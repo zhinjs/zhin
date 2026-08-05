@@ -1,9 +1,9 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import plugin from '../plugin.ts';
-import lotteryCommand from '../commands/lottery/[game:string=].ts';
+import lotteryCommand from '../commands/lottery/[[game]].ts';
 import todayCommand from '../commands/lottery-today.ts';
-import historyCommand from '../commands/lottery-history/[game:string].ts';
+import historyCommand from '../commands/lottery-history/[game].ts';
 import { resolveLotteryConfig } from '../src/config.js';
 import { resetLotteryDb, ensureLotteryMemoryDb, getLotteryDb } from '../src/db-store.js';
 

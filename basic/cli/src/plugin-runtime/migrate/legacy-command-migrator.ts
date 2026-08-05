@@ -155,9 +155,9 @@ function analyzeSource(root: string, source: string, text: string): SourceAnalys
       diagnostics.push(nodeDiagnostic(file, registration.call, 'manual', parsed.message));
       continue;
     }
-    const route = commandRoute(parsed.pattern);
-    if (typeof route === 'string') {
-      diagnostics.push(nodeDiagnostic(file, registration.call, 'manual', route));
+    const routed = commandRoute(parsed.pattern);
+    if (typeof routed === 'string') {
+      diagnostics.push(nodeDiagnostic(file, registration.call, 'manual', routed));
       continue;
     }
     const captures = externalReferences(parsed.action);
@@ -170,14 +170,14 @@ function analyzeSource(root: string, source: string, text: string): SourceAnalys
       ));
       continue;
     }
-    const target = join(root, 'commands', ...route);
+    const target = join(root, 'commands', ...routed.route);
     changes.push({
       kind: 'command',
       source,
       target,
       identity: parsed.pattern,
       pattern: parsed.pattern,
-      content: renderCommand(file, parsed.action, parsed.description),
+      content: renderCommand(file, parsed.action, parsed.description, routed.parameter),
     });
   }
   return { changes, diagnostics };
@@ -411,32 +411,40 @@ function parseBuilder(file: ts.SourceFile, registration: ts.CallExpression): Par
   return { pattern, description, action };
 }
 
-function commandRoute(pattern: string): readonly string[] | string {
+function commandRoute(
+  pattern: string,
+): { readonly route: readonly string[]; readonly parameter?: CommandRouteParameter } | string {
   const words = pattern.trim().split(/\s+/u);
   if (words.length === 0 || words[0] === '') return 'Command pattern is empty';
   const route: string[] = [];
-  let dynamic = false;
+  let parameter: CommandRouteParameter | undefined;
   for (const [index, word] of words.entries()) {
     if (/^[a-z0-9][a-z0-9-]*$/u.test(word)) {
-      if (dynamic) return 'Command literals cannot follow a dynamic parameter';
+      if (parameter) return 'Command literals cannot follow a dynamic parameter';
       route.push(index === words.length - 1 ? `${word}.ts` : word);
       continue;
     }
     const match = /^<([a-z][a-zA-Z0-9]*):(text|string|number|boolean)>$/u.exec(word);
-    if (!match || index !== words.length - 1 || dynamic) {
+    if (!match || index !== words.length - 1 || parameter) {
       return `Command pattern is outside the automatic route subset: ${pattern}`;
     }
-    dynamic = true;
     const type = match[2] === 'text' ? 'string' : match[2];
-    route.push(`[${match[1]}:${type}].ts`);
+    parameter = { name: match[1]!, type };
+    route.push(`[${match[1]}].ts`);
   }
-  return route;
+  return { route, ...(parameter ? { parameter } : {}) };
+}
+
+interface CommandRouteParameter {
+  readonly name: string;
+  readonly type: string;
 }
 
 function renderCommand(
   file: ts.SourceFile,
   action: ts.ArrowFunction | ts.FunctionExpression,
   description?: string,
+  parameter?: CommandRouteParameter,
 ): string {
   const lines = [
     "import { defineCommand } from '@zhin.js/command';",
@@ -444,6 +452,9 @@ function renderCommand(
     'export default defineCommand({',
   ];
   if (description !== undefined) lines.push(`  description: ${JSON.stringify(description)},`);
+  if (parameter) {
+    lines.push(`  params: { ${parameter.name}: { type: ${JSON.stringify(parameter.type)} } },`);
+  }
   const source = action.getText(file);
   lines.push(
     '  execute(context) {',

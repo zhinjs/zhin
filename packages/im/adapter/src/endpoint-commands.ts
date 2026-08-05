@@ -20,7 +20,7 @@
  * 3. src 下 `export const telegramEndpointCommands = createEndpointCommands({ adapterKey: 'telegram', ... }, defineCommand)`
  *    （defineCommand 由调用方从 @zhin.js/command 传入——provider 包之间禁止互相 import，
  *    见 scripts/check-architecture-layers.mjs，故 defineCommand 走依赖注入）。
- * 4. commands/endpoint/{list.ts, add/[name:string].ts, remove/[name:string].ts} 分别
+ * 4. commands/endpoint/{list.ts, add/[name].ts, remove/[name].ts} 分别
  *    `export default telegramEndpointCommands.list|add|remove`。
  *
  * 注意：adapterKey 即实例 key（zhin.config.yml 的 plugins.<key>）；多实例自定义 key 时
@@ -355,8 +355,8 @@ export interface EndpointCommandsSpec {
  * provider 层不允许 import @zhin.js/command，故 defineCommand 由调用方注入，
  * 这里只描述结构；适配器侧传入 defineCommand 后 TCommand 即 Readonly<CommandDefinition>。
  *
- * `params` 值域须与 CommandParameterValue 对齐（含 null / 结构化对象），
- * 否则注入的 defineCommand 会因 TS 逆变检查失败（TS2345）。
+ * `params` 值域须与 CommandParameterValue 对齐（含 null / 结构化对象 / rest 段
+ * 的 `readonly string[]`），否则注入的 defineCommand 会因 TS 逆变检查失败（TS2345）。
  */
 export interface EndpointCommandContext {
   readonly config: unknown;
@@ -369,13 +369,22 @@ export interface EndpointCommandContext {
   readonly args: readonly string[];
   readonly params: Readonly<Record<
     string,
-    string | number | boolean | Readonly<Record<string, unknown>> | null
+    string | number | boolean | Readonly<Record<string, unknown>> | null | readonly string[]
   >>;
   readonly use: EndpointCommandUse;
 }
 
 export interface EndpointCommandDefinition {
   readonly description?: string;
+  // 与 @zhin.js/command 的 CommandParamSchema 结构对齐（provider 层不能 import
+  // command，字面量联合在此镜像声明；新增参数类型须两侧同步）。
+  readonly params?: Readonly<Record<string, {
+    readonly type:
+      | 'string' | 'number' | 'integer' | 'float' | 'boolean' | 'word' | 'text'
+      | 'mention' | 'image' | 'face' | 'reply' | 'forward' | 'dice' | 'rps';
+    readonly default?: string | number | boolean | Readonly<Record<string, unknown>> | null;
+    readonly description?: string;
+  }>>;
   execute(context: EndpointCommandContext): unknown;
 }
 
@@ -532,6 +541,7 @@ export function createEndpointCommands<TCommand>(
     add: defineCommand({
       description: spec.addDescription
         ?? `手动添加 ${spec.adapterDisplayName} endpoint（凭据写入 .env 并追加到 zhin.config.yml，重启生效）`,
+      params: { name: { type: 'string', description: 'endpoint 名称' } },
       execute({ config, input, params, args, use }) {
         if (!isEndpointOperator(config, input)) return forbidden;
         const name = endpointNameParam(params);
@@ -550,6 +560,7 @@ export function createEndpointCommands<TCommand>(
     }),
     remove: defineCommand({
       description: `从 zhin.config.yml 的 plugins.${spec.adapterKey}.endpoints 移除指定 endpoint（重启生效）`,
+      params: { name: { type: 'string', description: 'endpoint 名称' } },
       execute({ config, input, params }) {
         if (!isEndpointOperator(config, input)) return forbidden;
         return removeEndpointByName(spec, String(params.name ?? ''));

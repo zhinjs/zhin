@@ -36,11 +36,14 @@ export default definePlugin({
 ```
 
 ```typescript
-// commands/hello/[name:string].ts
+// commands/hello/[name].ts
 import { defineCommand } from '@zhin.js/command'
 
 export default defineCommand({
   description: '打招呼',
+  params: {
+    name: { type: 'string' },
+  },
   execute({ params }) {
     return `Hello, ${params.name}!`
   },

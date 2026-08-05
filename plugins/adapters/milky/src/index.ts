@@ -5,15 +5,11 @@ export {
   callApi,
   extractInboundAudioUrl,
   formatInboundContent,
-  formatInboundMessageId,
-  formatOutboundMessageId,
   formatOutboundSegments,
   isMentioned,
   isMessageReceiveEvent,
   milkyInboundConversation,
   parseMessageReceiveData,
-  parseMilkyMessageId,
-  parseSendTarget,
   resolveMilkyConfig,
   senderNickname,
   type MilkyAdapterConfig,
@@ -30,7 +26,6 @@ export {
   type MilkyWireSegment,
   type MilkyWsConfig,
   type MilkyWssConfig,
-  type ParsedSendTarget,
   type ResolvedMilkyConfig,
 } from './protocol.js';
 

@@ -15,12 +15,10 @@ import {
 } from '../src/ws.js';
 import {
   formatInboundContent,
-  formatInboundTarget,
   formatOutboundKmarkdown,
   isKookWebhookChallenge,
   kookInboundConversation,
   normalizeKookWebhookEvent,
-  parseSendTarget,
   resolveKookConfig,
   verifyKookWebhookToken,
   type KookInboundMessage,
@@ -184,15 +182,8 @@ describe('kook protocol helpers', () => {
     }));
   });
 
-  it('formats inbound target and content', () => {
-    expect(formatInboundTarget(textMessage())).toBe('channel:chan-1');
-    expect(formatInboundTarget(textMessage({
-      channelKind: 'private',
-      channelId: 'user-1',
-    }))).toBe('private:user-1');
+  it('formats inbound content', () => {
     expect(formatInboundContent(textMessage())).toBe('hello');
-    expect(parseSendTarget('channel:chan-1')).toEqual({ kind: 'channel', id: 'chan-1' });
-    expect(parseSendTarget('private:user-1')).toEqual({ kind: 'private', id: 'user-1' });
   });
 
   it('normalizes inbound messages into ConversationRef', () => {

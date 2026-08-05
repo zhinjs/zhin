@@ -6,7 +6,7 @@
  */
 import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it } from 'vitest';
-import removeCommand from '../commands/rss-remove/[url:string].ts';
+import removeCommand from '../commands/rss-remove/[url].ts';
 import { RSS_SEEN_TABLE, RSS_SUBS_TABLE, resetRssDb, setRssDb, type RssModel } from '../src/db-store.js';
 import type { RssRow } from '../src/memory-store.js';
 import { cleanOldSeen } from '../src/poll.js';

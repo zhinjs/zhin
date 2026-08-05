@@ -10,9 +10,8 @@ import { CommandIndex } from './command-index.js';
 import {
   bindCommandParameter,
   parseCommandDefinition,
+  type CommandDefinition,
   type CommandParameterDefinition,
-  type CommandParameterType,
-  type CommandParameterValue,
 } from './definition.js';
 
 export const commandFeatureId = featureId('zhin.command');
@@ -27,7 +26,7 @@ const commandFiles: SourceConvention = {
     const module = await context.host.loadModule<{ default?: unknown }>(source.source);
     const definition = parseCommandDefinition(module.default);
     const file = parseCommandFile(basename(source.source));
-    return bindCommandParameter(definition, file?.parameter);
+    return bindCommandParameter(definition, resolveParameter(definition, file, source.source));
   },
 };
 
@@ -81,50 +80,76 @@ function isCommandSegment(value: string): boolean {
 
 interface ParsedCommandFile {
   readonly localSegment: string;
-  readonly parameter?: CommandParameterDefinition;
+  readonly parameter?: CommandParameterHint;
 }
 
-const dynamicCommandFilePattern =
-  /^\[([a-z][a-zA-Z0-9]*):([a-z][a-z0-9-]*)(?:=([^\]]*))?\]\.(?:tsx?|[cm]?js)$/;
+/** 文件名声明的参数形态；类型与默认值来自 `defineCommand({ params })`。 */
+interface CommandParameterHint {
+  readonly name: string;
+  readonly optional: boolean;
+  readonly rest: boolean;
+}
 
-const commandParameterTypes = new Set<CommandParameterType>([
-  'string',
-  'number',
-  'integer',
-  'float',
-  'boolean',
-  'word',
-  'text',
-  'mention',
-  'image',
-  'face',
-  'reply',
-  'forward',
-  'dice',
-  'rps',
-]);
+const dynamicCommandFilePatterns: ReadonlyArray<{
+  readonly pattern: RegExp;
+  readonly optional: boolean;
+  readonly rest: boolean;
+}> = [
+  { pattern: /^\[\[\.\.\.([a-zA-Z][a-zA-Z0-9]*)\]\]\.(?:tsx?|[cm]?js)$/, optional: true, rest: true },
+  { pattern: /^\[\.\.\.([a-zA-Z][a-zA-Z0-9]*)\]\.(?:tsx?|[cm]?js)$/, optional: false, rest: true },
+  { pattern: /^\[\[([a-zA-Z][a-zA-Z0-9]*)\]\]\.(?:tsx?|[cm]?js)$/, optional: true, rest: false },
+  { pattern: /^\[([a-zA-Z][a-zA-Z0-9]*)\]\.(?:tsx?|[cm]?js)$/, optional: false, rest: false },
+];
 
 function parseCommandFile(value: string): ParsedCommandFile | undefined {
   if (/^[a-z0-9][a-z0-9-]*\.(?:tsx?|[cm]?js)$/.test(value)) {
     return { localSegment: parse(value).name };
   }
-  const match = dynamicCommandFilePattern.exec(value);
-  if (match) {
-    const [, name, rawType, rawDefault] = match;
-    if (!name || !rawType || !commandParameterTypes.has(rawType as CommandParameterType)) {
-      throw new CommandPathSyntaxError(value, `unsupported parameter type: ${rawType ?? ''}`);
-    }
-    const type = rawType as CommandParameterType;
+  for (const { pattern, optional, rest } of dynamicCommandFilePatterns) {
+    const match = pattern.exec(value);
+    if (!match || !match[1]) continue;
+    const name = match[1];
     // Metadata can change during HMR while $name keeps the Capability identity stable.
-    const parameter = rawDefault === undefined
-      ? { name, type }
-      : { name, type, defaultValue: parseParameterValue(name, type, rawDefault, value) };
-    return { localSegment: `$${name}`, parameter };
+    return {
+      localSegment: `$${name}`,
+      parameter: { name, optional, rest },
+    };
   }
   if (value.startsWith('[') || value.includes(']')) {
     throw new CommandPathSyntaxError(value);
   }
   return undefined;
+}
+
+/** 把文件名形态与 `definition.params` 合并成完整参数定义。 */
+function resolveParameter(
+  definition: CommandDefinition,
+  file: ParsedCommandFile | undefined,
+  source: string,
+): CommandParameterDefinition | undefined {
+  const hint = file?.parameter;
+  if (!hint) return undefined;
+  const schema = definition.params?.[hint.name];
+  if (!schema) {
+    throw new CommandPathSyntaxError(
+      source,
+      `missing params.${hint.name} declaration in defineCommand({ params })`,
+    );
+  }
+  if (!hint.optional && schema.default !== undefined) {
+    throw new CommandPathSyntaxError(
+      source,
+      `params.${hint.name} has a default but the file is required: rename to [[${hint.name}]]`,
+    );
+  }
+  return {
+    name: hint.name,
+    type: schema.type,
+    ...(schema.default !== undefined ? { defaultValue: schema.default } : {}),
+    optional: hint.optional,
+    rest: hint.rest,
+    ...(schema.description !== undefined ? { description: schema.description } : {}),
+  };
 }
 
 function commandFilePriority(value: string, preferJavaScript: boolean): number {
@@ -136,57 +161,11 @@ function commandFilePriority(value: string, preferJavaScript: boolean): number {
   return priority < 0 ? Number.MAX_SAFE_INTEGER : priority;
 }
 
-function parseParameterValue(
-  name: string,
-  type: CommandParameterType,
-  value: string,
-  source: string,
-): CommandParameterValue {
-  if (type === 'string' || type === 'word' || type === 'text') return value;
-  if (type === 'number' || type === 'integer' || type === 'float') {
-    const number = Number(value);
-    if (
-      value.trim().length > 0
-      && Number.isFinite(number)
-      && (type !== 'integer' || Number.isInteger(number))
-      && (type !== 'float' || value.includes('.'))
-    ) return number;
-    throw new CommandPathSyntaxError(
-      source,
-      `default for ${name}:${type} is invalid`,
-    );
-  }
-  if (type === 'boolean') {
-    if (value === 'true' || value === 'false') return value === 'true';
-    throw new CommandPathSyntaxError(
-      source,
-      `default for ${name}:${type} is invalid`,
-    );
-  }
-  if (isStructuredParameter(type)) {
-    throw new CommandPathSyntaxError(
-      source,
-      `default for structured parameter ${name}:${type} is not supported`,
-    );
-  }
-  throw new CommandPathSyntaxError(
-    source,
-    `default for ${name}:${type} is invalid`,
-  );
-}
-
-function isStructuredParameter(type: CommandParameterType): boolean {
-  return type === 'mention'
-    || type === 'image'
-    || type === 'face'
-    || type === 'reply'
-    || type === 'forward'
-    || type === 'dice'
-    || type === 'rps';
-}
-
 export class CommandPathSyntaxError extends TypeError {
-  constructor(file: string, detail = 'expected [name:type=default].ts(x)') {
+  constructor(
+    file: string,
+    detail = 'expected [name].ts(x), [[name]].ts(x), [...name].ts(x) or [[...name]].ts(x)',
+  ) {
     super(`Invalid Command path ${file}: ${detail}`);
     this.name = 'CommandPathSyntaxError';
   }

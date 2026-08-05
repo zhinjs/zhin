@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import plugin from '../plugin.ts';
-import runCommand from '../commands/run/[language:string].ts';
+import runCommand from '../commands/run/[language].ts';
 import { formatResult } from '../src/run-code.js';
 
 describe('@zhin.js/plugin-code-runner', () => {

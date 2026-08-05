@@ -23,7 +23,7 @@ describe('legacy capability migration', () => {
     expect(plan.changes).toEqual([expect.objectContaining({
       pattern: 'gh pr <title:text>',
       source,
-      target: join(root, 'commands/gh/pr/[title:string].ts'),
+      target: join(root, 'commands/gh/pr/[title].ts'),
     })]);
     expect(plan.diagnostics.map((item) => item.message)).toEqual([
       'Command action captures source bindings: prefix',
@@ -32,6 +32,7 @@ describe('legacy capability migration', () => {
     ]);
     const generated = plan.changes[0]!.content;
     expect(generated).toContain("import { defineCommand } from '@zhin.js/command';");
+    expect(generated).toContain('params: { title: { type: "string" } },');
     expect(generated).toContain('return action(context.input, { params: context.params, args: context.args });');
     expect(generated).toContain('description: "create\\npull request"');
     expect(generated).toContain('result.params.title');

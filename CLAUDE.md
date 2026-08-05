@@ -107,7 +107,7 @@ Capabilities are **discovered from convention directories**, not registered impe
 
 | Directory | Authoring API |
 |---|---|
-| `commands/**/*.ts` | `defineCommand()` (`@zhin.js/command`) — path is the route; `[name:string=default].ts` for params |
+| `commands/**/*.ts` | `defineCommand()` (`@zhin.js/command`) — path is the route; Next.js-style param files `[name].ts` / `[[name]].ts` (optional) / `[...name].ts` (catch-all), type and default declared in `defineCommand({ params })` |
 | `middlewares/*.ts` | `defineMiddleware()` (`@zhin.js/middleware`) |
 | `components/*.tsx` | `defineComponent()` |
 | `tools/*.ts` | `defineAgentTool()` (`@zhin.js/tool`) |

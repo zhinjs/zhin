@@ -5,7 +5,7 @@
 ## 覆盖范围
 
 - `legacy/hello.ts` 保留旧版 `MessageCommand`，作为迁移前基线。
-- `commands/hello/[name:string].ts` 使用 convention 路由和原生 `defineCommand()`。
+- `commands/hello/[name].ts` 使用 convention 路由和原生 `defineCommand()`。
 - `middlewares/audit.ts` 使用原生 `defineMiddleware()` 进入 Middleware Feature。
 - `components/status-card.ts` 使用原生 `defineComponent()`，不再依赖 Plugin 注册副作用。
 - `package.json#zhin` 同时声明三个 Feature provider，是 cutover 后的静态拓扑事实源。

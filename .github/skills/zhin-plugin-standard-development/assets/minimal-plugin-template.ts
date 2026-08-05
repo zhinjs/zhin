@@ -35,6 +35,7 @@ export default definePlugin({
 //   },
 // });
 //
-// 带参数的路由用方括号文件名：
-//   commands/hello/[name:string=world].ts   ->  `hello <name:string=world>`
-//   commands/gh/issue/list.ts               ->  `gh issue list`
+// 带参数的路由用 Next.js 风格方括号文件名，类型与默认值在 defineCommand({ params }) 中声明：
+//   commands/hello/[[name]].ts   ->  `hello [name]`（可选；params: { name: { type: 'string', default: 'world' } }）
+//   commands/hello/[name].ts     ->  `hello <name>`（必需；params: { name: { type: 'string' } }）
+//   commands/gh/issue/list.ts    ->  `gh issue list`

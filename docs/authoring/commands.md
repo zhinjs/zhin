@@ -45,12 +45,21 @@ HMR 粒度缩小到单个命令文件。
 | --- | --- | --- |
 | `commands/hello.ts` | root | `hello` |
 | `commands/endpoint/list.ts` | `qq` | `qq.endpoint list` |
-| `commands/endpoint/add/[name:string=].ts` | `qq` | `qq.endpoint add [name]` |
+| `commands/endpoint/add/[[name]].ts` | `qq` | `qq.endpoint add [name]` |
 | `commands/foo.ts` | `b` 下的 `a`（`root/b/a`） | `b.a.foo` |
 
 先看嵌套：`commands/` 递归扫描，嵌套目录直接映射为子命令段，目录与文件名必须是小写 kebab 风格（`/^[a-z0-9][a-z0-9-]*$/`）。
 
-动态参数段写在文件名里：`[name:type=default].ts`（`.tsx` 亦可），且必须是路径的最后一段。`=default` 可省略——无默认值即必填，帮助里显示 `<name>`；有默认值显示 `[name]`，省略该参数时取默认值。
+动态参数段用 Next.js 风格文件名声明形态，且必须是路径的最后一段；**类型与默认值不写进文件名**，统一在 `defineCommand({ params })` 里声明——`params.<name>.type` 必填，`default` 可选：
+
+| 文件名 | 形态 | 帮助显示 | params 声明 |
+| --- | --- | --- | --- |
+| `[name].ts` | 必需参数 | `<name>` | `params: { name: { type: 'string' } }` |
+| `[[name]].ts` | 可选参数 | `[name]` | `params: { name: { type: 'string', default: '' } }` |
+| `[...name].ts` | 捕获所有（消费剩余全部词） | `<...name>` | `params: { name: { type: 'text' } }`，运行时 `params.name` 为 `string[]` |
+| `[[...name]].ts` | 可选捕获所有 | `[...name]` | 同上，未提供时为空数组 |
+
+一致性在启动期校验：有 `default` 时文件名必须用双方括号（`[[name]]`），文件名声明了参数形态但 `params` 里缺对应声明，都会抛 `CommandPathSyntaxError`。
 
 | 参数类别 | 支持的 type | 匹配结果 |
 | --- | --- | --- |
@@ -59,12 +68,12 @@ HMR 粒度缩小到单个命令文件。
 | 布尔 | `boolean` | `true` / `false` |
 | IM 段 | `mention` / `image` / `face` / `reply` / `forward` / `dice` / `rps` | canonical segment 对应字段 |
 
-结构化 IM 参数不支持文件名默认值。运行时由 `segment-matcher` 直接在 canonical segments
+结构化 IM 参数不支持默认值。运行时由 `segment-matcher` 直接在 canonical segments
 上匹配，不会先把 image、mention 等降级成文本；类型不匹配在派发时视为「命令不匹配」。
 
-路由冲突有两条规则：**静态优先**——`list.ts` 永远赢过 `[name:string].ts`，动态路由之间静态段多者（更具体）优先；**同形拒绝**——同一路由形状重复注册会在启动时报错（`Duplicate runtime Command`）。
+路由冲突有两条规则：**静态优先**——`list.ts` 永远赢过 `[name].ts`，动态路由之间静态段多者（更具体）优先；**同形拒绝**——同一路由形状重复注册会在启动时报错（`Duplicate runtime Command`）。
 
-真实示例（`plugins/adapters/qq/commands/endpoint/remove/[name:string].ts`，命令定义由[endpoint 管理命令套件](#适配器-endpoint-管理命令套件)生成）：
+真实示例（`plugins/adapters/qq/commands/endpoint/remove/[name].ts`，命令定义由[endpoint 管理命令套件](#适配器-endpoint-管理命令套件)生成）：
 
 ```ts
 import { qqEndpointCommands } from '../../../src/qq-endpoint-commands.js';
@@ -130,10 +139,13 @@ flowchart LR
 结构化参数示例：
 
 ```ts
-// commands/upload/[asset:image].ts
+// commands/upload/[asset].ts
 import { defineCommand } from '@zhin.js/command';
 
 export default defineCommand({
+  params: {
+    asset: { type: 'image', description: '要上传的图片' },
+  },
   execute: ({ params, args, segments }) => ({
     uploaded: params.asset,
     captionWords: args,
@@ -206,7 +218,7 @@ export const telegramEndpointCommands = createEndpointCommands({
   describeEntry: (entry) => `token: ${String(entry.token)}`,
 }, defineCommand);
 
-// 4. commands/endpoint/{list.ts, add/[name:string].ts, remove/[name:string].ts}
+// 4. commands/endpoint/{list.ts, add/[[name]].ts, remove/[name].ts}
 export default telegramEndpointCommands.list; // / .add / .remove
 ```
 

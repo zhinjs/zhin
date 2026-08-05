@@ -4,7 +4,6 @@ export {
   formatOutboundWire,
   formatSlashContent,
   headerValue,
-  inboundMessageId,
   keyboardToBlockKitBlocks,
   normalizeWebhookPath,
   readTextBody,
@@ -52,12 +51,6 @@ export {
   registerSlackPlatformPermitChecker,
   slackGroupPermitResolver,
 } from './platform-permit.js';
-
-export {
-  formatSlackMessageRef,
-  parseSlackMessageRef,
-  slackMessageTs,
-} from './slack-message-ref.js';
 
 export { normalizeSlackReactionName } from './slack-reaction.js';
 export { markdownToMrkdwn, mrkdwnToPlainFallback, splitMrkdwnText } from './markdown-to-mrkdwn.js';

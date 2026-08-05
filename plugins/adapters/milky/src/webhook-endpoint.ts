@@ -9,7 +9,6 @@ import type {
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
-import { formatLegacyConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { readRequestBody, verifyMilkyAccessToken } from './milky-auth.js';
@@ -89,16 +88,14 @@ export class MilkyWebhookEndpoint implements EndpointInstance {
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
-    // 平台 SDK 边界：Milky HTTP API 只消费 legacy `kind:id` 目标字符串
-    const target = formatLegacyConversationRef(conversation);
     const message = formatOutboundSegments(payload);
-    const { action, params } = buildSendAction(target, message);
+    const { action, params } = buildSendAction(conversation, message);
     const data = await this.callApi(action, params) as { message_seq?: number } | undefined;
-    const messageId = formatOutboundMessageId(target, data?.message_seq);
+    const messageId = formatOutboundMessageId(conversation, data?.message_seq);
     logger.debug(formatCompact({
       op: 'milky_send',
       endpoint: this.#options.config.name,
-      target,
+      target: `${conversation.kind}:${conversation.id}`,
       messageId,
     }));
     return messageId;

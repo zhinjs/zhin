@@ -32,7 +32,7 @@ export default defineCommand({
 
 动态生成的一批命令（`for (const name of list) addCommand(...)`）无法用文件路由表达：
 要么为每个固定名字建一个文件，要么改成一个带参数的命令
-（`commands/item/[name:string].ts`）在执行期分发。
+（`commands/item/[name].ts`，并在 `defineCommand({ params })` 中声明 `name` 的类型）在执行期分发。
 
 ## `Command action captures source bindings: a, b`
 
@@ -93,8 +93,11 @@ export default defineCommand({
 
 ```text
 gh issue list                        -> commands/gh/issue/list.ts
-gh pr <title:string=defaultTitle>    -> commands/gh/pr/[title:string=defaultTitle].ts
+gh pr <title:string=defaultTitle>    -> commands/gh/pr/[[title]].ts
 ```
+
+文件名只声明参数形态（双方括号 `[[title]]` 表示可选），类型与默认值在
+`defineCommand({ params })` 中声明；matcher 模式串 DSL 不变。
 
 模板必须是字面量。运行期才知道的名字，改成参数化命令在 `execute` 里分发。
 

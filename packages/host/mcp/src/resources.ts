@@ -86,11 +86,14 @@ export default definePlugin({
 \`\`\`
 
 \`\`\`typescript
-// commands/hello/[name:string].ts — 路径即路由
+// commands/hello/[name].ts — 路径即路由，类型在 params 中声明
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
   description: '打招呼',
+  params: {
+    name: { type: 'string' },
+  },
   execute({ params }) {
     return \`Hello, \${params.name}!\`;
   },
@@ -115,8 +118,10 @@ export default defineCommand({
 文件路径是路由 SSOT：
 
 - \`commands/hello.ts\` → \`hello\`
-- \`commands/hello/[name:string=world].ts\` → \`hello <name>\`
+- \`commands/hello/[[name]].ts\` → \`hello [name]\`（可选参数；\`params: { name: { type: 'string', default: 'world' } }\`）
 - \`commands/gh/issue/list.ts\` → \`gh issue list\`
+
+参数文件名用 Next.js 风格方括号（\`[name]\` 必需 / \`[[name]]\` 可选 / \`[...name]\` 捕获所有），类型与默认值在 \`defineCommand({ params })\` 中声明。
 
 \`\`\`typescript
 import { defineCommand } from 'zhin.js/command';
@@ -182,21 +187,27 @@ export default defineCommand({
 });
 `,
 
-  'zhin://examples/command-plugin': `// commands/echo/[text:string].ts
+  'zhin://examples/command-plugin': `// commands/echo/[text].ts
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
   description: '回声',
+  params: {
+    text: { type: 'text', description: '要回显的文本' },
+  },
   execute({ params }) {
     return String(params.text ?? '');
   },
 });
 
-// commands/greet/[name:string=world].ts
+// commands/greet/[[name]].ts
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
   description: '问候',
+  params: {
+    name: { type: 'string', default: 'world' },
+  },
   execute({ params }) {
     return \`你好，\${params.name}！\`;
   },

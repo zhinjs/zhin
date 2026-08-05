@@ -25,8 +25,37 @@ export type CommandParameterValue =
   | string
   | number
   | boolean
+  | readonly string[]
   | Readonly<Record<string, unknown>>
   | null;
+
+export const commandParameterTypes: ReadonlySet<CommandParameterType> = new Set([
+  'string',
+  'number',
+  'integer',
+  'float',
+  'boolean',
+  'word',
+  'text',
+  'mention',
+  'image',
+  'face',
+  'reply',
+  'forward',
+  'dice',
+  'rps',
+]);
+
+/**
+ * Next.js 风格参数声明（`defineCommand({ params: ... })`）。
+ * 文件名只声明参数形态（`[name]` / `[[name]]` / `[...name]` / `[[...name]]`），
+ * 类型与默认值统一在这里声明。
+ */
+export interface CommandParamSchema {
+  readonly type: CommandParameterType;
+  readonly default?: CommandParameterValue;
+  readonly description?: string;
+}
 
 /** Minimal structural contract shared with canonical IM segments. */
 export interface CommandSegment {
@@ -38,6 +67,11 @@ export interface CommandParameterDefinition {
   readonly name: string;
   readonly type: CommandParameterType;
   readonly defaultValue?: CommandParameterValue;
+  /** `[[name]]` / `[[...name]]` 可选段；缺省按 `defaultValue === undefined` 推断。 */
+  readonly optional?: boolean;
+  /** `[...name]` / `[[...name]]` 捕获所有段，运行时值为 `string[]`。 */
+  readonly rest?: boolean;
+  readonly description?: string;
 }
 
 /** 场景：群 / 私聊 / 频道等。 */
@@ -137,6 +171,11 @@ export interface CommandDefinition<
   readonly $feature: typeof commandBrand;
   readonly $parameter?: CommandParameterDefinition;
   readonly description?: string;
+  /**
+   * Next.js 风格参数声明：动态段文件名（`[name]` 等）的形态配合这里的
+   * 类型 / 默认值 / 描述使用。静态命令可忽略本字段。
+   */
+  readonly params?: Readonly<Record<string, CommandParamSchema>>;
   execute(context: CommandContext<TConfig, TInput>): TResult | Promise<TResult>;
 }
 
@@ -162,6 +201,17 @@ export function defineCommand<
 ): Readonly<CommandDefinition<TConfig, TResult, TInput>> {
   if (typeof definition.execute !== 'function') {
     throw new TypeError('Command execute must be a function');
+  }
+  if (definition.params !== undefined) {
+    if (!definition.params || typeof definition.params !== 'object') {
+      throw new TypeError('Command params must be a Record<string, CommandParamSchema>');
+    }
+    for (const [name, schema] of Object.entries(definition.params)) {
+      if (!schema || typeof schema !== 'object'
+        || !commandParameterTypes.has((schema as CommandParamSchema).type)) {
+        throw new TypeError(`Command params.${name} requires a valid type`);
+      }
+    }
   }
   return Object.freeze({ $feature: commandBrand, ...definition });
 }

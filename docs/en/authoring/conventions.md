@@ -34,7 +34,7 @@ There is only one universal segment rule: after removing extensions, directory n
 
 | Directory | localName derivation | Example |
 | --- | --- | --- |
-| `commands/` | Subdirectories and file names joined with `/`; dynamic parameter files `[name:type=default].ts(x)` map to `$name` segments, `type` is one of `string\|number\|boolean`, `=default` is optional | `commands/lottery-today.ts` -> `lottery-today`; `commands/lottery/[game:string=].ts` -> `lottery/$game` |
+| `commands/` | Subdirectories and file names joined with `/`; dynamic parameter files use Next.js-style brackets to declare their shape and map to `$name` segments: `[name].ts(x)` required, `[[name]].ts(x)` optional, `[...name].ts(x)` catch-all, `[[...name]].ts(x)` optional catch-all; type and default value are declared in `defineCommand({ params })` | `commands/lottery-today.ts` -> `lottery-today`; `commands/lottery/[[game]].ts` -> `lottery/$game` |
 | `middlewares/` | Relative path without extension, joined with `/` | `middlewares/keyword-reply.ts` -> `keyword-reply` |
 | `components/` | Same as above | `components/share-music.ts` -> `share-music` |
 | `adapters/` | Same as above | `adapters/napcat.ts` -> `napcat` |
@@ -44,7 +44,7 @@ There is only one universal segment rule: after removing extensions, directory n
 | `mcp/` | File name without extension (no recursion) | `mcp/my-server.ts` -> `my-server` |
 | `pages/` | File name without extension; `$nav.tsx` / `$footer.tsx` are layout slots (when both `.ts` and `.tsx` exist for the same slot, `.tsx` takes precedence) | `pages/orchestration.tsx` -> `orchestration`; `pages/$nav.tsx` -> `nav` |
 
-Malformed bracket syntax in command dynamic parameter files (such as unsupported types) throws `CommandPathSyntaxError`, with the message `expected [name:string|number|boolean=default].ts(x)`.
+Malformed bracket syntax in command dynamic parameter files throws `CommandPathSyntaxError`, with the message `expected [name].ts(x), [[name]].ts(x), [...name].ts(x) or [[...name]].ts(x)`; a default value requires double brackets in the file name, and the parameter must be declared in `params`, otherwise the same error is thrown.
 
 ## Minimal Form for Each Directory
 
@@ -141,4 +141,4 @@ tools:
 
 ## Repository Examples
 
-When looking for production-grade references, browse these directories directly: `commands` -- see `plugins/utils/lottery/commands/` (including dynamic parameter `[game:string=].ts`); `middlewares` -- see `plugins/utils/group-suite/middlewares/` and `plugins/games/*/middlewares/`; `components` -- see `plugins/utils/music/components/share-music.ts`; `adapters` -- see `plugins/adapters/napcat/adapters/napcat.ts`; `tools` -- see `plugins/utils/music/tools/` and `plugins/utils/group-suite/tools/`; `skills` -- see `examples/full-bot/skills/memory-consolidate/`; `agents` -- see `examples/multi-agent-room/agents/`; `pages` -- see `examples/full-bot/pages/orchestration.tsx`.
+When looking for production-grade references, browse these directories directly: `commands` -- see `plugins/utils/lottery/commands/` (including dynamic parameter `lottery/[[game]].ts`); `middlewares` -- see `plugins/utils/group-suite/middlewares/` and `plugins/games/*/middlewares/`; `components` -- see `plugins/utils/music/components/share-music.ts`; `adapters` -- see `plugins/adapters/napcat/adapters/napcat.ts`; `tools` -- see `plugins/utils/music/tools/` and `plugins/utils/group-suite/tools/`; `skills` -- see `examples/full-bot/skills/memory-consolidate/`; `agents` -- see `examples/multi-agent-room/agents/`; `pages` -- see `examples/full-bot/pages/orchestration.tsx`.

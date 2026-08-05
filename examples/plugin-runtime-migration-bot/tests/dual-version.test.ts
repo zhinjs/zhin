@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import nextHello from '../commands/hello/[name:string].js';
+import nextHello from '../commands/hello/[name].js';
 import statusCard from '../components/status-card.js';
 import { legacyHello } from '../legacy/hello.js';
 import audit from '../middlewares/audit.js';

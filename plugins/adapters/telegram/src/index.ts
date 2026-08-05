@@ -11,7 +11,6 @@ export {
   formatOutboundActions,
   formatOutboundPlan,
   normalizeWebhookPath,
-  resolveChannel,
   resolveTelegramConfig,
   senderDisplayName,
   type ResolvedTelegramConfig,

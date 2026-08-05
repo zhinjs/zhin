@@ -85,7 +85,7 @@ export class CommandIndex {
         source: slot.source,
         parameters: Object.freeze(parameter ? [{
           ...parameter,
-          required: parameter.defaultValue === undefined,
+          required: isRequiredParameter(parameter),
         }] : []),
         slot,
         segments: Object.freeze(segments),
@@ -173,13 +173,27 @@ export class CommandIndex {
     for (const command of this.#commands) {
       const result = command.matcher.match(asMatcherSegments(segments));
       if (!result || !hasCommandBoundary(result.remaining)) continue;
+      const parameter = command.parameter;
+      const params: Record<string, CommandParameterValue> = { ...result.params };
+      if (parameter?.rest) {
+        const raw = result.params[parameter.name];
+        const coerced = coerceRestValues(parameter, Array.isArray(raw) ? raw : []);
+        // 必需 `[...name]` 捕获所有：零元素视为不匹配；标量逐词转换失败同样不匹配。
+        if (!coerced || (isRequiredParameter(parameter) && coerced.length === 0)) continue;
+        params[parameter.name] = coerced;
+      }
       const remaining = normalizeSegments(result.remaining);
       if (exact && remaining.length > 0) continue;
+      // `[[name]]` 无 default 且未命中时，matcher 对 text 回退 ''、其他类型回退 null；
+      // 按契约（省略 default 时未匹配为 undefined）删除该键。
+      if (parameter && !parameter.rest && parameter.optional === true
+        && parameter.defaultValue === undefined
+        && (params[parameter.name] === '' || params[parameter.name] === null)) {
+        delete params[parameter.name];
+      }
       return {
         command,
-        params: Object.freeze({ ...result.params }) as Readonly<
-          Record<string, CommandParameterValue>
-        >,
+        params: Object.freeze(params),
         remaining,
       };
     }
@@ -190,7 +204,7 @@ export class CommandIndex {
     const words = splitCommand(name);
     for (const command of this.#commands) {
       const parameter = command.parameter;
-      if (!parameter) continue;
+      if (!parameter || parameter.rest) continue;
       const parameterIndex = command.segments.findIndex((segment) => segment.startsWith('$'));
       if (words.length !== command.segments.length) continue;
       if (!command.segments.every((segment, index) =>
@@ -233,15 +247,20 @@ function assertParameterSegment(
   throw new Error(`Broken dynamic Command identity for ${source}`);
 }
 
+function isRequiredParameter(parameter: CommandParameterDefinition): boolean {
+  return parameter.optional === true ? false : parameter.defaultValue === undefined;
+}
+
 function displayName(
   segments: readonly string[],
   parameter: CommandParameterDefinition | undefined,
 ): string {
   return segments.map((segment) => {
     if (!segment.startsWith('$')) return segment;
-    return parameter?.defaultValue === undefined
-      ? `<${segment.slice(1)}>`
-      : `[${segment.slice(1)}]`;
+    const label = segment.slice(1);
+    const required = !parameter || isRequiredParameter(parameter);
+    if (parameter?.rest) return required ? `<...${label}>` : `[...${label}]`;
+    return required ? `<${label}>` : `[${label}]`;
   }).join(' ');
 }
 
@@ -253,8 +272,13 @@ function matcherPattern(
     if (!segment.startsWith('$')) return segment;
     if (!parameter) throw new Error(`Missing Command parameter metadata: ${segment}`);
     const type = matcherType(parameter.type);
+    // rest：结构化类型按消息段收集；标量类型先按 text 段收集，再在 #match 里逐词切分转换。
+    if (parameter.rest) {
+      return `[...${parameter.name}:${isStructuredRestType(parameter.type) ? type : 'text'}]`;
+    }
+    if (isRequiredParameter(parameter)) return `<${parameter.name}:${type}>`;
     return parameter.defaultValue === undefined
-      ? `<${parameter.name}:${type}>`
+      ? `[${parameter.name}:${type}]`
       : `[${parameter.name}:${type}=${String(parameter.defaultValue)}]`;
   }).join(' ');
 }
@@ -268,13 +292,17 @@ function routeShape(segments: readonly string[]): string {
 }
 
 function compareCommands(left: CommandRecord, right: CommandRecord): number {
-  const leftDynamic = left.parameter ? 1 : 0;
-  const rightDynamic = right.parameter ? 1 : 0;
-  return leftDynamic - rightDynamic
+  return dynamicWeight(left) - dynamicWeight(right)
     || staticSegmentCount(right.segments) - staticSegmentCount(left.segments)
     || right.segments.length - left.segments.length
     || right.name.length - left.name.length
     || left.name.localeCompare(right.name);
+}
+
+/** 静态 < 单参数 < 捕获所有：更具体的形状优先匹配。 */
+function dynamicWeight(command: CommandRecord): number {
+  if (!command.parameter) return 0;
+  return command.parameter.rest ? 2 : 1;
 }
 
 function staticSegmentCount(segments: readonly string[]): number {

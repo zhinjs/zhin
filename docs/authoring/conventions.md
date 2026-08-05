@@ -34,7 +34,7 @@ flowchart LR
 
 | 目录 | localName 推导 | 示例 |
 | --- | --- | --- |
-| `commands/` | 子目录与文件名用 `/` 拼接；动态参数文件 `[name:type=default].ts(x)` 映射为 `$name` 段，`type ∈ string\|number\|boolean`，`=default` 可省 | `commands/lottery-today.ts` → `lottery-today`；`commands/lottery/[game:string=].ts` → `lottery/$game` |
+| `commands/` | 子目录与文件名用 `/` 拼接；动态参数文件用 Next.js 风格方括号声明形态并映射为 `$name` 段：`[name].ts(x)` 必需、`[[name]].ts(x)` 可选、`[...name].ts(x)` 捕获所有、`[[...name]].ts(x)` 可选捕获所有；类型与默认值在 `defineCommand({ params })` 中声明 | `commands/lottery-today.ts` → `lottery-today`；`commands/lottery/[[game]].ts` → `lottery/$game` |
 | `middlewares/` | 相对路径去扩展名，`/` 拼接 | `middlewares/keyword-reply.ts` → `keyword-reply` |
 | `components/` | 同上 | `components/share-music.ts` → `share-music` |
 | `adapters/` | 同上 | `adapters/napcat.ts` → `napcat` |
@@ -44,7 +44,7 @@ flowchart LR
 | `mcp/` | 文件名去扩展名（不递归） | `mcp/my-server.ts` → `my-server` |
 | `pages/` | 文件名去扩展名；`$nav.tsx` / `$footer.tsx` 是布局槽（同 slot 同时有 `.ts` 和 `.tsx` 时以 `.tsx` 为准） | `pages/orchestration.tsx` → `orchestration`；`pages/$nav.tsx` → `nav` |
 
-命令动态参数文件的方括号语法写错（如不支持的类型）会抛 `CommandPathSyntaxError`，提示 `expected [name:string|number|boolean=default].ts(x)`。
+命令动态参数文件的方括号语法写错会抛 `CommandPathSyntaxError`，提示 `expected [name].ts(x), [[name]].ts(x), [...name].ts(x) or [[...name]].ts(x)`；有默认值时文件名必须用双方括号，且 `params` 中必须声明对应参数，否则同样报错。
 
 ## 各目录的最小形态
 
@@ -141,4 +141,4 @@ tools:
 
 ## 仓库实例
 
-想找生产级参照时，直接翻这些目录：`commands` 看 `plugins/utils/lottery/commands/`（含动态参数 `[game:string=].ts`）；`middlewares` 看 `plugins/utils/group-suite/middlewares/` 和 `plugins/games/*/middlewares/`；`components` 看 `plugins/utils/music/components/share-music.ts`；`adapters` 看 `plugins/adapters/napcat/adapters/napcat.ts`；`tools` 看 `plugins/utils/music/tools/` 与 `plugins/utils/group-suite/tools/`；`skills` 看 `examples/full-bot/skills/memory-consolidate/`；`agents` 看 `examples/multi-agent-room/agents/`；`pages` 看 `examples/full-bot/pages/orchestration.tsx`。
+想找生产级参照时，直接翻这些目录：`commands` 看 `plugins/utils/lottery/commands/`（含动态参数 `lottery/[[game]].ts`）；`middlewares` 看 `plugins/utils/group-suite/middlewares/` 和 `plugins/games/*/middlewares/`；`components` 看 `plugins/utils/music/components/share-music.ts`；`adapters` 看 `plugins/adapters/napcat/adapters/napcat.ts`；`tools` 看 `plugins/utils/music/tools/` 与 `plugins/utils/group-suite/tools/`；`skills` 看 `examples/full-bot/skills/memory-consolidate/`；`agents` 看 `examples/multi-agent-room/agents/`；`pages` 看 `examples/full-bot/pages/orchestration.tsx`。

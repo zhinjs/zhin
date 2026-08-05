@@ -9,9 +9,9 @@ import {
   smokeGameMessage,
 } from '@zhin.js/game-kit';
 import plugin from '../plugin.ts';
-import gamesCommand from '../commands/games/[action:string=].ts';
+import gamesCommand from '../commands/games/[[action]].ts';
 import statsCommand from '../commands/战绩.ts';
-import leaderboardCommand from '../commands/排行/[query:string=].ts';
+import leaderboardCommand from '../commands/排行/[[query]].ts';
 
 const emptyCtx = {
   owner: {} as never,

@@ -35,7 +35,7 @@ export default defineGamePlugin({
 });
 ```
 
-- `commands/<name>/[action:string=].ts` 定义命令。
+- `commands/<name>/[[action]].ts` 定义命令（可选参数；在 `defineCommand({ params })` 中声明 `action` 的类型与默认值）。
 - `middlewares/` 处理按钮 payload、裸文本答案和旧命令别名。
 - `registerRuntimeGame()` / `getRuntimeGames()` 是大厅 SSOT，dispose 时对称移除。
 - `DEFAULT_GAME_STALE_CRON` 与 `scheduleHostToken` 用于清理超时会话。

@@ -22,7 +22,6 @@ import {
   formatOutboundSegments,
   milkyInboundConversation,
   parseMessageReceiveData,
-  parseSendTarget,
   resolveMilkyConfig,
   type MilkyEvent,
   type MilkyIncomingMessage,
@@ -243,20 +242,15 @@ describe('milky protocol helpers', () => {
       .toBe('hello');
   });
 
-  it('parses send targets', () => {
-    expect(parseSendTarget('private:42')).toEqual({ message_type: 'private', id: '42' });
-    expect(parseSendTarget('group:9')).toEqual({ message_type: 'group', id: '9' });
-  });
-
-  it('builds send_*_message actions from target', () => {
-    expect(buildSendAction('private:1', [{ type: 'text', data: { text: 'hi' } }])).toEqual({
+  it('builds send_*_message actions from the structured conversation', () => {
+    expect(buildSendAction(milkyConversation('private', '1'), [{ type: 'text', data: { text: 'hi' } }])).toEqual({
       action: 'send_private_message',
       params: {
         user_id: 1,
         message: [{ type: 'text', data: { text: 'hi' } }],
       },
     });
-    expect(buildSendAction('group:2', [{ type: 'text', data: { text: 'hi' } }])).toEqual({
+    expect(buildSendAction(milkyConversation('group', '2'), [{ type: 'text', data: { text: 'hi' } }])).toEqual({
       action: 'send_group_message',
       params: {
         group_id: 2,

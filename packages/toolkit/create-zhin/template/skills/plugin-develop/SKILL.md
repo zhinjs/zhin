@@ -49,17 +49,20 @@ tags:
 ### 第 2 步：实现（禁止旧 API）
 
 - **禁止**：`usePlugin`、`getPlugin`、`MessageCommand`、`plugin.addCommand`、`addCron(new Cron)`、`useContext('web')` 旧写法
-- **命令**：文件路径是路由 SSOT；参数用 `[name:type=default].ts`；`execute` 读 `params` / `args` / `input`
+- **命令**：文件路径是路由 SSOT；参数用 Next.js 风格文件名（`[name].ts` 必需 / `[[name]].ts` 可选 / `[...name].ts` 捕获所有），类型与默认值在 `defineCommand({ params })` 中声明；`execute` 读 `params` / `args` / `input`
 - **出站**：走统一发送链（`$reply` / Adapter.sendMessage），禁止直调平台 Bot
 - 本地导入带 `.js` 扩展名
 
-**命令示例** `commands/greet/[name:string].ts`：
+**命令示例** `commands/greet/[name].ts`：
 
 ```typescript
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
   description: '问候用户',
+  params: {
+    name: { type: 'string', description: '用户名字' },
+  },
   execute({ params }) {
     return `你好，${params.name}！`;
   },

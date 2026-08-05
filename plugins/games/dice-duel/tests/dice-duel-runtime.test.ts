@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import plugin from '../plugin.ts';
-import gameCommand from '../commands/dice/[action:string=].ts';
+import gameCommand from '../commands/dice/[[action]].ts';
 import { DICE_HELP } from '../src/index.js';
 import {
   createMemoryGameServices,

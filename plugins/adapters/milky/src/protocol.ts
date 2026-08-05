@@ -117,11 +117,6 @@ export interface MilkyOutgoingSegment {
   data: Record<string, unknown>;
 }
 
-export interface ParsedSendTarget {
-  readonly message_type: 'private' | 'group';
-  readonly id: string;
-}
-
 export interface MilkyApiClientOptions {
   readonly baseUrl: string;
   readonly access_token?: string;
@@ -440,18 +435,6 @@ export function formatInboundMessageId(data: MilkyIncomingMessage): string {
   return `${data.message_scene}:${data.peer_id}:${data.message_seq}`;
 }
 
-export function parseSendTarget(target: string): ParsedSendTarget {
-  const sep = target.indexOf(':');
-  if (sep <= 0) {
-    return { message_type: 'private', id: target };
-  }
-  const head = target.slice(0, sep);
-  const rest = target.slice(sep + 1);
-  if (head === 'group') return { message_type: 'group', id: rest };
-  if (head === 'private') return { message_type: 'private', id: rest };
-  return { message_type: 'private', id: target };
-}
-
 /**
  * 解析 image/audio/video 段的投递 uri（canonical MediaRef 唯一来源）：
  * - kind=url → http(s):// 直发；
@@ -583,15 +566,14 @@ export function formatOutboundSegments(payload: unknown): MilkyOutgoingSegment[]
 }
 
 export function buildSendAction(
-  target: string,
+  conversation: ConversationRef,
   message: MilkyOutgoingSegment[],
 ): { action: string; params: Record<string, unknown> } {
-  const parsed = parseSendTarget(target);
-  if (parsed.message_type === 'group') {
+  if (conversation.kind === 'group') {
     return {
       action: 'send_group_message',
       params: {
-        group_id: parseInt(parsed.id, 10),
+        group_id: parseInt(conversation.id, 10),
         message,
       },
     };
@@ -599,21 +581,23 @@ export function buildSendAction(
   return {
     action: 'send_private_message',
     params: {
-      user_id: parseInt(parsed.id, 10),
+      user_id: parseInt(conversation.id, 10),
       message,
     },
   };
 }
 
-/** message_seq result → gateway message id */
+/**
+ * message_seq result → gateway message id（`scene:peer:seq` 复合格式，
+ * 与 formatInboundMessageId 同源，仅供 recall 链在本端点边界内解析）。
+ */
 export function formatOutboundMessageId(
-  target: string,
+  conversation: ConversationRef,
   messageSeq: number | undefined,
 ): string {
   if (messageSeq == null) return '';
-  const parsed = parseSendTarget(target);
-  const scene = parsed.message_type === 'group' ? 'group' : 'friend';
-  return `${scene}:${parsed.id}:${messageSeq}`;
+  const scene = conversation.kind === 'group' ? 'group' : 'friend';
+  return `${scene}:${conversation.id}:${messageSeq}`;
 }
 
 export function parseMilkyMessageId(

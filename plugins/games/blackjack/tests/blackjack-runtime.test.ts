@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import plugin from '../plugin.ts';
-import gameCommand from '../commands/bj/[action:string=].ts';
+import gameCommand from '../commands/bj/[[action]].ts';
 import { BJ_HELP } from '../src/index.js';
 import {
   createMemoryGameServices,

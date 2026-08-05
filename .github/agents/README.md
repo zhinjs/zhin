@@ -158,9 +158,12 @@ interface Bot<C extends Endpoint.Config = Endpoint.Config, M = any> {
 import { definePlugin } from 'zhin.js/plugin-runtime'
 export default definePlugin({ name: 'my-plugin', setup() {} })
 
-// ✅ commands/hello/[name:string].ts
+// ✅ commands/hello/[name].ts
 import { defineCommand } from 'zhin.js/command'
 export default defineCommand({
+  params: {
+    name: { type: 'string' },
+  },
   execute({ params }) {
     return `你好，${params.name}！`
   },

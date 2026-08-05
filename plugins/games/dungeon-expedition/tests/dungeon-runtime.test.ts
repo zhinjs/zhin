@@ -6,7 +6,7 @@ import {
   type GameReply,
 } from '@zhin.js/game-kit';
 import plugin from '../plugin.ts';
-import dungeonCommand from '../commands/dungeon/[action:string=].ts';
+import dungeonCommand from '../commands/dungeon/[[action]].ts';
 import {
   createServices,
   type SessionService,

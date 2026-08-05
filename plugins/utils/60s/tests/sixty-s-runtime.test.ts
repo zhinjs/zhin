@@ -5,7 +5,7 @@ import { DEFAULT_API_BASE, registerSixtySApiBase, resolveApiBase } from '../src/
 import plugin from '../plugin.ts';
 import weatherTool from '../agent/tools/weather.ts';
 import newsTool from '../agent/tools/60s_news.ts';
-import weatherCommand from '../commands/weather/[city:string].ts';
+import weatherCommand from '../commands/weather/[city].ts';
 import newsCommand from '../commands/60s.ts';
 
 describe('@zhin.js/plugin-60s', () => {

@@ -155,7 +155,7 @@ export default defineCommand({
 });
 ```
 
-带参数用方括号文件名，例如 `commands/hello/[name:string=world].ts` → `hello <name:string=world>`，在 `execute` 里读 `params.name`。
+带参数用 Next.js 风格方括号文件名，例如 `commands/hello/[[name]].ts` → `hello [name]`（可选）；类型与默认值在 `defineCommand({ params })` 中声明（如 `params: { name: { type: 'string', default: 'world' } }`），在 `execute` 里读 `params.name`。必需参数用单方括号 `[name].ts`，捕获所有用 `[...name].ts`（运行时 `params.name` 为 `string[]`）。
 
 ### 第 6 步：生成 tsconfig.json
 

@@ -228,10 +228,6 @@ export function formatInboundContent(body: SatoriEventBody & { message: SatoriMe
   return typeof content === 'string' ? content : String(content);
 }
 
-export function resolveInboundTarget(body: SatoriEventBody & { message: SatoriMessage }): string {
-  const channel = body.channel ?? body.message.channel;
-  return channel?.id ?? '';
-}
 
 /**
  * 入站归一化 → ConversationRef：Channel.type 1 (DIRECT) → kind 'private'；

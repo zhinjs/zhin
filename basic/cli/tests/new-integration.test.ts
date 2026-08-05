@@ -45,7 +45,7 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(path.join(pluginDir, 'schema.json'))).toBe(true)
     expect(await fs.pathExists(path.join(pluginDir, 'commands', `${pluginName}.ts`))).toBe(true)
     expect(
-      await fs.pathExists(path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text:string].ts'))
+      await fs.pathExists(path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text].ts'))
     ).toBe(true)
     expect(await fs.pathExists(path.join(pluginDir, 'tests'))).toBe(true)
     expect(await fs.pathExists(path.join(pluginDir, 'agent', 'skills', `${pluginName}.md`))).toBe(true)
@@ -101,10 +101,11 @@ describe('CLI new command integration', () => {
     expect(commandTs).toContain('defineCommand')
     expect(commandTs).toContain('@zhin.js/command')
     const echoTs = await fs.readFile(
-      path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text:string].ts'),
+      path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text].ts'),
       'utf-8'
     )
     expect(echoTs).toContain('params.text')
+    expect(echoTs).toContain("text: { type: 'string', description: '要回显的文本' }")
 
     // Check schema.json（空对象 schema）
     const schema = await fs.readJson(path.join(pluginDir, 'schema.json'))

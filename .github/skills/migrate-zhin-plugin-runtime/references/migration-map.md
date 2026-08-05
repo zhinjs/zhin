@@ -94,8 +94,14 @@ gh issue list
   -> commands/gh/issue/list.ts
 
 gh pr <title:string=defaultTitle>
-  -> commands/gh/pr/[title:string=defaultTitle].ts
+  -> commands/gh/pr/[[title]].ts
+     （defineCommand({ params: { title: { type: 'string', default: 'defaultTitle' } } })）
 ```
+
+命令文件名用 Next.js 风格方括号声明参数形态（`[name]` 必需 / `[[name]]` 可选 /
+`[...name]` 捕获所有 / `[[...name]]` 可选捕获所有）；类型与默认值不再写在文件名里，
+统一在 `defineCommand({ params })` 中声明（`type` 必填，`default` 可选，有 `default`
+时文件名必须用双方括号）。matcher 模式串 DSL（`<name:type>` / `[name:type=default]`）不变。
 
 新 action 接收 `CommandContext`：旧 `message` 对应 `context.input`，旧
 `result.params/result.args` 对应 `context.params/context.args`。

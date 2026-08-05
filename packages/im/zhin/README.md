@@ -119,11 +119,14 @@ export default definePlugin({
 ```
 
 ```typescript
-// commands/hello/[name:string].ts — 路径即路由
+// commands/hello/[name].ts — 路径即路由，类型在 params 中声明
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
   description: '打招呼',
+  params: {
+    name: { type: 'string' },
+  },
   execute({ params }) {
     return `Hello, ${params.name}!`;
   },

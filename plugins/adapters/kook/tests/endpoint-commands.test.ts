@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import { createEndpointRuntimeState } from '@zhin.js/adapter';
 import listCommand from '../commands/endpoint/list.js';
-import addCommand from '../commands/endpoint/add/[name:string].js';
-import removeCommand from '../commands/endpoint/remove/[name:string].js';
+import addCommand from '../commands/endpoint/add/[name].js';
+import removeCommand from '../commands/endpoint/remove/[name].js';
 import { kookRuntimeStateToken } from '../src/kook-runtime-state.js';
 
 /**

@@ -15,7 +15,7 @@ export interface GameCommandAliasRoute {
   /** 首词命中即接管（不含前导 `/`），如 `['21点', 'bj']`。 */
   readonly aliases: readonly string[];
   /**
-   * 与 `commands/<cmd>/[action:string=].ts` 的 execute 逻辑保持一致：
+   * 与 `commands/<cmd>/[[action]].ts` 的 execute 逻辑保持一致：
    * action 为别名后剩余文本（无参数时为 ''）；返回回复文本，null/undefined 表示放行。
    */
   run(

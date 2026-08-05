@@ -17,7 +17,7 @@ user-invocable: true
 
 | 目录 | API |
 |------|-----|
-| `commands/**/*.ts` | `defineCommand()`（路径即路由；`[name:string=default].ts` 传参） |
+| `commands/**/*.ts` | `defineCommand()`（路径即路由；Next.js 风格 `[name].ts` / `[[name]].ts` / `[...name].ts` 传参，类型与默认值在 `params` 中声明） |
 | `middlewares/*.ts` | `defineMiddleware()` |
 | `components/*.tsx` | `defineComponent()` |
 | `tools/*.ts` | `defineAgentTool()` |

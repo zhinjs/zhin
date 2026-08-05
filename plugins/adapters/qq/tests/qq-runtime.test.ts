@@ -11,9 +11,7 @@ import {
 } from '../src/endpoint.js';
 import {
   formatInboundContent,
-  formatInboundTarget,
   formatOutboundText,
-  parseSendTarget,
   resolveOutboundMessageId,
   resolveQqConfig,
   type QqInboundMessage,
@@ -130,10 +128,8 @@ describe('qq protocol helpers', () => {
     expect(resolveQqConfig({ appid: 'a', secret: 's', mode: 'middleware' }).mode).toBe('middleware');
   });
 
-  it('formats inbound target and content', () => {
-    expect(formatInboundTarget(textMessage())).toBe('group:group-1');
+  it('formats inbound content', () => {
     expect(formatInboundContent(textMessage())).toBe('hello');
-    expect(parseSendTarget('channel:chan-1')).toEqual({ kind: 'channel', id: 'chan-1' });
   });
 
   it('formats outbound text and resolves send result ids', () => {

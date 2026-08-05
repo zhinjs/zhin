@@ -15,16 +15,17 @@ export default defineCommand({
 });
 ```
 
-最后一个文件名可以声明参数：
+最后一个文件名可以用 Next.js 风格方括号声明参数形态，类型与默认值在 `defineCommand({ params })` 中声明（`type` 必填，`default` 可选且有默认值时文件名必须用双方括号）：
 
 ```text
-commands/gh/pr/[title:string=defaultTitle].ts -> gh pr [title]
-commands/upload/[asset:image].ts             -> upload <asset>
+commands/gh/pr/[[title]].ts   -> gh pr [title]    （params: { title: { type: 'string', default: 'defaultTitle' } }）
+commands/upload/[asset].ts    -> upload <asset>   （params: { asset: { type: 'image' } }）
+commands/search/[...kw].ts    -> search <...kw>   （params: { kw: { type: 'text' } }，运行时 params.kw 为 string[]）
 ```
 
 文本类型包括 `string`、`word`、`text`、`number`、`integer`、`float`、`boolean`；结构化
 类型包括 `mention`、`image`、`face`、`reply`、`forward`、`dice`、`rps`。结构化类型
-直接从对应 segment 取值，不能声明文件名默认值。
+直接从对应 segment 取值，不能声明默认值。
 
 `execute()` 收到冻结的 `CommandContext`：
 

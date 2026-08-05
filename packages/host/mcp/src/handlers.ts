@@ -34,7 +34,7 @@ export function createCommandCode(args: {
   // 或中间件里读 context.input?.sender / scene 做场景校验。`
     : '';
 
-  return `// 建议路径：commands/${slug}.ts（文件路径即命令路由；带参用 [name:string].ts）
+  return `// 建议路径：commands/${slug}.ts（文件路径即命令路由；带参用 [name].ts 并在 defineCommand 的 params 中声明类型）
 // 经典模板「${pattern}」请改写为路径参数，勿再使用 MessageCommand。
 import { defineCommand } from 'zhin.js/command';
 

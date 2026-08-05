@@ -1,8 +1,6 @@
 export {
   formatInboundContent,
-  formatInboundTarget,
   formatOutboundKmarkdown,
-  parseSendTarget,
   resolveKookConfig,
   senderDisplayName,
   KookPermission,
@@ -10,7 +8,6 @@ export {
   type KookInboundMessage,
   type KookWireSegment,
   type LogLevel,
-  type ParsedSendTarget,
   type ResolvedKookConfig,
   type ResolvedKookWebhookConfig,
   type ResolvedKookWebsocketConfig,

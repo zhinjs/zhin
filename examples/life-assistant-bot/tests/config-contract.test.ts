@@ -24,7 +24,7 @@ describe('life-assistant-bot 配置契约', () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(botRoot, 'package.json'), 'utf8'))
     expect(manifest.scripts.dev).toBe('zhin runtime start')
     expect(manifest.zhin.entry).toBe('./plugin.ts')
-    expect(fs.existsSync(path.join(botRoot, 'commands/remind/[text:string].ts'))).toBe(true)
+    expect(fs.existsSync(path.join(botRoot, 'commands/remind/[text].ts'))).toBe(true)
     expect(fs.existsSync(path.join(botRoot, 'tools/get-current-time.ts'))).toBe(true)
   })
 

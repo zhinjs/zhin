@@ -4,9 +4,9 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import listCommand from '../commands/endpoint/list.js';
-import addCommand from '../commands/endpoint/add/[name:string=].js';
+import addCommand from '../commands/endpoint/add/[[name]].js';
 import cancelCommand from '../commands/endpoint/cancel.js';
-import removeCommand from '../commands/endpoint/remove/[name:string].js';
+import removeCommand from '../commands/endpoint/remove/[name].js';
 import { createQqRuntimeState, qqRuntimeStateToken } from '../src/qq-runtime-state.js';
 
 /**

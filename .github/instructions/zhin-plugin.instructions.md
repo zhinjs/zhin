@@ -46,12 +46,18 @@ Each TypeScript capability default-exports exactly one definition. Do not call `
 The file path is the route SSOT:
 
 ```text
-commands/gh/issue/list.ts                       gh issue list
-commands/gh/pr/[title:string=defaultTitle].ts  gh pr [title]
+commands/gh/issue/list.ts    gh issue list
+commands/gh/pr/[[title]].ts  gh pr [title]
 ```
 
+Dynamic parameter files use Next.js-style brackets: `[name].ts` required, `[[name]].ts` optional,
+`[...name].ts` catch-all, `[[...name]].ts` optional catch-all. Type and default value are declared
+in `defineCommand({ params })` — `params.<name>.type` is required, `default` is optional (a default
+requires the double-bracket file form). Catch-all parameters are `string[]` at runtime.
+
 Read parsed values from `context.params`, extra words from `context.args`, and the inbound Message
-from `context.input`. Do not duplicate route or parameter metadata inside the definition.
+from `context.input`. Do not duplicate route metadata inside the definition — but parameter type
+and default must live in `defineCommand({ params })`, not in the file name.
 
 ## Config, Resources and lifecycle
 

@@ -93,11 +93,6 @@ export interface QqWireSegment {
   readonly data?: Record<string, unknown>;
 }
 
-export interface ParsedSendTarget {
-  readonly kind: QqChannelKind;
-  readonly id: string;
-}
-
 export function resolveQqConfig(config: QqAdapterConfig = {}): ResolvedQqConfig {
   const entry = config.endpoints?.find((item) => item.context === 'qq' || !item.context);
   const appid = pickCredential(config.appid, entry?.appid, process.env.QQ_APPID, process.env.QQ_BOT_APPID);
@@ -138,27 +133,6 @@ export function resolveQqConfig(config: QqAdapterConfig = {}): ResolvedQqConfig 
     accessTokenUrl: config.accessTokenUrl ?? entry?.accessTokenUrl,
     gatewayUrl: config.gatewayUrl ?? entry?.gatewayUrl,
   };
-}
-
-/**
- * Gateway reply target：`private:uid` / `group:gid` / `channel:cid` / `direct:guildId`。
- * 仅用于平台边界编解码（compound message id 等）；框架侧寻址一律用 ConversationRef。
- */
-export function formatInboundTarget(msg: QqInboundMessage): string {
-  return `${msg.channelKind}:${msg.channelId}`;
-}
-
-export function parseSendTarget(target: string): ParsedSendTarget {
-  const sep = target.indexOf(':');
-  if (sep <= 0) {
-    return { kind: 'private', id: target };
-  }
-  const head = target.slice(0, sep);
-  const rest = target.slice(sep + 1);
-  if (head === 'private' || head === 'group' || head === 'channel' || head === 'direct') {
-    return { kind: head, id: rest };
-  }
-  return { kind: 'private', id: target };
 }
 
 /**

@@ -134,11 +134,6 @@ export interface KookWireSegment {
   readonly data?: Record<string, unknown>;
 }
 
-export interface ParsedSendTarget {
-  readonly kind: 'private' | 'channel';
-  readonly id: string;
-}
-
 export function resolveKookConfig(config: KookAdapterConfig = {}): ResolvedKookConfig {
   const entry = config.endpoints?.find((item) => item.context === 'kook' || !item.context);
   const token = pickCredential(config.token, entry?.token, process.env.KOOK_TOKEN, process.env.KOOK_BOT_TOKEN);
@@ -195,14 +190,6 @@ export function resolveKookConfig(config: KookAdapterConfig = {}): ResolvedKookC
 }
 
 /**
- * Gateway reply target：`private:uid` / `channel:cid`，便于 send() 还原 API。
- * 仅用于平台边界编解码；框架侧寻址一律用 ConversationRef。
- */
-export function formatInboundTarget(msg: KookInboundMessage): string {
-  return `${msg.channelKind}:${msg.channelId}`;
-}
-
-/**
  * 入站归一化 → ConversationRef：频道消息的所属 guild 进 `parent`（guild 容器
  * 映射为 channel 容器）；私聊（PERSON）无容器，直接 kind 'private'。
  */
@@ -215,18 +202,6 @@ export function kookInboundConversation(endpointId: string, msg: KookInboundMess
       ? { parent: { kind: 'channel' as const, id: msg.guildId } }
       : {}),
   };
-}
-
-export function parseSendTarget(target: string): ParsedSendTarget {
-  const sep = target.indexOf(':');
-  if (sep <= 0) {
-    return { kind: 'channel', id: target };
-  }
-  const head = target.slice(0, sep);
-  const rest = target.slice(sep + 1);
-  if (head === 'private') return { kind: 'private', id: rest };
-  if (head === 'channel' || head === 'group') return { kind: 'channel', id: rest };
-  return { kind: 'channel', id: target };
 }
 
 export function senderDisplayName(msg: KookInboundMessage): string {

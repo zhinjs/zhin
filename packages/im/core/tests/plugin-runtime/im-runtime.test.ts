@@ -185,7 +185,7 @@ describe('IM Runtime', () => {
       owner: root,
       feature: commandFeatureId,
       localName: 'upload/$asset',
-      source: '/commands/upload/[asset:image].ts',
+      source: '/commands/upload/[asset].ts',
       definition: {
         ...defineCommand({
           execute: ({ params }) =>

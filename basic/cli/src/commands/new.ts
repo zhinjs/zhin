@@ -384,7 +384,7 @@ export default definePlugin({
 
 /**
  * 约定式插件入口（Plugin Runtime）：
- * - commands/ 下的 defineCommand 模块即命令（文件名即命令名，支持 [param:type] 动态段目录）
+ * - commands/ 下的 defineCommand 模块即命令（文件名即命令名，支持 [param] 动态段目录）
  * - 如需初始化 / 清理逻辑，添加 setup(context)（参考 zhin new --type service）
  */
 export default definePlugin({
@@ -412,18 +412,21 @@ export default defineCommand({
     const echoCommandTs = `import { defineCommand } from '@zhin.js/command';
 
 /**
- * 动态段命令：目录名 [text:string] 声明一个 string 参数。
+ * 动态段命令：目录名 [text] 声明一个必需参数，类型在 params 中定义。
  * 聊天中发送 \`${pluginName}-echo 你好\` 即可触发，params.text 为「你好」。
  */
 export default defineCommand({
   description: '回显一段文本（动态段示例）',
+  params: {
+    text: { type: 'string', description: '要回显的文本' },
+  },
   execute({ params }) {
     return \`你说：\${String(params.text ?? '')}\`;
   },
 });
 `;
     await fs.writeFile(
-      path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text:string].ts'),
+      path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text].ts'),
       echoCommandTs,
       'utf8',
     );
@@ -494,7 +497,7 @@ export default defineAdapter<${capitalizedName}AdapterConfig, string>({
       ? `${capitalizedName} 适配器（\`zhin new --type adapter\` 生成）：约定式 Plugin Runtime 形态，\`adapters/\` 下的 \`defineAdapter\` 模块即适配器，Endpoint 骨架含 start/open/close/stop/send，入站经 \`messageGatewayToken\` 投递。`
       : kind === 'service'
         ? `${capitalizedName} 服务插件（\`zhin new --type service\` 生成）：\`plugin.ts\` 的 \`setup(context)\` 负责初始化与清理，宿主资源（database/schedule/outbound）经 \`context.resources\` 按需取用。`
-        : `${capitalizedName} 普通插件（\`zhin new\` / \`--type normal\` 生成）：\`commands/\` 下的 \`defineCommand\` 模块即命令，含动态段 \`[text:string]\` 示例。`;
+        : `${capitalizedName} 普通插件（\`zhin new\` / \`--type normal\` 生成）：\`commands/\` 下的 \`defineCommand\` 模块即命令，含动态段 \`[text]\` 示例。`;
 
   const readmeUse =
     kind === 'adapter'
@@ -542,7 +545,7 @@ ${readmeUse}
 
 - \`plugin.ts\`：插件入口（\`definePlugin\`，package.json \`zhin.entry\` 指向它）
 - \`schema.json\`：实例配置（\`plugins.<instanceKey>\`）的 JSON Schema
-${kind === 'normal' ? '- `commands/`：命令模块（`defineCommand`），目录段 `[name:type]` 声明动态参数\n' : ''}${kind === 'adapter' ? '- `adapters/`：适配器模块（`defineAdapter`），`create(context)` 返回 Endpoint 实例\n' : ''}- \`agent/skills/\`：AI 技能（随 npm 包发布）
+${kind === 'normal' ? '- `commands/`：命令模块（`defineCommand`），目录段 `[name]` 声明动态参数（类型在 `params` 中定义）\n' : ''}${kind === 'adapter' ? '- `adapters/`：适配器模块（`defineAdapter`），`create(context)` 返回 Endpoint 实例\n' : ''}- \`agent/skills/\`：AI 技能（随 npm 包发布）
 - \`tests/\`：Vitest 运行时契约测试
 
 ## AI 技能（agent/skills）
@@ -706,7 +709,7 @@ describe('zhin.js-${pluginName}', () => {
 import { parseCommandDefinition } from '@zhin.js/command';
 import plugin from '../plugin.ts';
 import mainCommand from '../commands/${pluginName}.ts';
-import echoCommand from '../commands/${pluginName}-echo/[text:string].ts';
+import echoCommand from '../commands/${pluginName}-echo/[text].ts';
 
 describe('zhin.js-${pluginName}', () => {
   it('defines a valid Plugin Runtime entry', () => {

@@ -54,7 +54,7 @@ pnpm dev          # = zhin runtime start
 （[minimal-bot](../minimal-bot/) 或 `npm create zhin-app`）：
 
 - 能力变多，需要按文件分工
-- 带参数文件路由（如 `commands/remind/[time:string].ts`）
+- 带参数文件路由（如 `commands/remind/[time].ts`）
 - 希望改单个能力时只重建对应 Feature projection，而不是重载整个单文件插件
 
 `setup()` 同样支持 `addComponent`、`addMiddleware`、`addAdapter`；自定义 Feature 用

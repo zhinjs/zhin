@@ -238,10 +238,6 @@ export function formatSlashContent(cmd: SlackSlashCommand): string {
   return `${cmd.command} ${cmd.text}`.trim();
 }
 
-export function inboundMessageId(event: SlackMessageEvent): string {
-  return `${event.channel}:${event.ts}`;
-}
-
 /**
  * Wire-encode an already-rendered outbound payload into Slack text + Block Kit blocks.
  * Segment canonicalization is intentionally not done here.

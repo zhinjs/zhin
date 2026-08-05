@@ -1,12 +1,9 @@
 export {
   formatInboundContent,
-  formatInboundTarget,
   formatOutboundText,
-  parseSendTarget,
   resolveOutboundMessageId,
   resolveQqConfig,
   senderDisplayName,
-  type ParsedSendTarget,
   type QqAdapterConfig,
   type QqChannelKind,
   type QqInboundMessage,

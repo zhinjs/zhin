@@ -322,16 +322,6 @@ export function botApiUrl(config: Pick<ResolvedTelegramConfig, 'apiBaseUrl' | 't
   return `${config.apiBaseUrl}/bot${config.token}/${method}`;
 }
 
-export function resolveChannel(msg: Pick<TelegramMessage, 'chat'>): {
-  readonly channelType: 'private' | 'group';
-  readonly channelId: string;
-} {
-  return {
-    channelType: msg.chat.type === 'private' ? 'private' : 'group',
-    channelId: String(msg.chat.id),
-  };
-}
-
 /** Telegram chat.type → canonical 会话 kind（supergroup 即 group，无容器层级故无 parent）。 */
 export function resolveTelegramChannelType(
   chatType: TelegramChat['type'],

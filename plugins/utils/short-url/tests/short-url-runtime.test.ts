@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import plugin from '../plugin.ts';
-import shortenCommand from '../commands/shorten/[url:string].ts';
-import expandCommand from '../commands/expand/[url:string].ts';
+import shortenCommand from '../commands/shorten/[url].ts';
+import expandCommand from '../commands/expand/[url].ts';
 import { expandUrl, isValidUrl } from '../src/short-url-lib.js';
 
 describe('@zhin.js/plugin-short-url', () => {
