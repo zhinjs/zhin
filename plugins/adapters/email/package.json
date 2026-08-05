@@ -16,6 +16,7 @@
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/core": "workspace:*",
+    "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "imap": "^0.8.19",

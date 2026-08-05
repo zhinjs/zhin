@@ -231,8 +231,7 @@ describe('BaseSessionService', () => {
     expect(send).toHaveBeenCalledWith({
       adapter: 'sandbox',
       endpointId: 'default',
-      channelType: 'group',
-      channelId: 'room',
+      conversation: { kind: 'group', id: 'room' },
       content: 'Alpha timed out',
     });
     await lifecycle.dispose();

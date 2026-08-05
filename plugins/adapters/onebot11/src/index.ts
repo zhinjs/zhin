@@ -4,13 +4,12 @@ export {
   extractQuoteId,
   formatInboundContent,
   formatInboundMetadata,
-  formatInboundTarget,
   formatOutboundSegments,
   getChannelId,
   isMessageEvent,
   isOneBot11BotMentioned,
   mediaRefToOneBotFile,
-  parseSendTarget,
+  onebot11InboundConversation,
   resolveOneBot11Config,
   senderDisplayName,
   senderNickname,
@@ -26,7 +25,6 @@ export {
   type OneBot11WireSegment,
   type OneBot11WsConfig,
   type OneBot11WssConfig,
-  type ParsedSendTarget,
   type ResolvedOneBot11Config,
 } from './protocol.js';
 

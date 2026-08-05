@@ -8,9 +8,9 @@ import {
 } from '../src/endpoint.js';
 import {
   Actions,
-  formatInboundTarget,
   formatOutboundBody,
-  parseSendTarget,
+  icqqInboundConversation,
+  icqqOutboundTarget,
   resolveIcqqConfig,
 } from '../src/protocol.js';
 import { getIcqqAgentDeps, setIcqqAgentDeps } from '../src/icqq-agent-deps.js';
@@ -77,24 +77,39 @@ describe('icqq protocol helpers', () => {
     expect(() => resolveIcqqConfig({ name: 'bot' })).toThrow(/numeric name/);
   });
 
-  it('parses send targets', () => {
-    expect(parseSendTarget('group:100')).toEqual({ kind: 'group', groupId: 100 });
-    expect(parseSendTarget('private:2')).toEqual({ kind: 'private', userId: 2 });
-    expect(parseSendTarget('temp:100:2')).toEqual({ kind: 'temp', groupId: 100, userId: 2 });
-    expect(parseSendTarget('channel:g1:c1')).toEqual({
+  it('derives outbound targets from conversations', () => {
+    const endpoint = { id: 'test-endpoint', adapter: 'test' };
+    expect(icqqOutboundTarget({ endpoint, kind: 'group', id: '100' }))
+      .toEqual({ kind: 'group', groupId: 100 });
+    expect(icqqOutboundTarget({ endpoint, kind: 'private', id: '2' }))
+      .toEqual({ kind: 'private', userId: 2 });
+    expect(icqqOutboundTarget({
+      endpoint,
+      kind: 'private',
+      id: '2',
+      parent: { kind: 'group', id: '100' },
+    })).toEqual({ kind: 'temp', groupId: 100, userId: 2 });
+    expect(icqqOutboundTarget({
+      endpoint,
       kind: 'channel',
-      guildId: 'g1',
-      channelId: 'c1',
-    });
+      id: 'c1',
+      parent: { kind: 'channel', id: 'g1' },
+    })).toEqual({ kind: 'channel', guildId: 'g1', channelId: 'c1' });
   });
 
-  it('formats inbound targets', () => {
-    expect(formatInboundTarget({ channelType: 'group', channelId: '100' })).toBe('group:100');
-    expect(formatInboundTarget({
+  it('normalizes inbound conversations', () => {
+    expect(icqqInboundConversation('test-endpoint', { channelType: 'group', channelId: '100' }))
+      .toMatchObject({ kind: 'group', id: '100' });
+    expect(icqqInboundConversation('test-endpoint', {
       channelType: 'private',
       channelId: '2',
       channelParentGroupId: '100',
-    })).toBe('temp:100:2');
+    })).toMatchObject({ kind: 'private', id: '2', parent: { kind: 'group', id: '100' } });
+    expect(icqqInboundConversation('test-endpoint', {
+      channelType: 'channel',
+      channelId: 'c1',
+      guildId: 'g1',
+    })).toMatchObject({ kind: 'channel', id: 'c1', parent: { kind: 'channel', id: 'g1' } });
   });
 
   it('formats outbound CQ-ish body', () => {
@@ -148,10 +163,10 @@ describe('icqq plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'group:100',
+      conversation: expect.objectContaining({ kind: 'group', id: '100' }),
+      message: expect.objectContaining({ id: 'm1' }),
       content: 'hello',
       sender: '2',
-      id: 'm1',
     }));
     await endpoint.stop();
   });
@@ -189,7 +204,7 @@ describe('icqq plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'm-quote',
+      message: expect.objectContaining({ id: 'm-quote' }),
       metadata: expect.objectContaining({
         quote_id: 'quoted-1',
         quote_sender_id: '3',
@@ -258,7 +273,7 @@ describe('icqq plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'group:100',
+      conversation: expect.objectContaining({ kind: 'group', id: '100' }),
       content: '[CQ:at,qq=10001] 在吗',
       metadata: expect.objectContaining({ mentioned: true }),
     }));
@@ -307,7 +322,11 @@ describe('icqq plugin runtime adapter', () => {
     await endpoint.start();
     endpoint.admit({
       id: '1',
-      target: 'group:1',
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: '1',
+      },
       content: 'x',
       sender: '2',
       channelType: 'group',
@@ -326,13 +345,20 @@ describe('icqq plugin runtime adapter', () => {
     });
     await endpoint.start();
     endpoint.open();
-    const id = await endpoint.send({ target: 'group:100', payload: 'pong' });
+    const id = await endpoint.send({
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: '100',
+      },
+      payload: 'pong',
+    });
     expect(id).toBe('sent-1');
     expect(mock.sent.some((s) => s.action === Actions.SEND_GROUP_MSG)).toBe(true);
     await endpoint.stop();
   });
 
-  it('send posts temp message via IPC (temp:gid:uid)', async () => {
+  it('send posts temp message via IPC (群容器内的 private 会话)', async () => {
     const mock = createMockIpc();
     const endpoint = new IcqqIpcEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
@@ -342,14 +368,22 @@ describe('icqq plugin runtime adapter', () => {
     });
     await endpoint.start();
     endpoint.open();
-    await endpoint.send({ target: 'temp:100:2', payload: 'hi' });
+    await endpoint.send({
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'private',
+        id: '2',
+        parent: { kind: 'group', id: '100' },
+      },
+      payload: 'hi',
+    });
     const call = mock.sent.find((s) => s.action === Actions.SEND_TEMP_MSG);
     expect(call).toBeDefined();
     expect(call?.params).toEqual({ group_id: 100, user_id: 2, message: 'hi' });
     await endpoint.stop();
   });
 
-  it('send posts guild channel message via IPC (channel:guild:channel)', async () => {
+  it('send posts guild channel message via IPC (guild 容器内的 channel 会话)', async () => {
     const mock = createMockIpc();
     const endpoint = new IcqqIpcEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
@@ -359,7 +393,15 @@ describe('icqq plugin runtime adapter', () => {
     });
     await endpoint.start();
     endpoint.open();
-    await endpoint.send({ target: 'channel:g1:c1', payload: 'hi' });
+    await endpoint.send({
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'channel',
+        id: 'c1',
+        parent: { kind: 'channel', id: 'g1' },
+      },
+      payload: 'hi',
+    });
     const call = mock.sent.find((s) => s.action === Actions.GUILD_SEND_MSG);
     expect(call).toBeDefined();
     expect(call?.params).toEqual({ guild_id: 'g1', channel_id: 'c1', message: 'hi' });
@@ -376,7 +418,14 @@ describe('icqq plugin runtime adapter', () => {
     });
     await endpoint.start();
     await endpoint.stop();
-    await expect(endpoint.send({ target: 'group:100', payload: 'x' })).rejects.toThrow(/未连接/);
+    await expect(endpoint.send({
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: '100',
+      },
+      payload: 'x',
+    })).rejects.toThrow(/未连接/);
     await expect(endpoint.request(Actions.PING)).rejects.toThrow(/未连接/);
   });
 

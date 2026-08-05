@@ -7,7 +7,7 @@ Zhin.js Telegram Bot API 适配器（Plugin Runtime），默认通过 **长轮�
 - 长轮询 `getUpdates` 入站（默认；无需公网 IP / host-http）
 - 解析 text / image / video / audio / voice / document / sticker / location / callback_query
 - 支持私聊与群组
-- 出站 `send({ target, payload })` → Bot API（text / media / keyboard）
+- 出站 `send({ conversation, payload })` → Bot API（text / media / keyboard）
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - Webhook 模式延期（需 `httpHostToken`）；配置 `polling: false` 会明确报错
 
@@ -25,8 +25,8 @@ pnpm add @zhin.js/adapter-telegram
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 - **无需** `@zhin.js/host-http`（polling 路径）
 
-入站：`gateway.receive({ adapter, target: chatId, content: text, sender, metadata })`  
-出站：`send({ target, payload })` → Telegram Bot API
+入站：`gateway.receive({ conversation, message, content, sender, metadata })`（`conversation` 为 ConversationRef，由 `telegramInboundConversation` 归一化）  
+出站：`send({ conversation, payload })` → Telegram Bot API
 
 ### 平台权限（platform permit）
 

@@ -8,7 +8,7 @@ Zhin.js [Milky](https://milky.ntqqrev.org/) 协议适配器（Plugin Runtime）�
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - **正向 WebSocket**（`connection: ws`）：应用连协议端 `ws(s)://baseUrl/event`
 - `access_token` 鉴权（Bearer + query）
-- 入站经 `messageGatewayToken`；出站 `send({ target, payload })` → HTTP `send_*_message`
+- 入站经 `messageGatewayToken`；出站 `send({ conversation, payload })` → HTTP `send_*_message`
 
 ## 安装
 
@@ -23,8 +23,8 @@ pnpm add @zhin.js/adapter-milky
 - `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
-入站：`gateway.receive({ adapter, target: "private:uid"|"group:gid", content, sender, metadata })`  
-出站：`send({ target, payload })` → HTTP `send_private_message` / `send_group_message`（payload 已由 gateway/core 渲染；无 segment-mapper）
+入站：`gateway.receive({ conversation: ConversationRef(kind: "private"|"group", id), message, content, sender, metadata })`  
+出站：`send({ conversation, payload })` → HTTP `send_private_message` / `send_group_message`（payload 已由 gateway/core 渲染；无 segment-mapper）
 
 ## 最小配置
 

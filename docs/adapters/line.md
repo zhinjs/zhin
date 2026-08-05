@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/line/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/line/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=3fbe6c1bad4a0704 -->
+<!-- sync-adapter-docs:sha256=6e91c318cd91392c -->
 
 # @zhin.js/adapter-line
 
@@ -36,8 +36,8 @@ pnpm add @zhin.js/adapter-line
 - `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
-入站：`gateway.receive({ adapter, target: channelId, content: text, sender, metadata })`  
-出站：`send({ target, payload })` → Reply API（缓存 replyToken）或 Push API
+入站：`gateway.receive({ conversation, message: { conversation, id }, content: text, sender, metadata })`  
+出站：`send({ conversation, payload })` → Reply API（缓存 replyToken）或 Push API
 
 ## 前置条件
 

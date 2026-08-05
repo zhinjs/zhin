@@ -9,6 +9,7 @@ import {
   type EndpointInstance,
   type EndpointLifecycle,
   type EndpointManagement,
+  type EndpointSendRequest,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -18,10 +19,10 @@ import {
   buildSendMessageParams,
   buildWsConnectOptions,
   formatInboundContent,
-  formatInboundTarget,
   formatOutboundSegments,
   isBotMentioned,
   isMessageEvent,
+  onebot12InboundConversation,
   senderNickname,
   senderUserId,
   uploadOneBot12MediaSegments,
@@ -115,7 +116,7 @@ export class OneBot12WsEndpoint implements EndpointInstance {
     this.#ws = undefined;
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const materialized = await uploadOneBot12MediaSegments(
       payload,
       (action, params) => this.callApi(action, params),
@@ -128,13 +129,14 @@ export class OneBot12WsEndpoint implements EndpointInstance {
       },
     );
     const message = formatOutboundSegments(materialized);
-    const params = buildSendMessageParams(target, message);
+    const params = buildSendMessageParams(conversation, message);
     const data = await this.#callAction('send_message', params) as { message_id?: string } | undefined;
     const messageId = data?.message_id ?? '';
     logger.debug(formatCompact({
       op: 'onebot12_send',
       endpoint: this.#options.config.name,
-      target,
+      kind: conversation.kind,
+      conversationId: conversation.id,
       messageId,
     }));
     return messageId;
@@ -153,16 +155,15 @@ export class OneBot12WsEndpoint implements EndpointInstance {
   /** Test / internal: admit a parsed event when the endpoint is open. */
   admit(ev: OneBot12Event): void {
     if (!this.#open || !isMessageEvent(ev)) return;
-    const target = formatInboundTarget(ev);
+    const conversation = onebot12InboundConversation(String(this.#options.id), ev);
     const content = formatInboundContent(ev);
     const nickname = senderNickname(ev);
     const mentioned = isBotMentioned(ev);
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target,
+      conversation,
+      message: { conversation, id: ev.message_id },
       content,
       sender: senderUserId(ev),
-      id: ev.message_id,
       metadata: Object.freeze({
         detail_type: ev.detail_type,
         user_id: ev.user_id,
@@ -177,7 +178,8 @@ export class OneBot12WsEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'onebot12_gateway_receive_failed',
-        target,
+        kind: conversation.kind,
+        conversationId: conversation.id,
         error: err instanceof Error ? err.message : String(err),
       }));
     });

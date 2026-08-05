@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/napcat/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/napcat/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=792c33d08b598cae -->
+<!-- sync-adapter-docs:sha256=b124e127f2a0ca10 -->
 
 # @zhin.js/adapter-napcat
 
@@ -36,8 +36,8 @@ pnpm add @zhin.js/adapter-napcat
 - `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
-入站：`gateway.receive({ adapter, target: "private:uid"|"group:gid", content, sender, metadata })`  
-出站：`send({ target, payload })` → WS `send_private_msg` / `send_group_msg`
+入站：`gateway.receive({ conversation, message: { conversation, id }, content, sender, metadata })`（`conversation` 为 ConversationRef：私聊 `kind: 'private'`、群聊 `kind: 'group'`，临时会话群容器进 `parent`）  
+出站：`send({ conversation, payload })` → WS `send_private_msg` / `send_group_msg`
 
 ## 最小配置
 

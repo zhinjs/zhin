@@ -19,8 +19,8 @@ import {
   extractInboundAudioUrl,
   formatInboundContent,
   formatInboundSegments,
-  formatInboundTarget,
   formatOutboundSegments,
+  milkyInboundConversation,
   parseMessageReceiveData,
   parseSendTarget,
   resolveMilkyConfig,
@@ -31,6 +31,20 @@ import {
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
+
+const milkyCapabilityId = capabilityId(rootPluginId(), adapterFeature, 'milky');
+const milkyEndpointRef = {
+  id: String(milkyCapabilityId),
+  adapter: String(rootPluginId()),
+} as const;
+
+function milkyConversation(kind: 'private' | 'group', id: string) {
+  return {
+    endpoint: milkyEndpointRef,
+    kind,
+    id,
+  } as const;
+}
 
 const baseConfig: MilkyWsConfig = resolveMilkyConfig({
   connection: 'ws',
@@ -114,7 +128,7 @@ describe('milky protocol helpers', () => {
     });
   });
 
-  it('formats inbound target and content from message_receive', () => {
+  it('builds inbound ConversationRef and content from message_receive', () => {
     const event: MilkyEvent = {
       event_type: 'message_receive',
       time: 1,
@@ -130,8 +144,35 @@ describe('milky protocol helpers', () => {
       },
     };
     const data = parseMessageReceiveData(event)!;
-    expect(formatInboundTarget(data)).toBe('group:100');
+    expect(milkyInboundConversation('root\0zhin.adapter\0milky', data)).toEqual({
+      endpoint: { id: 'root\0zhin.adapter\0milky', adapter: 'root' },
+      kind: 'group',
+      id: '100',
+    });
     expect(formatInboundContent(data)).toBe('hello');
+  });
+
+  it('maps temp scene to a private conversation inside its group container', () => {
+    const data = parseMessageReceiveData({
+      event_type: 'message_receive',
+      time: 1,
+      self_id: 1,
+      data: {
+        message_scene: 'temp',
+        peer_id: 100,
+        message_seq: 9,
+        sender_id: 42,
+        time: 1,
+        segments: [{ type: 'text', data: { text: 'hi' } }],
+        group: { group_id: 7 },
+      },
+    })!;
+    expect(milkyInboundConversation('ep', data)).toEqual({
+      endpoint: { id: 'ep', adapter: 'ep' },
+      kind: 'private',
+      id: '100',
+      parent: { kind: 'group', id: '7' },
+    });
   });
 
   function incomingMessage(segments: MilkyIncomingMessage['segments']): MilkyIncomingMessage {
@@ -320,10 +361,13 @@ describe('milky plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'private:10001',
+      conversation: milkyConversation('private', '10001'),
+      message: {
+        conversation: milkyConversation('private', '10001'),
+        id: 'friend:10001:42',
+      },
       content: '你好',
       sender: '10001',
-      id: 'friend:10001:42',
       metadata: expect.objectContaining({ nickname: 'Alice' }),
     }));
 
@@ -382,7 +426,7 @@ describe('milky plugin runtime adapter', () => {
     endpoint.open();
 
     await expect(endpoint.send({
-      target: 'private:10001',
+      conversation: milkyConversation('private', '10001'),
       payload: 'pong',
     })).resolves.toBe('friend:10001:99');
 
@@ -427,7 +471,7 @@ describe('milky plugin runtime adapter', () => {
     }));
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'group:200',
+      conversation: milkyConversation('group', '200'),
       content: 'from-ws',
     }));
     await endpoint.stop();
@@ -467,7 +511,7 @@ describe('milky plugin runtime adapter', () => {
     });
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'group:200',
+      conversation: milkyConversation('group', '200'),
       sender: '9',
       metadata: expect.objectContaining({ mentioned: true, nickname: 'bob' }),
     }));
@@ -692,10 +736,13 @@ describe('milky plugin runtime adapter', () => {
     expect(res.status).toBe(200);
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'private:10001',
+      conversation: milkyConversation('private', '10001'),
+      message: {
+        conversation: milkyConversation('private', '10001'),
+        id: 'friend:10001:42',
+      },
       content: 'from-webhook',
       sender: '10001',
-      id: 'friend:10001:42',
       metadata: expect.objectContaining({ nickname: 'Alice' }),
     }));
 

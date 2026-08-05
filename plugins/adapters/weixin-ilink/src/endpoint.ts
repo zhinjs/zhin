@@ -4,7 +4,12 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { EndpointFriend, EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
+import type {
+  EndpointFriend,
+  EndpointInstance,
+  EndpointManagement,
+  EndpointSendRequest,
+} from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
@@ -44,6 +49,7 @@ import {
   inboundMessageId,
   segmentLocalPath,
   sleep,
+  weixinIlinkInboundConversation,
   type ResolvedWeixinIlinkConfig,
   type WeixinMessageWithMedia,
   type WeixinWireSegment,
@@ -197,10 +203,12 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
     }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     if (!this.#creds?.botToken) {
       throw new Error('weixin-ilink bot not authenticated');
     }
+    // 个人微信仅 private 会话，对端 user_id 即 conversation.id
+    const target = conversation.id;
     const contextToken = getContextToken(this.#options.config.name, target);
     if (!contextToken) {
       logger.warn(formatCompact({
@@ -288,12 +296,12 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
     if (msg.context_token && userId) {
       setContextToken(this.#options.config.name, userId, msg.context_token);
     }
+    const conversation = weixinIlinkInboundConversation(String(this.#options.id), userId);
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target: userId,
+      conversation,
+      message: { conversation, id: inboundMessageId(msg) },
       content: formatInboundContent(msg),
       sender: userId,
-      id: inboundMessageId(msg),
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         messageType: msg.message_type,

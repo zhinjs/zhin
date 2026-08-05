@@ -156,10 +156,14 @@ describe('github plugin runtime adapter', () => {
     expect(res.status).toBe(200);
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'owner/repo/issues/42',
+      conversation: expect.objectContaining({
+        kind: 'channel',
+        id: 'owner/repo/issues/42',
+        parent: { kind: 'channel', id: 'owner/repo' },
+      }),
+      message: expect.objectContaining({ id: '1' }),
       content: 'hello from issue',
       sender: 'alice',
-      id: '1',
     }));
     await endpoint.stop();
   });
@@ -226,7 +230,12 @@ describe('github plugin runtime adapter', () => {
     await endpoint.start();
     endpoint.open();
     const id = await endpoint.send({
-      target: 'owner/repo/issues/7',
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'channel',
+        id: 'owner/repo/issues/7',
+        parent: { kind: 'channel', id: 'owner/repo' },
+      },
       payload: 'reply text',
     });
     expect(id).toBe('99');

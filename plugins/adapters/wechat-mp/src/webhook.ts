@@ -25,6 +25,7 @@ import {
   readTextBody,
   resolveEventPassiveReply,
   verifySignature,
+  wechatMpInboundConversation,
   type ResolvedWeChatMpConfig,
   type WeChatMessage,
 } from './protocol.js';
@@ -218,13 +219,13 @@ export async function collectPassiveReply(
 ): Promise<string> {
   const timeoutMs = handler.config.passiveReplyTimeoutMs;
   const text = await runWithPassiveReplyCapture(async () => {
+    const conversation = wechatMpInboundConversation(String(handler.id), wechatMsg);
     await Promise.race([
       handler.gateway.receive({
-        adapter: handler.id,
-        target: wechatMsg.FromUserName,
+        conversation,
+        message: { conversation, id: formatInboundId(wechatMsg) },
         content: formatInboundContent(wechatMsg),
         sender: wechatMsg.FromUserName,
-        id: formatInboundId(wechatMsg),
         metadata: Object.freeze({
           msgType: wechatMsg.MsgType,
           event: wechatMsg.Event,

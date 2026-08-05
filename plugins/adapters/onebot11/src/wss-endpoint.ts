@@ -2,7 +2,7 @@
  * OneBot11 reverse WSS endpoint — accepts inbound WebSocket from OneBot implementation.
  */
 import { clearInterval } from 'node:timers';
-import type { EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -13,9 +13,9 @@ import {
   buildSendAction,
   formatInboundContent,
   formatInboundMetadata,
-  formatInboundTarget,
   formatOutboundSegments,
   isMessageEvent,
+  onebot11InboundConversation,
   senderUserId,
   type OneBot11Event,
   type OneBot11WssConfig,
@@ -116,9 +116,9 @@ export class OneBot11WssEndpoint implements EndpointInstance {
     this.#started = false;
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
-    const { action, params } = buildSendAction(target, message);
+    const { action, params } = buildSendAction(conversation, message);
     const data = await this.callApi(action, params) as { message_id?: number | string } | undefined;
     return data?.message_id != null ? String(data.message_id) : '';
   }
@@ -144,18 +144,17 @@ export class OneBot11WssEndpoint implements EndpointInstance {
 
   admit(ev: OneBot11Event): void {
     if (!this.#open || !isMessageEvent(ev)) return;
-    const target = formatInboundTarget(ev);
+    const conversation = onebot11InboundConversation(String(this.#options.id), ev);
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target,
+      conversation,
+      message: { conversation, id: String(ev.message_id) },
       content: formatInboundContent(ev),
       sender: senderUserId(ev),
-      id: String(ev.message_id),
       metadata: formatInboundMetadata(ev, this.#options.config.name),
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'onebot11_gateway_receive_failed',
-        target,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });

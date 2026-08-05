@@ -12,10 +12,9 @@ import type { OneBot12WsSocket } from '../src/ws-types.js';
 import {
   buildSendMessageParams,
   formatInboundContent,
-  formatInboundTarget,
   formatOutboundSegments,
   mediaRefToOneBot12UploadParams,
-  parseSendTarget,
+  onebot12InboundConversation,
   resolveOneBot12Config,
   uploadOneBot12MediaSegments,
   type OneBot12Event,
@@ -24,6 +23,22 @@ import {
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
+
+const testEndpointId = capabilityId(rootPluginId(), adapterFeature, 'onebot12');
+const testEndpointIdString = String(testEndpointId);
+
+function makeConversation(
+  kind: 'private' | 'group' | 'channel',
+  id: string,
+  parent?: { kind: 'group' | 'channel'; id: string },
+) {
+  return {
+    endpoint: { id: testEndpointIdString, adapter: testEndpointIdString.split('\0')[0] ?? testEndpointIdString },
+    kind,
+    id,
+    ...(parent ? { parent } : {}),
+  };
+}
 
 const baseConfig: OneBot12WsConfig = resolveOneBot12Config({
   connection: 'ws',
@@ -95,7 +110,7 @@ describe('onebot12 protocol helpers', () => {
     });
   });
 
-  it('formats inbound target and content', () => {
+  it('normalizes inbound events into ConversationRef and content', () => {
     const ev: OneBot12Event = {
       id: 'e1',
       time: 1,
@@ -108,30 +123,63 @@ describe('onebot12 protocol helpers', () => {
       alt_message: 'hello',
       message: [{ type: 'text', data: { text: 'hello' } }],
     };
-    expect(formatInboundTarget(ev)).toBe('group:100');
+    expect(onebot12InboundConversation(testEndpointIdString, ev)).toEqual(makeConversation('group', '100'));
     expect(formatInboundContent(ev)).toBe('hello');
   });
 
-  it('parses send targets including channel with guild', () => {
-    expect(parseSendTarget('private:42')).toEqual({ detail_type: 'private', id: '42' });
-    expect(parseSendTarget('group:9')).toEqual({ detail_type: 'group', id: '9' });
-    expect(parseSendTarget('channel:g1:c1')).toEqual({
+  it('maps channel guild and private temp session into conversation parent', () => {
+    const channelEv: OneBot12Event = {
+      id: 'e2',
+      time: 1,
+      type: 'message',
       detail_type: 'channel',
+      sub_type: '',
+      message_id: 'm2',
+      channel_id: 'c1',
       guild_id: 'g1',
-      id: 'c1',
-    });
+      user_id: 'u1',
+      alt_message: 'hi',
+    };
+    expect(onebot12InboundConversation(testEndpointIdString, channelEv)).toEqual(
+      makeConversation('channel', 'c1', { kind: 'channel', id: 'g1' }),
+    );
+
+    const tempEv: OneBot12Event = {
+      id: 'e3',
+      time: 1,
+      type: 'message',
+      detail_type: 'private',
+      sub_type: '',
+      message_id: 'm3',
+      user_id: 'u2',
+      group_id: '300',
+      alt_message: 'temp',
+    };
+    expect(onebot12InboundConversation(testEndpointIdString, tempEv)).toEqual(
+      makeConversation('private', 'u2', { kind: 'group', id: '300' }),
+    );
   });
 
-  it('builds send_message params from target', () => {
-    expect(buildSendMessageParams('private:1', [{ type: 'text', data: { text: 'hi' } }])).toEqual({
+  it('builds send_message params from ConversationRef', () => {
+    expect(buildSendMessageParams(makeConversation('private', '1'), [{ type: 'text', data: { text: 'hi' } }])).toEqual({
       message: [{ type: 'text', data: { text: 'hi' } }],
       detail_type: 'private',
       user_id: '1',
     });
-    expect(buildSendMessageParams('group:2', [{ type: 'text', data: { text: 'hi' } }])).toEqual({
+    expect(buildSendMessageParams(makeConversation('group', '2'), [{ type: 'text', data: { text: 'hi' } }])).toEqual({
       message: [{ type: 'text', data: { text: 'hi' } }],
       detail_type: 'group',
       group_id: '2',
+    });
+    // channel 的 guild 容器取自 conversation.parent
+    expect(buildSendMessageParams(
+      makeConversation('channel', 'c1', { kind: 'channel', id: 'g1' }),
+      [{ type: 'text', data: { text: 'hi' } }],
+    )).toEqual({
+      message: [{ type: 'text', data: { text: 'hi' } }],
+      detail_type: 'channel',
+      channel_id: 'c1',
+      guild_id: 'g1',
     });
   });
 
@@ -268,10 +316,10 @@ describe('onebot12 plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'private:10001',
+      conversation: makeConversation('private', '10001'),
+      message: expect.objectContaining({ id: 'msg-1' }),
       content: '你好',
       sender: '10001',
-      id: 'msg-1',
       metadata: expect.objectContaining({ nickname: 'Alice' }),
     }));
 
@@ -313,7 +361,7 @@ describe('onebot12 plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'group:200',
+      conversation: makeConversation('group', '200'),
       sender: '9',
       metadata: expect.objectContaining({ mentioned: true }),
     }));
@@ -403,7 +451,7 @@ describe('onebot12 plugin runtime adapter', () => {
     endpoint.open();
 
     const sendPromise = endpoint.send({
-      target: 'private:10001',
+      conversation: makeConversation('private', '10001'),
       payload: 'pong',
     });
 
@@ -450,7 +498,7 @@ describe('onebot12 plugin runtime adapter', () => {
     endpoint.open();
 
     const sendPromise = endpoint.send({
-      target: 'private:10001',
+      conversation: makeConversation('private', '10001'),
       payload: [{
         type: 'image',
         data: { media: { kind: 'base64', value: 'QUJD', mime_type: 'image/png' }, name: 'a.png' },
@@ -515,7 +563,7 @@ describe('onebot12 plugin runtime adapter', () => {
     endpoint.open();
 
     const sendPromise = endpoint.send({
-      target: 'private:10001',
+      conversation: makeConversation('private', '10001'),
       payload: [{ type: 'image', data: { media: { kind: 'base64', value: 'QUJD' } } }],
     });
 
@@ -579,7 +627,7 @@ describe('onebot12 plugin runtime adapter', () => {
     }));
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'group:200',
+      conversation: makeConversation('group', '200'),
       content: 'from-ws',
     }));
     await endpoint.stop();
@@ -675,12 +723,12 @@ describe('onebot12 plugin runtime adapter', () => {
     expect(res.status).toBe(200);
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'private:10001',
+      conversation: makeConversation('private', '10001'),
+      message: expect.objectContaining({ id: 'msg-1' }),
       content: 'from-webhook',
-      id: 'msg-1',
     }));
 
-    await endpoint.send({ target: 'private:10001', payload: 'pong' });
+    await endpoint.send({ conversation: makeConversation('private', '10001'), payload: 'pong' });
     expect(callAction).toHaveBeenCalledWith(
       expect.objectContaining({ url: 'http://127.0.0.1:6700' }),
       'send_message',

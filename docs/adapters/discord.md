@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/discord/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/discord/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=cc737afbe0c433c3 -->
+<!-- sync-adapter-docs:sha256=3dd8af45e66bb7aa -->
 
 # @zhin.js/adapter-discord
 
@@ -19,7 +19,7 @@ Zhin.js Discord 适配器（Plugin Runtime），默认通过 **Gateway WebSocket
 - Gateway WebSocket 入站（默认；无需公网 HTTPS / host）
 - 解析 text / mention / attachment / embed / sticker / button
 - 支持私聊、群组与服务器频道
-- 出站 `send({ target, payload })` → Discord channel message（text / media / embed / keyboard）
+- 出站 `send({ conversation, payload })` → Discord channel message（text / media / embed / keyboard）
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - Interactions HTTP webhook 延期（需 `httpHostToken`）；配置 `connection: interactions` 会明确报错
 
@@ -37,8 +37,8 @@ pnpm add @zhin.js/adapter-discord discord.js
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 - **无需** `@zhin.js/host-http` / `@zhin.js/host-router`（Gateway 路径）
 
-入站：`gateway.receive({ adapter, target: channelId, content: text, sender, metadata })`  
-出站：`send({ target, payload })` → discord.js channel.send
+入站：`gateway.receive({ conversation, message, content: text, sender, metadata })`（`conversation` 为 `ConversationRef`，guild 频道带 `parent` guild 容器）  
+出站：`send({ conversation, payload })` → discord.js channel.send
 
 ### 平台权限（platform permit）
 

@@ -84,11 +84,17 @@ describe('IM Runtime', () => {
     });
     let requester: unknown;
     const message = new Message(
-      capabilityId(root, adapterFeatureId, 'memory'),
-      'room',
+      {
+        endpoint: {
+          id: String(capabilityId(root, adapterFeatureId, 'memory')),
+          adapter: String(root),
+        },
+        kind: 'private',
+        id: 'room',
+      },
       '/child.status',
       1,
-      async (_content, owner) => { requester = owner; },
+      async (_content, owner) => { requester = owner; return { status: 'sent' }; },
     );
 
     await expect(new MessageDispatcher().dispatch(message, snapshot)).resolves.toMatchObject({
@@ -129,12 +135,17 @@ describe('IM Runtime', () => {
       });
     };
     const send = (content: string, metadata?: Record<string, unknown>) => new Message(
-      capabilityId(root, adapterFeatureId, 'memory'),
-      'room',
+      {
+        endpoint: {
+          id: String(capabilityId(root, adapterFeatureId, 'memory')),
+          adapter: String(root),
+        },
+        kind: 'private',
+        id: 'room',
+      },
       content,
       1,
-      async () => 'ok',
-      undefined,
+      async () => ({ status: 'sent' as const }),
       undefined,
       metadata ? Object.freeze({ ...metadata }) : undefined,
     );
@@ -203,12 +214,17 @@ describe('IM Runtime', () => {
       projections: new Map([[commandFeatureId, new CommandIndex([command], base)]]),
     });
     const message = new Message(
-      capabilityId(root, adapterFeatureId, 'memory'),
-      'room',
+      {
+        endpoint: {
+          id: String(capabilityId(root, adapterFeatureId, 'memory')),
+          adapter: String(root),
+        },
+        kind: 'private',
+        id: 'room',
+      },
       '/upload',
       1,
-      async () => undefined,
-      undefined,
+      async () => ({ status: 'sent' as const }),
       undefined,
       undefined,
       Object.freeze([
@@ -230,17 +246,20 @@ describe('IM Runtime', () => {
     const fixture = await createFixture(events, sent);
 
     const result = await fixture.im.receive({
-      adapter: fixture.adapter.id,
-      target: 'room-1',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-1',
+      },
       content: '/gh issue list open',
       sender: 'alice',
     });
 
     expect(result).toMatchObject({ matched: true, command: 'gh issue list' });
-    expect(sent).toEqual([{
-      target: 'room-1',
+    expect(sent).toEqual([expect.objectContaining({
+      conversation: expect.objectContaining({ kind: 'private', id: 'room-1' }),
       payload: { text: 'open:alice:g0', hooked: true },
-    }]);
+    })]);
     expect(events).toEqual([
       'endpoint:start',
       'endpoint:open',
@@ -262,46 +281,49 @@ describe('IM Runtime', () => {
     const fixture = await createFixture([], sent, (message) => { captured = message; });
 
     await fixture.im.receive({
-      adapter: fixture.adapter.id,
-      target: 'room-1',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-1',
+      },
       content: 'ordinary message',
     });
     expect(captured).toBeInstanceOf(Message);
     expect(() => captured?.$reply('late')).toThrow('scope has ended');
 
     await fixture.im.send({
-      adapter: fixture.adapter.id,
-      target: 'room-2',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-2',
+      },
       requester: rootPluginId(),
       content: component('result', { state: 'active', sender: 'system' }),
     });
-    expect(sent.at(-1)).toEqual({
-      target: 'room-2',
+    expect(sent.at(-1)).toEqual(expect.objectContaining({
+      conversation: expect.objectContaining({ kind: 'private', id: 'room-2' }),
       payload: { text: 'active:system:g0', hooked: true },
-    });
+    }));
 
     await fixture.adapters.stop();
     await fixture.store.close();
   });
 
-  it('passes structured conversations through Core and derives legacy targets for structured-only host sends', async () => {
+  it('passes structured conversations through Core and anchors host send addresses', async () => {
     const sent: unknown[] = [];
     const fixture = await createFixture([], sent);
     const conversation = {
-      endpoint: { id: String(fixture.adapter.id), adapter: 'memory' },
+      endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
       kind: 'group' as const,
       id: 'room-1',
     };
 
     await fixture.im.send({
-      adapter: fixture.adapter.id,
-      target: 'group:room-1',
       conversation,
       requester: rootPluginId(),
       content: 'structured send',
     });
     expect(sent.at(-1)).toEqual(expect.objectContaining({
-      target: 'group:room-1',
       conversation,
     }));
 
@@ -312,7 +334,6 @@ describe('IM Runtime', () => {
       content: 'host structured send',
     });
     expect(sent.at(-1)).toEqual(expect.objectContaining({
-      target: 'group:room-1',
       conversation,
     }));
 
@@ -333,12 +354,15 @@ describe('IM Runtime', () => {
         return emoji;
       },
       typing: async (conversation, active) => {
-        calls.push(`typing:${String(conversation)}:${String(active)}`);
+        const target = typeof conversation === 'string'
+          ? conversation
+          : `${conversation.kind}:${conversation.id}`;
+        calls.push(`typing:${target}:${String(active)}`);
       },
     };
     const fixture = await createFixture([], [], undefined, undefined, undefined, { endpointControl: control });
     const conversation = {
-      endpoint: { id: String(fixture.adapter.id), adapter: 'memory' },
+      endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
       kind: 'group' as const,
       id: 'room-1',
     };
@@ -453,21 +477,23 @@ describe('IM Runtime', () => {
     const events: RuntimeMessageEvent[] = [];
     const unsubscribe = fixture.im.onMessage((event) => events.push(event));
 
+    const groupConversation = {
+      endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+      kind: 'group' as const,
+      id: 'room-1',
+    };
     await fixture.im.receive({
-      adapter: fixture.adapter.id,
-      target: 'group:room-1',
+      conversation: groupConversation,
+      message: { conversation: groupConversation, id: 'msg-1' },
       content: 'hello console',
       sender: 'alice',
-      id: 'msg-1',
     });
 
     const inbound = events.find((event) => event.direction === 'inbound');
     expect(inbound).toMatchObject({
       direction: 'inbound',
-      adapter: fixture.adapter.id,
-      target: 'group:room-1',
+      conversation: groupConversation,
       sender: 'alice',
-      channelType: 'group',
       contentPreview: 'hello console',
       messageId: 'msg-1',
     });
@@ -476,23 +502,32 @@ describe('IM Runtime', () => {
     // 未匹配消息也触发入站事件（无回复时仅有 inbound 一条）
     events.length = 0;
     await fixture.im.receive({
-      adapter: fixture.adapter.id,
-      target: 'room-2',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-2',
+      },
       content: 'no command here',
     });
     expect(events.map((event) => event.direction)).toEqual(['inbound']);
 
     await fixture.im.send({
-      adapter: fixture.adapter.id,
-      target: 'room-3',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-3',
+      },
       requester: rootPluginId(),
       content: raw({ text: 'outbound hello' }),
     });
     const outbound = events.find((event) => event.direction === 'outbound');
     expect(outbound).toMatchObject({
       direction: 'outbound',
-      adapter: fixture.adapter.id,
-      target: 'room-3',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private',
+        id: 'room-3',
+      },
       requester: rootPluginId(),
       contentPreview: 'outbound hello',
     });
@@ -500,8 +535,11 @@ describe('IM Runtime', () => {
     unsubscribe();
     events.length = 0;
     await fixture.im.receive({
-      adapter: fixture.adapter.id,
-      target: 'room-4',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-4',
+      },
       content: 'after unsubscribe',
     });
     expect(events).toEqual([]);
@@ -519,8 +557,11 @@ describe('IM Runtime', () => {
     fixture.im.onMessage((event) => events.push(event));
 
     await expect(fixture.im.send({
-      adapter: fixture.adapter.id,
-      target: 'room-1',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-1',
+      },
       requester: rootPluginId(),
       content: 'do not send',
     })).resolves.toEqual({ status: 'suppressed' });
@@ -543,20 +584,23 @@ describe('IM Runtime', () => {
     fixture.im.onMessage((event) => events.push(event));
 
     const receipt = await fixture.im.send({
-      adapter: fixture.adapter.id,
-      target: 'room-1',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-1',
+      },
       requester: rootPluginId(),
       content: 'initial payload',
     });
 
     expect(receipt).toEqual({ status: 'sent', legacyMessageId: 'sent-1' });
-    expect(sent).toContainEqual({
-      target: 'room-1',
+    expect(sent).toContainEqual(expect.objectContaining({
+      conversation: expect.objectContaining({ kind: 'private', id: 'room-1' }),
       payload: [{
         type: 'image',
         data: { media: { kind: 'url', value: 'https://cdn.example/replaced.png' } },
       }],
-    });
+    }));
     expect(events.filter((event) => event.direction === 'outbound')).toEqual([
       expect.objectContaining({ contentPreview: '[image]', messageId: 'sent-1' }),
     ]);
@@ -577,8 +621,11 @@ describe('IM Runtime', () => {
     fixture.im.onMessage((event) => events.push(event));
 
     await expect(fixture.im.send({
-      adapter: fixture.adapter.id,
-      target: 'room-1',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-1',
+      },
       requester: rootPluginId(),
       content: 'initial payload',
     })).resolves.toMatchObject({ status: 'rejected', failure: { code: 'outbound_payload_rejected' } });
@@ -596,8 +643,11 @@ describe('IM Runtime', () => {
     const failedEvents: RuntimeMessageEvent[] = [];
     failed.im.onMessage((event) => failedEvents.push(event));
     await expect(failed.im.send({
-      adapter: failed.adapter.id,
-      target: 'room-1',
+      conversation: {
+        endpoint: { id: String(failed.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-1',
+      },
       requester: rootPluginId(),
       content: 'will fail',
     })).resolves.toMatchObject({ status: 'failed', failure: { code: 'endpoint_send_failed' } });
@@ -611,8 +661,11 @@ describe('IM Runtime', () => {
     const unsupportedEvents: RuntimeMessageEvent[] = [];
     unsupported.im.onMessage((event) => unsupportedEvents.push(event));
     await expect(unsupported.im.send({
-      adapter: unsupported.adapter.id,
-      target: 'room-1',
+      conversation: {
+        endpoint: { id: String(unsupported.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-1',
+      },
       requester: rootPluginId(),
       content: 'not supported',
     })).resolves.toMatchObject({ status: 'unsupported', failure: { code: 'outbound_unsupported' } });
@@ -630,8 +683,11 @@ describe('IM Runtime', () => {
 
     const longContent = 'x'.repeat(500);
     await fixture.im.receive({
-      adapter: fixture.adapter.id,
-      target: 'room-1',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-1',
+      },
       content: longContent,
     });
 
@@ -653,8 +709,11 @@ describe('IM Runtime', () => {
     fixture.im.onMessage((event) => events.push(event));
 
     await fixture.im.send({
-      adapter: fixture.adapter.id,
-      target: 'room-1',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-1',
+      },
       requester: rootPluginId(),
       content: raw([
         { type: 'text', data: { text: 'part-a' } },
@@ -684,8 +743,11 @@ describe('IM Runtime', () => {
     });
 
     const running = fixture.im.receive({
-      adapter: fixture.adapter.id,
-      target: 'room-1',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-1',
+      },
       content: '/gh issue list leased',
       sender: 'alice',
     });
@@ -701,10 +763,10 @@ describe('IM Runtime', () => {
     await running;
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(disposed).toBe(true);
-    expect(sent).toEqual([{
-      target: 'room-1',
+    expect(sent).toEqual([expect.objectContaining({
+      conversation: expect.objectContaining({ kind: 'private', id: 'room-1' }),
       payload: { text: 'leased:alice:g1', hooked: true },
-    }]);
+    })]);
 
     await fixture.adapters.stop();
     await fixture.store.close();
@@ -723,8 +785,11 @@ describe('IM Runtime', () => {
     });
 
     await fixture.im.send({
-      adapter: fixture.adapter.id,
-      target: 'group:room-1',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'group' as const,
+        id: 'room-1',
+      },
       requester: rootPluginId(),
       content: raw([
         { type: 'text', data: { text: '🎮 游戏大厅' } },
@@ -753,8 +818,11 @@ describe('IM Runtime', () => {
 
     // 数字回跳 → 中央 fallback map → handler
     const digit = await fixture.im.receive({
-      adapter: fixture.adapter.id,
-      target: 'group:room-1',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'group' as const,
+        id: 'room-1',
+      },
       content: '2',
       sender: 'alice',
     });
@@ -763,8 +831,11 @@ describe('IM Runtime', () => {
 
     // 平台 callback action 段 → handler
     const action = await fixture.im.receive({
-      adapter: fixture.adapter.id,
-      target: 'group:room-1',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'group' as const,
+        id: 'room-1',
+      },
       content: '[action: hub:h1:g_ttt]',
       sender: 'bob',
       segments: [{ type: 'action', data: { id: 'cb1', payload: 'hub:h1:g_ttt' } }],
@@ -774,8 +845,11 @@ describe('IM Runtime', () => {
 
     // 无匹配 payload 的普通消息不受影响
     const miss = await fixture.im.receive({
-      adapter: fixture.adapter.id,
-      target: 'group:room-1',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'group' as const,
+        id: 'room-1',
+      },
       content: 'ordinary message',
     });
     expect(miss.matched).toBe(false);
@@ -796,8 +870,11 @@ describe('IM Runtime', () => {
       data: { rows: [[{ id: 'a', label: '甲', payload: 'x:s:a' }]] },
     };
     await fixture.im.send({
-      adapter: fixture.adapter.id,
-      target: 'room-1',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-1',
+      },
       requester: rootPluginId(),
       content: raw([keyboard]),
     });
@@ -811,7 +888,7 @@ describe('IM Runtime', () => {
     let captured: Message | undefined;
     const fixture = await createFixture([], sent, (message) => { captured = message; });
     const conversation = {
-      endpoint: { id: String(fixture.adapter.id), adapter: 'memory' },
+      endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
       kind: 'group' as const,
       id: 'room-1',
     };
@@ -822,13 +899,11 @@ describe('IM Runtime', () => {
     ] as const;
 
     await fixture.im.receive({
-      adapter: fixture.adapter.id,
-      target: 'room-1',
+      conversation,
+      message: messageRef,
       content: '看图[image]',
       sender: 'alice',
       segments,
-      conversation,
-      message: messageRef,
     });
     expect(captured?.segments).toEqual(segments);
     expect(Object.isFrozen(captured?.segments)).toBe(true);
@@ -839,8 +914,11 @@ describe('IM Runtime', () => {
     expect(captured?.id).toBe('message-1');
 
     await fixture.im.receive({
-      adapter: fixture.adapter.id,
-      target: 'room-2',
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-2',
+      },
       content: 'plain text only',
     });
     expect(captured?.segments).toBeUndefined();

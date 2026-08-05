@@ -7,7 +7,7 @@ Zhin.js KOOK（开黑啦）适配器（Plugin Runtime），默认通过 **WebSoc
 - WebSocket Gateway 入站（默认；无需公网 HTTPS / host）
 - Webhook 入站（`connection: webhook` + `httpHostToken` + `verify_token`）
 - 解析频道与私聊文本消息
-- 出站 `send({ target, payload })` → KOOK KMarkdown（`channel:id` / `private:id`）
+- 出站 `send({ conversation, payload })` → KOOK KMarkdown（`kind: 'channel' | 'private'`）
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 
 ## 安装
@@ -25,8 +25,8 @@ pnpm add @zhin.js/adapter-kook
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 - **WebSocket 路径无需** `@zhin.js/host-http` / `@zhin.js/host-router`
 
-入站：`gateway.receive({ adapter, target: 'channel:…'|'private:…', content, sender, metadata })`  
-出站：`send({ target, payload })` → `sendChannelMsg` / `sendPrivateMsg`
+入站：`gateway.receive({ conversation, message, content, sender, metadata })`（ConversationRef：`channel` 频道消息带 guild `parent`，`private` 私聊）  
+出站：`send({ conversation, payload })` → `sendChannelMsg` / `sendPrivateMsg`
 
 ## 前置条件
 

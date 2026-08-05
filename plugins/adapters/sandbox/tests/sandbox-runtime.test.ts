@@ -6,6 +6,7 @@ import WebSocket from 'ws';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import { createHttpHost } from '@zhin.js/host-http';
 import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import { SandboxWsEndpoint } from '../src/endpoint.js';
 import {
   formatSandboxOutbound,
@@ -15,6 +16,15 @@ import {
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
+const endpointId = String(capabilityId(rootPluginId(), adapterFeature, 'sandbox'));
+
+function sandboxConversation(id: string, kind: ConversationRef['kind'] = 'private'): ConversationRef {
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind,
+    id,
+  };
+}
 
 afterEach(async () => {
   await Promise.all(hosts.splice(0).map((host) => host.close()));
@@ -57,7 +67,7 @@ describe('sandbox plugin runtime adapter', () => {
     });
 
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'demo-bot',
+      conversation: sandboxConversation('sandbox-user'),
       content: 'hello sandbox',
       sender: 'sandbox-user',
     }));
@@ -87,7 +97,7 @@ describe('sandbox plugin runtime adapter', () => {
       const client = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
       const timer = setTimeout(() => reject(new Error('timeout waiting for websocket reply')), 3000);
       client.once('open', () => {
-        endpoint.send({ target: 'demo-bot', payload: 'pong' });
+        endpoint.send({ conversation: sandboxConversation('sandbox-user'), payload: 'pong' });
       });
       client.on('message', (data) => {
         const parsed = JSON.parse(String(data)) as {
@@ -182,21 +192,24 @@ describe('sandbox plugin runtime adapter', () => {
       }, 20);
     });
 
-    // No cross-talk: each gateway saw exactly its own message.
+    // No cross-talk: each gateway saw exactly its own message (metadata.endpoint
+    // distinguishes them — both test endpoints share one CapabilityId).
     expect(receiveA).toHaveBeenCalledTimes(1);
     expect(receiveA).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'alpha-bot',
+      conversation: sandboxConversation('sandbox-user'),
       content: 'to-alpha',
+      metadata: expect.objectContaining({ endpoint: 'alpha-bot' }),
     }));
     expect(receiveB).toHaveBeenCalledTimes(1);
     expect(receiveB).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'beta-bot',
+      conversation: sandboxConversation('sandbox-user'),
       content: 'to-beta',
+      metadata: expect.objectContaining({ endpoint: 'beta-bot' }),
     }));
 
     // Outbound reaches only the endpoint's own connection.
-    endpointA.send({ target: 'alpha-bot', payload: 'reply-alpha' });
-    endpointB.send({ target: 'beta-bot', payload: 'reply-beta' });
+    endpointA.send({ conversation: sandboxConversation('sandbox-user'), payload: 'reply-alpha' });
+    endpointB.send({ conversation: sandboxConversation('sandbox-user'), payload: 'reply-beta' });
     const [wireA, wireB] = await Promise.all([
       new Promise<string>((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error('timeout alpha reply')), 3000);
@@ -403,7 +416,7 @@ describe('sandbox plugin runtime adapter', () => {
     });
 
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'demo-bot',
+      conversation: sandboxConversation('sandbox-user'),
       content: 'pick:yes',
       metadata: expect.objectContaining({
         action: { id: 'btn-1', payload: 'pick:yes' },

@@ -16,8 +16,7 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
         const result = await im.sendEndpointMessage({
           adapter: input.adapter,
           endpointId: input.endpointId,
-          channelType: input.channelType,
-          channelId: input.channelId,
+          conversation: input.conversation,
           content: input.content,
         });
         return result.messageId || null;

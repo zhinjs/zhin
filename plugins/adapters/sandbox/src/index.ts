@@ -4,6 +4,7 @@ export {
   normalizeSandboxOutboundSegments,
   parseSandboxWsPayload,
   resolveSandboxEndpoint,
+  sandboxInboundConversation,
   whenWsOpen,
   type MessageElement,
   type MessageType,

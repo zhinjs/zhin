@@ -24,8 +24,8 @@ pnpm add @zhin.js/adapter-wechat-mp
 - `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
-入站：`gateway.receive({ adapter, target: openid, content: text, sender, metadata })`  
-出站：`send({ target, payload })` → 被动回复 XML（默认）或客服消息 API（`replyMode: customer_service`）
+入站：`gateway.receive({ conversation: { endpoint, kind: 'private', id: openid }, message: { conversation, id }, content: text, sender, metadata })`  
+出站：`send({ conversation, payload })` → 被动回复 XML（默认）或客服消息 API（`replyMode: customer_service`）
 
 ## 前置条件
 

@@ -6,6 +6,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { isMediaRef } from '@zhin.js/core';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('lark');
@@ -158,8 +159,17 @@ export function resolveChatType(chatId?: string, chatType?: string): 'group' | '
   return chatId?.startsWith('oc_') ? 'group' : 'private';
 }
 
-export function resolveTarget(msg: LarkMessage): string {
-  return msg.chat_id || 'unknown';
+/**
+ * 入站归一化 → ConversationRef：`chat_type` 为 'group' 的会话映射为 group，
+ * p2p 单聊映射为 private；id 一律为平台 chat_id。Lark 无 guild/频道容器，
+ * 不产生 `parent`。
+ */
+export function larkInboundConversation(endpointId: string, msg: LarkMessage): ConversationRef {
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind: resolveChatType(msg.chat_id, msg.chat_type),
+    id: msg.chat_id || 'unknown',
+  };
 }
 
 export function resolveSender(msg: LarkMessage): string {

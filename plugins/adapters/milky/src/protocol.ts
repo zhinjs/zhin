@@ -6,6 +6,7 @@
 
 import { isMediaRef } from '@zhin.js/core';
 import type { Segment } from '@zhin.js/core/runtime';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('milky');
@@ -261,10 +262,22 @@ export function isMessageReceiveEvent(
   return parseMessageReceiveData(event) != null;
 }
 
-/** Gateway reply target：`private:uid` / `group:gid` */
-export function formatInboundTarget(data: MilkyIncomingMessage): string {
-  const isGroup = data.message_scene === 'group';
-  return `${isGroup ? 'group' : 'private'}:${data.peer_id}`;
+/**
+ * 入站归一化 → ConversationRef：`friend`（私聊）→ `private`；`group` → `group`；
+ * `temp`（群临时会话）→ 群容器内的 `private` 会话（parent = 来源群）。
+ */
+export function milkyInboundConversation(
+  endpointId: string,
+  data: MilkyIncomingMessage,
+): ConversationRef {
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind: data.message_scene === 'group' ? 'group' : 'private',
+    id: String(data.peer_id),
+    ...(data.message_scene === 'temp' && data.group
+      ? { parent: { kind: 'group' as const, id: String(data.group.group_id) } }
+      : {}),
+  };
 }
 
 export function formatInboundContent(data: MilkyIncomingMessage): string {

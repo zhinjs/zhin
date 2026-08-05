@@ -27,9 +27,9 @@ Adapter definitions declare `capabilities` for inbound/outbound admission and
 instead of probing optional endpoint methods. The zero-dependency types live in
 [`@zhin.js/im-contract`](../im-contract/README.md).
 
-New framework-facing outbound code should carry a structured `ConversationRef`.
-`EndpointSendRequest.target` remains temporarily for platform codecs that still
-need their legacy target string; it is not a general-purpose message identity.
+Framework-facing outbound code carries a structured `ConversationRef`.
+`EndpointSendRequest` is `{ conversation, payload }`; platform adapters derive
+their native target from `conversation` at the endpoint boundary.
 
 ## Endpoint Control Port
 

@@ -5,6 +5,7 @@ import type {
   EndpointChannel,
   EndpointInstance,
   EndpointManagement,
+  EndpointSendRequest,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost } from '@zhin.js/host-http';
@@ -14,9 +15,9 @@ import { formatOutbound } from './outbound.js';
 import { registerQqAgentEndpoint } from './qq-agent-deps.js';
 import {
   formatInboundContent,
-  formatInboundTarget,
   parseCompoundMessageId,
-  parseSendTarget,
+  qqInboundConversation,
+  qqOutboundKind,
   resolveOutboundMessageId,
   senderDisplayName,
   type QqInboundMessage,
@@ -118,33 +119,31 @@ export class QqWebsocketEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const body = formatOutbound(payload);
-    const parsed = parseSendTarget(target);
+    const kind = qqOutboundKind(conversation);
     const bot = this.#requireBot();
     let result: unknown;
-    switch (parsed.kind) {
+    switch (kind) {
       case 'private':
-        result = await bot.sendPrivateMessage(parsed.id, body);
+        result = await bot.sendPrivateMessage(conversation.id, body);
         break;
       case 'group':
-        result = await bot.sendGroupMessage(parsed.id, body);
+        result = await bot.sendGroupMessage(conversation.id, body);
         break;
       case 'channel':
-        result = await bot.sendGuildMessage(parsed.id, body);
+        result = await bot.sendGuildMessage(conversation.id, body);
         break;
       case 'direct':
         if (!bot.sendDirectMessage) throw new Error('QQ direct message not supported by transport');
-        result = await bot.sendDirectMessage(parsed.id, body);
+        result = await bot.sendDirectMessage(conversation.id, body);
         break;
-      default:
-        throw new Error(`unsupported QQ target kind: ${String((parsed as ParsedSendTarget).kind)}`);
     }
-    const messageId = `${parsed.kind}-${parsed.id}:${resolveOutboundMessageId(result)}`;
+    const messageId = `${kind}-${conversation.id}:${resolveOutboundMessageId(result)}`;
     logger.debug(formatCompact({
       op: 'qq_send',
       endpoint: this.#options.config.name,
-      target,
+      target: `${kind}:${conversation.id}`,
       messageId,
     }));
     return messageId;
@@ -178,14 +177,13 @@ export class QqWebsocketEndpoint implements EndpointInstance {
   /** Test / internal: admit a message when open. */
   admit(msg: QqInboundMessage): void {
     if (!this.#open) return;
-    const target = formatInboundTarget(msg);
+    const conversation = qqInboundConversation(String(this.#options.id), msg);
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target,
+      conversation,
+      message: { conversation, id: msg.id },
       content: formatInboundContent(msg),
       ...(msg.segments?.length ? { segments: msg.segments } : {}),
       sender: senderDisplayName(msg),
-      id: msg.id,
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         channelKind: msg.channelKind,
@@ -198,7 +196,7 @@ export class QqWebsocketEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'qq_gateway_receive_failed',
-        target,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });
@@ -248,8 +246,6 @@ export class QqWebsocketEndpoint implements EndpointInstance {
     return this.#bot;
   }
 }
-
-type ParsedSendTarget = ReturnType<typeof parseSendTarget>;
 
 export interface QqHttpEndpointOptions {
   readonly id: CapabilityId;
@@ -331,29 +327,27 @@ export class QqHttpEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const body = formatOutbound(payload);
-    const parsed = parseSendTarget(target);
+    const kind = qqOutboundKind(conversation);
     const bot = this.#requireBot();
     let result: unknown;
-    switch (parsed.kind) {
+    switch (kind) {
       case 'private':
-        result = await bot.sendPrivateMessage(parsed.id, body);
+        result = await bot.sendPrivateMessage(conversation.id, body);
         break;
       case 'group':
-        result = await bot.sendGroupMessage(parsed.id, body);
+        result = await bot.sendGroupMessage(conversation.id, body);
         break;
       case 'channel':
-        result = await bot.sendGuildMessage(parsed.id, body);
+        result = await bot.sendGuildMessage(conversation.id, body);
         break;
       case 'direct':
         if (!bot.sendDirectMessage) throw new Error('QQ direct message not supported by transport');
-        result = await bot.sendDirectMessage(parsed.id, body);
+        result = await bot.sendDirectMessage(conversation.id, body);
         break;
-      default:
-        throw new Error(`unsupported QQ target kind: ${String((parsed as ParsedSendTarget).kind)}`);
     }
-    return `${parsed.kind}-${parsed.id}:${resolveOutboundMessageId(result)}`;
+    return `${kind}-${conversation.id}:${resolveOutboundMessageId(result)}`;
   }
 
   async recallMessage(messageId: string): Promise<void> {
@@ -383,14 +377,13 @@ export class QqHttpEndpoint implements EndpointInstance {
 
   admit(msg: QqInboundMessage): void {
     if (!this.#open) return;
-    const target = formatInboundTarget(msg);
+    const conversation = qqInboundConversation(String(this.#options.id), msg);
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target,
+      conversation,
+      message: { conversation, id: msg.id },
       content: formatInboundContent(msg),
       ...(msg.segments?.length ? { segments: msg.segments } : {}),
       sender: senderDisplayName(msg),
-      id: msg.id,
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         channelKind: msg.channelKind,
@@ -403,7 +396,7 @@ export class QqHttpEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'qq_gateway_receive_failed',
-        target,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });

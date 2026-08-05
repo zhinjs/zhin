@@ -1,7 +1,12 @@
 /**
  * IcqqIpcEndpoint — lifecycle, outbound, IPC subscribe/admit for ICQQ daemon.
  */
-import type { EndpointControl, EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
+import type {
+  EndpointControl,
+  EndpointInstance,
+  EndpointManagement,
+  EndpointSendRequest,
+} from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
@@ -38,9 +43,9 @@ import {
 import {
   Actions,
   formatInboundContent,
-  formatInboundTarget,
   formatOutboundBody,
-  parseSendTarget,
+  icqqInboundConversation,
+  icqqOutboundTarget,
   type IcqqInboundMessage,
   type IpcEvent,
   type IpcResponse,
@@ -265,7 +270,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     if (!this.ipc) {
       throw new Error(`icqq endpoint ${this.name} 未连接（IPC 未初始化或已停止），无法发送消息`);
     }
@@ -274,7 +279,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       ? materializeOutboundBase64(payload, mediaMode)
       : payload;
     const message = formatOutboundBody(content);
-    const parsed = parseSendTarget(target);
+    const parsed = icqqOutboundTarget(conversation);
     let action: string;
     let params: Record<string, unknown>;
     switch (parsed.kind) {
@@ -313,7 +318,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     logger.debug(formatCompact({
       op: 'icqq_send',
       endpoint: this.name,
-      target,
+      target: `${conversation.kind}:${conversation.id}`,
       messageId,
     }));
     return messageId;
@@ -630,13 +635,14 @@ export class IcqqIpcEndpoint implements EndpointInstance {
 
   /** Test / internal: admit when open. */
   admit(msg: IcqqInboundMessage): void {
+    const conversation = msg.conversation;
     if (!this.#open) {
       logger.debug(formatCompact({
         op: 'icqq_inbound_skip',
         reason: 'endpoint_closed',
         endpoint: this.name,
         id: msg.id,
-        target: msg.target,
+        target: `${conversation.kind}:${conversation.id}`,
       }));
       return;
     }
@@ -650,7 +656,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       op: 'icqq_inbound_admit',
       endpoint: this.name,
       id: msg.id,
-      target: msg.target,
+      target: `${conversation.kind}:${conversation.id}`,
       sender: msg.sender,
       channelType: msg.channelType,
       mentioned: mentioned || undefined,
@@ -658,12 +664,11 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       segments: summarizeSegmentTypes(msg.segments),
     }));
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target: msg.target,
+      conversation,
+      message: { conversation, id: msg.id },
       content: msg.content,
       ...(msg.segments ? { segments: msg.segments } : {}),
       sender: msg.sender,
-      id: msg.id,
       metadata: Object.freeze({
         endpoint: this.name,
         channelType: msg.channelType,
@@ -673,7 +678,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'icqq_gateway_receive_failed',
-        target: msg.target,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });
@@ -747,7 +752,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     }
     this.admit({
       id: normalized.messageId,
-      target: formatInboundTarget({
+      conversation: icqqInboundConversation(String(this.#options.id), {
         channelType: normalized.channelType,
         channelId: normalized.channelId,
         channelParentGroupId: normalized.channelParentGroupId,
@@ -789,7 +794,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     }
     this.admit({
       id: normalized.messageId,
-      target: formatInboundTarget({
+      conversation: icqqInboundConversation(String(this.#options.id), {
         channelType: 'channel',
         channelId: normalized.channelId,
         guildId: normalized.guildId,

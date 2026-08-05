@@ -1,7 +1,7 @@
 /**
  * DingTalkEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -9,13 +9,13 @@ import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { registerDingtalkAgentEndpoint } from './dingtalk-agent-deps.js';
 import { normalizeDingtalkSenderForPermit } from './platform-permit.js';
 import {
+  dingtalkInboundConversation,
   formatInboundContent,
   formatOutboundBody,
   generateMessageId,
   isDingtalkBotMentioned,
   resolveChatType,
   resolveSender,
-  resolveTarget,
   type AccessToken,
   type DingTalkApiResponse,
   type DingTalkEvent,
@@ -116,9 +116,9 @@ export class DingTalkEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const content = formatOutboundBody(payload);
-    const sessionWebhook = this.#sessionWebhooks.get(target);
+    const sessionWebhook = this.#sessionWebhooks.get(conversation.id);
     if (sessionWebhook) {
       const response = await this.#fetch(sessionWebhook, {
         method: 'POST',
@@ -133,7 +133,7 @@ export class DingTalkEndpoint implements EndpointInstance {
         op: 'send',
         endpoint: this.#options.config.name,
         via: 'sessionWebhook',
-        to: target,
+        to: conversation.id,
       }));
       return (data.msgId as string) || `${Date.now()}`;
     }
@@ -151,7 +151,7 @@ export class DingTalkEndpoint implements EndpointInstance {
     if (data.errcode !== 0) {
       throw new Error(`Failed to send message: ${data.errmsg}`);
     }
-    logger.debug(formatCompact({ op: 'send', endpoint: this.#options.config.name, to: target }));
+    logger.debug(formatCompact({ op: 'send', endpoint: this.#options.config.name, to: conversation.id }));
     return (data.msgId as string) || `${Date.now()}`;
   }
 
@@ -161,15 +161,14 @@ export class DingTalkEndpoint implements EndpointInstance {
     if (event.sessionWebhook && event.conversationId) {
       this.#sessionWebhooks.set(event.conversationId, event.sessionWebhook);
     }
-    const target = resolveTarget(event);
+    const conversation = dingtalkInboundConversation(String(this.#options.id), event);
     const chatType = resolveChatType(event.conversationType);
     const permit = normalizeDingtalkSenderForPermit({ isAdmin: event.isAdmin === true });
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target,
+      conversation,
+      message: { conversation, id: generateMessageId(event) },
       content: formatInboundContent(event),
       sender: resolveSender(event),
-      id: generateMessageId(event),
       metadata: Object.freeze({
         msgtype: event.msgtype,
         chatType,
@@ -183,7 +182,7 @@ export class DingTalkEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'dingtalk_gateway_receive_failed',
-        target,
+        conversationId: conversation.id,
         error: err instanceof Error ? err.message : String(err),
       }));
     });

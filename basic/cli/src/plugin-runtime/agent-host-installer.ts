@@ -407,7 +407,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       // so activity-feedback's typing indicator can resolve OutboundHost.
       // Runtime message.adapter is a CapabilityId (\0-separated); strip it and
       // use Endpoint liveName so the OutboundHost resolve() succeeds.
-      const effectiveAdapter = capabilityLocalName(message.adapter);
+      const effectiveAdapter = capabilityLocalName(String(message.conversation.endpoint.id));
       const effectiveEndpoint = adapterLiveEndpointName(message);
       if (effectiveAdapter && effectiveEndpoint) {
         (commMessage as { $adapter?: string }).$adapter = effectiveAdapter;
@@ -855,8 +855,10 @@ function createRuntimeProactiveOutbound(im: ImRuntime): ProactiveOutboundService
       const result = await im.sendEndpointMessage({
         adapter: ctx.scene.platform,
         endpointId: ctx.scene.endpointId,
-        channelType: ctx.scene.kind,
-        channelId: ctx.scene.sceneId,
+        conversation: {
+          kind: ctx.scene.kind as 'private' | 'group' | 'channel',
+          id: ctx.scene.sceneId,
+        },
         content,
       });
       return result.messageId || 'ok';
@@ -904,7 +906,7 @@ export function bridgeRuntimeMessage(
   endpointMaster: string | undefined,
   roles: RuntimeSenderRoles,
 ) {
-  const localName = capabilityLocalName(message.adapter);
+  const localName = capabilityLocalName(String(message.conversation.endpoint.id));
   const channelType = resolveChannelType(message.metadata);
   const channelId = resolveChannelId(message);
   // Prefer real Endpoint name (e.g. ICQQ uin); fall back to adapter local name.
@@ -947,8 +949,6 @@ export function bridgeRuntimeMessage(
       ...message.metadata,
       ...(message.segments?.length ? { segments: message.segments } : {}),
       ...(segmentMedia.length > 0 ? { media: segmentMedia } : {}),
-      runtimeAdapter: message.adapter,
-      runtimeTarget: message.target,
       ...(endpointMaster ? { endpointMaster } : {}),
     },
   });
@@ -959,7 +959,7 @@ function resolveOwnerForRuntimeMessage(
   resolve?: InstallAgentHostOptions['resolveEndpointOwner'],
 ): string | undefined {
   if (!resolve) return undefined;
-  const localName = capabilityLocalName(message.adapter);
+  const localName = capabilityLocalName(String(message.conversation.endpoint.id));
   const endpointId = String(
     message.metadata?.endpoint
     ?? message.metadata?.endpointId
@@ -973,7 +973,7 @@ function resolveTrustedForRuntimeMessage(
   resolve?: InstallAgentHostOptions['resolveEndpointTrusted'],
 ): readonly string[] {
   if (!resolve) return [];
-  const localName = capabilityLocalName(message.adapter);
+  const localName = capabilityLocalName(String(message.conversation.endpoint.id));
   const endpointId = String(
     message.metadata?.endpoint
     ?? message.metadata?.endpointId
@@ -1132,8 +1132,7 @@ function resolveChannelId(message: Message): string {
   const raw = String(
     message.metadata?.channelId
     ?? message.metadata?.sceneId
-    ?? message.target
-    ?? '',
+    ?? message.conversation.id,
   );
   // Strip scene prefix so AF / session sceneId stay as bare ids (private:uid → uid).
   const stripped = raw.replace(/^(private|group|channel|direct|c2c):/iu, '');
@@ -1148,11 +1147,11 @@ function capabilityLocalName(id: string): string {
 }
 
 /** Endpoint liveName (e.g. ICQQ uin, sandbox bot name) from metadata or sendEndpointMessage adapter. */
-function adapterLiveEndpointName(message: { metadata: Readonly<Record<string, unknown>>; target?: string }): string {
+function adapterLiveEndpointName(message: Message): string {
   const live = String(message.metadata?.endpoint ?? message.metadata?.endpointId ?? '');
   if (live) return live;
-  // sandbox sends endpoint as metadata.endpoint; fall back to target (connection key)
-  return String(message.target ?? '');
+  // sandbox sends endpoint as metadata.endpoint; fall back to the CapabilityId localName
+  return capabilityLocalName(String(message.conversation.endpoint.id));
 }
 
 function resolveChannelType(
@@ -1670,9 +1669,8 @@ function isPrivateRuntimeMessage(message: Message): boolean {
   if (channelType != null) {
     return channelType === 'private';
   }
-  // Fallback: target often looks like `private:<id>` when metadata is sparse.
-  const target = String(message.target ?? '');
-  return /^(private|direct|c2c):/iu.test(target);
+  // Fallback：metadata 稀疏时用结构化会话 kind。
+  return message.conversation.kind === 'private';
 }
 
 function flattenOutputElements(elements: readonly OutputElementLike[]): string {

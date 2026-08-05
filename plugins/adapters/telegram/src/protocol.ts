@@ -6,6 +6,7 @@
 import type { IncomingMessage } from 'node:http';
 import { isMediaRef } from '@zhin.js/core';
 import type { Segment } from '@zhin.js/core/runtime';
+import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('telegram');
@@ -328,6 +329,30 @@ export function resolveChannel(msg: Pick<TelegramMessage, 'chat'>): {
   return {
     channelType: msg.chat.type === 'private' ? 'private' : 'group',
     channelId: String(msg.chat.id),
+  };
+}
+
+/** Telegram chat.type → canonical 会话 kind（supergroup 即 group，无容器层级故无 parent）。 */
+export function resolveTelegramChannelType(
+  chatType: TelegramChat['type'],
+): ConversationKind {
+  if (chatType === 'private') return 'private';
+  if (chatType === 'channel') return 'channel';
+  return 'group';
+}
+
+/**
+ * 入站归一化 → ConversationRef：Telegram 无 guild/群组容器层级，
+ * kind 直取 chat.type（private/group/supergroup/channel），无 parent。
+ */
+export function telegramInboundConversation(
+  endpointId: string,
+  chat: Pick<TelegramChat, 'id' | 'type'>,
+): ConversationRef {
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind: resolveTelegramChannelType(chat.type),
+    id: String(chat.id),
   };
 }
 

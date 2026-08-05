@@ -205,10 +205,10 @@ describe('slack plugin runtime adapter (socket)', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'C001',
+      conversation: expect.objectContaining({ kind: 'group', id: 'C001' }),
+      message: expect.objectContaining({ id: '1700000000.000100' }),
       content: 'hello',
       sender: 'U001',
-      id: 'C001:1700000000.000100',
     }));
     await endpoint.stop();
   });
@@ -242,7 +242,14 @@ describe('slack plugin runtime adapter (socket)', () => {
     });
     await endpoint.start();
     endpoint.open();
-    const id = await endpoint.send({ target: 'C001', payload: 'pong' });
+    const id = await endpoint.send({
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: 'C001',
+      },
+      payload: 'pong',
+    });
     expect(id).toBe('C001:1700000001.000000');
     expect(client.chat.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ channel: 'C001' }),
@@ -301,7 +308,7 @@ describe('slack plugin runtime adapter (http)', () => {
     expect(res.status).toBe(200);
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'C001',
+      conversation: expect.objectContaining({ kind: 'group', id: 'C001' }),
       content: 'hello',
     }));
     await endpoint.stop();

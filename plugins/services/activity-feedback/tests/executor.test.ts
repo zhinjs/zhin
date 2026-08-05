@@ -54,8 +54,7 @@ describe('createOutboundEndpointAccess', () => {
     expect(sent[0]).toMatchObject({
       adapter: 'sandbox',
       endpointId: 'bot1',
-      channelType: 'private',
-      channelId: 'u1',
+      conversation: { kind: 'private', id: 'u1' },
     });
 
     // manager 挂在缓存的 endpoint 上，stop 时能解析到同一个对象

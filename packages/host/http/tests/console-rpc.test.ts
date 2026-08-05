@@ -143,10 +143,8 @@ describe('runtime console RPC', () => {
     expect(sent).toEqual([{
       adapter: 'sandbox',
       endpointId: 'bot',
-      channelId: '10001',
-      channelType: 'private',
+      conversation: { kind: 'private', id: '10001', parent: { kind: 'group', id: 'g1' } },
       content: [{ type: 'text', data: { text: 'hi' } }],
-      parent: { type: 'group', id: 'g1' },
     }]);
   });
 

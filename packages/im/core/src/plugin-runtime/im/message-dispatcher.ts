@@ -17,7 +17,7 @@ const logger = getLogger('command');
 export type CommandPrefixResolver = (message: Message, snapshot: RuntimeSnapshot) => string;
 
 function ownerOfMessage(message: Message): PluginId {
-  return String(message.adapter).split('\0')[0] as PluginId;
+  return message.conversation.endpoint.adapter as PluginId;
 }
 
 /**

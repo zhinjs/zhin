@@ -26,10 +26,9 @@ flowchart LR
 
    ```ts
    interface IncomingMessage {
-     readonly adapter: CapabilityId;  // 来源 endpoint 的能力 id
-     readonly target: string;         // 场景，如 "group:123" / "private:456"
+     readonly conversation: ConversationRef; // 结构化会话（endpoint/kind/id/parent/threadId）
+     readonly message?: MessageRef;   // 平台消息身份（原生消息 id）
      readonly content: string;
-     readonly id?: string;            // 平台消息 id
      readonly sender?: string;
      readonly metadata?: Readonly<Record<string, unknown>>; // 如 endpoint 名
    }
@@ -55,7 +54,7 @@ flowchart LR
 
 5. **AI 兜底**。命令 miss（或无前缀文本）时交给 `unmatchedHandler`——装了 `@zhin.js/agent` 的 Host 会把它接到 Agent 回复；未安装则消息安静丢弃。
 
-6. **事件广播**。dispatch 完成后向 `onMessage` 订阅者发出 `RuntimeMessageEvent`（含方向、adapter、target、sender、≤200 字的 `contentPreview`、时间戳），Console 的实时消息流就是消费它。
+6. **事件广播**。dispatch 完成后向 `onMessage` 订阅者发出 `RuntimeMessageEvent`（含方向、conversation、sender、≤200 字的 `contentPreview`、时间戳），Console 的实时消息流就是消费它。
 
 ## 出站：$reply → 渲染 → 中间件 → Endpoint
 

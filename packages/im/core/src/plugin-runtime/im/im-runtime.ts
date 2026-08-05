@@ -19,7 +19,6 @@ import {
   type EndpointManagementCapability,
 } from '@zhin.js/adapter';
 import {
-  formatLegacyConversationRef,
   formatLegacyMessageRef,
   isDeliveryReceipt,
   type ConversationRef,
@@ -31,10 +30,10 @@ import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import {
   Message,
   createOutboundEnvelope,
-  type ChannelParent,
-  type DeliveryMessageGateway,
+  type ConversationAddress,
   type IncomingMessage,
   type MessageDispatchResult,
+  type MessageGateway,
   type OutboundEnvelope,
   type SendContent,
   type SendRequest,
@@ -52,26 +51,23 @@ import { keyboardFallbackStore } from '../../built/interactive-segments/fallback
 import {
   findRuntimeInteractiveHandler,
   resolveRuntimeInteractivePayload,
-  runtimeInteractiveChannelKey,
+  runtimeInteractiveConversationKey,
   type RegisteredRuntimeInteractiveHandler,
   type RuntimeInteractiveHandler,
 } from './interactive.js';
 
 const logger = getLogger('im');
 
-export const messageGatewayToken = createToken<DeliveryMessageGateway>('zhin.im.message-gateway');
+export const messageGatewayToken = createToken<MessageGateway>('zhin.im.message-gateway');
 
 /** Console 实时消息事件（SSE 推送源；content 仅为截断预览，不含完整原始段）。 */
 export interface RuntimeMessageEvent {
   readonly direction: 'inbound' | 'outbound';
-  readonly adapter: CapabilityId;
-  readonly target: string;
+  readonly conversation: ConversationRef;
   /** inbound：发送者 id。 */
   readonly sender?: string;
   /** outbound：发起方插件。 */
   readonly requester?: PluginId;
-  /** inbound：从 target 前缀解析的场景（`group:xx` → `group`）。 */
-  readonly channelType?: string;
   /** 预览文本，截断至 200 字。 */
   readonly contentPreview: string;
   readonly messageId?: string;
@@ -89,7 +85,7 @@ export interface ImRuntimeOptions {
   readonly renderer?: OutboundRenderer;
 }
 
-export class ImRuntime implements DeliveryMessageGateway {
+export class ImRuntime implements MessageGateway {
   readonly #dispatcher: MessageDispatcher;
   readonly #renderer: OutboundRenderer;
   readonly #messageListeners = new Set<(event: RuntimeMessageEvent) => void>();
@@ -172,37 +168,34 @@ export class ImRuntime implements DeliveryMessageGateway {
     const lease = this.#acquire();
     let active = true;
     try {
-      const requester = requireAdapters(lease.value).owner(input.adapter);
+      const conversation = input.conversation;
+      const adapter = conversation.endpoint.id as CapabilityId;
+      const requester = requireAdapters(lease.value).owner(adapter);
       logger.debug(formatCompact({
         op: 'im_inbound_receive',
-        adapter: String(input.adapter).split('\0').pop() ?? String(input.adapter),
-        target: input.target,
+        adapter: String(adapter).split('\0').pop() ?? String(adapter),
+        conversation: formatConversationLog(conversation),
         sender: input.sender,
-        id: input.id,
+        id: input.message?.id,
         preview: truncatePreview(input.content),
         segments: input.segments?.length,
         generation: lease.value.generation,
       }));
       const message = new Message(
-        input.adapter,
-        input.target,
+        conversation,
         input.content,
         lease.value.generation,
         (content, replyRequester = requester) => {
           if (!active) throw new Error('Message reply scope has ended');
           return this.#sendWithSnapshot({
-            adapter: input.adapter,
-            ...(input.conversation ? { conversation: input.conversation } : {}),
-            target: input.target,
+            conversation,
             requester: replyRequester,
             content,
           }, lease.value);
         },
-        input.id ?? input.message?.id,
         input.sender,
         Object.freeze({ ...input.metadata }),
         input.segments ? Object.freeze([...input.segments]) : undefined,
-        input.conversation,
         input.message,
       );
       let result: MessageDispatchResult = Object.freeze({ matched: false });
@@ -215,8 +208,8 @@ export class ImRuntime implements DeliveryMessageGateway {
           if (!result.matched && this.#unmatchedHandler) {
             logger.debug(formatCompact({
               op: 'im_inbound_unmatched_handler',
-              target: input.target,
-              id: input.id,
+              conversation: formatConversationLog(conversation),
+              id: input.message?.id,
             }));
             const handled = await this.#unmatchedHandler(message, lease.value, requester);
             if (handled) {
@@ -228,24 +221,18 @@ export class ImRuntime implements DeliveryMessageGateway {
       );
       logger.debug(formatCompact({
         op: 'im_inbound_done',
-        target: input.target,
-        id: input.id,
+        conversation: formatConversationLog(conversation),
+        id: input.message?.id,
         matched: result.matched,
         command: result.command,
         owner: result.owner,
       }));
       this.#emitMessage({
         direction: 'inbound',
-        adapter: input.adapter,
-        target: input.target,
+        conversation,
         ...(input.sender !== undefined ? { sender: input.sender } : {}),
-        ...(channelTypeOf(input.target)
-          ? { channelType: channelTypeOf(input.target) }
-          : {}),
         contentPreview: previewText(input.content),
-        ...(input.id ?? input.message?.id
-          ? { messageId: input.id ?? input.message?.id }
-          : {}),
+        ...(input.message?.id ? { messageId: input.message.id } : {}),
         timestamp: Date.now(),
       });
       return result;
@@ -332,29 +319,24 @@ export class ImRuntime implements DeliveryMessageGateway {
   async sendEndpointMessage(input: {
     readonly adapter: string;
     readonly endpointId: string;
-    readonly conversation?: ConversationRef;
-    readonly channelId?: string;
-    readonly channelType?: string;
+    readonly conversation: ConversationAddress;
     readonly content: unknown;
-    readonly parent?: ChannelParent;
   }): Promise<{ messageId: string }> {
     const lease = this.#acquire();
     try {
       const index = requireAdapters(lease.value);
-      const capabilityId = index.resolve(input.adapter, input.endpointId);
-      if (!capabilityId) throw new Error('endpoint not found');
-      const target = input.conversation
-        ? formatLegacyConversationRef(input.conversation)
-        : composeSendTarget(input.channelType ?? '', input.channelId ?? '');
-      if (!target) throw new TypeError('conversation or channelId is required');
+      const resolved = index.resolve(input.adapter, input.endpointId);
+      if (!resolved) throw new Error('endpoint not found');
+      const requester = index.owner(resolved);
+      const conversation: ConversationRef = {
+        endpoint: { id: String(resolved), adapter: String(requester) },
+        ...input.conversation,
+      };
       const content = normalizeConsoleContent(input.content);
       const result = await this.#sendWithSnapshot({
-        adapter: capabilityId,
-        ...(input.conversation ? { conversation: input.conversation } : {}),
-        target,
-        requester: index.owner(capabilityId),
+        conversation,
+        requester,
         content,
-        ...(input.parent ? { parent: input.parent } : {}),
       }, lease.value);
       return { messageId: result.message?.id ?? result.legacyMessageId ?? '' };
     } finally {
@@ -415,16 +397,11 @@ export class ImRuntime implements DeliveryMessageGateway {
   async setEndpointTyping(input: {
     readonly adapter: string;
     readonly endpointId: string;
-    readonly conversation?: ConversationRef;
-    readonly target?: string;
+    readonly conversation: ConversationRef;
     readonly active?: boolean;
   }): Promise<void> {
-    const target = input.conversation
-      ? formatLegacyConversationRef(input.conversation)
-      : input.target;
-    if (!target) throw new TypeError('conversation or target is required');
     await this.#liveEndpointControl(input.adapter, input.endpointId)
-      ?.typing?.(target, input.active);
+      ?.typing?.(input.conversation, input.active);
   }
 
   #liveEndpoint(adapter: string, endpointId: string): unknown | null {
@@ -469,21 +446,19 @@ export class ImRuntime implements DeliveryMessageGateway {
     request: SendRequest,
     snapshot: RuntimeSnapshot,
   ): Promise<DeliveryReceipt> {
+    const adapter = request.conversation.endpoint.id as CapabilityId;
     let initialPayload: unknown;
     try {
       const rendered = await this.#renderer.render(request.content, request.requester, snapshot);
-      initialPayload = await prepareOutboundPayload(rendered, request, snapshot);
+      initialPayload = await prepareOutboundPayload(rendered, request.conversation, snapshot);
     } catch {
       return rejectedReceipt('outbound_payload_rejected');
     }
 
     const envelope = createOutboundEnvelope({
-      adapter: request.adapter,
-      ...(request.conversation ? { conversation: request.conversation } : {}),
-      target: request.target,
+      conversation: request.conversation,
       requester: request.requester,
       generation: snapshot.generation,
-      ...(request.parent ? { parent: request.parent } : {}),
     }, initialPayload);
     let terminalEntered = false;
     let receipt: DeliveryReceipt | undefined;
@@ -496,20 +471,16 @@ export class ImRuntime implements DeliveryMessageGateway {
           terminalEntered = true;
           let payload: unknown;
           try {
-            // Middleware may replace a payload with legacy/wire segments. Normalize
-            // again at the transport boundary so it cannot bypass core policy.
-            payload = await prepareOutboundPayload(envelope.payload, request, snapshot, true);
+            payload = await prepareOutboundPayload(envelope.payload, request.conversation, snapshot, true);
           } catch {
             receipt = rejectedReceipt('outbound_payload_rejected');
             return;
           }
 
           try {
-            const result = await requireAdapters(snapshot).send(request.adapter, {
-              target: request.target,
-              ...(request.conversation ? { conversation: request.conversation } : {}),
+            const result = await requireAdapters(snapshot).send(adapter, {
+              conversation: request.conversation,
               payload,
-              ...(request.parent ? { parent: request.parent } : {}),
             });
             receipt = receiptFromEndpointResult(result);
           } catch (error) {
@@ -519,8 +490,7 @@ export class ImRuntime implements DeliveryMessageGateway {
           if (receipt?.status === 'sent') {
             this.#emitMessage({
               direction: 'outbound',
-              adapter: request.adapter,
-              target: request.target,
+              conversation: request.conversation,
               requester: request.requester,
               contentPreview: previewText(payload),
               ...(receipt.message?.id || receipt.legacyMessageId
@@ -533,8 +503,6 @@ export class ImRuntime implements DeliveryMessageGateway {
         'outbound',
       );
     } catch {
-      // If a middleware fails after the terminal, the endpoint has already
-      // produced its receipt (and, for a real send, its event). Keep that fact.
       return receipt ?? failedReceipt('outbound_middleware_failed');
     }
 
@@ -600,28 +568,27 @@ function legacyMessageTarget(message?: MessageRef, messageId?: string): string {
 
 async function prepareOutboundPayload(
   rendered: unknown,
-  request: SendRequest,
+  conversation: ConversationRef,
   snapshot: RuntimeSnapshot,
   finalizeInteractive = false,
 ): Promise<unknown> {
-  const directHtml = isDirectHtmlConsumer(snapshot, request.adapter);
+  const adapter = conversation.endpoint.id as CapabilityId;
+  const directHtml = isDirectHtmlConsumer(snapshot, adapter);
   let payload = directHtml
     ? rendered
     : await normalizeOutboundPayload(rendered, resolveHtmlRenderer(snapshot), {
-      mediaPolicy: resolveOutboundMediaPolicy(request.adapter, snapshot),
+      mediaPolicy: resolveOutboundMediaPolicy(adapter, snapshot),
     });
   if (finalizeInteractive) {
     payload = applyOutboundInteractivePolicy(
       payload,
-      resolveOutboundInteractivePolicy(request.adapter, snapshot),
+      resolveOutboundInteractivePolicy(adapter, snapshot),
       (map) => keyboardFallbackStore.remember(
-        runtimeInteractiveChannelKey(String(request.adapter), request.target),
+        runtimeInteractiveConversationKey(conversation),
         map,
       ),
     );
   }
-  // Segment arrays crossing the adapter boundary are canonical after every
-  // middleware transform. Direct html consumers retain their explicit wire API.
   if (!directHtml && Array.isArray(payload)) assertCanonicalSegments(payload);
   return payload;
 }
@@ -680,17 +647,6 @@ function failedReceipt(code: string, retryable = false): DeliveryReceipt {
   });
 }
 
-/**
- * Build Adapter send target. If channelId already carries a scene prefix
- * (`private:uid` / `group:gid`), do not double-prefix.
- */
-function composeSendTarget(channelType: string, channelId: string): string {
-  const id = channelId.trim();
-  if (!id) return channelType || '';
-  if (/^(private|group|channel|direct|c2c|temp):/iu.test(id)) return id;
-  return channelType ? `${channelType}:${id}` : id;
-}
-
 /** `@zhin.js/adapter-icqq` → `icqq`；非 adapter 包名原样返回。 */
 function adapterTypeName(packageName: string | undefined): string | undefined {
   if (!packageName) return undefined;
@@ -721,10 +677,14 @@ function normalizeConsoleContent(content: unknown): SendContent {
   return String(content);
 }
 
-/** target 前缀场景：`group:123` → `group`；无前缀返回 undefined。 */
-function channelTypeOf(target: string): string | undefined {
-  const match = /^([a-z0-9-]+):/iu.exec(target);
-  return match?.[1];
+/** 日志用会话摘要（`kind:id@parentKind:parentId#threadId`），不拼 legacy target。 */
+function formatConversationLog(conversation: ConversationRef): string {
+  const base = `${conversation.kind}:${conversation.id}`;
+  const parent = conversation.parent
+    ? `@${conversation.parent.kind}:${conversation.parent.id}`
+    : '';
+  const thread = conversation.threadId ? `#${conversation.threadId}` : '';
+  return `${base}${parent}${thread}`;
 }
 
 /** 消息内容 → 预览文本（截断 200 字）；wire 段取 `data.text`，其余段记 `[type]`。 */

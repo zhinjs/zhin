@@ -211,7 +211,11 @@ describe('UNI-Channel 出站：canonical segments → CQ 串', () => {
     endpoint.open();
 
     await endpoint.send({
-      target: 'group:100',
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: '100',
+      },
       payload: [
         { type: 'reply', data: { message_id: 'm1' } },
         { type: 'mention', data: { target: '2' } },
@@ -235,7 +239,11 @@ describe('UNI-Channel 出站：canonical segments → CQ 串', () => {
     endpoint.open();
 
     await endpoint.send({
-      target: 'group:100',
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: '100',
+      },
       payload: [
         { type: 'image', data: { media: { kind: 'url', value: 'https://x/a.jpg' } } },
         { type: 'image', data: { media: { kind: 'base64', value: 'QUJD' } } },
@@ -261,7 +269,11 @@ describe('UNI-Channel 出站：canonical segments → CQ 串', () => {
     endpoint.open();
 
     await endpoint.send({
-      target: 'group:100',
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: '100',
+      },
       payload: [
         { type: 'image', data: { media: { kind: 'base64', value: 'YQ==' } } },
       ],

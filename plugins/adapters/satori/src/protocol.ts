@@ -6,6 +6,7 @@
 
 import { pickCredential } from '@zhin.js/adapter';
 import { isMediaRef } from '@zhin.js/core';
+import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('satori');
@@ -230,6 +231,26 @@ export function formatInboundContent(body: SatoriEventBody & { message: SatoriMe
 export function resolveInboundTarget(body: SatoriEventBody & { message: SatoriMessage }): string {
   const channel = body.channel ?? body.message.channel;
   return channel?.id ?? '';
+}
+
+/**
+ * 入站归一化 → ConversationRef：Channel.type 1 (DIRECT) → kind 'private'；
+ * 其余频道消息 → kind 'group'，所属 guild 容器进 `parent`（kind 'channel'）。
+ */
+export function satoriInboundConversation(
+  endpointId: string,
+  body: SatoriEventBody & { message: SatoriMessage },
+): ConversationRef {
+  const channel = body.channel ?? body.message.channel;
+  const kind: ConversationKind = isPrivateChannel(channel) ? 'private' : 'group';
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind,
+    id: channel?.id ?? '',
+    ...(kind === 'group' && body.guild?.id
+      ? { parent: { kind: 'channel' as const, id: body.guild.id } }
+      : {}),
+  };
 }
 
 export function resolveInboundSender(body: SatoriEventBody & { message: SatoriMessage }): string {

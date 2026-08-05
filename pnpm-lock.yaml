@@ -1725,6 +1725,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -1805,6 +1808,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -1857,6 +1863,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -1894,6 +1903,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -1934,6 +1946,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -1977,6 +1992,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -2017,6 +2035,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -2057,6 +2078,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -2103,6 +2127,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -2149,6 +2176,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -2195,6 +2225,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -2235,6 +2268,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -2281,6 +2317,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -2333,6 +2372,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -2379,6 +2421,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -2462,6 +2507,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -2505,6 +2553,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -2542,6 +2593,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger

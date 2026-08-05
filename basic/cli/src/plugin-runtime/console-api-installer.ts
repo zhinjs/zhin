@@ -256,7 +256,8 @@ const messageBridgeInstallations = new WeakSet<ImRuntime>();
  */
 export function publishMessageEvent(hub: ConsoleEventHub, event: RuntimeMessageEvent): void {
   // CapabilityId 形如 `${owner}\0${feature}\0${localName}`；localName 即 endpoint 槽名。
-  const localName = String(event.adapter).split('\0').pop() ?? String(event.adapter);
+  const localName = String(event.conversation.endpoint.id).split('\0').pop()
+    ?? String(event.conversation.endpoint.id);
   if (event.direction === 'inbound') {
     const data = {
       direction: 'inbound' as const,
@@ -264,7 +265,8 @@ export function publishMessageEvent(hub: ConsoleEventHub, event: RuntimeMessageE
       endpointId: localName,
       endpoint: localName,
       sender: event.sender,
-      target: event.target,
+      channelType: event.conversation.kind,
+      channelId: event.conversation.id,
       content: event.contentPreview,
       messageId: event.messageId,
       timestamp: event.timestamp,
@@ -278,7 +280,8 @@ export function publishMessageEvent(hub: ConsoleEventHub, event: RuntimeMessageE
     endpointId: localName,
     endpoint: localName,
     requester: event.requester,
-    target: event.target,
+    channelType: event.conversation.kind,
+    channelId: event.conversation.id,
     content: event.contentPreview,
     timestamp: event.timestamp,
   });

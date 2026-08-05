@@ -24,8 +24,8 @@ pnpm add @zhin.js/adapter-napcat
 - `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
-入站：`gateway.receive({ adapter, target: "private:uid"|"group:gid", content, sender, metadata })`  
-出站：`send({ target, payload })` → WS `send_private_msg` / `send_group_msg`
+入站：`gateway.receive({ conversation, message: { conversation, id }, content, sender, metadata })`（`conversation` 为 ConversationRef：私聊 `kind: 'private'`、群聊 `kind: 'group'`，临时会话群容器进 `parent`）  
+出站：`send({ conversation, payload })` → WS `send_private_msg` / `send_group_msg`
 
 ## 最小配置
 

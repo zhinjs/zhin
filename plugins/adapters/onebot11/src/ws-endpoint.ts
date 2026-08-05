@@ -8,6 +8,7 @@ import {
   type EndpointInstance,
   type EndpointLifecycle,
   type EndpointManagement,
+  type EndpointSendRequest,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -19,9 +20,9 @@ import {
   buildWsConnectOptions,
   formatInboundContent,
   formatInboundMetadata,
-  formatInboundTarget,
   formatOutboundSegments,
   isMessageEvent,
+  onebot11InboundConversation,
   senderUserId,
   type OneBot11Event,
   type OneBot11WsConfig,
@@ -115,15 +116,15 @@ export class OneBot11WsEndpoint implements EndpointInstance {
     this.#ws = undefined;
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
-    const { action, params } = buildSendAction(target, message);
+    const { action, params } = buildSendAction(conversation, message);
     const data = await this.callApi(action, params) as { message_id?: number | string } | undefined;
     const messageId = data?.message_id != null ? String(data.message_id) : '';
     logger.debug(formatCompact({
       op: 'onebot11_send',
       endpoint: this.#options.config.name,
-      target,
+      target: `${conversation.kind}:${conversation.id}`,
       messageId,
     }));
     return messageId;
@@ -157,19 +158,18 @@ export class OneBot11WsEndpoint implements EndpointInstance {
   /** Test / internal: admit a parsed event when the endpoint is open. */
   admit(ev: OneBot11Event): void {
     if (!this.#open || !isMessageEvent(ev)) return;
-    const target = formatInboundTarget(ev);
+    const conversation = onebot11InboundConversation(String(this.#options.id), ev);
     const content = formatInboundContent(ev);
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target,
+      conversation,
+      message: { conversation, id: String(ev.message_id) },
       content,
       sender: senderUserId(ev),
-      id: String(ev.message_id),
       metadata: formatInboundMetadata(ev, this.#options.config.name),
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'onebot11_gateway_receive_failed',
-        target,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });

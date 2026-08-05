@@ -2,7 +2,7 @@
  * GithubEndpoint — lifecycle, outbound send, inbound admit.
  */
 import path from 'node:path';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -14,6 +14,7 @@ import {
   enrichInboundContent,
   formatInboundContent,
   formatOutboundBody,
+  githubInboundConversation,
   parseChannelId,
   type GithubInboundComment,
   type ResolvedGithubConfig,
@@ -147,9 +148,9 @@ export class GithubEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
-    const parsed = parseChannelId(target);
-    if (!parsed) throw new Error(`无效的 GitHub channel ID: ${target}`);
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+    const parsed = parseChannelId(conversation.id);
+    if (!parsed) throw new Error(`无效的 GitHub conversation ID: ${conversation.id}`);
     const text = formatOutboundBody(payload);
     const r = parsed.type === 'issue'
       ? await this.gh.createIssueComment(parsed.repo, parsed.number, text)
@@ -158,7 +159,7 @@ export class GithubEndpoint implements EndpointInstance {
     logger.debug(formatCompact({
       op: 'github_send',
       endpoint: this.name,
-      target,
+      target: `${conversation.kind}:${conversation.id}`,
       messageId: r.data.id,
     }));
     return String(r.data.id);
@@ -169,6 +170,7 @@ export class GithubEndpoint implements EndpointInstance {
     if (!this.#open) return;
     const botUser = this.config.botLogin || this.gh.getBotLogin() || this.gh.authenticatedUser;
     if (botUser && comment.sender === botUser) return;
+    const conversation = githubInboundConversation(String(this.#options.id), comment);
     const content = enrichInboundContent(
       formatInboundContent(comment.content),
       this.config,
@@ -176,11 +178,10 @@ export class GithubEndpoint implements EndpointInstance {
       comment.repo,
     );
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target: comment.channelId,
+      conversation,
+      message: { conversation, id: comment.id },
       content,
       sender: comment.sender,
-      id: comment.id,
       metadata: Object.freeze({
         endpoint: this.name,
         repo: comment.repo,
@@ -190,7 +191,7 @@ export class GithubEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'github_gateway_receive_failed',
-        target: comment.channelId,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });

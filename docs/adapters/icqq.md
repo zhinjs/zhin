@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=d2fc8a756013bf56 -->
+<!-- sync-adapter-docs:sha256=a1f1a49a4462e296 -->
 
 # @zhin.js/adapter-icqq
 
@@ -17,8 +17,8 @@ ICQQ Plugin Runtime 适配器 — 通过 [@icqqjs/cli](https://github.com/icqqjs
 ## 功能特性
 
 - 群聊 / 私聊 / 群临时会话 / QQ 频道消息
-- 入站：`messageGatewayToken`（IPC 事件订阅）
-- 出站：`send({ target, payload })` → `send_group_msg` / `send_private_msg` / …
+- 入站：`messageGatewayToken`（IPC 事件订阅），归一为 `gateway.receive({ conversation, message, content, ... })`
+- 出站：`send({ conversation, payload })` → `send_group_msg` / `send_private_msg` / …（conversation kind/id/parent 路由）
 - Agent 工具：`agent/tools/`（戳一戳、群管、好友列表等）保留
 - Console Endpoint 管理：`src/endpoint.ts` 显式实现 `EndpointManagement`（好友/群/群成员列表、请求审批、删好友、踢人、禁言、设管理），Console 使用 `endpoint.friends` / `endpoint.groups` / `endpoint.group_members` 等规范 RPC
 
@@ -60,14 +60,14 @@ plugins:
 
 先执行 `icqq login`，再启动 Zhin。
 
-## Send target
+## Send conversation
 
-| 类型 | target |
-|------|--------|
-| 私聊 | `private:uin` |
-| 群聊 | `group:gid` |
-| 群临时会话 | `temp:gid:uin` |
-| 频道 | `channel:guildId:channelId` |
+| 类型 | conversation |
+|------|--------------|
+| 私聊 | `{ kind: 'private', id: uin }` |
+| 群聊 | `{ kind: 'group', id: gid }` |
+| 群临时会话 | `{ kind: 'private', id: uin, parent: { kind: 'group', id: gid } }` |
+| 频道 | `{ kind: 'channel', id: channelId, parent: { kind: 'channel', id: guildId } }` |
 
 ## 架构
 

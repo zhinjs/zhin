@@ -148,8 +148,11 @@ describe('Command Feature', () => {
     const index = new CommandIndex([slot], snapshot);
 
     await index.dispatch('who', {
-      adapter: 'root/icqq\0zhin.adapter/1\0icqq~1689919782',
-      target: 'group:12345',
+      conversation: {
+        endpoint: { id: 'root/icqq\0zhin.adapter/1\0icqq~1689919782', adapter: 'root/icqq' },
+        kind: 'group',
+        id: '12345',
+      },
       content: 'who',
       sender: '1659488338',
       metadata: {

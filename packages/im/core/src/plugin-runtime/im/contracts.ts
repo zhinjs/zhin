@@ -1,4 +1,4 @@
-import type { CapabilityId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { ConversationRef, DeliveryReceipt, MessageRef } from '@zhin.js/im-contract';
 import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
 // 入站段统一使用 canonical Segment SSOT（built/segment-contract）；
@@ -62,64 +62,37 @@ export function isSegmentContent(value: unknown): value is Segment {
 }
 
 export interface IncomingMessage {
-  readonly adapter: CapabilityId;
-  /** Structured identity supplied by migrated adapters; target remains the bridge. */
-  readonly conversation?: ConversationRef;
-  /** Structured native message identity supplied by migrated adapters. */
+  readonly conversation: ConversationRef;
   readonly message?: MessageRef;
-  readonly target: string;
-  /**
-   * 纯文本视图：与 `segments` 同源（adapter 从同一份入站载荷派生二者）。
-   * 触发判定与 Console 预览读取此字段；命令匹配在有 segments 时优先使用结构化视图。
-   */
   readonly content: string;
-  /**
-   * 结构化段视图（canonical Segment SSOT，见 built/segment-contract）。
-   * 与 `content` 同源：segments 承载纯文本无法表达的媒体（image/audio/video/file
-   * 的 MediaRef）、mention、reply 等信息。旧 adapter 未迁移时可缺省，
-   * 读取方必须容忍 undefined。
-   */
   readonly segments?: readonly Segment[];
-  readonly id?: string;
   readonly sender?: string;
   readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
 export interface SendRequest {
-  readonly adapter: CapabilityId;
-  /** Structured destination supplied to Adapter endpoints in parallel with target. */
-  readonly conversation?: ConversationRef;
-  readonly target: string;
+  readonly conversation: ConversationRef;
   readonly requester: PluginId;
   readonly content: SendContent;
-  readonly parent?: ChannelParent;
 }
 
-/** Console 通道的来源场景（群临时会话 parent.group / QQ 子频道 parent.guild）。 */
-export interface ChannelParent {
-  readonly type?: string;
-  readonly id?: string;
-  readonly name?: string;
-}
+/**
+ * Host 侧未锚定 endpoint 的会话地址（Console RPC / OutboundHost 入参）；
+ * ImRuntime 解析 adapter/endpointId 后锚定为完整 ConversationRef。
+ */
+export type ConversationAddress = Omit<ConversationRef, 'endpoint'>;
 
 export interface OutboundEnvelope {
-  readonly adapter: CapabilityId;
-  readonly conversation?: ConversationRef;
-  readonly target: string;
+  readonly conversation: ConversationRef;
   readonly requester: PluginId;
   readonly generation: number;
   readonly payload: unknown;
-  readonly parent?: ChannelParent;
   replace(payload: unknown): void;
 }
 
 export interface MessageGateway {
   receive(input: IncomingMessage): Promise<MessageDispatchResult>;
-  /**
-   * Compatibility surface for existing Adapter-facing gateway consumers.
-   * Runtime callers that need an outcome use DeliveryMessageGateway instead.
-   */
-  send(request: SendRequest): Promise<unknown>;
+  send(request: SendRequest): Promise<DeliveryReceipt>;
   /**
    * 注册 interactive action 回跳 handler（prefix 最长匹配；返回注销函数）。
    * 平台 callback 的 action 段、'text' 端点的数字回跳与指令预填直出
@@ -143,10 +116,6 @@ export interface MessageGateway {
   ): void;
 }
 
-/** Structured outbound gateway exposed by the Plugin Runtime. */
-export interface DeliveryMessageGateway extends MessageGateway {
-  send(request: SendRequest): Promise<DeliveryReceipt>;
-}
 
 export interface MessageDispatchResult {
   readonly matched: boolean;
@@ -157,15 +126,10 @@ export interface MessageDispatchResult {
 
 export class Message {
   constructor(
-    readonly adapter: CapabilityId,
-    readonly target: string,
+    readonly conversation: ConversationRef,
     readonly content: string,
     readonly generation: number,
-    // Compatibility at the construction boundary: legacy tests and embedders
-    // may still supply an untyped reply callback. ImRuntime always supplies a
-    // DeliveryReceipt-producing implementation.
-    reply: (content: SendContent, requester?: PluginId) => Promise<unknown>,
-    readonly id?: string,
+    reply: (content: SendContent, requester?: PluginId) => Promise<DeliveryReceipt>,
     readonly sender?: string,
     readonly metadata: Readonly<Record<string, unknown>> = Object.freeze({}),
     /**
@@ -173,14 +137,17 @@ export class Message {
      * Command dispatcher 优先使用此字段，以支持 mention、image 等结构化参数。
      */
     readonly segments?: readonly Segment[],
-    /** Structured inbound conversation when supplied by a migrated adapter. */
-    readonly conversation?: ConversationRef,
-    /** Structured inbound message identity when supplied by a migrated adapter. */
+    /** 结构化入站消息身份（平台原生 message id 经 MessageRef 传递）。 */
     readonly message?: MessageRef,
   ) {
-    this.$reply = (content) => reply(content) as Promise<DeliveryReceipt>;
-    this.$replyFrom = (requester, content) => reply(content, requester) as Promise<DeliveryReceipt>;
+    this.$reply = (content) => reply(content);
+    this.$replyFrom = (requester, content) => reply(content, requester);
     Object.freeze(this);
+  }
+
+  /** 平台原生消息 id（`message` 未提供时为 undefined）。 */
+  get id(): string | undefined {
+    return this.message?.id;
   }
 
   readonly $reply: (content: SendContent) => Promise<DeliveryReceipt>;

@@ -18,6 +18,7 @@ import {
   formatInboundTarget,
   formatOutboundKmarkdown,
   isKookWebhookChallenge,
+  kookInboundConversation,
   normalizeKookWebhookEvent,
   parseSendTarget,
   resolveKookConfig,
@@ -194,6 +195,25 @@ describe('kook protocol helpers', () => {
     expect(parseSendTarget('private:user-1')).toEqual({ kind: 'private', id: 'user-1' });
   });
 
+  it('normalizes inbound messages into ConversationRef', () => {
+    expect(kookInboundConversation('plugin\0kook', textMessage({ guildId: 'guild-1' }))).toEqual({
+      endpoint: { id: 'plugin\0kook', adapter: 'plugin' },
+      kind: 'channel',
+      id: 'chan-1',
+      parent: { kind: 'channel', id: 'guild-1' },
+    });
+    // 私聊（PERSON）无 guild 容器，即使事件携带 guild_id 也不进 parent
+    expect(kookInboundConversation('plugin\0kook', textMessage({
+      channelKind: 'private',
+      channelId: 'user-1',
+      guildId: 'guild-1',
+    }))).toEqual({
+      endpoint: { id: 'plugin\0kook', adapter: 'plugin' },
+      kind: 'private',
+      id: 'user-1',
+    });
+  });
+
   it('formats outbound string and segment payloads', () => {
     expect(formatOutboundKmarkdown('pong')).toBe('pong');
     expect(formatOutboundKmarkdown([
@@ -247,10 +267,10 @@ describe('kook plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'channel:chan-1',
+      conversation: expect.objectContaining({ kind: 'channel', id: 'chan-1' }),
+      message: expect.objectContaining({ id: 'msg-1' }),
       content: 'hello',
       sender: 'alice',
-      id: 'msg-1',
     }));
 
     await endpoint.stop();
@@ -274,7 +294,7 @@ describe('kook plugin runtime adapter', () => {
     endpoint.admit(textMessage({ content: '(met)bot-1(met) 在吗' }));
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
     expect(receive).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      target: 'channel:chan-1',
+      conversation: expect.objectContaining({ kind: 'channel', id: 'chan-1' }),
       metadata: expect.objectContaining({ mentioned: true }),
     }));
 
@@ -309,11 +329,25 @@ describe('kook plugin runtime adapter', () => {
       createClient: () => mock,
     });
     await endpoint.start();
-    const channelId = await endpoint.send({ target: 'channel:chan-1', payload: 'pong' });
+    const channelId = await endpoint.send({
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'channel',
+        id: 'chan-1',
+      },
+      payload: 'pong',
+    });
     expect(channelId).toBe('sent-1');
     expect(mock.sent[0]).toEqual({ kind: 'channel', id: 'chan-1', message: 'pong' });
 
-    const privateId = await endpoint.send({ target: 'private:user-1', payload: 'dm' });
+    const privateId = await endpoint.send({
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'private',
+        id: 'user-1',
+      },
+      payload: 'dm',
+    });
     expect(privateId).toBe('sent-2');
     expect(mock.sent[1]).toEqual({ kind: 'private', id: 'user-1', message: 'dm' });
     await endpoint.stop();
@@ -406,10 +440,14 @@ describe('kook plugin runtime adapter', () => {
     expect(messageRes.status).toBe(200);
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'channel:chan-1',
+      conversation: expect.objectContaining({
+        kind: 'channel',
+        id: 'chan-1',
+        parent: { kind: 'channel', id: 'guild-1' },
+      }),
+      message: expect.objectContaining({ id: 'msg-1' }),
       content: 'hello',
       sender: 'alice',
-      id: 'msg-1',
     }));
 
     const badRes = await globalThis.fetch(`http://127.0.0.1:${port}/kook/webhook`, {

@@ -36,17 +36,17 @@ export function installInboxMessageRecorder(im: ImRuntime, databaseHost: Databas
  * - adapter 取 CapabilityId 的 localName（endpoint 槽名，与 console $adapter 一致）；
  * - endpoint_id 取 live endpoint 名（如 icqq uin，与 console $endpoint 一致）；
  * - 出站（direction=outbound）sender 记为 endpoint 自己；
- * - target 前缀解析 channel：`temp:gid:uid` → private + group parent，
- *   `channel:guild:cid` → channel + guild parent。
+ * - conversation → channel 字段（kind/is 与 parent，parent.kind 'group' → group，
+ *   'channel' → guild，对齐 legacy target 的 temp/channel 前缀语义）。
  */
 export function buildInboxMessageRow(
   event: RuntimeMessageEvent,
   resolveEndpoint: (capabilityId: string) => string,
 ): Record<string, unknown> {
-  const capabilityId = String(event.adapter);
+  const capabilityId = String(event.conversation.endpoint.id);
   const localName = capabilityId.split('\0').pop() ?? capabilityId;
   const endpointName = resolveEndpoint(capabilityId) || localName;
-  const channel = parseInboxTarget(event.target, event.channelType);
+  const channel = conversationToInboxChannel(event.conversation);
   return {
     adapter: localName,
     endpoint_id: endpointName,
@@ -102,38 +102,14 @@ export interface InboxChannelParts {
   readonly parentId: string | null;
 }
 
-/** `group:xx` / `private:xx` / `temp:gid:uid` / `channel:guild:cid` → channel 字段。 */
-export function parseInboxTarget(target: string, channelTypeHint?: string): InboxChannelParts {
-  const parts = target.split(':');
-  const prefix = parts[0] ?? '';
-  if (prefix === 'temp' && parts.length >= 3) {
-    return {
-      channelType: 'private',
-      channelId: parts.slice(2).join(':'),
-      parentType: 'group',
-      parentId: parts[1] ?? null,
-    };
-  }
-  if (prefix === 'channel' && parts.length >= 3) {
-    return {
-      channelType: 'channel',
-      channelId: parts.slice(2).join(':'),
-      parentType: 'guild',
-      parentId: parts[1] ?? null,
-    };
-  }
-  if ((prefix === 'group' || prefix === 'private') && parts.length >= 2) {
-    return {
-      channelType: prefix,
-      channelId: parts.slice(1).join(':'),
-      parentType: null,
-      parentId: null,
-    };
-  }
+/** ConversationRef → channel 字段（parent.kind 'group' → group，'channel' → guild）。 */
+export function conversationToInboxChannel(
+  conversation: RuntimeMessageEvent['conversation'],
+): InboxChannelParts {
   return {
-    channelType: channelTypeHint ?? 'private',
-    channelId: target,
-    parentType: null,
-    parentId: null,
+    channelType: conversation.kind,
+    channelId: conversation.id,
+    parentType: conversation.parent ? (conversation.parent.kind === 'group' ? 'group' : 'guild') : null,
+    parentId: conversation.parent?.id ?? null,
   };
 }

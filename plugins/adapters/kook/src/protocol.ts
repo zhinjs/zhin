@@ -8,6 +8,7 @@ import { inflateSync } from 'node:zlib';
 import type { IncomingMessage } from 'node:http';
 import { pickCredential } from '@zhin.js/adapter';
 import { isMediaRef } from '@zhin.js/core';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('kook');
@@ -195,9 +196,25 @@ export function resolveKookConfig(config: KookAdapterConfig = {}): ResolvedKookC
 
 /**
  * Gateway reply target：`private:uid` / `channel:cid`，便于 send() 还原 API。
+ * 仅用于平台边界编解码；框架侧寻址一律用 ConversationRef。
  */
 export function formatInboundTarget(msg: KookInboundMessage): string {
   return `${msg.channelKind}:${msg.channelId}`;
+}
+
+/**
+ * 入站归一化 → ConversationRef：频道消息的所属 guild 进 `parent`（guild 容器
+ * 映射为 channel 容器）；私聊（PERSON）无容器，直接 kind 'private'。
+ */
+export function kookInboundConversation(endpointId: string, msg: KookInboundMessage): ConversationRef {
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind: msg.channelKind,
+    id: msg.channelId,
+    ...(msg.guildId && msg.channelKind === 'channel'
+      ? { parent: { kind: 'channel' as const, id: msg.guildId } }
+      : {}),
+  };
 }
 
 export function parseSendTarget(target: string): ParsedSendTarget {

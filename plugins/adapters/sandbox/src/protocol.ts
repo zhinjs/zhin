@@ -2,6 +2,7 @@
 
 import { readFileSync } from 'node:fs';
 import { isMediaRef } from '@zhin.js/core';
+import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('sandbox');
@@ -175,6 +176,27 @@ export function parseSandboxWsPayload(raw: string): {
       : action?.payload ?? raw;
   }
   return { type, id, content, timestamp: payload.timestamp ?? Date.now(), text, action };
+}
+
+/**
+ * 入站归一化 → ConversationRef。sandbox 无平台社交图谱：
+ * `private`/`group`/`channel` 直映射；`direct`（私聊）归 'private'；
+ * `guild`（频道容器语义）归 'channel'。无 guild/temp 容器信息，不产生 parent。
+ */
+export function sandboxInboundConversation(
+  endpointId: string,
+  msg: { readonly type: MessageType; readonly id: string },
+): ConversationRef {
+  const kind: ConversationKind = msg.type === 'direct'
+    ? 'private'
+    : msg.type === 'guild'
+      ? 'channel'
+      : msg.type;
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind,
+    id: msg.id,
+  };
 }
 
 export type SandboxOutboundChannel = {

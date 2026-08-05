@@ -4,6 +4,7 @@
  * Canonicalization is owned by gateway/core before endpoint.send.
  */
 import { isMediaRef, type MediaRef } from '@zhin.js/core';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('napcat');
@@ -213,23 +214,33 @@ export function getChannelId(ev: NapCatEvent): string {
   return '';
 }
 
-export function formatInboundTarget(ev: NapCatEvent): string {
-  const messageType = ev.message_type === 'group' || (ev.group_id != null && ev.message_type !== 'private')
-    ? 'group'
-    : 'private';
-  return `${messageType}:${getChannelId(ev)}`;
+/**
+ * 入站归一化 → ConversationRef：群消息 → kind 'group'；私聊临时会话
+ * （sub_type 'group'）→ kind 'private' + 群容器进 `parent`；其余私聊 → 'private'。
+ */
+export function napcatInboundConversation(endpointId: string, ev: NapCatEvent): ConversationRef {
+  const endpoint = { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId };
+  const isGroup = ev.message_type === 'group' || (ev.group_id != null && ev.message_type !== 'private');
+  if (isGroup && ev.group_id != null) {
+    return { endpoint, kind: 'group', id: String(ev.group_id) };
+  }
+  if (ev.sub_type === 'group' && ev.group_id != null) {
+    return {
+      endpoint,
+      kind: 'private',
+      id: ev.user_id != null ? String(ev.user_id) : '',
+      parent: { kind: 'group', id: String(ev.group_id) },
+    };
+  }
+  return { endpoint, kind: 'private', id: ev.user_id != null ? String(ev.user_id) : '' };
 }
 
-export function parseSendTarget(target: string): ParsedSendTarget {
-  const sep = target.indexOf(':');
-  if (sep <= 0) {
-    return { message_type: 'private', id: target };
-  }
-  const head = target.slice(0, sep);
-  const rest = target.slice(sep + 1);
-  if (head === 'group') return { message_type: 'group', id: rest };
-  if (head === 'private') return { message_type: 'private', id: rest };
-  return { message_type: 'private', id: target };
+/** 出站：ConversationRef → OneBot 私聊/群聊目标。 */
+export function napcatOutboundTarget(conversation: ConversationRef): ParsedSendTarget {
+  return {
+    message_type: conversation.kind === 'group' ? 'group' : 'private',
+    id: conversation.id,
+  };
 }
 
 export function formatInboundContent(ev: NapCatEvent): string {
@@ -373,15 +384,14 @@ export function formatOutboundSegments(payload: unknown): MessageSegment[] {
 }
 
 export function buildSendAction(
-  target: string,
+  target: ParsedSendTarget,
   message: MessageSegment[],
 ): { action: string; params: Record<string, unknown> } {
-  const parsed = parseSendTarget(target);
-  if (parsed.message_type === 'group') {
+  if (target.message_type === 'group') {
     return {
       action: 'send_group_msg',
       params: {
-        group_id: Number(parsed.id) || parsed.id,
+        group_id: Number(target.id) || target.id,
         message,
       },
     };
@@ -389,7 +399,7 @@ export function buildSendAction(
   return {
     action: 'send_private_msg',
     params: {
-      user_id: Number(parsed.id) || parsed.id,
+      user_id: Number(target.id) || target.id,
       message,
     },
   };

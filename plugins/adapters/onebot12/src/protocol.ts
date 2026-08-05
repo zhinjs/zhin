@@ -4,6 +4,7 @@
  * Spec: https://12.onebot.dev/
  */
 import { isMediaRef, type MediaRef } from '@zhin.js/core';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('onebot12');
@@ -118,12 +119,6 @@ export interface OneBot12WireSegment {
   readonly data?: Record<string, unknown>;
 }
 
-export interface ParsedSendTarget {
-  readonly detail_type: 'private' | 'group' | 'channel';
-  readonly id: string;
-  readonly guild_id?: string;
-}
-
 export function resolveOneBot12Config(config: OneBot12AdapterConfig = {}): ResolvedOneBot12Config {
   const entry = config.endpoints?.find((item) => item.context === 'onebot12');
   const connection = config.connection
@@ -204,37 +199,31 @@ export function getChannelId(ev: OneBot12Event): string {
 }
 
 /**
- * Gateway reply target：`detail_type:channelId`，便于 send() 还原动作参数。
+ * 入站归一化 → ConversationRef：`detail_type` 直映射 kind；channel 的 guild 容器
+ * 进 `parent`（kind 'channel'）；私聊临时会话（private 事件携带 group_id）映射为
+ * group 容器内的 private 会话。
  */
-export function formatInboundTarget(ev: OneBot12Event): string {
-  const detail = ev.detail_type === 'private' || ev.detail_type === 'group' || ev.detail_type === 'channel'
-    ? ev.detail_type
-    : 'private';
-  return `${detail}:${getChannelId(ev)}`;
-}
-
-export function parseSendTarget(target: string): ParsedSendTarget {
-  const sep = target.indexOf(':');
-  if (sep <= 0) {
-    return { detail_type: 'private', id: target };
+export function onebot12InboundConversation(endpointId: string, ev: OneBot12Event): ConversationRef {
+  const endpoint = { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId };
+  if (ev.detail_type === 'group' && ev.group_id) {
+    return { endpoint, kind: 'group', id: ev.group_id };
   }
-  const head = target.slice(0, sep);
-  const rest = target.slice(sep + 1);
-  if (head === 'private' || head === 'group') {
-    return { detail_type: head, id: rest };
+  if (ev.detail_type === 'channel' && ev.channel_id) {
+    return {
+      endpoint,
+      kind: 'channel',
+      id: ev.channel_id,
+      ...(ev.guild_id ? { parent: { kind: 'channel' as const, id: ev.guild_id } } : {}),
+    };
   }
-  if (head === 'channel') {
-    const guildSep = rest.indexOf(':');
-    if (guildSep > 0) {
-      return {
-        detail_type: 'channel',
-        guild_id: rest.slice(0, guildSep),
-        id: rest.slice(guildSep + 1),
-      };
-    }
-    return { detail_type: 'channel', id: rest };
-  }
-  return { detail_type: 'private', id: target };
+  return {
+    endpoint,
+    kind: 'private',
+    id: ev.user_id ?? ev.group_id ?? '',
+    ...(ev.detail_type === 'private' && ev.group_id
+      ? { parent: { kind: 'group' as const, id: ev.group_id } }
+      : {}),
+  };
 }
 
 /** Build inbound text for MessageGateway.receive */
@@ -501,22 +490,25 @@ export async function uploadOneBot12MediaSegments(
   return uploadOneMediaSegment(payload, callAction, onUploadFailed);
 }
 
+/**
+ * 结构化会话 → OB12 `send_message` 动作参数：kind 直映射 detail_type；
+ * channel 的 guild 容器取自 `conversation.parent`（kind 'channel'）。
+ */
 export function buildSendMessageParams(
-  target: string,
+  conversation: ConversationRef,
   message: OneBot12Segment[],
 ): Record<string, unknown> {
-  const parsed = parseSendTarget(target);
   const params: Record<string, unknown> = {
     message,
-    detail_type: parsed.detail_type,
+    detail_type: conversation.kind,
   };
-  if (parsed.detail_type === 'private') {
-    params.user_id = parsed.id;
-  } else if (parsed.detail_type === 'group') {
-    params.group_id = parsed.id;
+  if (conversation.kind === 'private') {
+    params.user_id = conversation.id;
+  } else if (conversation.kind === 'group') {
+    params.group_id = conversation.id;
   } else {
-    params.channel_id = parsed.id;
-    if (parsed.guild_id) params.guild_id = parsed.guild_id;
+    params.channel_id = conversation.id;
+    if (conversation.parent?.kind === 'channel') params.guild_id = conversation.parent.id;
   }
   return params;
 }

@@ -4,6 +4,7 @@
  */
 
 import { pickCredential } from '@zhin.js/adapter';
+import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('qq');
@@ -140,7 +141,8 @@ export function resolveQqConfig(config: QqAdapterConfig = {}): ResolvedQqConfig 
 }
 
 /**
- * Gateway reply target：`private:uid` / `group:gid` / `channel:cid` / `direct:guildId`.
+ * Gateway reply target：`private:uid` / `group:gid` / `channel:cid` / `direct:guildId`。
+ * 仅用于平台边界编解码（compound message id 等）；框架侧寻址一律用 ConversationRef。
  */
 export function formatInboundTarget(msg: QqInboundMessage): string {
   return `${msg.channelKind}:${msg.channelId}`;
@@ -157,6 +159,28 @@ export function parseSendTarget(target: string): ParsedSendTarget {
     return { kind: head, id: rest };
   }
   return { kind: 'private', id: target };
+}
+
+/**
+ * 入站归一化 → ConversationRef：`direct`（频道私信）映射为 guild 容器内的
+ * private 会话；频道消息的所属 guild 进 `parent`。
+ */
+export function qqInboundConversation(endpointId: string, msg: QqInboundMessage): ConversationRef {
+  const kind: ConversationKind = msg.channelKind === 'direct' ? 'private' : msg.channelKind;
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind,
+    id: msg.channelId,
+    ...(msg.guildId && (msg.channelKind === 'channel' || msg.channelKind === 'direct')
+      ? { parent: { kind: 'channel' as const, id: msg.guildId } }
+      : {}),
+  };
+}
+
+/** 出站：guild 容器内的 private 会话即 QQ `direct`（频道私信）。 */
+export function qqOutboundKind(conversation: ConversationRef): QqChannelKind {
+  if (conversation.kind === 'private' && conversation.parent?.kind === 'channel') return 'direct';
+  return conversation.kind;
 }
 
 export function senderDisplayName(msg: QqInboundMessage): string {

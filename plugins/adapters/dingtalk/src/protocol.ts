@@ -7,6 +7,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 
 import { isMediaRef } from '@zhin.js/core';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('dingtalk');
@@ -154,8 +155,17 @@ export function resolveChatType(conversationType?: string): 'group' | 'private' 
   return conversationType === '2' ? 'group' : 'private';
 }
 
-export function resolveTarget(msg: DingTalkMessage): string {
-  return msg.conversationId || msg.senderId || 'unknown';
+/**
+ * 入站归一化 → ConversationRef：`conversationType: '2'` 为群会话（kind 'group'），
+ * 其余为单聊（kind 'private'）；会话原生 id 取 conversationId，缺省回退 senderId。
+ * 钉钉无 guild/频道容器概念，不产生 parent。
+ */
+export function dingtalkInboundConversation(endpointId: string, msg: DingTalkMessage): ConversationRef {
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind: resolveChatType(msg.conversationType),
+    id: msg.conversationId || msg.senderId || 'unknown',
+  };
 }
 
 export function resolveSender(msg: DingTalkMessage): string {

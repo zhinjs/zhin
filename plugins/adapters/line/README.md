@@ -24,8 +24,8 @@ pnpm add @zhin.js/adapter-line
 - `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
-入站：`gateway.receive({ adapter, target: channelId, content: text, sender, metadata })`  
-出站：`send({ target, payload })` → Reply API（缓存 replyToken）或 Push API
+入站：`gateway.receive({ conversation, message: { conversation, id }, content: text, sender, metadata })`  
+出站：`send({ conversation, payload })` → Reply API（缓存 replyToken）或 Push API
 
 ## 前置条件
 

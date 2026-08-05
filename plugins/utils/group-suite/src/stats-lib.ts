@@ -32,23 +32,23 @@ function bufferKey(userId: string, groupId: string, date: string): string {
 }
 
 export function resolveGroupId(input: {
-  target?: string;
+  conversation?: { readonly kind?: string; readonly id?: string };
   metadata?: Readonly<Record<string, unknown>>;
 }): string {
   const meta = input.metadata ?? {};
   const channelType = String(meta.type ?? meta.channelType ?? '');
-  if (channelType === 'group' || channelType === 'guild') {
-    return String(input.target ?? meta.channelId ?? '');
+  if (channelType === 'group' || channelType === 'guild' || channelType === 'channel') {
+    return String(meta.channelId ?? input.conversation?.id ?? '');
   }
-  if (input.target && channelType !== 'private') {
-    return String(input.target);
+  if (input.conversation && channelType !== 'private') {
+    return String(input.conversation.id ?? '');
   }
   return '';
 }
 
 export function recordMessage(input: {
   sender?: string;
-  target?: string;
+  conversation?: { readonly kind?: string; readonly id?: string };
   metadata?: Readonly<Record<string, unknown>>;
 }, runtime?: GroupSuiteRuntime): void {
   const targetBuffer = runtime?.statsBuffer ?? buffer;

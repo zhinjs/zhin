@@ -50,8 +50,10 @@ export default definePlugin<LotteryConfig>({
             await outbound.send({
               adapter: target.adapter,
               endpointId: target.endpointId || target.adapter,
-              channelType: target.channelType || 'private',
-              channelId: target.channelId,
+              conversation: {
+                kind: (target.channelType || 'private') as 'private' | 'group' | 'channel',
+                id: target.channelId,
+              },
               content: text,
             });
           } catch {

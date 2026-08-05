@@ -7,6 +7,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { pickCredential } from '@zhin.js/adapter';
 import { isMediaRef } from '@zhin.js/core';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('github');
@@ -98,6 +99,23 @@ export interface GithubInboundComment {
   readonly repo: string;
   readonly kind: 'issue_comment' | 'pr_review_comment' | 'pr_review';
   readonly createdAt: number;
+}
+
+/**
+ * 入站归一化 → ConversationRef：Issue/PR 评论区即仓库容器内的 channel 会话，
+ * 仓库（owner/repo）进 `parent`。出站侧用 `parseChannelId(conversation.id)`
+ * 在平台边界还原 repo/type/number。
+ */
+export function githubInboundConversation(
+  endpointId: string,
+  comment: GithubInboundComment,
+): ConversationRef {
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind: 'channel',
+    id: comment.channelId,
+    parent: { kind: 'channel', id: comment.repo },
+  };
 }
 
 export function resolveGithubConfig(config: GithubAdapterConfig = {}): ResolvedGithubConfig {

@@ -167,10 +167,10 @@ describe('qq plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'group:group-1',
+      conversation: expect.objectContaining({ kind: 'group', id: 'group-1' }),
+      message: expect.objectContaining({ id: 'msg-1' }),
       content: 'hello',
       sender: 'alice',
-      id: 'msg-1',
     }));
 
     await endpoint.stop();
@@ -202,7 +202,11 @@ describe('qq plugin runtime adapter', () => {
       createBot: () => mock,
     });
     await endpoint.start();
-    const messageId = await endpoint.send({ target: 'group:group-1', payload: 'pong' });
+    const messageId = await endpoint.send({ conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: 'group-1',
+      }, payload: 'pong' });
     expect(messageId).toBe('group-group-1:sent-1');
     expect(mock.sent[0]).toEqual({ kind: 'group', id: 'group-1', message: 'pong' });
     await endpoint.stop();
@@ -279,7 +283,11 @@ describe('qq plugin runtime adapter', () => {
     });
     await endpoint.start();
     await endpoint.send({
-      target: 'group:group-1',
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: 'group-1',
+      },
       payload: [{ type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } }],
     });
     expect(mock.sent[0]).toEqual({
@@ -300,14 +308,22 @@ describe('qq plugin runtime adapter', () => {
     });
     await endpoint.start();
     await endpoint.send({
-      target: 'private:user-1',
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'private',
+        id: 'user-1',
+      },
       payload: [
         { type: 'text', data: { text: '看图' } },
         { type: 'image', data: { media: { kind: 'base64', value: 'aGk=', mime_type: 'image/png' } } },
       ],
     });
     await endpoint.send({
-      target: 'private:user-1',
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'private',
+        id: 'user-1',
+      },
       payload: [{ type: 'image', data: { media: { kind: 'path', value: '/tmp/a.png' } } }],
     });
     expect(mock.sent[0]?.message).toEqual([
@@ -331,11 +347,19 @@ describe('qq plugin runtime adapter', () => {
     });
     await endpoint.start();
     await endpoint.send({
-      target: 'group:group-1',
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: 'group-1',
+      },
       payload: [{ type: 'markdown', data: { content: '**粗体**' } }],
     });
     await endpoint.send({
-      target: 'group:group-1',
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: 'group-1',
+      },
       payload: [{
         type: 'markdown',
         data: { custom_template_id: 'tpl-1', params: [{ key: 'k', values: 'v' }] },
@@ -362,7 +386,11 @@ describe('qq plugin runtime adapter', () => {
     });
     await endpoint.start();
     await endpoint.send({
-      target: 'group:group-1',
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: 'group-1',
+      },
       payload: [
         { type: 'text', data: { text: '请操作' } },
         {
@@ -425,7 +453,11 @@ describe('qq plugin runtime adapter', () => {
       createBot: () => mock,
     });
     await endpoint.start();
-    await expect(endpoint.send({ target: 'group:group-1', payload: 'pong' }))
+    await expect(endpoint.send({ conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: 'group-1',
+      }, payload: 'pong' }))
       .rejects.toThrow('QQ API 500');
     await endpoint.stop();
   });
@@ -440,7 +472,11 @@ describe('qq plugin runtime adapter', () => {
       createBot: () => mock,
     });
     await endpoint.start();
-    await expect(endpoint.send({ target: 'group:group-1', payload: 'pong' }))
+    await expect(endpoint.send({ conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: 'group-1',
+      }, payload: 'pong' }))
       .rejects.toThrow('QQ 发送消息失败（304023）: audit rejected');
     await endpoint.stop();
   });

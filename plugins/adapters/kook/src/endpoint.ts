@@ -7,6 +7,7 @@ import type {
   EndpointGroup,
   EndpointInstance,
   EndpointManagement,
+  EndpointSendRequest,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
@@ -15,10 +16,9 @@ import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { registerKookAgentEndpoint } from './kook-agent-deps.js';
 import {
   formatInboundContent,
-  formatInboundTarget,
   formatOutboundKmarkdown,
   isKookBotMentioned,
-  parseSendTarget,
+  kookInboundConversation,
   senderDisplayName,
   type KookInboundMessage,
   type ResolvedKookWebhookConfig,
@@ -102,18 +102,17 @@ export class KookWebsocketEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const body = formatOutboundKmarkdown(payload);
-    const parsed = parseSendTarget(target);
     const client = this.#requireClient();
-    const result = parsed.kind === 'private'
-      ? await client.sendPrivateMsg(parsed.id, body)
-      : await client.sendChannelMsg(parsed.id, body);
+    const result = conversation.kind === 'private'
+      ? await client.sendPrivateMsg(conversation.id, body)
+      : await client.sendChannelMsg(conversation.id, body);
     const messageId = result?.msg_id != null ? String(result.msg_id) : '';
     logger.debug(formatCompact({
       op: 'kook_send',
       endpoint: this.#options.config.name,
-      target,
+      target: `${conversation.kind}:${conversation.id}`,
       messageId,
     }));
     return messageId;
@@ -123,14 +122,13 @@ export class KookWebsocketEndpoint implements EndpointInstance {
   admit(msg: KookInboundMessage): void {
     if (!this.#open) return;
     if (msg.authorBot) return;
-    const target = formatInboundTarget(msg);
+    const conversation = kookInboundConversation(String(this.#options.id), msg);
     const selfId = this.#client?.self_id != null ? String(this.#client.self_id) : undefined;
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target,
+      conversation,
+      message: { conversation, id: msg.id },
       content: formatInboundContent(msg),
       sender: senderDisplayName(msg),
-      id: msg.id,
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         channelKind: msg.channelKind,
@@ -142,7 +140,7 @@ export class KookWebsocketEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'kook_gateway_receive_failed',
-        target,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });
@@ -282,18 +280,17 @@ export class KookWebhookEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const body = formatOutboundKmarkdown(payload);
-    const parsed = parseSendTarget(target);
     const client = this.#requireClient();
-    const result = parsed.kind === 'private'
-      ? await client.sendPrivateMsg(parsed.id, body)
-      : await client.sendChannelMsg(parsed.id, body);
+    const result = conversation.kind === 'private'
+      ? await client.sendPrivateMsg(conversation.id, body)
+      : await client.sendChannelMsg(conversation.id, body);
     const messageId = result?.msg_id != null ? String(result.msg_id) : '';
     logger.debug(formatCompact({
       op: 'kook_send',
       endpoint: this.#options.config.name,
-      target,
+      target: `${conversation.kind}:${conversation.id}`,
       messageId,
     }));
     return messageId;
@@ -303,14 +300,13 @@ export class KookWebhookEndpoint implements EndpointInstance {
   admit(msg: KookInboundMessage): void {
     if (!this.#open) return;
     if (msg.authorBot) return;
-    const target = formatInboundTarget(msg);
+    const conversation = kookInboundConversation(String(this.#options.id), msg);
     const selfId = this.#client?.self_id != null ? String(this.#client.self_id) : undefined;
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target,
+      conversation,
+      message: { conversation, id: msg.id },
       content: formatInboundContent(msg),
       sender: senderDisplayName(msg),
-      id: msg.id,
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         channelKind: msg.channelKind,
@@ -322,7 +318,7 @@ export class KookWebhookEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'kook_gateway_receive_failed',
-        target,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });

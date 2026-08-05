@@ -10,10 +10,9 @@ import {
   buildSendAction,
   extractQuoteId,
   formatInboundContent,
-  formatInboundTarget,
   formatOutboundSegments,
   isOneBot11BotMentioned,
-  parseSendTarget,
+  onebot11InboundConversation,
   resolveOneBot11Config,
   senderNickname,
   senderUserId,
@@ -22,6 +21,12 @@ import {
 } from '../src/protocol.js';
 
 const adapterFeature = featureId('zhin.adapter');
+
+const endpointCapabilityId = capabilityId(rootPluginId(), adapterFeature, 'onebot11');
+const endpointRef = {
+  id: String(endpointCapabilityId),
+  adapter: String(endpointCapabilityId).split('\0')[0],
+};
 
 const baseConfig: OneBot11WsConfig = resolveOneBot11Config({
   connection: 'ws',
@@ -109,7 +114,7 @@ describe('onebot11 protocol helpers', () => {
     });
   });
 
-  it('formats inbound target and content', () => {
+  it('normalizes inbound events to ConversationRef and extracts content', () => {
     const ev: OneBot11Event = {
       post_type: 'message',
       message_type: 'group',
@@ -120,24 +125,39 @@ describe('onebot11 protocol helpers', () => {
       message: [{ type: 'text', data: { text: 'hello' } }],
       time: 1,
     };
-    expect(formatInboundTarget(ev)).toBe('group:100');
+    expect(onebot11InboundConversation(String(endpointCapabilityId), ev)).toEqual({
+      endpoint: endpointRef,
+      kind: 'group',
+      id: '100',
+    });
+    expect(onebot11InboundConversation(String(endpointCapabilityId), {
+      post_type: 'message',
+      message_type: 'private',
+      message_id: 2,
+      user_id: 42,
+    })).toEqual({
+      endpoint: endpointRef,
+      kind: 'private',
+      id: '42',
+    });
     expect(formatInboundContent(ev)).toBe('hello');
   });
 
-  it('parses send targets', () => {
-    expect(parseSendTarget('private:42')).toEqual({ message_type: 'private', id: '42' });
-    expect(parseSendTarget('group:9')).toEqual({ message_type: 'group', id: '9' });
-  });
-
-  it('builds send_*_msg actions from target', () => {
-    expect(buildSendAction('private:1', [{ type: 'text', data: { text: 'hi' } }])).toEqual({
+  it('builds send_*_msg actions from conversation', () => {
+    expect(buildSendAction(
+      { endpoint: endpointRef, kind: 'private', id: '1' },
+      [{ type: 'text', data: { text: 'hi' } }],
+    )).toEqual({
       action: 'send_private_msg',
       params: {
         user_id: 1,
         message: [{ type: 'text', data: { text: 'hi' } }],
       },
     });
-    expect(buildSendAction('group:2', [{ type: 'text', data: { text: 'hi' } }])).toEqual({
+    expect(buildSendAction(
+      { endpoint: endpointRef, kind: 'group', id: '2' },
+      [{ type: 'text', data: { text: 'hi' } }],
+    )).toEqual({
       action: 'send_group_msg',
       params: {
         group_id: 2,
@@ -275,10 +295,10 @@ describe('onebot11 plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'private:10001',
+      conversation: { endpoint: endpointRef, kind: 'private', id: '10001' },
+      message: { conversation: { endpoint: endpointRef, kind: 'private', id: '10001' }, id: '42' },
       content: '你好',
       sender: '10001',
-      id: '42',
       metadata: expect.objectContaining({ nickname: 'Alice' }),
     }));
 
@@ -317,7 +337,7 @@ describe('onebot11 plugin runtime adapter', () => {
     });
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'group:200',
+      conversation: { endpoint: endpointRef, kind: 'group', id: '200' },
       sender: '9',
       metadata: expect.objectContaining({ mentioned: true, nickname: 'bob' }),
     }));
@@ -449,7 +469,7 @@ describe('onebot11 plugin runtime adapter', () => {
     endpoint.open();
 
     const sendPromise = endpoint.send({
-      target: 'private:10001',
+      conversation: { endpoint: endpointRef, kind: 'private', id: '10001' },
       payload: 'pong',
     });
 
@@ -501,7 +521,7 @@ describe('onebot11 plugin runtime adapter', () => {
     }));
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'group:200',
+      conversation: { endpoint: endpointRef, kind: 'group', id: '200' },
       content: 'from-ws',
     }));
     await endpoint.stop();

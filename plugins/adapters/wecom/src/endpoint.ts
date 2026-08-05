@@ -1,7 +1,7 @@
 /**
  * WecomEndpoint — lifecycle, outbound send, inbound admit, OpenAPI helpers for agent tools.
  */
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -18,6 +18,7 @@ import {
   formatInboundContent,
   formatOutboundBody,
   resolveChatType,
+  wecomInboundConversation,
   type AccessToken,
   type ResolvedWecomConfig,
   type WecomApiResponse,
@@ -114,11 +115,11 @@ export class WecomEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const materialized = await this.#materializeOutboundMedia(payload);
     const content = formatOutboundBody(materialized);
     const body = buildSendRequestBody(
-      target,
+      conversation.id,
       content,
       // Legacy field: historically written into agentid (preserved for cutover).
       this.#options.config.agentSecret,
@@ -130,7 +131,11 @@ export class WecomEndpoint implements EndpointInstance {
     if (data.errcode !== 0) {
       throw new Error(`Failed to send message: ${data.errmsg} (${data.errcode})`);
     }
-    logger.debug(formatCompact({ op: 'send', endpoint: this.#options.config.name, to: target }));
+    logger.debug(formatCompact({
+      op: 'send',
+      endpoint: this.#options.config.name,
+      to: `${conversation.kind}:${conversation.id}`,
+    }));
     return (data.msgid as string) || `${Date.now()}`;
   }
 
@@ -200,12 +205,12 @@ export class WecomEndpoint implements EndpointInstance {
   admit(msg: WecomMessage): void {
     if (!this.#open) return;
     const chatType = resolveChatType(msg.FromUserName);
+    const conversation = wecomInboundConversation(String(this.#options.id), msg);
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target: msg.FromUserName,
+      conversation,
+      message: { conversation, id: msg.MsgId || `${msg.CreateTime}` },
       content: formatInboundContent(msg),
       sender: msg.FromUserName,
-      id: msg.MsgId || `${msg.CreateTime}`,
       metadata: Object.freeze({
         msgType: msg.MsgType,
         event: msg.Event,
@@ -217,7 +222,7 @@ export class WecomEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'wecom_gateway_receive_failed',
-        target: msg.FromUserName,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });
@@ -264,7 +269,15 @@ export class WecomEndpoint implements EndpointInstance {
 
   async sendTextMessage(userId: string, content: string): Promise<boolean> {
     try {
-      await this.send({ target: userId, payload: content });
+      const endpointId = String(this.#options.id);
+      await this.send({
+        conversation: {
+          endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+          kind: resolveChatType(userId),
+          id: userId,
+        },
+        payload: content,
+      });
       return true;
     } catch (error) {
       logger.error('Failed to send text message:', error);

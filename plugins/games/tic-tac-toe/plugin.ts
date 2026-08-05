@@ -73,8 +73,7 @@ export default defineGamePlugin<SessionServices>({
       await Promise.all(spectators.map((userId) => outbound.send({
         adapter: session.adapter,
         endpointId: session.endpoint,
-        channelType: 'private',
-        channelId: userId,
+        conversation: { kind: 'private', id: userId },
         content,
       })));
     };

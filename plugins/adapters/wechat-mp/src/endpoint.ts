@@ -2,7 +2,7 @@
  * WeChatMpEndpoint — lifecycle, outbound, admit, access token refresh.
  */
 import axios from 'axios';
-import type { EndpointFriend, EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
+import type { EndpointFriend, EndpointInstance, EndpointManagement, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -12,6 +12,7 @@ import {
   formatCustomerServiceBody,
   formatInboundContent,
   formatInboundId,
+  wechatMpInboundConversation,
   type ResolvedWeChatMpConfig,
   type TokenResponse,
   type WeChatAPIResponse,
@@ -159,7 +160,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     if (getPassiveReplyCapture()) {
       const text = extractOutboundText(payload);
       recordPassiveReplyText(text);
@@ -167,14 +168,14 @@ export class WeChatMpEndpoint implements EndpointInstance {
     }
 
     if (this.#options.config.replyMode === 'customer_service') {
-      return this.#sendCustomerService(target, payload);
+      return this.#sendCustomerService(conversation.id, payload);
     }
 
     logger.warn(formatCompact({
       op: 'send',
       skip: 'passive_outside_webhook',
       endpoint: this.#options.config.name,
-      target,
+      target: `${conversation.kind}:${conversation.id}`,
     }));
     return `passive_skipped_${Date.now()}`;
   }
@@ -182,12 +183,12 @@ export class WeChatMpEndpoint implements EndpointInstance {
   /** Test / internal: admit a parsed message when open (non-webhook path). */
   admit(msg: WeChatMessage): void {
     if (!this.#open) return;
+    const conversation = wechatMpInboundConversation(String(this.#options.id), msg);
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target: msg.FromUserName,
+      conversation,
+      message: { conversation, id: formatInboundId(msg) },
       content: formatInboundContent(msg),
       sender: msg.FromUserName,
-      id: formatInboundId(msg),
       metadata: Object.freeze({
         msgType: msg.MsgType,
         event: msg.Event,
@@ -197,7 +198,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'wechat_mp_gateway_receive_failed',
-        target: msg.FromUserName,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });

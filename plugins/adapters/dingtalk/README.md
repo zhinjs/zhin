@@ -24,8 +24,8 @@ pnpm add @zhin.js/adapter-dingtalk
 - `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
-入站：`gateway.receive({ adapter, target: conversationId, content: text, sender, metadata })`  
-出站：`send({ target, payload })` → sessionWebhook 或 `/robot/send`
+入站：`gateway.receive({ conversation: ConversationRef, message: { conversation, id }, content: text, sender, metadata })`  
+出站：`send({ conversation, payload })` → sessionWebhook 或 `/robot/send`
 
 ## 前置条件
 

@@ -3,7 +3,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import type { EndpointGroup, EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
+import type { EndpointGroup, EndpointInstance, EndpointManagement, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -18,9 +18,9 @@ import {
   formatInboundContent,
   formatOutboundBody,
   generateMessageId,
+  larkInboundConversation,
   resolveChatType,
   resolveSender,
-  resolveTarget,
   type AccessToken,
   type LarkApiResponse,
   type LarkMessage,
@@ -151,14 +151,14 @@ export class LarkEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const materialized = await this.#materializeOutboundMedia(payload);
     const content = formatOutboundBody(materialized);
     const data = await this.#request('/im/v1/messages', {
       method: 'POST',
       params: { receive_id_type: 'chat_id' },
       body: {
-        receive_id: target,
+        receive_id: conversation.id,
         msg_type: content.msg_type,
         content: content.content,
       },
@@ -170,7 +170,7 @@ export class LarkEndpoint implements EndpointInstance {
     logger.debug(formatCompact({
       op: 'send',
       endpoint: this.#options.config.name,
-      to: target,
+      to: conversation.id,
       id: messageId,
     }));
     return messageId;
@@ -234,13 +234,12 @@ export class LarkEndpoint implements EndpointInstance {
   /** Test / internal: admit a parsed message when open (non-webhook path). */
   admit(msg: LarkMessage): void {
     if (!this.#open) return;
-    const target = resolveTarget(msg);
+    const conversation = larkInboundConversation(String(this.#options.id), msg);
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target,
+      conversation,
+      message: { conversation, id: generateMessageId(msg) },
       content: formatInboundContent(msg),
       sender: resolveSender(msg),
-      id: generateMessageId(msg),
       metadata: Object.freeze({
         messageType: msg.message_type,
         chatType: resolveChatType(msg.chat_id, msg.chat_type),
@@ -249,7 +248,7 @@ export class LarkEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'lark_gateway_receive_failed',
-        target,
+        conversation: conversation.id,
         error: err instanceof Error ? err.message : String(err),
       }));
     });

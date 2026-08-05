@@ -1,4 +1,5 @@
 export {
+  dingtalkInboundConversation,
   formatInboundContent,
   formatOutboundBody,
   generateMessageId,
@@ -8,7 +9,6 @@ export {
   resolveChatType,
   resolveDingTalkConfig,
   resolveSender,
-  resolveTarget,
   verifySignature,
   type AccessToken,
   type DingTalkAdapterConfig,

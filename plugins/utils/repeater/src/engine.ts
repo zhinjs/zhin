@@ -24,7 +24,10 @@ function clampNumber(value: unknown, fallback: number, min: number, max: number)
 }
 
 export interface RepeaterInboundFields {
-  readonly target: string;
+  readonly conversation: {
+    readonly kind: 'private' | 'group' | 'channel';
+    readonly id: string;
+  };
   readonly content: string;
   readonly sender?: string;
   readonly metadata?: Readonly<Record<string, unknown>>;
@@ -32,22 +35,21 @@ export interface RepeaterInboundFields {
 
 /**
  * Best-effort group detection for Plugin Runtime `Message`.
- * Gap: channel type is not a first-class Message field; we read
- * `metadata.type` / `metadata.channelType` when present. Without them,
- * a non-empty `target` is treated as a group key (may false-positive DMs).
+ * Channel type comes from `conversation.kind`（metadata.type/channelType 优先，
+ * 兼容早期适配器）；无类型信息时按会话 `kind:id` 作为 group key。
  */
 export function resolveGroupId(message: RepeaterInboundFields): string | null {
   const meta = message.metadata ?? {};
   const type = meta.type ?? meta.channelType
     ?? (meta.channel && typeof meta.channel === 'object'
       ? (meta.channel as { type?: unknown }).type
-      : undefined);
+      : undefined)
+    ?? message.conversation.kind;
   if (type === 'private') return null;
   if (type === 'group' || type === 'channel') {
-    return String(message.target || '');
+    return message.conversation.id;
   }
-  if (type != null) return null;
-  return message.target ? String(message.target) : null;
+  return null;
 }
 
 interface RepeatState {

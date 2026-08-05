@@ -50,7 +50,7 @@ const emptyCtx = {
 
 const groupInput = {
   sender: 'u1',
-  target: 'g1',
+  conversation: { kind: 'group', id: 'g1' },
   content: '',
   metadata: { type: 'group', senderName: 'Alice' },
 };

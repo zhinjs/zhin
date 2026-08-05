@@ -1,9 +1,9 @@
 export {
   Actions,
   formatInboundContent,
-  formatInboundTarget,
   formatOutboundBody,
-  parseSendTarget,
+  icqqInboundConversation,
+  icqqOutboundTarget,
   resolveIcqqConfig,
   type IcqqAdapterConfig,
   type IcqqInboundMessage,

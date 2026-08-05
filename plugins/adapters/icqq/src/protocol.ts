@@ -13,6 +13,7 @@
  */
 
 import { pickCredential } from '@zhin.js/adapter';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import type { MessageSegment } from "zhin.js";
 import { resolveCqMediaArg } from "./cq-message.js";
 
@@ -313,7 +314,7 @@ export interface IcqqWireSegment {
 
 export interface IcqqInboundMessage {
   readonly id: string;
-  readonly target: string;
+  readonly conversation: ConversationRef;
   readonly content: string;
   /**
    * 结构化段视图（canonical Segment，经 toCanonicalSegments 归一）。
@@ -354,51 +355,59 @@ export function resolveIcqqConfig(config: IcqqAdapterConfig = {}): ResolvedIcqqC
   };
 }
 
-/** Gateway reply target: `private:uid` / `group:gid` / `temp:gid:uid` / `channel:guild:channel`. */
-export function formatInboundTarget(input: {
+/**
+ * 入站归一化 → ConversationRef：群临时会话（temp）映射为群容器内的 private
+ * 会话（parent kind 'group'）；频道消息的所属 guild 进 `parent`（kind 'channel'）。
+ */
+export function icqqInboundConversation(endpointId: string, input: {
   readonly channelType: 'private' | 'group' | 'channel';
   readonly channelId: string;
   readonly channelParentGroupId?: string;
   readonly guildId?: string;
-}): string {
+}): ConversationRef {
+  const endpoint = { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId };
   if (input.channelType === 'private' && input.channelParentGroupId) {
-    return `temp:${input.channelParentGroupId}:${input.channelId}`;
-  }
-  if (input.channelType === 'channel' && input.guildId) {
-    return `channel:${input.guildId}:${input.channelId}`;
-  }
-  return `${input.channelType}:${input.channelId}`;
-}
-
-export function parseSendTarget(target: string): ParsedIcqqSendTarget {
-  const trimmed = target.trim();
-  if (trimmed.startsWith('temp:')) {
-    const rest = trimmed.slice(5);
-    const [groupId, userId] = rest.split(':');
-    if (!groupId || !userId) throw new TypeError(`Invalid icqq temp target: ${target}`);
-    return { kind: 'temp', groupId: Number(groupId), userId: Number(userId) };
-  }
-  if (trimmed.startsWith('channel:')) {
-    const rest = trimmed.slice(8);
-    const idx = rest.indexOf(':');
-    if (idx <= 0) throw new TypeError(`Invalid icqq channel target: ${target}`);
     return {
-      kind: 'channel',
-      guildId: rest.slice(0, idx),
-      channelId: rest.slice(idx + 1),
+      endpoint,
+      kind: 'private',
+      id: input.channelId,
+      parent: { kind: 'group', id: input.channelParentGroupId },
     };
   }
-  if (trimmed.startsWith('private:')) {
-    return { kind: 'private', userId: Number(trimmed.slice(8)) };
+  if (input.channelType === 'channel' && input.guildId) {
+    return {
+      endpoint,
+      kind: 'channel',
+      id: input.channelId,
+      parent: { kind: 'channel', id: input.guildId },
+    };
   }
-  if (trimmed.startsWith('group:')) {
-    return { kind: 'group', groupId: Number(trimmed.slice(6)) };
+  return { endpoint, kind: input.channelType, id: input.channelId };
+}
+
+/**
+ * 出站：从 ConversationRef 派生 IPC action 路由。
+ * 群容器（parent kind 'group'）内的 private 会话即 ICQQ 群临时会话（temp）。
+ */
+export function icqqOutboundTarget(conversation: ConversationRef): ParsedIcqqSendTarget {
+  if (conversation.kind === 'private' && conversation.parent?.kind === 'group') {
+    return {
+      kind: 'temp',
+      groupId: Number(conversation.parent.id),
+      userId: Number(conversation.id),
+    };
   }
-  // Bare numeric id → private (common reply path)
-  if (/^\d+$/.test(trimmed)) {
-    return { kind: 'private', userId: Number(trimmed) };
+  if (conversation.kind === 'private') {
+    return { kind: 'private', userId: Number(conversation.id) };
   }
-  throw new TypeError(`Invalid icqq send target: ${target}`);
+  if (conversation.kind === 'group') {
+    return { kind: 'group', groupId: Number(conversation.id) };
+  }
+  const guildId = conversation.parent?.kind === 'channel' ? conversation.parent.id : undefined;
+  if (!guildId) {
+    throw new TypeError(`Invalid icqq channel conversation (missing guild parent): ${conversation.id}`);
+  }
+  return { kind: 'channel', guildId, channelId: conversation.id };
 }
 
 export function formatOutboundBody(payload: unknown): string {

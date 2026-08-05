@@ -4,6 +4,7 @@
  * Spec: https://github.com/botuniverse/onebot-11
  */
 import { isMediaRef, type MediaRef } from '@zhin.js/core';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('onebot11');
@@ -106,11 +107,6 @@ export interface OneBot11WireSegment {
   readonly data?: Record<string, unknown>;
 }
 
-export interface ParsedSendTarget {
-  readonly message_type: 'private' | 'group';
-  readonly id: string;
-}
-
 function normalizeConnection(
   connection: string | undefined,
   legacyType: string | undefined,
@@ -185,29 +181,19 @@ export function getChannelId(ev: OneBot11Event): string {
 }
 
 /**
- * Gateway reply target：`private:uid` / `group:gid`，便于 send() 还原动作参数。
+ * 入站归一化 → ConversationRef：OneBot 11 `group` 消息 → kind 'group'，
+ * 其余（private 及带 group_id 的非 private 事件按群处理）→ kind 'private'。
+ * OneBot 11 无 guild/temp 容器概念，不填 parent。
  */
-export function formatInboundTarget(ev: OneBot11Event): string {
-  const messageType = ev.message_type === 'group' || (ev.group_id != null && ev.message_type !== 'private')
-    ? 'group'
-    : 'private';
-  return `${messageType}:${getChannelId(ev)}`;
-}
-
-export function parseSendTarget(target: string): ParsedSendTarget {
-  const sep = target.indexOf(':');
-  if (sep <= 0) {
-    return { message_type: 'private', id: target };
-  }
-  const head = target.slice(0, sep);
-  const rest = target.slice(sep + 1);
-  if (head === 'group') {
-    return { message_type: 'group', id: rest };
-  }
-  if (head === 'private') {
-    return { message_type: 'private', id: rest };
-  }
-  return { message_type: 'private', id: target };
+export function onebot11InboundConversation(endpointId: string, ev: OneBot11Event): ConversationRef {
+  const kind = ev.message_type === 'group' || (ev.group_id != null && ev.message_type !== 'private')
+    ? 'group' as const
+    : 'private' as const;
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind,
+    id: getChannelId(ev),
+  };
 }
 
 /** Build inbound text for MessageGateway.receive */
@@ -420,15 +406,14 @@ export function formatOutboundSegments(payload: unknown): OneBot11Segment[] {
 }
 
 export function buildSendAction(
-  target: string,
+  conversation: ConversationRef,
   message: OneBot11Segment[],
 ): { action: string; params: Record<string, unknown> } {
-  const parsed = parseSendTarget(target);
-  if (parsed.message_type === 'group') {
+  if (conversation.kind === 'group') {
     return {
       action: 'send_group_msg',
       params: {
-        group_id: Number(parsed.id) || parsed.id,
+        group_id: Number(conversation.id) || conversation.id,
         message,
       },
     };
@@ -436,7 +421,7 @@ export function buildSendAction(
   return {
     action: 'send_private_msg',
     params: {
-      user_id: Number(parsed.id) || parsed.id,
+      user_id: Number(conversation.id) || conversation.id,
       message,
     },
   };

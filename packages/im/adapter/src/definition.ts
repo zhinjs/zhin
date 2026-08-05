@@ -22,15 +22,9 @@ export type AdapterOutboundMedia = 'url' | 'path' | 'base64' | 'upload';
 export type AdapterInteractiveMode = 'native' | 'text';
 
 export interface EndpointSendRequest {
-  /**
-   * Structured identity for new callers. The target remains until every
-   * platform adapter has migrated its native boundary codec.
-   */
-  readonly conversation?: ConversationRef;
-  /** @deprecated Use conversation for framework-facing code. */
-  readonly target: string;
+  /** 结构化会话寻址；端点在平台边界自行派生原生 target。 */
+  readonly conversation: ConversationRef;
   readonly payload: unknown;
-  readonly parent?: { readonly type?: string; readonly id?: string; readonly name?: string };
 }
 
 export interface EndpointInstance<TResult = unknown> {

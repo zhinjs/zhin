@@ -187,10 +187,14 @@ describe('dingtalk plugin runtime adapter', () => {
     expect(await res.json()).toEqual({ code: 0, msg: 'success' });
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'cid-1',
+      conversation: expect.objectContaining({
+        kind: 'private',
+        id: 'cid-1',
+        endpoint: expect.objectContaining({ adapter: 'root' }),
+      }),
+      message: expect.objectContaining({ id: 'msg-1' }),
       content: 'hello',
       sender: 'user-1',
-      id: 'msg-1',
     }));
     await endpoint.stop();
   });
@@ -301,7 +305,7 @@ describe('dingtalk plugin runtime adapter', () => {
     });
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
     expect(receive).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      target: 'cid-1',
+      conversation: expect.objectContaining({ kind: 'group', id: 'cid-1' }),
       metadata: expect.objectContaining({ mentioned: true }),
     }));
 
@@ -346,7 +350,14 @@ describe('dingtalk plugin runtime adapter', () => {
     });
     await endpoint.start();
     await http.listen();
-    const id = await endpoint.send({ target: 'cid-1', payload: 'pong' });
+    const id = await endpoint.send({
+      conversation: {
+        endpoint: { id: 'root\0zhin.adapter\0dingtalk', adapter: 'root' },
+        kind: 'group',
+        id: 'cid-1',
+      },
+      payload: 'pong',
+    });
     expect(id).toBe('out-42');
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/robot/send'),
@@ -375,7 +386,14 @@ describe('dingtalk plugin runtime adapter', () => {
     endpoint.admit(textMessage({
       sessionWebhook: 'https://session.example/hook',
     }));
-    const id = await endpoint.send({ target: 'cid-1', payload: 'reply' });
+    const id = await endpoint.send({
+      conversation: {
+        endpoint: { id: 'root\0zhin.adapter\0dingtalk', adapter: 'root' },
+        kind: 'group',
+        id: 'cid-1',
+      },
+      payload: 'reply',
+    });
     expect(id).toBe('session-9');
     expect(fetchMock).toHaveBeenCalledWith(
       'https://session.example/hook',

@@ -2,7 +2,7 @@
  * NapCat HTTP endpoint — POST inbound events + HTTP API outbound.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -19,9 +19,10 @@ import {
   buildSendAction,
   callNapCatHttpAction,
   formatInboundContent,
-  formatInboundTarget,
   formatOutboundSegments,
   isMessageEvent,
+  napcatInboundConversation,
+  napcatOutboundTarget,
   senderNickname,
   senderUserId,
   type NapCatEvent,
@@ -90,9 +91,9 @@ export class NapCatHttpEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
-    const { action, params } = buildSendAction(target, message);
+    const { action, params } = buildSendAction(napcatOutboundTarget(conversation), message);
     const resp = await this.#callHttpAction(
       {
         http_url: this.#options.config.http_url,
@@ -106,7 +107,7 @@ export class NapCatHttpEndpoint implements EndpointInstance {
     logger.debug(formatCompact({
       op: 'napcat_send',
       endpoint: this.#options.config.name,
-      target,
+      target: `${conversation.kind}:${conversation.id}`,
       messageId,
     }));
     return messageId;
@@ -136,15 +137,14 @@ export class NapCatHttpEndpoint implements EndpointInstance {
     if (Array.isArray(ev.message) || typeof ev.message === 'string') {
       ev = { ...ev, message: normalizeMessage(ev.message) };
     }
-    const target = formatInboundTarget(ev);
+    const conversation = napcatInboundConversation(String(this.#options.id), ev);
     const nickname = senderNickname(ev);
     const mentioned = isNapCatBotMentioned(ev);
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target,
+      conversation,
+      message: { conversation, id: msgId },
       content: formatInboundContent(ev),
       sender: senderUserId(ev),
-      id: msgId,
       metadata: Object.freeze({
         message_type: ev.message_type,
         user_id: ev.user_id != null ? String(ev.user_id) : undefined,
@@ -159,7 +159,7 @@ export class NapCatHttpEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'napcat_gateway_receive_failed',
-        target,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });

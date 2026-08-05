@@ -279,7 +279,11 @@ describe('email plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'sender@example.com',
+      conversation: expect.objectContaining({
+        kind: 'private',
+        id: 'sender@example.com',
+      }),
+      message: expect.objectContaining({ id: '<msg001@mock.com>' }),
       content: expect.stringContaining('你好'),
       sender: 'sender@example.com',
     }));
@@ -597,8 +601,13 @@ describe('email plugin runtime adapter', () => {
     });
     await endpoint.start();
     endpoint.open();
+    const endpointId = capabilityId(rootPluginId(), adapterFeature, 'email');
     const messageId = await endpoint.send({
-      target: 'user@example.com',
+      conversation: {
+        endpoint: { id: String(endpointId), adapter: String(endpointId).split('\0')[0]! },
+        kind: 'private',
+        id: 'user@example.com',
+      },
       payload: 'pong',
     });
     expect(messageId).toBe('<sent@mock.com>');

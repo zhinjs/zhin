@@ -3,6 +3,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import { createHttpHost } from '@zhin.js/host-http';
 import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import { WeChatMpEndpoint } from '../src/endpoint.js';
 import {
   buildTextReply,
@@ -36,6 +37,15 @@ const baseConfig = resolveWeChatMpConfig({
   encrypt: true,
   replyMode: 'passive',
 });
+
+/** 公众号只有粉丝单聊场景：kind='private'、id=openid，无 parent。 */
+function privateConversation(id: string): ConversationRef {
+  return {
+    endpoint: { id: 'wechat-mp', adapter: 'wechat-mp' },
+    kind: 'private',
+    id,
+  };
+}
 
 function mockFetchOk(): ReturnType<typeof vi.fn> {
   return vi.fn(async (url: string) => {
@@ -211,7 +221,7 @@ describe('wechat-mp plugin runtime adapter', () => {
     let endpoint!: WeChatMpEndpoint;
     const receive = vi.fn(async () => {
       // Simulate command $reply → endpoint.send during gateway.receive
-      await endpoint.send({ target: 'oUser', payload: 'pong' });
+      await endpoint.send({ conversation: privateConversation('oUser'), payload: 'pong' });
       return Object.freeze({ matched: true, value: 'pong' });
     });
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
@@ -263,7 +273,8 @@ describe('wechat-mp plugin runtime adapter', () => {
     expect(body).toContain('<Content><![CDATA[pong]]></Content>');
     expect(body).toContain('<ToUserName><![CDATA[oUser]]></ToUserName>');
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'oUser',
+      conversation: expect.objectContaining({ kind: 'private', id: 'oUser' }),
+      message: expect.objectContaining({ id: '123' }),
       content: 'hello',
       sender: 'oUser',
     }));
@@ -324,7 +335,7 @@ describe('wechat-mp plugin runtime adapter', () => {
     await endpoint.start();
     await http.listen();
     endpoint.open();
-    const messageId = await endpoint.send({ target: 'oUser', payload: 'hi' });
+    const messageId = await endpoint.send({ conversation: privateConversation('oUser'), payload: 'hi' });
     expect(messageId).toBe('42');
     expect(fetchFn).toHaveBeenCalledWith(
       expect.stringContaining('/message/custom/send'),
@@ -375,7 +386,7 @@ describe('wechat-mp plugin runtime adapter', () => {
     await endpoint.start();
     await http.listen();
     endpoint.open();
-    const messageId = await endpoint.send({ target: 'oUser', payload: 'hi' });
+    const messageId = await endpoint.send({ conversation: privateConversation('oUser'), payload: 'hi' });
     expect(messageId).toBe('77');
     expect(sendCalls).toBe(2);
     expect(tokenCalls).toBe(2);
@@ -417,7 +428,7 @@ describe('wechat-mp plugin runtime adapter', () => {
     await endpoint.start();
     await http.listen();
     endpoint.open();
-    const messageId = await endpoint.send({ target: 'oUser', payload: 'hi' });
+    const messageId = await endpoint.send({ conversation: privateConversation('oUser'), payload: 'hi' });
     expect(messageId).toBe('88');
     // start 一次 + 发送前过期刷新一次
     expect(tokenCalls).toBe(2);
@@ -457,7 +468,7 @@ describe('wechat-mp plugin runtime adapter', () => {
     await http.listen();
     endpoint.open();
     const messageId = await endpoint.send({
-      target: 'oUser',
+      conversation: privateConversation('oUser'),
       payload: [
         {
           type: 'image',
@@ -517,7 +528,7 @@ describe('wechat-mp plugin runtime adapter', () => {
     await http.listen();
     endpoint.open();
     const messageId = await endpoint.send({
-      target: 'oUser',
+      conversation: privateConversation('oUser'),
       payload: [
         {
           type: 'image',
@@ -566,7 +577,7 @@ describe('wechat-mp plugin runtime adapter', () => {
     await http.listen();
     endpoint.open();
     const messageId = await endpoint.send({
-      target: 'oUser',
+      conversation: privateConversation('oUser'),
       payload: [
         { type: 'image', data: { url: 'https://example.com/a.png' } },
       ],
@@ -611,7 +622,7 @@ describe('wechat-mp plugin runtime adapter', () => {
     await http.listen();
     endpoint.open();
     const messageId = await endpoint.send({
-      target: 'oUser',
+      conversation: privateConversation('oUser'),
       payload: [
         { type: 'image', data: { media: { kind: 'file', value: 'MID_EXISTING' } } },
       ],
@@ -659,7 +670,7 @@ describe('wechat-mp plugin runtime adapter', () => {
     await http.listen();
     endpoint.open();
     const messageId = await endpoint.send({
-      target: 'oUser',
+      conversation: privateConversation('oUser'),
       payload: [
         {
           type: 'audio',
@@ -686,7 +697,7 @@ describe('wechat-mp plugin runtime adapter', () => {
     // eslint-disable-next-line prefer-const -- assigned after `receive` closes over it
     let endpoint!: WeChatMpEndpoint;
     const receive = vi.fn(async () => {
-      await endpoint.send({ target: 'oUser', payload: 'pong' });
+      await endpoint.send({ conversation: privateConversation('oUser'), payload: 'pong' });
       return Object.freeze({ matched: true, value: 'pong' });
     });
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };

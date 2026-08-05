@@ -64,8 +64,10 @@ export default definePlugin<RssConfig>({
         await outbound.send({
           adapter: input.adapterName,
           endpointId: input.endpointId,
-          channelType: input.channelType,
-          channelId: input.channelId,
+          conversation: {
+            kind: input.channelType as 'private' | 'group' | 'channel',
+            id: input.channelId,
+          },
           content: input.content,
         });
       });

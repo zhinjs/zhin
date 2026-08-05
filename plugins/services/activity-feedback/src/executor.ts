@@ -115,8 +115,10 @@ export function createOutboundEndpointAccess(
             const messageId = await outbound.send({
               adapter: platform,
               endpointId,
-              channelType: options.type || 'private',
-              channelId: options.id,
+              conversation: {
+                kind: (options.type as 'private' | 'group' | 'channel' | undefined) || 'private',
+                id: options.id,
+              },
               content: text,
             });
             // Prefer real id; fall back to a sentinel so MessageTypingIndicator

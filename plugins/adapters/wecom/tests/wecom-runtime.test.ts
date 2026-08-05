@@ -68,6 +68,14 @@ function textMessage(overrides: Partial<WecomMessage> = {}): WecomMessage {
   };
 }
 
+function privateConversation(id: string) {
+  return {
+    endpoint: { id: 'wecom-endpoint', adapter: 'wecom' },
+    kind: 'private' as const,
+    id,
+  };
+}
+
 function mockFetchOk(messageId = 'sent-1'): ReturnType<typeof vi.fn> {
   return vi.fn(async (url: string) => {
     if (String(url).includes('/gettoken')) {
@@ -254,10 +262,10 @@ describe('wecom plugin runtime adapter', () => {
     expect(await res.text()).toBe('success');
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'user001',
+      conversation: expect.objectContaining({ kind: 'private', id: 'user001' }),
+      message: expect.objectContaining({ id: 'msg-1' }),
       content: 'hello',
       sender: 'user001',
-      id: 'msg-1',
     }));
     await endpoint.stop();
   });
@@ -327,7 +335,7 @@ describe('wecom plugin runtime adapter', () => {
     });
     await endpoint.start();
     await http.listen();
-    const id = await endpoint.send({ target: 'user001', payload: 'pong' });
+    const id = await endpoint.send({ conversation: privateConversation('user001'), payload: 'pong' });
     expect(id).toBe('out-42');
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/cgi-bin/message/send'),
@@ -376,7 +384,7 @@ describe('wecom plugin runtime adapter', () => {
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({
-      target: 'user001',
+      conversation: privateConversation('user001'),
       payload: [
         {
           type: 'image',
@@ -422,7 +430,7 @@ describe('wecom plugin runtime adapter', () => {
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({
-      target: 'user001',
+      conversation: privateConversation('user001'),
       payload: [
         { type: 'image', data: { media: { kind: 'file', value: 'MID_DIRECT' } } },
       ],
@@ -456,7 +464,7 @@ describe('wecom plugin runtime adapter', () => {
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({
-      target: 'user001',
+      conversation: privateConversation('user001'),
       payload: [
         { type: 'image', data: { url: 'https://legacy.example/a.png' } },
         { type: 'text', data: { text: 'hi' } },
@@ -514,7 +522,7 @@ describe('wecom plugin runtime adapter', () => {
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({
-      target: 'user001',
+      conversation: privateConversation('user001'),
       payload: [
         {
           type: 'image',

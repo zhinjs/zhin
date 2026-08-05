@@ -4,11 +4,12 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { simpleParser } from 'mailparser';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import {
+  emailInboundConversation,
   formatInboundContent,
   formatInboundSegments,
   formatOutboundMail,
@@ -120,8 +121,9 @@ export class EmailEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     if (!this.#smtp) throw new Error('SMTP transporter not initialized');
+    const target = conversation.id;
     const mailOptions = formatOutboundMail(payload, {
       from: this.#options.config.smtp.auth.user,
       to: target,
@@ -147,13 +149,13 @@ export class EmailEndpoint implements EndpointInstance {
     const savedAttachments = await this.#downloadAttachments(email);
     const content = formatInboundContent(email);
     const sender = email.from;
+    const conversation = emailInboundConversation(String(this.#options.id), email);
     await this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target: sender,
+      conversation,
+      ...(email.messageId ? { message: { conversation, id: email.messageId } } : {}),
       content,
       segments: formatInboundSegments(email, savedAttachments),
       sender: senderDisplayName(sender),
-      id: email.messageId || undefined,
       metadata: Object.freeze({
         subject: email.subject,
         to: email.to,

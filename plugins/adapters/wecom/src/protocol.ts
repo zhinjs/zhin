@@ -5,6 +5,7 @@
 
 import { createHash, createDecipheriv, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
+import type { ConversationRef } from '@zhin.js/im-contract';
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface WecomAdapterConfig {
@@ -253,6 +254,18 @@ export function formatInboundContent(msg: WecomMessage): string {
 
 export function resolveChatType(fromUserName: string): 'group' | 'private' {
   return fromUserName.endsWith('@chatroom') ? 'group' : 'private';
+}
+
+/**
+ * 入站归一化 → ConversationRef：WeCom 无 guild/channel 容器概念，
+ * `@chatroom` 群会话 → kind 'group'，其余（应用消息/单聊）→ kind 'private'。
+ */
+export function wecomInboundConversation(endpointId: string, msg: WecomMessage): ConversationRef {
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind: resolveChatType(msg.FromUserName),
+    id: msg.FromUserName,
+  };
 }
 
 /**

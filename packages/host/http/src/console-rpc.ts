@@ -8,6 +8,44 @@ import {
 } from '@zhin.js/console-protocol';
 import { dispatchExtendedConsoleRpc, type ConsoleRpcExtendedCtx } from './console-rpc-extended.js';
 
+/**
+ * Console RPC 请求结构：未锚定 endpoint 的会话地址（结构对齐
+ * `Omit<ConversationRef,'endpoint'>`；host/http 架构分层不允许依赖
+ * `@zhin.js/im-contract`，故本地结构化声明，endpoint 由 ImRuntime 锚定）。
+ */
+export interface ConversationAddress {
+  readonly kind: 'private' | 'group' | 'channel';
+  readonly id: string;
+  readonly parent?: Readonly<{
+    readonly kind: 'group' | 'channel';
+    readonly id: string;
+  }>;
+  readonly threadId?: string;
+}
+
+/** `$channel_type`/`$channel_id`/`$parent` wire 字段 → 会话地址（RPC 边界组帧）。 */
+function wireConversation(
+  channelType: string,
+  channelId: string,
+  parent: unknown,
+): ConversationAddress {
+  // console 旧 wire 允许 channel_id 自带场景前缀（`group:123`），解析结果优先
+  const prefixed = /^(private|group|channel|direct|c2c|temp):(.+)$/iu.exec(channelId);
+  const rawKind = channelType || prefixed?.[1] || 'private';
+  const kind: ConversationAddress['kind'] =
+    rawKind === 'group' || rawKind === 'channel' ? rawKind : 'private';
+  const wire = parent && typeof parent === 'object'
+    ? parent as { readonly type?: unknown; readonly id?: unknown }
+    : undefined;
+  const parentKind = wire?.type === 'group' || wire?.type === 'channel' ? wire.type : undefined;
+  const parentId = typeof wire?.id === 'string' && wire.id ? wire.id : undefined;
+  return {
+    kind,
+    id: prefixed ? prefixed[2]! : channelId,
+    ...(parentKind && parentId ? { parent: { kind: parentKind, id: parentId } } : {}),
+  };
+}
+
 export type RuntimeConsoleRpcMessage = {
   readonly type?: unknown;
   readonly requestId?: unknown;
@@ -86,10 +124,8 @@ export type RuntimeDatabaseInfo = {
 export type RuntimeEndpointSendInput = {
   readonly adapter: string;
   readonly endpointId: string;
-  readonly channelId: string;
-  readonly channelType: string;
+  readonly conversation: ConversationAddress;
   readonly content: unknown;
-  readonly parent?: { type?: string; id?: string; name?: string };
 };
 
 export function pickRpcReply(
@@ -625,8 +661,7 @@ export async function dispatchRuntimeConsoleRpc(
         const channelId = String(data.$channel_id ?? '');
         const channelType = String(data.$channel_type ?? '');
         const content = data.$content;
-        // channelType is optional: ImRuntime tolerates an empty value and
-        // targets the bare channel id (parity with the legacy RPC handler).
+        // channelType 可省：wireConversation 归一为 private（与旧 RPC 行为对齐）。
         if (!adapter || !endpointId || !channelId || content === undefined) {
           emit({
             requestId,
@@ -641,11 +676,8 @@ export async function dispatchRuntimeConsoleRpc(
         const result = await ctx.sendEndpointMessage({
           adapter,
           endpointId,
-          channelId,
-          channelType,
+          conversation: wireConversation(channelType, channelId, data.$parent),
           content,
-          parent: data.$parent as
-            { type?: string; id?: string; name?: string } | undefined,
         });
         // Legacy contract: { message_id }. Keep messageId for new callers.
         emit({ requestId, data: endpointSendResult(result.messageId) });

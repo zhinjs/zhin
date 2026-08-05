@@ -85,17 +85,20 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       const terminal = (adapters as AdapterIndex).list()[0];
       expect(terminal?.name).toBe('terminal');
 
+      const conversationOf = (id: string) => ({
+        endpoint: { id: String(terminal!.id), adapter: String(terminal!.id).split('\0')[0]! },
+        kind: 'private' as const,
+        id,
+      });
       const hello = await im.receive({
-        adapter: terminal!.id,
-        target: 'terminal',
+        conversation: conversationOf('terminal'),
         content: '/hello',
       });
       expect(hello).toMatchObject({ matched: true, command: 'hello' });
       expect(writes.join('')).toContain('Hello from minimal-bot.');
 
       const card = await im.receive({
-        adapter: terminal!.id,
-        target: 'terminal',
+        conversation: conversationOf('terminal'),
         content: '/card',
       });
       expect(card).toMatchObject({ matched: true, command: 'card' });

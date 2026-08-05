@@ -1,5 +1,6 @@
 export {
   addressListText,
+  emailInboundConversation,
   formatInboundContent,
   formatInboundSegments,
   formatOutboundMail,

@@ -366,7 +366,7 @@ export class IpcClient {
   }
 
   /**
-   * @deprecated 兼容旧调用方式：服务端已自动推送事件，type/id 过滤在客户端完成。
+   * 订阅 daemon 推送事件：服务端自动推送全部事件，type/id 过滤在客户端完成。
    * @returns 订阅句柄，包含 unsubscribe() 方法
    */
   subscribe(

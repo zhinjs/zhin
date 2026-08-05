@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/email/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/email/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=75b5de0301a147f8 -->
+<!-- sync-adapter-docs:sha256=1f0f47cfc6c48ac9 -->
 
 # @zhin.js/adapter-email
 
@@ -35,8 +35,8 @@ pnpm add @zhin.js/adapter-email
 - `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`（`smtp` / `imap`）
 
-入站：`gateway.receive({ adapter, target: fromEmail, content: text, sender, metadata })`  
-出站：`send({ target, payload })` → nodemailer（payload 已由 gateway/core 渲染；无 segment-mapper）
+入站：`gateway.receive({ conversation, message, content: text, sender, metadata })`（`conversation` 为 kind=private、id=发件人地址的 ConversationRef）  
+出站：`send({ conversation, payload })` → nodemailer（收件人取 `conversation.id`；payload 已由 gateway/core 渲染；无 segment-mapper）
 
 ## 前置条件
 

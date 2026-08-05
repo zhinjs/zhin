@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/lark/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/lark/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=88ee48e5390fd4ab -->
+<!-- sync-adapter-docs:sha256=b03cb0770d8401bb -->
 
 # @zhin.js/adapter-lark
 
@@ -36,8 +36,8 @@ pnpm add @zhin.js/adapter-lark
 - `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
-入站：`gateway.receive({ adapter, target: chat_id, content: text, sender, metadata })`  
-出站：`send({ target, payload })` → `im/v1/messages`
+入站：`gateway.receive({ conversation, message: { conversation, id }, content: text, sender, metadata })`  
+出站：`send({ conversation, payload })` → `im/v1/messages`
 
 入站 `metadata.mentioned`：**未接线**。消息事件的 `mentions[]` 元素含 `id.open_id`，但本适配器拿不到 bot 自身的 open_id——配置（`appId` / `appSecret` / `name` 等）不含 bot open_id，代码也未调用 `bot/v3/info` 获取应用信息，故无可靠判据比对 mentions。
 

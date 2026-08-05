@@ -13,6 +13,7 @@ import type {
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
+  formatLegacyConversationRef,
   formatLegacyMessageReference,
   nativeConversationId,
   parseLegacyMessageReference,
@@ -30,6 +31,7 @@ import {
   type DiscordClientTransport,
 } from './gateway.js';
 import {
+  discordInboundConversation,
   formatButtonContent,
   formatButtonSegments,
   formatInboundContent,
@@ -145,10 +147,11 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, conversation, payload }: EndpointSendRequest): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const body = formatOutboundBody(payload);
-    const channelId = nativeConversationId(target, conversation);
-    const snowflake = await this.#sendBody(channelId, body);
+    // recall 链路仍是本端点编码的 legacy 引用，在边界内部从 conversation 派生 target
+    const target = formatLegacyConversationRef(conversation);
+    const snowflake = await this.#sendBody(conversation.id, body);
     const messageId = formatLegacyMessageReference({ target, messageId: snowflake });
     logger.debug(formatCompact({
       op: 'discord_send',
@@ -175,13 +178,13 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
   admit(msg: DiscordInboundMessage): void {
     if (!this.#open) return;
     if (msg.authorBot) return;
+    const conversation = discordInboundConversation(String(this.#options.id), msg);
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target: msg.channelId,
+      conversation,
+      message: { conversation, id: msg.id },
       content: formatInboundContent(msg),
       segments: formatInboundSegments(msg),
       sender: senderDisplayName(msg),
-      id: msg.id,
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         channelKind: msg.channelKind,
@@ -194,7 +197,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'discord_gateway_receive_failed',
-        target: msg.channelId,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });
@@ -203,13 +206,13 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
   /** Test / internal: admit a button interaction when open. */
   admitButton(interaction: DiscordButtonInbound): void {
     if (!this.#open) return;
+    const conversation = discordInboundConversation(String(this.#options.id), interaction);
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target: interaction.channelId,
+      conversation,
+      message: { conversation, id: interaction.id },
       content: formatButtonContent(interaction),
       segments: formatButtonSegments(interaction),
       sender: interaction.userName,
-      id: interaction.id,
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         eventType: 'button',
@@ -219,7 +222,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'discord_gateway_receive_failed',
-        target: interaction.channelId,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });
@@ -465,9 +468,9 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, conversation, payload }: EndpointSendRequest): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const body = formatOutboundBody(payload);
-    const channelId = nativeConversationId(target, conversation);
+    const channelId = conversation.id;
     const response = await this.#fetch(`${DISCORD_API}/channels/${channelId}/messages`, {
       method: 'POST',
       headers: {
@@ -483,7 +486,13 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
     }
     const data = JSON.parse(text) as { id?: string };
     const snowflake = data.id ?? '';
-    return snowflake ? formatLegacyMessageReference({ target, messageId: snowflake }) : '';
+    // recall 链路仍是本端点编码的 legacy 引用，在边界内部从 conversation 派生 target
+    return snowflake
+      ? formatLegacyMessageReference({
+        target: formatLegacyConversationRef(conversation),
+        messageId: snowflake,
+      })
+      : '';
   }
 
   async recallMessage(messageId: string): Promise<void> {
@@ -505,13 +514,13 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
 
   admit(msg: DiscordInboundMessage): void {
     if (!this.#open) return;
+    const conversation = discordInboundConversation(String(this.#options.id), msg);
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target: msg.channelId,
+      conversation,
+      message: { conversation, id: msg.id },
       content: formatInboundContent(msg),
       segments: formatInboundSegments(msg),
       sender: senderDisplayName(msg),
-      id: msg.id,
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         channelKind: msg.channelKind,
@@ -522,7 +531,7 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'discord_gateway_receive_failed',
-        target: msg.channelId,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });

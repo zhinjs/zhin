@@ -32,23 +32,33 @@ describe('Plugin Runtime Tool policy bridge', () => {
   });
 });
 
+/** 测试便利：legacy `kind:id` 串 → ConversationRef（仅测试侧组帧用）。 */
+function conversationFromTarget(target: string) {
+  const match = /^(private|group|channel):(.+)$/.exec(target);
+  return {
+    endpoint: { id: String(adapter), adapter: String(adapter).split('\0')[0]! },
+    kind: (match?.[1] ?? 'private') as 'private' | 'group' | 'channel',
+    id: match?.[2] ?? target,
+  };
+}
+
 function makeMessage(input: {
   content: string;
   target?: string;
   sender?: string;
   metadata?: Record<string, unknown>;
-  segments?: ConstructorParameters<typeof Message>[8];
+  segments?: ConstructorParameters<typeof Message>[6];
 }): Message {
+  const conversation = conversationFromTarget(input.target ?? 'group:100');
   return new Message(
-    adapter,
-    input.target ?? 'group:100',
+    conversation,
     input.content,
     1,
-    async () => undefined,
-    'm1',
+    async () => ({ status: 'sent' as const }),
     input.sender ?? 'user-1',
     Object.freeze(input.metadata ?? {}),
     input.segments,
+    { conversation, id: 'm1' },
   );
 }
 
@@ -453,7 +463,6 @@ describe('入站段契约：bridgeRuntimeMessage 透传 segments 与媒体引用
     expect('segments' in extra).toBe(false);
     // metadata 原有字段不受影响
     expect(extra.channelType).toBe('group');
-    expect(extra.runtimeAdapter).toBe(message.adapter);
   });
 
   it('仅有非媒体段的 segments 挂 segments 但不写 media', () => {

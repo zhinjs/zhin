@@ -28,12 +28,12 @@ describe('@zhin.js/plugin-repeater', () => {
 
   it('resolves group id from metadata with private skip', () => {
     expect(resolveGroupId({
-      target: 'g1',
+      conversation: { kind: 'group', id: 'g1' },
       content: 'hi',
       metadata: { type: 'group' },
     })).toBe('g1');
     expect(resolveGroupId({
-      target: 'u1',
+      conversation: { kind: 'private', id: 'u1' },
       content: 'hi',
       metadata: { type: 'private' },
     })).toBeNull();
@@ -42,7 +42,7 @@ describe('@zhin.js/plugin-repeater', () => {
   it('repeats after threshold distinct senders', () => {
     const engine = new RepeaterEngine();
     const config = resolveRepeaterConfig({ threshold: 3, cooldown: 1000, maxLength: 200 });
-    const base = { target: 'g1', content: 'echo', metadata: { type: 'group' as const } };
+    const base = { conversation: { kind: 'group' as const, id: 'g1' }, content: 'echo', metadata: { type: 'group' as const } };
 
     expect(engine.tick({ ...base, sender: 'a' }, config).action).toBe('next');
     expect(engine.tick({ ...base, sender: 'b' }, config).action).toBe('next');
@@ -57,7 +57,7 @@ describe('@zhin.js/plugin-repeater', () => {
   it('ignores same sender double-post', () => {
     const engine = new RepeaterEngine();
     const config = resolveRepeaterConfig({ threshold: 2 });
-    const base = { target: 'g1', content: 'echo', metadata: { type: 'group' as const } };
+    const base = { conversation: { kind: 'group' as const, id: 'g1' }, content: 'echo', metadata: { type: 'group' as const } };
     expect(engine.tick({ ...base, sender: 'a' }, config).action).toBe('next');
     expect(engine.tick({ ...base, sender: 'a' }, config).action).toBe('next');
     expect(engine.tick({ ...base, sender: 'b' }, config).action).toBe('repeat');
@@ -78,7 +78,7 @@ describe('@zhin.js/plugin-repeater', () => {
       const t0 = Date.now();
       const engine = new RepeaterEngine();
       const config = resolveRepeaterConfig({ threshold: 2, cooldown: 300_000 });
-      const base = { target: 'g1', metadata: { type: 'group' as const } };
+      const base = { conversation: { kind: 'group' as const, id: 'g1' }, metadata: { type: 'group' as const } };
       expect(engine.tick({ ...base, content: 'echo', sender: 'a' }, config).action).toBe('next');
       expect(engine.tick({ ...base, content: 'echo', sender: 'b' }, config).action).toBe('repeat');
 

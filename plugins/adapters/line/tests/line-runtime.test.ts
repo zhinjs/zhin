@@ -17,6 +17,12 @@ const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
 const CHANNEL_SECRET = 'test-channel-secret';
 
+const userConversation = {
+  endpoint: { id: 'test-endpoint', adapter: 'test' },
+  kind: 'private' as const,
+  id: 'U1234567890abcdef',
+};
+
 const baseConfig = resolveLineConfig({
   name: 'test-line-bot',
   channelSecret: CHANNEL_SECRET,
@@ -149,10 +155,10 @@ describe('line plugin runtime adapter', () => {
     expect(await res.json()).toEqual({ message: 'OK' });
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'U1234567890abcdef',
+      conversation: expect.objectContaining({ kind: 'private', id: 'U1234567890abcdef' }),
+      message: expect.objectContaining({ id: 'msg-1' }),
       content: 'hello',
       sender: 'U1234567890abcdef',
-      id: 'msg-1',
     }));
     await endpoint.stop();
   });
@@ -223,7 +229,7 @@ describe('line plugin runtime adapter', () => {
     endpoint.open();
     endpoint.admit(textEvent());
     const messageId = await endpoint.send({
-      target: 'U1234567890abcdef',
+      conversation: userConversation,
       payload: 'pong',
     });
     expect(messageId).toBe('reply-id');
@@ -255,7 +261,7 @@ describe('line plugin runtime adapter', () => {
     await http.listen();
     endpoint.open();
     const messageId = await endpoint.send({
-      target: 'U1234567890abcdef',
+      conversation: userConversation,
       payload: 'hi',
     });
     expect(messageId).toBe('push-id');
@@ -290,7 +296,7 @@ describe('line plugin runtime adapter', () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(Date.now() + 61_000);
-      const messageId = await endpoint.send({ target: 'U1234567890abcdef', payload: 'pong' });
+      const messageId = await endpoint.send({ conversation: userConversation, payload: 'pong' });
       expect(messageId).toBe('push-id');
       expect(fetchFn).toHaveBeenCalledWith(
         'https://api.line.me/v2/bot/message/push',
@@ -334,7 +340,7 @@ describe('line plugin runtime adapter', () => {
     await http.listen();
     endpoint.open();
     endpoint.admit(textEvent());
-    const messageId = await endpoint.send({ target: 'U1234567890abcdef', payload: 'pong' });
+    const messageId = await endpoint.send({ conversation: userConversation, payload: 'pong' });
     expect(messageId).toBe('push-id');
     const calledUrls = fetchFn.mock.calls.map((call) => String(call[0]));
     expect(calledUrls.some((url) => url.includes('/message/reply'))).toBe(true);

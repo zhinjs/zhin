@@ -24,8 +24,8 @@ pnpm add @zhin.js/adapter-lark
 - `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
-入站：`gateway.receive({ adapter, target: chat_id, content: text, sender, metadata })`  
-出站：`send({ target, payload })` → `im/v1/messages`
+入站：`gateway.receive({ conversation, message: { conversation, id }, content: text, sender, metadata })`  
+出站：`send({ conversation, payload })` → `im/v1/messages`
 
 入站 `metadata.mentioned`：**未接线**。消息事件的 `mentions[]` 元素含 `id.open_id`，但本适配器拿不到 bot 自身的 open_id——配置（`appId` / `appSecret` / `name` 等）不含 bot open_id，代码也未调用 `bot/v3/info` 获取应用信息，故无可靠判据比对 mentions。
 

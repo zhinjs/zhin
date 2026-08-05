@@ -49,6 +49,12 @@ function textMessage(overrides: Partial<LarkMessage> = {}): LarkMessage {
   };
 }
 
+const groupConversation = {
+  endpoint: { id: 'test-endpoint', adapter: 'lark' },
+  kind: 'group' as const,
+  id: 'oc_group1',
+};
+
 function mockFetchOk(messageId = 'sent-1'): ReturnType<typeof vi.fn> {
   return vi.fn(async (url: string) => {
     if (String(url).includes('/auth/v3/tenant_access_token/internal')) {
@@ -240,10 +246,10 @@ describe('lark plugin runtime adapter', () => {
     expect(await res.json()).toEqual({ code: 0, msg: 'success' });
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'oc_group1',
+      conversation: expect.objectContaining({ kind: 'group', id: 'oc_group1' }),
+      message: expect.objectContaining({ id: 'om_1' }),
       content: 'hello',
       sender: 'ou_user1',
-      id: 'om_1',
     }));
     await endpoint.stop();
   });
@@ -393,6 +399,7 @@ describe('lark plugin runtime adapter', () => {
     endpoint.admit(textMessage({ chat_id: 'oc_p2pchat', chat_type: 'p2p' }));
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      conversation: expect.objectContaining({ kind: 'private', id: 'oc_p2pchat' }),
       metadata: expect.objectContaining({ chatType: 'private' }),
     }));
     await endpoint.stop();
@@ -432,7 +439,7 @@ describe('lark plugin runtime adapter', () => {
     });
     await endpoint.start();
     await http.listen();
-    const id = await endpoint.send({ target: 'oc_group1', payload: 'pong' });
+    const id = await endpoint.send({ conversation: groupConversation, payload: 'pong' });
     expect(id).toBe('out-42');
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/im/v1/messages'),
@@ -481,7 +488,7 @@ describe('lark plugin runtime adapter', () => {
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({
-      target: 'oc_group1',
+      conversation: groupConversation,
       payload: [
         {
           type: 'image',
@@ -553,7 +560,7 @@ describe('lark plugin runtime adapter', () => {
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({
-      target: 'oc_group1',
+      conversation: groupConversation,
       payload: [
         {
           type: 'image',

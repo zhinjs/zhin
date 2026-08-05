@@ -6,20 +6,31 @@ import { matchAiTrigger } from '../../src/plugin-runtime/agent-host-installer.js
 
 const adapter = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'icqq');
 
+/** 测试便利：legacy `kind:id` 串 → ConversationRef（仅测试侧组帧用）。 */
+function conversationFromTarget(target: string) {
+  const match = /^(private|group|channel):(.+)$/.exec(target);
+  return {
+    endpoint: { id: String(adapter), adapter: String(adapter).split('\0')[0]! },
+    kind: (match?.[1] ?? 'private') as 'private' | 'group' | 'channel',
+    id: match?.[2] ?? target,
+  };
+}
+
 function makeMessage(input: {
   content: string;
   target?: string;
   metadata?: Record<string, unknown>;
 }): Message {
+  const conversation = conversationFromTarget(input.target ?? 'group:100');
   return new Message(
-    adapter,
-    input.target ?? 'group:100',
+    conversation,
     input.content,
     1,
-    async () => undefined,
-    'm1',
+    async () => ({ status: 'sent' as const }),
     'user-1',
     Object.freeze(input.metadata ?? {}),
+    undefined,
+    { conversation, id: 'm1' },
   );
 }
 

@@ -26,10 +26,9 @@ The actual code locations for each step:
 
    ```ts
    interface IncomingMessage {
-     readonly adapter: CapabilityId;  // Source endpoint's capability ID
-     readonly target: string;         // Scene, e.g., "group:123" / "private:456"
+     readonly conversation: ConversationRef; // Structured conversation (endpoint/kind/id/parent/threadId)
+     readonly message?: MessageRef;   // Platform message identity (native message id)
      readonly content: string;
-     readonly id?: string;            // Platform message ID
      readonly sender?: string;
      readonly metadata?: Readonly<Record<string, unknown>>; // e.g., endpoint name
    }
@@ -55,7 +54,7 @@ The actual code locations for each step:
 
 5. **AI fallback**. On command miss (or unmatched plain text), the `unmatchedHandler` takes over -- a Host with `@zhin.js/agent` installed routes it to the Agent for reply; without it, the message is silently discarded.
 
-6. **Event broadcast**. After dispatch completes, a `RuntimeMessageEvent` is emitted to `onMessage` subscribers (containing direction, adapter, target, sender, a `contentPreview` of up to 200 characters, and timestamp). The Console's real-time message stream consumes this.
+6. **Event broadcast**. After dispatch completes, a `RuntimeMessageEvent` is emitted to `onMessage` subscribers (containing direction, conversation, sender, a `contentPreview` of up to 200 characters, and timestamp). The Console's real-time message stream consumes this.
 
 ## Outbound: $reply -> Render -> Middleware -> Endpoint
 

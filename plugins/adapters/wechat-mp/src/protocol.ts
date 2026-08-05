@@ -6,6 +6,7 @@
 import { createHash, createDecipheriv, createCipheriv, randomBytes } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import * as xml2js from 'xml2js';
+import type { ConversationRef } from '@zhin.js/im-contract';
 
 export interface WeChatMpAdapterConfig {
   readonly name?: string;
@@ -308,6 +309,21 @@ export function buildTextReply(
     `<Content><![CDATA[${cdata(content)}]]></Content>`,
     '</xml>',
   ].join('');
+}
+
+/**
+ * 入站归一化：公众号只有粉丝单聊场景，一律 kind='private'，id=openid（FromUserName），
+ * 无群/频道容器（parent 恒缺省）。
+ */
+export function wechatMpInboundConversation(
+  endpointId: string,
+  msg: WeChatMessage,
+): ConversationRef {
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind: 'private',
+    id: msg.FromUserName,
+  };
 }
 
 /**

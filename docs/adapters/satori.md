@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/satori/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=c700b782d7d3ce67 -->
+<!-- sync-adapter-docs:sha256=bfe7ef36b724bb43 -->
 
 # @zhin.js/adapter-satori
 
@@ -39,8 +39,8 @@ pnpm add @zhin.js/adapter-satori
 - `@zhin.js/host-http` — Webhook 模式需 `httpHostToken` 注册 POST 路由
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`（`baseUrl` / `token` / …）
 
-入站：`gateway.receive({ adapter, target: channelId, content: text, sender, id, metadata })`  
-出站：`send({ target: channelId, payload })` → Satori `message.create`（payload 已由 gateway/core 渲染；无 segment-mapper）
+入站：`gateway.receive({ conversation, message, content, sender, metadata })`（`conversation` 为 ConversationRef：DIRECT 频道 → kind `private`，其余 → kind `group`、所属 guild 进 `parent`）  
+出站：`send({ conversation, payload })` → Satori `message.create`（`channel_id = conversation.id`；payload 已由 gateway/core 渲染；无 segment-mapper）
 
 入站 `metadata.mentioned`：消息 content 中 `<at id="…"/>` 元素的 id 等于登录 selfId（READY/事件 `login.user.id`）时置 `true`。
 

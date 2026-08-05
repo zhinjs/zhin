@@ -28,6 +28,16 @@ const mockedSaveSyncBuf = vi.mocked(saveSyncBuf);
 
 const adapterFeature = featureId('zhin.adapter');
 
+const testEndpointId = String(capabilityId(rootPluginId(), adapterFeature, 'weixin-ilink'));
+
+function privateConversation(userId: string) {
+  return {
+    endpoint: { id: testEndpointId, adapter: testEndpointId.split('\0')[0] ?? testEndpointId },
+    kind: 'private' as const,
+    id: userId,
+  };
+}
+
 const baseConfig: ResolvedWeixinIlinkConfig = resolveWeixinIlinkConfig({
   name: 'test-ilink',
   botToken: 'test-token',
@@ -136,10 +146,10 @@ describe('weixin-ilink plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'user-1',
+      conversation: privateConversation('user-1'),
+      message: { conversation: privateConversation('user-1'), id: '42' },
       content: '你好',
       sender: 'user-1',
-      id: '42',
     }));
   });
 
@@ -183,7 +193,7 @@ describe('weixin-ilink plugin runtime adapter', () => {
     await endpoint.start();
     endpoint.open();
 
-    await expect(endpoint.send({ target: 'user-missing', payload: 'hi' }))
+    await expect(endpoint.send({ conversation: privateConversation('user-missing'), payload: 'hi' }))
       .rejects.toThrow(/missing context_token/);
 
     await endpoint.stop();
@@ -210,7 +220,7 @@ describe('weixin-ilink plugin runtime adapter', () => {
     endpoint.open();
     setContextToken(baseConfig.name, 'user-1', 'ctx-token');
 
-    const messageId = await endpoint.send({ target: 'user-1', payload: 'hello world' });
+    const messageId = await endpoint.send({ conversation: privateConversation('user-1'), payload: 'hello world' });
     expect(messageId).toBe('mid-1');
     expect(sendText).toHaveBeenCalledWith(expect.objectContaining({
       to: 'user-1',

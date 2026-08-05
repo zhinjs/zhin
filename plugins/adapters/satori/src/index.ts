@@ -12,6 +12,7 @@ export {
   resolveInboundSender,
   resolveInboundTarget,
   resolveSatoriConfig,
+  satoriInboundConversation,
   type ResolvedSatoriWebhookConfig,
   type ResolvedSatoriWsConfig,
   type SatoriAdapterConfig,

@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/wecom/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wecom/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=f538348e1e8fbc6d -->
+<!-- sync-adapter-docs:sha256=d85eb31fde0df965 -->
 
 # @zhin.js/adapter-wecom
 
@@ -35,8 +35,8 @@ pnpm add @zhin.js/adapter-wecom
 - `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
-入站：`gateway.receive({ adapter, target: FromUserName, content: text, sender, metadata })`  
-出站：`send({ target, payload })` → 企业微信 `message/send` API
+入站：`gateway.receive({ conversation, message: { conversation, id: MsgId }, content: text, sender, metadata })`（`conversation` 为 `ConversationRef`，`@chatroom` → kind `group`，其余 → kind `private`）  
+出站：`send({ conversation, payload })` → 企业微信 `message/send` API
 
 入站 `metadata.mentioned`：**未接线**。企业微信应用消息回调的 XML 事件不含 mentions/@ 字段，回调里的 `ToUserName` 是 CorpID（企业 ID）而非可比较的 bot 用户 id，配置中也没有 bot id/name 可作可靠判据，故无法可靠识别 @ 机器人。
 

@@ -8,6 +8,7 @@ import type {
   EndpointGroup,
   EndpointInstance,
   EndpointManagement,
+  EndpointSendRequest,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
@@ -17,8 +18,8 @@ import {
   formatInboundContent,
   formatInteractionContent,
   formatSlashContent,
-  inboundMessageId,
   resolveSlackChannelType,
+  slackInboundConversation,
   type ResolvedSlackConfig,
   type SlackEvent,
   type SlackEventEnvelope,
@@ -202,9 +203,10 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     if (!this.#client) throw new Error('Slack client not connected');
-    const { channel, threadTs } = parseSendTarget(target);
+    const channel = conversation.id;
+    const threadTs = conversation.threadId;
     const result = await sendSlackContent(
       this.#client,
       payload,
@@ -224,17 +226,22 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
     if (!msg.channel || !msg.ts) return;
 
     this.trackMessageChannel(msg.ts, msg.channel);
+    const threadTs = msg.thread_ts && msg.thread_ts !== msg.ts ? msg.thread_ts : undefined;
+    const conversation = slackInboundConversation(String(this.#options.id), {
+      channelId: msg.channel,
+      channelType: msg.channel_type,
+      threadId: threadTs,
+    });
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target: msg.channel,
+      conversation,
+      message: { conversation, id: msg.ts },
       content: formatInboundContent(msg),
       sender: msg.user ?? msg.channel,
-      id: inboundMessageId(msg),
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         channelType: resolveSlackChannelType(msg),
         userId: msg.user,
-        threadTs: msg.thread_ts && msg.thread_ts !== msg.ts ? msg.thread_ts : undefined,
+        threadTs,
         ts: msg.ts,
         // app_mention 事件本身即 @ 机器人；新 Runtime 纯文本 content 需经 metadata 传递
         ...(msg.type === 'app_mention' ? { mentioned: true } : {}),
@@ -242,7 +249,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'slack_gateway_receive_failed',
-        target: msg.channel,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });
@@ -257,12 +264,17 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
     if (payload.response_url) {
       postSlackEphemeral(payload.response_url, '已收到', logger);
     }
+    const actionTs = payload.actions[0]?.action_ts ?? messageTs ?? `action-${Date.now()}`;
+    const conversation = slackInboundConversation(String(this.#options.id), {
+      channelId: channelId || userId,
+      // block_actions 无 channel_type；无 channel 时按与发起用户的 DM 处理
+      channelType: channelId ? undefined : 'im',
+    });
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target: channelId || userId,
+      conversation,
+      message: { conversation, id: actionTs },
       content: formatInteractionContent(payload),
       sender: userId,
-      id: payload.actions[0]?.action_ts ?? messageTs ?? `action-${Date.now()}`,
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         eventType: 'block_actions',
@@ -272,7 +284,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'slack_gateway_receive_failed',
-        target: channelId,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });
@@ -281,12 +293,14 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
   admitSlashCommand(cmd: SlackSlashCommand): void {
     if (!this.#open) return;
     postSlackEphemeral(cmd.response_url, '处理中…', logger);
+    const conversation = slackInboundConversation(String(this.#options.id), {
+      channelId: cmd.channel_id,
+    });
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target: cmd.channel_id,
+      conversation,
+      message: { conversation, id: cmd.trigger_id },
       content: formatSlashContent(cmd),
       sender: cmd.user_id,
-      id: cmd.trigger_id,
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         eventType: 'slash_command',
@@ -295,7 +309,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'slack_gateway_receive_failed',
-        target: cmd.channel_id,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });
@@ -459,14 +473,6 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
 
     await this.#socket.start();
   }
-}
-
-function parseSendTarget(target: string): { channel: string; threadTs?: string } {
-  const parsed = parseSlackMessageRef(target);
-  if (parsed && /^\d+\.\d+$/.test(parsed.ts)) {
-    return { channel: parsed.channel, threadTs: parsed.ts };
-  }
-  return { channel: target };
 }
 
 /** Slack Web API 分页上限（每页 1000，cursor 翻页直到 next_cursor 为空）。 */

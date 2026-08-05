@@ -1,7 +1,7 @@
 /**
  * LineEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
-import type { EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -13,7 +13,7 @@ import {
   generateMessageId,
   isMessageEvent,
   isValidLineRecipientId,
-  resolveChannel,
+  lineInboundConversation,
   type LineApiResponse,
   type LineEvent,
   type ResolvedLineConfig,
@@ -117,11 +117,13 @@ export class LineEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const messages = formatOutboundMessages(payload);
     if (messages.length === 0) {
       throw new Error('No valid LINE messages to send');
     }
+    // LINE recipient id 前缀（U/G/R）自带场景信息，原生 id 即投递地址。
+    const target = conversation.id;
 
     const cached = this.#replyTokenCache.get(target);
     if (cached) {
@@ -152,16 +154,15 @@ export class LineEndpoint implements EndpointInstance {
   /** Test / internal: admit a parsed event when open (non-webhook path). */
   admit(event: LineEvent): void {
     if (!this.#open) return;
-    const { channelId } = resolveChannel(event.source);
+    const conversation = lineInboundConversation(String(this.#options.id), event.source);
     if ('replyToken' in event && typeof event.replyToken === 'string') {
-      this.#replyTokenCache.set(channelId, { token: event.replyToken, timestamp: Date.now() });
+      this.#replyTokenCache.set(conversation.id, { token: event.replyToken, timestamp: Date.now() });
     }
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target: channelId,
+      conversation,
+      message: { conversation, id: generateMessageId(event) },
       content: formatInboundContent(event),
-      sender: event.source.userId || channelId,
-      id: generateMessageId(event),
+      sender: event.source.userId || conversation.id,
       metadata: Object.freeze({
         eventType: event.type,
         sourceType: event.source.type,
@@ -172,7 +173,7 @@ export class LineEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'line_gateway_receive_failed',
-        target: channelId,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });

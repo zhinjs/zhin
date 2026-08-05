@@ -2,7 +2,7 @@
  * SandboxWsEndpoint — WebSocket lifecycle and MessageGateway bridge for /sandbox.
  */
 import { randomUUID } from 'node:crypto';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -11,6 +11,7 @@ import {
   bindSandboxWsSocket,
   formatSandboxOutbound,
   parseSandboxWsPayload,
+  sandboxInboundConversation,
   whenWsOpen,
   type ResolvedSandboxBot,
   type SandboxWsSocket,
@@ -58,11 +59,6 @@ function claimSandboxWsPath(
   };
 }
 
-interface SandboxChannel {
-  readonly type: string;
-  readonly id: string;
-}
-
 interface SandboxConnection {
   readonly target: string;
   readonly owner: string;
@@ -70,11 +66,6 @@ interface SandboxConnection {
   readonly release: () => void;
   /** true = 占位连接（尚无真实 WS 客户端），send 命中时按 miss 处理。 */
   readonly placeholder?: boolean;
-  /**
-   * 最近一条入站频道（Console UI 按 type+id 过滤气泡）。
-   * 出站必须带回，否则回复石沉大海。
-   */
-  lastChannel?: SandboxChannel;
 }
 
 export interface SandboxEndpointOptions {
@@ -156,35 +147,38 @@ export class SandboxWsEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'sandbox_stopped' }));
   }
 
-  send({ target, payload }: { readonly target: string; readonly payload: unknown }): unknown {
+  send({ conversation, payload }: EndpointSendRequest): unknown {
     if (!this.#open) return undefined;
-    // Reply target is the connection key (bot name / sandbox-uuid), not private:channelId.
-    const connection = this.#connections.get(target)
+    // Reply targets this endpoint's own live socket (fixed bot name, or the
+    // only live random-name connection); conversation carries kind/id stamp.
+    const connection = this.#connections.get(this.#options.defaults.name)
       ?? this.#findLiveConnection();
     if (!connection) {
-      logger.debug(formatCompact({ op: 'sandbox_send_miss', target }));
+      logger.debug(formatCompact({
+        op: 'sandbox_send_miss',
+        target: `${conversation.kind}:${conversation.id}`,
+      }));
       return undefined;
     }
     if (connection.placeholder) {
-      logger.debug(formatCompact({ op: 'sandbox_send_placeholder', target }));
+      logger.debug(formatCompact({
+        op: 'sandbox_send_placeholder',
+        target: `${conversation.kind}:${conversation.id}`,
+      }));
       return undefined;
     }
-    // Console UI filters by type+id; stamp last inbound channel onto outbound wire.
-    const channel = connection.lastChannel ?? {
-      type: 'private',
-      id: connection.owner,
-    };
+    // Console UI filters by type+id; stamp the conversation onto outbound wire.
     connection.socket.send(formatSandboxOutbound(payload, {
-      type: channel.type,
-      id: channel.id,
+      type: conversation.kind,
+      id: conversation.id,
       bot: this.#options.defaults.name,
       endpoint: connection.target,
     }));
     logger.debug(formatCompact({
       op: 'sandbox_send',
       target: connection.target,
-      channelType: channel.type,
-      channelId: channel.id,
+      channelType: conversation.kind,
+      channelId: conversation.id,
     }));
     return payload;
   }
@@ -221,28 +215,25 @@ export class SandboxWsEndpoint implements EndpointInstance {
     const release = bindSandboxWsSocket(socket, {
       onMessage: (raw) => {
         const parsed = parseSandboxWsPayload(raw);
-        const conn = this.#connections.get(target);
-        if (conn && !conn.placeholder) {
-          conn.lastChannel = {
-            type: parsed.type,
-            id: parsed.id || owner,
-          };
-        }
+        const sender = parsed.id || owner;
+        const conversation = sandboxInboundConversation(String(this.#options.id), {
+          type: parsed.type,
+          id: sender,
+        });
         logger.debug(formatCompact({
           op: 'sandbox_recv',
           target,
-          sender: parsed.id || owner,
+          sender,
           channelType: parsed.type,
-          channelId: parsed.id || owner,
+          channelId: sender,
           text: parsed.text.slice(0, 80),
         }));
         // Don't gate on #open — inbound must always reach the gateway so
         // Command/AI dispatch and outbound replies work.
         void this.#options.gateway.receive({
-          adapter: this.#options.id,
-          target,
+          conversation,
           content: parsed.text,
-          sender: parsed.id || owner,
+          sender,
           metadata: Object.freeze({
             type: parsed.type,
             channelType: parsed.type,

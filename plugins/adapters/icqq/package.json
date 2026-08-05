@@ -45,6 +45,7 @@
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/command": "workspace:*",
     "@zhin.js/core": "workspace:*",
+    "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*"
   },

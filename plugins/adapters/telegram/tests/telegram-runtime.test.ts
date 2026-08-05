@@ -57,6 +57,14 @@ function textMessage(overrides: Partial<TelegramMessage> = {}): TelegramMessage 
   };
 }
 
+function testConversation(kind: 'private' | 'group' | 'channel', id: string) {
+  return {
+    endpoint: { id: 'test-endpoint', adapter: 'test' },
+    kind,
+    id,
+  };
+}
+
 function mockApiFetch(handlers: Record<string, unknown> = {}): TelegramFetch & {
   calls: Array<{ method: string; body: Record<string, unknown> }>;
   forms: Array<{ method: string; form: FormData }>;
@@ -347,10 +355,10 @@ describe('telegram plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: '1001',
+      conversation: expect.objectContaining({ kind: 'private', id: '1001' }),
+      message: expect.objectContaining({ id: '42' }),
       content: 'hello',
       sender: 'alice',
-      id: '42',
     }));
 
     await endpoint.stop();
@@ -377,7 +385,7 @@ describe('telegram plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: '1001',
+      conversation: expect.objectContaining({ kind: 'private', id: '1001' }),
       metadata: expect.objectContaining({ mentioned: true }),
     }));
 
@@ -434,8 +442,8 @@ describe('telegram plugin runtime adapter', () => {
     });
     await endpoint.start();
     endpoint.open();
-    const messageId = await endpoint.send({ target: '1001', payload: 'pong' });
-    expect(messageId).toBe('1001:77');
+    const messageId = await endpoint.send({ conversation: testConversation('private', '1001'), payload: 'pong' });
+    expect(messageId).toBe('private:1001:77');
     expect(fetch.calls.some((c) => (
       c.method === 'sendMessage'
       && c.body.chat_id === 1001
@@ -444,7 +452,7 @@ describe('telegram plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('uses the native chat id for a legacy-prefixed outbound target', async () => {
+  it('uses the native chat id from the structured conversation', async () => {
     const fetch = mockApiFetch({ sendMessage: { message_id: 78 } });
     const endpoint = new TelegramEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
@@ -457,7 +465,7 @@ describe('telegram plugin runtime adapter', () => {
     });
     await endpoint.start();
     endpoint.open();
-    await expect(endpoint.send({ target: 'group:-1001', payload: 'pong' }))
+    await expect(endpoint.send({ conversation: testConversation('group', '-1001'), payload: 'pong' }))
       .resolves.toBe('group:-1001:78');
     expect(fetch.calls.some((call) => (
       call.method === 'sendMessage' && call.body.chat_id === -1001
@@ -479,7 +487,7 @@ describe('telegram plugin runtime adapter', () => {
     await endpoint.start();
     endpoint.open();
     const messageId = await endpoint.send({
-      target: '1001',
+      conversation: testConversation('private', '1001'),
       payload: [
         { type: 'text', data: { text: 'look' } },
         {
@@ -495,7 +503,7 @@ describe('telegram plugin runtime adapter', () => {
         },
       ],
     });
-    expect(messageId).toBe('1001:88');
+    expect(messageId).toBe('private:1001:88');
     const formCall = fetch.forms.find((f) => f.method === 'sendPhoto');
     expect(formCall).toBeDefined();
     expect(formCall!.form.get('chat_id')).toBe('1001');
@@ -525,10 +533,10 @@ describe('telegram plugin runtime adapter', () => {
       await endpoint.start();
       endpoint.open();
       const messageId = await endpoint.send({
-        target: '1001',
+        conversation: testConversation('private', '1001'),
         payload: [{ type: 'image', data: { media: { kind: 'path', value: filePath } } }],
       });
-      expect(messageId).toBe('1001:89');
+      expect(messageId).toBe('private:1001:89');
       const formCall = fetch.forms.find((f) => f.method === 'sendPhoto');
       expect(formCall).toBeDefined();
       const file = formCall!.form.get('photo') as File;
@@ -596,7 +604,7 @@ describe('telegram plugin runtime adapter', () => {
     expect(res.ok).toBe(true);
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: '1001',
+      conversation: expect.objectContaining({ kind: 'private', id: '1001' }),
       content: 'webhook hello',
       sender: 'alice',
     }));

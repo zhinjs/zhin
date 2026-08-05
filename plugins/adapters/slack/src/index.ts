@@ -10,6 +10,7 @@ export {
   readTextBody,
   resolveSlackChannelType,
   resolveSlackConfig,
+  slackInboundConversation,
   verifySlackSignature,
   type ResolvedSlackConfig,
   type SlackAdapterConfig,

@@ -1,7 +1,7 @@
 /**
  * Map Plugin Runtime CommandContext.input → classic Message-like shape used by game SessionService.
  *
- * Runtime Message: { adapter, target, sender?, metadata? }
+ * Runtime Message: { conversation, sender?, metadata? }
  * Classic Message: { $adapter, $endpoint, $channel, $sender }
  */
 import type { SendContent } from '@zhin.js/core';
@@ -33,16 +33,18 @@ function isClassicMessage(input: unknown): input is GameMessageLike {
 }
 
 function isRuntimeMessage(input: unknown): input is {
-  adapter?: string;
-  target?: string;
+  conversation?: {
+    endpoint?: { id?: string; adapter?: string };
+    kind?: string;
+    id?: string;
+  };
   sender?: string;
   metadata?: Readonly<Record<string, unknown>>;
 } {
   if (!input || typeof input !== 'object') return false;
   const m = input as Record<string, unknown>;
   return (
-    'adapter' in m ||
-    'target' in m ||
+    'conversation' in m ||
     'sender' in m ||
     (m.metadata != null && typeof m.metadata === 'object')
   );
@@ -66,10 +68,17 @@ export function messageFromCommandInput(input: unknown): GameMessageLike {
 
   if (isRuntimeMessage(input)) {
     const meta = input.metadata ?? {};
-    const adapter = String(input.adapter ?? meta.adapter ?? 'runtime');
+    const conversation = input.conversation;
+    const endpointCapabilityId = typeof conversation?.endpoint?.id === 'string'
+      ? conversation.endpoint.id
+      : undefined;
+    const adapterName = endpointCapabilityId
+      ? (endpointCapabilityId.split('\0').pop() ?? endpointCapabilityId).split('~')[0]
+      : undefined;
+    const adapter = String(adapterName ?? meta.adapter ?? 'runtime');
     const endpoint = String(meta.endpoint ?? meta.endpointId ?? 'default');
-    const channelType = String(meta.type ?? meta.channelType ?? 'private');
-    const channelId = String(input.target ?? meta.channelId ?? 'smoke');
+    const channelType = String(meta.type ?? meta.channelType ?? conversation?.kind ?? 'private');
+    const channelId = String(meta.channelId ?? conversation?.id ?? 'smoke');
     const senderId = String(input.sender ?? meta.senderId ?? 'smoke');
     const senderName = String(meta.senderName ?? meta.name ?? senderId);
     return {

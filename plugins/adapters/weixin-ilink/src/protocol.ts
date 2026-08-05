@@ -5,6 +5,7 @@
 
 import { pickCredential } from '@zhin.js/adapter';
 import { isMediaRef } from '@zhin.js/core';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import { bodyFromItemList, isMediaItem } from './weixin-inbound.js';
 import { DEFAULT_API_BASE_URL, DEFAULT_CDN_BASE_URL } from './ilink-meta.js';
 import type { WeixinMessage } from './ilink-types.js';
@@ -105,6 +106,18 @@ export function formatInboundContent(msg: WeixinMessageWithMedia): string {
 
 export function inboundMessageId(msg: WeixinMessage): string {
   return String(msg.message_id ?? msg.client_id ?? msg.seq ?? Date.now());
+}
+
+/**
+ * 入站归一化 → ConversationRef：个人微信无群/频道概念，全部会话都是
+ * 与 `from_user_id` 的 private 会话（无 parent）。
+ */
+export function weixinIlinkInboundConversation(endpointId: string, userId: string): ConversationRef {
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind: 'private',
+    id: userId,
+  };
 }
 
 /**

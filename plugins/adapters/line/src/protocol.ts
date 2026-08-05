@@ -6,6 +6,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { isMediaRef } from '@zhin.js/core';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('line');
@@ -215,6 +216,19 @@ export function resolveChannel(source: LineSource): LineChannel {
     default:
       return { channelType: 'private', channelId: '' };
   }
+}
+
+/**
+ * 入站归一化 → ConversationRef：LINE user → private、group → group、room → channel。
+ * LINE 没有 guild/频道容器概念，无 parent；recipient id 前缀（U/G/R）自带场景信息。
+ */
+export function lineInboundConversation(endpointId: string, source: LineSource): ConversationRef {
+  const channel = resolveChannel(source);
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind: channel.channelType,
+    id: channel.channelId,
+  };
 }
 
 export function generateMessageId(event: LineEvent): string {

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/dingtalk/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/dingtalk/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=699f5114b36d07c9 -->
+<!-- sync-adapter-docs:sha256=9be0ffb2c2da568d -->
 
 # @zhin.js/adapter-dingtalk
 
@@ -36,8 +36,8 @@ pnpm add @zhin.js/adapter-dingtalk
 - `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
-入站：`gateway.receive({ adapter, target: conversationId, content: text, sender, metadata })`  
-出站：`send({ target, payload })` → sessionWebhook 或 `/robot/send`
+入站：`gateway.receive({ conversation: ConversationRef, message: { conversation, id }, content: text, sender, metadata })`  
+出站：`send({ conversation, payload })` → sessionWebhook 或 `/robot/send`
 
 ## 前置条件
 

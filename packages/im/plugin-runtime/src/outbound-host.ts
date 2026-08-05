@@ -1,6 +1,21 @@
 import { createToken } from './token.js';
 
 /**
+ * 未锚定 endpoint 的会话地址（结构对齐 `@zhin.js/im-contract` 的
+ * `Omit<ConversationRef, 'endpoint'>`；plugin-runtime 是零依赖 kernel 层，
+ * 不能 import IM 契约，故此处独立声明，靠结构类型兼容）。
+ */
+export interface OutboundConversation {
+  readonly kind: 'private' | 'group' | 'channel';
+  readonly id: string;
+  readonly parent?: Readonly<{
+    readonly kind: 'group' | 'channel';
+    readonly id: string;
+  }>;
+  readonly threadId?: string;
+}
+
+/**
  * Thin Host Resource for proactive Adapter outbound (RSS poll, lottery push,
  * activity-feedback typing text). Implementations typically wrap ImRuntime
  * `sendEndpointMessage` (resolve adapter/endpoint → AdapterIndex.send).
@@ -8,8 +23,7 @@ import { createToken } from './token.js';
 export interface OutboundSendInput {
   readonly adapter: string;
   readonly endpointId: string;
-  readonly channelType: string;
-  readonly channelId: string;
+  readonly conversation: OutboundConversation;
   readonly content: string;
 }
 

@@ -1,5 +1,6 @@
 import { resolvePayloadFromText } from '../../built/interactive-segments/action.js';
 import { keyboardFallbackStore } from '../../built/interactive-segments/fallback-store.js';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import type { Segment } from '../../built/segment-contract/types.js';
 import type { Message } from './contracts.js';
 
@@ -21,9 +22,14 @@ export interface RegisteredRuntimeInteractiveHandler {
   readonly handler: RuntimeInteractiveHandler;
 }
 
-/** 频道键：出站降级写入与入站回跳读取共用（`adapter~target`）。 */
-export function runtimeInteractiveChannelKey(adapter: string, target: string): string {
-  return `${adapter}~${target}`;
+/** 频道键：出站降级写入与入站回跳读取共用（由 ConversationRef 派生，稳定即可）。 */
+export function runtimeInteractiveConversationKey(conversation: ConversationRef): string {
+  const base = `${String(conversation.endpoint.id)}~${conversation.kind}:${conversation.id}`;
+  const parent = conversation.parent
+    ? `@${conversation.parent.kind}:${conversation.parent.id}`
+    : '';
+  const thread = conversation.threadId ? `#${conversation.threadId}` : '';
+  return `${base}${parent}${thread}`;
 }
 
 /** prefix 最长匹配（与旧轨 findHandler 一致）。 */
@@ -54,7 +60,7 @@ export function resolveRuntimeInteractivePayload(message: Message): string | und
   return resolvePayloadFromText(
     raw,
     keyboardFallbackStore.mapFor(
-      runtimeInteractiveChannelKey(String(message.adapter), message.target),
+      runtimeInteractiveConversationKey(message.conversation),
     ),
   );
 }

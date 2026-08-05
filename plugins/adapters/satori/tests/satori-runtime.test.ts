@@ -179,10 +179,10 @@ describe('satori plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'ch-1',
+      conversation: expect.objectContaining({ kind: 'group', id: 'ch-1' }),
+      message: expect.objectContaining({ id: 'msg-1' }),
       content: '你好',
       sender: 'alice',
-      id: 'ch-1:msg-1',
     }));
 
     await endpoint.stop();
@@ -232,7 +232,7 @@ describe('satori plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'ch-1',
+      conversation: expect.objectContaining({ kind: 'group', id: 'ch-1' }),
       content: '<at id="bot-1"/> 在吗',
       metadata: expect.objectContaining({ mentioned: true }),
     }));
@@ -308,7 +308,7 @@ describe('satori plugin runtime adapter', () => {
     }));
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'channel-a',
+      conversation: expect.objectContaining({ kind: 'private', id: 'channel-a' }),
       content: 'from-ws',
       metadata: expect.objectContaining({ channelType: 'private' }),
     }));
@@ -332,7 +332,11 @@ describe('satori plugin runtime adapter', () => {
     endpoint.open();
     endpoint.setLogin({ platform: 'test', user: { id: 'bot-1' } });
     const messageId = await endpoint.send({
-      target: 'ch-9',
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: 'ch-9',
+      },
       payload: 'pong',
     });
     expect(messageId).toBe('ch-9:out-1');
@@ -410,13 +414,20 @@ describe('satori plugin runtime adapter', () => {
     expect(res.status).toBe(200);
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'ch-1',
+      conversation: expect.objectContaining({ kind: 'group', id: 'ch-1' }),
+      message: expect.objectContaining({ id: 'msg-1' }),
       content: 'from-webhook',
       sender: 'alice',
-      id: 'ch-1:msg-1',
     }));
 
-    const messageId = await endpoint.send({ target: 'ch-9', payload: 'pong' });
+    const messageId = await endpoint.send({
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: 'ch-9',
+      },
+      payload: 'pong',
+    });
     expect(messageId).toBe('ch-9:out-1');
 
     await endpoint.stop();

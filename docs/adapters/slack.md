@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=893adf860ad70fcb -->
+<!-- sync-adapter-docs:sha256=a4694263dc61b4f3 -->
 
 # @zhin.js/adapter-slack
 
@@ -36,8 +36,8 @@ pnpm add @zhin.js/adapter-slack
 - `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
-入站：`gateway.receive({ adapter, target: channelId, content: text, sender, metadata })`  
-出站：`send({ target, payload })` → Web API（`target` 可为 `channel` 或 `channel:thread_ts`）
+入站：`gateway.receive({ conversation, message: { conversation, id }, content: text, sender, metadata })`（`conversation` 为 ConversationRef：`channel_type: im` → kind `private`，其余 → kind `group`；线程根 ts 进 `threadId`）  
+出站：`send({ conversation, payload })` → Web API（`conversation.id` 为 channel，`conversation.threadId` 为 thread_ts）
 
 ### 平台权限（platform permit）
 

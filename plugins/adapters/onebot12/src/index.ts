@@ -3,14 +3,13 @@ export {
   buildWsConnectOptions,
   callOneBot12Action,
   formatInboundContent,
-  formatInboundTarget,
   formatOutboundSegments,
   getChannelId,
   isBotMentioned,
   isMessageEvent,
   mediaRefToOneBot12Fields,
   mediaRefToOneBot12UploadParams,
-  parseSendTarget,
+  onebot12InboundConversation,
   resolveOneBot12Config,
   senderNickname,
   senderUserId,
@@ -29,7 +28,6 @@ export {
   type OneBot12WireSegment,
   type OneBot12WsConfig,
   type OneBot12WssConfig,
-  type ParsedSendTarget,
   type ResolvedOneBot12Config,
 } from './protocol.js';
 

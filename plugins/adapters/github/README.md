@@ -6,7 +6,7 @@ GitHub Plugin Runtime 适配器 — Issue/PR 评论区即聊天通道，GitHub A
 
 - **聊天通道**：Issue/PR 评论区映射为群聊，支持收发消息
 - **Webhook 入站**：HMAC-SHA256 验签 → `messageGatewayToken`
-- **出站**：`send({ target, payload })` → Issue/PR comment（target 为 channel ID）
+- **出站**：`send({ conversation, payload })` → Issue/PR comment（`conversation.id` 为 channel ID）
 - **GitHub App 认证**：JWT → Installation Token
 - **Agent 工具**：`agent/` 下 star/bind/subscribe/workspace 等保留
 
@@ -85,7 +85,7 @@ plugins:
 | `src/gh-client.ts` | GitHub API 客户端 |
 
 - 入站：`httpHostToken` POST → `messageGatewayToken.receive`
-- 出站：`send({ target, payload })`
+- 出站：`send({ conversation, payload })`
 
 ## License
 

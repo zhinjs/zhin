@@ -58,14 +58,32 @@ export interface CommandSender {
 }
 
 /**
+ * 命令侧入站会话契约（结构对齐 `@zhin.js/im-contract` 的 ConversationRef；
+ * command 为 Feature 层，不能 import core / IM 契约包，故独立声明）。
+ */
+export interface CommandConversation {
+  readonly endpoint: Readonly<{
+    readonly id: string;
+    /** 适配器插件 owner（PluginId），与 `snapshot.config.get(adapter)` 对齐。 */
+    readonly adapter: string;
+  }>;
+  readonly kind: 'private' | 'group' | 'channel';
+  readonly id: string;
+  readonly parent?: Readonly<{
+    readonly kind: 'group' | 'channel';
+    readonly id: string;
+  }>;
+  readonly threadId?: string;
+}
+
+/**
  * 命令侧入站消息契约。
  *
  * `@zhin.js/core/runtime` 的 `Message` 结构兼容本接口（duck typing）。
  * 因架构分层（command 为 Feature 层，不能 import core），此处独立声明。
  */
 export interface CommandMessage {
-  readonly adapter: string;
-  readonly target: string;
+  readonly conversation: CommandConversation;
   readonly content: string;
   /** 发送者 id（扁平字段；结构化视图见 CommandContext.sender）。 */
   readonly sender?: string;
@@ -202,7 +220,7 @@ export function resolveCommandSession(input: unknown): CommandSession {
     ? input.metadata as Readonly<Record<string, unknown>>
     : undefined;
 
-  const adapter = input.adapter.split('\0')[0] || undefined;
+  const adapter = input.conversation.endpoint.adapter || undefined;
   const endpoint = typeof metadata?.endpoint === 'string' && metadata.endpoint
     ? metadata.endpoint
     : undefined;
@@ -221,8 +239,8 @@ export function resolveCommandSession(input: unknown): CommandSession {
 function isCommandMessageLike(input: unknown): input is CommandMessage {
   if (!input || typeof input !== 'object') return false;
   const value = input as Partial<CommandMessage>;
-  return typeof value.adapter === 'string'
-    && typeof value.target === 'string'
+  return !!value.conversation
+    && typeof value.conversation === 'object'
     && typeof value.content === 'string';
 }
 
@@ -238,12 +256,12 @@ function resolveScene(
     });
   }
 
-  const parsed = parseTarget(input.target);
+  const conversation = input.conversation;
   const type = (typeof metadata?.channelType === 'string' && metadata.channelType)
     || (typeof metadata?.type === 'string' && metadata.type)
-    || parsed?.type;
+    || conversation.kind;
   const id = (typeof metadata?.channelId === 'string' && metadata.channelId)
-    || parsed?.id;
+    || conversation.id;
   if (!type || !id) return undefined;
 
   const name = firstString(
@@ -307,22 +325,6 @@ function resolveRoles(
   if (metadata?.isTrusted === true) push('trusted');
   if (roles.length === 0) roles.push('user');
   return Object.freeze(roles);
-}
-
-function parseTarget(target: string): { readonly type: string; readonly id: string } | undefined {
-  const parts = target.split(':').filter(Boolean);
-  if (parts.length < 2) return undefined;
-  const [kind, ...rest] = parts;
-  if (!kind) return undefined;
-  const lastPart = parts.at(-1);
-  if (!lastPart) return undefined;
-  if (kind === 'channel' && parts.length >= 3) {
-    return { type: 'channel', id: lastPart };
-  }
-  if (kind === 'temp' && parts.length >= 3) {
-    return { type: 'private', id: lastPart };
-  }
-  return { type: kind, id: rest.join(':') };
 }
 
 function isCommandScene(value: unknown): value is CommandScene {

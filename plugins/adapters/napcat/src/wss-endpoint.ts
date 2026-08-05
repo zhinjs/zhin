@@ -2,7 +2,7 @@
  * NapCat reverse WSS endpoint — accepts inbound WebSocket from NapCat.
  */
 import { clearInterval } from 'node:timers';
-import type { EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -18,9 +18,10 @@ import {
 import {
   buildSendAction,
   formatInboundContent,
-  formatInboundTarget,
   formatOutboundSegments,
   isMessageEvent,
+  napcatInboundConversation,
+  napcatOutboundTarget,
   senderNickname,
   senderUserId,
   type NapCatEvent,
@@ -115,9 +116,9 @@ export class NapCatWssEndpoint implements EndpointInstance {
     this.#started = false;
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
-    const { action, params } = buildSendAction(target, message);
+    const { action, params } = buildSendAction(napcatOutboundTarget(conversation), message);
     const data = await this.callApi(action, params) as { message_id?: number | string } | undefined;
     return data?.message_id != null ? String(data.message_id) : '';
   }
@@ -139,15 +140,14 @@ export class NapCatWssEndpoint implements EndpointInstance {
     if (Array.isArray(ev.message) || typeof ev.message === 'string') {
       ev = { ...ev, message: normalizeMessage(ev.message) };
     }
-    const target = formatInboundTarget(ev);
+    const conversation = napcatInboundConversation(String(this.#options.id), ev);
     const nickname = senderNickname(ev);
     const mentioned = isNapCatBotMentioned(ev);
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target,
+      conversation,
+      message: { conversation, id: msgId },
       content: formatInboundContent(ev),
       sender: senderUserId(ev),
-      id: msgId,
       metadata: Object.freeze({
         message_type: ev.message_type,
         user_id: ev.user_id != null ? String(ev.user_id) : undefined,
@@ -162,7 +162,7 @@ export class NapCatWssEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'napcat_gateway_receive_failed',
-        target,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });

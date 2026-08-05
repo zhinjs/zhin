@@ -6,9 +6,10 @@ import type { EndpointControl, EndpointInstance, EndpointSendRequest } from '@zh
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
-  formatLegacyMessageReference,
+  formatLegacyMessageRef,
   nativeConversationId,
   parseLegacyMessageReference,
+  type ConversationRef,
 } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
@@ -22,8 +23,9 @@ import {
   formatInboundContent,
   formatInboundSegments,
   formatOutboundPlan,
-  resolveChannel,
+  resolveTelegramChannelType,
   senderDisplayName,
+  telegramInboundConversation,
   type ResolvedTelegramConfig,
   type TelegramCallbackQuery,
   type TelegramChatMember,
@@ -207,9 +209,8 @@ export class TelegramEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, conversation, payload }: EndpointSendRequest): Promise<string> {
-    const chatId = nativeConversationId(target, conversation);
-    const plan = formatOutboundPlan(chatId, payload);
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+    const plan = formatOutboundPlan(conversation.id, payload);
     let lastId = '';
     for (const action of plan.actions) {
       const form = await this.#buildUploadForm(action.params, plan.uploads);
@@ -219,7 +220,7 @@ export class TelegramEndpoint implements EndpointInstance {
       if (result.message_id != null) lastId = String(result.message_id);
     }
     if (!lastId) return `telegram-${Date.now()}`;
-    return formatLegacyMessageReference({ target, messageId: lastId });
+    return formatLegacyMessageRef({ conversation, id: lastId });
   }
 
   async recallMessage(messageId: string): Promise<void> {
@@ -266,27 +267,26 @@ export class TelegramEndpoint implements EndpointInstance {
   /** Test / internal: admit a message when open. */
   admit(msg: TelegramMessage): void {
     if (!this.#open) return;
-    const { channelId } = resolveChannel(msg);
-    void this.#admitWithSenderRole(msg, channelId).catch((err) => {
+    const conversation = telegramInboundConversation(String(this.#options.id), msg.chat);
+    void this.#admitWithSenderRole(msg, conversation).catch((err) => {
       logger.warn(formatCompact({
         op: 'telegram_gateway_receive_failed',
-        target: channelId,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });
   }
 
-  async #admitWithSenderRole(msg: TelegramMessage, channelId: string): Promise<void> {
+  async #admitWithSenderRole(msg: TelegramMessage, conversation: ConversationRef): Promise<void> {
     const permit = await this.#resolveGroupSenderPermit(msg);
     // 新 Runtime Message.content 为纯文本：@ 本机只能经 metadata 传递
     const mentioned = this.#isBotMentioned(msg);
     await this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target: channelId,
+      conversation,
+      message: { conversation, id: String(msg.message_id) },
       content: formatInboundContent(msg),
       segments: formatInboundSegments(msg),
       sender: senderDisplayName(msg.from),
-      id: String(msg.message_id),
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         // Preserve Telegram's native value below, but publish the canonical
@@ -360,15 +360,18 @@ export class TelegramEndpoint implements EndpointInstance {
   /** Test / internal: admit a callback query when open. */
   admitCallback(query: TelegramCallbackQuery): void {
     if (!this.#open) return;
+    const endpointId = String(this.#options.id);
     const msg = query.message;
-    const channelId = msg ? resolveChannel(msg).channelId : String(query.from.id);
+    // 无挂载消息的 callback（如 inline 模式）退化为 sender 私聊会话
+    const conversation = msg
+      ? telegramInboundConversation(endpointId, msg.chat)
+      : telegramInboundConversation(endpointId, { id: query.from.id, type: 'private' });
     void this.#options.gateway.receive({
-      adapter: this.#options.id,
-      target: channelId,
+      conversation,
+      message: { conversation, id: query.id },
       content: formatCallbackContent(query),
       segments: formatCallbackSegments(query),
       sender: senderDisplayName(query.from),
-      id: query.id,
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         eventType: 'callback_query',
@@ -378,7 +381,7 @@ export class TelegramEndpoint implements EndpointInstance {
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'telegram_gateway_receive_failed',
-        target: channelId,
+        target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
       }));
     });
@@ -520,12 +523,4 @@ export class TelegramEndpoint implements EndpointInstance {
       allows_multiple_answers: allowsMultipleAnswers,
     });
   }
-}
-
-function resolveTelegramChannelType(
-  chatType: TelegramMessage['chat']['type'],
-): 'private' | 'group' | 'channel' {
-  if (chatType === 'private') return 'private';
-  if (chatType === 'channel') return 'channel';
-  return 'group';
 }

@@ -15,16 +15,23 @@ import {
 import {
   buildSendAction,
   formatInboundContent,
-  formatInboundTarget,
   formatOutboundSegments,
-  parseSendTarget,
+  napcatInboundConversation,
+  napcatOutboundTarget,
   resolveNapCatConfig,
   type NapCatEvent,
   type NapCatWsConfig,
 } from '../src/protocol.js';
+import type { ConversationRef } from '@zhin.js/im-contract';
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
+
+const testConversation = (kind: ConversationRef['kind'], id: string): ConversationRef => ({
+  endpoint: { id: 'test-endpoint', adapter: 'test' },
+  kind,
+  id,
+});
 
 const baseConfig: NapCatWsConfig = resolveNapCatConfig({
   connection: 'ws',
@@ -115,7 +122,7 @@ describe('napcat protocol helpers', () => {
     });
   });
 
-  it('formats inbound target and content', () => {
+  it('normalizes inbound conversation and content', () => {
     const ev: NapCatEvent = {
       post_type: 'message',
       message_type: 'group',
@@ -126,24 +133,51 @@ describe('napcat protocol helpers', () => {
       message: [{ type: 'text', data: { text: 'hello' } }],
       time: 1,
     };
-    expect(formatInboundTarget(ev)).toBe('group:100');
+    expect(napcatInboundConversation('napcat-endpoint', ev)).toEqual({
+      endpoint: { id: 'napcat-endpoint', adapter: 'napcat-endpoint' },
+      kind: 'group',
+      id: '100',
+    });
     expect(formatInboundContent(ev)).toBe('hello');
   });
 
-  it('parses send targets', () => {
-    expect(parseSendTarget('private:42')).toEqual({ message_type: 'private', id: '42' });
-    expect(parseSendTarget('group:9')).toEqual({ message_type: 'group', id: '9' });
+  it('maps private temp sessions to a private conversation with group parent', () => {
+    const ev: NapCatEvent = {
+      post_type: 'message',
+      message_type: 'private',
+      sub_type: 'group',
+      message_id: 1,
+      group_id: 100,
+      user_id: 9,
+      raw_message: 'hi',
+    };
+    expect(napcatInboundConversation('napcat-endpoint', ev)).toEqual({
+      endpoint: { id: 'napcat-endpoint', adapter: 'napcat-endpoint' },
+      kind: 'private',
+      id: '9',
+      parent: { kind: 'group', id: '100' },
+    });
+  });
+
+  it('derives outbound targets from conversation', () => {
+    const conv = (kind: ConversationRef['kind'], id: string): ConversationRef => ({
+      endpoint: { id: 'e', adapter: 'a' },
+      kind,
+      id,
+    });
+    expect(napcatOutboundTarget(conv('private', '42'))).toEqual({ message_type: 'private', id: '42' });
+    expect(napcatOutboundTarget(conv('group', '9'))).toEqual({ message_type: 'group', id: '9' });
   });
 
   it('builds send_*_msg actions from target', () => {
-    expect(buildSendAction('private:1', [{ type: 'text', data: { text: 'hi' } }])).toEqual({
+    expect(buildSendAction({ message_type: 'private', id: '1' }, [{ type: 'text', data: { text: 'hi' } }])).toEqual({
       action: 'send_private_msg',
       params: {
         user_id: 1,
         message: [{ type: 'text', data: { text: 'hi' } }],
       },
     });
-    expect(buildSendAction('group:2', [{ type: 'text', data: { text: 'hi' } }])).toEqual({
+    expect(buildSendAction({ message_type: 'group', id: '2' }, [{ type: 'text', data: { text: 'hi' } }])).toEqual({
       action: 'send_group_msg',
       params: {
         group_id: 2,
@@ -267,10 +301,10 @@ describe('napcat plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'private:10001',
+      conversation: expect.objectContaining({ kind: 'private', id: '10001' }),
+      message: expect.objectContaining({ id: '42' }),
       content: '你好',
       sender: '10001',
-      id: '42',
       metadata: expect.objectContaining({ nickname: 'Alice' }),
     }));
 
@@ -358,7 +392,7 @@ describe('napcat plugin runtime adapter', () => {
     });
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'group:200',
+      conversation: expect.objectContaining({ kind: 'group', id: '200' }),
       sender: '2',
       metadata: expect.objectContaining({ mentioned: true }),
     }));
@@ -447,7 +481,7 @@ describe('napcat plugin runtime adapter', () => {
     endpoint.open();
 
     const sendPromise = endpoint.send({
-      target: 'private:10001',
+      conversation: testConversation('private', '10001'),
       payload: 'pong',
     });
 
@@ -499,7 +533,7 @@ describe('napcat plugin runtime adapter', () => {
     }));
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'group:200',
+      conversation: expect.objectContaining({ kind: 'group', id: '200' }),
       content: 'from-ws',
     }));
     await endpoint.stop();
@@ -589,12 +623,12 @@ describe('napcat plugin runtime adapter', () => {
     expect(res.status).toBe(200);
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'private:10001',
+      conversation: expect.objectContaining({ kind: 'private', id: '10001' }),
+      message: expect.objectContaining({ id: '42' }),
       content: 'from-http',
-      id: '42',
     }));
 
-    await endpoint.send({ target: 'private:10001', payload: 'pong' });
+    await endpoint.send({ conversation: testConversation('private', '10001'), payload: 'pong' });
     expect(callHttpAction).toHaveBeenCalledWith(
       expect.objectContaining({ http_url: 'http://127.0.0.1:3000' }),
       'send_private_msg',

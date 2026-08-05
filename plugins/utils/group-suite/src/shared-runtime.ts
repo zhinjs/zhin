@@ -19,16 +19,16 @@ export function randomInt(min: number, max: number): number {
 
 /** Runtime Message → group/global context */
 export function resolveContextKey(input: {
-  target?: string;
+  conversation?: { readonly kind?: string; readonly id?: string };
   metadata?: Readonly<Record<string, unknown>>;
 }): { type: string; id: string } {
   const meta = input.metadata ?? {};
   const channelType = String(meta.type ?? meta.channelType ?? '');
-  if (channelType === 'group' || channelType === 'guild') {
-    return { type: 'group', id: String(input.target ?? meta.channelId ?? '') };
+  if (channelType === 'group' || channelType === 'guild' || channelType === 'channel') {
+    return { type: 'group', id: String(meta.channelId ?? input.conversation?.id ?? '') };
   }
-  if (input.target && channelType !== 'private') {
-    return { type: 'group', id: String(input.target) };
+  if (input.conversation && channelType !== 'private') {
+    return { type: 'group', id: String(input.conversation.id ?? '') };
   }
   return { type: 'global', id: '' };
 }

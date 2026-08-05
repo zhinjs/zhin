@@ -9,15 +9,13 @@ describe('OutboundHost', () => {
     await host.send({
       adapter: 'sandbox',
       endpointId: 'bot',
-      channelType: 'private',
-      channelId: 'u1',
+      conversation: { kind: 'private', id: 'u1' },
       content: 'hello',
     });
     expect(sendEndpointMessage).toHaveBeenCalledWith({
       adapter: 'sandbox',
       endpointId: 'bot',
-      channelType: 'private',
-      channelId: 'u1',
+      conversation: { kind: 'private', id: 'u1' },
       content: 'hello',
     });
   });

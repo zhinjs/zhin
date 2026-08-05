@@ -143,8 +143,10 @@ export function defineGamePlugin<
                 await outbound.send({
                   adapter: row.adapter,
                   endpointId: row.endpoint,
-                  channelType: row.channel_type,
-                  channelId: row.channel_id,
+                  conversation: {
+                    kind: row.channel_type as 'private' | 'group' | 'channel',
+                    id: row.channel_id,
+                  },
                   content: typeof stale.message === 'function'
                     ? stale.message(row)
                     : stale.message

@@ -608,10 +608,12 @@ describe('console SSE events', () => {
 
     messageListener?.({
       direction: 'inbound',
-      adapter: 'root\0zhin.adapter\0icqq' as RuntimeMessageEvent['adapter'],
-      target: 'group:42',
+      conversation: {
+        endpoint: { id: 'root\0zhin.adapter\0icqq', adapter: 'root' },
+        kind: 'group',
+        id: '42',
+      },
       sender: 'alice',
-      channelType: 'group',
       contentPreview: 'hello console',
       messageId: 'msg-1',
       timestamp: 1_700_000_000_000,
@@ -629,8 +631,11 @@ describe('console SSE events', () => {
     // 出站 → message.receive（direction: outbound）
     messageListener?.({
       direction: 'outbound',
-      adapter: 'root\0zhin.adapter\0icqq' as RuntimeMessageEvent['adapter'],
-      target: 'group:42',
+      conversation: {
+        endpoint: { id: 'root\0zhin.adapter\0icqq', adapter: 'root' },
+        kind: 'group',
+        id: '42',
+      },
       requester: 'root' as RuntimeMessageEvent['requester'],
       contentPreview: 'reply text',
       timestamp: 1_700_000_000_001,

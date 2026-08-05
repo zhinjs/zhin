@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/weixin-ilink/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/weixin-ilink/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=36c986830b317252 -->
+<!-- sync-adapter-docs:sha256=3f84be280f6d42ce -->
 
 # @zhin.js/adapter-weixin-ilink
 
@@ -64,7 +64,7 @@ data/weixin-ilink/<bot-name>.json
 
 回复必须携带入站时缓存的 `context_token`（按 `endpointId + peerUserId`）。若用户久未发消息导致 token 缺失，出站会拒绝并打 warn。
 
-出站经 Runtime：`MessageGateway` → `endpoint.send({ target, payload })`。
+出站经 Runtime：`MessageGateway` → `endpoint.send({ conversation, payload })`（`conversation` 为入站归一化出的 `ConversationRef`，kind 恒为 `private`，`id` 即对端 user_id）。
 
 **图文限制**：微信单条消息不支持图文混排。适配器会自动：
 

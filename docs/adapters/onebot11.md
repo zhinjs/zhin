@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/onebot11/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot11/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=e78465fa47745ef0 -->
+<!-- sync-adapter-docs:sha256=b0067f6f98d26ab5 -->
 
 # @zhin.js/adapter-onebot11
 
@@ -20,7 +20,7 @@ Zhin.js [OneBot 11](https://github.com/botuniverse/onebot-11) 适配器（Plugin
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - **正向 WebSocket**（`connection: ws`）：应用连 OneBot 实现的 WS 服务器
 - `access_token` 鉴权（Bearer + query）
-- 入站经 `messageGatewayToken`；出站 `send({ target, payload })`
+- 入站经 `messageGatewayToken`；出站 `send({ conversation, payload })`
 
 ## 安装
 
@@ -35,8 +35,8 @@ pnpm add @zhin.js/adapter-onebot11
 - `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
-入站：`gateway.receive({ adapter, target: "private:uid"|"group:gid", content, sender, metadata })`  
-出站：`send({ target, payload })` → WS `send_private_msg` / `send_group_msg`（payload 已由 gateway/core 渲染；无 segment-mapper）
+入站：`gateway.receive({ conversation, message, content, sender, metadata })`（`conversation.kind` 为 `private`/`group`，`id` 为 uid/gid）  
+出站：`send({ conversation, payload })` → WS `send_private_msg` / `send_group_msg`（payload 已由 gateway/core 渲染；无 segment-mapper）
 
 ## 最小配置
 

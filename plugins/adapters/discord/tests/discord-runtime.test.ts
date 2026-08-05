@@ -13,6 +13,7 @@ import {
   type DiscordClientTransport,
 } from '../src/endpoint.js';
 import {
+  discordInboundConversation,
   formatButtonContent,
   formatButtonSegments,
   formatInboundContent,
@@ -218,6 +219,38 @@ describe('discord protocol helpers', () => {
     }
   });
 
+  it('maps inbound channel kinds to ConversationRef with guild container as parent', () => {
+    // guild 频道：kind 'channel' + guild 容器进 parent
+    expect(discordInboundConversation('test-endpoint', {
+      channelId: 'chan-1',
+      channelKind: 'channel',
+      guildId: 'guild-1',
+    })).toEqual({
+      endpoint: { id: 'test-endpoint', adapter: 'test-endpoint' },
+      kind: 'channel',
+      id: 'chan-1',
+      parent: { kind: 'channel', id: 'guild-1' },
+    });
+    // DM：'private'，无 parent
+    expect(discordInboundConversation('test-endpoint', {
+      channelId: 'dm-1',
+      channelKind: 'private',
+    })).toEqual({
+      endpoint: { id: 'test-endpoint', adapter: 'test-endpoint' },
+      kind: 'private',
+      id: 'dm-1',
+    });
+    // GroupDM：'group'，无 guild 容器
+    expect(discordInboundConversation('plugin\0feature\0discord', {
+      channelId: 'gdm-1',
+      channelKind: 'group',
+    })).toEqual({
+      endpoint: { id: 'plugin\0feature\0discord', adapter: 'plugin' },
+      kind: 'group',
+      id: 'gdm-1',
+    });
+  });
+
   it('formats inbound content by message kind', () => {
     expect(formatInboundContent(textMessage())).toBe('hello');
     expect(formatInboundContent(textMessage({
@@ -360,10 +393,10 @@ describe('discord plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'chan-1',
+      conversation: expect.objectContaining({ kind: 'channel', id: 'chan-1' }),
+      message: expect.objectContaining({ id: 'msg-1' }),
       content: 'hello',
       sender: 'alice',
-      id: 'msg-1',
     }));
 
     await endpoint.stop();
@@ -400,7 +433,7 @@ describe('discord plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      target: 'chan-1',
+      conversation: expect.objectContaining({ kind: 'channel', id: 'chan-1' }),
       metadata: expect.objectContaining({ mentioned: true }),
     }));
 
@@ -464,15 +497,22 @@ describe('discord plugin runtime adapter', () => {
       createClient: () => mock,
     });
     await endpoint.start();
-    const messageId = await endpoint.send({ target: 'chan-1', payload: 'pong' });
-    expect(messageId).toBe('chan-1:sent-1');
+    const messageId = await endpoint.send({
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'channel',
+        id: 'chan-1',
+      },
+      payload: 'pong',
+    });
+    expect(messageId).toBe('channel:chan-1:sent-1');
     expect(mock.sent[0]).toMatchObject({
       channelId: 'chan-1',
     });
     await endpoint.stop();
   });
 
-  it('uses the native channel id for a legacy-prefixed outbound target', async () => {
+  it('derives the legacy message id from the structured conversation', async () => {
     const mock = createMockClient();
     const endpoint = new DiscordGatewayEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
@@ -481,8 +521,14 @@ describe('discord plugin runtime adapter', () => {
       createClient: () => mock,
     });
     await endpoint.start();
-    await expect(endpoint.send({ target: 'group:chan-1', payload: 'pong' }))
-      .resolves.toBe('group:chan-1:sent-1');
+    await expect(endpoint.send({
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: 'chan-1',
+      },
+      payload: 'pong',
+    })).resolves.toBe('group:chan-1:sent-1');
     expect(mock.sent[0]).toMatchObject({ channelId: 'chan-1' });
     await endpoint.stop();
   });

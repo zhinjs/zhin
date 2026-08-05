@@ -9,8 +9,8 @@ import {
 } from '@zhin.js/plugin-runtime';
 import {
   buildInboxMessageRow,
+  conversationToInboxChannel,
   installInboxMessageRecorder,
-  parseInboxTarget,
 } from '../../src/plugin-runtime/inbox-installer.js';
 
 /** 内存假 DatabaseHost：行存 Map，select/insert/update 按 where 等值匹配。 */
@@ -94,15 +94,17 @@ function fakeIm(endpointName?: string): {
   };
 }
 
-const capabilityId = 'root\0zhin.adapter\0icqq' as RuntimeMessageEvent['adapter'];
+const capabilityId = 'root\0zhin.adapter\0icqq';
 
 function inboundEvent(overrides: Partial<RuntimeMessageEvent> = {}): RuntimeMessageEvent {
   return {
     direction: 'inbound',
-    adapter: capabilityId,
-    target: 'group:888',
+    conversation: {
+      endpoint: { id: capabilityId, adapter: 'root' },
+      kind: 'group',
+      id: '888',
+    },
     sender: '10001',
-    channelType: 'group',
     contentPreview: 'hello',
     messageId: 'm-1',
     timestamp: 1_700_000_000_000,
@@ -110,25 +112,29 @@ function inboundEvent(overrides: Partial<RuntimeMessageEvent> = {}): RuntimeMess
   };
 }
 
-describe('parseInboxTarget', () => {
-  it('parses group / private / temp / channel targets', () => {
-    expect(parseInboxTarget('group:888')).toEqual({
+describe('conversationToInboxChannel', () => {
+  it('maps group / private kinds and group/guild parents', () => {
+    expect(conversationToInboxChannel({
+      endpoint: { id: capabilityId, adapter: 'root' }, kind: 'group', id: '888',
+    })).toEqual({
       channelType: 'group', channelId: '888', parentType: null, parentId: null,
     });
-    expect(parseInboxTarget('private:10001')).toEqual({
+    expect(conversationToInboxChannel({
+      endpoint: { id: capabilityId, adapter: 'root' }, kind: 'private', id: '10001',
+    })).toEqual({
       channelType: 'private', channelId: '10001', parentType: null, parentId: null,
     });
-    expect(parseInboxTarget('temp:100:2')).toEqual({
+    expect(conversationToInboxChannel({
+      endpoint: { id: capabilityId, adapter: 'root' }, kind: 'private', id: '2',
+      parent: { kind: 'group', id: '100' },
+    })).toEqual({
       channelType: 'private', channelId: '2', parentType: 'group', parentId: '100',
     });
-    expect(parseInboxTarget('channel:g-1:c-1')).toEqual({
+    expect(conversationToInboxChannel({
+      endpoint: { id: capabilityId, adapter: 'root' }, kind: 'channel', id: 'c-1',
+      parent: { kind: 'channel', id: 'g-1' },
+    })).toEqual({
       channelType: 'channel', channelId: 'c-1', parentType: 'guild', parentId: 'g-1',
-    });
-  });
-
-  it('falls back to the channelType hint for bare targets', () => {
-    expect(parseInboxTarget('10001', 'private')).toEqual({
-      channelType: 'private', channelId: '10001', parentType: null, parentId: null,
     });
   });
 });
@@ -165,9 +171,16 @@ describe('buildInboxMessageRow', () => {
     expect(row.platform_message_id).toBe('local:1700000000000');
   });
 
-  it('maps temp targets to private channel with group parent', () => {
+  it('maps group-parented private conversations to private channel with group parent', () => {
     const row = buildInboxMessageRow(
-      inboundEvent({ target: 'temp:100:2', channelType: 'private' }),
+      inboundEvent({
+        conversation: {
+          endpoint: { id: capabilityId, adapter: 'root' },
+          kind: 'private',
+          id: '2',
+          parent: { kind: 'group', id: '100' },
+        },
+      }),
       resolveEndpoint,
     );
     expect(row.channel_type).toBe('private');

@@ -5,6 +5,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { isMediaRef, type MediaRef } from '@zhin.js/core';
+import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { mrkdwnToMarkdown } from './mrkdwn-to-markdown.js';
 
@@ -190,6 +191,30 @@ export function normalizeWebhookPath(path: string): string {
 
 export function resolveSlackChannelType(event: Pick<SlackEvent, 'channel_type'>): 'private' | 'group' {
   return event.channel_type === 'im' ? 'private' : 'group';
+}
+
+/**
+ * 入站归一化 → ConversationRef：channel_type `im` → private，其余（channel/group/mpim）
+ * → group；交互/斜杠命令无 channel_type 时按平台 id 前缀推断（D* 为 DM）。Slack 无
+ * guild 容器概念（team 为 workspace 级，不进 parent）；线程根 ts 进 `threadId`。
+ */
+export function slackInboundConversation(
+  endpointId: string,
+  opts: {
+    readonly channelId: string;
+    readonly channelType?: string;
+    readonly threadId?: string;
+  },
+): ConversationRef {
+  const kind: ConversationKind = opts.channelType != null
+    ? (opts.channelType === 'im' ? 'private' : 'group')
+    : (opts.channelId.startsWith('D') ? 'private' : 'group');
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind,
+    id: opts.channelId,
+    ...(opts.threadId ? { threadId: opts.threadId } : {}),
+  };
 }
 
 /** Build inbound text for MessageGateway.receive. */

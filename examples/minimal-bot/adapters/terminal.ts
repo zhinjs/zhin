@@ -48,9 +48,13 @@ export class TerminalEndpoint implements EndpointInstance {
         this.#schedulePrompt();
         return;
       }
+      const endpointId = String(this.#options.id);
       void this.#options.gateway.receive({
-        adapter: this.#options.id,
-        target: 'terminal',
+        conversation: {
+          endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+          kind: 'private',
+          id: 'terminal',
+        },
         content,
         sender: 'local-user',
       }).catch((error: unknown) => {

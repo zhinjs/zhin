@@ -6,6 +6,7 @@
 import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
 import { isMediaRef } from '@zhin.js/core';
 import type { Segment } from '@zhin.js/core/runtime';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('discord');
@@ -197,6 +198,29 @@ export function resolveChannelKind(channelType: number | string | undefined): 'p
   if (channelType === 1 || channelType === 'DM' || channelType === 'private') return 'private';
   if (channelType === 3 || channelType === 'GroupDM' || channelType === 'group') return 'group';
   return 'channel';
+}
+
+/**
+ * 入站归一化 → ConversationRef：DM → 'private'；GroupDM → 'group'；
+ * guild 频道 → 'channel' + guild 容器进 parent（guild 是频道容器，kind 'channel'）。
+ * endpoint.adapter = owner PluginId（CapabilityId 以 \0 分隔）。
+ */
+export function discordInboundConversation(
+  endpointId: string,
+  msg: {
+    readonly channelId: string;
+    readonly channelKind: 'private' | 'group' | 'channel';
+    readonly guildId?: string;
+  },
+): ConversationRef {
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind: msg.channelKind,
+    id: msg.channelId,
+    ...(msg.guildId && msg.channelKind === 'channel'
+      ? { parent: { kind: 'channel' as const, id: msg.guildId } }
+      : {}),
+  };
 }
 
 export function senderDisplayName(msg: DiscordInboundMessage): string {

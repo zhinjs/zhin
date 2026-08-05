@@ -6,6 +6,7 @@
 import type { Attachment } from 'mailparser';
 import { htmlToPlainTextWithBlockBreaks, isMediaRef, type MediaRef } from '@zhin.js/core';
 import type { Segment } from '@zhin.js/core/runtime';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('email');
@@ -225,6 +226,18 @@ export function formatInboundSegments(
     });
   }
   return out;
+}
+
+/**
+ * 入站归一化 → ConversationRef：Email 无群/频道概念，所有入站邮件都是
+ * 与发件人地址的 private 会话（id = 发件人地址）。
+ */
+export function emailInboundConversation(endpointId: string, email: EmailMessage): ConversationRef {
+  return {
+    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    kind: 'private',
+    id: email.from,
+  };
 }
 
 export function senderDisplayName(from: string): string {
