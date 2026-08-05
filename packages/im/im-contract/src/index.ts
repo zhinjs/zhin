@@ -138,14 +138,11 @@ export function formatLegacyConversationRef(conversation: ConversationRef): stri
 }
 
 /**
- * Returns the native platform conversation id from a structured reference or
- * a legacy `kind:id` target. Unknown target formats stay opaque.
+ * Returns the native platform conversation id from a legacy `kind:id` target.
+ * Unknown target formats stay opaque.
  */
-export function nativeConversationId(
-  target: string,
-  conversation?: ConversationRef,
-): string {
-  return conversation?.id ?? parseLegacyConversationTarget(target)?.id ?? target;
+export function nativeConversationId(target: string): string {
+  return parseLegacyConversationTarget(target)?.id ?? target;
 }
 
 /**
