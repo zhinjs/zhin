@@ -1,5 +1,13 @@
 # @zhin.js/runtime
 
+## 1.0.7
+
+### Patch Changes
+
+- Updated dependencies [afc0e66]
+  - @zhin.js/plugin-runtime@1.1.3
+  - @zhin.js/feature-kit@1.0.6
+
 ## 1.0.6
 
 ### Patch Changes

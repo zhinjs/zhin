@@ -1,5 +1,18 @@
 # life-assistant-bot
 
+## 0.1.17
+
+### Patch Changes
+
+- Updated dependencies [afc0e66]
+- Updated dependencies [2e41ad5]
+- Updated dependencies [9f57124]
+  - @zhin.js/plugin-runtime@1.1.3
+  - @zhin.js/command@1.0.7
+  - @zhin.js/agent@1.1.3
+  - @zhin.js/adapter-sandbox@7.0.2
+  - @zhin.js/tool@1.0.6
+
 ## 0.1.16
 
 ### Patch Changes

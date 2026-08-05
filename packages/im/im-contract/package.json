@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/im-contract",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Stable IM transport contracts for Zhin.js",
   "type": "module",
   "main": "./lib/index.js",
