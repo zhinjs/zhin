@@ -1,5 +1,18 @@
 # @zhin.js/agent
 
+## 1.1.3
+
+### Patch Changes
+
+- 2e41ad5: fix: agent 优化
+- Updated dependencies [afc0e66]
+  - @zhin.js/core@1.5.2
+  - @zhin.js/plugin-runtime@1.1.3
+  - @zhin.js/agent-feature@1.0.6
+  - @zhin.js/mcp-feature@1.0.6
+  - @zhin.js/skill@1.0.6
+  - @zhin.js/tool@1.0.6
+
 ## 1.1.2
 
 ### Patch Changes

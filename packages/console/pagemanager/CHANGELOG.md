@@ -1,5 +1,14 @@
 # @zhin.js/pagemanager
 
+## 2.0.12
+
+### Patch Changes
+
+- Updated dependencies [afc0e66]
+  - @zhin.js/plugin-runtime@1.1.3
+  - @zhin.js/layout@1.0.6
+  - @zhin.js/page@1.0.6
+
 ## 2.0.11
 
 ### Patch Changes

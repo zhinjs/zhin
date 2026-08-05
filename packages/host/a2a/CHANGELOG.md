@@ -1,5 +1,15 @@
 # @zhin.js/a2a
 
+## 3.0.3
+
+### Patch Changes
+
+- Updated dependencies [afc0e66]
+- Updated dependencies [2e41ad5]
+  - @zhin.js/core@1.5.2
+  - @zhin.js/agent@1.1.3
+  - zhin.js@6.0.2
+
 ## 3.0.2
 
 ### Patch Changes

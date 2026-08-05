@@ -1,5 +1,15 @@
 # multi-agent-room
 
+## 0.0.14
+
+### Patch Changes
+
+- Updated dependencies [afc0e66]
+- Updated dependencies [2e41ad5]
+  - @zhin.js/plugin-runtime@1.1.3
+  - @zhin.js/agent@1.1.3
+  - @zhin.js/adapter-sandbox@7.0.2
+
 ## 0.0.13
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @zhin.js/config-yaml
 
+## 1.0.7
+
+### Patch Changes
+
+- @zhin.js/runtime@1.0.7
+
 ## 1.0.6
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-slack",
-  "version": "6.0.2",
+  "version": "6.0.3",
   "description": "Zhin.js Slack adapter for Plugin Runtime (Socket Mode / HTTP Events)",
   "type": "module",
   "main": "./lib/index.js",
