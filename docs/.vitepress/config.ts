@@ -145,6 +145,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     { text: 'Middleware & Components', link: '/en/authoring/middleware-components' },
     { text: 'Agent Tools', link: '/en/authoring/agent-tools' },
     { text: 'Endpoint Lifecycle', link: '/en/authoring/endpoint-lifecycle' },
+    { text: 'Host Token Reference', link: '/en/authoring/host-tokens' },
     { text: 'Module-level State', link: '/en/authoring/module-state' },
     { text: 'Console Pages', link: '/en/authoring/console-pages' },
   ]),

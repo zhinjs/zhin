@@ -842,6 +842,26 @@ describe('命令名点号前缀（插件树路径段 + 命令段）', () => {
       command: 'b.foo',
     });
   });
+
+  it('子插件动态首段：报错含约束说明与修正提示', () => {
+    const remind = childPluginId(root, 'remind');
+    const slot = createCapabilitySlot({
+      owner: remind,
+      feature: commandFeatureId,
+      localName: '$note',
+      source: 'plugins/remind/commands/[note].ts',
+      definition: {
+        ...defineCommand({ execute: () => 'x' }),
+        $parameter: { name: 'note', type: 'string' } as const,
+      },
+    });
+    expect(() => new CommandIndex([slot], snapshotWithOwners([remind], [slot])))
+      .toThrow(/Invalid Command path for plugins\/remind\/commands\/\[note\]\.ts/);
+    expect(() => new CommandIndex([slot], snapshotWithOwners([remind], [slot])))
+      .toThrow(/must be the only dynamic segment and come after a static segment/);
+    expect(() => new CommandIndex([slot], snapshotWithOwners([remind], [slot])))
+      .toThrow(/Hint: move the file under a static directory/);
+  });
 });
 
 function snapshotFor(

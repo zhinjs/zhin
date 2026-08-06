@@ -115,6 +115,7 @@ Host（database / schedule / outbound / agentTools）一律可选：`has(token)`
 ### 第 3 步：命令与中间件
 
 - 命令：路径是路由 SSOT；`execute` 读 `params` / `args` / `input`（含 session 字段若需要）
+- **子插件命令路径首段必须是静态段**：子插件命令名自动带插件路径前缀（如 `remind.add`），动态参数只能是路径最后一段且至多一个。`commands/[note].ts` 在 root 可用、在子插件启动期抛 `Invalid Command path`；子插件一律写 `commands/add/[note].ts`
 - 中间件：洋葱模型，明确是否 `await next()`
 - 组件：消息渲染，不替代服务层
 - AI 工具：`inputSchema` 与 execute 入参一致；副作用边界清晰

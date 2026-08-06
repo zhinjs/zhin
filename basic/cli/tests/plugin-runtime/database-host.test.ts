@@ -37,6 +37,23 @@ describe('DatabaseHost', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
+  it('select("*") 抛可读错误（引导显式列名或 count()）', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'zhin-db-host-'));
+    const host = createDatabaseHost({ dialect: 'sqlite', filename: join(dir, 'star.sqlite') });
+    host.define('t', { id: { type: 'integer' } });
+    await host.start();
+    const model = host.models.get('t')!;
+    expect(() => (model.select as (...args: string[]) => unknown)('*')).toThrow(
+      /select\(\) requires explicit column names/,
+    );
+    // 显式列名不受影响
+    await model.insert({ id: 1 });
+    const rows = await model.select('id').where({ id: 1 });
+    expect(rows).toHaveLength(1);
+    await host.stop();
+    await rm(dir, { recursive: true, force: true });
+  });
+
   it('count aggregates on the DB side and supports where filters', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'zhin-db-count-'));
     const host = createDatabaseHost({ dialect: 'sqlite', filename: join(dir, 'count.sqlite') });
