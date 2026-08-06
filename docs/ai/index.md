@@ -165,7 +165,12 @@ ai:
     execPreset: readonly          # readonly | network | development | custom
     execAllowlist: [make]         # execPreset=custom 时的白名单
     execApprovalMode: ask         # ask（默认）| allow | deny
+    gitStatus: true               # 默认 true：Runtime 段注入单行 git 状态摘要（非 git 仓库自动跳过）
+    contextPaths: []              # 追加注入系统提示词的上下文文件（支持 ~ 与相对路径）
+    systemPromptMaxChars: 100000  # 系统提示词总字符上限，超出按牺牲顺序截断可截断段
 ```
+
+除 `contextPaths` 外，默认还会自动加载全局上下文文件 `~/.config/zhin/AGENTS.md` 与 `~/.config/zhin/ZHIN.md`（不存在则跳过），注入为 `# User Context` 段，置于项目 bootstrap 上下文之前；单文件上限 8KB、总量上限 16KB。
 
 `execPreset` 预设白名单逐档放宽：`readonly`（ls/cat/grep/find 等）→ `network`（加 curl/wget/ping 等）→ `development`（加 npm/node/git/python 等）。无论哪种模式，`sudo`、`eval`、`dd`、`export` 等危险命令一律拒绝，`rm -rf node_modules` 类操作硬阻断。
 

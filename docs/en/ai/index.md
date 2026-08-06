@@ -165,7 +165,12 @@ ai:
     execPreset: readonly          # readonly | network | development | custom
     execAllowlist: [make]         # Allowlist when execPreset=custom
     execApprovalMode: ask         # ask (default) | allow | deny
+    gitStatus: true               # Default true: inject a one-line git status summary into the Runtime section (skipped outside git repos)
+    contextPaths: []              # Extra context files injected into the system prompt (supports ~ and relative paths)
+    systemPromptMaxChars: 100000  # Total system prompt char budget; truncatable sections are cut in sacrifice order when exceeded
 ```
+
+In addition to `contextPaths`, the global context files `~/.config/zhin/AGENTS.md` and `~/.config/zhin/ZHIN.md` are loaded by default (skipped when missing) and injected as a `# User Context` section before the project bootstrap context; per-file cap is 8KB and the total cap is 16KB.
 
 `execPreset` preset allowlists widen progressively: `readonly` (ls/cat/grep/find etc.) -> `network` (adds curl/wget/ping etc.) -> `development` (adds npm/node/git/python etc.). Regardless of the mode, dangerous commands like `sudo`, `eval`, `dd`, `export` are always rejected, and operations like `rm -rf node_modules` are hard-blocked.
 
