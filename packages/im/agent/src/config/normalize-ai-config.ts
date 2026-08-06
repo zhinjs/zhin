@@ -1,8 +1,11 @@
 import { type AIConfig, type ProviderConfig, applyProviderGatewayPreset, isSdkId, validateProviderGatewayConfig } from '@zhin.js/ai';
+import { getLogger } from '@zhin.js/logger';
 import type {
   AgentBindingConfig,
   ProviderInstanceConfig,
 } from './types.js';
+
+const logger = getLogger('AIConfig');
 const LEGACY_DRIVER_KEYS = new Set([
   'openai', 'anthropic', 'deepseek', 'moonshot', 'zhipu', 'google', 'gemini', 'ollama', 'cloudflare',
 ]);
@@ -88,7 +91,7 @@ export function normalizeProviderEntry(
   const warnings = validateProviderGatewayConfig(alias, normalized);
   if (warnings.length > 0 && process.env.ZHIN_PROVIDER_GATEWAY_WARN !== '0') {
     for (const w of warnings) {
-      console.warn(`[ai.providers] ${w}`);
+      logger.warn(`[ai.providers] ${w}`);
     }
   }
   return withGateway;

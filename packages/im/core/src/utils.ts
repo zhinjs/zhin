@@ -5,6 +5,10 @@
  * IM-specific utilities (compose, segment) remain here.
  */
 
+import { getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('Middleware');
+
 // ── Re-export generic utils from kernel ──
 export {
   evaluate,
@@ -69,7 +73,7 @@ export function compose<P extends RegisteredAdapter=RegisteredAdapter>(
       try {
         return await fn(message, () => dispatch(i + 1));
       } catch (error) {
-        console.error("Middleware error:", error);
+        logger.error("Middleware error:", error);
         throw error;
       }
     };

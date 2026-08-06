@@ -8,6 +8,10 @@
  * - 自适应阈值
  */
 
+import { getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('AnomalyDetector');
+
 // ── 行为模式定义 ──────────────────────────────────────────────────────
 
 export interface BehaviorPattern {
@@ -122,7 +126,7 @@ export class AnomalyDetector {
           this.pushEvent(event);
         }
       } catch (error) {
-        console.error(`[AnomalyDetector] Rule ${ruleId} failed:`, error);
+        logger.error(`Rule ${ruleId} failed:`, error);
       }
     }
 
@@ -239,7 +243,7 @@ export class AnomalyDetector {
       try {
         listener(event);
       } catch (error) {
-        console.error('[AnomalyDetector] Listener error:', error);
+        logger.error('Listener error:', error);
       }
     }
   }

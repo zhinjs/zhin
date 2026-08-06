@@ -9,6 +9,9 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('TaskQueue');
 
 // ── 任务状态定义 ──────────────────────────────────────────────────────
 
@@ -532,7 +535,7 @@ export class TaskQueue {
       try {
         listener(event, task);
       } catch (error) {
-        console.error('[TaskQueue] Listener error:', error);
+        logger.error('Listener error:', error);
       }
     }
   }
