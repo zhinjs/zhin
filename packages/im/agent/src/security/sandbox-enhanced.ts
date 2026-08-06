@@ -8,7 +8,10 @@
  * - 配置热更新
  */
 
+import { getLogger } from '@zhin.js/logger';
 import * as child_process from 'node:child_process';
+
+const logger = getLogger('EnhancedSandbox');
 import * as path from 'node:path';
 import * as os from 'node:os';
 import * as fs from 'node:fs';
@@ -821,7 +824,7 @@ export class EnhancedSandbox {
       try {
         listener(this.config);
       } catch (error) {
-        console.error('[EnhancedSandbox] Config listener error:', error);
+        logger.error('[EnhancedSandbox] Config listener error:', error);
       }
     }
   }

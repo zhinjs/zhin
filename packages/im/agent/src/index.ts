@@ -20,7 +20,6 @@ export type {
 
 export { ZhinAgent } from './zhin-agent/index.js';
 export type { AgentTurnConfiguration, AgentTurnRequest } from './zhin-agent/index.js';
-export { elementsToMessageContent } from './init/output-renderer.js';
 export {
   pluginToolToAgentTool,
   agentToolToLlmTool,

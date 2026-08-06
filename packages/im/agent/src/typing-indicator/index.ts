@@ -8,7 +8,10 @@
  * - 支持配置和自定义
  */
 
+import { getLogger } from '@zhin.js/logger';
 import type { Plugin } from '@zhin.js/core';
+
+const logger = getLogger('TypingIndicator');
 
 // ── 类型定义 ──────────────────────────────────────────────────────────
 
@@ -105,7 +108,7 @@ export class ReactionTypingIndicator implements TypingIndicator {
   async start(): Promise<void> {
     if (this.active) return;
     if (!this.options.messageId) {
-      console.warn(
+      logger.warn(
         `[TypingIndicator] reaction skipped: missing messageId (platform=${this.options.platform} scene=${this.options.sceneType})`,
       );
       return;
@@ -120,14 +123,14 @@ export class ReactionTypingIndicator implements TypingIndicator {
       );
       if (!this.reactionId) {
         this.active = false;
-        console.warn(
+        logger.warn(
           `[TypingIndicator] reaction add returned null (platform=${this.options.platform} messageId=${this.options.messageId})`,
         );
       }
     } catch (error) {
       this.active = false;
       this.reactionId = null;
-      console.error('[TypingIndicator] Failed to add reaction:', error);
+      logger.error('[TypingIndicator] Failed to add reaction:', error);
     }
   }
 
@@ -144,7 +147,7 @@ export class ReactionTypingIndicator implements TypingIndicator {
     try {
       await this.removeReaction(messageId, reactionId);
     } catch (error) {
-      console.error('[TypingIndicator] Failed to remove reaction:', error);
+      logger.error('[TypingIndicator] Failed to remove reaction:', error);
     }
   }
 
@@ -195,7 +198,7 @@ export class MessageTypingIndicator implements TypingIndicator {
     } catch (error) {
       this.active = false;
       this.messageId = null;
-      console.error('[TypingIndicator] Failed to send message:', error);
+      logger.error('[TypingIndicator] Failed to send message:', error);
     }
   }
 
@@ -208,7 +211,7 @@ export class MessageTypingIndicator implements TypingIndicator {
       try {
         await this.editMessage(this.messageId, message);
       } catch (error) {
-        console.error('[TypingIndicator] Failed to edit message:', error);
+        logger.error('[TypingIndicator] Failed to edit message:', error);
       }
     }
   }
@@ -225,7 +228,7 @@ export class MessageTypingIndicator implements TypingIndicator {
       this.active = false;
       this.messageId = null;
     } catch (error) {
-      console.error('[TypingIndicator] Failed to delete message:', error);
+      logger.error('[TypingIndicator] Failed to delete message:', error);
     }
   }
 
@@ -258,7 +261,7 @@ export class NativeTypingIndicator implements TypingIndicator {
       const intervalMs = typeof raw === 'number' && raw > 0 ? raw : 5_000;
       this.keepaliveTimer = setInterval(() => {
         void this.startTyping(this.options).catch((error) => {
-          console.error('[TypingIndicator] keepalive failed:', error);
+          logger.error('[TypingIndicator] keepalive failed:', error);
         });
       }, intervalMs);
     } catch (error) {
@@ -267,7 +270,7 @@ export class NativeTypingIndicator implements TypingIndicator {
         clearInterval(this.keepaliveTimer);
         this.keepaliveTimer = undefined;
       }
-      console.error('[TypingIndicator] Failed to start native typing:', error);
+      logger.error('[TypingIndicator] Failed to start native typing:', error);
     }
   }
 
@@ -282,7 +285,7 @@ export class NativeTypingIndicator implements TypingIndicator {
     try {
       await this.stopTyping(this.options);
     } catch (error) {
-      console.error('[TypingIndicator] Failed to stop native typing:', error);
+      logger.error('[TypingIndicator] Failed to stop native typing:', error);
     } finally {
       this.active = false;
     }
@@ -337,7 +340,7 @@ export class TypingIndicatorManager {
   ): TypingIndicator {
     const adapter = this.adapters.get(options.platform);
     if (!adapter) {
-      console.warn(`[TypingIndicator] No adapter for platform: ${options.platform}`);
+      logger.warn(`[TypingIndicator] No adapter for platform: ${options.platform}`);
       return new NoneTypingIndicator();
     }
 
@@ -345,7 +348,7 @@ export class TypingIndicatorManager {
 
     // 检查平台是否支持该提示类型
     if (!adapter.supportedTypes.includes(mergedConfig.type)) {
-      console.warn(
+      logger.warn(
         `[TypingIndicator] Platform ${options.platform} does not support type: ${mergedConfig.type}`,
       );
       // 回退到第一个支持的类型
@@ -405,7 +408,7 @@ export class TypingIndicatorManager {
       try {
         await indicator.stop();
       } catch (error) {
-        console.error(`[TypingIndicator] Failed to stop indicator ${key}:`, error);
+        logger.error(`[TypingIndicator] Failed to stop indicator ${key}:`, error);
       }
     }
     this.activeIndicators.clear();

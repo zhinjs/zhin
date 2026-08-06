@@ -1,4 +1,4 @@
-import { MessageChannel, Message, MessageComponent } from './message.js';
+import type { MessageChannel, Message, MessageComponent } from './message.js';
 import {Adapter, Adapters} from './adapter.js';
 import { Endpoint } from './endpoint.js';
 import { SystemLog } from './models/system-log.js';

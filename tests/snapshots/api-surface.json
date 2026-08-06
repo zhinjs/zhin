@@ -135,7 +135,6 @@
     "export{deliverScheduleToAdapter}from './assistant/deliver-schedule-to-adapter.js';",
     "export{discoverAllPluginAgentSurfaces,discoverPluginAgentSurface,collectPluginAgentRoots,}from './discovery/agent-surface.js';",
     "export{discoverWorkspaceAgents,type AgentMeta,}from './discovery/agents.js';",
-    "export{elementsToMessageContent}from './init/output-renderer.js';",
     "export{ensureMcpConnections,ensureMcpConnectionsForBinding,getMcpToolsForBinding}from './orchestrator/mcp-lifecycle.js';",
     "export{filterImDeliveryContent}from './segment/filter-im-delivery.js';",
     "export{getAgentDispatcher,initAgentDispatcher,}from './orchestrator/agent-dispatcher.js';",

@@ -115,12 +115,6 @@ const BING_SEARCH_BROWSER_HEADERS_BASE = {
   'Upgrade-Insecure-Requests': '1',
 } as const;
 
-/** @deprecated 单测兼容：请用 {@link bingSearchFetchHeaders}；默认语言为 en-US 旧行为已弃用 */
-export const BING_SEARCH_BROWSER_HEADERS = {
-  ...BING_SEARCH_BROWSER_HEADERS_BASE,
-  'Accept-Language': 'en-US,en;q=0.9',
-} as const;
-
 export function bingSearchFetchHeaders(market: string): Record<string, string> {
   return {
     ...BING_SEARCH_BROWSER_HEADERS_BASE,

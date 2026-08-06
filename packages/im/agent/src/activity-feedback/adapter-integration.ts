@@ -2,6 +2,7 @@
  * Activity Feedback — endpoint 适配器集成（复用 typing-indicator 底层适配器）
  */
 
+import { getLogger } from '@zhin.js/logger';
 import type { Adapter, Endpoint, SendOptions } from '@zhin.js/core';
 import {
   ReactionTypingIndicatorAdapter,
@@ -17,6 +18,8 @@ import {
 } from '../typing-indicator/adapter-integration.js';
 import { ActivityFeedbackManager } from './manager.js';
 import type { ActivityFeedbackPhase, ResolvedActivityFeedbackPhaseConfig } from './types.js';
+
+const logger = getLogger('ActivityFeedback');
 
 export { PLATFORM_FEATURES, buildTypingSendContent, type PlatformFeatures };
 
@@ -58,10 +61,10 @@ function createOutboundSendMessage(
         content: segments,
       };
       if (outbound) return await outbound.sendMessage(sendOptions);
-      console.error(`[${platform}] Activity feedback requires Adapter.sendMessage; endpoint ${endpoint.$id} has no outbound adapter`);
+      logger.error(`[${platform}] Activity feedback requires Adapter.sendMessage; endpoint ${endpoint.$id} has no outbound adapter`);
       return null;
     } catch (error) {
-      console.error(`[${platform}] Failed to send activity feedback message:`, error);
+      logger.error(`[${platform}] Failed to send activity feedback message:`, error);
       return null;
     }
   };
@@ -123,7 +126,7 @@ function registerPlatformAdapters(
             channelId: options.groupId,
           });
         } catch (error) {
-          console.error(`[${platform}] Failed to add reaction:`, error);
+          logger.error(`[${platform}] Failed to add reaction:`, error);
           return null;
         }
       },
@@ -131,7 +134,7 @@ function registerPlatformAdapters(
         try {
           await endpoint.$removeReaction!(messageId, reactionId);
         } catch (error) {
-          console.error(`[${platform}] Failed to remove reaction:`, error);
+          logger.error(`[${platform}] Failed to remove reaction:`, error);
         }
       },
       sendMessage,

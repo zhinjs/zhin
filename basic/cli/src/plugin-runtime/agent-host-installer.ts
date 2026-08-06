@@ -74,7 +74,7 @@ import {
   getCollaborationSceneService,
   handleRuntimeOwnerApproveCommand,
   handleRuntimeManagementCommand,
-  elementsToMessageContent,
+  publishOutboundElements,
   type ProactiveOutboundService,
   type AssistantConfig,
   type ImTranscriptWriteInput,
@@ -542,7 +542,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           resolveTriggerTimeoutMs(trigger),
         );
         const transcriptBody = flattenOutputElements(elements).trim() || '(empty AI response)';
-        const content = await elementsToMessageContent(elements, effectiveAdapter || undefined);
+        const content = await publishOutboundElements(elements, effectiveAdapter || undefined);
         await replyAndRecord(content.length > 0 ? content : transcriptBody, transcriptBody);
         logger.debug(formatCompact({
           op: 'agent_host_turn',
@@ -864,7 +864,7 @@ function createRuntimeProactiveOutbound(im: ImRuntime): ProactiveOutboundService
       return result.messageId || 'ok';
     },
     async sendElements(ctx, elements) {
-      const content = await elementsToMessageContent(elements, ctx.scene.platform);
+      const content = await publishOutboundElements(elements, ctx.scene.platform);
       if (content.length === 0) return [];
       const id = await this.send(ctx, content);
       return [id];

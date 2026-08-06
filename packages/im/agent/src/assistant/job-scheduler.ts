@@ -1,6 +1,7 @@
 /**
  * Schedule job registration — calendar + every/at
  */
+import { getLogger } from '@zhin.js/logger';
 import {
   ScheduleEngine,
   getScheduleEngine,
@@ -14,7 +15,7 @@ import {
 } from '@zhin.js/kernel';
 import type { ScheduleJob, JobSchedule } from './types.js';
 
-const loggerName = 'schedule-job-scheduler';
+const jobLogger = getLogger('JobScheduler');
 
 export type ScheduleDispose = () => void;
 
@@ -96,7 +97,7 @@ export function registerJobSchedule(
       await onRun(jobId);
     });
   } catch (e: unknown) {
-    console.warn(`[${loggerName}] register failed for ${jobId}:`, (e as Error)?.message || String(e));
+    jobLogger.warn(`register failed for ${jobId}:`, (e as Error)?.message || String(e));
     return null;
   }
 }

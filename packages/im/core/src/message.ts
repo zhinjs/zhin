@@ -1,4 +1,4 @@
-import {MessageElement, MessageSender, SendContent} from "./types.js";
+import type {MessageElement, MessageSender, SendContent} from "./types.js";
 import { Component } from "./component.js";
 import { Adapters } from "./adapter.js";
 import {

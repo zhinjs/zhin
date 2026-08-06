@@ -434,6 +434,7 @@ function resolveRequesterRole(): ToolRequesterRole {
     if (!plugin) return 'unknown';
     return resolveToolRequesterRole(plugin, commMessage);
   } catch {
+    // fail-closed: treat as unknown if plugin system unavailable
     return 'unknown';
   }
 }
@@ -459,6 +460,7 @@ function tryExecBypassForSensitiveIcqq(normalizedSubCommand: string): boolean {
     if (!plugin) return false;
     return matchesBashOwnerExecBypass(plugin, commMessage, normalizedSubCommand);
   } catch {
+    // fail-closed: no bypass if check fails
     return false;
   }
 }

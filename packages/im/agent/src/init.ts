@@ -24,7 +24,6 @@ import { createZhinAgentContext } from './init/create-zhin-agent.js';
 import { registerGroupSessionPassive } from './init/register-group-session-passive.js';
 import { registerDbUpgrade } from './init/register-db-upgrade.js';
 import { registerManagementTools } from './init/register-management-tools.js';
-import { registerOwnerApproveCommands } from './init/register-owner-approve-commands.js';
 import { registerIntrospectionCommands } from './init/register-introspection-commands.js';
 import { registerCollaborationCommands } from './init/register-collaboration-commands.js';
 import { registerInitWizardGuardrail } from './init/register-init-wizard-guardrail.js';
@@ -54,7 +53,6 @@ export function initAgentModule(): void {
   registerGroupSessionPassive(refs);
   registerDbUpgrade(refs);
   registerManagementTools(refs);
-  registerOwnerApproveCommands();
   registerCollaborationCommands();
   registerInitWizardGuardrail();
   registerIntrospectionCommands(refs);

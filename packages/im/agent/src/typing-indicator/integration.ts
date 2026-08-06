@@ -4,7 +4,10 @@
  * 展示如何在 ZhinAgent 中集成消息处理状态提示
  */
 
+import { getLogger } from '@zhin.js/logger';
 import type { Adapter, Endpoint } from '@zhin.js/core';
+
+const logger = getLogger('TypingIndicator');
 
 type OutboundAdapter = Pick<Adapter, 'sendMessage'>;
 import {
@@ -94,7 +97,7 @@ export function createICQQAdapterFromBot(endpoint: ICQQBot, outbound?: OutboundA
       }
       return null;
     } catch (error) {
-      console.error('[ICQQ] Failed to add reaction:', error);
+      logger.error('[ICQQ] Failed to add reaction:', error);
       return null;
     }
   };
@@ -105,7 +108,7 @@ export function createICQQAdapterFromBot(endpoint: ICQQBot, outbound?: OutboundA
         await endpoint.$removeReaction(messageId, reactionId);
       }
     } catch (error) {
-      console.error('[ICQQ] Failed to remove reaction:', error);
+      logger.error('[ICQQ] Failed to remove reaction:', error);
     }
   };
 
@@ -131,7 +134,7 @@ export function createICQQAdapterFromBot(endpoint: ICQQBot, outbound?: OutboundA
       const typedBot = endpoint as BotWithEditing & { $sendMessage?(options: any): Promise<string | null> };
       return await typedBot.$sendMessage?.(sendOptions) ?? null;
     } catch (error) {
-      console.error('[ICQQ] Failed to send message:', error);
+      logger.error('[ICQQ] Failed to send message:', error);
       return null;
     }
   };
@@ -140,7 +143,7 @@ export function createICQQAdapterFromBot(endpoint: ICQQBot, outbound?: OutboundA
     try {
       await endpoint.$recallMessage(messageId);
     } catch (error) {
-      console.error('[ICQQ] Failed to delete message:', error);
+      logger.error('[ICQQ] Failed to delete message:', error);
     }
   };
 
@@ -179,7 +182,7 @@ export function createGenericAdapterFromBot(endpoint: Endpoint, platform: string
       const typedBot = endpoint as BotWithEditing & { $sendMessage?(options: any): Promise<string | null> };
       return await typedBot.$sendMessage?.(sendOptions) ?? null;
     } catch (error) {
-      console.error(`[${platform}] Failed to send message:`, error);
+      logger.error(`[${platform}] Failed to send message:`, error);
       return null;
     }
   };
@@ -188,7 +191,7 @@ export function createGenericAdapterFromBot(endpoint: Endpoint, platform: string
     try {
       await endpoint.$recallMessage(messageId);
     } catch (error) {
-      console.error(`[${platform}] Failed to delete message:`, error);
+      logger.error(`[${platform}] Failed to delete message:`, error);
     }
   };
 

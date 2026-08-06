@@ -1,6 +1,6 @@
-import { SendContent,MessageElement } from './types.js';
-import { MessageComponent } from './message.js';
-import { Component, ComponentContext } from './component.js';
+import type { SendContent,MessageElement } from './types.js';
+import type { MessageComponent } from './message.js';
+import type { Component, ComponentContext } from './component.js';
 
 
 // JSX 子元素类型

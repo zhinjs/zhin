@@ -372,15 +372,6 @@ export function checkMemoryWritePath(
   };
 }
 
-/** @deprecated 使用 checkMemoryWritePath */
-export function assertMemoryWritePath(
-  filePath: string,
-  context?: Message<any>,
-  workspaceDir?: string,
-): MemoryWriteDecision {
-  return checkMemoryWritePath(filePath, context, workspaceDir);
-}
-
 export function formatMemoryPathsHint(platform?: string, sessionKey?: string): string {
   const today = todayDate();
   const lines = [
