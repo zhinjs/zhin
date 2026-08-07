@@ -185,10 +185,13 @@ export class ImRuntime implements MessageGateway {
         conversation,
         input.content,
         lease.value.generation,
-        (content, replyRequester = requester) => {
+        (content, replyRequester = requester, targetConversation) => {
           if (!active) throw new Error('Message reply scope has ended');
+          const effectiveConversation = targetConversation
+            ? { endpoint: conversation.endpoint, ...targetConversation }
+            : conversation;
           return this.#sendWithSnapshot({
-            conversation,
+            conversation: effectiveConversation,
             requester: replyRequester,
             content,
           }, lease.value);

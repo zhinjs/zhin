@@ -1082,3 +1082,81 @@ function snapshotState(snapshot: ReturnType<SnapshotStore['acquire']>['value']):
     projections: snapshot.projections,
   };
 }
+
+describe('Message.$sendTo', () => {
+  it('sends to a different conversation on the same endpoint', async () => {
+    const sent: Array<{ conversation: unknown; content: unknown }> = [];
+    const endpoint = {
+      id: 'slot-1',
+      adapter: 'root',
+    };
+    const message = new Message(
+      { endpoint, kind: 'group', id: 'original-group' },
+      'hello',
+      1,
+      async (content, _requester, targetConversation) => {
+        const effectiveConversation = targetConversation
+          ? { endpoint, ...targetConversation }
+          : { endpoint, kind: 'group' as const, id: 'original-group' };
+        sent.push({ conversation: effectiveConversation, content });
+        return { status: 'sent' as const };
+      },
+    );
+
+    await message.$sendTo({ kind: 'private', id: 'user-123' }, '私信通知');
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.conversation).toEqual({
+      endpoint,
+      kind: 'private',
+      id: 'user-123',
+    });
+    expect(sent[0]!.content).toBe('私信通知');
+  });
+
+  it('$reply still targets the original conversation', async () => {
+    const sent: Array<{ targetConversation: unknown }> = [];
+    const message = new Message(
+      { endpoint: { id: 's', adapter: 'a' }, kind: 'group', id: 'g1' },
+      'hi',
+      1,
+      async (_content, _requester, targetConversation) => {
+        sent.push({ targetConversation });
+        return { status: 'sent' as const };
+      },
+    );
+
+    await message.$reply('reply');
+    await message.$sendTo({ kind: 'private', id: 'u1' }, 'dm');
+
+    expect(sent[0]!.targetConversation).toBeUndefined();
+    expect(sent[1]!.targetConversation).toEqual({ kind: 'private', id: 'u1' });
+  });
+
+  it('supports parent and threadId in target conversation', async () => {
+    const sent: Array<{ targetConversation: unknown }> = [];
+    const message = new Message(
+      { endpoint: { id: 's', adapter: 'a' }, kind: 'group', id: 'g1' },
+      'hi',
+      1,
+      async (_content, _requester, targetConversation) => {
+        sent.push({ targetConversation });
+        return { status: 'sent' as const };
+      },
+    );
+
+    await message.$sendTo({
+      kind: 'channel',
+      id: 'ch-1',
+      parent: { kind: 'group', id: 'guild-1' },
+      threadId: 'thread-1',
+    }, 'threaded');
+
+    expect(sent[0]!.targetConversation).toEqual({
+      kind: 'channel',
+      id: 'ch-1',
+      parent: { kind: 'group', id: 'guild-1' },
+      threadId: 'thread-1',
+    });
+  });
+});

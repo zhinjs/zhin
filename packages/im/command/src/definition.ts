@@ -127,6 +127,16 @@ export interface CommandMessage {
   readonly scene?: CommandScene;
   readonly $reply?: (content: unknown) => Promise<unknown>;
   readonly $replyFrom?: (requester: string, content: unknown) => Promise<unknown>;
+  /** 向同 Endpoint 的另一个通道发送消息（结构兼容 `Message.$sendTo`）。 */
+  readonly $sendTo?: (
+    conversation: {
+      readonly kind: 'private' | 'group' | 'channel';
+      readonly id: string;
+      readonly parent?: Readonly<{ readonly kind: 'group' | 'channel'; readonly id: string }>;
+      readonly threadId?: string;
+    },
+    content: unknown,
+  ) => Promise<unknown>;
 }
 
 /**

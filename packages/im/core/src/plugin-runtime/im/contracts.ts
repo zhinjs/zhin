@@ -129,7 +129,7 @@ export class Message {
     readonly conversation: ConversationRef,
     readonly content: string,
     readonly generation: number,
-    reply: (content: SendContent, requester?: PluginId) => Promise<DeliveryReceipt>,
+    reply: (content: SendContent, requester?: PluginId, targetConversation?: ConversationAddress) => Promise<DeliveryReceipt>,
     readonly sender?: string,
     readonly metadata: Readonly<Record<string, unknown>> = Object.freeze({}),
     /**
@@ -142,6 +142,7 @@ export class Message {
   ) {
     this.$reply = (content) => reply(content);
     this.$replyFrom = (requester, content) => reply(content, requester);
+    this.$sendTo = (target, content) => reply(content, undefined, target);
     Object.freeze(this);
   }
 
@@ -152,6 +153,15 @@ export class Message {
 
   readonly $reply: (content: SendContent) => Promise<DeliveryReceipt>;
   readonly $replyFrom: (requester: PluginId, content: SendContent) => Promise<DeliveryReceipt>;
+  /**
+   * 向同 Endpoint 的另一个通道发送消息。
+   *
+   * ```ts
+   * await message.$sendTo({ kind: 'group', id: '67890' }, '通知内容');
+   * await message.$sendTo({ kind: 'private', id: '12345' }, '私信提醒');
+   * ```
+   */
+  readonly $sendTo: (conversation: ConversationAddress, content: SendContent) => Promise<DeliveryReceipt>;
 }
 
 export function createOutboundEnvelope(
