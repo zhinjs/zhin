@@ -191,21 +191,67 @@ describe('Logger', () => {
 // LogSanitizer / DefaultFormatter 补全测试
 // ============================================================================
 describe('DefaultFormatter', () => {
-  it('should format log entry', async () => {
-    const { DefaultFormatter } = await import('../src/logger.js')
-    const formatter = new DefaultFormatter()
-    
-    const entry = {
-      level: 2,  // INFO
-      name: 'test',
+  const plainColors = {
+    dateColor: (text: string) => text,
+    levelColors: {
+      debug: (text: string) => text,
+      info: (text: string) => text,
+      warn: (text: string) => text,
+      error: (text: string) => text,
+      silent: (text: string) => text,
+    },
+    nameColor: (text: string) => text,
+  }
+
+  it('formats as [HH:mm:ss.SSS][LEVEL][category] message without Zhin prefix', async () => {
+    const { DefaultFormatter, LogLevel } = await import('../src/logger.js')
+    const formatter = new DefaultFormatter(plainColors)
+
+    const timestamp = new Date(2026, 7, 7, 12, 34, 56, 789)
+    const result = formatter.format({
+      level: LogLevel.INFO,
+      name: 'Zhin:icqq',
       message: 'hello world',
-      timestamp: new Date(),
+      timestamp,
       args: [],
-    }
-    
-    const result = formatter.format(entry)
-    expect(typeof result).toBe('string')
-    expect(result).toContain('hello world')
+    })
+
+    expect(result).toBe('[12:34:56.789][INFO] [icqq] hello world')
+  })
+
+  it('omits CATEGORY segment when logger name is empty', async () => {
+    const { DefaultFormatter, LogLevel } = await import('../src/logger.js')
+    const formatter = new DefaultFormatter(plainColors)
+
+    const result = formatter.format({
+      level: LogLevel.WARN,
+      name: '',
+      message: 'root',
+      timestamp: new Date(2026, 0, 1, 0, 0, 0, 1),
+      args: [],
+    })
+    expect(result).toBe('[00:00:00.001][WARN] root')
+  })
+
+  it('omits CATEGORY for legacy bare Zhin root name', async () => {
+    const { DefaultFormatter, LogLevel } = await import('../src/logger.js')
+    const formatter = new DefaultFormatter(plainColors)
+    const result = formatter.format({
+      level: LogLevel.INFO,
+      name: 'Zhin',
+      message: 'legacy',
+      timestamp: new Date(2026, 0, 1, 1, 2, 3, 4),
+      args: [],
+    })
+    expect(result).toBe('[01:02:03.004][INFO] legacy')
+  })
+})
+
+describe('getLogger category naming', () => {
+  it('root children use bare namespace without Zhin: prefix', async () => {
+    const { getLogger } = await import('../src/logger.js')
+    expect(getLogger('icqq').name).toBe('icqq')
+    expect(getLogger('icqq').getLogger('ws').name).toBe('icqq:ws')
   })
 })
 

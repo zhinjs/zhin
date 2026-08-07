@@ -243,10 +243,18 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     const online = endpoints.filter((ep) => ep.status === 'online').map((ep) => ep.name);
     const offline = endpoints.filter((ep) => ep.status !== 'online').map((ep) => ep.name);
     const httpAddress = `${httpConfig.host ?? '127.0.0.1'}:${httpConfig.port ?? 8086}`;
-    getLogger('startup').success(
-      `zhin runtime started (plugins=${snapshot.plugins}, http=http://${httpAddress}, ` +
-      `adapters online=[${online.join(', ')}] offline=[${offline.join(', ')}])`,
-    );
+    const startup = getLogger('setup');
+    startup.success('zhin runtime started');
+    startup.info(formatCompact({
+      plugins: snapshot.plugins,
+      http: `http://${httpAddress}`,
+    }));
+    if (online.length > 0) {
+      startup.info(`online: ${online.join(', ')}`);
+    }
+    if (offline.length > 0) {
+      startup.info(`offline: ${offline.join(', ')}`);
+    }
     printFirstRunGuidance(httpAddress, Boolean(httpConfig.token));
     if (parsed.open || process.env.ZHIN_OPEN === '1') openBrowser(REMOTE_CONSOLE_URL);
   } else {
@@ -558,11 +566,9 @@ export function parseStartOptions(args: readonly string[]): StartOptions {
 }
 
 function printFirstRunGuidance(httpAddress: string, tokenConfigured: boolean): void {
-  const startup = getLogger('startup');
-  startup.info(
-    `${chalk.bold('Remote Console')}: ${REMOTE_CONSOLE_URL}?host=${encodeURIComponent(`http://${httpAddress}`)}`
-    + `${tokenConfigured?chalk.dim(`(token required)`):''}`,
-  );
+  const startup = getLogger('setup');
+  const consoleUrl = `${REMOTE_CONSOLE_URL}?host=${encodeURIComponent(`http://${httpAddress}`)}`;
+  startup.info(`Remote Console: ${consoleUrl}${tokenConfigured ? chalk.dim(' (token required)') : ''}`);
 }
 
 function openBrowser(url: string): void {
@@ -570,7 +576,7 @@ function openBrowser(url: string): void {
   if (process.env.CI) return;
   if (process.platform === 'linux' && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) return;
   void open(url).catch((error) => {
-    getLogger('startup').warn(formatCompact({
+    getLogger('setup').warn(formatCompact({
       op: 'open_remote_console_failed',
       url,
       error: error instanceof Error ? error.message : String(error),

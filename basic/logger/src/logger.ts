@@ -211,22 +211,20 @@ export class DefaultFormatter implements LogFormatter {
     const { name, message, timestamp, error } = entry
     const level = parseLogLevel(entry.level)
 
-    // 格式化时间：MM-dd HH:mm:ss.SSS（本地时间，使用自定义颜色）
+    // [HH:mm:ss.SSS][LEVEL] [category] message（category 空则省略该段）
     const pad = (value: number, length = 2) => String(value).padStart(length, '0')
-    const date = `${pad(timestamp.getMonth() + 1)}-${pad(timestamp.getDate())} ` +
-      `${pad(timestamp.getHours())}:${pad(timestamp.getMinutes())}:${pad(timestamp.getSeconds())}`
-    const dateStr = this.dateColor(`[${date}]`)
+    const time = `${pad(timestamp.getHours())}:${pad(timestamp.getMinutes())}:${pad(timestamp.getSeconds())}.${pad(timestamp.getMilliseconds(), 3)}`
+    const dateStr = this.dateColor(`[${time}]`)
 
-    // 格式化级别（使用自定义颜色）
     const levelName = LOG_LEVEL_NAMES[level]
     const levelStr = this.levelColors[level](`[${levelName}]`)
 
-    // 格式化名称（使用自定义颜色）
-    const nameColor = this.getNameColor(name)
-    const nameStr = nameColor(`[${name}]`)
+    const category = displayLogCategory(name)
+    const nameStr = category
+      ? ` ${this.getNameColor(category)(`[${category}]`)}`
+      : ''
 
-    // 基础格式：【date】【level】【name】：【message】
-    let result = `${dateStr} ${levelStr} ${nameStr}: ${message}`
+    let result = `${dateStr}${levelStr}${nameStr} ${message}`
 
     // 如果是错误级别且有错误对象，添加堆栈信息
     if (level === LogLevel.ERROR && error && error.stack) {
@@ -235,6 +233,12 @@ export class DefaultFormatter implements LogFormatter {
 
     return result
   }
+}
+
+/** 展示用 category；空名不输出 CATEGORY 段。兼容历史 `Zhin:` / 裸 `Zhin`。 */
+export function displayLogCategory(name: string | undefined | null): string {
+  if (!name || name === 'Zhin') return ''
+  return name.replace(/^Zhin:/u, '')
 }
 
 /**
@@ -465,7 +469,10 @@ export class Logger {
     this.checkChildLoggerLimit()
     
     if (!this.childLoggers.has(namespace)) {
-      const childName = `${this.name}:${namespace}`
+      // 根 logger 的直接子级用裸 namespace，避免空根名拼出 `:icqq`
+      const childName = this.#parent === null
+        ? namespace
+        : (this.name ? `${this.name}:${namespace}` : namespace)
       const childLogger = new Logger(this,childName, options ?? {})
       this.childLoggers.set(namespace, childLogger)
     }
@@ -732,7 +739,7 @@ export class Logger {
     return this.name
   }
 }
-const defaultLogger=new Logger(null,'Zhin');
+const defaultLogger=new Logger(null,'');
 export function getLogger(name: string, options: LoggerOptions = {}, parent=defaultLogger): Logger {
   return parent.getLogger(name, options)
 }

@@ -3,6 +3,7 @@ export {
   LOG_LEVEL_COLORS,
   Logger,
   DefaultFormatter,
+  displayLogCategory,
   ConsoleTransport,
   FileTransport,
   StreamTransport,

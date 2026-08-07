@@ -164,12 +164,10 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
       const authTest = await this.#client.auth.test();
       if (authTest.user_id) this.#botUserId = String(authTest.user_id);
 
-      logger.info(formatCompact({
-        op: 'connect',
-        endpoint: config.name,
-        mode: config.mode,
-        platform_user_id: this.#botUserId,
-      }));
+      logger.info(
+        `connected ${config.name} (${config.mode})`
+        + (this.#botUserId ? ` | user: ${this.#botUserId}` : ''),
+      );
     } catch (error) {
       await this.stop();
       logger.error('Failed to connect Slack endpoint:', error);

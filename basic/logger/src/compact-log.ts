@@ -1,12 +1,13 @@
 /**
- * Compact log fields: `key1: val1; key2: val2` (no leading `[Tag]`).
+ * Compact log fields: `op | key: val | flag` (no leading `[Tag]`).
  *
- * **Prefix vs body:** Logger already prints `[Zhin:icqq]:` — the message body should
+ * - `op` 作为前缀动作词直接输出（`connect | endpoint: …`，不是 `op: connect | …`）
+ * - 值为 `true` 的字段只输出键名（`mentioned`，不是 `mentioned: true`）
+ *
+ * **Prefix vs body:** Logger already prints `[icqq]` — the message body should
  * NOT repeat `[ICQQ]`. Use `formatCompact()` for plugin/module loggers; reserve
  * `formatCompactLog(tag, …)` only when the tag adds context beyond the prefix
- * (e.g. `[Zhin:setup]` logging `[AI Handler] total_ms: …`).
- *
- * See field conventions below; avoid a universal `op:` schema.
+ * (e.g. `[setup]` logging `[AI Handler] total_ms: …`).
  */
 
 import {
@@ -50,11 +51,20 @@ export function formatCompact(
   pathOptions?: DisplayPathOptions,
 ): string {
   const parts: string[] = [];
+  const op = fields.op;
+  if (op !== undefined && op !== null && op !== '') {
+    parts.push(String(op));
+  }
   for (const [key, value] of Object.entries(fields)) {
+    if (key === 'op') continue;
     if (value === undefined || value === null || value === '') continue;
+    if (value === true) {
+      parts.push(key);
+      continue;
+    }
     parts.push(`${key}: ${formatCompactValue(key, value, pathOptions)}`);
   }
-  return parts.join('; ');
+  return parts.join(' | ');
 }
 
 /** Body with explicit tag — when tag is not redundant with logger prefix. */

@@ -24,7 +24,7 @@ import {
 import { isDemoHttpAllowed } from './console-rpc.js';
 import { HttpBodyError } from './json-body.js';
 
-const logger = getLogger('HttpHost');
+const logger = getLogger('http');
 
 export const REMOTE_CONSOLE_ORIGIN = 'https://console.zhin.dev';
 const DEFAULT_CORS_ORIGINS = Object.freeze([REMOTE_CONSOLE_ORIGIN]);
@@ -401,15 +401,17 @@ export function createHttpHost(options: HttpHostOptions = {}): HttpHost {
           const listenPort = typeof bound === 'object' && bound ? bound.port : port;
           const publicHost = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
           address = Object.freeze({ host: publicHost, port: listenPort });
-          logger.info(formatCompact({
-            http: `http://${publicHost}:${listenPort}`,
-            token: tokenRegistry.hasAnyToken()
+          logger.info(
+            `listening http://${publicHost}:${listenPort}`
+            + ` | routes: ${httpRoutes.length}`
+            + ` | token: ${tokenRegistry.hasAnyToken()
               ? `${tokenRegistry.primaryTokenPrefixForLog()}…`
-              : '(none)',
-            cors: corsOrigins.join(','),
-            ws_routes: [...wsRoutes.keys()].join(',') || '(none)',
-            http_routes: httpRoutes.length,
-          }));
+              : '(none)'}`,
+          );
+          logger.debug(
+            `listen detail | cors: ${corsOrigins.join(',')}`
+            + ` | ws: ${[...wsRoutes.keys()].join(',') || '(none)'}`,
+          );
           resolve(address);
         });
       });

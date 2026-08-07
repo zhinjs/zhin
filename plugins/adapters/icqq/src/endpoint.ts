@@ -150,13 +150,9 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     try {
       await this.#bindIpcSession();
       this.#unregisterAgent = registerIcqqAgentEndpoint(this.name, this);
-      logger.info(formatCompact({
-        op: 'connect',
-        endpoint: this.name,
-        mode: this.#options.config.rpc ? 'rpc' : 'ipc',
-        friends: this.friends.size,
-        groups: this.groups.size,
-      }));
+      logger.info(
+        `connected ${this.name} (${this.#options.config.rpc ? 'rpc' : 'ipc'}) | friends: ${this.friends.size} | groups: ${this.groups.size}`,
+      );
     } catch (error) {
       await this.stop();
       // Startup connect failures are surfaced once (with stack) by AdapterIndex;
@@ -212,14 +208,10 @@ export class IcqqIpcEndpoint implements EndpointInstance {
         if (this.#intentionalDisconnect) break;
         try {
           await this.#bindIpcSession();
-          logger.info(formatCompact({
-            op: 'reconnect',
-            endpoint: this.name,
-            ok: true,
-            attempts: attempt + 1,
-            friends: this.friends.size,
-            groups: this.groups.size,
-          }));
+          logger.info(
+            `reconnected ${this.name} after ${attempt + 1} attempt(s)`
+            + ` | friends: ${this.friends.size} | groups: ${this.groups.size}`,
+          );
           break;
         } catch (error) {
           const retryLog = attempt === 0 ? logger.warn.bind(logger) : logger.debug.bind(logger);
@@ -310,28 +302,17 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     }
     const resp = await this.ipc.request(action, params);
     if (!resp.ok) {
-      logger.warn(formatCompact({
-        op: 'send',
-        endpoint: this.name,
-        target: `${conversation.kind}:${conversation.id}`,
-        action,
-        ok: false,
-        error: resp.error,
-        preview: truncatePreview(typeof message === 'string' ? message : String(message), 80),
-      }));
+      logger.warn(
+        `send failed ${conversation.kind}:${conversation.id} | ${resp.error} | ${truncatePreview(typeof message === 'string' ? message : String(message), 80)}`,
+      );
       throw new Error(`发送消息失败: ${resp.error}`);
     }
     const messageId = String(
       (resp.data as { message_id?: unknown } | undefined)?.message_id ?? `sent_${Date.now()}`,
     );
-    logger.info(formatCompact({
-      op: 'send',
-      endpoint: this.name,
-      target: `${conversation.kind}:${conversation.id}`,
-      message_id: messageId,
-      action,
-      preview: truncatePreview(typeof message === 'string' ? message : String(message), 80),
-    }));
+    logger.info(
+      `send ${conversation.kind}:${conversation.id} | id: ${messageId} | ${truncatePreview(typeof message === 'string' ? message : String(message), 80)}`,
+    );
     return messageId;
   }
 
@@ -663,17 +644,12 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       content: msg.segments,
       rawMessage: msg.content,
     });
-    logger.info(formatCompact({
-      op: 'recv',
-      endpoint: this.name,
-      id: msg.id,
-      target: `${conversation.kind}:${conversation.id}`,
-      sender: msg.sender,
-      channel_type: msg.channelType,
-      mentioned: mentioned || undefined,
-      preview: truncatePreview(msg.content, 80),
-      segments: summarizeSegmentTypes(msg.segments),
-    }));
+    logger.info(
+      `recv ${conversation.kind}:${conversation.id}`
+      + (msg.sender ? ` from ${msg.sender}` : '')
+      + (mentioned ? ' (mentioned)' : '')
+      + ` | ${truncatePreview(msg.content, 80)}`,
+    );
     void this.#options.gateway.receive({
       conversation,
       message: { conversation, id: msg.id },
@@ -924,21 +900,6 @@ function toNumericId(value: number | string, label: string): number {
     throw new TypeError(`icqq ${label} 必须是数字: ${String(value)}`);
   }
   return n;
-}
-
-function summarizeSegmentTypes(
-  segments: readonly { readonly type?: unknown }[] | undefined,
-): string | undefined {
-  if (!segments?.length) return undefined;
-  return segments
-    .map((segment) => {
-      if (typeof segment.type === 'string') return segment.type;
-      if (segment.type && typeof segment.type === 'object' && 'name' in segment.type) {
-        return String((segment.type as { name: unknown }).name);
-      }
-      return '?';
-    })
-    .join(',');
 }
 
 async function defaultCreateIpc(config: ResolvedIcqqConfig): Promise<IcqqIpcTransport> {

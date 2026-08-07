@@ -111,11 +111,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
     if (!this.#options.defaults.randomNamePerConnection) {
       this.#ensurePlaceholder(this.#options.defaults.name, this.#options.defaults.owner);
     }
-    logger.info(formatCompact({
-      op: 'sandbox_ws_mounted',
-      path: claim.path,
-      endpoint: this.#options.defaults.name,
-    }));
+    logger.info(`ws mounted ${claim.path} | endpoint: ${this.#options.defaults.name}`);
   }
 
   open(): void {

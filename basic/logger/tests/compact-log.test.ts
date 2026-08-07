@@ -9,6 +9,26 @@ import {
 } from '../src/compact-log.js';
 
 describe('compact-log', () => {
+  it('formatCompact joins fields with pipe', () => {
+    expect(formatCompact({ a: 1, b: 2 })).toBe('a: 1 | b: 2');
+  });
+
+  it('formatCompact lifts op as bare leading verb', () => {
+    expect(formatCompact({
+      op: 'recv',
+      endpoint: '210723495',
+      preview: 'hi',
+    })).toBe('recv | endpoint: 210723495 | preview: hi');
+  });
+
+  it('formatCompact renders true flags as bare keys', () => {
+    expect(formatCompact({
+      op: 'recv',
+      mentioned: true,
+      preview: 'hi',
+    })).toBe('recv | mentioned | preview: hi');
+  });
+
   it('formatCompact skips empty fields', () => {
     expect(formatCompact({ a: 1, b: undefined, c: '' })).toBe('a: 1');
   });

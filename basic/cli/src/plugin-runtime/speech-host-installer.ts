@@ -115,12 +115,10 @@ export function installSpeechHost(handle: SpeechHostHandle | undefined): RootRes
     lifecycle.add(() => {
       /* pipeline cache lives for process; restart clears via process exit */
     });
-    logger.info(formatCompact({
-      op: 'speech_host_ready',
-      stt: handle.sttProvider,
-      tts: handle.ttsProvider,
-      tools: handle.tools.map((tool) => tool.name).join(','),
-    }));
+    logger.info(
+      `ready | stt: ${handle.sttProvider} | tts: ${handle.ttsProvider}`
+      + ` | tools: ${handle.tools.map((tool) => tool.name).join(',')}`,
+    );
   };
 }
 

@@ -7,7 +7,7 @@ import {
   type RuntimeConfigDocument,
 } from '@zhin.js/runtime';
 
-const logger = new Logger(null, 'HttpHost');
+const logger = new Logger(null, 'http');
 
 export async function resolveHttpConfig(
   config: RuntimeConfigDocument | ConfigDocumentPort,

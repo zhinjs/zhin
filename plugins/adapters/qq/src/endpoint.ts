@@ -77,12 +77,9 @@ export class QqWebsocketEndpoint implements EndpointInstance {
       this.#bot = this.#createBot(this.#options.config);
       this.#bindBot(this.#bot);
       await this.#bot.start();
-      logger.info(formatCompact({
-        op: 'connect',
-        endpoint: this.#options.config.name,
-        mode: 'websocket',
-        appid: this.#options.config.appid,
-      }));
+      logger.info(
+        `connected ${this.#options.config.name} (websocket) | appid: ${this.#options.config.appid}`,
+      );
     } catch (error) {
       await this.stop();
       logger.error('Failed to connect QQ websocket:', error);
@@ -288,12 +285,9 @@ export class QqHttpEndpoint implements EndpointInstance {
       this.#bot = this.#createBot(this.#options.config);
       this.#bindBot(this.#bot);
       await this.#bot.start();
-      logger.info(formatCompact({
-        op: 'connect',
-        endpoint: this.#options.config.name,
-        mode: this.#options.config.mode,
-        path: this.#options.config.webhookPath,
-      }));
+      logger.info(
+        `connected ${this.#options.config.name} (${this.#options.config.mode}) | path: ${this.#options.config.webhookPath}`,
+      );
     } catch (error) {
       await this.stop();
       logger.error('Failed to connect QQ HTTP receiver:', error);

@@ -129,7 +129,7 @@ interface McpServerEntry {
   readonly headers?: Record<string, string>;
 }
 
-const logger = getLogger('AgentHost');
+const logger = getLogger('agent');
 const BOOTSTRAP_FILES = ['SOUL.md', 'AGENTS.md', 'TOOLS.md'] as const;
 const MAX_BOOTSTRAP_CHARS = 12_000;
 
@@ -569,23 +569,29 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     });
 
     const binding = service.getBindingRegistry().requireZhinBinding();
-    logger.info(formatCompact({
-      op: 'agent_host_ready',
-      turnMode: 'zhin_agent.process',
-      subagent: zhinAgent.getSubagentSystem() ? 'on' : 'off',
-      presets: presetCount,
-      binding: `${binding.name}@${binding.providerAlias}/${binding.model}`,
-      providers: service.listProviders().join(','),
-      mcpServers: mcpEntries.map((entry) => entry.name).join(',') || '-',
-      extraTools: (options.extraTools ?? []).map((tool) => tool.name).join(',') || '-',
-      inboundStt: options.transcribeUrl ? 'on' : 'off',
-      persistence: persistencePendingActivate ? 'pending_activate' : 'memory',
-      schedule: scheduleTools.length > 0 ? 'on' : 'off',
-      assistant: assistantEnabled ? 'on' : 'off',
-      collaboration: collaborationReady || persistencePendingActivate ? 'on' : 'pending',
-      bash: 'on',
-      approve: options.resolveEndpointOwner ? 'on' : 'partial',
-    }));
+    const providers = service.listProviders();
+    const features = [
+      zhinAgent.getSubagentSystem() ? 'subagent' : '',
+      options.transcribeUrl ? 'inboundStt' : '',
+      scheduleTools.length > 0 ? 'schedule' : '',
+      assistantEnabled ? 'assistant' : '',
+      collaborationReady || persistencePendingActivate ? 'collaboration' : '',
+      'bash',
+      options.resolveEndpointOwner ? 'approve' : '',
+    ].filter(Boolean).join(',');
+    logger.info(
+      `ready | ${binding.name}@${binding.providerAlias}/${binding.model}`
+      + ` | providers: ${providers.length}`
+      + ` | presets: ${presetCount}`
+      + ` | mcp: ${mcpEntries.map((entry) => entry.name).join(',') || '-'}`
+      + ` | ${features}`
+      + ` | persistence: ${persistencePendingActivate ? 'pending_activate' : 'memory'}`,
+    );
+    logger.debug(
+      `ready detail | providers: ${providers.join(',')}`
+      + ` | mcp: ${mcpEntries.map((entry) => entry.name).join(',') || '-'}`
+      + ` | tools: ${(options.extraTools ?? []).map((tool) => tool.name).join(',') || '-'}`,
+    );
   };
 }
 
