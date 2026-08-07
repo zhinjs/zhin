@@ -1,5 +1,20 @@
 # zhin.js
 
+## 6.0.3
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/logger@1.0.76
+  - @zhin.js/agent@1.1.4
+  - @zhin.js/ai@1.5.1
+  - @zhin.js/core@1.5.3
+  - @zhin.js/plugin-runtime@1.1.4
+  - @zhin.js/runtime@1.0.8
+  - @zhin.js/html-renderer@3.0.3
+  - @zhin.js/speech@3.0.3
+
 ## 6.0.2
 
 ### Patch Changes

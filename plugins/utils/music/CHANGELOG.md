@@ -1,5 +1,16 @@
 # @zhin.js/plugin-music
 
+## 7.0.4
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/component@1.0.7
+  - @zhin.js/plugin-runtime@1.1.4
+  - @zhin.js/tool@1.0.7
+  - @zhin.js/adapter-icqq@8.0.4
+
 ## 7.0.3
 
 ### Patch Changes

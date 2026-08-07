@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/console-contract",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Zero-dependency Page, Layout, route and navigation contracts for Zhin.js plugins",
   "type": "module",
   "main": "./lib/index.js",

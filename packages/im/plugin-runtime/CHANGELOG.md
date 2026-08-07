@@ -1,5 +1,11 @@
 # @zhin.js/plugin-runtime
 
+## 1.1.4
+
+### Patch Changes
+
+- f8c7a54: fix: im
+
 ## 1.1.3
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @zhin.js/scaffold-wizard
 
+## 0.2.4
+
+### Patch Changes
+
+- f8c7a54: fix: im
+
 ## 0.2.3
 
 ### Patch Changes

@@ -1,5 +1,22 @@
 # @zhin.js/core
 
+## 1.5.3
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/database@1.0.79
+  - @zhin.js/logger@1.0.76
+  - @zhin.js/schema@1.0.73
+  - @zhin.js/adapter@1.1.6
+  - @zhin.js/command@1.0.8
+  - @zhin.js/component@1.0.7
+  - @zhin.js/im-contract@1.0.2
+  - @zhin.js/kernel@1.0.6
+  - @zhin.js/middleware@1.0.7
+  - @zhin.js/plugin-runtime@1.1.4
+
 ## 1.5.2
 
 ### Patch Changes

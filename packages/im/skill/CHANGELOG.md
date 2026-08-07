@@ -1,5 +1,14 @@
 # @zhin.js/skill
 
+## 1.0.7
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/feature-kit@1.0.7
+  - @zhin.js/plugin-runtime@1.1.4
+
 ## 1.0.6
 
 ### Patch Changes
