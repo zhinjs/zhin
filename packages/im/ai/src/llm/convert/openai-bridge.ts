@@ -164,7 +164,7 @@ export function chatCompletionToAssistantMessage(
   } else if (reasoning && !(message?.tool_calls?.length)) {
     content.push({ type: 'text', text: String(reasoning) });
   }
-  if (reasoning && text) {
+  if (reasoning) {
     content.push({ type: 'thinking', thinking: String(reasoning) });
   }
   const toolCalls = message?.tool_calls ?? [];
