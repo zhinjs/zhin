@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createToken } from '../src/token.js';
 import { outboundHostToken, type OutboundHost, type OutboundSendInput } from '../src/outbound-host.js';
-import { createOutboundSender, sendTo } from '../src/outbound-sender.js';
+import { createOutboundSender, sendTo, tempSession, guildChannel } from '../src/outbound-sender.js';
 
 function stubHost(): OutboundHost & { calls: OutboundSendInput[] } {
   const calls: OutboundSendInput[] = [];
@@ -84,5 +84,53 @@ describe('sendTo', () => {
       conversation: { kind: 'group', id: '99999' },
       content: 'broadcast',
     });
+  });
+});
+
+describe('tempSession', () => {
+  it('构造群临时会话地址', () => {
+    const conv = tempSession('12345', '67890');
+    expect(conv).toEqual({
+      kind: 'private',
+      id: '12345',
+      parent: { kind: 'group', id: '67890' },
+    });
+  });
+
+  it('可直接用于 sender.send', async () => {
+    const host = stubHost();
+    const sender = createOutboundSender(makeUse(host), 'root/icqq', 'main');
+    await sender.send(tempSession('u1', 'g1'), '临时私信');
+    expect(host.calls[0]!.conversation).toEqual({
+      kind: 'private',
+      id: 'u1',
+      parent: { kind: 'group', id: 'g1' },
+    });
+  });
+});
+
+describe('guildChannel', () => {
+  it('构造频道子通道地址', () => {
+    const conv = guildChannel('ch-1', 'guild-1');
+    expect(conv).toEqual({
+      kind: 'channel',
+      id: 'ch-1',
+      parent: { kind: 'channel', id: 'guild-1' },
+    });
+  });
+
+  it('支持 threadId', () => {
+    const conv = guildChannel('ch-1', 'guild-1', 'thread-42');
+    expect(conv).toEqual({
+      kind: 'channel',
+      id: 'ch-1',
+      parent: { kind: 'channel', id: 'guild-1' },
+      threadId: 'thread-42',
+    });
+  });
+
+  it('无 threadId 时不含 threadId 字段', () => {
+    const conv = guildChannel('ch-1', 'guild-1');
+    expect('threadId' in conv).toBe(false);
   });
 });

@@ -1,6 +1,36 @@
 import type { Token } from './token.js';
 import { outboundHostToken, type OutboundConversation, type OutboundHost, type OutboundSendInput } from './outbound-host.js';
 
+// ── 会话地址构造器 ──────────────────────────────────────────────────
+
+/**
+ * 构造群临时会话地址（如 QQ 群临时私聊）。
+ *
+ * ```ts
+ * await message.$sendTo(tempSession('12345', '67890'), '通过群临时会话私信');
+ * await sender.send(tempSession('12345', '67890'), '通知');
+ * ```
+ */
+export function tempSession(userId: string, fromGroupId: string): OutboundConversation {
+  return { kind: 'private', id: userId, parent: { kind: 'group', id: fromGroupId } };
+}
+
+/**
+ * 构造频道子通道地址（如 QQ 频道内的子频道）。
+ *
+ * ```ts
+ * await message.$sendTo(guildChannel('channel-1', 'guild-1'), '频道通知');
+ * ```
+ */
+export function guildChannel(channelId: string, guildId: string, threadId?: string): OutboundConversation {
+  return {
+    kind: 'channel',
+    id: channelId,
+    parent: { kind: 'channel', id: guildId },
+    ...(threadId ? { threadId } : {}),
+  };
+}
+
 /**
  * 结构兼容 CapabilityContext.use()、Scope.use()、EndpointCommandUse 的最小访问器。
  */
