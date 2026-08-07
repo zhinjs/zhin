@@ -147,6 +147,9 @@ export class Message {
       if (!sender) throw new Error('Cannot $replyToPrivate: message has no sender');
       let parent: ConversationAddress['parent'] | undefined;
       if (from === true) {
+        if (conversation.kind !== 'group' && conversation.kind !== 'channel') {
+          throw new Error('Cannot $replyToPrivate with from=true: current conversation must be a group or channel');
+        }
         parent = { kind: conversation.kind, id: conversation.id };
       } else if (from != null && typeof from === 'object') {
         parent = from;
