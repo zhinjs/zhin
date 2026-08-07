@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QqBindCallbacks } from '../src/qq-bind-flow.js';
 import {
+  completeQqPendingBotKind,
   extractQqCommandReply,
   isQqEndpointOperator,
   runQqEndpointAdd,
@@ -89,13 +90,22 @@ describe('isQqEndpointOperator', () => {
 });
 
 describe('runQqEndpointAdd', () => {
-  it('二维码就绪后 resolve 链接文本；成功后写 .env 与 zhin.config.yml 并回复', async () => {
+  const chatInput = {
+    conversation: {
+      endpoint: { adapter: 'sandbox', id: 'host' },
+      kind: 'private' as const,
+      id: 'u1',
+    },
+    sender: 'u1',
+  };
+
+  it('二维码就绪后 resolve 链接；扫码成功暂存凭据并追问公域/私域（不写文件）', async () => {
     const state = createQqRuntimeState();
     const stop = vi.fn();
     startQqBindFlowMock.mockReturnValue(stop);
     const { replies, reply } = collectReplies();
 
-    const firstReplyPromise = runQqEndpointAdd(state, 'newbot', reply, root);
+    const firstReplyPromise = runQqEndpointAdd(state, 'newbot', reply, root, chatInput);
     expect(state.bindFlow).not.toBeNull();
 
     lastCallbacks().onQrDisplayed?.('https://q.qq.com/connect?task_id=t1');
@@ -105,16 +115,54 @@ describe('runQqEndpointAdd', () => {
     await lastCallbacks().onSuccess([{ appId: '102000009', appSecret: 'sec-9' }]);
 
     expect(state.bindFlow).toBeNull();
-    // .env 凭据
+    expect(state.pendingBotKind).toMatchObject({
+      endpointName: 'newbot',
+      appId: '102000009',
+      appSecret: 'sec-9',
+    });
+    expect(fs.existsSync(path.join(root, '.env'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'zhin.config.yml'))).toBe(false);
+    expect(replies.some((text) => text.includes('扫码成功') && text.includes('public'))).toBe(true);
+  });
+
+  it('用户选择 private 后一次性写 .env 与配置', async () => {
+    const state = createQqRuntimeState();
+    startQqBindFlowMock.mockReturnValue(vi.fn());
+    const { reply } = collectReplies();
+
+    const firstReplyPromise = runQqEndpointAdd(state, 'newbot', reply, root, chatInput);
+    lastCallbacks().onQrDisplayed?.('https://example/qr');
+    await firstReplyPromise;
+    await lastCallbacks().onSuccess([{ appId: '102000009', appSecret: 'sec-9' }]);
+
+    const text = completeQqPendingBotKind(state.pendingBotKind!, 'private', root);
+    state.pendingBotKind = null;
+
+    expect(text).toContain('botKind=private');
+    expect(text).toContain('GUILD_MESSAGES');
     const envContent = fs.readFileSync(path.join(root, '.env'), 'utf-8');
     expect(envContent).toContain('QQ_NEWBOT_APPID=102000009');
     expect(envContent).toContain('QQ_NEWBOT_SECRET=sec-9');
-    // zhin.config.yml 追加 endpoints 项
     const configContent = fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8');
-    expect(configContent).toContain('newbot');
-    expect(configContent).toContain('${QQ_NEWBOT_APPID}');
-    // 成功提示（经 reply 推送，因首条回复已 resolve）
-    expect(replies.some((text) => text.includes('绑定成功') && text.includes('重启'))).toBe(true);
+    expect(configContent).toContain('botKind: private');
+    expect(configContent).toContain('GUILD_MESSAGES');
+  });
+
+  it('无会话上下文时直接按 public 一次性写入', async () => {
+    const state = createQqRuntimeState();
+    startQqBindFlowMock.mockReturnValue(vi.fn());
+    const { replies, reply } = collectReplies();
+
+    const firstReplyPromise = runQqEndpointAdd(state, 'newbot', reply, root);
+    lastCallbacks().onQrDisplayed?.('https://example/qr');
+    await firstReplyPromise;
+    await lastCallbacks().onSuccess([{ appId: '102000009', appSecret: 'sec-9' }]);
+
+    expect(state.pendingBotKind).toBeNull();
+    expect(fs.readFileSync(path.join(root, '.env'), 'utf-8')).toContain('QQ_NEWBOT_APPID');
+    const configContent = fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8');
+    expect(configContent).toContain('botKind: public');
+    expect(replies.some((text) => text.includes('无法交互'))).toBe(true);
   });
 
   it('未指定 name 时使用 appId 作为 endpoint 名', async () => {
@@ -122,13 +170,13 @@ describe('runQqEndpointAdd', () => {
     startQqBindFlowMock.mockReturnValue(vi.fn());
     const { reply } = collectReplies();
 
-    const firstReplyPromise = runQqEndpointAdd(state, undefined, reply, root);
+    const firstReplyPromise = runQqEndpointAdd(state, undefined, reply, root, chatInput);
     lastCallbacks().onQrDisplayed?.('https://example/qr');
     await firstReplyPromise;
     await lastCallbacks().onSuccess([{ appId: '102000010', appSecret: 's' }]);
 
-    const envContent = fs.readFileSync(path.join(root, '.env'), 'utf-8');
-    expect(envContent).toContain('QQ_102000010_APPID=102000010');
+    expect(fs.existsSync(path.join(root, '.env'))).toBe(false);
+    expect(state.pendingBotKind?.endpointName).toBe('102000010');
   });
 
   it('已有进行中的绑定时拒绝并发', async () => {
@@ -136,11 +184,11 @@ describe('runQqEndpointAdd', () => {
     startQqBindFlowMock.mockReturnValue(vi.fn());
     const { reply } = collectReplies();
 
-    const pending = runQqEndpointAdd(state, 'a', reply, root);
+    const pending = runQqEndpointAdd(state, 'a', reply, root, chatInput);
     lastCallbacks().onQrDisplayed?.('https://example/qr');
     await pending;
 
-    const second = await runQqEndpointAdd(state, 'b', reply, root);
+    const second = await runQqEndpointAdd(state, 'b', reply, root, chatInput);
     expect(second).toContain('已有进行中');
     expect(startQqBindFlowMock).toHaveBeenCalledTimes(1);
   });
@@ -150,7 +198,7 @@ describe('runQqEndpointAdd', () => {
     startQqBindFlowMock.mockReturnValue(vi.fn());
     const { replies, reply } = collectReplies();
 
-    const firstReplyPromise = runQqEndpointAdd(state, 'a', reply, root);
+    const firstReplyPromise = runQqEndpointAdd(state, 'a', reply, root, chatInput);
     lastCallbacks().onQrDisplayed?.('https://example/qr');
     await firstReplyPromise;
 
@@ -167,7 +215,7 @@ describe('runQqEndpointAdd', () => {
       throw new Error('Message reply scope has ended');
     };
 
-    const firstReplyPromise = runQqEndpointAdd(state, 'a', reply, root);
+    const firstReplyPromise = runQqEndpointAdd(state, 'a', reply, root, chatInput);
     lastCallbacks().onQrDisplayed?.('https://example/qr');
     await firstReplyPromise;
 
@@ -175,6 +223,7 @@ describe('runQqEndpointAdd', () => {
       lastCallbacks().onSuccess?.([{ appId: '102000011', appSecret: 's' }]),
     ).resolves.toBeUndefined();
     expect(state.bindFlow).toBeNull();
+    expect(state.pendingBotKind).not.toBeNull();
   });
 
   it('二维码尚未就绪就失败时，失败原因作为首条回复', async () => {
@@ -182,7 +231,7 @@ describe('runQqEndpointAdd', () => {
     startQqBindFlowMock.mockReturnValue(vi.fn());
     const { reply } = collectReplies();
 
-    const firstReplyPromise = runQqEndpointAdd(state, 'a', reply, root);
+    const firstReplyPromise = runQqEndpointAdd(state, 'a', reply, root, chatInput);
     lastCallbacks().onFailure(new Error('获取绑定任务失败: boom'));
 
     await expect(firstReplyPromise).resolves.toContain('获取绑定任务失败');
@@ -199,6 +248,19 @@ describe('runQqEndpointCancel', () => {
     expect(runQqEndpointCancel(state)).toContain('已取消');
     expect(stop).toHaveBeenCalledTimes(1);
     expect(state.bindFlow).toBeNull();
+  });
+
+  it('可取消待确认的公域/私域选择', () => {
+    const state = createQqRuntimeState();
+    state.pendingBotKind = {
+      endpointName: 'x',
+      appId: '1',
+      appSecret: '2',
+      sessionKey: 'k',
+    };
+
+    expect(runQqEndpointCancel(state)).toContain('尚未写入');
+    expect(state.pendingBotKind).toBeNull();
   });
 
   it('无流程时提示', () => {
@@ -262,5 +324,20 @@ describe('runQqEndpointList', () => {
     const text = runQqEndpointList(state, root);
 
     expect(text).toContain('qq.endpoint cancel');
+  });
+
+  it('待选 botKind 时 footer 提示', () => {
+    const state = createQqRuntimeState();
+    state.pendingBotKind = {
+      endpointName: 'wait-bot',
+      appId: '1',
+      appSecret: '2',
+      sessionKey: 'k',
+    };
+
+    const text = runQqEndpointList(state, root);
+
+    expect(text).toContain('wait-bot');
+    expect(text).toContain('公域/私域');
   });
 });

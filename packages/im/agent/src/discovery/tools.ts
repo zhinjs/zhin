@@ -290,12 +290,12 @@ async function loadToolHandler(handlerPath: string, toolMdPath: string): Promise
     const mod = await import(fileUrl);
     const fn = mod.default || mod;
     if (typeof fn !== 'function') {
-      logger.warn(`Tool handler 未导出函数: ${resolved}`);
+      logger.warn(`Tool handler has no exported function: ${resolved}`);
       return undefined;
     }
     return fn;
   } catch (e) {
-    logger.warn(`Tool handler 加载失败 (${resolved}): ${e instanceof Error ? e.message : String(e)}`);
+    logger.warn(`Failed to load tool handler ${resolved}: ${e instanceof Error ? e.message : String(e)}`);
     return undefined;
   }
 }

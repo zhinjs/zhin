@@ -13,7 +13,7 @@ import {
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import {
   SatoriOpcode,
@@ -43,8 +43,6 @@ import {
   type SatoriWsSocket,
 } from './ws.js';
 
-const logger = getLogger('satori');
-
 export type SatoriApiCaller = typeof callSatoriApi;
 
 export interface SatoriWsEndpointOptions {
@@ -56,6 +54,8 @@ export interface SatoriWsEndpointOptions {
 }
 
 export class SatoriWsEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: SatoriWsEndpointOptions;
   readonly #lifecycle: EndpointLifecycle;
   #ws: SatoriWsSocket | null = null;
@@ -67,6 +67,7 @@ export class SatoriWsEndpoint implements EndpointInstance {
   );
 
   constructor(options: SatoriWsEndpointOptions) {
+    this.#logger = getAdapterLogger('satori', options.config.name);
     this.#options = options;
     const { config } = options;
     this.#lifecycle = createEndpointLifecycle({
@@ -125,7 +126,7 @@ export class SatoriWsEndpoint implements EndpointInstance {
       content,
     });
     const msgId = extractCreatedMessageId(result);
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'satori_send',
       endpoint: this.#options.config.name,
       channel: conversation.id,
@@ -158,7 +159,7 @@ export class SatoriWsEndpoint implements EndpointInstance {
         ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'satori_gateway_receive_failed',
         channel: conversation.id,
         error: err instanceof Error ? err.message : String(err),
@@ -198,7 +199,7 @@ export class SatoriWsEndpoint implements EndpointInstance {
       });
 
       ws.on('open', () => {
-        logger.debug(formatCompact({ endpoint: config.name, mode: 'ws' }));
+        this.#logger.debug(formatCompact({ mode: 'ws' }));
         this.#sendSignal(SatoriOpcode.IDENTIFY, {
           token: config.token,
           sn: this.#lastSn,
@@ -220,7 +221,7 @@ export class SatoriWsEndpoint implements EndpointInstance {
           const signal = JSON.parse(raw) as SatoriSignal;
           this.#handleSignal(signal);
         } catch (error) {
-          logger.warn(formatCompact({
+          this.#logger.warn(formatCompact({
             op: 'ws_parse_error',
             endpoint: config.name,
             error: error instanceof Error ? error.message : String(error),
@@ -245,7 +246,7 @@ export class SatoriWsEndpoint implements EndpointInstance {
       });
 
       ws.on('error', (error) => {
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'ws_error',
           endpoint: config.name,
           ok: false,
@@ -269,7 +270,7 @@ export class SatoriWsEndpoint implements EndpointInstance {
       const logins = signal.body.logins as SatoriLogin[];
       this.#login = logins[0];
       if (!this.#login?.platform || !this.#login?.user?.id) {
-        logger.warn(formatCompact({ op: 'ready', ok: false, error: 'missing platform/user' }));
+        this.#logger.warn(formatCompact({ op: 'ready', ok: false, error: 'missing platform/user' }));
       }
       return;
     }
@@ -312,6 +313,8 @@ export interface SatoriWebhookEndpointOptions {
 }
 
 export class SatoriWebhookEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: SatoriWebhookEndpointOptions;
   #login: SatoriLogin | undefined;
   #routeReleases: HttpRouteRegistration[] = [];
@@ -322,6 +325,7 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
   );
 
   constructor(options: SatoriWebhookEndpointOptions) {
+    this.#logger = getAdapterLogger('satori', options.config.name);
     this.#options = options;
   }
 
@@ -339,7 +343,7 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
     this.#started = true;
     if (!this.#options.config.token) {
       // 未配 token 时 webhook 无鉴权：任何人知道 path 即可注入假事件。
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'webhook_no_token',
         endpoint: this.#options.config.name,
         path: this.#options.config.path,
@@ -347,7 +351,7 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
       }));
     }
     this.#routeReleases.push(...registerSatoriWebhookRoutes(this.#options.http, this));
-    logger.info(formatCompact({
+    this.#logger.info(formatCompact({
       op: 'listen',
       endpoint: this.#options.config.name,
       mode: 'webhook',
@@ -367,9 +371,8 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
     this.#open = false;
     for (const release of this.#routeReleases.splice(0)) release();
     this.#started = false;
-    logger.debug(formatCompact({
-      op: 'disconnect',
-      endpoint: this.#options.config.name,
+    this.#logger.debug(formatCompact({
+          op: 'disconnect',
     }));
   }
 
@@ -380,7 +383,7 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
       content,
     });
     const msgId = extractCreatedMessageId(result);
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'satori_send',
       endpoint: this.#options.config.name,
       channel: conversation.id,
@@ -412,7 +415,7 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
         ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'satori_gateway_receive_failed',
         channel: conversation.id,
         error: err instanceof Error ? err.message : String(err),

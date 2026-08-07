@@ -2,7 +2,7 @@
  * Peer 入站 handback（OrchestrationKernel SSOT；阶段 4）。
  */
 import { type Message, resolveIMSessionIdFromMessage } from '@zhin.js/core';
-import { formatCompactLog } from '@zhin.js/logger';
+import { formatCompact } from '@zhin.js/logger';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
 import { normalizeExecutorKind } from '../orchestrator/orchestration-mappers.js';
 import {
@@ -54,30 +54,26 @@ export async function tryHandlePeerInboundHandback(input: PeerInboundHandbackInp
   if (target && normalizeExecutorKind(target.executor_kind) === 'im_projection') {
     const assignee = target.assigned_to || peerEndpointId;
     if (assignee !== peerEndpointId) {
-      logger.debug(formatCompactLog('OrchestrationKernel', {
-        action: 'group_handback_skip',
+      logger.debug(formatCompact({
+        op: 'handback_skip',
         reason: 'assignee_mismatch',
         task: target.id,
-        assignee,
-        from: peerEndpointId,
       }));
     } else {
       const summary = summarizeDelegateeReply(
         explicitTaskId ? rawText.replace(`#${explicitTaskId}`, '').trim() : rawText,
       );
       if (!isSubstantiveGroupTaskReply(summary)) {
-        logger.info(formatCompactLog('OrchestrationKernel', {
-          action: 'group_handback_skip',
+        logger.info(formatCompact({
+          op: 'handback_skip',
           reason: 'not_substantive',
           task: target.id,
-          from: peerEndpointId,
         }));
       } else {
         await orch.completeTask(target.id, summary);
-        logger.info(formatCompactLog('OrchestrationKernel', {
-          action: 'group_handback',
+        logger.info(formatCompact({
+          op: 'handback_complete',
           task: target.id,
-          cell: cell.id,
           from: peerEndpointId,
         }));
       }

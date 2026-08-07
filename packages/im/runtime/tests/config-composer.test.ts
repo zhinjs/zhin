@@ -167,6 +167,54 @@ describe('hierarchical Plugin config', () => {
     expect((failure as ConfigValidationError).message).toContain('zhin.config.yml');
   });
 
+  it('injects master/trusted into adapter top-level and endpoints[].properties', async () => {
+    const root = await configProject({
+      rootSchema: {},
+      childSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          endpoints: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: true,
+              properties: {
+                name: { type: 'string' },
+              },
+              required: ['name'],
+            },
+          },
+        },
+        required: ['endpoints'],
+      },
+    });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const config = await new ConfigComposer().compose(graph, {
+      plugins: {
+        child: {
+          master: 'u-top',
+          trusted: ['t1'],
+          endpoints: [{ name: 'bot-a', master: 'u-ep', trusted: ['t2'] }],
+        },
+      },
+    });
+    expect(config.document.plugins).toMatchObject({
+      child: {
+        master: 'u-top',
+        trusted: ['t1'],
+        endpoints: [{ name: 'bot-a', master: 'u-ep', trusted: ['t2'] }],
+      },
+    });
+    const pluginsSchema = (config.effectiveSchema.properties as Record<string, any>).plugins;
+    const adapterProps = pluginsSchema.properties.child.properties;
+    expect(adapterProps.master).toBeTruthy();
+    expect(adapterProps.trusted).toBeTruthy();
+    expect(adapterProps.endpoints.items.properties.master).toBeTruthy();
+    expect(adapterProps.endpoints.items.properties.trusted).toBeTruthy();
+  });
+
   it('plans the shallowest forest whose owner views actually changed', async () => {
     const root = await configProject({
       rootSchema: {},

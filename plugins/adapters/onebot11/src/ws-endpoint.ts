@@ -11,7 +11,7 @@ import {
   type EndpointSendRequest,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { createOneBot11EndpointManagement } from './endpoint-management.js';
 import { registerOnebot11AgentEndpoint } from './onebot11-agent-deps.js';
@@ -38,8 +38,6 @@ import {
   type OneBot11WsSocket,
 } from './ws-types.js';
 
-const logger = getLogger('onebot11');
-
 export interface OneBot11WsEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
@@ -51,6 +49,8 @@ export interface OneBot11WsEndpointOptions {
 }
 
 export class OneBot11WsEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: OneBot11WsEndpointOptions;
   readonly management: EndpointManagement = createOneBot11EndpointManagement(this);
   readonly #lifecycle: EndpointLifecycle;
@@ -61,6 +61,7 @@ export class OneBot11WsEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: OneBot11WsEndpointOptions) {
+    this.#logger = getAdapterLogger('onebot11', options.config.name);
     this.#options = options;
     const { config } = options;
     this.#lifecycle = createEndpointLifecycle({
@@ -121,7 +122,7 @@ export class OneBot11WsEndpoint implements EndpointInstance {
     const { action, params } = buildSendAction(conversation, message);
     const data = await this.callApi(action, params) as { message_id?: number | string } | undefined;
     const messageId = data?.message_id != null ? String(data.message_id) : '';
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'onebot11_send',
       endpoint: this.#options.config.name,
       target: `${conversation.kind}:${conversation.id}`,
@@ -167,7 +168,7 @@ export class OneBot11WsEndpoint implements EndpointInstance {
       sender: senderUserId(ev),
       metadata: formatInboundMetadata(ev, this.#options.config.name),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'onebot11_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
@@ -197,13 +198,13 @@ export class OneBot11WsEndpoint implements EndpointInstance {
         if (settled) return;
         settled = true;
         if (!this.#options.config.access_token) {
-          logger.warn(formatCompact({
+          this.#logger.warn(formatCompact({
             endpoint: this.#options.config.name,
             ok: false,
             error: 'missing access_token',
           }));
         }
-        logger.debug(formatCompact({
+        this.#logger.debug(formatCompact({
           endpoint: this.#options.config.name,
           mode: 'ws',
           url: safeUrl,
@@ -243,7 +244,7 @@ export class OneBot11WsEndpoint implements EndpointInstance {
 
       ws.on('error', (err) => {
         const error = err instanceof Error ? err : new Error(String(err));
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'ws_error',
           endpoint: this.#options.config.name,
           ok: false,

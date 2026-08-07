@@ -6,6 +6,7 @@
 import { pickCredential } from '@zhin.js/adapter';
 import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import { resolveQqIntents } from './qq-intents.js';
 
 const logger = getLogger('qq');
 
@@ -17,7 +18,10 @@ export interface QqAdapterConfig {
   /** Default `websocket`. `webhook` / `middleware` use httpHostToken POST. */
   readonly mode?: 'websocket' | 'webhook' | 'middleware';
   readonly sandbox?: boolean;
+  /** Explicit intents; when omitted, derived from `botKind` (default public). */
   readonly intents?: readonly string[];
+  /** public | private — drives default intents when `intents` omitted. */
+  readonly botKind?: string;
   readonly accessTokenUrl?: string;
   readonly gatewayUrl?: string;
   readonly webhookPath?: string;
@@ -32,6 +36,7 @@ export interface QqAdapterConfig {
     readonly mode?: 'websocket' | 'webhook' | 'middleware';
     readonly sandbox?: boolean;
     readonly intents?: readonly string[];
+    readonly botKind?: string;
     readonly accessTokenUrl?: string;
     readonly gatewayUrl?: string;
     readonly webhookPath?: string;
@@ -129,7 +134,10 @@ export function resolveQqConfig(config: QqAdapterConfig = {}): ResolvedQqConfig 
     appid,
     secret,
     sandbox: config.sandbox === true || entry?.sandbox === true,
-    intents: config.intents ?? entry?.intents,
+    intents: resolveQqIntents({
+      intents: config.intents ?? entry?.intents,
+      botKind: config.botKind ?? entry?.botKind,
+    }),
     accessTokenUrl: config.accessTokenUrl ?? entry?.accessTokenUrl,
     gatewayUrl: config.gatewayUrl ?? entry?.gatewayUrl,
   };

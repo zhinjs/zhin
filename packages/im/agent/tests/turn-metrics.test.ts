@@ -24,11 +24,11 @@ describe('turn-metrics', () => {
     expect(log).toContain('4352');
     expect(log).toContain('agent');
     expect(log).toContain('mimo-v2.5-free');
-    expect(log).toContain('用户输入');
+    expect(log).toContain('Input');
     expect(log).toContain('你好');
-    expect(log).toContain('思考');
+    expect(log).toContain('Thinking');
     expect(log).toContain('用户在打招呼');
-    expect(log).toContain('输出');
+    expect(log).toContain('Output');
     expect(log).toContain('有什么可以帮你的');
     expect(log).toContain('╭');
     expect(log).toContain('╯');
@@ -58,9 +58,9 @@ describe('turn-metrics', () => {
       },
       800,
     );
-    expect(log).toContain('用户输入');
-    expect(log).toContain('思考');
-    expect(log).toContain('输出');
+    expect(log).toContain('Input');
+    expect(log).toContain('Thinking');
+    expect(log).toContain('Output');
   });
 
   it('formatOutputElementsPreview 拼接文本与图片', () => {

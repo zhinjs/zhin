@@ -93,7 +93,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
 
   useContext('ai', (ai) => {
     if (!ai.isReady()) {
-      logger.warn(formatCompact( { error: 'ai_not_ready' }));
+      logger.warn('AI service not ready, skipping agent creation');
       return;
     }
 

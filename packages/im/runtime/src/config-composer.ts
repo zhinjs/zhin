@@ -140,12 +140,12 @@ export class ConfigComposer {
 const FRAMEWORK_ROLE_SCHEMA: Readonly<Record<string, JsonSchema>> = Object.freeze({
   master: Object.freeze({
     type: ['string', 'number'] as unknown,
-    description: 'Endpoint owner (framework-level master role)',
+    description: 'Framework master user id (AI/tool privileges; not group owner/admin)',
   }),
   trusted: Object.freeze({
     type: 'array',
     items: Object.freeze({ type: ['string', 'number'] as unknown }),
-    description: 'Trusted user ID list (framework-level trusted role)',
+    description: 'Framework trusted user id list (weaker than master)',
   }),
 });
 
@@ -153,6 +153,40 @@ function hasArrayEndpoints(props: Record<string, JsonSchema>): boolean {
   const ep = props.endpoints;
   if (!ep || typeof ep !== 'object') return false;
   return (ep as Record<string, unknown>).type === 'array';
+}
+
+/** 顶层 + endpoints[].properties 注入 master/trusted（已声明则不覆盖） */
+function injectFrameworkRoleSchema(properties: Record<string, JsonSchema>): void {
+  for (const [key, schema] of Object.entries(FRAMEWORK_ROLE_SCHEMA)) {
+    if (!Object.hasOwn(properties, key)) {
+      properties[key] = schema;
+    }
+  }
+  if (!hasArrayEndpoints(properties)) return;
+  const ep = properties.endpoints as Record<string, unknown>;
+  const items = ep.items;
+  if (!items || typeof items !== 'object' || Array.isArray(items)) return;
+  const itemsObj = items as Record<string, unknown>;
+  const rawProps = itemsObj.properties;
+  const itemProps: Record<string, JsonSchema> =
+    rawProps && typeof rawProps === 'object' && !Array.isArray(rawProps)
+      ? { ...(rawProps as Record<string, JsonSchema>) }
+      : {};
+  let changed = false;
+  for (const [key, schema] of Object.entries(FRAMEWORK_ROLE_SCHEMA)) {
+    if (!Object.hasOwn(itemProps, key)) {
+      itemProps[key] = schema;
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  properties.endpoints = Object.freeze({
+    ...ep,
+    items: Object.freeze({
+      ...itemsObj,
+      properties: Object.freeze(itemProps),
+    }),
+  }) as JsonSchema;
 }
 
 async function composeNode(
@@ -164,13 +198,10 @@ async function composeNode(
   const properties = { ...schemaProperties(own) };
 
   // Adapter plugins (schemas declaring array-typed `endpoints`) get
-  // framework-level `master` / `trusted` injected when not already declared.
+  // framework-level `master` / `trusted` injected when not already declared
+  // (top-level and endpoints[].properties).
   if (hasArrayEndpoints(properties)) {
-    for (const [key, schema] of Object.entries(FRAMEWORK_ROLE_SCHEMA)) {
-      if (!Object.hasOwn(properties, key)) {
-        properties[key] = schema;
-      }
-    }
+    injectFrameworkRoleSchema(properties);
   }
 
   for (const child of node.children) {

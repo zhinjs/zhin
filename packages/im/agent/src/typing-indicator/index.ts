@@ -109,7 +109,7 @@ export class ReactionTypingIndicator implements TypingIndicator {
     if (this.active) return;
     if (!this.options.messageId) {
       logger.warn(
-        `[TypingIndicator] reaction skipped: missing messageId (platform=${this.options.platform} scene=${this.options.sceneType})`,
+        `reaction skipped: missing messageId (platform=${this.options.platform} scene=${this.options.sceneType})`,
       );
       return;
     }
@@ -124,13 +124,13 @@ export class ReactionTypingIndicator implements TypingIndicator {
       if (!this.reactionId) {
         this.active = false;
         logger.warn(
-          `[TypingIndicator] reaction add returned null (platform=${this.options.platform} messageId=${this.options.messageId})`,
+          `reaction add returned null (platform=${this.options.platform} messageId=${this.options.messageId})`,
         );
       }
     } catch (error) {
       this.active = false;
       this.reactionId = null;
-      logger.error('[TypingIndicator] Failed to add reaction:', error);
+      logger.error('Failed to add reaction:', error);
     }
   }
 
@@ -147,7 +147,7 @@ export class ReactionTypingIndicator implements TypingIndicator {
     try {
       await this.removeReaction(messageId, reactionId);
     } catch (error) {
-      logger.error('[TypingIndicator] Failed to remove reaction:', error);
+      logger.error('Failed to remove reaction:', error);
     }
   }
 
@@ -198,7 +198,7 @@ export class MessageTypingIndicator implements TypingIndicator {
     } catch (error) {
       this.active = false;
       this.messageId = null;
-      logger.error('[TypingIndicator] Failed to send message:', error);
+      logger.error('Failed to send message:', error);
     }
   }
 
@@ -211,7 +211,7 @@ export class MessageTypingIndicator implements TypingIndicator {
       try {
         await this.editMessage(this.messageId, message);
       } catch (error) {
-        logger.error('[TypingIndicator] Failed to edit message:', error);
+        logger.error('Failed to edit message:', error);
       }
     }
   }
@@ -228,7 +228,7 @@ export class MessageTypingIndicator implements TypingIndicator {
       this.active = false;
       this.messageId = null;
     } catch (error) {
-      logger.error('[TypingIndicator] Failed to delete message:', error);
+      logger.error('Failed to delete message:', error);
     }
   }
 
@@ -261,7 +261,7 @@ export class NativeTypingIndicator implements TypingIndicator {
       const intervalMs = typeof raw === 'number' && raw > 0 ? raw : 5_000;
       this.keepaliveTimer = setInterval(() => {
         void this.startTyping(this.options).catch((error) => {
-          logger.error('[TypingIndicator] keepalive failed:', error);
+          logger.error('keepalive failed:', error);
         });
       }, intervalMs);
     } catch (error) {
@@ -270,7 +270,7 @@ export class NativeTypingIndicator implements TypingIndicator {
         clearInterval(this.keepaliveTimer);
         this.keepaliveTimer = undefined;
       }
-      logger.error('[TypingIndicator] Failed to start native typing:', error);
+      logger.error('Failed to start native typing:', error);
     }
   }
 
@@ -285,7 +285,7 @@ export class NativeTypingIndicator implements TypingIndicator {
     try {
       await this.stopTyping(this.options);
     } catch (error) {
-      logger.error('[TypingIndicator] Failed to stop native typing:', error);
+      logger.error('Failed to stop native typing:', error);
     } finally {
       this.active = false;
     }
@@ -340,7 +340,7 @@ export class TypingIndicatorManager {
   ): TypingIndicator {
     const adapter = this.adapters.get(options.platform);
     if (!adapter) {
-      logger.warn(`[TypingIndicator] No adapter for platform: ${options.platform}`);
+      logger.warn(`No adapter for platform: ${options.platform}`);
       return new NoneTypingIndicator();
     }
 
@@ -349,7 +349,7 @@ export class TypingIndicatorManager {
     // 检查平台是否支持该提示类型
     if (!adapter.supportedTypes.includes(mergedConfig.type)) {
       logger.warn(
-        `[TypingIndicator] Platform ${options.platform} does not support type: ${mergedConfig.type}`,
+        `Platform ${options.platform} does not support type: ${mergedConfig.type}`,
       );
       // 回退到第一个支持的类型
       if (adapter.supportedTypes.length > 0) {
@@ -408,7 +408,7 @@ export class TypingIndicatorManager {
       try {
         await indicator.stop();
       } catch (error) {
-        logger.error(`[TypingIndicator] Failed to stop indicator ${key}:`, error);
+        logger.error(`Failed to stop indicator ${key}:`, error);
       }
     }
     this.activeIndicators.clear();

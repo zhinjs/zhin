@@ -1,4 +1,11 @@
-import { type AgentTurnMessage, type Message, QUOTE_CONTEXT_SYSTEM_EXTRA_KEY, resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import {
+  type AgentTurnMessage,
+  type Message,
+  QUOTE_CONTEXT_SYSTEM_EXTRA_KEY,
+  formatSenderRolesForLabel,
+  resolveIMSessionIdFromMessage,
+  senderRolesFromMessage,
+} from '@zhin.js/core';
 import { getFileMemoryContext, formatMemoryPathsHint } from '../memory-layers.js';
 export const TURN_CONTEXT_BEGIN = '[Turn context]';
 export const TURN_CONTEXT_END = '[/Turn context]';
@@ -27,6 +34,14 @@ export function formatSessionContextLine(commMessage: Message): string | null {
   return `Session: ${parts.join(' | ')}`;
 }
 
+/** 当前发言者框架角色（master/trusted）；私聊无 `[sender:…]` 前缀时靠此行告知模型 */
+export function formatSenderContextLine(commMessage: Message): string | null {
+  const id = String(commMessage.$sender?.id ?? '').trim();
+  if (!id) return null;
+  const roles = formatSenderRolesForLabel([...senderRolesFromMessage(commMessage)]);
+  return `Sender: id=${id} roles=${roles}`;
+}
+
 export function resolveQuoteSystemHint(commMessage?: AgentTurnMessage): string | undefined {
   const hint = commMessage?.extra?.[QUOTE_CONTEXT_SYSTEM_EXTRA_KEY];
   if (typeof hint !== 'string' || !hint.trim()) return undefined;
@@ -50,6 +65,8 @@ export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): strin
   if (input.commMessage) {
     const sessionLine = formatSessionContextLine(input.commMessage);
     if (sessionLine) lines.push(sessionLine);
+    const senderLine = formatSenderContextLine(input.commMessage);
+    if (senderLine) lines.push(senderLine);
     const sessionKey = resolveIMSessionIdFromMessage(input.commMessage);
     const memoryPaths = formatMemoryPathsHint(
       String(input.commMessage.$adapter),

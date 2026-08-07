@@ -4,7 +4,7 @@
 import type { EndpointInstance, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { registerWecomAgentEndpoint } from './wecom-agent-deps.js';
 import {
@@ -25,8 +25,6 @@ import {
   type WecomMessage,
 } from './protocol.js';
 import { registerWecomWebhookRoutes } from './webhook.js';
-
-const logger = getLogger('wecom');
 
 export type WecomFetch = (
   url: string,
@@ -56,6 +54,8 @@ export interface WecomEndpointOptions {
  * 因此本 endpoint 不暴露 EndpointManagement（Console 社交面 RPC 对该平台保持未接线）。
  */
 export class WecomEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: WecomEndpointOptions;
   readonly #fetch: WecomFetch;
   #routeReleases: HttpRouteRegistration[] = [];
@@ -66,6 +66,7 @@ export class WecomEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: WecomEndpointOptions) {
+    this.#logger = getAdapterLogger('wecom', options.config.name);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
@@ -86,14 +87,14 @@ export class WecomEndpoint implements EndpointInstance {
       await this.#refreshAccessToken();
       this.#unregisterAgent = registerWecomAgentEndpoint(this.#options.config.name, this);
       this.#routeReleases.push(...registerWecomWebhookRoutes(this.#options.http, this));
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         endpoint: this.#options.config.name,
         op: 'webhook',
         path: this.#options.config.webhookPath,
       }));
     } catch (error) {
       await this.stop();
-      logger.error('Failed to connect WeCom endpoint:', error);
+      this.#logger.error('Failed to connect WeCom endpoint:', error);
       throw error;
     }
   }
@@ -112,7 +113,7 @@ export class WecomEndpoint implements EndpointInstance {
     this.#unregisterAgent?.();
     this.#unregisterAgent = undefined;
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -131,10 +132,7 @@ export class WecomEndpoint implements EndpointInstance {
     if (data.errcode !== 0) {
       throw new Error(`Failed to send message: ${data.errmsg} (${data.errcode})`);
     }
-    logger.debug(formatCompact({
-      op: 'send',
-      endpoint: this.#options.config.name,
-      to: `${conversation.kind}:${conversation.id}`,
+    this.#logger.debug(formatCompact({ op: 'send', to: `${conversation.kind}:${conversation.id}`,
     }));
     return (data.msgid as string) || `${Date.now()}`;
   }
@@ -162,7 +160,7 @@ export class WecomEndpoint implements EndpointInstance {
       const data = seg.data ?? {};
       const media = readOutboundImageMedia(data);
       if (!media) {
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'wecom_outbound_media_dropped',
           endpoint: this.#options.config.name,
           type: 'image',
@@ -177,7 +175,7 @@ export class WecomEndpoint implements EndpointInstance {
         const mediaId = await this.#uploadMedia('image', media);
         return { type: 'image', data: { media_id: mediaId } };
       } catch (error) {
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'wecom_media_upload_failed',
           endpoint: this.#options.config.name,
           error: error instanceof Error ? error.message : String(error),
@@ -220,7 +218,7 @@ export class WecomEndpoint implements EndpointInstance {
         agentId: msg.AgentID,
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'wecom_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
@@ -236,7 +234,7 @@ export class WecomEndpoint implements EndpointInstance {
       if (data.errcode === 0) return data;
       throw new Error(`Failed to get user info: ${data.errmsg}`);
     } catch (error) {
-      logger.error('Failed to get user info:', error);
+      this.#logger.error('Failed to get user info:', error);
       return null;
     }
   }
@@ -249,7 +247,7 @@ export class WecomEndpoint implements EndpointInstance {
       if (data.errcode === 0) return (data.userlist as unknown[]) || [];
       throw new Error(`Failed to get department users: ${data.errmsg}`);
     } catch (error) {
-      logger.error('Failed to get department users:', error);
+      this.#logger.error('Failed to get department users:', error);
       return [];
     }
   }
@@ -262,7 +260,7 @@ export class WecomEndpoint implements EndpointInstance {
       if (data.errcode === 0) return (data.department as unknown[]) || [];
       throw new Error(`Failed to get department list: ${data.errmsg}`);
     } catch (error) {
-      logger.error('Failed to get department list:', error);
+      this.#logger.error('Failed to get department list:', error);
       return [];
     }
   }
@@ -280,7 +278,7 @@ export class WecomEndpoint implements EndpointInstance {
       });
       return true;
     } catch (error) {
-      logger.error('Failed to send text message:', error);
+      this.#logger.error('Failed to send text message:', error);
       return false;
     }
   }
@@ -343,7 +341,7 @@ export class WecomEndpoint implements EndpointInstance {
         expires_in: data.expires_in ?? 7200,
         timestamp: Date.now(),
       };
-      logger.debug('Access token refreshed successfully');
+      this.#logger.debug('Access token refreshed successfully');
       return;
     }
     throw new Error(`Failed to get access token: ${data.errmsg} (${data.errcode})`);

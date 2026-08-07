@@ -9,7 +9,7 @@ import type {
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { readRequestBody, verifyMilkyAccessToken } from './milky-auth.js';
 import { createMilkyEndpointManagement } from './endpoint-management.js';
@@ -33,8 +33,6 @@ import {
   type MilkyWebhookConfig,
 } from './protocol.js';
 
-const logger = getLogger('milky');
-
 export interface MilkyWebhookEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
@@ -44,6 +42,8 @@ export interface MilkyWebhookEndpointOptions {
 }
 
 export class MilkyWebhookEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: MilkyWebhookEndpointOptions;
   readonly #callApi: typeof callApi;
   readonly management: EndpointManagement = createMilkyEndpointManagement(this);
@@ -53,6 +53,7 @@ export class MilkyWebhookEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: MilkyWebhookEndpointOptions) {
+    this.#logger = getAdapterLogger('milky', options.config.name);
     this.#options = options;
     this.#callApi = options.callApi ?? callApi;
   }
@@ -62,7 +63,7 @@ export class MilkyWebhookEndpoint implements EndpointInstance {
     this.#started = true;
     this.#unregisterAgent = registerMilkyAgentEndpoint(this.#options.config.name, this);
     this.#setupRoutes();
-    logger.info(formatCompact({
+    this.#logger.info(formatCompact({
       op: 'listen',
       endpoint: this.#options.config.name,
       mode: 'webhook',
@@ -84,7 +85,7 @@ export class MilkyWebhookEndpoint implements EndpointInstance {
     this.#unregisterAgent?.();
     this.#unregisterAgent = undefined;
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -92,7 +93,7 @@ export class MilkyWebhookEndpoint implements EndpointInstance {
     const { action, params } = buildSendAction(conversation, message);
     const data = await this.callApi(action, params) as { message_seq?: number } | undefined;
     const messageId = formatOutboundMessageId(conversation, data?.message_seq);
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'milky_send',
       endpoint: this.#options.config.name,
       target: `${conversation.kind}:${conversation.id}`,
@@ -224,7 +225,7 @@ export class MilkyWebhookEndpoint implements EndpointInstance {
         ...(audioUrl ? { audio_url: audioUrl } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'milky_gateway_receive_failed',
         target,
         error: err instanceof Error ? err.message : String(err),
@@ -261,7 +262,7 @@ export class MilkyWebhookEndpoint implements EndpointInstance {
       response.writeHead(200, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify({ status: 'ok' }));
     } catch (error) {
-      logger.error('Milky webhook error:', error);
+      this.#logger.error('Milky webhook error:', error);
       if (!response.headersSent) {
         response.writeHead(500, { 'Content-Type': 'application/json' });
         response.end(JSON.stringify({ message: 'Internal Server Error' }));

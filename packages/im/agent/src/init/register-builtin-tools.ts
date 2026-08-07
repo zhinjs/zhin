@@ -318,7 +318,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         const { files: bootstrapFiles, profile } = await loadBootstrapWithProfile(workspaceDir, assistantCfg.profile);
         const contextFiles = buildContextFiles(bootstrapFiles);
 
-        logger.debug(`Bootstrap files loaded (cwd: ${workspaceDir}, profile: ${profile ? 'yes' : 'no'}): ${bootstrapFiles.map(f => f.name + (f.missing ? ' (missing)' : '')).join(', ')}`);
+        logger.debug(`Bootstrap: ${bootstrapFiles.filter(f => !f.missing).map(f => f.name).join(', ') || 'none'}`);
 
         const soulFile = contextFiles.find(f => f.path === 'SOUL.md');
         if (soulFile && refs.zhinAgent) loadedFiles.push('SOUL.md');
@@ -350,14 +350,14 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         logger.debug(`Bootstrap files not loaded: ${e instanceof Error ? e.message : String(e)}`);
       }
 
-      logger.debug(formatCompact( {
-        内置工具: builtinTools.length,
-        定时任务工具: scheduleTools.length,
-        技能数量: skillCount,
-        工作区工具: toolCount,
-        预设代理: agentCount,
-        插件工具: pluginTools || undefined,
-        引导文件: loadedFiles.length ? loadedFiles.join(',') : undefined,
+      logger.debug(formatCompact({
+        builtin: builtinTools.length,
+        schedule: scheduleTools.length,
+        skills: skillCount,
+        workspace: toolCount,
+        agents: agentCount,
+        plugin: pluginTools || undefined,
+        bootstrap: loadedFiles.length || undefined,
       }));
 
       const orchestrator2 = root.inject?.('agent') as AgentOrchestrator | undefined;
@@ -389,9 +389,9 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         try {
           const w = fs.watch(workspaceToolDir, { recursive: true }, onToolDirChange);
           skillWatchers.push(w);
-          logger.debug(`[Tool热重载] 监听目录: ${workspaceToolDir}`);
+          logger.debug(`Watching tool directory: ${workspaceToolDir}`);
         } catch (e: unknown) {
-          logger.debug(`[Tool热重载] 无法监听 ${workspaceToolDir}: ${e instanceof Error ? e.message : String(e)}`);
+          logger.debug(`Cannot watch tool directory ${workspaceToolDir}: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
 
@@ -417,9 +417,9 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           try {
             const w = fs.watch(dir, { recursive: true }, onSkillDirChange);
             skillWatchers.push(w);
-            logger.debug(`[技能热重载] 监听目录: ${dir}`);
+            logger.debug(`Watching skill directory: ${dir}`);
           } catch (e: unknown) {
-            logger.debug(`[技能热重载] 无法监听 ${dir}: ${e instanceof Error ? e.message : String(e)}`);
+            logger.debug(`Cannot watch skill directory ${dir}: ${e instanceof Error ? e.message : String(e)}`);
           }
         }
       }

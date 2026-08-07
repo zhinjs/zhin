@@ -5,7 +5,7 @@ import axios from 'axios';
 import type { EndpointFriend, EndpointInstance, EndpointManagement, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import {
   extractOutboundText,
@@ -29,8 +29,6 @@ import {
   recordPassiveReplyText,
 } from './passive-reply.js';
 import { registerWeChatMpWebhookRoutes } from './webhook.js';
-
-const logger = getLogger('wechat-mp');
 
 /** token 失效类错误码：40001/40014 invalid access_token、42001 access_token expired。 */
 const TOKEN_INVALID_ERRCODES = new Set([40001, 40014, 42001]);
@@ -72,6 +70,8 @@ function defaultFetch(
 }
 
 export class WeChatMpEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: WeChatMpEndpointOptions;
   readonly #fetch: WeChatMpFetch;
   #routeReleases: HttpRouteRegistration[] = [];
@@ -86,6 +86,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createWeChatMpEndpointManagement(this);
 
   constructor(options: WeChatMpEndpointOptions) {
+    this.#logger = getAdapterLogger('wechat-mp', options.config.name);
     this.#options = options;
     this.#fetch = options.fetch ?? defaultFetch;
   }
@@ -129,14 +130,14 @@ export class WeChatMpEndpoint implements EndpointInstance {
       await this.#refreshAccessToken();
       this.#routeReleases.push(...registerWeChatMpWebhookRoutes(this.#options.http, this));
       this.#startTokenRefreshTimer();
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         endpoint: this.#options.config.name,
         op: 'webhook',
         path: this.#options.config.path,
       }));
     } catch (error) {
       await this.stop();
-      logger.error('Failed to connect WeChat MP bot:', error);
+      this.#logger.error('Failed to connect WeChat MP bot:', error);
       throw error;
     }
   }
@@ -157,7 +158,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
     }
     for (const release of this.#routeReleases.splice(0)) release();
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -171,7 +172,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
       return this.#sendCustomerService(conversation.id, payload);
     }
 
-    logger.warn(formatCompact({
+    this.#logger.warn(formatCompact({
       op: 'send',
       skip: 'passive_outside_webhook',
       endpoint: this.#options.config.name,
@@ -196,7 +197,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
         toUserName: msg.ToUserName,
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'wechat_mp_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
@@ -214,7 +215,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
     let result = await this.#postCustomerService(messageData);
     if (result.errcode && TOKEN_INVALID_ERRCODES.has(Number(result.errcode))) {
       // 对端提前作废 token（多端共用等）：刷新后重试一次。
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'wechat_mp_token_invalid_retry',
         errcode: result.errcode,
       }));
@@ -224,7 +225,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
     if (result.errcode && result.errcode !== 0) {
       throw new Error(`WeChat API error: ${result.errcode} - ${result.errmsg}`);
     }
-    logger.debug(formatCompact({ op: 'wechat_mp_send', target, messageId: result.msgid }));
+    this.#logger.debug(formatCompact({ op: 'wechat_mp_send', target, messageId: result.msgid }));
     return result.msgid?.toString() || `cs_${Date.now()}`;
   }
 
@@ -250,7 +251,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
         // 已物化（mediaId/media_id）的段透传；其余无 canonical 媒体引用，丢弃留痕
         if (typeof data.mediaId === 'string' && data.mediaId) return item;
         if (typeof data.media_id === 'string' && data.media_id) return item;
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'wechat_mp_outbound_media_dropped',
           endpoint: this.#options.config.name,
           type: seg.type,
@@ -263,7 +264,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
         return { type: seg.type, data: { mediaId: media.value } };
       }
       if (!uploadType) {
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'wechat_mp_outbound_media_dropped',
           endpoint: this.#options.config.name,
           type: seg.type,
@@ -275,7 +276,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
         const mediaId = await this.#uploadMedia(uploadType, media);
         return { type: seg.type, data: { mediaId } };
       } catch (error) {
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'wechat_mp_media_upload_failed',
           endpoint: this.#options.config.name,
           error: error instanceof Error ? error.message : String(error),
@@ -350,7 +351,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
     if (data.access_token) {
       this.#accessToken = data.access_token;
       this.#tokenExpireTime = Date.now() + (data.expires_in - 300) * 1000;
-      logger.debug(formatCompact({ op: 'token_refresh' }));
+      this.#logger.debug(formatCompact({ op: 'token_refresh' }));
       return;
     }
     throw new Error(
@@ -364,7 +365,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
     this.#tokenRefreshTimer = setInterval(() => {
       if (Date.now() >= this.#tokenExpireTime) {
         void this.#refreshAccessToken().catch((error) => {
-          logger.error('Failed to refresh access token in timer:', error);
+          this.#logger.error('Failed to refresh access token in timer:', error);
         });
       }
     }, 3_600_000);

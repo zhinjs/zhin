@@ -12,7 +12,7 @@ import type {
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import {
   formatInboundContent,
@@ -37,8 +37,6 @@ import { normalizeSlackReactionName } from './slack-reaction.js';
 import { postSlackEphemeral } from './slack-response-url.js';
 import { editSlackContent, sendSlackContent, type SlackChatClient } from './slack-outbound.js';
 import { registerSlackWebhookRoutes, type SlackWebhookHandler } from './webhook.js';
-
-const logger = getLogger('slack');
 
 export interface SlackSocketLike {
   on(
@@ -103,6 +101,8 @@ export interface SlackEndpointOptions {
 }
 
 export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: SlackEndpointOptions;
   readonly #inboundFilter = createSlackInboundFilterState();
   readonly #messageChannelMap = new Map<string, string>();
@@ -116,6 +116,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
   readonly management: EndpointManagement = createSlackEndpointManagement(this);
 
   constructor(options: SlackEndpointOptions) {
+    this.#logger = getAdapterLogger('slack', options.config.name);
     this.#options = options;
   }
 
@@ -154,7 +155,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
           throw new Error('Slack HTTP Events API requires httpHostToken (Runtime Host)');
         }
         this.#routeReleases.push(...registerSlackWebhookRoutes(http, this));
-        logger.debug(formatCompact({
+        this.#logger.debug(formatCompact({
           endpoint: config.name,
           op: 'webhook',
           path: config.webhookPath,
@@ -164,13 +165,13 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
       const authTest = await this.#client.auth.test();
       if (authTest.user_id) this.#botUserId = String(authTest.user_id);
 
-      logger.info(
-        `connected ${config.name} (${config.mode})`
+      this.#logger.info(
+        `connected (${config.mode})`
         + (this.#botUserId ? ` | user: ${this.#botUserId}` : ''),
       );
     } catch (error) {
       await this.stop();
-      logger.error('Failed to connect Slack endpoint:', error);
+      this.#logger.error('Failed to connect Slack endpoint:', error);
       throw error;
     }
   }
@@ -198,7 +199,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
     this.#unregisterAgent = undefined;
     this.#client = undefined;
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -209,7 +210,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
       this.#client,
       payload,
       { channel, threadTs },
-      logger,
+      this.#logger,
     );
     if (result.ts) this.trackMessageChannel(result.ts, channel);
     return formatSlackMessageRef(channel, result.ts || String(Date.now()));
@@ -245,7 +246,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
         ...(msg.type === 'app_mention' ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'slack_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
@@ -260,7 +261,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
     const userId = payload.user.id;
     const messageTs = payload.message?.ts ?? '';
     if (payload.response_url) {
-      postSlackEphemeral(payload.response_url, '已收到', logger);
+      postSlackEphemeral(payload.response_url, '已收到', this.#logger);
     }
     const actionTs = payload.actions[0]?.action_ts ?? messageTs ?? `action-${Date.now()}`;
     const conversation = slackInboundConversation(String(this.#options.id), {
@@ -280,7 +281,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
         threadTs: messageTs || undefined,
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'slack_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
@@ -290,7 +291,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
 
   admitSlashCommand(cmd: SlackSlashCommand): void {
     if (!this.#open) return;
-    postSlackEphemeral(cmd.response_url, '处理中…', logger);
+    postSlackEphemeral(cmd.response_url, '处理中…', this.#logger);
     const conversation = slackInboundConversation(String(this.#options.id), {
       channelId: cmd.channel_id,
     });
@@ -305,7 +306,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
         command: cmd.command,
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'slack_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),

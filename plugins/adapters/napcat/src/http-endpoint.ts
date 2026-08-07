@@ -5,7 +5,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { createNapCatEndpointManagement } from './endpoint-management.js';
 import { registerNapcatAgentEndpoint } from './napcat-agent-deps.js';
@@ -32,8 +32,6 @@ import { readRequestBody } from './webhook.js';
 import { NapCatWsEndpoint } from './ws-endpoint.js';
 import { verifyNapCatAccessToken } from './wss-auth.js';
 
-const logger = getLogger('napcat');
-
 export interface NapCatHttpEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
@@ -43,6 +41,8 @@ export interface NapCatHttpEndpointOptions {
 }
 
 export class NapCatHttpEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: NapCatHttpEndpointOptions;
   readonly #inboundDeduper = new InboundMessageDeduper();
   readonly management: EndpointManagement = createNapCatEndpointManagement(this);
@@ -53,6 +53,7 @@ export class NapCatHttpEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: NapCatHttpEndpointOptions) {
+    this.#logger = getAdapterLogger('napcat', options.config.name);
     this.#options = options;
     this.#callHttpAction = options.callHttpAction ?? callNapCatHttpAction;
   }
@@ -65,7 +66,7 @@ export class NapCatHttpEndpoint implements EndpointInstance {
       this as unknown as NapCatWsEndpoint,
     );
     this.#setupRoutes();
-    logger.info(formatCompact({
+    this.#logger.info(formatCompact({
       op: 'listen',
       endpoint: this.#options.config.name,
       mode: 'http',
@@ -88,7 +89,7 @@ export class NapCatHttpEndpoint implements EndpointInstance {
     this.#unregisterAgent = undefined;
     this.#inboundDeduper.clear();
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -104,7 +105,7 @@ export class NapCatHttpEndpoint implements EndpointInstance {
     );
     const data = resp.data as { message_id?: number | string } | undefined;
     const messageId = data?.message_id != null ? String(data.message_id) : '';
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'napcat_send',
       endpoint: this.#options.config.name,
       target: `${conversation.kind}:${conversation.id}`,
@@ -157,7 +158,7 @@ export class NapCatHttpEndpoint implements EndpointInstance {
         ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'napcat_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
@@ -194,7 +195,7 @@ export class NapCatHttpEndpoint implements EndpointInstance {
       response.writeHead(200, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify({ status: 'ok' }));
     } catch (error) {
-      logger.error('NapCat HTTP webhook error:', error);
+      this.#logger.error('NapCat HTTP webhook error:', error);
       if (!response.headersSent) {
         response.writeHead(500, { 'Content-Type': 'application/json' });
         response.end(JSON.stringify({ message: 'Internal Server Error' }));

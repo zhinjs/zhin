@@ -366,6 +366,26 @@ describe('policy-facade', () => {
       ]);
     });
 
+    it('普通用户写会话 MEMORY.md 全链放行（对齐 checkMemoryWritePath session）', () => {
+      const ctx = mockCommMessage({
+        adapter: 'qq',
+        endpoint: '知音',
+        senderId: 'user1',
+        sender_roles: ['user'],
+        scope: 'private',
+      });
+      const fp = path.join(tmpDir, 'data', 'memory', 'sessions', 'qq_private_user1', 'MEMORY.md');
+      const result = runToolPolicies({
+        toolName: 'write_file',
+        filePath: fp,
+        rawFilePath: fp,
+        commMessage: ctx,
+      });
+      expect(result.allowed).toBe(true);
+      expect(result.needsOwnerApproval).toBeFalsy();
+      expect(toolPolicyResultToMessage(result, 'write_file')).toBeNull();
+    });
+
     it('普通用户读敏感路径在 file-permission-matrix 拒绝，且与工具返回逐字一致', async () => {
       mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });

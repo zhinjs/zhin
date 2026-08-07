@@ -608,9 +608,9 @@ describe('onebot11 ws lifecycle', () => {
   });
 
   it('warns loudly when wss starts without access_token', async () => {
-    const { getLogger } = await import('@zhin.js/logger');
+    const { getAdapterLogger } = await import('@zhin.js/logger');
     const { OneBot11WssEndpoint } = await import('../src/wss-endpoint.js');
-    const warnSpy = vi.spyOn(getLogger('onebot11'), 'warn');
+    const warnSpy = vi.spyOn(getAdapterLogger('onebot11', 'wss-noauth'), 'warn');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     try {
       const endpoint = new OneBot11WssEndpoint({

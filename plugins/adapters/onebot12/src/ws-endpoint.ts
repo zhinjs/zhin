@@ -12,7 +12,7 @@ import {
   type EndpointSendRequest,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { createOneBot12EndpointManagement } from './endpoint-management.js';
 import {
@@ -37,8 +37,6 @@ import {
   WS_OPEN,
 } from './ws-types.js';
 
-const logger = getLogger('onebot12');
-
 export interface OneBot12WsEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
@@ -50,6 +48,8 @@ export interface OneBot12WsEndpointOptions {
 }
 
 export class OneBot12WsEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: OneBot12WsEndpointOptions;
   readonly management: EndpointManagement = createOneBot12EndpointManagement(this);
   readonly #lifecycle: EndpointLifecycle;
@@ -63,6 +63,7 @@ export class OneBot12WsEndpoint implements EndpointInstance {
   #open = false;
 
   constructor(options: OneBot12WsEndpointOptions) {
+    this.#logger = getAdapterLogger('onebot12', options.config.name);
     this.#options = options;
     const { config } = options;
     this.#lifecycle = createEndpointLifecycle({
@@ -121,7 +122,7 @@ export class OneBot12WsEndpoint implements EndpointInstance {
       payload,
       (action, params) => this.callApi(action, params),
       (error) => {
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'onebot12_upload_failed',
           endpoint: this.#options.config.name,
           error: error instanceof Error ? error.message : String(error),
@@ -132,7 +133,7 @@ export class OneBot12WsEndpoint implements EndpointInstance {
     const params = buildSendMessageParams(conversation, message);
     const data = await this.#callAction('send_message', params) as { message_id?: string } | undefined;
     const messageId = data?.message_id ?? '';
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'onebot12_send',
       endpoint: this.#options.config.name,
       kind: conversation.kind,
@@ -176,7 +177,7 @@ export class OneBot12WsEndpoint implements EndpointInstance {
         ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'onebot12_gateway_receive_failed',
         kind: conversation.kind,
         conversationId: conversation.id,
@@ -206,7 +207,7 @@ export class OneBot12WsEndpoint implements EndpointInstance {
       ws.on('open', () => {
         if (settled) return;
         settled = true;
-        logger.debug(formatCompact({
+        this.#logger.debug(formatCompact({
           endpoint: this.#options.config.name,
           mode: 'ws',
           url: safeUrl,
@@ -239,7 +240,7 @@ export class OneBot12WsEndpoint implements EndpointInstance {
 
       ws.on('error', (err) => {
         const error = err instanceof Error ? err : new Error(String(err));
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'ws_error',
           endpoint: this.#options.config.name,
           ok: false,
@@ -276,7 +277,7 @@ export class OneBot12WsEndpoint implements EndpointInstance {
       }
       this.admit(msg as OneBot12Event);
     } catch (error) {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'onebot12_parse_failed',
         endpoint: this.#options.config.name,
         error: error instanceof Error ? error.message : String(error),

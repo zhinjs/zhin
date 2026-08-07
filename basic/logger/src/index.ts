@@ -8,6 +8,7 @@ export {
   FileTransport,
   StreamTransport,
   getLogger,
+  getAdapterLogger,
   setLogger,
   setOptions,
   addTransport,

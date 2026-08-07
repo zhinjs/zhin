@@ -48,6 +48,7 @@
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
+    "@zhin.js/middleware": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "qq-official-bot": "^1.2.3"
   },
@@ -82,6 +83,7 @@
   "files": [
     "adapters",
     "commands",
+    "middlewares",
     "plugin.js",
     "schema.json",
     "src",
@@ -110,6 +112,10 @@
       },
       {
         "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/middleware",
         "api": "^1.0.0"
       }
     ],

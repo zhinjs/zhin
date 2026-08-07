@@ -13,6 +13,7 @@ import { getGitStatusLine } from './git-context.js';
 import { buildPreExecFastPathPrompt } from '../tool/runtime.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { AgentMessage } from '@zhin.js/ai';
+import { getLlmTransportModel } from '@zhin.js/ai';
 
 export function buildDisciplinedPrompt(_agent: ZhinAgentPrivate, basePrompt: string): string {
   const guidance = [
@@ -95,6 +96,12 @@ export async function buildAgentPathSystemPrompt(
     ? await getGitStatusLine(process.cwd())
     : null;
 
+  const bindingModel = agent.activeBinding?.model;
+  const providerAlias = agent.activeBinding?.providerAlias ?? agent.getTurnProvider().name;
+  const llmModel = bindingModel
+    ? getLlmTransportModel(providerAlias, bindingModel)
+    : undefined;
+
   const promptCtx = {
     config: agent.config,
     skillRegistry: agent.skillRegistry,
@@ -108,7 +115,8 @@ export async function buildAgentPathSystemPrompt(
     platformSections: platformMarkdown,
     orchestratorSdk: modelSdk,
     agentNickname: agent.activeBinding?.nickname,
-    modelId: agent.activeBinding?.model,
+    modelId: bindingModel,
+    contextWindow: llmModel?.contextWindow ?? agent.config.contextTokens,
   };
   const richPrompt = buildRichSystemPrompt(promptCtx);
 

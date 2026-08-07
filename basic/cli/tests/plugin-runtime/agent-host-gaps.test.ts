@@ -491,17 +491,95 @@ describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () 
     expect(resolver.resolveTrusted('bot1', 'y')).toEqual(['t1', 't2']);
   });
 
-  it('endpoints[].owner / endpoints[].trusted 解析', async () => {
+  it('endpoints[].master / endpoints[].trusted 解析', async () => {
     const resolver = await createEndpointRoleResolver({
       plugins: {
         icqq: {
-          endpoints: [{ name: '10001', owner: 'u-ep-owner', trusted: 't3 t4' }],
+          endpoints: [{ name: '10001', master: 'u-ep-master', trusted: 't3 t4' }],
         },
       },
     } as never);
-    expect(resolver.resolveOwner('icqq', 'x')).toBe('u-ep-owner');
-    expect(resolver.resolveOwner('10001', '10001')).toBe('u-ep-owner');
-    expect(resolver.resolveTrusted('icqq', 'x')).toEqual(['t3', 't4']);
+    expect(resolver.resolveOwner('icqq', '10001')).toBe('u-ep-master');
+    expect(resolver.resolveOwner('10001', '10001')).toBe('u-ep-master');
+    // 不挂到插件键，避免污染同适配器其它 endpoint
+    expect(resolver.resolveOwner('icqq', 'other')).toBeUndefined();
+    expect(resolver.resolveTrusted('icqq', '10001')).toEqual(['t3', 't4']);
+  });
+
+  it('endpoints[].owner 不作为框架 master（owner/admin 是群身份）', async () => {
+    const resolver = await createEndpointRoleResolver({
+      plugins: {
+        qq: {
+          endpoints: [{ name: '知音', owner: 'should-not-be-master', master: 'real-master' }],
+        },
+      },
+    } as never);
+    expect(resolver.resolveOwner('qq', '知音')).toBe('real-master');
+    expect(resolver.resolveOwner('知音', '知音')).toBe('real-master');
+  });
+
+  it('多 endpoint 各自 master 互不覆盖', async () => {
+    const resolver = await createEndpointRoleResolver({
+      plugins: {
+        qq: {
+          endpoints: [
+            { name: 'zhin', master: 'master-a' },
+            { name: '知音', master: 'master-b' },
+          ],
+        },
+      },
+    } as never);
+    expect(resolver.resolveOwner('qq', 'zhin')).toBe('master-a');
+    expect(resolver.resolveOwner('qq', '知音')).toBe('master-b');
+  });
+
+  it('endpoints[].master → bridge isMaster → edit_file / 文件策略认 master', async () => {
+    const { checkFileToolAccess } = await import(
+      '../../../../packages/im/agent/src/security/dangerous-tool-policy.js'
+    );
+    const { runToolPolicies } = await import(
+      '../../../../packages/im/agent/src/security/policy-facade.js'
+    );
+    const masterId = '477561AD3A89AFCDABB6AFCB71FF54DF';
+    const resolver = await createEndpointRoleResolver({
+      plugins: {
+        qq: {
+          endpoints: [{ name: '知音', master: masterId }],
+        },
+      },
+    } as never);
+    const endpointMaster = resolver.resolveOwner('qq', '知音');
+    expect(endpointMaster).toBe(masterId);
+
+    const message = makeMessage({
+      content: 'edit please',
+      target: `private:${masterId}`,
+      sender: '昵称可变',
+      metadata: {
+        channelType: 'private',
+        endpoint: '知音',
+        userId: masterId,
+      },
+    });
+    const roles = resolveRuntimeSenderRoles(message, endpointMaster, [], undefined);
+    expect(roles).toEqual({ isMaster: true, isTrusted: false });
+
+    const comm = bridgeRuntimeMessage(message, endpointMaster, roles);
+    expect(comm.$sender.isMaster).toBe(true);
+    expect(comm.$sender.id).toBe(masterId);
+
+    const access = checkFileToolAccess('edit_file', comm);
+    expect(access).toMatchObject({ allowed: true, role: 'master' });
+
+    const result = runToolPolicies({
+      toolName: 'edit_file',
+      filePath: '/tmp/zhin-master-edit-ok.txt',
+      rawFilePath: '/tmp/zhin-master-edit-ok.txt',
+      commMessage: comm,
+    });
+    expect(result.allowed).toBe(true);
+    expect(result.needsOwnerApproval).toBeFalsy();
+    expect(result.decisions.find((d) => d.policy === 'role-gate')?.decision.role).toBe('master');
   });
 
   it('无 plugins 配置时返回空解析', async () => {

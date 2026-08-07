@@ -118,7 +118,7 @@ function resolveRoleFromMessageFallback(commMessage: Message): ToolRequesterRole
 
 function denyUnidentifiedTool(toolName: string): DangerousToolDecision {
   // 内部细节（身份解析失败）只进 debug 日志，用户消息不暴露策略实现
-  logger.debug(`无法确认调用者身份，已拒绝工具「${toolName}」`);
+  logger.debug(`Tool denied: unidentified caller → ${toolName}`);
   return {
     allowed: false,
     role: 'unknown',
@@ -148,7 +148,7 @@ export function checkFileToolAccess(toolName: FileToolName, commMessage?: Messag
 
   if (role === 'trusted') {
     if (op === 'delete') {
-      logger.debug(`trusted 角色无删除权限，已拒绝工具「${toolName}」`);
+      logger.debug(`Tool denied: trusted role cannot delete → ${toolName}`);
       return {
         allowed: false,
         role,
@@ -162,7 +162,7 @@ export function checkFileToolAccess(toolName: FileToolName, commMessage?: Messag
     return { allowed: true, role };
   }
 
-  logger.debug(`普通用户仅允许只读操作，已拒绝工具「${toolName}」`);
+  logger.debug(`Tool denied: read-only access for user → ${toolName}`);
   return {
     allowed: false,
     role,

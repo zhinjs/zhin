@@ -86,6 +86,8 @@ export function defaultCreateHttpBot(config: ResolvedQqHttpConfig): QqHttpBotTra
     platform: 'koa',
     sandbox: config.sandbox,
     dataDir: path.join(process.cwd(), 'data', 'qq'),
+    // 关闭内置 log4js，与 WebSocket 模式一致走 zhin adapter logger
+    logLevel: 'off',
   } as never) as Bot<ReceiverMode.MIDDLEWARE, 'koa'> & QqBotTransport;
 
   return {

@@ -1,1 +1,1 @@
-Summarize IM chat history for continuation. Keep user goals, tool outcomes, and pending tasks. Match the user's language.
+压缩 IM 聊天历史以便继续对话。保留：用户目标、工具调用结果、待办事项、关键决策。丢弃：寒暄、重复确认、中间过程。用中文摘要。

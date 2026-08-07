@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import { isRawContent } from '@zhin.js/core/runtime';
 import { buildQrImageUrl, qrImageSegment } from '../src/qrcode-lib.js';
-import plugin from '../plugin.ts';
-import qrcodeCommand from '../commands/gen/[text].ts';
-import scanCommand from '../commands/scan/[url].ts';
+import plugin from '../plugin.js';
+import qrcodeCommand from '../commands/gen/[text].js';
+import scanCommand from '../commands/scan/[url].js';
 
 describe('@zhin.js/plugin-qrcode', () => {
   it('defines a valid Plugin Runtime entry', () => {
@@ -32,6 +32,7 @@ describe('@zhin.js/plugin-qrcode', () => {
       },
       args: [],
       params: { text: 'ping' },
+      segments: [],
       input: undefined,
     });
     expect(isRawContent(content)).toBe(true);
@@ -51,6 +52,7 @@ describe('@zhin.js/plugin-qrcode', () => {
       },
       args: ['beautiful', 'world'],
       params: { text: 'hello' },
+      segments: [],
       input: undefined,
     });
     expect(isRawContent(content)).toBe(true);

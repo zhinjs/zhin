@@ -11,7 +11,7 @@ import {
   type EndpointSendRequest,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { createMilkyEndpointManagement } from './endpoint-management.js';
 import { registerMilkyAgentEndpoint } from './milky-agent-deps.js';
@@ -36,7 +36,6 @@ import {
 } from './protocol.js';
 import type { MilkyWsCreateOptions, MilkyWsSocket } from './ws-types.js';
 
-const logger = getLogger('milky');
 const WS_OPEN = 1;
 
 export interface MilkyWsEndpointOptions {
@@ -51,6 +50,8 @@ export interface MilkyWsEndpointOptions {
 }
 
 export class MilkyWsEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: MilkyWsEndpointOptions;
   readonly #callApi: typeof callApi;
   readonly management: EndpointManagement = createMilkyEndpointManagement(this);
@@ -60,6 +61,7 @@ export class MilkyWsEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: MilkyWsEndpointOptions) {
+    this.#logger = getAdapterLogger('milky', options.config.name);
     this.#options = options;
     this.#callApi = options.callApi ?? callApi;
     this.#lifecycle = createEndpointLifecycle({
@@ -115,7 +117,7 @@ export class MilkyWsEndpoint implements EndpointInstance {
     const { action, params } = buildSendAction(conversation, message);
     const data = await this.callApi(action, params) as { message_seq?: number } | undefined;
     const messageId = formatOutboundMessageId(conversation, data?.message_seq);
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'milky_send',
       endpoint: this.#options.config.name,
       target: `${conversation.kind}:${conversation.id}`,
@@ -249,7 +251,7 @@ export class MilkyWsEndpoint implements EndpointInstance {
         ...(audioUrl ? { audio_url: audioUrl } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'milky_gateway_receive_failed',
         target,
         error: err instanceof Error ? err.message : String(err),
@@ -279,13 +281,13 @@ export class MilkyWsEndpoint implements EndpointInstance {
         if (settled) return;
         settled = true;
         if (!this.#options.config.access_token) {
-          logger.warn(formatCompact({
+          this.#logger.warn(formatCompact({
             endpoint: this.#options.config.name,
             ok: false,
             error: 'missing access_token',
           }));
         }
-        logger.debug(formatCompact({
+        this.#logger.debug(formatCompact({
           endpoint: this.#options.config.name,
           mode: 'ws',
           url: safeUrl,
@@ -319,9 +321,8 @@ export class MilkyWsEndpoint implements EndpointInstance {
           : codeNum === 1006
             ? ' [异常关闭]'
             : '';
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'disconnect',
-          endpoint: this.#options.config.name,
           code: codeNum,
           error: `${reasonStr || 'closed'}${codeHint}`,
           reconnect_ms: this.#options.config.reconnect_interval,
@@ -336,7 +337,7 @@ export class MilkyWsEndpoint implements EndpointInstance {
 
       ws.on('error', (err) => {
         const error = err instanceof Error ? err : new Error(String(err));
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'ws_error',
           endpoint: this.#options.config.name,
           ok: false,
@@ -362,7 +363,7 @@ export class MilkyWsEndpoint implements EndpointInstance {
       const event = JSON.parse(raw) as MilkyEvent;
       this.admit(event);
     } catch (error) {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'milky_parse_failed',
         endpoint: this.#options.config.name,
         error: error instanceof Error ? error.message : String(error),

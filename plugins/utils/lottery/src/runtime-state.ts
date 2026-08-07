@@ -1,4 +1,4 @@
-import { createToken } from '@zhin.js/plugin-runtime';
+import { createToken, type Token } from '@zhin.js/plugin-runtime';
 import type { LotteryDb } from './db.js';
 
 export interface LotteryRuntime {
@@ -12,10 +12,10 @@ export const lotteryRuntimeToken = createToken<LotteryRuntime>(
 
 export function resolveLotteryRuntime(context: {
   owner?: { id?: unknown };
-  use<T>(token: typeof lotteryRuntimeToken): T;
+  use<T>(token: Token<T>): T;
 }): LotteryRuntime | undefined {
   try {
-    return context.use(lotteryRuntimeToken) as LotteryRuntime;
+    return context.use(lotteryRuntimeToken);
   } catch (error) {
     if (context.owner?.id) throw error;
     return undefined;

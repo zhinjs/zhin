@@ -8,7 +8,7 @@
         "string",
         "number"
       ],
-      "description": "Endpoint Owner QQ uin (for /approve bash and master role)"
+      "description": "框架 master QQ uin（/approve、AI/工具权限）；endpoints[i].master 可逐项覆盖"
     },
     "trusted": {
       "type": "array",
@@ -19,7 +19,7 @@
         ],
         "description": "Trusted QQ uin"
       },
-      "description": "Trusted QQ uin list"
+      "description": "框架 trusted QQ uin 列表（弱于 master）"
     },
     "autoReconnect": {
       "type": "boolean",
@@ -49,7 +49,7 @@
               "string",
               "number"
             ],
-            "description": "Endpoint Owner QQ uin (for /approve bash and master role)"
+            "description": "本 endpoint 的框架 master QQ uin；覆盖顶层 master"
           },
           "trusted": {
             "type": "array",
@@ -60,7 +60,7 @@
               ],
               "description": "Trusted QQ uin"
             },
-            "description": "Trusted QQ uin list"
+            "description": "本 endpoint 的 trusted 列表"
           },
           "rpc": {
             "type": "object",

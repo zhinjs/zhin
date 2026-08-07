@@ -50,6 +50,18 @@ describe('buildTurnContextEnvelope', () => {
     expect(envelope).toContain('[Tone hint] casual');
   });
 
+  it('私聊也写入 Sender roles（无 group sender 前缀时模型仍能看见 master）', () => {
+    const msg = mockCommMessage({
+      adapter: 'qq',
+      endpoint: '知音',
+      scope: 'private',
+      senderId: '477561AD3A89AFCDABB6AFCB71FF54DF',
+      isMaster: true,
+    });
+    const envelope = buildTurnContextEnvelope({ commMessage: msg });
+    expect(envelope).toContain('Sender: id=477561AD3A89AFCDABB6AFCB71FF54DF roles=master');
+  });
+
   it('prependTurnContextEnvelope 前缀到用户正文', () => {
     const envelope = `${TURN_CONTEXT_BEGIN}\nTime: test\n${TURN_CONTEXT_END}`;
     const out = prependTurnContextEnvelope('hello', envelope);

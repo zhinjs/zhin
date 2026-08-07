@@ -1,6 +1,6 @@
 import type { OutputElement, Usage } from '@zhin.js/ai';
 import {
-  formatCompactLog,
+  formatCompact,
   formatCompactUsage,
   formatLogKvTable,
   truncatePreview,
@@ -70,15 +70,15 @@ export function formatAiHandlerTurnTable(
   const output = context.output ?? metrics.output;
 
   const rows: LogKvRow[] = [
-    { label: '耗时', value: `${Math.round(totalMs)} ms` },
+    { label: 'Duration', value: `${Math.round(totalMs)} ms` },
     { label: 'Token', value: formatCompactUsage(metrics.usage, metrics.subagentUsage) },
-    { label: '模式', value: buildModeLine(metrics) },
+    { label: 'Mode', value: buildModeLine(metrics) },
   ];
 
   const contentRows: LogKvRow[] = [
-    ...previewToKvRows('用户输入', userInput, HANDLER_VALUE_WIDTH),
-    ...previewToKvRows('思考', thinking, HANDLER_VALUE_WIDTH),
-    ...previewToKvRows('输出', output, HANDLER_VALUE_WIDTH),
+    ...previewToKvRows('Input', userInput, HANDLER_VALUE_WIDTH),
+    ...previewToKvRows('Thinking', thinking, HANDLER_VALUE_WIDTH),
+    ...previewToKvRows('Output', output, HANDLER_VALUE_WIDTH),
   ];
 
   const sectionBreaks: number[] = [rows.length - 1];
@@ -112,8 +112,9 @@ export function formatZhinAgentTurnUsage(usage: Usage, subagentUsage?: Usage): s
 }
 
 export function formatAiHandlerFallbackLog(totalMs: number, path?: string): string {
-  return formatCompactLog('AI Handler', {
-    total_ms: Math.round(totalMs),
-    ...(path ? { path } : { usage: 'n/a' }),
+  return formatCompact({
+    op: 'turn_fallback',
+    ms: Math.round(totalMs),
+    ...(path ? { path } : {}),
   });
 }

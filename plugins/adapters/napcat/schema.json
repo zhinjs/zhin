@@ -25,6 +25,24 @@
       "type": "number",
       "default": 30000
     },
+    "master": {
+      "type": [
+        "string",
+        "number"
+      ],
+      "description": "框架 master（QQ uin；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖"
+    },
+    "trusted": {
+      "type": "array",
+      "items": {
+        "type": [
+          "string",
+          "number"
+        ],
+        "description": "Trusted QQ uin"
+      },
+      "description": "框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加"
+    },
     "endpoints": {
       "type": "array",
       "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
@@ -35,6 +53,24 @@
           "name": {
             "type": "string",
             "description": "NapCat bot name"
+          },
+          "master": {
+            "type": [
+              "string",
+              "number"
+            ],
+            "description": "本 endpoint 的框架 master（QQ uin）；覆盖顶层 master"
+          },
+          "trusted": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "Trusted QQ uin"
+            },
+            "description": "本 endpoint 的 trusted 列表"
           },
           "url": {
             "type": "string",

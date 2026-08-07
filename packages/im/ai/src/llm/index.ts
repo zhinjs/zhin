@@ -155,6 +155,8 @@ export {
   agentMessagesToAiSdk,
   contextToAiSdkPrompt,
   llmToolsToAiSdk,
+  shouldEnsureToolCallReasoning,
+  TOOL_CALL_REASONING_PLACEHOLDER,
 } from './bridge/ai-sdk-messages.js';
 
 export { createAiSdkStreamFn, generateTextViaAiSdk } from './bridge/ai-sdk-stream.js';

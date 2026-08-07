@@ -4,7 +4,7 @@
 import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { registerLineAgentEndpoint } from './line-agent-deps.js';
 import {
@@ -19,8 +19,6 @@ import {
   type ResolvedLineConfig,
 } from './protocol.js';
 import { registerLineWebhookRoutes } from './webhook.js';
-
-const logger = getLogger('line');
 
 /** LINE replyToken 有效期短，过期后 reply 必 400；缓存带时间戳，超时弃用改走 push。 */
 const REPLY_TOKEN_TTL_MS = 60_000;
@@ -51,6 +49,8 @@ export interface LineEndpointOptions {
 }
 
 export class LineEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: LineEndpointOptions;
   readonly #fetch: LineFetch;
   #routeReleases: HttpRouteRegistration[] = [];
@@ -61,6 +61,7 @@ export class LineEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createLineEndpointManagement(this);
 
   constructor(options: LineEndpointOptions) {
+    this.#logger = getAdapterLogger('line', options.config.name);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
@@ -87,14 +88,14 @@ export class LineEndpoint implements EndpointInstance {
     try {
       this.#unregisterAgent = registerLineAgentEndpoint(this.#options.config.name, this);
       this.#routeReleases.push(...registerLineWebhookRoutes(this.#options.http, this));
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         endpoint: this.#options.config.name,
         op: 'webhook',
         path: this.#options.config.webhookPath,
       }));
     } catch (error) {
       await this.stop();
-      logger.error('Failed to connect LINE endpoint:', error);
+      this.#logger.error('Failed to connect LINE endpoint:', error);
       throw error;
     }
   }
@@ -114,7 +115,7 @@ export class LineEndpoint implements EndpointInstance {
     this.#unregisterAgent?.();
     this.#unregisterAgent = undefined;
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -134,7 +135,7 @@ export class LineEndpoint implements EndpointInstance {
         } catch (error) {
           // replyToken 过期/失效时 LINE 返回 400，回退 push 保证消息不丢
           if ((error as { status?: number }).status !== 400) throw error;
-          logger.warn(formatCompact({
+          this.#logger.warn(formatCompact({
             op: 'line_reply_fallback_push',
             endpoint: this.#options.config.name,
             target,
@@ -171,7 +172,7 @@ export class LineEndpoint implements EndpointInstance {
         ...(isMessageEvent(event) ? { messageType: event.message.type } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'line_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),

@@ -3,7 +3,6 @@
  */
 import path from 'node:path';
 import { Bot, ReceiverMode, type Sendable } from 'qq-official-bot';
-import { getLevel, toLog4jsLevel } from '@zhin.js/logger';
 import type { MediaRef, Segment } from '@zhin.js/core';
 import type { QqOutboundMessage } from './outbound.js';
 import type { QqChannelKind, QqInboundMessage, ResolvedQqWebsocketConfig } from './protocol.js';
@@ -250,7 +249,8 @@ export function defaultCreateBot(config: ResolvedQqWebsocketConfig): QqBotTransp
     mode: ReceiverMode.WEBSOCKET,
     sandbox: config.sandbox,
     dataDir: path.join(process.cwd(), 'data', 'qq'),
-    logLevel: toLog4jsLevel(getLevel()),
+    // 关闭 qq-official-bot 内置 log4js，入/出站由 getAdapterLogger('qq', …) 统一格式
+    logLevel: 'off',
     ...(config.intents ? { intents: config.intents as never } : {}),
     ...(config.accessTokenUrl ? { accessTokenUrl: config.accessTokenUrl } : {}),
     ...(config.gatewayUrl ? { gatewayUrl: config.gatewayUrl } : {}),

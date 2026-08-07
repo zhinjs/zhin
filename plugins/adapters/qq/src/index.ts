@@ -14,6 +14,16 @@ export {
 } from './protocol.js';
 
 export {
+  DEFAULT_QQ_BOT_KIND,
+  QQ_INTENTS_BY_KIND,
+  defaultQqEndpointIntentFields,
+  parseQqBotKind,
+  resolveQqIntents,
+  type QqBotKind,
+  type QqIntent,
+} from './qq-intents.js';
+
+export {
   formatOutbound,
   resolveMediaFile,
   type QqOutboundElem,

@@ -60,35 +60,21 @@ export function logPromptComposition(input: LogPromptCompositionInput): void {
 
   const flat: Record<string, string | number | boolean> = {
     phase: 'prompt.compose',
-    session: input.sessionId,
     label: input.label,
-    systemChars,
-    systemEstTokens: estTokensFromChars(systemChars),
-    historyMsgs: input.historyMessages.length,
-    historyChars,
-    historyEstTokens: estTokensFromChars(historyChars),
-    toolCount: input.tools.length,
-    toolsSchemaChars: schemaChars,
-    toolsSchemaEstTokens: estTokensFromChars(schemaChars),
-    totalEstTokens: totalEst,
+    system: estTokensFromChars(systemChars),
+    history: `${input.historyMessages.length}msg/${estTokensFromChars(historyChars)}tok`,
+    tools: input.tools.length,
+    total: totalEst,
   };
 
   const sections = formatSections(input.sections);
   if (sections) flat.sections = sections;
-  if (input.tools.length > 0) {
-    flat.toolNames = input.tools.map(t => t.name).join(',');
-  }
   if (userChars > 0) {
-    flat.userChars = userChars;
     flat.userPreview = truncatePreview(input.userPreview!, 80);
   }
 
   if (input.config.promptTraceVerbose) {
     flat.systemHead = truncatePreview(input.systemPrompt, 120);
-    flat.systemTail = truncatePreview(
-      input.systemPrompt.slice(Math.max(0, input.systemPrompt.length - 120)),
-      120,
-    );
   }
 
   logger.info(formatCompact(flat));

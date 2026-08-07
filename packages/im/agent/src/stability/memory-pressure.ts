@@ -76,35 +76,18 @@ export function startStabilityMonitor(options: StabilityMonitorOptions = {}): ()
           const size = collect();
           if (size >= threshold * 2) {
             const removed = evict?.() ?? 0;
-            log.warn(formatCompact({
-              code: 'memory_pressure_evict',
-              metric: name,
-              size,
-              threshold,
-              removed,
-            }));
+            log.warn(formatCompact({ op: 'evict', metric: name, size, threshold, removed }));
           } else if (size >= threshold) {
-            log.warn(formatCompact({
-              code: 'memory_pressure_warn',
-              metric: name,
-              size,
-              threshold,
-            }));
+            log.warn(formatCompact({ op: 'pressure', metric: name, size, threshold }));
           }
         }
 
         if (includeRss) {
           const metrics = await collectStabilityMetrics({ includeRss: true });
-          log.debug(formatCompact({
-            code: 'stability_metrics',
-            ...metrics,
-          }));
+          log.debug(formatCompact({ op: 'stability', ...metrics }));
         }
       } catch (err) {
-        log.error(formatCompact({
-          code: 'stability_monitor_error',
-          error: err instanceof Error ? err.message : String(err),
-        }));
+        log.error(`Stability monitor error: ${err instanceof Error ? err.message : String(err)}`);
       }
     })();
   }, intervalMs);

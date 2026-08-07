@@ -9,7 +9,7 @@ import type {
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { formatOutbound } from './outbound.js';
 import { registerQqAgentEndpoint } from './qq-agent-deps.js';
@@ -38,8 +38,6 @@ import {
   type QqBotTransport,
 } from './ws.js';
 
-const logger = getLogger('qq');
-
 export type { CreateQqBot, QqBotTransport } from './ws.js';
 export type { CreateQqHttpBot, QqHttpBotTransport } from './webhook.js';
 
@@ -51,6 +49,8 @@ export interface QqEndpointOptions {
 }
 
 export class QqWebsocketEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: QqEndpointOptions;
   readonly #createBot: CreateQqBot;
   #bot: QqBotTransport | null = null;
@@ -60,6 +60,7 @@ export class QqWebsocketEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createQqEndpointManagement(this);
 
   constructor(options: QqEndpointOptions) {
+    this.#logger = getAdapterLogger('qq', options.config.name);
     this.#options = options;
     this.#createBot = options.createBot ?? defaultCreateBot;
   }
@@ -77,12 +78,12 @@ export class QqWebsocketEndpoint implements EndpointInstance {
       this.#bot = this.#createBot(this.#options.config);
       this.#bindBot(this.#bot);
       await this.#bot.start();
-      logger.info(
-        `connected ${this.#options.config.name} (websocket) | appid: ${this.#options.config.appid}`,
+      this.#logger.info(
+        `connected (websocket) | appid: ${this.#options.config.appid}`,
       );
     } catch (error) {
       await this.stop();
-      logger.error('Failed to connect QQ websocket:', error);
+      this.#logger.error('Failed to connect QQ websocket:', error);
       const raw = error instanceof Error ? error.message : String(error);
       throw new Error(
         `QQ WebSocket 连接失败：请检查 appid/secret 是否配对、网关地址（gatewayUrl/accessTokenUrl）是否可达（原始错误：${raw}）`,
@@ -113,7 +114,7 @@ export class QqWebsocketEndpoint implements EndpointInstance {
       this.#bot = null;
     }
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -137,12 +138,11 @@ export class QqWebsocketEndpoint implements EndpointInstance {
         break;
     }
     const messageId = `${kind}-${conversation.id}:${resolveOutboundMessageId(result)}`;
-    logger.debug(formatCompact({
-      op: 'qq_send',
-      endpoint: this.#options.config.name,
-      target: `${kind}:${conversation.id}`,
-      messageId,
-    }));
+    this.#logger.info(
+      `send ${kind}:${conversation.id}`
+      + ` | id: ${messageId}`
+      + ` | ${truncatePreview(typeof body === 'string' ? body : String(body), 80)}`,
+    );
     return messageId;
   }
 
@@ -163,7 +163,7 @@ export class QqWebsocketEndpoint implements EndpointInstance {
         await bot.recallDirectMessage?.(channelId, qqMsgId);
         break;
     }
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'qq_recall',
       endpoint: this.#options.config.name,
       kind,
@@ -175,10 +175,17 @@ export class QqWebsocketEndpoint implements EndpointInstance {
   admit(msg: QqInboundMessage): void {
     if (!this.#open) return;
     const conversation = qqInboundConversation(String(this.#options.id), msg);
+    const content = formatInboundContent(msg);
+    this.#logger.info(
+      `recv ${conversation.kind}:${conversation.id}`
+      + (msg.authorId ? ` from ${msg.authorId}` : '')
+      + (msg.mentioned ? ' (mentioned)' : '')
+      + ` | ${truncatePreview(content, 80)}`,
+    );
     void this.#options.gateway.receive({
       conversation,
       message: { conversation, id: msg.id },
-      content: formatInboundContent(msg),
+      content,
       ...(msg.segments?.length ? { segments: msg.segments } : {}),
       sender: senderDisplayName(msg),
       metadata: Object.freeze({
@@ -191,7 +198,7 @@ export class QqWebsocketEndpoint implements EndpointInstance {
         ...(msg.mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'qq_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
@@ -254,6 +261,8 @@ export interface QqHttpEndpointOptions {
 
 /** Webhook / middleware inbound via httpHostToken POST (qq-official-bot Middleware receiver). */
 export class QqHttpEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: QqHttpEndpointOptions;
   readonly #createBot: CreateQqHttpBot;
   #bot: QqHttpBotTransport | null = null;
@@ -264,6 +273,7 @@ export class QqHttpEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createQqEndpointManagement(this);
 
   constructor(options: QqHttpEndpointOptions) {
+    this.#logger = getAdapterLogger('qq', options.config.name);
     this.#options = options;
     this.#createBot = options.createBot ?? defaultCreateHttpBot;
   }
@@ -285,12 +295,12 @@ export class QqHttpEndpoint implements EndpointInstance {
       this.#bot = this.#createBot(this.#options.config);
       this.#bindBot(this.#bot);
       await this.#bot.start();
-      logger.info(
-        `connected ${this.#options.config.name} (${this.#options.config.mode}) | path: ${this.#options.config.webhookPath}`,
+      this.#logger.info(
+        `connected (${this.#options.config.mode}) | path: ${this.#options.config.webhookPath}`,
       );
     } catch (error) {
       await this.stop();
-      logger.error('Failed to connect QQ HTTP receiver:', error);
+      this.#logger.error('Failed to connect QQ HTTP receiver:', error);
       throw error;
     }
   }
@@ -318,7 +328,7 @@ export class QqHttpEndpoint implements EndpointInstance {
       this.#bot = null;
     }
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -341,7 +351,13 @@ export class QqHttpEndpoint implements EndpointInstance {
         result = await bot.sendDirectMessage(conversation.id, body);
         break;
     }
-    return `${kind}-${conversation.id}:${resolveOutboundMessageId(result)}`;
+    const messageId = `${kind}-${conversation.id}:${resolveOutboundMessageId(result)}`;
+    this.#logger.info(
+      `send ${kind}:${conversation.id}`
+      + ` | id: ${messageId}`
+      + ` | ${truncatePreview(typeof body === 'string' ? body : String(body), 80)}`,
+    );
+    return messageId;
   }
 
   async recallMessage(messageId: string): Promise<void> {
@@ -361,7 +377,7 @@ export class QqHttpEndpoint implements EndpointInstance {
         await bot.recallDirectMessage?.(channelId, qqMsgId);
         break;
     }
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'qq_recall',
       endpoint: this.#options.config.name,
       kind,
@@ -372,10 +388,17 @@ export class QqHttpEndpoint implements EndpointInstance {
   admit(msg: QqInboundMessage): void {
     if (!this.#open) return;
     const conversation = qqInboundConversation(String(this.#options.id), msg);
+    const content = formatInboundContent(msg);
+    this.#logger.info(
+      `recv ${conversation.kind}:${conversation.id}`
+      + (msg.authorId ? ` from ${msg.authorId}` : '')
+      + (msg.mentioned ? ' (mentioned)' : '')
+      + ` | ${truncatePreview(content, 80)}`,
+    );
     void this.#options.gateway.receive({
       conversation,
       message: { conversation, id: msg.id },
-      content: formatInboundContent(msg),
+      content,
       ...(msg.segments?.length ? { segments: msg.segments } : {}),
       sender: senderDisplayName(msg),
       metadata: Object.freeze({
@@ -388,7 +411,7 @@ export class QqHttpEndpoint implements EndpointInstance {
         ...(msg.mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'qq_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),

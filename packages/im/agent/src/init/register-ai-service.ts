@@ -23,7 +23,7 @@ export function registerAIService(refs: AIServiceRefs): void {
       const config = appConfig.ai || {};
 
       if (config.enabled === false) {
-        logger.info(formatCompact( { disabled: true }));
+        logger.info('ai service disabled by config');
         return undefined as unknown as AIService;
       }
 
@@ -33,7 +33,7 @@ export function registerAIService(refs: AIServiceRefs): void {
 
       const providers = service.listProviders();
       if (providers.length === 0) {
-        logger.warn(formatCompact( { error: 'no_providers' }));
+        logger.warn('未配置任何 AI 提供方');
       } else {
         logger.debug(formatCompact({ providers: providers.join(',') }));
       }
@@ -44,7 +44,7 @@ export function registerAIService(refs: AIServiceRefs): void {
       if (service) {
         service.dispose();
         refs.aiService = null;
-        logger.debug(formatCompact( { stopped: true }));
+        logger.debug('AI service stopped');
       }
       // 关停前 flush 审计日志，避免进程快退丢事件
       await closeAuditLogger();

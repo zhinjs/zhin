@@ -2,7 +2,7 @@
  * Collaboration ↔ OrchestrationKernel 桥接（ADR 0027）。
  * Kernel 就绪时 Cell 不再写入 activeDelegations；handback 走 task 完成。
  */
-import { formatCompactLog } from '@zhin.js/logger';
+import { formatCompact } from '@zhin.js/logger';
 import { type Message, type MessageElement, sceneRefFromMessage, resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { CollaborationScene } from './types.js';
 import type { OrchestrationRunSource, OrchestrationSceneRef, OrchestrationTaskRecord } from '@zhin.js/ai';
@@ -115,10 +115,9 @@ export async function tryCompleteKernelImProjectionFromOutbound(input: {
   if (!isSubstantiveGroupTaskReply(summary)) return;
 
   await orch.completeTask(task.id, summary);
-  input.logger.info(formatCompactLog('OrchestrationKernel', {
-    action: 'kernel_group_task_complete',
+  input.logger.info(formatCompact({
+    op: 'task_complete',
     task: task.id,
-    cell: input.cell.id,
     endpoint: input.endpointId,
   }));
 

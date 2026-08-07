@@ -172,14 +172,10 @@ export class ImRuntime implements MessageGateway {
       const adapter = conversation.endpoint.id as CapabilityId;
       const requester = requireAdapters(lease.value).owner(adapter);
       logger.debug(formatCompact({
-        op: 'im_inbound_receive',
-        adapter: String(adapter).split('\0').pop() ?? String(adapter),
-        conversation: formatConversationLog(conversation),
+        op: 'receive',
+        conv: formatConversationLog(conversation),
         sender: input.sender,
-        id: input.message?.id,
         preview: truncatePreview(input.content),
-        segments: input.segments?.length,
-        generation: lease.value.generation,
       }));
       const message = new Message(
         conversation,
@@ -209,11 +205,7 @@ export class ImRuntime implements MessageGateway {
           result = await this.#dispatchInteractive(message, requester)
             ?? await this.#dispatcher.dispatch(message, lease.value);
           if (!result.matched && this.#unmatchedHandler) {
-            logger.debug(formatCompact({
-              op: 'im_inbound_unmatched_handler',
-              conversation: formatConversationLog(conversation),
-              id: input.message?.id,
-            }));
+            logger.debug(formatCompact({ op: 'unmatched', conv: formatConversationLog(conversation) }));
             const handled = await this.#unmatchedHandler(message, lease.value, requester);
             if (handled) {
               result = Object.freeze({ matched: true, command: 'ai', owner: requester });
@@ -222,14 +214,13 @@ export class ImRuntime implements MessageGateway {
         },
         'inbound',
       );
-      logger.debug(formatCompact({
-        op: 'im_inbound_done',
-        conversation: formatConversationLog(conversation),
-        id: input.message?.id,
-        matched: result.matched,
-        command: result.command,
-        owner: result.owner,
-      }));
+      if (result.matched) {
+        logger.debug(formatCompact({
+          op: 'dispatched',
+          conv: formatConversationLog(conversation),
+          command: result.command,
+        }));
+      }
       this.#emitMessage({
         direction: 'inbound',
         conversation,

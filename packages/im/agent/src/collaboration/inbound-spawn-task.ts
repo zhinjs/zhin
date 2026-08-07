@@ -2,7 +2,7 @@
  * spawn_task 入站委派（OrchestrationKernel / SubagentSystem；阶段 4）。
  */
 import { type Message, type AgentTurnMessage, resolveIMSessionIdFromMessage } from '@zhin.js/core';
-import { formatCompactLog } from '@zhin.js/logger';
+import { formatCompact } from '@zhin.js/logger';
 import { parseOutput } from '@zhin.js/ai';
 import { DEFAULT_ZHIN_AGENT_NAME, type ResolvedAgentBinding } from '../config/types.js';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
@@ -51,10 +51,9 @@ export async function executeInboundSpawnTaskTurn(
 
   const subagentSystem = zhinAgent.getSubagentSystem();
   if (!subagentSystem) {
-    logger.warn(formatCompactLog('AI Handler', {
-      path: 'spawn_task_unavailable',
+    logger.warn(formatCompact({
+      op: 'spawn_task_unavailable',
       agent: delegation.targetAgentId,
-      fallback: 'local_process',
     }));
     return { handled: false, path: 'spawn_task_unavailable' };
   }
@@ -106,8 +105,8 @@ export async function executeInboundSpawnTaskTurn(
   } else {
     const fallback = '任务已完成，但没有可展示的文本结果。';
     await replyAi(fallback);
-    logger.warn(formatCompactLog('AI Handler', {
-      path: 'kernel_spawn_task_empty_reply',
+    logger.warn(formatCompact({
+      op: 'spawn_task_empty_reply',
       task: kernelTaskId,
       agent: targetAgentId,
     }));
@@ -121,8 +120,8 @@ export async function executeInboundSpawnTaskTurn(
     }));
   }
 
-  logger.info(formatCompactLog('AI Handler', {
-    path: kernelTaskId ? 'kernel_spawn_task' : 'spawn_task_legacy',
+  logger.info(formatCompact({
+    op: 'spawn_task_done',
     task: kernelTaskId,
     agent: targetAgentId,
   }));

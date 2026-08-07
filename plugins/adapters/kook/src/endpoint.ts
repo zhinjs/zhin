@@ -11,7 +11,7 @@ import type {
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { registerKookAgentEndpoint } from './kook-agent-deps.js';
 import {
@@ -33,8 +33,6 @@ import {
   type KookClientTransport,
 } from './ws.js';
 
-const logger = getLogger('kook');
-
 export interface KookEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
@@ -43,6 +41,8 @@ export interface KookEndpointOptions {
 }
 
 export class KookWebsocketEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: KookEndpointOptions;
   readonly #createClient: CreateKookClient;
   #client: KookClientTransport | null = null;
@@ -52,6 +52,7 @@ export class KookWebsocketEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
 
   constructor(options: KookEndpointOptions) {
+    this.#logger = getAdapterLogger('kook', options.config.name);
     this.#options = options;
     this.#createClient = options.createClient ?? (defaultCreateClient as CreateKookClient);
   }
@@ -64,7 +65,7 @@ export class KookWebsocketEndpoint implements EndpointInstance {
       this.#client = this.#createClient(this.#options.config);
       this.#bindClient(this.#client);
       await this.#client.connect();
-      logger.info(formatCompact({
+      this.#logger.info(formatCompact({
         op: 'connect',
         endpoint: this.#options.config.name,
         mode: 'websocket',
@@ -72,7 +73,7 @@ export class KookWebsocketEndpoint implements EndpointInstance {
       }));
     } catch (error) {
       await this.stop();
-      logger.error('Failed to connect KOOK websocket:', error);
+      this.#logger.error('Failed to connect KOOK websocket:', error);
       throw error;
     }
   }
@@ -99,7 +100,7 @@ export class KookWebsocketEndpoint implements EndpointInstance {
       this.#client = null;
     }
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -109,7 +110,7 @@ export class KookWebsocketEndpoint implements EndpointInstance {
       ? await client.sendPrivateMsg(conversation.id, body)
       : await client.sendChannelMsg(conversation.id, body);
     const messageId = result?.msg_id != null ? String(result.msg_id) : '';
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'kook_send',
       endpoint: this.#options.config.name,
       target: `${conversation.kind}:${conversation.id}`,
@@ -138,7 +139,7 @@ export class KookWebsocketEndpoint implements EndpointInstance {
         ...(isKookBotMentioned(msg, selfId) ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'kook_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
@@ -203,6 +204,8 @@ export interface KookWebhookEndpointOptions {
 }
 
 export class KookWebhookEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: KookWebhookEndpointOptions;
   readonly #createClient: CreateKookClient;
   #client: KookClientTransport | null = null;
@@ -214,6 +217,7 @@ export class KookWebhookEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
 
   constructor(options: KookWebhookEndpointOptions) {
+    this.#logger = getAdapterLogger('kook', options.config.name);
     this.#options = options;
     this.#createClient = options.createClient ?? (defaultCreateWebhookClient as CreateKookClient);
   }
@@ -239,7 +243,7 @@ export class KookWebhookEndpoint implements EndpointInstance {
       this.#client = this.#createClient(this.#options.config);
       await (this.#client as Client).init();
       this.#routeReleases.push(...registerKookWebhookRoutes(this.#options.http, this));
-      logger.info(formatCompact({
+      this.#logger.info(formatCompact({
         op: 'connect',
         endpoint: this.#options.config.name,
         mode: 'webhook',
@@ -248,7 +252,7 @@ export class KookWebhookEndpoint implements EndpointInstance {
       }));
     } catch (error) {
       await this.stop();
-      logger.error('Failed to connect KOOK webhook:', error);
+      this.#logger.error('Failed to connect KOOK webhook:', error);
       throw error;
     }
   }
@@ -277,7 +281,7 @@ export class KookWebhookEndpoint implements EndpointInstance {
       this.#client = null;
     }
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -287,7 +291,7 @@ export class KookWebhookEndpoint implements EndpointInstance {
       ? await client.sendPrivateMsg(conversation.id, body)
       : await client.sendChannelMsg(conversation.id, body);
     const messageId = result?.msg_id != null ? String(result.msg_id) : '';
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'kook_send',
       endpoint: this.#options.config.name,
       target: `${conversation.kind}:${conversation.id}`,
@@ -316,7 +320,7 @@ export class KookWebhookEndpoint implements EndpointInstance {
         ...(isKookBotMentioned(msg, selfId) ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'kook_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),

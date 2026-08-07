@@ -743,6 +743,16 @@ const defaultLogger=new Logger(null,'');
 export function getLogger(name: string, options: LoggerOptions = {}, parent=defaultLogger): Logger {
   return parent.getLogger(name, options)
 }
+
+/**
+ * Adapter Endpoint 日志：category 统一为 `adapter:endpoint`（如 `icqq:210723495`）。
+ * endpoint 为空时退化为仅 adapter 名。
+ */
+export function getAdapterLogger(adapter: string, endpoint: string, options: LoggerOptions = {}): Logger {
+  const id = String(endpoint ?? '').trim()
+  if (!id) return getLogger(adapter, options)
+  return getLogger(`${adapter}:${id}`, options)
+}
 export function setLogger(name:string,options?:LoggerOptions,parent:Logger=defaultLogger): Logger {
   return parent.setLogger(name, options)
 }

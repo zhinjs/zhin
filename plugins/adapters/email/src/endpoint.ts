@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { simpleParser } from 'mailparser';
 import type { EndpointInstance, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import {
   emailInboundConversation,
@@ -27,8 +27,6 @@ import {
   type EmailSmtpTransport,
 } from './transport.js';
 
-const logger = getLogger('email');
-
 export interface EmailEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
@@ -42,6 +40,8 @@ export interface EmailEndpointOptions {
  * 不适用 EndpointManagement 语义端口；本 endpoint 不暴露该端口。
  */
 export class EmailEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: EmailEndpointOptions;
   #smtp: EmailSmtpTransport | null = null;
   #imap: EmailImapTransport | null = null;
@@ -53,6 +53,7 @@ export class EmailEndpoint implements EndpointInstance {
   #started = false;
 
   constructor(options: EmailEndpointOptions) {
+    this.#logger = getAdapterLogger('email', options.config.name);
     this.#options = options;
   }
 
@@ -63,7 +64,7 @@ export class EmailEndpoint implements EndpointInstance {
     try {
       this.#smtp = await (this.#options.createSmtp?.(smtp) ?? defaultCreateSmtp(smtp));
       await this.#smtp.verify();
-      logger.debug(formatCompact({ endpoint: name, mode: 'smtp' }));
+      this.#logger.debug(formatCompact({ mode: 'smtp' }));
 
       this.#imap = this.#options.createImap?.(imap) ?? defaultCreateImap(imap);
       this.#setupImapListeners(this.#imap);
@@ -72,12 +73,12 @@ export class EmailEndpoint implements EndpointInstance {
         this.#imap!.once('error', (error) => reject(error));
         this.#imap!.connect();
       });
-      logger.debug(formatCompact({ endpoint: name, mode: 'imap' }));
+      this.#logger.debug(formatCompact({ mode: 'imap' }));
       this.#reconnectAttempts = 0;
       this.#startEmailCheck();
     } catch (error) {
       await this.stop();
-      logger.error('Failed to connect email services:', error);
+      this.#logger.error('Failed to connect email services:', error);
       throw error;
     }
   }
@@ -118,7 +119,7 @@ export class EmailEndpoint implements EndpointInstance {
       }
       this.#smtp = null;
     }
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -129,7 +130,7 @@ export class EmailEndpoint implements EndpointInstance {
       to: target,
     });
     const info = await this.#smtp.sendMail(mailOptions);
-    logger.debug(formatCompact({ op: 'email_send', target, messageId: info.messageId }));
+    this.#logger.debug(formatCompact({ op: 'email_send', target, messageId: info.messageId }));
     return info.messageId || '';
   }
 
@@ -137,7 +138,7 @@ export class EmailEndpoint implements EndpointInstance {
   admit(email: EmailMessage): void {
     if (!this.#open) return;
     void this.#admitWithAttachments(email).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'email_gateway_receive_failed',
         target: email.from,
         error: err instanceof Error ? err.message : String(err),
@@ -186,22 +187,22 @@ export class EmailEndpoint implements EndpointInstance {
       const filename = path.basename(rawName) || `attachment_${Date.now()}`;
       const filepath = path.resolve(downloadRoot, filename);
       if (filepath !== downloadRoot && !filepath.startsWith(downloadRoot + path.sep)) {
-        logger.warn(formatCompact({ op: 'email_attachment_skipped', filename: rawName, reason: 'path' }));
+        this.#logger.warn(formatCompact({ op: 'email_attachment_skipped', filename: rawName, reason: 'path' }));
         continue;
       }
       if (config.allowedTypes?.length && !config.allowedTypes.includes(attachment.contentType ?? '')) {
-        logger.debug(formatCompact({ op: 'email_attachment_skipped', filename, reason: 'type' }));
+        this.#logger.debug(formatCompact({ op: 'email_attachment_skipped', filename, reason: 'type' }));
         continue;
       }
       if (attachment.size != null && attachment.size > config.maxFileSize) {
-        logger.debug(formatCompact({ op: 'email_attachment_skipped', filename, reason: 'size' }));
+        this.#logger.debug(formatCompact({ op: 'email_attachment_skipped', filename, reason: 'size' }));
         continue;
       }
       try {
         await writeFile(filepath, attachment.content);
         saved.push({ filename, path: filepath, contentType: attachment.contentType, size: attachment.size });
       } catch (error) {
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'email_attachment_download_failed',
           filename,
           error: error instanceof Error ? error.message : String(error),
@@ -216,14 +217,13 @@ export class EmailEndpoint implements EndpointInstance {
       void this.#checkForNewEmails();
     });
     imap.on('error', (error) => {
-      logger.error('IMAP error:', error);
+      this.#logger.error('IMAP error:', error);
       // imap 通常在 error 后紧跟 end；两处都调度，靠已有定时器去重
       this.#scheduleImapReconnect();
     });
     imap.on('end', () => {
-      logger.debug(formatCompact({
-        op: 'disconnect',
-        endpoint: this.#options.config.name,
+      this.#logger.debug(formatCompact({
+          op: 'disconnect',
         mode: 'imap',
       }));
       this.#scheduleImapReconnect();
@@ -236,7 +236,7 @@ export class EmailEndpoint implements EndpointInstance {
     const base = this.#options.config.imap.reconnectInterval;
     const delay = Math.min(base * 2 ** this.#reconnectAttempts, 300_000);
     this.#reconnectAttempts += 1;
-    logger.warn(formatCompact({
+    this.#logger.warn(formatCompact({
       op: 'imap_reconnect_scheduled',
       endpoint: this.#options.config.name,
       reconnect_ms: delay,
@@ -260,14 +260,14 @@ export class EmailEndpoint implements EndpointInstance {
         imap.connect();
       });
       this.#reconnectAttempts = 0;
-      logger.info(formatCompact({
+      this.#logger.info(formatCompact({
         op: 'imap_reconnect',
         endpoint: this.#options.config.name,
         ok: true,
       }));
       void this.#checkForNewEmails();
     } catch (error) {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'imap_reconnect',
         endpoint: this.#options.config.name,
         ok: false,
@@ -309,7 +309,7 @@ export class EmailEndpoint implements EndpointInstance {
         });
       });
     } catch (error) {
-      logger.error('Error checking for new emails:', error);
+      this.#logger.error('Error checking for new emails:', error);
     } finally {
       this.#checking = false;
     }
@@ -330,7 +330,7 @@ export class EmailEndpoint implements EndpointInstance {
       void simpleParser(body).then((parsed) => {
         this.admit(parseEmailMessage(parsed, uid));
       }).catch((error) => {
-        logger.error('Error parsing email:', error);
+        this.#logger.error('Error parsing email:', error);
       });
     });
   }

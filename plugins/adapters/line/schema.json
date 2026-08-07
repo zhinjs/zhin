@@ -11,6 +11,24 @@
       "type": "string",
       "default": "https://api.line.me"
     },
+    "master": {
+      "type": [
+        "string",
+        "number"
+      ],
+      "description": "框架 master（LINE user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖"
+    },
+    "trusted": {
+      "type": "array",
+      "items": {
+        "type": [
+          "string",
+          "number"
+        ],
+        "description": "Trusted LINE user id"
+      },
+      "description": "框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加"
+    },
     "endpoints": {
       "type": "array",
       "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
@@ -21,6 +39,24 @@
           "name": {
             "type": "string",
             "description": "LINE bot name"
+          },
+          "master": {
+            "type": [
+              "string",
+              "number"
+            ],
+            "description": "本 endpoint 的框架 master（LINE user id）；覆盖顶层 master"
+          },
+          "trusted": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "Trusted LINE user id"
+            },
+            "description": "本 endpoint 的 trusted 列表"
           },
           "channelSecret": {
             "type": "string",

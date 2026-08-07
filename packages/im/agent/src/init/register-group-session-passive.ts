@@ -3,7 +3,6 @@
  * AI 回复仍仅由 shouldTriggerAI（群/频道下主要为 @）触发。
  */
 import { getPlugin, isActionMessage, mergeAITriggerConfig, resolveSenderRoles, extractTextContent, type Message } from '@zhin.js/core';
-import { formatCompactLog } from '@zhin.js/logger';
 import { findCellForInbound } from '../collaboration/collaboration-config.js';
 import { getCollaborationSceneService } from '../collaboration/scene-service.js';
 import { recordPassiveGroupMessage } from '../session/passive-group-session.js';
@@ -25,7 +24,7 @@ export function registerGroupSessionPassive(refs: AIServiceRefs): void {
       | undefined;
 
     if (!dispatcher?.setGroupPassiveContextHandler) {
-      logger.debug(formatCompactLog('GroupSessionPassive', { skip: 'no_dispatcher' }));
+      logger.debug('Group passive context: dispatcher not available');
       return;
     }
 
@@ -64,10 +63,10 @@ export function registerGroupSessionPassive(refs: AIServiceRefs): void {
       await recordPassiveGroupMessage(agent, message, rawText, cell);
     });
 
-    logger.debug(formatCompactLog('GroupSessionPassive', { hook: 'on' }));
+    logger.debug('Group passive context handler registered');
     return () => {
       dispatcher.setGroupPassiveContextHandler?.(null);
-      logger.debug(formatCompactLog('GroupSessionPassive', { hook: 'off' }));
+      logger.debug('Group passive context handler removed');
     };
   });
 }

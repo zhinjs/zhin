@@ -1,0 +1,240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "总开关"
+    },
+    "onError": {
+      "type": "string",
+      "enum": ["open", "closed"],
+      "default": "open",
+      "description": "审查源失败时的全局默认策略：open=视为通过，closed=视为 critical"
+    },
+    "maskChar": {
+      "type": "string",
+      "default": "*",
+      "minLength": 1,
+      "maxLength": 4,
+      "description": "文本打码字符"
+    },
+    "replyTemplate": {
+      "type": "string",
+      "default": "消息含不当内容，已拦截。",
+      "description": "reply 动作时的提示文案"
+    },
+    "masters": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "额外视为 master 的 userId（兜底，与 endpoint master 合并）"
+    },
+    "inbound": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "bypassMasters": {
+          "type": "boolean",
+          "default": true,
+          "description": "master 跳过入站审查"
+        },
+        "whitelist": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "userIds": {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": []
+            },
+            "conversationIds": {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": []
+            }
+          }
+        }
+      }
+    },
+    "outbound": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "bypass": {
+          "type": "boolean",
+          "default": false,
+          "description": "为 true 时跳过出站审查"
+        }
+      }
+    },
+    "actions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "severity → 动作（字符串或数组）；缺省用偏严默认表",
+      "properties": {
+        "pass": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+              }
+            }
+          ]
+        },
+        "low": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+              }
+            }
+          ]
+        },
+        "medium": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+              }
+            }
+          ]
+        },
+        "high": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+              }
+            }
+          ]
+        },
+        "critical": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "type": { "type": "string", "enum": ["local", "http"] },
+          "enabled": { "type": "boolean", "default": true },
+          "onError": { "type": "string", "enum": ["open", "closed"] },
+          "includeBuiltin": {
+            "type": "boolean",
+            "default": true,
+            "description": "是否合并内置分级违禁词词库"
+          },
+          "words": {
+            "type": "array",
+            "default": [],
+            "description": "自定义词：字符串（用 defaultSeverity）或 { word, severity }",
+            "items": {
+              "anyOf": [
+                { "type": "string", "minLength": 1 },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["word"],
+                  "properties": {
+                    "word": { "type": "string", "minLength": 1 },
+                    "text": { "type": "string", "minLength": 1 },
+                    "severity": {
+                      "type": "string",
+                      "enum": ["low", "medium", "high", "critical"]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "wordFiles": {
+            "type": "array",
+            "items": { "type": "string" },
+            "default": [],
+            "description": "词库文件；行格式 word / severity:word / word|severity"
+          },
+          "defaultSeverity": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"],
+            "default": "high",
+            "description": "未标注分级的自定义词默认 severity"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"],
+            "default": "high",
+            "description": "兼容旧字段，等同 defaultSeverity"
+          },
+          "url": { "type": "string" },
+          "headers": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "timeoutMs": {
+            "type": "number",
+            "default": 5000,
+            "minimum": 500,
+            "maximum": 60000
+          },
+          "forceUpload": {
+            "type": "boolean",
+            "default": false,
+            "description": "强制下载图片后上传，不传 URL"
+          }
+        }
+      }
+    }
+  }
+}

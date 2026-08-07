@@ -677,8 +677,8 @@ describe('telegram webhook auth', () => {
   it('warns once at startup when webhook has no secretToken', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const { getLogger } = await import('@zhin.js/logger');
-    const warn = vi.spyOn(getLogger('telegram'), 'warn');
+    const { getAdapterLogger } = await import('@zhin.js/logger');
+    const warn = vi.spyOn(getAdapterLogger('telegram', 'no-secret-bot'), 'warn');
     const endpoint = new TelegramEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
       gateway: {

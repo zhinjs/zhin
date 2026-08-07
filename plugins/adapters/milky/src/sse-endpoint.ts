@@ -10,7 +10,7 @@ import {
   type EndpointSendRequest,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { createMilkyEndpointManagement } from './endpoint-management.js';
 import { registerMilkyAgentEndpoint } from './milky-agent-deps.js';
@@ -35,8 +35,6 @@ import {
 } from './protocol.js';
 import { openSseStream, type SseClientHandle } from './sse-client.js';
 
-const logger = getLogger('milky');
-
 export type CreateMilkySseStream = (options: {
   readonly url: string;
   readonly headers: Record<string, string>;
@@ -54,6 +52,8 @@ export interface MilkySseEndpointOptions {
 }
 
 export class MilkySseEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: MilkySseEndpointOptions;
   readonly #callApi: typeof callApi;
   readonly management: EndpointManagement = createMilkyEndpointManagement(this);
@@ -63,6 +63,7 @@ export class MilkySseEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: MilkySseEndpointOptions) {
+    this.#logger = getAdapterLogger('milky', options.config.name);
     this.#options = options;
     this.#callApi = options.callApi ?? callApi;
     this.#lifecycle = createEndpointLifecycle({
@@ -112,7 +113,7 @@ export class MilkySseEndpoint implements EndpointInstance {
     const { action, params } = buildSendAction(conversation, message);
     const data = await this.callApi(action, params) as { message_seq?: number } | undefined;
     const messageId = formatOutboundMessageId(conversation, data?.message_seq);
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'milky_send',
       endpoint: this.#options.config.name,
       target: `${conversation.kind}:${conversation.id}`,
@@ -245,7 +246,7 @@ export class MilkySseEndpoint implements EndpointInstance {
         ...(audioUrl ? { audio_url: audioUrl } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'milky_gateway_receive_failed',
         target,
         error: err instanceof Error ? err.message : String(err),
@@ -265,7 +266,7 @@ export class MilkySseEndpoint implements EndpointInstance {
         onOpen: () => {
           if (settled) return;
           settled = true;
-          logger.debug(formatCompact({
+          this.#logger.debug(formatCompact({
             endpoint: this.#options.config.name,
             mode: 'sse',
             url: safeUrl,
@@ -274,7 +275,7 @@ export class MilkySseEndpoint implements EndpointInstance {
         },
         onMessage: (data) => this.#onMessage(data),
         onError: (error) => {
-          logger.warn(formatCompact({
+          this.#logger.warn(formatCompact({
             op: 'sse_error',
             endpoint: this.#options.config.name,
             ok: false,
@@ -297,9 +298,8 @@ export class MilkySseEndpoint implements EndpointInstance {
       void stream.closed.then(() => {
         // stop-during-connect 竞态由基座静默 settle（主动停止不算失败），此处仅对运行期断开告警
         if (this.#lifecycle.state !== 'stopped') {
-          logger.warn(formatCompact({
-            op: 'disconnect',
-            endpoint: this.#options.config.name,
+          this.#logger.warn(formatCompact({
+          op: 'disconnect',
             mode: 'sse',
             reconnect_ms: this.#options.config.reconnect_interval,
           }));
@@ -319,7 +319,7 @@ export class MilkySseEndpoint implements EndpointInstance {
       const event = JSON.parse(data) as MilkyEvent;
       this.admit(event);
     } catch (error) {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'milky_parse_failed',
         endpoint: this.#options.config.name,
         mode: 'sse',

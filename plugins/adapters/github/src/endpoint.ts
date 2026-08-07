@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { EndpointInstance, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId, DatabaseHost } from '@zhin.js/plugin-runtime';
 import { GhClient } from './gh-client.js';
 import { registerGithubAgentEndpoint } from './github-agent-deps.js';
@@ -22,8 +22,6 @@ import {
 import { registerGithubWebhookRoutes } from './webhook.js';
 import { WorkspaceManager } from './workspace-manager.js';
 
-const logger = getLogger('github');
-
 export interface GithubEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
@@ -38,6 +36,8 @@ export interface GithubEndpointOptions {
  * 不适用 EndpointManagement 语义端口；本 endpoint 不暴露该端口。
  */
 export class GithubEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: GithubEndpointOptions;
   readonly gh: GhClient;
   readonly config: ResolvedGithubConfig;
@@ -49,6 +49,7 @@ export class GithubEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: GithubEndpointOptions) {
+    this.#logger = getAdapterLogger('github', options.config.name);
     this.#options = options;
     this.config = options.config;
     this.name = options.config.name;
@@ -111,13 +112,13 @@ export class GithubEndpoint implements EndpointInstance {
           throw new TypeError('GitHub webhook_secret requires httpHostToken');
         }
         this.#routeReleases.push(...registerGithubWebhookRoutes(this.#options.http, this));
-        logger.debug(formatCompact({
+        this.#logger.debug(formatCompact({
           endpoint: this.name,
           op: 'webhook',
           path: this.config.webhookPath,
         }));
       } else {
-        logger.debug(formatCompact({
+        this.#logger.debug(formatCompact({
           endpoint: this.name,
           op: 'connect',
           mode: 'api-only',
@@ -126,7 +127,7 @@ export class GithubEndpoint implements EndpointInstance {
       }
     } catch (error) {
       await this.stop();
-      logger.error('Failed to connect GitHub endpoint:', error);
+      this.#logger.error('Failed to connect GitHub endpoint:', error);
       throw error;
     }
   }
@@ -145,7 +146,7 @@ export class GithubEndpoint implements EndpointInstance {
     this.#unregisterAgent?.();
     this.#unregisterAgent = undefined;
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -156,7 +157,7 @@ export class GithubEndpoint implements EndpointInstance {
       ? await this.gh.createIssueComment(parsed.repo, parsed.number, text)
       : await this.gh.createPRComment(parsed.repo, parsed.number, text);
     if (!r.ok) throw new Error(`发送失败: ${JSON.stringify(r.data)}`);
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'github_send',
       endpoint: this.name,
       target: `${conversation.kind}:${conversation.id}`,
@@ -189,7 +190,7 @@ export class GithubEndpoint implements EndpointInstance {
         createdAt: comment.createdAt,
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'github_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),

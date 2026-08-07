@@ -8,7 +8,7 @@ import type {
   EndpointSendRequest,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
-import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { registerIcqqAgentEndpoint } from './icqq-agent-deps.js';
 import {
@@ -53,8 +53,6 @@ import {
 } from './protocol.js';
 import type { IpcFriendInfo, IpcGroupInfo, IpcMemberInfo, IpcSystemMessage } from './types.js';
 
-const logger = getLogger('icqq');
-
 /** Minimal IPC surface used by the endpoint (real IpcClient or test mock). */
 export interface IcqqIpcTransport {
   request(action: string, params?: Record<string, unknown>): Promise<IpcResponse>;
@@ -89,6 +87,8 @@ export interface IcqqEndpointOptions {
 }
 
 export class IcqqIpcEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: IcqqEndpointOptions;
   readonly #createIpc: CreateIcqqIpc;
   readonly name: string;
@@ -131,6 +131,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
   #reconnectRunning = false;
 
   constructor(options: IcqqEndpointOptions) {
+    this.#logger = getAdapterLogger('icqq', options.config.name);
     this.#options = options;
     this.name = options.config.name;
     this.#createIpc = options.createIpc ?? defaultCreateIpc;
@@ -150,14 +151,14 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     try {
       await this.#bindIpcSession();
       this.#unregisterAgent = registerIcqqAgentEndpoint(this.name, this);
-      logger.info(
-        `connected ${this.name} (${this.#options.config.rpc ? 'rpc' : 'ipc'}) | friends: ${this.friends.size} | groups: ${this.groups.size}`,
+      this.#logger.info(
+        `connected (${this.#options.config.rpc ? 'rpc' : 'ipc'}) | friends: ${this.friends.size} | groups: ${this.groups.size}`,
       );
     } catch (error) {
       await this.stop();
       // Startup connect failures are surfaced once (with stack) by AdapterIndex;
       // keep this at debug to avoid a duplicate error-level log.
-      logger.debug(`Failed to connect ICQQ IPC: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
+      this.#logger.debug(`Failed to connect ICQQ IPC: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
       throw error;
     }
   }
@@ -196,10 +197,9 @@ export class IcqqIpcEndpoint implements EndpointInstance {
         const jitter = Math.floor(Math.random() * 400);
         const delayMs = base + jitter;
         // 首次断开 WARN，后续重试静默为 DEBUG，避免刷屏
-        const disconnectLog = attempt === 0 ? logger.warn.bind(logger) : logger.debug.bind(logger);
+        const disconnectLog = attempt === 0 ? this.#logger.warn.bind(this.#logger) : this.#logger.debug.bind(this.#logger);
         disconnectLog(formatCompact({
           op: 'disconnect',
-          endpoint: this.name,
           ok: false,
           delay_ms: delayMs,
           attempt: attempt + 1,
@@ -208,13 +208,13 @@ export class IcqqIpcEndpoint implements EndpointInstance {
         if (this.#intentionalDisconnect) break;
         try {
           await this.#bindIpcSession();
-          logger.info(
-            `reconnected ${this.name} after ${attempt + 1} attempt(s)`
+          this.#logger.info(
+            `reconnected after ${attempt + 1} attempt(s)`
             + ` | friends: ${this.friends.size} | groups: ${this.groups.size}`,
           );
           break;
         } catch (error) {
-          const retryLog = attempt === 0 ? logger.warn.bind(logger) : logger.debug.bind(logger);
+          const retryLog = attempt === 0 ? this.#logger.warn.bind(this.#logger) : this.#logger.debug.bind(this.#logger);
           retryLog(formatCompact({
             op: 'reconnect',
             endpoint: this.name,
@@ -259,7 +259,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     // 置空 ipc：start 前 / stop 后的 request() 走防御性报错而非 TypeError
     this.ipc = undefined as unknown as IcqqIpcTransport;
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -302,7 +302,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     }
     const resp = await this.ipc.request(action, params);
     if (!resp.ok) {
-      logger.warn(
+      this.#logger.warn(
         `send failed ${conversation.kind}:${conversation.id} | ${resp.error} | ${truncatePreview(typeof message === 'string' ? message : String(message), 80)}`,
       );
       throw new Error(`发送消息失败: ${resp.error}`);
@@ -310,7 +310,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     const messageId = String(
       (resp.data as { message_id?: unknown } | undefined)?.message_id ?? `sent_${Date.now()}`,
     );
-    logger.info(
+    this.#logger.info(
       `send ${conversation.kind}:${conversation.id} | id: ${messageId} | ${truncatePreview(typeof message === 'string' ? message : String(message), 80)}`,
     );
     return messageId;
@@ -345,7 +345,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
         id: emojiId,
       });
       if (!resp.ok) {
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'add_reaction',
           endpoint: this.name,
           message_id: messageId,
@@ -356,7 +356,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
         }));
         return null;
       }
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         op: 'add_reaction',
         endpoint: this.name,
         message_id: messageId,
@@ -366,7 +366,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       }));
       return emojiId;
     } catch (error) {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'add_reaction',
         endpoint: this.name,
         message_id: messageId,
@@ -387,7 +387,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
         id: emojiId,
       });
       if (!resp.ok) {
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'remove_reaction',
           endpoint: this.name,
           message_id: messageId,
@@ -398,7 +398,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
         }));
         return;
       }
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         op: 'remove_reaction',
         endpoint: this.name,
         message_id: messageId,
@@ -407,7 +407,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
         ok: true,
       }));
     } catch (error) {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'remove_reaction',
         endpoint: this.name,
         message_id: messageId,
@@ -424,7 +424,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     try {
       const resp = await this.request(Actions.RECALL_MSG, { message_id: messageId });
       if (!resp.ok) {
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'recall_message',
           endpoint: this.name,
           message_id: messageId,
@@ -433,14 +433,14 @@ export class IcqqIpcEndpoint implements EndpointInstance {
         }));
         return;
       }
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         op: 'recall_message',
         endpoint: this.name,
         message_id: messageId,
         ok: true,
       }));
     } catch (error) {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'recall_message',
         endpoint: this.name,
         message_id: messageId,
@@ -629,7 +629,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
   admit(msg: IcqqInboundMessage): void {
     const conversation = msg.conversation;
     if (!this.#open) {
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         op: 'icqq_inbound_skip',
         reason: 'endpoint_closed',
         endpoint: this.name,
@@ -644,7 +644,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       content: msg.segments,
       rawMessage: msg.content,
     });
-    logger.info(
+    this.#logger.info(
       `recv ${conversation.kind}:${conversation.id}`
       + (msg.sender ? ` from ${msg.sender}` : '')
       + (mentioned ? ' (mentioned)' : '')
@@ -663,7 +663,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
         ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'recv',
         endpoint: this.name,
         target: `${conversation.kind}:${conversation.id}`,
@@ -710,7 +710,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     if (!isIcqqMessagePostType(payload)) return;
     const data = payload as IcqqIpcMessageEvent;
     if (shouldSkipSelfInboundMessage(data)) {
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         op: 'icqq_inbound_skip',
         reason: 'self',
         endpoint: this.name,
@@ -721,7 +721,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     }
     const normalized = normalizeIcqqInboundMessage(data);
     if (!normalized) {
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         op: 'icqq_inbound_skip',
         reason: 'normalize_failed',
         endpoint: this.name,
@@ -731,7 +731,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       return;
     }
     if (!this.#inboundDeduper.shouldProcess(normalized.messageId)) {
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         op: 'icqq_inbound_skip',
         reason: 'dedupe',
         endpoint: this.name,
@@ -764,7 +764,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       payload as Parameters<typeof normalizeIcqqGuildInboundMessage>[0],
     );
     if (!normalized) {
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         op: 'icqq_inbound_skip',
         reason: 'guild_normalize_failed',
         endpoint: this.name,
@@ -773,7 +773,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     }
     this.#guildCatalog.upsertFromInbound(normalized.raw);
     if (!this.#inboundDeduper.shouldProcess(`guild:${normalized.messageId}`)) {
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         op: 'icqq_inbound_skip',
         reason: 'dedupe',
         endpoint: this.name,
@@ -853,7 +853,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
         hooks.publish?.('endpoint:request', row);
       }
     } catch (error) {
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         op: 'inbox_pull_system_msg',
         endpoint: this.name,
         error: error instanceof Error ? error.message : String(error),

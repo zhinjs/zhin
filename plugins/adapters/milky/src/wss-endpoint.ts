@@ -9,7 +9,7 @@ import type {
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { verifyMilkyAccessToken } from './milky-auth.js';
 import { createMilkyEndpointManagement } from './endpoint-management.js';
@@ -34,7 +34,6 @@ import {
 } from './protocol.js';
 import type { MilkyWsSocket } from './ws-types.js';
 
-const logger = getLogger('milky');
 const WS_OPEN = 1;
 
 export interface MilkyWssEndpointOptions {
@@ -46,6 +45,8 @@ export interface MilkyWssEndpointOptions {
 }
 
 export class MilkyWssEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: MilkyWssEndpointOptions;
   readonly #callApi: typeof callApi;
   readonly management: EndpointManagement = createMilkyEndpointManagement(this);
@@ -57,6 +58,7 @@ export class MilkyWssEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: MilkyWssEndpointOptions) {
+    this.#logger = getAdapterLogger('milky', options.config.name);
     this.#options = options;
     this.#callApi = options.callApi ?? callApi;
   }
@@ -69,7 +71,7 @@ export class MilkyWssEndpoint implements EndpointInstance {
     this.#wsRelease = handle.onConnection((connection) => {
       this.#acceptConnection(connection);
     });
-    logger.info(formatCompact({
+    this.#logger.info(formatCompact({
       op: 'listen',
       endpoint: this.#options.config.name,
       mode: 'wss',
@@ -111,7 +113,7 @@ export class MilkyWssEndpoint implements EndpointInstance {
     const { action, params } = buildSendAction(conversation, message);
     const data = await this.callApi(action, params) as { message_seq?: number } | undefined;
     const messageId = formatOutboundMessageId(conversation, data?.message_seq);
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'milky_send',
       endpoint: this.#options.config.name,
       target: `${conversation.kind}:${conversation.id}`,
@@ -243,7 +245,7 @@ export class MilkyWssEndpoint implements EndpointInstance {
         ...(audioUrl ? { audio_url: audioUrl } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'milky_gateway_receive_failed',
         target,
         error: err instanceof Error ? err.message : String(err),
@@ -272,7 +274,7 @@ export class MilkyWssEndpoint implements EndpointInstance {
     socket.on('close', () => {
       if (this.#ws === socket) this.#ws = undefined;
     });
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       endpoint: this.#options.config.name,
       mode: 'wss',
       peer: connection.request.socket.remoteAddress,
@@ -291,7 +293,7 @@ export class MilkyWssEndpoint implements EndpointInstance {
       const event = JSON.parse(raw) as MilkyEvent;
       this.admit(event);
     } catch (error) {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'milky_parse_failed',
         endpoint: this.#options.config.name,
         error: error instanceof Error ? error.message : String(error),

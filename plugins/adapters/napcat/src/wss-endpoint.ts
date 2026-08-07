@@ -5,7 +5,7 @@ import { clearInterval } from 'node:timers';
 import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { createNapCatEndpointManagement } from './endpoint-management.js';
 import { registerNapcatAgentEndpoint } from './napcat-agent-deps.js';
@@ -40,8 +40,6 @@ import {
 } from './ws-types.js';
 import { verifyNapCatAccessToken } from './wss-auth.js';
 
-const logger = getLogger('napcat');
-
 export interface NapCatWssEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
@@ -50,6 +48,8 @@ export interface NapCatWssEndpointOptions {
 }
 
 export class NapCatWssEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: NapCatWssEndpointOptions;
   readonly #inboundDeduper = new InboundMessageDeduper();
   readonly management: EndpointManagement = createNapCatEndpointManagement(this);
@@ -63,6 +63,7 @@ export class NapCatWssEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: NapCatWssEndpointOptions) {
+    this.#logger = getAdapterLogger('napcat', options.config.name);
     this.#options = options;
   }
 
@@ -77,7 +78,7 @@ export class NapCatWssEndpoint implements EndpointInstance {
     this.#wsRelease = handle.onConnection((connection) => {
       this.#acceptConnection(connection);
     });
-    logger.info(formatCompact({
+    this.#logger.info(formatCompact({
       op: 'listen',
       endpoint: this.#options.config.name,
       mode: 'wss',
@@ -160,7 +161,7 @@ export class NapCatWssEndpoint implements EndpointInstance {
         ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'napcat_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
@@ -203,7 +204,7 @@ export class NapCatWssEndpoint implements EndpointInstance {
         }
       }
     });
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       endpoint: this.#options.config.name,
       mode: 'wss',
       peer: connection.request.socket.remoteAddress,

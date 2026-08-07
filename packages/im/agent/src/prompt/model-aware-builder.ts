@@ -12,31 +12,30 @@ export class ModelAwarePromptBuilder {
       case 'concise':
         return [
           '# Style',
-          ' - Be concise and direct',
-          ' - One-word answers when possible',
-          ' - No emojis, no preamble, no postamble',
-          ' - Under 4 lines of text',
-          ' - Focus on actions, not explanations',
+          ' - Direct and concise — match reply length to question complexity',
+          ' - Simple question = short answer; complex task = structured reply',
+          ' - No preamble ("Here\'s...", "I\'ll..."), no postamble ("Let me know...")',
+          ' - Focus on actions and results, not explanations',
+          ' - Match the user\'s language; follow SOUL.md for default language',
         ].join('\n');
       case 'detailed':
         return [
           '# Style',
           ' - Lead with the answer or result',
           ' - Be concise, direct, and useful',
-          ' - Use rich Markdown formatting (headings, bullet lists, tables) for multi-sentence answers',
-          ' - Under 4 lines by default; up to 10-15 lines for large multi-file changes',
-          ' - No emojis, no preamble, no postamble',
-          ' - One-word answers when possible',
-          ' - No explanations unless user asks',
+          ' - Use Markdown formatting (headings, lists, tables) for multi-part answers',
+          ' - Match reply length to complexity: 1 line for greetings, structured format for multi-step results',
+          ' - No preamble ("Here\'s...", "I\'ll..."), no postamble ("Let me know...")',
+          ' - Match the user\'s language; follow SOUL.md for default language',
         ].join('\n');
       default:
         return [
           '# Style',
           ' - Lead with the answer or result',
-          ' - Be concise, direct, and useful',
-          ' - Use Markdown when helpful',
-          ' - Under 4 lines unless explaining complex changes',
-          ' - No emojis, no preamble, no postamble',
+          ' - Be concise, direct, and useful — match reply length to question complexity',
+          ' - Use Markdown when helpful for structure',
+          ' - No preamble ("Here\'s...", "I\'ll..."), no postamble ("Let me know...")',
+          ' - Match the user\'s language; follow SOUL.md for default language',
         ].join('\n');
     }
   }

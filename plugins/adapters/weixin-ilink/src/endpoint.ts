@@ -11,7 +11,7 @@ import type {
   EndpointSendRequest,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { getUpdates, notifyStart, notifyStop, sendTyping } from './ilink-api.js';
 import { configureIlinkMeta } from './ilink-meta.js';
@@ -55,8 +55,6 @@ import {
   type WeixinWireSegment,
 } from './protocol.js';
 
-const logger = getLogger('weixin-ilink');
-
 const MAX_CONSECUTIVE_FAILURES = 3;
 const BACKOFF_DELAY_MS = 30_000;
 const RETRY_DELAY_MS = 2_000;
@@ -86,6 +84,8 @@ export interface WeixinIlinkEndpointOptions {
 }
 
 export class WeixinIlinkEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: WeixinIlinkEndpointOptions;
   readonly #resolveCredentials: (
     config: ResolvedWeixinIlinkConfig,
@@ -106,6 +106,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createWeixinIlinkEndpointManagement(this);
 
   constructor(options: WeixinIlinkEndpointOptions) {
+    this.#logger = getAdapterLogger('weixin-ilink', options.config.name);
     this.#options = options;
     this.#resolveCredentials = options.resolveCredentials ?? resolveCredentials;
     this.#notifyStart = options.notifyStart ?? notifyStart;
@@ -148,19 +149,19 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
 
       this.#configManager = new WeixinConfigManager(
         { baseUrl: this.apiBaseUrl(), token: this.#creds.botToken },
-        (msg) => logger.debug(msg),
+        (msg) => this.#logger.debug(msg),
       );
 
       this.#pollAbort = new AbortController();
       this.#pollPromise = this.#pollLoop(this.#pollAbort.signal);
       this.#startMediaSweep();
-      logger.info(formatCompact({
+      this.#logger.info(formatCompact({
         op: 'connect',
         endpoint: this.#options.config.name,
       }));
     } catch (error) {
       await this.stop();
-      logger.error('Failed to connect weixin-ilink bot:', error);
+      this.#logger.error('Failed to connect weixin-ilink bot:', error);
       throw error;
     }
   }
@@ -189,7 +190,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
       try {
         await this.#notifyStop({ baseUrl: this.apiBaseUrl(), token: this.#creds.botToken });
       } catch (err) {
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'notify_stop',
           ok: false,
           error: err instanceof Error ? err.message : String(err),
@@ -197,9 +198,8 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
       }
     }
     this.#started = false;
-    logger.debug(formatCompact({
-      op: 'disconnect',
-      endpoint: this.#options.config.name,
+    this.#logger.debug(formatCompact({
+          op: 'disconnect',
     }));
   }
 
@@ -211,7 +211,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
     const target = conversation.id;
     const contextToken = getContextToken(this.#options.config.name, target);
     if (!contextToken) {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'send',
         ok: false,
         reason: 'missing_context_token',
@@ -269,7 +269,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
       }
 
       if (seg.type === 'image' || seg.type === 'video' || seg.type === 'file' || seg.type === 'record') {
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'send',
           skip: 'no_local_file',
           type: seg.type,
@@ -308,7 +308,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
         createTimeMs: msg.create_time_ms,
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'weixin_ilink_gateway_receive_failed',
         target: userId,
         error: err instanceof Error ? err.message : String(err),
@@ -321,7 +321,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
     const contextToken = getContextToken(this.#options.config.name, userId);
     const cfg = await this.#configManager.getForUser(userId, contextToken);
     if (!cfg.typingTicket) {
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         op: 'send_typing',
         skip: 'no_typing_ticket',
         userId,
@@ -402,7 +402,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
       } catch (err) {
         if (abortSignal.aborted) return;
         consecutiveFailures += 1;
-        logger.error(formatCompact({
+        this.#logger.error(formatCompact({
           op: 'poll',
           ok: false,
           error: err instanceof Error ? err.message : String(err),
@@ -424,7 +424,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
 
     const mediaOpts = await this.#downloadInboundMedia(full);
     this.admit({ ...full, _media: mediaOpts });
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'recv',
       endpoint: this.#options.config.name,
       target: fromUserId,
@@ -456,8 +456,8 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
       cdnBaseUrl: this.cdnBaseUrl(),
       saveMedia: (buffer, contentType, subdir, maxBytes, originalFilename) =>
         this.#saveInboundMedia(buffer, contentType, subdir, maxBytes, originalFilename),
-      log: (msg) => logger.debug(msg),
-      errLog: (msg) => logger.warn(msg),
+      log: (msg) => this.#logger.debug(msg),
+      errLog: (msg) => this.#logger.warn(msg),
       label: `inbound:${full.from_user_id ?? 'unknown'}`,
     });
   }
@@ -521,7 +521,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
         const stat = fs.statSync(filePath);
         if (now - stat.mtimeMs <= INBOUND_MEDIA_TTL_MS) continue;
         fs.unlinkSync(filePath);
-        logger.debug(formatCompact({
+        this.#logger.debug(formatCompact({
           op: 'media_sweep',
           endpoint: this.#options.config.name,
           file: entry.name,

@@ -5,7 +5,7 @@ import { clearInterval } from 'node:timers';
 import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { createOneBot11EndpointManagement } from './endpoint-management.js';
 import { registerOnebot11AgentEndpoint } from './onebot11-agent-deps.js';
@@ -33,8 +33,6 @@ import {
   type OneBot11WsSocket,
 } from './ws-types.js';
 
-const logger = getLogger('onebot11');
-
 export interface OneBot11WssEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
@@ -43,6 +41,8 @@ export interface OneBot11WssEndpointOptions {
 }
 
 export class OneBot11WssEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: OneBot11WssEndpointOptions;
   readonly management: EndpointManagement = createOneBot11EndpointManagement(this);
   #ws?: OneBot11WsSocket;
@@ -55,6 +55,7 @@ export class OneBot11WssEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: OneBot11WssEndpointOptions) {
+    this.#logger = getAdapterLogger('onebot11', options.config.name);
     this.#options = options;
   }
 
@@ -63,7 +64,7 @@ export class OneBot11WssEndpoint implements EndpointInstance {
     this.#started = true;
     if (!this.#options.config.access_token) {
       // wss 模式未配 access_token 时任何连接都会被放行（verifyOneBotAccessToken 直接 return true）
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         endpoint: this.#options.config.name,
         mode: 'wss',
         ok: false,
@@ -78,7 +79,7 @@ export class OneBot11WssEndpoint implements EndpointInstance {
     this.#wsRelease = handle.onConnection((connection) => {
       this.#acceptConnection(connection);
     });
-    logger.info(formatCompact({
+    this.#logger.info(formatCompact({
       op: 'listen',
       endpoint: this.#options.config.name,
       mode: 'wss',
@@ -152,7 +153,7 @@ export class OneBot11WssEndpoint implements EndpointInstance {
       sender: senderUserId(ev),
       metadata: formatInboundMetadata(ev, this.#options.config.name),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'onebot11_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
@@ -195,7 +196,7 @@ export class OneBot11WssEndpoint implements EndpointInstance {
         }
       }
     });
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       endpoint: this.#options.config.name,
       mode: 'wss',
       peer: connection.request.socket.remoteAddress,

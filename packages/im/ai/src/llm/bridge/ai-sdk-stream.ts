@@ -11,7 +11,7 @@ import type { Context } from '../types/context.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../types/agent-message.js';
 
 import { formatRedactedJson } from '../redact-request-body.js';
-import { contextToAiSdkPrompt, llmToolsToAiSdk } from './ai-sdk-messages.js';
+import { contextToAiSdkPrompt, llmToolsToAiSdk, shouldEnsureToolCallReasoning, TOOL_CALL_REASONING_PLACEHOLDER } from './ai-sdk-messages.js';
 import {
   applyPromptCacheToTools,
   buildPromptCacheProviderOptions,
@@ -101,7 +101,13 @@ function buildAssistantMessage(
 ): AssistantMessage {
   const content: AssistantMessage['content'] = [];
   if (text) content.push({ type: 'text', text });
-  if (thinking) content.push({ type: 'thinking', thinking });
+  // Persist a placeholder CoT when gateway omitted reasoning on tool_calls (DeepSeek round-trip).
+  const resolvedThinking =
+    thinking ||
+    (toolCalls.length > 0 && shouldEnsureToolCallReasoning(model)
+      ? TOOL_CALL_REASONING_PLACEHOLDER
+      : '');
+  if (resolvedThinking) content.push({ type: 'thinking', thinking: resolvedThinking });
   for (const call of toolCalls) {
     content.push({
       type: 'toolCall',
@@ -142,7 +148,9 @@ export function createAiSdkStreamFn(): StreamFn {
         model.sdk,
         options,
       );
-      const { system: systemText, messages } = contextToAiSdkPrompt(context);
+      const { system: systemText, messages } = contextToAiSdkPrompt(context, undefined, {
+        ensureToolCallReasoning: shouldEnsureToolCallReasoning(model),
+      });
       const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
       const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
       const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
@@ -268,7 +276,9 @@ export async function generateTextViaAiSdk(
     model.sdk,
     options,
   );
-  const { system: systemText, messages } = contextToAiSdkPrompt(context);
+  const { system: systemText, messages } = contextToAiSdkPrompt(context, undefined, {
+    ensureToolCallReasoning: shouldEnsureToolCallReasoning(model),
+  });
   const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
   const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
   const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;

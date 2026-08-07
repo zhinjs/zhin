@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import type { EndpointInstance, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import {
   bindSandboxWsSocket,
@@ -16,8 +16,6 @@ import {
   type ResolvedSandboxBot,
   type SandboxWsSocket,
 } from './protocol.js';
-
-const logger = getLogger('sandbox');
 
 /**
  * 多 sandbox endpoint 共用同一个 HttpHost 时，同 path 的所有 WS listener
@@ -80,6 +78,8 @@ export interface SandboxEndpointOptions {
  * 不适用 EndpointManagement 语义端口；本 endpoint 不暴露该端口。
  */
 export class SandboxWsEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: SandboxEndpointOptions;
   readonly #connections = new Map<string, SandboxConnection>();
   #wsHandleRelease?: () => void;
@@ -89,6 +89,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
   #started = false;
 
   constructor(options: SandboxEndpointOptions) {
+    this.#logger = getAdapterLogger('sandbox', options.defaults.name);
     this.#options = options;
   }
 
@@ -111,7 +112,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
     if (!this.#options.defaults.randomNamePerConnection) {
       this.#ensurePlaceholder(this.#options.defaults.name, this.#options.defaults.owner);
     }
-    logger.info(`ws mounted ${claim.path} | endpoint: ${this.#options.defaults.name}`);
+    this.#logger.info(`ws mounted ${claim.path}`);
   }
 
   open(): void {
@@ -140,7 +141,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
     }
     this.#connections.clear();
     this.#started = false;
-    logger.debug(formatCompact({ op: 'sandbox_stopped' }));
+    this.#logger.debug(formatCompact({ op: 'sandbox_stopped' }));
   }
 
   send({ conversation, payload }: EndpointSendRequest): unknown {
@@ -150,14 +151,14 @@ export class SandboxWsEndpoint implements EndpointInstance {
     const connection = this.#connections.get(this.#options.defaults.name)
       ?? this.#findLiveConnection();
     if (!connection) {
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         op: 'sandbox_send_miss',
         target: `${conversation.kind}:${conversation.id}`,
       }));
       return undefined;
     }
     if (connection.placeholder) {
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         op: 'sandbox_send_placeholder',
         target: `${conversation.kind}:${conversation.id}`,
       }));
@@ -170,7 +171,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
       bot: this.#options.defaults.name,
       endpoint: connection.target,
     }));
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'sandbox_send',
       target: connection.target,
       channelType: conversation.kind,
@@ -216,7 +217,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
           type: parsed.type,
           id: sender,
         });
-        logger.debug(formatCompact({
+        this.#logger.debug(formatCompact({
           op: 'sandbox_recv',
           target,
           sender,
@@ -240,7 +241,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
             ...(parsed.action ? { action: parsed.action } : {}),
           }),
         }).catch((err) => {
-          logger.warn(formatCompact({
+          this.#logger.warn(formatCompact({
             op: 'sandbox_gateway_receive_failed',
             target,
             error: err instanceof Error ? err.message : String(err),
@@ -253,11 +254,11 @@ export class SandboxWsEndpoint implements EndpointInstance {
         const current = this.#connections.get(target);
         if (current && current.socket === socket) {
           this.#connections.delete(target);
-          logger.debug(formatCompact({ op: 'sandbox_ws_closed', target }));
+          this.#logger.debug(formatCompact({ op: 'sandbox_ws_closed', target }));
         }
       },
       onError: (err) => {
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'sandbox_ws_error',
           target,
           error: err instanceof Error ? err.message : String(err),
@@ -265,7 +266,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
       },
     });
     this.#connections.set(target, { target, owner, socket, release });
-    logger.debug(formatCompact({ op: 'sandbox_ws_connected', target, owner }));
+    this.#logger.debug(formatCompact({ op: 'sandbox_ws_connected', target, owner }));
     if (!this.#options.defaults.randomNamePerConnection) {
       const readyPayload = JSON.stringify({
         type: 'ready',

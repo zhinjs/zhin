@@ -121,6 +121,15 @@ describe('qq protocol helpers', () => {
     const resolved = resolveQqConfig({ appid: 'a', secret: 's' });
     expect(resolved.mode).toBe('websocket');
     expect(resolved.name).toBe('qq-bot');
+    if (resolved.mode === 'websocket') {
+      expect(resolved.intents).toEqual([
+        'GROUP_AND_C2C_EVENT',
+        'GUILDS',
+        'GUILD_MEMBERS',
+        'DIRECT_MESSAGE',
+        'PUBLIC_GUILD_MESSAGES',
+      ]);
+    }
   });
 
   it('selects deferred modes when configured', () => {

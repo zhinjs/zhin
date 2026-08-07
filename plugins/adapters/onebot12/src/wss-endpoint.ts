@@ -5,7 +5,7 @@ import { clearInterval } from 'node:timers';
 import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { createOneBot12EndpointManagement } from './endpoint-management.js';
 import {
@@ -26,8 +26,6 @@ import {
 import { verifyOneBotAccessToken } from './wss-auth.js';
 import { type OneBot12WsSocket, WS_OPEN } from './ws-types.js';
 
-const logger = getLogger('onebot12');
-
 export interface OneBot12WssEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
@@ -36,6 +34,8 @@ export interface OneBot12WssEndpointOptions {
 }
 
 export class OneBot12WssEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: OneBot12WssEndpointOptions;
   readonly management: EndpointManagement = createOneBot12EndpointManagement(this);
   #ws?: OneBot12WsSocket;
@@ -51,6 +51,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
   #started = false;
 
   constructor(options: OneBot12WssEndpointOptions) {
+    this.#logger = getAdapterLogger('onebot12', options.config.name);
     this.#options = options;
   }
 
@@ -59,7 +60,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
     this.#started = true;
     if (!this.#options.config.access_token) {
       // wss 模式未配 access_token 时任何连接都会被放行（verifyOneBotAccessToken 直接 return true）
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         endpoint: this.#options.config.name,
         mode: 'wss',
         ok: false,
@@ -70,7 +71,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
     this.#wsRelease = handle.onConnection((connection) => {
       this.#acceptConnection(connection);
     });
-    logger.info(formatCompact({
+    this.#logger.info(formatCompact({
       op: 'listen',
       endpoint: this.#options.config.name,
       mode: 'wss',
@@ -115,7 +116,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
       payload,
       (action, params) => this.callApi(action, params),
       (error) => {
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'onebot12_upload_failed',
           endpoint: this.#options.config.name,
           error: error instanceof Error ? error.message : String(error),
@@ -160,7 +161,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
         ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'onebot12_gateway_receive_failed',
         kind: conversation.kind,
         conversationId: conversation.id,
@@ -196,7 +197,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
         }
       }
     });
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       endpoint: this.#options.config.name,
       mode: 'wss',
       peer: connection.request.socket.remoteAddress,
@@ -226,7 +227,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
       }
       this.admit(msg as OneBot12Event);
     } catch (error) {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'onebot12_parse_failed',
         endpoint: this.#options.config.name,
         error: error instanceof Error ? error.message : String(error),

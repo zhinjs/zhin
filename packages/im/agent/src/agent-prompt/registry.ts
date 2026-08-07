@@ -6,7 +6,7 @@ const contributors = new Map<string, AgentPromptContributor>();
 export function registerAgentPromptContributor(contributor: AgentPromptContributor): void {
   const key = contributor.platform;
   if (contributors.has(key)) {
-    logger.warn(`平台 "${key}" 的 AgentPromptContributor 已注册，正在覆盖旧实现`);
+    logger.warn(`Overriding AgentPromptContributor: ${key}`);
   }
   contributors.set(key, contributor);
 }

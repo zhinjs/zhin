@@ -541,9 +541,20 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           }),
           resolveTriggerTimeoutMs(trigger),
         );
-        const transcriptBody = flattenOutputElements(elements).trim() || '(empty AI response)';
+        const transcriptBody = flattenOutputElements(elements).trim();
         const content = await publishOutboundElements(elements, effectiveAdapter || undefined);
-        await replyAndRecord(content.length > 0 ? content : transcriptBody, transcriptBody);
+        if (content.length > 0) {
+          await replyAndRecord(content, transcriptBody || sendContentToText(content));
+        } else if (transcriptBody) {
+          await replyAndRecord(transcriptBody, transcriptBody);
+        } else {
+          // spawn_task 等委派回合 finalReply 为空：用户可见文案由 subagent auto-continue
+          // + proactive 出站；勿把 '(empty AI response)' 当成正文发给用户。
+          logger.debug(formatCompact({
+            op: 'agent_host_turn_no_outbound',
+            reason: 'empty_elements_delegated',
+          }));
+        }
         logger.debug(formatCompact({
           op: 'agent_host_turn',
           turnMode: 'zhin_agent.process',

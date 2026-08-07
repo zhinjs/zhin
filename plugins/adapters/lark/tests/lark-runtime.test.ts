@@ -363,8 +363,8 @@ describe('lark plugin runtime adapter', () => {
   });
 
   it('warns loudly at start when neither encryptKey nor verificationToken is configured', async () => {
-    const { getLogger } = await import('@zhin.js/logger');
-    const warnSpy = vi.spyOn(getLogger('lark'), 'warn');
+    const { getAdapterLogger } = await import('@zhin.js/logger');
+    const warnSpy = vi.spyOn(getAdapterLogger('lark', 'noauth-lark'), 'warn');
     try {
       const http = createHttpHost({ host: '127.0.0.1', port: 0 });
       hosts.push(http);

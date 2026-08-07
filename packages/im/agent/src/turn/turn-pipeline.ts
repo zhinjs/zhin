@@ -95,7 +95,7 @@ export async function processTextTurn(
       const rateCheck = host.rateLimiter.check(userId);
       if (!rateCheck.allowed) {
         logPhase(host.phaseConfig, 'turn.rate_limited', sessionId, { userId });
-        logger.debug(`[速率限制] 用户 ${userId} 被限制: ${rateCheck.message}`);
+        logger.debug(formatCompact({ op: 'rate_limited', user: userId }));
         await host.emitter.dispatch('ai.processing.finish', host.emitter.createPayload(sessionId, commMessage, 'text', {
           path: 'rate_limited',
           reply: rateCheck.message || '请稍后再试',
@@ -139,11 +139,7 @@ export async function processTextTurn(
     const filterMs = (now() - tFilter).toFixed(0);
     logPhase(host.phaseConfig, 'tools.collected', sessionId, { count: resolvedTools.length });
 
-    logger.debug(formatCompact({
-      tools: resolvedTools.length,
-      tool_search: true,
-      names: resolvedTools.map(t => t.name).join(',') || '(none)',
-    }));
+    logger.debug(formatCompact({ op: 'tools_resolved', count: resolvedTools.length }));
 
     const resolvedInboundMedia = await resolveInboundMediaInjection(commMessage);
     const inboundMedia = extras?.mediaBlocks?.length

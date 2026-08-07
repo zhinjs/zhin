@@ -3,7 +3,7 @@
  * Peer/at ownership + handback + peer dispatch; local turns stay with Agent Host.
  */
 import type { Message } from '@zhin.js/core';
-import { formatCompactLog } from '@zhin.js/logger';
+import { formatCompact } from '@zhin.js/logger';
 import { findCellForInbound } from './collaboration-config.js';
 import { evaluateCellAtOwnership, evaluatePeerTrigger, isInboundFromCollaborationPeer } from './peer-policy.js';
 import { tryHandlePeerInboundHandback } from './inbound-peer-handback.js';
@@ -73,22 +73,20 @@ export async function applyRuntimeCollaborationInbound(
     endpointAtIds,
   });
   if (peerResult.isPeer && !peerResult.shouldTrigger) {
-    logger.debug(formatCompactLog('AI Handler', {
-      skip: 'peer_mention_required',
+    logger.debug(formatCompact({
+      op: 'skip_peer',
       peer: peerResult.peerEndpointId,
       reason: peerResult.reason,
-      path: 'runtime',
     }));
     return { action: 'skip', reason: peerResult.reason ?? 'peer_mention_required' };
   }
 
   const atOwnership = evaluateCellAtOwnership(message, cell, endpointId);
   if (!atOwnership.shouldHandle) {
-    logger.debug(formatCompactLog('AI Handler', {
-      skip: atOwnership.reason ?? 'cell_at_filter',
-      mentioned: atOwnership.mentionedEndpointIds?.join(','),
+    logger.debug(formatCompact({
+      op: 'skip_at_filter',
+      reason: atOwnership.reason,
       endpoint: endpointId,
-      path: 'runtime',
     }));
     return { action: 'skip', reason: atOwnership.reason ?? 'cell_at_filter' };
   }
@@ -134,27 +132,23 @@ export async function applyRuntimeCollaborationInbound(
         || dispatched.task.status === 'waiting_result'
         || dispatched.task.status === 'running'
       ) {
-        logger.info(formatCompactLog('AI Handler', {
-          path: 'runtime_kernel_internal_room',
-          run: dispatched.runId,
+        logger.info(formatCompact({
+          op: 'peer_dispatch',
           task: dispatched.taskId,
           from: endpointId,
           to: peerTarget,
-          agent: turnPlan.handlerProfile,
         }));
         return { action: 'done', reason: 'peer_dispatch' };
       }
-      logger.warn(formatCompactLog('AI Handler', {
-        path: 'runtime_kernel_internal_room_failed',
+      logger.warn(formatCompact({
+        op: 'peer_dispatch_failed',
         task: dispatched.taskId,
         error: dispatched.task.error,
-        fallback: 'local_process',
       }));
     } catch (err) {
-      logger.warn(formatCompactLog('AI Handler', {
-        path: 'runtime_kernel_internal_room_failed',
+      logger.warn(formatCompact({
+        op: 'peer_dispatch_failed',
         error: err instanceof Error ? err.message : String(err),
-        fallback: 'local_process',
       }));
     }
   }

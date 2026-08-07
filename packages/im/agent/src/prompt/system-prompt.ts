@@ -370,15 +370,12 @@ function buildPlatformSection(platformSections: string | undefined, toolSearchAc
 function buildCommunicationSection(): string {
   const items = [
     'Lead with the answer or result.',
-    'Be concise, direct, and useful.',
-    'Use Markdown when helpful.',
+    'Be concise, direct, and useful — match reply length to question complexity.',
+    'Use Markdown when helpful for structure.',
     'Prioritize the user\'s latest message; prior compressed messages are context.',
-    'One-word answers when possible.',
-    'No emojis ever.',
-    'No explanations unless user asks.',
-    'No preamble ("Here\'s...", "I\'ll...").',
-    'No postamble ("Let me know...", "Hope this helps...").',
-    'Use rich Markdown formatting (headings, bullet lists, tables) for multi-sentence answers.',
+    'No preamble ("Here\'s...", "I\'ll..."), no postamble ("Let me know...", "Hope this helps...").',
+    'Match the user\'s language; follow SOUL.md for default language.',
+    'Use rich Markdown formatting (headings, bullet lists, tables) for multi-part answers.',
   ];
   return ['# Style', ...prependBullets(items)].join('\n');
 }

@@ -11,7 +11,7 @@ import {
   type EndpointSendRequest,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { createNapCatEndpointManagement } from './endpoint-management.js';
 import { registerNapcatAgentEndpoint } from './napcat-agent-deps.js';
@@ -45,8 +45,6 @@ import {
   type NapCatWsSocket,
 } from './ws-types.js';
 
-const logger = getLogger('napcat');
-
 export interface NapCatWsEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
@@ -58,6 +56,8 @@ export interface NapCatWsEndpointOptions {
 }
 
 export class NapCatWsEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: NapCatWsEndpointOptions;
   readonly #inboundDeduper = new InboundMessageDeduper();
   readonly management: EndpointManagement = createNapCatEndpointManagement(this);
@@ -69,6 +69,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: NapCatWsEndpointOptions) {
+    this.#logger = getAdapterLogger('napcat', options.config.name);
     this.#options = options;
     this.#lifecycle = createEndpointLifecycle({
       name: options.config.name,
@@ -125,7 +126,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
     const { action, params } = buildSendAction(napcatOutboundTarget(conversation), message);
     const data = await this.callApi(action, params) as { message_id?: number | string } | undefined;
     const messageId = data?.message_id != null ? String(data.message_id) : '';
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'napcat_send',
       endpoint: this.#options.config.name,
       target: `${conversation.kind}:${conversation.id}`,
@@ -349,7 +350,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
         ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'napcat_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
@@ -379,13 +380,13 @@ export class NapCatWsEndpoint implements EndpointInstance {
         if (settled) return;
         settled = true;
         if (!this.#options.config.access_token) {
-          logger.warn(formatCompact({
+          this.#logger.warn(formatCompact({
             endpoint: this.#options.config.name,
             ok: false,
             error: 'missing access_token',
           }));
         }
-        logger.debug(formatCompact({
+        this.#logger.debug(formatCompact({
           endpoint: this.#options.config.name,
           mode: 'ws',
           url: safeUrl,
@@ -423,9 +424,8 @@ export class NapCatWsEndpoint implements EndpointInstance {
           : codeNum === 1006
             ? ' [abnormal]'
             : '';
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'disconnect',
-          endpoint: this.#options.config.name,
           code: codeNum,
           error: `${reasonStr || 'closed'}${codeHint}`,
           reconnect_ms: this.#options.config.reconnect_interval,
@@ -440,7 +440,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
 
       ws.on('error', (err) => {
         const error = err instanceof Error ? err : new Error(String(err));
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           op: 'ws_error',
           endpoint: this.#options.config.name,
           ok: false,

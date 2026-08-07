@@ -64,6 +64,7 @@
     "@zhin.js/plugin-group-suite": "workspace:*",
     "@zhin.js/plugin-guess-number": "workspace:*",
     "@zhin.js/plugin-idiom-chain": "workspace:*",
+    "@zhin.js/plugin-content-moderation": "workspace:*",
     "@zhin.js/plugin-link-poster": "workspace:*",
     "@zhin.js/plugin-lottery": "workspace:*",
     "@zhin.js/plugin-music": "workspace:*",
@@ -225,6 +226,10 @@
       {
         "package": "@zhin.js/process-monitor",
         "instanceKey": "process-monitor"
+      },
+      {
+        "package": "@zhin.js/plugin-content-moderation",
+        "instanceKey": "content-moderation"
       }
     ]
   }

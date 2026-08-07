@@ -132,6 +132,14 @@ function fromDangerousDecision(d: DangerousToolDecision): ToolPolicyDecision {
   };
 }
 
+/** 是否为 checkMemoryWritePath 已放行的记忆写路径（session 任意；global/platform 仅 master） */
+function isPermittedMemoryToolWrite(input: ToolPolicyInput): boolean {
+  const filePath = input.rawFilePath ?? input.filePath;
+  if (!filePath || !isWriteAccess(input)) return false;
+  const decision = checkMemoryWritePath(filePath, input.commMessage);
+  return decision.scope !== 'none' && decision.allowed;
+}
+
 function sortByPriority(layers: ToolPolicyLayer[]): ToolPolicyLayer[] {
   return layers.sort((a, b) => a.priority - b.priority);
 }
@@ -141,7 +149,16 @@ const TOOL_POLICIES: ToolPolicyLayer[] = sortByPriority([
     name: 'role-gate',
     priority: 10,
     applies: (input) => FILE_TOOL_NAMES.has(input.toolName),
-    check: (input) => fromDangerousDecision(checkFileToolAccess(input.toolName as FileToolName, input.commMessage)),
+    check: (input) => {
+      // 与 checkMemoryWritePath 对齐：会话记忆写对任意角色放行（避免矩阵/危险工具层先拒）
+      if (isPermittedMemoryToolWrite(input)) {
+        const role = input.commMessage
+          ? resolveToolRequesterRole(input.hostPlugin ?? null, input.commMessage)
+          : 'unknown';
+        return { allowed: true, role };
+      }
+      return fromDangerousDecision(checkFileToolAccess(input.toolName as FileToolName, input.commMessage));
+    },
   },
   {
     name: 'bash-command-safety',
@@ -156,10 +173,17 @@ const TOOL_POLICIES: ToolPolicyLayer[] = sortByPriority([
     name: 'dangerous-tool-approval',
     priority: 20,
     applies: (input) => DANGEROUS_TOOL_NAMES.has(input.toolName),
-    check: (input) =>
-      fromDangerousDecision(
+    check: (input) => {
+      if (isPermittedMemoryToolWrite(input)) {
+        const role = input.commMessage
+          ? resolveToolRequesterRole(input.hostPlugin ?? null, input.commMessage)
+          : 'unknown';
+        return { allowed: true, role };
+      }
+      return fromDangerousDecision(
         checkDangerousToolAccess(input.toolName as 'write_file' | 'edit_file' | 'web_fetch', input.commMessage),
-      ),
+      );
+    },
   },
   {
     name: 'bash-sensitive-read',
@@ -175,6 +199,17 @@ const TOOL_POLICIES: ToolPolicyLayer[] = sortByPriority([
       const operation = resolveFileOperation(input)!;
       const roleGate = prior.find((r) => r.policy === 'role-gate');
       const requesterRole: ToolRequesterRole = roleGate?.decision.role ?? 'unknown';
+      if (isPermittedMemoryToolWrite(input)) {
+        return {
+          allowed: true,
+          role: requesterRole,
+          payload: {
+            allowed: true,
+            role: toolRequesterRoleToFileRole(requesterRole),
+            operation,
+          } satisfies FilePermissionResult,
+        };
+      }
       const fileRole = toolRequesterRoleToFileRole(requesterRole);
       const permResult = checkFilePermission(fileRole, operation, input.rawFilePath ?? input.filePath);
       return {

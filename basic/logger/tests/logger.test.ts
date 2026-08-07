@@ -255,6 +255,18 @@ describe('getLogger category naming', () => {
   })
 })
 
+describe('getAdapterLogger', () => {
+  it('uses adapter:endpoint category', async () => {
+    const { getAdapterLogger } = await import('../src/logger.js')
+    expect(getAdapterLogger('icqq', '210723495').name).toBe('icqq:210723495')
+  })
+
+  it('falls back to adapter when endpoint empty', async () => {
+    const { getAdapterLogger } = await import('../src/logger.js')
+    expect(getAdapterLogger('icqq', '  ').name).toBe('icqq')
+  })
+})
+
 describe('Logger 安全特性', () => {
   it('Logger 实例应可设置日志级别', () => {
     const logger = new Logger(null, 'test-security')

@@ -351,7 +351,7 @@ export async function configureQQBot(ctx: EndpointConfigureContext): Promise<Rec
   ctx.envVars.QQ_APP_ID = credentials.appID.trim();
   ctx.envVars.QQ_SECRET = credentials.secret;
 
-  const { mode, sandbox } = await inquirer.prompt([
+  const { mode, sandbox, botKind } = await inquirer.prompt([
     {
       type: 'select',
       name: 'mode',
@@ -368,9 +368,36 @@ export async function configureQQBot(ctx: EndpointConfigureContext): Promise<Rec
       message: '  沙箱环境 (sandbox)?',
       default: false,
     },
+    {
+      type: 'select',
+      name: 'botKind',
+      message: '  公域 / 私域（决定频道消息 intents；群聊两边都有）:',
+      choices: [
+        {
+          name: 'public — 公域（频道仅 @；+ 群聊/私聊）',
+          value: 'public',
+        },
+        {
+          name: 'private — 私域（频道全量消息；+ 群聊/私聊；公域勿选）',
+          value: 'private',
+        },
+      ],
+      default: 'public',
+    },
   ]);
 
-  // schema：mode / sandbox 为顶层共享字段；name / appid / secret 为 endpoint 级
+  const sharedIntents = [
+    'GROUP_AND_C2C_EVENT',
+    'GUILDS',
+    'GUILD_MEMBERS',
+    'DIRECT_MESSAGE',
+  ];
+  const intents =
+    botKind === 'private'
+      ? [...sharedIntents, 'GUILD_MESSAGES']
+      : [...sharedIntents, 'PUBLIC_GUILD_MESSAGES'];
+
+  // schema：mode / sandbox 可顶层共享；botKind / intents 写在 endpoint，与扫码绑定一致
   return {
     mode,
     sandbox,
@@ -378,6 +405,8 @@ export async function configureQQBot(ctx: EndpointConfigureContext): Promise<Rec
       name: credentials.name.trim(),
       appid: '${QQ_APP_ID}',
       secret: '${QQ_SECRET}',
+      botKind,
+      intents,
     }],
   };
 }

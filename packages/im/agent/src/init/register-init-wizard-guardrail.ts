@@ -5,7 +5,7 @@
  * 提交阶段仍由 /collab inited 命令一次性创建 Cell。
  */
 import { getPlugin, type Message } from '@zhin.js/core';
-import { formatCompactLog } from '@zhin.js/logger';
+import { formatCompact } from '@zhin.js/logger';
 import { handleInitWizardInboundGate } from '../collaboration/init-observe-hook.js';
 
 export function registerInitWizardGuardrail(): void {
@@ -27,23 +27,18 @@ export function registerInitWizardGuardrail(): void {
         const gate = await handleInitWizardInboundGate(message, endpointId, root);
         if (gate.action === 'block') {
           if (gate.replied) {
-            logger.info(formatCompactLog('InitWizard', {
-              endpoint: endpointId,
-              action: 'prompt',
-            }));
+            logger.info(formatCompact({ op: 'init_wizard_prompt', endpoint: endpointId }));
           }
           return;
         }
       } catch (err) {
-        logger.debug(formatCompactLog('InitWizard', {
-          error: err instanceof Error ? err.message : String(err),
-        }));
+        logger.debug(formatCompact({ op: 'init_wizard_error', error: err instanceof Error ? err.message : String(err) }));
       }
 
       await next();
     });
 
-    logger.debug(formatCompactLog('InitWizard', { guardrail: 'on' }));
+    logger.debug('Init wizard guardrail enabled');
     return dispose;
   });
 }

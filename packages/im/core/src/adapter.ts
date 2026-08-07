@@ -104,7 +104,7 @@ export abstract class Adapter<
       const endpoint = this.endpoints.get(endpoint_id);
       if(!endpoint) throw new Error(`Endpoint ${endpoint_id} not found`);
       assertOutbound(endpoint);
-      this.logger.debug(formatCompact( { recall: id, endpoint: endpoint_id }));
+      this.logger.debug(formatCompact({ op: 'recall_message', msgId: id, endpoint: endpoint_id }));
       await endpoint.$recallMessage(id);
     };
     this.on('call.recallMessage', this.recallMessageHandler);
@@ -147,7 +147,7 @@ export abstract class Adapter<
 
     // 背压控制：同步返回 false 表示丢弃
     if (this.inboundPipeline.shouldDropDueToBackpressure()) {
-      this.logger.warn(formatCompact( { drop: 'concurrency', limit: this.maxConcurrentMessages }));
+      this.logger.warn(formatCompact({ op: 'backpressure_drop', limit: this.maxConcurrentMessages }));
       return false;
     }
 
@@ -398,7 +398,7 @@ export abstract class Adapter<
       const endpoint = this.endpoints.get(endpoint_id);
       if(!endpoint) throw new Error(`Endpoint ${endpoint_id} not found`);
       assertOutbound(endpoint);
-      this.logger.debug(formatCompact( { recall: id, endpoint: endpoint_id }));
+      this.logger.debug(formatCompact({ op: 'recall_message', msgId: id, endpoint: endpoint_id }));
       await endpoint.$recallMessage(id);
     };
     this.on('call.recallMessage', this.recallMessageHandler);

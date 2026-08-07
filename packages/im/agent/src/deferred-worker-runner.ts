@@ -107,12 +107,9 @@ export class DeferredWorkerRunner {
 
     const loadedToolNames = workerTools.map(t => t.name);
     if (loadedToolNames.length === 0) {
-      logger.info(formatCompact( {
-        worker: 'delegated',
-        ok: false,
-        goal: truncatePreview(goal, 300),
-        tool_query: truncatePreview(query, 120),
-        error: 'no_tools_matched',
+      logger.info(formatCompact({
+        op: 'worker_no_tools',
+        query: truncatePreview(query, 120),
       }));
       return {
         summary: JSON.stringify({
@@ -161,11 +158,10 @@ ${goal}${platformBlock}`;
 
     const maxIterations = options.maxIterations ?? execPolicyConfig?.maxSubagentIterations ?? 15;
 
-    logger.info(formatCompact( {
-      worker: 'delegated',
-      goal: truncatePreview(goal, 300),
-      tool_query: query !== goal ? truncatePreview(query, 120) : undefined,
-      tools: loadedToolNames.join(','),
+    logger.info(formatCompact({
+      op: 'worker_start',
+      tools: loadedToolNames.length,
+      goal: truncatePreview(goal, 120),
     }));
     await onEvent?.({
       phase: 'start',
@@ -220,14 +216,11 @@ ${goal}${platformBlock}`;
       });
       const hitMaxIter = result.iterations >= maxIterations;
       const summary = buildWorkerSummary(result, summaryMaxChars, hitMaxIter);
-      logger.info(formatCompact( {
-        worker: 'done',
-        ok: true,
-        partial: hitMaxIter || undefined,
+      logger.info(formatCompact({
+        op: 'worker_done',
         iter: result.iterations,
-        tools: loadedToolNames.join(','),
+        partial: hitMaxIter || undefined,
         usage: formatCompactUsage(result.usage),
-        summary: truncatePreview(summary, 480),
       }));
       await onEvent?.({
         phase: 'finish',
@@ -251,10 +244,8 @@ ${goal}${platformBlock}`;
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.warn(formatCompact( {
-        worker: 'done',
-        ok: false,
-        tools: loadedToolNames.join(','),
+      logger.warn(formatCompact({
+        op: 'worker_error',
         error: truncatePreview(errorMsg),
       }));
       await onEvent?.({

@@ -18,7 +18,7 @@ import {
   nativeConversationId,
   parseLegacyMessageReference,
 } from '@zhin.js/im-contract';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { registerDiscordAgentEndpoint } from './discord-agent-deps.js';
 import {
@@ -49,8 +49,6 @@ import { registerDiscordInteractionRoutes } from './webhook.js';
 const DISCORD_API = 'https://discord.com/api/v10';
 /** 出站 HTTP 调用统一 30s 超时。 */
 const OUTBOUND_TIMEOUT_MS = 30_000;
-const logger = getLogger('discord');
-
 export type {
   CreateDiscordClient,
   DiscordClientTransport,
@@ -64,6 +62,8 @@ export interface DiscordEndpointOptions {
 }
 
 export class DiscordGatewayEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: DiscordEndpointOptions;
   readonly #createClient: CreateDiscordClient;
   #client: DiscordClientTransport | null = null;
@@ -92,6 +92,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
   });
 
   constructor(options: DiscordEndpointOptions) {
+    this.#logger = getAdapterLogger('discord', options.config.name);
     this.#options = options;
     this.#createClient = options.createClient ?? defaultCreateClient;
   }
@@ -109,7 +110,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
         onMessage: (msg) => this.admit(msg),
         onButton: (interaction) => this.admitButton(interaction),
       });
-      logger.info(formatCompact({
+      this.#logger.info(formatCompact({
         op: 'connect',
         endpoint: this.#options.config.name,
         mode: 'gateway',
@@ -117,7 +118,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
       }));
     } catch (error) {
       await this.stop();
-      logger.error('Failed to connect Discord gateway:', error);
+      this.#logger.error('Failed to connect Discord gateway:', error);
       throw error;
     }
   }
@@ -144,7 +145,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
       this.#client = null;
     }
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -153,7 +154,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
     const target = formatLegacyConversationRef(conversation);
     const snowflake = await this.#sendBody(conversation.id, body);
     const messageId = formatLegacyMessageReference({ target, messageId: snowflake });
-    logger.debug(formatCompact({
+    this.#logger.debug(formatCompact({
       op: 'discord_send',
       endpoint: this.#options.config.name,
       target,
@@ -195,7 +196,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
         ...(msg.mentionedBot ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'discord_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
@@ -220,7 +221,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
         sourceMessageId: interaction.sourceMessageId,
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'discord_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
@@ -419,6 +420,8 @@ export interface DiscordInteractionsEndpointOptions {
 }
 
 export class DiscordInteractionsEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: DiscordInteractionsEndpointOptions;
   readonly #fetch: typeof globalThis.fetch;
   #routeReleases: HttpRouteRegistration[] = [];
@@ -429,6 +432,7 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
   });
 
   constructor(options: DiscordInteractionsEndpointOptions) {
+    this.#logger = getAdapterLogger('discord', options.config.name);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
@@ -445,7 +449,7 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
     if (this.#started) return;
     this.#started = true;
     this.#routeReleases.push(...registerDiscordInteractionRoutes(this.#options.http, this));
-    logger.info(formatCompact({
+    this.#logger.info(formatCompact({
       op: 'connect',
       endpoint: this.#options.config.name,
       mode: 'interactions',
@@ -465,7 +469,7 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
     this.#open = false;
     for (const release of this.#routeReleases.splice(0)) release();
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -529,7 +533,7 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
         eventType: 'application_command',
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'discord_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),

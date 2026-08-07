@@ -4,7 +4,7 @@
 import type { EndpointInstance, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { registerDingtalkAgentEndpoint } from './dingtalk-agent-deps.js';
 import { normalizeDingtalkSenderForPermit } from './platform-permit.js';
@@ -24,8 +24,6 @@ import {
   type ResolvedDingTalkConfig,
 } from './protocol.js';
 import { registerDingTalkWebhookRoutes } from './webhook.js';
-
-const logger = getLogger('dingtalk');
 
 export type DingTalkFetch = (
   url: string,
@@ -55,6 +53,8 @@ export interface DingTalkEndpointOptions {
  * 因此本 endpoint 不暴露 EndpointManagement（Console 社交面 RPC 对该平台保持未接线）。
  */
 export class DingTalkEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: DingTalkEndpointOptions;
   readonly #fetch: DingTalkFetch;
   #routeReleases: HttpRouteRegistration[] = [];
@@ -66,6 +66,7 @@ export class DingTalkEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: DingTalkEndpointOptions) {
+    this.#logger = getAdapterLogger('dingtalk', options.config.name);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
@@ -86,14 +87,14 @@ export class DingTalkEndpoint implements EndpointInstance {
       await this.#refreshAccessToken();
       this.#unregisterAgent = registerDingtalkAgentEndpoint(this.#options.config.name, this);
       this.#routeReleases.push(...registerDingTalkWebhookRoutes(this.#options.http, this));
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         endpoint: this.#options.config.name,
         op: 'webhook',
         path: this.#options.config.webhookPath,
       }));
     } catch (error) {
       await this.stop();
-      logger.error('Failed to connect DingTalk endpoint:', error);
+      this.#logger.error('Failed to connect DingTalk endpoint:', error);
       throw error;
     }
   }
@@ -113,7 +114,7 @@ export class DingTalkEndpoint implements EndpointInstance {
     this.#unregisterAgent?.();
     this.#unregisterAgent = undefined;
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -129,7 +130,7 @@ export class DingTalkEndpoint implements EndpointInstance {
       if (data.errcode !== 0) {
         throw new Error(`Failed to send message via session webhook: ${data.errmsg}`);
       }
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         op: 'send',
         endpoint: this.#options.config.name,
         via: 'sessionWebhook',
@@ -151,7 +152,7 @@ export class DingTalkEndpoint implements EndpointInstance {
     if (data.errcode !== 0) {
       throw new Error(`Failed to send message: ${data.errmsg}`);
     }
-    logger.debug(formatCompact({ op: 'send', endpoint: this.#options.config.name, to: conversation.id }));
+    this.#logger.debug(formatCompact({ op: 'send', to: conversation.id }));
     return (data.msgId as string) || `${Date.now()}`;
   }
 
@@ -180,7 +181,7 @@ export class DingTalkEndpoint implements EndpointInstance {
         ...(isDingtalkBotMentioned(event, this.#options.config.robotCode) ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'dingtalk_gateway_receive_failed',
         conversationId: conversation.id,
         error: err instanceof Error ? err.message : String(err),
@@ -197,7 +198,7 @@ export class DingTalkEndpoint implements EndpointInstance {
       if (data.errcode === 0) return data.result;
       throw new Error(`Failed to get user info: ${data.errmsg}`);
     } catch (error) {
-      logger.error('Failed to get user info:', error);
+      this.#logger.error('Failed to get user info:', error);
       return null;
     }
   }
@@ -214,7 +215,7 @@ export class DingTalkEndpoint implements EndpointInstance {
       }
       throw new Error(`Failed to get department users: ${data.errmsg}`);
     } catch (error) {
-      logger.error('Failed to get department users:', error);
+      this.#logger.error('Failed to get department users:', error);
       return [];
     }
   }
@@ -232,7 +233,7 @@ export class DingTalkEndpoint implements EndpointInstance {
       if (data.errcode === 0) return true;
       throw new Error(`Failed to send work notice: ${data.errmsg}`);
     } catch (error) {
-      logger.error('Failed to send work notice:', error);
+      this.#logger.error('Failed to send work notice:', error);
       return false;
     }
   }
@@ -246,7 +247,7 @@ export class DingTalkEndpoint implements EndpointInstance {
       if (data.errcode === 0) return (data.result as unknown[]) || [];
       throw new Error(`Failed to get department list: ${data.errmsg}`);
     } catch (error) {
-      logger.error('Failed to get department list:', error);
+      this.#logger.error('Failed to get department list:', error);
       return [];
     }
   }
@@ -260,7 +261,7 @@ export class DingTalkEndpoint implements EndpointInstance {
       if (data.errcode === 0) return data.result;
       throw new Error(`Failed to get department info: ${data.errmsg}`);
     } catch (error) {
-      logger.error('Failed to get department info:', error);
+      this.#logger.error('Failed to get department info:', error);
       return null;
     }
   }
@@ -278,7 +279,7 @@ export class DingTalkEndpoint implements EndpointInstance {
       if (data.errcode === 0) return (data.chatid as string) || null;
       throw new Error(`Failed to create chat: ${data.errmsg}`);
     } catch (error) {
-      logger.error('Failed to create chat:', error);
+      this.#logger.error('Failed to create chat:', error);
       return null;
     }
   }
@@ -292,7 +293,7 @@ export class DingTalkEndpoint implements EndpointInstance {
       if (data.errcode === 0) return data.chat_info;
       throw new Error(`Failed to get chat info: ${data.errmsg}`);
     } catch (error) {
-      logger.error('Failed to get chat info:', error);
+      this.#logger.error('Failed to get chat info:', error);
       return null;
     }
   }
@@ -314,7 +315,7 @@ export class DingTalkEndpoint implements EndpointInstance {
       if (data.errcode === 0) return true;
       throw new Error(`Failed to update chat: ${data.errmsg}`);
     } catch (error) {
-      logger.error('Failed to update chat:', error);
+      this.#logger.error('Failed to update chat:', error);
       return false;
     }
   }
@@ -378,7 +379,7 @@ export class DingTalkEndpoint implements EndpointInstance {
         expires_in: data.expires_in ?? 7200,
         timestamp: Date.now(),
       };
-      logger.debug('Access token refreshed successfully');
+      this.#logger.debug('Access token refreshed successfully');
       return;
     }
     throw new Error(`Failed to get access token: ${data.errmsg} (${data.errcode})`);

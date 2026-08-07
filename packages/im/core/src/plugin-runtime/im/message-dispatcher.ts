@@ -49,77 +49,30 @@ export class MessageDispatcher {
   async dispatch(message: Message, snapshot: RuntimeSnapshot): Promise<MessageDispatchResult> {
     const prefix = this.resolvePrefix(message, snapshot);
     let input = message.content.trim();
-    logger.debug(formatCompact({
-      op: 'command_dispatch_start',
-      adapter: ownerOfMessage(message),
-      endpoint: typeof message.metadata?.endpoint === 'string'
-        ? message.metadata.endpoint
-        : undefined,
-      prefix: prefix || '(none)',
-      preview: truncatePreview(input),
-      segments: summarizeSegmentTypes(message.segments),
-    }));
-    if (prefix) {
-      if (!input.startsWith(prefix)) {
-        logger.debug(formatCompact({
-          op: 'command_dispatch_miss',
-          reason: 'prefix_miss',
-          prefix,
-          preview: truncatePreview(input),
-        }));
-        return Object.freeze({ matched: false });
-      }
-      input = input.slice(prefix.length).trim();
-    }
-    if (!input) {
-      logger.debug(formatCompact({
-        op: 'command_dispatch_miss',
-        reason: 'empty_after_prefix',
-        prefix: prefix || '(none)',
-      }));
+    if (prefix && !input.startsWith(prefix)) {
       return Object.freeze({ matched: false });
     }
+    if (prefix) input = input.slice(prefix.length).trim();
+    if (!input) return Object.freeze({ matched: false });
     const commands = snapshot.projections.get(commandFeatureId);
-    if (!isCommandIndex(commands)) {
-      logger.debug(formatCompact({
-        op: 'command_dispatch_miss',
-        reason: 'no_command_index',
-      }));
-      return Object.freeze({ matched: false });
-    }
+    if (!isCommandIndex(commands)) return Object.freeze({ matched: false });
     const structuredInput = message.segments
       ? stripCommandPrefix(message.segments, prefix)
       : undefined;
-    if (message.segments && structuredInput === undefined) {
-      logger.debug(formatCompact({
-        op: 'command_dispatch_fallback_text',
-        reason: 'strip_prefix_failed',
-        prefix: prefix || '(none)',
-        segments: summarizeSegmentTypes(message.segments),
-      }));
-    }
     const matchInput = structuredInput ?? input;
-    logger.debug(formatCompact({
-      op: 'command_dispatch_match_input',
-      mode: typeof matchInput === 'string' ? 'text' : 'segments',
-      preview: typeof matchInput === 'string'
-        ? truncatePreview(matchInput)
-        : summarizeSegmentTypes(matchInput),
-    }));
     const result = await commands.dispatch(matchInput, message);
     if (result.matched && result.value !== undefined) {
       if (!result.owner) throw new Error('Matched Command is missing its owner');
       logger.debug(formatCompact({
-        op: 'command_dispatch_hit',
+        op: 'dispatch_hit',
         command: result.command,
         owner: result.owner,
       }));
       await message.$replyFrom(result.owner, result.value as SendContent);
-    } else {
+    } else if (!result.matched) {
       logger.debug(formatCompact({
-        op: 'command_dispatch_miss',
-        reason: result.matched ? 'empty_value' : 'no_match',
-        command: result.command,
+        op: 'dispatch_miss',
+        preview: truncatePreview(input),
       }));
     }
     return result;
@@ -170,17 +123,3 @@ function stripCommandPrefix(
   return pendingPrefix ? undefined : result;
 }
 
-function summarizeSegmentTypes(
-  segments: readonly Readonly<CommandSegment>[] | undefined,
-): string | undefined {
-  if (!segments?.length) return undefined;
-  return segments
-    .map((segment) => {
-      if (typeof segment.type === 'string') return segment.type;
-      if (segment.type && typeof segment.type === 'object' && 'name' in segment.type) {
-        return String((segment.type as { name: unknown }).name);
-      }
-      return '?';
-    })
-    .join(',');
-}

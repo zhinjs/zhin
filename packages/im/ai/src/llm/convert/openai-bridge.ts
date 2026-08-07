@@ -69,7 +69,8 @@ function assistantToOpenAiMessage(message: AssistantMessage): ChatMessage {
   }
   const thinking = message.content.find((b) => b.type === 'thinking');
   if (thinking && thinking.type === 'thinking') {
-    msg.reasoning_content = thinking.thinking;
+    // Empty CoT still needs a non-empty field for DeepSeek tool-loop round-trip.
+    msg.reasoning_content = thinking.thinking || '\u200b';
   }
   return msg;
 }

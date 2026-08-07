@@ -54,7 +54,7 @@ export class ScheduleJobEngine {
         logger.debug(formatCompact({ schedule_jobs: count }));
       }
     }).catch((e) => {
-      logger.warn('加载 Schedule Job 失败: ' + ((e as Error)?.message || String(e)));
+      logger.warn(`Failed to load schedule jobs: ${(e as Error)?.message || String(e)}`);
     });
   }
 

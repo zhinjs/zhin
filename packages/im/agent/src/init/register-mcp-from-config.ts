@@ -59,7 +59,7 @@ export function registerMcpFromConfig(): void {
 
     const mcpFeature = root.inject('mcpFeature');
     if (!mcpFeature) {
-      logger.warn(formatCompact({ error: 'no_mcp_feature' }));
+      logger.warn('MCP feature not available');
       return;
     }
 
@@ -72,11 +72,11 @@ export function registerMcpFromConfig(): void {
     for (const raw of servers) {
       const entry = validateMcpServerEntry(raw);
       if (!entry) {
-        logger.warn(formatCompact({ error: 'invalid_entry', preview: JSON.stringify(raw) }));
+        logger.warn(`Invalid MCP server config: ${JSON.stringify(raw)}`);
         continue;
       }
       if (mcpFeature.get(entry.name)) {
-        logger.warn(formatCompact({ error: 'duplicate', name: entry.name }));
+        logger.warn(`Duplicate MCP server: ${entry.name}`);
         continue;
       }
       mcpFeature.add(entry, 'config');
@@ -84,7 +84,7 @@ export function registerMcpFromConfig(): void {
     }
     if (registered > 0) {
       root.inject('capabilityIngress')?.invalidate();
-      logger.debug(formatCompact({ count: registered, source: 'ai.mcpServers' }));
+      logger.debug(formatCompact({ op: 'mcp_registered', count: registered }));
     }
   });
 }

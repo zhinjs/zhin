@@ -590,10 +590,10 @@ function parseMode(value: string | undefined): RuntimeMode {
 }
 
 /**
- * Endpoint Owner（master）/ trusted 解析器。
- * Owner 来源：plugins.<key>.master、plugins.<key>.endpoints[].owner（+ name 别名键）。
- * trusted 来源：plugins.<key>.trusted、plugins.<key>.endpoints[].trusted（数组或空白/逗号分隔字符串），
- * 对齐 legacy resolveSenderRoles 的 endpoint $config.trusted 语义。
+ * Endpoint master / trusted 解析器。
+ * master 来源：plugins.<key>.master、plugins.<key>.endpoints[].master（+ name 别名键）。
+ * trusted 来源：plugins.<key>.trusted、plugins.<key>.endpoints[].trusted（数组或空白/逗号分隔字符串）。
+ * 不读 owner/admin：那是群/频道平台身份，不是框架 master。
  */
 export async function createEndpointRoleResolver(
   config: RuntimeConfigDocument | ConfigDocumentPort,
@@ -611,6 +611,10 @@ export async function createEndpointRoleResolver(
   if (!plugins || typeof plugins !== 'object' || Array.isArray(plugins)) {
     return { resolveOwner: () => undefined, resolveTrusted: () => [] };
   }
+  const addMaster = (key: string, raw: unknown) => {
+    if (raw == null || String(raw).trim() === '') return;
+    map.set(key, String(raw));
+  };
   const addTrusted = (key: string, raw: unknown) => {
     const ids = normalizeTrustedIdList(raw);
     if (ids.length === 0) return;
@@ -621,11 +625,8 @@ export async function createEndpointRoleResolver(
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
     const cfg = raw as Record<string, unknown>;
     const nameKey = cfg.name != null && String(cfg.name).trim() !== '' ? String(cfg.name) : undefined;
-    if (cfg.master != null && String(cfg.master).trim() !== '') {
-      const master = String(cfg.master);
-      map.set(pluginKey, master);
-      if (nameKey) map.set(nameKey, master);
-    }
+    addMaster(pluginKey, cfg.master);
+    if (nameKey) addMaster(nameKey, cfg.master);
     addTrusted(pluginKey, cfg.trusted);
     if (nameKey) addTrusted(nameKey, cfg.trusted);
     if (Array.isArray(cfg.endpoints)) {
@@ -633,22 +634,22 @@ export async function createEndpointRoleResolver(
         if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
         const ep = entry as Record<string, unknown>;
         const epName = ep.name != null && String(ep.name).trim() !== '' ? String(ep.name) : undefined;
-        if (ep.owner != null && String(ep.owner).trim() !== '') {
-          const owner = String(ep.owner);
-          map.set(pluginKey, owner);
-          if (epName) map.set(epName, owner);
+        // 仅挂到 endpoint 名，避免多账号时互相污染插件键
+        if (epName) {
+          addMaster(epName, ep.master);
+          addTrusted(epName, ep.trusted);
         }
-        addTrusted(pluginKey, ep.trusted);
-        if (epName) addTrusted(epName, ep.trusted);
       }
     }
   }
   return {
     resolveOwner: (adapterLocalName, endpointId) =>
-      map.get(adapterLocalName) ?? map.get(endpointId),
+      map.get(endpointId) ?? map.get(adapterLocalName),
     resolveTrusted: (adapterLocalName, endpointId) => [
-      ...(trustedMap.get(adapterLocalName) ?? []),
-      ...(trustedMap.get(endpointId) ?? []),
+      ...new Set([
+        ...(trustedMap.get(endpointId) ?? []),
+        ...(trustedMap.get(adapterLocalName) ?? []),
+      ]),
     ],
   };
 }

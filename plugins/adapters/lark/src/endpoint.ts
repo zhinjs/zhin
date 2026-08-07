@@ -6,7 +6,7 @@ import { basename } from 'node:path';
 import type { EndpointGroup, EndpointInstance, EndpointManagement, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { registerLarkAgentEndpoint } from './lark-agent-deps.js';
 import {
@@ -27,8 +27,6 @@ import {
   type ResolvedLarkConfig,
 } from './protocol.js';
 import { registerLarkWebhookRoutes } from './webhook.js';
-
-const logger = getLogger('lark');
 
 /** 出站 HTTP 调用统一 30s 超时。 */
 const OUTBOUND_TIMEOUT_MS = 30_000;
@@ -57,6 +55,8 @@ export interface LarkEndpointOptions {
 }
 
 export class LarkEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: LarkEndpointOptions;
   readonly #fetch: LarkFetch;
   /**
@@ -93,6 +93,7 @@ export class LarkEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: LarkEndpointOptions) {
+    this.#logger = getAdapterLogger('lark', options.config.name);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
@@ -112,7 +113,7 @@ export class LarkEndpoint implements EndpointInstance {
     try {
       if (!this.#options.config.encryptKey && !this.#options.config.verificationToken) {
         // encryptKey / verificationToken 都未配置时 webhook 完全无鉴权，任何人可伪造事件
-        logger.warn(formatCompact({
+        this.#logger.warn(formatCompact({
           endpoint: this.#options.config.name,
           op: 'webhook',
           ok: false,
@@ -122,14 +123,14 @@ export class LarkEndpoint implements EndpointInstance {
       await this.#refreshAccessToken();
       this.#unregisterAgent = registerLarkAgentEndpoint(this.#options.config.name, this);
       this.#routeReleases.push(...registerLarkWebhookRoutes(this.#options.http, this));
-      logger.debug(formatCompact({
+      this.#logger.debug(formatCompact({
         endpoint: this.#options.config.name,
         op: 'webhook',
         path: this.#options.config.webhookPath,
       }));
     } catch (error) {
       await this.stop();
-      logger.error('Failed to connect Lark endpoint:', error);
+      this.#logger.error('Failed to connect Lark endpoint:', error);
       throw error;
     }
   }
@@ -148,7 +149,7 @@ export class LarkEndpoint implements EndpointInstance {
     this.#unregisterAgent?.();
     this.#unregisterAgent = undefined;
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -167,10 +168,7 @@ export class LarkEndpoint implements EndpointInstance {
       throw new Error(`Failed to send message: ${data.msg}`);
     }
     const messageId = (data.data?.message_id as string) || `${Date.now()}`;
-    logger.debug(formatCompact({
-      op: 'send',
-      endpoint: this.#options.config.name,
-      to: conversation.id,
+    this.#logger.debug(formatCompact({ op: 'send', to: conversation.id,
       id: messageId,
     }));
     return messageId;
@@ -226,7 +224,7 @@ export class LarkEndpoint implements EndpointInstance {
       }
       throw new Error(`Image upload failed: ${data.msg}`);
     } catch (error) {
-      logger.error('Failed to upload image:', error);
+      this.#logger.error('Failed to upload image:', error);
       return null;
     }
   }
@@ -246,7 +244,7 @@ export class LarkEndpoint implements EndpointInstance {
         endpoint: this.#options.config.name,
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'lark_gateway_receive_failed',
         conversation: conversation.id,
         error: err instanceof Error ? err.message : String(err),
@@ -265,7 +263,7 @@ export class LarkEndpoint implements EndpointInstance {
       });
       return data.data?.user ?? null;
     } catch (error) {
-      logger.error('Failed to get user info:', error);
+      this.#logger.error('Failed to get user info:', error);
       return null;
     }
   }
@@ -275,7 +273,7 @@ export class LarkEndpoint implements EndpointInstance {
       const data = await this.#request(`/im/v1/chats/${chatId}`, { method: 'GET' });
       return data.data ?? null;
     } catch (error) {
-      logger.error('Failed to get chat info:', error);
+      this.#logger.error('Failed to get chat info:', error);
       return null;
     }
   }
@@ -302,7 +300,7 @@ export class LarkEndpoint implements EndpointInstance {
       }
       throw new Error(`Upload failed: ${data.msg}`);
     } catch (error) {
-      logger.error('Failed to upload file:', error);
+      this.#logger.error('Failed to upload file:', error);
       return null;
     }
   }
@@ -324,7 +322,7 @@ export class LarkEndpoint implements EndpointInstance {
       if (data.code === 0) return (data.data?.chat_id as string) || null;
       throw new Error(`Failed to create chat: ${data.msg}`);
     } catch (error) {
-      logger.error('Failed to create chat:', error);
+      this.#logger.error('Failed to create chat:', error);
       return null;
     }
   }
@@ -341,7 +339,7 @@ export class LarkEndpoint implements EndpointInstance {
       if (data.code === 0) return true;
       throw new Error(`Failed to update chat: ${data.msg}`);
     } catch (error) {
-      logger.error('Failed to update chat:', error);
+      this.#logger.error('Failed to update chat:', error);
       return false;
     }
   }
@@ -355,7 +353,7 @@ export class LarkEndpoint implements EndpointInstance {
       if (data.code === 0) return true;
       throw new Error(`Failed to add members: ${data.msg}`);
     } catch (error) {
-      logger.error('Failed to add chat members:', error);
+      this.#logger.error('Failed to add chat members:', error);
       return false;
     }
   }
@@ -369,7 +367,7 @@ export class LarkEndpoint implements EndpointInstance {
       if (data.code === 0) return true;
       throw new Error(`Failed to remove members: ${data.msg}`);
     } catch (error) {
-      logger.error('Failed to remove chat members:', error);
+      this.#logger.error('Failed to remove chat members:', error);
       return false;
     }
   }
@@ -380,7 +378,7 @@ export class LarkEndpoint implements EndpointInstance {
       if (data.code === 0) return (data.data?.items as unknown[]) || [];
       throw new Error(`Failed to get members: ${data.msg}`);
     } catch (error) {
-      logger.error('Failed to get chat members:', error);
+      this.#logger.error('Failed to get chat members:', error);
       return [];
     }
   }
@@ -391,7 +389,7 @@ export class LarkEndpoint implements EndpointInstance {
       if (data.code === 0) return true;
       throw new Error(`Failed to dissolve chat: ${data.msg}`);
     } catch (error) {
-      logger.error('Failed to dissolve chat:', error);
+      this.#logger.error('Failed to dissolve chat:', error);
       return false;
     }
   }
@@ -405,7 +403,7 @@ export class LarkEndpoint implements EndpointInstance {
       if (data.code === 0) return true;
       throw new Error(`Failed to set managers: ${data.msg}`);
     } catch (error) {
-      logger.error('Failed to set chat managers:', error);
+      this.#logger.error('Failed to set chat managers:', error);
       return false;
     }
   }
@@ -419,7 +417,7 @@ export class LarkEndpoint implements EndpointInstance {
       if (data.code === 0) return true;
       throw new Error(`Failed to remove managers: ${data.msg}`);
     } catch (error) {
-      logger.error('Failed to remove chat managers:', error);
+      this.#logger.error('Failed to remove chat managers:', error);
       return false;
     }
   }
@@ -524,7 +522,7 @@ export class LarkEndpoint implements EndpointInstance {
         expires_in: data.expire ?? 7200,
         timestamp: Date.now(),
       };
-      logger.debug('Access token refreshed successfully');
+      this.#logger.debug('Access token refreshed successfully');
       return;
     }
     throw new Error(`Failed to get access token: ${data.msg} (${data.code})`);

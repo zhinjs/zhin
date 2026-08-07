@@ -11,7 +11,7 @@ import {
   parseLegacyMessageReference,
   type ConversationRef,
 } from '@zhin.js/im-contract';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { runTelegramPollLoop } from './polling.js';
 import { normalizeTelegramChatMember } from './platform-permit.js';
@@ -35,8 +35,6 @@ import {
 } from './protocol.js';
 import { registerTelegramAgentEndpoint } from './telegram-agent-deps.js';
 import { registerTelegramWebhookRoutes } from './webhook.js';
-
-const logger = getLogger('telegram');
 
 const CHAT_MEMBER_CACHE_TTL_MS = 60_000;
 const CHAT_MEMBER_CACHE_MAX = 2_000;
@@ -87,6 +85,8 @@ interface TelegramApiErr {
  * 因此本 endpoint 不暴露 EndpointManagement（Console 社交面 RPC 对该平台保持未接线）。
  */
 export class TelegramEndpoint implements EndpointInstance {
+  readonly #logger!: ReturnType<typeof getAdapterLogger>;
+
   readonly #options: TelegramEndpointOptions;
   readonly #fetch: TelegramFetch;
   #pollAbort?: AbortController;
@@ -104,6 +104,7 @@ export class TelegramEndpoint implements EndpointInstance {
   });
 
   constructor(options: TelegramEndpointOptions) {
+    this.#logger = getAdapterLogger('telegram', options.config.name);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
@@ -146,7 +147,7 @@ export class TelegramEndpoint implements EndpointInstance {
         const webhook = this.#options.config.webhook!;
         if (!webhook.secretToken) {
           // 未配 secretToken 时 webhook 无鉴权：任何人知道 path 即可注入假 update。
-          logger.warn(formatCompact({
+          this.#logger.warn(formatCompact({
             op: 'webhook_no_secret',
             endpoint: this.#options.config.name,
             path: webhook.path,
@@ -159,7 +160,7 @@ export class TelegramEndpoint implements EndpointInstance {
           allowed_updates: this.#options.config.allowedUpdates,
           ...(webhook.secretToken ? { secret_token: webhook.secretToken } : {}),
         });
-        logger.info(formatCompact({
+        this.#logger.info(formatCompact({
           op: 'connect',
           endpoint: this.#options.config.name,
           mode: 'webhook',
@@ -172,7 +173,7 @@ export class TelegramEndpoint implements EndpointInstance {
       await this.callApi('deleteWebhook', { drop_pending_updates: false });
       this.#pollAbort = new AbortController();
       this.#pollPromise = runTelegramPollLoop(this, this.#pollAbort.signal);
-      logger.info(formatCompact({
+      this.#logger.info(formatCompact({
         op: 'connect',
         endpoint: this.#options.config.name,
         mode: 'polling',
@@ -180,7 +181,7 @@ export class TelegramEndpoint implements EndpointInstance {
       }));
     } catch (error) {
       await this.stop();
-      logger.error('Failed to connect Telegram bot:', error);
+      this.#logger.error('Failed to connect Telegram bot:', error);
       throw error;
     }
   }
@@ -206,7 +207,7 @@ export class TelegramEndpoint implements EndpointInstance {
     this.#unregisterAgent = undefined;
     this.#chatMemberCache.clear();
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -269,7 +270,7 @@ export class TelegramEndpoint implements EndpointInstance {
     if (!this.#open) return;
     const conversation = telegramInboundConversation(String(this.#options.id), msg.chat);
     void this.#admitWithSenderRole(msg, conversation).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'telegram_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
@@ -379,7 +380,7 @@ export class TelegramEndpoint implements EndpointInstance {
         sourceMessageId: msg ? String(msg.message_id) : undefined,
       }),
     }).catch((err) => {
-      logger.warn(formatCompact({
+      this.#logger.warn(formatCompact({
         op: 'telegram_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),

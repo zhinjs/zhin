@@ -37,6 +37,41 @@ describe('addQqEndpointToConfig', () => {
     ]);
   });
 
+  it('写入扫码绑定生成的 botKind 与 intents', () => {
+    addQqEndpointToConfig(
+      {
+        name: 'bot1',
+        appid: '${QQ_BOT1_APPID}',
+        secret: '${QQ_BOT1_SECRET}',
+        botKind: 'public',
+        intents: [
+          'GROUP_AND_C2C_EVENT',
+          'GUILDS',
+          'GUILD_MEMBERS',
+          'DIRECT_MESSAGE',
+          'PUBLIC_GUILD_MESSAGES',
+        ],
+      },
+      root,
+    );
+
+    expect(listQqEndpointEntries(root)).toEqual([
+      {
+        name: 'bot1',
+        appid: '${QQ_BOT1_APPID}',
+        secret: '${QQ_BOT1_SECRET}',
+        botKind: 'public',
+        intents: [
+          'GROUP_AND_C2C_EVENT',
+          'GUILDS',
+          'GUILD_MEMBERS',
+          'DIRECT_MESSAGE',
+          'PUBLIC_GUILD_MESSAGES',
+        ],
+      },
+    ]);
+  });
+
   it('保留已有注释与其它配置，仅追加 endpoints 项', () => {
     writeConfig(
       [

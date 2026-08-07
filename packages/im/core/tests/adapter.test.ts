@@ -502,7 +502,7 @@ describe('Adapter Core Functionality', () => {
         expect(adapter.emit('message.receive', makeInboundMessage())).toBe(true)
         expect(adapter.pendingMessages).toBe(1)
         expect(adapter.emit('message.receive', makeInboundMessage())).toBe(false)
-        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('drop: concurrency'))
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('backpressure_drop'))
 
         await vi.waitFor(() => expect(adapter.pendingMessages).toBe(0))
       })
