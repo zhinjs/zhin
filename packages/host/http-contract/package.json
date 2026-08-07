@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/host-http-contract",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Minimal HTTP route and request-body contract shared by Zhin hosts",
   "type": "module",
   "main": "./lib/index.js",
@@ -12,7 +12,11 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib", "src", "README.md"],
+  "files": [
+    "lib",
+    "src",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc"
   },

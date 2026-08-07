@@ -1,5 +1,11 @@
 # @zhin.js/schedule
 
+## 0.0.5
+
+### Patch Changes
+
+- f8c7a54: fix: im
+
 ## 0.0.4
 
 ### Patch Changes

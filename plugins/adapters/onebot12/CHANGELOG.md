@@ -1,5 +1,20 @@
 # @zhin.js/adapter-onebot12
 
+## 5.0.3
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/logger@1.0.76
+  - @zhin.js/host-http@1.0.7
+  - @zhin.js/adapter@1.1.6
+  - @zhin.js/command@1.0.8
+  - @zhin.js/core@1.5.3
+  - @zhin.js/im-contract@1.0.2
+  - @zhin.js/plugin-runtime@1.1.4
+  - zhin.js@6.0.3
+
 ## 5.0.2
 
 ### Patch Changes

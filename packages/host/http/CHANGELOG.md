@@ -1,5 +1,16 @@
 # @zhin.js/host-http
 
+## 1.0.7
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/logger@1.0.76
+  - @zhin.js/console-protocol@1.1.1
+  - @zhin.js/host-http-contract@1.0.1
+  - @zhin.js/plugin-runtime@1.1.4
+
 ## 1.0.6
 
 ### Patch Changes

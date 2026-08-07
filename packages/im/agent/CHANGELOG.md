@@ -1,5 +1,22 @@
 # @zhin.js/agent
 
+## 1.1.4
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/logger@1.0.76
+  - @zhin.js/schedule@0.0.5
+  - @zhin.js/agent-feature@1.0.7
+  - @zhin.js/ai@1.5.1
+  - @zhin.js/core@1.5.3
+  - @zhin.js/kernel@1.0.6
+  - @zhin.js/mcp-feature@1.0.7
+  - @zhin.js/plugin-runtime@1.1.4
+  - @zhin.js/skill@1.0.7
+  - @zhin.js/tool@1.0.7
+
 ## 1.1.3
 
 ### Patch Changes

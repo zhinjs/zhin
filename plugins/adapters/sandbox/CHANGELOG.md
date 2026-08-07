@@ -1,5 +1,21 @@
 # @zhin.js/adapter-process
 
+## 7.0.3
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/logger@1.0.76
+  - @zhin.js/client@2.1.5
+  - @zhin.js/page@1.0.7
+  - @zhin.js/console-contract@1.0.1
+  - @zhin.js/host-http@1.0.7
+  - @zhin.js/adapter@1.1.6
+  - @zhin.js/core@1.5.3
+  - @zhin.js/im-contract@1.0.2
+  - @zhin.js/plugin-runtime@1.1.4
+
 ## 7.0.2
 
 ### Patch Changes

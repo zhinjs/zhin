@@ -1,5 +1,17 @@
 # @zhin.js/a2a
 
+## 3.0.4
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/logger@1.0.76
+  - @zhin.js/host-http-contract@1.0.1
+  - @zhin.js/agent@1.1.4
+  - @zhin.js/core@1.5.3
+  - zhin.js@6.0.3
+
 ## 3.0.3
 
 ### Patch Changes

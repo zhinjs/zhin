@@ -1,5 +1,11 @@
 # @zhin.js/logger
 
+## 1.0.76
+
+### Patch Changes
+
+- f8c7a54: fix: im
+
 ## 1.0.75
 
 ### Patch Changes

@@ -1,5 +1,27 @@
 # @zhin.js/cli
 
+## 3.0.3
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/database@1.0.79
+  - @zhin.js/logger@1.0.76
+  - @zhin.js/schedule@0.0.5
+  - @zhin.js/pagemanager@2.0.13
+  - @zhin.js/host-http@1.0.7
+  - @zhin.js/adapter@1.1.6
+  - @zhin.js/agent@1.1.4
+  - @zhin.js/command@1.0.8
+  - @zhin.js/component@1.0.7
+  - @zhin.js/config-yaml@1.0.8
+  - @zhin.js/core@1.5.3
+  - @zhin.js/plugin-runtime@1.1.4
+  - @zhin.js/runtime@1.0.8
+  - @zhin.js/scaffold-wizard@0.2.4
+  - @zhin.js/speech@3.0.3
+
 ## 3.0.2
 
 ### Patch Changes

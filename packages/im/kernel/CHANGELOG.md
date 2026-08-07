@@ -1,5 +1,15 @@
 # @zhin.js/kernel
 
+## 1.0.6
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/logger@1.0.76
+  - @zhin.js/schedule@0.0.5
+  - @zhin.js/schema@1.0.73
+
 ## 1.0.5
 
 ### Patch Changes
