@@ -134,4 +134,42 @@ describe('ScheduleJobStore', () => {
     expect(await store.removeJob('to-remove')).toBe(true);
     expect(await store.listJobs()).toHaveLength(0);
   });
+
+  it('upsertJob 业务字段未变时不写盘', async () => {
+    const store = new ScheduleJobStore({ dataDir });
+    const filePath = join(dataDir, SCHEDULE_JOBS_FILENAME);
+    const base = {
+      id: 'noop-job',
+      enabled: true,
+      schedule: { kind: 'every' as const, everyMs: 30 * 60 * 1000 },
+      action: { kind: 'heartbeat' as const, prompt: 'ping' },
+      notify: { channel: 'silent' as const },
+      createdAt: 1000,
+      updatedAt: 1000,
+      state: {},
+      source: 'profile' as const,
+    };
+    await store.upsertJob(base);
+    const afterFirst = await readFile(filePath, 'utf-8');
+    const updatedAtFirst = (await store.getJob('noop-job'))!.updatedAt;
+
+    await store.upsertJob({
+      ...base,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    const afterSecond = await readFile(filePath, 'utf-8');
+    expect(afterSecond).toBe(afterFirst);
+    expect((await store.getJob('noop-job'))!.updatedAt).toBe(updatedAtFirst);
+
+    await store.upsertJob({
+      ...base,
+      action: { kind: 'heartbeat', prompt: 'changed' },
+    });
+    expect(await readFile(filePath, 'utf-8')).not.toBe(afterFirst);
+    expect((await store.getJob('noop-job'))!.action).toEqual({
+      kind: 'heartbeat',
+      prompt: 'changed',
+    });
+  });
 });

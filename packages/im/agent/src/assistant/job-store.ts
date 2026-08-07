@@ -99,11 +99,14 @@ export class ScheduleJobStore {
     const store = await this.read();
     const idx = store.jobs.findIndex((j) => j.id === job.id);
     const now = Date.now();
-    const normalized = { ...job, updatedAt: now };
     if (idx >= 0) {
-      store.jobs[idx] = normalized;
+      const existing = store.jobs[idx]!;
+      if (isSameScheduleJobBusiness(existing, job)) {
+        return;
+      }
+      store.jobs[idx] = { ...job, createdAt: existing.createdAt, updatedAt: now };
     } else {
-      store.jobs.push({ ...normalized, createdAt: normalized.createdAt || now });
+      store.jobs.push({ ...job, updatedAt: now, createdAt: job.createdAt || now });
     }
     await this.write(store);
   }
@@ -164,6 +167,29 @@ export class ScheduleJobStore {
     await this.upsertJob(job);
     return job;
   }
+}
+
+/** Compare business fields; ignore timestamps that upsert always refreshes. */
+function isSameScheduleJobBusiness(a: ScheduleJob, b: ScheduleJob): boolean {
+  return JSON.stringify(scheduleJobBusiness(a)) === JSON.stringify(scheduleJobBusiness(b));
+}
+
+function scheduleJobBusiness(job: ScheduleJob): unknown {
+  return {
+    id: job.id,
+    label: job.label,
+    enabled: job.enabled,
+    schedule: job.schedule,
+    action: job.action,
+    notify: job.notify,
+    notifyOnFailure: job.notifyOnFailure,
+    state: job.state ?? {},
+    source: job.source,
+    createdBy: job.createdBy,
+    executionPlan: job.executionPlan,
+    activityFeedback: job.activityFeedback,
+    eventPayload: job.eventPayload,
+  };
 }
 
 function normalizeJob(raw: Record<string, unknown>, defaultNotify?: JobNotify): ScheduleJob {

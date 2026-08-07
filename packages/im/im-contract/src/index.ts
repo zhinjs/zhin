@@ -18,7 +18,7 @@ export interface ConversationRef {
   readonly id: string;
   /** Optional platform container, for example a guild that owns a channel. */
   readonly parent?: Readonly<{
-    readonly kind: 'group' | 'channel';
+    readonly kind: 'private' | 'group' | 'channel';
     readonly id: string;
   }>;
   /** Optional platform thread/topic identifier. */

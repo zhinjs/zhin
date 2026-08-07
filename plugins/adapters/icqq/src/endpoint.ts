@@ -8,7 +8,7 @@ import type {
   EndpointSendRequest,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
-import { formatCompact, getLogger } from '@zhin.js/logger';
+import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { registerIcqqAgentEndpoint } from './icqq-agent-deps.js';
 import {
@@ -310,16 +310,27 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     }
     const resp = await this.ipc.request(action, params);
     if (!resp.ok) {
+      logger.warn(formatCompact({
+        op: 'send',
+        endpoint: this.name,
+        target: `${conversation.kind}:${conversation.id}`,
+        action,
+        ok: false,
+        error: resp.error,
+        preview: truncatePreview(typeof message === 'string' ? message : String(message), 80),
+      }));
       throw new Error(`发送消息失败: ${resp.error}`);
     }
     const messageId = String(
       (resp.data as { message_id?: unknown } | undefined)?.message_id ?? `sent_${Date.now()}`,
     );
-    logger.debug(formatCompact({
-      op: 'icqq_send',
+    logger.info(formatCompact({
+      op: 'send',
       endpoint: this.name,
       target: `${conversation.kind}:${conversation.id}`,
-      messageId,
+      message_id: messageId,
+      action,
+      preview: truncatePreview(typeof message === 'string' ? message : String(message), 80),
     }));
     return messageId;
   }
@@ -652,15 +663,15 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       content: msg.segments,
       rawMessage: msg.content,
     });
-    logger.debug(formatCompact({
-      op: 'icqq_inbound_admit',
+    logger.info(formatCompact({
+      op: 'recv',
       endpoint: this.name,
       id: msg.id,
       target: `${conversation.kind}:${conversation.id}`,
       sender: msg.sender,
-      channelType: msg.channelType,
+      channel_type: msg.channelType,
       mentioned: mentioned || undefined,
-      preview: msg.content.slice(0, 80),
+      preview: truncatePreview(msg.content, 80),
       segments: summarizeSegmentTypes(msg.segments),
     }));
     void this.#options.gateway.receive({
@@ -677,8 +688,10 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       }),
     }).catch((err) => {
       logger.warn(formatCompact({
-        op: 'icqq_gateway_receive_failed',
+        op: 'recv',
+        endpoint: this.name,
         target: `${conversation.kind}:${conversation.id}`,
+        ok: false,
         error: err instanceof Error ? err.message : String(err),
       }));
     });

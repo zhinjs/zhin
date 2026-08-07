@@ -28,7 +28,13 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { createToken, type Token } from '@zhin.js/plugin-runtime';
+import {
+  createToken,
+  outboundHostToken,
+  type OutboundHost,
+  type OutboundSendInput,
+  type Token,
+} from '@zhin.js/plugin-runtime';
 import { isMap, isSeq, parseDocument, type YAMLSeq } from 'yaml';
 
 // ---------------------------------------------------------------------------
@@ -78,6 +84,71 @@ export function extractEndpointCommandReply(input: unknown): EndpointCommandRepl
     return (text) => (reply as (content: string) => Promise<unknown>).call(input, text);
   }
   return async () => undefined;
+}
+
+/**
+ * bindFlow 后续状态推送：优先走 OutboundHost（不受 inbound Message reply scope 限制）。
+ * 扫码绑定等长流程会在命令结果已送达、`$reply` 已冻结后继续 notify，必须用 durable 出站。
+ */
+export function createDurableEndpointCommandReply(
+  input: unknown,
+  use: EndpointCommandUse,
+): EndpointCommandReply {
+  const scoped = extractEndpointCommandReply(input);
+  const target = readOutboundSendTarget(input);
+  if (!target) return scoped;
+
+  return async (text) => {
+    let outbound: OutboundHost | undefined;
+    try {
+      outbound = use(outboundHostToken);
+    } catch {
+      outbound = undefined;
+    }
+    if (outbound) {
+      await outbound.send({ ...target, content: text });
+      return;
+    }
+    await scoped(text);
+  };
+}
+
+function readOutboundSendTarget(input: unknown): Omit<OutboundSendInput, 'content'> | undefined {
+  const message = input as {
+    conversation?: {
+      endpoint?: { id?: unknown; adapter?: unknown };
+      kind?: unknown;
+      id?: unknown;
+      parent?: OutboundSendInput['conversation']['parent'];
+      threadId?: unknown;
+    };
+    metadata?: Readonly<Record<string, unknown>>;
+  } | null | undefined;
+  const conversation = message?.conversation;
+  const endpointIdRaw = conversation?.endpoint?.id;
+  const adapterRaw = conversation?.endpoint?.adapter;
+  const kind = conversation?.kind;
+  const id = conversation?.id;
+  if (
+    endpointIdRaw == null
+    || adapterRaw == null
+    || (kind !== 'private' && kind !== 'group' && kind !== 'channel')
+    || typeof id !== 'string'
+    || !id
+  ) {
+    return undefined;
+  }
+  const live = String(message?.metadata?.endpoint ?? message?.metadata?.endpointId ?? '').trim();
+  return {
+    adapter: String(adapterRaw),
+    endpointId: live || String(endpointIdRaw),
+    conversation: {
+      kind,
+      id,
+      parent: conversation.parent,
+      threadId: typeof conversation.threadId === 'string' ? conversation.threadId : undefined,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -324,7 +395,7 @@ export type EndpointCommandUse = <T>(token: Token<T>) => T;
 export interface EndpointBindFlowContext {
   /** 命令参数 name（未指定时为 undefined，流程可自行决定终名） */
   readonly name?: string;
-  /** 向当前会话推送后续状态（二维码刷新 / 成功 / 失败） */
+  /** 向当前会话推送后续状态（二维码刷新 / 成功 / 失败；走 durable OutboundHost，可在命令 reply scope 结束后调用） */
   readonly reply: EndpointCommandReply;
   readonly config: unknown;
   readonly input: unknown;
@@ -560,7 +631,7 @@ export function createEndpointCommands<TCommand>(
         if (spec.bindFlow) {
           return spec.bindFlow({
             name,
-            reply: extractEndpointCommandReply(input),
+            reply: createDurableEndpointCommandReply(input, use),
             config,
             input,
             use,

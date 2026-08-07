@@ -160,6 +160,23 @@ describe('runQqEndpointAdd', () => {
     expect(replies.some((text) => text.includes('network down'))).toBe(true);
   });
 
+  it('后续 reply 抛 Message reply scope has ended 时不让进程崩溃', async () => {
+    const state = createQqRuntimeState();
+    startQqBindFlowMock.mockReturnValue(vi.fn());
+    const reply = async () => {
+      throw new Error('Message reply scope has ended');
+    };
+
+    const firstReplyPromise = runQqEndpointAdd(state, 'a', reply, root);
+    lastCallbacks().onQrDisplayed?.('https://example/qr');
+    await firstReplyPromise;
+
+    await expect(
+      lastCallbacks().onSuccess?.([{ appId: '102000011', appSecret: 's' }]),
+    ).resolves.toBeUndefined();
+    expect(state.bindFlow).toBeNull();
+  });
+
   it('二维码尚未就绪就失败时，失败原因作为首条回复', async () => {
     const state = createQqRuntimeState();
     startQqBindFlowMock.mockReturnValue(vi.fn());

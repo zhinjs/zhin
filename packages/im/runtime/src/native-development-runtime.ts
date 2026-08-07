@@ -15,7 +15,7 @@ export interface NativeDevelopmentModuleRuntimeOptions {
 }
 
 const ignoredDirectories = new Set([
-  '.git', '.zhin', 'coverage', 'dist', 'lib', 'node_modules',
+  '.git', '.zhin', 'coverage', 'data', 'dist', 'lib', 'node_modules',
 ]);
 const watchedExtensions = new Set([
   '.cjs', '.js', '.json', '.md', '.mjs', '.ts', '.tsx', '.yaml', '.yml',

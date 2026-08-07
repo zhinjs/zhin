@@ -3,7 +3,7 @@ import { parseCommandDefinition } from '@zhin.js/command';
 import { isRawContent } from '@zhin.js/core/runtime';
 import { buildQrImageUrl, qrImageSegment } from '../src/qrcode-lib.js';
 import plugin from '../plugin.ts';
-import qrcodeCommand from '../commands/[text].ts';
+import qrcodeCommand from '../commands/gen [text].js';
 import scanCommand from '../commands/scan/[url].ts';
 
 describe('@zhin.js/plugin-qrcode', () => {

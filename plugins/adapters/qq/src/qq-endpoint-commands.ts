@@ -79,7 +79,10 @@ export function runQqEndpointAdd(
         resolve(text);
         return;
       }
-      void reply(text);
+      // Follow-ups outlive the inbound Message reply scope; durable reply
+      // (OutboundHost) is provided by createEndpointCommands.bindFlow. Never
+      // let a late notify crash the process.
+      void Promise.resolve(reply(text)).catch(() => undefined);
     };
     const stop = startQqBindFlow(
       {
@@ -90,7 +93,11 @@ export function runQqEndpointAdd(
           );
         },
         onQrExpired: async () => {
-          await reply('二维码已过期，正在刷新，请扫描新链接…');
+          try {
+            await reply('二维码已过期，正在刷新，请扫描新链接…');
+          } catch {
+            // same as settle follow-up: best-effort after command scope ends
+          }
         },
         onSuccess: async (credentials) => {
           state.bindFlow = null;

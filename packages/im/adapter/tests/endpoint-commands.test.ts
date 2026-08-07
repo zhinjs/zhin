@@ -7,6 +7,7 @@ import {
   addEndpointFromKeyValues,
   addEndpointToConfig,
   buildEndpointEnvKey,
+  createDurableEndpointCommandReply,
   createEndpointCommands,
   createEndpointRuntimeState,
   defineEndpointRuntimeStateToken,
@@ -18,8 +19,10 @@ import {
   persistEndpointEnvValues,
   removeEndpointByName,
   removeEndpointFromConfig,
+  type EndpointCommandUse,
   type EndpointCommandsSpec,
 } from '../src/endpoint-commands.js';
+import { outboundHostToken } from '@zhin.js/plugin-runtime';
 
 let root: string;
 
@@ -88,6 +91,59 @@ describe('extractEndpointCommandReply', () => {
 
     await expect(extractEndpointCommandReply(undefined)('x')).resolves.toBeUndefined();
     await expect(extractEndpointCommandReply({})('x')).resolves.toBeUndefined();
+  });
+});
+
+describe('createDurableEndpointCommandReply', () => {
+  it('有 conversation 时优先走 OutboundHost，不调用已过期的 $reply', async () => {
+    const sent: unknown[] = [];
+    const outbound = {
+      send: async (input: unknown) => {
+        sent.push(input);
+        return 'mid-1';
+      },
+    };
+    const use = ((token: { id: string }) => {
+      if (token === outboundHostToken || token.id === outboundHostToken.id) return outbound;
+      throw new Error(`unexpected token ${token.id}`);
+    }) as EndpointCommandUse;
+
+    const reply = createDurableEndpointCommandReply({
+      conversation: {
+        endpoint: { id: 'cap-icqq', adapter: 'root/icqq' },
+        kind: 'group',
+        id: '129043431',
+      },
+      metadata: { endpoint: '210723495' },
+      $reply: async () => {
+        throw new Error('Message reply scope has ended');
+      },
+    }, use);
+
+    await expect(reply('绑定成功')).resolves.toBeUndefined();
+    expect(sent).toEqual([{
+      adapter: 'root/icqq',
+      endpointId: '210723495',
+      conversation: { kind: 'group', id: '129043431' },
+      content: '绑定成功',
+    }]);
+  });
+
+  it('无 OutboundHost 时回退 scoped $reply', async () => {
+    const calls: string[] = [];
+    const use = (() => {
+      throw new Error('missing outbound');
+    }) as EndpointCommandUse;
+    const reply = createDurableEndpointCommandReply({
+      conversation: {
+        endpoint: { id: 'cap', adapter: 'root/icqq' },
+        kind: 'private',
+        id: 'u1',
+      },
+      $reply: async (content: string) => void calls.push(content),
+    }, use);
+    await reply('hi');
+    expect(calls).toEqual(['hi']);
   });
 });
 

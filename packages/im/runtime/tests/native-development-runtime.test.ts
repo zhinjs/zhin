@@ -181,6 +181,40 @@ describe('NativeDevelopmentModuleRuntime', () => {
       await runtime.close();
     }
   });
+
+  it('ignores runtime data/ directory so schedule-jobs.json cannot loop HMR', async () => {
+    const root = await fixture();
+    await mkdir(join(root, 'data'), { recursive: true });
+    const ignored = join(root, 'data/schedule-jobs.json');
+    const source = join(root, 'commands/status.ts');
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root });
+    const reported: string[] = [];
+    const observed = new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('watch timeout')), 15_000);
+      const dispose = runtime.watch((changed) => {
+        reported.push(changed);
+        if (changed !== source) return;
+        clearTimeout(timeout);
+        dispose();
+        resolve();
+      });
+    });
+
+    const writer = setInterval(() => {
+      void writeFile(ignored, `${JSON.stringify({ version: 1, jobs: [], t: Date.now() })}\n`).catch(() => {});
+      void writeFile(source, `export default ${Date.now()};\n`).catch(() => {});
+    }, 200);
+    try {
+      await writeFile(ignored, '{"version":1,"jobs":[]}\n');
+      await writeFile(source, 'export default 1;\n');
+      await observed;
+      expect(reported).toContain(source);
+      expect(reported).not.toContain(ignored);
+    } finally {
+      clearInterval(writer);
+      await runtime.close();
+    }
+  });
 });
 
 async function fixture(): Promise<string> {
