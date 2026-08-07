@@ -143,6 +143,34 @@ export class Message {
     this.$reply = (content) => reply(content);
     this.$replyFrom = (requester, content) => reply(content, requester);
     this.$sendTo = (target, content) => reply(content, undefined, target);
+    this.$replyToPrivate = (content, from) => {
+      if (!sender) throw new Error('Cannot $replyToPrivate: message has no sender');
+      let parent: ConversationAddress['parent'] | undefined;
+      if (from === true) {
+        if (conversation.kind === 'private') throw new Error('$replyToPrivate(content, true) requires a group or channel conversation');
+        parent = { kind: conversation.kind, id: conversation.id };
+      } else if (typeof from === 'string') {
+        parent = { kind: 'group', id: from };
+      } else if (from != null && typeof from === 'object') {
+        parent = from;
+      }
+      return reply(content, undefined, {
+        kind: 'private',
+        id: sender,
+        ...(parent ? { parent } : {}),
+      });
+    };
+    this.$replyToGroup = (groupId, content) => {
+      return reply(content, undefined, { kind: 'group', id: groupId });
+    };
+    this.$replyToChannel = (channelId, guildId, content, threadId) => {
+      return reply(content, undefined, {
+        kind: 'channel',
+        id: channelId,
+        parent: { kind: 'channel', id: guildId },
+        ...(threadId ? { threadId } : {}),
+      });
+    };
     Object.freeze(this);
   }
 
@@ -154,14 +182,51 @@ export class Message {
   readonly $reply: (content: SendContent) => Promise<DeliveryReceipt>;
   readonly $replyFrom: (requester: PluginId, content: SendContent) => Promise<DeliveryReceipt>;
   /**
-   * 向同 Endpoint 的另一个通道发送消息。
+   * 向同 Endpoint 的另一个通道发送消息（通用）。
    *
    * ```ts
-   * await message.$sendTo({ kind: 'group', id: '67890' }, '通知内容');
-   * await message.$sendTo({ kind: 'private', id: '12345' }, '私信提醒');
+   * await message.$sendTo({ kind: 'channel', id: 'ch-1', parent: { kind: 'channel', id: 'guild-1' } }, '频道通知');
    * ```
    */
   readonly $sendTo: (conversation: ConversationAddress, content: SendContent) => Promise<DeliveryReceipt>;
+  /**
+   * 私信当前消息的发送者（同 Endpoint）。
+   *
+   * @param content 消息内容
+   * @param from 会话上下文：
+   *   - `true` — 用当前群/频道作为 parent（要求当前不在私聊中）
+   *   - `string` — 来源群 ID（`{ kind: 'group', id }` 的简写）
+   *   - `{ kind, id }` — 显式指定 parent（群或子频道）
+   *   - 省略 — 直接私信
+   *
+   * ```ts
+   * await message.$replyToPrivate('直接私信');
+   * await message.$replyToPrivate('群临时私信', true);
+   * await message.$replyToPrivate('指定群', '群ID');
+   * await message.$replyToPrivate('频道私信', { kind: 'channel', id: '子频道ID' });
+   * ```
+   */
+  readonly $replyToPrivate: (
+    content: SendContent,
+    from?: boolean | string | { readonly kind: 'group' | 'channel'; readonly id: string },
+  ) => Promise<DeliveryReceipt>;
+  /**
+   * 向指定群发送消息（同 Endpoint）。
+   *
+   * ```ts
+   * await message.$replyToGroup('67890', '群通知');
+   * ```
+   */
+  readonly $replyToGroup: (groupId: string, content: SendContent) => Promise<DeliveryReceipt>;
+  /**
+   * 向指定频道/子频道发送消息（同 Endpoint）。
+   *
+   * ```ts
+   * await message.$replyToChannel('channel-1', 'guild-1', '频道通知');
+   * await message.$replyToChannel('channel-1', 'guild-1', '话题回复', 'thread-1');
+   * ```
+   */
+  readonly $replyToChannel: (channelId: string, guildId: string, content: SendContent, threadId?: string) => Promise<DeliveryReceipt>;
 }
 
 export function createOutboundEnvelope(

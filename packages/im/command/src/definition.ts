@@ -137,6 +137,15 @@ export interface CommandMessage {
     },
     content: unknown,
   ) => Promise<unknown>;
+  /** 私信当前消息的发送者（结构兼容 `Message.$replyToPrivate`）。 */
+  readonly $replyToPrivate?: (
+    content: unknown,
+    from?: boolean | string | { readonly kind: 'group' | 'channel'; readonly id: string },
+  ) => Promise<unknown>;
+  /** 向指定群发送消息（结构兼容 `Message.$replyToGroup`）。 */
+  readonly $replyToGroup?: (groupId: string, content: unknown) => Promise<unknown>;
+  /** 向指定频道发送消息（结构兼容 `Message.$replyToChannel`）。 */
+  readonly $replyToChannel?: (channelId: string, guildId: string, content: unknown, threadId?: string) => Promise<unknown>;
 }
 
 /**

@@ -1160,3 +1160,137 @@ describe('Message.$sendTo', () => {
     });
   });
 });
+
+describe('Message.$replyToPrivate', () => {
+  function makeMessage(kind: 'group' | 'private' | 'channel', sender?: string) {
+    const sent: Array<{ targetConversation: unknown }> = [];
+    const message = new Message(
+      { endpoint: { id: 's', adapter: 'a' }, kind, id: 'conv-1' },
+      'hi',
+      1,
+      async (_content, _requester, targetConversation) => {
+        sent.push({ targetConversation });
+        return { status: 'sent' as const };
+      },
+      sender,
+    );
+    return { message, sent };
+  }
+
+  it('直接私信发送者', async () => {
+    const { message, sent } = makeMessage('group', 'user-42');
+    await message.$replyToPrivate('私信');
+    expect(sent[0]!.targetConversation).toEqual({ kind: 'private', id: 'user-42' });
+  });
+
+  it('withSession=true 使用当前群作为 parent', async () => {
+    const { message, sent } = makeMessage('group', 'user-42');
+    await message.$replyToPrivate('群临时私信', true);
+    expect(sent[0]!.targetConversation).toEqual({
+      kind: 'private',
+      id: 'user-42',
+      parent: { kind: 'group', id: 'conv-1' },
+    });
+  });
+
+  it('withSession=字符串 指定来源群 ID', async () => {
+    const { message, sent } = makeMessage('group', 'user-42');
+    await message.$replyToPrivate('指定群', 'other-group');
+    expect(sent[0]!.targetConversation).toEqual({
+      kind: 'private',
+      id: 'user-42',
+      parent: { kind: 'group', id: 'other-group' },
+    });
+  });
+
+  it('无 sender 时抛异常', () => {
+    const { message } = makeMessage('group');
+    expect(() => message.$replyToPrivate('hi')).toThrow('no sender');
+  });
+
+  it('withSession=true 但在私聊中时抛异常', () => {
+    const { message } = makeMessage('private', 'user-42');
+    expect(() => message.$replyToPrivate('hi', true)).toThrow('group or channel');
+  });
+
+  it('withSession=true 在频道中使用 channel parent', async () => {
+    const { message, sent } = makeMessage('channel', 'user-42');
+    await message.$replyToPrivate('频道私信', true);
+    expect(sent[0]!.targetConversation).toEqual({
+      kind: 'private',
+      id: 'user-42',
+      parent: { kind: 'channel', id: 'conv-1' },
+    });
+  });
+
+  it('withSession={kind,id} 显式指定 parent', async () => {
+    const { message, sent } = makeMessage('group', 'user-42');
+    await message.$replyToPrivate('频道私信', { kind: 'channel', id: 'sub-ch-1' });
+    expect(sent[0]!.targetConversation).toEqual({
+      kind: 'private',
+      id: 'user-42',
+      parent: { kind: 'channel', id: 'sub-ch-1' },
+    });
+  });
+});
+
+describe('Message.$replyToGroup', () => {
+  it('向指定群发送消息', async () => {
+    const sent: Array<{ targetConversation: unknown }> = [];
+    const message = new Message(
+      { endpoint: { id: 's', adapter: 'a' }, kind: 'private', id: 'u1' },
+      'hi',
+      1,
+      async (_content, _requester, targetConversation) => {
+        sent.push({ targetConversation });
+        return { status: 'sent' as const };
+      },
+      'u1',
+    );
+    await message.$replyToGroup('group-99', '群通知');
+    expect(sent[0]!.targetConversation).toEqual({ kind: 'group', id: 'group-99' });
+  });
+});
+
+describe('Message.$replyToChannel', () => {
+  it('向指定频道发送消息', async () => {
+    const sent: Array<{ targetConversation: unknown }> = [];
+    const message = new Message(
+      { endpoint: { id: 's', adapter: 'a' }, kind: 'group', id: 'g1' },
+      'hi',
+      1,
+      async (_content, _requester, targetConversation) => {
+        sent.push({ targetConversation });
+        return { status: 'sent' as const };
+      },
+      'u1',
+    );
+    await message.$replyToChannel('ch-1', 'guild-1', '频道通知');
+    expect(sent[0]!.targetConversation).toEqual({
+      kind: 'channel',
+      id: 'ch-1',
+      parent: { kind: 'channel', id: 'guild-1' },
+    });
+  });
+
+  it('支持 threadId', async () => {
+    const sent: Array<{ targetConversation: unknown }> = [];
+    const message = new Message(
+      { endpoint: { id: 's', adapter: 'a' }, kind: 'group', id: 'g1' },
+      'hi',
+      1,
+      async (_content, _requester, targetConversation) => {
+        sent.push({ targetConversation });
+        return { status: 'sent' as const };
+      },
+      'u1',
+    );
+    await message.$replyToChannel('ch-1', 'guild-1', '话题回复', 'thread-42');
+    expect(sent[0]!.targetConversation).toEqual({
+      kind: 'channel',
+      id: 'ch-1',
+      parent: { kind: 'channel', id: 'guild-1' },
+      threadId: 'thread-42',
+    });
+  });
+});
