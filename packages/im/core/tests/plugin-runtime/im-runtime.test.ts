@@ -1193,16 +1193,6 @@ describe('Message.$replyToPrivate', () => {
     });
   });
 
-  it('withSession=字符串 指定来源群 ID', async () => {
-    const { message, sent } = makeMessage('group', 'user-42');
-    await message.$replyToPrivate('指定群', 'other-group');
-    expect(sent[0]!.targetConversation).toEqual({
-      kind: 'private',
-      id: 'user-42',
-      parent: { kind: 'group', id: 'other-group' },
-    });
-  });
-
   it('无 sender 时抛异常', () => {
     const { message } = makeMessage('group');
     expect(() => message.$replyToPrivate('hi')).toThrow('no sender');

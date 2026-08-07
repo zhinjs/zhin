@@ -149,8 +149,6 @@ export class Message {
       if (from === true) {
         if (conversation.kind === 'private') throw new Error('$replyToPrivate(content, true) requires a group or channel conversation');
         parent = { kind: conversation.kind, id: conversation.id };
-      } else if (typeof from === 'string') {
-        parent = { kind: 'group', id: from };
       } else if (from != null && typeof from === 'object') {
         parent = from;
       }
@@ -195,20 +193,18 @@ export class Message {
    * @param content 消息内容
    * @param from 会话上下文：
    *   - `true` — 用当前群/频道作为 parent（要求当前不在私聊中）
-   *   - `string` — 来源群 ID（`{ kind: 'group', id }` 的简写）
    *   - `{ kind, id }` — 显式指定 parent（群或子频道）
    *   - 省略 — 直接私信
    *
    * ```ts
    * await message.$replyToPrivate('直接私信');
    * await message.$replyToPrivate('群临时私信', true);
-   * await message.$replyToPrivate('指定群', '群ID');
    * await message.$replyToPrivate('频道私信', { kind: 'channel', id: '子频道ID' });
    * ```
    */
   readonly $replyToPrivate: (
     content: SendContent,
-    from?: boolean | string | { readonly kind: 'group' | 'channel'; readonly id: string },
+    from?: boolean | { readonly kind: 'group' | 'channel'; readonly id: string },
   ) => Promise<DeliveryReceipt>;
   /**
    * 向指定群发送消息（同 Endpoint）。
