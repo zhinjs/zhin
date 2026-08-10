@@ -91,18 +91,23 @@ if (getPluginViolations.length > 0) {
   process.exit(1);
 }
 
-// ── Check 2: ban getHostRootPlugin() in ideal agent turn-path modules ──
+// ── Check 2: ban getHostRootPlugin() calls everywhere (definition in host-plugin-registry.ts exempt) ──
 
 const getHostRootPluginBanRoots = [
-  'packages/im/agent/src/core',
-  'packages/im/agent/src/skill',
-  'packages/im/agent/src/turn',
-  'packages/im/agent/src/tool',
-  'packages/im/agent/src/context',
-  'packages/im/agent/src/memory',
-  'packages/im/agent/src/session',
-  'packages/im/agent/src/event',
+  'packages/im/agent/src',
+  'packages/im/core/src',
+  'packages/im/zhin/src',
+  'plugins/adapters',
+  'plugins/features',
+  'plugins/utils',
+  'plugins/games',
+  'plugins/services',
+  'examples/minimal-bot',
+  'examples/full-bot',
+  'examples/test-bot',
 ];
+
+const getHostRootPluginDefinitionFile = 'packages/im/core/src/host-plugin-registry.ts';
 
 /** @type {{ file: string, line: number, text: string }[]} */
 const hostRootViolations = [];
@@ -112,13 +117,15 @@ for (const rel of getHostRootPluginBanRoots) {
   const files = [];
   walkTs(abs, files);
   for (const file of files) {
+    const relFile = path.relative(repoRoot, file);
+    if (relFile === getHostRootPluginDefinitionFile) continue;
     const txt = fs.readFileSync(file, 'utf8');
     if (!/\bgetHostRootPlugin\s*\(/.test(txt)) continue;
     const lines = txt.split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
       if (lineHasCall(lines[i], /\bgetHostRootPlugin\s*\(/)) {
         hostRootViolations.push({
-          file: path.relative(repoRoot, file),
+          file: relFile,
           line: i + 1,
           text: lines[i].trim(),
         });
@@ -129,12 +136,11 @@ for (const rel of getHostRootPluginBanRoots) {
 
 if (hostRootViolations.length > 0) {
   console.error(
-    'getHostRootPlugin() must not be used in ideal agent modules (core/skill/turn/tool/context/memory/session/event):\n',
+    'getHostRootPlugin() has been removed — no calls allowed (use Scope+Token instead):\n',
   );
   for (const v of hostRootViolations) {
     console.error(`  ${v.file}:${v.line}  ${v.text}`);
   }
-  console.error('\nInject hostPlugin via ZhinAgent.configure({ hostPlugin: root }) and read host.emitter.getHostPlugin().');
   process.exit(1);
 }
 

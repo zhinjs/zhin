@@ -7,7 +7,6 @@ import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { setHostRootPlugin } from '../../../core/src/host-plugin-registry.js';
 import type { Plugin, Message } from '@zhin.js/core';
 import { createWriteFileTool, WriteFileBuiltinTool } from '../../src/builtin/write-file-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
@@ -18,7 +17,6 @@ describe('WriteFileBuiltinTool', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-write-file-'));
   });
   afterEach(() => {
-    setHostRootPlugin(null);
     vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -37,7 +35,6 @@ describe('WriteFileBuiltinTool', () => {
       dispatch: vi.fn(),
     } as unknown as Plugin;
     (plugin as unknown as { root: Plugin }).root = plugin;
-    setHostRootPlugin(plugin);
   }
 
   it('toTool 元数据与 schema 完整', () => {

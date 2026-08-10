@@ -216,10 +216,9 @@ export function resolveStructuredOutboundRequired(
 ): boolean {
   if (!message) return false;
   const cell = resolveCollaborationSceneForMessage(message);
-  const plugin = null;
-  const adapterInstance = plugin?.inject(message.$adapter) as object | undefined;
-  const extensions = adapterInstance ? getAdapterAiOutboundExtensions(adapterInstance) : [];
-  const caps = adapterInstance ? getAdapterAiOutboundCapabilities(adapterInstance) : undefined;
+  const adapterInstance: object | undefined = undefined;
+  const extensions: ReturnType<typeof getAdapterAiOutboundExtensions> = [];
+  const caps = undefined as ReturnType<typeof getAdapterAiOutboundCapabilities> | undefined;
 
   return isStructuredOutboundRequired({
     collaborationCell: Boolean(cell),

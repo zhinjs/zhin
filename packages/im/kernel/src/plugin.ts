@@ -181,11 +181,13 @@ export class PluginBase extends EventEmitter<PluginBaseLifecycle> implements Plu
     return result;
   }
 
+  /** @deprecated @internal Legacy string-based DI — use Scope+Token via Plugin Runtime. */
   inject(name: string): unknown {
     const ctx = this.root.contexts.get(name);
     return ctx?.value;
   }
 
+  /** @deprecated @internal Legacy DI registration — use Scope+Token via Plugin Runtime. */
   provide(target: Feature | BaseContext): this {
     if (target instanceof Feature) {
       const feature = target;

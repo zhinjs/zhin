@@ -6,7 +6,7 @@
  */
 import type { AgentExecutor } from './orchestration-types.js';
 import type { OrchestrationKernel } from './orchestration-service.js';
-import type { AIServiceRefs } from '../init/shared-refs.js';
+import type { AIServiceRefs } from '../internal/ai-service-refs.js';
 import { readInboundMediaRefs } from '../media/inbound-refs.js';
 import { buildSubagentInboundTask } from '../media/index.js';
 import type { AgentRunInput } from '../media/media-types.js';

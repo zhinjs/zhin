@@ -68,14 +68,13 @@ export function getCurrentFile(metaUrl = import.meta.url): string {
 }
 
 /**
- * @deprecated **已删除**。请使用 `definePlugin` + 约定目录；运行时用 `getHostRootPlugin()` 或
- * 从 `context.plugin` 闭包引用。
+ * @deprecated **已删除**。请使用 `definePlugin` + 约定目录；运行时通过 Scope+Token 访问服务。
  * @throws 总是抛出——仅保留签名供编译期过渡。
  */
 export function getPlugin(): Plugin {
   throw new Error(
     'getPlugin() has been removed. Use `definePlugin` + convention directories, '
-    + 'or `getHostRootPlugin()` for host-level access. '
+    + 'and access services via Scope+Token. '
     + 'See docs/contributing/public-api-surface.md',
   );
 }

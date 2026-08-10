@@ -4,7 +4,7 @@
  * public API usable without reviving the removed staged pipeline modules.
  */
 import type { AITriggerConfig, Message, Plugin } from '@zhin.js/core';
-import type { AIServiceRefs } from '../init/shared-refs.js';
+import type { AIServiceRefs } from '../internal/ai-service-refs.js';
 import type { AIService } from '../service.js';
 import type { PeerTriggerMode } from './types.js';
 

@@ -6,7 +6,7 @@ import type { Plugin } from '@zhin.js/core';
 import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 import { ZhinAgent } from '../zhin-agent/index.js';
 import type { AIService } from '../service.js';
-import type { AIServiceRefs } from '../init/shared-refs.js';
+import type { AIServiceRefs } from '../internal/ai-service-refs.js';
 import { DEFAULT_ZHIN_AGENT_NAME, type ResolvedAgentBinding } from '../config/types.js';
 import type { ZhinAgentConfig } from '../config/index.js';
 import { getAgentRuntimeRegistry } from './runtime-registry.js';

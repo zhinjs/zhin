@@ -76,7 +76,7 @@ generation lifecycle。旧式 `set*` API 仅供非 HMR 的 legacy bootstrap 使�
 - 🛡️ **6 层 Bash 安全**：`ExecPolicy` 纵深防御（危险黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、交互式审批）
 - 📂 **文件访问安全**：`FilePolicy` 路径检查、设备路径拦截、命令读写分类
 - 📋 **精简系统提示词**：`PromptBuilder` 组装 Context、Style、Tools、Safety，并按需注入 Platform、Skills、Memory、Bootstrap
-- 🔌 **框架挂载**：`initAgentModule()` 注册 `ctx.ai`、`ctx.agent`、定时任务、DB 模型等
+- 🔌 **框架挂载**：Plugin Runtime (basic/cli) 装配 Agent 服务，通过 Scope+Token 提供
 - 📦 **上下文与记忆**：`ContextRepository`（`agent_messages`）、`AgentSessionStore`、`ImTranscriptStore`（`im_transcripts` + `chat_history`）；辅助：`ContextManager`、`ConversationMemory`、`UserProfileStore`
 - ⏰ **跟进与定时**：`FollowUpManager`、`PersistentCronEngine`、cron 工具
 - 🔧 **内置工具**：bash、read_file、write_file、ask_user、web_search、`chat_history`（按关键词/最近条数查 `im_transcripts`）等
@@ -87,7 +87,7 @@ generation lifecycle。旧式 `set*` API 仅供非 HMR 的 legacy bootstrap 使�
 ## 依赖关系
 
 - 依赖 **@zhin.js/core**（IM 类型与消息链）与 **@zhin.js/ai**（`agentLoop`、Provider 抽象）
-- **zhin.js 4.x** 主包为 optional peer；运行时通过 `zhin.js/agent` 子路径或本包 import；`bootstrapNode` 在检测到本包时调用 `initAgentModule()`
+- **zhin.js 4.x** 主包为 optional peer；运行时通过 `zhin.js/agent` 子路径或本包 import
 
 ## 模块化架构（理想蓝图 8 模块）
 
@@ -171,14 +171,12 @@ useContext('ai', async (ai) => {
 })
 ```
 
-`initAgentModule()` 由 Plugin Runtime / CLI Host 装配调用；`bootstrapNode`（`zhin.js/node`）已弃用。插件一般无需手动 init。
+Agent 模块由 Plugin Runtime (`basic/cli`) 自动装配，插件无需手动 init。`initAgentModule()` 和 `bootstrapNode` 已删除。
 
 ### 非 Zhin 宿主 / 单独集成
 
 ```javascript
-import { initAgentModule, AIService } from '@zhin.js/agent'
-
-initAgentModule()
+import { AIService } from '@zhin.js/agent'
 
 // 程序化 Agent（agentLoop 隔离 context）
 useContext('ai', async (ai) => {
@@ -194,7 +192,7 @@ useContext('ai', async (ai) => {
 
 | 类别 | 导出 |
 |------|------|
-| 初始化 | `initAgentModule` |
+| 初始化 | ~~`initAgentModule`~~（已删除；由 Plugin Runtime 装配） |
 | Agent | `ServiceAgent`、`CreateServiceAgentOptions`（`AIService.createAgent`）；legacy `Agent` / `createAgent` re-export 自 `@zhin.js/ai` |
 | Model harness | `MODEL_HARNESS_DEFAULTS`, `resolveModelHarness`, `mergeModelHarnessValues` |
 | 服务与会话 | `AIService`；会话/context 类型见 `@zhin.js/ai`（`ContextRepository`、`AgentSessionStore`、`ImTranscriptStore`） |
@@ -217,7 +215,7 @@ useContext('ai', async (ai) => {
 
 ## 全局上下文
 
-通过 `initAgentModule()` 挂载后，插件可声明：
+Agent 模块装配后，插件可声明：
 
 ```typescript
 declare module '@zhin.js/core' {
@@ -466,7 +464,7 @@ src/
 │
 ├── mcp-client/                      # MCP 客户端
 │
-├── init.ts                          # initAgentModule 入口
+├── init.ts                          # legacy initAgentModule（已删除，throwing stub）
 ├── init/                            # create-zhin-agent、compose/configure/dispose 生命周期
 │
 ├── service.ts                       # AIService

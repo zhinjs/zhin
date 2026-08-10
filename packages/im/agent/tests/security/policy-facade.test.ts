@@ -8,7 +8,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { setHostRootPlugin } from '../../../core/src/host-plugin-registry.js';
 import type { Plugin } from '@zhin.js/core';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import {
@@ -39,7 +38,6 @@ describe('policy-facade', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-policy-facade-'));
   });
   afterEach(() => {
-    setHostRootPlugin(null);
     vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -57,7 +55,6 @@ describe('policy-facade', () => {
       },
     } as unknown as Plugin;
     (plugin as unknown as { root: Plugin }).root = plugin;
-    setHostRootPlugin(plugin);
     return plugin;
   }
 
