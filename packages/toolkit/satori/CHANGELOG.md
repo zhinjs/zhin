@@ -1,5 +1,11 @@
 # @zhin.js/satori
 
+## 1.0.18
+
+### Patch Changes
+
+- f8c7a54: fix: im
+
 ## 1.0.17
 
 ### Patch Changes

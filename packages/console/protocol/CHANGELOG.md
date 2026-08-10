@@ -1,5 +1,11 @@
 # @zhin.js/console-protocol
 
+## 1.1.1
+
+### Patch Changes
+
+- f8c7a54: fix: im
+
 ## 1.1.0
 
 ### Minor Changes

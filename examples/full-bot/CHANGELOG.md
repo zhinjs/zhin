@@ -1,5 +1,25 @@
 # full-bot
 
+## 0.0.22
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/client@2.1.5
+  - @zhin.js/page@1.0.7
+  - @zhin.js/console-contract@1.0.1
+  - @zhin.js/a2a@3.0.4
+  - @zhin.js/mcp@6.0.3
+  - @zhin.js/agent@1.1.4
+  - @zhin.js/skill@1.0.7
+  - @zhin.js/tool@1.0.7
+  - zhin.js@6.0.3
+  - @zhin.js/satori@1.0.18
+  - @zhin.js/adapter-kook@7.0.4
+  - @zhin.js/adapter-napcat@6.0.4
+  - @zhin.js/adapter-sandbox@7.0.3
+
 ## 0.0.21
 
 ### Patch Changes

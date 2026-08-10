@@ -1,5 +1,17 @@
 # @zhin.js/pagemanager
 
+## 2.0.13
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/contract@1.0.10
+  - @zhin.js/layout@1.0.7
+  - @zhin.js/page@1.0.7
+  - @zhin.js/console-contract@1.0.1
+  - @zhin.js/plugin-runtime@1.1.4
+
 ## 2.0.12
 
 ### Patch Changes

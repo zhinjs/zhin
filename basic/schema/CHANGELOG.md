@@ -1,5 +1,11 @@
 # @zhin.js/schema
 
+## 1.0.73
+
+### Patch Changes
+
+- f8c7a54: fix: im
+
 ## 1.0.72
 
 ### Patch Changes
