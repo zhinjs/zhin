@@ -22,7 +22,7 @@ describe('Setup - Default Configuration', () => {
   })
 
   it('should generate default config when file does not exist', async () => {
-    const { ConfigService } = await import('@zhin.js/core')
+    const { ConfigFeature: ConfigService } = await import('@zhin.js/core')
     const { LogLevel } = await import('@zhin.js/logger')
 
     const configService = new ConfigService()
@@ -45,7 +45,7 @@ describe('Setup - Default Configuration', () => {
   })
 
   it('should have correct plugin_dirs order', async () => {
-    const { ConfigService } = await import('@zhin.js/core')
+    const { ConfigFeature: ConfigService } = await import('@zhin.js/core')
 
     const configService = new ConfigService()
     await configService.load('test-zhin-config.yml', withTestDefaults())
@@ -58,7 +58,7 @@ describe('Setup - Default Configuration', () => {
   })
 
   it('should merge minimal config with runtime defaults', async () => {
-    const { ConfigService } = await import('@zhin.js/core')
+    const { ConfigFeature: ConfigService } = await import('@zhin.js/core')
     const { LogLevel } = await import('@zhin.js/logger')
 
     fs.writeFileSync(testConfigPath, [
@@ -79,7 +79,7 @@ describe('Setup - Default Configuration', () => {
   })
 
   it('should preserve plugin order when explicitly configured', async () => {
-    const { ConfigService } = await import('@zhin.js/core')
+    const { ConfigFeature: ConfigService } = await import('@zhin.js/core')
 
     const plugins = [
       '@zhin.js/adapter-sandbox',
@@ -99,7 +99,7 @@ describe('Setup - Default Configuration', () => {
   })
 
   it('should include all required services', async () => {
-    const { ConfigService } = await import('@zhin.js/core')
+    const { ConfigFeature: ConfigService } = await import('@zhin.js/core')
 
     const configService = new ConfigService()
     await configService.load('test-zhin-config.yml', withTestDefaults())
@@ -111,7 +111,7 @@ describe('Setup - Default Configuration', () => {
   })
 
   it('should match minimal runtime config shape', async () => {
-    const { ConfigService } = await import('@zhin.js/core')
+    const { ConfigFeature: ConfigService } = await import('@zhin.js/core')
 
     const configService = new ConfigService()
     await configService.load('test-zhin-config.yml', withTestDefaults())

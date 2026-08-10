@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   formatLegacyConversationTarget,
   formatLegacyConversationRef,
-  formatLegacyMessageReference,
   formatLegacyMessageRef,
   nativeConversationId,
   parseLegacyConversationTarget,
@@ -42,8 +41,14 @@ describe('@zhin.js/im-contract', () => {
       target: 'group:123',
       messageId: '456',
     });
-    expect(formatLegacyMessageReference({ target: 'channel:abc:def', messageId: 'm-1' }))
-      .toBe('channel:abc:def:m-1');
+    expect(formatLegacyMessageRef({
+      conversation: {
+        endpoint: { id: 'ep-1', adapter: 'test' },
+        kind: 'channel',
+        id: 'abc:def',
+      },
+      id: 'm-1',
+    })).toBe('channel:abc:def:m-1');
     expect(nativeConversationId('group:123')).toBe('123');
     expect(nativeConversationId('opaque:123')).toBe('opaque:123');
   });
