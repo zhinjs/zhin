@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Harness：usePlugin() 须在模块顶层调用（AsyncLocalStorage 上下文）。
- * 启发式：出现 usePlugin( 时花括号深度须为 0（忽略字符串内的括号误差不计）。
+ * Harness：usePlugin() 已删除——禁止在插件/示例源码中出现任何 usePlugin 调用。
+ * 忽略注释行和字符串内容。
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -14,8 +14,10 @@ const scanRoots = [
   'plugins/features',
   'plugins/utils',
   'plugins/games',
+  'plugins/services',
   'examples/minimal-bot',
   'examples/test-bot',
+  'examples/full-bot',
 ];
 
 /** @param {string} line */
@@ -59,27 +61,21 @@ for (const rel of scanRoots) {
   for (const file of files) {
     const txt = fs.readFileSync(file, 'utf8');
     if (!/\busePlugin\s*\(/.test(txt)) continue;
-    let depth = 0;
     const lines = txt.split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (lineHasUsePluginCall(line) && depth > 0) {
+      if (lineHasUsePluginCall(lines[i])) {
         violations.push({
           file: path.relative(repoRoot, file),
           line: i + 1,
-          text: line.trim(),
+          text: lines[i].trim(),
         });
-      }
-      for (const ch of line) {
-        if (ch === '{') depth++;
-        else if (ch === '}') depth = Math.max(0, depth - 1);
       }
     }
   }
 }
 
 if (violations.length > 0) {
-  console.error('usePlugin() must be called at module top-level:\n');
+  console.error('usePlugin() has been removed — no calls allowed in plugin/example source:\n');
   for (const v of violations) {
     console.error(`  ${v.file}:${v.line}  ${v.text}`);
   }

@@ -50,7 +50,7 @@ export default defineCommand({
 })
 ```
 
-> **已弃用**：`usePlugin()` / `MessageCommand` / `Plugin.addCommand` 仅经典路径（`zhin.js/node`）残留，新代码勿用。见 [public-api-surface](../../docs/contributing/public-api-surface.md)。
+> **已移除**：`usePlugin()` / `getPlugin()` / `bootstrapNode`（`zhin.js/node`）调用即 throw；唯一入口为 `definePlugin` + `zhin runtime start`。`MessageCommand` / `Plugin.addCommand` 仍 deprecated。见 [public-api-surface](../../docs/contributing/public-api-surface.md)。
 
 本包仍提供 IM 运行时契约（Message / Adapter / Endpoint）；创作面在 Feature 包与 `@zhin.js/plugin-runtime`。
 
@@ -209,7 +209,7 @@ Core **不包含** ZhinAgent 实现。IM 侧的 AI 对话、工具收集、执�
 
 ```typescript
 // 插件系统
-export { Plugin, usePlugin, getPlugin, definePlugin } from './plugin.js'
+export { Plugin, usePlugin, getPlugin, definePlugin } from './plugin.js'  // usePlugin/getPlugin 为 throwing stub
 
 // Feature 体系（Cron / Scheduler 来自 @zhin.js/kernel）
 export { Feature, Cron, Scheduler } from '@zhin.js/kernel'

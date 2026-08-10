@@ -1,7 +1,7 @@
 /**
  * home_* 工具 — 薄封装 HomeAssistantService（M4）
  */
-import { ZhinTool, type Message, getHostRootPlugin } from '@zhin.js/core';
+import { ZhinTool, type Message } from '@zhin.js/core';
 import type { HomeAssistantService } from './domains/home-assistant.js';
 import type { HomePolicyConfig } from './home-config.js';
 import {
@@ -10,7 +10,6 @@ import {
   toHomeOwnerSignal,
   type HomeToolDecision,
 } from './home-policy.js';
-import { resolveToolRequesterRole } from '../security/owner-approve-always-store.js';
 export interface HomeToolsOptions {
   service: HomeAssistantService;
   policy: HomePolicyConfig & { requireMaster: boolean; confirmServices: string[] };
@@ -33,19 +32,7 @@ function guardMasterOnly(
   if (!policy.requireMaster || !commMessage?.$adapter || !commMessage?.$endpoint || !commMessage?.$sender?.id) {
     return null;
   }
-  try {
-    const host = getHostRootPlugin();
-    if (!host) return null;
-    const role = resolveToolRequesterRole(host, commMessage);
-    if (role === 'master') return null;
-    return toHomeDenyError({
-      allowed: false,
-      role,
-      reason: '智能家居操作仅允许 Endpoint Owner（master）调用。',
-    });
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 function formatGuardResult(decision: HomeToolDecision): string | null {

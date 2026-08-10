@@ -10,7 +10,7 @@ export interface PeerPolicyInput {
   cell?: CollaborationScene;
   peerMode: PeerTriggerMode;
   endpointAtIds: string[];
-  /** 用于 Endpoint 反查 peer 身份（缺省回退 getHostRootPlugin）。 */
+  /** 用于 Endpoint 反查 peer 身份。 */
   root?: Plugin;
 }
 

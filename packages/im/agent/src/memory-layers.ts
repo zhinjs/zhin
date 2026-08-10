@@ -4,10 +4,8 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { getHostRootPlugin, senderRolesFromMessage, type Message, getLogger } from '@zhin.js/core';
-import type { AIConfig } from '@zhin.js/ai';
+import { senderRolesFromMessage, type Message, getLogger } from '@zhin.js/core';
 import { getMemoryDir } from './bootstrap.js';
-import { resolveToolRequesterRole } from './security/owner-approve-always-store.js';
 const logger = getLogger('MemoryLayers');
 
 export interface MemoryLayerBudgets {
@@ -265,18 +263,6 @@ export function buildMemoryPrompt(
 }
 
 export function resolveMemoryPromptOptions(): MemoryPromptOptions {
-  const host = getHostRootPlugin();
-  if (host) {
-    const configService = host.inject?.('config') as
-      | { getPrimary?: () => { ai?: AIConfig } }
-      | undefined;
-    const ai = configService?.getPrimary?.()?.ai;
-    const mem = ai?.memory;
-    return {
-      enabled: mem?.enabled !== false,
-      budgets: { ...DEFAULT_MEMORY_BUDGETS, ...mem?.budgets },
-    };
-  }
   return { enabled: true, budgets: DEFAULT_MEMORY_BUDGETS };
 }
 
@@ -354,10 +340,7 @@ export function checkMemoryWritePath(
   }
 
   let role: string = 'unknown';
-  const host = getHostRootPlugin();
-  if (host && context) {
-    role = resolveToolRequesterRole(host, context);
-  } else if (context && senderRolesFromMessage(context).includes('master')) {
+  if (context && senderRolesFromMessage(context).includes('master')) {
     role = 'master';
   }
   if (role === 'master') {

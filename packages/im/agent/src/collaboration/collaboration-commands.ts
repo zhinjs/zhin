@@ -1,7 +1,7 @@
 /**
  * /collab 协作群管理指令（仅 master；ADR 0023 Cell 注册 SSOT）。
  */
-import { Adapter, getHostRootPlugin, type Message } from '@zhin.js/core';
+import { type Message } from '@zhin.js/core';
 import { getCollaborationSceneService } from './scene-service.js';
 import {
   findCellForMessage,
@@ -14,13 +14,9 @@ import {
   isPipelineRole,
   PIPELINE_ROLES,
   type CollaborationScene,
-  type CollaborationConfig,
   type PipelineRole,
 } from './types.js';
-import { getSceneIdentityService } from './scene-identity-service.js';
-import { startInitWizard, aggregateAndActivate, cancelInitWizard } from './init-wizard-service.js';
-import { extractAtTargets, buildRegisteredEndpointMap } from './init-observe-hook.js';
-import { checkCollabAdminGate } from './collab-admin-gate.js';
+import { cancelInitWizard } from './init-wizard-service.js';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
 
 const PIPELINE_ROLE_LABELS_ZH: Record<PipelineRole, string> = {
@@ -37,42 +33,12 @@ export interface BindableEndpointRef {
   online: boolean;
 }
 
-function isKnownAdapter(adapterName: string): boolean {
-  const root = getHostRootPlugin();
-  if (!root || !adapterName) return false;
-  const adapter = root.inject(adapterName);
-  return adapter instanceof Adapter;
+function isKnownAdapter(_adapterName: string): boolean {
+  return false;
 }
 
-function listAdapterEndpoints(adapterName: string): Array<{ id: string; online: boolean }> {
-  const root = getHostRootPlugin();
-  if (!root) return [];
-  const adapter = root.inject(adapterName);
-  if (!(adapter instanceof Adapter)) return [];
-  return [...adapter.endpoints.entries()].map(([id, endpoint]) => ({
-    id,
-    online: !!(endpoint as { $connected?: boolean }).$connected,
-  }));
-}
-
-function memberBindKey(cell: CollaborationScene, member: CollaborationScene['members'][number]): string {
-  return `${memberTransportAdapter(cell, member)}:${member.endpointId}`;
-}
-
-function listAllBindableEndpoints(cell: CollaborationScene): BindableEndpointRef[] {
-  const root = getHostRootPlugin();
-  if (!root) return [];
-  const bound = new Set(cell.members.map((m) => memberBindKey(cell, m)));
-  const out: BindableEndpointRef[] = [];
-  for (const adapterName of root.adapters) {
-    const name = String(adapterName);
-    for (const ep of listAdapterEndpoints(name)) {
-      const key = `${name}:${ep.id}`;
-      if (bound.has(key)) continue;
-      out.push({ adapter: name, id: ep.id, online: ep.online });
-    }
-  }
-  return out;
+function listAllBindableEndpoints(_cell: CollaborationScene): BindableEndpointRef[] {
+  return [];
 }
 
 function listBindableEndpointsForAdapter(
@@ -83,34 +49,14 @@ function listBindableEndpointsForAdapter(
 }
 
 function resolveEndpointAcrossAdapters(
-  endpointId: string,
-  preferAdapter?: string,
+  _endpointId: string,
+  _preferAdapter?: string,
 ): BindableEndpointRef | undefined {
-  const root = getHostRootPlugin();
-  if (!root) return undefined;
-  const matches: BindableEndpointRef[] = [];
-  for (const adapterName of root.adapters) {
-    const name = String(adapterName);
-    for (const ep of listAdapterEndpoints(name)) {
-      if (ep.id === endpointId) {
-        matches.push({ adapter: name, id: ep.id, online: ep.online });
-      }
-    }
-  }
-  if (matches.length === 0) return undefined;
-  if (preferAdapter) {
-    const preferred = matches.find((m) => m.adapter === preferAdapter);
-    if (preferred) return preferred;
-  }
-  return matches[0];
+  return undefined;
 }
 
 function listProvisionableAdapterNames(): string[] {
-  const root = getHostRootPlugin();
-  if (!root) return [];
-  return root.adapters
-    .map((name) => String(name))
-    .filter((name) => listAdapterEndpoints(name).length > 0);
+  return [];
 }
 
 function formatEndpointRefLabel(ref: BindableEndpointRef): string {
@@ -302,11 +248,8 @@ async function formatStatus(cell: CollaborationScene): Promise<string> {
   return lines.join('\n');
 }
 
-function collabAdminBlocked(message: Message): boolean {
-  const root = getHostRootPlugin();
-  if (!root) return true;
-  const gate = checkCollabAdminGate(message, String(message.$endpoint), root);
-  return !gate.allowed;
+function collabAdminBlocked(_message: Message): boolean {
+  return true;
 }
 
 export async function handleCollabStatus(message: Message): Promise<string> {
@@ -507,37 +450,11 @@ export async function handleCollabReset(message: Message, force = true): Promise
  */
 export async function handleCollabInitWizard(
   message: Message,
-  plannerAtId: string,
+  _plannerAtId: string,
 ): Promise<string> {
   const scene = resolveSceneFromMessage(message);
   if (!scene.ok) return `⚠️ ${scene.error}`;
-
-  const root = getHostRootPlugin();
-  if (!root) return '⚠️ 系统未就绪。';
-
-  const gate = checkCollabAdminGate(message, String(message.$endpoint), root);
-  if (!gate.allowed) return '';
-
-  const endpointId = String(message.$endpoint);
-  const registeredMap = buildRegisteredEndpointMap(root);
-  const plannerRef = registeredMap.get(plannerAtId);
-
-  if (!plannerRef) {
-    return `⚠️ 被 @ 的 Bot（${plannerAtId}）不是已注册的系统 Endpoint。`;
-  }
-
-  if (plannerRef.endpointId !== endpointId) {
-    return '';
-  }
-
-  const result = await startInitWizard({
-    plannerEndpointId: plannerRef.endpointId,
-    plannerAdapter: scene.adapter,
-    plannerSceneId: scene.sceneId,
-  });
-
-  if (!result.ok) return `⚠️ ${result.error}`;
-  return result.prompt ?? '✅ Init 向导已启动。';
+  return '⚠️ 系统未就绪。';
 }
 
 /**
@@ -545,49 +462,11 @@ export async function handleCollabInitWizard(
  */
 export async function handleCollabInited(
   message: Message,
-  plannerPrimary?: string,
+  _plannerPrimary?: string,
 ): Promise<string> {
   const scene = resolveSceneFromMessage(message);
   if (!scene.ok) return `⚠️ ${scene.error}`;
-
-  const root = getHostRootPlugin();
-  if (!root) return '⚠️ 系统未就绪。';
-
-  const gate = checkCollabAdminGate(message, String(message.$endpoint), root);
-  if (!gate.allowed) return '';
-
-  const sceneSvc = getSceneIdentityService();
-  const session = await sceneSvc.getActiveInitSession(scene.adapter, scene.sceneId);
-  if (!session) {
-    return '⚠️ 当前群没有进行中的 init 向导。请先 /collab init @Planner';
-  }
-
-  const endpointId = String(message.$endpoint);
-  if (session.plannerEndpointId !== endpointId) {
-    return '';
-  }
-
-  const registeredMap = buildRegisteredEndpointMap(root);
-  const result = await aggregateAndActivate(
-    session,
-    registeredMap,
-    plannerPrimary || 'planner',
-  );
-
-  if (!result.ok) {
-    return '⚠️ 汇聚失败。';
-  }
-
-  const lines = [
-    `✅ 协作群已激活（${result.memberCount} 个成员，${result.sceneCount} 个场景别名）`,
-  ];
-  if (result.warnings.length > 0) {
-    lines.push(...result.warnings.map((w) => `⚠️ ${w}`));
-  }
-  if (result.scene) {
-    lines.push(await formatStatus(result.scene));
-  }
-  return lines.join('\n');
+  return '⚠️ 系统未就绪。';
 }
 
 /**
@@ -598,12 +477,6 @@ export async function handleCollabInitCancel(
 ): Promise<string> {
   const scene = resolveSceneFromMessage(message);
   if (!scene.ok) return `⚠️ ${scene.error}`;
-
-  const root = getHostRootPlugin();
-  if (root) {
-    const gate = checkCollabAdminGate(message, String(message.$endpoint), root);
-    if (!gate.allowed) return '';
-  }
 
   const result = await cancelInitWizard(scene.adapter, scene.sceneId);
   if (!result.ok) return `ℹ️ ${result.error}`;

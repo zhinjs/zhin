@@ -1,8 +1,7 @@
-import { type AgentPromptBuildContext, type AgentPromptSection, getHostRootPlugin, getLogger } from '@zhin.js/core';
+import { type AgentPromptBuildContext, type AgentPromptSection, getLogger } from '@zhin.js/core';
 import type { AgentTool } from '@zhin.js/ai';
 import { type ZhinAgentConfig, DEFAULT_CONFIG } from '../config/index.js';
 import { createAIHookEvent, triggerAIHook } from '../hooks.js';
-import type { AgentOrchestrator } from '../orchestrator/index.js';
 import {
   applyAgentPromptLimits,
   formatAgentPromptSectionsMarkdown,
@@ -57,8 +56,6 @@ export async function resolveAgentPromptSections(
     sections,
   });
   await triggerAIHook(hookEvent);
-  const orchestrator = getHostRootPlugin()?.inject?.('agent') as AgentOrchestrator | undefined;
-  await orchestrator?.hooks.trigger(hookEvent);
   const hookSections = hookEvent.context.sections;
   if (Array.isArray(hookSections)) {
     sections = sortAgentPromptSections(hookSections as AgentPromptSection[]);

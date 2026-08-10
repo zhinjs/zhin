@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getPlugin, Plugin } from '@zhin.js/core';
+import { Plugin } from '@zhin.js/core';
 import {
   AI_EVENT_NAMES,
   subscribeAIEvents,
@@ -35,20 +35,6 @@ describe('ai-event-subscriber', () => {
       'any:ai.session.new',
       'session:new',
     ]);
-  });
-
-  it('runs handlers inside plugin AsyncLocalStorage context', async () => {
-    const plugin = new Plugin('/virtual/host-plugin.ts');
-    let seen: Plugin | undefined;
-
-    subscribeAIEvents(plugin, {
-      onProcessingStart: () => {
-        seen = getPlugin();
-      },
-    });
-
-    await plugin.dispatch('ai.processing.start', { sessionId: 's1', source: 'zhin-agent' });
-    expect(seen).toBe(plugin);
   });
 
   it('filters by session and source and can dispose', async () => {

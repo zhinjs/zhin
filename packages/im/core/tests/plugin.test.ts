@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { Plugin, usePlugin, getPlugin, storage, defineContext } from '../src/plugin'
+import { Plugin, storage, defineContext } from '../src/plugin'
 import { EventEmitter } from 'events'
 
 describe('Plugin Core Functionality', () => {
@@ -218,95 +218,6 @@ describe('Plugin Core Functionality', () => {
 })
 
 describe('Plugin AsyncLocalStorage', () => {
-  beforeEach(() => {
-    // 清理 storage
-    storage.disable()
-  })
-
-  describe('usePlugin', () => {
-    it('should create and store plugin in AsyncLocalStorage', () => {
-      storage.run(undefined, () => {
-        const plugin = usePlugin()
-        expect(plugin).toBeInstanceOf(Plugin)
-        expect(storage.getStore()).toBe(plugin)
-      })
-    })
-
-    it('should return same instance when called twice from same file', () => {
-      storage.run(undefined, () => {
-        const first = usePlugin()
-        const second = usePlugin()
-        
-        expect(second).toBe(first)
-      })
-    })
-
-    it('should handle nested contexts correctly', () => {
-      storage.run(undefined, () => {
-        const parent = usePlugin()
-        
-        storage.run(undefined, () => {
-          const nested = usePlugin()
-          // 嵌套上下文应该创建新的独立插件
-          expect(nested).toBeInstanceOf(Plugin)
-          expect(nested).not.toBe(parent)
-          expect(storage.getStore()).toBe(nested)
-        })
-        
-        // 返回外层上下文后，应该恢复原来的插件
-        expect(storage.getStore()).toBe(parent)
-      })
-    })
-
-    it('should handle storage disabled during execution', () => {
-      storage.run(undefined, () => {
-        const plugin = usePlugin()
-        expect(plugin).toBeInstanceOf(Plugin)
-        
-        // 禁用 storage
-        storage.disable()
-        
-        // 再次调用应该创建新插件
-        const newPlugin = usePlugin()
-        expect(newPlugin).toBeInstanceOf(Plugin)
-        // 注意：禁用后 storage 可能仍然在当前 run 上下文中有值
-        // 只需要验证 usePlugin 仍然能正常工作即可
-      })
-    })
-
-    it('should handle errors in nested contexts', () => {
-      storage.run(undefined, () => {
-        const parent = usePlugin()
-        
-        expect(() => {
-          storage.run(undefined, () => {
-            usePlugin()
-            throw new Error('Test error')
-          })
-        }).toThrow('Test error')
-        
-        // 错误后，外层上下文应该保持不变
-        expect(storage.getStore()).toBe(parent)
-      })
-    })
-  })
-
-  describe('getPlugin', () => {
-    it('should throw error when called outside plugin context', () => {
-      storage.run(undefined, () => {
-        expect(() => getPlugin()).toThrow('must be called within a plugin context')
-      })
-    })
-
-    it('should return current plugin from storage', () => {
-      const plugin = new Plugin('/test/plugin.ts')
-      storage.run(plugin, () => {
-        const retrieved = getPlugin()
-        expect(retrieved).toBe(plugin)
-      })
-    })
-  })
-
   describe('storage', () => {
     it('should be an instance of AsyncLocalStorage', () => {
       expect(storage).toBeDefined()

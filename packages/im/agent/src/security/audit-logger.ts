@@ -8,7 +8,6 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { getHostRootPlugin } from '@zhin.js/core';
 import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 
 // ── 审计事件类型 ──────────────────────────────────────────────────────
@@ -655,11 +654,6 @@ const auditStore = createGenerationStore<AuditLogger>('zhin.agent.audit-logger')
 export function getAuditLogger(): AuditLogger {
   const existing = auditStore.tryUse();
   if (existing) return existing;
-  const host = getHostRootPlugin();
-  if (host) {
-    const config = (host.inject('config') as any)?.getPrimary?.()?.ai?.agent?.audit;
-    return new AuditLogger(config);
-  }
   return new AuditLogger({ enabled: false });
 }
 

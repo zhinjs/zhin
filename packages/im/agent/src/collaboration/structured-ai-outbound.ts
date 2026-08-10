@@ -3,7 +3,6 @@
  */
 import { renderToPlainText, type OutputElement } from '@zhin.js/ai';
 import {
-  getHostRootPlugin,
   parseAiOutboundJson,
   extractEmbeddedAiOutboundJson,
   rewritePlainTextMentions,
@@ -39,7 +38,7 @@ function extractPlainTextFromElements(elements: OutputElement[]): string {
 }
 
 function resolveAdapterView(message: Message, root?: Plugin): GroupMessageAdapterView | undefined {
-  const plugin = root ?? getHostRootPlugin();
+  const plugin = root ?? null;
   if (!plugin) return undefined;
   return plugin.inject(message.$adapter) as GroupMessageAdapterView | undefined;
 }
@@ -49,7 +48,7 @@ function buildParseContext(message: Message, root?: Plugin): AiOutboundParseCont
   const adapter = resolveAdapterView(message, root);
   if (!adapter) return null;
 
-  const plugin = root ?? getHostRootPlugin();
+  const plugin = root ?? null;
   const adapterInstance = plugin?.inject(message.$adapter) as object | undefined;
 
   return {
@@ -75,7 +74,7 @@ export interface TryResolveStructuredAiOutboundOptions {
   /** ai.agent.outputSchema 开启：模型回复即出站 JSON，强制结构化解析 */
   outputSchemaRequired?: boolean;
   warn?: (message: string) => void;
-  /** Init-time root plugin; avoids getHostRootPlugin in inbound pipeline path */
+  /** Init-time root plugin; avoids global plugin registry in inbound pipeline path */
   root?: import('@zhin.js/core').Plugin;
 }
 
@@ -137,7 +136,7 @@ export async function tryResolveStructuredAiOutbound(
   options: TryResolveStructuredAiOutboundOptions = {},
 ): Promise<MessageElement[] | null> {
   const cell = resolveCollaborationSceneForMessage(message);
-  const plugin = options.root ?? getHostRootPlugin();
+  const plugin = options.root ?? null;
   const adapterInstance = plugin?.inject(message.$adapter) as object | undefined;
   const extensions = adapterInstance ? getAdapterAiOutboundExtensions(adapterInstance) : [];
   const structuredRequired = options.outputSchemaRequired === true
@@ -217,7 +216,7 @@ export function resolveStructuredOutboundRequired(
 ): boolean {
   if (!message) return false;
   const cell = resolveCollaborationSceneForMessage(message);
-  const plugin = getHostRootPlugin();
+  const plugin = null;
   const adapterInstance = plugin?.inject(message.$adapter) as object | undefined;
   const extensions = adapterInstance ? getAdapterAiOutboundExtensions(adapterInstance) : [];
   const caps = adapterInstance ? getAdapterAiOutboundCapabilities(adapterInstance) : undefined;

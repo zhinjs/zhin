@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
- * Harness：getPlugin() 禁止出现在运行时回调内（中间件、action、execute 等）。
- * 启发式：.action / .execute / addMiddleware / addCron / .on( 之后的函数体中不得调用 getPlugin()。
+ * Harness：
+ * 1. getPlugin() 已删除——禁止在插件/示例源码中出现任何 getPlugin() 调用。
+ *    框架内部（packages/im/*）的残留调用属于 dead code，由后续切片清除。
+ * 2. getHostRootPlugin() 禁止出现在 ideal agent turn 路径模块中（core/skill/turn/…）。
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -9,39 +11,17 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const scanRoots = [
+// ── Check 1: ban getPlugin() in plugin/example source ──
+
+const getPluginScanRoots = [
   'plugins/adapters',
   'plugins/features',
   'plugins/utils',
   'plugins/games',
+  'plugins/services',
   'examples/minimal-bot',
   'examples/full-bot',
-  'examples/demo-bot',
   'examples/test-bot',
-  'packages/im/agent/src',
-  'packages/im/zhin/src',
-];
-
-/** Paths where getPlugin() at registration/bootstrap is intentional */
-const getPluginAllowlist = [
-  '/init/',
-  'plugin-context.ts',
-  'host-plugin-registry.ts',
-  'packages/im/core/src/built/',
-];
-
-/** @param {string} relFile */
-function isGetPluginAllowlisted(relFile) {
-  const normalized = relFile.replace(/\\/g, '/');
-  return getPluginAllowlist.some((p) => normalized.includes(p));
-}
-
-const CALLBACK_MARKERS = [
-  /\.action\s*\(/,
-  /\.execute\s*\(/,
-  /addMiddleware\s*\(/,
-  /addCron\s*\(/,
-  /\.on(?:ce)?\s*\(/,
 ];
 
 /** @param {string} line */
@@ -50,7 +30,7 @@ function lineIsCommentOrDoc(line) {
   return trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/**');
 }
 
-/** @param {string} line @param {string} pattern */
+/** @param {string} line @param {RegExp} pattern */
 function lineHasCall(line, pattern) {
   if (lineIsCommentOrDoc(line)) return false;
   const noStrings = line.replace(
@@ -58,22 +38,6 @@ function lineHasCall(line, pattern) {
     '',
   );
   return pattern.test(noStrings);
-}
-
-/** @param {string} line */
-function lineHasGetPluginCall(line) {
-  return lineHasCall(line, /\bgetPlugin\s*\(/);
-}
-
-/** @param {string} line */
-function lineHasCallbackMarker(line) {
-  const trimmed = line.trim();
-  if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/**')) return false;
-  const noStrings = line.replace(
-    /('[^'\\]*(?:\\.[^'\\]*)*'|"[^"\\]*(?:\\.[^'\\]*)*"|`[^`\\]*(?:\\.[^`\\]*)*`)/g,
-    '',
-  );
-  return CALLBACK_MARKERS.some((re) => re.test(noStrings));
 }
 
 const skipDirNames = new Set(['node_modules', 'lib', 'dist', 'coverage', '.git', 'tests']);
@@ -97,67 +61,38 @@ function walkTs(dir, acc) {
 }
 
 /** @type {{ file: string, line: number, text: string }[]} */
-const violations = [];
+const getPluginViolations = [];
 
-for (const rel of scanRoots) {
+for (const rel of getPluginScanRoots) {
   const abs = path.join(repoRoot, rel);
   const files = [];
   walkTs(abs, files);
   for (const file of files) {
     const txt = fs.readFileSync(file, 'utf8');
     if (!/\bgetPlugin\s*\(/.test(txt)) continue;
-
-    let depth = 0;
-    /** @type {number | null} */
-    let callbackBodyDepth = null;
-    let pendingCallback = false;
     const lines = txt.split(/\r?\n/);
-
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-
-      if (lineHasGetPluginCall(line) && callbackBodyDepth !== null && depth >= callbackBodyDepth) {
-        const relFile = path.relative(repoRoot, file);
-        if (isGetPluginAllowlisted(relFile)) continue;
-        violations.push({
-          file: relFile,
+      if (lineHasCall(lines[i], /\bgetPlugin\s*\(/)) {
+        getPluginViolations.push({
+          file: path.relative(repoRoot, file),
           line: i + 1,
-          text: line.trim(),
+          text: lines[i].trim(),
         });
-      }
-
-      if (lineHasCallbackMarker(line)) {
-        pendingCallback = true;
-      }
-
-      for (const ch of line) {
-        if (ch === '{') {
-          depth++;
-          if (pendingCallback) {
-            callbackBodyDepth = depth;
-            pendingCallback = false;
-          }
-        } else if (ch === '}') {
-          depth = Math.max(0, depth - 1);
-          if (callbackBodyDepth !== null && depth < callbackBodyDepth) {
-            callbackBodyDepth = null;
-          }
-        }
       }
     }
   }
 }
 
-if (violations.length > 0) {
-  console.error('getPlugin() must not be called inside runtime callbacks (middleware, action, execute, cron, on):\n');
-  for (const v of violations) {
+if (getPluginViolations.length > 0) {
+  console.error('getPlugin() has been removed — no calls allowed in plugin/example source:\n');
+  for (const v of getPluginViolations) {
     console.error(`  ${v.file}:${v.line}  ${v.text}`);
   }
-  console.error('\nCapture plugin/root at registration time and use closures instead.');
   process.exit(1);
 }
 
-/** ideal 模块 turn 路径禁止 getHostRootPlugin；hostPlugin 须经 configure → emitter 注入 */
+// ── Check 2: ban getHostRootPlugin() in ideal agent turn-path modules ──
+
 const getHostRootPluginBanRoots = [
   'packages/im/agent/src/core',
   'packages/im/agent/src/skill',

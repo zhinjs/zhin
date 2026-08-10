@@ -22,7 +22,7 @@ AI / Agent 能力在 **`@zhin.js/agent`**（及 `@zhin.js/ai`），须显式安�
 | `zhin.js` | **仅** `@zhin.js/core` + `@zhin.js/logger` |
 | `zhin.js/agent` | `@zhin.js/agent` + 多 Agent 编排（`runPipeline` / `runParallel` / `route`） |
 | `zhin.js/ai` | `@zhin.js/ai` 引擎 API |
-| `zhin.js/node` | ~~`bootstrapNode`~~（**deprecated**，未接 CLI；用 `zhin runtime start`） |
+| `zhin.js/node` | ~~`bootstrapNode`~~（**removed**，调用 throw；唯一入口 `zhin runtime start`） |
 | `zhin.js/runtime` | `@zhin.js/runtime` optional-peer facade；不进入默认 IM 闭包 |
 | `zhin.js/jsx*` | Satori JSX 运行时 |
 
@@ -152,9 +152,9 @@ export default defineAgentTool({
 
 最短示例：[examples/single-file-bot](../../../examples/single-file-bot/)。编排 API 从 **`zhin.js/agent`** 引入。
 
-## 已弃用：`zhin.js/node`
+## 已移除：`zhin.js/node`
 
-`bootstrapNode` / `usePlugin()` / `MessageCommand` 属于经典插件路径，**未接任何 CLI**，仅兼容残留；新代码不要使用。迁移见 `.github/skills/migrate-zhin-plugin-runtime`。
+`bootstrapNode` / `usePlugin()` / `getPlugin()` **已移除**，调用即 throw。唯一入口为 `definePlugin()` + `zhin runtime start`。`MessageCommand` 仍 deprecated。迁移见 `.github/skills/migrate-zhin-plugin-runtime`。
 
 ## 核心概念
 

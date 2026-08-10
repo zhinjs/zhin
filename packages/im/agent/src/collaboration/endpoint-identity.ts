@@ -5,7 +5,7 @@
  * Endpoint 在平台上的身份（platformUserId / config.name / appid / endpointId），
  * 则该消息来自 peer Bot；否则视为人类（非 roster sender）。
  */
-import { type Message, type Plugin, getHostRootPlugin } from '@zhin.js/core';
+import { type Message, type Plugin } from '@zhin.js/core';
 import type { CollaborationScene, CollaborationSceneMemberRuntime } from './types.js';
 import { memberTransportAdapter } from './collaboration-config.js';
 interface EndpointLike {
@@ -43,7 +43,7 @@ export function resolveMemberBySender(
   root?: Plugin,
 ): CollaborationSceneMemberRuntime | undefined {
   if (!cell || !senderId) return undefined;
-  const plugin = root ?? getHostRootPlugin() ?? undefined;
+  const plugin = root ?? undefined;
   for (const member of cell.members) {
     const ids = resolveEndpointIdsForMember(
       plugin,
@@ -83,7 +83,7 @@ export function resolveOutboundMentionId(
   senderAdapter: string,
   root?: Plugin,
 ): string {
-  const plugin = root ?? getHostRootPlugin() ?? undefined;
+  const plugin = root ?? undefined;
   const targetAdapter = memberTransportAdapter(cell, targetMember);
 
   if (targetAdapter === senderAdapter) {

@@ -6,7 +6,7 @@
  */
 
 import * as os from 'node:os';
-import { type AgentTurnMessage, type Message, getPlugin, resolveIMSessionIdFromMessage, senderRolesFromMessage } from '@zhin.js/core';
+import { type AgentTurnMessage, type Message, resolveIMSessionIdFromMessage, senderRolesFromMessage } from '@zhin.js/core';
 import type { ContentPart, AgentMessage, AssistantMessage, UserMessage } from '@zhin.js/ai';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import { type ZhinAgentConfig, SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from '../config/index.js';

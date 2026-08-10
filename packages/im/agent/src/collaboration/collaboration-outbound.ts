@@ -2,7 +2,7 @@
  * 协作群出站解析 — 委托 core ZhinAiOutboundPayload；cell roster 语义保留在此。
  */
 import type { OutputElement } from '@zhin.js/ai';
-import { type Message, type MessageElement, AI_OUTBOUND_JSON_EXAMPLE, buildAiOutboundPromptHint, parseAiOutboundJson, readMentionSegmentTarget, type ZhinAiOutboundPayload, getHostRootPlugin } from '@zhin.js/core';
+import { type Message, type MessageElement, AI_OUTBOUND_JSON_EXAMPLE, buildAiOutboundPromptHint, parseAiOutboundJson, readMentionSegmentTarget, type ZhinAiOutboundPayload } from '@zhin.js/core';
 import { resolvePeerEndpointInCell } from './collaboration-config.js';
 import { resolveCollaborationSceneForMessage } from './collaboration-context.js';
 import type { CollaborationScene } from './types.js';
@@ -357,10 +357,8 @@ export function coerceGroupDelegateArgs(args: Record<string, unknown>): GroupDel
   return null;
 }
 
-function resolveAdapterView(message: Message): GroupMessageAdapterView | undefined {
-  const plugin = getHostRootPlugin();
-  if (!plugin) return undefined;
-  return plugin.inject(message.$adapter) as GroupMessageAdapterView | undefined;
+function resolveAdapterView(_message: Message): GroupMessageAdapterView | undefined {
+  return undefined;
 }
 
 /**

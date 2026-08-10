@@ -1,7 +1,7 @@
 /**
  * 群消息发送 — 经统一 Adapter.sendMessage 从当前 Endpoint 出站（ADR 0023 identity follows outbound）。
  */
-import { type Message, type MessageElement, getHostRootPlugin, segment } from '@zhin.js/core';
+import { type Message, type MessageElement } from '@zhin.js/core';
 /** IM 单条文本上限（QQ 等约 4k；超长则分段连发，不截断省略）。 */
 export const DEFAULT_IM_TEXT_CHUNK_CHARS = 4000;
 
@@ -144,39 +144,9 @@ export interface SendGroupMessageContentInput {
 }
 
 export async function sendGroupMessageContent(
-  input: SendGroupMessageContentInput,
+  _input: SendGroupMessageContentInput,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { message, content } = input;
-  const plugin = getHostRootPlugin();
-  if (!plugin) return { ok: false, error: 'Host plugin 未就绪' };
-
-  const adapter = plugin.inject(message.$adapter) as GroupMessageAdapterView | undefined;
-  if (!adapter?.sendMessage) {
-    return { ok: false, error: `adapter ${message.$adapter} 不支持 sendMessage` };
-  }
-
-  const channel = message.$channel;
-  if (!channel?.id || !channel.type) {
-    return { ok: false, error: '仅支持群/频道内发送' };
-  }
-  if (channel.type !== 'group' && channel.type !== 'channel') {
-    return { ok: false, error: `不支持的频道类型: ${channel.type}` };
-  }
-
-  await adapter.sendMessage({
-    context: message.$adapter,
-    endpoint: String(message.$endpoint),
-    id: channel.id,
-    type: channel.type,
-    parent: channel.parent
-      ? {
-          type: channel.parent.type === 'channel' ? 'guild' as const : channel.parent.type,
-          id: channel.parent.id,
-        }
-      : undefined,
-    content,
-  });
-  return { ok: true };
+  return { ok: false, error: 'Host plugin 未就绪' };
 }
 
 export interface SendGroupMessageInput {
@@ -189,37 +159,7 @@ export interface SendGroupMessageInput {
 }
 
 export async function sendGroupMessageFromEndpoint(
-  input: SendGroupMessageInput,
+  _input: SendGroupMessageInput,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { message, text, atTargetEndpointId, maxChars } = input;
-  const plugin = getHostRootPlugin();
-  if (!plugin) return { ok: false, error: 'Host plugin 未就绪' };
-
-  const adapter = plugin.inject(message.$adapter) as GroupMessageAdapterView | undefined;
-  if (!adapter?.sendMessage) {
-    return { ok: false, error: `adapter ${message.$adapter} 不支持 sendMessage` };
-  }
-
-  const channel = message.$channel;
-  if (!channel?.id || !channel.type) {
-    return { ok: false, error: '仅支持群/频道内发送' };
-  }
-  if (channel.type !== 'group' && channel.type !== 'channel') {
-    return { ok: false, error: `不支持的频道类型: ${channel.type}` };
-  }
-
-  const trimmed = text.trim();
-  if (!trimmed) return { ok: false, error: '消息正文为空' };
-
-  const chunks = splitLongTextForIm(trimmed, maxChars ?? DEFAULT_IM_TEXT_CHUNK_CHARS);
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i]!;
-    const attachAt = i === 0 && atTargetEndpointId;
-    const content: unknown = attachAt
-      ? buildAtMessageContent(adapter, [atTargetEndpointId], chunk)
-      : segment.text(chunk);
-    const sent = await sendGroupMessageContent({ message, content });
-    if (!sent.ok) return sent;
-  }
-  return { ok: true };
+  return { ok: false, error: 'Host plugin 未就绪' };
 }

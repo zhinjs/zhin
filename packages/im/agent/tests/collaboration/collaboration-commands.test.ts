@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Adapter, setHostRootPlugin, type Message } from '@zhin.js/core';
+import { Adapter, type Message, type Plugin } from '@zhin.js/core';
+import * as core from '@zhin.js/core';
 import {
   defaultCellId,
   handleCollabBind,
@@ -12,7 +13,6 @@ import {
   resetCollaborationSceneService,
 } from '../../src/collaboration/scene-service.js';
 import { MemoryCollaborationSceneRepository } from '../../src/collaboration/collaboration-scene-repository.js';
-import { createMockHostPlugin } from '../helpers/mock-host-plugin.js';
 
 vi.mock('../../src/collaboration/bootstrap-agent-runtimes.js', () => ({
   rebootstrapEndpointRuntimes: vi.fn(async () => {}),
@@ -34,16 +34,21 @@ function groupMessage(
 
 type EndpointStub = { $connected: boolean; $platformUserId: string };
 
+let getHostRootPluginSpy: ReturnType<typeof vi.spyOn> | undefined;
+
 function installHostRoot(endpoints: Array<[string, EndpointStub]>) {
-  const host = createMockHostPlugin();
   const adapter = Object.create(Adapter.prototype) as Adapter & {
     endpoints: Map<string, EndpointStub>;
   };
   adapter.endpoints = new Map(endpoints);
-  (host as { adapters: string[]; inject: (name: string) => Adapter | undefined }).adapters = ['icqq'];
-  (host as { inject: (name: string) => Adapter | undefined }).inject = (name: string) =>
-    name === 'icqq' ? adapter : undefined;
-  setHostRootPlugin(host);
+  const host = {
+    adapters: ['icqq'],
+    inject: (name: string) => (name === 'icqq' ? adapter : undefined),
+    root: null as unknown as Plugin,
+  };
+  host.root = host as unknown as Plugin;
+  getHostRootPluginSpy?.mockRestore();
+  getHostRootPluginSpy = vi.spyOn(core, 'getHostRootPlugin').mockReturnValue(host as Plugin);
 }
 
 async function seedEmptyCell(sceneId = '373460458') {
@@ -69,7 +74,8 @@ describe('collaboration /collab commands', () => {
   });
 
   afterEach(() => {
-    setHostRootPlugin(null);
+    getHostRootPluginSpy?.mockRestore();
+    getHostRootPluginSpy = undefined;
     resetCollaborationSceneService();
     vi.clearAllMocks();
   });

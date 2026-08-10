@@ -39,6 +39,7 @@
     "export * from './command-index.js';",
     "export * from './definition.js';",
     "export{CommandPathSyntaxError,commandFeatureId,default as commandFeature,}from './provider.js';",
+    "export{assertBuiltinPermits,checkBuiltinPermit,checkBuiltinPermitList,isBuiltinPermit,isPlatformPermit,parsePermitName,type ParsedPermit,type PermitKind,}from './permit.js';",
     "export{default}from './provider.js';"
   ],
   "component": [
@@ -60,9 +61,11 @@
     "export * from './contracts.js';",
     "export * from './im-runtime.js';",
     "export * from './interactive.js';",
+    "export * from './message-bus.js';",
     "export * from './message-dispatcher.js';",
     "export * from './outbound-renderer.js';",
-    "export * from './outbound-segments.js';"
+    "export * from './outbound-segments.js';",
+    "export * from './service-tokens.js';"
   ],
   "feature-kit": [
     "export * from './catalog.js';",

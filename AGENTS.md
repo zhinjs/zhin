@@ -97,8 +97,8 @@ basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp
 ## 必须遵守的约束（代码约定）
 
 - TypeScript 本地导入通常必须使用 `.js` 扩展名。
-- **新插件走 Plugin Runtime**：`plugin.ts` default-export `definePlugin()`；能力用约定目录（`defineCommand` / `defineMiddleware` / `defineAgentTool` 等）。**不要**再写 `usePlugin()` / `MessageCommand`（`zhin.js/node` / `bootstrapNode` 已弃用，未接 CLI）。
-- **Legacy 残留**：若文件仍调用 `usePlugin()`，必须在模块顶层（`pnpm check:use-plugin-top-level`）；`getPlugin()` 仅装配阶段，运行时回调禁止（`pnpm check:get-plugin-runtime`）。
+- **唯一入口：Plugin Runtime**：`plugin.ts` default-export `definePlugin()`，用 `zhin runtime start` 启动；能力用约定目录（`defineCommand` / `defineMiddleware` / `defineAgentTool` 等）。`usePlugin()` / `getPlugin()` / `bootstrapNode`（`zhin.js/node`）**已移除**，调用即 throw。
+- **Legacy API 已移除**：`usePlugin()` / `getPlugin()` / `bootstrapNode` 现为 throwing stub，勿再调用；门禁 `pnpm check:use-plugin-top-level` / `pnpm check:get-plugin-runtime` 防止仓库内残留引用。
 - 发送消息不能绕过统一链路：`Message.$reply` 或 `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → 平台 Endpoint（`pnpm check:harness-paths` 门禁）。
 - Endpoint 可按 `capabilities`（`inbound` / `outbound`）拆分 IO；跨平台出站用 `inject(adapter).sendMessage`，见 [docs/concepts/message-flow.md](docs/concepts/message-flow.md)。
 - 保持依赖方向单向：basic → kernel → ai → core → agent → zhin；不要让低层依赖 IM 概念。例外仅限 `basic/cli`（见上）。

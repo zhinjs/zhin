@@ -1,4 +1,4 @@
-import { type Message, buildAiOutboundPromptHint, getAdapterAiOutboundCapabilities, getAdapterAiOutboundExtensions, getHostRootPlugin } from '@zhin.js/core';
+import { type Message, buildAiOutboundPromptHint } from '@zhin.js/core';
 import type { CollaborationScene } from './types.js';
 import { resolveCellForScene, findCellMemberByEndpoint } from './collaboration-config.js';
 /** 每轮 turn envelope 用的精简 Cell 提示（勿重复 buildAiOutboundPromptHint 长文）。 */
@@ -47,19 +47,8 @@ export function formatCollaborationSceneHint(
     }
   }
 
-  const plugin = getHostRootPlugin();
-  const adapterInstance = plugin?.inject(cell.adapter) as object | undefined;
-  const capabilities = adapterInstance
-    ? getAdapterAiOutboundCapabilities(adapterInstance)
-    : undefined;
-  const extensions = adapterInstance
-    ? getAdapterAiOutboundExtensions(adapterInstance)
-    : undefined;
-
   const lines = [
     buildAiOutboundPromptHint({
-      capabilities,
-      extensions,
       rosterLines: cellLines,
       forceJsonOnly: options?.forceJsonOnly ?? false,
     }),

@@ -8,7 +8,6 @@ import type { MessageElement, SendContent } from '../types.js';
 import { hasSenderRole, type SenderRole } from './roles.js';
 
 import { resolveSubjectRoles } from './authorization.js';
-import { getHostRootPlugin } from '../host-plugin-registry.js';
 
 /** Agent turn 可挂载在 Message 扩展字段上的元数据 */
 export type AgentTurnMessage = Message<{ extra?: Record<string, unknown> }>;
@@ -26,10 +25,6 @@ export function senderRolesFromMessage(message: Message<any>): readonly SenderRo
   const sender = message.$sender;
   if (sender.isMaster !== undefined || sender.isTrusted !== undefined) {
     return frameworkRolesFromSenderFlags(sender);
-  }
-  const root = getHostRootPlugin();
-  if (root) {
-    return resolveSubjectRoles(root, message).roles;
   }
   return ['user'];
 }

@@ -141,4 +141,3 @@ export class AgentPresetFeature extends Feature<AgentPreset> {
 }
 
 import { resolveEntry } from '../utils.js';
-import { usePlugin } from '../plugin.js';

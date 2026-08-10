@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { AgentPromptContributor } from '@zhin.js/core';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
-import { withMockHostRoot } from './helpers/mock-host-plugin.js';
 import {
   clearAgentPromptContributors,
   registerAgentPromptContributor,
@@ -50,28 +49,6 @@ describe('resolveAgentPromptSections', () => {
       },
     });
     expect(sections.map(s => s.id)).toContain('hook.extra');
-  });
-
-  it('bridges legacy hooks to plugin ai.hook bus', async () => {
-    const payloads: any[] = [];
-
-    await withMockHostRoot(async (hostPlugin) => {
-      hostPlugin.on('ai.hook', payload => payloads.push(payload));
-
-      await resolveAgentPromptSections({
-        sessionId: 'test:scene1:user1',
-        ctx: {
-          slot: 'orchestrator',
-          commMessage: mockCommMessage({ adapter: 'mock', senderId: 'user1', sceneId: 'scene1' }),
-        },
-      });
-    });
-
-    expect(payloads).toHaveLength(1);
-    expect(payloads[0].source).toBe('ai-hook');
-    expect(payloads[0].hookType).toBe('agent');
-    expect(payloads[0].hookAction).toBe('prompt');
-    expect(payloads[0].sessionId).toBe('test:scene1:user1');
   });
 
   it('isolates contributor errors', async () => {

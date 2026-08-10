@@ -4,7 +4,6 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@zhin.js/core')>();
   return {
     ...actual,
-    getPlugin: () => ({ root: {} }),
     resolveSubjectRoles: vi.fn((_plugin: unknown, message: { _roles?: string[]; $sender?: { isMaster?: boolean; isTrusted?: boolean } }) => ({
       scope: 'group',
       roles: message?._roles ?? (message?.$sender?.isMaster ? ['master'] : message?.$sender?.isTrusted ? ['trusted'] : ['user']),

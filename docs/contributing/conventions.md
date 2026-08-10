@@ -25,18 +25,13 @@ import { DisposeStack } from './dispose';           // ❌
 
 - `plugin.ts` default-export `definePlugin()`（`@zhin.js/plugin-runtime` / `zhin.js/plugin-runtime`）
 - 能力放在约定目录（`commands/` → `defineCommand`，`tools/` → `defineAgentTool`，…），一个文件一个 default export
-- **不要**再写 `usePlugin()` / `getPlugin()` / `MessageCommand`
+- **不要**调用已移除的 `usePlugin()` / `getPlugin()` / `bootstrapNode`（`zhin.js/node`）；这些 API 现为 throwing stub
 
 见 [编写第一个插件](../getting-started/first-plugin.md)、[definePlugin](../authoring/define-plugin.md)。
 
-## Legacy：`usePlugin()` / `getPlugin()`（仅残留代码）
+## Removed：`usePlugin()` / `getPlugin()` / `bootstrapNode`
 
-经典路径只在 `zhin.js/node`（`bootstrapNode`）下有效，**未接 CLI**。若维护仍调用这两套 API 的遗留模块：
-
-- `usePlugin()` 只能在**模块顶层**（门禁 `pnpm check:use-plugin-top-level`）
-- `getPlugin()` 只允许初始化/装配阶段；中间件、命令 action、工具 execute、Cron、事件回调内禁止（门禁 `pnpm check:get-plugin-runtime`）；运行时用注册时捕获的闭包
-
-新功能应迁到 Runtime，而不是继续扩经典 API。迁移：`.github/skills/migrate-zhin-plugin-runtime`。
+`usePlugin()`、`getPlugin()`、`bootstrapNode`（`zhin.js/node`）**已移除**，调用即 throw。唯一入口是 `definePlugin()` + `zhin runtime start`。仓库内残留引用由门禁 `pnpm check:use-plugin-top-level` / `pnpm check:get-plugin-runtime` 拦截。迁移：`.github/skills/migrate-zhin-plugin-runtime`。
 ## 模块级状态：createGenerationStore
 
 插件热重载意味着同一份模块代码会被多个 generation 先后使用。裸的模块级 `let _x` 单例会让新一代读到上一代已释放的资源，或让旧代卸载时误清掉新代的值。统一用 `createGenerationStore<T>(name)`（`@zhin.js/plugin-runtime`）：

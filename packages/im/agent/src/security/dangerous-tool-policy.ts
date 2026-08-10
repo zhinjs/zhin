@@ -1,9 +1,9 @@
-import { getHostRootPlugin, getLogger, hasSenderRole, resolveSubjectRoles, senderRolesFromMessage, type Message, type Plugin } from '@zhin.js/core';
+import { getLogger, hasSenderRole, senderRolesFromMessage, type Message, type Plugin } from '@zhin.js/core';
 
 const logger = getLogger('DangerousToolPolicy');
 import type { ZhinAgentConfig } from '../config/index.js';
 import { checkFileAccess, extractBashReadPaths } from './file-policy.js';
-import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approve-always-store.js';
+import type { ToolRequesterRole } from './owner-approve-always-store.js';
 export interface DangerousToolDecision {
   allowed: boolean;
   needsOwnerApproval?: boolean;
@@ -59,9 +59,8 @@ function resolveExecAllowlistSafe(
   const fromExtra = resolveExecAllowlistFromMessage(commMessage);
   if (fromExtra.length > 0) return fromExtra;
 
-  const host = plugin ?? getHostRootPlugin() ?? undefined;
-  if (host) {
-    const fromPlugin = resolveExecAllowlistFromAiService(host);
+  if (plugin) {
+    const fromPlugin = resolveExecAllowlistFromAiService(plugin);
     if (fromPlugin.length > 0) return fromPlugin;
   }
 
@@ -82,15 +81,6 @@ function resolveRoleFromMessage(commMessage?: Message): {
     return { role: 'unknown', hasIdentity: false };
   }
 
-  const host = getHostRootPlugin();
-  if (host) {
-    return {
-      role: resolveToolRequesterRole(host, commMessage!),
-      plugin: host,
-      hasIdentity: true,
-    };
-  }
-
   return {
     role: resolveRoleFromMessageFallback(commMessage!),
     plugin: undefined,
@@ -104,13 +94,6 @@ function resolveRoleFromMessageFallback(commMessage: Message): ToolRequesterRole
   if (commMessage.$sender.isMaster !== undefined || commMessage.$sender.isTrusted !== undefined) {
     if (hasSenderRole(snapshot, 'master')) return 'master';
     if (hasSenderRole(snapshot, 'trusted')) return 'trusted';
-    return 'other';
-  }
-  const host = getHostRootPlugin();
-  if (host) {
-    const { roles } = resolveSubjectRoles(host, commMessage);
-    if (hasSenderRole(roles, 'master')) return 'master';
-    if (hasSenderRole(roles, 'trusted')) return 'trusted';
     return 'other';
   }
   return 'unknown';

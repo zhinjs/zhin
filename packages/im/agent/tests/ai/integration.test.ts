@@ -15,28 +15,13 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
   const original = await importOriginal() as any;
   return {
     ...original,
-    defineModel: vi.fn(), // Mock defineModel
-    // 保留原始 getPlugin（依赖 AsyncLocalStorage）；勿全局 stub，否则 hook-registry / write-file 等单测失效
-    usePlugin: vi.fn(() => ({
-      name: 'test-plugin',
-      root: { 
-        inject: vi.fn(),
-        dispatch: vi.fn().mockResolvedValue(undefined),
-        addMiddleware: vi.fn(),
-      },
-      provide: vi.fn(),
-      useContext: vi.fn(),
-      addMiddleware: vi.fn(),
-      defineModel: vi.fn(),
-      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    })),
+    defineModel: vi.fn(),
     Logger: class {
       debug = vi.fn();
       info = vi.fn();
       warn = vi.fn();
       error = vi.fn();
     },
-    getPlugin: vi.fn(() => ({ root: {} })),
     resolveSubjectRoles: vi.fn((_plugin: unknown, message: { _roles?: string[] }) => ({
       scope: 'private',
       roles: message?._roles ?? ['user'],

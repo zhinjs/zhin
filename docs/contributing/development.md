@@ -77,8 +77,8 @@ pnpm --filter @zhin.js/scaffold-wizard build   # 或 pnpm prepare:cli
 | --- | --- |
 | IM Send Path（`pnpm check:harness-paths`） | 不得绕过 Adapter.sendMessage 统一链路 |
 | IM Session SSOT（`pnpm check:im-session-ssot`） | IM 场景/session 身份解析走 core SSOT |
-| usePlugin Top-Level（`pnpm check:use-plugin-top-level`） | `usePlugin()` 须在模块顶层 |
-| getPlugin Runtime（`pnpm check:get-plugin-runtime`） | 运行时回调内禁止 `getPlugin()` |
+| usePlugin Top-Level（`pnpm check:use-plugin-top-level`） | 禁止调用已移除的 `usePlugin()`（throwing stub） |
+| getPlugin Runtime（`pnpm check:get-plugin-runtime`） | 禁止调用已移除的 `getPlugin()`（含运行时回调；throwing stub） |
 | Orchestration SSOT（`pnpm check:orchestration-ssot`） | 编排任务状态须经 OrchestrationKernel |
 
 **AI 层**

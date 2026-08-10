@@ -68,31 +68,14 @@ export function getCurrentFile(metaUrl = import.meta.url): string {
 }
 
 /**
- * getPlugin - 获取当前 AsyncLocalStorage 中的插件实例
- *
- * **调用时机（重要）**
- * - ✅ 插件**初始化/装配**阶段：模块顶层、register/init 函数内、注册命令/中间件/工具**之前**
- * - ❌ **运行时回调**内严禁调用：中间件、命令 `.action()`、工具 `.execute()`、Cron、生命周期 `.on()` 等
- *
- * 运行时回调应使用初始化时捕获的 `plugin` / `root` 闭包引用，而非再次 `getPlugin()`。
- * AsyncLocalStorage 在跨 await、线程池、部分平台适配器回调中可能丢失，导致线上 `getPlugin() must be called within a plugin context`。
- *
- * 插件作者优先在模块顶层使用 `usePlugin()` 解构 API，一般不需要 `getPlugin()`。
- * Bot 启动时框架调用 `setHostRootPlugin(root)`；运行时模块用 `getHostRootPlugin()` 代替 `getPlugin()`。
- *
- * @see docs/guide/plugin-development.md#getplugin-与-useplugin
+ * @deprecated **已删除**。请使用 `definePlugin` + 约定目录；运行时用 `getHostRootPlugin()` 或
+ * 从 `context.plugin` 闭包引用。
+ * @throws 总是抛出——仅保留签名供编译期过渡。
  */
 export function getPlugin(): Plugin {
-  const plugin = storage.getStore();
-  if (!plugin) {
-    if (_pluginRuntimeActive) {
-      throw new Error(
-        'getPlugin() is not available under Plugin Runtime (`zhin runtime start`). ' +
-        'Use `definePlugin` + convention directories instead. ' +
-        'See docs/contributing/public-api-surface.md',
-      );
-    }
-    throw new Error('getPlugin() must be called within a plugin context');
-  }
-  return plugin;
+  throw new Error(
+    'getPlugin() has been removed. Use `definePlugin` + convention directories, '
+    + 'or `getHostRootPlugin()` for host-level access. '
+    + 'See docs/contributing/public-api-surface.md',
+  );
 }

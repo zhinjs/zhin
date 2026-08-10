@@ -37,8 +37,8 @@ Custom lint checks:
 - `pnpm check:no-koa` — 检测插件是否直接 import koa（应使用 RouterContext）
 - `pnpm check:prod` — 检查生产环境配置（无 console.log/debugger/TODO/FIXME）
 - `pnpm check:plugin` — 检查插件是否符合标准规范（入口文件、测试、README）
-- `pnpm check:use-plugin-top-level` — 检测 usePlugin() 是否在模块顶层调用
-- `pnpm check:get-plugin-runtime` — 检测 getPlugin() 是否在运行时回调中调用
+- `pnpm check:use-plugin-top-level` — 检测是否仍调用已移除的 `usePlugin()`（现为 throwing stub）
+- `pnpm check:get-plugin-runtime` — 检测是否在运行时回调内调用已移除的 `getPlugin()`（现为 throwing stub）
 - `pnpm check:plugin-agent-publish` — 带 agent/ 的插件发布清单（files、prepublishOnly）
 - `pnpm check:all` — 运行所有 harness 检查（含 type-check / lint / test）
 
@@ -116,11 +116,9 @@ Capabilities are **discovered from convention directories**, not registered impe
 
 DI is **Scope + Token** based (`context.resources`), generation-scoped rather than a global registry. See `.github/skills/migrate-zhin-plugin-runtime/references/migration-map.md` for the full old→new mapping.
 
-### Legacy `usePlugin()` plugin system (vestigial)
+### Removed legacy APIs (`usePlugin()` / `getPlugin()` / `bootstrapNode`)
 
-The older `Plugin`/`PluginBase` classes (`packages/im/{kernel,core}/src/plugin.ts`) use **AsyncLocalStorage**: `Plugin.create()` evaluates the module inside `pluginStorage.run()`, which is what makes top-level `usePlugin()` work. `provide()` registers, `inject()` / `useContext()` consumes.
-
-This path is reachable only via `bootstrapNode` (`zhin.js/node`) and is **not wired to any CLI command**. `@zhin.js/runtime` has no bridge to `pluginStorage`, so a top-level `usePlugin()` in a `plugin.ts` will **not** work under `zhin runtime start`. Do not author new plugins this way.
+`usePlugin()`, `getPlugin()`, and `bootstrapNode` (`zhin.js/node`) have been **removed** — they are throwing stubs that direct callers to migrate. The **sole entry path** is `definePlugin()` + `zhin runtime start` (Plugin Runtime). Do not author or call legacy plugin APIs.
 
 ### Build output
 
@@ -228,7 +226,7 @@ These rules are non-negotiable — violating them will break the project:
 1. **Never bypass the send chain** — All outbound messages must flow through `Message.$reply` or `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → platform Endpoint.
 2. **Respect the dependency direction** — `basic → kernel → ai → core → agent → zhin`. Lower layers must never import from higher layers. Exception: `basic/cli` is the Plugin Runtime composition root (`zhin runtime start` assembles IM/Agent/Console hosts) and may import `packages/im` layers; this exception is scoped to `basic/cli` only.
 3. **`plugin.ts` must default-export `definePlugin()`** — The Plugin Runtime loader requires it; capabilities belong in convention directories (`commands/`, `middlewares/`, `tools/`, …), not in imperative top-level registration.
-4. **Legacy `usePlugin()` / `getPlugin()` rules still bind legacy code** — Where the `zhin.js/node` path is still used: `usePlugin()` at module top-level only (never inside async functions or lazy init — AsyncLocalStorage context is lost), and `getPlugin()` at plugin init only (capture `plugin`/`root` when registering; never call it inside runtime callbacks). Enforced by `check:use-plugin-top-level` / `check:get-plugin-runtime`.
+4. **Legacy `usePlugin()` / `getPlugin()` / `bootstrapNode` are removed** — These APIs throw at runtime. Use `definePlugin()` + `zhin runtime start` only. Harness checks (`check:use-plugin-top-level` / `check:get-plugin-runtime`) guard against lingering call sites in the codebase.
 5. **Use `.js` extensions in imports** — TypeScript local imports require `.js` suffix (`import { x } from './y.js'`).
 6. **Build order matters** — When building incrementally, follow: logger/schema/database → kernel → ai → core → agent → zhin.
 7. **No git submodules** — This is a pnpm workspace monorepo; all packages live under `basic/`, `packages/`, `plugins/`, or `examples/`.

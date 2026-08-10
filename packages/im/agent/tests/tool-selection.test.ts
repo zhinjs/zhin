@@ -1,9 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
-vi.mock('../../core/src/plugin.js', () => ({
-  getPlugin: () => ({ root: {} }),
-}));
-
 vi.mock('@zhin.js/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@zhin.js/core')>();
   return {

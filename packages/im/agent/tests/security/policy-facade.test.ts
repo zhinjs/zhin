@@ -201,11 +201,15 @@ describe('policy-facade', () => {
     });
 
     it('trusted 在 execAllowlist 中则全链通过', () => {
-      mockPlugin('owner1', ['admin1'], ['edit_file']);
-      const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
+      const ctx = mockCommMessage({
+        adapter: 'icqq',
+        endpoint: 'bot1',
+        senderId: 'admin1',
+        sender_roles: ['trusted'],
+        extra: { execAllowlist: ['edit_file'] },
+      });
       const fp = path.join(tmpDir, 'a.txt');
       const result = runToolPolicies({ toolName: 'edit_file', filePath: fp, rawFilePath: fp, commMessage: ctx });
-      console.log('DEBUG result:', JSON.stringify(result, null, 2));
       expect(result.allowed).toBe(true);
       expect(result.decisions).toHaveLength(7);
     });

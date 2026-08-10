@@ -9,6 +9,7 @@ import {
   type SnapshotStore,
 } from '@zhin.js/plugin-runtime';
 import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
+import { MessageBus, messageBusToken } from './message-bus.js';
 import {
   AdapterIndex,
   adapterFeatureId,
@@ -130,10 +131,12 @@ export class ImRuntime implements MessageGateway {
   }
 
   readonly permissionHost = createPermissionHost();
+  readonly messageBus = new MessageBus();
 
   install(resources: Scope): void {
     resources.provide(messageGatewayToken, this);
     resources.provide(permissionHostToken, this.permissionHost);
+    resources.provide(messageBusToken, this.messageBus);
   }
 
   /**

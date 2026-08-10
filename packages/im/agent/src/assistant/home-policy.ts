@@ -1,11 +1,8 @@
 /**
  * Home Domain 工具权限（M4）
  */
-import { getHostRootPlugin, hasSenderRole, mergeAITriggerConfig, resolveSenderRoles, senderRolesFromMessage, type Message } from '@zhin.js/core';
-import {
-  resolveToolRequesterRole,
-  type ToolRequesterRole,
-} from '../security/owner-approve-always-store.js';
+import { hasSenderRole, mergeAITriggerConfig, resolveSenderRoles, senderRolesFromMessage, type Message } from '@zhin.js/core';
+import { type ToolRequesterRole } from '../security/owner-approve-always-store.js';
 import type { HomePolicyConfig } from './home-config.js';
 import { parseEntityDomain } from './domains/home-assistant.js';
 export interface HomeToolDecision {
@@ -20,10 +17,6 @@ function resolveRole(commMessage?: Message): ToolRequesterRole {
     return 'unknown';
   }
   if (commMessage.$adapter === 'process') return 'master';
-  const host = getHostRootPlugin();
-  if (host) {
-    return resolveToolRequesterRole(host, commMessage);
-  }
   if (commMessage.$sender.isMaster !== undefined || commMessage.$sender.isTrusted !== undefined) {
     const roles = senderRolesFromMessage(commMessage);
     if (hasSenderRole(roles, 'master')) return 'master';

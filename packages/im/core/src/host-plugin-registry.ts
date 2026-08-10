@@ -1,15 +1,14 @@
 /**
- * 宿主根插件引用 — 在 Bot 启动/装配阶段注册，供运行时路径读取。
- * 避免在中间件、工具 execute、命令 action 等回调内调用 getPlugin()（ALS 易丢失）。
+ * @deprecated **已删除**。服务通过 Scope+Token 提供；不再有全局根插件引用。
  */
 import type { Plugin } from './plugin.js';
 
-let hostRoot: Plugin | null = null;
-
-export function setHostRootPlugin(plugin: Plugin | null): void {
-  hostRoot = plugin ? (plugin.root ?? plugin) : null;
+/** @deprecated 已删除——不做任何事。 */
+export function setHostRootPlugin(_plugin: Plugin | null): void {
+  // no-op: legacy host root plugin registry has been removed
 }
 
+/** @deprecated 已删除——总是返回 null。 */
 export function getHostRootPlugin(): Plugin | null {
-  return hostRoot;
+  return null;
 }

@@ -23,9 +23,8 @@ import { Adapter, Adapters } from "./adapter.js";
 import { Feature, PluginBase, BaseContext, PluginBaseLifecycle, resolvePluginResolveDir as _resolvePluginResolveDir, pluginCreateRequire as _pluginCreateRequire, getFileHash, watchFile, registerExtension, unregisterExtensions, installExtensionProxy, type PluginLike } from '@zhin.js/kernel';
 
 
-import { storage, getCurrentFile, isPluginRuntimeActive } from "./plugin-context.js";
+import { storage } from "./plugin-context.js";
 
-// Re-export getPlugin from plugin-context for backward compatibility
 export { getPlugin, markPluginRuntimeActive, isPluginRuntimeActive, resetPluginRuntimeFlag } from "./plugin-context.js";
 export { storage, getCurrentFile } from "./plugin-context.js";
 export { setHostRootPlugin, getHostRootPlugin } from "./host-plugin-registry.js";
@@ -49,34 +48,15 @@ export type DisposeFn<A> = (context: ArrayItem<A>) => MaybePromise<void>
 export type ContextList<CS extends (keyof Plugin.Contexts)[]> = CS extends [infer L, ...infer R] ? R extends (keyof Plugin.Contexts)[] ? [ContextItem<L>, ...ContextList<R>] : never[] : never[]
 type ContextItem<L> = L extends keyof Plugin.Contexts ? Plugin.Contexts[L] : never
 
-// ============================================================================
-// usePlugin — 获取或创建当前插件实例
-// ============================================================================
-
 /**
- * 获取当前插件实例（经典 AsyncLocalStorage 路径）。
- * 同一上下文中同一文件多次调用返回同一实例。
- *
- * @deprecated 仅 `zhin.js/node`（`bootstrapNode`）可用；`zhin runtime start` 下不工作。
- * 新插件请用 `definePlugin` + 约定目录。见 `docs/contributing/public-api-surface.md`。
+ * @deprecated **已删除**。请使用 `definePlugin` + 约定目录（`zhin runtime start`）。
+ * @throws 总是抛出——仅保留签名供编译期过渡。
  */
 export function usePlugin(): Plugin {
-  // 必须传入 plugin.ts 的 import.meta.url：getCurrentFile 默认锚定在 plugin-context.ts，
-  // 否则会多跳一层 usePlugin 帧，把调用方误判为 plugin.ts（plugin.name === "plugin"）。
-  const callerFile = getCurrentFile(import.meta.url);
-  // 如果当前 store 已是同一文件创建的插件，直接返回
-  const current = storage.getStore();
-  if (current && current.filePath.replace(/\?t=\d+$/, '') === callerFile.replace(/\?t=\d+$/, '')) {
-    return current;
-  }
-  const parentPlugin = current;
-  const newPlugin = new Plugin(callerFile, parentPlugin);
-  try {
-    storage.enterWith(newPlugin);
-  } catch {
-    // Cloudflare Workers 等环境未实现 enterWith；调用方须用 storage.run()
-  }
-  return newPlugin;
+  throw new Error(
+    'usePlugin() has been removed. Use `definePlugin` + convention directories instead. '
+    + 'See docs/contributing/public-api-surface.md',
+  );
 }
 
 // ============================================================================
