@@ -1,6 +1,8 @@
 import {
   toActivityFeedbackEventContext,
   isActivityFeedbackEnabled,
+  applySubagentActivityPrefixToConfig,
+  withSubagentActivityPrefix,
   type AIEventPayload,
   type ActivityFeedbackPhase,
 } from '@zhin.js/agent';
@@ -26,8 +28,9 @@ export class ActivityFeedbackOrchestrator {
       const resolution = this.policy.resolvePhase(ctx.platform, ctx.endpointId, phase, ctx.sceneType);
       if (resolution.kind !== 'active') return;
 
+      const config = applySubagentActivityPrefixToConfig(resolution.config, payload);
       this.log.debug(`[ActivityFeedback] start ${phase} (${reason}) session=${ctx.sessionId}`);
-      await this.executor.start(ctx, phase, resolution.config);
+      await this.executor.start(ctx, phase, config);
     } catch (error) {
       this.log.error(`[ActivityFeedback] start ${phase} failed (${reason}):`, error);
     }
@@ -50,7 +53,7 @@ export class ActivityFeedbackOrchestrator {
     if (!ctx || !text) return;
 
     try {
-      await this.executor.updateThinkingText(ctx, text);
+      await this.executor.updateThinkingText(ctx, withSubagentActivityPrefix(text, payload));
     } catch (error) {
       this.log.error('[ActivityFeedback] thinking update failed:', error);
     }

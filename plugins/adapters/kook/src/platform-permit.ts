@@ -1,7 +1,7 @@
 /**
  * KOOK platform permit — guild / channel 差异化门禁
  */
-import { registerPlatformPermitChecker, type Message } from '@zhin.js/core';
+import type { PermissionSubject } from '@zhin.js/permission';
 import { KookPermission } from './protocol.js';
 
 const ADAPTER = 'kook';
@@ -54,17 +54,9 @@ export function normalizeKookSenderForPermit(
   return { role: 'member', permissions };
 }
 
-function senderPermits(message: Message<any>): { role?: string; permissions: string[] } {
-  const sender = message.$sender as KookSenderInfo & { role?: string; permissions?: string[] };
-  const permissions = [...(sender.permissions ?? [])];
-  if (sender.isGuildOwner) permissions.push('guild_owner');
-  if (sender.isAdmin) permissions.push('guild_admin');
-  if (sender.permission === KookPermission.ChannelAdmin) permissions.push('channel_admin');
-  return { role: sender.role, permissions };
-}
-
-export function checkKookPlatformPermit(perm: string, message: Message<any>): boolean {
-  const { role, permissions } = senderPermits(message);
+export function checkKookPlatformPermit(perm: string, subject: PermissionSubject): boolean {
+  const role = subject.sender?.role?.[0];
+  const permissions = subject.sender?.permissions ?? [];
   const has = (t: string) => permissions.includes(t);
 
   switch (perm) {
@@ -81,6 +73,3 @@ export function checkKookPlatformPermit(perm: string, message: Message<any>): bo
   }
 }
 
-export function registerKookPlatformPermitChecker(): () => void {
-  return registerPlatformPermitChecker(ADAPTER, checkKookPlatformPermit);
-}

@@ -39,6 +39,5 @@ export {
   checkTelegramPlatformPermit,
   normalizeTelegramChatMember,
   platformPermit,
-  registerTelegramPlatformPermitChecker,
   telegramGroupPermitResolver,
 } from './platform-permit.js';

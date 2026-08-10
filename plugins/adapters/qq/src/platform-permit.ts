@@ -1,7 +1,7 @@
 /**
  * QQ 官方频道 platform permit（guild/channel，非 QQ 群 group_*）
  */
-import { registerPlatformPermitChecker, type Message } from '@zhin.js/core';
+import type { PermissionSubject } from '@zhin.js/permission';
 
 const ADAPTER = 'qq';
 
@@ -36,10 +36,9 @@ export function normalizeQqGuildSenderForPermit(input: {
   return { role: 'member', permissions };
 }
 
-export function checkQqPlatformPermit(perm: string, message: Message<any>): boolean {
-  const sender = message.$sender as { role?: string; permissions?: string[] };
-  const permissions = sender.permissions ?? [];
-  const role = sender.role;
+export function checkQqPlatformPermit(perm: string, subject: PermissionSubject): boolean {
+  const role = subject.sender?.role?.[0];
+  const permissions = subject.sender?.permissions ?? [];
   const has = (t: string) => permissions.includes(t);
 
   switch (perm) {
@@ -54,8 +53,4 @@ export function checkQqPlatformPermit(perm: string, message: Message<any>): bool
     default:
       return false;
   }
-}
-
-export function registerQqPlatformPermitChecker(): () => void {
-  return registerPlatformPermitChecker(ADAPTER, checkQqPlatformPermit);
 }

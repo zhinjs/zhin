@@ -79,4 +79,59 @@ describe('ActivityFeedbackOrchestrator', () => {
 
     expect(executor.start).not.toHaveBeenCalled();
   });
+
+  it('子 agent 的 message phase 应带 [agentId] 前缀', async () => {
+    const executor = {
+      start: vi.fn(),
+      stop: vi.fn(),
+      updateThinkingText: vi.fn(),
+    } satisfies ActivityFeedbackExecutor;
+
+    const policy = new ActivityFeedbackPolicy(
+      loadActivityFeedbackServiceConfig({
+        platforms: {
+          qq: {
+            phases: {
+              thinking: { private: { type: 'message', message: '思考中...', autoRemove: true } },
+              active: { private: { type: 'message', message: '正在处理中...', autoRemove: true } },
+            },
+          },
+        },
+      }),
+    );
+
+    const orchestrator = new ActivityFeedbackOrchestrator(policy, executor, {
+      debug: vi.fn(),
+      error: vi.fn(),
+    });
+
+    const payload = {
+      source: 'subagent',
+      agentId: 'researcher',
+      taskId: '91a68419',
+      platform: 'qq',
+      endpointId: '知音',
+      sessionId: 'qq:知音:private:477561',
+      sceneId: '477561',
+      userId: '477561',
+      scope: 'private',
+      hookContext: { activityFeedbackEligible: true },
+    } as AIEventPayload;
+
+    await orchestrator.startPhase(payload, 'thinking', 'subagent.start');
+    expect(executor.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: expect.stringContaining('::agent:researcher:'),
+      }),
+      'thinking',
+      expect.objectContaining({ message: '[researcher] 思考中...' }),
+    );
+
+    await orchestrator.startPhase(payload, 'active', 'processing.start');
+    expect(executor.start).toHaveBeenCalledWith(
+      expect.anything(),
+      'active',
+      expect.objectContaining({ message: '[researcher] 正在处理中...' }),
+    );
+  });
 });

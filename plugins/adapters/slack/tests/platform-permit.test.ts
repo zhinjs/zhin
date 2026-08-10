@@ -1,22 +1,35 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { canAccessTool, clearPlatformPermitCheckers } from 'zhin.js';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { canAccessTool } from '@zhin.js/core';
+import { createPermissionHost, type PermissionHost } from '@zhin.js/permission';
 import {
   checkSlackPlatformPermit,
   normalizeSlackSenderForPermit,
   platformPermit,
-  registerSlackPlatformPermitChecker,
 } from '../src/platform-permit.js';
 
+function mockSubject(sender: { role?: string; permissions?: string[] }) {
+  return {
+    adapter: 'slack',
+    sender: { id: 'u1', role: sender.role ? [sender.role] : [], permissions: sender.permissions },
+    scene: { type: 'group', id: 'C1' },
+  };
+}
+
 function mockMsg(sender: { role?: string; permissions?: string[] }) {
-  return { $adapter: 'slack', $sender: sender, $channel: { type: 'group', id: 'C1' } } as any;
+  return {
+    $adapter: 'slack',
+    $sender: { id: 'u1', ...sender },
+    $channel: { type: 'group', id: 'C1' },
+  } as any;
 }
 
 describe('slack platform-permit', () => {
+  let host: PermissionHost;
+
   beforeEach(() => {
-    clearPlatformPermitCheckers();
-    registerSlackPlatformPermitChecker();
+    host = createPermissionHost();
+    host.registerPlatform('slack', (perm, subject) => checkSlackPlatformPermit(perm, subject));
   });
-  afterEach(() => clearPlatformPermitCheckers());
 
   it('normalizeSlackSenderForPermit', () => {
     expect(normalizeSlackSenderForPermit({ isWorkspaceOwner: true }).role).toBe('owner');
@@ -24,19 +37,19 @@ describe('slack platform-permit', () => {
   });
 
   it('checkSlackPlatformPermit', () => {
-    expect(checkSlackPlatformPermit('channel_manager', mockMsg({ role: 'channel_admin', permissions: ['channel_manager'] }))).toBe(true);
-    expect(checkSlackPlatformPermit('workspace_admin', mockMsg({ role: 'member', permissions: [] }))).toBe(false);
+    expect(checkSlackPlatformPermit('channel_manager', mockSubject({ role: 'channel_admin', permissions: ['channel_manager'] }))).toBe(true);
+    expect(checkSlackPlatformPermit('workspace_admin', mockSubject({ role: 'member', permissions: [] }))).toBe(false);
   });
 
-  it('canAccessTool', () => {
+  it('canAccessTool', async () => {
     const tool = {
       name: 't',
       description: 'd',
-      parameters: { type: 'object', properties: {} },
+      parameters: { type: 'object' as const, properties: {} },
       permissions: [platformPermit('channel_manager')],
       execute: async () => '',
     };
-    expect(canAccessTool(tool, mockMsg({ role: 'member', permissions: [] }))).toBe(false);
-    expect(canAccessTool(tool, mockMsg({ role: 'admin', permissions: ['workspace_admin'] }))).toBe(true);
+    expect(await canAccessTool(tool, mockMsg({ role: 'member', permissions: [] }), host)).toBe(false);
+    expect(await canAccessTool(tool, mockMsg({ role: 'admin', permissions: ['workspace_admin'] }), host)).toBe(true);
   });
 });

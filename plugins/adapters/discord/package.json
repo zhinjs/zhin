@@ -46,6 +46,7 @@
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
+    "@zhin.js/permission": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "discord.js": "^14.27.0"
   },

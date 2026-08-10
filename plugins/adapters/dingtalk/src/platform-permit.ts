@@ -1,7 +1,7 @@
 /**
  * 钉钉 DingTalk platform permit
  */
-import { registerPlatformPermitChecker, type Message } from '@zhin.js/core';
+import type { PermissionSubject } from '@zhin.js/permission';
 
 const ADAPTER = 'dingtalk';
 
@@ -31,10 +31,9 @@ export function normalizeDingtalkSenderForPermit(input: {
   return { role: 'member', permissions: [] };
 }
 
-export function checkDingtalkPlatformPermit(perm: string, message: Message<any>): boolean {
-  const sender = message.$sender as { role?: string; permissions?: string[] };
-  const permissions = sender.permissions ?? [];
-  const role = sender.role;
+export function checkDingtalkPlatformPermit(perm: string, subject: PermissionSubject): boolean {
+  const role = subject.sender?.role?.[0];
+  const permissions = subject.sender?.permissions ?? [];
   const has = (t: string) => permissions.includes(t);
 
   switch (perm) {
@@ -47,6 +46,3 @@ export function checkDingtalkPlatformPermit(perm: string, message: Message<any>)
   }
 }
 
-export function registerDingtalkPlatformPermitChecker(): () => void {
-  return registerPlatformPermitChecker(ADAPTER, checkDingtalkPlatformPermit);
-}

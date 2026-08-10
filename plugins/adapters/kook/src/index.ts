@@ -47,6 +47,5 @@ export {
   kookGroupPermitResolver,
   normalizeKookSenderForPermit,
   platformPermit,
-  registerKookPlatformPermitChecker,
   type KookSenderInfo,
 } from './platform-permit.js';

@@ -1,7 +1,7 @@
 /**
  * Telegram platform permit — ChatMember 状态 + 细粒度权限
  */
-import { registerPlatformPermitChecker, type Message } from '@zhin.js/core';
+import type { PermissionSubject } from '@zhin.js/permission';
 
 const ADAPTER = 'telegram';
 
@@ -42,13 +42,9 @@ export function normalizeTelegramChatMember(member: {
   return { role: 'member', permissions };
 }
 
-function senderPermits(message: Message<any>): { role?: string; permissions: string[] } {
-  const sender = message.$sender as { role?: string; permissions?: string[] };
-  return { role: sender.role, permissions: sender.permissions ?? [] };
-}
-
-export function checkTelegramPlatformPermit(perm: string, message: Message<any>): boolean {
-  const { role, permissions } = senderPermits(message);
+export function checkTelegramPlatformPermit(perm: string, subject: PermissionSubject): boolean {
+  const role = subject.sender?.role?.[0];
+  const permissions = subject.sender?.permissions ?? [];
   const has = (t: string) => permissions.includes(t);
 
   switch (perm) {
@@ -67,6 +63,3 @@ export function checkTelegramPlatformPermit(perm: string, message: Message<any>)
   }
 }
 
-export function registerTelegramPlatformPermitChecker(): () => void {
-  return registerPlatformPermitChecker(ADAPTER, checkTelegramPlatformPermit);
-}

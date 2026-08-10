@@ -45,5 +45,4 @@ export {
   dingtalkGroupPermitResolver,
   normalizeDingtalkSenderForPermit,
   platformPermit,
-  registerDingtalkPlatformPermitChecker,
 } from './platform-permit.js';

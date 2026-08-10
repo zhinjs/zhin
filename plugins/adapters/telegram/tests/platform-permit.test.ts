@@ -1,26 +1,35 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { canAccessTool, clearPlatformPermitCheckers } from 'zhin.js';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { canAccessTool } from '@zhin.js/core';
+import { createPermissionHost, type PermissionHost } from '@zhin.js/permission';
 import {
   checkTelegramPlatformPermit,
   normalizeTelegramChatMember,
   platformPermit,
-  registerTelegramPlatformPermitChecker,
 } from '../src/platform-permit.js';
+
+function mockSubject(sender: { role?: string; permissions?: string[] }) {
+  return {
+    adapter: 'telegram',
+    sender: { id: 'u1', role: sender.role ? [sender.role] : [], permissions: sender.permissions },
+    scene: { type: 'group', id: 'g1' },
+  };
+}
 
 function mockMsg(sender: { role?: string; permissions?: string[] }) {
   return {
     $adapter: 'telegram',
-    $sender: sender,
+    $sender: { id: 'u1', ...sender },
     $channel: { type: 'group', id: 'g1' },
   } as any;
 }
 
 describe('telegram platform-permit', () => {
+  let host: PermissionHost;
+
   beforeEach(() => {
-    clearPlatformPermitCheckers();
-    registerTelegramPlatformPermitChecker();
+    host = createPermissionHost();
+    host.registerPlatform('telegram', (perm, subject) => checkTelegramPlatformPermit(perm, subject));
   });
-  afterEach(() => clearPlatformPermitCheckers());
 
   it('normalizeTelegramChatMember 映射 creator/administrator', () => {
     expect(normalizeTelegramChatMember({ status: 'creator' }).role).toBe('creator');
@@ -35,20 +44,20 @@ describe('telegram platform-permit', () => {
   });
 
   it('checkTelegramPlatformPermit 三档', () => {
-    expect(checkTelegramPlatformPermit('chat_creator', mockMsg({ role: 'creator', permissions: ['chat_creator'] }))).toBe(true);
-    expect(checkTelegramPlatformPermit('pin_messages', mockMsg({ role: 'member', permissions: [] }))).toBe(false);
-    expect(checkTelegramPlatformPermit('pin_messages', mockMsg({ role: 'administrator', permissions: ['pin_messages'] }))).toBe(true);
+    expect(checkTelegramPlatformPermit('chat_creator', mockSubject({ role: 'creator', permissions: ['chat_creator'] }))).toBe(true);
+    expect(checkTelegramPlatformPermit('pin_messages', mockSubject({ role: 'member', permissions: [] }))).toBe(false);
+    expect(checkTelegramPlatformPermit('pin_messages', mockSubject({ role: 'administrator', permissions: ['pin_messages'] }))).toBe(true);
   });
 
-  it('canAccessTool 与 platform permit 联动', () => {
+  it('canAccessTool 与 platform permit 联动', async () => {
     const tool = {
       name: 't',
       description: 'd',
-      parameters: { type: 'object', properties: {} },
+      parameters: { type: 'object' as const, properties: {} },
       permissions: [platformPermit('pin_messages')],
       execute: async () => '',
     };
-    expect(canAccessTool(tool, mockMsg({ role: 'member', permissions: [] }))).toBe(false);
-    expect(canAccessTool(tool, mockMsg({ role: 'creator', permissions: ['chat_creator'] }))).toBe(true);
+    expect(await canAccessTool(tool, mockMsg({ role: 'member', permissions: [] }), host)).toBe(false);
+    expect(await canAccessTool(tool, mockMsg({ role: 'creator', permissions: ['chat_creator'] }), host)).toBe(true);
   });
 });

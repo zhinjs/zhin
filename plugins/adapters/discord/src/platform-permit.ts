@@ -1,7 +1,7 @@
 /**
  * Discord platform permit — Guild 权限位
  */
-import { registerPlatformPermitChecker, type Message } from '@zhin.js/core';
+import type { PermissionSubject } from '@zhin.js/permission';
 
 const ADAPTER = 'discord';
 
@@ -36,13 +36,9 @@ export function normalizeDiscordSenderForPermit(input: {
   return { role: 'member', permissions };
 }
 
-function senderPermits(message: Message<any>): { role?: string; permissions: string[] } {
-  const sender = message.$sender as { role?: string; permissions?: string[] };
-  return { role: sender.role, permissions: sender.permissions ?? [] };
-}
-
-export function checkDiscordPlatformPermit(perm: string, message: Message<any>): boolean {
-  const { role, permissions } = senderPermits(message);
+export function checkDiscordPlatformPermit(perm: string, subject: PermissionSubject): boolean {
+  const role = subject.sender?.role?.[0];
+  const permissions = subject.sender?.permissions ?? [];
   const has = (t: string) => permissions.includes(t);
 
   switch (perm) {
@@ -59,6 +55,3 @@ export function checkDiscordPlatformPermit(perm: string, message: Message<any>):
   }
 }
 
-export function registerDiscordPlatformPermitChecker(): () => void {
-  return registerPlatformPermitChecker(ADAPTER, checkDiscordPlatformPermit);
-}

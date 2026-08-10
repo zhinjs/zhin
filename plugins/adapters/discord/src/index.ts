@@ -30,7 +30,6 @@ export {
   discordGroupPermitResolver,
   normalizeDiscordSenderForPermit,
   platformPermit,
-  registerDiscordPlatformPermitChecker,
 } from './platform-permit.js';
 
 export {

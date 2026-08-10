@@ -48,7 +48,6 @@ export {
   checkSlackPlatformPermit,
   normalizeSlackSenderForPermit,
   platformPermit,
-  registerSlackPlatformPermitChecker,
   slackGroupPermitResolver,
 } from './platform-permit.js';
 

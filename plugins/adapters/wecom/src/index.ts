@@ -34,7 +34,6 @@ export {
   checkWecomPlatformPermit,
   normalizeWecomSenderForPermit,
   platformPermit,
-  registerWecomPlatformPermitChecker,
   wecomGroupPermitResolver,
 } from './platform-permit.js';
 

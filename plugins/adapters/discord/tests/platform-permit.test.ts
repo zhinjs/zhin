@@ -1,22 +1,35 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { canAccessTool, clearPlatformPermitCheckers } from 'zhin.js';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { canAccessTool } from '@zhin.js/core';
+import { createPermissionHost, type PermissionHost } from '@zhin.js/permission';
 import {
   checkDiscordPlatformPermit,
   normalizeDiscordSenderForPermit,
   platformPermit,
-  registerDiscordPlatformPermitChecker,
 } from '../src/platform-permit.js';
 
+function mockSubject(sender: { role?: string; permissions?: string[] }) {
+  return {
+    adapter: 'discord',
+    sender: { id: 'u1', role: sender.role ? [sender.role] : [], permissions: sender.permissions },
+    scene: { type: 'group', id: 'g1' },
+  };
+}
+
 function mockMsg(sender: { role?: string; permissions?: string[] }) {
-  return { $adapter: 'discord', $sender: sender, $channel: { type: 'group', id: 'g1' } } as any;
+  return {
+    $adapter: 'discord',
+    $sender: { id: 'u1', ...sender },
+    $channel: { type: 'group', id: 'g1' },
+  } as any;
 }
 
 describe('discord platform-permit', () => {
+  let host: PermissionHost;
+
   beforeEach(() => {
-    clearPlatformPermitCheckers();
-    registerDiscordPlatformPermitChecker();
+    host = createPermissionHost();
+    host.registerPlatform('discord', (perm, subject) => checkDiscordPlatformPermit(perm, subject));
   });
-  afterEach(() => clearPlatformPermitCheckers());
 
   it('normalizeDiscordSenderForPermit', () => {
     const owner = normalizeDiscordSenderForPermit({ isOwner: true });
@@ -25,28 +38,26 @@ describe('discord platform-permit', () => {
   });
 
   it('checkDiscordPlatformPermit manage_roles/moderate', () => {
-    expect(checkDiscordPlatformPermit('manage_roles', mockMsg({ role: 'member', permissions: ['MANAGE_ROLES'] }))).toBe(true);
-    expect(checkDiscordPlatformPermit('moderate_members', mockMsg({ role: 'member', permissions: [] }))).toBe(false);
-    expect(checkDiscordPlatformPermit('guild_owner', mockMsg({ role: 'owner', permissions: ['guild_owner'] }))).toBe(true);
+    expect(checkDiscordPlatformPermit('manage_roles', mockSubject({ role: 'member', permissions: ['MANAGE_ROLES'] }))).toBe(true);
+    expect(checkDiscordPlatformPermit('moderate_members', mockSubject({ role: 'member', permissions: [] }))).toBe(false);
+    expect(checkDiscordPlatformPermit('guild_owner', mockSubject({ role: 'owner', permissions: ['guild_owner'] }))).toBe(true);
   });
 
   it('moderate_members includes admin role (aligned with normalize)', () => {
-    // normalizeDiscordSenderForPermit 会把 MODERATE_MEMBERS/MANAGE_GUILD 归一为 role: 'admin'，
-    // 即便 permissions 未透传，admin 也应通过 moderate_members
-    expect(checkDiscordPlatformPermit('moderate_members', mockMsg({ role: 'admin', permissions: [] }))).toBe(true);
-    expect(checkDiscordPlatformPermit('moderate_members', mockMsg({ role: 'owner', permissions: [] }))).toBe(true);
-    expect(checkDiscordPlatformPermit('moderate_members', mockMsg({ role: 'member', permissions: [] }))).toBe(false);
+    expect(checkDiscordPlatformPermit('moderate_members', mockSubject({ role: 'admin', permissions: [] }))).toBe(true);
+    expect(checkDiscordPlatformPermit('moderate_members', mockSubject({ role: 'owner', permissions: [] }))).toBe(true);
+    expect(checkDiscordPlatformPermit('moderate_members', mockSubject({ role: 'member', permissions: [] }))).toBe(false);
   });
 
-  it('canAccessTool', () => {
+  it('canAccessTool', async () => {
     const tool = {
       name: 't',
       description: 'd',
-      parameters: { type: 'object', properties: {} },
+      parameters: { type: 'object' as const, properties: {} },
       permissions: [platformPermit('manage_channels')],
       execute: async () => '',
     };
-    expect(canAccessTool(tool, mockMsg({ role: 'member', permissions: [] }))).toBe(false);
-    expect(canAccessTool(tool, mockMsg({ role: 'member', permissions: ['MANAGE_CHANNELS'] }))).toBe(true);
+    expect(await canAccessTool(tool, mockMsg({ role: 'member', permissions: [] }), host)).toBe(false);
+    expect(await canAccessTool(tool, mockMsg({ role: 'member', permissions: ['MANAGE_CHANNELS'] }), host)).toBe(true);
   });
 });

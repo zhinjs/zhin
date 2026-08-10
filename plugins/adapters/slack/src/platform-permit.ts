@@ -1,7 +1,7 @@
 /**
  * Slack platform permit — workspace + channel 权限
  */
-import { registerPlatformPermitChecker, type Message } from '@zhin.js/core';
+import type { PermissionSubject } from '@zhin.js/permission';
 
 const ADAPTER = 'slack';
 
@@ -39,10 +39,9 @@ export function normalizeSlackSenderForPermit(input: {
   return { role: 'member', permissions };
 }
 
-export function checkSlackPlatformPermit(perm: string, message: Message<any>): boolean {
-  const sender = message.$sender as { role?: string; permissions?: string[] };
-  const permissions = sender.permissions ?? [];
-  const role = sender.role;
+export function checkSlackPlatformPermit(perm: string, subject: PermissionSubject): boolean {
+  const role = subject.sender?.role?.[0];
+  const permissions = subject.sender?.permissions ?? [];
   const has = (t: string) => permissions.includes(t);
 
   switch (perm) {
@@ -58,6 +57,3 @@ export function checkSlackPlatformPermit(perm: string, message: Message<any>): b
   }
 }
 
-export function registerSlackPlatformPermitChecker(): () => void {
-  return registerPlatformPermitChecker(ADAPTER, checkSlackPlatformPermit);
-}

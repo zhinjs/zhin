@@ -1,6 +1,7 @@
 import { createEndpointRuntimeState } from '@zhin.js/adapter';
 import { definePlugin } from '@zhin.js/plugin-runtime';
-import { registerLarkPlatformPermitChecker } from './src/platform-permit.js';
+import { permissionHostToken } from '@zhin.js/permission';
+import { checkLarkPlatformPermit } from './src/platform-permit.js';
 import { larkRuntimeStateToken } from './src/lark-runtime-state.js';
 
 export default definePlugin({
@@ -9,8 +10,10 @@ export default definePlugin({
     displayName: 'Lark/Feishu (飞书) Adapter',
   },
   setup(context) {
-    // 运行中 endpoint 注册表（lark.endpoint list 的"运行中"数据源）
     context.resources.provide(larkRuntimeStateToken, createEndpointRuntimeState());
-    return registerLarkPlatformPermitChecker();
+    if (context.resources.has(permissionHostToken)) {
+      const host = context.resources.use(permissionHostToken);
+      return host.registerPlatform('lark', checkLarkPlatformPermit);
+    }
   },
 });

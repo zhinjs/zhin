@@ -68,5 +68,4 @@ export {
   normalizeQqGuildSenderForPermit,
   platformPermit,
   qqGuildPermitResolver,
-  registerQqPlatformPermitChecker,
 } from './platform-permit.js';

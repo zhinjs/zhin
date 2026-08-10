@@ -1,22 +1,35 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { canAccessTool, clearPlatformPermitCheckers } from 'zhin.js';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { canAccessTool } from '@zhin.js/core';
+import { createPermissionHost, type PermissionHost } from '@zhin.js/permission';
 import {
   checkLarkPlatformPermit,
   normalizeLarkSenderForPermit,
   platformPermit,
-  registerLarkPlatformPermitChecker,
 } from '../src/platform-permit.js';
 
+function mockSubject(sender: { role?: string; permissions?: string[] }) {
+  return {
+    adapter: 'lark',
+    sender: { id: 'u1', role: sender.role ? [sender.role] : [], permissions: sender.permissions },
+    scene: { type: 'group', id: 'oc1' },
+  };
+}
+
 function mockMsg(sender: { role?: string; permissions?: string[] }) {
-  return { $adapter: 'lark', $sender: sender, $channel: { type: 'group', id: 'oc1' } } as any;
+  return {
+    $adapter: 'lark',
+    $sender: { id: 'u1', ...sender },
+    $channel: { type: 'group', id: 'oc1' },
+  } as any;
 }
 
 describe('lark platform-permit', () => {
+  let host: PermissionHost;
+
   beforeEach(() => {
-    clearPlatformPermitCheckers();
-    registerLarkPlatformPermitChecker();
+    host = createPermissionHost();
+    host.registerPlatform('lark', (perm, subject) => checkLarkPlatformPermit(perm, subject));
   });
-  afterEach(() => clearPlatformPermitCheckers());
 
   it('normalizeLarkSenderForPermit', () => {
     expect(normalizeLarkSenderForPermit({ isOwner: true }).permissions).toContain('manage_managers');
@@ -24,19 +37,19 @@ describe('lark platform-permit', () => {
   });
 
   it('checkLarkPlatformPermit manage_managers', () => {
-    expect(checkLarkPlatformPermit('manage_managers', mockMsg({ role: 'owner', permissions: ['chat_owner'] }))).toBe(true);
-    expect(checkLarkPlatformPermit('manage_managers', mockMsg({ role: 'admin', permissions: ['chat_admin'] }))).toBe(false);
+    expect(checkLarkPlatformPermit('manage_managers', mockSubject({ role: 'owner', permissions: ['chat_owner'] }))).toBe(true);
+    expect(checkLarkPlatformPermit('manage_managers', mockSubject({ role: 'admin', permissions: ['chat_admin'] }))).toBe(false);
   });
 
-  it('canAccessTool', () => {
+  it('canAccessTool', async () => {
     const tool = {
       name: 't',
       description: 'd',
-      parameters: { type: 'object', properties: {} },
+      parameters: { type: 'object' as const, properties: {} },
       permissions: [platformPermit('chat_admin')],
       execute: async () => '',
     };
-    expect(canAccessTool(tool, mockMsg({ role: 'member', permissions: [] }))).toBe(false);
-    expect(canAccessTool(tool, mockMsg({ role: 'admin', permissions: ['chat_admin'] }))).toBe(true);
+    expect(await canAccessTool(tool, mockMsg({ role: 'member', permissions: [] }), host)).toBe(false);
+    expect(await canAccessTool(tool, mockMsg({ role: 'admin', permissions: ['chat_admin'] }), host)).toBe(true);
   });
 });

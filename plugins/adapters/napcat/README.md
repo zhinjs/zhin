@@ -8,7 +8,7 @@ Zhin.js [NapCatQQ](https://github.com/NapNeko/NapCatQQ) 适配器（Plugin Runti
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - **正向 WebSocket**（`connection: ws`）：应用连 NapCat WS
 - `access_token` 鉴权（Bearer + query）
-- 入站经 `messageGatewayToken`（去重 + 自发过滤）；出站 `send({ target, payload })`
+- 入站经 `messageGatewayToken`（去重 + 自发过滤）；出站 `send({ conversation, payload })`
 - 41 个 AI 工具（`agent/tools/`）
 
 ## 安装

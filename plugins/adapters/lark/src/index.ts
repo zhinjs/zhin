@@ -33,7 +33,6 @@ export {
   larkGroupPermitResolver,
   normalizeLarkSenderForPermit,
   platformPermit,
-  registerLarkPlatformPermitChecker,
 } from './platform-permit.js';
 
 export {

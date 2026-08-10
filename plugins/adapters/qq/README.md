@@ -6,7 +6,7 @@ Zhin.js QQ 官方机器人适配器（Plugin Runtime），默认通过 **WebSock
 
 - WebSocket Gateway 入站（默认；无需公网 HTTPS / host）
 - 解析私聊 / 群 / 频道消息
-- 出站 `send({ target, payload })` → QQ API（`private:` / `group:` / `channel:` / `direct:`）
+- 出站 `send({ conversation, payload })` → QQ API（`conversation.kind`/`id`/`parent` 结构化寻址）
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - Webhook / middleware 模式已实现（经 `httpHostToken` 注册 POST 路由）
 - AI `@` 触发标注：群消息（GROUP_AT_MESSAGE_CREATE 仅 @ 时下发）与频道 `mentions[].bot` 会在入站 metadata 标 `mentioned: true`（新 Plugin Runtime 纯文本 content 经 metadata 传递 @）
@@ -25,8 +25,8 @@ pnpm add @zhin.js/adapter-qq
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 - **无需** `@zhin.js/host-http` / `@zhin.js/host-router`（WebSocket 路径）
 
-入站：`gateway.receive({ adapter, target: 'group:…'|…, content, sender, metadata })`  
-出站：`send({ target, payload })` → `sendPrivateMessage` / `sendGroupMessage` / `sendGuildMessage`
+入站：`gateway.receive({ conversation, message, content, sender, metadata })`（ConversationRef 结构化寻址）  
+出站：`send({ conversation, payload })` → `sendPrivateMessage` / `sendGroupMessage` / `sendGuildMessage`
 
 ## 前置条件
 

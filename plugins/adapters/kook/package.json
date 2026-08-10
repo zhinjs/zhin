@@ -47,6 +47,7 @@
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
+    "@zhin.js/permission": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "kook-client": "^1.0.4"
   },

@@ -62,12 +62,13 @@ export function createActivityFeedbackAIEventHandlers(
 
     onSubagentStart: async (payload) => {
       if (!isActivityFeedbackEnabled(payload, 'thinking')) return;
-      await orchestrator.stopPhase(payload, 'active', 'subagent.start');
+      // Do not stop the parent turn's active indicator — subagent uses an isolated session key.
       await orchestrator.startPhase(payload, 'thinking', 'subagent.start');
-      const label = payload.label
-        ? `🔍 子任务执行中: ${payload.label}...`
-        : '🔍 子 agent 处理中...';
-      await orchestrator.updateThinkingText(payload, label);
+      const tag = payload.agentId?.trim() || 'subagent';
+      const label = payload.label?.trim()
+        ? `子任务执行中: ${payload.label.trim()}...`
+        : '思考中...';
+      await orchestrator.updateThinkingText(payload, `[${tag}] ${label}`);
     },
 
     onSubagentFinish: async (payload) => {
