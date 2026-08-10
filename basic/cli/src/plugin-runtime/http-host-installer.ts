@@ -11,6 +11,7 @@ const logger = new Logger(null, 'http');
 
 export async function resolveHttpConfig(
   config: RuntimeConfigDocument | ConfigDocumentPort,
+  envOverlay?: Readonly<Record<string, string | undefined>>,
 ): Promise<HttpHostOptions> {
   const document = await readConfigDocument(config);
   if (!document || typeof document !== 'object') return {};
@@ -18,7 +19,7 @@ export async function resolveHttpConfig(
   if (!http || typeof http !== 'object') return {};
   const value = expandEnvironmentValue(
     http,
-    (key) => process.env[key],
+    (key) => envOverlay?.[key] ?? process.env[key],
   ) as Record<string, unknown>;
   return Object.freeze({
     host: typeof value.host === 'string' ? value.host : undefined,

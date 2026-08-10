@@ -36,7 +36,7 @@ import {
   installProcessLifecycle,
   nodeProcessLifecycleAdapter,
 } from './process-lifecycle.js';
-import { DISABLE_EXPERIMENTAL_WARNING_FLAG, suppressNodeExperimentalWarnings } from '../utils/node-warnings.js';
+const DISABLE_EXPERIMENTAL_WARNING_FLAG = '--disable-warning=ExperimentalWarning';
 
 export const processRestartExitCode = 75;
 const REMOTE_CONSOLE_URL = 'https://console.zhin.dev';
@@ -88,7 +88,6 @@ function readableCapabilityId(value: string): string {
 }
 
 export async function runStartCommand(options: StartCommandOptions): Promise<void> {
-  suppressNodeExperimentalWarnings();
   // Parse before any relaunch so invalid options fail fast instead of looping.
   const parsed = parseStartOptions(options.args);
   if (await relaunchWithNativeTypeScript(parsed, options.root)) return;
@@ -96,7 +95,8 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   const environmentVariables = await loadRuntimeEnvironmentLayers(options.root, parsed.environment);
   const { config, file: configFile } = await loadProjectConfig(options.root);
   await applyRuntimeLogLevel(config);
-  const httpConfig = await resolveHttpConfig(config);
+  const envOverlay = environmentVariables.environments?.[parsed.environment];
+  const httpConfig = await resolveHttpConfig(config, envOverlay);
   const databaseConfig = await resolveDatabaseConfig(options.root, config);
   // Agent is an optional install tier. Do not resolve its module from the
   // IM-only startup graph unless the project actually configures Agent state.
@@ -693,7 +693,8 @@ async function loadProjectConfig(
   root: string,
 ): Promise<{ config: RuntimeConfigDocument | ConfigDocumentPort; file: string | undefined }> {
   const candidates = [
-    'config.yml', 'config.yaml', 'config.json', 'zhin.config.yml', 'zhin.config.yaml',
+    'config.yml', 'config.yaml', 'config.json',
+    'zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json',
   ];
   const existing: string[] = [];
   for (const candidate of candidates) {

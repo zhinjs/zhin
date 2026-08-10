@@ -21,7 +21,7 @@ import {
   type RootResourceInstaller,
   type RuntimeConfigDocument,
 } from '@zhin.js/runtime';
-import { databaseRootHostToken, agentToolsHostToken, type AgentToolRegistration, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { databaseRootHostToken, agentToolsHostToken, type AgentToolRegistration, type DisposeStack, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   AIService,
   McpClientManager,
@@ -43,7 +43,7 @@ import {
   defineAiDatabaseModels,
   createScheduleJobStoreFromConfig,
   createScheduleTools,
-  registerScheduleManager,
+  provideScheduleManager,
   ScheduleJobEngine,
   JobWorker,
   createTaskExecutor,
@@ -51,7 +51,7 @@ import {
   resolveAssistantConfig,
   resolveAssistantDefaultsConfig,
   parseJobNotify,
-  registerAssistantRuntime,
+  provideAssistantRuntime,
   AssistantEventIngress,
   loadAssistantProfileFile,
   validateAssistantProfile,
@@ -59,12 +59,12 @@ import {
   syncProfileRoutinesToStore,
   pruneStaleProfileCronJobs,
   OrchestrationService,
-  registerOrchestrationService,
+  provideOrchestrationService,
   MemoryOrchestrationRepository,
   registerDefaultExecutors,
-  setOrchestrationRuntime,
+  provideOrchestrationRuntime,
   createOrchestrationRuntimeFromService,
-  setSessionTreeRuntime,
+  provideSessionTreeRuntime,
   createSessionTreeRuntimeFromAgent,
   asPrivate,
   getAgentRuntimeRegistry,
@@ -255,14 +255,14 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       seedPresets = created.seedPresets;
 
       orchService = new OrchestrationService(new MemoryOrchestrationRepository());
-      lifecycle.add(registerOrchestrationService(orchService));
+      provideOrchestrationService({ lifecycle }, orchService);
       registerDefaultExecutors(orchService, {
         refs: { zhinAgent, aiService: service },
       });
       // Console REST（/api/agent/orchestration/*、session tree）读这两个 registry；
       // 与 legacy create-zhin-agent 对齐，此前 Runtime 路径漏接 → 两个页面 503
-      setOrchestrationRuntime(createOrchestrationRuntimeFromService(orchService));
-      setSessionTreeRuntime(createSessionTreeRuntimeFromAgent(asPrivate(zhinAgent)));
+      provideOrchestrationRuntime({ lifecycle }, createOrchestrationRuntimeFromService(orchService));
+      provideSessionTreeRuntime({ lifecycle }, createSessionTreeRuntimeFromAgent(asPrivate(zhinAgent)));
       const disposeDefaultAgent = getAgentRuntimeRegistry().registerDefault(zhinAgent);
       lifecycle.add(disposeDefaultAgent);
 
@@ -271,6 +271,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         options.im,
         options.projectRoot,
         assistantConfig,
+        lifecycle,
       );
       scheduleTools = schedule.tools;
       assistantEnabled = schedule.assistantEnabled;
@@ -482,7 +483,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           message.metadata,
           options.transcribeUrl,
         );
-        const capabilities = readCapabilities(ingress, snapshot, requester, commMessage);
+        const capabilities = await readCapabilities(ingress, snapshot, requester, commMessage);
         const routed = routeSpecialistAgent(inbound.text, capabilities);
         const binding = service.getBindingRegistry().requireZhinBinding();
         const collab = await applyRuntimeCollaborationInbound({
@@ -614,7 +615,8 @@ function wireRuntimeSchedule(
   agent: ZhinAgent,
   im: ImRuntime,
   projectRoot: string,
-  assistantRaw?: AssistantConfig,
+  assistantRaw: AssistantConfig | undefined,
+  lifecycle: DisposeStack,
 ): { tools: Tool[]; dispose: () => void; assistantEnabled: boolean } {
   const dataDir = join(projectRoot, 'data');
   mkdirSync(dataDir, { recursive: true });
@@ -633,10 +635,10 @@ function wireRuntimeSchedule(
   const proactiveOutbound = createRuntimeProactiveOutbound(im);
   const notificationRouter = createNotificationRouter({
     resolveAdapter: () => undefined,
-    sendIm: async (notify, content) => {
+    sendIm: async (notify, content, source) => {
       await proactiveOutbound.send({
         scene: notify.target.scene,
-        source: 'scheduled',
+        source: (source ?? 'scheduled') as import('@zhin.js/agent').ProactiveSendSource,
       }, content);
     },
   });
@@ -645,13 +647,6 @@ function wireRuntimeSchedule(
     resolveAdapter: () => undefined,
     router: notificationRouter,
     defaultNotify,
-    proactiveOutbound,
-    deliverIm: async (notify, content) => {
-      await proactiveOutbound.send({
-        scene: notify.target.scene,
-        source: 'scheduled',
-      }, content);
-    },
   });
 
   const store = createScheduleJobStoreFromConfig(dataDir, {
@@ -670,7 +665,7 @@ function wireRuntimeSchedule(
     defaultNotify,
   });
 
-  const disposeScheduleManager = registerScheduleManager({
+  provideScheduleManager({ lifecycle }, {
     scheduleFeature: {
       getStatus: () => [],
     },
@@ -681,7 +676,6 @@ function wireRuntimeSchedule(
       timeContext: false,
     }),
   });
-  let disposeAssistantRuntime: () => void;
 
   if (assistantCfg.enabled) {
     const ingress = new AssistantEventIngress({
@@ -689,7 +683,7 @@ function wireRuntimeSchedule(
       engine: jobEngine,
       eventsConfig: assistantCfg.events,
     });
-    disposeAssistantRuntime = registerAssistantRuntime({
+    provideAssistantRuntime({ lifecycle }, {
       config: assistantCfg,
       store,
       engine: jobEngine,
@@ -720,7 +714,7 @@ function wireRuntimeSchedule(
       profile: assistantCfg.profile?.enabled === true,
     }));
   } else {
-    disposeAssistantRuntime = registerAssistantRuntime(null);
+    provideAssistantRuntime({ lifecycle }, null);
     jobEngine.load();
   }
 
@@ -740,9 +734,8 @@ function wireRuntimeSchedule(
   return {
     tools,
     assistantEnabled: assistantCfg.enabled,
+    // assistant / schedule-manager 注册随 generation lifecycle 反注册（provide 时挂接）
     dispose: () => {
-      disposeAssistantRuntime();
-      disposeScheduleManager();
       jobEngine.unload();
       jobWorker.stop();
     },
@@ -1243,14 +1236,14 @@ async function loadBootstrap(projectRoot: string): Promise<string> {
   return parts.join('\n\n');
 }
 
-function readCapabilities(
+async function readCapabilities(
   ingress: CapabilityIngress,
   snapshot: RuntimeSnapshot,
   requester: PluginId,
   message: ReturnType<typeof createSyntheticMessage>,
-): AgentCapabilities {
+): Promise<AgentCapabilities> {
   try {
-    return ingress.read(snapshot, requester, () => true, message);
+    return await ingress.read(snapshot, requester, () => true, message);
   } catch {
     return Object.freeze({
       generation: snapshot.generation,

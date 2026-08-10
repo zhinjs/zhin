@@ -5,7 +5,10 @@ import fs from 'fs-extra';
 import path from 'path';
 import yaml from 'yaml';
 
-const CONFIG_CANDIDATES = ['zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json'];
+const CONFIG_CANDIDATES = [
+  'config.yml', 'config.yaml', 'config.json',
+  'zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json',
+];
 
 export interface HostHttpConfig {
   baseUrl: string;

@@ -9,7 +9,10 @@ import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 
 async function findConfigFile(cwd: string): Promise<string | null> {
-  const candidates = ['zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json'];
+  const candidates = [
+    'config.yml', 'config.yaml', 'config.json',
+    'zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json',
+  ];
   return candidates.find(f => fs.existsSync(path.join(cwd, f))) || null;
 }
 
