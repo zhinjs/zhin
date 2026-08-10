@@ -2,8 +2,11 @@ import {
   formatLegacyConversationRef,
   formatLegacyMessageRef,
   type ConversationTarget,
+  type LegacyEndpointControlSurface,
   type MessageTarget,
 } from '@zhin.js/im-contract';
+
+export type { LegacyEndpointControlSurface } from '@zhin.js/im-contract';
 
 /**
  * Transport-neutral control plane for a live endpoint.
@@ -28,31 +31,13 @@ export interface EndpointWithControl {
   readonly control?: EndpointControl;
 }
 
-interface LegacyEndpointControlSurface {
-  recallMessage?(messageId: string): Promise<void>;
-  $recallMessage?(messageId: string): Promise<void>;
-  editMessage?(messageId: string, content: unknown): Promise<string | null>;
-  $editMessage?(messageId: string, content: unknown): Promise<string | null>;
-  addReaction?(
-    messageId: string,
-    emoji: string,
-    hint?: { readonly sceneType?: string; readonly channelId?: string },
-  ): Promise<string | null>;
-  $addReaction?(
-    messageId: string,
-    emoji: string,
-    hint?: { readonly sceneType?: string; readonly channelId?: string },
-  ): Promise<string | null>;
-  removeReaction?(messageId: string, reactionId: string): Promise<void>;
-  $removeReaction?(messageId: string, reactionId: string): Promise<void>;
-  typing?(target: string, active?: boolean): Promise<void>;
-  $typing?(target: string, active?: boolean): Promise<void>;
-}
-
 /**
  * Resolves the public control port. The legacy branch is deliberately kept in
- * Adapter only: it is a migration bridge for existing protocol endpoints, not
- * an IM Core extension point. New adapters must expose `control` directly.
+ * Adapter only: it is a migration bridge for existing classic protocol
+ * endpoints (`LegacyEndpointControlSurface` lives in `@zhin.js/im-contract`),
+ * not an IM Core extension point. New adapters must expose `control` directly.
+ * 下线条件：classic Plugin 轨下线后，legacy 分支与 LegacyEndpointControlSurface
+ * 一并删除。
  */
 export function resolveEndpointControl(endpoint: unknown): EndpointControl | undefined {
   if (!endpoint || typeof endpoint !== 'object') return undefined;

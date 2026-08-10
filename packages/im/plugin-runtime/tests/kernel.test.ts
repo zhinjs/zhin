@@ -32,13 +32,19 @@ describe('Plugin Runtime kernel', () => {
     expect(capabilityId(root, featureId('test.command'), 'gh/pr/$title')).toContain(
       'gh/pr/$title',
     );
+    expect(capabilityId(root, featureId('test.command'), '赞我')).toContain('赞我');
+    expect(capabilityId(root, featureId('test.command'), '工具/赞我')).toContain('工具/赞我');
     expect(() => capabilityId(root, featureId('test.command'), 'gh//list')).toThrow(
       'Invalid capability local name',
     );
     expect(() => capabilityId(root, featureId('test.command'), 'gh/pr/$Title')).toThrow(
       'Invalid capability local name',
     );
+    expect(() => capabilityId(root, featureId('test.command'), 'Hello')).toThrow(
+      'Invalid capability local name',
+    );
     expect(() => childPluginId(root, 'gh/issue')).toThrow('Invalid plugin instance key');
+    expect(() => childPluginId(root, '赞我')).toThrow('Invalid plugin instance key');
   });
 
   it('disposes a shared lifetime only after its final generation lease', async () => {
