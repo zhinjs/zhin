@@ -1,4 +1,5 @@
-import { ConfigFeature, CommandFeature, ComponentFeature, ScheduleFeature, PermissionFeature, SchemaFeature, MessageFilterFeature, createMessageDispatcher, ProcessAdapter, LoginAssist, shouldBindProcessStdin, registerEndpointManagementCommands, type Plugin, type Message } from '@zhin.js/core';
+import { ConfigFeature, CommandFeature, ComponentFeature, ScheduleFeature, SchemaFeature, MessageFilterFeature, createMessageDispatcher, ProcessAdapter, LoginAssist, shouldBindProcessStdin, registerEndpointManagementCommands, type Plugin, type Message } from '@zhin.js/core';
+import { createPermissionHost } from '@zhin.js/permission';
 
 import type { AppConfig } from '../types.js';
 import { DEFAULT_CORE_SERVICES } from './load-config.js';
@@ -48,14 +49,14 @@ export function registerCoreServices(
     });
   }
   if (enabledServices.has('component')) provide(new ComponentFeature());
-  if (enabledServices.has('permission')) provide(new PermissionFeature());
   if (enabledServices.has('schedule')) provide(new ScheduleFeature());
 
   // 消息过滤引擎
   const filterFeature = new MessageFilterFeature(appConfig.message_filter);
   provide(filterFeature);
 
-  provide(createMessageDispatcher({ dualRoute: appConfig.dispatcher }));
+  const permissionHost = createPermissionHost();
+  provide(createMessageDispatcher({ dualRoute: appConfig.dispatcher, permissionHost }));
 
   // 将过滤引擎接入 Dispatcher Guardrail（第一阶段拦截）
   plugin.useContext('dispatcher', (dispatcher) => {
