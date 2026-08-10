@@ -1,63 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { MessageCommand } from '../src/command'
 import { Message } from '../src/message'
-import { Plugin } from '../src/plugin'
-import { App } from '../src/app'
+import { createPermissionHost, type PermissionHost } from '@zhin.js/permission'
 
-// Mock App with permissions
-const mockPermissionService = {
-  check: vi.fn(async (perm: string, message: any) => {
-    if (perm === 'adapter(discord)') {
-      return message.$adapter === 'discord'
-    }
-    if (perm === 'adapter(telegram)') {
-      return message.$adapter === 'telegram'
-    }
-    if (perm === 'adapter(email)') {
-      return message.$adapter === 'email'
-    }
-    if (perm === 'adapter(test)') {
-      return message.$adapter === 'test'
-    }
-    return true
-  })
-}
-
-const mockApp = {
-  contextIsReady: vi.fn((name: string) => name === 'permission'),
-  inject: vi.fn((name: string) => {
-    if (name === 'permission') return mockPermissionService
-    return null
-  })
-} as any
-
-// 为多个权限测试创建特殊的 mock app
-const multiPermitPermissionService = {
-  check: vi.fn(async (perm: string, message: any) => {
-    // 对于多个权限，只要有一个匹配就返回 true
-    if (perm === 'adapter(discord)' && message.$adapter === 'discord') {
-      return true
-    }
-    if (perm === 'adapter(telegram)' && message.$adapter === 'telegram') {
-      return true
-    }
-    if (perm === 'adapter(email)' && message.$adapter === 'email') {
-      return true
-    }
-    if (perm === 'adapter(test)' && message.$adapter === 'test') {
-      return true
-    }
-    return false
-  })
-}
-
-const multiPermitMockApp = {
-  contextIsReady: vi.fn((name: string) => name === 'permission'),
-  inject: vi.fn((name: string) => {
-    if (name === 'permission') return multiPermitPermissionService
-    return null
-  })
-} as any
+const host: PermissionHost = createPermissionHost();
 
 describe('Command系统测试', () => {
   describe('MessageCommand基础功能测试', () => {
@@ -110,8 +56,8 @@ describe('Command系统测试', () => {
         $raw: 'hello world'
       }
 
-      const discordResult = await command.handle(discordMessage, mockApp)
-      const telegramResult = await command.handle(telegramMessage, mockApp)
+      const discordResult = await command.handle(discordMessage, host)
+      const telegramResult = await command.handle(telegramMessage, host)
 
       expect(discordResult).toBe('Hello from Discord!')
       expect(telegramResult).toBeUndefined()
@@ -158,9 +104,9 @@ describe('Command系统测试', () => {
         $raw: 'hello'
       }
 
-      const discordResult = await command.handle(discordMessage, mockApp)
-      const telegramResult = await command.handle(telegramMessage, mockApp)
-      const emailResult = await command.handle(emailMessage, mockApp)
+      const discordResult = await command.handle(discordMessage, host)
+      const telegramResult = await command.handle(telegramMessage, host)
+      const emailResult = await command.handle(emailMessage, host)
 
       expect(discordResult).toBe('Hello!')
       expect(telegramResult).toBeUndefined()
@@ -192,8 +138,8 @@ describe('Command系统测试', () => {
       }
 
       expect(command.requiredPermits).toEqual(['adapter(discord)'])
-      expect(await command.checkPermits(discordMessage, mockApp)).toBe(true)
-      expect(await command.checkPermits(telegramMessage, mockApp)).toBe(false)
+      expect(await command.checkPermits(discordMessage, host)).toBe(true)
+      expect(await command.checkPermits(telegramMessage, host)).toBe(false)
     })
   })
 
@@ -216,7 +162,7 @@ describe('Command系统测试', () => {
         $raw: 'test message'
       }
 
-      const result = await command.handle(message, mockApp)
+      const result = await command.handle(message, host)
 
       expect(actionSpy).toHaveBeenCalledWith(message, expect.any(Object))
       expect(result).toBe('Action executed!')
@@ -244,7 +190,7 @@ describe('Command系统测试', () => {
         $raw: 'test'
       }
 
-      const result = await command.handle(message, mockApp)
+      const result = await command.handle(message, host)
 
       expect(action1).toHaveBeenCalled()
       expect(action2).toHaveBeenCalled()
@@ -270,7 +216,7 @@ describe('Command系统测试', () => {
         $raw: 'async test'
       }
 
-      const result = await command.handle(message, mockApp)
+      const result = await command.handle(message, host)
 
       expect(asyncAction).toHaveBeenCalled()
       expect(result).toBe('Async result')
@@ -294,7 +240,7 @@ describe('Command系统测试', () => {
         $raw: 'echo hello world'
       }
 
-      const result = await command.handle(message, mockApp)
+      const result = await command.handle(message, host)
 
       expect(actionSpy).toHaveBeenCalledWith(
         message,
@@ -324,7 +270,7 @@ describe('Command系统测试', () => {
         $raw: 'goodbye'
       }
 
-      const result = await command.handle(message, mockApp)
+      const result = await command.handle(message, host)
       expect(result).toBeUndefined()
     })
 
@@ -344,7 +290,7 @@ describe('Command系统测试', () => {
         $raw: ''
       }
 
-      const result = await command.handle(message, mockApp)
+      const result = await command.handle(message, host)
       expect(result).toBeUndefined()
     })
 
@@ -366,7 +312,7 @@ describe('Command系统测试', () => {
         $raw: '[图片]'
       }
 
-      const result = await command.handle(message, mockApp)
+      const result = await command.handle(message, host)
       expect(result).toBeUndefined()
     })
   })
@@ -416,9 +362,9 @@ describe('Command系统测试', () => {
         $raw: 'hello world'
       }
 
-      const validResult = await command.handle(validMessage, mockApp)
-      const wrongAdapterResult = await command.handle(wrongAdapterMessage, mockApp)
-      const nonMatchingResult = await command.handle(nonMatchingMessage, mockApp)
+      const validResult = await command.handle(validMessage, host)
+      const wrongAdapterResult = await command.handle(wrongAdapterMessage, host)
+      const nonMatchingResult = await command.handle(nonMatchingMessage, host)
 
       expect(validResult).toBe('Admin command executed')
       expect(wrongAdapterResult).toBeUndefined()
@@ -447,7 +393,7 @@ describe('Command系统测试', () => {
         $raw: 'error test'
       }
 
-      await expect(command.handle(message, mockApp)).rejects.toThrow('Action failed')
+      await expect(command.handle(message, host)).rejects.toThrow('Action failed')
     })
 
     it('应该正确处理动作中的异步错误', async () => {
@@ -468,7 +414,7 @@ describe('Command系统测试', () => {
         $raw: 'async-error test'
       }
 
-      await expect(command.handle(message, mockApp)).rejects.toThrow('Async action failed')
+      await expect(command.handle(message, host)).rejects.toThrow('Async action failed')
     })
   })
 
@@ -508,7 +454,7 @@ describe('Command系统测试', () => {
 
       const startTime = Date.now()
       const results = await Promise.all(
-        messages.map(message => command.handle(message, mockApp))
+        messages.map(message => command.handle(message, host))
       )
       const endTime = Date.now()
 
@@ -543,7 +489,7 @@ describe('Command系统测试', () => {
         $raw: 'say hello world from bot'
       }
 
-      const result = await command.handle(message, mockApp)
+      const result = await command.handle(message, host)
 
       expect(actionSpy).toHaveBeenCalledWith(
         message,
@@ -591,8 +537,8 @@ describe('Command系统测试', () => {
         $raw: 'multi test'
       }
 
-      const privateResult = await command.handle(privateMessage, mockApp)
-      const groupResult = await command.handle(groupMessage, mockApp)
+      const privateResult = await command.handle(privateMessage, host)
+      const groupResult = await command.handle(groupMessage, host)
 
       expect(privateResult).toBe('私人消息响应')
       expect(groupResult).toBe('群组消息响应')
@@ -694,7 +640,7 @@ describe('Command系统测试', () => {
         $raw: 'admin test'
       }
 
-      const result = await command.handle(message, mockApp)
+      const result = await command.handle(message, host)
       expect(result).toBeUndefined()
     })
 
@@ -715,7 +661,7 @@ describe('Command系统测试', () => {
         $raw: 'admin test'
       }
 
-      const result = await command.handle(message, mockApp)
+      const result = await command.handle(message, host)
       expect(result).toBe('Admin command')
     })
   })

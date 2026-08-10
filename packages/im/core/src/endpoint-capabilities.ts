@@ -26,7 +26,6 @@ export interface OutboundEndpoint<Config extends object = object> {
   $config: Config;
   $connected: boolean;
   $sendMessage(options: SendOptions): Promise<string>;
-  $recallMessage(id: string): Promise<void>;
 }
 
 export type FullEndpoint<Config extends object = object, Event extends object = object> =

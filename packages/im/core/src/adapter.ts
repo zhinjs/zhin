@@ -5,6 +5,7 @@ import {
   hasInbound,
   type EndpointCapability,
 } from "./endpoint-capabilities.js";
+import { resolveEndpointControl } from "@zhin.js/adapter";
 import { connectEndpointInstance, disconnectEndpointInstance } from "./built/connect-endpoint-instance.js";
 import type { EndpointManager } from "./built/endpoint-manager.js";
 import { Plugin } from "./plugin.js";
@@ -100,13 +101,7 @@ export abstract class Adapter<
     public config: Adapter.EndpointConfig<R>[]
   ) {
     super();
-    this.recallMessageHandler = async(endpoint_id: string, id: string) => {
-      const endpoint = this.endpoints.get(endpoint_id);
-      if(!endpoint) throw new Error(`Endpoint ${endpoint_id} not found`);
-      assertOutbound(endpoint);
-      this.logger.debug(formatCompact({ op: 'recall_message', msgId: id, endpoint: endpoint_id }));
-      await endpoint.$recallMessage(id);
-    };
+    this.recallMessageHandler = (endpoint_id, id) => this.recallEndpointMessage(endpoint_id, id);
     this.on('call.recallMessage', this.recallMessageHandler);
     this.inboundPipeline = new InboundMessagePipeline({
       getPlugin: () => this.plugin,
@@ -300,8 +295,25 @@ export abstract class Adapter<
   }
 
   /**
+   * `call.recallMessage` 事件链（prompt.ts 超时撤回等）的统一出口：
+   * 经 canonical `EndpointControl` 端口撤回，classic 端点的 `$` 方法由
+   * `resolveEndpointControl` 迁移桥适配。
+   */
+  private async recallEndpointMessage(endpointId: string, messageId: string): Promise<void> {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} not found`);
+    assertOutbound(endpoint);
+    const control = resolveEndpointControl(endpoint);
+    if (!control?.recall) {
+      throw new Error(`Endpoint ${endpointId} does not support recall`);
+    }
+    this.logger.debug(formatCompact({ op: 'recall_message', msgId: messageId, endpoint: endpointId }));
+    await control.recall(messageId);
+  }
+
+  /**
    * 编辑已发送的消息。
-   * - 如果 Endpoint 实现了 $editMessage，调用平台编辑 API
+   * - 如果 Endpoint 的 control 端口实现了 edit，调用平台编辑 API
    * - 否则 fallback 到发送新消息
    * @returns 消息 ID（编辑时返回原 ID，fallback 时返回新消息 ID）
    */
@@ -310,9 +322,9 @@ export abstract class Adapter<
     if (!endpoint) throw new Error(`Endpoint ${options.endpoint} not found`);
     assertOutbound(endpoint);
 
-    const editable = endpoint as { $editMessage?: (opts: EditMessageOptions) => Promise<void> };
+    const control = resolveEndpointControl(endpoint);
 
-    if (editable.$editMessage) {
+    if (control?.edit) {
       const rendered = await this.renderSendMessage({
         context: options.context,
         endpoint: options.endpoint,
@@ -320,7 +332,7 @@ export abstract class Adapter<
         type: options.type,
         content: options.content,
       });
-      await editable.$editMessage({ ...options, content: rendered.content });
+      await control.edit(options.messageId, rendered.content);
       this.logger.debug(formatCompact({
         edit: `${options.type}(${options.id})`,
         endpoint: options.endpoint,
@@ -332,7 +344,7 @@ export abstract class Adapter<
     this.logger.debug(formatCompact({
       editFallback: 'sendMessage',
       endpoint: options.endpoint,
-      reason: '$editMessage not implemented',
+      reason: 'control.edit not implemented',
     }));
     return this.sendMessage({
       context: options.context,
@@ -394,13 +406,7 @@ export abstract class Adapter<
 
     // 移除所有事件监听器
     this.removeAllListeners();
-    this.recallMessageHandler = async(endpoint_id: string, id: string) => {
-      const endpoint = this.endpoints.get(endpoint_id);
-      if(!endpoint) throw new Error(`Endpoint ${endpoint_id} not found`);
-      assertOutbound(endpoint);
-      this.logger.debug(formatCompact({ op: 'recall_message', msgId: id, endpoint: endpoint_id }));
-      await endpoint.$recallMessage(id);
-    };
+    this.recallMessageHandler = (endpoint_id, id) => this.recallEndpointMessage(endpoint_id, id);
     this.on('call.recallMessage', this.recallMessageHandler);
 
     this.logger.debug(formatCompact( { stop: this.name }));

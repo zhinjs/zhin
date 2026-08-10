@@ -6,15 +6,17 @@ import { Feature, FeatureJSON } from "@zhin.js/kernel";
 import { Plugin } from "../plugin.js";
 import type { Tool, ToolJsonSchema, ToolParametersSchema, PropertySchema, MaybePromise, ToolScope } from "../types.js";
 import type { Message } from "../message.js";
-import { isBuiltinPermit, isPlatformPermit } from './permit-parse.js';
-import { checkBuiltinPermit } from './permit-check.js';
-import { checkPlatformPermit } from './platform-permit.js';
-import { senderRolesFromMessage } from './message-enrich.js';
+import { type PermissionHost, toPermissionSubject } from '@zhin.js/permission';
 
 /**
- * 检查工具是否可被当前 Message 通讯上下文访问
+ * 检查工具是否可被当前 Message 通讯上下文访问。
+ * `host` 为 PermissionHost 实例；无 host 且有 permissions → deny。
  */
-export function canAccessTool(tool: Tool, message?: Message<any>): boolean {
+export async function canAccessTool(
+  tool: Tool,
+  message?: Message<any>,
+  host?: PermissionHost | null,
+): Promise<boolean> {
   if (!message) return !tool.platforms?.length && !tool.scopes?.length && !tool.permissions?.length;
 
   const adapter = String(message.$adapter);
@@ -28,17 +30,9 @@ export function canAccessTool(tool: Tool, message?: Message<any>): boolean {
   }
   if (!tool.permissions?.length) return true;
 
-  const roles = senderRolesFromMessage(message);
-  for (const permit of tool.permissions) {
-    if (isBuiltinPermit(permit)) {
-      if (!checkBuiltinPermit(permit, message, roles)) return false;
-    } else if (isPlatformPermit(permit)) {
-      if (!checkPlatformPermit(permit, message)) return false;
-    } else {
-      return false;
-    }
-  }
-  return true;
+  if (!host) return false;
+  const subject = toPermissionSubject(message);
+  return host.checkAll(tool.permissions, subject);
 }
 
 // ============================================================================
@@ -421,8 +415,12 @@ export class ToolFeature extends Feature<Tool> {
   /**
    * 根据 Message 通讯上下文过滤工具
    */
-  filterByContext(tools: Tool[], message?: Message<any>): Tool[] {
-    return tools.filter(tool => canAccessTool(tool, message));
+  async filterByContext(tools: Tool[], message?: Message<any>, host?: PermissionHost | null): Promise<Tool[]> {
+    const results = await Promise.all(tools.map(async (tool) => ({
+      tool,
+      allowed: await canAccessTool(tool, message, host),
+    })));
+    return results.filter((r) => r.allowed).map((r) => r.tool);
   }
 
   /**

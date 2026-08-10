@@ -16,14 +16,20 @@ import {
   registerDefaultScenePlatformPermitChecker,
   clearPlatformPermitCheckers,
 } from '../src/built/platform-permit.js';
+import { createPermissionHost, createSceneRolePlatformChecker, type PermissionHost } from '@zhin.js/permission';
 import type { Tool } from '../src/types.js';
+
+let host: PermissionHost;
 
 beforeEach(() => {
   registerDefaultScenePlatformPermitChecker('qq');
+  host = createPermissionHost();
+  host.registerPlatform('qq', createSceneRolePlatformChecker());
 });
 
 afterEach(() => {
   clearPlatformPermitCheckers();
+  host = undefined!;
 });
 
 function mockCommMessage(overrides: Record<string, any> = {}) {
@@ -71,23 +77,23 @@ describe('canAccessTool', () => {
   };
 
 
-  it('无限制的工具应始终可访问', () => {
-    expect(canAccessTool(baseTool, mockCommMessage({ adapter: 'qq', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(true);
+  it('无限制的工具应始终可访问', async () => {
+    expect(await canAccessTool(baseTool, mockCommMessage({ adapter: 'qq', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(true);
   });
 
-  it('应检查平台限制', () => {
+  it('应检查平台限制', async () => {
     const tool = { ...baseTool, platforms: ['discord'] };
-    expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(false);
-    expect(canAccessTool(tool, mockCommMessage({ adapter: 'discord', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(true);
+    expect(await canAccessTool(tool, mockCommMessage({ adapter: 'qq', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(false);
+    expect(await canAccessTool(tool, mockCommMessage({ adapter: 'discord', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(true);
   });
 
-  it('应检查场景限制', () => {
+  it('应检查场景限制', async () => {
     const tool = { ...baseTool, scopes: ['group' as const] };
-    expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq', scope: 'private', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(false);
-    expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq', scope: 'group', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(true);
+    expect(await canAccessTool(tool, mockCommMessage({ adapter: 'qq', scope: 'private', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(false);
+    expect(await canAccessTool(tool, mockCommMessage({ adapter: 'qq', scope: 'group', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(true);
   });
 
-  it('应检查 platform(...) permit', () => {
+  it('应检查 platform(...) permit', async () => {
     const tool = { ...baseTool, permissions: ['platform(qq,scene_admin)'] };
     const msg = {
       $adapter: 'qq',
@@ -95,8 +101,8 @@ describe('canAccessTool', () => {
       $sender: { id: 'u1', role: 'admin' },
       $channel: { type: 'group', id: 'g1' },
     } as any;
-    expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(false);
-    expect(canAccessTool(tool, msg)).toBe(true);
+    expect(await canAccessTool(tool, mockCommMessage({ adapter: 'qq', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }), host)).toBe(false);
+    expect(await canAccessTool(tool, msg, host)).toBe(true);
   });
 });
 
@@ -172,22 +178,22 @@ describe('ToolFeature', () => {
   });
 
   describe('filterByContext', () => {
-    it('应过滤不符合权限的工具', () => {
+    it('应过滤不符合权限的工具', async () => {
       const tools: Tool[] = [
         { name: 'public', description: '公开', parameters: { type: 'object', properties: {} }, execute: async () => '' },
         { name: 'admin', description: '管理', parameters: { type: 'object', properties: {} }, execute: async () => '', permissions: ['role(trusted)'] },
       ];
-      const filtered = feature.filterByContext(tools, mockCommMessage({ adapter: 'qq', endpoint: 'b', senderId: 'u', sceneId: 's' }) as any);
+      const filtered = await feature.filterByContext(tools, mockCommMessage({ adapter: 'qq', endpoint: 'b', senderId: 'u', sceneId: 's' }) as any);
       expect(filtered).toHaveLength(1);
       expect(filtered[0].name).toBe('public');
     });
 
-    it('应过滤不符合平台的工具', () => {
+    it('应过滤不符合平台的工具', async () => {
       const tools: Tool[] = [
         { name: 'all', description: '', parameters: { type: 'object', properties: {} }, execute: async () => '' },
         { name: 'discord-only', description: '', parameters: { type: 'object', properties: {} }, execute: async () => '', platforms: ['discord'] },
       ];
-      const filtered = feature.filterByContext(tools, mockCommMessage({ adapter: 'qq', endpoint: 'b', senderId: 'u', sceneId: 's' }) as any);
+      const filtered = await feature.filterByContext(tools, mockCommMessage({ adapter: 'qq', endpoint: 'b', senderId: 'u', sceneId: 's' }) as any);
       expect(filtered).toHaveLength(1);
       expect(filtered[0].name).toBe('all');
     });

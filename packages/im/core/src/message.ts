@@ -60,7 +60,7 @@ export namespace Message{
      * 工具方法：合并自定义字段与基础消息结构
      */
     export function from<T extends object>(input:T,format:MessageBase):Message<T>{
-        return Object.assign(input,format)
+        return Object.assign({},input,format)
     }
 
     export function quoteIdFromContent(content: MessageElement[]): string | undefined {

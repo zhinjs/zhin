@@ -31,6 +31,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { Message } from '../message.js';
 import { isActionMessage } from './interactive-segments/action.js';
 import { Plugin, type Context } from '../plugin.js';
+import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
 import type {
   MessageMiddleware,
   RegisteredAdapter,
@@ -132,6 +133,7 @@ export interface ReplyWithPolishOptions {
 
 export interface CreateMessageDispatcherOptions {
   dualRoute?: Partial<DualRouteConfig>;
+  permissionHost?: PermissionHost | null;
 }
 
 // ============================================================================
@@ -417,7 +419,7 @@ export function createMessageDispatcher(
     if (!rootPlugin) return;
     const commandService = rootPlugin.inject('command');
     if (!commandService) return;
-    const response = await commandService.handle(message, rootPlugin);
+    const response = await commandService.handle(message, options?.permissionHost ?? null);
     if (response !== undefined && response !== null) {
       await replyWithPolishInternal(message, 'command', response);
     }

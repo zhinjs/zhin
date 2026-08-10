@@ -1,7 +1,7 @@
 import { MatchResult, SegmentMatcher} from 'segment-matcher';
 import { AdapterMessage, SendContent, RegisteredAdapter, MaybePromise } from './types.js';
 import type {Message} from './message.js';
-import {Plugin} from './plugin.js';
+import { type PermissionHost, toPermissionSubject } from '@zhin.js/permission';
 type ConstructFirstParam<T extends new (...args: any[]) => any> = T extends new (...args: [infer U, ...any[]]) => any ? U : never;
 type ConstructSecondParam<T extends new (...args: any[]) => any> = T extends new (...args: [any, infer V, ...any[]]) => any ? V : never;
 
@@ -81,23 +81,20 @@ export class MessageCommand<T extends RegisteredAdapter=RegisteredAdapter> exten
         return this.#permissions;
     }
     /** 与 handle 一致的 permit 校验，供帮助菜单等场景过滤不可见命令 */
-    async checkPermits(message: Message<AdapterMessage<T>>, plugin: Plugin): Promise<boolean> {
+    async checkPermits(message: Message<AdapterMessage<T>>, host: PermissionHost | null): Promise<boolean> {
         if (!this.#permissions.length) return true;
-        const auth = plugin.contextIsReady('permission') ? plugin.inject('permission') : null;
-        if (!auth) return false;
-        for (const permit of this.#permissions) {
-            if (!(await auth.check(permit, message))) return false;
-        }
-        return true;
+        if (!host) return false;
+        const subject = toPermissionSubject(message);
+        return host.checkAll(this.#permissions, subject);
     }
     /**
      * 处理消息，自动匹配命令并执行回调
      * @param message 消息对象
-     * @param plugin 插件实例
+     * @param host PermissionHost（null 时有 permit 的命令 fail-closed）
      * @returns 命令返回内容或undefined
      */
-    async handle(message:Message<AdapterMessage<T>>,plugin:Plugin):Promise<SendContent|undefined>{
-        if (!(await this.checkPermits(message, plugin))) {
+    async handle(message:Message<AdapterMessage<T>>, host: PermissionHost | null):Promise<SendContent|undefined>{
+        if (!(await this.checkPermits(message, host))) {
             return;
         }
         const matched=this.match(message.$content);

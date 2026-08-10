@@ -16,6 +16,8 @@ export {
   listEndpointManagementCapabilities,
   resolveEndpointManagement,
 } from '@zhin.js/adapter';
+export type { EndpointControl, EndpointWithControl } from '@zhin.js/adapter';
+export { resolveEndpointControl } from '@zhin.js/adapter';
 
 export type {
   EndpointCapability,

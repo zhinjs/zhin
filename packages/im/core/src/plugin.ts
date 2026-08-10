@@ -23,10 +23,10 @@ import { Adapter, Adapters } from "./adapter.js";
 import { Feature, PluginBase, BaseContext, PluginBaseLifecycle, resolvePluginResolveDir as _resolvePluginResolveDir, pluginCreateRequire as _pluginCreateRequire, getFileHash, watchFile, registerExtension, unregisterExtensions, installExtensionProxy, type PluginLike } from '@zhin.js/kernel';
 
 
-import { storage, getCurrentFile } from "./plugin-context.js";
+import { storage, getCurrentFile, isPluginRuntimeActive } from "./plugin-context.js";
 
 // Re-export getPlugin from plugin-context for backward compatibility
-export { getPlugin } from "./plugin-context.js";
+export { getPlugin, markPluginRuntimeActive, isPluginRuntimeActive, resetPluginRuntimeFlag } from "./plugin-context.js";
 export { storage, getCurrentFile } from "./plugin-context.js";
 export { setHostRootPlugin, getHostRootPlugin } from "./host-plugin-registry.js";
 
@@ -257,10 +257,9 @@ export class Plugin extends PluginBase implements PluginLike {
         sideEffect.finished = false;
       }
       this.on('context.dispose', disposeFn)
-      // 确保 dispose 时清理监听器（只注册一次）
       const cleanupOnDispose = () => {
         this.off('context.dispose', disposeFn)
-        dispose(this.inject(args[0] as any) as any)
+        dispose(this.inject(contexts[0] as any) as any)
       }
       this.once('dispose', cleanupOnDispose)
     }

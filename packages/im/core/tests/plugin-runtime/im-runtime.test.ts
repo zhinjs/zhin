@@ -446,6 +446,11 @@ describe('IM Runtime', () => {
       status: 'online',
       managementCapabilities: ['listFriends', 'listGroups', 'kickGroupMember'],
     })]);
+    // tree 仅 root → plugins=0；endpoints 与 listEndpoints 对齐
+    expect(im.inventory()).toEqual({
+      plugins: 0,
+      endpoints: { total: 1, online: 1 },
+    });
 
     // 用 slot localName 解析（inbox-installer 路径）
     expect(im.getEndpoint('icqq', 'icqq')).toEqual(expect.objectContaining({

@@ -88,10 +88,6 @@ export interface EditMessageOptions {
   content: SendContent;
 }
 
-export interface EditableEndpoint {
-  $editMessage?(options: EditMessageOptions): Promise<void>;
-}
-
 /** 出站回复来源（指令 / AI / proactive），仅当经 MessageDispatcher.replyWithPolish 或 runWithOutboundPolish 发出时由框架填入异步上下文 */
 export type OutboundReplySource = 'command' | 'ai' | 'proactive'
 

@@ -17,6 +17,26 @@ import type { Plugin } from "./plugin.js";
 
 export const storage = new AsyncLocalStorage<Plugin>();
 
+let _pluginRuntimeActive = false;
+
+/**
+ * Plugin Runtime (`zhin runtime start`) 启动时调用。
+ * 标记后 getPlugin()/usePlugin() 在 ALS 为空时抛出更明确的迁移提示，
+ * 而非通用的 "must be called within a plugin context"。
+ */
+export function markPluginRuntimeActive(): void {
+  _pluginRuntimeActive = true;
+}
+
+export function isPluginRuntimeActive(): boolean {
+  return _pluginRuntimeActive;
+}
+
+/** 测试重置 */
+export function resetPluginRuntimeFlag(): void {
+  _pluginRuntimeActive = false;
+}
+
 /**
  * 获取当前文件路径（调用者）
  */
@@ -65,6 +85,13 @@ export function getCurrentFile(metaUrl = import.meta.url): string {
 export function getPlugin(): Plugin {
   const plugin = storage.getStore();
   if (!plugin) {
+    if (_pluginRuntimeActive) {
+      throw new Error(
+        'getPlugin() is not available under Plugin Runtime (`zhin runtime start`). ' +
+        'Use `definePlugin` + convention directories instead. ' +
+        'See docs/contributing/public-api-surface.md',
+      );
+    }
     throw new Error('getPlugin() must be called within a plugin context');
   }
   return plugin;

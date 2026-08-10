@@ -9,14 +9,18 @@
  * 5. 命令模式生成
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ZhinTool, defineTool, isZhinTool, extractParamInfo, canAccessTool, roleSatisfies, checkBuiltinPermitList, registerDefaultScenePlatformPermitChecker, clearPlatformPermitCheckers, type Tool } from '@zhin.js/core';
+import { ZhinTool, defineTool, isZhinTool, extractParamInfo, canAccessTool, roleSatisfies, checkBuiltinPermitList, type Tool } from '@zhin.js/core';
+import { createPermissionHost, createSceneRolePlatformChecker, type PermissionHost } from '@zhin.js/permission';
+
+let host: PermissionHost;
 
 beforeEach(() => {
-  registerDefaultScenePlatformPermitChecker('qq');
+  host = createPermissionHost();
+  host.registerPlatform('qq', createSceneRolePlatformChecker());
 });
 
 afterEach(() => {
-  clearPlatformPermitCheckers();
+  host = undefined!;
 });
 
 function mockCommMessage(overrides: Record<string, any> = {}) {
@@ -259,39 +263,39 @@ describe('canAccessTool 函数', () => {
     execute: async () => '',
   };
 
-  it('无限制的工具应该对所有人可用', () => {
-    expect(canAccessTool(baseTool, undefined)).toBe(true);
+  it('无限制的工具应该对所有人可用', async () => {
+    expect(await canAccessTool(baseTool, undefined)).toBe(true);
   });
 
-  it('应该正确检查平台限制', () => {
+  it('应该正确检查平台限制', async () => {
     const tool: Tool = { ...baseTool, platforms: ['qq', 'telegram'] };
     
-    expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq' }))).toBe(true);
-    expect(canAccessTool(tool, mockCommMessage({ adapter: 'telegram' }))).toBe(true);
-    expect(canAccessTool(tool, mockCommMessage({ adapter: 'discord' }))).toBe(false);
-    expect(canAccessTool(tool, undefined)).toBe(false);
+    expect(await canAccessTool(tool, mockCommMessage({ adapter: 'qq' }))).toBe(true);
+    expect(await canAccessTool(tool, mockCommMessage({ adapter: 'telegram' }))).toBe(true);
+    expect(await canAccessTool(tool, mockCommMessage({ adapter: 'discord' }))).toBe(false);
+    expect(await canAccessTool(tool, undefined)).toBe(false);
   });
 
-  it('应该正确检查场景限制', () => {
+  it('应该正确检查场景限制', async () => {
     const tool: Tool = { ...baseTool, scopes: ['group'] };
     
-    expect(canAccessTool(tool, mockCommMessage({ scope: 'group' }))).toBe(true);
-    expect(canAccessTool(tool, mockCommMessage({ scope: 'private' }))).toBe(false);
+    expect(await canAccessTool(tool, mockCommMessage({ scope: 'group' }))).toBe(true);
+    expect(await canAccessTool(tool, mockCommMessage({ scope: 'private' }))).toBe(false);
   });
 
-  it('应该正确检查 platform(...) permit', () => {
+  it('应该正确检查 platform(...) permit', async () => {
     const tool: Tool = { ...baseTool, permissions: ['platform(qq,scene_admin)'] };
     const adminMsg = mockMessage('scene_admin');
     const ownerMsg = mockMessage('scene_owner');
     const masterMsg = mockMessage('master');
 
-    expect(canAccessTool(tool, adminMsg)).toBe(true);
-    expect(canAccessTool(tool, ownerMsg)).toBe(true);
-    expect(canAccessTool(tool, masterMsg)).toBe(false);
-    expect(canAccessTool(tool, undefined)).toBe(false);
+    expect(await canAccessTool(tool, adminMsg, host)).toBe(true);
+    expect(await canAccessTool(tool, ownerMsg, host)).toBe(true);
+    expect(await canAccessTool(tool, masterMsg, host)).toBe(false);
+    expect(await canAccessTool(tool, undefined, host)).toBe(false);
   });
 
-  it('应该组合检查所有条件', () => {
+  it('应该组合检查所有条件', async () => {
     const tool: Tool = {
       ...baseTool,
       platforms: ['qq'],
@@ -300,13 +304,13 @@ describe('canAccessTool 函数', () => {
     };
     const okMsg = mockMessage('scene_admin');
 
-    expect(canAccessTool(tool, { ...okMsg, $adapter: 'qq', $channel: { type: 'group', id: 'g1' } })).toBe(true);
+    expect(await canAccessTool(tool, { ...okMsg, $adapter: 'qq', $channel: { type: 'group', id: 'g1' } }, host)).toBe(true);
 
-    expect(canAccessTool(tool, { ...okMsg, $adapter: 'telegram', $channel: { type: 'group', id: 'g1' } })).toBe(false);
+    expect(await canAccessTool(tool, { ...okMsg, $adapter: 'telegram', $channel: { type: 'group', id: 'g1' } }, host)).toBe(false);
 
-    expect(canAccessTool(tool, { ...okMsg, $adapter: 'qq', $channel: { type: 'private', id: 'u1' } })).toBe(false);
+    expect(await canAccessTool(tool, { ...okMsg, $adapter: 'qq', $channel: { type: 'private', id: 'u1' } }, host)).toBe(false);
 
-    expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq', scope: 'group' }))).toBe(false);
+    expect(await canAccessTool(tool, mockCommMessage({ adapter: 'qq', scope: 'group' }), host)).toBe(false);
   });
 
   it('checkBuiltinPermitList 支持 AND 链', () => {
@@ -318,18 +322,18 @@ describe('canAccessTool 函数', () => {
     )).toBe(true);
   });
 
-  it('空平台数组应该允许所有平台', () => {
+  it('空平台数组应该允许所有平台', async () => {
     const tool: Tool = { ...baseTool, platforms: [] };
     
-    expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq' }))).toBe(true);
-    expect(canAccessTool(tool, mockCommMessage({ adapter: 'telegram' }))).toBe(true);
+    expect(await canAccessTool(tool, mockCommMessage({ adapter: 'qq' }))).toBe(true);
+    expect(await canAccessTool(tool, mockCommMessage({ adapter: 'telegram' }))).toBe(true);
   });
 
-  it('空场景数组应该允许所有场景', () => {
+  it('空场景数组应该允许所有场景', async () => {
     const tool: Tool = { ...baseTool, scopes: [] };
     
-    expect(canAccessTool(tool, mockCommMessage({ scope: 'group' }))).toBe(true);
-    expect(canAccessTool(tool, mockCommMessage({ scope: 'private' }))).toBe(true);
+    expect(await canAccessTool(tool, mockCommMessage({ scope: 'group' }))).toBe(true);
+    expect(await canAccessTool(tool, mockCommMessage({ scope: 'private' }))).toBe(true);
   });
 });
 

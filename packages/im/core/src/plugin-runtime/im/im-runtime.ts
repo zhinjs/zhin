@@ -8,6 +8,7 @@ import {
   type RuntimeSnapshot,
   type SnapshotStore,
 } from '@zhin.js/plugin-runtime';
+import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
 import {
   AdapterIndex,
   adapterFeatureId,
@@ -128,8 +129,11 @@ export class ImRuntime implements MessageGateway {
     this.#unmatchedHandler = handler;
   }
 
+  readonly permissionHost = createPermissionHost();
+
   install(resources: Scope): void {
     resources.provide(messageGatewayToken, this);
+    resources.provide(permissionHostToken, this.permissionHost);
   }
 
   /**
@@ -273,6 +277,38 @@ export class ImRuntime implements MessageGateway {
       }
     } catch {
       return Object.freeze([]);
+    }
+  }
+
+  /**
+   * Console `GET /api/stats` 同源计数：非 root 插件节点 + AdapterIndex endpoints。
+   * 供命令 / 状态卡等在 Plugin Runtime 下读取（legacy `root.adapters` / `root.children` 已不存在）。
+   */
+  inventory(): Readonly<{
+    plugins: number;
+    endpoints: { readonly total: number; readonly online: number };
+  }> {
+    try {
+      const lease = this.#acquire();
+      try {
+        const plugins = [...lease.value.tree.values()]
+          .filter((node) => node.parent !== undefined).length;
+        const endpoints = requireAdapters(lease.value).describe();
+        return Object.freeze({
+          plugins,
+          endpoints: Object.freeze({
+            total: endpoints.length,
+            online: endpoints.filter((endpoint) => endpoint.status === 'online').length,
+          }),
+        });
+      } finally {
+        lease.release();
+      }
+    } catch {
+      return Object.freeze({
+        plugins: 0,
+        endpoints: Object.freeze({ total: 0, online: 0 }),
+      });
     }
   }
 

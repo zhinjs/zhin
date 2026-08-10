@@ -24,6 +24,7 @@ import { MessageCommand } from "../command.js";
 import { Message } from "../message.js";
 import { Plugin } from "../plugin.js";
 import type { RegisteredAdapter, AdapterMessage } from "../types.js";
+import type { PermissionHost } from '@zhin.js/permission';
 
 /**
  * CommandContext 扩展方法类型
@@ -83,12 +84,12 @@ export class CommandFeature extends Feature<MessageCommand<RegisteredAdapter>> {
   /**
    * 处理消息，依次尝试匹配命令（较长前缀优先，避免 `teach` 抢 `teach-list`）
    */
-  async handle(message: Message<AdapterMessage<RegisteredAdapter>>, plugin: Plugin): Promise<any> {
+  async handle(message: Message<AdapterMessage<RegisteredAdapter>>, host: PermissionHost | null): Promise<any> {
     const commands = [...this.items].sort((a, b) =>
       compareCommandPatterns(a.pattern, b.pattern),
     );
     for (const command of commands) {
-      const result = await command.handle(message, plugin);
+      const result = await command.handle(message, host);
       if (result) return result;
     }
     return null;

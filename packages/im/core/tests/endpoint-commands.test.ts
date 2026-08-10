@@ -4,6 +4,7 @@ import { PermissionFeature } from '../src/built/permission.js';
 import { MANAGEMENT_OPERATOR_PERMIT } from '../src/built/management-command-guard.js';
 import { registerEndpointManagementCommands } from '../src/built/endpoint-commands.js';
 import * as lifecycleModule from '../src/built/endpoint-lifecycle-service.js';
+import { createPermissionHost, type PermissionHost } from '@zhin.js/permission';
 
 function trustedMsg(text: string) {
   return {
@@ -68,13 +69,15 @@ describe('registerEndpointManagementCommands', () => {
 
   it('/endpoint add without adapter lists provisionable adapters', async () => {
     registerEndpointManagementCommands(plugin, commandService);
-    const result = await commandService.handle(trustedMsg('/endpoint add'), plugin);
+    const host = createPermissionHost();
+    const result = await commandService.handle(trustedMsg('/endpoint add'), host);
     expect(String(result)).toMatch(/qq/);
   });
 
   it('denies when sender lacks trusted role', async () => {
     registerEndpointManagementCommands(plugin, commandService);
-    const result = await commandService.handle(untrustedMsg('/endpoint help'), plugin);
+    const host = createPermissionHost();
+    const result = await commandService.handle(untrustedMsg('/endpoint help'), host);
     expect(result).toBeFalsy();
   });
 });

@@ -24,7 +24,6 @@ export type { ScheduleDescriptor, ScheduleHandle, ScheduleContextExtensions } fr
 // Models
 export * from './models/system-log.js'
 export * from './models/user.js'
-export * from './built/permission.js'
 export * from './built/permit-parse.js'
 export * from './built/permit-check.js'
 export * from './built/platform-permit.js'
