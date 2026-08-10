@@ -1,5 +1,5 @@
 ---
-zhin: patch
+zhin.js: patch
 ---
 
 refactor(zhin): replace PermissionFeature with createPermissionHost
