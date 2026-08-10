@@ -39,6 +39,7 @@ export {
   isSdkId,
   SDK_IDS,
   createSdkProviderAdapter,
+  SdkProviderAdapter,
   sdkEntryFromProvider,
   sdkSupportsImageGeneration,
   resolveSdkProviderModels,
@@ -67,6 +68,7 @@ export type {
   PromptCacheRetention,
   ProviderGatewayPreset,
   ProviderMediaKind,
+  ChatCompletionsMockProvider,
 } from './llm/index.js';
 export type {
   Context,
@@ -111,8 +113,7 @@ export type {
   ChatCompletionRequest,
   ChatCompletionResponse,
   ChatCompletionChoice,
-  ChatCompletionChunk,
-  ChatCompletionChunkChoice,
+  TextCompleteOptions,
   ContentPart,
   ToolCall,
   ToolDefinition,

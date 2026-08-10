@@ -675,39 +675,25 @@ export class ConversationMemory {
       this.provider.models.find((m) => /flash|lite|mini/i.test(m)) ||
       this.provider.models[0];
 
-    const request = {
-      model,
-      messages: [
-        {
-          role: 'system' as const,
-          content:
-            'You are a topic-analysis assistant. Decide whether the user\'s latest message has switched to a completely new topic compared to the previous messages. Reply with exactly one word: yes or no.',
-        },
-        {
-          role: 'user' as const,
-          content: `Previous messages:\n${recentText}\n\nLatest message:\n${currentMessage}`,
-        },
-      ],
-      temperature: 0.1,
-    };
+    const system =
+      'You are a topic-analysis assistant. Decide whether the user\'s latest message has switched to a completely new topic compared to the previous messages. Reply with exactly one word: yes or no.';
+    const user = `Previous messages:\n${recentText}\n\nLatest message:\n${currentMessage}`;
 
     const maxAttempts = 3;
-    let response: Awaited<ReturnType<AIProvider['chat']>> | undefined;
+    let content: string | undefined;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        response = await this.provider.chat(request);
+        content = await this.provider.completeText(system, user, { model, temperature: 0.1 });
         break;
       } catch (err) {
         if (!isProviderRateLimitError(err) || attempt >= maxAttempts - 1) throw err;
         await sleep(1500 * (attempt + 1));
       }
     }
-    if (!response) return false;
+    if (!content) return false;
 
-    const raw = response.choices[0]?.message?.content;
-    const content = (typeof raw === 'string' ? raw : '').trim();
     // Parse: "yes" → switched, "no" or other → not switched
-    const lower = content.toLowerCase();
+    const lower = content.trim().toLowerCase();
     return lower.includes('yes') && !lower.includes('no');
   }
 
@@ -876,22 +862,11 @@ export class ConversationMemory {
     }
 
     const model = this.provider.models[0];
-    const response = await this.provider.chat({
-      model,
-      messages: [
-        {
-          role: 'system',
-          content: parentSummary
-            ? 'You are a conversation summarization assistant. Merge "previous summary" and "recent conversation" into one new summary (150-300 words). Keep key information, user preferences, and important conclusions; the summary should cover all history. Output only the summary, no prefix.'
-            : 'You are a conversation summarization assistant. Compress the following conversation into a concise summary (100-200 words). Keep key information, user preferences, and important conclusions. Output only the summary, no prefix.',
-        },
-        { role: 'user', content: userContent },
-      ],
-      temperature: 0.3,
-    });
-
-    const content = response.choices[0]?.message?.content;
-    return typeof content === 'string' ? content.trim() : null;
+    const system = parentSummary
+      ? 'You are a conversation summarization assistant. Merge "previous summary" and "recent conversation" into one new summary (150-300 words). Keep key information, user preferences, and important conclusions; the summary should cover all history. Output only the summary, no prefix.'
+      : 'You are a conversation summarization assistant. Compress the following conversation into a concise summary (100-200 words). Keep key information, user preferences, and important conclusions. Output only the summary, no prefix.';
+    const content = await this.provider.completeText(system, userContent, { model, temperature: 0.3 });
+    return content.trim() || null;
   }
 
   // ── 查询 API（供 AI 工具调用） ──

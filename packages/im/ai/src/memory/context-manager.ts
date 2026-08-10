@@ -328,18 +328,13 @@ export class ContextManager {
 
     try {
       // 调用 AI 进行总结
-      const response = await this.aiProvider.chat({
-        model: this.aiProvider.models[0],
-        messages: [
-          { role: 'system', content: this.config.summaryPrompt },
-          { role: 'user', content: conversationText },
-        ],
-        temperature: 0.3,
-        max_tokens: 500,
-      });
+      const summary = await this.aiProvider.completeText(
+        this.config.summaryPrompt,
+        conversationText,
+        { temperature: 0.3, maxTokens: 500 },
+      );
 
-      const summary = response.choices[0]?.message?.content;
-      if (typeof summary !== 'string' || !summary.trim()) {
+      if (!summary.trim()) {
         return null;
       }
 

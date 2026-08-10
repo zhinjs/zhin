@@ -7,7 +7,7 @@
  */
 
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import type { AIProvider } from '../../types.js';
+import type { ChatCompletionRequest, ChatCompletionResponse } from '../../types.js';
 import { formatRedactedJson } from '../redact-request-body.js';
 import {
   chatCompletionToAssistantMessage,
@@ -20,8 +20,18 @@ import {
 
 const llmContextLogger = getLogger('LLM');
 
+/**
+ * 测试 mock 面的最小契约（OpenAI wire chat）。
+ * 生产 `AIProvider` 已无 chat —— 本类型仅服务 mock 桥，不是生产扩展点。
+ */
+export interface ChatCompletionsMockProvider {
+  readonly name: string;
+  readonly models: readonly string[];
+  chat(request: ChatCompletionRequest): Promise<ChatCompletionResponse>;
+}
+
 export function createOpenAiCompletionsStreamFn(
-  getResolver: () => ((alias: string) => AIProvider | undefined) | undefined,
+  getResolver: () => ((alias: string) => ChatCompletionsMockProvider | undefined) | undefined,
 ): StreamFn {
   return (model, context, options) => {
     return createAssistantMessageEventStream(async (push) => {

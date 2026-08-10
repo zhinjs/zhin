@@ -229,22 +229,15 @@ The summary should be brief but informative so that later turns can quickly reco
   }
   userContent += `New conversation:\n${conversation}\n\nGenerate the updated full summary.`;
 
-  let response: Awaited<ReturnType<AIProvider['chat']>>;
+  let result: string;
   try {
-    response = await provider.chat({
-      model: provider.models[0],
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent },
-      ],
-    });
+    result = await provider.completeText(systemPrompt, userContent);
   } catch (e: unknown) {
     logger.warn(formatCompact( { summarize: 'fail', error: truncatePreview(e instanceof Error ? e.message : String(e)) }));
     // 摘要失败必须抛错：吞错返回占位文本会让上层把占位当真摘要注入、静默丢历史
     throw e;
   }
-  const result = response.choices?.[0]?.message?.content;
-  if (typeof result !== 'string' || !result.trim()) {
+  if (!result.trim()) {
     throw new Error('Summarization returned empty content');
   }
   return result;

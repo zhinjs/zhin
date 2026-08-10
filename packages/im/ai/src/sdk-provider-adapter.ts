@@ -4,10 +4,8 @@
 
 import type {
   AIProvider,
-  ChatCompletionChunk,
-  ChatCompletionRequest,
-  ChatCompletionResponse,
   ProviderConfig,
+  TextCompleteOptions,
 } from './types.js';
 import type { ProviderInstanceConfig } from './llm/types/model.js';
 import { createLanguageModel, normalizeGoogleBaseUrl, type SdkId } from './llm/sdk-registry.js';
@@ -139,67 +137,26 @@ export class SdkProviderAdapter implements AIProvider {
     registerLanguageModel(this.name, modelId, lm);
   }
 
-  async chat(request: ChatCompletionRequest): Promise<ChatCompletionResponse> {
-    this.ensureLanguageModel(request.model);
-    const model = getLlmTransportModel(this.name, request.model);
-    const messages = request.messages
-      .filter((m) => m.role !== 'system')
-      .map((m) => {
-        if (m.role === 'user') {
-          const content = typeof m.content === 'string'
-            ? m.content
-            : JSON.stringify(m.content);
-          return createUserMessage(content);
-        }
-        return createUserMessage(JSON.stringify(m));
-      });
-    const system = request.messages.find((m) => m.role === 'system');
-    const systemPrompt = system && typeof system.content === 'string' ? system.content : '';
-    const ctx = createContext(systemPrompt, messages);
+  /**
+   * 纯文本补全（compaction / 话题判定 / 上下文摘要等轻量场景）：
+   * system + user → assistant 文本，走 ai-sdk 传输。
+   */
+  async completeText(
+    system: string,
+    user: string,
+    opts: TextCompleteOptions = {},
+  ): Promise<string> {
+    const modelId = opts.model ?? this.models[0];
+    this.ensureLanguageModel(modelId);
+    const model = getLlmTransportModel(this.name, modelId);
+    const ctx = createContext(system, [createUserMessage(user)]);
     const assistant = await generateTextViaAiSdk(
-      createLanguageModel(this.sdk, this.config, request.model),
+      createLanguageModel(this.sdk, this.config, modelId),
       model,
       ctx,
-      { temperature: request.temperature, maxTokens: request.max_tokens },
+      { temperature: opts.temperature, maxTokens: opts.maxTokens },
     );
-    const text = assistantText(assistant);
-    return {
-      id: `chatcmpl-${Date.now()}`,
-      object: 'chat.completion',
-      created: Math.floor(Date.now() / 1000),
-      model: request.model,
-      choices: [{
-        index: 0,
-        message: { role: 'assistant', content: text },
-        finish_reason: assistant.stopReason === 'toolCalls' ? 'tool_calls' : 'stop',
-      }],
-      usage: {
-        prompt_tokens: assistant.usage.input,
-        completion_tokens: assistant.usage.output,
-        total_tokens: assistant.usage.totalTokens,
-      },
-    };
-  }
-
-  async *chatStream(_request: ChatCompletionRequest): AsyncIterable<ChatCompletionChunk> {
-    const response = await this.chat(_request);
-    const text = response.choices[0]?.message?.content ?? '';
-    if (typeof text === 'string' && text) {
-      yield {
-        id: response.id,
-        object: 'chat.completion.chunk',
-        created: response.created,
-        model: response.model,
-        choices: [{ index: 0, delta: { content: text }, finish_reason: null }],
-      };
-    }
-    yield {
-      id: response.id,
-      object: 'chat.completion.chunk',
-      created: response.created,
-      model: response.model,
-      choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
-    };
+    return assistantText(assistant);
   }
 
   async listModels(): Promise<string[]> {
@@ -261,9 +218,8 @@ export function sdkEntryFromProvider(provider: AIProvider): import('./llm/regist
       models: [...provider.models],
     };
   }
-  return {
-    alias: provider.name,
-    config: { sdk: 'openai' },
-    models: [...provider.models],
-  };
+  throw new TypeError(
+    `AIProvider "${provider.name}" is not an SdkProviderAdapter; `
+    + 'providers must be created via createSdkProviderAdapter to join the ai-sdk transport registry',
+  );
 }

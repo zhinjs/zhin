@@ -110,27 +110,6 @@ export interface Usage {
 }
 
 // ============================================================================
-// 流式响应类型
-// ============================================================================
-
-/** 流式响应块 */
-export interface ChatCompletionChunk {
-  id: string;
-  object: 'chat.completion.chunk';
-  created: number;
-  model: string;
-  choices: ChatCompletionChunkChoice[];
-  usage?: Usage;
-}
-
-/** 流式选择 */
-export interface ChatCompletionChunkChoice {
-  index: number;
-  delta: Partial<ChatMessage>;
-  finish_reason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | null;
-}
-
-// ============================================================================
 // Provider 类型
 // ============================================================================
 
@@ -163,20 +142,31 @@ export interface ProviderConfig {
   imageGeneration?: import('./image-generation.js').ImageGenerationDefaults;
 }
 
-/** Provider 接口 */
+/** 纯文本补全选项（摘要 / 判定等轻量场景）。 */
+export interface TextCompleteOptions {
+  /** 缺省用 provider.models[0]。 */
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+/**
+ * Provider 接口。
+ *
+ * 传输面只有两类：结构化 agent 会话走 `registerLlmApiFromProviders` /
+ * `getLlmTransportModel` 的 ai-sdk 传输；轻量"system+user→文本"补全走
+ * `completeText`。不再有 OpenAI wire 形态的 chat/chatStream 双轨。
+ */
 export interface AIProvider {
   name: string;
   models: string[];
-  
-  /** 聊天补全 */
-  chat(request: ChatCompletionRequest): Promise<ChatCompletionResponse>;
-  
-  /** 流式聊天补全 */
-  chatStream(request: ChatCompletionRequest): AsyncIterable<ChatCompletionChunk>;
-  
+
+  /** 纯文本补全：system + user → assistant 文本。 */
+  completeText(system: string, user: string, opts?: TextCompleteOptions): Promise<string>;
+
   /** 列出可用模型 */
   listModels?(): Promise<string[]>;
-  
+
   /** 检查连接 */
   healthCheck?(): Promise<boolean>;
 

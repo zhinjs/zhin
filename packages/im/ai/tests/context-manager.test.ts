@@ -366,16 +366,14 @@ describe('ContextManager', () => {
 
       const mockProvider = {
         models: ['test-model'],
-        chat: vi.fn().mockResolvedValue({
-          choices: [{ message: { content: '这是总结' } }],
-        }),
+        completeText: vi.fn().mockResolvedValue('这是总结'),
       };
 
       manager.setAIProvider(mockProvider as any);
 
       const result = await manager.summarize('group-123');
 
-      expect(mockProvider.chat).toHaveBeenCalled();
+      expect(mockProvider.completeText).toHaveBeenCalled();
     });
   });
 

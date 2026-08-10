@@ -262,7 +262,7 @@ describe('ConversationMemory（内存模式）', () => {
       memory.setProvider({
         name: 'mock',
         models: ['mock-model'],
-        chat,
+        completeText: chat,
       } as any);
       const detect = (memory as any).detectTopicChangeByLLM.bind(memory) as (
         prev: string[],

@@ -117,6 +117,7 @@ export {
 
 export {
   createOpenAiCompletionsStreamFn,
+  type ChatCompletionsMockProvider,
 } from './providers/openai-completions.js';
 
 export {

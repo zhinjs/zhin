@@ -235,14 +235,12 @@ describe('pruneHistoryForContext', () => {
 });
 
 describe('compactSession', () => {
-  let mockProvider: { chat: ReturnType<typeof vi.fn>; models: string[] };
+  let mockProvider: { completeText: ReturnType<typeof vi.fn>; models: string[] };
 
   beforeEach(() => {
     mockProvider = {
       models: ['mock-model'],
-      chat: vi.fn().mockResolvedValue({
-        choices: [{ message: { content: '摘要内容' } }],
-      }),
+      completeText: vi.fn().mockResolvedValue('摘要内容'),
     };
   });
 
@@ -306,7 +304,7 @@ describe('compactSession', () => {
     expect(result.keptMessages).toEqual(messages);
     expect(result.summary).toBe('');
     expect(result.savedTokens).toBe(0);
-    expect(mockProvider.chat).not.toHaveBeenCalled();
+    expect(mockProvider.completeText).not.toHaveBeenCalled();
   });
 
   it('should have correct function signature and return type', async () => {
@@ -334,12 +332,12 @@ describe('compactSession', () => {
 });
 
 describe('压缩失败语义（不得静默吞错丢历史）', () => {
-  let failingProvider: { chat: ReturnType<typeof vi.fn>; models: string[] };
+  let failingProvider: { completeText: ReturnType<typeof vi.fn>; models: string[] };
 
   beforeEach(() => {
     failingProvider = {
       models: ['mock-model'],
-      chat: vi.fn().mockRejectedValue(new Error('429 Too Many Requests')),
+      completeText: vi.fn().mockRejectedValue(new Error('429 Too Many Requests')),
     };
   });
 
