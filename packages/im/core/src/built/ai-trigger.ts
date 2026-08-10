@@ -196,6 +196,25 @@ export function extractTextContent<T extends object>(message: Message<T>): strin
 }
 
 /**
+ * 为群/频道消息构建发送者前缀（与 sender-extra.ts buildSenderPrefix 格式对齐）
+ * 私聊消息返回 null
+ */
+export function buildSenderPrefixForMessage<T extends object>(
+  message: Message<T>,
+  roles: SenderRole[],
+): string | null {
+  const scope = (message.$channel?.type as ToolScope) || 'private';
+  if (scope !== 'group' && scope !== 'channel') return null;
+  const rawId = String(message.$sender?.id ?? 'unknown');
+  const id = rawId.trim().replace(/[\]\s]+/g, '_').slice(0, 64) || 'unknown';
+  const rawName = message.$sender?.name;
+  const name = (rawName?.trim() || 'unknown').replace(/[\]\s]+/g, '_').slice(0, 64);
+  const nonUserRoles = roles.filter((r) => r !== 'user');
+  const roleStr = nonUserRoles.join(',') || 'user';
+  return `[sender:id=${id} name=${name} roles=${roleStr}]`;
+}
+
+/**
  * 解析 AI 回复中的富媒体内容
  * 将字符串中的 XML-like 标签解析为 MessageElement
  */
@@ -311,6 +330,15 @@ export function shouldTriggerAI<T extends object>(
   const text = extractTextContent(message);
   const scope = (message.$channel?.type as ToolScope) || 'private';
   const isSharedSession = scope === 'group' || scope === 'channel';
+
+  /** 对群/频道触发结果附加发送者前缀（与 DB 历史的 buildSenderPrefix 格式对齐） */
+  const withSenderPrefix = (content: string): string => {
+    if (!isSharedSession) return content;
+    const { roles } = resolveSenderRoles(message, config);
+    const prefix = buildSenderPrefixForMessage(message, roles);
+    if (!prefix) return content;
+    return content ? `${prefix} ${content}` : prefix;
+  };
   
   // 检查忽略前缀
   for (const prefix of fullConfig.ignorePrefixes) {
@@ -331,9 +359,10 @@ export function shouldTriggerAI<T extends object>(
   // 2. 检查 @ 触发（群/频道主路径；仅 @ 无正文时也触发，由 Agent 处理空输入）
   if (fullConfig.respondToAt && isAtEndpoint(message, endpointAtIds)) {
     const content = removeAtEndpoint(message, endpointAtIds);
+    const body = content.length ? segment.toString(content).trim() : '';
     return {
       triggered: true,
-      content: content.length ? segment.toString(content).trim() : '',
+      content: withSenderPrefix(body),
     };
   }
   
