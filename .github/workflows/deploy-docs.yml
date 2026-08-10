@@ -47,12 +47,15 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: pnpm install
         env:
           NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
+
+      - name: Build packages
+        run: pnpm build
+
       - name: Build docs
         run: pnpm docs:build
       
@@ -64,7 +67,7 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.url }}
     needs: build
     runs-on: ubuntu-latest
     name: Deploy
