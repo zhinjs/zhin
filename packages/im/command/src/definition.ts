@@ -3,6 +3,7 @@ import {
   createCapabilityContext,
   type CapabilityContext,
 } from '@zhin.js/feature-kit';
+import { assertPermitSyntax } from '@zhin.js/permission';
 
 const commandBrand = 'zhin.command/1' as const;
 
@@ -195,6 +196,21 @@ export interface CommandDefinition<
    * 类型 / 默认值 / 描述使用。静态命令可忽略本字段。
    */
   readonly params?: Readonly<Record<string, CommandParamSchema>>;
+  /**
+   * 本地静态段别名（可多词，如 `'gh issue'`）。替换全部本地静态段后仍挂
+   * owner 前缀；不打破子插件命名空间。
+   */
+  readonly alias?: readonly string[];
+  /**
+   * 内置 permit DSL（AND）。单项内逗号为 OR。
+   * 例：`adapter(icqq)`、`role(master)`、`group(123,456)`。
+   */
+  readonly permit?: readonly string[];
+  /**
+   * 全局整句快捷方式：触发串（trim 后全文相等）→ 预填 params。
+   * 可打破 owner 命名空间。
+   */
+  readonly shortcut?: Readonly<Record<string, Readonly<Record<string, CommandParameterValue>>>>;
   execute(context: CommandContext<TConfig, TInput>): TResult | Promise<TResult>;
 }
 
@@ -232,7 +248,56 @@ export function defineCommand<
       }
     }
   }
+  validateCommandAlias(definition.alias);
+  validateCommandPermit(definition.permit);
+  validateCommandShortcutShape(definition.shortcut);
   return Object.freeze({ $feature: commandBrand, ...definition });
+}
+
+function validateCommandAlias(alias: readonly string[] | undefined): void {
+  if (alias === undefined) return;
+  if (!Array.isArray(alias)) {
+    throw new TypeError('Command alias must be a readonly string[]');
+  }
+  for (const [index, entry] of alias.entries()) {
+    if (typeof entry !== 'string') {
+      throw new TypeError(`Command alias[${index}] must be a string`);
+    }
+    const tokens = entry.trim().split(/\s+/u).filter(Boolean);
+    if (tokens.length === 0) {
+      throw new TypeError(`Command alias[${index}] must contain at least one token`);
+    }
+  }
+}
+
+function validateCommandPermit(permit: readonly string[] | undefined): void {
+  if (permit === undefined) return;
+  if (!Array.isArray(permit)) {
+    throw new TypeError('Command permit must be a readonly string[]');
+  }
+  for (const [index, entry] of permit.entries()) {
+    if (typeof entry !== 'string') {
+      throw new TypeError(`Command permit[${index}] must be a string`);
+    }
+  }
+  assertPermitSyntax(permit);
+}
+
+function validateCommandShortcutShape(
+  shortcut: Readonly<Record<string, Readonly<Record<string, CommandParameterValue>>>> | undefined,
+): void {
+  if (shortcut === undefined) return;
+  if (!shortcut || typeof shortcut !== 'object' || Array.isArray(shortcut)) {
+    throw new TypeError('Command shortcut must be a Record<string, Record<string, value>>');
+  }
+  for (const [trigger, params] of Object.entries(shortcut)) {
+    if (!trigger.trim()) {
+      throw new TypeError('Command shortcut keys must be non-empty after trim');
+    }
+    if (!params || typeof params !== 'object' || Array.isArray(params)) {
+      throw new TypeError(`Command shortcut[${JSON.stringify(trigger)}] must be a params Record`);
+    }
+  }
 }
 
 export function bindCommandParameter<

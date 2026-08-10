@@ -15,6 +15,7 @@ import {
   parseCommandDefinition,
   type CommandParameterDefinition,
 } from '../src/index.js';
+import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
 import {
   FeatureDiscovery,
   type DirectoryEntry,
@@ -384,7 +385,235 @@ describe('Command Feature', () => {
     expect(() => new CommandIndex(
       [title, number],
       snapshotFor(owner, [title, number]),
-    )).toThrow('Duplicate runtime Command');
+    )).toThrow(/Duplicate Command route/);
+  });
+
+  it('replaces all local static segments via alias and keeps owner namespace', async () => {
+    const root = rootPluginId();
+    const qq = childPluginId(root, 'qq');
+    const slot = createCapabilitySlot({
+      owner: qq,
+      feature: commandFeatureId,
+      localName: 'endpoint/list',
+      source: '/commands/endpoint/list.ts',
+      definition: defineCommand({
+        alias: ['ep', 'e l'],
+        execute: ({ args }) => `list:${args.join(',')}`,
+      }),
+    });
+    const index = new CommandIndex([slot], snapshotWithOwners([qq], [slot]));
+
+    expect(index.list()[0]).toMatchObject({
+      name: 'qq.endpoint list',
+      alias: ['ep', 'e l'],
+    });
+    await expect(index.dispatch('qq.ep')).resolves.toMatchObject({
+      matched: true,
+      command: 'qq.endpoint list',
+      value: 'list:',
+    });
+    await expect(index.dispatch('qq.e l open')).resolves.toMatchObject({
+      matched: true,
+      value: 'list:open',
+    });
+    await expect(index.dispatch('ep')).resolves.toEqual({ matched: false });
+  });
+
+  it('matches multi-word alias with trailing dynamic params', async () => {
+    const owner = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'bugs/$id',
+      source: '/commands/bugs/[id].ts',
+      definition: {
+        ...defineCommand({
+          alias: ['gh issue'],
+          params: { id: { type: 'number' } },
+          execute: ({ params }) => `bug:${params.id}`,
+        }),
+        $parameter: { name: 'id', type: 'number' } as const,
+      },
+    });
+    const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
+
+    await expect(index.dispatch('gh issue 42')).resolves.toMatchObject({
+      matched: true,
+      value: 'bug:42',
+    });
+    await expect(index.dispatch('bugs 7')).resolves.toMatchObject({ value: 'bug:7' });
+  });
+
+  it('allows b and b list as distinct alias sequences', async () => {
+    const owner = rootPluginId();
+    const short = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'alpha',
+      source: '/commands/alpha.ts',
+      definition: defineCommand({ alias: ['b'], execute: () => 'short' }),
+    });
+    const longer = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'beta',
+      source: '/commands/beta.ts',
+      definition: defineCommand({ alias: ['b list'], execute: () => 'long' }),
+    });
+    const index = new CommandIndex([short, longer], snapshotFor(owner, [short, longer]));
+
+    await expect(index.dispatch('b')).resolves.toMatchObject({ value: 'short' });
+    await expect(index.dispatch('b list')).resolves.toMatchObject({ value: 'long' });
+  });
+
+  it('dispatches global shortcut with prefilled params and rejects trailing text', async () => {
+    const owner = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'bugs/$id',
+      source: '/commands/bugs/[id].ts',
+      definition: {
+        ...defineCommand({
+          shortcut: { '开虫': { id: 9 } },
+          params: { id: { type: 'number' } },
+          execute: ({ params }) => `bug:${params.id}`,
+        }),
+        $parameter: { name: 'id', type: 'number' } as const,
+      },
+    });
+    const child = childPluginId(owner, 'remind');
+    const namespaced = createCapabilitySlot({
+      owner: child,
+      feature: commandFeatureId,
+      localName: 'ping',
+      source: '/remind/commands/ping.ts',
+      definition: defineCommand({
+        shortcut: { '叮': {} },
+        execute: () => 'pong',
+      }),
+    });
+    const index = new CommandIndex(
+      [slot, namespaced],
+      snapshotWithOwners([owner, child], [slot, namespaced]),
+    );
+
+    await expect(index.dispatch('开虫')).resolves.toMatchObject({
+      matched: true,
+      value: 'bug:9',
+    });
+    await expect(index.dispatch('开虫 1')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('叮')).resolves.toMatchObject({
+      matched: true,
+      value: 'pong',
+      command: 'remind.ping',
+    });
+  });
+
+  it('treats permit failure as silent miss and skips permit on execute', async () => {
+    const owner = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'secret',
+      source: '/commands/secret.ts',
+      definition: defineCommand({
+        permit: ['adapter(icqq)', 'role(master)'],
+        execute: () => 'ok',
+      }),
+    });
+    const snapshot = snapshotFor(owner, [slot]);
+    snapshot.resources.get(owner)!.set(permissionHostToken.id, createPermissionHost());
+    const index = new CommandIndex([slot], snapshot);
+
+    await expect(index.dispatch('secret', {
+      conversation: {
+        endpoint: { id: 'root/discord\0x', adapter: 'root/discord' },
+        kind: 'private',
+        id: '1',
+      },
+      content: 'secret',
+      sender: '1',
+      metadata: { isMaster: true },
+    })).resolves.toEqual({ matched: false });
+
+    await expect(index.dispatch('secret', {
+      conversation: {
+        endpoint: { id: 'root/icqq\0x', adapter: 'root/icqq' },
+        kind: 'private',
+        id: '1',
+      },
+      content: 'secret',
+      sender: '1',
+      metadata: { isMaster: true },
+    })).resolves.toMatchObject({ matched: true, value: 'ok' });
+
+    await expect(index.execute('secret')).resolves.toBe('ok');
+  });
+
+  it('rejects conflicting routes and invalid permit/shortcut at build time', () => {
+    const owner = rootPluginId();
+    expect(() => defineCommand({
+      permit: ['unknownDsl(foo)'],
+      execute: () => 'x',
+    })).toThrow(/Unknown permit/);
+
+    expect(() => defineCommand({
+      alias: ['  '],
+      execute: () => 'x',
+    })).toThrow(/at least one token/);
+
+    const primary = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'zan',
+      source: '/commands/zan.ts',
+      definition: defineCommand({ execute: () => 'a' }),
+    });
+    const aliasClash = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'other',
+      source: '/commands/other.ts',
+      definition: defineCommand({ alias: ['zan'], execute: () => 'b' }),
+    });
+    expect(() => new CommandIndex(
+      [primary, aliasClash],
+      snapshotFor(owner, [primary, aliasClash]),
+    )).toThrow(/Duplicate Command route "zan"/);
+
+    const shortcutClash = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'hello',
+      source: '/commands/hello.ts',
+      definition: defineCommand({
+        shortcut: { zan: {} },
+        execute: () => 'c',
+      }),
+    });
+    expect(() => new CommandIndex(
+      [primary, shortcutClash],
+      snapshotFor(owner, [primary, shortcutClash]),
+    )).toThrow(/Duplicate Command route "zan"/);
+
+    expect(() => {
+      const bad = createCapabilitySlot({
+        owner,
+        feature: commandFeatureId,
+        localName: 'bugs/$id',
+        source: '/commands/bugs/[id].ts',
+        definition: {
+          ...defineCommand({
+            shortcut: { go: { nope: 1 } },
+            params: { id: { type: 'number' } },
+            execute: () => 'x',
+          }),
+          $parameter: { name: 'id', type: 'number' } as const,
+        },
+      });
+      return new CommandIndex([bad], snapshotFor(owner, [bad]));
+    }).toThrow(/unknown key "nope"/);
   });
 
   it('rejects legacy typed filenames during discovery', async () => {
@@ -457,6 +686,27 @@ describe('Command Feature', () => {
       matched: true,
       owner: child,
       value: 'child',
+    });
+  });
+
+  it('dispatches Unicode command names (e.g. Chinese 赞我)', async () => {
+    const owner = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: '赞我',
+      source: '/commands/赞我.ts',
+      definition: defineCommand({ execute: ({ args }) => `liked:${args[0] ?? 'self'}` }),
+    });
+    const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
+    await expect(index.dispatch('赞我')).resolves.toMatchObject({
+      matched: true,
+      command: '赞我',
+      value: 'liked:self',
+    });
+    await expect(index.dispatch('赞我 10')).resolves.toMatchObject({
+      matched: true,
+      value: 'liked:10',
     });
   });
 

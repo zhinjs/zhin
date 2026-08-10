@@ -1,5 +1,5 @@
 import { basename, join, parse, sep } from 'node:path';
-import { featureId } from '@zhin.js/plugin-runtime';
+import { featureId, isCapabilityLocalSegment } from '@zhin.js/plugin-runtime';
 import {
   defineFeatureProvider,
   type DiscoveryContext,
@@ -54,7 +54,7 @@ async function* discoverCommandDirectory(
     }
   }
   for (const entry of entries) {
-    if (entry.kind === 'directory' && isCommandSegment(entry.name)) {
+    if (entry.kind === 'directory' && isCapabilityLocalSegment(entry.name)) {
       yield* discoverCommandDirectory(
         context,
         join(directory, entry.name),
@@ -72,10 +72,6 @@ async function* discoverCommandDirectory(
       target: 'server',
     };
   }
-}
-
-function isCommandSegment(value: string): boolean {
-  return /^[a-z0-9][a-z0-9-]*$/.test(value);
 }
 
 interface ParsedCommandFile {
@@ -101,9 +97,15 @@ const dynamicCommandFilePatterns: ReadonlyArray<{
   { pattern: /^\[([a-zA-Z][a-zA-Z0-9]*)\]\.(?:tsx?|[cm]?js)$/, optional: false, rest: false },
 ];
 
+const commandModuleExtension = /\.(?:tsx?|[cm]?js)$/u;
+
 function parseCommandFile(value: string): ParsedCommandFile | undefined {
-  if (/^[a-z0-9][a-z0-9-]*\.(?:tsx?|[cm]?js)$/.test(value)) {
-    return { localSegment: parse(value).name };
+  // 静态段：ASCII kebab（hello.ts）或 Unicode 名（赞我.ts）；与 isCapabilityLocalSegment 对齐。
+  if (commandModuleExtension.test(value)) {
+    const localSegment = parse(value).name;
+    if (isCapabilityLocalSegment(localSegment)) {
+      return { localSegment };
+    }
   }
   for (const { pattern, optional, rest } of dynamicCommandFilePatterns) {
     const match = pattern.exec(value);

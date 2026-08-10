@@ -10,12 +10,15 @@ import type {
 } from '@zhin.js/plugin-runtime';
 import {
   createCommandContext,
+  resolveCommandSession,
   type CommandDefinition,
   type CommandParameterDefinition,
   type CommandParameterType,
   type CommandParameterValue,
   type CommandSegment,
 } from './definition.js';
+import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
+import { toPermissionSubject } from '@zhin.js/permission';
 
 export interface CommandParameterDescriptor extends CommandParameterDefinition {
   readonly required: boolean;
@@ -26,6 +29,10 @@ export interface CommandDescriptor {
   readonly description?: string;
   readonly source: string;
   readonly parameters: readonly CommandParameterDescriptor[];
+  readonly alias?: readonly string[];
+  readonly permit?: readonly string[];
+  /** shortcut 触发键列表（不含预填 params）。 */
+  readonly shortcut?: readonly string[];
 }
 
 export interface CommandDispatchResult {
@@ -39,7 +46,18 @@ interface CommandRecord extends CommandDescriptor {
   readonly slot: Readonly<CapabilitySlot<CommandDefinition>>;
   readonly segments: readonly string[];
   readonly parameter?: CommandParameterDefinition;
+}
+
+interface CommandRoute {
+  readonly record: CommandRecord;
+  readonly segments: readonly string[];
   readonly matcher: SegmentMatcher;
+  readonly kind: 'primary' | 'alias';
+}
+
+interface ShortcutEntry {
+  readonly record: CommandRecord;
+  readonly params: Readonly<Record<string, CommandParameterValue>>;
 }
 
 interface CommandMatch {
@@ -66,19 +84,39 @@ const segmentFields = {
 export class CommandIndex {
   readonly $projection = 'zhin.command-index/1' as const;
   readonly #commands: readonly CommandRecord[];
+  readonly #routes: readonly CommandRoute[];
+  readonly #shortcuts: ReadonlyMap<string, ShortcutEntry>;
 
   constructor(
     slots: readonly Readonly<CapabilitySlot<CommandDefinition>>[],
     private readonly snapshot: RuntimeSnapshot,
   ) {
     const commands: CommandRecord[] = [];
-    const staticCommands = new Map<string, CommandRecord>();
-    const dynamicCommands = new Map<string, CommandRecord>();
+    const routes: CommandRoute[] = [];
+    const occupancy = new Map<string, string>();
+    const shortcuts = new Map<string, ShortcutEntry>();
+
+    const claim = (key: string, source: string): void => {
+      const existing = occupancy.get(key);
+      if (existing !== undefined) {
+        throw new Error(`Duplicate Command route "${key}" (${source} vs ${existing})`);
+      }
+      occupancy.set(key, source);
+    };
+
     for (const slot of slots) {
-      const segments = runtimeSegments(slot.owner, slot.localName);
+      const primarySegments = runtimeSegments(slot.owner, slot.localName);
       const parameter = slot.definition.$parameter;
-      assertParameterSegment(segments, parameter, slot.source);
-      const name = displayName(segments, parameter);
+      assertParameterSegment(primarySegments, parameter, slot.source);
+      const name = displayName(primarySegments, parameter);
+      const alias = normalizeAliasList(slot.definition.alias);
+      const permit = slot.definition.permit
+        ? Object.freeze([...slot.definition.permit])
+        : undefined;
+      const shortcutKeys = slot.definition.shortcut
+        ? Object.freeze(Object.keys(slot.definition.shortcut).map((key) => key.trim()))
+        : undefined;
+
       const record: CommandRecord = Object.freeze({
         name,
         description: slot.definition.description,
@@ -87,23 +125,57 @@ export class CommandIndex {
           ...parameter,
           required: isRequiredParameter(parameter),
         }] : []),
+        ...(alias ? { alias } : {}),
+        ...(permit ? { permit } : {}),
+        ...(shortcutKeys && shortcutKeys.length > 0 ? { shortcut: shortcutKeys } : {}),
         slot,
-        segments: Object.freeze(segments),
+        segments: Object.freeze(primarySegments),
         parameter,
-        matcher: new SegmentMatcher(matcherPattern(segments, parameter), segmentFields),
       });
-      if (!parameter) {
-        const key = segments.join(' ');
-        if (staticCommands.has(key)) throw duplicateCommand(key);
-        staticCommands.set(key, record);
-      } else {
-        const shape = routeShape(segments);
-        if (dynamicCommands.has(shape)) throw duplicateCommand(name);
-        dynamicCommands.set(shape, record);
+
+      claim(occupancyKey(primarySegments, parameter), slot.source);
+      routes.push({
+        record,
+        segments: primarySegments,
+        matcher: new SegmentMatcher(matcherPattern(primarySegments, parameter), segmentFields),
+        kind: 'primary',
+      });
+
+      if (alias) {
+        for (const entry of alias) {
+          const aliasSegments = aliasRuntimeSegments(slot.owner, entry, primarySegments);
+          assertParameterSegment(aliasSegments, parameter, `${slot.source} alias ${JSON.stringify(entry)}`);
+          claim(occupancyKey(aliasSegments, parameter), `${slot.source} alias ${JSON.stringify(entry)}`);
+          routes.push({
+            record,
+            segments: Object.freeze(aliasSegments),
+            matcher: new SegmentMatcher(matcherPattern(aliasSegments, parameter), segmentFields),
+            kind: 'alias',
+          });
+        }
       }
+
+      if (slot.definition.shortcut) {
+        for (const [rawTrigger, prefill] of Object.entries(slot.definition.shortcut)) {
+          const trigger = rawTrigger.trim();
+          claim(trigger, `${slot.source} shortcut ${JSON.stringify(trigger)}`);
+          shortcuts.set(trigger, {
+            record,
+            params: Object.freeze(resolveShortcutParams(
+              slot.definition,
+              prefill,
+              `${slot.source} shortcut ${JSON.stringify(trigger)}`,
+            )),
+          });
+        }
+      }
+
       commands.push(record);
     }
-    this.#commands = Object.freeze(commands.sort(compareCommands));
+
+    this.#commands = Object.freeze(commands.sort(compareRecords));
+    this.#routes = Object.freeze(routes.sort(compareRoutes));
+    this.#shortcuts = shortcuts;
   }
 
   list(): readonly CommandDescriptor[] {
@@ -125,6 +197,7 @@ export class CommandIndex {
       this.#diagnoseParameter(name);
       throw new Error(`Unknown Command: ${name}`);
     }
+    // Host / 无 session：跳过 permit。
     return match.command.slot.definition.execute(
       createCommandContext(
         this.snapshot,
@@ -139,8 +212,34 @@ export class CommandIndex {
     input: CommandMatchInput,
     source: unknown = undefined,
   ): Promise<CommandDispatchResult> {
+    const shortcut = this.#matchShortcut(input);
+    if (shortcut) {
+      if (!(await this.#permitAllows(shortcut.record, source))) {
+        return Object.freeze({ matched: false });
+      }
+      const value = await shortcut.record.slot.definition.execute(
+        createCommandContext(
+          this.snapshot,
+          shortcut.record.slot.owner,
+          Object.freeze([]),
+          shortcut.params,
+          source,
+          Object.freeze([]),
+        ),
+      );
+      return Object.freeze({
+        matched: true,
+        command: shortcut.record.name,
+        owner: shortcut.record.slot.owner,
+        value,
+      });
+    }
+
     const match = this.#match(input, false);
     if (!match) return Object.freeze({ matched: false });
+    if (!(await this.#permitAllows(match.command, source))) {
+      return Object.freeze({ matched: false });
+    }
     const args = textArgs(match.remaining);
     const value = await match.command.slot.definition.execute(
       createCommandContext(
@@ -160,6 +259,35 @@ export class CommandIndex {
     });
   }
 
+  async #permitAllows(record: CommandRecord, source: unknown): Promise<boolean> {
+    const permits = record.permit;
+    if (!permits || permits.length === 0) return true;
+    if (!hasImSession(source)) return true;
+    const host = this.#resolveHost();
+    if (!host) return false;
+    const subject = toPermissionSubject(resolveCommandSession(source));
+    return host.checkAll(permits, subject);
+  }
+
+  #resolveHost(): PermissionHost | undefined {
+    try {
+      const resources = this.snapshot.resources.get(this.snapshot.root);
+      if (!resources) return undefined;
+      const host = resources.get(permissionHostToken.id);
+      return host && typeof (host as PermissionHost).check === 'function'
+        ? host as PermissionHost
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  #matchShortcut(input: CommandMatchInput): ShortcutEntry | undefined {
+    const text = exactMessageText(input);
+    if (text === undefined) return undefined;
+    return this.#shortcuts.get(text);
+  }
+
   #match(input: CommandMatchInput, exact: boolean): CommandMatch | undefined {
     const segments = normalizeSegments(
       typeof input === 'string'
@@ -170,29 +298,26 @@ export class CommandIndex {
     );
     if (segments.length === 0) return undefined;
 
-    for (const command of this.#commands) {
-      const result = command.matcher.match(asMatcherSegments(segments));
+    for (const route of this.#routes) {
+      const result = route.matcher.match(asMatcherSegments(segments));
       if (!result || !hasCommandBoundary(result.remaining)) continue;
-      const parameter = command.parameter;
+      const parameter = route.record.parameter;
       const params: Record<string, CommandParameterValue> = { ...result.params };
       if (parameter?.rest) {
         const raw = result.params[parameter.name];
         const coerced = coerceRestValues(parameter, Array.isArray(raw) ? raw : []);
-        // 必需 `[...name]` 捕获所有：零元素视为不匹配；标量逐词转换失败同样不匹配。
         if (!coerced || (isRequiredParameter(parameter) && coerced.length === 0)) continue;
         params[parameter.name] = coerced;
       }
       const remaining = normalizeSegments(result.remaining);
       if (exact && remaining.length > 0) continue;
-      // `[[name]]` 无 default 且未命中时，matcher 对 text 回退 ''、其他类型回退 null；
-      // 按契约（省略 default 时未匹配为 undefined）删除该键。
       if (parameter && !parameter.rest && parameter.optional === true
         && parameter.defaultValue === undefined
         && (params[parameter.name] === '' || params[parameter.name] === null)) {
         delete params[parameter.name];
       }
       return {
-        command,
+        command: route.record,
         params: Object.freeze(params),
         remaining,
       };
@@ -202,12 +327,12 @@ export class CommandIndex {
 
   #diagnoseParameter(name: string): void {
     const words = splitCommand(name);
-    for (const command of this.#commands) {
-      const parameter = command.parameter;
+    for (const route of this.#routes) {
+      const parameter = route.record.parameter;
       if (!parameter || parameter.rest) continue;
-      const parameterIndex = command.segments.findIndex((segment) => segment.startsWith('$'));
-      if (words.length !== command.segments.length) continue;
-      if (!command.segments.every((segment, index) =>
+      const parameterIndex = route.segments.findIndex((segment) => segment.startsWith('$'));
+      if (words.length !== route.segments.length) continue;
+      if (!route.segments.every((segment, index) =>
         index === parameterIndex || segment === words[index])) continue;
       const value = words[parameterIndex];
       if (value === undefined || matchesParameter(parameter.type, value)) continue;
@@ -232,6 +357,103 @@ function runtimeSegments(owner: string, localName: string): string[] {
   if (owner === 'root') return localSegments;
   const prefix = owner.slice('root/'.length).split('/').join('.');
   return [`${prefix}.${localSegments[0]}`, ...localSegments.slice(1)];
+}
+
+/**
+ * 用 alias 词序列替换全部本地静态段，再按 owner 规则重挂前缀；动态段保留。
+ */
+function aliasRuntimeSegments(
+  owner: string,
+  alias: string,
+  primarySegments: readonly string[],
+): string[] {
+  const aliasTokens = alias.trim().split(/\s+/u).filter(Boolean);
+  const dynamicTail = primarySegments.filter((segment) => segment.startsWith('$'));
+  if (owner === 'root') return [...aliasTokens, ...dynamicTail];
+  const prefix = owner.slice('root/'.length).split('/').join('.');
+  return [`${prefix}.${aliasTokens[0]}`, ...aliasTokens.slice(1), ...dynamicTail];
+}
+
+function occupancyKey(
+  segments: readonly string[],
+  parameter: CommandParameterDefinition | undefined,
+): string {
+  return parameter ? routeShape(segments) : segments.join(' ');
+}
+
+function normalizeAliasList(
+  alias: readonly string[] | undefined,
+): readonly string[] | undefined {
+  if (!alias || alias.length === 0) return undefined;
+  return Object.freeze(alias.map((entry) => entry.trim().split(/\s+/u).filter(Boolean).join(' ')));
+}
+
+function resolveShortcutParams(
+  definition: CommandDefinition,
+  prefill: Readonly<Record<string, CommandParameterValue>>,
+  source: string,
+): Record<string, CommandParameterValue> {
+  const allowed = new Set<string>();
+  const parameter = definition.$parameter;
+  if (parameter) allowed.add(parameter.name);
+  if (definition.params) {
+    for (const key of Object.keys(definition.params)) allowed.add(key);
+  }
+
+  for (const key of Object.keys(prefill)) {
+    if (!allowed.has(key)) {
+      throw new TypeError(
+        `Invalid shortcut params for ${source}: unknown key ${JSON.stringify(key)}`,
+      );
+    }
+  }
+
+  const result: Record<string, CommandParameterValue> = { ...prefill };
+
+  if (parameter) {
+    if (result[parameter.name] === undefined) {
+      if (parameter.defaultValue !== undefined) {
+        result[parameter.name] = parameter.defaultValue;
+      } else if (isRequiredParameter(parameter)) {
+        throw new TypeError(
+          `Invalid shortcut params for ${source}: missing required ${parameter.name}`,
+        );
+      }
+    }
+  } else if (allowed.size === 0 && Object.keys(prefill).length > 0) {
+    throw new TypeError(
+      `Invalid shortcut params for ${source}: command has no params declaration`,
+    );
+  }
+
+  if (definition.params) {
+    for (const [name, schema] of Object.entries(definition.params)) {
+      if (result[name] === undefined && schema.default !== undefined) {
+        result[name] = schema.default;
+      }
+    }
+  }
+
+  return result;
+}
+
+function hasImSession(source: unknown): boolean {
+  if (!source || typeof source !== 'object') return false;
+  const conversation = (source as { conversation?: unknown }).conversation;
+  return !!conversation && typeof conversation === 'object';
+}
+
+function exactMessageText(input: CommandMatchInput): string | undefined {
+  if (typeof input === 'string') {
+    const trimmed = input.trim();
+    return trimmed || undefined;
+  }
+  // 仅纯单 text 段可作整句 shortcut；含 mention/image 等则不走 shortcut。
+  if (input.length !== 1) return undefined;
+  const only = input[0];
+  if (!only || only.type !== 'text' || typeof only.data.text !== 'string') return undefined;
+  const trimmed = only.data.text.trim();
+  return trimmed || undefined;
 }
 
 function assertParameterSegment(
@@ -280,7 +502,6 @@ function matcherPattern(
     if (!segment.startsWith('$')) return segment;
     if (!parameter) throw new Error(`Missing Command parameter metadata: ${segment}`);
     const type = matcherType(parameter.type);
-    // rest：结构化类型按消息段收集；标量类型先按 text 段收集，再在 #match 里逐词切分转换。
     if (parameter.rest) {
       return `[...${parameter.name}:${isStructuredRestType(parameter.type) ? type : 'text'}]`;
     }
@@ -295,7 +516,6 @@ function matcherType(type: CommandParameterType): string {
   return type === 'string' ? 'word' : type;
 }
 
-/** rest 参数中按消息段收集（matcher 原生行为）的结构化类型。 */
 function isStructuredRestType(type: CommandParameterType): boolean {
   return type === 'mention'
     || type === 'image'
@@ -306,19 +526,12 @@ function isStructuredRestType(type: CommandParameterType): boolean {
     || type === 'rps';
 }
 
-/**
- * 捕获所有参数的取值粒度由类型决定：
- * - `text` / 结构化类型：逐消息段（matcher 原生结果）；
- * - `word` / `string`：逐词（空白切分）；
- * - `number` / `integer` / `float` / `boolean`：逐词切分后逐个转换，任一失败返回 undefined（不匹配）。
- */
 function coerceRestValues(
   parameter: CommandParameterDefinition,
   values: readonly unknown[],
 ): readonly (string | number | boolean)[] | undefined {
   const type = parameter.type;
   if (type === 'text' || isStructuredRestType(type)) {
-    // 逐消息段，保持 matcher 原生提取值（text 为 string，结构化类型可能是 number 等）。
     return values as readonly (string | number | boolean)[];
   }
   const words = values.flatMap((value) =>
@@ -346,18 +559,21 @@ function routeShape(segments: readonly string[]): string {
   return segments.map((segment) => segment.startsWith('$') ? '$' : segment).join(' ');
 }
 
-function compareCommands(left: CommandRecord, right: CommandRecord): number {
+function compareRecords(left: CommandRecord, right: CommandRecord): number {
+  return left.name.localeCompare(right.name);
+}
+
+function compareRoutes(left: CommandRoute, right: CommandRoute): number {
   return dynamicWeight(left) - dynamicWeight(right)
     || staticSegmentCount(right.segments) - staticSegmentCount(left.segments)
     || right.segments.length - left.segments.length
-    || right.name.length - left.name.length
-    || left.name.localeCompare(right.name);
+    || right.record.name.length - left.record.name.length
+    || left.record.name.localeCompare(right.record.name);
 }
 
-/** 静态 < 单参数 < 捕获所有：更具体的形状优先匹配。 */
-function dynamicWeight(command: CommandRecord): number {
-  if (!command.parameter) return 0;
-  return command.parameter.rest ? 2 : 1;
+function dynamicWeight(route: CommandRoute): number {
+  if (!route.record.parameter) return 0;
+  return route.record.parameter.rest ? 2 : 1;
 }
 
 function staticSegmentCount(segments: readonly string[]): number {
@@ -435,14 +651,9 @@ function toDescriptor({
   slot: _slot,
   segments: _segments,
   parameter: _parameter,
-  matcher: _matcher,
   ...descriptor
 }: CommandRecord): CommandDescriptor {
   return descriptor;
-}
-
-function duplicateCommand(name: string): Error {
-  return new Error(`Duplicate runtime Command: ${name}`);
 }
 
 export class CommandParameterValueError extends TypeError {

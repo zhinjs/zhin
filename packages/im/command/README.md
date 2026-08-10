@@ -3,14 +3,21 @@
 Zhin Plugin Runtime 的约定式 Command Feature。它发现 `commands/**/*.ts(x)`，将插件树
 路径与文件路径投影为命令，并用 `segment-matcher` 同时匹配纯文本和 canonical IM segments。
 
+静态命令文件名可为 ASCII kebab（`hello.ts`）或 Unicode 名（`赞我.ts`）；动态参数文件
+（`[name].ts` 等）仍限 ASCII。详见 [命令创作指南](../../../docs/authoring/commands.md)。
+
 ## Authoring
 
 ```ts
 // commands/gh/issue/list.ts -> gh issue list
+// commands/赞我.ts -> 赞我
 import { defineCommand } from '@zhin.js/command';
 
 export default defineCommand({
   description: 'List GitHub issues',
+  alias: ['issues'],                 // 可多词；子插件仍保留 owner 前缀
+  permit: ['adapter(icqq)', 'role(master)'], // 数组 AND；未过则静默未命中
+  // shortcut: { '列 issue': {} },   // 全局整句，可打破命名空间
   execute: ({ args }) => `issues:${args.join(',')}`,
 });
 ```
@@ -37,6 +44,12 @@ commands/search/[...kw].ts    -> search <...kw>   （params: { kw: { type: 'text
 - `adapter` / `endpoint`：适配器实例 id 与 endpoint 名。
 - `scene`：`{ id, type, name? }` 场景对象。
 - `sender`：`{ id, name?, role: string[] }` 发送者对象。
+
+可选声明字段：
+
+- `alias`：替换全部本地静态段并重挂 owner 前缀（不打破子插件命名空间）。
+- `permit`：内置 DSL（`adapter|group|private|channel|user|role`）；失败为静默未命中。
+- `shortcut`：全局整句精确匹配 → 预填 `params`（可打破命名空间）。
 
 单文件插件可在 `setup({ addCommand })` 中调用
 `addCommand('hello', defineCommand(...))`。它与目录发现共用 CommandIndex；拆成文件后
