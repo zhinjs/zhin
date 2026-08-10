@@ -135,7 +135,8 @@ describe('AI Trigger 工具函数', () => {
       });
       const result = shouldTriggerAI(message as any, { prefixes: ['#'], respondToAt: true });
       expect(result.triggered).toBe(true);
-      expect(result.content).toBe('问题');
+      expect(result.content).toContain('问题');
+      expect(result.content).toContain('[sender:');
     });
   });
 
@@ -162,7 +163,8 @@ describe('AI Trigger 工具函数', () => {
       });
       const result = shouldTriggerAI(message as any, { prefixes: ['#'], respondToAt: true });
       expect(result.triggered).toBe(true);
-      expect(result.content).toBe('问题');
+      expect(result.content).toContain('问题');
+      expect(result.content).toContain('[sender:');
     });
   });
 
@@ -546,6 +548,97 @@ describe('AI Trigger 工具函数', () => {
       const result = parseRichMediaContent('');
       
       expect(Array.isArray(result)).toBe(true);
+    });
+  });
+
+  describe('shouldTriggerAI - 群/频道发送者前缀', () => {
+    it('群聊 @ 触发时 content 包含 sender 前缀', () => {
+      const message = createMockMessage({
+        content: [
+          { type: 'at', data: { user_id: 'bot123' } },
+          { type: 'text', data: { text: ' 你好' } },
+        ],
+        endpoint: 'bot123',
+        channelType: 'group',
+        senderId: 'alice',
+      });
+      (message.$sender as any).name = '小红';
+      const result = shouldTriggerAI(message as any, { respondToAt: true });
+      expect(result.triggered).toBe(true);
+      expect(result.content).toMatch(/^\[sender:id=alice name=小红 roles=user\]/);
+      expect(result.content).toContain('你好');
+    });
+
+    it('频道 @ 触发时 content 包含 sender 前缀', () => {
+      const message = createMockMessage({
+        content: [
+          { type: 'at', data: { user_id: 'bot123' } },
+          { type: 'text', data: { text: ' 问好' } },
+        ],
+        endpoint: 'bot123',
+        channelType: 'channel',
+        senderId: 'bob',
+      });
+      (message.$sender as any).name = '阿博';
+      const result = shouldTriggerAI(message as any, { respondToAt: true });
+      expect(result.triggered).toBe(true);
+      expect(result.content).toMatch(/^\[sender:id=bob name=阿博 roles=user\]/);
+    });
+
+    it('群聊 sender 无名称时 name 为 unknown', () => {
+      const message = createMockMessage({
+        content: [
+          { type: 'at', data: { user_id: 'bot123' } },
+        ],
+        endpoint: 'bot123',
+        channelType: 'group',
+        senderId: 'user99',
+      });
+      const result = shouldTriggerAI(message as any, { respondToAt: true });
+      expect(result.triggered).toBe(true);
+      expect(result.content).toMatch(/^\[sender:id=user99 name=unknown roles=user\]/);
+    });
+
+    it('仅 @ 无正文时 content 仅含 sender 前缀', () => {
+      const message = createMockMessage({
+        content: [{ type: 'at', data: { user_id: 'bot123' } }],
+        endpoint: 'bot123',
+        channelType: 'group',
+        senderId: 'u1',
+      });
+      (message.$sender as any).name = '用户';
+      const result = shouldTriggerAI(message as any, { respondToAt: true });
+      expect(result.triggered).toBe(true);
+      expect(result.content).toMatch(/^\[sender:id=u1 name=用户 roles=user\]$/);
+    });
+
+    it('私聊触发时不添加 sender 前缀', () => {
+      const message = createMockMessage({
+        content: '你好',
+        channelType: 'private',
+        senderId: 'u1',
+      });
+      (message.$sender as any).name = '小明';
+      const result = shouldTriggerAI(message as any, { respondToPrivate: true });
+      expect(result.triggered).toBe(true);
+      expect(result.content).toBe('你好');
+      expect(result.content).not.toContain('[sender:');
+    });
+
+    it('master 角色应体现在 sender 前缀中', () => {
+      const message = createMockMessage({
+        content: [
+          { type: 'at', data: { user_id: 'bot123' } },
+          { type: 'text', data: { text: ' 命令' } },
+        ],
+        endpoint: 'bot123',
+        channelType: 'group',
+        senderId: 'admin1',
+      });
+      (message.$sender as any).name = '管理员';
+      const result = shouldTriggerAI(message as any, { respondToAt: true, masters: ['admin1'] });
+      expect(result.triggered).toBe(true);
+      expect(result.content).toMatch(/\[sender:id=admin1 name=管理员 roles=master\]/);
     });
   });
 });
