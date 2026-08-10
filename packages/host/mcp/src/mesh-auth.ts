@@ -17,12 +17,9 @@ export function timingSafeEqualString(a: string, b: string): boolean {
 }
 
 export function isLocalhost(req: IncomingMessage): boolean {
-  const host = req.headers.host ?? '';
   const addr = req.socket.remoteAddress ?? '';
   return (
-    host.startsWith('127.0.0.1')
-    || host.startsWith('localhost')
-    || addr === '127.0.0.1'
+    addr === '127.0.0.1'
     || addr === '::1'
     || addr === '::ffff:127.0.0.1'
   );
