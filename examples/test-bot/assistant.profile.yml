@@ -9,7 +9,7 @@ defaults:
       channel: im
       scene:
         platform: icqq
-        endpointId: "8596238"
+        endpointId: "1689919782"
         sceneId: "1659488338"
         kind: private
   notifyOnFailure: false

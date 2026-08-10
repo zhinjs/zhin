@@ -20,7 +20,7 @@ Zhin.js [NapCatQQ](https://github.com/NapNeko/NapCatQQ) adapter (Plugin Runtime,
 - Convention-based `defineAdapter` / `definePlugin` (no `usePlugin` needed)
 - **Forward WebSocket** (`connection: ws`): the application connects to NapCat WS
 - `access_token` authentication (Bearer + query)
-- Inbound via `messageGatewayToken` (deduplication + self-message filtering); outbound `send({ target, payload })`
+- Inbound via `messageGatewayToken` (deduplication + self-message filtering); outbound `send({ conversation, payload })`
 - 41 AI tools (`agent/tools/`)
 
 ## Installation
@@ -36,8 +36,8 @@ pnpm add @zhin.js/adapter-napcat
 - `@zhin.js/plugin-runtime` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 
-Inbound: `gateway.receive({ adapter, target: "private:uid"|"group:gid", content, sender, metadata })`
-Outbound: `send({ target, payload })` -> WS `send_private_msg` / `send_group_msg`
+Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'private'|'group'`; group temp sessions carry the group in `parent`)
+Outbound: `send({ conversation, payload })` -> WS `send_private_msg` / `send_group_msg`
 
 ## Minimal Configuration
 

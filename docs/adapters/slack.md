@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=a4694263dc61b4f3 -->
+<!-- sync-adapter-docs:sha256=c66228399ea363b8 -->
 
 # @zhin.js/adapter-slack
 
@@ -18,7 +18,7 @@ Zhin.js Slack 适配器（Plugin Runtime），优先 Socket Mode，也可经 Run
 
 - **Socket Mode**（默认）：WebSocket 长连接，无需公网 URL
 - **HTTP Events API**：`httpHostToken` POST（签名验证），**非** legacy host-router/Koa
-- 入站经 `messageGatewayToken`；出站 `send({ target, payload })` → `chat.postMessage` / Block Kit
+- 入站经 `messageGatewayToken`；出站 `send({ conversation, payload })` → `chat.postMessage` / Block Kit
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - Block Kit 按钮、斜杠命令、消息编辑、表情反应等（见 `agent/tools/`）
 

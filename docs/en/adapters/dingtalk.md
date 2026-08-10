@@ -36,8 +36,8 @@ pnpm add @zhin.js/adapter-dingtalk
 - `@zhin.js/plugin-runtime` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 
-Inbound: `gateway.receive({ adapter, target: conversationId, content: text, sender, metadata })`
-Outbound: `send({ target, payload })` -> sessionWebhook or `/robot/send`
+Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.kind` is `group`/`private`, `conversation.id` is the conversationId)
+Outbound: `send({ conversation, payload })` -> sessionWebhook or `/robot/send` (`conversation.id` is the conversationId)
 
 ## Prerequisites
 

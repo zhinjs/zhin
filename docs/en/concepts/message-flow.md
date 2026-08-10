@@ -62,14 +62,14 @@ The actual code locations for each step:
 flowchart LR
     A["$reply(content) / $replyFrom / gateway.send"] --> R[OutboundRenderer<br/>component -> JSX render<br/>raw passthrough / array expand]
     R --> N[normalizeOutboundPayload<br/>html segments -> image/text<br/>sandbox consumes html directly]
-    N --> V["createOutboundEnvelope<br/>adapter, target, requester, generation"]
+    N --> V["createOutboundEnvelope<br/>conversation, requester, generation"]
     V --> MW["Middleware outbound<br/>can envelope.replace(payload)"]
     MW --> S[AdapterIndex.send<br/>validate outbound capability and online status]
-    S --> E["endpoint.send({target, payload, parent})"]
+    S --> E["endpoint.send({conversation, payload})"]
 ```
 
 - **SendContent forms** (`packages/im/core/src/plugin-runtime/im/contracts.ts`): string; canonical `Segment` (first-class citizen, see "Multimodal" below); `component(name, props)` component call (recursively rendered via `ComponentIndex`, depth limit 32); `raw(payload)` passthrough; and nested arrays of any of these.
-- **Envelope** carries `adapter`, `target`, `requester` (the originating plugin, used for component permissions and auditing), `generation`, and provides `replace(payload)` for outbound middleware to rewrite content.
+- **Envelope** carries `conversation` (structured conversation addressing, `ConversationRef` from `@zhin.js/im-contract`), `requester` (the originating plugin, used for component permissions and auditing), `generation`, and provides `replace(payload)` for outbound middleware to rewrite content.
 - **Outbound middleware** shares the same definition as inbound; `target: 'outbound'` intercepts outbound messages.
 - **The last mile** is in `AdapterIndex.send`: the endpoint must declare `outbound` capability and be in `started && !stopped` state, otherwise an error is thrown; once passed, `endpoint.send()` is called to deliver to the platform.
 

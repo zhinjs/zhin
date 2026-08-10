@@ -18,7 +18,7 @@ Zhin.js QQ Official Bot adapter (Plugin Runtime). By default, it sends and recei
 
 - WebSocket Gateway inbound (default; no public HTTPS / host required)
 - Parses private chat / group / channel messages
-- Outbound `send({ target, payload })` -> QQ API (`private:` / `group:` / `channel:` / `direct:`)
+- Outbound `send({ conversation, payload })` -> QQ API (`conversation.kind`/`id`/`parent` structured addressing; a guild-parented private conversation is a `direct` message)
 - Convention-based `defineAdapter` / `definePlugin` (no `usePlugin` needed)
 - Webhook / middleware mode implemented (registers POST route via `httpHostToken`)
 - AI `@` trigger annotation: group messages (GROUP_AT_MESSAGE_CREATE only delivered on @) and channel `mentions[].bot` mark `mentioned: true` in inbound metadata (in the new Plugin Runtime, plain-text content conveys @ via metadata)
@@ -37,8 +37,8 @@ pnpm add @zhin.js/adapter-qq
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 - **Does not require** `@zhin.js/host-http` / `@zhin.js/host-router` (WebSocket path)
 
-Inbound: `gateway.receive({ adapter, target: 'group:...'|..., content, sender, metadata })`
-Outbound: `send({ target, payload })` -> `sendPrivateMessage` / `sendGroupMessage` / `sendGuildMessage`
+Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'private'|'group'|'channel'`; the owning guild lands in `parent`)
+Outbound: `send({ conversation, payload })` -> `sendPrivateMessage` / `sendGroupMessage` / `sendGuildMessage`
 
 ## Prerequisites
 

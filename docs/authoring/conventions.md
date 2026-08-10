@@ -30,11 +30,15 @@ flowchart LR
 
 ## 命名规则
 
-通用段规则只有一条：目录名、普通文件名去扩展名后，必须匹配 `^[a-z0-9][a-z0-9-]*$`，即小写字母/数字开头、可含连字符。不匹配的文件被跳过。各目录的补充规则：
+通用段规则：目录名、普通文件名去扩展名后，默认须匹配 `^[a-z0-9][a-z0-9-]*$`（小写字母/数字开头、可含连字符）。不匹配的文件被跳过。
+
+**例外：`commands/`** 静态段还允许 Unicode 名（如 `赞我.ts`），规则与 `isCapabilityLocalSegment`（`@zhin.js/plugin-runtime`）一致——ASCII kebab，或含非 ASCII 字母且无 ASCII 大写的 Unicode 标识；动态参数文件（`[name].ts` 等）仍限 ASCII。其它约定目录（middlewares / tools / adapters / …）不放宽。
+
+各目录的补充规则：
 
 | 目录 | localName 推导 | 示例 |
 | --- | --- | --- |
-| `commands/` | 子目录与文件名用 `/` 拼接；动态参数文件用 Next.js 风格方括号声明形态并映射为 `$name` 段：`[name].ts(x)` 必需、`[[name]].ts(x)` 可选、`[...name].ts(x)` 捕获所有、`[[...name]].ts(x)` 可选捕获所有；类型与默认值在 `defineCommand({ params })` 中声明 | `commands/lottery-today.ts` → `lottery-today`；`commands/lottery/[[game]].ts` → `lottery/$game` |
+| `commands/` | 子目录与文件名用 `/` 拼接；静态段可为 ASCII kebab 或 Unicode 名（如 `赞我`）；动态参数文件用 Next.js 风格方括号声明形态并映射为 `$name` 段：`[name].ts(x)` 必需、`[[name]].ts(x)` 可选、`[...name].ts(x)` 捕获所有、`[[...name]].ts(x)` 可选捕获所有；类型与默认值在 `defineCommand({ params })` 中声明 | `commands/lottery-today.ts` → `lottery-today`；`commands/赞我.ts` → `赞我`；`commands/lottery/[[game]].ts` → `lottery/$game` |
 | `middlewares/` | 相对路径去扩展名，`/` 拼接 | `middlewares/keyword-reply.ts` → `keyword-reply` |
 | `components/` | 同上 | `components/share-music.ts` → `share-music` |
 | `adapters/` | 同上 | `adapters/napcat.ts` → `napcat` |

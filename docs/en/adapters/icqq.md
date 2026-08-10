@@ -18,7 +18,7 @@ ICQQ Plugin Runtime adapter — connects to a logged-in QQ account via the [@icq
 
 - Group chat / private chat / temporary group session / QQ channel messages
 - Inbound: `messageGatewayToken` (IPC event subscription)
-- Outbound: `send({ target, payload })` -> `send_group_msg` / `send_private_msg` / ...
+- Outbound: `send({ conversation, payload })` -> `send_group_msg` / `send_private_msg` / ... (`kind`/`id`/`parent` structured addressing)
 - Agent tools: `agent/tools/` (poke, group management, friend list, etc.) retained
 - Console Endpoint management: `src/endpoint.ts` explicitly implements `EndpointManagement` (friend/group/group member lists, request approval, delete friend, kick member, mute, set admin). Console uses standardized RPCs such as `endpoint.friends` / `endpoint.groups` / `endpoint.group_members`
 

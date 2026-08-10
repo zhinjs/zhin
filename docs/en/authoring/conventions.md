@@ -30,11 +30,15 @@ A few key points. The full capability id takes the form `owner\0feature\0localNa
 
 ## Naming Rules
 
-There is only one universal segment rule: after removing extensions, directory names and regular file names must match `^[a-z0-9][a-z0-9-]*$`, meaning lowercase letters/digits at the start, with hyphens allowed. Non-matching files are skipped. Supplementary rules per directory:
+Default segment rule: after removing extensions, directory names and regular file names must match `^[a-z0-9][a-z0-9-]*$` (lowercase letter/digit start, hyphens allowed). Non-matching files are skipped.
+
+**Exception: `commands/`** static segments also allow Unicode names (e.g. `赞我.ts`), matching `isCapabilityLocalSegment` (`@zhin.js/plugin-runtime`) — ASCII kebab, or a Unicode identifier with at least one non-ASCII character and no ASCII uppercase. Dynamic parameter files (`[name].ts`, etc.) remain ASCII-only. Other convention directories (middlewares / tools / adapters / …) are not relaxed.
+
+Supplementary rules per directory:
 
 | Directory | localName derivation | Example |
 | --- | --- | --- |
-| `commands/` | Subdirectories and file names joined with `/`; dynamic parameter files use Next.js-style brackets to declare their shape and map to `$name` segments: `[name].ts(x)` required, `[[name]].ts(x)` optional, `[...name].ts(x)` catch-all, `[[...name]].ts(x)` optional catch-all; type and default value are declared in `defineCommand({ params })` | `commands/lottery-today.ts` -> `lottery-today`; `commands/lottery/[[game]].ts` -> `lottery/$game` |
+| `commands/` | Subdirectories and file names joined with `/`; static segments may be ASCII kebab or Unicode names (e.g. `赞我`); dynamic parameter files use Next.js-style brackets to declare their shape and map to `$name` segments: `[name].ts(x)` required, `[[name]].ts(x)` optional, `[...name].ts(x)` catch-all, `[[...name]].ts(x)` optional catch-all; type and default value are declared in `defineCommand({ params })` | `commands/lottery-today.ts` -> `lottery-today`; `commands/赞我.ts` -> `赞我`; `commands/lottery/[[game]].ts` -> `lottery/$game` |
 | `middlewares/` | Relative path without extension, joined with `/` | `middlewares/keyword-reply.ts` -> `keyword-reply` |
 | `components/` | Same as above | `components/share-music.ts` -> `share-music` |
 | `adapters/` | Same as above | `adapters/napcat.ts` -> `napcat` |

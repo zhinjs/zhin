@@ -36,8 +36,8 @@ pnpm add @zhin.js/adapter-wechat-mp
 - `@zhin.js/plugin-runtime` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 
-Inbound: `gateway.receive({ adapter, target: openid, content: text, sender, metadata })`
-Outbound: `send({ target, payload })` -> passive reply XML (default) or Customer Service Message API (`replyMode: customer_service`)
+Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (always `kind: 'private'`, `conversation.id` is the openid)
+Outbound: `send({ conversation, payload })` -> passive reply XML (default) or Customer Service Message API (`replyMode: customer_service`; touser is `conversation.id`)
 
 ## Prerequisites
 

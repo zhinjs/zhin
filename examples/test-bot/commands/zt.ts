@@ -1,20 +1,45 @@
 import { defineCommand } from 'zhin.js/command';
-import { raw } from 'zhin.js/core/runtime';
+import { messageGatewayToken, raw } from 'zhin.js/core/runtime';
 import { buildZtReportHtml, ZT_REPORT_CANVAS } from '../lib/zt-report-card.js';
-import { buildZtReportText, collectZtFallbackData, collectZtReportData } from '../lib/zt-report-data.js';
+import {
+  buildZtReportText,
+  collectZtFallbackData,
+  collectZtReportData,
+  type ZtFrameworkCounts,
+} from '../lib/zt-report-data.js';
 
-/** Runtime 环境无 legacy Plugin root；报告数据只用它做计数展示。 */
-const rootStub = { adapters: [], children: [] } as never;
+/** install() 提供的是 ImRuntime；用 inventory 取与 Console /api/stats 同源计数。 */
+type RuntimeInventoryHost = {
+  inventory(): {
+    plugins: number;
+    endpoints: { total: number; online: number };
+  };
+};
+
+function readFrameworkCounts(use: (token: typeof messageGatewayToken) => unknown): ZtFrameworkCounts {
+  try {
+    const host = use(messageGatewayToken) as RuntimeInventoryHost;
+    const inventory = host.inventory();
+    return {
+      // Runtime 无独立 Adapter 列表；展示用 endpoint 总数（Console endpoints.total）。
+      adapters: inventory.endpoints.total,
+      plugins: inventory.plugins,
+    };
+  } catch {
+    return { adapters: 0, plugins: 0 };
+  }
+}
 
 /** Runtime zt：富系统报告卡（legacy /zt 同款布局）。 */
 export default defineCommand({
   description: '系统状态卡片（富报告）',
-  execute: () => {
+  execute: (context) => {
+    const counts = readFrameworkCounts((token) => context.use(token));
     let data;
     try {
-      data = collectZtReportData(rootStub);
+      data = collectZtReportData(counts);
     } catch {
-      data = collectZtFallbackData(rootStub);
+      data = collectZtFallbackData(counts);
     }
     return raw({
       type: 'html',

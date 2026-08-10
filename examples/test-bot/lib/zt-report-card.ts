@@ -135,7 +135,12 @@ function buildZtReportBody(data: ZtReportData, subtitle = "Zhin.js test-bot"): s
         rows: [
           { label: "网卡", value: data.networkName },
           { label: "地址", value: data.networkIp },
+          ...(data.networkIpv6 ? [{ label: "IPv6", value: data.networkIpv6 }] : []),
+          ...(data.networkMac ? [{ label: "MAC", value: data.networkMac }] : []),
           { label: "速率", value: data.networkSpeedLine },
+          ...(data.networkTrafficLine
+            ? [{ label: "累计", value: data.networkTrafficLine }]
+            : []),
         ],
       },
       right: {

@@ -1141,6 +1141,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../core
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../im-contract
       '@zhin.js/kernel':
         specifier: workspace:*
         version: link:../kernel
@@ -1150,6 +1153,9 @@ importers:
       '@zhin.js/mcp-feature':
         specifier: workspace:*
         version: link:../mcp-feature
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
@@ -1255,6 +1261,9 @@ importers:
       '@zhin.js/feature-kit':
         specifier: workspace:*
         version: link:../feature-kit
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
@@ -1330,6 +1339,9 @@ importers:
       '@zhin.js/middleware':
         specifier: workspace:*
         version: link:../middleware
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
@@ -1463,6 +1475,19 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/im/permission:
+    dependencies:
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/im/plugin-runtime:
     devDependencies:
       '@types/node':
@@ -1564,6 +1589,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
@@ -1734,6 +1762,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../../../packages/im/permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../../packages/im/plugin-runtime
@@ -1777,6 +1808,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../../../packages/im/permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../../packages/im/plugin-runtime
@@ -1955,6 +1989,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../../../packages/im/permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../../packages/im/plugin-runtime
@@ -2001,6 +2038,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../../../packages/im/permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../../packages/im/plugin-runtime
@@ -2136,6 +2176,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../../../packages/im/permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../../packages/im/plugin-runtime
@@ -2185,6 +2228,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../../../packages/im/permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../../packages/im/plugin-runtime
@@ -2280,6 +2326,9 @@ importers:
       '@zhin.js/middleware':
         specifier: workspace:*
         version: link:../../../packages/im/middleware
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../../../packages/im/permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../../packages/im/plugin-runtime
@@ -2433,6 +2482,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../../../packages/im/permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../../packages/im/plugin-runtime
@@ -2476,6 +2528,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../../../packages/im/permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../../packages/im/plugin-runtime
@@ -2565,6 +2620,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../../../packages/im/permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../../packages/im/plugin-runtime

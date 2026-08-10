@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=a8f04727f6bef7fc -->
+<!-- sync-adapter-docs:sha256=fe9dacbde5c082c6 -->
 
 # @zhin.js/adapter-qq
 
@@ -18,7 +18,7 @@ Zhin.js QQ 官方机器人适配器（Plugin Runtime），默认通过 **WebSock
 
 - WebSocket Gateway 入站（默认；无需公网 HTTPS / host）
 - 解析私聊 / 群 / 频道消息
-- 出站 `send({ target, payload })` → QQ API（`private:` / `group:` / `channel:` / `direct:`）
+- 出站 `send({ conversation, payload })` → QQ API（`conversation.kind`/`id`/`parent` 结构化寻址）
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - Webhook / middleware 模式已实现（经 `httpHostToken` 注册 POST 路由）
 - AI `@` 触发标注：群消息（GROUP_AT_MESSAGE_CREATE 仅 @ 时下发）与频道 `mentions[].bot` 会在入站 metadata 标 `mentioned: true`（新 Plugin Runtime 纯文本 content 经 metadata 传递 @）
@@ -37,8 +37,8 @@ pnpm add @zhin.js/adapter-qq
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 - **无需** `@zhin.js/host-http` / `@zhin.js/host-router`（WebSocket 路径）
 
-入站：`gateway.receive({ adapter, target: 'group:…'|…, content, sender, metadata })`  
-出站：`send({ target, payload })` → `sendPrivateMessage` / `sendGroupMessage` / `sendGuildMessage`
+入站：`gateway.receive({ conversation, message, content, sender, metadata })`（ConversationRef 结构化寻址）  
+出站：`send({ conversation, payload })` → `sendPrivateMessage` / `sendGroupMessage` / `sendGuildMessage`
 
 ## 前置条件
 
@@ -119,8 +119,8 @@ plugins:
 | `qq.endpoint list` | 列出运行中与配置中的 endpoints |
 | `qq.endpoint remove <name>` | 从配置移除 endpoint（`.env` 键保留，可手动清理） |
 
-add/cancel/remove 受 `master` 限制：实例配置声明了 `master`（顶层或 `endpoints[i]`）时仅
-master 可执行；未配置则放行（首个扫码绑定者即 owner）。二维码当前以链接文本下发
+add/cancel/remove 受 `master` 限制：实例配置声明了 `master`（顶层或 `endpoints[i].master`）时仅
+master 可执行；未配置则放行（首个扫码绑定者会写入该 endpoint 的 `master`）。二维码当前以链接文本下发
 （出站富媒体待迁移），用手机 QQ 打开链接即可扫码。
 
 ## 环境变量

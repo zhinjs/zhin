@@ -36,8 +36,8 @@ pnpm add @zhin.js/adapter-lark
 - `@zhin.js/plugin-runtime` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 
-Inbound: `gateway.receive({ adapter, target: chat_id, content: text, sender, metadata })`
-Outbound: `send({ target, payload })` -> `im/v1/messages`
+Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.id` is the chat_id)
+Outbound: `send({ conversation, payload })` -> `im/v1/messages` (`receive_id` is `conversation.id`)
 
 Inbound `metadata.mentioned`: **not wired**. The message event's `mentions[]` elements contain `id.open_id`, but this adapter cannot obtain the bot's own open_id -- the configuration (`appId` / `appSecret` / `name`, etc.) does not include the bot open_id, and the code does not call `bot/v3/info` to get application info, so there is no reliable basis for comparing mentions.
 

@@ -19,7 +19,7 @@ Zhin.js KOOK adapter (Plugin Runtime). By default, it sends and receives message
 - WebSocket Gateway inbound (default; no public HTTPS / host required)
 - Webhook inbound (`connection: webhook` + `httpHostToken` + `verify_token`)
 - Parses channel and private chat text messages
-- Outbound `send({ target, payload })` -> KOOK KMarkdown (`channel:id` / `private:id`)
+- Outbound `send({ conversation, payload })` -> KOOK KMarkdown (`kind: 'channel' | 'private'`, `conversation.id` is the channel/user id)
 - Convention-based `defineAdapter` / `definePlugin` (no `usePlugin` needed)
 
 ## Installation
@@ -37,8 +37,8 @@ pnpm add @zhin.js/adapter-kook
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 - **WebSocket path does not require** `@zhin.js/host-http` / `@zhin.js/host-router`
 
-Inbound: `gateway.receive({ adapter, target: 'channel:...'|'private:...', content, sender, metadata })`
-Outbound: `send({ target, payload })` -> `sendChannelMsg` / `sendPrivateMsg`
+Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'channel'` carries the guild in `parent`)
+Outbound: `send({ conversation, payload })` -> `sendChannelMsg` / `sendPrivateMsg`
 
 ## Prerequisites
 

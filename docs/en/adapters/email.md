@@ -35,8 +35,8 @@ pnpm add @zhin.js/adapter-email
 - `@zhin.js/plugin-runtime` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json` (`smtp` / `imap`)
 
-Inbound: `gateway.receive({ adapter, target: fromEmail, content: text, sender, metadata })`
-Outbound: `send({ target, payload })` -> nodemailer (payload is rendered by gateway/core; no segment-mapper)
+Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (always `kind: 'private'`, `conversation.id` is the sender address)
+Outbound: `send({ conversation, payload })` -> nodemailer (recipient is `conversation.id`; payload is rendered by gateway/core; no segment-mapper)
 
 ## Prerequisites
 

@@ -20,7 +20,7 @@ Zhin.js [OneBot 11](https://github.com/botuniverse/onebot-11) adapter (Plugin Ru
 - Convention-based `defineAdapter` / `definePlugin` (no `usePlugin` needed)
 - **Forward WebSocket** (`connection: ws`): the application connects to the OneBot implementation's WS server
 - `access_token` authentication (Bearer + query)
-- Inbound via `messageGatewayToken`; outbound `send({ target, payload })`
+- Inbound via `messageGatewayToken`; outbound `send({ conversation, payload })`
 
 ## Installation
 
@@ -35,8 +35,8 @@ pnpm add @zhin.js/adapter-onebot11
 - `@zhin.js/plugin-runtime` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 
-Inbound: `gateway.receive({ adapter, target: "private:uid"|"group:gid", content, sender, metadata })`
-Outbound: `send({ target, payload })` -> WS `send_private_msg` / `send_group_msg` (payload is rendered by gateway/core; no segment-mapper)
+Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'private'|'group'`)
+Outbound: `send({ conversation, payload })` -> WS `send_private_msg` / `send_group_msg` (payload is rendered by gateway/core; no segment-mapper)
 
 ## Minimal Configuration
 

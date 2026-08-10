@@ -32,13 +32,25 @@
     "packages/im/ai/src/**/*",
     "packages/im/kernel/src/**/*",
     "packages/im/core/src/**/*",
-    "packages/im/agent/src/**/*"
+    "packages/im/agent/src/**/*",
+    "examples/minimal-bot/plugin.ts",
+    "examples/minimal-bot/adapters/**/*",
+    "examples/minimal-bot/agents/**/*",
+    "examples/minimal-bot/commands/**/*",
+    "examples/minimal-bot/tools/**/*",
+    "examples/full-bot/plugin.ts",
+    "examples/full-bot/commands/**/*",
+    "examples/full-bot/tools/**/*",
+    "examples/full-bot/skills/**/*",
+    "examples/capabilities-bot/plugin.ts",
+    "examples/capabilities-bot/commands/**/*"
   ],
   "exclude": [
     "node_modules",
     "**/lib/**",
     "**/dist/**",
     "**/client/**",
+    "**/pages/**",
     "**/*.js"
   ]
 }

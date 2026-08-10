@@ -19,8 +19,11 @@ interface ShowcaseConfig {
   pushTarget?: {
     adapter: string;
     endpointId: string;
-    channelType: string;
-    channelId: string;
+    conversation: {
+      kind: 'private' | 'group' | 'channel';
+      id: string;
+      parent?: { kind: 'group' | 'channel'; id: string };
+    };
   };
 }
 
@@ -85,7 +88,12 @@ export default definePlugin<ShowcaseConfig>({
       // ⑦ 代际交接（handoff）：endpoint 就绪后再发，避免启动时序竞争
       context.handoff.add({
         activateNext: async () => {
-          await outbound.send({ ...target, content: `${config.greeting}，capabilities-bot 已上线` });
+          await outbound.send({
+            adapter: target.adapter,
+            endpointId: target.endpointId,
+            conversation: target.conversation,
+            content: `${config.greeting}，capabilities-bot 已上线`,
+          });
           log('outbound: boot message pushed');
         },
       });

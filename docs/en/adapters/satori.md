@@ -39,8 +39,8 @@ pnpm add @zhin.js/adapter-satori
 - `@zhin.js/host-http` — Webhook mode requires `httpHostToken` to register POST route
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json` (`baseUrl` / `token` / ...)
 
-Inbound: `gateway.receive({ adapter, target: channelId, content: text, sender, id, metadata })`
-Outbound: `send({ target: channelId, payload })` -> Satori `message.create` (payload is rendered by gateway/core; no segment-mapper)
+Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.id` is the channelId; guild lands in `parent`)
+Outbound: `send({ conversation, payload })` -> Satori `message.create` (`channel_id` is `conversation.id`; payload is rendered by gateway/core; no segment-mapper)
 
 Inbound `metadata.mentioned`: set to `true` when the id of an `<at id="..."/>` element in the message content equals the login selfId (from READY/event `login.user.id`).
 

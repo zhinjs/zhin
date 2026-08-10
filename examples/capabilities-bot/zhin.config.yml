@@ -19,8 +19,9 @@ plugin:
   pushTarget:
     adapter: sandbox
     endpointId: sandbox-bot
-    channelType: private
-    channelId: sandbox-user
+    conversation:
+      kind: private
+      id: sandbox-user
 
 plugins:
   sandbox:

@@ -19,7 +19,7 @@ Zhin.js Telegram Bot API adapter (Plugin Runtime). By default, it sends and rece
 - Long polling `getUpdates` inbound (default; no public IP / host-http required)
 - Parses text / image / video / audio / voice / document / sticker / location / callback_query
 - Supports private chat and groups
-- Outbound `send({ target, payload })` -> Bot API (text / media / keyboard)
+- Outbound `send({ conversation, payload })` -> Bot API (text / media / keyboard)
 - Convention-based `defineAdapter` / `definePlugin` (no `usePlugin` needed)
 - Webhook mode deferred (requires `httpHostToken`); configuring `polling: false` will produce an explicit error
 
@@ -37,8 +37,8 @@ pnpm add @zhin.js/adapter-telegram
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 - **Does not require** `@zhin.js/host-http` (polling path)
 
-Inbound: `gateway.receive({ adapter, target: chatId, content: text, sender, metadata })`
-Outbound: `send({ target, payload })` -> Telegram Bot API
+Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.id` is the chatId)
+Outbound: `send({ conversation, payload })` -> Telegram Bot API (chat_id is `conversation.id`)
 
 ### Platform Permissions (platform permit)
 

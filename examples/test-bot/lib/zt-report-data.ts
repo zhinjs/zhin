@@ -1,5 +1,4 @@
 import { Time } from "zhin.js";
-import type { Plugin } from "zhin.js";
 import * as os from "node:os";
 import {
   getCpuInfo,
@@ -12,6 +11,12 @@ import {
 } from "@puniyu/system-info";
 
 const isBun = typeof Bun !== "undefined";
+
+/** Plugin Runtime 下与 Console `/api/stats` 对齐的框架计数（非 legacy Plugin.root）。 */
+export type ZtFrameworkCounts = {
+  readonly adapters: number;
+  readonly plugins: number;
+};
 
 export interface ZtReportData {
   hostName: string;
@@ -30,7 +35,12 @@ export interface ZtReportData {
   diskMounts: Array<{ mount: string; used: string; total: string; usage?: number }>;
   networkName: string;
   networkIp: string;
+  /** IPv6（优先全局地址；无则省略）。 */
+  networkIpv6?: string;
+  networkMac?: string;
   networkSpeedLine: string;
+  /** 累计流量 ↑/↓。 */
+  networkTrafficLine?: string;
   gpuLine?: string;
   botName: string;
   botPid: number;
@@ -84,12 +94,27 @@ function resolveUsagePercent(reported: number | undefined, used: number, total: 
   return undefined;
 }
 
-function pickPrimaryIp(ipInfo: Array<{ ipAddress: string }>) {
-  const ips = ipInfo.map((i) => i.ipAddress);
-  const ipv4 = ips.find((ip) => /^\d+\.\d+\.\d+\.\d+$/.test(ip) && !ip.startsWith("127."));
-  if (ipv4) return ipv4;
-  const sane = ips.find((ip) => !ip.startsWith("127.") && !ip.startsWith("fe80:") && !ip.startsWith("::1"));
-  return sane ?? ips[0] ?? "—";
+function pickPrimaryIp(ipInfo: Array<{ ipAddress: string; netmask?: number }>) {
+  const ipv4 = ipInfo.find((i) => /^\d+\.\d+\.\d+\.\d+$/.test(i.ipAddress) && !i.ipAddress.startsWith("127."));
+  if (ipv4) {
+    return ipv4.netmask != null ? `${ipv4.ipAddress}/${ipv4.netmask}` : ipv4.ipAddress;
+  }
+  const sane = ipInfo.find((i) =>
+    !i.ipAddress.startsWith("127.") && !i.ipAddress.startsWith("fe80:") && !i.ipAddress.startsWith("::1"));
+  return sane?.ipAddress ?? ipInfo[0]?.ipAddress ?? "—";
+}
+
+function pickIpv6(ipInfo: Array<{ ipAddress: string }>) {
+  const global = ipInfo.find((i) =>
+    i.ipAddress.includes(":") && !i.ipAddress.startsWith("fe80:") && !i.ipAddress.startsWith("::1"));
+  if (global) return truncateText(global.ipAddress, 36);
+  const link = ipInfo.find((i) => i.ipAddress.startsWith("fe80:"));
+  return link ? truncateText(link.ipAddress, 36) : undefined;
+}
+
+/** system-info 累计流量单位为 KB。 */
+function formatTrafficKb(kb: number) {
+  return formatMemoSize(kb * 1024);
 }
 
 export function formatCpuSample(value: number | undefined, runTimeSec: number) {
@@ -97,11 +122,11 @@ export function formatCpuSample(value: number | undefined, runTimeSec: number) {
   return runTimeSec < 30 ? "采样中" : "—";
 }
 
-function frameworkLine(root: Plugin) {
-  return `适配器 ${root.adapters.length} · 插件 ${root.children.length}`;
+function frameworkLine(counts: ZtFrameworkCounts) {
+  return `适配器 ${counts.adapters} · 插件 ${counts.plugins}`;
 }
 
-export function collectZtReportData(root: Plugin): ZtReportData {
+export function collectZtReportData(counts: ZtFrameworkCounts): ZtReportData {
   const host = getHostInfo();
   const cpu = getCpuInfo();
   const memory = getMemoryInfo();
@@ -138,7 +163,10 @@ export function collectZtReportData(root: Plugin): ZtReportData {
     })),
     networkName: network.name,
     networkIp: primaryIp,
+    networkIpv6: pickIpv6(network.ipInfo),
+    networkMac: network.macAddr || undefined,
     networkSpeedLine: `↑ ${network.upload.toFixed(1)}  ↓ ${network.download.toFixed(1)} KB/s`,
+    networkTrafficLine: `↑ ${formatTrafficKb(network.totalUpload)}  ↓ ${formatTrafficKb(network.totalDownload)}`,
     gpuLine: gpu
       ? `${truncateText(gpu.model, 32)} · ${gpu.memoryUsed ?? "—"}/${gpu.memoryTotal ?? "—"} MB · ${formatPercent(gpu.usage)}`
       : undefined,
@@ -152,11 +180,11 @@ export function collectZtReportData(root: Plugin): ZtReportData {
     botRuntime: runtime,
     botRss: formatMemoSize(memUsage.rss),
     botHeap: `${formatMemoSize(memUsage.heapUsed)} / ${formatMemoSize(memUsage.heapTotal)}`,
-    frameworkLine: frameworkLine(root),
+    frameworkLine: frameworkLine(counts),
   };
 }
 
-export function collectZtFallbackData(root: Plugin): ZtReportData {
+export function collectZtFallbackData(counts: ZtFrameworkCounts): ZtReportData {
   const totalmem = os.totalmem();
   const freemem = os.freemem();
   const memUsage = process.memoryUsage();
@@ -185,7 +213,7 @@ export function collectZtFallbackData(root: Plugin): ZtReportData {
     botRuntime: runtime,
     botRss: formatMemoSize(memUsage.rss),
     botHeap: `${formatMemoSize(memUsage.heapUsed)} / ${formatMemoSize(memUsage.heapTotal)}`,
-    frameworkLine: frameworkLine(root),
+    frameworkLine: frameworkLine(counts),
     fallbackNote: "system-info 不可用，已回退基础信息",
   };
 }
@@ -213,7 +241,10 @@ export function buildZtReportText(data: ZtReportData): string {
     "",
     "**网络**",
     `${data.networkName} · ${data.networkIp}`,
+    data.networkIpv6 ? `IPv6  ${data.networkIpv6}` : null,
+    data.networkMac ? `MAC  ${data.networkMac}` : null,
     `速率  ${data.networkSpeedLine}`,
+    data.networkTrafficLine ? `累计  ${data.networkTrafficLine}` : null,
     data.gpuLine ? ["", "**GPU**", data.gpuLine].join("\n") : null,
     "",
     "**Endpoint**",

@@ -48,7 +48,13 @@ HMR 粒度缩小到单个命令文件。
 | `commands/endpoint/add/[[name]].ts` | `qq` | `qq.endpoint add [name]` |
 | `commands/foo.ts` | `b` 下的 `a`（`root/b/a`） | `b.a.foo` |
 
-先看嵌套：`commands/` 递归扫描，嵌套目录直接映射为子命令段，目录与文件名必须是小写 kebab 风格（`/^[a-z0-9][a-z0-9-]*$/`）。
+先看嵌套：`commands/` 递归扫描，嵌套目录直接映射为子命令段。静态段文件名 / 目录名须通过 `isCapabilityLocalSegment`（`@zhin.js/plugin-runtime`）：
+
+- **ASCII kebab**：`/^[a-z0-9][a-z0-9-]*$/`（如 `hello.ts`、`lottery-today.ts`）
+- **Unicode 名**：含至少一个非 ASCII 字符、无 ASCII 大写，如 `赞我.ts`（触发词即 `赞我`）
+- 动态参数文件仍限 ASCII：`[name].ts` / `[[name]].ts` 等
+
+`instanceKey`、中间件 / 工具等其它约定目录**不**放宽，仍为 ASCII kebab。
 
 动态参数段用 Next.js 风格文件名声明形态，且必须是路径的最后一段；**类型与默认值不写进文件名**，统一在 `defineCommand({ params })` 里声明——`params.<name>.type` 必填，`default` 可选：
 
@@ -178,7 +184,29 @@ plugins:
 
 `master` / `trusted` 名单由 Core 的角色解析读取（`resolveSenderRoles`，`packages/im/core/src/built/ai-trigger.ts`），`role(master)`、`role(trusted)` 这类 permit 以及 [Agent 工具](./agent-tools.md)的 `permissions` 都基于同一套角色。
 
-命令自身不内置权限声明，权限判断写在 `execute` 里。以 endpoint 管理命令的通用判定为例（`isEndpointOperator`，`packages/im/adapter/src/endpoint-commands.ts`）：
+## alias / permit / shortcut
+
+`defineCommand` 支持声明式别名、权限与整句快捷方式（构建期校验；命中冲突抛错）：
+
+```ts
+export default defineCommand({
+  description: 'ICQQ 点赞',
+  alias: ['zan'],                    // 可多词，如 'gh issue'
+  permit: ['adapter(icqq)'],         // 数组 AND；单项内逗号 OR
+  // shortcut: { '赞满': { count: 10 } }, // 全局整句精确匹配，可打破 owner 前缀
+  execute: async (ctx) => { /* ... */ },
+});
+```
+
+| 字段 | 行为 |
+|---|---|
+| `alias` | 替换**全部本地静态段**后仍挂 owner 前缀（子插件如 `qq.ep`，裸 `ep` 不命中）；动态 `$param` 接在后面 |
+| `permit` | 仅内置 DSL：`adapter\|group\|private\|channel\|user\|role(...)`；未过则**静默未命中**（`matched: false`）；`CommandIndex.execute` 无 session 时跳过 |
+| `shortcut` | `Record`：触发串 → 预填 `params`；trim 后全文相等才命中；**可全局**（不强制命名空间） |
+
+冲突键按**完整词序列**（`b` 与 `b list` 可共存）。正式路由、alias、shortcut 键互斥。
+
+仍可在 `execute` 里做更细的业务权限（例如 endpoint 管理命令的 `isEndpointOperator`）：
 
 ```ts
 export function isEndpointOperator(config: unknown, input: unknown): boolean {

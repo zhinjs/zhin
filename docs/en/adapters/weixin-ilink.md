@@ -64,7 +64,7 @@ data/weixin-ilink/<bot-name>.json
 
 Replies must carry the `context_token` cached at inbound time (keyed by `endpointId + peerUserId`). If the user has not sent a message for a long time, causing the token to be missing, outbound will be rejected with a warning.
 
-Outbound goes through the Runtime: `MessageGateway` -> `endpoint.send({ target, payload })`.
+Outbound goes through the Runtime: `MessageGateway` -> `endpoint.send({ conversation, payload })` (always `kind: 'private'`, `conversation.id` is the peer user_id).
 
 **Image-text limitation**: WeChat does not support mixed image-text in a single message. The adapter automatically:
 

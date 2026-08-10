@@ -19,7 +19,7 @@ Zhin.js Discord adapter (Plugin Runtime). By default, it sends and receives mess
 - Gateway WebSocket inbound (default; no public HTTPS / host required)
 - Parses text / mention / attachment / embed / sticker / button
 - Supports private chat, group, and server channels
-- Outbound `send({ target, payload })` -> Discord channel message (text / media / embed / keyboard)
+- Outbound `send({ conversation, payload })` -> Discord channel message (text / media / embed / keyboard)
 - Convention-based `defineAdapter` / `definePlugin` (no `usePlugin` needed)
 - Interactions HTTP webhook deferred (requires `httpHostToken`); configuring `connection: interactions` will produce an explicit error
 
@@ -37,8 +37,8 @@ pnpm add @zhin.js/adapter-discord discord.js
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 - **Does not require** `@zhin.js/host-http` / `@zhin.js/host-router` (Gateway path)
 
-Inbound: `gateway.receive({ adapter, target: channelId, content: text, sender, metadata })`
-Outbound: `send({ target, payload })` -> discord.js channel.send
+Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.id` is the channelId; guild channels carry `parent`)
+Outbound: `send({ conversation, payload })` -> discord.js channel.send (`conversation.id` is the channelId)
 
 ### Platform Permissions (platform permit)
 

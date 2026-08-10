@@ -62,14 +62,14 @@ flowchart LR
 flowchart LR
     A["$reply(content) / $replyFrom / gateway.send"] --> R[OutboundRenderer<br/>component → JSX 渲染<br/>raw 透传 / 数组展开]
     R --> N[normalizeOutboundPayload<br/>html 段 → 图片/文本<br/>sandbox 直接消费 html]
-    N --> V["createOutboundEnvelope<br/>adapter·target·requester·generation"]
+    N --> V["createOutboundEnvelope<br/>conversation·requester·generation"]
     V --> MW["中间件 outbound<br/>可 envelope.replace(payload)"]
     MW --> S[AdapterIndex.send<br/>校验 outbound 能力与在线状态]
-    S --> E["endpoint.send({target, payload, parent})"]
+    S --> E["endpoint.send({conversation, payload})"]
 ```
 
 - **SendContent 形态**（`packages/im/core/src/plugin-runtime/im/contracts.ts`）：字符串；canonical `Segment`（一等公民，见下文「多模态」）；`component(name, props)` 组件调用（经 `ComponentIndex` 递归渲染，深度上限 32）；`raw(payload)` 原样透传；以及它们的数组嵌套。
-- **Envelope** 携带 `adapter`、`target`、`requester`（发起方插件，用于组件权限与审计）、`generation`，并提供 `replace(payload)` 给出站中间件改写内容。
+- **Envelope** 携带 `conversation`（结构化会话寻址 `ConversationRef`，`@zhin.js/im-contract`）、`requester`（发起方插件，用于组件权限与审计）、`generation`，并提供 `replace(payload)` 给出站中间件改写内容。
 - **出站中间件**与入站共用一套定义，`target: 'outbound'` 即拦截出站。
 - **最终一公里**在 `AdapterIndex.send`：endpoint 必须声明 `outbound` 能力、且处于 `started && !stopped`，否则抛错；通过后调用 `endpoint.send()` 落到平台。
 

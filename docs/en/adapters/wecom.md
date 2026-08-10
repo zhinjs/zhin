@@ -35,8 +35,8 @@ pnpm add @zhin.js/adapter-wecom
 - `@zhin.js/plugin-runtime` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 
-Inbound: `gateway.receive({ adapter, target: FromUserName, content: text, sender, metadata })`
-Outbound: `send({ target, payload })` -> WeCom `message/send` API
+Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.id` is FromUserName; `@chatroom` suffix means `kind: 'group'`)
+Outbound: `send({ conversation, payload })` -> WeCom `message/send` API (`conversation.id` drives the chatid/touser split)
 
 Inbound `metadata.mentioned`: **not wired**. The XML event in WeCom application message callbacks does not contain mentions/@ fields. The `ToUserName` in the callback is the CorpID (Enterprise ID) rather than a comparable bot user id, and the configuration does not contain a bot id/name that can serve as a reliable basis for comparison, so @ bot detection is not reliably possible.
 

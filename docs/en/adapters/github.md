@@ -18,7 +18,7 @@ GitHub Plugin Runtime adapter — Issue/PR comment sections serve as chat channe
 
 - **Chat channel**: Issue/PR comment sections are mapped as group chats, supporting message send/receive
 - **Webhook inbound**: HMAC-SHA256 signature verification -> `messageGatewayToken`
-- **Outbound**: `send({ target, payload })` -> Issue/PR comment (target is the channel ID)
+- **Outbound**: `send({ conversation, payload })` -> Issue/PR comment (`conversation.id` is the channel ID, e.g. `owner/repo/issues/42`)
 - **GitHub App authentication**: JWT -> Installation Token
 - **Agent tools**: `agent/` retains star/bind/subscribe/workspace, etc.
 
@@ -97,7 +97,7 @@ See `agent/tools/`: `github_star`, `github_bind`, `github_subscribe`, `github_pr
 | `src/gh-client.ts` | GitHub API client |
 
 - Inbound: `httpHostToken` POST -> `messageGatewayToken.receive`
-- Outbound: `send({ target, payload })`
+- Outbound: `send({ conversation, payload })`
 
 ## License
 

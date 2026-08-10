@@ -20,7 +20,7 @@ Zhin.js [Milky](https://milky.ntqqrev.org/) protocol adapter (Plugin Runtime). D
 - Convention-based `defineAdapter` / `definePlugin` (no `usePlugin` needed)
 - **Forward WebSocket** (`connection: ws`): the application connects to the protocol endpoint `ws(s)://baseUrl/event`
 - `access_token` authentication (Bearer + query)
-- Inbound via `messageGatewayToken`; outbound `send({ target, payload })` -> HTTP `send_*_message`
+- Inbound via `messageGatewayToken`; outbound `send({ conversation, payload })` -> HTTP `send_*_message`
 
 ## Installation
 
@@ -35,8 +35,8 @@ pnpm add @zhin.js/adapter-milky
 - `@zhin.js/plugin-runtime` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 
-Inbound: `gateway.receive({ adapter, target: "private:uid"|"group:gid", content, sender, metadata })`
-Outbound: `send({ target, payload })` -> HTTP `send_private_message` / `send_group_message` (payload is rendered by gateway/core; no segment-mapper)
+Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'private'|'group'`; temp sessions carry the group in `parent`)
+Outbound: `send({ conversation, payload })` -> HTTP `send_private_message` / `send_group_message` (payload is rendered by gateway/core; no segment-mapper)
 
 ## Minimal Configuration
 

@@ -48,7 +48,13 @@ Command name = plugin tree path segments (instanceKey, without root, joined by `
 | `commands/endpoint/add/[[name]].ts` | `qq` | `qq.endpoint add [name]` |
 | `commands/foo.ts` | `a` under `b` (`root/b/a`) | `b.a.foo` |
 
-First, nesting: `commands/` is scanned recursively, and nested directories map directly to subcommand segments. Directory and file names must be lowercase kebab-case (`/^[a-z0-9][a-z0-9-]*$/`).
+First, nesting: `commands/` is scanned recursively, and nested directories map directly to subcommand segments. Static file / directory names must pass `isCapabilityLocalSegment` (`@zhin.js/plugin-runtime`):
+
+- **ASCII kebab**: `/^[a-z0-9][a-z0-9-]*$/` (e.g. `hello.ts`, `lottery-today.ts`)
+- **Unicode names**: at least one non-ASCII character and no ASCII uppercase, e.g. `赞我.ts` (trigger word `赞我`)
+- Dynamic parameter files remain ASCII-only: `[name].ts` / `[[name]].ts`, etc.
+
+`instanceKey` and other convention directories (middlewares / tools / …) are **not** relaxed; they stay ASCII kebab.
 
 Dynamic parameter segments use Next.js-style file names to declare their shape and must be the last segment of the path; **type and default value are not written into the file name** — they are declared in `defineCommand({ params })`, where `params.<name>.type` is required and `default` is optional:
 
@@ -178,7 +184,29 @@ plugins:
 
 The `master` / `trusted` lists are read by Core's role resolution (`resolveSenderRoles`, `packages/im/core/src/built/ai-trigger.ts`); permits like `role(master)`, `role(trusted)`, and [Agent tool](./agent-tools.md) `permissions` all rely on the same role system.
 
-Commands themselves have no built-in permission declaration; permission checks are written inside `execute`. Using the common check for endpoint management commands as an example (`isEndpointOperator`, `packages/im/adapter/src/endpoint-commands.ts`):
+## alias / permit / shortcut
+
+`defineCommand` supports declarative aliases, permissions, and whole-message shortcuts (validated at build time; conflicts throw):
+
+```ts
+export default defineCommand({
+  description: 'ICQQ like',
+  alias: ['zan'],                    // multi-word OK, e.g. 'gh issue'
+  permit: ['adapter(icqq)'],         // array AND; commas inside one entry OR
+  // shortcut: { '赞满': { count: 10 } }, // global exact full-message match; may break owner prefix
+  execute: async (ctx) => { /* ... */ },
+});
+```
+
+| Field | Behavior |
+|---|---|
+| `alias` | Replaces **all local static segments**, then re-applies the owner prefix (child plugins need `qq.ep`; bare `ep` does not match). Dynamic `$param` still follows. |
+| `permit` | Builtin DSL only: `adapter\|group\|private\|channel\|user\|role(...)`. Failure is a **silent miss** (`matched: false`). `CommandIndex.execute` skips permit when there is no session. |
+| `shortcut` | `Record`: trigger → prefilled `params`. Exact match after trim. **May be global** (no owner prefix required). |
+
+Conflict keys are the **full word sequence** (`b` and `b list` may coexist). Primary routes, aliases, and shortcut keys are mutually exclusive.
+
+You can still do finer business checks inside `execute` (for example `isEndpointOperator` for endpoint management commands):
 
 ```ts
 export function isEndpointOperator(config: unknown, input: unknown): boolean {

@@ -8,15 +8,15 @@ endpoints: []
 #     master: '你的用户ID'      # ⚠️ Endpoint Master（ask_user 安全确认目标）
 plugins: []
 
-# AI 服务配置（可选）— 新格式：命名 providers + agents.zhin 绑定
+# AI 服务配置（可选）— 新格式：命名 providers + 显式 sdk + agents.zhin 绑定
 # ai:
 #   enabled: true
 #   providers:
 #     ds-main:
-#       driver: deepseek
+#       sdk: deepseek
 #       apiKey: ${DEEP_SEEK_API_KEY}
 #     ollama-local:
-#       driver: ollama
+#       sdk: ollama
 #       host: http://127.0.0.1:11434
 #   agents:
 #     zhin:

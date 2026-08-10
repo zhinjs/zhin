@@ -24,8 +24,15 @@
       "properties": {
         "adapter": { "type": "string", "default": "sandbox" },
         "endpointId": { "type": "string", "default": "sandbox-bot" },
-        "channelType": { "type": "string", "default": "private" },
-        "channelId": { "type": "string", "default": "sandbox-user" }
+        "conversation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "type": "string", "enum": ["private", "group", "channel"], "default": "private" },
+            "id": { "type": "string", "default": "sandbox-user" }
+          },
+          "required": ["kind", "id"]
+        }
       }
     }
   }

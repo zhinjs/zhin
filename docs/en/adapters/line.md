@@ -36,8 +36,8 @@ pnpm add @zhin.js/adapter-line
 - `@zhin.js/plugin-runtime` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 
-Inbound: `gateway.receive({ adapter, target: channelId, content: text, sender, metadata })`
-Outbound: `send({ target, payload })` -> Reply API (cached replyToken) or Push API
+Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.id` is the user/group/room id)
+Outbound: `send({ conversation, payload })` -> Reply API (cached replyToken) or Push API (recipient is `conversation.id`)
 
 ## Prerequisites
 
