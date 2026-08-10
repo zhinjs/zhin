@@ -205,7 +205,8 @@ export function buildSenderPrefixForMessage<T extends object>(
 ): string | null {
   const scope = (message.$channel?.type as ToolScope) || 'private';
   if (scope !== 'group' && scope !== 'channel') return null;
-  const id = String(message.$sender?.id ?? 'unknown').trim() || 'unknown';
+  const rawId = String(message.$sender?.id ?? 'unknown');
+  const id = rawId.trim().replace(/[\]\s]+/g, '_').slice(0, 64) || 'unknown';
   const rawName = message.$sender?.name;
   const name = (rawName?.trim() || 'unknown').replace(/[\]\s]+/g, '_').slice(0, 64);
   const nonUserRoles = roles.filter((r) => r !== 'user');
