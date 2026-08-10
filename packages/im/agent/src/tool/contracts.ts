@@ -1,7 +1,7 @@
 /**
  * Tool System — 模块契约（与实现同步）。
  *
- * 实现：`ToolSystem.collectForTurn` 同步收集 `AgentTool[]`（`ToolSource.collectTools` 亦为同步）；
+ * 实现：`ToolSystem.collectForTurn` 异步收集 `AgentTool[]`（`ToolSource.collectTools` 返回 `Promise<AgentTool[]>` 或同步 `AgentTool[]`）；
  * 每 turn 通过 `createDefaultToolSources` 独立 Source 列表，避免并发 mutate。
  */
 
@@ -34,7 +34,7 @@ export interface FilterContext {
 export interface ToolSource {
   name: string;
   priority: number;
-  collectTools(context: TurnContext): AgentTool[];
+  collectTools(context: TurnContext): AgentTool[] | Promise<AgentTool[]>;
 }
 
 export interface ToolFilter {

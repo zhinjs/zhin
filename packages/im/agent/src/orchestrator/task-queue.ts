@@ -10,6 +10,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { getLogger } from '@zhin.js/logger';
+import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 
 const logger = getLogger('TaskQueue');
 
@@ -543,23 +544,24 @@ export class TaskQueue {
 
 // ── 全局实例 ──────────────────────────────────────────────────────────
 
-let globalTaskQueue: TaskQueue | null = null;
+const queueStore = createGenerationStore<TaskQueue>('zhin.agent.task-queue');
 
 /**
  * 获取全局任务队列
  */
 export function getTaskQueue(): TaskQueue {
-  if (!globalTaskQueue) {
-    globalTaskQueue = new TaskQueue();
-  }
-  return globalTaskQueue;
+  return queueStore.tryUse() ?? new TaskQueue();
 }
 
 /**
- * 初始化任务队列
+ * 注册 generation-scoped 任务队列
  */
-export function initTaskQueue(config: Partial<TaskQueueConfig>): TaskQueue {
-  globalTaskQueue?.dispose();
-  globalTaskQueue = new TaskQueue(config);
-  return globalTaskQueue;
+export function provideTaskQueue(
+  context: GenerationStoreContext,
+  config: Partial<TaskQueueConfig>,
+): TaskQueue {
+  const queue = new TaskQueue(config);
+  queueStore.provide(context, queue);
+  context.lifecycle.add(() => queue.dispose());
+  return queue;
 }

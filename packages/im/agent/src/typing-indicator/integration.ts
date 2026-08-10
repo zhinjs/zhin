@@ -6,6 +6,7 @@
 
 import { getLogger } from '@zhin.js/logger';
 import type { Adapter, Endpoint } from '@zhin.js/core';
+import type { LegacyEndpointControlSurface } from '@zhin.js/im-contract';
 
 const logger = getLogger('TypingIndicator');
 
@@ -72,12 +73,9 @@ export function createTypingIndicatorManagerForZhinAgent(
 }
 
 /**
- * ICQQ Endpoint 接口扩展
+ * ICQQ Endpoint 接口扩展（legacy `$` 控制面见 im-contract 的 SSOT 声明）
  */
-interface ICQQBot extends Endpoint {
-  $addReaction?(messageId: string, emoji: string): Promise<string | null>;
-  $removeReaction?(messageId: string, reactionId: string): Promise<void>;
-}
+type ICQQBot = Endpoint & LegacyEndpointControlSurface;
 
 /**
  * 创建 ICQQ 适配器
@@ -141,7 +139,7 @@ export function createICQQAdapterFromBot(endpoint: ICQQBot, outbound?: OutboundA
 
   const deleteMessage = async (messageId: string): Promise<void> => {
     try {
-      await endpoint.$recallMessage(messageId);
+      await endpoint.$recallMessage?.(messageId);
     } catch (error) {
       logger.error('[ICQQ] Failed to delete message:', error);
     }
@@ -159,7 +157,7 @@ export function createICQQAdapterFromBot(endpoint: ICQQBot, outbound?: OutboundA
 /**
  * 创建通用适配器
  */
-export function createGenericAdapterFromBot(endpoint: Endpoint, platform: string, outbound?: OutboundAdapter): GenericTypingIndicatorAdapter {
+export function createGenericAdapterFromBot(endpoint: Endpoint & LegacyEndpointControlSurface, platform: string, outbound?: OutboundAdapter): GenericTypingIndicatorAdapter {
   const sendMessage = async (
     options: TypingIndicatorOptions,
     content: string,
@@ -189,7 +187,7 @@ export function createGenericAdapterFromBot(endpoint: Endpoint, platform: string
 
   const deleteMessage = async (messageId: string): Promise<void> => {
     try {
-      await endpoint.$recallMessage(messageId);
+      await endpoint.$recallMessage?.(messageId);
     } catch (error) {
       logger.error(`[${platform}] Failed to delete message:`, error);
     }

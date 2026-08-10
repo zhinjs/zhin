@@ -1,5 +1,6 @@
 import type { FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { canAccessTool, type Message, type Tool as CoreTool } from '@zhin.js/core';
+import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
 import {
   AgentIndex,
   agentFeatureId,
@@ -41,19 +42,19 @@ export interface AgentCapabilities {
 }
 
 export class CapabilityIngress {
-  read(
+  async read(
     snapshot: RuntimeSnapshot,
     owner: PluginId,
     isActive: () => boolean = () => true,
     message?: Message,
-  ): AgentCapabilities {
+  ): Promise<AgentCapabilities> {
     if (!snapshot.tree.has(owner)) throw new Error(`Unknown Agent capability owner: ${owner}`);
     const tools = projection(snapshot, toolFeatureId, ToolIndex);
     const mcp = projection(snapshot, mcpFeatureId, McpIndex);
     return Object.freeze({
       generation: snapshot.generation,
       owner,
-      tools: bindTools(tools, owner, isActive, message),
+      tools: await bindTools(tools, owner, isActive, message, resolvePermissionHost(snapshot)),
       skills: Object.freeze([
         ...(projection(snapshot, skillFeatureId, SkillIndex)?.visible(owner) ?? []),
       ]),
@@ -65,28 +66,37 @@ export class CapabilityIngress {
   }
 }
 
-function bindTools(
+async function bindTools(
   index: ToolIndex | undefined,
   owner: PluginId,
   isActive: () => boolean,
   message?: Message,
-): readonly ToolCapability[] {
+  host?: PermissionHost,
+): Promise<readonly ToolCapability[]> {
   if (!index) return Object.freeze([]);
-  return Object.freeze(index.visible(owner)
-    .filter((descriptor) => !descriptor.hidden && canAccessDescriptor(descriptor, message))
-    .map((descriptor) => Object.freeze({
-    ...descriptor,
-    execute: <TInput, TResult>(input: TInput) => {
-      assertActive(isActive);
-      return index.execute<TInput, TResult>(owner, descriptor.name, input);
-    },
+  const visibleDescriptors = index.visible(owner);
+  const accessResults = await Promise.all(
+    visibleDescriptors.map(async (descriptor) => ({
+      descriptor,
+      allowed: !descriptor.hidden && await canAccessDescriptor(descriptor, message, host),
+    })),
+  );
+  return Object.freeze(accessResults
+    .filter((r) => r.allowed)
+    .map((r) => Object.freeze({
+      ...r.descriptor,
+      execute: <TInput, TResult>(input: TInput) => {
+        assertActive(isActive);
+        return index.execute<TInput, TResult>(owner, r.descriptor.name, input);
+      },
     })));
 }
 
-function canAccessDescriptor(
+async function canAccessDescriptor(
   descriptor: ToolDescriptor,
   message: Message | undefined,
-): boolean {
+  host?: PermissionHost,
+): Promise<boolean> {
   return canAccessTool({
     name: descriptor.name,
     description: descriptor.description,
@@ -95,7 +105,20 @@ function canAccessDescriptor(
     platforms: descriptor.platforms ? [...descriptor.platforms] : undefined,
     scopes: descriptor.scopes ? [...descriptor.scopes] : undefined,
     permissions: descriptor.permissions ? [...descriptor.permissions] : undefined,
-  } satisfies CoreTool, message);
+  } satisfies CoreTool, message, host);
+}
+
+/** Root resources 上的 PermissionHost（command-index 同款解析；未安装时 fail-closed）。 */
+function resolvePermissionHost(snapshot: RuntimeSnapshot): PermissionHost | undefined {
+  try {
+    const resources = snapshot.resources.get(snapshot.root);
+    const host = resources?.get(permissionHostToken.id);
+    return host && typeof (host as PermissionHost).check === 'function'
+      ? host as PermissionHost
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function bindMcp(

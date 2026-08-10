@@ -15,6 +15,8 @@ import * as child_process from 'node:child_process';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import * as fs from 'node:fs';
+import { matchHardBlockedCommand } from './exec-policy.js';
+import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 
 // ── 资源限制包装 ────────────────────────────────────────────────────
 
@@ -249,6 +251,9 @@ function checkNetworkCommand(
 // ── 命令验证 ──────────────────────────────────────────────────────────
 
 function matchDangerousSandboxCommand(command: string): string | undefined {
+  const hardBlocked = matchHardBlockedCommand(command);
+  if (hardBlocked) return hardBlocked;
+
   const lower = command.toLowerCase();
   if (
     (lower.includes('curl') || lower.includes('wget')) &&
@@ -263,12 +268,6 @@ function matchDangerousSandboxCommand(command: string): string | undefined {
     lower.includes('./')
   ) {
     return '沙箱内禁止执行危险命令模式: curl/wget 下载后直接执行';
-  }
-  if (/\b(?:rm|rmdir)\b/.test(lower) && lower.includes('node_modules')) {
-    return '沙箱内禁止执行危险命令模式: 删除 node_modules';
-  }
-  if (lower.includes('find') && lower.includes('node_modules') && lower.includes('-delete')) {
-    return '沙箱内禁止执行危险命令模式: find -delete node_modules';
   }
   if (lower.includes('eval(') || lower.includes('exec(')) {
     return '沙箱内禁止执行危险命令模式: eval/exec';
@@ -653,29 +652,21 @@ export class Sandbox {
 
 // ── 全局沙箱实例 ──────────────────────────────────────────────────────
 
-let globalSandbox: Sandbox | null = null;
+const sandboxStore = createGenerationStore<Sandbox>('zhin.agent.sandbox');
 
-/**
- * 获取全局沙箱实例
- */
 export function getSandbox(): Sandbox {
-  if (!globalSandbox) {
-    globalSandbox = new Sandbox();
-  }
-  return globalSandbox;
+  return sandboxStore.tryUse() ?? new Sandbox();
 }
 
-/**
- * 初始化沙箱
- */
-export function initSandbox(config: Partial<SandboxConfig>): Sandbox {
-  globalSandbox = new Sandbox(config);
-  return globalSandbox;
+export function provideSandbox(context: GenerationStoreContext, config: Partial<SandboxConfig>): Sandbox {
+  const sandbox = new Sandbox(config);
+  sandboxStore.provide(context, sandbox);
+  return sandbox;
 }
 
 /** 重置全局沙箱（用于测试隔离） */
 export function resetSandbox(): void {
-  globalSandbox = null;
+  sandboxStore.clear();
 }
 
 /**

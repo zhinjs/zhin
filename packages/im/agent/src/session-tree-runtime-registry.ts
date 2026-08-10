@@ -1,7 +1,13 @@
 /**
  * Session tree runtime — 供 Host API 调用（ADR 0010 D3 Console API）。
+ * Generation-scoped：provide 随 lifecycle 反注册，杜绝跨热重载悬挂。
  */
 
+import {
+  createGenerationStore,
+  type Dispose,
+  type GenerationStoreContext,
+} from '@zhin.js/plugin-runtime';
 import type {
   AgentSessionStore,
   ContextRepository,
@@ -23,14 +29,17 @@ export interface SessionTreeRuntimeHandle {
   resolveActiveSessionId(sessionKey: string): Promise<string | null>;
 }
 
-let runtime: SessionTreeRuntimeHandle | null = null;
+const store = createGenerationStore<SessionTreeRuntimeHandle>('zhin.agent.session-tree-runtime');
 
-export function setSessionTreeRuntime(handle: SessionTreeRuntimeHandle | null): void {
-  runtime = handle;
+export function provideSessionTreeRuntime(
+  context: GenerationStoreContext,
+  handle: SessionTreeRuntimeHandle,
+): Dispose {
+  return store.provide(context, handle);
 }
 
 export function getSessionTreeRuntime(): SessionTreeRuntimeHandle | null {
-  return runtime;
+  return store.tryUse() ?? null;
 }
 
 export function createSessionTreeRuntimeFromAgent(

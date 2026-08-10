@@ -2,7 +2,6 @@
  * Remote task execution via A2A SendMessage / SSE (Agent Mesh v2).
  */
 import type { Task } from '@a2a-js/sdk';
-import { getAgentDispatcher } from './agent-dispatcher.js';
 import { getRemoteAgentRegistry } from './remote-agent-registry.js';
 import { getOrchestrationService } from './orchestration-service.js';
 import { buildSendMessageRequest } from '../a2a/delegation-message.js';
@@ -65,8 +64,9 @@ async function applyStreamToKernel(
 export async function executeRemoteOrchestrationTask(
   taskId: string,
 ): Promise<{ ok: boolean; message: string }> {
-  const dispatcher = getAgentDispatcher();
   const orch = getOrchestrationService();
+  if (!orch) return { ok: false, message: '编排服务不可用（OrchestrationService 未注册）' };
+  const dispatcher = orch.dispatcherHandle;
   const task = dispatcher.getTask(taskId);
   if (!task) {
     return { ok: false, message: `任务 ${taskId} 不存在` };
@@ -76,6 +76,7 @@ export async function executeRemoteOrchestrationTask(
   }
 
   const registry = getRemoteAgentRegistry();
+  if (!registry) return { ok: false, message: '远程 Agent 注册表不可用（未注册）' };
   const agent = registry.get(task.remoteAgentId);
   if (!agent) {
     return { ok: false, message: `远程 Agent ${task.remoteAgentId} 未注册` };
@@ -170,15 +171,18 @@ export async function executeRemoteOrchestrationTask(
 export async function pollRemoteTaskStatus(
   taskId: string,
 ): Promise<{ done: boolean; status: string; result?: string }> {
-  const dispatcher = getAgentDispatcher();
   const orch = getOrchestrationService();
+  if (!orch) return { done: false, status: 'unknown' };
+  const dispatcher = orch.dispatcherHandle;
   const task = dispatcher.getTask(taskId);
   if (!task?.remoteAgentId || !task.remoteTaskId) {
     return { done: false, status: 'unknown' };
   }
 
+  const remoteRegistry = getRemoteAgentRegistry();
+  if (!remoteRegistry) return { done: false, status: 'unknown' };
   try {
-    const client = await getRemoteAgentRegistry().getA2aClient(task.remoteAgentId);
+    const client = await remoteRegistry.getA2aClient(task.remoteAgentId);
     const remoteTask = await client.getTask({ id: task.remoteTaskId, tenant: '' }) as Task;
     const status = mapA2aTaskState(remoteTask.status?.state);
     const resultText = extractTaskResultText(remoteTask);

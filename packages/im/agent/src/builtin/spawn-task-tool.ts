@@ -10,7 +10,6 @@ import {
 import { orchestrationSourceFromMessage } from '../collaboration/collaboration-kernel-bridge.js';
 import type { SubagentSystem, SubagentOrigin } from '../subagent/index.js';
 import type { SubagentContextMode } from '../subagent-preset.js';
-import { getAgentDispatcher } from '../orchestrator/agent-dispatcher.js';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
 import { executeRemoteOrchestrationTask } from '../orchestrator/remote-task-executor.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
@@ -150,7 +149,8 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
     let targetTaskId = orchestrationTaskId;
 
     if (targetTaskId) {
-      const dispatcher = getAgentDispatcher();
+      const dispatcher = svc?.dispatcherHandle;
+      if (!dispatcher) return '编排服务不可用（OrchestrationService 未注册）';
       if (runId) {
         await dispatcher.hydrateRun(runId);
       }
@@ -176,7 +176,7 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
     const contextMode: SubagentContextMode | undefined =
       args.context === 'fork' || args.context === 'fresh' ? args.context : undefined;
     const orchestrationRole = targetTaskId
-      ? getAgentDispatcher().getTask(targetTaskId)?.role
+      ? svc?.dispatcherHandle.getTask(targetTaskId)?.role
       : undefined;
     const requestedTools = parseStringArray(args.tools);
     const requestedSkills = parseStringArray(args.skills);

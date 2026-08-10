@@ -5,13 +5,13 @@ import {
   getCollaborationSceneService,
   resetCollaborationSceneService,
 } from '../../src/collaboration/scene-service.js';
-import { initOrchestrationService } from '../../src/orchestrator/orchestration-service.js';
+import { provideTestOrchestrationService } from '../helpers/orchestration.js';
 import { MemoryOrchestrationRepository } from '../../src/orchestrator/orchestration-repository.js';
 
 describe('applyRuntimeCollaborationInbound', () => {
   beforeEach(() => {
     resetCollaborationSceneService();
-    initOrchestrationService(new MemoryOrchestrationRepository());
+    provideTestOrchestrationService(new MemoryOrchestrationRepository());
   });
 
   it('continues when no collaboration cell', async () => {

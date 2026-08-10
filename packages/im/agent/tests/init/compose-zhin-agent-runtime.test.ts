@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { composeZhinAgentRuntime } from '../../src/init/compose-zhin-agent-runtime.js';
 import { ZhinAgent } from '../../src/zhin-agent/index.js';
+import { createMockSdkProvider } from '../helpers/mock-llm-api.js';
 
 describe('composeZhinAgentRuntime', () => {
   it('wires 8 ideal modules and returns deliverOutbound sender', () => {
-    const provider = { name: 'mock', models: ['m1'] } as any;
+    const provider = createMockSdkProvider(vi.fn(), ['m1']);
     const agent = new ZhinAgent(provider);
     const { deliverOutbound, agentCore, toolSystem, sessionSystem, eventSystem, skillSystem, memorySystem, subagentSystem, contextSystem } =
       composeZhinAgentRuntime(agent, provider, {
@@ -24,7 +25,7 @@ describe('composeZhinAgentRuntime', () => {
   });
 
   it('injects composed runtime modules onto agent via configure', () => {
-    const provider = { name: 'mock', models: ['m1'] } as any;
+    const provider = createMockSdkProvider(vi.fn(), ['m1']);
     const agent = new ZhinAgent(provider);
     const composed = composeZhinAgentRuntime(agent, provider, { send: async () => {} });
     agent.configure({
@@ -41,14 +42,14 @@ describe('composeZhinAgentRuntime', () => {
   });
 
   it('creates per-agent contextSystem instance (not global singleton)', () => {
-    const provider = { name: 'mock', models: ['m1'] } as any;
+    const provider = createMockSdkProvider(vi.fn(), ['m1']);
     const a = composeZhinAgentRuntime(new ZhinAgent(provider), provider, { send: async () => {} });
     const b = composeZhinAgentRuntime(new ZhinAgent(provider), provider, { send: async () => {} });
     expect(a.contextSystem).not.toBe(b.contextSystem);
   });
 
   it('wires AgentCore eventBus to composed EventSystem', () => {
-    const provider = { name: 'mock', models: ['m1'] } as any;
+    const provider = createMockSdkProvider(vi.fn(), ['m1']);
     const { agentCore, eventSystem } = composeZhinAgentRuntime(
       new ZhinAgent(provider),
       provider,

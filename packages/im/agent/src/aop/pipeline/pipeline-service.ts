@@ -18,6 +18,7 @@ import {
 } from '../../collaboration/types.js';
 import { getCollaborationSceneService } from '../../collaboration/scene-service.js';
 import { getCollaborationArtifactRepository } from '../../collaboration/collaboration-artifact-repository.js';
+import { createGenerationStore, type GenerationStoreContext, DisposeStack } from '@zhin.js/plugin-runtime';
 import {
   allowedNextStages,
   isRejectTransition,
@@ -290,23 +291,33 @@ export class PipelineService {
   }
 }
 
-let globalPipelineService: PipelineService | null = null;
+const pipelineStore = createGenerationStore<PipelineService>('zhin.agent.pipeline-service');
 
-export function getPipelineService(): PipelineService {
-  if (!globalPipelineService) {
-    globalPipelineService = new PipelineService({
-      cells: {
-        getScene: (id) => getCollaborationSceneService().getScene(id),
-        getSceneFresh: async (id) => (await getCollaborationSceneService().getSceneFresh(id)) ?? undefined,
-        setPipelineState: (id, state) => getCollaborationSceneService().setPipelineState(id, state),
-        setMissionRunId: (id, runId) => getCollaborationSceneService().setMissionRunId(id, runId),
-      },
-      artifacts: getCollaborationArtifactRepository(),
-    });
-  }
-  return globalPipelineService;
+function createDefaultPipelineService(): PipelineService {
+  return new PipelineService({
+    cells: {
+      getScene: (id) => getCollaborationSceneService().getScene(id),
+      getSceneFresh: async (id) => (await getCollaborationSceneService().getSceneFresh(id)) ?? undefined,
+      setPipelineState: (id, state) => getCollaborationSceneService().setPipelineState(id, state),
+      setMissionRunId: (id, runId) => getCollaborationSceneService().setMissionRunId(id, runId),
+    },
+    artifacts: getCollaborationArtifactRepository(),
+  });
 }
 
+export function getPipelineService(): PipelineService {
+  return pipelineStore.tryUse() ?? createDefaultPipelineService();
+}
+
+export function providePipelineService(context: GenerationStoreContext, svc: PipelineService): void {
+  pipelineStore.provide(context, svc);
+}
+
+let _pipelineLegacy: DisposeStack | null = null;
 export function setPipelineService(svc: PipelineService | null): void {
-  globalPipelineService = svc;
+  if (_pipelineLegacy) { void _pipelineLegacy.dispose(); _pipelineLegacy = null; }
+  if (svc) {
+    _pipelineLegacy = new DisposeStack();
+    pipelineStore.provide({ lifecycle: _pipelineLegacy }, svc);
+  }
 }

@@ -4,6 +4,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ZhinAgent } from '../src/zhin-agent/index.js';
 import { MemoryAgentSessionStore, type AIProvider } from '@zhin.js/ai';
+import { createMockSdkProvider } from './helpers/mock-llm-api.js';
 import {
   getCompactionStateCount,
   clearCompactionStates,
@@ -16,15 +17,12 @@ import { pruneAdapterRegistry } from '../src/stability/registry-cleanup.js';
 
 function mockProvider(): AIProvider & { dispose: ReturnType<typeof vi.fn> } {
   const dispose = vi.fn();
-  return {
-    name: 'mock',
-    models: ['m'],
-    chat: vi.fn(async () => ({
+  const provider = createMockSdkProvider(
+    vi.fn(async () => ({
       choices: [{ message: { role: 'assistant' as const, content: 'ok' }, finish_reason: 'stop' }],
     })),
-    chatStream: vi.fn(async function* () {}),
-    dispose,
-  };
+  );
+  return Object.assign(provider, { dispose }) as unknown as AIProvider & { dispose: ReturnType<typeof vi.fn> };
 }
 
 describe('stability lifecycle (ADR 0014 P2-2)', () => {

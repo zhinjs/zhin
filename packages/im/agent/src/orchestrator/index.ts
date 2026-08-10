@@ -166,8 +166,8 @@ export {
   OrchestrationService,
   getOrchestrationKernel,
   getOrchestrationService,
-  initOrchestrationService,
-  registerOrchestrationService,
+  createOrchestrationService,
+  provideOrchestrationService,
   upgradeOrchestrationRepository,
 } from './orchestration-service.js';
 export type {

@@ -9,6 +9,7 @@
  */
 
 import { getLogger } from '@zhin.js/logger';
+import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 import type { Plugin } from '@zhin.js/core';
 
 const logger = getLogger('TypingIndicator');
@@ -555,33 +556,26 @@ export class GenericTypingIndicatorAdapter implements TypingIndicatorAdapter {
 
 // ── 全局实例 ──────────────────────────────────────────────────────────
 
-let globalManager: TypingIndicatorManager | null = null;
+const typingStore = createGenerationStore<TypingIndicatorManager>('zhin.agent.typing-indicator');
 
 /**
  * 获取全局提示管理器
  */
 export function getTypingIndicatorManager(): TypingIndicatorManager {
-  if (!globalManager) {
-    globalManager = new TypingIndicatorManager();
-  }
-  return globalManager;
+  return typingStore.tryUse() ?? new TypingIndicatorManager();
 }
 
 /**
- * 初始化提示管理器
+ * 注册 generation-scoped 提示管理器
  */
-export function initTypingIndicatorManager(
+export function provideTypingIndicatorManager(
+  context: GenerationStoreContext,
   defaultConfig?: Partial<TypingIndicatorConfig>,
 ): TypingIndicatorManager {
-  globalManager = new TypingIndicatorManager(defaultConfig);
-  return globalManager;
-}
-
-export async function disposeTypingIndicatorManager(): Promise<void> {
-  if (globalManager) {
-    await globalManager.dispose();
-    globalManager = null;
-  }
+  const manager = new TypingIndicatorManager(defaultConfig);
+  typingStore.provide(context, manager);
+  context.lifecycle.add(() => void manager.dispose());
+  return manager;
 }
 
 // ── 便捷函数 ──────────────────────────────────────────────────────────

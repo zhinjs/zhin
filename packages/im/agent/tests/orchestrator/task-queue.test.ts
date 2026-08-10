@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   TaskQueue,
-  initTaskQueue,
+  provideTaskQueue,
   getTaskQueue,
 } from '../../src/orchestrator/task-queue.js';
+import { DisposeStack } from '@zhin.js/plugin-runtime';
 
 describe('TaskQueue', () => {
   let queue: TaskQueue;
@@ -388,8 +389,10 @@ describe('TaskQueue', () => {
     });
 
     it('应该初始化全局实例', () => {
-      const instance = initTaskQueue({ maxConcurrency: 10 });
+      const lifecycle = new DisposeStack();
+      const instance = provideTaskQueue({ lifecycle }, { maxConcurrency: 10 });
       expect(instance).toBeDefined();
+      void lifecycle.dispose();
     });
   });
 });

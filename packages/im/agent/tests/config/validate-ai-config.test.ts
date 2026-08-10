@@ -68,13 +68,18 @@ describe('validateAiRoutingConfig', () => {
     expect(errors.some(e => e.includes('sdk is required'))).toBe(true);
   });
 
-  it('legacy driver 归一化为 sdk', () => {
-    const cfg = normalizeAiRoutingConfig({
+  it('legacy driver 字段硬报错（一次性升级走 zhin setup）', () => {
+    expect(() => normalizeAiRoutingConfig({
       providers: { deepseek: { driver: 'deepseek', apiKey: 'k' } },
       agents: { zhin: { provider: 'deepseek', model: 'm' } },
-    } as any);
-    expect(cfg.providers.deepseek?.sdk).toBe('deepseek');
-    expect(validateAiRoutingConfig(cfg)).toEqual([]);
+    } as any)).toThrow(/"driver" is removed; use "sdk" instead/);
+  });
+
+  it('旧平铺 providers 写法硬报错（缺少显式 sdk）', () => {
+    expect(() => normalizeAiRoutingConfig({
+      providers: { openai: { apiKey: 'k' } },
+      agents: { zhin: { provider: 'openai', model: 'm' } },
+    } as any)).toThrow(/sdk is required.*命名 providers/s);
   });
 
   it('拒绝 ai.routes', () => {

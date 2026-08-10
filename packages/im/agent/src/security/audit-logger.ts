@@ -9,6 +9,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { getHostRootPlugin } from '@zhin.js/core';
+import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 
 // ── 审计事件类型 ──────────────────────────────────────────────────────
 
@@ -646,42 +647,41 @@ export class AuditLogger {
 
 // ── 全局审计日志实例 ──────────────────────────────────────────────────
 
-let globalAuditLogger: AuditLogger | null = null;
+const auditStore = createGenerationStore<AuditLogger>('zhin.agent.audit-logger');
 
 /**
  * 获取全局审计日志实例
  */
 export function getAuditLogger(): AuditLogger {
-  if (!globalAuditLogger) {
-    const host = getHostRootPlugin();
-    if (host) {
-       
-      const config = (host.inject('config') as any)?.getPrimary?.()?.ai?.agent?.audit;
-      globalAuditLogger = new AuditLogger(config);
-    } else {
-      globalAuditLogger = new AuditLogger({ enabled: false });
-    }
+  const existing = auditStore.tryUse();
+  if (existing) return existing;
+  const host = getHostRootPlugin();
+  if (host) {
+    const config = (host.inject('config') as any)?.getPrimary?.()?.ai?.agent?.audit;
+    return new AuditLogger(config);
   }
-  return globalAuditLogger;
+  return new AuditLogger({ enabled: false });
 }
 
 /**
- * 初始化审计日志
+ * 注册 generation-scoped 审计日志
  */
-export function initAuditLogger(config: Partial<AuditLoggerConfig>): AuditLogger {
-  if (globalAuditLogger) {
-    void globalAuditLogger.close().catch(() => {});
-  }
-  globalAuditLogger = new AuditLogger(config);
-  return globalAuditLogger;
+export function provideAuditLogger(
+  context: GenerationStoreContext,
+  config: Partial<AuditLoggerConfig>,
+): AuditLogger {
+  const logger = new AuditLogger(config);
+  auditStore.provide(context, logger);
+  context.lifecycle.add(() => void logger.close());
+  return logger;
 }
 
 /**
  * 关闭审计日志（等待全部缓冲事件落盘）
  */
 export async function closeAuditLogger(): Promise<void> {
-  if (globalAuditLogger) {
-    await globalAuditLogger.close();
-    globalAuditLogger = null;
+  const logger = auditStore.tryUse();
+  if (logger) {
+    await logger.close();
   }
 }

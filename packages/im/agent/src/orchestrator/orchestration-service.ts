@@ -11,7 +11,12 @@ import type {
   OrchestrationTaskStatus,
 } from '@zhin.js/ai';
 import type { Message } from '@zhin.js/core';
-import { type AgentRole, type AgentTask, getAgentDispatcher } from './agent-dispatcher.js';
+import { type AgentRole, type AgentTask, AgentDispatcher } from './agent-dispatcher.js';
+import {
+  createGenerationStore,
+  type Dispose,
+  type GenerationStoreContext,
+} from '@zhin.js/plugin-runtime';
 import {
   type OrchestrationRepository,
   type OrchestrationRunWithTasks,
@@ -105,11 +110,23 @@ export class OrchestrationKernel {
   private executors = new Map<ExecutorKind, AgentExecutor>();
   private strategies = new Map<string, WorkflowStrategy>();
   private waiters = new Map<string, Array<(task: OrchestrationTask) => void>>();
+  /**
+   * 任务调度器由 kernel 持有：随 generation 创建/销毁，仓库句柄同源同步，
+   * 不再有模块级全局 dispatcher 与反向写耦合（原 synchronizeDispatcherRepository）。
+   */
+  readonly #dispatcher: AgentDispatcher;
 
-  constructor(private repository: OrchestrationRepository) {}
+  constructor(private repository: OrchestrationRepository) {
+    this.#dispatcher = new AgentDispatcher();
+    this.#dispatcher.setRepository(repository);
+  }
 
   get repositoryHandle(): OrchestrationRepository {
     return this.repository;
+  }
+
+  get dispatcherHandle(): AgentDispatcher {
+    return this.#dispatcher;
   }
 
   /**
@@ -119,6 +136,13 @@ export class OrchestrationKernel {
    */
   replaceRepository(repository: OrchestrationRepository): void {
     this.repository = repository;
+    this.#dispatcher.setRepository(repository);
+  }
+
+  /** Generation teardown：释放调度器（任务表/结果表/监听器）。 */
+  dispose(): void {
+    this.waiters.clear();
+    this.#dispatcher.dispose();
   }
 
   registerExecutor(executor: AgentExecutor): () => void {
@@ -301,7 +325,7 @@ export class OrchestrationKernel {
       finished_at: Date.now(),
     });
     const completedRecord = await this.repository.getTask(taskId);
-    if (completedRecord) getAgentDispatcher().syncTaskFromRecord(completedRecord);
+    if (completedRecord) this.dispatcherHandle.syncTaskFromRecord(completedRecord);
     await this.appendEvent(task.run_id, 'task.completed', taskId, { result });
     await this.appendEvent(task.run_id, 'result.returned', taskId, { result });
     await this.recomputeRunStatus(task.run_id);
@@ -321,7 +345,7 @@ export class OrchestrationKernel {
       finished_at: Date.now(),
     });
     const failedRecord = await this.repository.getTask(taskId);
-    if (failedRecord) getAgentDispatcher().syncTaskFromRecord(failedRecord);
+    if (failedRecord) this.dispatcherHandle.syncTaskFromRecord(failedRecord);
     await this.appendEvent(task.run_id, 'task.failed', taskId, { error });
     await this.recomputeRunStatus(task.run_id);
     const updated = mapTaskRecord((await this.repository.getTask(taskId))!);
@@ -356,7 +380,7 @@ export class OrchestrationKernel {
       await this.appendEvent(task.run_id, 'task.progress', taskId, { text: patch.progress });
     }
     const updated = await this.repository.getTask(taskId);
-    if (updated) getAgentDispatcher().syncTaskFromRecord(updated);
+    if (updated) this.dispatcherHandle.syncTaskFromRecord(updated);
     await this.recomputeRunStatus(task.run_id);
     return mapTaskRecord((await this.repository.getTask(taskId))!);
   }
@@ -376,7 +400,7 @@ export class OrchestrationKernel {
       finished_at: Date.now(),
     });
     const updated = await this.repository.getTask(taskId);
-    if (updated) getAgentDispatcher().syncTaskFromRecord(updated);
+    if (updated) this.dispatcherHandle.syncTaskFromRecord(updated);
     await this.appendEvent(task.run_id, 'task.failed', taskId, { cancelled: true, reason });
     await this.recomputeRunStatus(task.run_id);
     const mapped = mapTaskRecord((await this.repository.getTask(taskId))!);
@@ -418,8 +442,7 @@ export class OrchestrationKernel {
   async getStatus(runId: string): Promise<OrchestrationRunWithTasks | null> {
     const snapshot = await this.repository.getRunWithTasks(runId);
     if (!snapshot) return null;
-    const dispatcher = getAgentDispatcher();
-    for (const task of snapshot.tasks) dispatcher.syncTaskFromRecord(task);
+    for (const task of snapshot.tasks) this.dispatcherHandle.syncTaskFromRecord(task);
     return snapshot;
   }
 
@@ -463,7 +486,7 @@ export class OrchestrationKernel {
       finished_at: null,
     });
     const updated = await this.repository.getTask(taskId);
-    if (updated) getAgentDispatcher().syncTaskFromRecord(updated);
+    if (updated) this.dispatcherHandle.syncTaskFromRecord(updated);
     await this.appendEvent(task.run_id, 'task.progress', taskId, { status: 'pending', action: 'retry' });
     return { ok: true, message: `Task ${taskId} reset to pending` };
   }
@@ -479,7 +502,7 @@ export class OrchestrationKernel {
       finished_at: Date.now(),
     });
     const updated = await this.repository.getTask(taskId);
-    if (updated) getAgentDispatcher().syncTaskFromRecord(updated);
+    if (updated) this.dispatcherHandle.syncTaskFromRecord(updated);
     await this.appendEvent(task.run_id, 'task.failed', taskId, { cancelled: true, reason });
     await this.recomputeRunStatus(task.run_id);
     return { ok: true, message: `Task ${taskId} cancelled` };
@@ -518,7 +541,7 @@ export class OrchestrationKernel {
 
   private async createTaskRecord(input: CreateOrchestrationTaskInput): Promise<OrchestrationTaskRecord> {
     const record = await this.repository.createTask(input);
-    getAgentDispatcher().syncTaskFromRecord(record);
+    this.dispatcherHandle.syncTaskFromRecord(record);
     await this.appendEvent(record.run_id, 'task.created', record.id, {
       name: record.name,
       role: record.role,
@@ -528,7 +551,7 @@ export class OrchestrationKernel {
       assigned_to: record.assigned_to,
     });
     const assigned = (await this.repository.getTask(record.id)) ?? record;
-    getAgentDispatcher().syncTaskFromRecord(assigned);
+    this.dispatcherHandle.syncTaskFromRecord(assigned);
     await this.appendEvent(record.run_id, 'task.assigned', record.id, {
       executorKind: record.executor_kind,
       assignedTo: record.assigned_to || null,
@@ -618,58 +641,50 @@ export class OrchestrationKernel {
 
 export class OrchestrationService extends OrchestrationKernel {}
 
-let globalService: OrchestrationService | null = null;
-const serviceRegistrations: OrchestrationService[] = [];
+const serviceStore = createGenerationStore<OrchestrationService>('zhin.agent.orchestration-service');
 
-function activeOrchestrationService(): OrchestrationService | null {
-  return serviceRegistrations[serviceRegistrations.length - 1] ?? globalService;
-}
-
-function synchronizeDispatcherRepository(): void {
-  getAgentDispatcher().setRepository(activeOrchestrationService()?.repositoryHandle ?? null);
-}
-
-export function initOrchestrationService(repository: OrchestrationRepository): OrchestrationService {
-  globalService = new OrchestrationService(repository);
-  synchronizeDispatcherRepository();
-  return globalService;
-}
-
-/** Generation-owned registration for Plugin Runtime composition roots. */
-export function registerOrchestrationService(service: OrchestrationService): () => void {
-  serviceRegistrations.push(service);
-  synchronizeDispatcherRepository();
-  return () => {
-    const index = serviceRegistrations.lastIndexOf(service);
-    if (index >= 0) serviceRegistrations.splice(index, 1);
-    synchronizeDispatcherRepository();
-  };
+/** 纯工厂：创建服务（dispatcher 由服务持有）。注册请走 provideOrchestrationService。 */
+export function createOrchestrationService(repository: OrchestrationRepository): OrchestrationService {
+  return new OrchestrationService(repository);
 }
 
 /**
- * Upgrade the global kernel's repository in-place. If no kernel exists yet, this
- * is equivalent to {@link initOrchestrationService}. Otherwise it swaps the
- * repository while preserving registered executors and workflow strategies —
- * used by the DB activation path to move from the Memory placeholder to a
- * Database repository without losing bootstrap-time registrations.
+ * Generation-owned registration：反注册与服务 dispose（含 dispatcher）随
+ * `context.lifecycle` 自动执行，代际结束即摘除，杜绝跨热重载悬挂。
+ */
+export function provideOrchestrationService(
+  context: GenerationStoreContext,
+  service: OrchestrationService,
+): Dispose {
+  context.lifecycle.add(() => { service.dispose(); });
+  return serviceStore.provide(context, service);
+}
+
+/**
+ * Upgrade the active kernel's repository in-place, preserving registered
+ * executors and workflow strategies — used by the DB activation path to move
+ * from the Memory placeholder to a Database repository without losing
+ * bootstrap-time registrations. Throws when no generation has provided a
+ * service (旧的静默创建全局服务兜底已删除）。
  */
 export function upgradeOrchestrationRepository(
   repository: OrchestrationRepository,
-  target: OrchestrationService | null = activeOrchestrationService(),
+  target: OrchestrationService | null = getOrchestrationService(),
 ): OrchestrationService {
   const existing = target;
-  if (existing) {
-    existing.replaceRepository(repository);
-    if (existing === activeOrchestrationService()) synchronizeDispatcherRepository();
-    return existing;
+  if (!existing) {
+    throw new Error(
+      'No live OrchestrationService — createOrchestrationService + provideOrchestrationService first',
+    );
   }
-  return initOrchestrationService(repository);
+  existing.replaceRepository(repository);
+  return existing;
 }
 
 export function getOrchestrationService(): OrchestrationService | null {
-  return activeOrchestrationService();
+  return serviceStore.tryUse() ?? null;
 }
 
 export function getOrchestrationKernel(): OrchestrationKernel | null {
-  return activeOrchestrationService();
+  return getOrchestrationService();
 }

@@ -7,6 +7,7 @@
  * 3. AI 触发中间件
  * 4. 内置工具
  */
+import { createPermissionHost } from '@zhin.js/permission';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock Logger first
@@ -74,7 +75,7 @@ describe('AI Service 集成测试', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     aiService = new AIService({
-      providers: { mock: { driver: 'openai', apiKey: 'sk-test' } },
+      providers: { mock: { sdk: 'openai', apiKey: 'sk-test' } },
       agents: { zhin: { provider: 'mock', model: 'gpt-4o-mini' } },
       sessions: { maxHistory: 10 },
     });
@@ -105,12 +106,12 @@ describe('AI Service 集成测试', () => {
     it('应该根据配置初始化所有 Provider', () => {
       const fullService = new AIService({
         providers: {
-          openai: { driver: 'openai', apiKey: 'sk-test' },
-          anthropic: { driver: 'anthropic', apiKey: 'sk-ant-test' },
-          deepseek: { driver: 'deepseek', apiKey: 'sk-deepseek' },
-          moonshot: { driver: 'moonshot', apiKey: 'sk-moonshot', baseUrl: 'https://api.moonshot.cn/v1' },
-          zhipu: { driver: 'zhipu', apiKey: 'sk-zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
-          ollama: { driver: 'ollama', host: 'http://localhost:11434' },
+          openai: { sdk: 'openai', apiKey: 'sk-test' },
+          anthropic: { sdk: 'anthropic', apiKey: 'sk-ant-test' },
+          deepseek: { sdk: 'deepseek', apiKey: 'sk-deepseek' },
+          moonshot: { sdk: 'openai-compatible', apiKey: 'sk-moonshot', baseUrl: 'https://api.moonshot.cn/v1' },
+          zhipu: { sdk: 'openai-compatible', apiKey: 'sk-zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
+          ollama: { sdk: 'ollama', host: 'http://localhost:11434' },
         },
         agents: {
           zhin: { provider: 'openai', model: 'gpt-4o-mini' },
@@ -132,9 +133,9 @@ describe('AI Service 集成测试', () => {
     it('应该只初始化有 apiKey 的 Provider', () => {
       const partialService = new AIService({
         providers: {
-          openai: { driver: 'openai', apiKey: 'sk-test' },
-          deepseek: { driver: 'deepseek' },
-          moonshot: { driver: 'moonshot', apiKey: 'sk-moonshot', baseUrl: 'https://api.moonshot.cn/v1' },
+          openai: { sdk: 'openai', apiKey: 'sk-test' },
+          deepseek: { sdk: 'deepseek' },
+          moonshot: { sdk: 'openai-compatible', apiKey: 'sk-moonshot', baseUrl: 'https://api.moonshot.cn/v1' },
         },
         agents: {
           zhin: { provider: 'openai', model: 'gpt-4o-mini' },
@@ -164,7 +165,7 @@ describe('AI Service 集成测试', () => {
 
     it('应该返回 access 配置', () => {
       const svc = new AIService({
-        providers: { mock: { driver: 'openai', apiKey: 'sk-test' } },
+        providers: { mock: { sdk: 'openai', apiKey: 'sk-test' } },
         agents: { zhin: { provider: 'mock', model: 'gpt-4o-mini' } },
         access: {
           mode: 'whitelist',
@@ -350,7 +351,7 @@ describe('Tool Service 集成测试', () => {
   });
 
   describe('上下文过滤', () => {
-    it('应该按平台过滤工具', () => {
+    it('应该按平台过滤工具', async () => {
       service.addTool({
         name: 'qq_only',
         description: '',
@@ -371,16 +372,16 @@ describe('Tool Service 集成测试', () => {
       
       const allTools = service.getAll();
       
-      const qqFiltered = service.filterByContext(allTools, qqContext);
+      const qqFiltered = await service.filterByContext(allTools, qqContext);
       expect(qqFiltered.some(t => t.name === 'qq_only')).toBe(true);
       expect(qqFiltered.some(t => t.name === 'all_platforms')).toBe(true);
       
-      const telegramFiltered = service.filterByContext(allTools, telegramContext);
+      const telegramFiltered = await service.filterByContext(allTools, telegramContext);
       expect(telegramFiltered.some(t => t.name === 'qq_only')).toBe(false);
       expect(telegramFiltered.some(t => t.name === 'all_platforms')).toBe(true);
     });
 
-    it('应该按权限过滤工具', () => {
+    it('应该按权限过滤工具', async () => {
       service.addTool({
         name: 'admin_tool',
         description: '',
@@ -404,10 +405,11 @@ describe('Tool Service 集成测试', () => {
         $channel: { type: 'private', id: 'admin1' },
       } as import('@zhin.js/core').Message<any>;
       
-      const userFiltered = service.filterByContext(allTools, userContext);
+      const host = createPermissionHost();
+      const userFiltered = await service.filterByContext(allTools, userContext, host);
       expect(userFiltered.some(t => t.name === 'admin_tool')).toBe(false);
       
-      const adminFiltered = service.filterByContext(allTools, adminContext);
+      const adminFiltered = await service.filterByContext(allTools, adminContext, host);
       expect(adminFiltered.some(t => t.name === 'admin_tool')).toBe(true);
     });
   });

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
-import { initOrchestrationService } from '../../src/orchestrator/orchestration-service.js';
+import { provideTestOrchestrationService } from '../helpers/orchestration.js';
 import { MemoryOrchestrationRepository } from '../../src/orchestrator/orchestration-repository.js';
 import { tryCompleteKernelImProjectionFromOutbound } from '../../src/collaboration/collaboration-kernel-bridge.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
@@ -35,7 +35,7 @@ describe('tryCompleteKernelImProjectionFromOutbound', () => {
     });
 
     const repo = new MemoryOrchestrationRepository();
-    const orch = initOrchestrationService(repo);
+    const orch = provideTestOrchestrationService(repo);
     const run = await orch.startRun({ sessionKey: resolveIMSessionIdFromMessage(message) });
     const dispatched = await orch.dispatchTask({
       runId: run.run.id,

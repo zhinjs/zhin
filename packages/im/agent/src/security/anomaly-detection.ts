@@ -9,6 +9,7 @@
  */
 
 import { getLogger } from '@zhin.js/logger';
+import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 
 const logger = getLogger('AnomalyDetector');
 
@@ -364,48 +365,35 @@ export const DEFAULT_DETECTION_RULES: DetectionRule[] = [
 
 // ── 全局实例 ──────────────────────────────────────────────────────────
 
-let globalAnomalyDetector: AnomalyDetector | null = null;
+const anomalyStore = createGenerationStore<AnomalyDetector>('zhin.agent.anomaly-detector');
 
-/**
- * 获取全局异常检测器
- */
-export function getAnomalyDetector(): AnomalyDetector {
-  if (!globalAnomalyDetector) {
-    globalAnomalyDetector = new AnomalyDetector();
-
-    // 添加预定义行为模式
-    for (const pattern of DEFAULT_BEHAVIOR_PATTERNS) {
-      globalAnomalyDetector.addPattern(pattern);
-    }
-
-    // 添加预定义检测规则
-    for (const rule of DEFAULT_DETECTION_RULES) {
-      globalAnomalyDetector.addRule(rule);
-    }
+function createConfiguredDetector(): AnomalyDetector {
+  const detector = new AnomalyDetector();
+  for (const pattern of DEFAULT_BEHAVIOR_PATTERNS) {
+    detector.addPattern(pattern);
   }
-  return globalAnomalyDetector;
+  for (const rule of DEFAULT_DETECTION_RULES) {
+    detector.addRule(rule);
+  }
+  return detector;
 }
 
-/**
- * 初始化异常检测器
- */
+export function getAnomalyDetector(): AnomalyDetector {
+  return anomalyStore.tryUse() ?? createConfiguredDetector();
+}
+
+export function provideAnomalyDetector(context: GenerationStoreContext): AnomalyDetector {
+  const detector = createConfiguredDetector();
+  anomalyStore.provide(context, detector);
+  return detector;
+}
+
+/** @deprecated 使用 provideAnomalyDetector 替代 */
 export function initAnomalyDetector(): AnomalyDetector {
-  globalAnomalyDetector = new AnomalyDetector();
-
-  // 添加预定义行为模式
-  for (const pattern of DEFAULT_BEHAVIOR_PATTERNS) {
-    globalAnomalyDetector.addPattern(pattern);
-  }
-
-  // 添加预定义检测规则
-  for (const rule of DEFAULT_DETECTION_RULES) {
-    globalAnomalyDetector.addRule(rule);
-  }
-
-  return globalAnomalyDetector;
+  return createConfiguredDetector();
 }
 
 /** 重置全局异常检测器（用于测试隔离） */
 export function resetAnomalyDetector(): void {
-  globalAnomalyDetector = null;
+  anomalyStore.clear();
 }

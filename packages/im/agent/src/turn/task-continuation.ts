@@ -7,6 +7,7 @@
 
 import type { AgentMessage, Usage } from '@zhin.js/ai';
 import type { ZhinAgentConfig } from '../config/index.js';
+import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 
 // ── 任务状态定义 ──────────────────────────────────────────────────────
 
@@ -480,22 +481,19 @@ function generateSubtasks(
 
 // ── 全局实例 ──────────────────────────────────────────────────────────
 
-let globalContinuationManager: TaskContinuationManager | null = null;
+const continuationStore = createGenerationStore<TaskContinuationManager>('zhin.agent.task-continuation');
 
-/**
- * 获取全局任务续传管理器
- */
 export function getContinuationManager(): TaskContinuationManager {
-  if (!globalContinuationManager) {
-    globalContinuationManager = new TaskContinuationManager();
-  }
-  return globalContinuationManager;
+  return continuationStore.tryUse() ?? new TaskContinuationManager();
 }
 
-/**
- * 初始化任务续传管理器
- */
+export function provideContinuationManager(context: GenerationStoreContext, maxStoredTasks?: number): TaskContinuationManager {
+  const manager = new TaskContinuationManager(maxStoredTasks);
+  continuationStore.provide(context, manager);
+  return manager;
+}
+
+/** @deprecated 使用 provideContinuationManager 替代 */
 export function initContinuationManager(maxStoredTasks?: number): TaskContinuationManager {
-  globalContinuationManager = new TaskContinuationManager(maxStoredTasks);
-  return globalContinuationManager;
+  return new TaskContinuationManager(maxStoredTasks);
 }

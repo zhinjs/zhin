@@ -6,11 +6,12 @@ import {
   NoneTypingIndicator,
   ReactionTypingIndicatorAdapter,
   GenericTypingIndicatorAdapter,
-  initTypingIndicatorManager,
+  provideTypingIndicatorManager,
   getTypingIndicatorManager,
   startTypingIndicator,
   stopTypingIndicator,
 } from '../../src/typing-indicator/index.js';
+import { DisposeStack } from '@zhin.js/plugin-runtime';
 
 describe('TypingIndicatorManager', () => {
   let manager: TypingIndicatorManager;
@@ -635,18 +636,21 @@ describe('全局实例', () => {
   });
 
   it('应该初始化全局实例', () => {
-    const instance = initTypingIndicatorManager({
+    const lifecycle = new DisposeStack();
+    const instance = provideTypingIndicatorManager({ lifecycle }, {
       type: 'reaction',
       emoji: '👍',
     });
 
     expect(instance).toBeDefined();
+    void lifecycle.dispose();
   });
 });
 
 describe('便捷函数', () => {
   it('应该快速开始提示', async () => {
-    const manager = initTypingIndicatorManager();
+    const lifecycle = new DisposeStack();
+    const manager = provideTypingIndicatorManager({ lifecycle });
 
     const mockIndicator = {
       start: vi.fn().mockResolvedValue(undefined),
@@ -673,7 +677,8 @@ describe('便捷函数', () => {
   });
 
   it('应该快速停止提示', async () => {
-    const manager = initTypingIndicatorManager();
+    const lifecycle = new DisposeStack();
+    const manager = provideTypingIndicatorManager({ lifecycle });
 
     const mockIndicator = {
       start: vi.fn().mockResolvedValue(undefined),

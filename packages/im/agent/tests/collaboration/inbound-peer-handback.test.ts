@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
-import { initOrchestrationService } from '../../src/orchestrator/orchestration-service.js';
+import { provideTestOrchestrationService } from '../helpers/orchestration.js';
 import { MemoryOrchestrationRepository } from '../../src/orchestrator/orchestration-repository.js';
 import { tryHandlePeerInboundHandback } from '../../src/collaboration/inbound-peer-handback.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
@@ -31,7 +31,7 @@ describe('tryHandlePeerInboundHandback', () => {
     });
 
     const repo = new MemoryOrchestrationRepository();
-    const orch = initOrchestrationService(repo);
+    const orch = provideTestOrchestrationService(repo);
     const run = await orch.startRun({ sessionKey: resolveIMSessionIdFromMessage(baseMessage) });
     const dispatched = await orch.dispatchTask({
       runId: run.run.id,
@@ -81,7 +81,7 @@ describe('tryHandlePeerInboundHandback', () => {
     };
 
     const repo = new MemoryOrchestrationRepository();
-    const orch = initOrchestrationService(repo);
+    const orch = provideTestOrchestrationService(repo);
     const run = await orch.startRun({ sessionKey: resolveIMSessionIdFromMessage(message) });
     for (const name of ['t1', 't2']) {
       const dispatched = await orch.dispatchTask({

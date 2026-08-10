@@ -1,8 +1,11 @@
 /**
  * RemoteAgentRegistry — A2A Agent Card discovery + Client cache.
+ *
+ * Generation-scoped: provide() 注册后随 lifecycle 自动 dispose + 反注册。
  */
 import { createRequire } from 'node:module';
 import { getLogger } from '@zhin.js/logger';
+import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 import type { AIConfig } from '@zhin.js/ai';
 import type { AgentCard } from '@a2a-js/sdk';
 import { resolveConfigEnvString } from '../utils/config-env.js';
@@ -191,18 +194,20 @@ export class RemoteAgentRegistry {
   }
 }
 
-let globalRegistry: RemoteAgentRegistry | null = null;
+const registryStore = createGenerationStore<RemoteAgentRegistry>('zhin.agent.remote-agent-registry');
 
-export function getRemoteAgentRegistry(): RemoteAgentRegistry {
-  if (!globalRegistry) {
-    globalRegistry = new RemoteAgentRegistry();
-  }
-  return globalRegistry;
+export function getRemoteAgentRegistry(): RemoteAgentRegistry | null {
+  return registryStore.tryUse() ?? null;
 }
 
-export async function initRemoteAgentRegistry(config: AIConfig | undefined): Promise<RemoteAgentRegistry> {
-  const registry = getRemoteAgentRegistry();
+export async function provideRemoteAgentRegistry(
+  context: GenerationStoreContext,
+  config: AIConfig | undefined,
+): Promise<RemoteAgentRegistry> {
+  const registry = new RemoteAgentRegistry();
   registry.loadFromConfig(config);
+  registryStore.provide(context, registry);
+  context.lifecycle.add(() => void registry.dispose());
   for (const entry of registry.list()) {
     try {
       await registry.refreshCard(entry.id);
@@ -211,11 +216,4 @@ export async function initRemoteAgentRegistry(config: AIConfig | undefined): Pro
     }
   }
   return registry;
-}
-
-export async function disposeRemoteAgentRegistry(): Promise<void> {
-  if (globalRegistry) {
-    await globalRegistry.dispose();
-    globalRegistry = null;
-  }
 }

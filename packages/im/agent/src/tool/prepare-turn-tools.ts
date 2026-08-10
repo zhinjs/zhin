@@ -67,7 +67,7 @@ export async function prepareTurnTools(
     : [];
 
   const toolSystem = host.toolSystem ?? defaultToolSystem;
-  let allTools = toolSystem.collectForTurn({
+  let allTools = await toolSystem.collectForTurn({
     host,
     message: contextForTools,
     content: opts.content,

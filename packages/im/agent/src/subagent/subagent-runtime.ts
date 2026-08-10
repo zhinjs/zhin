@@ -475,6 +475,7 @@ export class SubagentRuntime {
         taskId,
         label,
         presetName: opts?.presetName,
+        role,
         origin,
         keepTypingUntilUpstreamFinish: opts?.keepTypingUntilUpstreamFinish,
       })

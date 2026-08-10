@@ -4,6 +4,57 @@ import { PIPELINE_ROLES } from '../collaboration/types.js';
 import { normalizeAiRoutingConfig } from './normalize-ai-config.js';
 type LegacyRouteEntry = { priority: number; match: AgentBindingConfig['match'] };
 
+/**
+ * 旧 driver 名 → sdk 的迁移映射（一次性升级专用；运行时 normalize 不再识别
+ * driver，直接硬报错）。
+ */
+const LEGACY_DRIVER_TO_SDK: Record<string, string> = {
+  openai: 'openai',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  moonshot: 'openai-compatible',
+  zhipu: 'openai-compatible',
+  google: 'google',
+  gemini: 'google',
+  ollama: 'ollama',
+  cloudflare: 'openai-compatible',
+};
+
+/** providers 段的 driver 字段 / 旧平铺写法（key 即 driver、无 sdk）→ 显式 sdk。 */
+function migrateLegacyProviderDrivers(
+  providers: unknown,
+): { providers: Record<string, unknown>; migrated: boolean } {
+  if (!providers || typeof providers !== 'object' || Array.isArray(providers)) {
+    return { providers: providers as Record<string, unknown>, migrated: false };
+  }
+  const out: Record<string, unknown> = {};
+  let migrated = false;
+  for (const [alias, entry] of Object.entries(providers as Record<string, unknown>)) {
+    if (!entry || typeof entry !== 'object') {
+      out[alias] = entry;
+      continue;
+    }
+    const record = { ...(entry as Record<string, unknown>) };
+    const driver = typeof record.driver === 'string' ? record.driver.trim().toLowerCase() : '';
+    if (driver) {
+      delete record.driver;
+      if (typeof record.sdk !== 'string' || !record.sdk.trim()) {
+        record.sdk = LEGACY_DRIVER_TO_SDK[driver] ?? driver;
+      }
+      migrated = true;
+    } else if (
+      (typeof record.sdk !== 'string' || !record.sdk.trim())
+      && LEGACY_DRIVER_TO_SDK[alias.trim().toLowerCase()]
+    ) {
+      // 旧平铺写法：providers: { openai: { apiKey } }（key 即 driver）
+      record.sdk = LEGACY_DRIVER_TO_SDK[alias.trim().toLowerCase()];
+      migrated = true;
+    }
+    out[alias] = record;
+  }
+  return { providers: out, migrated };
+}
+
 function mergeLegacyRoutesIntoAgents(
   agents: Record<string, AgentBindingConfig>,
   routes: Record<string, LegacyRouteEntry>,
@@ -75,9 +126,12 @@ export function applyAiConfigFixes(
     && Object.keys(legacy.pipeline).length > 0;
   const hadDefaultProvider = !!legacy.defaultProvider;
   const hadLegacyAgent = !!(legacy.agent?.chatModel || legacy.agent?.visionModel);
+  // driver 字段 / 旧平铺 providers 真正重写为显式 sdk（运行时 normalize 硬拒绝旧形态）
+  const driverMigration = migrateLegacyProviderDrivers(src.providers);
+  if (driverMigration.migrated) {
+    src.providers = driverMigration.providers as AIConfig['providers'];
+  }
   const providers = src.providers;
-  const hadDriver = providers && typeof providers === 'object' && !Array.isArray(providers)
-    && Object.values(providers).some((p) => p && typeof p === 'object' && 'driver' in (p as object));
 
   const agents = {
     ...((src as AIConfig & { agents?: Record<string, AgentBindingConfig> }).agents ?? {}),
@@ -167,7 +221,7 @@ export function applyAiConfigFixes(
     fixes.push('removed deprecated ai.memoryMcp');
   }
 
-  if (hadDriver) fixes.push('migrated ai.providers.*.driver to sdk');
+  if (driverMigration.migrated) fixes.push('migrated ai.providers.*.driver to sdk');
 
   const context = next.context;
   if (context && typeof context === 'object' && !Array.isArray(context)) {

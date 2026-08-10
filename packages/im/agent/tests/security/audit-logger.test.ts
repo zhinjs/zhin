@@ -10,7 +10,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { AuditLogger, initAuditLogger, closeAuditLogger } from '../../src/security/audit-logger.js';
+import { AuditLogger, provideAuditLogger, closeAuditLogger } from '../../src/security/audit-logger.js';
+import { DisposeStack } from '@zhin.js/plugin-runtime';
 
 describe('AuditLogger 异步硬化', () => {
   let tmpDir: string;
@@ -137,7 +138,8 @@ describe('AuditLogger 异步硬化', () => {
   });
 
   it('closeAuditLogger() 等待全局实例 flush', async () => {
-    const logger = initAuditLogger({ enabled: true, logFile });
+    const lifecycle = new DisposeStack();
+    const logger = provideAuditLogger({ lifecycle }, { enabled: true, logFile });
     logger.log({ type: 'session.end', severity: 'info', message: 'global-flush' });
     await closeAuditLogger();
 

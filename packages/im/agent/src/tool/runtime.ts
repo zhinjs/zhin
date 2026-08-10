@@ -26,7 +26,7 @@ export interface CollectRuntimeToolsOptions {
   toolSystem?: ToolSystem;
 }
 
-export function collectRuntimeTools(options: CollectRuntimeToolsOptions): AgentTool[] {
+export async function collectRuntimeTools(options: CollectRuntimeToolsOptions): Promise<AgentTool[]> {
   const toolSystem = options.toolSystem ?? defaultToolSystem;
   const ctx: CollectToolsContext = {
     message: options.commMessage,

@@ -4,22 +4,24 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { TaskState, Role } from '@a2a-js/sdk';
-import { getAgentDispatcher } from '../../src/orchestrator/agent-dispatcher.js';
+
 import { MemoryOrchestrationRepository } from '../../src/orchestrator/orchestration-repository.js';
-import { initOrchestrationService } from '../../src/orchestrator/orchestration-service.js';
+import { provideTestOrchestrationService } from '../helpers/orchestration.js';
+import { getOrchestrationService } from '../../src/orchestrator/orchestration-service.js';
 import type { AgentExecutor } from '../../src/orchestrator/orchestration-types.js';
 import {
   executeRemoteOrchestrationTask,
   pollRemoteTaskStatus,
 } from '../../src/orchestrator/remote-task-executor.js';
 import {
-  initRemoteAgentRegistry,
+  provideRemoteAgentRegistry,
   type RemoteAgentRegistry,
 } from '../../src/orchestrator/remote-agent-registry.js';
+import { DisposeStack } from '@zhin.js/plugin-runtime';
 
 describe('Executor contract — local', () => {
   it('success: result event → completed + result_summary', async () => {
-    const kernel = initOrchestrationService(new MemoryOrchestrationRepository());
+    const kernel = provideTestOrchestrationService(new MemoryOrchestrationRepository());
     const run = await kernel.startRun({ sessionKey: 'local-ok' });
     const dispatched = await kernel.dispatchTask({
       runId: run.run.id,
@@ -41,7 +43,7 @@ describe('Executor contract — local', () => {
   });
 
   it('fail: error event → failed', async () => {
-    const kernel = initOrchestrationService(new MemoryOrchestrationRepository());
+    const kernel = provideTestOrchestrationService(new MemoryOrchestrationRepository());
     const run = await kernel.startRun({ sessionKey: 'local-fail' });
     const dispatched = await kernel.dispatchTask({
       runId: run.run.id,
@@ -64,7 +66,7 @@ describe('Executor contract — local', () => {
 
   it('cancel: cancelTask on running → cancelled', async () => {
     const repo = new MemoryOrchestrationRepository();
-    const kernel = initOrchestrationService(repo);
+    const kernel = provideTestOrchestrationService(repo);
     const run = await kernel.startRun({ sessionKey: 'local-cancel' });
     const task = await kernel.addTask({ runId: run.run.id, name: 'work' });
     await repo.updateTaskStatus(task.id, 'running', { started_at: Date.now() });
@@ -77,7 +79,7 @@ describe('Executor contract — local', () => {
 
 describe('Executor contract — im_projection', () => {
   it('fail: error event → failed', async () => {
-    const kernel = initOrchestrationService(new MemoryOrchestrationRepository());
+    const kernel = provideTestOrchestrationService(new MemoryOrchestrationRepository());
     const run = await kernel.startRun({ sessionKey: 'mention-fail' });
     const dispatched = await kernel.dispatchTask({
       runId: run.run.id,
@@ -100,7 +102,7 @@ describe('Executor contract — im_projection', () => {
   });
 
   it('handoff: no result event → waiting_result (completed via outbound bridge)', async () => {
-    const kernel = initOrchestrationService(new MemoryOrchestrationRepository());
+    const kernel = provideTestOrchestrationService(new MemoryOrchestrationRepository());
     const run = await kernel.startRun({ sessionKey: 'mention-wait' });
     const dispatched = await kernel.dispatchTask({
       runId: run.run.id,
@@ -129,7 +131,7 @@ describe('Executor contract — im_projection', () => {
 
 describe('Executor contract — internal_room', () => {
   it('success: result event → completed + result_summary', async () => {
-    const kernel = initOrchestrationService(new MemoryOrchestrationRepository());
+    const kernel = provideTestOrchestrationService(new MemoryOrchestrationRepository());
     const run = await kernel.startRun({ sessionKey: 'internal-room-ok' });
     const dispatched = await kernel.dispatchTask({
       runId: run.run.id,
@@ -153,6 +155,8 @@ describe('Executor contract — internal_room', () => {
 });
 
 describe('Executor contract — remote_mesh', () => {
+  const lifecycle = new DisposeStack();
+
   function stubA2aClient(registry: RemoteAgentRegistry, client: {
     sendMessage: ReturnType<typeof vi.fn>;
     getTask: ReturnType<typeof vi.fn>;
@@ -182,15 +186,14 @@ describe('Executor contract — remote_mesh', () => {
   }
 
   beforeEach(() => {
-    void initRemoteAgentRegistry({
+    void provideRemoteAgentRegistry({ lifecycle }, {
       remoteAgents: [{ id: 'local', cardUrl: 'http://127.0.0.1:8068/a2a/zhin/.well-known/agent-card.json', token: 't' }],
     });
   });
 
   it('success: delegate → poll completed', async () => {
     const repo = new MemoryOrchestrationRepository();
-    initOrchestrationService(repo);
-    getAgentDispatcher().setRepository(repo);
+    provideTestOrchestrationService(repo);
 
     const run = await repo.createRun({ session_key: 'remote-ok', title: 'r' });
     const task = await repo.createTask({
@@ -201,10 +204,10 @@ describe('Executor contract — remote_mesh', () => {
       remote_agent_id: 'local',
       status: 'running',
     });
-    getAgentDispatcher().syncTaskFromRecord(task);
+    getOrchestrationService()!.dispatcherHandle.syncTaskFromRecord(task);
 
     const remoteTaskId = 'rt-1';
-    const registry = await initRemoteAgentRegistry({
+    const registry = await provideRemoteAgentRegistry({ lifecycle }, {
       remoteAgents: [{ id: 'local', cardUrl: 'http://127.0.0.1:8068/a2a/zhin/.well-known/agent-card.json', token: 't' }],
     });
     stubA2aClient(registry, {
@@ -248,8 +251,7 @@ describe('Executor contract — remote_mesh', () => {
 
   it('fail: delegate throws → failed (not waiting_result)', async () => {
     const repo = new MemoryOrchestrationRepository();
-    initOrchestrationService(repo);
-    getAgentDispatcher().setRepository(repo);
+    provideTestOrchestrationService(repo);
 
     const run = await repo.createRun({ session_key: 'remote-fail', title: 'r' });
     const task = await repo.createTask({
@@ -260,9 +262,9 @@ describe('Executor contract — remote_mesh', () => {
       remote_agent_id: 'local',
       status: 'running',
     });
-    getAgentDispatcher().syncTaskFromRecord(task);
+    getOrchestrationService()!.dispatcherHandle.syncTaskFromRecord(task);
 
-    const registry = await initRemoteAgentRegistry({
+    const registry = await provideRemoteAgentRegistry({ lifecycle }, {
       remoteAgents: [{ id: 'local', cardUrl: 'http://127.0.0.1:8068/a2a/zhin/.well-known/agent-card.json', token: 't' }],
     });
     stubA2aClient(registry, {
@@ -277,8 +279,7 @@ describe('Executor contract — remote_mesh', () => {
 
   it('cancel: remote cancelled status → cancelled terminal', async () => {
     const repo = new MemoryOrchestrationRepository();
-    initOrchestrationService(repo);
-    getAgentDispatcher().setRepository(repo);
+    provideTestOrchestrationService(repo);
 
     const run = await repo.createRun({ session_key: 'remote-cancel', title: 'r' });
     const task = await repo.createTask({
@@ -291,9 +292,9 @@ describe('Executor contract — remote_mesh', () => {
     });
     await repo.updateTaskStatus(task.id, 'waiting_result', { remote_task_id: 'rt-cancel' });
     const synced = (await repo.getTask(task.id))!;
-    getAgentDispatcher().syncTaskFromRecord(synced);
+    getOrchestrationService()!.dispatcherHandle.syncTaskFromRecord(synced);
 
-    const registry = await initRemoteAgentRegistry({
+    const registry = await provideRemoteAgentRegistry({ lifecycle }, {
       remoteAgents: [{ id: 'local', cardUrl: 'http://127.0.0.1:8068/a2a/zhin/.well-known/agent-card.json', token: 't' }],
     });
     stubA2aClient(registry, {
@@ -330,7 +331,7 @@ describe('Executor contract — remote_mesh', () => {
 
 describe('Executor contract — snapshot API', () => {
   it('getSnapshot reflects kernel DB after completeTask', async () => {
-    const kernel = initOrchestrationService(new MemoryOrchestrationRepository());
+    const kernel = provideTestOrchestrationService(new MemoryOrchestrationRepository());
     const run = await kernel.startRun({ sessionKey: 'snap' });
     const task = await kernel.addTask({ runId: run.run.id, name: 't1' });
     await kernel.completeTask(task.id, 'snapshot body');

@@ -16,6 +16,7 @@ import { logPromptComposition } from '../internal/prompt-trace.js';
 import { planToolRun } from '../tool/runtime.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
+import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
 import { transformContextWithCompaction } from '../memory/compaction-runtime.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
 import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars } from '../config/index.js';
@@ -835,7 +836,7 @@ export async function* runAgentLoopTextTurnRun(
   if (spawnedSubagent) {
     await host.getActiveTurnTracker()?.waitForPendingSubagents();
   }
-  const delegatedOnly = spawnedSubagent
+  const delegatedOnly = shouldSuppressReplyForSpawnDelegation(toolCalls)
     && !toolCalls.some(tc => tc.tool === 'run_deferred_task')
     && !toolCalls.some(tc =>
       tc.tool === 'generate_image'

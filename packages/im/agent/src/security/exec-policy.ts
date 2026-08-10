@@ -65,7 +65,7 @@ export function isDangerousCommand(cmdName: string): boolean {
   return DANGEROUS_COMMANDS.has(cmdName);
 }
 
-function matchHardBlockedCommand(command: string): string | undefined {
+export function matchHardBlockedCommand(command: string): string | undefined {
   const lower = command.trim().toLowerCase();
   if (/\b(?:rm|rmdir)\b/.test(lower) && lower.includes('node_modules')) {
     return '拒绝删除依赖目录 node_modules（高风险破坏操作）。';

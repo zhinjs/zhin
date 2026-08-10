@@ -1,9 +1,11 @@
 /**
  * RemoteTaskPoller — 轮询远程 A2A 任务状态（Get Task fallback）。
+ *
+ * Generation-scoped: provide() 注册后随 lifecycle 自动 stop + 反注册。
  */
 import { getLogger } from '@zhin.js/logger';
+import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 import { getOrchestrationService } from './orchestration-service.js';
-import { getAgentDispatcher } from './agent-dispatcher.js';
 import { pollRemoteTaskStatus } from './remote-task-executor.js';
 
 const logger = getLogger('RemoteTaskPoller');
@@ -46,7 +48,7 @@ export class RemoteTaskPoller {
       const orch = getOrchestrationService();
       if (!orch) return;
       const tasks = await orch.repositoryHandle.listActiveRemoteTasks();
-      const dispatcher = getAgentDispatcher();
+      const dispatcher = orch.dispatcherHandle;
       for (const record of tasks) {
         dispatcher.syncTaskFromRecord(record);
         if (record.remote_task_id) {
@@ -63,24 +65,26 @@ export class RemoteTaskPoller {
   }
 }
 
-let globalPoller: RemoteTaskPoller | null = null;
+const pollerStore = createGenerationStore<RemoteTaskPoller>('zhin.agent.remote-task-poller');
 
-export function getRemoteTaskPoller(): RemoteTaskPoller {
-  if (!globalPoller) {
-    globalPoller = new RemoteTaskPoller();
-  }
-  return globalPoller;
+export function getRemoteTaskPoller(): RemoteTaskPoller | null {
+  return pollerStore.tryUse() ?? null;
 }
 
-export function startRemoteTaskPoller(config?: RemoteTaskPollerConfig): RemoteTaskPoller {
-  globalPoller = new RemoteTaskPoller(config);
-  globalPoller.start();
-  return globalPoller;
+export function provideRemoteTaskPoller(
+  context: GenerationStoreContext,
+  config?: RemoteTaskPollerConfig,
+): RemoteTaskPoller {
+  const prev = pollerStore.tryUse();
+  if (prev) prev.stop();
+  const poller = new RemoteTaskPoller(config);
+  pollerStore.provide(context, poller);
+  context.lifecycle.add(() => poller.stop());
+  poller.start();
+  return poller;
 }
 
 export function stopRemoteTaskPoller(): void {
-  if (globalPoller) {
-    globalPoller.stop();
-    globalPoller = null;
-  }
+  const poller = pollerStore.tryUse();
+  if (poller) poller.stop();
 }

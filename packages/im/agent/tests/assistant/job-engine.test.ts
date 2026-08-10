@@ -31,7 +31,7 @@ describe('ScheduleJobEngine', () => {
     const worker = new JobWorker({ executor });
 
     const engine = new ScheduleJobEngine({ store, worker });
-    engine.load();
+    await engine.load();
 
     await engine.addJob({
       id: 'sched-echo',

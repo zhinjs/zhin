@@ -4,6 +4,8 @@
 
 import { getLogger } from '@zhin.js/logger';
 import type { Adapter, Endpoint, SendOptions } from '@zhin.js/core';
+import type { LegacyEndpointControlSurface } from '@zhin.js/im-contract';
+import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 import {
   ReactionTypingIndicatorAdapter,
   GenericTypingIndicatorAdapter,
@@ -98,14 +100,8 @@ export interface PlatformActivityFeedbackManager {
 
 export type BotActivityFeedbackManager = ActivityFeedbackManager | PlatformActivityFeedbackManager;
 
-export interface EndpointWithActivityFeedback extends Endpoint {
+export interface EndpointWithActivityFeedback extends Endpoint, LegacyEndpointControlSurface {
   $activityFeedback?: BotActivityFeedbackManager;
-  $addReaction?(
-    messageId: string,
-    emoji: string,
-    hint?: { sceneType?: 'private' | 'group' | 'channel'; channelId?: string },
-  ): Promise<string | null>;
-  $removeReaction?(messageId: string, reactionId: string): Promise<void>;
 }
 
 function registerPlatformAdapters(
@@ -138,7 +134,7 @@ function registerPlatformAdapters(
         }
       },
       sendMessage,
-      async (messageId) => { await endpoint.$recallMessage(messageId); },
+      async (messageId) => { await endpoint.$recallMessage?.(messageId); },
       async (messageId, content) => {
         const editBot = endpoint as BotWithEditing;
         if (typeof editBot.$editMessage === 'function') await editBot.$editMessage(messageId, content);
@@ -150,7 +146,7 @@ function registerPlatformAdapters(
   manager.registerAdapter(new GenericTypingIndicatorAdapter(
     platform,
     sendMessage,
-    async (messageId) => { await endpoint.$recallMessage(messageId); },
+    async (messageId) => { await endpoint.$recallMessage?.(messageId); },
     async (messageId, content) => {
       const editBot = endpoint as BotWithEditing;
       if (typeof editBot.$editMessage === 'function') await editBot.$editMessage(messageId, content);
@@ -199,19 +195,21 @@ export class AdapterActivityFeedbackManager {
   }
 }
 
-let globalAdapterManager: AdapterActivityFeedbackManager | null = null;
+const adapterFeedbackStore = createGenerationStore<AdapterActivityFeedbackManager>('zhin.agent.adapter-activity-feedback');
 
 export function getAdapterActivityFeedbackManager(): AdapterActivityFeedbackManager {
-  if (!globalAdapterManager) {
-    globalAdapterManager = new AdapterActivityFeedbackManager();
-  }
-  return globalAdapterManager;
+  return adapterFeedbackStore.tryUse() ?? new AdapterActivityFeedbackManager();
 }
 
-export function initAdapterActivityFeedbackManager(): AdapterActivityFeedbackManager {
-  globalAdapterManager = new AdapterActivityFeedbackManager();
-  return globalAdapterManager;
+export function provideAdapterActivityFeedbackManager(context: GenerationStoreContext): AdapterActivityFeedbackManager {
+  const manager = new AdapterActivityFeedbackManager();
+  adapterFeedbackStore.provide(context, manager);
+  context.lifecycle.add(() => manager.clearAll());
+  return manager;
 }
+
+/** @deprecated 使用 provideAdapterActivityFeedbackManager 替代 */
+export const initAdapterActivityFeedbackManager = () => new AdapterActivityFeedbackManager();
 
 export function enableActivityFeedbackForBot(
   endpoint: EndpointWithActivityFeedback,

@@ -4,6 +4,7 @@
  */
 
 import type { ZhinAgent } from '../zhin-agent/index.js';
+import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 
 export class AgentRuntimeRegistry {
   private defaultRuntimes: ZhinAgent[] = [];
@@ -40,14 +41,23 @@ export class AgentRuntimeRegistry {
   }
 }
 
-let globalRegistry: AgentRuntimeRegistry | null = null;
+const runtimeRegistryStore = createGenerationStore<AgentRuntimeRegistry>('zhin.agent.runtime-registry');
 
+let _fallbackRuntimeRegistry: AgentRuntimeRegistry | null = null;
 export function getAgentRuntimeRegistry(): AgentRuntimeRegistry {
-  if (!globalRegistry) globalRegistry = new AgentRuntimeRegistry();
-  return globalRegistry;
+  return runtimeRegistryStore.tryUse() ?? (_fallbackRuntimeRegistry ??= new AgentRuntimeRegistry());
+}
+
+export function provideAgentRuntimeRegistry(context: GenerationStoreContext): AgentRuntimeRegistry {
+  const registry = new AgentRuntimeRegistry();
+  runtimeRegistryStore.provide(context, registry);
+  context.lifecycle.add(() => registry.clear());
+  return registry;
 }
 
 export function resetAgentRuntimeRegistry(): void {
-  globalRegistry?.clear();
-  globalRegistry = null;
+  const reg = runtimeRegistryStore.tryUse();
+  if (reg) reg.clear();
+  runtimeRegistryStore.clear();
+  if (_fallbackRuntimeRegistry) { _fallbackRuntimeRegistry.clear(); _fallbackRuntimeRegistry = null; }
 }

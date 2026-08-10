@@ -711,31 +711,3 @@ export class AgentDispatcher {
     };
   }
 }
-
-// ── 全局调度器实例 ────────────────────────────────────────────────────
-
-let globalDispatcher: AgentDispatcher | null = null;
-
-/**
- * 获取全局调度器实例
- */
-export function getAgentDispatcher(): AgentDispatcher {
-  if (!globalDispatcher) {
-    globalDispatcher = new AgentDispatcher();
-  }
-  return globalDispatcher;
-}
-
-/**
- * 初始化调度器
- */
-export function initAgentDispatcher(): AgentDispatcher {
-  globalDispatcher?.dispose();
-  globalDispatcher = new AgentDispatcher();
-  return globalDispatcher;
-}
-
-/** 重置全局调度器（用于测试隔离） */
-export function resetAgentDispatcher(): void {
-  globalDispatcher = null;
-}

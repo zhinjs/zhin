@@ -17,6 +17,7 @@ import { senderFromScheduleCreator } from './assistant/job-creator.js';
 import { buildScheduleTurnMessage } from './assistant/schedule-message.js';
 import { buildScheduleTurnPrompt } from './assistant/schedule-execution.js';
 import { deliverScheduleToAdapter } from './assistant/deliver-schedule-to-adapter.js';
+import { KeyedMutex } from './utils/keyed-mutex.js';
 const logger = getLogger('task-executor');
 
 export interface TaskExecutionOptions {
@@ -46,27 +47,9 @@ export interface TaskExecutorDeps {
   resolveAdapter: (platform: string) => { sendMessage: (opts: import('@zhin.js/core').SendOptions) => Promise<string> } | undefined;
   router?: NotificationRouter;
   defaultNotify?: JobNotify;
-  deliverIm?: (notify: JobNotify & { channel: 'im' }, content: string) => Promise<void>;
-  proactiveOutbound?: import('./outbound/send-proactive.js').ProactiveOutboundService;
 }
 
-const locks = new Map<string, Promise<unknown>>();
-
-async function withLock<T>(sceneId: string, fn: () => Promise<T>): Promise<T> {
-  const prev = locks.get(sceneId) ?? Promise.resolve();
-  let resolve!: () => void;
-  const gate = new Promise<void>((r) => { resolve = r; });
-  const next = prev.then(() => gate, () => gate);
-  locks.set(sceneId, next.finally(() => {
-    if (locks.get(sceneId) === next) locks.delete(sceneId);
-  }));
-  await prev.catch(() => {});
-  try {
-    return await fn();
-  } finally {
-    resolve();
-  }
-}
+const sceneLocks = new KeyedMutex();
 
 function elementsToText(elements: OutputElement[]): string {
   return elements.map(el => {
@@ -79,9 +62,6 @@ function elementsToText(elements: OutputElement[]): string {
 export function createTaskExecutor(deps: TaskExecutorDeps) {
   const router = deps.router ?? createNotificationRouter({
     resolveAdapter: deps.resolveAdapter,
-    sendIm: deps.deliverIm
-      ? async (notify, content) => deps.deliverIm!(notify, content)
-      : undefined,
   });
 
   async function executeTask(options: TaskExecutionOptions): Promise<TaskExecutionResult> {
@@ -132,7 +112,14 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       const scope = scene?.kind || 'private';
       const sender = createdBy
         ? senderFromScheduleCreator(createdBy)
-        : { id: 'system', name: 'system', isMaster: true, isTrusted: false as const };
+        : scope === 'private'
+          ? {
+              id: scene?.senderId || sceneId,
+              name: scene?.senderId || sceneId,
+              isMaster: true,
+              isTrusted: false as const,
+            }
+          : { id: 'system', name: 'system', isMaster: true, isTrusted: false as const };
       commMessage = createSyntheticMessage({
         adapter: scene?.platform || 'cron',
         endpoint: scene?.endpointId || 'default',
@@ -153,7 +140,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
 
     try {
       dispatchSchedule('schedule.start');
-      const elements = await withLock(lockKey, () =>
+      const elements = await sceneLocks.run(lockKey, () =>
         deps.agent.process(finalPrompt, commMessage),
       );
 
@@ -185,7 +172,6 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       }
 
       if (!text) {
-        // spawn_task 委派时主回合 finalReply 为空；投递由 auto-continue + proactive 出站完成。
         if (timeContext && typeof deps.agent.waitForIdle === 'function') {
           await deps.agent.waitForIdle();
         }
@@ -196,9 +182,8 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       await deliverScheduleToAdapter({
         notify: effectiveNotify,
         content: text,
-        proactiveOutbound: deps.proactiveOutbound,
         router,
-        resolveAdapter: deps.resolveAdapter,
+        source: 'scheduled',
       });
       dispatchSchedule('schedule.finish');
       return { success: true, responseText: text, durationMs: Date.now() - t0, executionPlan: resultPlan };
@@ -214,11 +199,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
 }
 
 export async function drainTaskExecutorLocks(timeoutMs: number): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (locks.size > 0 && Date.now() < deadline) {
-    await Promise.allSettled([...locks.values()]);
-  }
-  locks.clear();
+  await sceneLocks.drain(timeoutMs);
 }
 
 export type TaskExecutor = ReturnType<typeof createTaskExecutor>;

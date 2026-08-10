@@ -42,20 +42,17 @@ export class ScheduleJobEngine {
     return this.store.getDataDir();
   }
 
-  load(): void {
-    this.store.listJobs().then((jobs) => {
-      for (const job of jobs) {
-        if (isRuntimeSchedulable(job)) {
-          this.registerOne(job);
-        }
+  async load(): Promise<void> {
+    const jobs = await this.store.listJobs();
+    for (const job of jobs) {
+      if (isRuntimeSchedulable(job)) {
+        this.registerOne(job);
       }
-      const count = jobs.filter((j) => isRuntimeSchedulable(j)).length;
-      if (count > 0) {
-        logger.debug(formatCompact({ schedule_jobs: count }));
-      }
-    }).catch((e) => {
-      logger.warn(`Failed to load schedule jobs: ${(e as Error)?.message || String(e)}`);
-    });
+    }
+    const count = jobs.filter((j) => isRuntimeSchedulable(j)).length;
+    if (count > 0) {
+      logger.debug(formatCompact({ schedule_jobs: count }));
+    }
   }
 
   registerOne(job: ScheduleJob): void {

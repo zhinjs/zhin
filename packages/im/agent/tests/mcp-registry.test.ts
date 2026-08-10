@@ -153,8 +153,8 @@ describe('McpRegistry', () => {
 });
 
 describe('collectRuntimeTools MCP merge', () => {
-  it('merges mcpTools into runtime tool list', () => {
-    const tools = collectRuntimeTools({
+  it('merges mcpTools into runtime tool list', async () => {
+    const tools = await collectRuntimeTools({
       content: 'hello',
       commMessage: mockCommMessage({ adapter: 'test', senderId: 'u1' }),
       externalTools: [],
@@ -170,8 +170,8 @@ describe('collectRuntimeTools MCP merge', () => {
     expect(tools.some(t => t.name === 'fs__read')).toBe(true);
   });
 
-  it('skips MCP tools that conflict with reserved names', () => {
-    const tools = collectRuntimeTools({
+  it('skips MCP tools that conflict with reserved names', async () => {
+    const tools = await collectRuntimeTools({
       content: 'hello',
       commMessage: mockCommMessage({ adapter: 'test', senderId: 'u1' }),
       externalTools: [],

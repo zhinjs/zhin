@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { getAgentDispatcher } from '../../src/orchestrator/agent-dispatcher.js';
 import { MemoryOrchestrationRepository } from '../../src/orchestrator/orchestration-repository.js';
-import { initOrchestrationService } from '../../src/orchestrator/orchestration-service.js';
+import { provideTestOrchestrationService } from '../helpers/orchestration.js';
 import type { AgentExecutor } from '../../src/orchestrator/orchestration-types.js';
 import { createFiveAgentWorkflowStrategy } from '../../src/builtin/five-agent/index.js';
 
 describe('OrchestrationKernel', () => {
   it('drives run/task state through events and snapshots', async () => {
-    const kernel = initOrchestrationService(new MemoryOrchestrationRepository());
+    const kernel = provideTestOrchestrationService(new MemoryOrchestrationRepository());
     const started = await kernel.startRun({ sessionKey: 's1', title: 'demo' });
     const dispatched = await kernel.dispatchTask({
       runId: started.run.id,
@@ -50,7 +49,7 @@ describe('OrchestrationKernel', () => {
   });
 
   it('failTask is idempotent on terminal tasks', async () => {
-    const kernel = initOrchestrationService(new MemoryOrchestrationRepository());
+    const kernel = provideTestOrchestrationService(new MemoryOrchestrationRepository());
     const run = await kernel.startRun({ sessionKey: 's2' });
     const task = await kernel.addTask({ runId: run.run.id, name: 'one' });
 
@@ -60,7 +59,7 @@ describe('OrchestrationKernel', () => {
   });
 
   it('cancelTask cancels active mesh tasks', async () => {
-    const kernel = initOrchestrationService(new MemoryOrchestrationRepository());
+    const kernel = provideTestOrchestrationService(new MemoryOrchestrationRepository());
     const run = await kernel.startRun({ sessionKey: 's-cancel' });
     const task = await kernel.addTask({ runId: run.run.id, name: 'mesh' });
     await kernel.repository.updateTaskStatus(task.id, 'running', { started_at: Date.now() });
@@ -72,8 +71,8 @@ describe('OrchestrationKernel', () => {
 
   it('completes task when dispatcher recordResult precedes kernel result event', async () => {
     const repo = new MemoryOrchestrationRepository();
-    const kernel = initOrchestrationService(repo);
-    const dispatcher = getAgentDispatcher();
+    const kernel = provideTestOrchestrationService(repo);
+    const dispatcher = kernel.dispatcherHandle;
     dispatcher.setRepository(repo);
 
     const started = await kernel.startRun({ sessionKey: 'spawn-race' });
@@ -109,7 +108,7 @@ describe('OrchestrationKernel', () => {
   });
 
   it('plans five-agent workflow as an optional strategy', async () => {
-    const kernel = initOrchestrationService(new MemoryOrchestrationRepository());
+    const kernel = provideTestOrchestrationService(new MemoryOrchestrationRepository());
     kernel.registerWorkflowStrategy(createFiveAgentWorkflowStrategy());
 
     const snapshot = await kernel.runWorkflowStrategy('five-agent', {

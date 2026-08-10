@@ -1,6 +1,7 @@
 import type { TypingIndicatorOptions } from '../typing-indicator/index.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 import type { ActivitySceneType } from './types.js';
+import { resolveActivityFeedbackSessionId } from './subagent-prefix.js';
 
 /** 单次 activity phase 操作的归一化上下文（由 AI 事件 payload 解析） */
 export interface ActivityFeedbackEventContext {
@@ -67,11 +68,13 @@ export function toActivityFeedbackEventContext(
 
   const sceneType = resolveActivitySceneType(payload);
   const targets = resolveActivityEventTargets(payload, sceneType);
+  // Subagent shares the IM session but uses an isolated indicator key.
+  const activitySessionId = resolveActivityFeedbackSessionId(payload);
 
   return {
     platform,
     endpointId,
-    sessionId,
+    sessionId: activitySessionId,
     messageId: payload.messageId,
     sceneType,
     userId: targets.userId,
@@ -79,7 +82,7 @@ export function toActivityFeedbackEventContext(
     options: {
       platform,
       endpointId,
-      sessionId,
+      sessionId: activitySessionId,
       messageId: payload.messageId,
       sceneType,
       userId: targets.userId,

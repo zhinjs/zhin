@@ -1,61 +1,61 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { DisposeStack } from '@zhin.js/plugin-runtime';
 import {
   getScheduleManager,
-  registerScheduleManager,
-  setScheduleManager,
+  provideScheduleManager,
 } from '../src/schedule-manager.js';
 import {
   getAssistantRuntime,
-  registerAssistantRuntime,
-  setAssistantRuntime,
+  provideAssistantRuntime,
 } from '../src/assistant/runtime-registry.js';
 import { MemoryOrchestrationRepository } from '../src/orchestrator/orchestration-repository.js';
 import {
   getOrchestrationService,
   OrchestrationService,
-  registerOrchestrationService,
+  provideOrchestrationService,
 } from '../src/orchestrator/orchestration-service.js';
 
-afterEach(() => {
-  setScheduleManager(null);
-  setAssistantRuntime(null);
-});
-
 describe('generation-owned Agent runtime registrations', () => {
-  it('keeps the latest schedule manager when the previous owner disposes', () => {
+  it('keeps the latest schedule manager when the previous owner disposes', async () => {
     const previous = { scheduleFeature: { getStatus: () => [] }, engine: null };
     const next = { scheduleFeature: { getStatus: () => [] }, engine: null };
-    const disposePrevious = registerScheduleManager(previous);
-    const disposeNext = registerScheduleManager(next);
+    const genPrevious = new DisposeStack();
+    const genNext = new DisposeStack();
+    provideScheduleManager({ lifecycle: genPrevious }, previous);
+    provideScheduleManager({ lifecycle: genNext }, next);
 
-    disposePrevious();
+    await genPrevious.dispose();
     expect(getScheduleManager()).toBe(next);
-    disposeNext();
+    await genNext.dispose();
     expect(getScheduleManager()).toBeNull();
   });
 
-  it('lets a disabled generation override and then reveal the previous Assistant', () => {
+  it('lets a disabled generation override and then reveal the previous Assistant', async () => {
     const previous = { id: 'previous' } as never;
-    const disposePrevious = registerAssistantRuntime(previous);
-    const disposeNext = registerAssistantRuntime(null);
+    const genPrevious = new DisposeStack();
+    const genNext = new DisposeStack();
+    provideAssistantRuntime({ lifecycle: genPrevious }, previous);
+    provideAssistantRuntime({ lifecycle: genNext }, null);
 
     expect(getAssistantRuntime()).toBeNull();
-    disposeNext();
+    await genNext.dispose();
     expect(getAssistantRuntime()).toBe(previous);
-    disposePrevious();
+    await genPrevious.dispose();
     expect(getAssistantRuntime()).toBeNull();
   });
 
-  it('keeps orchestration bound to the newest live generation', () => {
+  it('keeps orchestration bound to the newest live generation', async () => {
     const previous = new OrchestrationService(new MemoryOrchestrationRepository());
     const next = new OrchestrationService(new MemoryOrchestrationRepository());
-    const disposePrevious = registerOrchestrationService(previous);
-    const disposeNext = registerOrchestrationService(next);
+    const genPrevious = new DisposeStack();
+    const genNext = new DisposeStack();
+    provideOrchestrationService({ lifecycle: genPrevious }, previous);
+    provideOrchestrationService({ lifecycle: genNext }, next);
 
     expect(getOrchestrationService()).toBe(next);
-    disposePrevious();
+    await genPrevious.dispose();
     expect(getOrchestrationService()).toBe(next);
-    disposeNext();
+    await genNext.dispose();
     expect(getOrchestrationService()).not.toBe(next);
   });
 });

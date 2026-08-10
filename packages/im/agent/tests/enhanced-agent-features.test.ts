@@ -2,15 +2,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   // Sandbox
   Sandbox,
-  initSandbox,
   getSandbox,
   executeInSandbox,
 } from '../src/security/sandbox.js';
 import {
   // Agent Dispatcher
   AgentDispatcher,
-  initAgentDispatcher,
-  getAgentDispatcher,
   AGENT_ROLE_CONFIGS,
 } from '../src/orchestrator/agent-dispatcher.js';
 import {

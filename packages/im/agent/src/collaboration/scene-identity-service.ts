@@ -6,6 +6,7 @@
  */
 
 import { type CollaborationScene, isPipelineRole } from './types.js';
+import { createGenerationStore, type GenerationStoreContext, DisposeStack } from '@zhin.js/plugin-runtime';
 import { getCollaborationSceneService } from './scene-service.js';
 import type {
   CollaborationSceneAliasRow,
@@ -575,17 +576,25 @@ export class SceneIdentityService {
   }
 }
 
-let globalSceneIdentityService: SceneIdentityService | null = null;
+const sceneIdentityStore = createGenerationStore<SceneIdentityService>('zhin.agent.scene-identity-service');
 
+let _fallbackSceneIdentity: SceneIdentityService | null = null;
 export function getSceneIdentityService(): SceneIdentityService {
-  if (!globalSceneIdentityService) {
-    globalSceneIdentityService = new SceneIdentityService();
-  }
-  return globalSceneIdentityService;
+  return sceneIdentityStore.tryUse() ?? (_fallbackSceneIdentity ??= new SceneIdentityService());
 }
 
+export function provideSceneIdentityService(context: GenerationStoreContext, svc: SceneIdentityService): void {
+  sceneIdentityStore.provide(context, svc);
+}
+
+let _sceneIdentityLegacy: DisposeStack | null = null;
 export function setSceneIdentityService(svc: SceneIdentityService | null): void {
-  globalSceneIdentityService = svc;
+  if (_sceneIdentityLegacy) { void _sceneIdentityLegacy.dispose(); _sceneIdentityLegacy = null; }
+  _fallbackSceneIdentity = null;
+  if (svc) {
+    _sceneIdentityLegacy = new DisposeStack();
+    sceneIdentityStore.provide({ lifecycle: _sceneIdentityLegacy }, svc);
+  }
 }
 
 export function createSceneIdentityService(

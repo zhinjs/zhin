@@ -230,8 +230,7 @@ export { ZHIN_WEB_USER_AGENT, WEB_TOOL_FETCH_TIMEOUT_MS } from './builtin/web-to
 
 export {
   createScheduleTools,
-  setScheduleManager,
-  registerScheduleManager,
+  provideScheduleManager,
   getScheduleManager,
   generateScheduleJobId,
   SCHEDULE_JOBS_FILENAME,
@@ -256,8 +255,7 @@ export {
   createNotificationRouter,
   imNotifyToSendOptions,
   parseJobNotify,
-  setAssistantRuntime,
-  registerAssistantRuntime,
+  provideAssistantRuntime,
   getAssistantRuntime,
   isAssistantEventsEndpointActive,
   getAssistantEventsTokenFallback,
@@ -307,7 +305,7 @@ export {
 } from './assistant/index.js';
 
 export {
-  setSessionTreeRuntime,
+  provideSessionTreeRuntime,
   getSessionTreeRuntime,
   createSessionTreeRuntimeFromAgent,
 } from './session-tree-runtime-registry.js';
@@ -334,7 +332,7 @@ export { HttpApprovalWaiter } from './session/http-approval-waiter.js';
 export type { ApprovalPort, ApprovalRequestInput } from './session/session-interaction-port.js';
 
 export {
-  setOrchestrationRuntime,
+  provideOrchestrationRuntime,
   getOrchestrationRuntime,
   createOrchestrationRuntimeFromService,
 } from './orchestration-runtime-registry.js';
@@ -343,8 +341,8 @@ export type { OrchestrationRuntimeHandle } from './orchestration-runtime-registr
 export {
   getOrchestrationService,
   getOrchestrationKernel,
-  initOrchestrationService,
-  registerOrchestrationService,
+  createOrchestrationService,
+  provideOrchestrationService,
   upgradeOrchestrationRepository,
   OrchestrationKernel,
   OrchestrationService,
@@ -378,8 +376,6 @@ export type {
 } from './orchestrator/orchestration-types.js';
 
 export {
-  getAgentDispatcher,
-  initAgentDispatcher,
 } from './orchestrator/agent-dispatcher.js';
 export type {
   AgentRole,
@@ -389,12 +385,12 @@ export type {
 
 export {
   getRemoteAgentRegistry,
-  initRemoteAgentRegistry,
+  provideRemoteAgentRegistry,
 } from './orchestrator/remote-agent-registry.js';
 
 export {
   getRemoteTaskPoller,
-  startRemoteTaskPoller,
+  provideRemoteTaskPoller,
 } from './orchestrator/remote-task-poller.js';
 
 export {
@@ -501,6 +497,7 @@ export {
   ActivityFeedbackManager,
   getActivityFeedbackManager,
   initActivityFeedbackManager,
+  provideActivityFeedbackManager,
   resolveActivityFeedbackPhaseConfig,
   isActivityFeedbackEnabled,
   toActivityFeedbackEventContext,
@@ -509,9 +506,15 @@ export {
   enableActivityFeedbackForBot,
   getAdapterActivityFeedbackManager,
   initAdapterActivityFeedbackManager,
+  provideAdapterActivityFeedbackManager,
   isGenericActivityFeedbackManager,
   activityFeedbackAiBus,
   ActivityFeedbackAIBus,
+  resolveSubagentActivityTag,
+  formatSubagentActivityPrefix,
+  withSubagentActivityPrefix,
+  applySubagentActivityPrefixToConfig,
+  resolveActivityFeedbackSessionId,
 } from './activity-feedback/index.js';
 export type {
   ActivityFeedbackType,
@@ -569,7 +572,7 @@ export {
   NativeTypingIndicator,
   GenericTypingIndicatorAdapter,
   getTypingIndicatorManager,
-  initTypingIndicatorManager,
+  provideTypingIndicatorManager,
   startTypingIndicator,
   stopTypingIndicator,
 } from './typing-indicator/index.js';

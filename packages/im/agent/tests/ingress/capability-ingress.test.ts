@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ToolFeature, SkillFeature, type Message } from '@zhin.js/core';
+import { createPermissionHost, type PermissionHost } from '@zhin.js/permission';
 import { AgentOrchestrator } from '../../src/orchestrator/index.js';
 import { FeatureCapabilityIngress } from '../../src/ingress/capability-ingress.js';
 import { AgentFeature } from '../../src/features/agent-feature.js';
@@ -83,7 +84,7 @@ describe('FeatureCapabilityIngress', () => {
     expect(orch.tools.get('web_search')).toBeDefined();
   });
 
-  it('ensureForTurn filters by platforms and caches by key', () => {
+  it('ensureForTurn filters by platforms and caches by key', async () => {
     tools.addTool(makeTool('icqq_only', {
       source: 'plugin:a',
       platforms: ['icqq'],
@@ -93,23 +94,23 @@ describe('FeatureCapabilityIngress', () => {
     const binding = makeBinding();
     const icqqMsg = makeMessage({ adapter: 'icqq', scene: 'group' });
 
-    const first = ingress.ensureForTurn(orch, bundle(), { binding, message: icqqMsg });
+    const first = await ingress.ensureForTurn(orch, bundle(), { binding, message: icqqMsg });
     expect(first.cacheHit).toBe(false);
     expect(orch.tools.get('icqq_only')).toBeDefined();
     expect(orch.tools.get('any_plat')).toBeDefined();
 
-    const second = ingress.ensureForTurn(orch, bundle(), { binding, message: icqqMsg });
+    const second = await ingress.ensureForTurn(orch, bundle(), { binding, message: icqqMsg });
     expect(second.cacheHit).toBe(true);
     expect(second.tools).toBe(0);
   });
 
-  it('ensureForTurn skips tools that fail platforms filter', () => {
+  it('ensureForTurn skips tools that fail platforms filter', async () => {
     tools.addTool(makeTool('icqq_only', {
       source: 'plugin:a',
       platforms: ['icqq'],
     }), 'a');
 
-    const result = ingress.ensureForTurn(
+    const result = await ingress.ensureForTurn(
       orch,
       bundle(),
       { binding: makeBinding(), message: makeMessage({ adapter: 'process' }) },
@@ -118,13 +119,13 @@ describe('FeatureCapabilityIngress', () => {
     expect(orch.tools.get('icqq_only')).toBeUndefined();
   });
 
-  it('ensureForTurn skips tools that fail scopes filter', () => {
+  it('ensureForTurn skips tools that fail scopes filter', async () => {
     tools.addTool(makeTool('group_only', {
       source: 'plugin:a',
       scopes: ['group'],
     }), 'a');
 
-    const privateResult = ingress.ensureForTurn(
+    const privateResult = await ingress.ensureForTurn(
       orch,
       bundle(),
       { binding: makeBinding(), message: makeMessage({ scene: 'private' }) },
@@ -133,7 +134,7 @@ describe('FeatureCapabilityIngress', () => {
     expect(orch.tools.get('group_only')).toBeUndefined();
 
     ingress.invalidate();
-    const groupResult = ingress.ensureForTurn(
+    const groupResult = await ingress.ensureForTurn(
       orch,
       bundle(),
       { binding: makeBinding(), message: makeMessage({ scene: 'group' }) },
@@ -142,35 +143,36 @@ describe('FeatureCapabilityIngress', () => {
     expect(orch.tools.get('group_only')).toBeDefined();
   });
 
-  it('ensureForTurn skips tools that fail permissions filter', () => {
+  it('ensureForTurn skips tools that fail permissions filter', async () => {
     tools.addTool(makeTool('master_only', {
       source: 'plugin:a',
       permissions: ['role(master)'],
     }), 'a');
 
+    const host = createPermissionHost();
     const userMsg = makeMessage({});
-    const denied = ingress.ensureForTurn(
+    const denied = await ingress.ensureForTurn(
       orch,
       bundle(),
-      { binding: makeBinding(), message: userMsg },
+      { binding: makeBinding(), message: userMsg, host },
     );
     expect(denied.tools).toBe(0);
 
     ingress.invalidate();
     const masterMsg = {
       ...makeMessage({}),
-      $sender: { id: 'u1', isMaster: true, isTrusted: true },
+      $sender: { id: 'u1', role: ['master'], isMaster: true, isTrusted: true },
     } as unknown as Message;
-    const allowed = ingress.ensureForTurn(
+    const allowed = await ingress.ensureForTurn(
       orch,
       bundle(),
-      { binding: makeBinding(), message: masterMsg },
+      { binding: makeBinding(), message: masterMsg, host },
     );
     expect(allowed.tools).toBe(1);
     expect(orch.tools.get('master_only')).toBeDefined();
   });
 
-  it('switches access projection: purges previous on-demand tools', () => {
+  it('switches access projection: purges previous on-demand tools', async () => {
     tools.addTool(makeTool('icqq_only', {
       source: 'plugin:a',
       platforms: ['icqq'],
@@ -180,7 +182,7 @@ describe('FeatureCapabilityIngress', () => {
       platforms: ['process'],
     }), 'a');
 
-    const first = ingress.ensureForTurn(
+    const first = await ingress.ensureForTurn(
       orch,
       bundle(),
       { binding: makeBinding(), message: makeMessage({ adapter: 'icqq' }) },
@@ -189,7 +191,7 @@ describe('FeatureCapabilityIngress', () => {
     expect(orch.tools.get('process_only')).toBeUndefined();
     first.release();
 
-    ingress.ensureForTurn(
+    await ingress.ensureForTurn(
       orch,
       bundle(),
       { binding: makeBinding(), message: makeMessage({ adapter: 'process' }) },
@@ -198,7 +200,7 @@ describe('FeatureCapabilityIngress', () => {
     expect(orch.tools.get('process_only')).toBeDefined();
   });
 
-  it('defers purging the previous projection while its turn is in flight', () => {
+  it('defers purging the previous projection while its turn is in flight', async () => {
     tools.addTool(makeTool('icqq_only', {
       source: 'plugin:a',
       platforms: ['icqq'],
@@ -210,7 +212,7 @@ describe('FeatureCapabilityIngress', () => {
     tools.addTool(makeTool('shared', { source: 'plugin:a' }), 'a');
 
     // Turn A starts on the icqq projection and is still executing…
-    const turnA = ingress.ensureForTurn(
+    const turnA = await ingress.ensureForTurn(
       orch,
       bundle(),
       { binding: makeBinding(), message: makeMessage({ adapter: 'icqq' }) },
@@ -219,7 +221,7 @@ describe('FeatureCapabilityIngress', () => {
 
     // …when turn B interleaves on a different projection: the cache miss
     // must NOT purge the tools turn A is running with.
-    const turnB = ingress.ensureForTurn(
+    const turnB = await ingress.ensureForTurn(
       orch,
       bundle(),
       { binding: makeBinding(), message: makeMessage({ adapter: 'process' }) },
@@ -238,7 +240,7 @@ describe('FeatureCapabilityIngress', () => {
 
     // Turn B finishes: the live projection stays cached for the next turn.
     turnB.release();
-    const again = ingress.ensureForTurn(
+    const again = await ingress.ensureForTurn(
       orch,
       bundle(),
       { binding: makeBinding(), message: makeMessage({ adapter: 'process' }) },
@@ -248,7 +250,7 @@ describe('FeatureCapabilityIngress', () => {
     again.release();
   });
 
-  it('key oscillation A→B→A keeps per-projection lease accounting', () => {
+  it('key oscillation A→B→A keeps per-projection lease accounting', async () => {
     tools.addTool(makeTool('icqq_only', {
       source: 'plugin:a',
       platforms: ['icqq'],
@@ -263,9 +265,9 @@ describe('FeatureCapabilityIngress', () => {
     const processCtx = { binding: makeBinding(), message: makeMessage({ adapter: 'process' }) };
 
     // K1 (icqq) live → K2 (process) retires K1 → K1 again retires K2.
-    const turnA = ingress.ensureForTurn(orch, bundle(), icqqCtx);
-    const turnB = ingress.ensureForTurn(orch, bundle(), processCtx);
-    const turnC = ingress.ensureForTurn(orch, bundle(), icqqCtx);
+    const turnA = await ingress.ensureForTurn(orch, bundle(), icqqCtx);
+    const turnB = await ingress.ensureForTurn(orch, bundle(), processCtx);
+    const turnC = await ingress.ensureForTurn(orch, bundle(), icqqCtx);
     expect(turnC.cacheHit).toBe(false);
 
     // Turn A belongs to the *retired* K1 projection, not the live one:
@@ -273,7 +275,7 @@ describe('FeatureCapabilityIngress', () => {
     turnA.release();
 
     // Next miss must still defer the purge — turn C is executing with K1.
-    const turnD = ingress.ensureForTurn(orch, bundle(), processCtx);
+    const turnD = await ingress.ensureForTurn(orch, bundle(), processCtx);
     expect(turnD.cacheHit).toBe(false);
     expect(orch.tools.get('icqq_only')).toBeDefined();
 
@@ -290,30 +292,30 @@ describe('FeatureCapabilityIngress', () => {
 
     // Live projection stays cached once every lease is released.
     turnD.release();
-    const again = ingress.ensureForTurn(orch, bundle(), processCtx);
+    const again = await ingress.ensureForTurn(orch, bundle(), processCtx);
     expect(again.cacheHit).toBe(true);
     again.release();
   });
 
-  it('fingerprint change (tool meta) invalidates prior cache key', () => {
+  it('fingerprint change (tool meta) invalidates prior cache key', async () => {
     tools.addTool(makeTool('a1', { source: 'plugin:a' }), 'a');
     const binding = makeBinding();
     const msg = makeMessage({ adapter: 'process' });
 
-    ingress.ensureForTurn(orch, bundle(), { binding, message: msg });
+    await ingress.ensureForTurn(orch, bundle(), { binding, message: msg });
     tools.addTool(makeTool('a2', { source: 'plugin:a' }), 'a');
 
-    const again = ingress.ensureForTurn(orch, bundle(), { binding, message: msg });
+    const again = await ingress.ensureForTurn(orch, bundle(), { binding, message: msg });
     expect(again.cacheHit).toBe(false);
     expect(orch.tools.get('a2')).toBeDefined();
   });
 
-  it('AgentFeature epoch change invalidates cache', () => {
+  it('AgentFeature epoch change invalidates cache', async () => {
     const binding = makeBinding();
     const msg = makeMessage({});
-    ingress.ensureForTurn(orch, bundle(), { binding, message: msg });
+    await ingress.ensureForTurn(orch, bundle(), { binding, message: msg });
     expect(
-      ingress.ensureForTurn(orch, bundle(), { binding, message: msg }).cacheHit,
+      (await ingress.ensureForTurn(orch, bundle(), { binding, message: msg })).cacheHit,
     ).toBe(true);
 
     agents.add({
@@ -323,13 +325,13 @@ describe('FeatureCapabilityIngress', () => {
       pluginName: 'p',
     }, 'p');
 
-    const after = ingress.ensureForTurn(orch, bundle(), { binding, message: msg });
+    const after = await ingress.ensureForTurn(orch, bundle(), { binding, message: msg });
     expect(after.cacheHit).toBe(false);
     expect(after.agents).toBe(1);
     expect(orch.subagents.getPreset('helper')).toBeDefined();
   });
 
-  it('loads only MCP servers listed on binding.mcpServers', () => {
+  it('loads only MCP servers listed on binding.mcpServers', async () => {
     mcps.add({
       name: 'allowed',
       transport: 'stdio',
@@ -343,7 +345,7 @@ describe('FeatureCapabilityIngress', () => {
       pluginName: 'p',
     }, 'p');
 
-    const empty = ingress.ensureForTurn(
+    const empty = await ingress.ensureForTurn(
       orch,
       bundle(),
       { binding: makeBinding('zhin', []), message: makeMessage() },
@@ -352,7 +354,7 @@ describe('FeatureCapabilityIngress', () => {
     expect(orch.mcps.has('allowed')).toBe(false);
 
     ingress.invalidate();
-    const filtered = ingress.ensureForTurn(
+    const filtered = await ingress.ensureForTurn(
       orch,
       bundle(),
       { binding: makeBinding('zhin', ['allowed']), message: makeMessage() },
@@ -362,7 +364,7 @@ describe('FeatureCapabilityIngress', () => {
     expect(orch.mcps.has('other')).toBe(false);
   });
 
-  it('loads skills and agent presets from Features', () => {
+  it('loads skills and agent presets from Features', async () => {
     skills.add({
       name: 'demo',
       description: 'demo skill',
@@ -377,7 +379,7 @@ describe('FeatureCapabilityIngress', () => {
       pluginName: 'p',
     }, 'p');
 
-    const result = ingress.ensureForTurn(
+    const result = await ingress.ensureForTurn(
       orch,
       bundle(),
       { binding: makeBinding(), message: makeMessage({ adapter: 'process' }) },
@@ -388,7 +390,7 @@ describe('FeatureCapabilityIngress', () => {
     expect(orch.subagents.getPreset('helper')).toBeDefined();
   });
 
-  it('skill platforms filter uses canAccessTool vocabulary', () => {
+  it('skill platforms filter uses canAccessTool vocabulary', async () => {
     skills.add({
       name: 'icqq_skill',
       description: 'x',
@@ -397,7 +399,7 @@ describe('FeatureCapabilityIngress', () => {
       platforms: ['icqq'],
     }, 'p');
 
-    const miss = ingress.ensureForTurn(
+    const miss = await ingress.ensureForTurn(
       orch,
       bundle(),
       { binding: makeBinding(), message: makeMessage({ adapter: 'process' }) },
@@ -405,7 +407,7 @@ describe('FeatureCapabilityIngress', () => {
     expect(miss.skills).toBe(0);
 
     ingress.invalidate();
-    const hit = ingress.ensureForTurn(
+    const hit = await ingress.ensureForTurn(
       orch,
       bundle(),
       { binding: makeBinding(), message: makeMessage({ adapter: 'icqq' }) },

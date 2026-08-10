@@ -58,14 +58,14 @@ export class ToolSystem {
     this.filters.push(filter);
   }
 
-  collectTools(context: CollectToolsContext, sources?: ToolSource[]): AgentTool[] {
+  async collectTools(context: CollectToolsContext, sources?: ToolSource[]): Promise<AgentTool[]> {
     const activeSources = sources ?? [
       ...createDefaultToolSources(context),
       ...this.customSources,
     ];
     let tools: AgentTool[] = [];
     for (const source of activeSources) {
-      tools.push(...source.collectTools(context));
+      tools.push(...(await source.collectTools(context)));
     }
     for (const filter of this.filters) {
       tools = filter.filter(tools, { message: context.message });
@@ -73,9 +73,9 @@ export class ToolSystem {
     return tools;
   }
 
-  collectForTurn(input: CollectToolsForTurnInput): AgentTool[] {
+  async collectForTurn(input: CollectToolsForTurnInput): Promise<AgentTool[]> {
     const { host, spawnableAgentNames, ...ctx } = input;
-    const tools = this.collectTools(ctx, createDefaultToolSources(ctx));
+    const tools = await this.collectTools(ctx, createDefaultToolSources(ctx));
 
     if (host.subagentSystem && spawnableAgentNames) {
       const permissionTask = host.activeBinding?.permission?.task;

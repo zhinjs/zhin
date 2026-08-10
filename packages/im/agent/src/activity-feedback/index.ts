@@ -23,9 +23,18 @@ export {
 } from './event-context.js';
 
 export {
+  resolveSubagentActivityTag,
+  formatSubagentActivityPrefix,
+  withSubagentActivityPrefix,
+  applySubagentActivityPrefixToConfig,
+  resolveActivityFeedbackSessionId,
+} from './subagent-prefix.js';
+
+export {
   ActivityFeedbackManager,
   getActivityFeedbackManager,
   initActivityFeedbackManager,
+  provideActivityFeedbackManager,
 } from './manager.js';
 
 export {
@@ -34,6 +43,7 @@ export {
   enableActivityFeedbackForBot,
   getAdapterActivityFeedbackManager,
   initAdapterActivityFeedbackManager,
+  provideAdapterActivityFeedbackManager,
   isGenericActivityFeedbackManager,
 } from './adapter-integration.js';
 export type {

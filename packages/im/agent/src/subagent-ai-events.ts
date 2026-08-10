@@ -7,7 +7,10 @@ import type { ZhinAgentEventEmitter } from './event/event-emitter.js';
 export interface SubagentAiEventContext {
   taskId: string;
   label: string;
+  /** ai.agents / *.agent.md 名，如 researcher */
   presetName?: string;
+  /** 角色：researcher / executor / … */
+  role?: string;
   origin: SubagentOrigin;
   /** 为 true 时不在 processing.finish 里发 typing.stop（入站 route + 主 agent 摘要续接） */
   keepTypingUntilUpstreamFinish?: boolean;
@@ -26,12 +29,15 @@ export class SubagentAiEventReporter {
   }
 
   private payload(extra: Partial<import('@zhin.js/core').Plugin.AIEventPayload> = {}) {
+    const agentId = this.ctx.presetName?.trim()
+      || this.ctx.role?.trim()
+      || 'subagent';
     return this.emitter.createPayload(this.sessionId, this.commMessage, 'text', {
       source: 'subagent',
       path: 'agent',
       taskId: this.ctx.taskId,
       label: this.ctx.label,
-      agentId: this.ctx.presetName ?? this.ctx.label,
+      agentId,
       ...extra,
     });
   }

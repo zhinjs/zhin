@@ -25,7 +25,7 @@ export class AgentRuntime {
     const lease = this.#snapshots.acquire();
     let active = true;
     try {
-      return await operation(this.#ingress.read(
+      return await operation(await this.#ingress.read(
         lease.value,
         owner,
         () => active,

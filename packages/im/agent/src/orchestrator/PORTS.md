@@ -53,7 +53,7 @@ getTask(taskId): AgentTask | undefined                     // 调度依赖查询
 recordResult(result): void                                 // ⚠️ 仅 remote_mesh 等 legacy 路径；非 Kernel SSOT
 ```
 
-Kernel 在 `completeTask` / `failTask` / `assignTask` 后 **必须** 调用 `getAgentDispatcher().syncTaskFromRecord(...)`，保持 Dispatcher 投影与仓库一致。
+Kernel 在 `completeTask` / `failTask` / `assignTask` 后 **必须** 调用 `this.dispatcherHandle.syncTaskFromRecord(...)`，保持 Dispatcher 投影与仓库一致（Dispatcher 由 Kernel 持有，随 generation 创建/销毁）。
 
 ## Executor Port
 

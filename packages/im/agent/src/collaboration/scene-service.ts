@@ -3,6 +3,7 @@
  */
 
 import type { CollaborationScene } from './types.js';
+import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 import {
   getCollaborationSceneRepository,
   type CollaborationSceneRepository,
@@ -176,13 +177,17 @@ export class CollaborationSceneService {
   }
 }
 
-let globalSceneService: CollaborationSceneService | null = null;
+const sceneServiceStore = createGenerationStore<CollaborationSceneService>('zhin.agent.collaboration-scene-service');
+let _fallbackSceneService: CollaborationSceneService | null = null;
 
 export function getCollaborationSceneService(): CollaborationSceneService {
-  if (!globalSceneService) {
-    globalSceneService = new CollaborationSceneService();
-  }
-  return globalSceneService;
+  return sceneServiceStore.tryUse() ?? (_fallbackSceneService ??= new CollaborationSceneService());
+}
+
+export function provideCollaborationSceneService(context: GenerationStoreContext): CollaborationSceneService {
+  const svc = new CollaborationSceneService();
+  sceneServiceStore.provide(context, svc);
+  return svc;
 }
 
 export async function initCollaborationSceneService(): Promise<CollaborationSceneService> {
@@ -192,5 +197,6 @@ export async function initCollaborationSceneService(): Promise<CollaborationScen
 }
 
 export function resetCollaborationSceneService(): void {
-  globalSceneService = null;
+  sceneServiceStore.clear();
+  _fallbackSceneService = null;
 }

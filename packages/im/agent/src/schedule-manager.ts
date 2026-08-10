@@ -2,6 +2,11 @@
  * 持久化调度任务 + AI 工具
  */
 import { ZhinTool, getLogger } from '@zhin.js/core';
+import {
+  createGenerationStore,
+  type Dispose,
+  type GenerationStoreContext,
+} from '@zhin.js/plugin-runtime';
 import { captureScheduleJobCreator } from './assistant/job-creator.js';
 import {
   addScheduleJob,
@@ -31,25 +36,18 @@ export interface ScheduleManager {
   previewTask?: (options: TaskExecutionOptions) => Promise<TaskExecutionResult>;
 }
 
-let scheduleManager: ScheduleManager | null = null;
-const scheduleManagerRegistrations: ScheduleManager[] = [];
+const store = createGenerationStore<ScheduleManager>('zhin.agent.schedule-manager');
 
-export function setScheduleManager(m: ScheduleManager | null): void {
-  scheduleManager = m;
-}
-
-/** Generation-safe registration; disposing an older owner cannot clear a newer manager. */
-export function registerScheduleManager(manager: ScheduleManager): () => void {
-  scheduleManagerRegistrations.push(manager);
-  return () => {
-    const index = scheduleManagerRegistrations.lastIndexOf(manager);
-    if (index >= 0) scheduleManagerRegistrations.splice(index, 1);
-  };
+/** Generation-owned registration：随 `context.lifecycle` 反注册。 */
+export function provideScheduleManager(
+  context: GenerationStoreContext,
+  manager: ScheduleManager,
+): Dispose {
+  return store.provide(context, manager);
 }
 
 export function getScheduleManager(): ScheduleManager | null {
-  return scheduleManagerRegistrations[scheduleManagerRegistrations.length - 1]
-    ?? scheduleManager;
+  return store.tryUse() ?? null;
 }
 
 export { generateScheduleJobId };

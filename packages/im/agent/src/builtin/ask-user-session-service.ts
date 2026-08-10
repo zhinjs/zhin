@@ -2,6 +2,10 @@
  * ask_user 常驻会话服务 — 单轨 middleware、排队、命令 bypass、Prompt/私聊统一。
  */
 import {
+  createGenerationStore,
+  type GenerationStoreContext,
+} from '@zhin.js/plugin-runtime';
+import {
   Prompt,
   type Adapter,
   type Message,
@@ -54,7 +58,8 @@ function isSlashCommand(message: Message): boolean {
   return raw.startsWith('/');
 }
 
-let serviceInstance: AskUserSessionService | undefined;
+const askUserStore = createGenerationStore<AskUserSessionService>('zhin.agent.ask-user-session');
+let _fallbackAskUser: AskUserSessionService | null = null;
 
 export class AskUserSessionService {
   private readonly ownerQueues = new Map<string, OwnerQueue>();
@@ -65,19 +70,25 @@ export class AskUserSessionService {
     this.disposeMiddleware = (plugin.root ?? plugin).addMiddleware(this.middleware.bind(this));
   }
 
-  static install(plugin: Plugin): AskUserSessionService {
-    if (!serviceInstance) {
-      serviceInstance = new AskUserSessionService(plugin);
+  static install(plugin: Plugin, context?: GenerationStoreContext): AskUserSessionService {
+    const existing = askUserStore.tryUse() ?? _fallbackAskUser;
+    if (existing) return existing;
+    const svc = new AskUserSessionService(plugin);
+    if (context) {
+      askUserStore.provide(context, svc);
+    } else {
+      _fallbackAskUser = svc;
     }
-    return serviceInstance;
+    return svc;
   }
 
   static resetForTests(): void {
-    serviceInstance = undefined;
+    askUserStore.clear();
+    _fallbackAskUser = null;
   }
 
   static get(): AskUserSessionService | undefined {
-    return serviceInstance;
+    return askUserStore.tryUse() ?? _fallbackAskUser ?? undefined;
   }
 
   matchInbound(

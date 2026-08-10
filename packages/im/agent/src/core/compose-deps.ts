@@ -20,8 +20,7 @@ const NO_OP_EVENT_BUS: AgentCoreDependencies['eventBus'] = { emit: async () => {
 const NO_OP_PROVIDER = {
   name: 'no-op',
   models: [],
-  chat: async () => ({ content: '' }),
-  chatStream: async function* () {},
+  completeText: async () => '',
 } as unknown as AgentCoreDependencies['provider'];
 
 /** 占位工具执行器；生产路径经 `agent-core-run` + host，此处返回空结果。 */

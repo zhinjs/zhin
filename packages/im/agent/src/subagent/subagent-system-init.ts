@@ -1,7 +1,7 @@
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { AgentTool, ModelRegistry, AIProvider } from '@zhin.js/ai';
-import { getAgentDispatcher } from '../orchestrator/agent-dispatcher.js';
+import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
 import { getActiveTurnTracker } from '../internal/turn-context.js';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import type { ZhinAgentConfig } from '../config/index.js';
@@ -29,7 +29,7 @@ export function createSubagentSystem(opts: SubagentSystemInitOptions): SubagentS
     maxParallelSubagents: opts.config.maxParallelSubagents,
     execPolicyConfig: opts.config,
     modelRegistry: opts.modelRegistry,
-    agentDispatcher: getAgentDispatcher(),
+    agentDispatcher: getOrchestrationService()?.dispatcherHandle,
     onSubagentUsage: (usage) => getActiveTurnTracker()?.addSubagentUsage(usage),
     registerSubagentTask: (done) => getActiveTurnTracker()?.trackSubagent(done),
     eventEmitter: opts.emitter,

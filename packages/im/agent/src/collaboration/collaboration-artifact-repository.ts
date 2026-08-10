@@ -6,6 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PipelineArtifact, PipelineArtifactKind, PipelineStage } from './types.js';
 import type { CollaborationSceneArtifactRow } from './collaboration-db-model.js';
+import { createGenerationStore, type GenerationStoreContext, DisposeStack } from '@zhin.js/plugin-runtime';
 
 export interface SubmitArtifactInput {
   collaborationSceneId: string;
@@ -126,15 +127,25 @@ export class DatabaseCollaborationArtifactRepository implements CollaborationArt
   }
 }
 
-let globalArtifactRepo: CollaborationArtifactRepository | null = null;
+const artifactRepoStore = createGenerationStore<CollaborationArtifactRepository>('zhin.agent.collaboration-artifact-repository');
 
+let _fallbackArtifactRepo: CollaborationArtifactRepository | null = null;
 export function getCollaborationArtifactRepository(): CollaborationArtifactRepository {
-  if (!globalArtifactRepo) globalArtifactRepo = new MemoryCollaborationArtifactRepository();
-  return globalArtifactRepo;
+  return artifactRepoStore.tryUse() ?? (_fallbackArtifactRepo ??= new MemoryCollaborationArtifactRepository());
 }
 
+export function provideCollaborationArtifactRepository(context: GenerationStoreContext, repo: CollaborationArtifactRepository): void {
+  artifactRepoStore.provide(context, repo);
+}
+
+let _artifactRepoLegacy: DisposeStack | null = null;
 export function setCollaborationArtifactRepository(repo: CollaborationArtifactRepository | null): void {
-  globalArtifactRepo = repo;
+  if (_artifactRepoLegacy) { void _artifactRepoLegacy.dispose(); _artifactRepoLegacy = null; }
+  _fallbackArtifactRepo = null;
+  if (repo) {
+    _artifactRepoLegacy = new DisposeStack();
+    artifactRepoStore.provide({ lifecycle: _artifactRepoLegacy }, repo);
+  }
 }
 
 export function createCollaborationArtifactRepository(model?: DbModel): CollaborationArtifactRepository {

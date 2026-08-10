@@ -30,6 +30,7 @@ import {
   toolFeatureId,
 } from '@zhin.js/tool';
 import { createSyntheticMessage } from '@zhin.js/core';
+import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
 import {
   AgentRuntime,
   CapabilityIngress,
@@ -39,7 +40,7 @@ import {
 describe('Agent CapabilityIngress', () => {
   it('builds an owner-visible immutable view across four Feature projections', async () => {
     const fixture = await createFixture();
-    const capabilities = new CapabilityIngress().read(fixture.snapshot, fixture.child);
+    const capabilities = await new CapabilityIngress().read(fixture.snapshot, fixture.child);
 
     expect(capabilities.tools.map((tool) => tool.name)).toEqual(['lookup']);
     expect(capabilities.skills.map((skill) => skill.name)).toEqual(['research']);
@@ -108,7 +109,7 @@ describe('Agent CapabilityIngress', () => {
       permissions: ['role(trusted)'],
     });
     const ingress = new CapabilityIngress();
-    expect(ingress.read(restricted.snapshot, restricted.child).tools).toEqual([]);
+    expect((await ingress.read(restricted.snapshot, restricted.child)).tools).toEqual([]);
 
     const allowedMessage = createSyntheticMessage({
       adapter: 'qq',
@@ -116,12 +117,12 @@ describe('Agent CapabilityIngress', () => {
       sender: { id: 'trusted-user', isTrusted: true },
       channel: { type: 'group', id: '100' },
     });
-    expect(ingress.read(
+    expect((await ingress.read(
       restricted.snapshot,
       restricted.child,
       () => true,
       allowedMessage,
-    ).tools.map((tool) => tool.name)).toEqual(['lookup']);
+    )).tools.map((tool) => tool.name)).toEqual(['lookup']);
 
     const wrongPlatform = createSyntheticMessage({
       adapter: 'telegram',
@@ -129,16 +130,16 @@ describe('Agent CapabilityIngress', () => {
       sender: { id: 'trusted-user', isTrusted: true },
       channel: { type: 'group', id: '100' },
     });
-    expect(ingress.read(
+    expect((await ingress.read(
       restricted.snapshot,
       restricted.child,
       () => true,
       wrongPlatform,
-    ).tools).toEqual([]);
+    )).tools).toEqual([]);
     await restricted.mcp.stop();
 
     const hidden = await createFixture({ hidden: true });
-    expect(ingress.read(hidden.snapshot, hidden.child).tools).toEqual([]);
+    expect((await ingress.read(hidden.snapshot, hidden.child)).tools).toEqual([]);
     await hidden.mcp.stop();
   });
 });
@@ -229,7 +230,7 @@ function baseState(slots: readonly CapabilitySlot[]): SnapshotState {
       [child, { id: child, instanceKey: 'child', packageName: '@test/child', packageRoot: '/project/plugins/child', parent: root, children: [] }],
     ]),
     config: new Map([[root, {}], [child, {}]]),
-    resources: new Map([[root, new Map()], [child, new Map()]]),
+    resources: new Map([[root, new Map([[permissionHostToken.id, createPermissionHost()]])], [child, new Map()]]),
     capabilities: new Map(slots.map((slot) => [slot.id, slot])),
     projections: new Map(),
   };

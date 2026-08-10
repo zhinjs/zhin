@@ -1,5 +1,6 @@
 import { isReservedToolName, type AgentTool, type ImTranscriptStore, type MemoryImTranscriptStore } from '@zhin.js/ai';
 import { canAccessTool, getLogger, type Tool as CoreTool } from '@zhin.js/core';
+import type { PermissionHost } from '@zhin.js/permission';
 import type { Tool, Message } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
@@ -27,6 +28,8 @@ export interface CollectToolsContext {
   imTranscriptStore: ImTranscriptStore | MemoryImTranscriptStore;
   userProfiles: UserProfileStore;
   mcpTools?: AgentTool[];
+  /** PermissionHost（permit 声明的工具经其判定；缺省 fail-closed）。 */
+  permissionHost?: PermissionHost | null;
 }
 
 export class ExternalToolSource implements ToolSource {
@@ -35,10 +38,10 @@ export class ExternalToolSource implements ToolSource {
 
   constructor(private readonly externalTools: Tool[]) {}
 
-  collectTools(context: CollectToolsContext): AgentTool[] {
+  async collectTools(context: CollectToolsContext): Promise<AgentTool[]> {
     const tools: AgentTool[] = [];
     for (const tool of this.externalTools) {
-      if (!canAccessTool(tool as unknown as CoreTool, context.message)) continue;
+      if (!(await canAccessTool(tool as unknown as CoreTool, context.message, context.permissionHost))) continue;
       tools.push(sharedToolSelection.normalize(tool, context.message));
     }
     return tools;
@@ -70,11 +73,11 @@ export class RegisteredToolSource implements ToolSource {
    * `canAccessTool` for both registration paths; `hidden` tools stay
    * executable by name but are never offered to the model.
    */
-  collectTools(context: CollectToolsContext): AgentTool[] {
+  async collectTools(context: CollectToolsContext): Promise<AgentTool[]> {
     const tools: AgentTool[] = [];
     for (const tool of this.externalRegistered.values()) {
       if (tool.hidden) continue;
-      if (!canAccessTool(tool as unknown as CoreTool, context.message)) continue;
+      if (!(await canAccessTool(tool as unknown as CoreTool, context.message, context.permissionHost))) continue;
       tools.push(tool);
     }
     return tools;

@@ -11,7 +11,7 @@ import {
   bindDeferredToolRuntime,
   type DeferredToolRuntime,
 } from '../../src/builtin/deferred-tool-meta.js';
-import { wireMockProviderToLlmApi } from '../helpers/mock-llm-api.js';
+import { wireMockProviderToLlmApi, createMockSdkProvider } from '../helpers/mock-llm-api.js';
 
 function completion(message: Partial<ChatMessage>): ChatCompletionResponse {
   return {
@@ -43,26 +43,27 @@ describe('standalone loop 延迟加载', () => {
     const loadTool = new LoadToolBuiltinTool().toTool() as unknown as AgentTool;
 
     let phase = 0;
-    const provider = {
-      name: 'test',
-      models: ['mock'],
-      capabilities: { vision: false, streaming: false, toolCalling: true },
-      async chat(): Promise<ChatCompletionResponse> {
-        phase += 1;
-        if (phase === 1) {
-          return completion({
-            tool_calls: [{ id: 't1', type: 'function', function: { name: 'load_tool', arguments: '{"name":"bash"}' } }],
-          });
-        }
-        if (phase === 2) {
-          return completion({
-            tool_calls: [{ id: 't2', type: 'function', function: { name: 'bash', arguments: '{}' } }],
-          });
-        }
-        return completion({ content: 'done' });
-      },
-      async *chatStream() {},
-    } as unknown as AIProvider;
+    const provider = Object.assign(
+      createMockSdkProvider(
+        async (): Promise<ChatCompletionResponse> => {
+          phase += 1;
+          if (phase === 1) {
+            return completion({
+              tool_calls: [{ id: 't1', type: 'function', function: { name: 'load_tool', arguments: '{"name":"bash"}' } }],
+            });
+          }
+          if (phase === 2) {
+            return completion({
+              tool_calls: [{ id: 't2', type: 'function', function: { name: 'bash', arguments: '{}' } }],
+            });
+          }
+          return completion({ content: 'done' });
+        },
+        ['mock'],
+        'test',
+      ),
+      { capabilities: { vision: false, streaming: false, toolCalling: true } },
+    ) as unknown as AIProvider;
     wireMockProviderToLlmApi(provider);
 
     const parentSnapshot = { loadedTools: {} as Record<string, number> };

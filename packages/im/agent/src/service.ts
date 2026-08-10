@@ -4,7 +4,7 @@
  */
 
 import { type Plugin, type AITriggerConfig, type AIAccessConfig, createSyntheticMessage, type Tool } from '@zhin.js/core';
-import { type AIProvider, type AIConfig, type ChatMessage, type ChatCompletionRequest, type ChatCompletionResponse, type ChatCompletionChunk, type AgentTool, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, registerLlmApiFromProviders } from '@zhin.js/ai';
+import { type AIProvider, type AIConfig, type AgentTool, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, registerLlmApiFromProviders } from '@zhin.js/ai';
 import type { AgentRunInput } from './media/media-types.js';
 import { DEFAULT_CONFIG } from './config/index.js';
 import { normalizeTool } from './orchestrator/tool-selection.js';
@@ -213,31 +213,6 @@ export class AIService {
       }
     }
     return result;
-  }
-
-  async chat(request: ChatCompletionRequest, providerName?: string): Promise<ChatCompletionResponse> {
-    return this.getProvider(providerName).chat(request);
-  }
-
-  async *chatStream(request: ChatCompletionRequest, providerName?: string): AsyncIterable<ChatCompletionChunk> {
-    yield* this.getProvider(providerName).chatStream(request);
-  }
-
-  async ask(
-    question: string,
-    options: { provider?: string; model?: string; systemPrompt?: string; temperature?: number } = {},
-  ): Promise<string> {
-    const messages: ChatMessage[] = [];
-    if (options.systemPrompt) messages.push({ role: 'system', content: options.systemPrompt });
-    messages.push({ role: 'user', content: question });
-    const provider = this.getProvider(options.provider);
-    const response = await provider.chat({
-      model: options.model || provider.models[0],
-      messages,
-      temperature: options.temperature,
-    });
-    const content = response.choices[0]?.message?.content;
-    return typeof content === 'string' ? content : '';
   }
 
   private resolveServiceAgentTools(options: CreateServiceAgentOptions): AgentTool[] {

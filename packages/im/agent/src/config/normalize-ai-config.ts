@@ -1,4 +1,4 @@
-import { type AIConfig, type ProviderConfig, applyProviderGatewayPreset, isSdkId, validateProviderGatewayConfig } from '@zhin.js/ai';
+import { type AIConfig, applyProviderGatewayPreset, isSdkId, validateProviderGatewayConfig } from '@zhin.js/ai';
 import { getLogger } from '@zhin.js/logger';
 import type {
   AgentBindingConfig,
@@ -6,43 +6,12 @@ import type {
 } from './types.js';
 
 const logger = getLogger('AIConfig');
-const LEGACY_DRIVER_KEYS = new Set([
-  'openai', 'anthropic', 'deepseek', 'moonshot', 'zhipu', 'google', 'gemini', 'ollama', 'cloudflare',
-]);
 
-/** Map legacy driver names to sdk ids (hard break: api/preset/spec are rejected). */
-const DRIVER_TO_SDK: Record<string, ProviderInstanceConfig['sdk']> = {
-  openai: 'openai',
-  anthropic: 'anthropic',
-  deepseek: 'deepseek',
-  moonshot: 'openai-compatible',
-  zhipu: 'openai-compatible',
-  google: 'google',
-  gemini: 'google',
-  ollama: 'ollama',
-  cloudflare: 'openai-compatible',
-};
+/** 统一的新写法提示（硬报错文案共用）。 */
+const PROVIDER_FORM_HINT =
+  '命名 providers + 显式 sdk，例: providers: { my-openai: { sdk: openai, apiKey: sk-... } }';
 
-function isNamedProviderShape(
-  providers: AIConfig['providers'],
-): providers is Record<string, ProviderInstanceConfig & { driver?: string; api?: string; preset?: string; spec?: string }> {
-  if (!providers || typeof providers !== 'object' || Array.isArray(providers)) return false;
-  const entries = Object.entries(providers);
-  if (entries.length === 0) return false;
-  // Legacy flat shape: keys are driver ids (openai, anthropic, …)
-  if (entries.every(([key]) => LEGACY_DRIVER_KEYS.has(key))) return false;
-  return true;
-}
-
-function inferSdkFromAlias(alias: string): ProviderInstanceConfig['sdk'] | undefined {
-  const lower = alias.trim().toLowerCase();
-  if (DRIVER_TO_SDK[lower]) return DRIVER_TO_SDK[lower];
-  const head = lower.split(/[-_/]/)[0];
-  if (head && DRIVER_TO_SDK[head]) return DRIVER_TO_SDK[head];
-  return undefined;
-}
-
-/** Normalize provider entry to required `sdk` (ADR 0018). Rejects api/preset/spec. */
+/** Normalize provider entry to required `sdk` (ADR 0018). Rejects api/preset/spec/driver. */
 export function normalizeProviderEntry(
   alias: string,
   cfg: ProviderInstanceConfig & { driver?: string; api?: string; preset?: string; spec?: string },
@@ -52,29 +21,9 @@ export function normalizeProviderEntry(
       `ai.providers.${alias}: "api", "preset", and "spec" are removed; use "sdk" instead (ADR 0018)`,
     );
   }
-
-  const legacyDriver = cfg.driver?.trim().toLowerCase();
-  const sdkForPreset = (
-    cfg.sdk?.trim().toLowerCase() as ProviderInstanceConfig['sdk'] | undefined
-  )
-    || (legacyDriver ? DRIVER_TO_SDK[legacyDriver] : undefined)
-    || inferSdkFromAlias(alias)
-    || 'openai-compatible';
-  const presetHint = applyProviderGatewayPreset(alias, {
-    sdk: sdkForPreset,
-    baseUrl: cfg.baseUrl?.trim(),
-    host: cfg.host?.trim(),
-    apiKey: cfg.apiKey,
-    contextWindow: cfg.contextWindow,
-  });
-  const sdkRaw = cfg.sdk?.trim().toLowerCase()
-    || (legacyDriver ? DRIVER_TO_SDK[legacyDriver] : undefined)
-    || inferSdkFromAlias(alias)
-    || presetHint.sdk?.trim().toLowerCase();
-
-  if (!sdkRaw || !isSdkId(sdkRaw)) {
+  if (cfg.driver?.trim()) {
     throw new Error(
-      `ai.providers.${alias}: sdk is required (openai | anthropic | google | deepseek | ollama | openai-compatible)`,
+      `ai.providers.${alias}: "driver" is removed; use "sdk" instead (ADR 0018) — ${PROVIDER_FORM_HINT}`,
     );
   }
 
@@ -83,34 +32,28 @@ export function normalizeProviderEntry(
   delete rest.api;
   delete rest.preset;
   delete rest.spec;
-  const normalized = { ...(rest as unknown as ProviderInstanceConfig), sdk: sdkRaw };
+  const normalized = { ...(rest as unknown as ProviderInstanceConfig) };
   if (typeof normalized.apiKey === 'string') normalized.apiKey = normalized.apiKey.trim();
   if (typeof normalized.baseUrl === 'string') normalized.baseUrl = normalized.baseUrl.trim();
   if (typeof normalized.host === 'string') normalized.host = normalized.host.trim();
+  // 网关预设（opencode / zhipu 等已知别名）可补齐或纠正 sdk；其余必须显式声明
   const withGateway = applyProviderGatewayPreset(alias, normalized);
-  const warnings = validateProviderGatewayConfig(alias, normalized);
+  const sdkRaw = withGateway.sdk?.trim().toLowerCase();
+
+  if (!sdkRaw || !isSdkId(sdkRaw)) {
+    throw new Error(
+      `ai.providers.${alias}: sdk is required (openai | anthropic | google | deepseek | ollama | openai-compatible) — ${PROVIDER_FORM_HINT}`,
+    );
+  }
+
+  const result = { ...withGateway, sdk: sdkRaw as ProviderInstanceConfig['sdk'] };
+  const warnings = validateProviderGatewayConfig(alias, result);
   if (warnings.length > 0 && process.env.ZHIN_PROVIDER_GATEWAY_WARN !== '0') {
     for (const w of warnings) {
       logger.warn(`[ai.providers] ${w}`);
     }
   }
-  return withGateway;
-}
-
-function normalizeLegacyProviders(
-  legacy: NonNullable<AIConfig['providers']>,
-): Record<string, ProviderInstanceConfig> {
-  const out: Record<string, ProviderInstanceConfig> = {};
-  for (const [key, cfg] of Object.entries(legacy)) {
-    if (key === 'custom' || !cfg || typeof cfg !== 'object') continue;
-    if (LEGACY_DRIVER_KEYS.has(key)) {
-      out[key] = normalizeProviderEntry(key, {
-        ...(cfg as ProviderConfig),
-        sdk: DRIVER_TO_SDK[key]!,
-      });
-    }
-  }
-  return out;
+  return result;
 }
 
 function rejectRemovedAiConfigFields(ai: AIConfig | undefined): void {
@@ -140,20 +83,22 @@ export interface NormalizedAiRoutingConfig {
 }
 
 /**
- * 解析 ai.providers / agents（拒绝已删除的 routes / pipeline / defaultProvider）。
+ * 解析 ai.providers / agents（拒绝已删除的 routes / pipeline / defaultProvider /
+ * driver 字段与旧平铺 providers 写法——后者因缺少显式 sdk 在此硬报错）。
  */
 export function normalizeAiRoutingConfig(ai: AIConfig | undefined): NormalizedAiRoutingConfig {
   rejectRemovedAiConfigFields(ai);
 
-  let providers: Record<string, ProviderInstanceConfig>;
-
-  if (isNamedProviderShape(ai?.providers)) {
-    providers = {};
-    for (const [alias, cfg] of Object.entries(ai!.providers as Record<string, ProviderInstanceConfig & { driver?: string }>)) {
-      providers[alias] = normalizeProviderEntry(alias, cfg);
+  const providers: Record<string, ProviderInstanceConfig> = {};
+  const rawProviders = ai?.providers;
+  if (rawProviders && typeof rawProviders === 'object' && !Array.isArray(rawProviders)) {
+    for (const [alias, cfg] of Object.entries(rawProviders)) {
+      if (!cfg || typeof cfg !== 'object') continue;
+      providers[alias] = normalizeProviderEntry(
+        alias,
+        cfg as ProviderInstanceConfig & { driver?: string; api?: string; preset?: string; spec?: string },
+      );
     }
-  } else {
-    providers = normalizeLegacyProviders(ai?.providers ?? {});
   }
 
   const agents = { ...((ai as AIConfig & { agents?: Record<string, AgentBindingConfig> })?.agents ?? {}) };

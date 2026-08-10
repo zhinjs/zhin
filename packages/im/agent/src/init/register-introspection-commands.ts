@@ -41,9 +41,27 @@ async function visibleCommandItems(
   message: Message,
   plugin: ReturnType<typeof getPlugin>['root'],
 ): Promise<MessageCommand[]> {
+  // classic 轨：permission feature 经 plugin.inject 取（与 MessageCommand 旧行为一致，
+  // fail-closed）；runtime 轨的 PermissionHost 不流经这里。
+  const auth = plugin.contextIsReady('permission' as never)
+    ? (plugin.inject('permission' as never) as unknown as { check(name: string, message: Message): Promise<boolean> } | null)
+    : null;
   const out: MessageCommand[] = [];
   for (const cmd of commandService.items) {
-    if (await cmd.checkPermits(message, plugin)) out.push(cmd);
+    const permits = cmd.requiredPermits;
+    if (!permits.length) {
+      out.push(cmd);
+      continue;
+    }
+    if (!auth) continue;
+    let allowed = true;
+    for (const permit of permits) {
+      if (!(await auth.check(permit, message))) {
+        allowed = false;
+        break;
+      }
+    }
+    if (allowed) out.push(cmd);
   }
   return out;
 }

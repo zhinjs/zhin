@@ -5,6 +5,7 @@ import { getLogger } from '@zhin.js/logger';
 import {
   ScheduleEngine,
   getScheduleEngine,
+  setScheduleEngine,
   resolveSolarJob,
   resolveLunarJob,
   resolveWorkdayJob,
@@ -23,6 +24,7 @@ function ensureEngine(): ScheduleEngine {
   let engine = getScheduleEngine();
   if (!engine) {
     engine = new ScheduleEngine();
+    setScheduleEngine(engine);
   }
   return engine;
 }

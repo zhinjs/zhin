@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { resetLlmApiRegistryForTests, type AgentTool, type AIProvider } from '@zhin.js/ai';
 
-import { wireMockProviderToLlmApi } from './helpers/mock-llm-api.js';
+import { wireMockProviderToLlmApi, createMockSdkProvider } from './helpers/mock-llm-api.js';
 import { DeferredWorkerRunner } from '../src/deferred-worker-runner.js';
 
 function makeTool(name: string, description = 'test'): AgentTool {
@@ -27,11 +27,7 @@ describe('DeferredWorkerRunner', () => {
       usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
     });
 
-    const provider = {
-      name: 'mock',
-      models: ['test-model'],
-      chat,
-    } as unknown as AIProvider;
+    const provider = createMockSdkProvider(chat, ['test-model']) as unknown as AIProvider;
     wireMockProviderToLlmApi(provider);
 
     const deferredCatalog = [makeTool('github_star', 'star repo')];
@@ -61,11 +57,7 @@ describe('DeferredWorkerRunner', () => {
   });
 
   it('returns error when no tools match query', async () => {
-    const provider = {
-      name: 'mock',
-      models: ['test-model'],
-      chat: vi.fn(),
-    } as unknown as AIProvider;
+    const provider = createMockSdkProvider(vi.fn(), ['test-model']) as unknown as AIProvider;
     wireMockProviderToLlmApi(provider);
 
     const runner = new DeferredWorkerRunner();
@@ -102,11 +94,7 @@ describe('DeferredWorkerRunner', () => {
       usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
     });
 
-    const provider = {
-      name: 'mock',
-      models: ['test-model'],
-      chat,
-    } as unknown as AIProvider;
+    const provider = createMockSdkProvider(chat, ['test-model']) as unknown as AIProvider;
     wireMockProviderToLlmApi(provider);
 
     const deferredCatalog = [makeTool('web_search', 'search web')];
@@ -163,11 +151,7 @@ describe('DeferredWorkerRunner', () => {
         usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
       });
 
-    const provider = {
-      name: 'mock',
-      models: ['test-model'],
-      chat,
-    } as unknown as AIProvider;
+    const provider = createMockSdkProvider(chat, ['test-model']) as unknown as AIProvider;
     wireMockProviderToLlmApi(provider);
 
     const bash = makeTool('bash');
@@ -203,11 +187,7 @@ describe('DeferredWorkerRunner', () => {
       usage: { prompt_tokens: 2, completion_tokens: 2, total_tokens: 4 },
     });
 
-    const provider = {
-      name: 'mock',
-      models: ['test-model'],
-      chat,
-    } as unknown as AIProvider;
+    const provider = createMockSdkProvider(chat, ['test-model']) as unknown as AIProvider;
     wireMockProviderToLlmApi(provider);
 
     const deferredCatalog = [makeTool('github_star', 'star repo')];

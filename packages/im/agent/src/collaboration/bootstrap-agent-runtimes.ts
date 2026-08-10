@@ -3,6 +3,7 @@
  */
 
 import type { Plugin } from '@zhin.js/core';
+import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 import { ZhinAgent } from '../zhin-agent/index.js';
 import type { AIService } from '../service.js';
 import type { AIServiceRefs } from '../init/shared-refs.js';
@@ -22,7 +23,7 @@ export interface BootstrapRuntimesOptions {
   agentConfig?: ZhinAgentConfig;
 }
 
-let lastBootstrapOptions: BootstrapRuntimesOptions | null = null;
+const bootstrapOptionsStore = createGenerationStore<BootstrapRuntimesOptions>('zhin.agent.bootstrap-options');
 
 function resolveMemberForEndpoint(
   cells: CollaborationScene[],
@@ -125,13 +126,14 @@ export function markAllRuntimesPersistenceReady(primary: ZhinAgent): void {
   syncCollaborationRuntimePersistence(primary);
 }
 
-export function bootstrapEndpointRuntimes(options: BootstrapRuntimesOptions): void {
-  lastBootstrapOptions = options;
+export function bootstrapEndpointRuntimes(options: BootstrapRuntimesOptions, context?: GenerationStoreContext): void {
+  if (context) bootstrapOptionsStore.provide(context, options);
   applyEndpointRuntimes(options);
 }
 
 /** DB 加载协作单元后重新绑定 Endpoint Runtime */
 export async function rebootstrapEndpointRuntimes(): Promise<void> {
-  if (!lastBootstrapOptions) return;
-  applyEndpointRuntimes(lastBootstrapOptions);
+  const opts = bootstrapOptionsStore.tryUse();
+  if (!opts) return;
+  applyEndpointRuntimes(opts);
 }

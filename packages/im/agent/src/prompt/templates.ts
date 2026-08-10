@@ -8,6 +8,8 @@
  * - 版本管理
  */
 
+import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
+
 // ── 模板定义 ──────────────────────────────────────────────────────────
 
 export interface PromptTemplate {
@@ -542,33 +544,27 @@ Safety rules:
 
 // ── 全局实例 ──────────────────────────────────────────────────────────
 
-let globalTemplateManager: PromptTemplateManager | null = null;
+const templateStore = createGenerationStore<PromptTemplateManager>('zhin.agent.template-manager');
 
-/**
- * 获取全局模板管理器
- */
-export function getTemplateManager(): PromptTemplateManager {
-  if (!globalTemplateManager) {
-    globalTemplateManager = new PromptTemplateManager();
-
-    // 添加预定义模板
-    for (const template of DEFAULT_TEMPLATES) {
-      globalTemplateManager.addTemplate(template);
-    }
+function createConfiguredTemplateManager(): PromptTemplateManager {
+  const manager = new PromptTemplateManager();
+  for (const template of DEFAULT_TEMPLATES) {
+    manager.addTemplate(template);
   }
-  return globalTemplateManager;
+  return manager;
 }
 
-/**
- * 初始化模板管理器
- */
+export function getTemplateManager(): PromptTemplateManager {
+  return templateStore.tryUse() ?? createConfiguredTemplateManager();
+}
+
+export function provideTemplateManager(context: GenerationStoreContext): PromptTemplateManager {
+  const manager = createConfiguredTemplateManager();
+  templateStore.provide(context, manager);
+  return manager;
+}
+
+/** @deprecated 使用 provideTemplateManager 替代 */
 export function initTemplateManager(): PromptTemplateManager {
-  globalTemplateManager = new PromptTemplateManager();
-
-  // 添加预定义模板
-  for (const template of DEFAULT_TEMPLATES) {
-    globalTemplateManager.addTemplate(template);
-  }
-
-  return globalTemplateManager;
+  return createConfiguredTemplateManager();
 }

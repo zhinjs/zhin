@@ -23,11 +23,8 @@ import {
   createRestrictedToolView,
   normalizeTool,
 } from '../src/orchestrator/tool-selection.js';
-import {
-  registerDefaultScenePlatformPermitChecker,
-  clearPlatformPermitCheckers,
-} from '@zhin.js/core';
 import { planToolRun } from '../src/tool/runtime.js';
+import { createPermissionHost, createSceneRolePlatformChecker } from '@zhin.js/permission';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
 import type { Tool } from '../src/orchestrator/types.js';
 import type { ZhinAgentConfig } from '../src/config/index.js';
@@ -89,15 +86,14 @@ function makeTool(overrides: Partial<Tool> = {}): Tool {
 }
 
 describe('tool-selection permissions', () => {
+  let host: ReturnType<typeof createPermissionHost>;
+
   beforeEach(() => {
-    registerDefaultScenePlatformPermitChecker('qq');
+    host = createPermissionHost();
+    host.registerPlatform('qq', createSceneRolePlatformChecker());
   });
 
-  afterEach(() => {
-    clearPlatformPermitCheckers();
-  });
-
-  it('checks platform, scope and platform permit in one place', () => {
+  it('checks platform, scope and platform permit in one place', async () => {
     const tool = makeTool({
       platforms: ['qq'],
       scopes: ['group'],
@@ -106,24 +102,24 @@ describe('tool-selection permissions', () => {
     const msg = {
       $adapter: 'qq',
       $endpoint: 'b1',
-      $sender: { id: 'u1', role: 'admin' },
+      $sender: { id: 'u1', role: ['admin'] },
       $channel: { type: 'group', id: 'g1' },
     } as any;
 
-    expect(canAccessTool(tool, msg)).toBe(true);
-    expect(canAccessTool(tool, { ...msg, $channel: { type: 'private', id: 'u1' } })).toBe(false);
-    expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq', scope: 'group', senderId: undefined }))).toBe(false);
+    expect(await canAccessTool(tool, msg, host)).toBe(true);
+    expect(await canAccessTool(tool, { ...msg, $channel: { type: 'private', id: 'u1' } }, host)).toBe(false);
+    expect(await canAccessTool(tool, mockCommMessage({ adapter: 'qq', scope: 'group', senderId: undefined }), host)).toBe(false);
   });
 
-  it('canAccessToolFromSkill ignores platform but keeps scope and permission', () => {
+  it('canAccessToolFromSkill ignores platform but keeps scope and permission', async () => {
     const tool = makeTool({
       platforms: ['github'],
       scopes: ['private'],
     });
 
-    expect(canAccessToolFromSkill(tool, mockCommMessage({ scope: 'private' }))).toBe(true);
-    expect(canAccessToolFromSkill(tool, mockCommMessage({ scope: 'group' }))).toBe(false);
-    expect(canAccessTool(tool, mockCommMessage({ scope: 'private' }))).toBe(false);
+    expect(await canAccessToolFromSkill(tool, mockCommMessage({ scope: 'private' }))).toBe(true);
+    expect(await canAccessToolFromSkill(tool, mockCommMessage({ scope: 'group' }))).toBe(false);
+    expect(await canAccessTool(tool, mockCommMessage({ scope: 'private' }))).toBe(false);
   });
 });
 
@@ -210,7 +206,7 @@ describe('ToolSelection', () => {
     expect(selection.cacheSize).toBe(0);
   });
 
-  it('collects tools with skill priority, support tools and allow filtering', () => {
+  it('collects tools with skill priority, support tools and allow filtering', async () => {
     const selection = new ToolSelection();
     const context = mockCommMessage({ scope: 'group' });
     const externalTools = [
@@ -228,7 +224,7 @@ describe('ToolSelection', () => {
       search: () => [deploySkill],
     };
 
-    const tools = selection.collectRelevantTools('please deploy this app', context, externalTools, {
+    const tools = await selection.collectRelevantTools('please deploy this app', context, externalTools, {
       config: makeConfig({ allowedTools: ['activate_skill', 'bash', 'deploy_tool'] }),
       skillRegistry: skillRegistry as any,
       externalRegistered: new Map(),
@@ -238,7 +234,7 @@ describe('ToolSelection', () => {
     expect(tools.some(t => t.name === 'blocked')).toBe(false);
   });
 
-  it('消息命中技能关键词时注入该技能工具（跨 IM 平台，如 QQ 上用 github_star）', () => {
+  it('消息命中技能关键词时注入该技能工具（跨 IM 平台，如 QQ 上用 github_star）', async () => {
     const selection = new ToolSelection();
     const context = mockCommMessage({ scope: 'private' });
     const externalTools = [
@@ -268,7 +264,7 @@ describe('ToolSelection', () => {
       search: () => [],
     };
 
-    const tools = selection.collectRelevantTools('查看 zhinjs/qq-official-bot 的 star 数', context, externalTools, {
+    const tools = await selection.collectRelevantTools('查看 zhinjs/qq-official-bot 的 star 数', context, externalTools, {
       config: makeConfig({ maxSkills: 5, maxTools: 20 }),
       skillRegistry: skillRegistry as any,
       externalRegistered: new Map(),
@@ -278,7 +274,7 @@ describe('ToolSelection', () => {
     expect(tools.map(t => t.name)).toContain('activate_skill');
   });
 
-  it('当 context.platform 命中技能 platforms 时自动注入 activate_skill（消息无需含技能名）', () => {
+  it('当 context.platform 命中技能 platforms 时自动注入 activate_skill（消息无需含技能名）', async () => {
     const selection = new ToolSelection();
     const context = mockCommMessage({ adapter: 'icqq' });
     const externalTools = [
@@ -303,7 +299,7 @@ describe('ToolSelection', () => {
       search: () => [],
     };
 
-    const tools = selection.collectRelevantTools('帮我看看今天天气', context, externalTools, {
+    const tools = await selection.collectRelevantTools('帮我看看今天天气', context, externalTools, {
       config: makeConfig({ maxSkills: 5, maxTools: 12 }),
       skillRegistry: skillRegistry as any,
       externalRegistered: new Map(),
@@ -314,13 +310,13 @@ describe('ToolSelection', () => {
     expect(tools.map(t => t.name)).toContain('bash');
   });
 
-  it('retains web_search after relevance filter for messages without search keywords', () => {
+  it('retains web_search after relevance filter for messages without search keywords', async () => {
     const selection = new ToolSelection();
     const context = mockCommMessage();
     const externalTools = [
       makeTool({ name: 'web_search', description: 'Bing HTML search', keywords: ['search', 'bing'] }),
     ];
-    const tools = selection.collectRelevantTools('狐蒂云最近有什么动态', context, externalTools, {
+    const tools = await selection.collectRelevantTools('狐蒂云最近有什么动态', context, externalTools, {
       config: makeConfig(),
       skillRegistry: null,
       externalRegistered: new Map(),
@@ -328,13 +324,13 @@ describe('ToolSelection', () => {
     expect(tools.some(t => t.name === 'web_search')).toBe(true);
   });
 
-  it('retains ask_user after relevance filter for messages without interaction keywords', () => {
+  it('retains ask_user after relevance filter for messages without interaction keywords', async () => {
     const selection = new ToolSelection();
     const context = mockCommMessage();
     const externalTools = [
       makeTool({ name: 'ask_user', description: 'Ask bot owner', keywords: ['owner', 'confirm'] }),
     ];
-    const tools = selection.collectRelevantTools('今天天气适合出门吗', context, externalTools, {
+    const tools = await selection.collectRelevantTools('今天天气适合出门吗', context, externalTools, {
       config: makeConfig(),
       skillRegistry: null,
       externalRegistered: new Map(),
@@ -364,7 +360,7 @@ describe('ToolSelection', () => {
       ...filler,
       makeTool({ name: 'group_delegate', description: 'Legacy delegate to peer bot', keywords: ['delegate'] }),
     ];
-    const tools = selection.collectRelevantTools('重新启动调研 zhin框架', context, externalTools, {
+    const tools = await selection.collectRelevantTools('重新启动调研 zhin框架', context, externalTools, {
       config: makeConfig({ maxTools: 12 }),
       skillRegistry: null,
       externalRegistered: new Map(),

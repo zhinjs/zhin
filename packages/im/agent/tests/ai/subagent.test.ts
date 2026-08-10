@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
-import { wireMockProviderToLlmApi } from '../helpers/mock-llm-api.js';
+import { wireMockProviderToLlmApi, createMockSdkProvider } from '../helpers/mock-llm-api.js';
 import { SubagentRuntime, type SubagentOrigin, type SpawnOptions } from '@zhin.js/agent';
 import type { ZhinAgentEventEmitter } from '../../src/event/event-emitter.js';
 
@@ -32,15 +32,16 @@ const baseOrigin: SubagentOrigin = {
 };
 
 function createMockProvider(response: string = '任务完成') {
-  return {
-    name: 'mock',
-    models: ['mock-model'],
-    chat: vi.fn(async () => ({
+  const provider = createMockSdkProvider(
+    vi.fn(async () => ({
       choices: [{ message: { role: 'assistant', content: response }, finish_reason: 'stop' }],
       usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
     } as ChatCompletionResponse)),
+    ['mock-model'],
+  );
+  return Object.assign(provider, {
     listModels: vi.fn(async () => ['mock-model']),
-  };
+  });
 }
 
 function createMockTools(): AgentTool[] {

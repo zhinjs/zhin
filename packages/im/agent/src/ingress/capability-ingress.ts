@@ -26,6 +26,7 @@ import {
   type ToolFeature,
   type SkillFeature,
 } from '@zhin.js/core';
+import type { PermissionHost } from '@zhin.js/permission';
 import { isBuiltinToolSource } from '@zhin.js/ai';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 import type { Skill, Tool, AgentPreset, McpServerEntry } from '../orchestrator/types.js';
@@ -43,6 +44,7 @@ export interface CapabilityFeatureBundle {
 export interface IngressTurnContext {
   binding: ResolvedAgentBinding;
   message: Message;
+  host?: PermissionHost | null;
 }
 
 interface IngressOwned {
@@ -71,7 +73,7 @@ function skillToOrchestrator(skill: CoreSkill): Skill {
 }
 
 /** Skill visibility via same platforms/scopes/permissions contract as Tool. */
-function canAccessSkill(skill: CoreSkill, message: Message): boolean {
+async function canAccessSkill(skill: CoreSkill, message: Message, host?: PermissionHost | null): Promise<boolean> {
   return canAccessTool(
     {
       name: skill.name,
@@ -81,6 +83,7 @@ function canAccessSkill(skill: CoreSkill, message: Message): boolean {
       platforms: skill.platforms,
     },
     message,
+    host,
   );
 }
 
@@ -232,11 +235,11 @@ export class FeatureCapabilityIngress {
    * projection instead of purging it; the purge runs when the last turn
    * holding that projection releases its lease.
    */
-  ensureForTurn(
+  async ensureForTurn(
     orchestrator: AgentOrchestrator,
     features: CapabilityFeatureBundle,
     ctx: IngressTurnContext,
-  ): IngressTurnLease {
+  ): Promise<IngressTurnLease> {
     const fp = featureFingerprint(features);
     const key = buildTurnCacheKey(ctx, fp);
     if (this.live && this.live.key === key) {
@@ -276,18 +279,22 @@ export class FeatureCapabilityIngress {
 
     for (const tool of features.tools?.getAll() ?? []) {
       if (isBuiltinToolSource(tool.source)) continue;
-      if (!canAccessTool(tool, ctx.message)) continue;
+      if (!(await canAccessTool(tool, ctx.message, ctx.host))) continue;
       orchestrator.addTool(toolToOrchestrator(tool), undefined, tool.source ?? 'feature');
       projection.owned.tools.add(tool.name);
       tools++;
     }
 
     for (const skill of features.skills?.getAll() ?? []) {
-      if (!canAccessSkill(skill, ctx.message)) continue;
+      if (!(await canAccessSkill(skill, ctx.message, ctx.host))) continue;
       const orchSkill = skillToOrchestrator(skill);
-      orchSkill.tools = orchSkill.tools.filter((t) =>
-        canAccessTool(t as unknown as CoreTool, ctx.message),
+      const toolAccessResults = await Promise.all(
+        orchSkill.tools.map(async (t) => ({
+          tool: t,
+          allowed: await canAccessTool(t as unknown as CoreTool, ctx.message, ctx.host),
+        })),
       );
+      orchSkill.tools = toolAccessResults.filter((r) => r.allowed).map((r) => r.tool);
       orchestrator.addSkill(orchSkill, undefined, skill.pluginName);
       projection.owned.skills.add(skill.name);
       skills++;

@@ -7,7 +7,7 @@ import { formatCompact, getPlugin, getScheduler, isZhinTool, Scheduler, setSched
 import { createProactiveOutboundService } from '../outbound/send-proactive.js';
 import { composeZhinAgentRuntime } from './compose-zhin-agent-runtime.js';
 import { ModelRegistry, computeTierScore, InMemoryMemoryEntryRepository, type AIConfig } from '@zhin.js/ai';
-import { setMemoryEntryRepository } from '../memory-entry-registry.js';
+import { provideMemoryEntryRepository } from '../memory-entry-registry.js';
 import { ZhinAgent } from '../zhin-agent/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
 import { createGenerateImageTool } from '../builtin/generate-image-tool.js';
@@ -20,8 +20,9 @@ import {
   DEFAULT_ALWAYS_LOADED_TOOLS,
   type ZhinAgentConfig,
 } from '../config/index.js';
-import { setScheduleManager } from '../schedule-manager.js';
+import { provideScheduleManager } from '../schedule-manager.js';
 import { ScheduleEngine, getScheduleEngine, setScheduleEngine } from '@zhin.js/kernel';
+import { DisposeStack } from '@zhin.js/plugin-runtime';
 import { createTaskExecutor } from '../task-executor.js';
 import {
   AssistantEventIngress,
@@ -38,7 +39,8 @@ import {
   validateAssistantProfile,
   resolveAssistantConfig,
   resolveAssistantDefaultsConfig,
-  setAssistantRuntime,
+  resolveAssistantQueueConfig,
+  provideAssistantRuntime,
   type AssistantConfig,
 } from '../assistant/index.js';
 import type { AIServiceRefs } from './shared-refs.js';
@@ -46,19 +48,23 @@ import { activateAiDatabaseStorage } from './activate-ai-database-storage.js';
 import { wireCollaborationStorage } from '../collaboration/wire-collaboration-storage.js';
 import {
   createSessionTreeRuntimeFromAgent,
-  setSessionTreeRuntime,
+  provideSessionTreeRuntime,
 } from '../session-tree-runtime-registry.js';
 import { createAgentSessionHostPort, type AgentSessionHostPort } from '../session/agent-session-host-port.js';
 import { getAgentRuntimeRegistry } from '../collaboration/runtime-registry.js';
 import { MemoryOrchestrationRepository } from '../orchestrator/orchestration-repository.js';
-import { initOrchestrationService } from '../orchestrator/orchestration-service.js';
+import {
+  createOrchestrationService,
+  provideOrchestrationService,
+} from '../orchestrator/orchestration-service.js';
 import {
   createOrchestrationRuntimeFromService,
-  setOrchestrationRuntime,
+  provideOrchestrationRuntime,
 } from '../orchestration-runtime-registry.js';
 import { registerDefaultExecutors } from '../orchestrator/bootstrap-executors.js';
-import { initRemoteAgentRegistry } from '../orchestrator/remote-agent-registry.js';
-import { startRemoteTaskPoller } from '../orchestrator/remote-task-poller.js';
+import { provideRemoteAgentRegistry } from '../orchestrator/remote-agent-registry.js';
+import { provideRemoteTaskPoller } from '../orchestrator/remote-task-poller.js';
+import { provideTaskQueue } from '../orchestrator/task-queue.js';
 import { asPrivate } from '../internal/as-private.js';
 import type { AIService } from '../service.js';
 import { createExecPolicyHook } from '../security/exec-policy-hook.js';
@@ -92,6 +98,8 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
   const { useContext, root, logger } = plugin;
 
   useContext('ai', (ai) => {
+    // Generation-scoped 注册表统一挂这个 lifecycle；下方 teardown 统一 dispose。
+    const generationLifecycle = new DisposeStack();
     if (!ai.isReady()) {
       logger.warn('AI service not ready, skipping agent creation');
       return;
@@ -139,10 +147,10 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       ai,
       primaryAgent: agent,
       agentConfig: zhinAgentCfg,
-    });
-    setSessionTreeRuntime(createSessionTreeRuntimeFromAgent(asPrivate(agent)));
-    void initRemoteAgentRegistry(appConfig.ai).then((registry) => registry.healthCheckAll());
-    startRemoteTaskPoller({ intervalMs: 15_000 });
+    }, { lifecycle: generationLifecycle });
+    provideSessionTreeRuntime({ lifecycle: generationLifecycle }, createSessionTreeRuntimeFromAgent(asPrivate(agent)));
+    void provideRemoteAgentRegistry({ lifecycle: generationLifecycle }, appConfig.ai).then((registry) => registry.healthCheckAll());
+    provideRemoteTaskPoller({ lifecycle: generationLifecycle }, { intervalMs: 15_000 });
     agent.configure({
       hostPlugin: root,
       providerResolver: (alias) => ai.getProvider(alias),
@@ -157,11 +165,12 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     // DB activation path upgrades it in-place via upgradeOrchestrationRepository,
     // preserving registered executors/strategies. This eliminates the startup
     // window where getOrchestrationService() was null (ADR 0027).
-    const orchService = initOrchestrationService(new MemoryOrchestrationRepository());
-    setOrchestrationRuntime(createOrchestrationRuntimeFromService(orchService));
+    const orchService = createOrchestrationService(new MemoryOrchestrationRepository());
+    provideOrchestrationService({ lifecycle: generationLifecycle }, orchService);
+    provideOrchestrationRuntime({ lifecycle: generationLifecycle }, createOrchestrationRuntimeFromService(orchService));
     if (!useDb) {
       if (semanticMemory) {
-        setMemoryEntryRepository(new InMemoryMemoryEntryRepository());
+        provideMemoryEntryRepository({ lifecycle: generationLifecycle }, new InMemoryMemoryEntryRepository());
       }
       markAllRuntimesPersistenceReady(agent);
       void wireCollaborationStorage(undefined, appConfig.collaboration);
@@ -294,10 +303,10 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     const proactiveOutbound = createProactiveOutboundService({ plugin: root, resolveAdapter });
     const notificationRouter = createNotificationRouter({
       resolveAdapter,
-      sendIm: async (notify, content) => {
+      sendIm: async (notify, content, source) => {
         await proactiveOutbound.send({
           scene: notify.target.scene,
-          source: 'notification',
+          source: (source ?? 'notification') as import('../outbound/send-proactive.js').ProactiveSendSource,
         }, content);
       },
     });
@@ -306,13 +315,6 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       resolveAdapter,
       defaultNotify: defaultNotifyCfg.notify,
       router: notificationRouter,
-      proactiveOutbound,
-      deliverIm: async (notify, content) => {
-        await proactiveOutbound.send({
-          scene: notify.target.scene,
-          source: 'scheduled',
-        }, content);
-      },
     });
 
     const composed = composeZhinAgentRuntime(agent, provider, proactiveOutbound);
@@ -348,6 +350,15 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     const store = createScheduleJobStoreFromConfig(dataDir, {
       defaultNotify: defaultNotifyCfg.notify,
     });
+    const queueCfg = resolveAssistantQueueConfig(assistantCfg.queue, assistantCfg.enabled);
+    if (queueCfg.enabled) {
+      provideTaskQueue({ lifecycle: generationLifecycle }, {
+        maxConcurrency: queueCfg.maxConcurrency,
+        defaultMaxRetries: queueCfg.maxRetries,
+        defaultTimeout: queueCfg.defaultTimeoutMs,
+        enableDAG: false,
+      });
+    }
     jobWorker = new JobWorker({
       executor,
       queue: assistantCfg.queue,
@@ -362,21 +373,24 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     });
 
     void (async () => {
-      if (assistantCfg.enabled) {
-        const profile = await loadAssistantProfileFile(process.cwd(), assistantCfg.profile);
-        if (profile) {
-          for (const err of validateAssistantProfile(profile)) {
-            logger.warn(formatCompact({ assistant_profile: err }));
+      try {
+        if (assistantCfg.enabled) {
+          const profile = await loadAssistantProfileFile(process.cwd(), assistantCfg.profile);
+          if (profile) {
+            for (const err of validateAssistantProfile(profile)) {
+              logger.warn(formatCompact({ assistant_profile: err }));
+            }
           }
+          await syncProfileHeartbeatToStore(store, profile);
+          await syncProfileRoutinesToStore(store, profile);
+          await pruneStaleProfileCronJobs(store, profile);
         }
-        await syncProfileHeartbeatToStore(store, profile);
-        await syncProfileRoutinesToStore(store, profile);
-        await pruneStaleProfileCronJobs(store, profile);
+      } catch (e) {
+        logger.warn('Profile sync failed: ' + ((e as Error)?.message || String(e)));
       }
-      jobEngine!.load();
+      await jobEngine!.load();
     })().catch((e) => {
       logger.warn('Schedule load failed: ' + ((e as Error)?.message || String(e)));
-      jobEngine?.load();
     });
 
     if (assistantCfg.enabled) {
@@ -385,7 +399,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         engine: jobEngine,
         eventsConfig: assistantCfg.events,
       });
-      setAssistantRuntime({
+      provideAssistantRuntime({ lifecycle: generationLifecycle }, {
         config: assistantCfg,
         store,
         engine: jobEngine,
@@ -399,7 +413,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     }
 
     if (scheduleFeature) {
-      setScheduleManager({
+      provideScheduleManager({ lifecycle: generationLifecycle }, {
         scheduleFeature,
         engine: jobEngine,
         previewTask: (opts) => executor.executeTask({
@@ -432,11 +446,11 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
 
     logger.debug('ZhinAgent created');
     return () => {
-      setSessionTreeRuntime(null);
+      // orchestration runtime/service、session tree、assistant、schedule manager
+      // 统一经 generation store 反注册（此前 orchestration runtime 漏清，跨热重载泄漏）
+      void generationLifecycle.dispose();
       agentSessionHost = null;
-      setScheduleManager(null);
       setScheduleEngine(null);
-      setAssistantRuntime(null);
       if (jobEngine) {
         jobEngine.unload();
         jobEngine = null;

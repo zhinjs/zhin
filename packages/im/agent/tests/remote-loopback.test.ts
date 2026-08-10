@@ -4,12 +4,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TaskState } from '@a2a-js/sdk';
 import { MemoryOrchestrationRepository } from '../src/orchestrator/orchestration-repository.js';
-import { initOrchestrationService } from '../src/orchestrator/orchestration-service.js';
-import { getAgentDispatcher } from '../src/orchestrator/agent-dispatcher.js';
+import { provideTestOrchestrationService } from './helpers/orchestration.js';
+import { getOrchestrationService } from '../src/orchestrator/orchestration-service.js';
 import {
   RemoteAgentRegistry,
-  initRemoteAgentRegistry,
+  provideRemoteAgentRegistry,
 } from '../src/orchestrator/remote-agent-registry.js';
+import { DisposeStack } from '@zhin.js/plugin-runtime';
 import {
   executeRemoteOrchestrationTask,
   pollRemoteTaskStatus,
@@ -17,11 +18,11 @@ import {
 
 describe('Remote loopback A2A delegate flow', () => {
   let repo: MemoryOrchestrationRepository;
+  const lifecycle = new DisposeStack();
 
   beforeEach(() => {
     repo = new MemoryOrchestrationRepository();
-    initOrchestrationService(repo);
-    getAgentDispatcher().setRepository(repo);
+    provideTestOrchestrationService(repo);
   });
 
   it('delegate → poll completed via mocked A2A client', async () => {
@@ -33,7 +34,7 @@ describe('Remote loopback A2A delegate flow', () => {
       executor_kind: 'remote_mesh',
       remote_agent_id: 'local',
     });
-    getAgentDispatcher().syncTaskFromRecord(task);
+    getOrchestrationService()!.dispatcherHandle.syncTaskFromRecord(task);
 
     const remoteTaskId = 'rt-abc123';
     const sendMessage = vi.fn().mockResolvedValue({
@@ -78,7 +79,7 @@ describe('Remote loopback A2A delegate flow', () => {
         history: [],
       });
 
-    const registry = await initRemoteAgentRegistry({
+    const registry = await provideRemoteAgentRegistry({ lifecycle }, {
       remoteAgents: [{
         id: 'local',
         cardUrl: 'http://127.0.0.1:8069/a2a/zhin/.well-known/agent-card.json',
@@ -111,7 +112,7 @@ describe('Remote loopback A2A delegate flow', () => {
 
     const updated = await repo.getTask(task.id);
     expect(updated?.remote_task_id).toBe(remoteTaskId);
-    getAgentDispatcher().syncTaskFromRecord(updated!);
+    getOrchestrationService()!.dispatcherHandle.syncTaskFromRecord(updated!);
 
     const poll1 = await pollRemoteTaskStatus(task.id);
     expect(poll1.done).toBe(false);
@@ -133,9 +134,9 @@ describe('Remote loopback A2A delegate flow', () => {
       remote_agent_id: 'local',
       status: 'running',
     });
-    getAgentDispatcher().syncTaskFromRecord(task);
+    getOrchestrationService()!.dispatcherHandle.syncTaskFromRecord(task);
 
-    const registry = await initRemoteAgentRegistry({
+    const registry = await provideRemoteAgentRegistry({ lifecycle }, {
       remoteAgents: [{
         id: 'local',
         cardUrl: 'http://127.0.0.1:8069/a2a/zhin/.well-known/agent-card.json',

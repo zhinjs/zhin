@@ -1,6 +1,6 @@
 /**
  * Schedule → adapter delivery helper — ADR 0039 P1.
- * Routes scheduled task output through proactive outbound / Adapter.sendMessage (D2).
+ * Routes scheduled task output through NotificationRouter (unified outbound chain).
  */
 import type { JobNotify } from './types.js';
 import {
@@ -9,16 +9,16 @@ import {
   type NotificationRouter,
   type NotificationRouterDeps,
 } from './notification-router.js';
-import type { ProactiveOutboundService } from '../outbound/send-proactive.js';
 
 export interface DeliverScheduleToAdapterInput {
   notify: JobNotify;
   content: string;
   jobId?: string;
   label?: string;
-  proactiveOutbound?: ProactiveOutboundService;
   router?: NotificationRouter;
+  /** @deprecated 仅用于未注入 router 时的回退构造 */
   resolveAdapter?: NotificationRouterDeps['resolveAdapter'];
+  source?: string;
 }
 
 /**
@@ -27,20 +27,12 @@ export interface DeliverScheduleToAdapterInput {
 export async function deliverScheduleToAdapter(
   input: DeliverScheduleToAdapterInput,
 ): Promise<DeliverResult> {
-  const { notify, content, jobId, label, proactiveOutbound } = input;
-  if (notify.channel === 'im' && proactiveOutbound) {
-    await proactiveOutbound.send(
-      { scene: notify.target.scene, source: 'scheduled' },
-      content,
-    );
-    return { delivered: true, channel: 'im' };
-  }
-
+  const { notify, content, jobId, label, source } = input;
   const router = input.router ?? (input.resolveAdapter
     ? createNotificationRouter({ resolveAdapter: input.resolveAdapter })
     : undefined);
   if (!router) {
     return { delivered: false, channel: notify.channel };
   }
-  return router.deliver({ notify, content, jobId, label });
+  return router.deliver({ notify, content, jobId, label, source });
 }

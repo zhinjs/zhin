@@ -3,6 +3,7 @@
  */
 
 import { type CollaborationScene, type PipelineState, isPipelineRole } from './types.js';
+import { createGenerationStore, type GenerationStoreContext, DisposeStack } from '@zhin.js/plugin-runtime';
 import {
   memberInputToRow,
   memberRowToRecord,
@@ -523,17 +524,25 @@ export class DatabaseCollaborationSceneRepository extends CollaborationSceneRepo
   }
 }
 
-let globalRepository: CollaborationSceneRepository | null = null;
+const sceneRepoStore = createGenerationStore<CollaborationSceneRepository>('zhin.agent.collaboration-scene-repository');
 
+let _fallbackSceneRepo: CollaborationSceneRepository | null = null;
 export function getCollaborationSceneRepository(): CollaborationSceneRepository {
-  if (!globalRepository) {
-    globalRepository = new MemoryCollaborationSceneRepository();
-  }
-  return globalRepository;
+  return sceneRepoStore.tryUse() ?? (_fallbackSceneRepo ??= new MemoryCollaborationSceneRepository());
 }
 
+export function provideCollaborationSceneRepository(context: GenerationStoreContext, repo: CollaborationSceneRepository): void {
+  sceneRepoStore.provide(context, repo);
+}
+
+let _sceneRepoLegacy: DisposeStack | null = null;
 export function setCollaborationSceneRepository(repo: CollaborationSceneRepository | null): void {
-  globalRepository = repo;
+  if (_sceneRepoLegacy) { void _sceneRepoLegacy.dispose(); _sceneRepoLegacy = null; }
+  _fallbackSceneRepo = null;
+  if (repo) {
+    _sceneRepoLegacy = new DisposeStack();
+    sceneRepoStore.provide({ lifecycle: _sceneRepoLegacy }, repo);
+  }
 }
 
 export function createCollaborationSceneRepository(

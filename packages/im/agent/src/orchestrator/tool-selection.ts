@@ -2,7 +2,8 @@
  * Tool selection — normalization, permission checks, context injection and relevance caching.
  */
 
-import { canAccessTool as coreCanAccessTool, checkBuiltinPermitList, isBuiltinPermit, resolveContextKey, senderRolesFromMessage, type Message, getLogger } from '@zhin.js/core';
+import { canAccessTool as coreCanAccessTool, resolveContextKey, type Message, getLogger } from '@zhin.js/core';
+import { type PermissionHost, toPermissionSubject } from '@zhin.js/permission';
 import { formatCompact } from '@zhin.js/logger';
 import { type AgentTool, type ToolFilterOptions, CachedToolFilter } from '@zhin.js/ai';
 import type { SkillRegistry } from './skill-registry.js';
@@ -82,21 +83,19 @@ export interface RestrictedToolViewOptions {
   disabledNames?: readonly string[];
 }
 
-export function canAccessTool(tool: Tool, message?: Message): boolean {
-  return coreCanAccessTool(tool as import('@zhin.js/core').Tool, message);
+export async function canAccessTool(tool: Tool, message?: Message, host?: PermissionHost | null): Promise<boolean> {
+  return coreCanAccessTool(tool as import('@zhin.js/core').Tool, message, host);
 }
 
 /** 技能关联工具：跨 IM 平台可用（如 QQ 上 star 仓库），仅校验 scope/权限。 */
-export function canAccessToolFromSkill(tool: Tool, message?: Message): boolean {
+export async function canAccessToolFromSkill(tool: Tool, message?: Message, host?: PermissionHost | null): Promise<boolean> {
   const scope = (message?.$channel?.type || 'private') as import('./types.js').ToolScope;
   if (tool.scopes?.length && !tool.scopes.includes(scope)) return false;
   if (!tool.permissions?.length) return true;
   if (!message) return false;
-  const roles = senderRolesFromMessage(message);
-  if (tool.permissions.every((p) => isBuiltinPermit(p))) {
-    return checkBuiltinPermitList(tool.permissions, message, roles);
-  }
-  return tool.permissions.every((p) => checkBuiltinPermitList([p], message, roles));
+  if (!host) return false;
+  const subject = toPermissionSubject(message);
+  return host.checkAll(tool.permissions, subject);
 }
 
 export function createRestrictedToolView(
@@ -248,12 +247,13 @@ export class ToolSelection {
     return this.cachedFilter.size;
   }
 
-  collectRelevantTools(
+  async collectRelevantTools(
     userMessage: string,
     commMessage: Message,
     externalTools: Tool[],
     ctx: CollectToolsContext,
-  ): AgentTool[] {
+    host?: PermissionHost | null,
+  ): Promise<AgentTool[]> {
     const { config, skillRegistry, externalRegistered } = ctx;
     const collected: AgentTool[] = [];
     const collectedNames = new Set<string>();
@@ -290,7 +290,7 @@ export class ToolSelection {
 
     if (mentionedSkill) {
       const activateSkillTool = externalTools.find(t => t.name === 'activate_skill');
-      if (activateSkillTool && canAccessTool(activateSkillTool, commMessage)) {
+      if (activateSkillTool && await canAccessTool(activateSkillTool, commMessage, host)) {
         collected.push(this.normalize(activateSkillTool, commMessage));
         collectedNames.add('activate_skill');
         logger.debug(`[技能激活] 已提前加入 activate_skill 工具（优先级最高）`);
@@ -300,7 +300,7 @@ export class ToolSelection {
         : undefined;
       if (skillByName) {
         for (const tool of skillByName.tools) {
-          if (!canAccessToolFromSkill(tool, commMessage)) continue;
+          if (!(await canAccessToolFromSkill(tool, commMessage, host))) continue;
           if (collectedNames.has(tool.name)) continue;
           collected.push(this.normalize(tool, commMessage));
           collectedNames.add(tool.name);
@@ -330,7 +330,7 @@ export class ToolSelection {
 
       for (const skill of skills) {
         for (const tool of skill.tools) {
-          if (!canAccessToolFromSkill(tool, commMessage)) continue;
+          if (!(await canAccessToolFromSkill(tool, commMessage, host))) continue;
           if (collectedNames.has(tool.name)) continue;
           collected.push(this.normalize(tool, commMessage));
           collectedNames.add(tool.name);
@@ -340,7 +340,7 @@ export class ToolSelection {
 
     let deduped = 0;
     for (const tool of externalTools) {
-      if (!canAccessTool(tool, commMessage)) continue;
+      if (!(await canAccessTool(tool, commMessage, host))) continue;
       if (collectedNames.has(tool.name)) {
         deduped++;
         continue;

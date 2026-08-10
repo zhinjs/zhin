@@ -7,19 +7,20 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ZhinAgent } from '@zhin.js/agent';
 import { Plugin, SkillFeature, type AIProvider, type AgentTool, type Tool } from '@zhin.js/core';
 import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
-import { wireMockProviderToLlmApi } from '../helpers/mock-llm-api.js';
+import { wireMockProviderToLlmApi, createMockSdkProvider } from '../helpers/mock-llm-api.js';
 
 
 // Mock AIProvider
 function createMockProvider(response: string = '你好！'): AIProvider {
-  return {
-    name: 'mock',
-    models: ['mock-model'],
-    chat: vi.fn(async () => ({
+  const provider = createMockSdkProvider(
+    vi.fn(async () => ({
       choices: [{ message: { role: 'assistant' as const, content: response }, finish_reason: 'stop' }],
     } as ChatResponse)),
+    ['mock-model'],
+  );
+  return Object.assign(provider, {
     listModels: vi.fn(async () => ['mock-model']),
-  };
+  }) as unknown as AIProvider;
 }
 
 function makeCommMessage(overrides: {
