@@ -1,9 +1,13 @@
 /**
- * HomeAssistantService — 别名解析 + HA REST（M4）
+ * HaHomeBackend — Home Assistant REST client（别名解析 + 服务调用）
  */
 import { getLogger } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
-import { type AssistantHomeConfig, resolveAssistantHomeConfig } from '../home-config.js';
+import { type AssistantHomeConfig, resolveAssistantHomeConfig, type ResolvedAssistantHomeConfig } from '../home-config.js';
+import { parseEntityDomain } from './home-entity.js';
+
+export { parseEntityDomain };
+
 const logger = getLogger('home-assistant');
 
 export type HaFetch = (url: string, init?: RequestInit) => Promise<Response>;
@@ -16,6 +20,12 @@ export interface HaEntityState {
   lastUpdated?: string;
 }
 
+export interface HaServiceResult {
+  alias: string;
+  entityId: string;
+  service: string;
+}
+
 const DOMAIN_SERVICE_MAP: Record<string, { on: string; off: string }> = {
   light: { on: 'turn_on', off: 'turn_off' },
   switch: { on: 'turn_on', off: 'turn_off' },
@@ -26,13 +36,8 @@ const DOMAIN_SERVICE_MAP: Record<string, { on: string; off: string }> = {
   media_player: { on: 'turn_on', off: 'turn_off' },
 };
 
-export function parseEntityDomain(entityId: string): string {
-  const dot = entityId.indexOf('.');
-  return dot > 0 ? entityId.slice(0, dot) : entityId;
-}
-
-export class HomeAssistantService {
-  private cfg: ReturnType<typeof resolveAssistantHomeConfig>;
+export class HaHomeBackend {
+  private cfg: ResolvedAssistantHomeConfig;
   private fetchFn: HaFetch;
 
   constructor(homeConfig: AssistantHomeConfig, fetchFn: HaFetch = globalThis.fetch.bind(globalThis)) {
@@ -120,14 +125,40 @@ export class HomeAssistantService {
     logger.debug(formatCompact({ op: 'ha_service', alias, entityId, domain, service }));
   }
 
-  async turnOn(alias: string): Promise<{ alias: string; entityId: string; service: string }> {
+  /**
+   * JobNotify channel:ha — call by domain/service with optional entity target.
+   * `service` may be `domain.service` or bare service name (requires target entity).
+   */
+  async callHaNotifyService(service: string, target?: string, data?: unknown): Promise<void> {
+    const payload = (data && typeof data === 'object') ? data as Record<string, unknown> : {};
+    let domain: string;
+    let svc: string;
+    if (service.includes('.')) {
+      const [d, s] = service.split('.', 2);
+      domain = d;
+      svc = s;
+    } else if (target) {
+      domain = parseEntityDomain(target);
+      svc = service;
+    } else {
+      throw new Error(`callHaService 需要 domain.service 或 target entity（got: ${service}）`);
+    }
+    const body = target ? { entity_id: target, ...payload } : { ...payload };
+    await this.haRequest(`/api/services/${domain}/${svc}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    logger.debug(formatCompact({ op: 'ha_notify_service', domain, service: svc, target }));
+  }
+
+  async turnOn(alias: string): Promise<HaServiceResult> {
     const entityId = this.resolveAlias(alias);
     const { domain, service } = this.resolveServiceForToggle(entityId, true);
     await this.callService(alias, service);
     return { alias, entityId, service: `${domain}.${service}` };
   }
 
-  async turnOff(alias: string): Promise<{ alias: string; entityId: string; service: string }> {
+  async turnOff(alias: string): Promise<HaServiceResult> {
     const entityId = this.resolveAlias(alias);
     const { domain, service } = this.resolveServiceForToggle(entityId, false);
     await this.callService(alias, service);

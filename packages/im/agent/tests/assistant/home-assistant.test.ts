@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
-  HomeAssistantService,
+  HaHomeBackend,
   parseEntityDomain,
-} from '../../src/assistant/domains/home-assistant.js';
+} from '../../src/assistant/domains/ha-home-backend.js';
+import { parseEntityDomain as parseDomain } from '../../src/assistant/domains/home-entity.js';
 
-describe('HomeAssistantService', () => {
+describe('HaHomeBackend', () => {
   const homeConfig = {
     enabled: true,
     restUrl: 'http://ha.local:8123',
@@ -22,12 +23,12 @@ describe('HomeAssistantService', () => {
   });
 
   it('解析 entity domain', () => {
-    expect(parseEntityDomain('light.living_room')).toBe('light');
+    expect(parseDomain('light.living_room')).toBe('light');
     expect(parseEntityDomain('lock.front')).toBe('lock');
   });
 
   it('resolveAlias 未知别名抛错', () => {
-    const svc = new HomeAssistantService(homeConfig, fetchMock);
+    const svc = new HaHomeBackend(homeConfig, fetchMock);
     expect(() => svc.resolveAlias('卧室灯')).toThrow(/未知设备别名/);
   });
 
@@ -41,7 +42,7 @@ describe('HomeAssistantService', () => {
         last_updated: '2026-06-05T10:00:00Z',
       }),
     });
-    const svc = new HomeAssistantService(homeConfig, fetchMock);
+    const svc = new HaHomeBackend(homeConfig, fetchMock);
     const state = await svc.getState('客厅灯');
     expect(state.entityId).toBe('light.living_room');
     expect(state.state).toBe('on');
@@ -55,7 +56,7 @@ describe('HomeAssistantService', () => {
 
   it('turnOn 映射 light.turn_on', async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200, text: async () => '[]' });
-    const svc = new HomeAssistantService(homeConfig, fetchMock);
+    const svc = new HaHomeBackend(homeConfig, fetchMock);
     const result = await svc.turnOn('客厅灯');
     expect(result.service).toBe('light.turn_on');
     expect(fetchMock).toHaveBeenCalledWith(
@@ -69,7 +70,7 @@ describe('HomeAssistantService', () => {
 
   it('turnOff lock 映射 lock.lock', async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200, text: async () => '[]' });
-    const svc = new HomeAssistantService(homeConfig, fetchMock);
+    const svc = new HaHomeBackend(homeConfig, fetchMock);
     const result = await svc.turnOff('大门锁');
     expect(result.service).toBe('lock.lock');
   });

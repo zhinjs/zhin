@@ -270,6 +270,9 @@ export {
   parseScheduleAddFromToolArgs,
   parseScheduleAddFromRpcMessage,
   buildScheduleTurnPrompt,
+  bootstrapAssistantHome,
+  isAssistantHomeActive,
+  resolveAssistantHomeConfig,
 } from './assistant/index.js';
 export type {
   AssistantConfig,
@@ -278,6 +281,7 @@ export type {
   AssistantProfileConfig,
   AssistantProfile,
   NotificationRouter,
+  BootstrapAssistantHomeResult,
   ScheduleJob,
   ScheduleJobFile,
   ScheduleJobCreator,

@@ -53,6 +53,23 @@ life-assistant-bot/
 └── README.md
 ```
 
+## 接入智能家居（可选）
+
+如果你有 Home Assistant，可以让 Bot 控制家中设备。在 `zhin.config.yml` 中取消 `assistant.home` 注释块即可：
+
+```yaml
+assistant:
+  enabled: true
+  home:
+    enabled: true
+    restUrl: "${HA_REST_URL}"
+    restToken: "${HA_REST_TOKEN}"
+    aliases:
+      客厅灯: light.living_room
+```
+
+详见 [智能家居接入指南](../../docs/advanced/assistant-home-setup.md)。
+
 ## 接入真实 IM
 
 在 `package.json#zhin.plugins` 将 Sandbox child 替换为平台适配器，并在配置中使用相同 `instanceKey`：

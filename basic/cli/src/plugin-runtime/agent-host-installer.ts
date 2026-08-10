@@ -58,6 +58,7 @@ import {
   syncProfileHeartbeatToStore,
   syncProfileRoutinesToStore,
   pruneStaleProfileCronJobs,
+  bootstrapAssistantHome,
   OrchestrationService,
   provideOrchestrationService,
   MemoryOrchestrationRepository,
@@ -241,6 +242,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     let zhinAgent: ZhinAgent;
     let seedPresets: () => Promise<number>;
     let scheduleTools: Tool[] = [];
+    let homeTools: Tool[] = [];
     let assistantEnabled = false;
     let collaborationReady = false;
     let orchService: OrchestrationService;
@@ -276,6 +278,24 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       scheduleTools = schedule.tools;
       assistantEnabled = schedule.assistantEnabled;
       lifecycle.add(schedule.dispose);
+
+      const home = await wireRuntimeHome(
+        options.projectRoot,
+        assistantConfig,
+        schedule.notificationRouter,
+        schedule.bindCallHaService,
+        schedule.defaultNotify,
+      );
+      homeTools = home.tools;
+      lifecycle.add(home.dispose);
+      if (home.homeActive) {
+        logger.info(formatCompact({
+          op: 'agent_host_home',
+          enabled: true,
+          watch: home.watchActive,
+          tools: home.tools.length,
+        }));
+      }
     } catch (error) {
       logger.warn(formatCompact({
         op: 'agent_host_skip',
@@ -520,6 +540,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           // spawn_task is injected by ToolSystem when SubagentSystem is attached.
           ...deferredMetaTools,
           ...scheduleTools,
+          ...homeTools,
           bashTool,
         ];
 
@@ -586,6 +607,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       zhinAgent.getSubagentSystem() ? 'subagent' : '',
       options.transcribeUrl ? 'inboundStt' : '',
       scheduleTools.length > 0 ? 'schedule' : '',
+      homeTools.length > 0 ? 'home' : '',
       assistantEnabled ? 'assistant' : '',
       collaborationReady || persistencePendingActivate ? 'collaboration' : '',
       'bash',
@@ -617,7 +639,14 @@ function wireRuntimeSchedule(
   projectRoot: string,
   assistantRaw: AssistantConfig | undefined,
   lifecycle: DisposeStack,
-): { tools: Tool[]; dispose: () => void; assistantEnabled: boolean } {
+): {
+  tools: Tool[];
+  dispose: () => void;
+  assistantEnabled: boolean;
+  notificationRouter: ReturnType<typeof createNotificationRouter>;
+  defaultNotify: ReturnType<typeof parseJobNotify> | undefined;
+  bindCallHaService: (fn: (service: string, target?: string, data?: unknown) => Promise<void>) => void;
+} {
   const dataDir = join(projectRoot, 'data');
   mkdirSync(dataDir, { recursive: true });
 
@@ -632,6 +661,11 @@ function wireRuntimeSchedule(
     }
   }
 
+  let callHaServiceImpl: ((service: string, target?: string, data?: unknown) => Promise<void>) | undefined;
+  const bindCallHaService = (fn: (service: string, target?: string, data?: unknown) => Promise<void>) => {
+    callHaServiceImpl = fn;
+  };
+
   const proactiveOutbound = createRuntimeProactiveOutbound(im);
   const notificationRouter = createNotificationRouter({
     resolveAdapter: () => undefined,
@@ -640,6 +674,17 @@ function wireRuntimeSchedule(
         scene: notify.target.scene,
         source: (source ?? 'scheduled') as import('@zhin.js/agent').ProactiveSendSource,
       }, content);
+    },
+    callHaService: async (service, target, data) => {
+      if (callHaServiceImpl) {
+        await callHaServiceImpl(service, target, data);
+        return;
+      }
+      logger.info(formatCompact({
+        op: 'job_notify_ha_stub',
+        service,
+        target,
+      }));
     },
   });
   const executor = createTaskExecutor({
@@ -734,12 +779,48 @@ function wireRuntimeSchedule(
   return {
     tools,
     assistantEnabled: assistantCfg.enabled,
+    notificationRouter,
+    defaultNotify,
+    bindCallHaService,
     // assistant / schedule-manager 注册随 generation lifecycle 反注册（provide 时挂接）
     dispose: () => {
       jobEngine.unload();
       jobWorker.stop();
     },
   };
+}
+
+async function wireRuntimeHome(
+  projectRoot: string,
+  assistantRaw: AssistantConfig | undefined,
+  notificationRouter: ReturnType<typeof createNotificationRouter>,
+  bindCallHaService: (fn: (service: string, target?: string, data?: unknown) => Promise<void>) => void,
+  defaultNotify: ReturnType<typeof parseJobNotify> | undefined,
+): Promise<{ tools: Tool[]; dispose: () => void; homeActive: boolean; watchActive: boolean }> {
+  const assistantCfg = resolveAssistantConfig(assistantRaw);
+  try {
+    const result = await bootstrapAssistantHome({
+      homeRaw: assistantCfg.home,
+      profile: assistantCfg.profile,
+      projectRoot,
+      notificationRouter,
+      defaultNotify,
+      bindCallHaService,
+      log: (payload) => logger.info(formatCompact(payload)),
+    });
+    return {
+      tools: result.tools,
+      dispose: result.dispose,
+      homeActive: result.homeActive,
+      watchActive: result.watchActive,
+    };
+  } catch (error) {
+    logger.warn(formatCompact({
+      op: 'agent_host_home_skip',
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return { tools: [], dispose: () => {}, homeActive: false, watchActive: false };
+  }
 }
 
 function resolvePeerMode(trigger?: AITriggerConfig): PeerTriggerMode {

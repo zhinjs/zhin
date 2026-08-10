@@ -1,13 +1,33 @@
 export type { AssistantConfig, AssistantDefaultsConfig, AssistantEventsConfig, AssistantQueueConfig } from './config.js';
-export type { AssistantHomeConfig, HomePolicyConfig } from './home-config.js';
+export type { AssistantHomeConfig, HomePolicyConfig, ResolvedHomePolicyConfig } from './home-config.js';
 export {
   resolveAssistantHomeConfig,
   isAssistantHomeActive,
   DEFAULT_HOME_POLICY,
+  DEFAULT_ALLOWED_SERVICE_DOMAINS,
+  DEFAULT_DEBOUNCE_MS,
 } from './home-config.js';
-export { HomeAssistantService, parseEntityDomain } from './domains/home-assistant.js';
-export type { HaEntityState, HaFetch } from './domains/home-assistant.js';
+export { HaHomeBackend } from './domains/ha-home-backend.js';
+export type { HaEntityState, HaFetch, HaServiceResult } from './domains/ha-home-backend.js';
+export { parseEntityDomain } from './domains/home-entity.js';
+export { HaWsTransport, buildWsUrl } from './domains/ha-ws-transport.js';
+export type { HaWsTransportOptions, CreateHaSocket, HaStateChangedEvent } from './domains/ha-ws-transport.js';
+export {
+  HomeStateWatch,
+  buildWatchEntityMap,
+  formatStateMessage,
+} from './domains/home-state-watch.js';
+export type { HomeStateWatchOptions } from './domains/home-state-watch.js';
+export { HomeFacade, mapFacadeFailToToolError } from './home-facade.js';
+export type { HomeFacadeResult, HomeFacadeOk, HomeFacadeFail, HomeFacadeOptions } from './home-facade.js';
 export { createHomeTools } from './home-tools.js';
+export {
+  bootstrapAssistantHome,
+} from './bootstrap-assistant-home.js';
+export type {
+  BootstrapAssistantHomeOptions,
+  BootstrapAssistantHomeResult,
+} from './bootstrap-assistant-home.js';
 export type { AssistantProfileConfig, AssistantProfile } from './profile-types.js';
 export {
   ASSISTANT_PROFILE_VERSION,

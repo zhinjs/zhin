@@ -120,6 +120,24 @@ _避免使用_：mutate 入站 Message.extra、augmentPromptWithExecutionPlan
 群/频道未 @ 入站消息写入进程内 buffer（`MAX_PASSIVE_LINES=50`、`PASSIVE_TTL_MS=30min`），@ 触发时 drain 合并进 turn；session key 与 `resolveAgentTurnSessionKey` SSOT 一致；pipeline reset 后不继承旧 run buffer。
 _避免使用_：持久化 passive、跨 run 继承旁听
 
+## 智能家居（Home Assistant）
+
+**HaHomeBackend**:
+Home Assistant REST 客户端：别名解析、读状态、调用服务。当前唯一 smart-home 后端。
+_避免使用_：HomeBackend、多 provider 工厂、Native 适配器
+
+**HomeFacade**:
+交互式控制门面：别名 + 权限（master / confirmServices）+ 意图方法（turnOn、setBrightness 等）；返回判别联合供 tools 映射。
+_避免使用_：在每个 home_* tool 内重复 guard、把鉴权塞进 HaHomeBackend
+
+**Home Tool**:
+`home_*` ZhinTool：参数校验后委托 **HomeFacade**；Agent 可见契约保持稳定。
+_避免使用_：直接调 REST、暴露 entity_id
+
+**HomeStateWatch** / **HaWsTransport**:
+可选状态推送：Transport 负责 HA WebSocket 鉴权/订阅/重连；Watch 负责别名过滤、防抖与 NotificationRouter 投递。
+_避免使用_：经 HomeFacade 鉴权推送、createEndpointLifecycle 硬套 HA 客户端
+
 **Agent Turn Session Key**:
 `resolveAgentTurnSessionKey`（transport + 可选 `pipeline:{runPrefix}:`）为 turn 级 SSOT；passive write / @ drain / auto-continue depth / persist 共用。
 _避免使用_：私有 `resolveTurnSessionKey`、snapshot 与 cell 双轨 key

@@ -53,3 +53,35 @@ ai:
       enabled: true
       auto: true
       keepRecentTokens: 20000
+
+# --- 智能家居（可选，需 Home Assistant） ---
+# 取消注释并配置 HA 凭证后，Agent 即可使用 home_* 工具控制设备
+# 详见 docs/advanced/assistant-home-setup.md
+#
+# assistant:
+#   enabled: true
+#   defaults:
+#     notify:
+#       channel: im
+#       target:
+#         channel: im
+#         scene:
+#           platform: sandbox
+#           endpointId: assistant
+#           sceneId: owner
+#           kind: private
+#   home:
+#     enabled: true
+#     restUrl: "${HA_REST_URL}"
+#     restToken: "${HA_REST_TOKEN}"
+#     aliases:
+#       客厅灯: light.living_room
+#       卧室灯: light.bedroom
+#     watch:
+#       - 客厅灯
+#     debounceMs: 5000
+#     policy:
+#       requireMaster: true
+#       confirmServices:
+#         - lock
+#         - alarm_control_panel
