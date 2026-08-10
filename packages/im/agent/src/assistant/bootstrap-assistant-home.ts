@@ -33,7 +33,7 @@ export interface BootstrapAssistantHomeOptions {
   defaultNotify?: JobNotify;
   /** Assign after backend created so JobNotify channel:ha works */
   bindCallHaService?: (fn: (service: string, target?: string, data?: unknown) => Promise<void>) => void;
-  log?: (payload: Record<string, unknown>) => void;
+  log?: (payload: Record<string, string | number | boolean | null | undefined>) => void;
 }
 
 export interface BootstrapAssistantHomeResult {
