@@ -81,10 +81,15 @@ describe('agentLoop tiered execution', () => {
   it('runs tiered parallel bucket concurrently before sequential tools', async () => {
     const model = getLlmTransportModel('test', 'mock');
     const delayMs = 40;
+    let inFlight = 0;
+    let maxInFlight = 0;
 
     const executeTool = vi.fn(async (toolCall): Promise<AgentMessage> => {
       parallelStartOrder.push(toolCall.name);
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
       await new Promise((r) => setTimeout(r, delayMs));
+      inFlight -= 1;
       parallelEndOrder.push(toolCall.name);
       return {
         role: 'toolResult',
@@ -95,7 +100,6 @@ describe('agentLoop tiered execution', () => {
       };
     });
 
-    const t0 = Date.now();
     for await (const _event of agentLoop(
       createUserMessage('tiered'),
       agentContextFrom({ systemPrompt: 'sys', messages: [], tools: [slowReadA, slowReadB] }),
@@ -103,11 +107,12 @@ describe('agentLoop tiered execution', () => {
     )) {
       // drain
     }
-    const elapsed = Date.now() - t0;
 
     expect(parallelStartOrder).toEqual(['read_file', 'grep']);
     expect(parallelEndOrder).toHaveLength(2);
-    expect(elapsed).toBeLessThan(delayMs * 2 - 10);
+    // 结构性并发断言：两个并行桶工具的最大在飞数必须为 2
+    // （不断言墙钟时间——CI 共享 runner 的调度抖动不影响判定）
+    expect(maxInFlight).toBe(2);
     expect(executeTool).toHaveBeenCalledTimes(2);
   });
 });
