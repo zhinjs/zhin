@@ -8,23 +8,89 @@
       "DOM"
     ],
     "paths": {
-      "@zhin.js/logger": [
-        "./basic/logger/src/index.ts"
+      "@zhin.js/a2a": [
+        "./packages/host/a2a/src/index.ts"
       ],
-      "@zhin.js/schema": [
-        "./basic/schema/src/index.ts"
+      "@zhin.js/a2a/runtime": [
+        "./packages/host/a2a/src/runtime.ts"
       ],
-      "@zhin.js/database": [
-        "./basic/database/src/index.ts"
+      "@zhin.js/adapter": [
+        "./packages/im/adapter/src/index.ts"
       ],
-      "@zhin.js/schedule": [
-        "./basic/schedule/src/index.ts"
+      "@zhin.js/agent": [
+        "./packages/im/agent/src/index.ts"
       ],
-      "@zhin.js/kernel": [
-        "./packages/im/kernel/src/index.ts"
+      "@zhin.js/agent-feature": [
+        "./packages/im/agent-feature/src/index.ts"
+      ],
+      "@zhin.js/agent/config": [
+        "./packages/im/agent/src/config/index.ts"
+      ],
+      "@zhin.js/agent/connection": [
+        "./packages/im/agent/src/connection/index.ts"
+      ],
+      "@zhin.js/agent/connections": [
+        "./packages/im/agent/src/authoring/entries/connections.ts"
+      ],
+      "@zhin.js/agent/context": [
+        "./packages/im/agent/src/context/index.ts"
+      ],
+      "@zhin.js/agent/core": [
+        "./packages/im/agent/src/core/index.ts"
+      ],
+      "@zhin.js/agent/evals": [
+        "./packages/im/agent/src/authoring/entries/evals.ts"
+      ],
+      "@zhin.js/agent/event": [
+        "./packages/im/agent/src/event/index.ts"
+      ],
+      "@zhin.js/agent/hooks": [
+        "./packages/im/agent/src/authoring/entries/hooks.ts"
+      ],
+      "@zhin.js/agent/memory": [
+        "./packages/im/agent/src/memory/index.ts"
+      ],
+      "@zhin.js/agent/prompt": [
+        "./packages/im/agent/src/prompt/index.ts"
+      ],
+      "@zhin.js/agent/runtime": [
+        "./packages/im/agent/src/plugin-runtime/index.ts"
+      ],
+      "@zhin.js/agent/schedules": [
+        "./packages/im/agent/src/authoring/entries/schedules.ts"
+      ],
+      "@zhin.js/agent/security": [
+        "./packages/im/agent/src/security/index.ts"
+      ],
+      "@zhin.js/agent/session": [
+        "./packages/im/agent/src/session/index.ts"
+      ],
+      "@zhin.js/agent/skill": [
+        "./packages/im/agent/src/skill/index.ts"
+      ],
+      "@zhin.js/agent/skills": [
+        "./packages/im/agent/src/authoring/entries/skills.ts"
+      ],
+      "@zhin.js/agent/subagent": [
+        "./packages/im/agent/src/subagent/index.ts"
+      ],
+      "@zhin.js/agent/task-executor": [
+        "./packages/im/agent/src/task-executor.ts"
+      ],
+      "@zhin.js/agent/tool": [
+        "./packages/im/agent/src/tool/index.ts"
+      ],
+      "@zhin.js/agent/tools": [
+        "./packages/im/agent/src/authoring/entries/tools.ts"
+      ],
+      "@zhin.js/agent/turn": [
+        "./packages/im/agent/src/turn/index.ts"
       ],
       "@zhin.js/ai": [
         "./packages/im/ai/src/index.ts"
+      ],
+      "@zhin.js/ai/agent-step-checkpoint": [
+        "./packages/im/ai/src/agent-step-checkpoint.ts"
       ],
       "@zhin.js/ai/agent-stream": [
         "./packages/im/ai/src/agent-stream.ts"
@@ -32,32 +98,173 @@
       "@zhin.js/ai/agent-stream-consumer": [
         "./packages/im/ai/src/agent-stream-consumer.ts"
       ],
-      "@zhin.js/ai/agent-step-checkpoint": [
-        "./packages/im/ai/src/agent-step-checkpoint.ts"
-      ],
-      "@zhin.js/ai/tool-policy": [
-        "./packages/im/ai/src/tool-policy.ts"
+      "@zhin.js/ai/authorization-events": [
+        "./packages/im/ai/src/authorization-events.ts"
       ],
       "@zhin.js/ai/mcp-qualified-name": [
         "./packages/im/ai/src/mcp-qualified-name.ts"
       ],
-      "@zhin.js/ai/authorization-events": [
-        "./packages/im/ai/src/authorization-events.ts"
+      "@zhin.js/ai/tool-policy": [
+        "./packages/im/ai/src/tool-policy.ts"
+      ],
+      "@zhin.js/cli": [
+        "./basic/cli/src/index.ts"
+      ],
+      "@zhin.js/command": [
+        "./packages/im/command/src/index.ts"
+      ],
+      "@zhin.js/component": [
+        "./packages/im/component/src/index.ts"
+      ],
+      "@zhin.js/config-yaml": [
+        "./packages/im/config-yaml/src/index.ts"
       ],
       "@zhin.js/core": [
         "./packages/im/core/src/index.ts"
       ],
+      "@zhin.js/core/feature/adapter": [
+        "./packages/im/core/src/feature/adapter.ts"
+      ],
+      "@zhin.js/core/feature/command": [
+        "./packages/im/core/src/feature/command.ts"
+      ],
+      "@zhin.js/core/feature/component": [
+        "./packages/im/core/src/feature/component.ts"
+      ],
+      "@zhin.js/core/feature/middleware": [
+        "./packages/im/core/src/feature/middleware.ts"
+      ],
+      "@zhin.js/core/jsx": [
+        "./packages/im/core/src/jsx.ts"
+      ],
+      "@zhin.js/core/jsx-dev-runtime": [
+        "./packages/im/core/src/jsx-dev-runtime.ts"
+      ],
+      "@zhin.js/core/jsx-runtime": [
+        "./packages/im/core/src/jsx-runtime.ts"
+      ],
       "@zhin.js/core/queue-im-field-contract": [
         "./packages/im/core/src/built/queue-im-field-contract.ts"
       ],
-      "@zhin.js/agent": [
-        "./packages/im/agent/src/index.ts"
+      "@zhin.js/core/runtime": [
+        "./packages/im/core/src/plugin-runtime/im/index.ts"
+      ],
+      "@zhin.js/core/tool-zod": [
+        "./packages/im/core/src/tool-zod.ts"
+      ],
+      "@zhin.js/database": [
+        "./basic/database/src/index.ts"
+      ],
+      "@zhin.js/feature-kit": [
+        "./packages/im/feature-kit/src/index.ts"
+      ],
+      "@zhin.js/game-kit": [
+        "./packages/game-kit/src/index.ts"
+      ],
+      "@zhin.js/host-http": [
+        "./packages/host/http/src/index.ts"
+      ],
+      "@zhin.js/host-http-contract": [
+        "./packages/host/http-contract/src/index.ts"
+      ],
+      "@zhin.js/html-renderer": [
+        "./packages/toolkit/html-renderer/src/index.ts"
+      ],
+      "@zhin.js/im-contract": [
+        "./packages/im/im-contract/src/index.ts"
+      ],
+      "@zhin.js/isolate": [
+        "./packages/im/isolate/src/index.ts"
+      ],
+      "@zhin.js/kernel": [
+        "./packages/im/kernel/src/index.ts"
+      ],
+      "@zhin.js/logger": [
+        "./basic/logger/src/index.ts"
+      ],
+      "@zhin.js/mcp": [
+        "./packages/host/mcp/src/index.ts"
+      ],
+      "@zhin.js/mcp-feature": [
+        "./packages/im/mcp-feature/src/index.ts"
+      ],
+      "@zhin.js/mcp/adapter-tools-helper": [
+        "./packages/host/mcp/src/adapter-tools-helper.ts"
+      ],
+      "@zhin.js/mcp/runtime": [
+        "./packages/host/mcp/src/runtime.ts"
+      ],
+      "@zhin.js/middleware": [
+        "./packages/im/middleware/src/index.ts"
+      ],
+      "@zhin.js/permission": [
+        "./packages/im/permission/src/index.ts"
+      ],
+      "@zhin.js/plugin-runtime": [
+        "./packages/im/plugin-runtime/src/index.ts"
+      ],
+      "@zhin.js/runtime": [
+        "./packages/im/runtime/src/index.ts"
       ],
       "@zhin.js/scaffold-wizard": [
         "./packages/toolkit/scaffold-wizard/src/index.ts"
       ],
+      "@zhin.js/schedule": [
+        "./basic/schedule/src/index.ts"
+      ],
+      "@zhin.js/schema": [
+        "./basic/schema/src/index.ts"
+      ],
+      "@zhin.js/skill": [
+        "./packages/im/skill/src/index.ts"
+      ],
+      "@zhin.js/speech": [
+        "./packages/toolkit/speech/src/index.ts"
+      ],
+      "@zhin.js/tool": [
+        "./packages/im/tool/src/index.ts"
+      ],
       "zhin.js": [
         "./packages/im/zhin/src/index.ts"
+      ],
+      "zhin.js/adapter": [
+        "./packages/im/zhin/src/adapter.ts"
+      ],
+      "zhin.js/agent": [
+        "./packages/im/zhin/src/agent.ts"
+      ],
+      "zhin.js/ai": [
+        "./packages/im/zhin/src/ai.ts"
+      ],
+      "zhin.js/command": [
+        "./packages/im/zhin/src/command.ts"
+      ],
+      "zhin.js/component": [
+        "./packages/im/zhin/src/component.ts"
+      ],
+      "zhin.js/core/runtime": [
+        "./packages/im/zhin/src/core-runtime.ts"
+      ],
+      "zhin.js/jsx": [
+        "./packages/im/zhin/src/jsx.ts"
+      ],
+      "zhin.js/jsx-dev-runtime": [
+        "./packages/im/zhin/src/jsx-dev-runtime.ts"
+      ],
+      "zhin.js/jsx-runtime": [
+        "./packages/im/zhin/src/jsx-runtime.ts"
+      ],
+      "zhin.js/node": [
+        "./packages/im/zhin/src/node.ts"
+      ],
+      "zhin.js/plugin-runtime": [
+        "./packages/im/zhin/src/define-plugin.ts"
+      ],
+      "zhin.js/qrcode": [
+        "./packages/im/zhin/src/qrcode.ts"
+      ],
+      "zhin.js/runtime": [
+        "./packages/im/zhin/src/plugin-runtime.ts"
       ]
     },
     "types": []
@@ -80,7 +287,13 @@
     "examples/full-bot/components/**/*",
     "examples/full-bot/skills/**/*",
     "examples/capabilities-bot/plugin.ts",
-    "examples/capabilities-bot/commands/**/*"
+    "examples/capabilities-bot/commands/**/*",
+    "plugins/*/*/plugin.ts",
+    "plugins/*/*/commands/**/*.ts",
+    "plugins/*/*/middlewares/**/*.ts",
+    "plugins/*/*/agent/**/*.ts",
+    "plugins/*/*/adapters/**/*.ts",
+    "plugins/*/*/src/**/*.d.ts"
   ],
   "exclude": [
     "node_modules",

@@ -1,4 +1,4 @@
-import type { SendContent } from '@zhin.js/core';
+import type { SendContent } from '@zhin.js/core/runtime';
 import { buildChoiceKeyboard } from '@zhin.js/game-kit';
 import type { AdvProfileRow, AdvSessionRow } from './models.js';
 import { formatProgressCompact } from './profile-format.js';

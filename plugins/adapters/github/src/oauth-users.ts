@@ -2,7 +2,7 @@
  * github_oauth_users — SSOT for Runtime user-token binding (gh bind / Endpoint lookup).
  */
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import type { DatabaseHost } from '@zhin.js/plugin-runtime';
+import type { DatabaseHost, PluginDatabaseHost } from '@zhin.js/plugin-runtime';
 
 const logger = getLogger('github');
 
@@ -25,7 +25,7 @@ export function defineGithubOauthUsersTable(
 
 /** Resolve a stored PAT/device-flow token; null when DB missing or no row. */
 export async function lookupGithubOauthAccessToken(
-  database: DatabaseHost | undefined,
+  database: DatabaseHost | PluginDatabaseHost | undefined,
   platform: string,
   platformUid: string,
 ): Promise<string | null> {

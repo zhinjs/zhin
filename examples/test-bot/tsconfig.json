@@ -2,11 +2,21 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "types": ["@types/node", "@types/bun", "zhin.js", "@zhin.js/adapter-sandbox"],
-    "outDir": "./lib",
-    "rootDir": "./src",
+    "noEmit": true,
+    "rootDir": ".",
     "jsx": "react-jsx",
     "jsxImportSource": "zhin.js"
   },
-  "include": ["src/**/*"],
-  "exclude": ["lib", "node_modules"]
+  "include": [
+    "plugin.ts",
+    "commands/**/*",
+    "tools/**/*",
+    "components/**/*",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+    "client/**/*",
+    "agents/**/*.ts",
+    "tests/**/*"
+  ],
+  "exclude": ["node_modules", "lib/plugins"]
 }

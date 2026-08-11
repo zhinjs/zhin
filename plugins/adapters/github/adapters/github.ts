@@ -7,7 +7,7 @@ import { messageGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import {
   databaseHostToken,
-  type DatabaseHost,
+  type PluginDatabaseHost,
 } from '@zhin.js/plugin-runtime';
 import { GithubEndpoint } from '../src/endpoint.js';
 import { githubRuntimeStateToken } from '../src/github-runtime-state.js';
@@ -19,7 +19,7 @@ import {
 export { GithubEndpoint } from '../src/endpoint.js';
 export type { GithubEndpointOptions } from '../src/endpoint.js';
 
-function optionalDatabase(context: AdapterContext): DatabaseHost | undefined {
+function optionalDatabase(context: AdapterContext): PluginDatabaseHost | undefined {
   try {
     return context.use(databaseHostToken);
   } catch {

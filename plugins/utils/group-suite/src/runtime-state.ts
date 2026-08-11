@@ -1,4 +1,4 @@
-import { createToken } from '@zhin.js/plugin-runtime';
+import { createToken, type Token } from '@zhin.js/plugin-runtime';
 import type { GroupSuiteMemoryDb } from './memory-store.js';
 
 export interface PendingStatsIncrement {
@@ -33,10 +33,10 @@ export function createGroupSuiteRuntime(db: GroupSuiteMemoryDb): GroupSuiteRunti
 
 export function resolveGroupSuiteRuntime(context: {
   owner?: { id?: unknown };
-  use<T>(token: typeof groupSuiteRuntimeToken): T;
+  use<T>(token: Token<T>): T;
 }): GroupSuiteRuntime | undefined {
   try {
-    return context.use(groupSuiteRuntimeToken) as GroupSuiteRuntime;
+    return context.use(groupSuiteRuntimeToken);
   } catch (error) {
     if (context.owner?.id) throw error;
     return undefined;

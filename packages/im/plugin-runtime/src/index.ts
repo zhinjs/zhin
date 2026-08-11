@@ -19,6 +19,8 @@ export * from './database-host.js';
 /** @public Host token：`agentToolsHostToken`（experimental）。 */
 export * from './agent-tools-host.js';
 export * from './html-renderer.js';
+/** @public Host token：`componentHostToken`（承诺 semver）。 */
+export * from './component-host.js';
 /** @public Host token：`outboundHostToken`（承诺 semver）。 */
 export * from './outbound-host.js';
 /** @public 跨通道发送辅助：`createOutboundSender` / `sendTo`（承诺 semver）。 */

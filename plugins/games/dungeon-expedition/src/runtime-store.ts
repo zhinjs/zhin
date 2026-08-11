@@ -1,4 +1,4 @@
-import { createToken } from '@zhin.js/plugin-runtime';
+import { createToken, type Token } from '@zhin.js/plugin-runtime';
 import type { SessionService } from './session-service.js';
 
 export const gameServicesToken = createToken<SessionService>(
@@ -6,7 +6,7 @@ export const gameServicesToken = createToken<SessionService>(
 );
 
 export function resolveGameServices(
-  context: { use<T>(token: typeof gameServicesToken): T },
+  context: { use<T>(token: Token<T>): T },
 ): SessionService {
-  return context.use(gameServicesToken) as SessionService;
+  return context.use(gameServicesToken);
 }

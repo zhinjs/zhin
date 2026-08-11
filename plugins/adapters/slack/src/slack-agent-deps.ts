@@ -13,12 +13,26 @@ export interface SlackAgentEndpoint {
   renameChannel(channel: string, name: string): Promise<boolean>;
   getChannelMembers(channel: string): Promise<string[]>;
   getChannelInfo(channel: string): Promise<unknown>;
-  getUserInfo(user: string): Promise<unknown>;
+  getUserInfo(user: string): Promise<SlackUserInfo | undefined>;
   addReaction(channel: string, timestamp: string, name: string): Promise<boolean>;
   removeReaction(channel: string, timestamp: string, name: string): Promise<boolean>;
   pinMessage(channel: string, timestamp: string): Promise<boolean>;
   unpinMessage(channel: string, timestamp: string): Promise<boolean>;
   editMessage(channel: string, messageTs: string, content: unknown): Promise<void>;
+}
+
+/** Slack users.info 返回的用户对象（SDK 响应字段对 agent 工具的投影）。 */
+export interface SlackUserInfo {
+  id?: string;
+  name?: string;
+  real_name?: string;
+  is_admin?: boolean;
+  is_bot?: boolean;
+  profile?: {
+    display_name?: string;
+    email?: string;
+    status_text?: string;
+  };
 }
 
 export interface SlackAgentDeps {

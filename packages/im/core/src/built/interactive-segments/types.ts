@@ -16,7 +16,10 @@ export interface ButtonCommandOptions {
   reply?: boolean;
 }
 
-export interface ButtonData {
+// 出站 canonical Segment 要求 `data: Record<string, unknown>`：type 别名（对象字面量
+// 类型）自带隐式索引签名，interface 没有 —— 这几个 data 必须是 type 别名才能直接
+// 流入 Plugin Runtime 的 SendContent。
+export type ButtonData = {
   id: string;
   label: string;
   payload: string;
@@ -25,20 +28,20 @@ export interface ButtonData {
   /** 默认 callback */
   mode?: ButtonInteractionMode;
   command?: ButtonCommandOptions;
-}
-export interface KeyboardFallback {
+};
+export type KeyboardFallback = {
   hint: string;
   map: Record<string, string>;
-}
-export interface KeyboardSegmentData {
+};
+export type KeyboardSegmentData = {
   rows: ButtonData[][];
   fallback?: KeyboardFallback;
-}
-export interface ActionSegmentData {
+};
+export type ActionSegmentData = {
   id: string;
   payload: string;
   sourceMessageId?: string;
-}
+};
 
 export type InteractivePolicy = 'native' | 'text';
 

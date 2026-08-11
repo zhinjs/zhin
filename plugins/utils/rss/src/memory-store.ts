@@ -1,23 +1,25 @@
 /**
  * In-memory RSS models (slice-2) until Plugin Runtime DatabaseFeature Resource lands.
+ *
+ * 模型表面与 `@zhin.js/plugin-runtime` 的 DatabaseHostModel 结构兼容：
+ * select 的 where 返回 PromiseLike（host 返回链式 Selection，memory 返回 Promise），
+ * 这样 plugin.ts 可以把 PluginDatabaseHost 直接当 RssMemoryDb 用。
  */
 
-export interface RssRow extends Record<string, unknown> {
-  id: string;
-}
+export type RssRow = Record<string, unknown>;
 
 export interface RssModel {
-  select: () => {
-    where: (query: Record<string, unknown>) => Promise<RssRow[]>;
+  select: (...fields: string[]) => {
+    where: (query: Record<string, unknown>) => PromiseLike<RssRow[]>;
     then: <TResult1 = RssRow[], TResult2 = never>(
       onfulfilled?: ((value: RssRow[]) => TResult1 | PromiseLike<TResult1>) | null,
       onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
     ) => Promise<TResult1 | TResult2>;
   };
-  insert: (row: Record<string, unknown>) => Promise<RssRow>;
-  delete: () => { where: (query: Record<string, unknown>) => Promise<void> };
+  insert: (row: Record<string, unknown>) => Promise<unknown>;
+  delete: () => { where: (query: Record<string, unknown>) => Promise<unknown> };
   update: (patch: Record<string, unknown>) => {
-    where: (query: Record<string, unknown>) => Promise<void>;
+    where: (query: Record<string, unknown>) => Promise<unknown>;
   };
 }
 

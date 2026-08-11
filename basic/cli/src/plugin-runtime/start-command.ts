@@ -27,6 +27,7 @@ import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from './database-host-installer.js';
 import { installSystemLogStore, resolveSystemLogConfig } from './log-transport.js';
 import { installHtmlRendererHost, prepareHtmlRendererHost } from './html-renderer-host-installer.js';
+import { installComponentHost } from './component-host-installer.js';
 import { installOutboundHost } from './outbound-host-installer.js';
 import { installScheduleHost, createScheduleHost } from './schedule-host-installer.js';
 import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './speech-host-installer.js';
@@ -141,6 +142,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
       installDatabaseHost(databaseHost)(context);
       installOutboundHost(im)(context);
       installScheduleHost(scheduleHost)(context);
+      installComponentHost()(context);
       installHtmlRendererHost(htmlRendererHost)(context);
       installSpeechHost(speechHandle)(context);
       // Agent Host seeds presets async — must await so unmatched handler

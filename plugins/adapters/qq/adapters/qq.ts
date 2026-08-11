@@ -41,16 +41,18 @@ export default defineAdapter<QqAdapterConfig>({
       name: config.name,
       mode: config.mode,
     });
-    const endpoint = (config.mode === 'webhook' || config.mode === 'middleware')
-      ? new QqHttpEndpoint({
+    // 正向判 websocket：TS 对 `mode === 'webhook' || mode === 'middleware'` 的
+    // 否定分支不做联合消减（多字面量判别式），反向写会让 config 窄化失败。
+    const endpoint = config.mode === 'websocket'
+      ? new QqWebsocketEndpoint({
+        id: context.id,
+        gateway,
+        config,
+      })
+      : new QqHttpEndpoint({
         id: context.id,
         gateway,
         http: context.use(httpHostToken),
-        config,
-      })
-      : new QqWebsocketEndpoint({
-        id: context.id,
-        gateway,
         config,
       });
     // 运行状态表只增不减：stop 时同步摘除，避免 stop 后 qq.endpoint list 仍显示运行中。

@@ -26,8 +26,8 @@ export default defineMiddleware<OutboundEnvelope, ModerationConfig>({
     }
 
     const envelope = context.input;
+    // 引擎由 plugin setup 按 generation 配置一次；这里只做判定。
     const engine = getModerationEngine();
-    engine.configure(config);
 
     const extracted = extractFromOutboundPayload(envelope.payload);
     if (!extracted.text && extracted.images.length === 0) {

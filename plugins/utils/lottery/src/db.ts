@@ -13,8 +13,9 @@ export interface LotteryDb {
 }
 
 export interface LotteryModel {
-  select: () => {
-    where: (q: Record<string, unknown>) => Promise<unknown[]>;
+  // where 返回 PromiseLike：host 侧是链式 Selection（thenable），memory 侧是 Promise。
+  select: (...fields: string[]) => {
+    where: (q: Record<string, unknown>) => PromiseLike<unknown[]>;
   };
   insert: (row: Record<string, unknown>) => Promise<unknown>;
   delete: () => { where: (q: Record<string, unknown>) => Promise<unknown> };

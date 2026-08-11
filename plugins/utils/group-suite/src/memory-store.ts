@@ -1,23 +1,25 @@
 /**
  * In-memory group-suite models (slice-2) until Plugin Runtime DatabaseFeature Resource lands.
+ *
+ * 模型表面与 `@zhin.js/plugin-runtime` 的 DatabaseHostModel 结构兼容
+ * （where 返回 PromiseLike，host 侧是链式 Selection），
+ * plugin.ts 可把 PluginDatabaseHost 直接当 GroupSuiteMemoryDb 用。
  */
 
-export interface GroupSuiteRow extends Record<string, unknown> {
-  id: string;
-}
+export type GroupSuiteRow = Record<string, unknown>;
 
 export interface GroupSuiteModel {
-  select: () => {
-    where: (query: Record<string, unknown>) => Promise<GroupSuiteRow[]>;
+  select: (...fields: string[]) => {
+    where: (query: Record<string, unknown>) => PromiseLike<GroupSuiteRow[]>;
     then: <TResult1 = GroupSuiteRow[], TResult2 = never>(
       onfulfilled?: ((value: GroupSuiteRow[]) => TResult1 | PromiseLike<TResult1>) | null,
       onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
     ) => Promise<TResult1 | TResult2>;
   };
-  insert: (row: Record<string, unknown>) => Promise<GroupSuiteRow>;
-  delete: () => { where: (query: Record<string, unknown>) => Promise<void> };
+  insert: (row: Record<string, unknown>) => Promise<unknown>;
+  delete: () => { where: (query: Record<string, unknown>) => Promise<unknown> };
   update: (patch: Record<string, unknown>) => {
-    where: (query: Record<string, unknown>) => Promise<void>;
+    where: (query: Record<string, unknown>) => Promise<unknown>;
   };
 }
 

@@ -73,13 +73,41 @@ export interface IncomingMessage {
   readonly content: string;
   readonly segments?: readonly Segment[];
   readonly sender?: MessageSenderRef;
+  /** Endpoint 实例名（如 ICQQ uin、sandbox bot name），区别于 conversation.endpoint.id（CapabilityId）。 */
+  readonly endpointName?: string;
+  /** 消息是否 @了机器人。 */
+  readonly mentioned?: boolean;
+  /** 引用/回复的原始消息。 */
+  readonly replyTo?: { readonly id: string };
   readonly metadata?: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * 入站消息上下文快照 — 由 reply 闭包捕获，沿出站链路传递到模板编译。
+ * 定时任务 / 跨通道发送时整个 incoming 为 undefined。
+ */
+export interface IncomingContext {
+  readonly sender?: MessageSenderRef;
+  /** 收到的消息纯文本内容。 */
+  readonly content: string;
+  /** 结构化消息段（图片、@、引用等）。 */
+  readonly segments?: readonly Segment[];
+  /** 平台原生消息 ID。 */
+  readonly messageId?: string;
+  /** 消息到达时间戳（ms）。 */
+  readonly timestamp: number;
+  /** Endpoint 实例名（如 ICQQ uin、sandbox bot name）。 */
+  readonly endpointName?: string;
+  /** 消息是否 @了机器人。 */
+  readonly mentioned?: boolean;
 }
 
 export interface SendRequest {
   readonly conversation: ConversationRef;
   readonly requester: PluginId;
   readonly content: SendContent;
+  /** Incoming message context (absent for scheduled / cross-channel sends). */
+  readonly incoming?: IncomingContext;
 }
 
 /**
@@ -145,6 +173,9 @@ export class Message {
     readonly segments?: readonly Segment[],
     /** 结构化入站消息身份（平台原生 message id 经 MessageRef 传递）。 */
     readonly message?: MessageRef,
+    readonly endpointName?: string,
+    readonly mentioned?: boolean,
+    readonly replyTo?: { readonly id: string },
   ) {
     this.$reply = (content) => reply(content);
     this.$replyFrom = (requester, content) => reply(content, requester);

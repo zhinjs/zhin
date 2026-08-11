@@ -11,7 +11,7 @@ import {
   resolveLotteryConfig,
   type LotteryConfig,
 } from './src/config.js';
-import { defineLotteryTables } from './src/db.js';
+import { defineLotteryTables, type LotteryDb } from './src/db.js';
 import { registerLotteryDb } from './src/db-store.js';
 import { registerLotteryAgentDeps } from './src/lottery-agent-deps.js';
 import { createInMemoryLotteryDb } from './src/memory-db.js';
@@ -32,12 +32,15 @@ export default definePlugin<LotteryConfig>({
   },
   async setup(context) {
     const config = resolveLotteryConfig(context.config.get());
-    const db = context.resources.has(databaseHostToken)
-      ? context.resources.use(databaseHostToken)
-      : createInMemoryLotteryDb();
-    if (context.resources.has(databaseHostToken)) {
-      defineLotteryTables(db);
-    }
+    // host 与 memory 模型表面结构兼容（where 均返回 PromiseLike），可直接互换。
+    const db: LotteryDb = (() => {
+      if (context.resources.has(databaseHostToken)) {
+        const host = context.resources.use(databaseHostToken);
+        defineLotteryTables(host);
+        return host;
+      }
+      return createInMemoryLotteryDb();
+    })();
     context.resources.provide(lotteryRuntimeToken, { db });
     context.lifecycle.add(registerLotteryDb(db));
 

@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import type { AIProvider } from '@zhin.js/ai';
-import type { SegmentMediaRef } from '@zhin.js/core';
 import { buildSubagentInboundTask } from '../../src/media/subagent-inbound.js';
 import { DEFAULT_MULTIMODAL_CONFIG } from '../../src/media/media-types.js';
 
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
+type SegmentMediaRef = Parameters<typeof buildSubagentInboundTask>[1][number];
 
 describe('buildSubagentInboundTask', () => {
   it('应为图片落盘并写入 analyze_media 路径提示', async () => {

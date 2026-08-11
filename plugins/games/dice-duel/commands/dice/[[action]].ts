@@ -9,7 +9,7 @@ export default defineCommand({
   async execute({ params, input, use, owner }) {
     const action = normalizeDiceAction(String(params.action ?? ''));
     if (!action || action === 'help') return DICE_HELP;
-    const services = resolveGameServices({ use, owner });
+    const services = resolveGameServices({ use });
     const message = messageFromCommandInput(input);
     return runDiceCommand(services, message, action);
   },

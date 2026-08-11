@@ -4,7 +4,7 @@
  * Runtime Message: { conversation, sender?, metadata? }
  * Classic Message: { $adapter, $endpoint, $channel, $sender }
  */
-import type { SendContent } from '@zhin.js/core';
+import type { SendContent } from '@zhin.js/core/runtime';
 
 /** A game returns semantic content; Runtime owns native rendering and text fallback. */
 export type GameReply = SendContent;

@@ -198,12 +198,24 @@ export class ImRuntime implements MessageGateway {
             conversation: effectiveConversation,
             requester: replyRequester,
             content,
+            incoming: {
+              sender: input.sender,
+              content: input.content,
+              segments: input.segments,
+              messageId: input.message?.id,
+              timestamp: Date.now(),
+              endpointName: input.endpointName,
+              mentioned: input.mentioned,
+            },
           }, lease.value);
         },
         input.sender,
         Object.freeze({ ...input.metadata }),
         input.segments ? Object.freeze([...input.segments]) : undefined,
         input.message,
+        input.endpointName,
+        input.mentioned,
+        input.replyTo,
       );
       let result: MessageDispatchResult = Object.freeze({ matched: false });
       await runMiddleware(
@@ -475,7 +487,10 @@ export class ImRuntime implements MessageGateway {
     const adapter = request.conversation.endpoint.id as CapabilityId;
     let initialPayload: unknown;
     try {
-      const rendered = await this.#renderer.render(request.content, request.requester, snapshot);
+      const rendered = await this.#renderer.render(
+        request.content, request.requester, snapshot,
+        request.conversation, request.incoming,
+      );
       initialPayload = await prepareOutboundPayload(rendered, request.conversation, snapshot);
     } catch {
       return rejectedReceipt('outbound_payload_rejected');

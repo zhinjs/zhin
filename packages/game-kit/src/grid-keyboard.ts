@@ -2,7 +2,8 @@
  * 通用网格按钮键盘构建器
  * 支持井字棋（3×3）、五子棋（15×15）、四子棋（7×6）等
  */
-import { segment, type SendContent } from '@zhin.js/core';
+import { segment } from '@zhin.js/core';
+import type { SendContent } from '@zhin.js/core/runtime';
 import { buildChoiceFallbackMap, type ChoiceOption } from './choice-keyboard.js';
 
 import { applyInteractionProfile } from './interaction-profiles.js';

@@ -40,8 +40,9 @@ export default defineMiddleware<Message, ModerationConfig>({
       return;
     }
 
+    // 引擎由 plugin setup 按 generation 配置一次（configure 含 provider 重建与
+    // 词库 readFileSync，不能留在每条消息的热路径）；这里只做判定。
     const engine = getModerationEngine();
-    engine.configure(config);
 
     const extracted = extractFromTextAndSegments(message.content, message.segments);
     if (!extracted.text && extracted.images.length === 0) {

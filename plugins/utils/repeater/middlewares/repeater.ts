@@ -7,11 +7,10 @@ import {
 } from '../src/engine.js';
 
 /**
- * Gaps vs legacy Message:
- * - Uses Runtime `Message.content` / `Message.sender` / `Message.target` / `Message.metadata`
- *   (no `$raw` / `$channel` / `$sender`).
- * - Group vs private relies on `metadata.type|channelType`; see `resolveGroupId`.
- * - Reply uses `Message.$reply` (available during inbound middleware scope).
+ * Runtime `Message` 是 conversation 原生：`conversation.kind/id` 直接喂给引擎
+ * （引擎契约 `RepeaterInboundFields.conversation`，私聊由引擎判 null 跳过）。
+ * Sender 为 MessageSenderRef（`{ id, name?, roles? }`），引擎只读 `id`。
+ * Reply uses `Message.$reply` (available during inbound middleware scope).
  */
 export default defineMiddleware<Message, RepeaterConfig>({
   target: 'inbound',
@@ -19,7 +18,10 @@ export default defineMiddleware<Message, RepeaterConfig>({
     const config = resolveRepeaterConfig(context.config);
     const engine = getRepeaterEngine();
     const result = engine.tick({
-      target: context.input.target,
+      conversation: {
+        kind: context.input.conversation.kind,
+        id: context.input.conversation.id,
+      },
       content: context.input.content,
       sender: context.input.sender,
       metadata: context.input.metadata,

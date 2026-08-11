@@ -1,5 +1,5 @@
 import { buildChoiceKeyboard } from '@zhin.js/game-kit';
-import type { SendContent } from '@zhin.js/core';
+import type { SendContent } from '@zhin.js/core/runtime';
 import { getRiddleById, RIDDLE_PREFIX, typeLabel } from './engine.js';
 import type { RiddleSessionRow } from './models.js';
 import { currentRiddleId, parseQueue } from './session-service.js';

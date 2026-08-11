@@ -45,14 +45,16 @@ function conversationFromTarget(target: string) {
 function makeMessage(input: {
   content: string;
   target?: string;
-  sender?: string | { id: string; name?: string };
+  sender?: string | { id: string; name?: string } | null;
   metadata?: Record<string, unknown>;
   segments?: ConstructorParameters<typeof Message>[6];
 }): Message {
   const conversation = conversationFromTarget(input.target ?? 'group:100');
-  const senderRef = typeof input.sender === 'object'
-    ? input.sender
-    : { id: input.sender ?? 'user-1', name: input.sender };
+  const senderRef = input.sender === null
+    ? undefined
+    : typeof input.sender === 'object'
+      ? input.sender
+      : { id: input.sender ?? 'user-1', name: input.sender };
   return new Message(
     conversation,
     input.content,
@@ -311,8 +313,8 @@ describe('缺口 3：masters / trusted 角色解析', () => {
     expect(roles).toEqual({ isMaster: false, isTrusted: false });
   });
 
-  it('显示名伪装 master/trusted 时绝不授权', () => {
-    const message = groupMessage('hi', { userId: 'attacker-id' }, 'owner-x');
+  it('sender.id 不匹配 master 时不授权', () => {
+    const message = groupMessage('hi', { userId: 'attacker-id' }, 'attacker-id');
     const roles = resolveRuntimeSenderRoles(message, 'owner-x', ['owner-x'], {
       masters: ['owner-x'],
       trusted: ['owner-x'],
@@ -320,21 +322,30 @@ describe('缺口 3：masters / trusted 角色解析', () => {
     expect(roles).toEqual({ isMaster: false, isTrusted: false });
   });
 
-  it('缺少稳定身份字段时不使用显示名授权', () => {
-    const roles = resolveRuntimeSenderRoles(
-      groupMessage('hi', {}, 'owner-x'),
-      'owner-x',
-      ['owner-x'],
-      { masters: ['owner-x'], trusted: ['owner-x'] },
-    );
-    expect(roles).toEqual({ isMaster: false, isTrusted: false });
+  it('sender.id 匹配 master 时授权（无需 metadata）', () => {
+    const message = makeMessage({
+      content: 'hi',
+      target: 'group:100',
+      sender: { id: 'owner-x', name: '昵称' },
+      metadata: { endpoint: '10001' },
+    });
+    const roles = resolveRuntimeSenderRoles(message, 'owner-x', [], {
+      masters: ['owner-x'],
+    });
+    expect(roles).toEqual({ isMaster: true, isTrusted: false });
   });
 
   it.each([
     ['user_id', 'legacy-user'],
     ['senderId', 'runtime-user'],
-  ])('接受 metadata.%s 作为稳定授权身份', (key, id) => {
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { [key]: id }), id, [], undefined);
+  ])('sender.id 缺失时 fallback metadata.%s 作为授权身份', (key, id) => {
+    const message = makeMessage({
+      content: 'hi',
+      target: 'group:100',
+      sender: null,
+      metadata: { endpoint: '10001', [key]: id },
+    });
+    const roles = resolveRuntimeSenderRoles(message, id, [], undefined);
     expect(roles).toEqual({ isMaster: true, isTrusted: false });
   });
 
@@ -347,85 +358,89 @@ describe('缺口 3：masters / trusted 角色解析', () => {
   });
 });
 
-describe('稳定 senderId：metadata.userId 优先于显示名（QQ/KOOK/Discord）', () => {
-  it('sender 为昵称时 $sender.id 取 metadata.userId，私聊 sceneId 稳定', () => {
+describe('稳定 senderId：sender.id 是一等字段（SSOT）', () => {
+  it('sender.id 直接作为 $sender.id，name 保留供 prompt 展示', () => {
     const message = makeMessage({
       content: '你好',
-      sender: 'Cc',
+      sender: { id: 'OPENID_A', name: 'Cc' },
       target: 'private:OPENID_A',
-      metadata: { channelKind: 'private', endpoint: 'zhin', userId: 'OPENID_A' },
+      metadata: { endpoint: 'zhin' },
     });
     const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
     expect(comm.$sender.id).toBe('OPENID_A');
-    // 显示名保留在 name，供 prompt 展示
     expect(comm.$sender.name).toBe('Cc');
     expect(resolveIMSessionIdFromMessage(comm)).toBe('icqq:zhin:private:OPENID_A');
   });
 
-  it('昵称变化不影响私聊 session key（同一 userId）', () => {
+  it('昵称变化不影响私聊 session key（sender.id 稳定）', () => {
     const before = bridgeRuntimeMessage(makeMessage({
-      content: 'hi', sender: 'Cc', target: 'private:OPENID_A',
-      metadata: { channelKind: 'private', endpoint: 'zhin', userId: 'OPENID_A' },
+      content: 'hi', sender: { id: 'OPENID_A', name: 'Cc' }, target: 'private:OPENID_A',
+      metadata: { endpoint: 'zhin' },
     }), undefined, { isMaster: false, isTrusted: false });
     const after = bridgeRuntimeMessage(makeMessage({
-      content: 'hi', sender: 'Cc(新昵称)', target: 'private:OPENID_A',
-      metadata: { channelKind: 'private', endpoint: 'zhin', userId: 'OPENID_A' },
+      content: 'hi', sender: { id: 'OPENID_A', name: 'Cc(新昵称)' }, target: 'private:OPENID_A',
+      metadata: { endpoint: 'zhin' },
     }), undefined, { isMaster: false, isTrusted: false });
     expect(resolveIMSessionIdFromMessage(after)).toBe(resolveIMSessionIdFromMessage(before));
   });
 
-  it('无 metadata.userId 时回退 message.sender（OneBot/ICQQ sender 本身即 ID）', () => {
+  it('sender.id 直接使用（OneBot/ICQQ sender 本身即 ID）', () => {
     const message = privateMessage('你好');
     const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
     expect(comm.$sender.id).toBe('user-1');
     expect(resolveIMSessionIdFromMessage(comm)).toBe('icqq:10001:private:user-1');
   });
 
-  it('metadata.userId 为空白字符串时同样回退 message.sender', () => {
-    const message = privateMessage('你好', { userId: '  ' });
+  it('sender.id 缺失时 fallback metadata.userId', () => {
+    const message = makeMessage({
+      content: '你好',
+      target: 'private:user-1',
+      sender: null,
+      metadata: { endpoint: '10001', userId: 'stable-id' },
+    });
     const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    expect(comm.$sender.id).toBe('user-1');
+    expect(comm.$sender.id).toBe('stable-id');
   });
 
   it.each([
     ['userId', 'user-id'],
     ['user_id', 'user-id'],
     ['senderId', 'user-id'],
-  ] as const)('%s 都可作为稳定身份字段', (field, expectedId) => {
+  ] as const)('sender.id 缺失时 fallback metadata.%s', (field, expectedId) => {
     const message = makeMessage({
       content: '你好',
-      sender: '可变昵称',
+      sender: null,
       target: 'private:user-id',
-      metadata: { channelType: 'private', endpoint: '10001', [field]: expectedId },
+      metadata: { endpoint: '10001', [field]: expectedId },
     });
     const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
     expect(comm.$sender.id).toBe(expectedId);
   });
 });
 
-describe('Telegram chatType 场景映射', () => {
+describe('conversation.kind 场景映射', () => {
   it.each([
     ['private', 'private'],
     ['group', 'group'],
-    ['supergroup', 'group'],
     ['channel', 'channel'],
-  ] as const)('%s 映射为 %s synthetic channel', (chatType, expectedType) => {
+  ] as const)('conversation.kind=%s → synthetic channel type=%s', (kind, expectedType) => {
     const message = makeMessage({
       content: '消息',
-      target: 'telegram-chat-1',
-      metadata: { chatType, endpoint: 'telegram-bot', userId: 'telegram-user-1' },
+      sender: { id: 'telegram-user-1' },
+      target: `${kind}:telegram-chat-1`,
+      metadata: { endpoint: 'telegram-bot' },
     });
     const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
     expect(comm.$channel.type).toBe(expectedType);
   });
 
-  it('supergroup 消息进入 Passive Group Context', async () => {
+  it('group 消息进入 Passive Group Context', async () => {
     const agent = makeAgentStub();
     const message = makeMessage({
       content: 'Telegram 群聊消息',
-      sender: 'Alice',
-      target: '-100123',
-      metadata: { chatType: 'supergroup', endpoint: 'telegram-bot', userId: 'telegram-user-1' },
+      sender: { id: 'telegram-user-1', name: 'Alice' },
+      target: 'group:-100123',
+      metadata: { endpoint: 'telegram-bot' },
     });
     const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
     await recordPassiveGroupContext(agent, message, comm);
@@ -557,11 +572,9 @@ describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () 
     const message = makeMessage({
       content: 'edit please',
       target: `private:${masterId}`,
-      sender: '昵称可变',
+      sender: { id: masterId, name: '昵称可变' },
       metadata: {
-        channelType: 'private',
         endpoint: '知音',
-        userId: masterId,
       },
     });
     const roles = resolveRuntimeSenderRoles(message, endpointMaster, [], undefined);

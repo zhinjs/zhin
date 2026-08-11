@@ -43,8 +43,10 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
     definitions?: Database.DefinitionObj<S>,
   ) {
     for (const key in definitions) {
-      this.definitions.set(key, definitions[key]);
-      this.registerDialectSchema(key, definitions[key]);
+      const definition = definitions[key];
+      if (!definition) continue;
+      this.definitions.set(key, definition);
+      this.registerDialectSchema(key, definition);
     }
   }
 
@@ -281,7 +283,9 @@ export namespace Database {
       return super.get(key) as Model<D,S,Q,K> | undefined;
     }
   }
+  // 可选映射：插件经 `declare module` 增强 Models 后，内置 definitions 只需
+  // 覆盖自身注册的键（否则每个增强键都会让 Registry.create 的实参类型报错）。
   export type DefinitionObj<S extends Record<string, object>> = {
-    [K in keyof S]: Definition<S[K]>;
+    [K in keyof S]?: Definition<S[K]>;
   };
 }

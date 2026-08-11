@@ -499,8 +499,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           mcpEnsured = await ensureMcpConnections(mcp, mcpEntries);
         }
         const inbound = await preprocessInboundTurn(
+          message,
           matched.content,
-          message.metadata,
           options.transcribeUrl,
         );
         const capabilities = await readCapabilities(ingress, snapshot, requester, commMessage);
@@ -991,9 +991,7 @@ export function resolveRuntimeSenderRoles(
   endpointTrusted: readonly string[],
   trigger?: AITriggerConfig,
 ): RuntimeSenderRoles {
-  // Authorization must never fall back to a mutable display name. Adapters
-  // that expose privileged Agent paths must supply a platform identity here.
-  const senderId = resolveAuthenticatedSenderId(message);
+  const senderId = message.sender?.id ?? resolveAuthenticatedSenderId(message);
   const triggerMasters = (trigger?.masters ?? []).map(String);
   const triggerTrusted = (trigger?.trusted ?? []).map(String);
   const isMaster = senderId != null
@@ -1010,16 +1008,12 @@ export function bridgeRuntimeMessage(
   roles: RuntimeSenderRoles,
 ) {
   const localName = capabilityLocalName(String(message.conversation.endpoint.id));
-  const channelType = resolveChannelType(message.metadata);
+  const channelType = resolveChannelType(message);
   const channelId = resolveChannelId(message);
-  // Prefer real Endpoint name (e.g. ICQQ uin); fall back to adapter local name.
-  const endpointId = String(
-    message.metadata?.endpoint
-    ?? message.metadata?.endpointId
-    ?? localName,
-  );
+  const endpointId = message.endpointName
+    || String(message.metadata?.endpoint ?? message.metadata?.endpointId ?? localName);
   const senderId = resolveStableSenderId(message);
-  const quoteId = message.metadata?.quote_id;
+  const quoteId = message.replyTo?.id ?? (typeof message.metadata?.quote_id === 'string' ? message.metadata.quote_id : undefined);
   // 入站结构化段：纯文本视图（matched.content）会丢弃媒体，这里把 canonical
   // segments 与提取出的媒体引用（image/audio/video/file 的 MediaRef）挂到
   // synthetic message 的 extra，AI turn 与工具经 resolveContextKey 可读。
@@ -1141,7 +1135,7 @@ export async function recordPassiveGroupContext(
   message: Message,
   commMessage: ReturnType<typeof createSyntheticMessage>,
 ): Promise<void> {
-  const channelType = resolveChannelType(message.metadata);
+  const channelType = resolveChannelType(message);
   if (channelType !== 'group' && channelType !== 'channel') return;
   const rawText = message.content.trim();
   if (!rawText) return;
@@ -1233,14 +1227,7 @@ export function withTriggerTimeout<T>(
 }
 
 function resolveChannelId(message: Message): string {
-  const raw = String(
-    message.metadata?.channelId
-    ?? message.metadata?.sceneId
-    ?? message.conversation.id,
-  );
-  // Strip scene prefix so AF / session sceneId stay as bare ids (private:uid → uid).
-  const stripped = raw.replace(/^(private|group|channel|direct|c2c):/iu, '');
-  return stripped || raw || (message.sender?.id ?? 'unknown');
+  return message.conversation.id || (message.sender?.id ?? 'unknown');
 }
 
 function capabilityLocalName(id: string): string {
@@ -1250,50 +1237,31 @@ function capabilityLocalName(id: string): string {
   return local.split('~')[0]!;
 }
 
-/** Endpoint liveName (e.g. ICQQ uin, sandbox bot name) from metadata or sendEndpointMessage adapter. */
+/** Endpoint liveName (e.g. ICQQ uin, sandbox bot name) — first-class field, metadata fallback. */
 function adapterLiveEndpointName(message: Message): string {
+  if (message.endpointName) return message.endpointName;
   const live = String(message.metadata?.endpoint ?? message.metadata?.endpointId ?? '');
   if (live) return live;
-  // sandbox sends endpoint as metadata.endpoint; fall back to the CapabilityId localName
   return capabilityLocalName(String(message.conversation.endpoint.id));
 }
 
 function resolveChannelType(
-  metadata: Readonly<Record<string, unknown>>,
+  message: Message,
 ): 'private' | 'group' | 'channel' {
-  return resolveExplicitChannelType(metadata) ?? 'private';
-}
-
-/** Normalize adapter metadata without allowing an event `type` to hide scene metadata. */
-function resolveExplicitChannelType(
-  metadata: Readonly<Record<string, unknown>>,
-): 'private' | 'group' | 'channel' | undefined {
-  // Telegram supplies `chatType`; `type` is last because many adapters use it
-  // for an event kind instead of a conversation kind.
-  const candidates = [metadata.channelType, metadata.channelKind, metadata.chatType, metadata.type];
-  for (const candidate of candidates) {
-    const raw = String(candidate ?? '').trim().toLowerCase();
-    if (raw === 'private' || raw === 'direct' || raw === 'c2c') return 'private';
-    if (raw === 'group' || raw === 'supergroup') return 'group';
-    if (raw === 'channel' || raw === 'guild') return 'channel';
-  }
-  return undefined;
+  return message.conversation.kind;
 }
 
 /**
- * 稳定发送者 ID：QQ/KOOK/Discord 等适配器 `sender` 传显示名（昵称可变），稳定身份
- * 经 `metadata.userId` 传递；未提供 `userId` 的适配器（OneBot/ICQQ/Milky 等 sender
- * 本身即平台 ID）原样回退。`$sender.id` 是私聊 sceneId 与记忆作用域的 key，
- * 必须稳定——否则用户改名即换会话、历史上下文丢失。
+ * 稳定发送者 ID：sender.id 是适配器从平台 API 传入的一等字段（稳定平台 ID），
+ * metadata userId/user_id 降为 fallback（兼容尚未迁移的适配器）。
  */
 function resolveStableSenderId(message: Message): string {
-  return resolveAuthenticatedSenderId(message) ?? message.sender?.id ?? 'anon';
+  return message.sender?.id ?? resolveAuthenticatedSenderId(message) ?? 'anon';
 }
 
 /**
- * Stable actor identity for authorization. Unlike resolveStableSenderId(),
- * this deliberately has no display-name fallback: names must never grant
- * master/trusted access when an adapter omits its platform user ID.
+ * Fallback sender identity from metadata. Only used when sender.id is absent
+ * (legacy adapters that haven't migrated to MessageSenderRef).
  */
 function resolveAuthenticatedSenderId(message: Message): string | undefined {
   for (const key of ['userId', 'user_id', 'senderId'] as const) {
@@ -1639,11 +1607,11 @@ function buildBootstrapContext(
 }
 
 async function preprocessInboundTurn(
+  message: Message,
   content: string,
-  metadata: Readonly<Record<string, unknown>> | undefined,
   transcribeUrl?: (audioUrl: string) => Promise<string | null>,
 ): Promise<{ readonly text: string; readonly sttApplied: boolean }> {
-  const audioUrl = resolveInboundAudioUrl(content, metadata);
+  const audioUrl = resolveInboundAudioUrl(message);
   if (!audioUrl || !transcribeUrl) {
     return { text: stripAudioPlaceholders(content), sttApplied: false };
   }
@@ -1657,12 +1625,24 @@ async function preprocessInboundTurn(
 }
 
 function resolveInboundAudioUrl(
-  content: string,
-  metadata: Readonly<Record<string, unknown>> | undefined,
+  message: Message,
 ): string | undefined {
-  const fromMeta = metadata?.audio_url;
+  if (message.segments) {
+    for (const seg of message.segments) {
+      if (seg.type === 'audio' || seg.type === 'record') {
+        const media = seg.data?.media as { kind?: string; value?: string } | undefined;
+        if (media?.kind === 'url' && typeof media.value === 'string' && media.value.trim()) {
+          return media.value.trim();
+        }
+        const d = seg.data as Record<string, unknown> | undefined;
+        const url = d?.url ?? d?.src ?? d?.file;
+        if (typeof url === 'string' && url.trim()) return url.trim();
+      }
+    }
+  }
+  const fromMeta = message.metadata?.audio_url;
   if (typeof fromMeta === 'string' && fromMeta.trim()) return fromMeta.trim();
-  const match = content.match(/\[audio:([^\]]+)\]/u);
+  const match = message.content.match(/\[audio:([^\]]+)\]/u);
   const fromContent = match?.[1]?.trim();
   return fromContent || undefined;
 }
@@ -1735,7 +1715,7 @@ export function matchAiTrigger(
 
   // 2. @ 触发（群/频道主路径；剥离提及后为空也触发，与 legacy 一致）
   const respondToAt = trigger?.respondToAt !== false;
-  if (respondToAt && !isPrivate && message.metadata?.mentioned === true) {
+  if (respondToAt && !isPrivate && (message.mentioned === true || message.metadata?.mentioned === true)) {
     return { content: stripMentionMarkup(text) };
   }
 
@@ -1769,11 +1749,6 @@ function stripMentionMarkup(text: string): string {
 }
 
 function isPrivateRuntimeMessage(message: Message): boolean {
-  const channelType = resolveExplicitChannelType(message.metadata);
-  if (channelType != null) {
-    return channelType === 'private';
-  }
-  // Fallback：metadata 稀疏时用结构化会话 kind。
   return message.conversation.kind === 'private';
 }
 

@@ -9,7 +9,7 @@ export default defineCommand({
   async execute({ params, input, use, owner }) {
     const action = normalizeRpsAction(String(params.action ?? ''));
     if (!action || action === 'help') return RPS_HELP;
-    const services = resolveGameServices({ use, owner });
+    const services = resolveGameServices({ use });
     const message = messageFromCommandInput(input);
     return runRpsCommand(services, message, action);
   },

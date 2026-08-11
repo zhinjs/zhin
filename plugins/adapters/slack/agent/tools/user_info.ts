@@ -17,6 +17,7 @@ export default defineAgentTool<{
     const { getEndpoint } = getSlackAgentDeps();
     const endpoint = getEndpoint(endpoint_id);
     const user = await endpoint.getUserInfo(user_id);
+    if (!user) throw new Error(`Slack 用户不存在: ${user_id}`);
     return {
       id: user.id,
       name: user.name,

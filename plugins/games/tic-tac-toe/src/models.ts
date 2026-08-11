@@ -20,6 +20,10 @@ declare module '@zhin.js/core' {
       status: TttSessionStatus;
       winner: number;
       move_count: number;
+      /** 乐观锁版本（VersionedSessionService 契约） */
+      revision: number;
+      /** JSON 数组：已处理 actionId 历史（幂等去重） */
+      processed_actions: string;
       updated_at: number;
       created_at: number;
     };
@@ -75,6 +79,8 @@ export function defineHostTables(
     status: { type: 'text', default: 'active' },
     winner: { type: 'integer', default: 0 },
     move_count: { type: 'integer', default: 0 },
+    revision: { type: 'integer', default: 0 },
+    processed_actions: { type: 'text', default: '[]' },
     updated_at: { type: 'integer', default: 0 },
     created_at: { type: 'integer', default: 0 },
   });

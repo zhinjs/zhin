@@ -1,7 +1,7 @@
 import { definePlugin, databaseHostToken } from '@zhin.js/plugin-runtime';
 import type { GroupSuiteConfig } from './src/config.js';
 import { registerGroupSuiteDb } from './src/db-store.js';
-import { createInMemoryGroupSuiteDb } from './src/memory-store.js';
+import { createInMemoryGroupSuiteDb, type GroupSuiteMemoryDb } from './src/memory-store.js';
 import { createGroupSuiteRuntime, groupSuiteRuntimeToken } from './src/runtime-state.js';
 import { flushStatsBuffer } from './src/stats-lib.js';
 import { defineGroupSuiteTables } from './src/tables.js';
@@ -18,12 +18,15 @@ export default definePlugin<GroupSuiteConfig>({
     displayName: 'Group Suite',
   },
   setup(context) {
-    const db = context.resources.has(databaseHostToken)
-      ? context.resources.use(databaseHostToken)
-      : createInMemoryGroupSuiteDb();
-    if (context.resources.has(databaseHostToken)) {
-      defineGroupSuiteTables(db);
-    }
+    // host 与 memory 模型表面结构兼容（where 均返回 PromiseLike），可直接互换。
+    const db: GroupSuiteMemoryDb = (() => {
+      if (context.resources.has(databaseHostToken)) {
+        const host = context.resources.use(databaseHostToken);
+        defineGroupSuiteTables(host);
+        return host;
+      }
+      return createInMemoryGroupSuiteDb();
+    })();
     const runtime = createGroupSuiteRuntime(db);
     context.resources.provide(groupSuiteRuntimeToken, runtime);
     context.lifecycle.add(registerGroupSuiteDb(db));

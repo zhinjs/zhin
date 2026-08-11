@@ -9,7 +9,7 @@ export default defineCommand({
   async execute({ params, input, use, owner }) {
     const action = normalizeRiddleAction(String(params.action ?? ''));
     if (!action || action === 'help') return RIDDLE_HELP;
-    const services = resolveGameServices({ use, owner });
+    const services = resolveGameServices({ use });
     const message = messageFromCommandInput(input);
     return runRiddleCommand(services, message, action);
   },

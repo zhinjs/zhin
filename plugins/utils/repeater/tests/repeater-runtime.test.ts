@@ -72,6 +72,45 @@ describe('@zhin.js/plugin-repeater', () => {
     expect(second).not.toBe(first);
   });
 
+  it('middleware wires runtime Message conversation into the engine (regression)', async () => {
+    // 回归：中间件曾传 `{ target, ... }`（无 conversation），resolveGroupId 逐条抛
+    // TypeError，复读在生产完全失效。这里用 runtime Message 形直接驱动 handle。
+    const replies: unknown[] = [];
+    const next = vi.fn(async () => {});
+    const handle = middleware.handle;
+    const makeContext = (senderId: string, kind: 'group' | 'private' = 'group') => ({
+      input: {
+        conversation: {
+          endpoint: { id: 'sandbox\0im\0bot', adapter: 'sandbox' },
+          kind,
+          id: kind === 'group' ? 'g1' : senderId,
+        },
+        content: 'echo',
+        sender: { id: senderId, name: senderId },
+        metadata: Object.freeze({}),
+        $reply: async (content: unknown) => {
+          replies.push(content);
+        },
+      },
+      config: { threshold: 3, cooldown: 1_000, maxLength: 200 },
+    }) as unknown as Parameters<typeof handle>[0];
+
+    await handle(makeContext('a'), next);
+    await handle(makeContext('b'), next);
+    expect(replies).toEqual([]);
+    expect(next).toHaveBeenCalledTimes(2);
+
+    // 第三个不同 sender 同文 → 复读一次且不再放行
+    await handle(makeContext('c'), next);
+    expect(replies).toEqual(['echo']);
+    expect(next).toHaveBeenCalledTimes(2);
+
+    // 私聊直接放行
+    await handle(makeContext('d', 'private'), next);
+    expect(next).toHaveBeenCalledTimes(3);
+    expect(replies).toEqual(['echo']);
+  });
+
   it('prunes cooldown entries by configured cooldown, not the default', () => {
     vi.useFakeTimers();
     try {

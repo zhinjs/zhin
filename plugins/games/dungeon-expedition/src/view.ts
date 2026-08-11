@@ -1,4 +1,4 @@
-import type { SendContent } from '@zhin.js/core';
+import type { SendContent } from '@zhin.js/core/runtime';
 import {
   buildChoiceKeyboard,
   type ChoiceOption,

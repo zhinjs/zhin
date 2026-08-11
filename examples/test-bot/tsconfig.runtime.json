@@ -1,9 +1,5 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "noEmit": true,
-    "rootDir": "."
-  },
   "include": [
     "plugin.ts",
     "commands/**/*",

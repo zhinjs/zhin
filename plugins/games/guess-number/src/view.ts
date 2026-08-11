@@ -1,5 +1,5 @@
 import { buildChoiceKeyboard } from '@zhin.js/game-kit';
-import type { SendContent } from '@zhin.js/core';
+import type { SendContent } from '@zhin.js/core/runtime';
 import type { GuessSessionRow } from './models.js';
 
 export const GUESS_PREFIX = 'guess';

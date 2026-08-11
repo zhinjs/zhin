@@ -27,7 +27,7 @@ import {
   type SlackMessageEvent,
   type SlackSlashCommand,
 } from './protocol.js';
-import { registerSlackAgentEndpoint } from './slack-agent-deps.js';
+import { registerSlackAgentEndpoint, type SlackUserInfo } from './slack-agent-deps.js';
 import {
   createSlackInboundFilterState,
   shouldDropSlackInboundMessage,
@@ -402,9 +402,9 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
     return result.channel;
   }
 
-  async getUserInfo(user: string): Promise<unknown> {
+  async getUserInfo(user: string): Promise<SlackUserInfo | undefined> {
     const result = await this.#client!.users.info({ user });
-    return result.user;
+    return result.user as SlackUserInfo | undefined;
   }
 
   async addReaction(channel: string, timestamp: string, name: string): Promise<boolean> {

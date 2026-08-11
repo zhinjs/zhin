@@ -105,7 +105,7 @@ export interface CommandConversation {
   readonly kind: 'private' | 'group' | 'channel';
   readonly id: string;
   readonly parent?: Readonly<{
-    readonly kind: 'group' | 'channel';
+    readonly kind: 'private' | 'group' | 'channel';
     readonly id: string;
   }>;
   readonly threadId?: string;
@@ -121,32 +121,34 @@ export interface CommandMessage {
   readonly conversation: CommandConversation;
   readonly content: string;
   /** 发送者（结构化视图见 CommandContext.sender）。 */
-  readonly sender?: { readonly id: string; readonly name?: string };
+  readonly sender?: { readonly id: string; readonly name?: string; readonly roles?: readonly string[] };
   readonly id?: string;
   readonly metadata?: Readonly<Record<string, unknown>>;
   /** 若上游已结构化，优先采用。 */
   readonly scene?: CommandScene;
-  readonly $reply?: (content: unknown) => Promise<unknown>;
-  readonly $replyFrom?: (requester: string, content: unknown) => Promise<unknown>;
+  // 方法式声明（而非属性式函数类型）：方法参数双变，runtime `Message` 的
+  // `$reply(content: SendContent)` 等才能鸭式兼容本契约（属性式是抗变，会报错）。
+  $reply?(content: unknown): Promise<unknown>;
+  $replyFrom?(requester: string, content: unknown): Promise<unknown>;
   /** 向同 Endpoint 的另一个通道发送消息（结构兼容 `Message.$sendTo`）。 */
-  readonly $sendTo?: (
+  $sendTo?(
     conversation: {
       readonly kind: 'private' | 'group' | 'channel';
       readonly id: string;
-      readonly parent?: Readonly<{ readonly kind: 'group' | 'channel'; readonly id: string }>;
+      readonly parent?: Readonly<{ readonly kind: 'private' | 'group' | 'channel'; readonly id: string }>;
       readonly threadId?: string;
     },
     content: unknown,
-  ) => Promise<unknown>;
+  ): Promise<unknown>;
   /** 私信当前消息的发送者（结构兼容 `Message.$replyToPrivate`）。 */
-  readonly $replyToPrivate?: (
+  $replyToPrivate?(
     content: unknown,
     from?: boolean | { readonly kind: 'group' | 'channel'; readonly id: string },
-  ) => Promise<unknown>;
+  ): Promise<unknown>;
   /** 向指定群发送消息（结构兼容 `Message.$replyToGroup`）。 */
-  readonly $replyToGroup?: (groupId: string, content: unknown) => Promise<unknown>;
+  $replyToGroup?(groupId: string, content: unknown): Promise<unknown>;
   /** 向指定频道发送消息（结构兼容 `Message.$replyToChannel`）。 */
-  readonly $replyToChannel?: (channelId: string, guildId: string, content: unknown, threadId?: string) => Promise<unknown>;
+  $replyToChannel?(channelId: string, guildId: string, content: unknown, threadId?: string): Promise<unknown>;
 }
 
 /**
@@ -355,9 +357,8 @@ export function resolveCommandSession(input: unknown): CommandSession {
     : undefined;
 
   const adapter = input.conversation.endpoint.adapter || undefined;
-  const endpoint = typeof metadata?.endpoint === 'string' && metadata.endpoint
-    ? metadata.endpoint
-    : undefined;
+  const endpoint = (input as { endpointName?: string }).endpointName
+    || (typeof metadata?.endpoint === 'string' && metadata.endpoint ? metadata.endpoint : undefined);
 
   const scene = resolveScene(input, metadata);
   const sender = resolveSender(input, metadata);
@@ -391,11 +392,8 @@ function resolveScene(
   }
 
   const conversation = input.conversation;
-  const type = (typeof metadata?.channelType === 'string' && metadata.channelType)
-    || (typeof metadata?.type === 'string' && metadata.type)
-    || conversation.kind;
-  const id = (typeof metadata?.channelId === 'string' && metadata.channelId)
-    || conversation.id;
+  const type = conversation.kind;
+  const id = conversation.id;
   if (!type || !id) return undefined;
 
   const name = firstString(
@@ -425,7 +423,7 @@ function resolveSender(
   if (!id) return undefined;
 
   const name = input.sender?.name || firstString(metadata?.nickname, metadata?.senderName, metadata?.name);
-  const role = resolveRoles(metadata);
+  const role = resolveRoles(input, metadata);
 
   return Object.freeze({
     id,
@@ -435,8 +433,12 @@ function resolveSender(
 }
 
 function resolveRoles(
+  input: CommandMessage,
   metadata: Readonly<Record<string, unknown>> | undefined,
 ): readonly string[] {
+  if (input.sender?.roles?.length) {
+    return Object.freeze([...input.sender.roles]);
+  }
   const roles: string[] = [];
   const push = (value: unknown) => {
     if (typeof value !== 'string') return;

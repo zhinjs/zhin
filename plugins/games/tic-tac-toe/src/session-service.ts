@@ -1,12 +1,14 @@
 import type { Database, Models, RelatedModel } from '@zhin.js/core';
 import {
-  BaseSessionService,
+  SessionActionGate,
+  VersionedSessionService,
   channelKey,
   generateCompactId,
   type GameMessageLike,
   type GameSessionDatabase,
+  type SessionMutationResult,
 } from '@zhin.js/game-kit';
-import type { TttModelName, TttSessionRow } from './models.js';
+import type { TttModelName, TttSessionRow, TttSessionStatus } from './models.js';
 import { BOT_ID } from './player-label.js';
 
 /** 井字棋服务使用的数据库实例（Models 经 models.ts 模块增强） */
@@ -28,6 +30,9 @@ function getModel<K extends TttModelName>(db: TttDatabase, name: K): TttModel<K>
 }
 
 export class QueueService {
+  /** 同频道匹配串行化：并发 join→tryMatch 不得读到同一对玩家双开局。 */
+  readonly #matchGate = new SessionActionGate();
+
   constructor(private readonly db: TttDatabase) {}
 
   /** 清掉频道内过期排队行（ttt_queue 无 TTL，靠 join 时顺带清理） */
@@ -76,21 +81,25 @@ export class QueueService {
   }
 
   async tryMatch(channel: string): Promise<[TttPlayerRef, TttPlayerRef] | null> {
-    const q = getModel(this.db, 'ttt_queue');
-    const rows = await q.findAll({ channel_key: channel });
-    rows.sort((a, b) => a.joined_at - b.joined_at);
-    if (rows.length < 2) return null;
-    // 只删除匹配到的两人，保留队列中其余的等待者
-    await q.deleteWhere({ channel_key: channel, user_id: rows[0]!.user_id });
-    await q.deleteWhere({ channel_key: channel, user_id: rows[1]!.user_id });
-    const toRef = (userId: string, userName: string) => ({
-      id: userId,
-      displayName: userName.trim() || userId,
+    // 读-删-读非原子：两个并发调用者可能拿到同一对玩家。按频道串行后，
+    // 第二个调用者读到的是匹配后的队列（前两名已被删除），自然落空。
+    return this.#matchGate.run(`ttt-queue:${channel}`, async () => {
+      const q = getModel(this.db, 'ttt_queue');
+      const rows = await q.findAll({ channel_key: channel });
+      rows.sort((a, b) => a.joined_at - b.joined_at);
+      if (rows.length < 2) return null;
+      // 只删除匹配到的两人，保留队列中其余的等待者
+      await q.deleteWhere({ channel_key: channel, user_id: rows[0]!.user_id });
+      await q.deleteWhere({ channel_key: channel, user_id: rows[1]!.user_id });
+      const toRef = (userId: string, userName: string) => ({
+        id: userId,
+        displayName: userName.trim() || userId,
+      });
+      return [
+        toRef(rows[0]!.user_id, rows[0]!.user_name),
+        toRef(rows[1]!.user_id, rows[1]!.user_name),
+      ];
     });
-    return [
-      toRef(rows[0]!.user_id, rows[0]!.user_name),
-      toRef(rows[1]!.user_id, rows[1]!.user_name),
-    ];
   }
 
   async count(channel: string): Promise<number> {
@@ -103,7 +112,7 @@ export function sessionId(): string {
   return generateCompactId('s');
 }
 
-export class SessionService extends BaseSessionService<TttSessionRow> {
+export class SessionService extends VersionedSessionService<TttSessionRow> {
   constructor(private readonly db: TttDatabase) {
     super(db as unknown as GameSessionDatabase<TttSessionRow>, {
       gameId: 'ttt',
@@ -167,10 +176,45 @@ export class SessionService extends BaseSessionService<TttSessionRow> {
       status: 'active',
       winner: 0,
       move_count: 0,
+      revision: 0,
+      processed_actions: '[]',
       updated_at: now,
       created_at: now,
     };
     return this.createRow(row);
+  }
+
+  /**
+   * 落子写路径：乐观锁（expectedRevision）+ actionId 幂等 + 进程内按会话串行
+   * （VersionedSessionService.mutateSession）。仅 applied 时补记 ttt_moves 流水
+   * —— 提前插入会让冲突/重试产生孤儿行。
+   */
+  async performMove(input: {
+    readonly sessionId: string;
+    readonly playerId: string;
+    readonly cell: number;
+    readonly expectedRevision: number;
+    readonly boardJson: string;
+    readonly moveCount: number;
+    readonly nextTurn: number;
+    readonly status: TttSessionStatus;
+    readonly winner: number;
+  }): Promise<SessionMutationResult<TttSessionRow>> {
+    const result = await this.mutateSession(input.sessionId, {
+      actionId: `${input.sessionId}:${input.expectedRevision}:${input.playerId}:${input.cell}`,
+      expectedRevision: input.expectedRevision,
+      apply: {
+        board: input.boardJson,
+        move_count: input.moveCount,
+        turn: input.nextTurn,
+        status: input.status,
+        winner: input.winner,
+      },
+    });
+    if (result.kind === 'applied') {
+      await this.recordMove(input.sessionId, input.playerId, input.cell, input.moveCount);
+    }
+    return result;
   }
 
   async recordMove(sessionId: string, playerId: string, cell: number, moveIndex: number): Promise<void> {

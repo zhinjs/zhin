@@ -1,4 +1,9 @@
 import { formatCompact, getLogger, type Logger } from '@zhin.js/logger';
+import {
+  createGenerationStore,
+  type Dispose,
+  type GenerationStoreContext,
+} from '@zhin.js/plugin-runtime';
 import { resolveModerationConfig } from './config.js';
 import { mergeMatches, type ExtractedContent } from './extract.js';
 import { redactOutboundPayload } from './redact.js';
@@ -208,13 +213,30 @@ function shouldStop(direction: Direction, actions: ReadonlySet<Action>): boolean
   return false;
 }
 
-let sharedEngine: ModerationEngine | null = null;
+const moderationEngineStore = createGenerationStore<ModerationEngine>('content-moderation/engine');
+
+let fallbackEngine: ModerationEngine | null = null;
+
+/**
+ * Generation-owned engine binding：plugin setup 提供已配置的引擎，
+ * generation lifecycle dispose 时自动摘除（不留跨代际悬挂引用）。
+ */
+export function provideModerationEngine(
+  context: GenerationStoreContext,
+  engine: ModerationEngine,
+): Dispose {
+  return moderationEngineStore.provide(context, engine);
+}
 
 export function getModerationEngine(): ModerationEngine {
-  if (!sharedEngine) sharedEngine = new ModerationEngine();
-  return sharedEngine;
+  const provided = moderationEngineStore.tryUse();
+  if (provided) return provided;
+  // 脱离 Plugin Runtime 的调用（单测 / 独立脚本）走兜底实例。
+  if (!fallbackEngine) fallbackEngine = new ModerationEngine();
+  return fallbackEngine;
 }
 
 export function resetModerationEngine(): void {
-  sharedEngine = null;
+  moderationEngineStore.clear();
+  fallbackEngine = null;
 }

@@ -13,7 +13,7 @@ export default defineCommand({
   async execute({ params, input, use, owner }) {
     const rawAction = String(params.action ?? '');
     if (normalizeDungeonAction(rawAction) === 'help') return DUNGEON_HELP;
-    const service = resolveGameServices({ use, owner });
+    const service = resolveGameServices({ use });
     return runDungeonCommand(
       service,
       messageFromCommandInput(input),

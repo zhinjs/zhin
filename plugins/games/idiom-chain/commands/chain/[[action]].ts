@@ -9,7 +9,7 @@ export default defineCommand({
   async execute({ params, input, use, owner }) {
     const action = normalizeChainAction(String(params.action ?? ''));
     if (!action || action === 'help') return CHAIN_HELP;
-    const services = resolveGameServices({ use, owner });
+    const services = resolveGameServices({ use });
     const message = messageFromCommandInput(input);
     return runChainCommand(services, message, action);
   },
