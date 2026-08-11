@@ -1,4 +1,7 @@
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
+
+const logger = getLogger('AIBus');
 
 type AIBusListener = (payload: AIEventPayload) => void;
 
@@ -29,7 +32,12 @@ export class ActivityFeedbackAIBus {
 
   emit(event: string, payload: AIEventPayload): void {
     const set = this.listeners.get(event);
-    if (!set || set.size === 0) return;
+    if (!set || set.size === 0) {
+      // 零订阅 = activity-feedback 插件未加载，或运行时装了双份 @zhin.js/agent
+      // （模块级 bus 分裂）。此前完全静默，是 typing 反馈消失最难排查的形态。
+      logger.debug(formatCompact({ op: 'ai_bus_no_listener', event }));
+      return;
+    }
     for (const listener of set) {
       try {
         listener(payload);

@@ -20,13 +20,31 @@ export class ActivityFeedbackOrchestrator {
 
   async startPhase(payload: AIEventPayload, phase: ActivityFeedbackPhase, reason: string): Promise<void> {
     const gatePhase = phase as import('@zhin.js/agent').ActivityFeedbackGatePhase;
-    if (!isActivityFeedbackEnabled(payload, gatePhase)) return;
+    if (!isActivityFeedbackEnabled(payload, gatePhase)) {
+      this.log.debug(
+        `[ActivityFeedback] skip ${phase} (${reason}): gate closed`
+        + ` (eligible=${String(payload.hookContext?.activityFeedbackEligible)})`,
+      );
+      return;
+    }
     const ctx = toActivityFeedbackEventContext(payload);
-    if (!ctx) return;
+    if (!ctx) {
+      this.log.debug(
+        `[ActivityFeedback] skip ${phase} (${reason}): unresolvable context`
+        + ` (platform=${String(payload.platform)} endpoint=${String(payload.endpointId)})`,
+      );
+      return;
+    }
 
     try {
       const resolution = this.policy.resolvePhase(ctx.platform, ctx.endpointId, phase, ctx.sceneType);
-      if (resolution.kind !== 'active') return;
+      if (resolution.kind !== 'active') {
+        this.log.debug(
+          `[ActivityFeedback] skip ${phase} (${reason}): policy=${resolution.kind}`
+          + ` (${ctx.platform}:${ctx.endpointId} ${ctx.sceneType})`,
+        );
+        return;
+      }
 
       const config = applySubagentActivityPrefixToConfig(resolution.config, payload);
       this.log.debug(`[ActivityFeedback] start ${phase} (${reason}) session=${ctx.sessionId}`);
