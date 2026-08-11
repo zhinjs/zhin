@@ -545,8 +545,20 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         ];
 
         // thinkingMessage：进入 AI 处理前先回占位（对齐 legacy inbound-turn-pipeline）。
+        // 占位消息不 await 回包——平台 ack 慢（实测 icqq 守护进程 10s+）不应拖住 turn 启动；
+        // 失败仅记日志（正式回复仍走 replyAndRecord 的完整确认）。
         if (trigger.thinkingMessage) {
-          await replyAndRecord(trigger.thinkingMessage);
+          message.$reply(trigger.thinkingMessage).catch((error: unknown) => {
+            logger.debug(formatCompact({
+              op: 'agent_host_thinking_reply_failed',
+              error: error instanceof Error ? error.message : String(error),
+            }));
+          });
+          recordRuntimeTranscript(zhinAgent, commMessage, {
+            direction: 'outbound',
+            body: sendContentToText(trigger.thinkingMessage as SendContent),
+            senderRole: 'assistant',
+          });
         }
 
         const elements = await withTriggerTimeout(
