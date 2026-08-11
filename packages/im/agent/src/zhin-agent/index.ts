@@ -8,7 +8,6 @@ import {
   type AIProvider,
   type AgentTool,
   type AgentMessage,
-  type ContentPart,
   type MediaContentBlock,
   type Usage,
   type AgentEvent,
@@ -54,7 +53,6 @@ import {
 } from '../config/index.js';
 import { processTextTurn } from '../turn/turn-pipeline.js';
 import { DeferredTurnState } from '../turn/deferred-turn-state.js';
-import { prepareMultimodalBlocks } from '../media/media-normalize.js';
 import { resolveContextTailMessageLimit } from '../context/context-tail-limit.js';
 import { archiveSessionByKey } from '../session/session-io.js';
 import { recordPassiveGroupMessage as recordPassiveGroupMessageInternal } from '../session/passive-group-session.js';
@@ -89,8 +87,8 @@ import {
   type TurnContextRunOptions,
 } from '../turn/turn-context-bridge.js';
 import { emitSessionCompactEvent, emitSessionNewEvent, type SessionCompactInfo } from '../event/session-events.js';
-import { applyZhinAgentConfigure, wireZhinAgentLlmApiLayer, type ConfigureZhinAgentTarget } from '../init/configure-zhin-agent.js';
-import { disposeZhinAgentResources, type DisposeZhinAgentTarget } from '../init/dispose-zhin-agent.js';
+import { applyZhinAgentConfigure, wireZhinAgentLlmApiLayer } from '../init/configure-zhin-agent.js';
+import { disposeZhinAgentResources } from '../init/dispose-zhin-agent.js';
 import type { PhaseTraceConfig } from '../internal/phase-trace.js';
 import type { HttpApprovalAdapter } from '../session/http-approval-adapter.js';
 import type { ApprovalPort } from '../session/session-interaction-port.js';
@@ -139,7 +137,7 @@ export interface AgentTurnRequest {
 
 export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAgentDiagnostics, IAgentConfigurator {
   private provider: AIProvider;
-  private providerResolver: ((alias: string) => AIProvider) | null = null;
+  providerResolver: ((alias: string) => AIProvider) | null = null;
   private configuredActiveBinding: ResolvedAgentBinding | null = null;
   config: Required<ZhinAgentConfig>;
   /** ideal 模块槽位；经 getter/setter 供 configure 与 asPrivate(host) 读写 */
@@ -148,14 +146,14 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
   contextRepository: ContextRepository;
   imTranscriptStore: ImTranscriptStore;
-  private memory: ConversationMemory;
+  memory: ConversationMemory;
   readonly externalTools: Map<string, RegisteredAgentTool> = new Map();
   userProfiles: UserProfileStore;
   rateLimiter: RateLimiter;
   subagentSystem: SubagentSystem | null = null;
   private configuredBootstrapContext: string = '';
   private configuredGlobalContext: string = '';
-  private alwaysSkillsBaseline: string = '';
+  alwaysSkillsBaseline: string = '';
   skillsSummaryXML: string = '';
   modelRegistry: ModelRegistry | null = null;
   readonly emitter = new ZhinAgentEventEmitter();
@@ -167,10 +165,10 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   approvalPort?: ApprovalPort;
   /** Per-turn instructions from defineDynamic resolvers (ADR 0039 P2)。 */
   turnDynamicInstructions?: string;
-  private lastTurnMetrics: ZhinAgentTurnMetrics | null = null;
+  lastTurnMetrics: ZhinAgentTurnMetrics | null = null;
   private readonly inboundQueueConfig: ResolvedInboundQueueConfig;
-  private readonly inboundTurnQueue: InboundTurnQueue;
-  private readonly turnContextState: TurnContextBridgeState = {
+  readonly inboundTurnQueue: InboundTurnQueue;
+  readonly turnContextState: TurnContextBridgeState = {
     alwaysSkillsBaseline: '',
   };
 
@@ -249,7 +247,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   }
 
   configure(deps: Partial<ZhinAgentDependencies>): void {
-    applyZhinAgentConfigure(this as unknown as ConfigureZhinAgentTarget, deps);
+    applyZhinAgentConfigure(this, deps);
   }
 
   getTurnActiveSkills(): string {
@@ -276,7 +274,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return assembleDisciplinedPrompt(asPrivate(this), basePrompt);
   }
 
-  private wireLlmApiLayer(): void {
+  wireLlmApiLayer(): void {
     wireZhinAgentLlmApiLayer(this.provider, this.providerResolver);
   }
 
@@ -542,26 +540,13 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     });
   }
 
-  /**
-   * @deprecated ContentPart 时代的多模态薄 shim，下个大版本删除。
-   * 替代路径：canonical Segment 注入（入站段 → UserMessage.media）。
-   */
-  async processMultimodal(parts: ContentPart[], commMessage: Message, onChunk?: OnChunkCallback): Promise<OutputElement[]> {
-    const { content, mediaBlocks } = await prepareMultimodalBlocks(parts);
-    return this.runInTurnContext(randomUUID(), () =>
-      runWithInboundQueue(commMessage, this.inboundQueueConfig, this.inboundTurnQueue, {
-        coalesce: false,
-        run: () => processTextTurn(asPrivate(this), content, commMessage, [], onChunk, { mediaBlocks }),
-      }),
-    );
-  }
 
   isReady(): boolean {
     return true;
   }
 
   dispose(): void {
-    disposeZhinAgentResources(this as unknown as DisposeZhinAgentTarget);
+    disposeZhinAgentResources(this);
     this.subagentSystem = null;
     this.lastTurnMetrics = null;
      

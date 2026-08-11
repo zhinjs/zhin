@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { MediaRef } from '@zhin.js/core';
-import type { ContentPart, MediaContentBlock } from '@zhin.js/ai';
+import type { MediaContentBlock } from '@zhin.js/ai';
 import type { MediaBinaryPayload, MediaKind } from './media-types.js';
 
 function kindFromSegmentType(type: string): MediaKind | null {
@@ -131,90 +131,12 @@ export async function normalizeMediaRefsToPayloads(
   return out;
 }
 
-/**
- * @deprecated ContentPart 时代的多模态入口，下个大版本删除。
- * 替代路径：canonical Segment 注入（`normalizeMediaRefsToPayloads`）。
- */
-export async function normalizeContentPartsToPayloads(
-  parts: readonly ContentPart[],
-  maxBytes: number,
-): Promise<MediaBinaryPayload[]> {
-  const payloads: MediaBinaryPayload[] = [];
-  for (const part of parts) {
-    if (part.type === 'audio') {
-      const base64 = typeof part.audio?.data === 'string' ? part.audio.data : '';
-      if (base64) {
-        const format = part.audio.format === 'wav' ? 'wav' : 'mp3';
-        payloads.push({
-          kind: 'audio',
-          base64: base64.replace(/^base64:\/\//, ''),
-          mimeType: format === 'wav' ? 'audio/wav' : 'audio/mpeg',
-          meta: { format },
-        });
-      }
-      continue;
-    }
-
-    const url = part.type === 'image_url'
-      ? part.image_url?.url
-      : part.type === 'video_url'
-        ? (part as { video_url?: { url?: unknown } }).video_url?.url
-        : undefined;
-    if (typeof url !== 'string' || !url.trim()) continue;
-
-    const parsed = parseDataUri(url);
-    const expectedKind: MediaKind = part.type === 'image_url' ? 'image' : 'video';
-    if (parsed) {
-      payloads.push({ kind: expectedKind, base64: parsed.base64, mimeType: parsed.mime });
-      continue;
-    }
-
-    const localPath = resolveLocalMediaPath(url);
-    if (localPath) {
-      const local = await readLocalFileAsBase64(localPath, maxBytes);
-      if (local) payloads.push({ ...local, kind: expectedKind });
-      continue;
-    }
-
-    const fetched = await fetchUrlAsBase64(url, maxBytes);
-    if (fetched) payloads.push({ ...fetched, kind: expectedKind });
-  }
-  return payloads;
-}
 
 export function payloadToDataUri(payload: MediaBinaryPayload): string {
   return `data:${payload.mimeType};base64,${payload.base64}`;
 }
 
-/**
- * @deprecated ContentPart 时代的多模态入口，下个大版本删除。
- * 替代路径：canonical Segment 注入（入站段 → UserMessage.media）。
- */
-export async function prepareMultimodalBlocks(
-  parts: ContentPart[],
-  maxPayloadBytes: number = 26_214_400,
-): Promise<{ content: string; mediaBlocks: MediaContentBlock[] }> {
-  const payloads = await normalizeContentPartsToPayloads(parts, maxPayloadBytes);
-  const mediaBlocks = payloads.flatMap((payload) => {
-    const block = payloadToVisionPart(payload);
-    return block ? [block] : [];
-  });
-  return { content: summarizeContentParts(parts), mediaBlocks };
-}
 
-/** @deprecated ContentPart 时代入口，下个大版本删除；替代路径：canonical Segment 文本视图。 */
-export function summarizeContentParts(parts: readonly ContentPart[]): string {
-  const text = parts
-    .filter((part): part is Extract<ContentPart, { type: 'text' }> => part.type === 'text')
-    .map((part) => part.text)
-    .join(' ')
-    .trim();
-  if (text) return text;
-  if (parts.some((part) => part.type === 'image_url')) return '[图片]';
-  if (parts.some((part) => part.type === 'audio')) return '[音频]';
-  if (parts.some((part) => part.type === 'video_url')) return '[视频]';
-  return '[多模态消息]';
-}
 
 export function payloadToVisionPart(payload: MediaBinaryPayload): MediaContentBlock | null {
   if (payload.kind !== 'image') return null;

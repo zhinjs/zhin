@@ -153,7 +153,7 @@ export function microCompactMessages(
     const isCompactable = !toolName || compactableTools.has(toolName);
     if (!isCompactable) continue;
 
-    const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+    const content = msg.content;
     // 只清理内容较大的结果（>100 字符）
     if (content.length <= 100) continue;
 

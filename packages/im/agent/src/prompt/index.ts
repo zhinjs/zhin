@@ -10,7 +10,6 @@ export type { WorkspacePromptRole } from './workspace-prompt.js';
 
 export {
   FIXED_DISCIPLINE_RULES,
-  contentToText,
   buildUserMessageWithHistory,
   resolvePromptFileRole,
   describePromptSectionsForDebug,

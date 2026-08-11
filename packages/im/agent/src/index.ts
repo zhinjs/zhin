@@ -82,7 +82,6 @@ export {
   buildRichSystemPrompt,
   buildLiteSystemPromptWithPlatform,
   buildUserMessageWithHistory,
-  contentToText,
   describePromptSectionsForDebug,
 } from './prompt/system-prompt.js';
 export type { RichSystemPromptContext, PromptSectionDebugInfo } from './prompt/system-prompt.js';
@@ -423,7 +422,6 @@ export type { BootstrapFile, ContextFile } from './bootstrap.js';
 
 export {
   preprocessInboundMedia,
-  normalizeContentPartsToPayloads,
   publishOutboundElements,
   resolveMultimodalConfig,
   resolveOutboundCapabilities,
@@ -652,7 +650,6 @@ export {
   COLLABORATION_SCENE_MODEL,
   COLLABORATION_SCENE_MEMBER_MODEL,
   COLLABORATION_SCENE_ARTIFACT_MODEL,
-  createInboundTurnPipeline,
   bootstrapEndpointRuntimes,
   buildTurnPlan,
   evaluatePeerTrigger,
@@ -668,8 +665,6 @@ export type {
   TurnPlan,
   DelegationMode,
   PeerTriggerMode,
-  InboundTurnPipeline,
-  InboundTurnPipelineDeps,
   RuntimeCollaborationInboundInput,
   RuntimeCollaborationInboundResult,
 } from './collaboration/index.js';

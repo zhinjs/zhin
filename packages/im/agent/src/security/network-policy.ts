@@ -1,7 +1,7 @@
 /**
  * 统一网络安全策略 — SSRF 防护、域名白名单、网络命令检测
  *
- * 合并了原散落在 web-fetch-tool.ts / sandbox.ts / sandbox-enhanced.ts / exec-policy.ts 中的
+ * 合并了原散落在 web-fetch-tool.ts / sandbox.ts / exec-policy.ts 中的
  * 网络安全检查逻辑，作为单一事实来源。
  */
 

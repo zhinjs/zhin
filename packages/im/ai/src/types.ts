@@ -10,10 +10,10 @@
 /** 消息角色 */
 export type MessageRole = 'system' | 'user' | 'assistant' | 'tool' | 'tool_call' | 'tool_result';
 
-/** OpenAI-compatible wire format for Provider chat/stream APIs (not agent session history). */
+/** 会话记忆消息（text-only；多模态入站走 canonical Segment，不经此模型）。 */
 export interface ChatMessage {
   role: MessageRole;
-  content: string | ContentPart[];
+  content: string;
   name?: string;
   tool_call_id?: string;
   tool_calls?: ToolCall[];
@@ -21,13 +21,6 @@ export interface ChatMessage {
   /** Some OpenAI-compatible providers (e.g. Cloudflare GLM) use `reasoning` instead of `reasoning_content`. */
   reasoning?: string | null;
 }
-
-/** 内容部分（支持多模态） */
-export type ContentPart = 
-  | { type: 'text'; text: string }
-  | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } }
-  | { type: 'audio'; audio: { data: string; format: 'wav' | 'mp3' } }
-  | { type: 'video_url'; video_url: { url: string } };
 
 /** 工具调用 */
 export interface ToolCall {

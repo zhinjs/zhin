@@ -2,7 +2,7 @@
  * ZhinAgent 运行时 host 契约 — 供 ideal 模块引用，避免依赖 zhin-agent 门面实现。
  * 成员按域拆为窄接口，ZhinAgentPrivate 组合之；消费方优先用窄接口形参。
  */
-import type { AIProvider, ContentPart, Usage, OutputElement, AgentSessionStore, ContextRepository, IMSessionStore, ImTranscriptStore, MemoryAgentSessionStore, MemoryIMSessionStore, RateLimiter, ModelRegistry } from '@zhin.js/ai';
+import type { AIProvider, Usage, OutputElement, AgentSessionStore, ContextRepository, IMSessionStore, ImTranscriptStore, MemoryAgentSessionStore, MemoryIMSessionStore, RateLimiter, ModelRegistry } from '@zhin.js/ai';
 import type { Plugin } from '@zhin.js/core';
 import type { Tool, Message } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
@@ -112,4 +112,4 @@ export interface ZhinAgentPrivate
   readonly deferred: DeferredTurnState;
 }
 
-export type { OnChunkCallback, OutputElement, Tool, Message, Plugin, ContentPart };
+export type { OnChunkCallback, OutputElement, Tool, Message, Plugin };

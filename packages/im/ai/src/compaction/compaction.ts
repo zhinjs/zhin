@@ -207,7 +207,7 @@ async function generateSummary(
 ): Promise<string> {
   const conversation = messages.map(m => {
     const role = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'System';
-    const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+    const content = m.content;
     return `[${role}] ${content}`;
   }).join('\n');
 

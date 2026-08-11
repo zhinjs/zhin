@@ -5,7 +5,7 @@
  * ZhinAgent 类实现所有接口；外部消费方按需使用具体接口而非完整类。
  */
 
-import type { AgentMessage, AgentEvent, ContentPart, MediaContentBlock, OutputElement } from '@zhin.js/ai';
+import type { AgentMessage, AgentEvent, MediaContentBlock, OutputElement } from '@zhin.js/ai';
 import type { Message, Tool } from '../orchestrator/types.js';
 import type { SubagentSystem } from '../subagent/index.js';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
@@ -22,13 +22,6 @@ export interface IAgentTurnProcessor {
     content: string,
     commMessage: Message,
     externalTools?: Tool[],
-    onChunk?: OnChunkCallback,
-  ): Promise<OutputElement[]>;
-
-  /** @deprecated ContentPart 时代的多模态薄 shim，下个大版本删除；替代路径：canonical Segment 注入。 */
-  processMultimodal(
-    parts: ContentPart[],
-    commMessage: Message,
     onChunk?: OnChunkCallback,
   ): Promise<OutputElement[]>;
 

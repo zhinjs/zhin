@@ -54,8 +54,6 @@ export interface ProcessTextTurnOptions {
   onTurnEvent?: (event: TurnEvent) => void;
   /** Ordered wire-event journal owned by processTextTurnStream. */
   journal?: AgentRunJournal;
-  /** Compatibility media supplied by ZhinAgent.processMultimodal. */
-  mediaBlocks?: readonly MediaContentBlock[];
   /** Per-turn cancellation from an ingress owner such as the IM trigger host. */
   signal?: AbortSignal;
 }
@@ -141,13 +139,7 @@ export async function processTextTurn(
 
     logger.debug(formatCompact({ op: 'tools_resolved', count: resolvedTools.length }));
 
-    const resolvedInboundMedia = await resolveInboundMediaInjection(commMessage);
-    const inboundMedia = extras?.mediaBlocks?.length
-      ? {
-        blocks: [...resolvedInboundMedia.blocks, ...extras.mediaBlocks],
-        textAppends: resolvedInboundMedia.textAppends,
-      }
-      : resolvedInboundMedia;
+    const inboundMedia = await resolveInboundMediaInjection(commMessage);
     const turnCtx = await requireContextSystem(host).buildTextTurnContext({
       host,
       commMessage,

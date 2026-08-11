@@ -7,7 +7,7 @@
 
 import * as os from 'node:os';
 import { type AgentTurnMessage, type Message, resolveIMSessionIdFromMessage, senderRolesFromMessage } from '@zhin.js/core';
-import type { ContentPart, AgentMessage, AssistantMessage, UserMessage } from '@zhin.js/ai';
+import type { AgentMessage, AssistantMessage, UserMessage } from '@zhin.js/ai';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import { type ZhinAgentConfig, SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from '../config/index.js';
 import { resolveQuoteSystemHint } from '../context/turn-envelope.js';
@@ -34,21 +34,6 @@ export const FIXED_DISCIPLINE_RULES = [
   'Lead with the answer or result; avoid unnecessary preambles and filler.',
 ] as const;
 
-export function contentToText(c: string | ContentPart[] | ContentPart | null | undefined): string {
-  if (c == null) return '';
-  if (typeof c === 'string') return c;
-  const parts = Array.isArray(c) ? c : [c as ContentPart];
-  return parts.map(p => {
-    if (!p) return '';
-    switch (p.type) {
-      case 'text': return p.text;
-      case 'image_url': return '[图片]';
-      case 'audio': return '[音频]';
-      case 'video_url': return '[视频]';
-      default: return '';
-    }
-  }).join('');
-}
 
 /** Extract plain text from an AgentMessage for history display. */
 function agentMessageToText(message: AgentMessage): string {
