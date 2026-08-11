@@ -194,7 +194,7 @@ describe('dingtalk plugin runtime adapter', () => {
       }),
       message: expect.objectContaining({ id: 'msg-1' }),
       content: 'hello',
-      sender: 'user-1',
+      sender: expect.objectContaining({ id: 'user-1', name: 'Alice' }),
     }));
     await endpoint.stop();
   });

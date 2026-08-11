@@ -158,7 +158,7 @@ describe('line plugin runtime adapter', () => {
       conversation: expect.objectContaining({ kind: 'private', id: 'U1234567890abcdef' }),
       message: expect.objectContaining({ id: 'msg-1' }),
       content: 'hello',
-      sender: 'U1234567890abcdef',
+      sender: expect.objectContaining({ id: 'U1234567890abcdef' }),
     }));
     await endpoint.stop();
   });

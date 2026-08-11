@@ -301,7 +301,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
       conversation,
       message: { conversation, id: inboundMessageId(msg) },
       content: formatInboundContent(msg),
-      sender: userId,
+      sender: { id: userId },
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         messageType: msg.message_type,

@@ -156,7 +156,7 @@ export class EmailEndpoint implements EndpointInstance {
       ...(email.messageId ? { message: { conversation, id: email.messageId } } : {}),
       content,
       segments: formatInboundSegments(email, savedAttachments),
-      sender: senderDisplayName(sender),
+      sender: { id: sender, name: senderDisplayName(sender) || undefined },
       metadata: Object.freeze({
         subject: email.subject,
         to: email.to,

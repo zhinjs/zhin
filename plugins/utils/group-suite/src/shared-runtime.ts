@@ -34,11 +34,11 @@ export function resolveContextKey(input: {
 }
 
 export function resolveSender(input: {
-  sender?: string;
+  sender?: { readonly id: string; readonly name?: string };
   metadata?: Readonly<Record<string, unknown>>;
 }): { id: string; name: string } {
   const meta = input.metadata ?? {};
-  const id = String(input.sender ?? meta.senderId ?? '');
-  const name = String(meta.senderName ?? meta.name ?? '用户');
+  const id = input.sender?.id ?? String(meta.senderId ?? '');
+  const name = input.sender?.name ?? String(meta.senderName ?? meta.name ?? '用户');
   return { id, name };
 }

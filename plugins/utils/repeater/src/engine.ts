@@ -29,7 +29,7 @@ export interface RepeaterInboundFields {
     readonly id: string;
   };
   readonly content: string;
-  readonly sender?: string;
+  readonly sender?: { readonly id: string; readonly name?: string } | string;
   readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
@@ -94,7 +94,8 @@ export class RepeaterEngine {
     const content = message.content.trim();
     if (!content || content.length > config.maxLength) return { action: 'next' };
 
-    const senderId = String(message.sender ?? '');
+    const rawSender = message.sender;
+    const senderId = typeof rawSender === 'object' ? rawSender?.id ?? '' : String(rawSender ?? '');
     if (!senderId) return { action: 'next' };
 
     const state = this.#groupStates.get(groupId);

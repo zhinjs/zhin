@@ -646,7 +646,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     });
     this.#logger.info(
       `recv ${conversation.kind}:${conversation.id}`
-      + (msg.sender ? ` from ${msg.sender}` : '')
+      + (msg.sender ? ` from ${msg.sender.name ?? msg.sender.id}` : '')
       + (mentioned ? ' (mentioned)' : '')
       + ` | ${truncatePreview(msg.content, 80)}`,
     );
@@ -748,7 +748,11 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       }),
       content: formatInboundContent(normalized.rawMessage),
       segments: normalized.content,
-      sender: normalized.userId,
+      sender: {
+        id: normalized.userId,
+        name: normalized.nickname || undefined,
+        ...(normalized.senderRole ? { roles: [normalized.senderRole] } : {}),
+      },
       channelType: normalized.channelType,
       metadata: buildIcqqQuoteMetadata(data, {
         nickname: normalized.nickname,
@@ -790,7 +794,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       }),
       content: formatInboundContent(normalized.rawMessage),
       segments: normalized.content,
-      sender: normalized.userId,
+      sender: { id: normalized.userId, name: normalized.nickname || undefined },
       channelType: 'channel',
       metadata: {
         guildId: normalized.guildId,

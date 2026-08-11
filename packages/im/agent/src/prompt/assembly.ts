@@ -11,11 +11,11 @@ import {
 import { resolveWorkspacePrompt } from './workspace-prompt.js';
 import { getGitStatusLine } from './git-context.js';
 import { buildPreExecFastPathPrompt } from '../tool/runtime.js';
-import type { ZhinAgentPrivate } from '../internal/agent-host.js';
+import type { AgentContextHost, ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { AgentMessage } from '@zhin.js/ai';
 import { getLlmTransportModel } from '@zhin.js/ai';
 
-export function buildDisciplinedPrompt(_agent: ZhinAgentPrivate, basePrompt: string): string {
+export function buildDisciplinedPrompt(_host: AgentContextHost, basePrompt: string): string {
   const guidance = [
     '# Style',
     '- Lead with the answer or result.',

@@ -208,7 +208,7 @@ describe('slack plugin runtime adapter (socket)', () => {
       conversation: expect.objectContaining({ kind: 'group', id: 'C001' }),
       message: expect.objectContaining({ id: '1700000000.000100' }),
       content: 'hello',
-      sender: 'U001',
+      sender: expect.objectContaining({ id: 'U001' }),
     }));
     await endpoint.stop();
   });

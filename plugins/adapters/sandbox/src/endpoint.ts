@@ -230,7 +230,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
         void this.#options.gateway.receive({
           conversation,
           content: parsed.text,
-          sender,
+          sender: { id: sender },
           metadata: Object.freeze({
             type: parsed.type,
             channelType: parsed.type,

@@ -396,7 +396,7 @@ describe('discord plugin runtime adapter', () => {
       conversation: expect.objectContaining({ kind: 'channel', id: 'chan-1' }),
       message: expect.objectContaining({ id: 'msg-1' }),
       content: 'hello',
-      sender: 'alice',
+      sender: expect.objectContaining({ id: 'user-1', name: 'alice' }),
     }));
 
     await endpoint.stop();

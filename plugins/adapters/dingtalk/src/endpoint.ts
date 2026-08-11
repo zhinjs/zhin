@@ -169,7 +169,11 @@ export class DingTalkEndpoint implements EndpointInstance {
       conversation,
       message: { conversation, id: generateMessageId(event) },
       content: formatInboundContent(event),
-      sender: resolveSender(event),
+      sender: {
+        id: resolveSender(event),
+        name: event.senderNick || undefined,
+        ...(permit.role ? { roles: [permit.role] } : {}),
+      },
       metadata: Object.freeze({
         msgtype: event.msgtype,
         chatType,

@@ -164,7 +164,7 @@ export class OneBot12WsEndpoint implements EndpointInstance {
       conversation,
       message: { conversation, id: ev.message_id },
       content,
-      sender: senderUserId(ev),
+      sender: { id: senderUserId(ev), name: senderNickname(ev) },
       metadata: Object.freeze({
         detail_type: ev.detail_type,
         user_id: ev.user_id,

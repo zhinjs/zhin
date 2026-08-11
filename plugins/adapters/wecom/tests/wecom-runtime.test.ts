@@ -265,7 +265,7 @@ describe('wecom plugin runtime adapter', () => {
       conversation: expect.objectContaining({ kind: 'private', id: 'user001' }),
       message: expect.objectContaining({ id: 'msg-1' }),
       content: 'hello',
-      sender: 'user001',
+      sender: expect.objectContaining({ id: 'user001' }),
     }));
     await endpoint.stop();
   });

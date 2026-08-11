@@ -45,17 +45,20 @@ function conversationFromTarget(target: string) {
 function makeMessage(input: {
   content: string;
   target?: string;
-  sender?: string;
+  sender?: string | { id: string; name?: string };
   metadata?: Record<string, unknown>;
   segments?: ConstructorParameters<typeof Message>[6];
 }): Message {
   const conversation = conversationFromTarget(input.target ?? 'group:100');
+  const senderRef = typeof input.sender === 'object'
+    ? input.sender
+    : { id: input.sender ?? 'user-1', name: input.sender };
   return new Message(
     conversation,
     input.content,
     1,
     async () => ({ status: 'sent' as const }),
-    input.sender ?? 'user-1',
+    senderRef,
     Object.freeze(input.metadata ?? {}),
     input.segments,
     { conversation, id: 'm1' },
@@ -103,8 +106,8 @@ describe('缺口 1：im_transcripts 流水写入（recordRuntimeTranscript）', 
       direction: 'inbound',
       body: message.content,
       messageId: message.id,
-      senderId: message.sender ?? '',
-      senderName: message.sender ?? '',
+      senderId: message.sender?.id ?? '',
+      senderName: message.sender?.name ?? message.sender?.id ?? '',
       senderRole: 'user',
     });
     expect(agent.transcripts).toHaveLength(1);

@@ -133,7 +133,7 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
       conversation,
       message: { conversation, id: ev.message_id },
       content,
-      sender: senderUserId(ev),
+      sender: { id: senderUserId(ev), ...(nickname ? { name: nickname } : {}) },
       metadata: Object.freeze({
         detail_type: ev.detail_type,
         user_id: ev.user_id,

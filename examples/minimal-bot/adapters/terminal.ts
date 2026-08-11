@@ -56,7 +56,7 @@ export class TerminalEndpoint implements EndpointInstance {
           id: 'terminal',
         },
         content,
-        sender: 'local-user',
+        sender: { id: 'local-user' },
       }).catch((error: unknown) => {
         this.#options.error.write(`${formatError(error)}\n`);
       }).finally(() => {

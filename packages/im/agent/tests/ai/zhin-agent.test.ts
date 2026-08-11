@@ -7,20 +7,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ZhinAgent } from '@zhin.js/agent';
 import { Plugin, SkillFeature, type AIProvider, type AgentTool, type Tool } from '@zhin.js/core';
 import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
-import { wireMockProviderToLlmApi, createMockSdkProvider } from '../helpers/mock-llm-api.js';
+import { wireMockLlmApi, assistantTextReply, type MockLlmApi } from '../helpers/mock-llm-api.js';
 
 
-// Mock AIProvider
-function createMockProvider(response: string = '你好！'): AIProvider {
-  const provider = createMockSdkProvider(
-    vi.fn(async () => ({
-      choices: [{ message: { role: 'assistant' as const, content: response }, finish_reason: 'stop' }],
-    } as ChatResponse)),
-    ['mock-model'],
-  );
-  return Object.assign(provider, {
+// Mock LLM（ai-sdk 原生面）
+function createMockProvider(response: string = '你好！'): { provider: AIProvider; llm: MockLlmApi } {
+  const llm = wireMockLlmApi({ responder: () => assistantTextReply(response) });
+  const provider = Object.assign(llm.provider, {
     listModels: vi.fn(async () => ['mock-model']),
   }) as unknown as AIProvider;
+  return { provider, llm };
 }
 
 function makeCommMessage(overrides: {
@@ -94,11 +90,11 @@ function createToolCallProvider(): AIProvider {
 describe('ZhinAgent', () => {
   let agent: ZhinAgent;
   let provider: AIProvider;
+  let llm: MockLlmApi;
 
   beforeEach(() => {
     resetLlmApiRegistryForTests();
-    provider = createMockProvider();
-    wireMockProviderToLlmApi(provider);
+    ({ provider, llm } = createMockProvider());
     agent = new ZhinAgent(provider, {
       persona: '测试助手',
       maxIterations: 3,
@@ -150,7 +146,7 @@ describe('ZhinAgent', () => {
       expect(result).toBeDefined();
       expect(Array.isArray(result)).toBe(true);
       expect(result.length).toBeGreaterThan(0);
-      expect(provider.chat).toHaveBeenCalled();
+      expect(llm.calls.length).toBeGreaterThan(0);
     });
 
     it('应传递工具列表', async () => {
@@ -160,7 +156,7 @@ describe('ZhinAgent', () => {
       await agent.process('现在几点', commMessage, tools);
 
       // provider.chat 应被调用
-      expect(provider.chat).toHaveBeenCalled();
+      expect(llm.calls.length).toBeGreaterThan(0);
     });
 
     it('速率限制应生效', async () => {
@@ -287,7 +283,7 @@ describe('ZhinAgent', () => {
       await agent.process('查看天气', commMessage, externalTools);
 
       // provider.chat 应被调用（正常处理）
-      expect(provider.chat).toHaveBeenCalled();
+      expect(llm.calls.length).toBeGreaterThan(0);
     });
   });
 

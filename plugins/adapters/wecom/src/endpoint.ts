@@ -208,7 +208,7 @@ export class WecomEndpoint implements EndpointInstance {
       conversation,
       message: { conversation, id: msg.MsgId || `${msg.CreateTime}` },
       content: formatInboundContent(msg),
-      sender: msg.FromUserName,
+      sender: { id: msg.FromUserName },
       metadata: Object.freeze({
         msgType: msg.MsgType,
         event: msg.Event,

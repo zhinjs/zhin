@@ -1,10 +1,10 @@
 import { autoCompactAgentMessagesIfNeeded, createAgentCompactionState, estimateAgentMessagesTokens, type AgentCompactionConfig, type AgentCompactionState, type ContextRepository, type Model, type AgentMessage } from '@zhin.js/ai';
 import type { CompactionConfig } from '../config/zhin-agent-config.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
-import type { ZhinAgentPrivate, Message } from '../internal/agent-host.js';
+import type { AgentSessionHost, Message } from '../internal/agent-host.js';
 import { resolveWorkspacePrompt } from '../prompt/workspace-prompt.js';
 export interface CompactionRuntimeOptions {
-  host: ZhinAgentPrivate;
+  host: AgentSessionHost;
   sessionId: string;
   commMessage: Message;
   model: Model;
@@ -131,7 +131,7 @@ export async function transformContextWithCompaction(
 export async function manualCompactSession(
   repo: ContextRepository,
   options: Omit<CompactionRuntimeOptions, 'host'> & {
-    host: ZhinAgentPrivate;
+    host: AgentSessionHost;
   },
 ): Promise<{ ok: boolean; message: string }> {
   const cfg = resolveAgentCompactionConfig(options.compactionConfig, options.contextWindow);

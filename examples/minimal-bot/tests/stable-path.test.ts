@@ -135,7 +135,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     input.write('/hello\n');
     await vi.waitFor(() => expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       content: '/hello',
-      sender: 'local-user',
+      sender: expect.objectContaining({ id: 'local-user' }),
     })));
     await vi.waitFor(() => {
       expect(writes.join('').match(/zhin> /gu)).toHaveLength(2);

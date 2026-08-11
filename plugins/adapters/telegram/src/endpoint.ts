@@ -287,11 +287,13 @@ export class TelegramEndpoint implements EndpointInstance {
       message: { conversation, id: String(msg.message_id) },
       content: formatInboundContent(msg),
       segments: formatInboundSegments(msg),
-      sender: senderDisplayName(msg.from),
+      sender: {
+        id: String(msg.from?.id ?? ''),
+        name: senderDisplayName(msg.from) || undefined,
+        ...(permit?.role ? { roles: [permit.role] } : {}),
+      },
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
-        // Preserve Telegram's native value below, but publish the canonical
-        // scene kind so every Runtime consumer sees the same conversation type.
         channelType: resolveTelegramChannelType(msg.chat.type),
         chatType: msg.chat.type,
         userId: msg.from?.id,
@@ -372,7 +374,7 @@ export class TelegramEndpoint implements EndpointInstance {
       message: { conversation, id: query.id },
       content: formatCallbackContent(query),
       segments: formatCallbackSegments(query),
-      sender: senderDisplayName(query.from),
+      sender: { id: String(query.from?.id ?? ''), name: senderDisplayName(query.from) || undefined },
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         eventType: 'callback_query',

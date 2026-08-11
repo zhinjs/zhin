@@ -235,7 +235,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
       conversation,
       message: { conversation, id: msg.ts },
       content: formatInboundContent(msg),
-      sender: msg.user ?? msg.channel,
+      sender: { id: msg.user ?? msg.channel ?? '' },
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         channelType: resolveSlackChannelType(msg),
@@ -273,7 +273,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
       conversation,
       message: { conversation, id: actionTs },
       content: formatInteractionContent(payload),
-      sender: userId,
+      sender: { id: userId },
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         eventType: 'block_actions',
@@ -299,7 +299,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
       conversation,
       message: { conversation, id: cmd.trigger_id },
       content: formatSlashContent(cmd),
-      sender: cmd.user_id,
+      sender: { id: cmd.user_id, name: cmd.user_name },
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         eventType: 'slash_command',

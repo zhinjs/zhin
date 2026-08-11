@@ -39,16 +39,6 @@ export interface ToolCall {
   };
 }
 
-/** 工具定义 */
-export interface ToolDefinition {
-  type: 'function';
-  function: {
-    name: string;
-    description: string;
-    parameters: JsonSchema;
-  };
-}
-
 /** JSON Schema */
 export interface JsonSchema {
   type: string;
@@ -60,45 +50,6 @@ export interface JsonSchema {
   default?: unknown;
   /** JSON Schema allows arbitrary extension properties */
   [key: string]: any;  
-}
-
-// ============================================================================
-// 请求/响应类型
-// ============================================================================
-
-/** 聊天补全请求 */
-export interface ChatCompletionRequest {
-  model: string;
-  messages: ChatMessage[];
-  tools?: ToolDefinition[];
-  tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
-  temperature?: number;
-  top_p?: number;
-  max_tokens?: number;
-  stream?: boolean;
-  stop?: string | string[];
-  presence_penalty?: number;
-  frequency_penalty?: number;
-  user?: string;
-  /** 是否启用链式思考（Ollama：`think`，仅 `true` 开启；省略时默认关闭）。 */
-  think?: boolean;
-}
-
-/** 聊天补全响应 */
-export interface ChatCompletionResponse {
-  id: string;
-  object: 'chat.completion';
-  created: number;
-  model: string;
-  choices: ChatCompletionChoice[];
-  usage?: Usage;
-}
-
-/** 选择 */
-export interface ChatCompletionChoice {
-  index: number;
-  message: ChatMessage;
-  finish_reason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | null;
 }
 
 /** 用量统计 */

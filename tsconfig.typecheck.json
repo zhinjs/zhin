@@ -3,27 +3,62 @@
   "compilerOptions": {
     "noEmit": true,
     "moduleResolution": "bundler",
-    "lib": ["ES2022", "DOM"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "paths": {
-      "@zhin.js/logger": ["./basic/logger/src/index.ts"],
-      "@zhin.js/schema": ["./basic/schema/src/index.ts"],
-      "@zhin.js/database": ["./basic/database/src/index.ts"],
-      "@zhin.js/schedule": ["./basic/schedule/src/index.ts"],
-      "@zhin.js/kernel": ["./packages/im/kernel/src/index.ts"],
-      "@zhin.js/ai": ["./packages/im/ai/src/index.ts"],
-      "@zhin.js/ai/agent-stream": ["./packages/im/ai/src/agent-stream.ts"],
-      "@zhin.js/ai/agent-stream-consumer": ["./packages/im/ai/src/agent-stream-consumer.ts"],
-      "@zhin.js/ai/agent-step-checkpoint": ["./packages/im/ai/src/agent-step-checkpoint.ts"],
-      "@zhin.js/ai/tool-policy": ["./packages/im/ai/src/tool-policy.ts"],
-      "@zhin.js/ai/mcp-qualified-name": ["./packages/im/ai/src/mcp-qualified-name.ts"],
-      "@zhin.js/ai/authorization-events": ["./packages/im/ai/src/authorization-events.ts"],
-      "@zhin.js/core": ["./packages/im/core/src/index.ts"],
+      "@zhin.js/logger": [
+        "./basic/logger/src/index.ts"
+      ],
+      "@zhin.js/schema": [
+        "./basic/schema/src/index.ts"
+      ],
+      "@zhin.js/database": [
+        "./basic/database/src/index.ts"
+      ],
+      "@zhin.js/schedule": [
+        "./basic/schedule/src/index.ts"
+      ],
+      "@zhin.js/kernel": [
+        "./packages/im/kernel/src/index.ts"
+      ],
+      "@zhin.js/ai": [
+        "./packages/im/ai/src/index.ts"
+      ],
+      "@zhin.js/ai/agent-stream": [
+        "./packages/im/ai/src/agent-stream.ts"
+      ],
+      "@zhin.js/ai/agent-stream-consumer": [
+        "./packages/im/ai/src/agent-stream-consumer.ts"
+      ],
+      "@zhin.js/ai/agent-step-checkpoint": [
+        "./packages/im/ai/src/agent-step-checkpoint.ts"
+      ],
+      "@zhin.js/ai/tool-policy": [
+        "./packages/im/ai/src/tool-policy.ts"
+      ],
+      "@zhin.js/ai/mcp-qualified-name": [
+        "./packages/im/ai/src/mcp-qualified-name.ts"
+      ],
+      "@zhin.js/ai/authorization-events": [
+        "./packages/im/ai/src/authorization-events.ts"
+      ],
+      "@zhin.js/core": [
+        "./packages/im/core/src/index.ts"
+      ],
       "@zhin.js/core/queue-im-field-contract": [
         "./packages/im/core/src/built/queue-im-field-contract.ts"
       ],
-      "@zhin.js/agent": ["./packages/im/agent/src/index.ts"],
-      "@zhin.js/scaffold-wizard": ["./packages/toolkit/scaffold-wizard/src/index.ts"],
-      "zhin.js": ["./packages/im/zhin/src/index.ts"]
+      "@zhin.js/agent": [
+        "./packages/im/agent/src/index.ts"
+      ],
+      "@zhin.js/scaffold-wizard": [
+        "./packages/toolkit/scaffold-wizard/src/index.ts"
+      ],
+      "zhin.js": [
+        "./packages/im/zhin/src/index.ts"
+      ]
     },
     "types": []
   },
@@ -38,9 +73,11 @@
     "examples/minimal-bot/agents/**/*",
     "examples/minimal-bot/commands/**/*",
     "examples/minimal-bot/tools/**/*",
+    "examples/minimal-bot/components/**/*",
     "examples/full-bot/plugin.ts",
     "examples/full-bot/commands/**/*",
     "examples/full-bot/tools/**/*",
+    "examples/full-bot/components/**/*",
     "examples/full-bot/skills/**/*",
     "examples/capabilities-bot/plugin.ts",
     "examples/capabilities-bot/commands/**/*"

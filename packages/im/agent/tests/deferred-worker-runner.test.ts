@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { resetLlmApiRegistryForTests, type AgentTool, type AIProvider } from '@zhin.js/ai';
 
-import { wireMockProviderToLlmApi, createMockSdkProvider } from './helpers/mock-llm-api.js';
+import { wireMockLlmApi, assistantTextReply, assistantToolCallReply } from './helpers/mock-llm-api.js';
 import { DeferredWorkerRunner } from '../src/deferred-worker-runner.js';
 
 function makeTool(name: string, description = 'test'): AgentTool {
@@ -19,16 +19,11 @@ describe('DeferredWorkerRunner', () => {
   });
 
   it('loads deferred tools and returns summary', async () => {
-    const chat = vi.fn().mockResolvedValue({
-      choices: [{
-        message: { role: 'assistant', content: 'Star count is 64' },
-        finish_reason: 'stop',
-      }],
-      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    const llm = wireMockLlmApi({
+      models: ['test-model'],
+      responder: () => assistantTextReply('Star count is 64'),
     });
-
-    const provider = createMockSdkProvider(chat, ['test-model']) as unknown as AIProvider;
-    wireMockProviderToLlmApi(provider);
+    const provider = llm.provider as unknown as AIProvider;
 
     const deferredCatalog = [makeTool('github_star', 'star repo')];
     const allByName = new Map<string, AgentTool>([
@@ -53,12 +48,12 @@ describe('DeferredWorkerRunner', () => {
     expect(result.status).toBe('ok');
     expect(result.loadedToolNames).toContain('github_star');
     expect(result.summary).toContain('64');
-    expect(chat).toHaveBeenCalled();
+    expect(llm.calls.length).toBeGreaterThan(0);
   });
 
   it('returns error when no tools match query', async () => {
-    const provider = createMockSdkProvider(vi.fn(), ['test-model']) as unknown as AIProvider;
-    wireMockProviderToLlmApi(provider);
+    const llm = wireMockLlmApi({ models: ['test-model'] });
+    const provider = llm.provider as unknown as AIProvider;
 
     const runner = new DeferredWorkerRunner();
     const result = await runner.runSync({
@@ -74,28 +69,20 @@ describe('DeferredWorkerRunner', () => {
 
     expect(result.status).toBe('error');
     expect(result.loadedToolNames).toEqual([]);
-    expect(provider.chat).not.toHaveBeenCalled();
+    expect(llm.calls).toHaveLength(0);
   });
 
   it('sanitizes noisy html payloads in worker summary', async () => {
-    const chat = vi.fn().mockResolvedValue({
-      choices: [{
-        message: {
-          role: 'assistant',
-          content: [
-            '【bash】[执行] STDOUT:',
-            '200',
-            '<!DOCTYPE html><html><head><script>window.location.assign("/antibot/verifycode")</script></head><body>captcha</body></html>',
-            'Final finding: source site blocks scraping, switch to web_search results.',
-          ].join('\n'),
-        },
-        finish_reason: 'stop',
-      }],
-      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    const llm = wireMockLlmApi({
+      models: ['test-model'],
+      responder: () => assistantTextReply([
+        '【bash】[执行] STDOUT:',
+        '200',
+        '<!DOCTYPE html><html><head><script>window.location.assign("/antibot/verifycode")</script></head><body>captcha</body></html>',
+        'Final finding: source site blocks scraping, switch to web_search results.',
+      ].join('\n')),
     });
-
-    const provider = createMockSdkProvider(chat, ['test-model']) as unknown as AIProvider;
-    wireMockProviderToLlmApi(provider);
+    const provider = llm.provider as unknown as AIProvider;
 
     const deferredCatalog = [makeTool('web_search', 'search web')];
     const allByName = new Map<string, AgentTool>([
@@ -124,35 +111,17 @@ describe('DeferredWorkerRunner', () => {
   });
 
   it('falls back to tool call results when final content is raw tool_call markup', async () => {
-    const chat = vi
-      .fn()
-      .mockResolvedValueOnce({
-        choices: [{
-          message: {
-            role: 'assistant',
-            tool_calls: [{
-              id: 'tc1',
-              type: 'function',
-              function: { name: 'bash', arguments: '{}' },
-            }],
-          },
-          finish_reason: 'tool_calls',
-        }],
-        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
-      })
-      .mockResolvedValueOnce({
-        choices: [{
-          message: {
-            role: 'assistant',
-            content: '<tool_call>read_file</tool_call>',
-          },
-          finish_reason: 'stop',
-        }],
-        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
-      });
-
-    const provider = createMockSdkProvider(chat, ['test-model']) as unknown as AIProvider;
-    wireMockProviderToLlmApi(provider);
+    let phase = 0;
+    const llm = wireMockLlmApi({
+      models: ['test-model'],
+      responder: () => {
+        phase += 1;
+        return phase === 1
+          ? assistantToolCallReply([{ id: 'tc1', name: 'bash', arguments: {} }])
+          : assistantTextReply('<tool_call>read_file</tool_call>');
+      },
+    });
+    const provider = llm.provider as unknown as AIProvider;
 
     const bash = makeTool('bash');
     const readFile = makeTool('read_file');
@@ -179,16 +148,11 @@ describe('DeferredWorkerRunner', () => {
   });
 
   it('emits lifecycle events', async () => {
-    const chat = vi.fn().mockResolvedValue({
-      choices: [{
-        message: { role: 'assistant', content: 'Deferred done' },
-        finish_reason: 'stop',
-      }],
-      usage: { prompt_tokens: 2, completion_tokens: 2, total_tokens: 4 },
+    const llm = wireMockLlmApi({
+      models: ['test-model'],
+      responder: () => assistantTextReply('Deferred done'),
     });
-
-    const provider = createMockSdkProvider(chat, ['test-model']) as unknown as AIProvider;
-    wireMockProviderToLlmApi(provider);
+    const provider = llm.provider as unknown as AIProvider;
 
     const deferredCatalog = [makeTool('github_star', 'star repo')];
     const allByName = new Map<string, AgentTool>([

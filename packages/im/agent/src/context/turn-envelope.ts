@@ -39,7 +39,8 @@ export function formatSenderContextLine(commMessage: Message): string | null {
   const id = String(commMessage.$sender?.id ?? '').trim();
   if (!id) return null;
   const roles = formatSenderRolesForLabel([...senderRolesFromMessage(commMessage)]);
-  return `Sender: id=${id} roles=${roles}`;
+  const name = commMessage.$sender?.name?.trim();
+  return name ? `Sender: id=${id} name=${name} roles=${roles}` : `Sender: id=${id} roles=${roles}`;
 }
 
 export function resolveQuoteSystemHint(commMessage?: AgentTurnMessage): string | undefined {

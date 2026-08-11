@@ -304,7 +304,7 @@ describe('napcat plugin runtime adapter', () => {
       conversation: expect.objectContaining({ kind: 'private', id: '10001' }),
       message: expect.objectContaining({ id: '42' }),
       content: '你好',
-      sender: '10001',
+      sender: expect.objectContaining({ id: '10001', name: 'Alice' }),
       metadata: expect.objectContaining({ nickname: 'Alice' }),
     }));
 
@@ -393,7 +393,7 @@ describe('napcat plugin runtime adapter', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'group', id: '200' }),
-      sender: '2',
+      sender: expect.objectContaining({ id: '2' }),
       metadata: expect.objectContaining({ mentioned: true }),
     }));
     await endpoint.stop();

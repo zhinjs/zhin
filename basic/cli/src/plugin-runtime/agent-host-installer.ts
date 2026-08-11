@@ -441,7 +441,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         body: message.content,
         messageId: message.id,
         senderId: resolveStableSenderId(message),
-        senderName: message.sender ?? '',
+        senderName: message.sender?.name ?? message.sender?.id ?? '',
         senderRole: senderRoles.isMaster ? 'master' : senderRoles.isTrusted ? 'trusted' : 'user',
       });
 
@@ -1023,7 +1023,8 @@ export function bridgeRuntimeMessage(
     ...(typeof quoteId === 'string' && quoteId ? { quote_id: quoteId } : {}),
     sender: {
       id: senderId,
-      name: message.sender,
+      name: message.sender?.name,
+      role: message.sender?.roles?.[0],
       isMaster: roles.isMaster,
       isTrusted: roles.isTrusted,
     },
@@ -1227,7 +1228,7 @@ function resolveChannelId(message: Message): string {
   );
   // Strip scene prefix so AF / session sceneId stay as bare ids (private:uid → uid).
   const stripped = raw.replace(/^(private|group|channel|direct|c2c):/iu, '');
-  return stripped || raw || (message.sender ?? 'unknown');
+  return stripped || raw || (message.sender?.id ?? 'unknown');
 }
 
 function capabilityLocalName(id: string): string {
@@ -1274,7 +1275,7 @@ function resolveExplicitChannelType(
  * 必须稳定——否则用户改名即换会话、历史上下文丢失。
  */
 function resolveStableSenderId(message: Message): string {
-  return resolveAuthenticatedSenderId(message) ?? message.sender ?? 'anon';
+  return resolveAuthenticatedSenderId(message) ?? message.sender?.id ?? 'anon';
 }
 
 /**

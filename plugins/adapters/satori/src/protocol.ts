@@ -249,9 +249,13 @@ export function satoriInboundConversation(
   };
 }
 
-export function resolveInboundSender(body: SatoriEventBody & { message: SatoriMessage }): string {
+export function resolveInboundSender(
+  body: SatoriEventBody & { message: SatoriMessage },
+): { id: string; name?: string } {
   const user = body.user ?? body.message.user ?? body.message.member?.user;
-  return user?.name ?? body.message.member?.nick ?? user?.id ?? '';
+  const name = user?.name ?? body.message.member?.nick;
+  const id = user?.id ?? name ?? '';
+  return name && name !== id ? { id, name } : { id };
 }
 
 /**

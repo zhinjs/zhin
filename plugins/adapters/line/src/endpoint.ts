@@ -163,7 +163,7 @@ export class LineEndpoint implements EndpointInstance {
       conversation,
       message: { conversation, id: generateMessageId(event) },
       content: formatInboundContent(event),
-      sender: event.source.userId || conversation.id,
+      sender: { id: event.source.userId || conversation.id },
       metadata: Object.freeze({
         eventType: event.type,
         sourceType: event.source.type,

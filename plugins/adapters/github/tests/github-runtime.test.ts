@@ -163,7 +163,7 @@ describe('github plugin runtime adapter', () => {
       }),
       message: expect.objectContaining({ id: '1' }),
       content: 'hello from issue',
-      sender: 'alice',
+      sender: expect.objectContaining({ id: 'alice' }),
     }));
     await endpoint.stop();
   });
@@ -209,7 +209,7 @@ describe('github plugin runtime adapter', () => {
     endpoint.admit({
       id: '1',
       channelId: 'o/r/issues/1',
-      sender: 'alice',
+      sender: expect.objectContaining({ id: 'alice' }),
       content: 'hi',
       repo: 'o/r',
       kind: 'issue_comment',

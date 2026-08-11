@@ -321,7 +321,7 @@ export interface IcqqInboundMessage {
    * 与 content（CQ 原文纯文本视图）同源，随 gateway.receive 上送。
    */
   readonly segments?: readonly MessageSegment[];
-  readonly sender: string;
+  readonly sender: { readonly id: string; readonly name?: string };
   readonly channelType: 'private' | 'group' | 'channel';
   readonly metadata?: Record<string, unknown>;
 }

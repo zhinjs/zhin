@@ -62,7 +62,7 @@ function serializedCheckin<T>(key: string, task: () => Promise<T>): Promise<T> {
 }
 
 export async function doCheckin(
-  input: { sender?: string; target?: string; metadata?: Readonly<Record<string, unknown>> },
+  input: { sender?: { readonly id: string; readonly name?: string }; target?: string; metadata?: Readonly<Record<string, unknown>> },
   cfg: GroupSuiteConfig,
   runtime?: GroupSuiteRuntime,
 ): Promise<string> {
@@ -111,7 +111,7 @@ export async function doCheckin(
 }
 
 export async function myPoints(
-  input: { sender?: string; target?: string; metadata?: Readonly<Record<string, unknown>> },
+  input: { sender?: { readonly id: string; readonly name?: string }; target?: string; metadata?: Readonly<Record<string, unknown>> },
   runtime?: GroupSuiteRuntime,
 ): Promise<string> {
   const M = getCheckinModel(runtime?.db);
@@ -137,7 +137,7 @@ export async function myPoints(
 }
 
 export async function pointsRank(
-  input: { sender?: string; target?: string; metadata?: Readonly<Record<string, unknown>> },
+  input: { sender?: { readonly id: string; readonly name?: string }; target?: string; metadata?: Readonly<Record<string, unknown>> },
   cfg: GroupSuiteConfig,
   runtime?: GroupSuiteRuntime,
 ): Promise<string> {

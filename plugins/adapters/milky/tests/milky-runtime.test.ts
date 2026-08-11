@@ -361,7 +361,7 @@ describe('milky plugin runtime adapter', () => {
         id: 'friend:10001:42',
       },
       content: '你好',
-      sender: '10001',
+      sender: expect.objectContaining({ id: '10001' }),
       metadata: expect.objectContaining({ nickname: 'Alice' }),
     }));
 
@@ -506,7 +506,7 @@ describe('milky plugin runtime adapter', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: milkyConversation('group', '200'),
-      sender: '9',
+      sender: expect.objectContaining({ id: '9' }),
       metadata: expect.objectContaining({ mentioned: true, nickname: 'bob' }),
     }));
     await endpoint.stop();
@@ -736,7 +736,7 @@ describe('milky plugin runtime adapter', () => {
         id: 'friend:10001:42',
       },
       content: 'from-webhook',
-      sender: '10001',
+      sender: expect.objectContaining({ id: '10001' }),
       metadata: expect.objectContaining({ nickname: 'Alice' }),
     }));
 

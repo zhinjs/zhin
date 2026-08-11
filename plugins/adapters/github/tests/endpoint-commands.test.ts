@@ -106,7 +106,7 @@ describe('github.endpoint command definitions', () => {
   it('配置 master 后非 master 拒绝 add/remove', () => {
     const denied = fakeContext({
       config: { master: 'alice' },
-      input: { sender: 'bob' },
+      input: { sender: { id: 'bob' } },
       params: { name: 'bot1' },
       args: ['app_id=1', 'private_key=./k.pem'],
     });

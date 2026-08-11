@@ -14,15 +14,13 @@ import {
 import { persistSubagentResultToContext } from './persist-subagent-context.js';
 import { persistDeferredWorkerResultToContext } from './persist-deferred-context.js';
 import { processTextTurn } from './turn-pipeline.js';
-import type { ZhinAgentPrivate } from '../internal/agent-host.js';
+import type { AgentTurnLifecycleHost, ZhinAgentPrivate } from '../internal/agent-host.js';
 
 const logger = getLogger('ZhinAgent');
 
-/** auto-continue 实际读取的窄面（单参数收敛后的内部 seam）。 */
-export type AutoContinueHost = Pick<
-  ZhinAgentPrivate,
-  'config' | 'promptController' | 'deferred' | 'runInTurnContext'
->;
+/** auto-continue 实际读取的窄面（turn 生命周期域 + config/deferred）。 */
+export type AutoContinueHost = AgentTurnLifecycleHost
+  & Pick<ZhinAgentPrivate, 'config' | 'deferred'>;
 
 type AutoContinueKind = 'deferred' | 'subagent';
 

@@ -4,28 +4,14 @@
  * 且子 loop 的加载不污染父会话 snapshot。
  */
 import { describe, expect, it } from 'vitest';
-import type { AgentTool, AIProvider, ChatCompletionResponse, ChatMessage } from '@zhin.js/ai';
+import type { AgentTool, AIProvider } from '@zhin.js/ai';
 import { runAgentLoopStandaloneTurn } from '../../src/core/agent-loop-standalone.js';
 import {
   LoadToolBuiltinTool,
   bindDeferredToolRuntime,
   type DeferredToolRuntime,
 } from '../../src/builtin/deferred-tool-meta.js';
-import { wireMockProviderToLlmApi, createMockSdkProvider } from '../helpers/mock-llm-api.js';
-
-function completion(message: Partial<ChatMessage>): ChatCompletionResponse {
-  return {
-    id: 'mock',
-    object: 'chat.completion',
-    created: 0,
-    model: 'mock',
-    choices: [{
-      index: 0,
-      message: { role: 'assistant', content: null, ...message } as ChatMessage,
-      finish_reason: message.tool_calls ? 'tool_calls' : 'stop',
-    }],
-  } as ChatCompletionResponse;
-}
+import { wireMockLlmApi, assistantTextReply, assistantToolCallReply } from '../helpers/mock-llm-api.js';
 
 describe('standalone loop 延迟加载', () => {
   it('load_tool 后目标工具可执行，且父会话 snapshot 不被写入', async () => {
@@ -43,28 +29,23 @@ describe('standalone loop 延迟加载', () => {
     const loadTool = new LoadToolBuiltinTool().toTool() as unknown as AgentTool;
 
     let phase = 0;
-    const provider = Object.assign(
-      createMockSdkProvider(
-        async (): Promise<ChatCompletionResponse> => {
-          phase += 1;
-          if (phase === 1) {
-            return completion({
-              tool_calls: [{ id: 't1', type: 'function', function: { name: 'load_tool', arguments: '{"name":"bash"}' } }],
-            });
-          }
-          if (phase === 2) {
-            return completion({
-              tool_calls: [{ id: 't2', type: 'function', function: { name: 'bash', arguments: '{}' } }],
-            });
-          }
-          return completion({ content: 'done' });
-        },
-        ['mock'],
-        'test',
-      ),
-      { capabilities: { vision: false, streaming: false, toolCalling: true } },
-    ) as unknown as AIProvider;
-    wireMockProviderToLlmApi(provider);
+    const llm = wireMockLlmApi({
+      name: 'test',
+      models: ['mock'],
+      responder: () => {
+        phase += 1;
+        if (phase === 1) {
+          return assistantToolCallReply([{ id: 't1', name: 'load_tool', arguments: { name: 'bash' } }]);
+        }
+        if (phase === 2) {
+          return assistantToolCallReply([{ id: 't2', name: 'bash', arguments: {} }]);
+        }
+        return assistantTextReply('done');
+      },
+    });
+    const provider = Object.assign(llm.provider, {
+      capabilities: { vision: false, streaming: false, toolCalling: true },
+    }) as unknown as AIProvider;
 
     const parentSnapshot = { loadedTools: {} as Record<string, number> };
     const runtime: DeferredToolRuntime = {

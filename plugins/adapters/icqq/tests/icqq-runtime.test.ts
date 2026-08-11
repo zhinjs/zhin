@@ -166,7 +166,7 @@ describe('icqq plugin runtime adapter', () => {
       conversation: expect.objectContaining({ kind: 'group', id: '100' }),
       message: expect.objectContaining({ id: 'm1' }),
       content: 'hello',
-      sender: '2',
+      sender: expect.objectContaining({ id: '2' }),
     }));
     await endpoint.stop();
   });
@@ -328,7 +328,7 @@ describe('icqq plugin runtime adapter', () => {
         id: '1',
       },
       content: 'x',
-      sender: '2',
+      sender: expect.objectContaining({ id: '2' }),
       channelType: 'group',
     });
     expect(receive).not.toHaveBeenCalled();

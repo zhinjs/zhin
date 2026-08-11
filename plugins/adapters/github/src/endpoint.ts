@@ -182,7 +182,7 @@ export class GithubEndpoint implements EndpointInstance {
       conversation,
       message: { conversation, id: comment.id },
       content,
-      sender: comment.sender,
+      sender: { id: comment.sender, name: comment.sender },
       metadata: Object.freeze({
         endpoint: this.name,
         repo: comment.repo,

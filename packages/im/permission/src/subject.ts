@@ -36,7 +36,9 @@ export function toPermissionSubject(source: unknown): PermissionSubject {
   if (typeof obj.adapter === 'string') result.adapter = obj.adapter;
   if (typeof obj.endpoint === 'string') result.endpoint = obj.endpoint;
   if (obj.scene && typeof obj.scene === 'object') result.scene = obj.scene;
-  if (obj.sender && typeof obj.sender === 'object') result.sender = obj.sender;
+  if (obj.sender && typeof obj.sender === 'object' && Array.isArray((obj.sender as { role?: unknown }).role)) {
+    result.sender = obj.sender;
+  }
 
   // Message 风格（$adapter / $endpoint / $channel / $sender）
   if (typeof obj.$adapter === 'string' && !result.adapter) result.adapter = obj.$adapter;

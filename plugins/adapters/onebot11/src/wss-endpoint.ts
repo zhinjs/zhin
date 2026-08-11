@@ -16,6 +16,7 @@ import {
   formatOutboundSegments,
   isMessageEvent,
   onebot11InboundConversation,
+  senderDisplayName,
   senderUserId,
   type OneBot11Event,
   type OneBot11WssConfig,
@@ -150,7 +151,11 @@ export class OneBot11WssEndpoint implements EndpointInstance {
       conversation,
       message: { conversation, id: String(ev.message_id) },
       content: formatInboundContent(ev),
-      sender: senderUserId(ev),
+      sender: {
+        id: senderUserId(ev),
+        name: senderDisplayName(ev) || undefined,
+        ...(ev.sender?.role ? { roles: [ev.sender.role] } : {}),
+      },
       metadata: formatInboundMetadata(ev, this.#options.config.name),
     }).catch((err) => {
       this.#logger.warn(formatCompact({

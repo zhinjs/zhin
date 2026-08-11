@@ -3,11 +3,11 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
-import { wireMockProviderToLlmApi, createMockSdkProvider } from '../helpers/mock-llm-api.js';
+import { wireMockLlmApi, assistantTextReply, type MockLlmApi } from '../helpers/mock-llm-api.js';
 import { SubagentRuntime, type SubagentOrigin, type SpawnOptions } from '@zhin.js/agent';
 import type { ZhinAgentEventEmitter } from '../../src/event/event-emitter.js';
 
-import type { AgentTool, ChatCompletionResponse } from '@zhin.js/core';
+import type { AgentTool } from '@zhin.js/core';
 
 vi.mock('@zhin.js/logger', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@zhin.js/logger')>();
@@ -32,16 +32,11 @@ const baseOrigin: SubagentOrigin = {
 };
 
 function createMockProvider(response: string = '任务完成') {
-  const provider = createMockSdkProvider(
-    vi.fn(async () => ({
-      choices: [{ message: { role: 'assistant', content: response }, finish_reason: 'stop' }],
-      usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
-    } as ChatCompletionResponse)),
-    ['mock-model'],
-  );
-  return Object.assign(provider, {
+  const llm = wireMockLlmApi({ responder: () => assistantTextReply(response) });
+  const provider = Object.assign(llm.provider, {
     listModels: vi.fn(async () => ['mock-model']),
   });
+  return { provider, llm };
 }
 
 function createMockTools(): AgentTool[] {
@@ -88,14 +83,14 @@ function createMockTools(): AgentTool[] {
 
 describe('SubagentRuntime', () => {
   let manager: SubagentRuntime;
-  let provider: ReturnType<typeof createMockProvider>;
+  let provider: ReturnType<typeof createMockProvider>['provider'];
+  let llm: MockLlmApi;
   let mockTools: AgentTool[];
   let onSubagentComplete: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     resetLlmApiRegistryForTests();
-    provider = createMockProvider();
-    wireMockProviderToLlmApi(provider);
+    ({ provider, llm } = createMockProvider());
     mockTools = createMockTools();
     onSubagentComplete = vi.fn().mockResolvedValue(undefined);
     manager = new SubagentRuntime({
@@ -135,7 +130,7 @@ describe('SubagentRuntime', () => {
 
     it('应递增 runningTasks 计数', async () => {
       // 让 provider 永不返回，模拟长时间运行
-      provider.chat.mockImplementation(() => new Promise(() => {}));
+      llm.hang();
 
       expect(manager.getRunningCount()).toBe(0);
 
@@ -173,19 +168,12 @@ describe('SubagentRuntime', () => {
 
       await vi.waitFor(() => expect(onSubagentComplete).toHaveBeenCalled(), { timeout: 2000 });
 
-      // 验证 provider.chat 被调用时传入的工具列表
-      const chatCall = provider.chat.mock.calls[0][0] ?? provider.chat.mock.calls[0];
-      // createAgent 调用 provider.chat({ model, messages, tools, ... })
-      // 查找 tools 参数
-      const callArgs = provider.chat.mock.calls[0];
-      // 接口是 chat(request) 形式
-      const request = callArgs[0] as any;
-      if (request?.tools) {
-        const toolNames = request.tools.map((t: any) => t.function?.name || t.name);
-        expect(toolNames).toContain('read_file');
-        expect(toolNames).not.toContain('spawn_task');
-        expect(toolNames).not.toContain('discover');
-      }
+      // 断言面：LLM 调用 context（AgentMessage 层）携带的工具列表
+      const call = llm.calls[0];
+      const toolNames = (call?.context.tools ?? []).map((t) => t.name);
+      expect(toolNames).toContain('read_file');
+      expect(toolNames).not.toContain('spawn_task');
+      expect(toolNames).not.toContain('discover');
     });
 
     it('子 agent 经 toolSearch 按任务 TF-IDF 载入工具', async () => {
@@ -207,11 +195,8 @@ describe('SubagentRuntime', () => {
       await customManager.spawn({ task: '帮我列一份 todo 任务清单', origin: baseOrigin });
       await vi.waitFor(() => expect(onComplete).toHaveBeenCalled(), { timeout: 2000 });
 
-      const request = provider.chat.mock.calls[0]?.[0] as any;
-      if (request?.tools) {
-        const toolNames = request.tools.map((t: any) => t.function?.name || t.name);
-        expect(toolNames).toContain('todo_write');
-      }
+      const toolNames = (llm.calls[0]?.context.tools ?? []).map((t) => t.name);
+      expect(toolNames).toContain('todo_write');
       customManager.dispose();
     });
   });
@@ -247,7 +232,7 @@ describe('SubagentRuntime', () => {
     });
 
     it('provider 错误时仍应交给 onSubagentComplete', async () => {
-      provider.chat.mockRejectedValue(new Error('API 调用失败'));
+      llm.fail(new Error('API 调用失败'));
 
       await manager.spawn({ task: '会失败的任务', label: '失败测试', origin: baseOrigin });
 
@@ -309,7 +294,7 @@ describe('SubagentRuntime', () => {
     });
 
     it('失败后也应从 runningTasks 移除', async () => {
-      provider.chat.mockRejectedValue(new Error('boom'));
+      llm.fail(new Error('boom'));
 
       await manager.spawn({ task: '会失败', origin: baseOrigin });
 
@@ -400,7 +385,7 @@ describe('SubagentRuntime', () => {
 
   describe('maxParallelSubagents cap', () => {
     it('rejects spawn when at capacity', async () => {
-      provider.chat.mockImplementation(() => new Promise(() => {}));
+      llm.hang();
       const capped = new SubagentRuntime({
         provider: provider as any,
         workspace: '/tmp/test-workspace',
@@ -416,7 +401,7 @@ describe('SubagentRuntime', () => {
     });
 
     it('spawnSync rejects when at capacity', async () => {
-      provider.chat.mockImplementation(() => new Promise(() => {}));
+      llm.hang();
       const capped = new SubagentRuntime({
         provider: provider as any,
         workspace: '/tmp/test-workspace',

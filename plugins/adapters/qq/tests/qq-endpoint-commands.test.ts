@@ -64,7 +64,7 @@ describe('extractQqCommandReply', () => {
 });
 
 describe('isQqEndpointOperator', () => {
-  const message = (sender: string) => ({ sender });
+  const message = (sender: string) => ({ sender: { id: sender } });
 
   it('未配置 master 时放行（首个绑定者即 owner）', () => {
     expect(isQqEndpointOperator({}, message('alice'))).toBe(true);

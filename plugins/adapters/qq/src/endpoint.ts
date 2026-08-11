@@ -187,7 +187,11 @@ export class QqWebsocketEndpoint implements EndpointInstance {
       message: { conversation, id: msg.id },
       content,
       ...(msg.segments?.length ? { segments: msg.segments } : {}),
-      sender: senderDisplayName(msg),
+      sender: {
+        id: msg.authorId,
+        name: senderDisplayName(msg) || undefined,
+        ...(msg.authorRoles?.length ? { roles: msg.authorRoles } : {}),
+      },
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         channelKind: msg.channelKind,
@@ -400,7 +404,11 @@ export class QqHttpEndpoint implements EndpointInstance {
       message: { conversation, id: msg.id },
       content,
       ...(msg.segments?.length ? { segments: msg.segments } : {}),
-      sender: senderDisplayName(msg),
+      sender: {
+        id: msg.authorId,
+        name: senderDisplayName(msg) || undefined,
+        ...(msg.authorRoles?.length ? { roles: msg.authorRoles } : {}),
+      },
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         channelKind: msg.channelKind,

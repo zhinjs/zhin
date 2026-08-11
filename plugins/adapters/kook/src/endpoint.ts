@@ -129,7 +129,11 @@ export class KookWebsocketEndpoint implements EndpointInstance {
       conversation,
       message: { conversation, id: msg.id },
       content: formatInboundContent(msg),
-      sender: senderDisplayName(msg),
+      sender: {
+        id: msg.authorId,
+        name: senderDisplayName(msg) || undefined,
+        ...(msg.authorRoles?.length ? { roles: msg.authorRoles.map(String) } : {}),
+      },
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         channelKind: msg.channelKind,
@@ -310,7 +314,11 @@ export class KookWebhookEndpoint implements EndpointInstance {
       conversation,
       message: { conversation, id: msg.id },
       content: formatInboundContent(msg),
-      sender: senderDisplayName(msg),
+      sender: {
+        id: msg.authorId,
+        name: senderDisplayName(msg) || undefined,
+        ...(msg.authorRoles?.length ? { roles: msg.authorRoles.map(String) } : {}),
+      },
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         channelKind: msg.channelKind,

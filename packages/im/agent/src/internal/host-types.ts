@@ -64,7 +64,7 @@ export interface HostEventEmitter {
 }
 
 export interface HostPromptController {
-  schedule<T>(request: HostPromptTurnRequest): Promise<T>;
+  schedule(request: HostPromptTurnRequest): Promise<HostAgentLoopTurnResult>;
   abort(): void;
   waitForIdle(): Promise<void>;
   isBusy(): boolean;
@@ -97,7 +97,7 @@ export interface HostAgentLoopTurnResult {
   path: 'chat' | 'agent' | 'multimodal';
   iterations: number;
   model: string;
-  toolCalls: unknown[];
+  toolCalls: import('../core/tool-calls-user-format.js').ToolCallRecord[];
   thinking?: string;
 }
 

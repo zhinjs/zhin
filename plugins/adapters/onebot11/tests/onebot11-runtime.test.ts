@@ -298,7 +298,7 @@ describe('onebot11 plugin runtime adapter', () => {
       conversation: { endpoint: endpointRef, kind: 'private', id: '10001' },
       message: { conversation: { endpoint: endpointRef, kind: 'private', id: '10001' }, id: '42' },
       content: '你好',
-      sender: '10001',
+      sender: expect.objectContaining({ id: '10001' }),
       metadata: expect.objectContaining({ nickname: 'Alice' }),
     }));
 
@@ -338,7 +338,7 @@ describe('onebot11 plugin runtime adapter', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: { endpoint: endpointRef, kind: 'group', id: '200' },
-      sender: '9',
+      sender: expect.objectContaining({ id: '9' }),
       metadata: expect.objectContaining({ mentioned: true, nickname: 'bob' }),
     }));
     await endpoint.stop();

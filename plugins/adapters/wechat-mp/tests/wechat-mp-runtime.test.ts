@@ -276,7 +276,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       conversation: expect.objectContaining({ kind: 'private', id: 'oUser' }),
       message: expect.objectContaining({ id: '123' }),
       content: 'hello',
-      sender: 'oUser',
+      sender: expect.objectContaining({ id: 'oUser' }),
     }));
     await endpoint.stop();
   });

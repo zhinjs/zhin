@@ -104,7 +104,7 @@ function inboundEvent(overrides: Partial<RuntimeMessageEvent> = {}): RuntimeMess
       kind: 'group',
       id: '888',
     },
-    sender: '10001',
+    sender: { id: '10001' },
     contentPreview: 'hello',
     messageId: 'm-1',
     timestamp: 1_700_000_000_000,

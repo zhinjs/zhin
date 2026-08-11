@@ -249,7 +249,7 @@ describe('lark plugin runtime adapter', () => {
       conversation: expect.objectContaining({ kind: 'group', id: 'oc_group1' }),
       message: expect.objectContaining({ id: 'om_1' }),
       content: 'hello',
-      sender: 'ou_user1',
+      sender: expect.objectContaining({ id: 'ou_user1' }),
     }));
     await endpoint.stop();
   });

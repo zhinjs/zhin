@@ -613,7 +613,7 @@ describe('console SSE events', () => {
         kind: 'group',
         id: '42',
       },
-      sender: 'alice',
+      sender: { id: 'alice' },
       contentPreview: 'hello console',
       messageId: 'msg-1',
       timestamp: 1_700_000_000_000,
@@ -624,7 +624,7 @@ describe('console SSE events', () => {
     expect(frames).toContain('"adapter":"icqq"');
     expect(frames).toContain('"endpointId":"icqq"');
     expect(frames).toContain('"endpoint":"icqq"');
-    expect(frames).toContain('"sender":"alice"');
+    expect(frames).toContain('"sender":{"id":"alice"}');
     expect(frames).toContain('"content":"hello console"');
     expect(frames).toContain('"direction":"inbound"');
 

@@ -70,7 +70,7 @@ import { createInboundTurnQueue, runWithInboundQueue } from '../turn/inbound-que
 import type { ResolvedInboundQueueConfig } from '../turn/inbound-queue-config.js';
 import type { InboundTurnQueue } from '../turn/inbound-turn-queue.js';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
-import { continueAfterDeferredWorker, continueAfterSubagent } from '../turn/auto-continue.js';
+import { continueAfterSubagent } from '../turn/auto-continue.js';
 import { createSubagentSystem } from '../subagent/subagent-system-init.js';
 import { processTextTurnStream } from '../turn/process-stream.js';
 import { followUpMessage, runPromptTurn, steerMessage } from '../turn/prompt-api.js';
@@ -92,6 +92,8 @@ import { emitSessionCompactEvent, emitSessionNewEvent, type SessionCompactInfo }
 import { applyZhinAgentConfigure, wireZhinAgentLlmApiLayer, type ConfigureZhinAgentTarget } from '../init/configure-zhin-agent.js';
 import { disposeZhinAgentResources, type DisposeZhinAgentTarget } from '../init/dispose-zhin-agent.js';
 import type { PhaseTraceConfig } from '../internal/phase-trace.js';
+import type { HttpApprovalAdapter } from '../session/http-approval-adapter.js';
+import type { ApprovalPort } from '../session/session-interaction-port.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import type {
   IAgentTurnProcessor,
@@ -139,26 +141,32 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   private provider: AIProvider;
   private providerResolver: ((alias: string) => AIProvider) | null = null;
   private configuredActiveBinding: ResolvedAgentBinding | null = null;
-  private config: Required<ZhinAgentConfig>;
+  config: Required<ZhinAgentConfig>;
   /** ideal 模块槽位；经 getter/setter 供 configure 与 asPrivate(host) 读写 */
   private readonly runtimeModules: ZhinAgentRuntimeModules;
-  private imSessionStore: IMSessionStore | MemoryIMSessionStore = new MemoryIMSessionStore();
-  private agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
-  private contextRepository: ContextRepository;
-  private imTranscriptStore: ImTranscriptStore;
+  readonly imSessionStore: IMSessionStore | MemoryIMSessionStore = new MemoryIMSessionStore();
+  agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
+  contextRepository: ContextRepository;
+  imTranscriptStore: ImTranscriptStore;
   private memory: ConversationMemory;
-  private externalTools: Map<string, RegisteredAgentTool> = new Map();
-  private userProfiles: UserProfileStore;
-  private rateLimiter: RateLimiter;
-  private subagentSystem: SubagentSystem | null = null;
+  readonly externalTools: Map<string, RegisteredAgentTool> = new Map();
+  userProfiles: UserProfileStore;
+  rateLimiter: RateLimiter;
+  subagentSystem: SubagentSystem | null = null;
   private configuredBootstrapContext: string = '';
   private configuredGlobalContext: string = '';
   private alwaysSkillsBaseline: string = '';
-  private skillsSummaryXML: string = '';
-  private modelRegistry: ModelRegistry | null = null;
-  private readonly emitter = new ZhinAgentEventEmitter();
+  skillsSummaryXML: string = '';
+  modelRegistry: ModelRegistry | null = null;
+  readonly emitter = new ZhinAgentEventEmitter();
   readonly deferred = new DeferredTurnState();
-  private readonly promptController: PromptController;
+  readonly promptController: PromptController;
+  /** HTTP approval adapter — AgentSessionHostPort 装配时写入（ADR 0041）。 */
+  httpApprovalAdapter?: HttpApprovalAdapter;
+  /** 无交互审批面传输的 host 级回退。 */
+  approvalPort?: ApprovalPort;
+  /** Per-turn instructions from defineDynamic resolvers (ADR 0039 P2)。 */
+  turnDynamicInstructions?: string;
   private lastTurnMetrics: ZhinAgentTurnMetrics | null = null;
   private readonly inboundQueueConfig: ResolvedInboundQueueConfig;
   private readonly inboundTurnQueue: InboundTurnQueue;
@@ -200,11 +208,11 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     this.configuredGlobalContext = value;
   }
 
-  private get phaseConfig(): PhaseTraceConfig {
+  get phaseConfig(): PhaseTraceConfig {
     return { phaseTraceEnabled: isPhaseTraceEnabled(this.config), onPhaseTrace: this.config.onPhaseTrace };
   }
 
-  private get promptTraceConfig() {
+  get promptTraceConfig() {
     return { promptTraceEnabled: isPromptTraceEnabled(this.config), promptTraceVerbose: isPromptTraceVerbose(this.config) };
   }
 
@@ -348,12 +356,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     });
   }
 
-  async continueAfterDeferredWorker(
-    commMessage: Message, taskId: string, goal: string, result: DeferredWorkerResult,
-  ): Promise<void> {
-    return continueAfterDeferredWorker(asPrivate(this), commMessage, taskId, goal, result);
-  }
-
   async continueAfterSubagent(payload: SubagentCompletePayload): Promise<void> {
     return continueAfterSubagent(asPrivate(this), payload);
   }
@@ -411,11 +413,11 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return computeDeferredDelta(snap, deferredCfg.alwaysLoadedTools, priv.deferred.lastSnapshotBefore);
   }
 
-  private beginActiveTurn(): void {
+  beginActiveTurn(): void {
     getActiveTurnTracker()?.begin();
   }
 
-  private async finalizeActiveTurn(
+  async finalizeActiveTurn(
     partial: Omit<ZhinAgentTurnMetrics, 'usage' | 'mainUsage' | 'subagentUsage'> & { usage: Usage },
   ): Promise<void> {
     const tracker = getActiveTurnTracker();

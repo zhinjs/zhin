@@ -10,7 +10,7 @@ describe('group-suite owner-scoped runtime', () => {
     const right = createGroupSuiteRuntime(createInMemoryGroupSuiteDb());
 
     addKeyword('hello', 'left', left.keywords);
-    recordMessage({ sender: 'u1', target: 'g1', metadata: { type: 'group' } }, left);
+    recordMessage({ sender: { id: 'u1' }, target: 'g1', metadata: { type: 'group' } }, left);
 
     expect(listKeywords(left.keywords)).toEqual([['hello', 'left']]);
     expect(listKeywords(right.keywords)).toEqual([]);

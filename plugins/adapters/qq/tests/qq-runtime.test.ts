@@ -175,7 +175,7 @@ describe('qq plugin runtime adapter', () => {
       conversation: expect.objectContaining({ kind: 'group', id: 'group-1' }),
       message: expect.objectContaining({ id: 'msg-1' }),
       content: 'hello',
-      sender: 'alice',
+      sender: expect.objectContaining({ id: 'user-1', name: 'alice' }),
     }));
 
     await endpoint.stop();

@@ -157,7 +157,7 @@ describe('Command Feature', () => {
         id: '12345',
       },
       content: 'who',
-      sender: '1659488338',
+      sender: { id: '1659488338', name: '凉菜', roles: ['admin'] },
       metadata: {
         endpoint: '1689919782',
         channelType: 'group',
@@ -262,12 +262,12 @@ describe('Command Feature', () => {
       localName: 'gh/issue/list',
       source: '/commands/gh/issue/list.ts',
       definition: defineCommand<{}, string, { sender: string }>({
-        execute: ({ args, input }) => `${input.sender}:${args.join(',')}`,
+        execute: ({ args, input }) => `${input.sender?.id}:${args.join(',')}`,
       }),
     });
     const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
 
-    await expect(index.dispatch('gh issue list open assigned', { sender: 'alice' }))
+    await expect(index.dispatch('gh issue list open assigned', { sender: { id: 'alice' } }))
       .resolves.toEqual({
         matched: true,
         command: 'gh issue list',
@@ -533,7 +533,7 @@ describe('Command Feature', () => {
         id: '1',
       },
       content: 'secret',
-      sender: '1',
+      sender: { id: '1' },
       metadata: { isMaster: true },
     })).resolves.toEqual({ matched: false });
 
@@ -544,7 +544,7 @@ describe('Command Feature', () => {
         id: '1',
       },
       content: 'secret',
-      sender: '1',
+      sender: { id: '1' },
       metadata: { isMaster: true },
     })).resolves.toMatchObject({ matched: true, value: 'ok' });
 

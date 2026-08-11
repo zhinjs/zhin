@@ -1,5 +1,6 @@
 /**
  * ZhinAgent 运行时 host 契约 — 供 ideal 模块引用，避免依赖 zhin-agent 门面实现。
+ * 成员按域拆为窄接口，ZhinAgentPrivate 组合之；消费方优先用窄接口形参。
  */
 import type { AIProvider, ContentPart, Usage, OutputElement, AgentSessionStore, ContextRepository, IMSessionStore, ImTranscriptStore, MemoryAgentSessionStore, MemoryIMSessionStore, RateLimiter, ModelRegistry } from '@zhin.js/ai';
 import type { Plugin } from '@zhin.js/core';
@@ -30,7 +31,67 @@ import type {
   OnChunkCallback,
   RequiredHostConfig,
 } from './host-types.js';
-export interface ZhinAgentPrivate {
+
+/** session 域：会话/上下文存储与会话事件。 */
+export interface AgentSessionHost {
+  imSessionStore: IMSessionStore | MemoryIMSessionStore;
+  agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
+  contextRepository: ContextRepository;
+  sessionSystem: SessionSystem | null;
+  imTranscriptStore: ImTranscriptStore;
+  waitForMemoryPersistence(): Promise<void>;
+  emitSessionNewEvent(
+    sessionId: string,
+    commMessage: Message,
+    mode: 'text' | 'multimodal',
+    content: string,
+    reply: string,
+  ): void;
+  emitSessionCompactEvent(
+    sessionId: string,
+    commMessage: Message,
+    mode: 'text' | 'multimodal',
+    info: SessionCompactInfo,
+  ): void;
+}
+
+/** context 域：提示词与上下文装配。 */
+export interface AgentContextHost {
+  contextSystem: ContextSystem | null;
+  bootstrapContext: string;
+  globalContext: string;
+  skillsSummaryXML: string;
+  getTurnActiveSkills(): string;
+  getAlwaysSkillsBaseline(): string;
+  appendActiveSkillsContext(fragment: string): void;
+  /** Per-turn instructions from defineDynamic resolvers (ADR 0039 P2). */
+  turnDynamicInstructions?: string;
+  buildDisciplinedPrompt(basePrompt: string): string;
+}
+
+/** turn 生命周期域：调度、指标、追踪与 turn ALS。 */
+export interface AgentTurnLifecycleHost {
+  readonly promptController: HostPromptController;
+  readonly phaseConfig: HostPhaseTraceConfig;
+  readonly promptTraceConfig: HostPromptTraceConfig;
+  readonly rateLimiter: RateLimiter;
+  initScheduleTurnContext(ctx: HostScheduleTurnContext): void;
+  initInboundTurnContext(): void;
+  beginActiveTurn(): void;
+  finalizeActiveTurn(
+    partial: Omit<HostTurnMetrics, 'usage' | 'mainUsage' | 'subagentUsage'> & { usage: Usage },
+  ): Promise<void>;
+  getActiveTurnTracker(): HostTurnTracker | undefined;
+  runInTurnContext<T>(turnId: string, fn: () => Promise<T>): Promise<T>;
+}
+
+/** emitter 域：事件派发。 */
+export interface AgentEmitterHost {
+  readonly emitter: HostEventEmitter;
+}
+
+export interface ZhinAgentPrivate
+  extends AgentSessionHost, AgentContextHost, AgentTurnLifecycleHost, AgentEmitterHost {
   config: RequiredHostConfig;
   activeBinding: ResolvedAgentBinding | null;
   getTurnProvider(): AIProvider;
@@ -39,53 +100,16 @@ export interface ZhinAgentPrivate {
   orchestrator: AgentOrchestrator | null;
   agentCore: AgentCore | null;
   toolSystem: ToolSystem | null;
-  contextSystem: ContextSystem | null;
-  sessionSystem: SessionSystem | null;
   /** HTTP approval adapter — set when AgentSessionHostPort is wired (ADR 0041). */
   httpApprovalAdapter?: HttpApprovalAdapter;
   /** Optional host-level fallback, for transports without an interactive approval surface. */
   approvalPort?: ApprovalPort;
-  imSessionStore: IMSessionStore | MemoryIMSessionStore;
-  agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
-  contextRepository: ContextRepository;
-  imTranscriptStore: ImTranscriptStore;
   readonly externalTools: Map<string, RegisteredAgentTool>;
   readonly userProfiles: UserProfileStore;
-  readonly rateLimiter: RateLimiter;
   subagentSystem: SubagentSystem | null;
-  bootstrapContext: string;
-  globalContext: string;
-  getTurnActiveSkills(): string;
-  getAlwaysSkillsBaseline(): string;
-  initScheduleTurnContext(ctx: HostScheduleTurnContext): void;
-  initInboundTurnContext(): void;
-  appendActiveSkillsContext(fragment: string): void;
-  skillsSummaryXML: string;
   modelRegistry: ModelRegistry | null;
-  readonly phaseConfig: HostPhaseTraceConfig;
-  readonly promptTraceConfig: HostPromptTraceConfig;
-  readonly emitter: HostEventEmitter;
   /** deferred 工具族的跨 turn 状态（目录/快照/统计/自动续轮深度/结果回投器）。 */
   readonly deferred: DeferredTurnState;
-  /** Per-turn instructions from defineDynamic resolvers (ADR 0039 P2). */
-  turnDynamicInstructions?: string;
-  readonly promptController: HostPromptController;
-  getActiveTurnTracker(): HostTurnTracker | undefined;
-  runInTurnContext<T>(turnId: string, fn: () => Promise<T>): Promise<T>;
-  waitForMemoryPersistence(): Promise<void>;
-  beginActiveTurn(): void;
-  finalizeActiveTurn(
-    partial: Omit<HostTurnMetrics, 'usage' | 'mainUsage' | 'subagentUsage'> & { usage: Usage },
-  ): Promise<void>;
-  emitSessionNewEvent(
-    sessionId: string,
-    commMessage: Message,
-    mode: 'text' | 'multimodal',
-    content: string,
-    reply: string,
-  ): void;
-  emitSessionCompactEvent(sessionId: string, commMessage: Message, mode: 'text' | 'multimodal', info: SessionCompactInfo): void;
-  buildDisciplinedPrompt(basePrompt: string): string;
 }
 
 export type { OnChunkCallback, OutputElement, Tool, Message, Plugin, ContentPart };

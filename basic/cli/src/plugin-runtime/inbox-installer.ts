@@ -60,8 +60,10 @@ export function buildInboxMessageRow(
     channel_parent_id: channel.parentId,
     sender_id: event.direction === 'outbound'
       ? endpointName
-      : String(event.sender ?? ''),
-    sender_name: null,
+      : (event.sender?.id ?? ''),
+    sender_name: event.direction === 'outbound'
+      ? null
+      : (event.sender?.name ?? null),
     sender_payload: '{}',
     content: event.contentPreview,
     raw: null,

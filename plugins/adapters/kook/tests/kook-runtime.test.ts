@@ -261,7 +261,7 @@ describe('kook plugin runtime adapter', () => {
       conversation: expect.objectContaining({ kind: 'channel', id: 'chan-1' }),
       message: expect.objectContaining({ id: 'msg-1' }),
       content: 'hello',
-      sender: 'alice',
+      sender: expect.objectContaining({ id: 'user-1', name: 'alice' }),
     }));
 
     await endpoint.stop();
@@ -438,7 +438,7 @@ describe('kook plugin runtime adapter', () => {
       }),
       message: expect.objectContaining({ id: 'msg-1' }),
       content: 'hello',
-      sender: 'alice',
+      sender: expect.objectContaining({ id: 'user-1', name: 'alice' }),
     }));
 
     const badRes = await globalThis.fetch(`http://127.0.0.1:${port}/kook/webhook`, {

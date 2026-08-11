@@ -60,8 +60,9 @@ export function isEndpointOperator(config: unknown, input: unknown): boolean {
     }
   }
   if (masters.size === 0) return true;
-  const sender = String((input as { sender?: unknown } | null | undefined)?.sender ?? '').trim();
-  return !!sender && masters.has(sender);
+  const senderRaw = (input as { sender?: { id?: string } | null } | null | undefined)?.sender;
+  const senderId = (typeof senderRaw === 'object' && senderRaw?.id) ? senderRaw.id.trim() : '';
+  return !!senderId && masters.has(senderId);
 }
 
 /** add/remove 的拒绝文案（list 只读，不校验）。 */

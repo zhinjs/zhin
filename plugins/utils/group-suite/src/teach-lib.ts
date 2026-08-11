@@ -73,7 +73,7 @@ function qaWhereKey(row: {
 }
 
 type MessageInput = {
-  sender?: string;
+  sender?: { readonly id: string; readonly name?: string };
   target?: string;
   content?: unknown;
   metadata?: Readonly<Record<string, unknown>>;

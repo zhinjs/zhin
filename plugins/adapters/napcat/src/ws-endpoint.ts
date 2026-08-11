@@ -337,7 +337,11 @@ export class NapCatWsEndpoint implements EndpointInstance {
       conversation,
       message: { conversation, id: msgId },
       content,
-      sender: senderUserId(ev),
+      sender: {
+        id: senderUserId(ev),
+        name: nickname,
+        ...(ev.sender?.role ? { roles: [ev.sender.role] } : {}),
+      },
       metadata: Object.freeze({
         message_type: ev.message_type,
         user_id: ev.user_id != null ? String(ev.user_id) : undefined,

@@ -237,7 +237,7 @@ export class LarkEndpoint implements EndpointInstance {
       conversation,
       message: { conversation, id: generateMessageId(msg) },
       content: formatInboundContent(msg),
-      sender: resolveSender(msg),
+      sender: { id: resolveSender(msg) },
       metadata: Object.freeze({
         messageType: msg.message_type,
         chatType: resolveChatType(msg.chat_id, msg.chat_type),

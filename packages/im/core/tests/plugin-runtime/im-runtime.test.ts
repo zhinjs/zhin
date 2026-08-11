@@ -252,7 +252,7 @@ describe('IM Runtime', () => {
         id: 'room-1',
       },
       content: '/gh issue list open',
-      sender: 'alice',
+      sender: { id: 'alice' },
     });
 
     expect(result).toMatchObject({ matched: true, command: 'gh issue list' });
@@ -491,14 +491,14 @@ describe('IM Runtime', () => {
       conversation: groupConversation,
       message: { conversation: groupConversation, id: 'msg-1' },
       content: 'hello console',
-      sender: 'alice',
+      sender: { id: 'alice' },
     });
 
     const inbound = events.find((event) => event.direction === 'inbound');
     expect(inbound).toMatchObject({
       direction: 'inbound',
       conversation: groupConversation,
-      sender: 'alice',
+      sender: { id: 'alice' },
       contentPreview: 'hello console',
       messageId: 'msg-1',
     });
@@ -754,7 +754,7 @@ describe('IM Runtime', () => {
         id: 'room-1',
       },
       content: '/gh issue list leased',
-      sender: 'alice',
+      sender: { id: 'alice' },
     });
     await started;
     current = fixture.store.current;
@@ -829,7 +829,7 @@ describe('IM Runtime', () => {
         id: 'room-1',
       },
       content: '2',
-      sender: 'alice',
+      sender: { id: 'alice' },
     });
     expect(digit).toMatchObject({ matched: true, command: 'interactive' });
     expect(handled).toEqual(['2']);
@@ -842,7 +842,7 @@ describe('IM Runtime', () => {
         id: 'room-1',
       },
       content: '[action: hub:h1:g_ttt]',
-      sender: 'bob',
+      sender: { id: 'bob' },
       segments: [{ type: 'action', data: { id: 'cb1', payload: 'hub:h1:g_ttt' } }],
     });
     expect(action).toMatchObject({ matched: true, command: 'interactive' });
@@ -907,7 +907,7 @@ describe('IM Runtime', () => {
       conversation,
       message: messageRef,
       content: '看图[image]',
-      sender: 'alice',
+      sender: { id: 'alice' },
       segments,
     });
     expect(captured?.segments).toEqual(segments);
@@ -984,7 +984,7 @@ async function createFixture(
         await commandGate;
         return component('result', {
           state: args[0],
-          sender: input.sender,
+          sender: input.sender?.id,
           generation: input.generation,
         });
       },
@@ -1177,7 +1177,7 @@ describe('Message.$replyToPrivate', () => {
         sent.push({ targetConversation });
         return { status: 'sent' as const };
       },
-      sender,
+      sender ? { id: sender } : undefined,
     );
     return { message, sent };
   }

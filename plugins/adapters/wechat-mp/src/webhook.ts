@@ -225,7 +225,7 @@ export async function collectPassiveReply(
         conversation,
         message: { conversation, id: formatInboundId(wechatMsg) },
         content: formatInboundContent(wechatMsg),
-        sender: wechatMsg.FromUserName,
+        sender: { id: wechatMsg.FromUserName },
         metadata: Object.freeze({
           msgType: wechatMsg.MsgType,
           event: wechatMsg.Event,

@@ -232,7 +232,7 @@ export class MilkySseEndpoint implements EndpointInstance {
       message: { conversation, id: formatInboundMessageId(data) },
       content,
       segments,
-      sender: String(data.sender_id),
+      sender: { id: String(data.sender_id), name: nickname },
       metadata: Object.freeze({
         message_scene: data.message_scene,
         peer_id: String(data.peer_id),

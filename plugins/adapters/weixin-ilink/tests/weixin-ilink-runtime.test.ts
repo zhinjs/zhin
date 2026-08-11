@@ -149,7 +149,7 @@ describe('weixin-ilink plugin runtime adapter', () => {
       conversation: privateConversation('user-1'),
       message: { conversation: privateConversation('user-1'), id: '42' },
       content: '你好',
-      sender: 'user-1',
+      sender: expect.objectContaining({ id: 'user-1' }),
     }));
   });
 

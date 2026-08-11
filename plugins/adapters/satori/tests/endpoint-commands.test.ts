@@ -94,7 +94,7 @@ describe('satori.endpoint command definitions', () => {
   it('配置 master 后非 master 拒绝 add/remove', () => {
     const denied = fakeContext({
       config: { master: 'alice' },
-      input: { sender: 'bob' },
+      input: { sender: { id: 'bob' } },
       params: { name: 'bot1' },
       args: ['baseUrl=http://127.0.0.1:5140', 'token=tok-1'],
     });

@@ -182,7 +182,7 @@ describe('satori plugin runtime adapter', () => {
       conversation: expect.objectContaining({ kind: 'group', id: 'ch-1' }),
       message: expect.objectContaining({ id: 'msg-1' }),
       content: '你好',
-      sender: 'alice',
+      sender: expect.objectContaining({ id: 'u-1', name: 'alice' }),
     }));
 
     await endpoint.stop();
@@ -417,7 +417,7 @@ describe('satori plugin runtime adapter', () => {
       conversation: expect.objectContaining({ kind: 'group', id: 'ch-1' }),
       message: expect.objectContaining({ id: 'msg-1' }),
       content: 'from-webhook',
-      sender: 'alice',
+      sender: expect.objectContaining({ id: 'u-1', name: 'alice' }),
     }));
 
     const messageId = await endpoint.send({

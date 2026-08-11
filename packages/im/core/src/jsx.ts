@@ -14,28 +14,27 @@ export type JSXProps = Record<string, any> & {
     children?: JSXChildren;
 };
 export {Fragment} from './component.js'
-// 全局 JSX 命名空间
-declare global {
-    namespace JSX {
-        // 支持同步和异步组件 - Element 可以是 MessageComponent
-        // TypeScript 会在编译时允许异步组件，运行时会自动 await
-        type Element = SendContent | Promise<SendContent>
-        interface ElementClass {
-            render(props: any, context?: ComponentContext): Element;
-        }
-        interface ElementAttributesProperty {
-            data: {};
-        }
-        interface ElementChildrenAttribute {
-            children: {};
-        }
-        interface IntrinsicElements {
-            [elemName: string]: any;
-        }
-        // 添加对异步组件的支持
-        interface IntrinsicAttributes {
-            key?: string | number;
-        }
+// 模块作用域 JSX 命名空间（经 jsxImportSource 解析；不污染全局，
+// 与 @zhin.js/satori 的字符串 JSX.Element 在同一编译单元共存不冲突）
+export namespace JSX {
+    // 支持同步和异步组件 - Element 可以是 MessageComponent
+    // TypeScript 会在编译时允许异步组件，运行时会自动 await
+    export type Element = SendContent | Promise<SendContent>
+    export interface ElementClass {
+        render(props: any, context?: ComponentContext): Element;
+    }
+    export interface ElementAttributesProperty {
+        data: {};
+    }
+    export interface ElementChildrenAttribute {
+        children: {};
+    }
+    export interface IntrinsicElements {
+        [elemName: string]: any;
+    }
+    // 添加对异步组件的支持
+    export interface IntrinsicAttributes {
+        key?: string | number;
     }
 }
 

@@ -285,7 +285,7 @@ describe('email plugin runtime adapter', () => {
       }),
       message: expect.objectContaining({ id: '<msg001@mock.com>' }),
       content: expect.stringContaining('你好'),
-      sender: 'sender@example.com',
+      sender: expect.objectContaining({ id: 'sender@example.com' }),
     }));
 
     await endpoint.stop();

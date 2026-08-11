@@ -69,7 +69,7 @@ describe('sandbox plugin runtime adapter', () => {
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: sandboxConversation('sandbox-user'),
       content: 'hello sandbox',
-      sender: 'sandbox-user',
+      sender: expect.objectContaining({ id: 'sandbox-user' }),
     }));
   });
 

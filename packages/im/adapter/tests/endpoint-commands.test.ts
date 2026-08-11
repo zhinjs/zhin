@@ -54,7 +54,7 @@ function writeConfig(content: string): string {
 }
 
 describe('isEndpointOperator', () => {
-  const message = (sender: string) => ({ sender });
+  const message = (sender: string) => ({ sender: { id: sender } });
 
   it('未配置 master 时放行', () => {
     expect(isEndpointOperator({}, message('alice'))).toBe(true);
@@ -384,7 +384,7 @@ describe('createEndpointCommands', () => {
     const forbidden = endpointCommandForbidden('Demo');
     const denied = fakeContext({
       config: { master: 'alice' },
-      input: { sender: 'bob' },
+      input: { sender: { id: 'bob' } },
       params: { name: 'x' },
     });
 
@@ -394,7 +394,7 @@ describe('createEndpointCommands', () => {
 
     const allowed = fakeContext({
       config: { master: 'alice' },
-      input: { sender: 'alice' },
+      input: { sender: { id: 'alice' } },
       params: { name: 'x' },
       args: ['token=t'],
     });

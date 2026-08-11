@@ -1,7 +1,7 @@
 ---
-"@zhin.js/ai": minor
-"@zhin.js/agent": minor
-"@zhin.js/core": minor
+"@zhin.js/ai": patch
+"@zhin.js/agent": patch
+"@zhin.js/core": patch
 "@zhin.js/im-contract": patch
 "@zhin.js/adapter": patch
 ---

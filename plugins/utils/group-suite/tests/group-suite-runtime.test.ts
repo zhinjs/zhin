@@ -49,7 +49,7 @@ const emptyCtx = {
 };
 
 const groupInput = {
-  sender: 'u1',
+  sender: { id: 'u1', name: 'Alice' },
   conversation: { kind: 'group', id: 'g1' },
   content: '',
   metadata: { type: 'group', senderName: 'Alice' },
@@ -194,7 +194,7 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
     const db = ensureGroupSuiteMemoryDb();
     const stats = getStatsModel(db)!;
     const runtime = createGroupSuiteRuntime(db);
-    const bobInput = { ...groupInput, sender: 'u2', metadata: { type: 'group', senderName: 'Bob' } };
+    const bobInput = { ...groupInput, sender: { id: 'u2', name: 'Bob' }, metadata: { type: 'group', senderName: 'Bob' } };
     recordMessage(groupInput, runtime);
     recordMessage(groupInput, runtime);
     recordMessage(bobInput, runtime);

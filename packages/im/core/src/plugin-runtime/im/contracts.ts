@@ -61,12 +61,18 @@ export function isSegmentContent(value: unknown): value is Segment {
     && (value as { data?: unknown }).data !== null;
 }
 
+export interface MessageSenderRef {
+  readonly id: string;
+  readonly name?: string;
+  readonly roles?: readonly string[];
+}
+
 export interface IncomingMessage {
   readonly conversation: ConversationRef;
   readonly message?: MessageRef;
   readonly content: string;
   readonly segments?: readonly Segment[];
-  readonly sender?: string;
+  readonly sender?: MessageSenderRef;
   readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
@@ -130,7 +136,7 @@ export class Message {
     readonly content: string,
     readonly generation: number,
     reply: (content: SendContent, requester?: PluginId, targetConversation?: ConversationAddress) => Promise<DeliveryReceipt>,
-    readonly sender?: string,
+    readonly sender?: MessageSenderRef,
     readonly metadata: Readonly<Record<string, unknown>> = Object.freeze({}),
     /**
      * 结构化段视图（与 `content` 纯文本视图同源，见 IncomingMessage.segments）。
@@ -156,7 +162,7 @@ export class Message {
       }
       return reply(content, undefined, {
         kind: 'private',
-        id: sender,
+        id: sender.id,
         ...(parent ? { parent } : {}),
       });
     };

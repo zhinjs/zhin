@@ -358,7 +358,7 @@ describe('telegram plugin runtime adapter', () => {
       conversation: expect.objectContaining({ kind: 'private', id: '1001' }),
       message: expect.objectContaining({ id: '42' }),
       content: 'hello',
-      sender: 'alice',
+      sender: expect.objectContaining({ id: '7', name: 'alice' }),
     }));
 
     await endpoint.stop();
@@ -606,7 +606,7 @@ describe('telegram plugin runtime adapter', () => {
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'private', id: '1001' }),
       content: 'webhook hello',
-      sender: 'alice',
+      sender: expect.objectContaining({ id: '7', name: 'alice' }),
     }));
     expect(apiFetch.calls.some((c) => c.method === 'setWebhook')).toBe(true);
     await endpoint.stop();

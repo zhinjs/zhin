@@ -27,7 +27,7 @@ export default defineMiddleware<Message, ModerationConfig>({
     }
 
     const message = context.input;
-    const sender = message.sender;
+    const sender = message.sender?.id;
     const conversationId = message.conversation.id;
     const endpointMasters = resolveEndpointMasters(message, config);
 

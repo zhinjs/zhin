@@ -98,7 +98,7 @@ describe('wecom.endpoint command definitions', () => {
   it('配置 master 后非 master 拒绝 add/remove', () => {
     const denied = fakeContext({
       config: { master: 'alice' },
-      input: { sender: 'bob' },
+      input: { sender: { id: 'bob' } },
       params: { name: 'bot1' },
       args: ['corpId=ww-1', 'agentSecret=sec-1', 'token=tok-1', 'encodingAESKey=aes-1'],
     });

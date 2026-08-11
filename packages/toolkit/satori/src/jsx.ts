@@ -21,16 +21,17 @@ export type JSXProps = Record<string, unknown> & {
   children?: JSXChild;
 };
 
-declare global {
-  namespace JSX {
-    type Element = string;
-    interface ElementChildrenAttribute {
+// 模块作用域 JSX 命名空间（jsxImportSource 解析用；不污染全局，避免与
+// @zhin.js/core 的 SendContent JSX.Element 在同一编译单元冲突）
+export namespace JSX {
+    export type Element = string;
+    export interface ElementChildrenAttribute {
       children: {};
     }
-    interface IntrinsicAttributes {
+    export interface IntrinsicAttributes {
       key?: string | number;
     }
-    interface HTMLAttributes {
+    export interface HTMLAttributes {
       children?: JSXChild;
       key?: string | number;
       style?: string | Record<string, string | number>;
@@ -39,7 +40,7 @@ declare global {
       title?: string;
       [attr: string]: unknown;
     }
-    interface IntrinsicElements {
+    export interface IntrinsicElements {
       div: HTMLAttributes;
       span: HTMLAttributes;
       p: HTMLAttributes;
@@ -58,7 +59,6 @@ declare global {
       em: HTMLAttributes;
       [elemName: string]: HTMLAttributes;
     }
-  }
 }
 
 const SELF_CLOSING = new Set(["img", "br", "hr", "input", "meta", "link"]);

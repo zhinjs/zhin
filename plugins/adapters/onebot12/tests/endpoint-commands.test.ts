@@ -95,7 +95,7 @@ describe('onebot12.endpoint command definitions', () => {
   it('配置 master 后非 master 拒绝 add/remove', () => {
     const denied = fakeContext({
       config: { master: 'alice' },
-      input: { sender: 'bob' },
+      input: { sender: { id: 'bob' } },
       params: { name: 'bot1' },
       args: ['url=ws://127.0.0.1:3001', 'access_token=sec-1'],
     });

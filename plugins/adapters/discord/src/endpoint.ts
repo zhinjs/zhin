@@ -184,7 +184,11 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
       message: { conversation, id: msg.id },
       content: formatInboundContent(msg),
       segments: formatInboundSegments(msg),
-      sender: senderDisplayName(msg),
+      sender: {
+        id: msg.authorId,
+        name: senderDisplayName(msg) || undefined,
+        ...(resolveSenderRole(msg) ? { roles: [resolveSenderRole(msg)!] } : {}),
+      },
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         channelKind: msg.channelKind,
@@ -212,7 +216,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
       message: { conversation, id: interaction.id },
       content: formatButtonContent(interaction),
       segments: formatButtonSegments(interaction),
-      sender: interaction.userName,
+      sender: { id: interaction.userId, name: interaction.userName },
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         eventType: 'button',
@@ -518,7 +522,11 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
       message: { conversation, id: msg.id },
       content: formatInboundContent(msg),
       segments: formatInboundSegments(msg),
-      sender: senderDisplayName(msg),
+      sender: {
+        id: msg.authorId,
+        name: senderDisplayName(msg) || undefined,
+        ...(resolveSenderRole(msg) ? { roles: [resolveSenderRole(msg)!] } : {}),
+      },
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
         channelKind: msg.channelKind,

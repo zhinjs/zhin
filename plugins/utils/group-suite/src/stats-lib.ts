@@ -47,7 +47,7 @@ export function resolveGroupId(input: {
 }
 
 export function recordMessage(input: {
-  sender?: string;
+  sender?: { readonly id: string; readonly name?: string };
   conversation?: { readonly kind?: string; readonly id?: string };
   metadata?: Readonly<Record<string, unknown>>;
 }, runtime?: GroupSuiteRuntime): void {
@@ -142,7 +142,7 @@ export async function queryStats(
 }
 
 type MessageInput = {
-  sender?: string;
+  sender?: { readonly id: string; readonly name?: string };
   target?: string;
   metadata?: Readonly<Record<string, unknown>>;
 };

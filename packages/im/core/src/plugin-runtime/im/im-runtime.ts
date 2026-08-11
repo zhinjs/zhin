@@ -36,6 +36,7 @@ import {
   type IncomingMessage,
   type MessageDispatchResult,
   type MessageGateway,
+  type MessageSenderRef,
   type OutboundEnvelope,
   type SendContent,
   type SendRequest,
@@ -66,8 +67,8 @@ export const messageGatewayToken = createToken<MessageGateway>('zhin.im.message-
 export interface RuntimeMessageEvent {
   readonly direction: 'inbound' | 'outbound';
   readonly conversation: ConversationRef;
-  /** inbound：发送者 id。 */
-  readonly sender?: string;
+  /** inbound：发送者。 */
+  readonly sender?: MessageSenderRef;
   /** outbound：发起方插件。 */
   readonly requester?: PluginId;
   /** 预览文本，截断至 200 字。 */
@@ -181,7 +182,7 @@ export class ImRuntime implements MessageGateway {
       logger.debug(formatCompact({
         op: 'receive',
         conv: formatConversationLog(conversation),
-        sender: input.sender,
+        sender: `${input.sender?.name||'undefined'}(${input.sender?.id||'undefined'})`,
         preview: truncatePreview(input.content),
       }));
       const message = new Message(

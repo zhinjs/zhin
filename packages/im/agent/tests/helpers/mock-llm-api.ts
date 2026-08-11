@@ -1,46 +1,102 @@
 /**
- * Test helper — wire mock AIProvider.chat into ai-sdk ApiRegistry (ADR 0018).
+ * Test helper — ai-sdk 原生面 mock：直接注册 `ai-sdk` ApiProvider，把应答器
+ * 产出的 AssistantMessage 经 createAssistantMessageEventStream 回流给 agentLoop，
+ * 测试链路走真实的 ai-sdk stream 转换路径（原 OpenAI wire 测试桥已退役）。
+ * 断言面：calls[] 的 model/context（AgentMessage 层）。
  */
 import {
+  createAssistantMessageEventStream,
   registerApiProvider,
   registerProviderInstance,
   setLiveModelsResolver,
+  EMPTY_TOKEN_USAGE,
   SdkProviderAdapter,
+  type AssistantMessage,
+  type Context,
+  type Model,
 } from '@zhin.js/ai';
-import {
-  createOpenAiCompletionsStreamFn,
-  type ChatCompletionsMockProvider,
-} from './openai-completions-bridge.js';
 
-export function wireMockProviderToLlmApi(provider: ChatCompletionsMockProvider): void {
-  registerProviderInstance(
-    provider.name,
-    { sdk: 'openai', apiKey: 'test-key' },
-    [...provider.models],
-  );
-  setLiveModelsResolver((alias) => (
-    alias === provider.name ? [...provider.models] : []
-  ));
-  const streamFn = createOpenAiCompletionsStreamFn(() => (
-    (alias: string) => (alias === provider.name ? provider : undefined)
-  ));
-  registerApiProvider({ api: 'ai-sdk', stream: streamFn, streamSimple: streamFn });
+export interface MockLlmCall {
+  readonly model: Model;
+  readonly context: Context;
 }
 
-/**
- * 生产路径 `sdkEntryFromProvider` 只接受 SdkProviderAdapter（无静默兜底）；
- * 测试 mock 必须落在真实实例上，chat 以 own property 挂接供断言。
- */
-export function createMockSdkProvider(
-  chat: ChatCompletionsMockProvider['chat'],
-  models: readonly string[] = ['mock-model'],
-  name = 'mock',
-): SdkProviderAdapter & ChatCompletionsMockProvider {
-  const adapter = new SdkProviderAdapter(
-    name,
-    'openai',
-    { sdk: 'openai', apiKey: 'test-key' },
-    [...models],
-  );
-  return Object.assign(adapter, { chat });
+export type MockLlmResponder = (context: Context) => AssistantMessage | Promise<AssistantMessage>;
+
+export interface MockLlmApi {
+  readonly provider: SdkProviderAdapter;
+  readonly calls: MockLlmCall[];
+  respondWith(next: MockLlmResponder): void;
+  respondText(text: string): void;
+  /** 永不返回（模拟挂起的长任务）。 */
+  hang(): void;
+  fail(error: Error): void;
+}
+
+export function assistantTextReply(text: string): AssistantMessage {
+  return {
+    role: 'assistant',
+    content: [{ type: 'text', text }],
+    api: 'ai-sdk',
+    provider: 'mock',
+    model: 'mock',
+    usage: { ...EMPTY_TOKEN_USAGE },
+    stopReason: 'stop',
+    timestamp: Date.now(),
+  };
+}
+
+export function assistantToolCallReply(
+  toolCalls: ReadonlyArray<{ id: string; name: string; arguments: Record<string, unknown> }>,
+  text = '',
+): AssistantMessage {
+  const content: AssistantMessage['content'] = [];
+  if (text) content.push({ type: 'text', text });
+  for (const call of toolCalls) content.push({ type: 'toolCall', ...call });
+  return {
+    role: 'assistant',
+    content,
+    api: 'ai-sdk',
+    provider: 'mock',
+    model: 'mock',
+    usage: { ...EMPTY_TOKEN_USAGE },
+    stopReason: 'toolCalls',
+    timestamp: Date.now(),
+  };
+}
+
+export function wireMockLlmApi(options: {
+  name?: string;
+  models?: readonly string[];
+  responder?: MockLlmResponder;
+} = {}): MockLlmApi {
+  const name = options.name ?? 'mock';
+  const models = [...(options.models ?? ['mock-model'])];
+  const provider = new SdkProviderAdapter(name, 'openai', { sdk: 'openai', apiKey: 'test-key' }, models);
+  registerProviderInstance(name, { sdk: 'openai', apiKey: 'test-key' }, models);
+  setLiveModelsResolver((alias) => (alias === name ? [...models] : []));
+
+  const calls: MockLlmCall[] = [];
+  let responder: MockLlmResponder = options.responder ?? (() => assistantTextReply('ok'));
+  const streamFn = (model: Model, context: Context) =>
+    createAssistantMessageEventStream(async (push) => {
+      calls.push({ model, context });
+      const message = await responder(context);
+      const text = message.content
+        .filter((b) => b.type === 'text')
+        .map((b) => (b as { text: string }).text)
+        .join('');
+      if (text) push({ type: 'text_delta', text });
+      return message;
+    });
+  registerApiProvider({ api: 'ai-sdk', stream: streamFn, streamSimple: streamFn });
+
+  return {
+    provider,
+    calls,
+    respondWith(next) { responder = next; },
+    respondText(text) { responder = () => assistantTextReply(text); },
+    hang() { responder = () => new Promise<AssistantMessage>(() => {}); },
+    fail(error) { responder = () => { throw error; }; },
+  };
 }

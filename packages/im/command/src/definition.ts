@@ -120,8 +120,8 @@ export interface CommandConversation {
 export interface CommandMessage {
   readonly conversation: CommandConversation;
   readonly content: string;
-  /** 发送者 id（扁平字段；结构化视图见 CommandContext.sender）。 */
-  readonly sender?: string;
+  /** 发送者（结构化视图见 CommandContext.sender）。 */
+  readonly sender?: { readonly id: string; readonly name?: string };
   readonly id?: string;
   readonly metadata?: Readonly<Record<string, unknown>>;
   /** 若上游已结构化，优先采用。 */
@@ -420,17 +420,11 @@ function resolveSender(
   if (isCommandSender(structured)) {
     return freezeSender(structured);
   }
-  // 允许上游把 sender 直接做成对象（未来 Runtime Message 演进）
-  if (isCommandSender(input.sender)) {
-    return freezeSender(input.sender);
-  }
 
-  const id = typeof input.sender === 'string' && input.sender
-    ? input.sender
-    : firstString(metadata?.user_id, metadata?.userId);
+  const id = input.sender?.id || firstString(metadata?.user_id, metadata?.userId);
   if (!id) return undefined;
 
-  const name = firstString(metadata?.nickname, metadata?.senderName, metadata?.name);
+  const name = input.sender?.name || firstString(metadata?.nickname, metadata?.senderName, metadata?.name);
   const role = resolveRoles(metadata);
 
   return Object.freeze({
