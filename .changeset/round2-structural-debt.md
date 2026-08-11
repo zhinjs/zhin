@@ -1,8 +1,8 @@
 ---
-"@zhin.js/ai": match
-"@zhin.js/agent": match
-"@zhin.js/core": match
-"@zhin.js/satori": match
+"@zhin.js/ai": patch
+"@zhin.js/agent": patch
+"@zhin.js/core": patch
+"@zhin.js/satori": patch
 ---
 
 refactor!: 架构债第二轮（asPrivate 零强转、窄接口域拆分、JSX 全局冲突根治、测试面真迁移）
