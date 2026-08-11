@@ -7,7 +7,7 @@ import type {
   PipelineArtifactKind,
   PipelineRole,
 } from './types.js';
-import { resolvePlannerEndpointId } from './collaboration-delegation.js';
+import { resolvePlannerEndpointId } from './collab-utils.js';
 
 /** pipeline 模式委派时默认要求的产物种类（requireArtifact 未显式 true 时自动补齐）。 */
 export function defaultArtifactKindsForRole(role: PipelineRole): PipelineArtifactKind[] {

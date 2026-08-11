@@ -25,6 +25,7 @@ export interface IAgentTurnProcessor {
     onChunk?: OnChunkCallback,
   ): Promise<OutputElement[]>;
 
+  /** @deprecated ContentPart 时代的多模态薄 shim，下个大版本删除；替代路径：canonical Segment 注入。 */
   processMultimodal(
     parts: ContentPart[],
     commMessage: Message,

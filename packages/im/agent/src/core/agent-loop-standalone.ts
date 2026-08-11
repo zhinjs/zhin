@@ -15,15 +15,8 @@ import {
   TOOLS_MUTATED_MARKER,
 } from '../builtin/deferred-tool-meta.js';
 import { catalogToolByName } from '../tool-catalog/tool-catalog.js';
+import { tokenUsageToLegacy } from './agent-run-shared.js';
 const logger = getLogger('AgentLoopStandalone');
-
-function tokenUsageToLegacy(usage: TokenUsage): Usage {
-  return {
-    prompt_tokens: usage.input,
-    completion_tokens: usage.output,
-    total_tokens: usage.totalTokens,
-  };
-}
 
 function toolResultToAgentMessage(
   toolCall: ParsedToolCall,

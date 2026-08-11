@@ -5,7 +5,16 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { senderRolesFromMessage, type Message, getLogger } from '@zhin.js/core';
-import { getMemoryDir } from './bootstrap.js';
+import { getDataDir } from './bootstrap.js';
+
+/** 获取文件制长期记忆目录（data/memory），不存在则创建 */
+export function getMemoryDir(workspaceDir?: string): string {
+  const dir = path.join(getDataDir(workspaceDir), 'memory');
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
 const logger = getLogger('MemoryLayers');
 
 export interface MemoryLayerBudgets {

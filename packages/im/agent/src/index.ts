@@ -81,8 +81,6 @@ export type {
 export {
   buildRichSystemPrompt,
   buildLiteSystemPromptWithPlatform,
-  buildContextHint,
-  buildEnhancedPersona,
   buildUserMessageWithHistory,
   contentToText,
   describePromptSectionsForDebug,
@@ -418,8 +416,9 @@ export {
   loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection,
   buildStableContextFiles, buildStableBootstrapSection,
   loadSoulPersona, loadToolsGuide, loadAgentsMemory, clearBootstrapCache,
-  getFileMemoryContext, STABLE_BOOTSTRAP_FILENAMES,
+  STABLE_BOOTSTRAP_FILENAMES,
 } from './bootstrap.js';
+export { getFileMemoryContext, getMemoryDir } from './memory-layers.js';
 export type { BootstrapFile, ContextFile } from './bootstrap.js';
 
 export {
@@ -428,7 +427,6 @@ export {
   publishOutboundElements,
   resolveMultimodalConfig,
   resolveOutboundCapabilities,
-  INBOUND_MEDIA_PARTS_EXTRA_KEY,
 } from './media/index.js';
 export type { MediaBinaryPayload, MultimodalConfig, OutboundMediaCapabilities } from './media/index.js';
 

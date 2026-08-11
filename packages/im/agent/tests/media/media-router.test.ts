@@ -20,15 +20,6 @@ describe('preprocessInboundMedia', () => {
     expect(pre.textAppend).toContain('图片');
   });
 
-  it('兼容 ContentPart data URI，避免读取未规范化的 base64 字段', async () => {
-    const pre = await preprocessInboundMedia(
-      [{ type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } }],
-      DEFAULT_MULTIMODAL_CONFIG,
-    );
-    expect(pre.payloads).toMatchObject([{ kind: 'image', base64: 'iVBORw0KGgo=' }]);
-    expect(pre.visionParts).toHaveLength(1);
-  });
-
   it('transcribe 成功时追加语音转写文本', async () => {
     resetPreprocessInboundMediaForTests();
     const pre = await preprocessInboundMedia(

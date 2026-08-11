@@ -86,7 +86,6 @@ export function hasKeyboardSegment(content: SendContent | undefined): boolean {
 }
 
 /** @deprecated 使用 {@link hasKeyboardSegment} */
-export const hasInteractiveSegment = hasKeyboardSegment;
 
 /** 按 Adapter interactivePolicy 将 keyboard 段转为 native 保留或文本降级 */
 export function resolveKeyboardSegments(
@@ -121,6 +120,3 @@ export function resolveKeyboardSegments(
 
   return packSegments(out);
 }
-
-/** @deprecated 使用 {@link resolveKeyboardSegments} */
-export const resolveInteractiveSegments = resolveKeyboardSegments;

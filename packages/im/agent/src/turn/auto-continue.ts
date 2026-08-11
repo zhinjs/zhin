@@ -18,22 +18,20 @@ import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 
 const logger = getLogger('ZhinAgent');
 
+/** auto-continue 实际读取的窄面（单参数收敛后的内部 seam）。 */
 export type AutoContinueHost = Pick<
   ZhinAgentPrivate,
-  'config' | 'promptController' | 'getDeferredAutoContinueDepth'
-  | 'setDeferredAutoContinueDepth' | 'resetDeferredAutoContinueDepth'
-  | 'getDeferredResultSender' | 'runInTurnContext'
+  'config' | 'promptController' | 'deferred' | 'runInTurnContext'
 >;
 
 type AutoContinueKind = 'deferred' | 'subagent';
 
 async function runAutoContinueProcess(
-  host: AutoContinueHost,
   agent: ZhinAgentPrivate,
   commMessage: Message,
   buildMessage: () => UserMessage,
 ) {
-  return host.runInTurnContext(randomUUID(), () =>
+  return agent.runInTurnContext(randomUUID(), () =>
     processTextTurn(agent, '', commMessage, [], undefined, {
       prebuiltMessages: [buildMessage()],
       deferredAutoContinue: true,
@@ -42,7 +40,6 @@ async function runAutoContinueProcess(
 }
 
 async function executeAutoContinueTurn(
-  host: AutoContinueHost,
   agent: ZhinAgentPrivate,
   commMessage: Message,
   sessionKey: string,
@@ -53,12 +50,13 @@ async function executeAutoContinueTurn(
   /** 仅 subagent：首轮空回复时再催一次主 Agent 汇总（仍不直接转发子 Agent 原文） */
   buildRetryMessage?: () => UserMessage,
 ): Promise<void> {
+  const host: AutoContinueHost = agent;
   await host.promptController.waitForIdle();
-  host.setDeferredAutoContinueDepth(sessionKey, depth + 1);
+  host.deferred.setAutoContinueDepth(sessionKey, depth + 1);
 
   logger.info(formatCompact({ op: `${kind}_auto_continue`, task: taskId, depth: depth + 1 }));
 
-  let elements = await runAutoContinueProcess(host, agent, commMessage, buildMessage);
+  let elements = await runAutoContinueProcess(agent, commMessage, buildMessage);
 
   if (elements.length === 0 && buildRetryMessage) {
     logger.warn(formatCompact({
@@ -66,10 +64,10 @@ async function executeAutoContinueTurn(
       task: taskId,
       reason: 'empty_outbound',
     }));
-    elements = await runAutoContinueProcess(host, agent, commMessage, buildRetryMessage);
+    elements = await runAutoContinueProcess(agent, commMessage, buildRetryMessage);
   }
 
-  const sender = host.getDeferredResultSender();
+  const sender = host.deferred.resultSender;
   if (sender && elements.length > 0) {
     await deliverDeferredAutoContinueReply(sender, commMessage, elements);
   } else if (elements.length === 0) {
@@ -84,15 +82,15 @@ async function executeAutoContinueTurn(
 }
 
 export async function continueAfterDeferredWorker(
-  host: AutoContinueHost,
   agent: ZhinAgentPrivate,
   commMessage: Message,
   taskId: string,
   goal: string,
   result: DeferredWorkerResult,
 ): Promise<void> {
+  const host: AutoContinueHost = agent;
   const sessionKey = resolveAgentTurnSessionKey(commMessage);
-  const depth = host.getDeferredAutoContinueDepth(sessionKey);
+  const depth = host.deferred.getAutoContinueDepth(sessionKey);
 
   const persisted = await persistDeferredWorkerResultToContext(agent, commMessage, taskId, goal, result);
   if (!shouldDeferredAutoContinue(host.config, result, depth, persisted)) {
@@ -106,7 +104,6 @@ export async function continueAfterDeferredWorker(
   }
 
   await executeAutoContinueTurn(
-    host,
     agent,
     commMessage,
     sessionKey,
@@ -118,15 +115,15 @@ export async function continueAfterDeferredWorker(
 }
 
 export async function continueAfterSubagent(
-  host: AutoContinueHost,
   agent: ZhinAgentPrivate,
   payload: SubagentCompletePayload,
 ): Promise<void> {
+  const host: AutoContinueHost = agent;
   if (host.config.subagentAutoContinue === false) return;
 
   const commMessage = payload.origin.message;
   const sessionKey = resolveAgentTurnSessionKey(commMessage);
-  const depth = host.getDeferredAutoContinueDepth(sessionKey);
+  const depth = host.deferred.getAutoContinueDepth(sessionKey);
   if (depth >= host.config.deferredAutoContinueMaxDepth) {
     logger.warn(formatCompact({
       op: 'subagent_auto_continue_skip',
@@ -147,7 +144,6 @@ export async function continueAfterSubagent(
   }
 
   await executeAutoContinueTurn(
-    host,
     agent,
     commMessage,
     sessionKey,

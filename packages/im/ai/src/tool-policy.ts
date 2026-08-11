@@ -32,9 +32,3 @@ export function toolApprovalNever(): ToolApprovalMode {
   return 'never';
 }
 
-/** @deprecated Use toolApprovalAlways — Eve-style alias */
-export const always = toolApprovalAlways;
-/** @deprecated Use toolApprovalOnce */
-export const once = toolApprovalOnce;
-/** @deprecated Use toolApprovalNever */
-export const never = toolApprovalNever;

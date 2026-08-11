@@ -24,7 +24,7 @@ import {
   DEFAULT_INTERACTIVE_POLICY,
   collectKeyboardFallbackMaps,
   keyboardFallbackStore,
-  resolveInteractiveSegments,
+  resolveKeyboardSegments,
   type InteractivePolicy,
 } from "./built/interactive-segments/index.js";
 import {
@@ -250,7 +250,7 @@ export abstract class Adapter<
       }
       options = {
         ...options,
-        content: resolveInteractiveSegments(
+        content: resolveKeyboardSegments(
           options.content,
           this.getInteractivePolicy(),
         ),

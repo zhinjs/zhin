@@ -28,10 +28,6 @@ export type RichSegmentMode = (typeof RICH_SEGMENT_MODE)[keyof typeof RICH_SEGME
 /** 任意已注册 kind → 渲染 mode */
 export type OutboundRichSegmentPolicy = Record<string, string>;
 
-/** @deprecated 使用 OutboundRichSegmentPolicy；保留别名便于迁移 */
-export type RichSegmentKind = string;
-export type RichRenderMode = string;
-
 /** html-renderer 可选包契约 */
 export interface HtmlRendererForRichSegment {
   render(
@@ -58,8 +54,6 @@ export type RichSegmentCapabilityId = 'html-renderer' | 'speech' | 'media-pipeli
 export interface RichSegmentRenderContext {
   /** 按 id 懒加载能力（core 或 optional 包 register loader） */
   resolveCapability: <T>(id: RichSegmentCapabilityId) => Promise<T | undefined>;
-  /** @deprecated 请用 resolveCapability('html-renderer') */
-  getHtmlRenderer?: () => Promise<HtmlRendererForRichSegment | undefined>;
   /** 可选：rich_segment stage 结构化日志 */
   logContentChain?: (fields: ContentChainLogFields) => void;
   warn?: (message: string) => void;

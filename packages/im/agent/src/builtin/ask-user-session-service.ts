@@ -18,7 +18,7 @@ import { notifyGroupOwnerAskUserResolved, buildGroupAskUserFollowUp } from '../c
 import {
   buildSensitiveOwnerQuestionText,
   formatOwnerResponse,
-} from './ask-user-tool.js';
+} from './ask-user-format.js';
 
 export type AskUserSessionKind = 'prompt' | 'sensitive_dm';
 

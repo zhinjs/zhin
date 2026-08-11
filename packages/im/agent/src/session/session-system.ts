@@ -104,7 +104,7 @@ export class SessionSystem {
     if (options?.deferredAutoContinue) {
       logPhase(host.phaseConfig, 'turn.deferred_auto_continue', sessionKey, {});
     } else {
-      host.resetDeferredAutoContinueDepth(sessionKey);
+      host.deferred.resetAutoContinueDepth(sessionKey);
     }
 
     await host.waitForMemoryPersistence();

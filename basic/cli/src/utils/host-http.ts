@@ -104,7 +104,7 @@ export async function hostGet<T>(
       err?.name === 'TimeoutError'
         ? `请求 ${http.baseUrl} 超时（5s 无响应）`
         : err?.code === 'ECONNREFUSED'
-          ? `无法连接 ${http.baseUrl}（请先 zhin dev / zhin start）`
+          ? `无法连接 ${http.baseUrl}（请先 zhin runtime start）`
           : (err?.message ?? String(e));
     return { ok: false, status: 0, error: msg };
   }

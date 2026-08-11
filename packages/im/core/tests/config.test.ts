@@ -260,9 +260,9 @@ describe('ConfigLoader', () => {
     })
   })
 
-  describe('ConfigService', () => {
+  describe('ConfigFeature', () => {
     it('should load and cache configs', async () => {
-      const { ConfigService } = await import('../src/built/config')
+      const { ConfigFeature: ConfigService } = await import('../src/built/config')
       const service = new ConfigService()
       
       const config = { test: 'value' }
@@ -272,7 +272,7 @@ describe('ConfigLoader', () => {
     })
 
     it('should throw error for unsupported format', async () => {
-      const { ConfigService } = await import('../src/built/config')
+      const { ConfigFeature: ConfigService } = await import('../src/built/config')
       const service = new ConfigService()
       
       expect(() => {
@@ -281,7 +281,7 @@ describe('ConfigLoader', () => {
     })
 
     it('should get config data', async () => {
-      const { ConfigService } = await import('../src/built/config')
+      const { ConfigFeature: ConfigService } = await import('../src/built/config')
       const service = new ConfigService()
       
       const config = { test: 'value' }
@@ -292,7 +292,7 @@ describe('ConfigLoader', () => {
     })
 
     it('should get raw config data', async () => {
-      const { ConfigService } = await import('../src/built/config')
+      const { ConfigFeature: ConfigService } = await import('../src/built/config')
       const service = new ConfigService()
       
       const config = { test: '${VAR}' }
@@ -303,7 +303,7 @@ describe('ConfigLoader', () => {
     })
 
     it('should update config data', async () => {
-      const { ConfigService } = await import('../src/built/config')
+      const { ConfigFeature: ConfigService } = await import('../src/built/config')
       const service = new ConfigService()
       
       const config = { test: 'initial' }
@@ -316,7 +316,7 @@ describe('ConfigLoader', () => {
     })
 
     it('should throw error when getting non-existent config', async () => {
-      const { ConfigService } = await import('../src/built/config')
+      const { ConfigFeature: ConfigService } = await import('../src/built/config')
       const service = new ConfigService()
       
       service.load(testConfigPath, { test: 'value' })
@@ -329,7 +329,7 @@ describe('ConfigLoader', () => {
     })
 
     it('should auto-load config if not cached', async () => {
-      const { ConfigService } = await import('../src/built/config')
+      const { ConfigFeature: ConfigService } = await import('../src/built/config')
       const service = new ConfigService()
       
       const config = { test: 'value' }

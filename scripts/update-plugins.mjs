@@ -45,6 +45,8 @@ const CORE_PACKAGES = new Set([
   '@zhin.js/queue-runtime',
   '@zhin.js/storage-port',
   '@zhin.js/adapter-process', // 已废弃，见 @zhin.js/adapter-sandbox
+  '@zhin.js/host-router', // 已删除，Console Host 由 basic/cli 装配
+  '@zhin.js/host-api', // 已删除，同上
   'zhin.js',
 ]);
 

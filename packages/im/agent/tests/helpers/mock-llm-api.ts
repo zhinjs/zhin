@@ -4,11 +4,13 @@
 import {
   registerApiProvider,
   registerProviderInstance,
-  createOpenAiCompletionsStreamFn,
   setLiveModelsResolver,
   SdkProviderAdapter,
-  type ChatCompletionsMockProvider,
 } from '@zhin.js/ai';
+import {
+  createOpenAiCompletionsStreamFn,
+  type ChatCompletionsMockProvider,
+} from './openai-completions-bridge.js';
 
 export function wireMockProviderToLlmApi(provider: ChatCompletionsMockProvider): void {
   registerProviderInstance(

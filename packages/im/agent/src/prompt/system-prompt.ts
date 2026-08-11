@@ -12,7 +12,6 @@ import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import { type ZhinAgentConfig, SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from '../config/index.js';
 import { resolveQuoteSystemHint } from '../context/turn-envelope.js';
 import { getFileMemoryContext, formatMemoryPathsHint } from '../memory-layers.js';
-import { PromptBuilder } from './prompt-builder.js';
 import {
   buildSenderRolesFilePermissionsPrompt,
   inferFileRole,
@@ -46,7 +45,6 @@ export function contentToText(c: string | ContentPart[] | ContentPart | null | u
       case 'image_url': return '[图片]';
       case 'audio': return '[音频]';
       case 'video_url': return '[视频]';
-      case 'face': return (p as Extract<ContentPart, { type: 'face' }>).face.text || '[表情]';
       default: return '';
     }
   }).join('');
@@ -83,21 +81,6 @@ export function buildUserMessageWithHistory(history: AgentMessage[], currentCont
   return `${HISTORY_CONTEXT_MARKER}\nNote: Prior assistant messages may contain errors or hallucinations. Do NOT treat them as ground truth. Only trust information from tool results.\n${historyBlock}\n\n${CURRENT_MESSAGE_MARKER}\n${currentContent}`;
 }
 
-export function buildEnhancedPersona(
-  config: Required<ZhinAgentConfig>,
-  profileSummary: string,
-  toneHint: string,
-): string {
-  let persona = config.persona;
-  if (profileSummary) {
-    persona += `\n\n${profileSummary}`;
-  }
-  if (toneHint) {
-    persona += `\n\n[Tone hint] ${toneHint}`;
-  }
-  return persona;
-}
-
 /** 从 Message 重算 SenderRole 并推导文件策略档位（提示词 §3b） */
 export function resolvePromptFileRole(commMessage: Message): FileRole | undefined {
   if (!commMessage) return undefined;
@@ -107,11 +90,6 @@ export function resolvePromptFileRole(commMessage: Message): FileRole | undefine
   } catch {
     return undefined;
   }
-}
-
-/** @deprecated 已并入 {@link buildContextSection}；保留空实现避免重复 Context 行 */
-export function buildContextHint(_commMessage: Message, _content: string): string {
-  return '';
 }
 
 export interface RichSystemPromptContext {
@@ -306,21 +284,6 @@ function buildContextSection(
   ].join('\n');
 }
 
-/** 直连工具模式：工具 + 纪律 */
-function buildDirectToolsSection(): string {
-  const items = [
-    'Use tools for actions, fresh facts, file access, and verification.',
-    'Read before editing files.',
-    'Prefer dedicated tools over shell; run independent reads in parallel.',
-    'Search before assuming.',
-    'Use absolute paths for file operations.',
-    'Run tools in parallel when safe (no dependencies).',
-    'Summarize tool output for user.',
-    ...FIXED_DISCIPLINE_RULES,
-  ];
-  return ['# Tools', ...prependBullets(items)].join('\n');
-}
-
 /** 编排层：合并原 Tools + 可选 workspace/sdk 片段 */
 function buildOrchestrationSection(modelSdk?: string): string {
   const resolved = resolveWorkspacePrompt('orchestrator', modelSdk);
@@ -358,56 +321,27 @@ function buildSecuritySection(): string {
   ].join('\n');
 }
 
-function buildPlatformSection(platformSections: string | undefined, toolSearchActive: boolean): string | null {
+function buildPlatformSection(platformSections: string | undefined, withIntro = true): string | null {
   const body = platformSections?.trim();
   if (!body) return null;
-  const intro = toolSearchActive
+  const intro = withIntro
     ? 'IM-specific hints for deferred tasks (general rules are in # Orchestration):\n\n'
     : '';
   return `# Platform\n\n${intro}${body}`;
 }
 
-function buildCommunicationSection(): string {
-  const items = [
-    'Lead with the answer or result.',
-    'Be concise, direct, and useful — match reply length to question complexity.',
-    'Use Markdown when helpful for structure.',
-    'Prioritize the user\'s latest message; prior compressed messages are context.',
-    'No preamble ("Here\'s...", "I\'ll..."), no postamble ("Let me know...", "Hope this helps...").',
-    'Match the user\'s language; follow SOUL.md for default language.',
-    'Use rich Markdown formatting (headings, bullet lists, tables) for multi-part answers.',
-  ];
-  return ['# Style', ...prependBullets(items)].join('\n');
-}
-
 function buildSkillsSection(
   skillRegistry: SkillRegistry | null,
   skillsSummaryXML: string,
-  toolSearchActive: boolean,
 ): string | null {
-  if (toolSearchActive) {
-    const catalog = buildOrchestratorSkillsCatalog(skillsSummaryXML, skillRegistry);
-    if (!catalog) return null;
-    return [
-      '# Skills (catalog)',
-      catalog,
-      '',
-      'Use discover(kind) to find matching skills, load_skill for instructions, then load_tool or call unlocked tools. Delegate specialist work with spawn_task.',
-    ].join('\n');
-  }
-  if (skillsSummaryXML) {
-    return '# Available Skills\n\n' + skillsSummaryXML + '\n\nUse discover(kind=skill) then load_skill(name) when you need full skill instructions.';
-  }
-  if (skillRegistry && skillRegistry.size > 0) {
-    const skills = skillRegistry.getAll();
-    const lines: string[] = ['# Available Skills'];
-    for (const skill of skills) {
-      lines.push(` - ${skill.name}: ${skill.description}`);
-    }
-    lines.push('\nUse discover(kind=skill) then load_skill(name) when you need full skill instructions.');
-    return lines.join('\n');
-  }
-  return null;
+  const catalog = buildOrchestratorSkillsCatalog(skillsSummaryXML, skillRegistry);
+  if (!catalog) return null;
+  return [
+    '# Skills (catalog)',
+    catalog,
+    '',
+    'Use discover(kind) to find matching skills, load_skill for instructions, then load_tool or call unlocked tools. Delegate specialist work with spawn_task.',
+  ].join('\n');
 }
 
 /**
@@ -451,7 +385,6 @@ export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): Pr
     config, skillRegistry, skillsSummaryXML, bootstrapContext,
     toolSearchDeferredStats, platformSections, orchestratorSdk,
   } = ctx;
-  const toolSearchActive = true;
   const boot = bootstrapContext?.trim() ? bootstrapContext : null;
   const modelBuilder = new ModelAwarePromptBuilder(ctx.modelId);
   const contextWindow = ctx.contextWindow ?? 128000;
@@ -460,8 +393,7 @@ export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): Pr
     ['§1b_critical_rules', CRITICAL_RULES],
     ['§1c_workflow', WORKFLOW_RULES],
     ['§1d_model_style', modelBuilder.buildStyleSection()],
-    ['§2_style', toolSearchActive ? null : buildCommunicationSection()],
-    ['§3_tools', toolSearchActive ? buildOrchestrationSection(orchestratorSdk) : buildDirectToolsSection()],
+    ['§3_tools', buildOrchestrationSection(orchestratorSdk)],
     ['§4_security', buildSecuritySection()],
     ['§5_error_handling', ERROR_HANDLING_RULES],
     ['§5b_editing', EDITING_RULES],
@@ -469,8 +401,8 @@ export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): Pr
     ['§5d_code_references', CODE_REFERENCE_RULES],
     ['§5e_memory_instructions', MEMORY_INSTRUCTIONS],
     ['§5f_context_mode', modelBuilder.buildContextModeHint(contextWindow)],
-    ['§6c_platform', buildPlatformSection(platformSections, toolSearchActive)],
-    ['§8_skills', buildSkillsSection(skillRegistry, skillsSummaryXML, toolSearchActive)],
+    ['§6c_platform', buildPlatformSection(platformSections)],
+    ['§8_skills', buildSkillsSection(skillRegistry, skillsSummaryXML)],
     ['§10_global', ctx.globalContext?.trim() ? ctx.globalContext : null],
     ['§11_bootstrap', boot],
   ];
@@ -516,7 +448,6 @@ export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
     config, skillRegistry, skillsSummaryXML, bootstrapContext,
     toolSearchDeferredStats, platformSections, orchestratorSdk,
   } = ctx;
-  const toolSearchActive = true;
   const modelBuilder = new ModelAwarePromptBuilder(ctx.modelId);
 
   const contextSection = buildContextSection(config, ctx.commMessage, bootstrapContext, ctx.agentNickname, ctx.gitStatus);
@@ -529,15 +460,9 @@ export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
     { content: CRITICAL_RULES, truncatable: false },
     { content: WORKFLOW_RULES, truncatable: false },
     { content: modelStyle, truncatable: false },
-    { content: toolSearchActive ? null : buildCommunicationSection(), truncatable: false },
-    {
-      content: toolSearchActive
-        ? buildOrchestrationSection(orchestratorSdk)
-        : buildDirectToolsSection(),
-      truncatable: false,
-    },
+    { content: buildOrchestrationSection(orchestratorSdk), truncatable: false },
     { content: buildSecuritySection(), truncatable: false },
-    { content: buildPlatformSection(platformSections, toolSearchActive), truncatable: false },
+    { content: buildPlatformSection(platformSections), truncatable: false },
     // 可截断段（牺牲顺序：error-handling → editing → task-completion → code-ref → memory → context-mode → skills → globalContext → bootstrap）
     { content: ERROR_HANDLING_RULES, truncatable: true },
     { content: EDITING_RULES, truncatable: true },
@@ -545,7 +470,7 @@ export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
     { content: CODE_REFERENCE_RULES, truncatable: true },
     { content: MEMORY_INSTRUCTIONS, truncatable: true },
     { content: contextModeHint, truncatable: true },
-    { content: buildSkillsSection(skillRegistry, skillsSummaryXML, toolSearchActive), truncatable: true },
+    { content: buildSkillsSection(skillRegistry, skillsSummaryXML), truncatable: true },
     { content: ctx.globalContext || null, truncatable: true },
     { content: bootstrapContext || null, truncatable: true },
   ];
@@ -553,229 +478,6 @@ export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
   return enforcePromptBudget(sections, config.systemPromptMaxChars);
 }
 
-/**
- * 使用 PromptBuilder 构建系统提示词
- *
- * 这是一个更现代的提示词构建方式，支持：
- * - 分层提示词结构
- * - 优先级排序
- * - 字符数截断
- * - 安全规则嵌入
- */
-export function buildRichSystemPromptWithBuilder(ctx: RichSystemPromptContext): string {
-  const {
-    config, skillRegistry, skillsSummaryXML, activeSkillsContext, bootstrapContext,
-    toolSearchDeferredStats, platformSections,
-  } = ctx;
-  const toolSearchActive = true;
-
-  const modelBuilder = new ModelAwarePromptBuilder(ctx.modelId);
-
-  const builder = new PromptBuilder({
-    maxTotalChars: modelBuilder.strategy.maxPromptChars,
-    enableSafetyRules: modelBuilder.strategy.detailedSecurityRules,
-    enableConstraints: !toolSearchActive,
-  });
-
-  // §1 系统级提示词（最高优先级）— 包含模型感知风格
-  const personaLead = resolvePersonaLead(config, bootstrapContext, ctx.agentNickname);
-  const modelStyle = modelBuilder.buildStyleSection();
-  builder.addSystemPrompt(`${personaLead}\n\n${modelStyle}`, { priority: 100 });
-
-  // §2 关键规则（不可截断，最高优先级）
-  builder.addCustomSection({
-    layer: 'system',
-    title: 'Critical Rules',
-    content: CRITICAL_RULES,
-    priority: 99,
-    truncatable: false,
-  });
-
-  // §3 工作流规则
-  builder.addCustomSection({
-    layer: 'constraints',
-    title: 'Workflow',
-    content: WORKFLOW_RULES,
-    priority: 98,
-    truncatable: false,
-  });
-
-  // §4 上下文信息
-  const now = new Date();
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const timeStr = now.toLocaleString('zh-CN', { timeZone: tz });
-  const cwd = process.cwd();
-  const sessionKey = ctx.commMessage
-    ? resolveIMSessionIdFromMessage(ctx.commMessage)
-    : undefined;
-
-  builder.addContext({
-    cwd,
-    platform: os.platform(),
-    nodeVersion: process.version,
-    shell: process.env.SHELL || 'unknown',
-    timestamp: `${timeStr} (${tz})`,
-    memoryPath: formatMemoryPathsHint(ctx.commMessage ? String(ctx.commMessage.$adapter) : undefined, sessionKey),
-  });
-
-  // §5 上下文窗口模式提示
-  const contextWindow = ctx.contextWindow ?? 128000;
-  const contextModeHint = modelBuilder.buildContextModeHint(contextWindow);
-  if (contextModeHint) {
-    builder.addCustomSection({
-      layer: 'context',
-      title: 'Context Mode',
-      content: contextModeHint,
-      priority: 69,
-      truncatable: true,
-      maxChars: 512,
-    });
-  }
-
-  // §6 错误处理规则
-  builder.addCustomSection({
-    layer: 'constraints',
-    title: 'Error Handling',
-    content: ERROR_HANDLING_RULES,
-    priority: 97,
-    truncatable: true,
-    maxChars: 2048,
-  });
-
-  // §7 任务完整性规则
-  builder.addCustomSection({
-    layer: 'constraints',
-    title: 'Task Completion',
-    content: TASK_COMPLETION_RULES,
-    priority: 96,
-    truncatable: true,
-    maxChars: 1024,
-  });
-
-  // §8 编辑精确匹配规则
-  builder.addCustomSection({
-    layer: 'constraints',
-    title: 'Editing',
-    content: EDITING_RULES,
-    priority: 95,
-    truncatable: true,
-    maxChars: 2048,
-  });
-
-  // §9 代码引用格式
-  builder.addCustomSection({
-    layer: 'constraints',
-    title: 'Code References',
-    content: CODE_REFERENCE_RULES,
-    priority: 94,
-    truncatable: true,
-    maxChars: 512,
-  });
-
-  if (!toolSearchActive) {
-    builder.addCustomSection({
-      layer: 'constraints',
-      title: 'Style',
-      content: buildCommunicationSection(),
-      priority: 90,
-      truncatable: false,
-    });
-  }
-
-  builder.addCustomSection({
-    layer: 'safety',
-    title: 'Security',
-    content: buildSecuritySection(),
-    priority: 88,
-    truncatable: true,
-    maxChars: 2048,
-  });
-
-  if (toolSearchActive) {
-    builder.addCustomSection({
-      layer: 'tools',
-      title: 'Orchestration',
-      content: buildOrchestrationSection(toolSearchDeferredStats),
-      priority: 75,
-      truncatable: false,
-    });
-  } else {
-    builder.addCustomSection({
-      layer: 'tools',
-      title: 'Tools',
-      content: buildDirectToolsSection(),
-      priority: 75,
-      truncatable: false,
-    });
-    builder.addConstraints();
-  }
-
-  if (platformSections?.trim()) {
-    const platformBody = buildPlatformSection(platformSections, toolSearchActive);
-    if (platformBody) {
-      builder.addCustomSection({
-        layer: 'context',
-        title: 'Platform',
-        content: platformBody,
-        priority: 70,
-        truncatable: true,
-        maxChars: 2048,
-      });
-    }
-  }
-
-  const skillsSection = buildSkillsSection(skillRegistry, skillsSummaryXML, toolSearchActive);
-  if (skillsSection) {
-    builder.addCustomSection({
-      layer: 'context',
-      title: 'Skills',
-      content: skillsSection,
-      priority: 50,
-      truncatable: true,
-    });
-  }
-
-  // 活跃技能上下文
-  if (activeSkillsContext) {
-    builder.addCustomSection({
-      layer: 'context',
-      title: 'Active Skills',
-      content: `# Active Skills\n\n${activeSkillsContext}`,
-      priority: 45,
-      truncatable: true,
-    });
-  }
-
-  // 内存指令 + 内存上下文
-  builder.addCustomSection({
-    layer: 'context',
-    title: 'Memory Instructions',
-    content: MEMORY_INSTRUCTIONS,
-    priority: 40,
-    truncatable: true,
-    maxChars: 1024,
-  });
-
-  const fileMemory = getFileMemoryContext(undefined, ctx.commMessage ? String(ctx.commMessage.$adapter) : undefined, sessionKey);
-  if (fileMemory) {
-    builder.addMemory({
-      longTerm: [fileMemory],
-    });
-  }
-
-  // 启动上下文
-  if (bootstrapContext?.trim()) {
-    builder.addCustomSection({
-      layer: 'context',
-      title: 'Bootstrap',
-      content: bootstrapContext,
-      priority: 30,
-      truncatable: true,
-    });
-  }
-
-  return builder.build();
-}
 
 /** Vision / lite paths: persona + optional platform + context hint. */
 export function buildLiteSystemPromptWithPlatform(

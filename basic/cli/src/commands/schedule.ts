@@ -66,7 +66,7 @@ const listCommand = new Command('list')
       logger.log(`    投递:   ${notifySummary(j.notify)}`);
       logger.log(`    内容:   ${j.action.prompt}`);
     }
-    logger.log('\n重启应用 (zhin start / zhin dev) 后生效。');
+    logger.log('\n重启应用（zhin runtime start）后生效。');
   });
 
 const addCommand = new Command('add')
@@ -203,6 +203,3 @@ export const scheduleCommand = new Command('schedule')
   .addCommand(removeCommand)
   .addCommand(pauseCommand)
   .addCommand(resumeCommand);
-
-/** @deprecated 使用 schedule */
-export const cronCommand = scheduleCommand;

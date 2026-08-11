@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/weixin-ilink/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/weixin-ilink/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=3f84be280f6d42ce -->
+<!-- sync-adapter-docs:sha256=3ef2b1f90f8d45f5 -->
 
 # @zhin.js/adapter-weixin-ilink
 
@@ -83,4 +83,3 @@ data/weixin-ilink/<bot-name>.json
 ## 文档
 
 - 适配器索引：[`plugins/adapters/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/weixin-ilink/README.md)
-- 原位迁移：[`docs/architecture/target-implementation/in-place-migration.md`](https://github.com/zhinjs/zhin/tree/main/plugins/docs/architecture/target-implementation/in-place-migration.md)

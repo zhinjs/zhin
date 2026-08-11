@@ -20,7 +20,7 @@ src/
 
 - 一个文件超过数百行
 - 每个命令都自己查数据库、拼相同返回格式
-- `useContext('database')`、`useContext('router')`、`addCron()` 都写在一起
+- Host 资源取用（数据库 / HTTP / 定时任务）与业务逻辑都写在一起
 
 ## 重构后：按职责拆开
 
@@ -44,47 +44,44 @@ src/
 
 ### 旧入口里原本同时做这些事
 
-1. `declareConfig()`
+1. 配置声明与默认值
 2. `defineModel()` 或 `db.define()`
-3. `useContext('database', ...)`
-4. 多个 `addCommand()`
-5. `addCron(new Cron(...))`
-6. `useContext('router', ...)`
+3. 数据库服务挂载
+4. 多个命令注册
+5. 定时任务注册
+6. HTTP 路由注册
 
-### 新结构里推荐这样放
+### 新结构里推荐这样放（Plugin Runtime 约定目录）
 
-1. `src/index.ts`
+1. `plugin.ts`
 内容：
-- `usePlugin()`
-- `declareConfig()`
-- 导入 `commands/index.js`
-- 导入 `crons/index.js`
-- `useContext('database', ...)` 时挂载数据库服务逻辑
-- `useContext('router', ...)` 时挂载 HTTP 服务逻辑
+- default-export `definePlugin()`
+- Host 资源装配（`context.resources.use(databaseHostToken)` 等）
+- `context.lifecycle.add(...)` 反注册
+- 配置经 `schema.json` + `context.config.get()`
 
-2. `src/models/index.ts`
+2. `models/` 或入口内
 内容：
-- 表定义
-- `registerPluginModels()`
+- 表定义（`db.define(...)`）
 
 3. `src/services/database.ts`
 内容：
 - 获取 model
 - 查询、写入、聚合等共享数据逻辑
 
-4. `src/commands/feed.ts`
+4. `commands/feed.ts`（约定目录，default-export `defineCommand`）
 内容：
 - 只保留命令入口和参数处理
 - 真正的数据读写调用 `services/database.ts` 或 `services/feed.ts`
 
-5. `src/crons/index.ts`
+5. 定时任务
 内容：
-- 注册定时任务
-- 周期表达式来自配置
+- 经 `scheduleHostToken` 注册，cron 表达式来自配置
+- `context.lifecycle.add` 挂反注册
 
 6. `src/services/http.ts`
 内容：
-- 路由注册逻辑
+- 经 `httpHostToken` 的路由注册逻辑
 
 ## 一条具体迁移规则
 

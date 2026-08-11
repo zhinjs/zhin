@@ -101,7 +101,7 @@ ai:
     expect(fixedAi.providers.openai.driver).toBeUndefined();
   });
 
-  it('应报告 bot 缺少对应 adapter 插件', async () => {
+  it('legacy plugins 数组与顶层 endpoints 报整体迁移错误', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
 plugins:
   - "@zhin.js/adapter-sandbox"
@@ -111,28 +111,52 @@ endpoints:
 `);
 
     const result = await runConfigCheck(tmpDir);
-    expect(result.issues.some((i) => i.code === 'endpoint.adapter_plugin_missing')).toBe(true);
+    const codes = result.issues.map((i) => i.code);
+    expect(codes).toContain('plugins.legacy_form');
+    expect(codes).toContain('endpoints.legacy_form');
+  });
 
-    const raw = await readConfig(path.join(tmpDir, 'zhin.config.yml'));
-    const { config: fixed } = applyConfigFixes(raw);
-    expect((fixed.plugins as string[]).includes('@zhin.js/adapter-qq')).toBe(true);
+  it('新形态 plugins.<instanceKey> 的键与形态校验', async () => {
+    await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+plugins:
+  "1bad-key": {}
+  sandbox: "not-an-object"
+`);
+
+    const result = await runConfigCheck(tmpDir);
+    const codes = result.issues.map((i) => i.code);
+    expect(codes).toContain('plugins.key_invalid');
+    expect(codes).toContain('plugins.entry_invalid');
+  });
+
+  it('新形态 plugins.<instanceKey> 合法配置不误报', async () => {
+    await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+plugins:
+  sandbox: {}
+`);
+
+    const result = await runConfigCheck(tmpDir);
+    expect(result.issues.some((i) => i.code.startsWith('plugins.'))).toBe(false);
+    expect(result.issues.some((i) => i.code.startsWith('endpoints.'))).toBe(false);
   });
 
   it('inspectProjectConfig --fix 应写回配置', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
 plugins:
-  - "@zhin.js/adapter-sandbox"
-endpoints:
-  - context: qq
-    name: zhin
+  sandbox: {}
+database:
+  dialect: postgres
+log_level: 1
 `);
 
     const before = await inspectProjectConfig(tmpDir);
-    expect(before.issues.some((i) => i.code === 'endpoint.adapter_plugin_missing')).toBe(true);
+    expect(before.issues.length).toBeGreaterThan(0);
 
     const after = await inspectProjectConfig(tmpDir, { fix: true });
     expect(after.fixesApplied.length).toBeGreaterThan(0);
-    expect(after.issues.every((i) => i.code !== 'endpoint.adapter_plugin_missing')).toBe(true);
+    const raw = await readConfig(path.join(tmpDir, 'zhin.config.yml'));
+    expect((raw.database as { dialect: string }).dialect).toBe('pg');
+    expect(raw.log_level).toBe('info');
   });
 
   it('--fix 应将数字 log_level 规范为字符串', () => {

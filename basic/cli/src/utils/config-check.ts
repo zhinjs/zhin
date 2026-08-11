@@ -86,108 +86,62 @@ function collectEnvRefs(
 
 function checkEndpoints(
   config: Record<string, unknown>,
-  plugins: string[],
   issues: ConfigIssue[],
 ): void {
   const endpoints = config.endpoints;
-  if (!endpoints) return;
-  if (!Array.isArray(endpoints)) {
-    pushIssue(issues, {
-      severity: 'error',
-      code: 'endpoints.invalid',
-      path: 'endpoints',
-      message: 'endpoints 必须是数组',
-    });
-    return;
-  }
-  if (endpoints.length === 0) {
-    pushIssue(issues, {
-      severity: 'warn',
-      code: 'endpoints.empty',
-      path: 'endpoints',
-      message: '未配置任何 Endpoint 实例',
-      fixHint: 'zhin setup --adapters',
-    });
-  }
-
-  const pluginSet = new Set(plugins);
-  endpoints.forEach((entry, index) => {
-    const base = `endpoints[${index}]`;
-    if (!entry || typeof entry !== 'object') {
-      pushIssue(issues, {
-        severity: 'error',
-        code: 'endpoint.invalid',
-        path: base,
-        message: 'Endpoint 配置必须是对象',
-      });
-      return;
-    }
-    const row = entry as Record<string, unknown>;
-    const context = typeof row.context === 'string' ? row.context : '';
-    const name = typeof row.name === 'string' ? row.name : '';
-    if (!context) {
-      pushIssue(issues, {
-        severity: 'error',
-        code: 'endpoint.context_missing',
-        path: `${base}.context`,
-        message: 'Endpoint 缺少 context',
-      });
-    }
-    if (!name) {
-      pushIssue(issues, {
-        severity: 'error',
-        code: 'endpoint.name_missing',
-        path: `${base}.name`,
-        message: 'Endpoint 缺少 name',
-      });
-    }
-    if (context === 'icqq' && (row.password != null || row.platform != null)) {
-      pushIssue(issues, {
-        severity: 'warn',
-        code: 'icqq.legacy_login_fields',
-        path: base,
-        message: 'ICQQ 登录凭据应通过 icqq login 管理，不应写在 zhin.config 中',
-        fixable: true,
-        fixHint: 'zhin config check --fix 将移除 password/platform 字段',
-      });
-    }
-    if (context) {
-      const expected = adapterPluginForContext(context);
-      if (!pluginSet.has(expected)) {
-        pushIssue(issues, {
-          severity: 'error',
-          code: 'endpoint.adapter_plugin_missing',
-          path: 'plugins',
-          message: `endpoints[].context=${context} 需要插件 ${expected}`,
-          fixable: true,
-          fixHint: `zhin config check --fix 将把 ${expected} 加入 plugins`,
-        });
-      }
-    }
+  if (endpoints === undefined) return;
+  // legacy 顶层 endpoints 数组已废弃：Endpoint 收敛到 plugins.<适配器实例>.endpoints
+  pushIssue(issues, {
+    severity: 'error',
+    code: 'endpoints.legacy_form',
+    path: 'endpoints',
+    message: '顶层 endpoints 数组已废弃（legacy 形态）。Endpoint 配置收敛到 plugins.<适配器实例>.endpoints；请运行 `zhin migrate` 或 `zhin setup --adapters` 迁移',
   });
 }
 
-function checkPlugins(config: Record<string, unknown>, issues: ConfigIssue[]): string[] {
-  const plugins = Array.isArray(config.plugins)
-    ? config.plugins.map((p) => String(p))
-    : [];
-
-  for (const plugin of plugins) {
-    if (RENAMED_PLUGINS[plugin]) {
+function checkPlugins(config: Record<string, unknown>, issues: ConfigIssue[]): void {
+  const raw = config.plugins;
+  if (raw === undefined) return;
+  if (Array.isArray(raw)) {
+    // legacy 形态：plugins 字符串数组已废弃，整体需迁移
+    pushIssue(issues, {
+      severity: 'error',
+      code: 'plugins.legacy_form',
+      path: 'plugins',
+      message: 'plugins 数组形态已废弃（legacy）。Plugin Runtime 使用 plugins.<instanceKey> 对象形态；请运行 `zhin migrate` 或 `zhin setup` 迁移',
+    });
+    return;
+  }
+  if (!raw || typeof raw !== 'object') {
+    pushIssue(issues, {
+      severity: 'error',
+      code: 'plugins.invalid',
+      path: 'plugins',
+      message: 'plugins 必须是对象（plugins.<instanceKey> 形态）',
+    });
+    return;
+  }
+  // 新形态：合法键校验（与 config-composer 的 plugins 对象 Schema 对齐）
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!/^[a-zA-Z][a-zA-Z0-9._-]*$/.test(key)) {
       pushIssue(issues, {
         severity: 'error',
-        code: 'plugins.renamed',
-        path: 'plugins',
-        message: `插件 ${plugin} 已重命名为 ${RENAMED_PLUGINS[plugin]}`,
-        fixable: true,
-        fixHint: 'zhin config check --fix',
+        code: 'plugins.key_invalid',
+        path: `plugins.${key}`,
+        message: `plugins 键名 ${JSON.stringify(key)} 非法（须为 instanceKey，字母开头，字母/数字/._-）`,
+      });
+      continue;
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      pushIssue(issues, {
+        severity: 'error',
+        code: 'plugins.entry_invalid',
+        path: `plugins.${key}`,
+        message: `plugins.${key} 必须是对象（插件实例配置）`,
       });
     }
   }
-
-  return plugins;
 }
-
 function checkLogLevel(config: Record<string, unknown>, issues: ConfigIssue[]): void {
   if (!('log_level' in config)) return;
   if (!isValidLogLevelInput(config.log_level)) {
@@ -450,10 +404,10 @@ export async function runConfigCheck(
 
   const aiUtils = loadAiConfigUtils(cwd);
 
-  const plugins = checkPlugins(config, issues);
+  checkPlugins(config, issues);
   checkLogLevel(config, issues);
   checkDatabase(config, issues);
-  checkEndpoints(config, plugins, issues);
+  checkEndpoints(config, issues);
   checkZhinStackDependencies(cwd, config, issues);
   checkAiDependencies(cwd, config, issues);
   checkAi(config, issues, aiUtils);
@@ -485,18 +439,6 @@ export function applyConfigFixes(
         changed = true;
       }
     }
-    const endpoints = Array.isArray(next.endpoints) ? next.endpoints : [];
-    for (const entry of endpoints) {
-      if (!entry || typeof entry !== 'object') continue;
-      const context = String((entry as Record<string, unknown>).context ?? '');
-      if (!context) continue;
-      const expected = adapterPluginForContext(context);
-      if (!plugins.includes(expected)) {
-        plugins.push(expected);
-        fixes.push(`added ${expected} for endpoints[].context=${context}`);
-        changed = true;
-      }
-    }
     if (changed) next.plugins = [...new Set(plugins)];
   }
 
@@ -507,26 +449,6 @@ export function applyConfigFixes(
       next.database = database;
       fixes.push('renamed database.dialect postgres → pg');
     }
-  }
-
-  if (Array.isArray(next.endpoints)) {
-    next.endpoints = next.endpoints.map((entry) => {
-      if (!entry || typeof entry !== 'object') return entry;
-      const row = { ...(entry as Record<string, unknown>) };
-      if (row.context === 'icqq') {
-        let changed = false;
-        if ('password' in row) {
-          delete row.password;
-          changed = true;
-        }
-        if ('platform' in row) {
-          delete row.platform;
-          changed = true;
-        }
-        if (changed) fixes.push('removed legacy icqq password/platform fields from endpoints[]');
-      }
-      return row;
-    });
   }
 
   if (next.ai && typeof next.ai === 'object' && !Array.isArray(next.ai)) {

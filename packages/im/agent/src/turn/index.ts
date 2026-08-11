@@ -81,6 +81,7 @@ export { persistDeferredWorkerResultToContext } from './persist-deferred-context
 export { persistSubagentResultToContext } from './persist-subagent-context.js';
 
 export { computeDeferredDelta } from './turn-deferred-delta.js';
+export { DeferredTurnState } from './deferred-turn-state.js';
 
 export {
   initScheduleTurnContext,

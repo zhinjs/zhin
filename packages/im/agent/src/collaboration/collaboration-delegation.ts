@@ -4,6 +4,8 @@
 import { type Message, extractEmbeddedAiOutboundJson } from '@zhin.js/core';
 import type { CollaborationScene, PipelineArtifactKind } from './types.js';
 import { findActiveDelegation } from './delegation-state.js';
+import { resolvePlannerEndpointId } from './collab-utils.js';
+export { resolvePlannerEndpointId } from './collab-utils.js';
 export function messageTextContent(message: Message): string {
   const parts: string[] = [];
   for (const seg of message.$content) {
@@ -12,10 +14,6 @@ export function messageTextContent(message: Message): string {
     }
   }
   return parts.join(' ').trim();
-}
-
-export function resolvePlannerEndpointId(cell: CollaborationScene): string | undefined {
-  return cell.members.find((m) => m.pipelineRole === 'planner')?.endpointId;
 }
 
 /** 模型把 cell_* 工具返回值原样贴到群里的 JSON blob。 */

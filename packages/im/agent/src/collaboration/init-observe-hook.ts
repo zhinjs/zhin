@@ -10,35 +10,13 @@ import type { Message, Plugin } from '@zhin.js/core';
 import { getSceneIdentityService } from './scene-identity-service.js';
 import { advanceWizardStep } from './init-wizard-service.js';
 import { isAssignableWizardRole, type WizardStep } from './collaboration-db-model.js';
+import { extractAtTargets } from './collab-utils.js';
 
 /**
- * 从 at 消息段提取平台 id（兼容 qq / user_id / id）。
+ * 从 at 消息段提取平台 id / target 列表：实现已下沉到 collab-utils.ts
+ * （纯函数无依赖模块），此处 re-export 保持导出面。
  */
-export function atSegmentPlatformId(
-  data: Record<string, unknown> | undefined,
-): string | undefined {
-  if (!data) return undefined;
-  for (const key of ['qq', 'user_id', 'id'] as const) {
-    const value = data[key];
-    if (value != null && String(value).trim() !== '') {
-      return String(value);
-    }
-  }
-  return undefined;
-}
-
-/**
- * 提取消息中 at segment 的 target id 列表。
- */
-export function extractAtTargets(message: Message): string[] {
-  const targets: string[] = [];
-  for (const el of message.$content ?? []) {
-    if (el.type !== 'at') continue;
-    const id = atSegmentPlatformId(el.data as Record<string, unknown> | undefined);
-    if (id) targets.push(id);
-  }
-  return targets;
-}
+export { atSegmentPlatformId, extractAtTargets } from './collab-utils.js';
 
 /**
  * 判断当前 endpoint 是否是已注册的系统 Bot。

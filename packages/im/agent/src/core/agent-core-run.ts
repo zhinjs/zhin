@@ -5,9 +5,10 @@
 import { aiOutboundJsonSchema, buildAiOutboundPromptHint, type Plugin } from '@zhin.js/core';
 import type { AIService } from '../service.js';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, getLlmTransportModel, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, getLoadedToolNamesFromSnapshot } from '@zhin.js/ai';
+import { type AgentTool, type AgentToolExecutionContext, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, getLlmTransportModel, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, getLoadedToolNamesFromSnapshot } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { runWithCommMessage } from '../security/comm-message-context.js';
+import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { createOwnerOrchestratedToolResultTransform } from '../orchestrator/owner-confirm-orchestration.js';
 import { resolveModelHarness } from '../config/model-harness-runtime.js';
@@ -89,14 +90,6 @@ function resolveAgentOutputSchema(
   return value;
 }
 
-function tokenUsageToLegacy(usage: TokenUsage): Usage {
-  return {
-    prompt_tokens: usage.input,
-    completion_tokens: usage.output,
-    total_tokens: usage.totalTokens,
-  };
-}
-
 function toolResultToAgentMessage(
   toolCall: ParsedToolCall,
   result: unknown,
@@ -145,26 +138,12 @@ export interface AgentLoopTurnInput {
   journal?: AgentRunJournal;
 }
 
-/** Optional second argument for tools that support cooperative cancellation. */
-export interface AgentToolExecutionContext {
-  readonly signal?: AbortSignal;
-  readonly sessionId: string;
-  readonly toolCallId: string;
-  readonly toolName: string;
-}
-
-type CancellableToolExecute<TResult = unknown> = (
-  args: Record<string, unknown>,
-  legacyContext?: Message,
-  executionContext?: AgentToolExecutionContext,
-) => TResult | Promise<TResult>;
-
-export async function executeCancellableTool<TResult>(
-  execute: CancellableToolExecute<TResult>,
+export async function executeCancellableTool(
+  execute: AgentTool['execute'],
   args: Record<string, unknown>,
   legacyContext: Message,
   context: AgentToolExecutionContext,
-): Promise<TResult> {
+): Promise<unknown> {
   throwIfToolExecutionAborted(context.signal);
   const execution = Promise.resolve().then(() => execute(args, legacyContext, context));
   const result = await raceToolExecutionAbort(execution, context.signal);
@@ -447,8 +426,8 @@ export async function* runAgentLoopTextTurnRun(
       })
     : [];
 
-  let sessionSnapshot = host.lastDeferredSessionSnapshot ?? { loadedTools: {}, loadedSkills: [] };
-  const catalog = host.lastDeferredCatalog ?? [];
+  let sessionSnapshot = host.deferred.lastSessionSnapshot ?? { loadedTools: {}, loadedSkills: [] };
+  const catalog = host.deferred.lastCatalog ?? [];
   const deferredCfg = resolveDeferredToolsConfig(host.config);
 
   if (hasTools && catalog.length > 0) {
@@ -462,7 +441,7 @@ export async function* runAgentLoopTextTurnRun(
       discoverTopK: deferredCfg.discoverTopK,
       persistSnapshot: async (snap) => {
         sessionSnapshot = snap;
-        host.lastDeferredSessionSnapshot = snap;
+        host.deferred.lastSessionSnapshot = snap;
         await persistDeferredToolSnapshot(host, sessionId, snap);
       },
       onSkillLoaded: (_name, instructions) => {
@@ -680,7 +659,7 @@ export async function* runAgentLoopTextTurnRun(
       try {
         const raw = await runWithCommMessage(contextForTools, () =>
           executeCancellableTool(
-            legacy.execute as CancellableToolExecute,
+            legacy.execute,
             effectiveArgs,
             contextForTools,
             {

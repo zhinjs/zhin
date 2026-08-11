@@ -1,4 +1,3 @@
-export * from './constants.js';
 export * from './media-types.js';
 export * from './resolve-config.js';
 export * from './media-normalize.js';

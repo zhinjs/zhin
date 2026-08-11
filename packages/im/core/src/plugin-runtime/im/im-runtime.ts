@@ -457,14 +457,6 @@ export class ImRuntime implements MessageGateway {
   }
 
   /**
-   * Console endpoint 社交/群管 RPC：解析 live Endpoint 实例（无则 null）。
-   * @deprecated Host callers should use `getEndpointManagement()`.
-   */
-  getLiveEndpoint(adapter: string, endpointId: string): unknown | null {
-    return this.#liveEndpoint(adapter, endpointId);
-  }
-
-  /**
    * Narrow Host seam for Console social/group management. An empty object means
    * the Endpoint exists but implements no management operations; null means it
    * cannot be resolved.

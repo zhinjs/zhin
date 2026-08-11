@@ -102,11 +102,11 @@ export async function prepareTurnTools(
   let sessionSnapshot = initialSnapshot;
   sessionSnapshot = await preloadScheduleToolsFromContext(host, opts.sessionId, catalog, sessionSnapshot);
   captureDeferredSnapshotBefore(sessionSnapshot);
-  host.lastDeferredSnapshotBefore = cloneDeferredSnapshot(sessionSnapshot);
+  host.deferred.lastSnapshotBefore = cloneDeferredSnapshot(sessionSnapshot);
   await rehydrateTurnActiveSkills(host, opts.sessionId, host.getAlwaysSkillsBaseline());
-  host.lastDeferredSessionSnapshot = sessionSnapshot;
-  host.lastDeferredCatalog = catalog;
-  host.lastToolSearchDeferredStats = deferredStats;
+  host.deferred.lastSessionSnapshot = sessionSnapshot;
+  host.deferred.lastCatalog = catalog;
+  host.deferred.lastToolSearchStats = deferredStats;
 
   return {
     contextForTools,

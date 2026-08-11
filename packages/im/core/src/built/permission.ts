@@ -145,8 +145,3 @@ export namespace Permissions {
     return { name, check };
   }
 }
-
-/**
- * @deprecated Use PermissionFeature instead
- */
-export const PermissionService = PermissionFeature;

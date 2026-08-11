@@ -12,12 +12,9 @@ export {
   FIXED_DISCIPLINE_RULES,
   contentToText,
   buildUserMessageWithHistory,
-  buildEnhancedPersona,
   resolvePromptFileRole,
-  buildContextHint,
   describePromptSectionsForDebug,
   buildRichSystemPrompt,
-  buildRichSystemPromptWithBuilder,
   buildLiteSystemPromptWithPlatform,
   appendQuoteContextSystemHint,
 } from './system-prompt.js';

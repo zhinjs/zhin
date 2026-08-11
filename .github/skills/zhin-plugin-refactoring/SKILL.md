@@ -97,23 +97,22 @@ user-invocable: true
 
 ### 第 5 步：收口到入口文件
 
-重构后的入口文件应只负责：
+重构后的入口文件（`plugin.ts`）应只负责：
 
-- `usePlugin()`
-- `declareConfig()`
-- 装配子模块
-- `useContext()` 注入依赖
+- default-export `definePlugin()`（Plugin Runtime 形态；不要再用 `usePlugin()` / `MessageCommand`）
+- 装配子模块与 Host 资源（`context.resources.has/use`，如 `databaseHostToken` / `scheduleHostToken` / `httpHostToken`）
+- 注册随 generation 回收的资源（`context.lifecycle.add(...)`）
 
-不要把业务细节继续留在入口文件里。
+配置由 `schema.json` + `context.config.get()` 声明/读取（不再有 `declareConfig()`）；命令、中间件、AI 工具等能力放约定目录（`commands/` / `middlewares/` / `agent/`），由运行时按目录装配，不要在入口手写注册。不要把业务细节继续留在入口文件里。
 
 ### 第 6 步：校验生命周期与清理
 
 检查以下问题：
 
-- 监听器是否在销毁时可清理
-- 定时任务是否通过 `addCron()` 管理
-- 路由与 Web 入口是否有对应释放路径
-- 数据库逻辑是否只在 `database` Context 就绪后挂载
+- 监听器是否在销毁时可清理（优先 `context.lifecycle.add` 挂反注册）
+- 定时任务是否通过 `scheduleHostToken` 注册并随 generation 回收（不再有 `addCron()`）
+- HTTP 路由是否经 `httpHostToken` 注册并有对应释放路径
+- 数据库逻辑是否只在拿到 `databaseHostToken` 后挂载
 
 ### 第 7 步：验证行为未回退
 
@@ -147,9 +146,9 @@ pnpm --filter <pkg> test
 
 | 触发条件 | 一线处理 | 仍失败 |
 |----------|----------|--------|
-| 重构后命令不触发 | 对比重构前后 `addCommand` 注册与模板字符串 | 回滚该模块，逐文件迁移 |
+| 重构后命令不触发 | 对比重构前后 `commands/` 约定目录的 `defineCommand` 导出与文件路径 | 回滚该模块，逐文件迁移 |
 | 测试大面积失败 | 先恢复行为再谈结构；用 git 对比入口装配 | 🔴 暂停拆文件，只修回归 |
-| Context 未就绪 | 确认 `useContext` 依赖顺序与清理函数 | 对照 [重构迁移清单](./references/refactor-migration-checklist.md) |
+| Host 资源未装配 | 确认 `context.resources.has(token)` 守卫与 `lifecycle` 清理 | 对照 [重构迁移清单](./references/refactor-migration-checklist.md) |
 
 ## 🔴 CHECKPOINT · 行为冻结
 

@@ -178,7 +178,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
         eventHub: consoleEventHub,
         snapshot: () => host.runtime.controller.snapshots.current,
         onRestart: () => {
-          // Exit 51: CLI daemon (`zhin start` / `zhin dev`) auto-restarts the process.
+          // Exit 51: CLI daemon (`zhin runtime start`) auto-restarts the process.
           process.exit(51);
         },
       })(context);

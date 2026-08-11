@@ -129,7 +129,9 @@ export interface MessageSender{
 /**
  * 通用字典类型
  */
-export type Dict<V=any,K extends string|symbol=string>=Record<K, V>;
+// SSOT 在 @zhin.js/kernel（Record<string, T>）；core 仅 re-export。
+// 原 K extends string|symbol 形参全仓零使用，已随收敛删除。
+export type { Dict } from '@zhin.js/kernel';
 /**
  * 用户信息结构
  */
@@ -140,8 +142,6 @@ export interface UserInfo {
   role?: string;
 }
 
-// PermissionService and ConfigService are now exported from their respective
-// built files as backward-compatible aliases for PermissionFeature / ConfigFeature.
 /**
  * 群组信息结构
  */
@@ -428,10 +428,6 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   command?: ToolCommandConfig | false;
 }
 
-/**
- * @deprecated 使用 `Tool<TArgs>` 替代。Tool 已原生支持泛型。
- */
-export type ToolDefinition<TArgs extends Record<string, any> = Record<string, any>> = Tool<TArgs>;
 
 export namespace Tool {
   /**

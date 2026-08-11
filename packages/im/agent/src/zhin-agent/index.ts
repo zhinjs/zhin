@@ -53,6 +53,7 @@ import {
   isPromptTraceVerbose,
 } from '../config/index.js';
 import { processTextTurn } from '../turn/turn-pipeline.js';
+import { DeferredTurnState } from '../turn/deferred-turn-state.js';
 import { prepareMultimodalBlocks } from '../media/media-normalize.js';
 import { resolveContextTailMessageLimit } from '../context/context-tail-limit.js';
 import { archiveSessionByKey } from '../session/session-io.js';
@@ -156,11 +157,8 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   private skillsSummaryXML: string = '';
   private modelRegistry: ModelRegistry | null = null;
   private readonly emitter = new ZhinAgentEventEmitter();
-  private deferredCatalog: AgentTool[] = [];
-  lastToolSearchDeferredStats?: string;
+  readonly deferred = new DeferredTurnState();
   private readonly promptController: PromptController;
-  private deferredResultSender: SubagentResultSender | null = null;
-  private deferredAutoContinueDepthBySession = new Map<string, number>();
   private lastTurnMetrics: ZhinAgentTurnMetrics | null = null;
   private readonly inboundQueueConfig: ResolvedInboundQueueConfig;
   private readonly inboundTurnQueue: InboundTurnQueue;
@@ -350,30 +348,14 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     });
   }
 
-  getDeferredResultSender(): SubagentResultSender | null {
-    return this.deferredResultSender;
-  }
-
-  getDeferredAutoContinueDepth(sessionKey: string): number {
-    return this.deferredAutoContinueDepthBySession.get(sessionKey) ?? 0;
-  }
-
-  setDeferredAutoContinueDepth(sessionKey: string, depth: number): void {
-    this.deferredAutoContinueDepthBySession.set(sessionKey, depth);
-  }
-
-  resetDeferredAutoContinueDepth(sessionKey: string): void {
-    this.deferredAutoContinueDepthBySession.delete(sessionKey);
-  }
-
   async continueAfterDeferredWorker(
     commMessage: Message, taskId: string, goal: string, result: DeferredWorkerResult,
   ): Promise<void> {
-    return continueAfterDeferredWorker(asPrivate(this), asPrivate(this), commMessage, taskId, goal, result);
+    return continueAfterDeferredWorker(asPrivate(this), commMessage, taskId, goal, result);
   }
 
   async continueAfterSubagent(payload: SubagentCompletePayload): Promise<void> {
-    return continueAfterSubagent(asPrivate(this), asPrivate(this), payload);
+    return continueAfterSubagent(asPrivate(this), payload);
   }
 
   getActiveTurnTracker(): TurnTracker | undefined {
@@ -424,9 +406,9 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   getLastTurnToolSnapshot(): { tools: string[]; skills: string[] } {
     const priv = asPrivate(this);
-    const snap = priv.lastDeferredSessionSnapshot ?? { loadedTools: {}, loadedSkills: [] };
+    const snap = priv.deferred.lastSessionSnapshot ?? { loadedTools: {}, loadedSkills: [] };
     const deferredCfg = resolveDeferredToolsConfig(this.config);
-    return computeDeferredDelta(snap, deferredCfg.alwaysLoadedTools, priv.lastDeferredSnapshotBefore);
+    return computeDeferredDelta(snap, deferredCfg.alwaysLoadedTools, priv.deferred.lastSnapshotBefore);
   }
 
   private beginActiveTurn(): void {
@@ -558,6 +540,10 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     });
   }
 
+  /**
+   * @deprecated ContentPart 时代的多模态薄 shim，下个大版本删除。
+   * 替代路径：canonical Segment 注入（入站段 → UserMessage.media）。
+   */
   async processMultimodal(parts: ContentPart[], commMessage: Message, onChunk?: OnChunkCallback): Promise<OutputElement[]> {
     const { content, mediaBlocks } = await prepareMultimodalBlocks(parts);
     return this.runInTurnContext(randomUUID(), () =>
@@ -575,8 +561,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   dispose(): void {
     disposeZhinAgentResources(this as unknown as DisposeZhinAgentTarget);
     this.subagentSystem = null;
-    this.deferredAutoContinueDepthBySession.clear();
-    this.deferredCatalog = [];
     this.lastTurnMetrics = null;
      
     this.provider = null!;

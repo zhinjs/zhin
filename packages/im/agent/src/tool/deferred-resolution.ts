@@ -64,7 +64,7 @@ export async function resolveAgentToolsForTurn(
   const apiTools = resolveDeferredApiTools(catalog, alwaysLoaded, sessionLoaded);
   const deferredStats = buildDeferredStats(catalog, apiTools);
 
-  agent.deferredCatalog = catalog.map(c => c.fullTool);
+  agent.deferred.catalog = catalog.map(c => c.fullTool);
 
   return {
     tools: apiTools,

@@ -5,7 +5,7 @@ import { expect } from 'vitest';
 import {
   Adapter,
   assertAdapterDeclaresInteractivePolicy,
-  resolveInteractiveSegments,
+  resolveKeyboardSegments,
   segment,
 } from '@zhin.js/core';
 
@@ -17,7 +17,7 @@ export function assertInteractiveOutboundContract(
 }
 
 export function smokeResolveInteractiveTextMode(policy: 'native' | 'text'): void {
-  const out = resolveInteractiveSegments(
+  const out = resolveKeyboardSegments(
     [
       segment.text('board'),
       segment.keyboard([

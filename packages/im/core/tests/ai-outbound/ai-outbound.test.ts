@@ -20,13 +20,6 @@ describe('parseOutboundSegment', () => {
       data: { text: 'hi' },
     });
   });
-
-  it('maps legacy kind to type', () => {
-    expect(parseOutboundSegment({ kind: 'mention', data: { target: '1' } })).toEqual({
-      type: 'mention',
-      data: { target: '1' },
-    });
-  });
 });
 
 describe('parseAiOutboundJson', () => {
@@ -52,7 +45,7 @@ describe('parseAiOutboundJson', () => {
     expect(parseAiOutboundJson(JSON.stringify({
       segments: [
         { type: 'text', data: { text: 'a' } },
-        { kind: 'mention', data: { target: '9' } },
+        { type: 'mention', data: { target: '9' } },
       ],
     }))).toEqual({
       text: undefined,

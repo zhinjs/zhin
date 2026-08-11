@@ -12,7 +12,7 @@ import { WIZARD_STEPS, isAssignableWizardRole, type WizardStep, type AssignableW
 import { getSceneIdentityService, type InitSessionRecord } from './scene-identity-service.js';
 import { getCollaborationSceneService } from './scene-service.js';
 import { rebootstrapEndpointRuntimes } from './bootstrap-agent-runtimes.js';
-import { defaultCellId } from './collaboration-commands.js';
+import { defaultCellId } from './collab-utils.js';
 
 const WIZARD_PROMPTS: Record<WizardStep, string> = {
   researcher: '协作群初始化：请 @ 调研员（Researcher）Bot',

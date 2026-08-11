@@ -2,7 +2,7 @@ import type { Adapters } from './adapter.js';
 import type { NoticeKind } from './side-event/types.js';
 import type { SideEventBase } from './side-event/base.js';
 
-export type { NoticeKind, ComposedNoticeName, NoticeType } from './side-event/types.js';
+export type { NoticeKind, ComposedNoticeName } from './side-event/types.js';
 export type { SideEventBase } from './side-event/base.js';
 export {
   composeSideEventName,

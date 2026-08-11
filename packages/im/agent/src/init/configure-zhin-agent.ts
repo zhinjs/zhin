@@ -9,43 +9,29 @@ import type { SessionSystem } from '../session/session-system.js';
 import type { EventSystem } from '../event/event-system.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
-import type { SubagentSystem, SubagentResultSender } from '../subagent/index.js';
-import type { ResolvedAgentBinding } from '../config/types.js';
 import { bindingToModelConfig } from '../routing/runtime-binding.js';
-import type { ZhinAgentConfig, ZhinAgentDependencies } from '../config/index.js';
-import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
+import type { ZhinAgentDependencies } from '../config/index.js';
+import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { TurnContextBridgeState } from '../turn/turn-context-bridge.js';
 const logger = getLogger('ZhinAgent');
 
-export interface ConfigureZhinAgentTarget {
-  config: Required<ZhinAgentConfig>;
-  skillRegistry: SkillRegistry | null;
-  skillSystem: SkillSystem | null;
-  orchestrator: AgentOrchestrator | null;
-  agentCore: AgentCore | null;
-  toolSystem: ToolSystem | null;
-  contextSystem: ContextSystem | null;
+/** configure 的写入目标：权威接口（ZhinAgentPrivate）Pick + 门面内部装配字段。 */
+export type ConfigureZhinAgentTarget = Pick<
+  ZhinAgentPrivate,
+  | 'config' | 'skillRegistry' | 'skillSystem' | 'orchestrator' | 'agentCore' | 'toolSystem'
+  | 'contextSystem' | 'sessionSystem'
+  | 'imSessionStore' | 'agentSessionStore' | 'contextRepository' | 'imTranscriptStore'
+  | 'modelRegistry' | 'subagentSystem' | 'emitter' | 'activeBinding'
+  | 'bootstrapContext' | 'globalContext' | 'skillsSummaryXML' | 'deferred'
+> & {
+  /** 接口外的运行时模块（declare 在类上，不经 ZhinAgentPrivate 暴露） */
   memorySystem: MemorySystem | null;
-  sessionSystem: SessionSystem | null;
   eventSystem: EventSystem | null;
-  imSessionStore: ZhinAgentDependencies['imSessionStore'];
-  agentSessionStore: ZhinAgentDependencies['agentSessionStore'];
-  contextRepository: ZhinAgentDependencies['contextRepository'];
-  imTranscriptStore: ZhinAgentDependencies['imTranscriptStore'];
-  modelRegistry: ModelRegistry | null;
-  subagentSystem: SubagentSystem | null;
-  emitter: ZhinAgentEventEmitter;
-  provider: AIProvider;
   providerResolver: ((alias: string) => AIProvider) | null;
-  activeBinding: ResolvedAgentBinding | null;
-  deferredResultSender: SubagentResultSender | null;
-  bootstrapContext: string;
-  globalContext: string;
   alwaysSkillsBaseline: string;
-  skillsSummaryXML: string;
   turnContextState: TurnContextBridgeState;
   wireLlmApiLayer(): void;
-}
+};
 
 export function applyZhinAgentConfigure(
   target: ConfigureZhinAgentTarget,
@@ -89,7 +75,7 @@ export function applyZhinAgentConfigure(
   if (deps.subagentSender !== undefined) {
     target.subagentSystem?.setSender(deps.subagentSender);
   }
-  if (deps.deferredResultSender !== undefined) target.deferredResultSender = deps.deferredResultSender;
+  if (deps.deferredResultSender !== undefined) target.deferred.resultSender = deps.deferredResultSender;
   if (deps.bootstrapContext !== undefined) {
     target.bootstrapContext = deps.bootstrapContext;
     logger.debug(`Bootstrap context set (${deps.bootstrapContext.length} chars)`);

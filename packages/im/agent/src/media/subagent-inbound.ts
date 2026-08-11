@@ -1,8 +1,7 @@
 import * as path from 'node:path';
 import { loadSpeechPipeline, type SegmentMediaRef } from '@zhin.js/core';
-import type { AIProvider, ContentPart, MediaContentBlock } from '@zhin.js/ai';
+import type { AIProvider, MediaContentBlock } from '@zhin.js/ai';
 import {
-  normalizeContentPartsToPayloads,
   normalizeMediaRefsToPayloads,
   payloadToVisionPart,
 } from './media-normalize.js';
@@ -45,13 +44,11 @@ export interface SubagentInboundTask {
  */
 export async function buildSubagentInboundTask(
   aiContent: string,
-  mediaRefs: readonly SegmentMediaRef[] | readonly ContentPart[],
+  mediaRefs: readonly SegmentMediaRef[],
   opts?: { workspaceDir?: string; provider?: AIProvider; config?: MultimodalConfig },
 ): Promise<SubagentInboundTask> {
   const config = opts?.config ?? resolveMultimodalConfig();
-  const payloads = isSegmentMediaRefs(mediaRefs)
-    ? await normalizeMediaRefsToPayloads(mediaRefs, config.maxFileBytes)
-    : await normalizeContentPartsToPayloads(mediaRefs, config.maxFileBytes);
+  const payloads = await normalizeMediaRefsToPayloads(mediaRefs, config.maxFileBytes);
   const inboundRoot = path.join(opts?.workspaceDir || process.cwd(), config.inboundDir);
   const lines: string[] = [];
   const visionParts: MediaContentBlock[] = [];
@@ -152,10 +149,4 @@ export async function buildSubagentInboundTask(
     visionPartCount: visionParts.length,
     useNativeVision: useNativeVision && visionParts.length > 0,
   };
-}
-
-function isSegmentMediaRefs(
-  input: readonly SegmentMediaRef[] | readonly ContentPart[],
-): input is readonly SegmentMediaRef[] {
-  return input.every((item) => typeof item === 'object' && item !== null && 'media' in item);
 }

@@ -108,17 +108,7 @@ export type {
   AfterToolCallContext,
 } from './agent-loop.js';
 
-export {
-  agentMessagesToOpenAi,
-  contextToChatCompletionRequest,
-  chatCompletionToAssistantMessage,
-  assistantText,
-} from './convert/openai-bridge.js';
-
-export {
-  createOpenAiCompletionsStreamFn,
-  type ChatCompletionsMockProvider,
-} from './providers/openai-completions.js';
+export { assistantText } from './convert/openai-bridge.js';
 
 export {
   registerLlmApiFromProviders,
@@ -130,7 +120,7 @@ export type { SdkProviderEntry } from './register-api-layer.js';
 export {
   agentToolToLlmTool,
   agentToolsToLlmTools,
-} from './legacy-tool-bridge.js';
+} from './tool-bridge.js';
 
 export { formatRedactedJson, redactValueForLog } from './redact-request-body.js';
 

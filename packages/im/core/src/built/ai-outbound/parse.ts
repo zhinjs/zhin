@@ -6,16 +6,11 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** 解析单条 outbound segment（canonical 或 legacy kind/mode）。 */
+/** 解析单条 outbound segment（canonical type/data 形态）。 */
 export function parseOutboundSegment(raw: unknown): Segment | null {
   if (!isPlainObject(raw)) return null;
 
-  const type =
-    typeof raw.type === 'string' && raw.type.trim()
-      ? raw.type.trim()
-      : typeof raw.kind === 'string' && raw.kind.trim()
-        ? raw.kind.trim()
-        : undefined;
+  const type = typeof raw.type === 'string' && raw.type.trim() ? raw.type.trim() : undefined;
   if (!type) return null;
 
   const data = isPlainObject(raw.data) ? raw.data : {};

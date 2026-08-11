@@ -14,7 +14,7 @@ import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
   formatLegacyConversationRef,
-  formatLegacyMessageReference,
+  formatLegacyMessageRef,
   nativeConversationId,
   parseLegacyMessageReference,
 } from '@zhin.js/im-contract';
@@ -150,14 +150,13 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const body = formatOutboundBody(payload);
-    // recall 链路仍是本端点编码的 legacy 引用，在边界内部从 conversation 派生 target
-    const target = formatLegacyConversationRef(conversation);
+    // recall 链路仍是本端点编码的 legacy 引用，在边界内部从 conversation 派生
     const snowflake = await this.#sendBody(conversation.id, body);
-    const messageId = formatLegacyMessageReference({ target, messageId: snowflake });
+    const messageId = formatLegacyMessageRef({ conversation, id: snowflake });
     this.#logger.debug(formatCompact({
       op: 'discord_send',
       endpoint: this.#options.config.name,
-      target,
+      target: formatLegacyConversationRef(conversation),
       messageId,
     }));
     return messageId;
@@ -490,13 +489,8 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
     }
     const data = JSON.parse(text) as { id?: string };
     const snowflake = data.id ?? '';
-    // recall 链路仍是本端点编码的 legacy 引用，在边界内部从 conversation 派生 target
-    return snowflake
-      ? formatLegacyMessageReference({
-        target: formatLegacyConversationRef(conversation),
-        messageId: snowflake,
-      })
-      : '';
+    // recall 链路仍是本端点编码的 legacy 引用，在边界内部从 conversation 派生
+    return snowflake ? formatLegacyMessageRef({ conversation, id: snowflake }) : '';
   }
 
   async recallMessage(messageId: string): Promise<void> {

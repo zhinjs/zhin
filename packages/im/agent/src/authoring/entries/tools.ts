@@ -8,8 +8,5 @@ export {
   toolApprovalAlways,
   toolApprovalOnce,
   toolApprovalNever,
-  always,
-  once,
-  never,
 } from '../tool-policy.js';
 export type { ToolApprovalPolicy, ToolToModelOutputFn } from '../tool-policy.js';

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { segment } from '../src/utils.js';
 import {
-  resolveInteractiveSegments,
+  resolveKeyboardSegments,
   registerInteractiveHandler,
   resetInteractiveHandlersForTests,
   ensureInteractiveMiddleware,
@@ -16,7 +16,7 @@ import {
 } from '../src/built/interactive-segments/index.js';
 import { Message } from '../src/message.js';
 
-describe('resolveInteractiveSegments', () => {
+describe('resolveKeyboardSegments', () => {
   const board = [
     segment.text('轮到 X'),
     segment.keyboard([
@@ -28,13 +28,13 @@ describe('resolveInteractiveSegments', () => {
   ];
 
   it('keeps keyboard segment when policy is native', () => {
-    const out = resolveInteractiveSegments(board, 'native');
+    const out = resolveKeyboardSegments(board, 'native');
     const arr = Array.isArray(out) ? out : [out];
     expect(arr.some((s) => typeof s !== 'string' && s.type === 'keyboard')).toBe(true);
   });
 
   it('degrades keyboard to text when policy is text', () => {
-    const out = resolveInteractiveSegments(board, 'text');
+    const out = resolveKeyboardSegments(board, 'text');
     const raw = segment.raw(out);
     expect(raw).toContain('轮到 X');
     expect(raw).toContain('落子 1-9');

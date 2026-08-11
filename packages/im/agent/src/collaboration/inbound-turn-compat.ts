@@ -24,6 +24,8 @@ export type InboundTurnPipeline = (message: Message, content: string) => Promise
  * Run the current Agent turn surface behind the former public factory.
  * Collaboration routing now belongs to the runtime host, so this adapter only
  * preserves the standalone local-turn contract.
+ *
+ * @deprecated 生产零调用（仅 public-compat 测试锁定），下个大版本删除。
  */
 export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): InboundTurnPipeline {
   return async (message, content) => {

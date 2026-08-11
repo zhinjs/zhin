@@ -158,8 +158,8 @@ export function parseLegacyMessageReference(reference: string): LegacyMessageRef
   };
 }
 
-/** Encodes a message only for a legacy adapter API that still returns strings. */
-export function formatLegacyMessageReference(reference: LegacyMessageReference): string {
+/** formatLegacyMessageRef 的内部实现；外部一律走 MessageRef 入参版。 */
+function formatLegacyMessageReference(reference: LegacyMessageReference): string {
   return `${reference.target}:${reference.messageId}`;
 }
 

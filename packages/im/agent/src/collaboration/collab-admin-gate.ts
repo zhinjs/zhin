@@ -11,7 +11,7 @@
  */
 
 import type { Message, Plugin } from '@zhin.js/core';
-import { extractAtTargets } from './init-observe-hook.js';
+import { extractAtTargets } from './collab-utils.js';
 
 interface EndpointLike {
   $config?: Record<string, unknown>;

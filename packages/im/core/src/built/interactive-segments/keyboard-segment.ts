@@ -10,4 +10,3 @@ export class KeyboardSegment {
 }
 
 /** @deprecated 使用 {@link KeyboardSegment} */
-export const InteractiveSegment = KeyboardSegment;

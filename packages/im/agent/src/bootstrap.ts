@@ -106,23 +106,12 @@ export function clearBootstrapCache(): void {
 /**
  * 获取数据目录
  */
-function getDataDir(workspaceDir?: string): string {
+export function getDataDir(workspaceDir?: string): string {
   const cwd = workspaceDir || process.cwd();
   return path.join(cwd, 'data');
 }
 
-/**
- * 获取文件制长期记忆目录（data/memory），不存在则创建
- */
-export function getMemoryDir(workspaceDir?: string): string {
-  const dir = path.join(getDataDir(workspaceDir), 'memory');
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-}
 
-export { getFileMemoryContext } from './memory-layers.js';
 
 /**
  * 加载工作区引导文件

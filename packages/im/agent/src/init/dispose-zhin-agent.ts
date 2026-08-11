@@ -1,30 +1,20 @@
-import type { AgentTool, ConversationMemory, RateLimiter } from '@zhin.js/ai';
-import type { UserProfileStore } from '../user-profile.js';
-import type { SubagentSystem } from '../subagent/index.js';
-import type { PromptController } from '../turn/prompt-controller.js';
+import type { ConversationMemory } from '@zhin.js/ai';
 import type { InboundTurnQueue } from '../turn/inbound-turn-queue.js';
 import type { Disposable } from '../types/disposable.js';
-export interface DisposeZhinAgentTarget {
+import type { ZhinAgentPrivate } from '../internal/agent-host.js';
+
+/** dispose 的读取目标：权威接口（ZhinAgentPrivate）Pick + 门面内部资源。 */
+export type DisposeZhinAgentTarget = Pick<
+  ZhinAgentPrivate,
+  | 'externalTools' | 'userProfiles' | 'rateLimiter' | 'subagentSystem' | 'promptController'
+  | 'imSessionStore' | 'agentSessionStore' | 'contextRepository' | 'imTranscriptStore'
+  | 'deferred'
+> & {
+  /** 接口外的门面内部资源 */
   memory: ConversationMemory;
-  externalTools: Map<string, AgentTool>;
-  userProfiles: UserProfileStore;
-  rateLimiter: RateLimiter;
-  subagentSystem: SubagentSystem | null;
-  promptController: PromptController;
   inboundTurnQueue: InboundTurnQueue;
-  imSessionStore: unknown;
-  agentSessionStore: unknown;
-  contextRepository: unknown;
-  imTranscriptStore: unknown;
-  deferredAutoContinueDepthBySession: Map<string, number>;
-  deferredCatalog: AgentTool[];
   lastTurnMetrics: unknown;
-  provider: import('@zhin.js/ai').AIProvider | null;
-  providerResolver: ((alias: string) => import('@zhin.js/ai').AIProvider) | null;
-  skillRegistry: unknown;
-  skillSystem: unknown;
-  orchestrator: unknown;
-}
+};
 
 export function disposeZhinAgentResources(target: DisposeZhinAgentTarget): void {
   target.memory.dispose();
@@ -46,7 +36,6 @@ export function disposeZhinAgentResources(target: DisposeZhinAgentTarget): void 
   tryDispose(target.agentSessionStore);
   tryDispose(target.contextRepository);
   tryDispose(target.imTranscriptStore);
-  target.deferredAutoContinueDepthBySession.clear();
-  target.deferredCatalog.length = 0;
+  target.deferred.clear();
   target.lastTurnMetrics = null;
 }

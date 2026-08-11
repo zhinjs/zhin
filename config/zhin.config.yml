@@ -1,12 +1,13 @@
 log_level: info
-disable_endpoints: []
-disable_plugins: []
-plugin_dirs: []
-endpoints: []
-#   - context: icqq            # 须先 icqq login；name 为 QQ 号
-#     name: '123456789'
-#     master: '你的用户ID'      # ⚠️ Endpoint Master（ask_user 安全确认目标）
-plugins: []
+
+# 插件实例配置（Plugin Runtime 形态）：plugins.<instanceKey> 对象。
+# 适配器 endpoint 在对应实例配置内声明，例如：
+# plugins:
+#   icqq:
+#     endpoints:
+#       - name: '123456789'        # 须先 icqq login；name 为 QQ 号
+#         master: '你的用户ID'      # ⚠️ Endpoint Master（ask_user 安全确认目标）
+plugins: {}
 
 # AI 服务配置（可选）— 新格式：命名 providers + 显式 sdk + agents.zhin 绑定
 # ai:

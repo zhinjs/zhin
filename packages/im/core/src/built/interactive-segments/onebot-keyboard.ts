@@ -20,7 +20,6 @@ export function keyboardToOneBotSegment(data: KeyboardSegmentData): MessageSegme
 }
 
 /** @deprecated 使用 {@link keyboardToOneBotSegment} */
-export const interactiveToKeyboardSegment = keyboardToOneBotSegment;
 
 function asKeyboardData(item: MessageElement | KeyboardSegment): KeyboardSegmentData | null {
   if (item instanceof KeyboardSegment) return item.data;
@@ -53,4 +52,3 @@ export function expandKeyboardSegmentsInContent(content: SendContent): SendConte
 }
 
 /** @deprecated 使用 {@link expandKeyboardSegmentsInContent} */
-export const expandInteractiveSegmentsInContent = expandKeyboardSegmentsInContent;

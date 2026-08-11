@@ -9,7 +9,7 @@
 ### 💥 破坏性变更（4.1.3，按仓库惯例以 patch 形式发布）
 
 - **约定式插件运行时迁移**：插件与适配器由 `usePlugin()` / `extends Adapter` 迁移为 `definePlugin` / `defineAdapter` + `plugin.ts` 入口 + 约定目录（`adapters/`、`commands/`、`components/`、`tools/` 等），旧 `usePlugin` / `extends Adapter` 生产入口已删除；全部 20 个平台适配器完成迁移。迁移边界见 [ADR 0050](./docs/adr/0050-plugin-runtime-migration-boundary.md)，开发形态见 [examples/plugin-runtime-migration-bot](./examples/plugin-runtime-migration-bot/)。
-- **CLI daemon 化**：`zhin runtime start --daemon`（pidfile / 崩溃拉起 / 风暴保护 / orphan watchdog）；legacy `zhin dev` / `zhin start`（含 `zhin restart`）已移除，`zhin stop` 兼容新 daemon。命令参考见 [docs/reference/cli.md](./docs/reference/cli.md)。
+- **CLI daemon 化**：`zhin runtime start --daemon`（pidfile / 崩溃拉起 / 风暴保护 / orphan watchdog）；legacy `zhin dev` / `zhin start`（含 `zhin restart`）已移除，`zhin stop` 兼容新 daemon。命令参考见 [docs/cli/index.md](./docs/cli/index.md)。
 - 注：为避免 zhin.js 5.0 级联，本次 breaking 迁移统一以 patch 版本发布（见 [docs/CHANGELOG.md](./docs/CHANGELOG.md) 1.0.45 条）。
 
 ### ✨ 新能力主线

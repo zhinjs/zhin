@@ -51,17 +51,4 @@ describe('buildSubagentInboundTask', () => {
     expect(Array.isArray(inbound.runInput)).toBe(true);
     expect(inbound.visionPartCount).toBe(1);
   });
-
-  it('兼容旧 ContentPart 入站并生成图片任务', async () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-subagent-legacy-media-'));
-    const inbound = await buildSubagentInboundTask('inspect this', [
-      { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
-    ], {
-      workspaceDir: tmp,
-      config: { ...DEFAULT_MULTIMODAL_CONFIG, inboundDir: 'inbound-test' },
-    });
-    expect(inbound.payloadCount).toBe(1);
-    expect(inbound.spooledPaths).toHaveLength(1);
-    expect(fs.existsSync(inbound.spooledPaths[0]!)).toBe(true);
-  });
 });

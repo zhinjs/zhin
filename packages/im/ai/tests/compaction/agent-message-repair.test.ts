@@ -5,7 +5,6 @@ import {
   snapCompactionStartIndex,
 } from '../../src/compaction/agent-message-tokens.js';
 import { repairAgentMessagesForLlm } from '../../src/llm/repair-agent-messages.js';
-import { agentMessagesToOpenAi } from '../../src/llm/convert/openai-bridge.js';
 
 function assistantWithToolCall(id: string, name = 'echo'): AgentMessage {
   return {
@@ -64,13 +63,16 @@ describe('findKeepRecentStartIndex', () => {
     expect(messages[startIdx]?.role).not.toBe('toolResult');
     if (startIdx > 0 && startIdx < messages.length) {
       const kept = messages.slice(startIdx);
-      const openAi = agentMessagesToOpenAi(kept);
-      for (let i = 0; i < openAi.length; i += 1) {
-        if (openAi[i]?.role === 'tool') {
-          const prev = openAi[i - 1];
-          expect(prev?.role).toBe('assistant');
-          expect(prev?.tool_calls?.some((tc) => tc.id === openAi[i]?.tool_call_id)).toBe(true);
-        }
+      // AgentMessage 层不变式：toolResult 不得孤立（须有携带同名 toolCall 的 assistant 前驱）
+      for (let i = 0; i < kept.length; i += 1) {
+        const msg = kept[i];
+        if (msg?.role !== 'toolResult') continue;
+        const prev = kept[i - 1];
+        expect(prev?.role).toBe('assistant');
+        const calls = prev?.role === 'assistant'
+          ? prev.content.filter((b) => b.type === 'toolCall')
+          : [];
+        expect(calls.some((tc) => tc.type === 'toolCall' && tc.id === msg.toolCallId)).toBe(true);
       }
     }
   });

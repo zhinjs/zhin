@@ -71,4 +71,3 @@ data/weixin-ilink/<bot-name>.json
 ## 文档
 
 - 适配器索引：[`plugins/adapters/README.md`](../README.md)
-- 原位迁移：[`docs/architecture/target-implementation/in-place-migration.md`](../../../docs/architecture/target-implementation/in-place-migration.md)

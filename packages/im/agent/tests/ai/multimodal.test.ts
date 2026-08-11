@@ -43,27 +43,12 @@ describe('contentToText 多模态支持', () => {
     expect(contentToText(parts)).toBe('[音频]');
   });
 
-  it('应将 face ContentPart 转为表情文字', () => {
-    const parts: ContentPart[] = [
-      { type: 'face', face: { id: '178', text: '笑哭' } },
-    ];
-    expect(contentToText(parts)).toBe('笑哭');
-  });
-
-  it('应将无文字 face ContentPart 转为 [表情]', () => {
-    const parts: ContentPart[] = [
-      { type: 'face', face: { id: '178' } },
-    ];
-    expect(contentToText(parts)).toBe('[表情]');
-  });
-
   it('应正确处理混合内容', () => {
     const parts: ContentPart[] = [
       { type: 'text', text: '看看这个' },
       { type: 'image_url', image_url: { url: 'https://example.com/img.jpg' } },
-      { type: 'face', face: { id: '1', text: '微笑' } },
     ];
-    expect(contentToText(parts)).toBe('看看这个[图片]微笑');
+    expect(contentToText(parts)).toBe('看看这个[图片]');
   });
 
   it('应处理单个 ContentPart（非数组）', () => {
@@ -78,13 +63,11 @@ describe('ContentPart 类型完整性', () => {
     const imagePart: ContentPart = { type: 'image_url', image_url: { url: 'https://img.png' } };
     const audioPart: ContentPart = { type: 'audio', audio: { data: 'data', format: 'mp3' } };
     const videoPart: ContentPart = { type: 'video_url', video_url: { url: 'https://vid.mp4' } };
-    const facePart: ContentPart = { type: 'face', face: { id: '1', text: '微笑' } };
 
     expect(textPart.type).toBe('text');
     expect(imagePart.type).toBe('image_url');
     expect(audioPart.type).toBe('audio');
     expect(videoPart.type).toBe('video_url');
-    expect(facePart.type).toBe('face');
   });
 
   it('image_url 应支持 detail 参数', () => {
@@ -97,10 +80,4 @@ describe('ContentPart 类型完整性', () => {
     }
   });
 
-  it('face 的 text 应为可选', () => {
-    const part: ContentPart = { type: 'face', face: { id: '100' } };
-    if (part.type === 'face') {
-      expect(part.face.text).toBeUndefined();
-    }
-  });
 });

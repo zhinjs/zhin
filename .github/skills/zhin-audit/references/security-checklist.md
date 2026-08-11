@@ -39,7 +39,7 @@
 ## 3. 认证与授权 [高]
 
 - [ ] **Token 比较**
-  - 文件：`packages/host/router/src/index.ts`
+  - 文件：`packages/host/http/src/index.ts`
   - 验证：是否使用 `crypto.timingSafeEqual()` 防止时序攻击
   - 当前状态：使用 `===` 直接比较（⚠️ 时序攻击风险）
 

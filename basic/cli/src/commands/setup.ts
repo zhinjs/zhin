@@ -269,7 +269,7 @@ export const setupCommand = new Command('setup')
 
       console.log('');
       console.log(chalk.cyan(options.global
-        ? '💡 提示: 任意目录运行 "zhin start" 或 "zhin dev" 启动全局实例'
+        ? '💡 提示: 任意目录运行 "zhin runtime start" 启动全局实例'
         : '💡 提示: 运行 "zhin dev" 启动开发服务器'));
     } catch (error: unknown) {
       logger.error(`配置失败: ${error instanceof Error ? error.message : String(error)}`);

@@ -175,10 +175,7 @@ function parseBindArgs(
   return { adapter, endpoint, role };
 }
 
-export function defaultCellId(adapter: string, sceneId: string): string {
-  const slug = `${adapter}-${sceneId}`.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/-+/g, '-').slice(0, 80);
-  return slug || `${adapter}-cell`;
-}
+export { defaultCellId } from './collab-utils.js';
 
 export function resolveSceneFromMessage(message: Message):
   | { ok: true; adapter: string; sceneId: string }

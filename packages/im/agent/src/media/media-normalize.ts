@@ -132,8 +132,8 @@ export async function normalizeMediaRefsToPayloads(
 }
 
 /**
- * Compatibility ingress for the former ContentPart-based multimodal surface.
- * New IM ingress should use normalizeMediaRefsToPayloads instead.
+ * @deprecated ContentPart 时代的多模态入口，下个大版本删除。
+ * 替代路径：canonical Segment 注入（`normalizeMediaRefsToPayloads`）。
  */
 export async function normalizeContentPartsToPayloads(
   parts: readonly ContentPart[],
@@ -186,7 +186,10 @@ export function payloadToDataUri(payload: MediaBinaryPayload): string {
   return `data:${payload.mimeType};base64,${payload.base64}`;
 }
 
-/** 图片载荷 → canonical vision 媒体块（base64 ref，agentLoop UserMessage.media 用） */
+/**
+ * @deprecated ContentPart 时代的多模态入口，下个大版本删除。
+ * 替代路径：canonical Segment 注入（入站段 → UserMessage.media）。
+ */
 export async function prepareMultimodalBlocks(
   parts: ContentPart[],
   maxPayloadBytes: number = 26_214_400,
@@ -199,6 +202,7 @@ export async function prepareMultimodalBlocks(
   return { content: summarizeContentParts(parts), mediaBlocks };
 }
 
+/** @deprecated ContentPart 时代入口，下个大版本删除；替代路径：canonical Segment 文本视图。 */
 export function summarizeContentParts(parts: readonly ContentPart[]): string {
   const text = parts
     .filter((part): part is Extract<ContentPart, { type: 'text' }> => part.type === 'text')

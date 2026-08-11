@@ -3,7 +3,7 @@ import type { Adapters } from './adapter.js';
 import type { RequestKind } from './side-event/types.js';
 import type { SideEventBase } from './side-event/base.js';
 
-export type { RequestKind, ComposedRequestName, RequestType } from './side-event/types.js';
+export type { RequestKind, ComposedRequestName } from './side-event/types.js';
 
 /**
  * 请求基础结构 — 继承 SideEventBase，附加审批方法。

@@ -13,10 +13,7 @@ async function resolveHtmlRenderer(
   ctx?: RichSegmentRenderContext,
 ): Promise<HtmlRendererForRichSegment | undefined> {
   if (!ctx) return undefined;
-  if (ctx.resolveCapability) {
-    return ctx.resolveCapability<HtmlRendererForRichSegment>('html-renderer');
-  }
-  return ctx.getHtmlRenderer?.();
+  return ctx.resolveCapability<HtmlRendererForRichSegment>('html-renderer');
 }
 
 export class MarkdownSegment extends RichSegment<MarkdownSegmentData> {

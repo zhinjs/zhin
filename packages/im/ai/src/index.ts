@@ -44,10 +44,8 @@ export {
   sdkSupportsImageGeneration,
   resolveSdkProviderModels,
   SDK_DEFAULT_MODELS,
-  createOpenAiCompletionsStreamFn,
   agentToolToLlmTool,
   agentToolsToLlmTools,
-  agentMessagesToOpenAi,
   formatRedactedJson,
   buildPromptCacheKey,
   supportsPromptCacheSdk,
@@ -68,7 +66,6 @@ export type {
   PromptCacheRetention,
   ProviderGatewayPreset,
   ProviderMediaKind,
-  ChatCompletionsMockProvider,
 } from './llm/index.js';
 export type {
   Context,
@@ -120,6 +117,7 @@ export type {
   ToolDefinition as ChatToolDefinition,
   MessageRole,
   AgentTool,
+  AgentToolExecutionContext,
   AgentConfig,
   AgentResult,
   ToolResultTransformInput,
@@ -146,7 +144,6 @@ export type {
 } from './image-generation.js';
 
 // ── Agent Engine (utilities, not the legacy Agent class) ──
-export { userMessageToFilterText } from './agent/user-message-text.js';
 export {
   sanitizeToolResult,
   compactMediaToolJsonForModel,
@@ -503,9 +500,6 @@ export {
   toolApprovalAlways,
   toolApprovalOnce,
   toolApprovalNever,
-  always,
-  once,
-  never,
 } from './tool-policy.js';
 export type {
   ToolApprovalMode,

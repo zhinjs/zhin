@@ -35,11 +35,6 @@ export type ComposedRequestName =
   | 'request.group.invite'
   | (string & {});
 
-/** @deprecated 使用 ComposedNoticeName + formatSideEventName */
-export type NoticeType = ComposedNoticeName;
-/** @deprecated 使用 ComposedRequestName + formatSideEventName */
-export type RequestType = ComposedRequestName;
-
 export interface SideEventParts {
   scene_type: string;
   sub_type: string;

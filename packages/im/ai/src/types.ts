@@ -27,8 +27,7 @@ export type ContentPart =
   | { type: 'text'; text: string }
   | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } }
   | { type: 'audio'; audio: { data: string; format: 'wav' | 'mp3' } }
-  | { type: 'video_url'; video_url: { url: string } }
-  | { type: 'face'; face: { id: string; text?: string } };
+  | { type: 'video_url'; video_url: { url: string } };
 
 /** 工具调用 */
 export interface ToolCall {
@@ -202,12 +201,24 @@ export interface ToolContext {
 // Agent 类型
 // ============================================================================
 
+/** 工具执行上下文（协作取消 / 追踪；由运行时注入，工具可实现方可选消费）。 */
+export interface AgentToolExecutionContext {
+  readonly signal?: AbortSignal;
+  readonly sessionId: string;
+  readonly toolCallId: string;
+  readonly toolName: string;
+}
+
 /** Agent 工具 */
 export interface AgentTool {
   name: string;
   description: string;
   parameters: JsonSchema;
-  execute: (args: Record<string, any>) => Promise<unknown>;
+  execute: (
+    args: Record<string, any>,
+    context?: any,
+    executionContext?: AgentToolExecutionContext,
+  ) => Promise<unknown>;
   /** 工具来源（如 builtin / plugin:xxx），用于冲突诊断与命名策略 */
   source?: string;
   /** 工具标签，用于分类和快速匹配 */

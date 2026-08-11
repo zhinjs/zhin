@@ -97,7 +97,7 @@ pnpm --filter @zhin.js/scaffold-wizard build   # 或 pnpm prepare:cli
 | Rich Segment Adapters（`pnpm check:rich-segments`） | outboundRichSegmentPolicy 声明与契约测试 |
 | AI Outbound Adapters（`pnpm check:ai-outbound`） | aiOutboundExtensions 声明与契约测试 |
 | Interactive Segments（`pnpm check:interactive-segments`） | interactivePolicy 声明与契约测试 |
-| Segment Adapters（`pnpm check:segments`） | segment-mapper 契约（sandbox 必须达标） |
+| Segment Adapters（`pnpm check:segments`） | defineAdapter segments 声明契约（sandbox 必须达标） |
 
 **文档一致性**
 

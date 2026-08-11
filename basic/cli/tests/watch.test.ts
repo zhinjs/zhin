@@ -89,7 +89,7 @@ describe('zhin watch format', () => {
       error: '无法连接',
     });
     expect(text).toContain('无法连接');
-    expect(text).toContain('zhin dev');
+    expect(text).toContain('zhin runtime start');
   });
 });
 

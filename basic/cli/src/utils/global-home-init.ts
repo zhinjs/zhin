@@ -11,8 +11,8 @@ const GLOBAL_PACKAGE_JSON = {
   description: 'Zhin.js 全局实例（~/.zhin）',
   type: 'module',
   scripts: {
-    dev: 'zhin dev',
-    start: 'zhin start',
+    dev: 'zhin runtime start',
+    start: 'zhin runtime start --mode production --no-watch',
   },
   dependencies: {
     'zhin.js': 'latest',

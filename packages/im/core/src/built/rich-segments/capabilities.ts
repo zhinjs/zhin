@@ -56,7 +56,6 @@ export function createRichSegmentRenderContext(
 
   return {
     resolveCapability,
-    getHtmlRenderer: () => resolveCapability<HtmlRendererForRichSegment>('html-renderer'),
     warn: options.warn,
     logContentChain: options.logContentChain,
   };

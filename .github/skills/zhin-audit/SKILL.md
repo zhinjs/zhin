@@ -26,7 +26,7 @@ user-invocable: true
 | 范围 | 目标目录 | 触发词 |
 |------|----------|--------|
 | 全面审计 | `packages/`, `plugins/`, `basic/` | "全面审计", "全量检查" |
-| 安全专项 | `packages/im/core/`, `packages/im/agent/`, `packages/host/router/`, `packages/toolkit/satori/` | "安全", "漏洞", "XSS", "注入" |
+| 安全专项 | `packages/im/core/`, `packages/im/agent/`, `packages/host/http/`, `packages/toolkit/satori/` | "安全", "漏洞", "XSS", "注入" |
 | 性能专项 | `packages/im/core/src/plugin.ts`, `packages/im/core/src/built/`, `packages/im/core/src/adapter.ts` | "性能", "内存", "泄漏", "慢" |
 | 架构专项 | `packages/*/package.json`, `packages/*/src/index.ts` | "架构", "依赖", "分层", "耦合" |
 | 变更审计 | `git diff` 涉及的文件 | "审查变更", "PR 审查" |
@@ -49,7 +49,7 @@ user-invocable: true
    - XSS：检查 `packages/toolkit/satori/src/` HTML 渲染中的输入转义
 
 3. **认证与授权 [高]**
-   - 检查 `packages/host/router/src/index.ts` Token 校验逻辑
+   - 检查 `packages/host/http/src/index.ts` Token 校验逻辑
    - 验证 Bearer token 是否使用 `crypto.timingSafeEqual` 比较
    - 确认 query 参数 token 不会泄漏到日志
    - 检查 `/pub/` 公共路径配置是否合理

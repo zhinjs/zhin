@@ -425,8 +425,3 @@ export class ConfigFeature extends Feature<ConfigRecord> {
     };
   }
 }
-
-/**
- * @deprecated Use ConfigFeature instead
- */
-export const ConfigService = ConfigFeature;
