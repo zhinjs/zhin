@@ -27,7 +27,9 @@ describe('Plugin Runtime Tool policy bridge', () => {
   });
 
   it('provides deterministic CLI approval ports with deny as the default', async () => {
-    const input = { requestId: 'r1', toolName: 'danger', question: 'continue?' };
+    const input = {
+      requestId: 'r1', toolName: 'danger', question: 'continue?', signal: new AbortController().signal,
+    };
     await expect(createDeterministicApprovalPort().requestApproval(input)).resolves.toBe(false);
     await expect(createDeterministicApprovalPort('approve').requestApproval(input)).resolves.toBe(true);
   });
@@ -53,7 +55,7 @@ describe('canonical IM TurnRequest ingress', () => {
       traceId: 'trace-1',
       turnId: 'turn-1',
       signal,
-      ports: { journal: { append: () => undefined } },
+      ports: {},
     });
 
     expect(request).toMatchObject({
@@ -83,7 +85,7 @@ describe('canonical IM TurnRequest ingress', () => {
 
   it('fails closed when authenticated sender or endpoint identity is absent', () => {
     const signal = new AbortController().signal;
-    const options = { traceId: 't', turnId: 'u', signal, ports: { journal: { append: () => undefined } } } as const;
+    const options = { traceId: 't', turnId: 'u', signal, ports: {} } as const;
     expect(() => createRuntimeTurnRequest(makeMessage({
       content: 'x', sender: null, metadata: { endpoint: 'bot' },
     }), 'x', { isMaster: false, isTrusted: false }, options)).toThrow('sender identity');
@@ -99,7 +101,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const request = createRuntimeTurnRequest(message, 'x', {
       isMaster: false,
       isTrusted: true,
-    }, { traceId: 't', turnId: 'u', signal: new AbortController().signal, ports: { journal: { append: () => undefined } } });
+    }, { traceId: 't', turnId: 'u', signal: new AbortController().signal, ports: {} });
     expect(request.principal.roles).toEqual(['owner', 'admin', 'trusted']);
     expect(request.policy.permissions).toEqual(['owner', 'admin', 'trusted']);
   });

@@ -92,6 +92,21 @@ function mapTurnEvent(
           durationMs: event.durationMs,
         },
       }];
+    case 'tool_denied':
+      return [{ ...base, type: AgentStreamEventType.ACTION_RESULT, data: {
+        callId: event.toolUseId, toolName: event.toolName, status: 'denied',
+        policy: event.policy, reason: event.reason,
+      } }];
+    case 'tool_failed':
+      return [{ ...base, type: AgentStreamEventType.ACTION_RESULT, data: {
+        callId: event.toolUseId, toolName: event.toolName, status: 'failed',
+        error: event.error, durationMs: event.durationMs,
+      } }];
+    case 'tool_cancelled':
+      return [{ ...base, type: AgentStreamEventType.ACTION_RESULT, data: {
+        callId: event.toolUseId, toolName: event.toolName, status: 'cancelled',
+        reason: event.reason, durationMs: event.durationMs,
+      } }];
     case 'turn_end': {
       const message = textFromOutput(event.output);
       return [
@@ -119,6 +134,11 @@ function mapTurnEvent(
       return [terminalEvent('cancelled', AgentStreamEventType.TURN_CANCELLED, {
         code: event.code,
         reason: event.reason,
+      }, ctx)];
+    case 'budget_exceeded':
+      return [terminalEvent('budget_exceeded', AgentStreamEventType.TURN_BUDGET_EXCEEDED, {
+        budget: event.budget,
+        usage: event.usage,
       }, ctx)];
     case 'subagent_start':
       return [{

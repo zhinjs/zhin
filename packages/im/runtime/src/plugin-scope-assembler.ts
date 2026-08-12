@@ -52,6 +52,16 @@ export interface RootResourceContext {
   readonly lifecycle: DisposeStack;
   readonly handoff: GenerationHandoffRegistry;
   readonly config: PrimaryConfig;
+  /**
+   * Adds a root-owned capability to this shadow generation. The definition is
+   * validated and projected with convention/setup capabilities; it is never
+   * visible before the generation commits.
+   */
+  addFeature<TDefinition>(
+    feature: FeatureId | string,
+    localName: string,
+    definition: TDefinition,
+  ): void;
 }
 
 export type RootResourceInstaller = (
@@ -120,6 +130,11 @@ export class PluginScopeAssembler {
     // Every owner shadows the inherited EnvStore with its exact overlay view.
     const environment = this.#envStores.create(node.id);
     scope.provide(envStoreToken, environment);
+    const register = <TDefinition>(
+      feature: FeatureId | string,
+      localName: string,
+      capabilityDefinition: TDefinition,
+    ): void => this.#registerSetupCapability(node, manifest, feature, localName, capabilityDefinition);
 
     if (!node.parent) {
       scope.provide(runtimeEnvironmentToken, this.environment);
@@ -130,6 +145,7 @@ export class PluginScopeAssembler {
         lifecycle: scope.disposers,
         handoff: this.#handoffs,
         config,
+        addFeature: register,
       });
     }
     if (node.parent) this.installOwnerScopedHosts(scope, node.id);
@@ -184,25 +200,6 @@ export class PluginScopeAssembler {
           throw new Error(`Missing resource ${token.id} for Plugin ${node.id}`);
         }
       }
-      const register = <TDefinition>(
-        feature: FeatureId | string,
-        localName: string,
-        capabilityDefinition: TDefinition,
-      ): void => {
-        const featureName = featureId(String(feature));
-        const id = capabilityId(node.id, featureName, localName);
-        if (this.#setupCapabilities.has(id)) {
-          throw new Error(`Duplicate setup Capability: ${id}`);
-        }
-        this.#setupCapabilities.set(id, Object.freeze({
-          id,
-          owner: node.id,
-          feature: featureName,
-          localName,
-          source: resolve(node.package.root, manifest.entry),
-          definition: capabilityDefinition,
-        }));
-      };
       const setupContext: Record<string, unknown> = {
         plugin,
         config: view,
@@ -236,6 +233,28 @@ export class PluginScopeAssembler {
     this.resources.set(node.id, scope.snapshot());
 
     for (const child of node.children) await this.setupTree(child);
+  }
+
+  #registerSetupCapability<TDefinition>(
+    node: PluginGraphNode,
+    manifest: ZhinPluginManifest,
+    feature: FeatureId | string,
+    localName: string,
+    definition: TDefinition,
+  ): void {
+    const featureName = featureId(String(feature));
+    const id = capabilityId(node.id, featureName, localName);
+    if (this.#setupCapabilities.has(id)) {
+      throw new Error(`Duplicate setup Capability: ${id}`);
+    }
+    this.#setupCapabilities.set(id, Object.freeze({
+      id,
+      owner: node.id,
+      feature: featureName,
+      localName,
+      source: resolve(node.package.root, manifest.entry),
+      definition,
+    }));
   }
 
   synchronizeTree(node: PluginGraphNode): void {

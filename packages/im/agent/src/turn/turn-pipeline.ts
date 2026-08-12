@@ -60,6 +60,11 @@ export interface ProcessTextTurnOptions {
   signal?: AbortSignal;
   /** Stateless execution: no conversation session/history and eager tools only. */
   isolated?: boolean;
+  /**
+   * Snapshot generation for ToolRuntime validation.
+   * Plugin Runtime hosts pass AgentCapabilities.generation.
+   */
+  generation?: number;
 }
 
 export async function processTextTurn(
@@ -203,6 +208,7 @@ export async function processTextTurn(
           conversationPersistence: extras?.isolated ? 'none' : 'session',
           onTurnEvent: extras?.onTurnEvent,
           journal: extras?.journal,
+          generation: extras?.generation,
         }),
       });
     } catch (err) {

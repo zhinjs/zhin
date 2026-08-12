@@ -47,7 +47,6 @@ Three tiers:
 | `databaseHostToken` | `stable` | `@zhin.js/plugin-runtime` | Database Host capability |
 | `scheduleHostToken` | `stable` | `@zhin.js/plugin-runtime` | Scheduled task Host capability |
 | `outboundHostToken` | `stable` | `@zhin.js/plugin-runtime` | Cross-platform outbound message capability |
-| `agentToolsHostToken` | `experimental` | `@zhin.js/plugin-runtime` | Agent tool registration Host capability |
 | `messageGatewayToken` | `stable` | `@zhin.js/core` (`zhin.js/core/runtime`) | Inbound message delivery gateway (used by adapters) |
 | `httpHostToken` | `stable` | `@zhin.js/host-http` | HTTP/WS Host capability (used by Console, Webhooks) |
 

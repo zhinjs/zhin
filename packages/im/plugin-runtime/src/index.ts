@@ -16,8 +16,6 @@ export * from './token.js';
 export * from './schedule-host.js';
 /** @public Host token：`databaseHostToken`（承诺 semver）。 */
 export * from './database-host.js';
-/** @public Host token：`agentToolsHostToken`（experimental）。 */
-export * from './agent-tools-host.js';
 export * from './html-renderer.js';
 /** @public Host token：`componentHostToken`（承诺 semver）。 */
 export * from './component-host.js';

@@ -101,6 +101,9 @@ export interface TurnPorts {
   readonly delivery?: DeliveryPort;
 }
 
+/** Ports supplied by an ingress adapter; Journal authority is injected by AgentRuntime. */
+export type TurnRequestPorts = Omit<TurnPorts, 'journal'>;
+
 export interface TurnIngress {
   readonly identity: Readonly<TurnIdentity>;
   readonly origin: TurnOrigin;
@@ -126,7 +129,7 @@ export interface TurnRequest {
   readonly session: Readonly<TurnSessionAddress>;
   readonly policy: Readonly<TurnPolicyContext>;
   readonly signal: AbortSignal;
-  readonly ports: Readonly<TurnPorts>;
+  readonly ports: Readonly<TurnRequestPorts>;
 }
 
 export type TurnAccessContext = Pick<TurnRequest, 'origin' | 'principal' | 'policy'>;

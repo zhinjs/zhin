@@ -8,7 +8,13 @@ import {
   createCapabilityContext,
   type OwnerCapabilityEntry,
 } from '@zhin.js/feature-kit';
-import type { AgentToolDefinition, ToolApproval, ToolScope } from './definition.js';
+import type {
+  AgentToolDefinition,
+  ToolApproval,
+  ToolExecutionContext,
+  ToolInvocationContext,
+  ToolScope,
+} from './definition.js';
 
 export interface ToolDescriptor {
   readonly owner: PluginId;
@@ -50,13 +56,23 @@ export class ToolIndex {
     requester: PluginId,
     name: string,
     input: TInput,
+    invocation: ToolInvocationContext,
   ): Promise<TResult> {
     const entry = this.#index.resolve(requester, name);
     if (!entry) throw new Error(`Unknown Agent Tool ${name} for ${requester}`);
-    return entry.slot.definition.execute(
-      input,
-      createCapabilityContext(this.snapshot, entry.owner),
-    ) as TResult | Promise<TResult>;
+    const capability = createCapabilityContext(this.snapshot, entry.owner);
+    const context: ToolExecutionContext = Object.freeze({
+      ...capability,
+      signal: invocation.signal,
+      traceId: invocation.traceId,
+      turnId: invocation.turnId,
+      sessionKey: invocation.sessionKey,
+      principal: Object.freeze({
+        subjectId: invocation.principal.subjectId,
+        roles: Object.freeze([...invocation.principal.roles]),
+      }),
+    });
+    return entry.slot.definition.execute(input, context) as TResult | Promise<TResult>;
   }
 }
 

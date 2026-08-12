@@ -4,7 +4,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -50,12 +49,6 @@ export class ListDirBuiltinTool extends BuiltinBaseTool {
     }
     try {
       const dirPath = path.resolve(process.cwd(), expandHome(pathArg));
-      // 统一安全策略门面（与原两层手写链等价）：role-gate → sensitive-path
-      const policyGate = toolPolicyResultToMessage(
-        runToolPolicies({ toolName: 'list_dir', filePath: dirPath, commMessage }),
-        'list_dir',
-      );
-      if (policyGate) return policyGate;
       const stat = await fs.stat(dirPath);
       if (!stat.isDirectory()) {
         return `Error: Not a directory: ${pathArg}`;

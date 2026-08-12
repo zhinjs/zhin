@@ -33,6 +33,7 @@ export type {
   TurnPorts,
   TurnPrincipal,
   TurnRequest,
+  TurnRequestPorts,
   TurnScope,
   TurnSessionAddress,
 } from './turn-ingress.js';

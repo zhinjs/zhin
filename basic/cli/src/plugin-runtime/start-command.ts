@@ -164,6 +164,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
         http: httpConfig,
         snapshots: host.runtime.controller.snapshots,
         production: parsed.mode === 'production',
+        projectRoot: options.root,
       })(context);
       installConsoleHttp({
         console: consoleHost.console,

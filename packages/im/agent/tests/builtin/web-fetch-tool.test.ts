@@ -97,23 +97,21 @@ describe('WebFetchBuiltinTool', () => {
     expect(String(result)).toContain('OK');
   });
 
-  it('admin 且 web_fetch 不在 execAllowlist 时返回 ZHIN_NEEDS_OWNER', async () => {
+  it('admin 且 web_fetch 不在 execAllowlist — 工具不再自行拒绝（由 ToolRuntime 处理）', async () => {
     mockPlugin('owner1', ['admin1'], []);
-    vi.stubGlobal('fetch', vi.fn());
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('OK', { status: 200 })));
     const inst = new WebFetchBuiltinTool();
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
     const out = String(await inst.run({ url: 'https://example.com/' }, ctx));
-    expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(out).not.toMatch(/^Error:|^ZHIN_NEEDS_OWNER:/);
   });
 
-  it('普通用户调用 web_fetch 直接拒绝', async () => {
+  it('普通用户调用 web_fetch — 工具不再自行拒绝（由 ToolRuntime 处理）', async () => {
     mockPlugin('owner1', ['admin1'], []);
-    vi.stubGlobal('fetch', vi.fn());
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('OK', { status: 200 })));
     const inst = new WebFetchBuiltinTool();
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
     const out = String(await inst.run({ url: 'https://example.com/' }, ctx));
-    expect(out).toMatch(/^Error:/);
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(out).not.toMatch(/^Error:|^ZHIN_NEEDS_OWNER:/);
   });
 });

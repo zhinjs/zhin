@@ -7,6 +7,8 @@ export interface ApprovalRequestInput {
   toolName: string;
   question: string;
   timeoutMs?: number;
+  /** The adapter must settle promptly and deny when the owning Turn is cancelled. */
+  signal: AbortSignal;
 }
 
 export interface ApprovalPort {

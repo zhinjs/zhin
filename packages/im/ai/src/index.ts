@@ -467,6 +467,11 @@ export type {
   AgentStreamReduceState,
 } from './agent-stream.js';
 
+export type {
+  JournalStore,
+  JournalRunSummary,
+} from './journal-store.js';
+
 export {
   createAgentStreamNdjsonParserState,
   parseAgentStreamNdjsonChunk,

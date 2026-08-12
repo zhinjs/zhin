@@ -7,7 +7,6 @@ import {
   MAX_EDIT_FILE_SIZE,
   isFileStale,
 } from '../security/file-policy.js';
-import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import {
@@ -64,20 +63,12 @@ export class EditFileBuiltinTool extends BuiltinBaseTool {
       return 'Error: new_string is required';
     }
 
-    // 统一安全策略门面（与原七层手写链等价）：
-    // role-gate → dangerous-tool-approval → file-permission-matrix(update) →
-    // memory-write-path → sensitive-path → blocked-device-path → workspace-access
     let fp: string;
     try {
       fp = expandHome(filePathArg);
     } catch (e: unknown) {
       return nodeErrToFileMessage(e, String(filePathArg), 'edit');
     }
-    const policyGate = toolPolicyResultToMessage(
-      runToolPolicies({ toolName: 'edit_file', filePath: fp, rawFilePath: filePathArg, commMessage }),
-      'edit_file',
-    );
-    if (policyGate) return policyGate;
 
     try {
       const stat = await fs.stat(fp);

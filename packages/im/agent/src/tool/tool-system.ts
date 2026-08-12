@@ -129,5 +129,14 @@ ${preData}
 Answer the user's question based on the data above. Be clear and concise; use emoji when appropriate.`;
 }
 
+/** Stamps the owning generation so ToolRuntime can reject retired-generation tools. */
+export function stampToolGeneration<T extends { generation?: number }>(
+  tools: T[],
+  generation: number,
+): T[] {
+  for (const tool of tools) tool.generation = generation;
+  return tools;
+}
+
 /** 无 per-turn 可变 state；并发 collectForTurn 安全。 */
 export const defaultToolSystem = createToolSystem();

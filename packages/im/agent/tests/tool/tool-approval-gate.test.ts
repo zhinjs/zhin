@@ -52,6 +52,7 @@ describe('tool-approval-gate', () => {
       port: new ImApprovalAdapter(plugin, commMessage),
       publishCtx: { sessionId: 'sess-1' },
       onceStore,
+      signal: new AbortController().signal,
     });
     expect(denied).toBeNull();
     expect(events).toEqual([
@@ -73,6 +74,7 @@ describe('tool-approval-gate', () => {
       sessionId: 'sess-1',
       commMessage: mockCommMessage(),
       policy: 'on-risk',
+      signal: new AbortController().signal,
     });
 
     expect(denied).toBe('Error: approval required but ApprovalPort unavailable');
@@ -92,6 +94,7 @@ describe('tool-approval-gate', () => {
       port: { requestApproval: async () => true },
       bus,
       journal,
+      signal: new AbortController().signal,
     });
 
     expect(denied).toBeNull();

@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   createSyntheticMessage,
@@ -11,7 +12,6 @@ import {
   type Tool,
 } from '@zhin.js/core';
 import {
-  parseToolInputSchema,
   toolInputSchemaToParameters,
 } from '@zhin.js/core/tool-zod';
 import { ingressRouteToken, type ImRuntime, type Message, type SendContent } from '@zhin.js/core/runtime';
@@ -21,7 +21,7 @@ import {
   type RootResourceInstaller,
   type RuntimeConfigDocument,
 } from '@zhin.js/runtime';
-import { databaseRootHostToken, agentToolsHostToken, type AgentToolRegistration, type DisposeStack, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { databaseRootHostToken, type DisposeStack, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   AIService,
   McpClientManager,
@@ -81,13 +81,17 @@ import {
   type ImTranscriptWriteInput,
   type PeerTriggerMode,
   type ApprovalPort,
-  type TurnPorts,
+  type TurnRequestPorts,
   type TurnRequest,
   type TurnAccessContext,
+  FileJournalStore,
 } from '@zhin.js/agent';
 import {
   agentHostToken,
+  toolsFromCapabilities,
   CapabilityIngress,
+  projectHostTool,
+  turnJournalStoreToken,
   type AgentCapabilities,
   type ToolCapability,
 } from '@zhin.js/agent/runtime';
@@ -207,7 +211,7 @@ export interface InstallAgentHostOptions {
  * - Subagent/main-turn `bash` (sandbox + safety) + Owner `/approve` 命令面
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
-  return async ({ resources, lifecycle, handoff, config: primaryConfig }) => {
+  return async ({ resources, lifecycle, handoff, config: primaryConfig, addFeature }) => {
     const configuredAi = options.ai ?? primaryConfig.get<AIConfig>('ai');
     const aiConfig = configuredAi ? softPruneAiConfig(configuredAi) : undefined;
     const assistantConfig = options.assistant
@@ -402,18 +406,35 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     lifecycle.add(() => zhinAgent.dispose());
     lifecycle.add(() => mcp.disconnectAll());
 
+    for (const tool of [
+      ...(options.extraTools ?? []),
+      ...deferredMetaTools,
+      ...scheduleTools,
+      ...homeTools,
+      bashTool,
+    ]) {
+      const projected = projectHostTool({
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters,
+        approval: 'approval' in tool ? tool.approval : undefined,
+        platforms: tool.platforms,
+        scopes: tool.scopes,
+        permissions: tool.permissions,
+        hidden: tool.hidden,
+        execute: (input) => tool.execute(input) as unknown | Promise<unknown>,
+      });
+      addFeature(projected.feature, projected.name, projected.definition);
+    }
+
     // Protocol Hosts (MCP/A2A) consume this narrow generation-owned port.
     // The Scope is sealed after all Root installers finish, so publication must
     // happen here rather than through a mutable process-global registry.
     resources.provide(agentHostToken, Object.freeze({ service, agent: zhinAgent }));
-
-    // Plugin agent tools (e.g. lottery agent/tools): plugins register during
-    // setup() against this generation-owned host; every turn's deferred catalog
-    // picks them up via ZhinAgent's RegisteredToolSource.
-    resources.provide(agentToolsHostToken, Object.freeze({
-      register: (registration: AgentToolRegistration) =>
-        zhinAgent.registerTool(toRegisteredAgentTool(registration)),
-    }));
+    resources.provide(
+      turnJournalStoreToken,
+      new FileJournalStore(join(options.projectRoot, '.zhin', 'agent-journal')),
+    );
 
     const presetCount = await seedPresets();
 
@@ -531,16 +552,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         if (collab.action === 'skip') return true;
         if (collab.action === 'done') return true;
 
-        const tools = [
-          ...capabilities.tools.map(toTool),
-          ...await mcpToolsAsTools(capabilities),
-          ...configMcpToolsAsTools(mcp),
-          ...(options.extraTools ?? []).map(toTool),
-          ...deferredMetaTools,
-          ...scheduleTools,
-          ...homeTools,
-          bashTool,
-        ];
+        let toolCount = 0;
 
         // thinkingMessage：进入 AI 处理前先回占位（对齐 legacy inbound-turn-pipeline）。
         // 占位消息不 await 回包——平台 ack 慢（实测 icqq 守护进程 10s+）不应拖住 turn 启动；
@@ -560,17 +572,37 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         }
 
         const elements = await withTriggerTimeout(
-          (signal) => zhinAgent.processTurn({
-            content: routed.userText,
-            message: commMessage,
-            tools,
-            signal,
-            activityFeedbackEligible: true,
-            configuration: {
-              activeBinding: binding,
-              bootstrapContext: buildBootstrapContext(bootstrapText, capabilities, routed.agent),
-            },
-          }),
+          async (signal) => {
+            const request = createRuntimeTurnRequest(message, routed.userText, senderRoles, {
+              traceId: randomUUID(),
+              turnId: randomUUID(),
+              signal,
+              ports: options.approvalPort ? { approval: options.approvalPort } : {},
+            });
+            const tools = [
+              ...toolsFromCapabilities(capabilities, request),
+              ...await mcpToolsAsTools(capabilities),
+              ...configMcpToolsAsTools(mcp),
+              ...(options.extraTools ?? []).map(toTool),
+              ...deferredMetaTools,
+              ...scheduleTools,
+              ...homeTools,
+              bashTool,
+            ];
+            toolCount = tools.length;
+            return zhinAgent.processTurn({
+              content: routed.userText,
+              message: commMessage,
+              tools,
+              signal,
+              activityFeedbackEligible: true,
+              generation: capabilities.generation,
+              configuration: {
+                activeBinding: binding,
+                bootstrapContext: buildBootstrapContext(bootstrapText, capabilities, routed.agent),
+              },
+            });
+          },
           resolveTriggerTimeoutMs(trigger),
         );
         const transcriptBody = flattenOutputElements(elements).trim();
@@ -590,7 +622,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         logger.debug(formatCompact({
           op: 'agent_host_turn',
           turnMode: 'zhin_agent.process',
-          tools: tools.length,
+          tools: toolCount,
           ingressTools: capabilities.tools.length,
           elements: elements.length,
           model: binding.model,
@@ -1062,7 +1094,7 @@ export function createRuntimeTurnRequest(
     traceId: string;
     turnId: string;
     signal: AbortSignal;
-    ports: TurnPorts;
+    ports: TurnRequestPorts;
   }>,
 ): TurnRequest {
   const access = createRuntimeTurnAccess(message, roles);
@@ -1391,11 +1423,9 @@ async function readCapabilities(
   return ingress.read(snapshot, requester, isActive, createRuntimeTurnAccess(message, roles));
 }
 
-function toTool(tool: AgentToolLike | ToolCapability): Tool {
-  const parameters = isToolCapability(tool)
-    ? toolInputSchemaToParameters(tool.inputSchema)
-    : tool.parameters;
-  const source = isToolCapability(tool) ? tool.owner : tool.source;
+function toTool(tool: AgentToolLike): Tool {
+  const parameters = tool.parameters;
+  const source = tool.source;
   const result: AgentToolLike = {
     name: tool.name,
     description: tool.description,
@@ -1409,9 +1439,7 @@ function toTool(tool: AgentToolLike | ToolCapability): Tool {
     scopes: tool.scopes,
     permissions: tool.permissions,
     hidden: tool.hidden,
-    approval: isToolCapability(tool)
-      ? runtimeApprovalPolicy(tool.approval)
-      : tool.approval,
+    approval: tool.approval,
     async execute(args) {
       return await tool.execute(args as Record<string, unknown>) as Awaited<ReturnType<Tool['execute']>>;
     },
@@ -1423,7 +1451,7 @@ function toTool(tool: AgentToolLike | ToolCapability): Tool {
 
 export function runtimeApprovalPolicy(
   approval: ToolCapability['approval'],
-): 'never' | 'always' | 'on-risk' {
+): 'never' | 'always' | 'once' | 'on-risk' {
   return approval;
 }
 
@@ -1435,50 +1463,6 @@ export function createDeterministicApprovalPort(
     available: true,
     requestApproval: async () => decision === 'approve',
   };
-}
-
-function isToolCapability(tool: AgentToolLike | ToolCapability): tool is ToolCapability {
-  return 'inputSchema' in tool && 'owner' in tool;
-}
-
-/**
- * Bridge a plugin-registered tool (agentToolsHostToken) into the per-turn
- * catalog shape. zod-like inputSchemas are reused for argument validation,
- * mirroring the legacy authoring bridge (parseWithZodSchema).
- * platforms / scopes / permissions / hidden ride on the registered tool so
- * RegisteredToolSource applies the same Core canAccessTool gate as the
- * ToolIndex path.
- */
-export function toRegisteredAgentTool(
-  registration: AgentToolRegistration,
-): Parameters<ZhinAgent['registerTool']>[0] {
-  const parameters = toolInputSchemaToParameters(registration.inputSchema);
-  const result: Parameters<ZhinAgent['registerTool']>[0] = {
-    name: registration.name,
-    description: registration.description,
-    parameters: {
-      type: 'object',
-      properties: (parameters.properties ?? {}) as Parameters<ZhinAgent['registerTool']>[0]['parameters']['properties'],
-      required: parameters.required,
-    },
-    source: registration.source ?? 'plugin',
-    ...(registration.keywords ? { keywords: [...registration.keywords] } : {}),
-    ...(registration.tags ? { tags: [...registration.tags] } : {}),
-    ...(registration.platforms ? { platforms: [...registration.platforms] } : {}),
-    ...(registration.scopes ? { scopes: [...registration.scopes] } : {}),
-    ...(registration.permissions ? { permissions: registration.permissions } : {}),
-    ...(registration.hidden !== undefined ? { hidden: registration.hidden } : {}),
-    ...(registration.approval ? { approval: registration.approval } : {}),
-    async execute(args) {
-      const parsed = parseToolInputSchema<Record<string, unknown>>(
-        registration.inputSchema,
-        args ?? {},
-      );
-      if (!parsed.ok) return `Error: ${parsed.error}`;
-      return await registration.execute(parsed.data);
-    },
-  };
-  return result;
 }
 
 async function mcpToolsAsTools(capabilities: AgentCapabilities): Promise<Tool[]> {

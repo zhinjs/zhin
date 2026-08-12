@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ToolSystem, createDefaultToolSources } from '../../src/tool/tool-system.js';
+import { ToolSystem, createDefaultToolSources, stampToolGeneration } from '../../src/tool/tool-system.js';
 import { DedupeToolFilter, ExternalToolSource, RegisteredToolSource } from '../../src/tool/sources.js';
 import type { RegisteredAgentTool } from '../../src/tool/contracts.js';
 import type { AgentTool } from '@zhin.js/ai';
@@ -172,6 +172,19 @@ describe('ToolSystem', () => {
         .collectTools({ ...base, message: undefined as never }))
         .map((t) => t.name);
       expect(names).toEqual(['echo']);
+    });
+  });
+
+  describe('stampToolGeneration', () => {
+    it('stamps all tools with the given generation', () => {
+      const tools: AgentTool[] = [
+        { name: 'a', description: 'a', parameters: { type: 'object', properties: {} }, execute: async () => 'a' },
+        { name: 'b', description: 'b', parameters: { type: 'object', properties: {} }, execute: async () => 'b' },
+      ];
+      const result = stampToolGeneration(tools, 7);
+      expect(result).toBe(tools);
+      expect(tools[0].generation).toBe(7);
+      expect(tools[1].generation).toBe(7);
     });
   });
 });

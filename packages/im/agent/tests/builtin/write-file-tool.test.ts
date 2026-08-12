@@ -62,13 +62,13 @@ describe('WriteFileBuiltinTool', () => {
     expect(out).toMatch(/Error|required|file_path/i);
   });
 
-  it('run 拒绝写入敏感文件名（策略路径返回 ZHIN_NEEDS_OWNER）', async () => {
+  it('run 不再自行拒绝敏感文件名（由 ToolRuntime 统一处理）', async () => {
     const fp = path.join(tmpDir, '.env');
     const inst = new WriteFileBuiltinTool();
     const out = String(await inst.run({ file_path: fp, content: 'secret' }));
-    expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
-    expect(out).toMatch(/拒绝|敏感/i);
-    expect(fs.existsSync(fp)).toBe(false);
+    expect(out).toContain('Wrote');
+    expect(fs.existsSync(fp)).toBe(true);
+    fs.unlinkSync(fp);
   });
 
   it('execute 与 normalizeTool 绑定 context 时可调用', async () => {
@@ -82,24 +82,24 @@ describe('WriteFileBuiltinTool', () => {
     expect(fs.readFileSync(fp, 'utf-8')).toBe('ok');
   });
 
-  it('admin 且 write_file 不在 execAllowlist 时返回 ZHIN_NEEDS_OWNER', async () => {
+  it('admin 且 write_file 不在 execAllowlist — 工具不再自行拒绝（由 ToolRuntime 处理）', async () => {
     mockPlugin('owner1', ['admin1'], []);
     const fp = path.join(tmpDir, 'blocked-by-role.txt');
     const inst = new WriteFileBuiltinTool();
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
     const out = String(await inst.run({ file_path: fp, content: 'x' }, ctx));
-    expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
-    expect(fs.existsSync(fp)).toBe(false);
+    expect(out).toContain('Wrote');
+    fs.unlinkSync(fp);
   });
 
-  it('普通用户调用 write_file 直接拒绝', async () => {
+  it('普通用户调用 write_file — 工具不再自行拒绝（由 ToolRuntime 处理）', async () => {
     mockPlugin('owner1', ['admin1'], []);
     const fp = path.join(tmpDir, 'deny-by-role.txt');
     const inst = new WriteFileBuiltinTool();
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
     const out = String(await inst.run({ file_path: fp, content: 'x' }, ctx));
-    expect(out).toMatch(/^Error:/);
-    expect(fs.existsSync(fp)).toBe(false);
+    expect(out).toContain('Wrote');
+    fs.unlinkSync(fp);
   });
 
   it('master 调用 write_file 直接放行', async () => {
@@ -112,7 +112,7 @@ describe('WriteFileBuiltinTool', () => {
     expect(fs.readFileSync(fp, 'utf-8')).toBe('owner-ok');
   });
 
-  it('非 master 写入 global 记忆路径被拒绝', async () => {
+  it('非 master 写入 global 记忆路径 — 工具不再自行拒绝（由 ToolRuntime 处理）', async () => {
     mockPlugin('owner1', ['admin1'], ['write_file']);
     const memRoot = path.join(tmpDir, 'data', 'memory', 'global', 'MEMORY.md');
     const inst = new WriteFileBuiltinTool();
@@ -124,9 +124,8 @@ describe('WriteFileBuiltinTool', () => {
       extra: { execAllowlist: ['write_file'] },
     });
     const out = String(await inst.run({ file_path: memRoot, content: 'nope' }, ctx));
-    expect(out).toMatch(/^Error:/);
-    expect(out).toMatch(/master|Owner|全局/i);
-    expect(fs.existsSync(memRoot)).toBe(false);
+    expect(out).toContain('Wrote');
+    fs.unlinkSync(memRoot);
   });
 
   it('master 可写入 global 记忆路径', async () => {

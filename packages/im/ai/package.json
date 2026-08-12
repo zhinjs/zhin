@@ -40,6 +40,11 @@
       "types": "./lib/authorization-events.d.ts",
       "development": "./src/authorization-events.ts",
       "import": "./lib/authorization-events.js"
+    },
+    "./journal-store": {
+      "types": "./lib/journal-store.d.ts",
+      "development": "./src/journal-store.ts",
+      "import": "./lib/journal-store.js"
     }
   },
   "files": [

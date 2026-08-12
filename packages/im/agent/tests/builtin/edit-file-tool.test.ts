@@ -93,25 +93,25 @@ describe('EditFileBuiltinTool', () => {
     expect(fs.readFileSync(fp, 'utf-8')).toBe('one three');
   });
 
-  it('admin 且 edit_file 不在 execAllowlist 时返回 ZHIN_NEEDS_OWNER', async () => {
+  it('admin 且 edit_file 不在 execAllowlist — 工具本身不再拒绝（由 ToolRuntime 统一处理）', async () => {
     mockPlugin('owner1', ['admin1'], []);
     const fp = path.join(tmpDir, 'role-edit.txt');
     fs.writeFileSync(fp, 'before', 'utf-8');
     const inst = new EditFileBuiltinTool();
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
     const out = String(await inst.run({ file_path: fp, old_string: 'before', new_string: 'after' }, ctx));
-    expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
-    expect(fs.readFileSync(fp, 'utf-8')).toBe('before');
+    expect(out).not.toMatch(/^Error:/);
+    expect(fs.readFileSync(fp, 'utf-8')).toBe('after');
   });
 
-  it('普通用户调用 edit_file 直接拒绝', async () => {
+  it('普通用户调用 edit_file — 工具本身不再拒绝（由 ToolRuntime 统一处理）', async () => {
     mockPlugin('owner1', ['admin1'], []);
     const fp = path.join(tmpDir, 'role-edit-deny.txt');
     fs.writeFileSync(fp, 'before', 'utf-8');
     const inst = new EditFileBuiltinTool();
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
     const out = String(await inst.run({ file_path: fp, old_string: 'before', new_string: 'after' }, ctx));
-    expect(out).toMatch(/^Error:/);
-    expect(fs.readFileSync(fp, 'utf-8')).toBe('before');
+    expect(out).not.toMatch(/^Error:/);
+    expect(fs.readFileSync(fp, 'utf-8')).toBe('after');
   });
 });

@@ -5,6 +5,8 @@ import { type Tool, type Message, type ToolParametersSchema, type ToolResult, ht
 import { errMsg } from '../discovery/utils.js';
 import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
+// NOTE: runToolPolicies retained ONLY for per-URL SSRF network checks (per-redirect hop).
+// The initial dangerous-tool-approval check is handled by ToolRuntime pre-execution.
 import { WEB_TOOL_FETCH_TIMEOUT_MS, ZHIN_WEB_USER_AGENT } from './web-tool-utils.js';
 import { getToolNetworkPolicy } from '../security/network-policy-context.js';
 export const WEB_FETCH_DEFAULT_MAX_LENGTH = 20 * 1024;
@@ -50,13 +52,6 @@ export class WebFetchBuiltinTool extends BuiltinBaseTool {
 
   async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
     try {
-      // 统一安全策略门面（与原单层手写链等价）：dangerous-tool-approval
-      const policyGate = toolPolicyResultToMessage(
-        runToolPolicies({ toolName: 'web_fetch', commMessage }),
-        'web_fetch',
-      );
-      if (policyGate) return policyGate;
-
       const MAX_REDIRECTS = 5;
       let currentUrl = String(args.url ?? '');
       let redirectCount = 0;

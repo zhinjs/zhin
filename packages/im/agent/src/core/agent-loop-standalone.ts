@@ -16,6 +16,8 @@ import {
 } from '../builtin/deferred-tool-meta.js';
 import { catalogToolByName } from '../tool-catalog/tool-catalog.js';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
+import { createToolRuntime } from '../tool/tool-runtime.js';
+import { registerBuiltinPolicyExtractors } from '../tool/builtin-policy-extractors.js';
 const logger = getLogger('AgentLoopStandalone');
 
 function toolResultToAgentMessage(
@@ -156,17 +158,34 @@ export async function runAgentLoopStandaloneTurn(
   let lastAssistantText = '';
   let lastUsage: TokenUsage | undefined;
 
+  registerBuiltinPolicyExtractors();
+  const toolRuntime = createToolRuntime({
+    generation: 0,
+    signal: signal ?? AbortSignal.timeout(600_000),
+    sessionId,
+    commMessage,
+  });
+
   const runTool = async (toolCall: ParsedToolCall) => {
     const legacy = legacyByName.get(toolCall.name);
     if (!legacy) {
       return toolResultToAgentMessage(toolCall, `Unknown tool: ${toolCall.name}`, true);
     }
     try {
-      const exec = () => (legacy as import('@zhin.js/core').Tool).execute(toolCall.arguments, commMessage);
-      const raw = directExecution
-        ? await runWithDirectAgentExecution(commMessage, exec)
-        : await runWithCommMessage(commMessage, exec);
-      const rawText = typeof raw === 'string' ? raw : JSON.stringify(raw ?? null);
+      const exec = () => directExecution
+        ? runWithDirectAgentExecution(commMessage, () =>
+            toolRuntime.execute(legacy, toolCall.arguments, { toolCallId: toolCall.id }),
+          )
+        : runWithCommMessage(commMessage, () =>
+            toolRuntime.execute(legacy, toolCall.arguments, { toolCallId: toolCall.id }),
+          );
+      const outcome = await exec();
+      if (outcome.denied) {
+        toolCalls.push({ tool: toolCall.name, args: toolCall.arguments, result: String(outcome.output) });
+        callbacks?.onToolResult?.(toolCall.name, outcome.output);
+        return toolResultToAgentMessage(toolCall, outcome.output, true);
+      }
+      const rawText = typeof outcome.output === 'string' ? outcome.output : JSON.stringify(outcome.output ?? null);
       const transformed = transformToolResult
         ? await transformToolResult({
             toolName: toolCall.name,

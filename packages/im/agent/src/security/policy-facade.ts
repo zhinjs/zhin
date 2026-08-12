@@ -46,6 +46,8 @@ import { checkExecPolicyWithOptions } from './exec-policy.js';
 import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approve-always-store.js';
 import { checkUrlNetworkAccess } from './network-policy.js';
 import type { ToolNetworkPolicy } from './network-policy-context.js';
+import type { ToolDescriptor } from '@zhin.js/tool';
+import type { TurnIngress } from '../turn/turn-ingress.js';
 
 // ── 输入 / 输出类型 ─────────────────────────────────────────────────
 
@@ -99,6 +101,29 @@ export interface ToolPolicyResult extends ToolPolicyDecision {
   deniedBy?: string;
   /** 已执行层的决策记录 */
   decisions: ReadonlyArray<ToolPolicyLayerRecord>;
+}
+
+export type TurnToolPolicyDecision =
+  | Readonly<{ status: 'allowed' }>
+  | Readonly<{ status: 'denied'; policy: string; reason: string }>
+  | Readonly<{ status: 'approval_required'; policy: string; reason: string }>;
+
+export interface TurnToolPolicyInput {
+  readonly turn: TurnIngress;
+  readonly tool: ToolDescriptor;
+  readonly input: Readonly<Record<string, unknown>>;
+}
+
+/** Generic, execution-domain-neutral policy facade for canonical Turn tools. */
+export function runTurnToolPolicies(input: TurnToolPolicyInput): TurnToolPolicyDecision {
+  if (input.tool.approval !== 'never') {
+    return Object.freeze({
+      status: 'approval_required',
+      policy: 'approval',
+      reason: `tool approval policy is ${input.tool.approval}`,
+    });
+  }
+  return Object.freeze({ status: 'allowed' });
 }
 
 // ── 声明式策略表 ────────────────────────────────────────────────────

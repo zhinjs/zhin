@@ -4,7 +4,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { Tool, Message, MediaRef, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { normalizeMediaRefsToPayloads } from '../media/media-normalize.js';
@@ -48,25 +47,12 @@ export class AnalyzeMediaBuiltinTool extends BuiltinBaseTool {
       return 'Error: file_path is required';
     }
 
-    // 统一安全策略门面（与原三层手写链等价，旧链以 read_file 身份执行）：
-    // role-gate(read_file) → file-permission-matrix(read) → sensitive-path
     let fp: string;
     try {
       fp = expandHome(filePathArg);
     } catch (e: unknown) {
       return nodeErrToFileMessage(e, String(filePathArg), 'read');
     }
-    const policyGate = toolPolicyResultToMessage(
-      runToolPolicies({
-        toolName: 'read_file',
-        filePath: fp,
-        rawFilePath: filePathArg,
-        fileOperation: 'read',
-        commMessage,
-      }),
-      'analyze_media',
-    );
-    if (policyGate) return policyGate;
 
     try {
       if (!isMediaPath(fp)) {

@@ -12,11 +12,12 @@ export class ImApprovalAdapter implements SessionInteractionPort {
   ) {}
 
   async requestApproval(input: ApprovalRequestInput): Promise<boolean> {
+    if (input.signal.aborted) return false;
     if (!this.plugin) {
       throw new Error('approval required but Host plugin is unavailable');
     }
     const askTool = new AskUserBuiltinTool(this.plugin);
-    const raw = await askTool.run(
+    const raw = await Promise.race([askTool.run(
       {
         question: input.question,
         type: 'confirm',
@@ -24,8 +25,15 @@ export class ImApprovalAdapter implements SessionInteractionPort {
         sensitive: true,
       },
       this.commMessage,
-    );
+    ), waitForCancellation(input.signal)]);
     const answer = typeof raw === 'string' ? raw.trim().toLowerCase() : String(raw);
     return answer === 'yes';
   }
+}
+
+function waitForCancellation(signal: AbortSignal): Promise<string> {
+  return new Promise((resolve) => {
+    if (signal.aborted) return resolve('no');
+    signal.addEventListener('abort', () => resolve('no'), { once: true });
+  });
 }

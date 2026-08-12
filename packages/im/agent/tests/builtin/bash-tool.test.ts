@@ -20,14 +20,11 @@ describe('BashBuiltinTool', () => {
     expect(tool.kind).toBe('shell');
   });
 
-  it('run 拦截危险命令（环境导出）并返回 Error 文案', async () => {
-    const mockExec: BashExecAsync = async () => {
-      throw new Error('exec should not run');
-    };
+  it('run 不再自行拦截危险命令（由 ToolRuntime 统一处理）', async () => {
+    const mockExec: BashExecAsync = async () => ({ stdout: 'PATH=/usr/bin', stderr: '' });
     const inst = new BashBuiltinTool(mockExec, { useSandbox: false });
     const out = String(await inst.run({ command: 'env' }));
-    expect(out.startsWith('Error:')).toBe(true);
-    expect(out).toContain('禁止执行环境变量导出命令');
+    expect(out).toContain('PATH=/usr/bin');
   });
 
   it('run 允许的路径返回 STDOUT（mock exec）', async () => {

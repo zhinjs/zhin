@@ -9,7 +9,7 @@ export class HttpApprovalAdapter implements SessionInteractionPort {
 
   async requestApproval(input: ApprovalRequestInput): Promise<boolean> {
     try {
-      return await this.waiter.wait(input.requestId, input.timeoutMs ?? 300_000);
+      return await this.waiter.wait(input.requestId, input.timeoutMs ?? 300_000, input.signal);
     } catch {
       return false;
     }

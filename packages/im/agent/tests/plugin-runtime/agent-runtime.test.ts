@@ -33,9 +33,10 @@ import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 import {
   AgentRuntime,
-  CapabilityLeaseRuntime,
+  ToolIngressRuntime,
   CapabilityIngress,
-  type ToolCapability,
+  turnJournalStoreToken,
+  type ExternalToolCapability,
 } from '../../src/plugin-runtime/index.js';
 
 describe('Agent CapabilityIngress', () => {
@@ -47,7 +48,7 @@ describe('Agent CapabilityIngress', () => {
     expect(capabilities.skills.map((skill) => skill.name)).toEqual(['research']);
     expect(capabilities.agents.map((agent) => agent.name)).toEqual(['planner']);
     expect(capabilities.mcp.map((connection) => connection.name)).toEqual(['memory']);
-    await expect(capabilities.tools[0]?.execute({ value: 'x' })).resolves.toBe('old:x');
+    await expect(capabilities.tools[0]?.execute({ value: 'x' }, invocation())).resolves.toBe('old:x');
     await expect(capabilities.mcp[0]?.listTools()).resolves.toEqual([{ name: 'search' }]);
     await expect(capabilities.mcp[0]?.callTool('search', { q: 'x' })).resolves.toEqual({ q: 'x' });
     expect(Object.isFrozen(capabilities)).toBe(true);
@@ -57,19 +58,19 @@ describe('Agent CapabilityIngress', () => {
   it('holds one generation for the complete Agent turn', async () => {
     const fixture = await createFixture();
     const store = new SnapshotStore(stateFrom(fixture.snapshot));
-    const runtime = new CapabilityLeaseRuntime();
+    const runtime = new ToolIngressRuntime();
     runtime.attach(store);
     let release!: () => void;
     let entered!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
     const started = new Promise<void>((resolve) => { entered = resolve; });
-    let captured: ToolCapability | undefined;
+    let captured: ExternalToolCapability | undefined;
 
-    const turn = runtime.withCapabilities(fixture.child, async (capabilities) => {
-      captured = capabilities.tools[0];
+    const turn = runtime.withTools(fixture.child, externalRequest('lease-1'), async (tools) => {
+      captured = tools[0];
       entered();
       await gate;
-      return capabilities.tools[0]?.execute({ value: 'leased' });
+      return tools[0]?.execute({ value: 'leased' }, 'call-leased');
     });
     await started;
     const current = store.current;
@@ -80,6 +81,7 @@ describe('Agent CapabilityIngress', () => {
       source: '/plugins/child/tools/lookup.ts',
       definition: defineAgentTool<{ value: string }>({
         description: 'Replacement lookup',
+        approval: 'never',
         execute: (input) => `new:${input.value}`,
       }),
     });
@@ -95,10 +97,30 @@ describe('Agent CapabilityIngress', () => {
     });
     release();
 
-    await expect(turn).resolves.toBe('old:leased');
-    await expect(runtime.withCapabilities(fixture.child, (next) =>
-      next.tools[0]?.execute({ value: 'turn' }))).resolves.toBe('new:turn');
-    expect(() => captured?.execute({ value: 'late' })).toThrow('scope has ended');
+    await expect(turn).resolves.toMatchObject({ status: 'completed', output: 'old:leased' });
+    expect(fixture.journal.events.at(-1)?.terminal).toBe('completed');
+    await expect(runtime.withTools(fixture.child, externalRequest('lease-2'), (next) =>
+      next[0]?.execute({ value: 'turn' }, 'call-turn'))).resolves.toMatchObject({
+        status: 'completed', output: 'new:turn',
+      });
+    await expect(captured?.execute({ value: 'late' }, 'call-late'))
+      .rejects.toThrow('scope has ended');
+    await fixture.mcp.stop();
+    await store.close();
+  });
+
+  it('fails closed for approval-gated external protocol tools', async () => {
+    const fixture = await createFixture({ approval: 'always' });
+    const store = new SnapshotStore(stateFrom(fixture.snapshot));
+    const runtime = new ToolIngressRuntime();
+    runtime.attach(store);
+
+    await expect(runtime.withTools(fixture.child, externalRequest('approval'), (tools) =>
+      tools[0]!.execute({ value: 'blocked' }, 'call-blocked'))).resolves.toMatchObject({
+        status: 'denied',
+        policy: 'approval',
+      });
+    expect(fixture.journal.events.at(-1)?.terminal).toBe('failed');
     await fixture.mcp.stop();
     await store.close();
   });
@@ -107,9 +129,13 @@ describe('Agent CapabilityIngress', () => {
     const fixture = await createFixture();
     const store = new SnapshotStore(stateFrom(fixture.snapshot));
     const seen: import('../../src/turn/turn-ingress.js').TurnIngress[] = [];
-    const runtime = new AgentRuntime(async function* ({ turn, capabilities }) {
+    const runtime = new AgentRuntime(async function* ({ turn, capabilities, tools }) {
       seen.push(turn);
       expect(capabilities.tools[0]?.name).toBe('lookup');
+      expect('execute' in capabilities.tools[0]!).toBe(false);
+      await expect(tools.execute('lookup', { value: 'runner' }, 'call-1')).resolves.toMatchObject({
+        status: 'completed', output: 'old:runner',
+      });
       yield {
         type: 'turn_end',
         output: [{ type: 'text', content: 'done' }],
@@ -126,7 +152,7 @@ describe('Agent CapabilityIngress', () => {
       session: { key: 'http:http-1' },
       policy: { permissions: ['user'], unattended: false },
       signal: new AbortController().signal,
-      ports: { journal: { append: () => undefined } },
+      ports: {},
     });
 
     expect(outcome).toMatchObject({ status: 'completed' });
@@ -176,6 +202,7 @@ async function createFixture(access: {
   readonly scopes?: readonly ('private' | 'group' | 'channel')[];
   readonly permissions?: readonly string[];
   readonly hidden?: boolean;
+  readonly approval?: 'never' | 'always';
 } = {}) {
   const root = rootPluginId();
   const child = childPluginId(root, 'child');
@@ -190,6 +217,7 @@ async function createFixture(access: {
     definition: defineAgentTool<{ value: string }>({
       description: 'Lookup',
       ...access,
+      approval: access.approval ?? 'never',
       execute(input) { return `old:${input.value}`; },
     }),
   });
@@ -230,7 +258,8 @@ async function createFixture(access: {
     }),
   });
   const slots: readonly CapabilitySlot[] = [tool, skill, agent, mcpSlot];
-  const base = baseState(slots);
+  const journal = memoryJournalStore();
+  const base = baseState(slots, journal);
   const view = createSnapshotView(1, base);
   const mcp = await McpIndex.create([mcpSlot], view);
   await mcp.start();
@@ -243,7 +272,7 @@ async function createFixture(access: {
       [mcpFeatureId, mcp],
     ]),
   });
-  return { snapshot, child, mcp };
+  return { snapshot, child, mcp, journal };
 }
 
 function accessTurn(platform: string) {
@@ -260,8 +289,31 @@ function accessTurn(platform: string) {
   });
 }
 
+function invocation() {
+  return {
+    signal: new AbortController().signal,
+    traceId: 'trace',
+    turnId: 'turn',
+    sessionKey: 'session',
+    principal: { subjectId: 'user', roles: ['user'] },
+  } as const;
+}
 
-function baseState(slots: readonly CapabilitySlot[]): SnapshotState {
+function externalRequest(id: string) {
+  return {
+    identity: { traceId: `trace-${id}`, turnId: `turn-${id}` },
+    origin: { kind: 'http' as const, sessionId: 'mcp' },
+    principal: { subjectId: 'mcp-client', roles: ['authenticated'] },
+    input: { text: 'MCP tool request' },
+    session: { key: 'mcp:stateless' },
+    policy: { permissions: ['authenticated'], unattended: true },
+    signal: new AbortController().signal,
+    ports: {},
+  };
+}
+
+
+function baseState(slots: readonly CapabilitySlot[], journal = memoryJournalStore()): SnapshotState {
   const root = rootPluginId();
   const child = childPluginId(root, 'child');
   return {
@@ -271,9 +323,24 @@ function baseState(slots: readonly CapabilitySlot[]): SnapshotState {
       [child, { id: child, instanceKey: 'child', packageName: '@test/child', packageRoot: '/project/plugins/child', parent: root, children: [] }],
     ]),
     config: new Map([[root, {}], [child, {}]]),
-    resources: new Map([[root, new Map([[permissionHostToken.id, createPermissionHost()]])], [child, new Map()]]),
+    resources: new Map([[root, new Map([
+      [permissionHostToken.id, createPermissionHost()],
+      [turnJournalStoreToken.id, journal],
+    ])], [child, new Map()]]),
     capabilities: new Map(slots.map((slot) => [slot.id, slot])),
     projections: new Map(),
+  };
+}
+
+function memoryJournalStore() {
+  const events: import('@zhin.js/ai/agent-stream').AgentRunEvent[] = [];
+  return {
+    events,
+    append: (event: import('@zhin.js/ai/agent-stream').AgentRunEvent) => { events.push(event); },
+    replay: async (run: import('@zhin.js/ai/agent-stream').AgentRunIdentity, after = 0) =>
+      events.filter((event) => event.run.sessionId === run.sessionId
+        && event.run.turnId === run.turnId && event.sequence > after),
+    listRuns: async () => [],
   };
 }
 

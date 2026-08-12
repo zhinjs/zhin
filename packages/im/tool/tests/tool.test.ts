@@ -121,13 +121,23 @@ describe('Tool Feature', () => {
     const snapshot = createSnapshot([rootSlot, childSlot], secret.id);
     const index = new ToolIndex([rootSlot, childSlot], snapshot);
 
-    await expect(index.execute(child, 'lookup', { query: 'q' }))
+    await expect(index.execute(child, 'lookup', { query: 'q' }, invocation()))
       .resolves.toBe('child:q:child:child-secret');
-    await expect(index.execute(root, 'lookup', { query: 'q' }))
+    await expect(index.execute(root, 'lookup', { query: 'q' }, invocation()))
       .resolves.toBe('root:q:root:root-secret');
     expect(index.visible(child).map((tool) => tool.qualifiedName)).toEqual(['child__lookup']);
   });
 });
+
+function invocation() {
+  return {
+    signal: new AbortController().signal,
+    traceId: 'trace-1',
+    turnId: 'turn-1',
+    sessionKey: 'session-1',
+    principal: { subjectId: 'user-1', roles: ['user'] },
+  } as const;
+}
 
 function createSnapshot(
   slots: readonly ReturnType<typeof createCapabilitySlot>[],

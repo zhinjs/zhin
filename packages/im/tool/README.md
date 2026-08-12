@@ -32,7 +32,7 @@ export default defineAgentTool<{ city: string }>({
 });
 ```
 
-`defineAgentTool()` 只校验并冻结声明，不定位当前 Plugin、不注册能力。`approval` 支持 `never`、`on-risk`、`always`，默认 `on-risk`；真正的批准策略由上层 orchestrator adapter 执行。
+`defineAgentTool()` 只校验并冻结声明，不定位当前 Plugin、不注册能力。`approval` 支持 `never`、`on-risk`、`once`、`always`，默认 `on-risk`；批准状态和判定由 Turn Tool Runtime 持有，本包只保留声明。
 
 `inputSchema` 保持 provider-neutral，可以是 JSON Schema 或模型 adapter 能理解的其它只读描述。本包不引入 Zod，也不在 ToolIndex 重复实现 schema validator。
 
@@ -41,7 +41,7 @@ export default defineAgentTool<{ city: string }>({
 
 ## Owner 解析
 
-`ToolIndex.execute(requester, name, input)` 从 requester 向 Root 查找最近 definition。child 可覆盖继承的 Root Tool；执行上下文的 config/resource 始终属于实际声明 owner，而不是 requester。
+`ToolIndex.execute(requester, name, input, invocation)` 从 requester 向 Root 查找最近 definition。`invocation` 必须包含所属 Turn 的 `AbortSignal`、trace/turn/session identity 与 principal；这些字段会连同声明 owner 的 config/resource 组成 `ToolExecutionContext`。child 可覆盖继承的 Root Tool。
 
 `list()` 返回全树 qualified descriptors；`visible(owner)` 返回该 owner 可见且完成 override 后的 local descriptors。
 

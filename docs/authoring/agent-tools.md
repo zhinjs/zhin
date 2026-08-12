@@ -1,18 +1,18 @@
 ---
 title: Agent 工具与技能
-description: tools/*.ts 约定与 setup 动态注册两条路径、canAccessTool 统一准入、deferred catalog 与 load_tool、skills 与 *.agent.md
+description: tools/*.ts 约定与 setup addTool、统一 ToolIndex 准入、deferred catalog 与 load_tool、skills 与 *.agent.md
 ---
 
 # Agent 工具与技能
 
-想让模型替用户搜一首歌、查一次乐透推荐？把这段逻辑写成一个文件丢进 `tools/`，下一个 Agent turn 模型就能按名调用它。注册有两条路径：**`tools/*.ts` 文件约定**（声明式，随插件树继承）与 **`setup()` 动态注册**（命令式，按代际挂载），两条路径共用同一条准入谓词和同一份 deferred catalog。
+想让模型替用户搜一首歌、查一次乐透推荐？把这段逻辑写成一个文件丢进 `tools/`，下一个 Agent turn 模型就能按名调用它。创作有两种形式：**`tools/*.ts` 文件约定**，以及按配置在 **`setup()` 中调用 `context.addTool()`**。两者都写入候选 generation 的同一份 capability table，commit 后由唯一 `ToolIndex` 发布；不存在第二个动态注册表。
 
 ```mermaid
 flowchart LR
-    A["tools/*.ts<br/>defineAgentTool"] --> C[ToolIndex 投影]
-    B["setup() → agentToolsHostToken<br/>host.register()"] --> D[AgentToolsHost 注册表]
-    C --> E[CapabilityIngress]
-    D --> E
+    A["tools/*.ts<br/>defineAgentTool"] --> C[候选 capability table]
+    B["setup() → context.addTool()"] --> C
+    C --> D["commit → ToolIndex 投影"]
+    D --> E[CapabilityIngress]
     E --> F{"canAccessTool(message)<br/>platforms/scopes/permissions"}
     F -->|hidden 过滤| G[deferred catalog]
     G --> H["discover / load_tool / load_skill"]
@@ -52,45 +52,48 @@ export default defineAgentTool<{ message: string }>({
 
 工具名即文件名——对模型暴露的就是这个名字，注意跨插件唯一；子插件可以看到并覆盖父插件的同名工具（沿插件树向上解析）。描述符上另有 `qualifiedName`（owner 路径段与文件名以 `__` 连接）用于消歧。
 
-## 路径二：setup 动态注册
+## 路径二：setup 条件式声明
 
-需要按运行期条件（配置开关、数据库句柄）决定注册哪些工具时，在 `setup()` 里通过 `agentToolsHostToken`（`@zhin.js/plugin-runtime` 导出）拿到 `AgentToolsHost`：
+需要按配置开关或已注入资源决定是否提供工具时，在 `setup()` 中直接调用 `context.addTool()`：
 
 ```ts
 // plugins/utils/lottery/plugin.ts（节选）
-import { definePlugin, agentToolsHostToken } from '@zhin.js/plugin-runtime';
+import { definePlugin } from '@zhin.js/plugin-runtime';
+import { defineAgentTool } from '@zhin.js/tool';
 
 export default definePlugin({
   name: 'lottery',
   async setup(context) {
-    // AI 未安装/未启用时 Host 不存在，必须先 has() 守卫
-    if (context.resources.has(agentToolsHostToken)) {
-      const agentTools = context.resources.use(agentToolsHostToken);
-      const { registerLotteryAgentTools } = await import('./agent/runtime-tools.js');
-      context.lifecycle.add(registerLotteryAgentTools(agentTools));
-    }
+    if (!context.config.get().agentToolsEnabled) return;
+    context.addTool('lottery_sync', defineAgentTool({
+      description: 'Synchronize lottery draws',
+      approval: 'always',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async (_input, toolContext) => {
+        const database = toolContext.use(lotteryDatabaseToken);
+        return database.sync();
+      },
+    }));
   },
 });
 ```
 
-`host.register(tool)` 按**当前代际**注册并返回注销函数；挂到 `context.lifecycle` 即可随代际自动清理。注册项（`AgentToolRegistration`）：
+`addTool()` 只写 shadow generation；prepare 失败时从未可见，commit 后才随整代原子发布，无需手工注销。定义仍是同一个 `defineAgentTool()`：
 
 ```ts
-host.register({
-  name: 'lottery_sync',          // 暴露给模型的运行名
+context.addTool('lottery_sync', defineAgentTool({
   description: tool.description,
-  inputSchema: tool.inputSchema, // zod object 或 JSON Schema
-  source: 'lottery',             // 来源标签（诊断用）
-  platforms: tool.platforms,     // 四元组同路径一
+  inputSchema: tool.inputSchema,
+  platforms: tool.platforms,
   scopes: tool.scopes,
   permissions: tool.permissions,
   hidden: tool.hidden,
-  approval: 'never',             // 'never' | 'always'，与 ExecPolicy 叠加
-  execute: (input) => tool.execute(input, { pluginName: 'lottery', runtimeName: name }),
-});
+  approval: 'never',
+  execute: (input, context) => tool.execute(input, context),
+}));
 ```
 
-注意：`execute` 闭包在 `setup()` 时捕获依赖，**不要在闭包里调用插件定位器**（如 `getPlugin()`）——运行期路径禁止动态取插件。
+依赖应通过 `execute` 的 capability context 解析；不要在执行时调用插件定位器。这样工具始终绑定调用它的固定 generation lease。
 
 ## 统一准入：canAccessTool
 

@@ -21,10 +21,14 @@ import {
   ToolIndex,
   toolFeatureId,
   type ToolDescriptor,
+  type ToolInvocationContext,
 } from '@zhin.js/tool';
 
 export interface ToolCapability extends ToolDescriptor {
-  execute<TInput = unknown, TResult = unknown>(input: TInput): Promise<TResult>;
+  execute<TInput = unknown, TResult = unknown>(
+    input: TInput,
+    invocation: ToolInvocationContext,
+  ): Promise<TResult>;
 }
 
 export interface McpCapability extends McpDescriptor {
@@ -85,9 +89,9 @@ async function bindTools(
     .filter((r) => r.allowed)
     .map((r) => Object.freeze({
       ...r.descriptor,
-      execute: <TInput, TResult>(input: TInput) => {
+      execute: <TInput, TResult>(input: TInput, invocation: ToolInvocationContext) => {
         assertActive(isActive);
-        return index.execute<TInput, TResult>(owner, r.descriptor.name, input);
+        return index.execute<TInput, TResult>(owner, r.descriptor.name, input, invocation);
       },
     })));
 }

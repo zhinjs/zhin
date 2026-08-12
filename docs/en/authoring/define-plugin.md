@@ -109,12 +109,11 @@ Host tokens are capability handles provided by the Host to plugins, resolved in 
 
 `databaseHostToken` and `scheduleHostToken` do not expose process-wide `start` / `stop`, Console administration, or the raw database. The CLI owns those root-only lifecycles; plugins use logical table names and job ids, so equal names cannot collide with sibling or child plugins.
 | `outboundHostToken` | `zhin.outbound.host` | Has available Adapter | `send(input)` proactive push (returns platform message id or `null`); optional `addReaction` / `removeReaction` / `recall` |
-| `agentToolsHostToken` | `zhin.agent-tools.host` | AI installed and enabled (Agent Host) | `register(tool)` registers an Agent tool, returns an unregister function |
 | `htmlRendererToken` | `zhin.html-renderer.host` | `@zhin.js/html-renderer` installed | `render(html, { width, format, backgroundColor })` -> PNG (Buffer) or SVG (string); must degrade to plain text when not installed |
 | `runtimeEventPublisherToken` | `zhin.runtime.event-publisher` | Root-level, CLI console assembly | `publish(type, data)` broadcasts events to the Console SSE hub (used by adapters to push `endpoint:request` / `endpoint:notice` etc.) |
 | `httpHostToken` | `zhin.host.http` | HTTP Host enabled | `route(method, path, handler, meta?)` registers an HTTP route; `ws(path).onConnection(cb)` registers a WS endpoint; `listen()` / `close()` managed by Host |
 
-Note the common pattern in these two typical usages: first guard with `has()`, then hook the returned unregister function into `lifecycle` -- automatically cleaned up during hot reload.
+Host-token unregister functions belong in `lifecycle`; Tool capabilities are written directly to the candidate generation and need no manual cleanup.
 
 ```ts
 // Scheduled task: dispose hooked to lifecycle, safely cleaned up on hot reload
@@ -128,24 +127,18 @@ if (config.heartbeatCron && context.resources.has(scheduleHostToken)) {
   }));
 }
 
-// Agent tool: only exists when Agent Host is installed, silently skipped otherwise
-if (context.resources.has(agentToolsHostToken)) {
-  const agentTools = context.resources.use(agentToolsHostToken);
-  context.lifecycle.add(agentTools.register({
-    name: 'showcase_greet',
+// Agent tool: shares the same candidate capability table as tools/*.ts
+context.addTool('showcase_greet', defineAgentTool<{ name?: string }>({
     description: 'Return the configured greeting for a name',
-    source: 'capabilities-bot',
+    approval: 'never',
     inputSchema: {
       type: 'object',
       properties: { name: { type: 'string' } },
       required: ['name'],
     },
     execute: (input) => `${config.greeting}，${String(input.name ?? 'world')}！`,
-  }));
-}
+}));
 ```
-
-Common fields of `AgentToolRegistration`: `name` (tool name visible to the model), `description`, `inputSchema` (zod or JSON Schema), `platforms` / `scopes` / `permissions` (restrict visibility by message dimensions), `hidden` (only callable by name, not listed in the tool catalog), `approval` (`'never' | 'always'`, combined with execution policy), `source` (origin label).
 
 ## Generation Handoff
 
@@ -188,12 +181,7 @@ async setup(context) {
   }
   context.resources.provide(lotteryRuntimeToken, { db });
 
-  // Lazy-load Agent tools: IM-only installs don't include @zhin.js/agent
-  if (context.resources.has(agentToolsHostToken)) {
-    const agentTools = context.resources.use(agentToolsHostToken);
-    const { registerLotteryAgentTools } = await import('./agent/runtime-tools.js');
-    context.lifecycle.add(registerLotteryAgentTools(agentTools));
-  }
+  context.addTool('lottery_sync', createLotterySyncTool());
   // ...cron registration, see scheduleHostToken section
 }
 ```

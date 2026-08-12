@@ -111,12 +111,11 @@ Host token 是 Host 提供给插件的能力句柄，`setup` 里通过 `context.
 
 `databaseHostToken` 与 `scheduleHostToken` 不暴露进程级 `start` / `stop`、Console 管理端口或原始数据库。CLI 负责这些 root-only 生命周期；插件只使用逻辑表名和任务 ID，因此同名资源不会与 sibling/child 插件冲突。
 | `outboundHostToken` | `zhin.outbound.host` | 有可用 Adapter | `send(input)` 主动推送（返回平台消息 id 或 `null`）；可选 `addReaction` / `removeReaction` / `recall` |
-| `agentToolsHostToken` | `zhin.agent-tools.host` | 安装并启用 AI（Agent Host） | `register(tool)` 注册 Agent 工具，返回注销函数 |
 | `htmlRendererToken` | `zhin.html-renderer.host` | 安装了 `@zhin.js/html-renderer` | `render(html, { width, format, backgroundColor })` → PNG（Buffer）或 SVG（string）；未安装时必须降级为纯文本 |
 | `runtimeEventPublisherToken` | `zhin.runtime.event-publisher` | Root 级，CLI console 装配 | `publish(type, data)` 向 Console SSE hub 广播事件（适配器用来推 `endpoint:request` / `endpoint:notice` 等） |
 | `httpHostToken` | `zhin.host.http` | HTTP Host 启用 | `route(method, path, handler, meta?)` 注册 HTTP 路由；`ws(path).onConnection(cb)` 注册 WS 端点；`listen()` / `close()` 由 Host 管理 |
 
-注意这两段典型用法的共同点：先 `has()` 守卫，再把返回的注销函数挂进 `lifecycle`——热重载时自动回收。
+Host token 注册返回的注销函数要挂进 `lifecycle`；Tool capability 则直接写候选 generation，无需手工清理。
 
 ```ts
 // 定时任务：dispose 挂 lifecycle，热重载安全回收
@@ -130,24 +129,18 @@ if (config.heartbeatCron && context.resources.has(scheduleHostToken)) {
   }));
 }
 
-// Agent 工具：装了 Agent Host 才存在，未装静默跳过
-if (context.resources.has(agentToolsHostToken)) {
-  const agentTools = context.resources.use(agentToolsHostToken);
-  context.lifecycle.add(agentTools.register({
-    name: 'showcase_greet',
+// Agent 工具：与 tools/*.ts 共用同一个候选 capability table
+context.addTool('showcase_greet', defineAgentTool<{ name?: string }>({
     description: 'Return the configured greeting for a name',
-    source: 'capabilities-bot',
+    approval: 'never',
     inputSchema: {
       type: 'object',
       properties: { name: { type: 'string' } },
       required: ['name'],
     },
     execute: (input) => `${config.greeting}，${String(input.name ?? 'world')}！`,
-  }));
-}
+}));
 ```
-
-`AgentToolRegistration` 的常用字段：`name`（模型可见的工具名）、`description`、`inputSchema`（zod 或 JSON Schema）、`platforms` / `scopes` / `permissions`（按消息维度限制可见性）、`hidden`（只按名调用、不进入工具目录）、`approval`（`'never' | 'always'`，与执行策略叠加）、`source`（来源标注）。
 
 ## 代际交接（handoff）
 
@@ -190,12 +183,7 @@ async setup(context) {
   }
   context.resources.provide(lotteryRuntimeToken, { db });
 
-  // Agent 工具惰性加载：IM-only 安装不含 @zhin.js/agent
-  if (context.resources.has(agentToolsHostToken)) {
-    const agentTools = context.resources.use(agentToolsHostToken);
-    const { registerLotteryAgentTools } = await import('./agent/runtime-tools.js');
-    context.lifecycle.add(registerLotteryAgentTools(agentTools));
-  }
+  context.addTool('lottery_sync', createLotterySyncTool());
   // …cron 注册见 scheduleHostToken 一节
 }
 ```

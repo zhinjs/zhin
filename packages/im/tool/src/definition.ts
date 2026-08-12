@@ -2,8 +2,27 @@ import type { CapabilityContext } from '@zhin.js/feature-kit';
 
 const toolBrand = 'zhin.agent-tool/1' as const;
 
-export type ToolApproval = 'never' | 'on-risk' | 'always';
+export type ToolApproval = 'never' | 'on-risk' | 'once' | 'always';
 export type ToolScope = 'private' | 'group' | 'channel';
+
+export interface ToolInvocationContext {
+  readonly signal: AbortSignal;
+  readonly traceId: string;
+  readonly turnId: string;
+  readonly sessionKey: string;
+  readonly principal: Readonly<{
+    subjectId: string;
+    roles: readonly string[];
+  }>;
+}
+
+export interface ToolExecutionContext<TConfig = unknown> extends CapabilityContext<TConfig> {
+  readonly signal: AbortSignal;
+  readonly traceId: string;
+  readonly turnId: string;
+  readonly sessionKey: string;
+  readonly principal: ToolInvocationContext['principal'];
+}
 
 export interface AgentToolDefinition<
   TInput = unknown,
@@ -18,7 +37,7 @@ export interface AgentToolDefinition<
   readonly scopes?: readonly ToolScope[];
   readonly permissions?: readonly string[];
   readonly hidden?: boolean;
-  execute(input: TInput, context: CapabilityContext<TConfig>): TResult | Promise<TResult>;
+  execute(input: TInput, context: ToolExecutionContext<TConfig>): TResult | Promise<TResult>;
 }
 
 declare module '@zhin.js/plugin-runtime' {
@@ -44,7 +63,7 @@ export function defineAgentTool<
     throw new TypeError('Agent Tool execute must be a function');
   }
   const approval = definition.approval ?? 'on-risk';
-  if (approval !== 'never' && approval !== 'on-risk' && approval !== 'always') {
+  if (approval !== 'never' && approval !== 'on-risk' && approval !== 'once' && approval !== 'always') {
     throw new TypeError(`Invalid Agent Tool approval: ${String(approval)}`);
   }
   validateStringList('platforms', definition.platforms);
@@ -75,6 +94,7 @@ export function parseAgentToolDefinition(value: unknown): AgentToolDefinition {
     || typeof definition.execute !== 'function'
     || (definition.approval !== 'never'
       && definition.approval !== 'on-risk'
+      && definition.approval !== 'once'
       && definition.approval !== 'always')
     || !validStringList(definition.platforms)
     || !validStringList(definition.permissions)

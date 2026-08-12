@@ -38,6 +38,7 @@ export interface ToolApprovalGateOptions {
   publishCtx?: AgentStreamPublishContext;
   /** Stream-turn journal; request/result become ordered run events when present. */
   journal?: AgentRunJournal;
+  signal: AbortSignal;
 }
 
 /**
@@ -82,6 +83,7 @@ export async function runToolApprovalGate(
       requestId,
       toolName: options.toolName,
       question,
+      signal: options.signal,
     });
   } catch (err) {
     failure = err instanceof Error ? err.message : String(err);

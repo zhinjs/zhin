@@ -22,8 +22,7 @@ describe('Runtime MCP Host', () => {
       name: 'echo',
       description: 'Echo input',
       inputSchema: z.object({ value: z.string() }),
-      approval: 'never',
-      execute: (input) => execute(input as { value: string }),
+      execute: (input, context) => execute(input as { value: string }, context),
     };
     const { baseUrl } = await start([tool]);
 
@@ -37,15 +36,19 @@ describe('Runtime MCP Host', () => {
       name: 'echo',
       arguments: { value: 'hello' },
     })).toContain('echo:hello');
-    expect(execute).toHaveBeenCalledWith({ value: 'hello' });
+    expect(execute).toHaveBeenCalledWith({ value: 'hello' }, expect.objectContaining({
+      signal: expect.any(AbortSignal),
+      principal: { subjectId: 'mcp-client', roles: ['authenticated'] },
+    }));
   });
 
-  it('does not execute approval-gated tools unless explicitly enabled', async () => {
-    const execute = vi.fn(async () => 'unsafe');
+  it('surfaces denial from the canonical tool execution authority', async () => {
+    const execute = vi.fn(async () => {
+      throw new Error('approval required but ApprovalPort unavailable');
+    });
     const { baseUrl } = await start([{
       name: 'dangerous',
       description: 'Requires approval',
-      approval: 'always',
       execute,
     }]);
 
@@ -53,8 +56,28 @@ describe('Runtime MCP Host', () => {
       name: 'dangerous',
       arguments: {},
     });
-    expect(body).toContain('requires approval');
-    expect(execute).not.toHaveBeenCalled();
+    expect(body).toContain('approval required');
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('does not grant authenticated role for a bogus localhost Authorization header', async () => {
+    const execute = vi.fn(async (
+      _input: unknown,
+      context: Parameters<RuntimeMcpTool['execute']>[1],
+    ) => context.principal.roles.join(','));
+    const { baseUrl } = await start([{
+      name: 'identity',
+      description: 'Return caller role',
+      execute,
+    }], true);
+    const response = await mcpRequest(baseUrl, 'tools/call', {
+      name: 'identity', arguments: {},
+    }, 'bogus-token');
+
+    expect(await response.text()).toContain('localhost');
+    expect(execute).toHaveBeenCalledWith({}, expect.objectContaining({
+      principal: { subjectId: 'mcp-client', roles: ['localhost'] },
+    }));
   });
 
   it('uses the Host JSON parser limit and preserves JSON-RPC parse errors', async () => {
@@ -88,13 +111,16 @@ describe('Runtime MCP Host', () => {
   });
 });
 
-async function start(tools: readonly RuntimeMcpTool[]): Promise<{ baseUrl: string }> {
+async function start(
+  tools: readonly RuntimeMcpTool[],
+  allowUnauthenticatedLocalhost = false,
+): Promise<{ baseUrl: string }> {
   const host = createHttpHost({ host: '127.0.0.1', port: 0 });
   hosts.push(host);
   installRuntimeMcp({
     http: host,
-    config: { token: 'test-token', allowUnauthenticatedLocalhost: false },
-    tools: { withTools: (operation) => operation(tools) },
+    config: { token: 'test-token', allowUnauthenticatedLocalhost },
+    tools: { withTools: (_context, operation) => operation(tools) },
   });
   const address = await host.listen();
   return { baseUrl: `http://127.0.0.1:${address.port}/mcp` };

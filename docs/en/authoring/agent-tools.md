@@ -1,18 +1,18 @@
 ---
 title: Agent Tools and Skills
-description: tools/*.ts convention and setup dynamic registration — two paths, canAccessTool unified access control, deferred catalog and load_tool, skills and *.agent.md
+description: tools/*.ts convention and setup addTool — one ToolIndex, deferred catalog and load_tool, skills and *.agent.md
 ---
 
 # Agent Tools and Skills
 
-Want the model to search a song or check a lottery recommendation for the user? Write that logic into a file, drop it in `tools/`, and the model can call it by name on the next Agent turn. There are two registration paths: **`tools/*.ts` file convention** (declarative, inherited along the plugin tree) and **`setup()` dynamic registration** (imperative, mounted per generation). Both paths share the same access predicate and the same deferred catalog.
+Want the model to search a song or check a lottery recommendation for the user? Put the logic in `tools/`, or conditionally call `context.addTool()` from `setup()`. Both forms write the same candidate-generation capability table and become visible through the sole `ToolIndex` only after commit. There is no second dynamic registry.
 
 ```mermaid
 flowchart LR
-    A["tools/*.ts<br/>defineAgentTool"] --> C[ToolIndex projection]
-    B["setup() → agentToolsHostToken<br/>host.register()"] --> D[AgentToolsHost registry]
-    C --> E[CapabilityIngress]
-    D --> E
+    A["tools/*.ts<br/>defineAgentTool"] --> C[Candidate capability table]
+    B["setup() → context.addTool()"] --> C
+    C --> D["commit → ToolIndex projection"]
+    D --> E[CapabilityIngress]
     E --> F{"canAccessTool(message)<br/>platforms/scopes/permissions"}
     F -->|hidden filtering| G[deferred catalog]
     G --> H["discover / load_tool / load_skill"]
@@ -52,42 +52,42 @@ Definition fields (`packages/im/tool/src/definition.ts`):
 
 The tool name is the file name -- this is the name exposed to the model; note it must be unique across plugins. Child plugins can see and override parent plugins' same-named tools (resolved upward along the plugin tree). The descriptor also has `qualifiedName` (owner path segments and file name joined with `__`) for disambiguation.
 
-## Path Two: setup Dynamic Registration
+## Path Two: Conditional setup Declaration
 
-When you need to decide which tools to register based on runtime conditions (configuration switches, database handles), get `AgentToolsHost` via `agentToolsHostToken` (exported from `@zhin.js/plugin-runtime`) inside `setup()`:
+When configuration or injected resources decide whether a tool exists, call `context.addTool()` directly in `setup()`:
 
 ```ts
 // plugins/utils/lottery/plugin.ts (excerpt)
-import { definePlugin, agentToolsHostToken } from '@zhin.js/plugin-runtime';
+import { definePlugin } from '@zhin.js/plugin-runtime';
+import { defineAgentTool } from '@zhin.js/tool';
 
 export default definePlugin({
   name: 'lottery',
   async setup(context) {
-    // When AI is not installed/enabled, the Host doesn't exist -- must guard with has() first
-    if (context.resources.has(agentToolsHostToken)) {
-      const agentTools = context.resources.use(agentToolsHostToken);
-      const { registerLotteryAgentTools } = await import('./agent/runtime-tools.js');
-      context.lifecycle.add(registerLotteryAgentTools(agentTools));
-    }
+    if (!context.config.get().agentToolsEnabled) return;
+    context.addTool('lottery_sync', defineAgentTool({
+      description: 'Synchronize lottery draws',
+      approval: 'always',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async (_input, toolContext) => toolContext.use(lotteryDatabaseToken).sync(),
+    }));
   },
 });
 ```
 
-`host.register(tool)` registers under the **current generation** and returns an unregister function; hooking it to `context.lifecycle` enables automatic cleanup with generation turnover. Registration item (`AgentToolRegistration`):
+`addTool()` writes only the shadow generation. It is never visible if prepare fails and becomes visible atomically on commit, so no manual unregister function is needed. The definition is the same `defineAgentTool()` used by convention files:
 
 ```ts
-host.register({
-  name: 'lottery_sync',          // Runtime name exposed to the model
+context.addTool('lottery_sync', defineAgentTool({
   description: tool.description,
   inputSchema: tool.inputSchema, // zod object or JSON Schema
-  source: 'lottery',             // Source label (for diagnostics)
-  platforms: tool.platforms,     // Same four-tuple as path one
+  platforms: tool.platforms,
   scopes: tool.scopes,
   permissions: tool.permissions,
   hidden: tool.hidden,
-  approval: 'never',             // 'never' | 'always', combined with ExecPolicy
-  execute: (input) => tool.execute(input, { pluginName: 'lottery', runtimeName: name }),
-});
+  approval: 'never',
+  execute: (input, context) => tool.execute(input, context),
+}));
 ```
 
 Note: the `execute` closure captures dependencies at `setup()` time. **Do not call plugin locators** (such as `getPlugin()`) **inside the closure** -- the runtime path prohibits dynamic plugin retrieval.

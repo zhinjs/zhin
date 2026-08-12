@@ -118,15 +118,6 @@ function createAgentRuntimeResolver(
             });
           }
         }
-        // Runtime 插件经 agentToolsHostToken 注册的工具（ZhinAgent.registerTool）
-        for (const tool of resolveRegisteredAgentTools()) {
-          if (tool.hidden || seen.has(tool.name)) continue;
-          seen.set(tool.name, {
-            name: tool.name,
-            source: tool.source ?? 'agent',
-            description: tool.description ?? '',
-          });
-        }
         return [...seen.values()];
       },
       mcp: () => {
@@ -174,20 +165,6 @@ function resolveOrchestrator(): {
     return (orchestrator as never) ?? null;
   } catch {
     return null;
-  }
-}
-
-function resolveRegisteredAgentTools(): readonly {
-  name: string;
-  description?: string;
-  hidden?: boolean;
-  source?: string;
-}[] {
-  try {
-    const registry = agentModule?.getAgentRuntimeRegistry?.();
-    return registry?.getDefault?.()?.listRegisteredTools?.() ?? [];
-  } catch {
-    return [];
   }
 }
 

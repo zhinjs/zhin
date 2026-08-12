@@ -30,6 +30,37 @@ afterEach(async () => {
 });
 
 describe('Agent Feature slot HMR', () => {
+  it('projects composition-root tools through the candidate generation transaction', async () => {
+    const project = await createProject();
+    const modules = new FakeModules();
+    const pluginSource = join(project, 'plugin.ts');
+    const toolProviderSource = join(project, 'packages/tool/index.ts');
+    modules.set(pluginSource, { default: definePlugin({ name: 'root' }) });
+    modules.set(toolProviderSource, { default: toolFeature });
+    modules.set(join(project, 'packages/skill/index.ts'), { default: skillFeature });
+    modules.set(join(project, 'packages/agent/index.ts'), { default: agentFeature });
+    modules.set(join(project, 'packages/mcp/index.ts'), { default: mcpFeature });
+    modules.set(join(project, 'tools/lookup.ts'), { default: lookupTool('fixture') });
+    modules.set(join(project, 'mcp/memory.ts'), { default: memoryMcp([]) });
+    const runtime = new RootRuntime({
+      projectRoot: project,
+      modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+      installResources({ addFeature }) {
+        addFeature(toolFeatureId, 'host-clock', defineAgentTool({
+          description: 'Host clock',
+          execute: (_input, context) => `generation:${context.generation}`,
+        }));
+      },
+    });
+
+    const snapshot = await runtime.start();
+    await expect(projection(snapshot, toolFeatureId, ToolIndex)
+      .execute(rootPluginId(), 'host-clock', {}, toolInvocation())).resolves.toBe('generation:1');
+
+    await runtime.stop();
+  });
+
   it('reloads TS and Markdown slots without reloading providers or Plugin setup', async () => {
     const project = await createProject();
     const modules = new FakeModules();
@@ -135,7 +166,17 @@ function projection<T>(
 
 function executeTool(snapshot: RuntimeSnapshot): Promise<unknown> {
   return projection(snapshot, toolFeatureId, ToolIndex)
-    .execute(rootPluginId(), 'lookup', { value: 'value' });
+    .execute(rootPluginId(), 'lookup', { value: 'value' }, toolInvocation());
+}
+
+function toolInvocation() {
+  return {
+    signal: new AbortController().signal,
+    traceId: 'trace',
+    turnId: 'turn',
+    sessionKey: 'session',
+    principal: { subjectId: 'user', roles: ['user'] },
+  } as const;
 }
 
 function readSkill(snapshot: RuntimeSnapshot): string | undefined {

@@ -47,7 +47,6 @@
 | `databaseHostToken` | `stable` | `@zhin.js/plugin-runtime` | 数据库 Host 能力 |
 | `scheduleHostToken` | `stable` | `@zhin.js/plugin-runtime` | 定时任务 Host 能力 |
 | `outboundHostToken` | `stable` | `@zhin.js/plugin-runtime` | 跨平台出站消息能力 |
-| `agentToolsHostToken` | `experimental` | `@zhin.js/plugin-runtime` | Agent 工具注册 Host 能力 |
 | `messageGatewayToken` | `stable` | `@zhin.js/core`（`zhin.js/core/runtime`） | 入站消息投递网关（适配器用） |
 | `httpHostToken` | `stable` | `@zhin.js/host-http` | HTTP/WS Host 能力（Console、Webhook 用） |
 

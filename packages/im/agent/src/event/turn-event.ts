@@ -16,6 +16,9 @@ export type TurnEvent =
   | ChunkEvent
   | ToolCallEvent
   | ToolResultEvent
+  | ToolDeniedEvent
+  | ToolFailedEvent
+  | ToolCancelledEvent
   | ThinkingEvent
   | UsageEvent
   | TurnEndEvent
@@ -53,6 +56,30 @@ export interface ToolResultEvent {
   output: unknown;
   durationMs: number;
   toolUseId: string;
+}
+
+export interface ToolDeniedEvent {
+  type: 'tool_denied';
+  toolName: string;
+  toolUseId: string;
+  policy: string;
+  reason: string;
+}
+
+export interface ToolFailedEvent {
+  type: 'tool_failed';
+  toolName: string;
+  toolUseId: string;
+  error: string;
+  durationMs: number;
+}
+
+export interface ToolCancelledEvent {
+  type: 'tool_cancelled';
+  toolName: string;
+  toolUseId: string;
+  reason: string;
+  durationMs: number;
 }
 
 export interface ThinkingEvent {

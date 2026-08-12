@@ -70,6 +70,7 @@ export type {
   TurnPorts,
   TurnPrincipal,
   TurnRequest,
+  TurnRequestPorts,
   TurnScope,
   TurnSessionAddress,
 } from './turn/turn-ingress.js';
@@ -254,6 +255,20 @@ export {
   formatOwnerResponse,
 } from './builtin/ask-user-tool.js';
 export { createBuiltinTools, type BuiltinToolsOptions } from './builtin-tools.js';
+export {
+  createToolRuntime,
+  registerPolicyExtractor,
+  type ToolRuntime,
+  type ToolRuntimeTurnContext,
+  type ToolRuntimeJournalPort,
+  type ToolCallContext,
+  type ToolExecutionOutcome,
+  type ToolPolicyInputExtractor,
+} from './tool/tool-runtime.js';
+export { registerBuiltinPolicyExtractors } from './tool/builtin-policy-extractors.js';
+export { stampToolGeneration } from './tool/tool-system.js';
+export { FileJournalStore } from './journal/index.js';
+export { PersistentTurnJournal } from './journal/index.js';
 export { ZHIN_WEB_USER_AGENT, WEB_TOOL_FETCH_TIMEOUT_MS } from './builtin/web-tool-utils.js';
 
 export {

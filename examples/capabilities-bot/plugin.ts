@@ -5,12 +5,12 @@
  * 硬依赖请改用 `requires: [databaseHostToken]`（缺失即拒绝启动）。
  */
 import {
-  agentToolsHostToken,
   databaseHostToken,
   definePlugin,
   outboundHostToken,
   scheduleHostToken,
 } from '@zhin.js/plugin-runtime';
+import { defineAgentTool } from '@zhin.js/tool';
 
 interface ShowcaseConfig {
   greeting: string;
@@ -64,22 +64,18 @@ export default definePlugin<ShowcaseConfig>({
       log(`schedule: heartbeat @ ${config.heartbeatCron}`);
     }
 
-    // ⑤ Agent 工具（agentToolsHostToken）：装了 Agent Host 才存在，未装静默跳过
-    if (context.resources.has(agentToolsHostToken)) {
-      const agentTools = context.resources.use(agentToolsHostToken);
-      context.lifecycle.add(agentTools.register({
-        name: 'showcase_greet',
+    // ⑤ Agent 工具：作为本 generation 的 Tool capability 原子发布
+    context.addTool('showcase_greet', defineAgentTool<{ name?: string }>({
         description: 'Return the configured greeting for a name',
-        source: 'capabilities-bot',
+        approval: 'never',
         inputSchema: {
           type: 'object',
           properties: { name: { type: 'string' } },
           required: ['name'],
         },
         execute: (input) => `${config.greeting}，${String(input.name ?? 'world')}！`,
-      }));
-      log('agent-tools: showcase_greet registered');
-    }
+    }));
+    log('agent-tools: showcase_greet projected');
 
     // ⑥ 主动出站（outboundHostToken）：启动后向配置目标推送上线消息
     if (config.pushOnBoot && config.pushTarget && context.resources.has(outboundHostToken)) {

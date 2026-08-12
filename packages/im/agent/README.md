@@ -14,7 +14,9 @@ owner-visible 能力句柄；公开输入/输出只有 `TurnRequest` / `TurnOutc
 import { AgentRuntime } from '@zhin.js/agent/runtime';
 
 const runtime = new AgentRuntime(async function* ({ turn, capabilities }) {
-  yield* orchestrator.run({ turn, capabilities });
+  // Runner 注入点：能力句柄 → 带 generation 戳的工具（ToolRuntime 执行前校验）
+  const tools = toolsFromCapabilities(capabilities);
+  yield* orchestrator.run({ turn, capabilities, tools });
 });
 runtime.attach(snapshotReader);
 

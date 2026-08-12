@@ -29,7 +29,6 @@ Plugin Runtime 里，插件通过 `context.use(token)`（setup 期）或命令/�
 | Token | 注入后得到 | 关键方法 |
 | --- | --- | --- |
 | `agentHostToken`（`@zhin.js/agent`，`agent-host-port`） | Agent Host 端口 | 访问 ZhinAgent / AI 服务（装了 `@zhin.js/agent` 时可用） |
-| `agentToolsHostToken`（`@zhin.js/plugin-runtime`） | `AgentToolsHost` | `register(tool)`：插件向 Agent 工具目录注册 `agent/tools` |
 
 ## 渲染与 HTTP
 

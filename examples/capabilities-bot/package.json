@@ -13,6 +13,7 @@
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/command": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/tool": "workspace:*",
     "zod": "^4.4.3"
   },
   "zhin": {
@@ -24,6 +25,10 @@
     "features": [
       {
         "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/tool",
         "api": "^1.0.0"
       }
     ],

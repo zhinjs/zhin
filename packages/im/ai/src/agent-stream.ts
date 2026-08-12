@@ -11,7 +11,7 @@ export const AGENT_STREAM_MEDIA_TYPE = "application/x-ndjson; charset=utf-8";
 /** Version of the additive run envelope used for ordered turn events. */
 export const AGENT_RUN_EVENT_VERSION = 1 as const;
 
-export type AgentRunTerminal = "completed" | "failed" | "cancelled";
+export type AgentRunTerminal = "completed" | "failed" | "cancelled" | "budget_exceeded";
 
 export interface AgentRunIdentity {
   readonly sessionId: string;
@@ -30,6 +30,7 @@ export const AgentStreamEventType = {
   TURN_COMPLETED: "turn.completed",
   TURN_FAILED: "turn.failed",
   TURN_CANCELLED: "turn.cancelled",
+  TURN_BUDGET_EXCEEDED: "turn.budget_exceeded",
   MESSAGE_RECEIVED: "message.received",
   MESSAGE_APPENDED: "message.appended",
   MESSAGE_COMPLETED: "message.completed",
@@ -76,14 +77,21 @@ export type AgentRunEvent = AgentStreamEvent & {
 /**
  * In-memory ordered journal for one agent turn. The journal owns the run
  * identity and sequence, and closes permanently after its first terminal.
+ *
+ * When a {@link JournalStore} is provided, every appended event is written
+ * through to the persistent backend (fire-and-forget — the in-memory list
+ * is the source of truth for the current turn; persistence failures are
+ * logged but never block the turn).
  */
 export class AgentRunJournal {
   readonly run: AgentRunIdentity;
   #events: AgentRunEvent[] = [];
   #terminal: AgentRunEvent | undefined;
+  readonly #store: import('./journal-store.js').JournalStore | undefined;
 
-  constructor(run: AgentRunIdentity) {
+  constructor(run: AgentRunIdentity, store?: import('./journal-store.js').JournalStore) {
     this.run = run;
+    this.#store = store;
   }
 
   append(event: AgentRunEventInput): AgentRunEvent | undefined {
@@ -97,6 +105,9 @@ export class AgentRunJournal {
     };
     this.#events.push(appended);
     if (appended.terminal) this.#terminal = appended;
+    if (this.#store) {
+      Promise.resolve(this.#store.append(appended, appended.sequence - 1)).catch(() => {});
+    }
     return appended;
   }
 

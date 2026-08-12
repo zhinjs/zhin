@@ -192,6 +192,8 @@ export interface AgentTool {
   approval?: import('./tool-policy.js').ToolApprovalPolicy;
   /** Shapes tool output before it enters model context (IM rich payload may differ). */
   toModelOutput?: import('./tool-policy.js').ToolToModelOutputFn;
+  /** Generation stamp — set when tools are collected; ToolRuntime validates before execution. */
+  generation?: number;
 }
 
 /**

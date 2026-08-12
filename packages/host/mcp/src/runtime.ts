@@ -6,7 +6,8 @@ import {
   type HttpRouteRegistration,
 } from '@zhin.js/host-http-contract';
 import { HttpBodyError, readJsonBody } from '@zhin.js/host-http-contract';
-import type { ToolApproval } from '@zhin.js/tool';
+import type { ToolInvocationContext } from '@zhin.js/tool';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { mcpAuthRequired, verifyMcpBearer } from './mesh-auth.js';
 
@@ -15,20 +16,18 @@ export interface RuntimeMcpConfig {
   readonly path?: string;
   readonly token?: string;
   readonly allowUnauthenticatedLocalhost?: boolean;
-  /** External callers may only invoke `approval: never` tools by default. */
-  readonly allowApprovalTools?: boolean;
 }
 
 export interface RuntimeMcpTool {
   readonly name: string;
   readonly description: string;
   readonly inputSchema?: unknown;
-  readonly approval: ToolApproval;
-  execute(input: unknown): Promise<unknown>;
+  execute(input: unknown, context: ToolInvocationContext): Promise<unknown>;
 }
 
 export interface RuntimeMcpToolProvider {
   withTools<TResult>(
+    context: ToolInvocationContext,
     operation: (tools: readonly RuntimeMcpTool[]) => Promise<TResult>,
   ): Promise<TResult>;
 }
@@ -80,10 +79,9 @@ export async function handleRuntimeMcpRequest(
   }
 
   const expectedToken = options.config.token ?? options.fallbackToken ?? '';
-  if (
-    mcpAuthRequired(body, request, options.config, options.production ?? false)
-    && !verifyMcpBearer(request, expectedToken)
-  ) {
+  const bearerAuthenticated = verifyMcpBearer(request, expectedToken);
+  if (mcpAuthRequired(body, request, options.config, options.production ?? false)
+    && !bearerAuthenticated) {
     writeJson(response, 401, {
       jsonrpc: '2.0',
       error: { code: -32001, message: 'Unauthorized - Bearer token required' },
@@ -93,11 +91,9 @@ export async function handleRuntimeMcpRequest(
   }
 
   try {
-    await options.tools.withTools(async (tools) => {
-      const server = createRuntimeMcpServer(
-        tools,
-        options.config.allowApprovalTools === true,
-      );
+    const invocation = mcpInvocationContext(request, response, body, bearerAuthenticated);
+    await options.tools.withTools(invocation, async (tools) => {
+      const server = createRuntimeMcpServer(tools, invocation);
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
       try {
         await server.connect(transport);
@@ -120,7 +116,7 @@ export async function handleRuntimeMcpRequest(
 
 function createRuntimeMcpServer(
   tools: readonly RuntimeMcpTool[],
-  allowApprovalTools: boolean,
+  invocation: ToolInvocationContext,
 ): McpServer {
   const server = new McpServer(
     { name: 'zhin-plugin-runtime', version: '1.0.0' },
@@ -134,10 +130,7 @@ function createRuntimeMcpServer(
       description: tool.description,
       inputSchema: inputSchemaToZodShape(tool.inputSchema),
     }, async (input) => {
-      if (tool.approval !== 'never' && !allowApprovalTools) {
-        throw new Error(`Tool ${tool.name} requires approval and is not exposed to MCP`);
-      }
-      const result = await tool.execute(input);
+      const result = await tool.execute(input, invocation);
       return {
         content: [{
           type: 'text' as const,
@@ -147,6 +140,32 @@ function createRuntimeMcpServer(
     });
   }
   return server;
+}
+
+function mcpInvocationContext(
+  request: IncomingMessage,
+  response: ServerResponse,
+  body: unknown,
+  bearerAuthenticated: boolean,
+): ToolInvocationContext {
+  const controller = new AbortController();
+  request.once('aborted', () => controller.abort(new Error('MCP request aborted')));
+  response.once('close', () => {
+    if (!response.writableEnded) controller.abort(new Error('MCP response closed'));
+  });
+  response.once('error', (error) => controller.abort(error));
+  const id = String(requestId(body) ?? 'notification');
+  const invocationId = randomUUID();
+  return Object.freeze({
+    signal: controller.signal,
+    traceId: `mcp:${id}:${invocationId}`,
+    turnId: `mcp:${invocationId}`,
+    sessionKey: 'mcp:stateless',
+    principal: Object.freeze({
+      subjectId: 'mcp-client',
+      roles: Object.freeze([bearerAuthenticated ? 'authenticated' : 'localhost']),
+    }),
+  });
 }
 
 function inputSchemaToZodShape(schema: unknown): Record<string, z.ZodType> {

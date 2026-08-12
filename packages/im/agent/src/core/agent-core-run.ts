@@ -5,7 +5,7 @@
 import { aiOutboundJsonSchema, buildAiOutboundPromptHint, type Plugin } from '@zhin.js/core';
 import type { AIService } from '../service.js';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { type AgentTool, type AgentToolExecutionContext, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, getLlmTransportModel, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, getLoadedToolNamesFromSnapshot } from '@zhin.js/ai';
+import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, getLlmTransportModel, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, getLoadedToolNamesFromSnapshot } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { runWithCommMessage } from '../security/comm-message-context.js';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
@@ -20,7 +20,7 @@ import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-f
 import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
 import { transformContextWithCompaction } from '../memory/compaction-runtime.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
-import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars } from '../config/index.js';
+import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars, type ZhinAgentConfig } from '../config/index.js';
 import type { HostPromptTurnHooks } from '../internal/host-types.js';
 import type { AgentCore } from './agent-core.js';
 import type { ZhinAgentPrivate, OnChunkCallback, Message } from '../internal/agent-host.js';
@@ -28,6 +28,8 @@ import { bindDeferredToolRuntime } from '../builtin/deferred-tool-meta.js';
 import { persistDeferredToolSnapshot, buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
 import { runToolApprovalGate } from '../tool/tool-approval-gate.js';
 import { applyToolToModelOutput } from '../tool/tool-model-output.js';
+import { createToolRuntime, type ToolRuntimeTurnContext } from '../tool/tool-runtime.js';
+import { registerBuiltinPolicyExtractors } from '../tool/builtin-policy-extractors.js';
 import { resolveSessionInteractionPort, readHttpSessionId } from '../session/resolve-session-interaction-port.js';
 import { resolveDeferredToolsConfig, resolveAlwaysLoadedSet } from '../tool-catalog/resolve-config.js';
 import { resolveDeferredApiTools } from '../tool-catalog/tool-catalog.js';
@@ -140,45 +142,12 @@ export interface AgentLoopTurnInput {
   onTurnEvent?: (event: TurnEvent) => void;
   /** Ordered public event journal for this stream turn. */
   journal?: AgentRunJournal;
-}
-
-export async function executeCancellableTool(
-  execute: AgentTool['execute'],
-  args: Record<string, unknown>,
-  legacyContext: Message,
-  context: AgentToolExecutionContext,
-): Promise<unknown> {
-  throwIfToolExecutionAborted(context.signal);
-  const execution = Promise.resolve().then(() => execute(args, legacyContext, context));
-  const result = await raceToolExecutionAbort(execution, context.signal);
-  throwIfToolExecutionAborted(context.signal);
-  return result;
-}
-
-function throwIfToolExecutionAborted(signal?: AbortSignal): void {
-  if (!signal?.aborted) return;
-  throw signal.reason instanceof Error ? signal.reason : new Error('Tool execution cancelled');
-}
-
-function raceToolExecutionAbort<TResult>(execution: Promise<TResult>, signal?: AbortSignal): Promise<TResult> {
-  if (!signal) return execution;
-  throwIfToolExecutionAborted(signal);
-  return new Promise<TResult>((resolve, reject) => {
-    const onAbort = () => reject(
-      signal.reason instanceof Error ? signal.reason : new Error('Tool execution cancelled'),
-    );
-    signal.addEventListener('abort', onAbort, { once: true });
-    void execution.then(
-      (result) => {
-        signal.removeEventListener('abort', onAbort);
-        resolve(result);
-      },
-      (error: unknown) => {
-        signal.removeEventListener('abort', onAbort);
-        reject(error);
-      },
-    );
-  });
+  /**
+   * Snapshot generation for ToolRuntime validation.
+   * Plugin Runtime hosts pass SnapshotStore / AgentCapabilities.generation;
+   * legacy paths keep the `0` placeholder.
+   */
+  generation?: number;
 }
 
 export interface AgentLoopTurnResult {
@@ -534,6 +503,18 @@ export async function* runAgentLoopTextTurnRun(
   let lastAssistantText = '';
   let lastUsage: TokenUsage | undefined;
 
+  registerBuiltinPolicyExtractors();
+  const toolRuntimeCtx: ToolRuntimeTurnContext = {
+    generation: input.generation ?? 0,
+    signal: signal ?? AbortSignal.timeout(600_000),
+    sessionId,
+    commMessage: contextForTools,
+    journal: input.journal ? { append: (evt) => { input.journal!.append(evt); } } : undefined,
+    config: host.config as Required<ZhinAgentConfig>,
+    hostPlugin: orchestrationPlugin,
+  };
+  const toolRuntime = createToolRuntime(toolRuntimeCtx);
+
   logPhase(host.phaseConfig, 'agent_loop.turn.start', sessionId, {
     model: modelId,
     maxIterations,
@@ -665,30 +646,22 @@ export async function* runAgentLoopTextTurnRun(
         publishCtx: { sessionId, httpSessionId },
         onceStore: host.orchestrator?.approvalOnce,
         journal: input.journal,
+        signal: toolRuntimeCtx.signal,
           });
       if (approvalDenied) {
         toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: approvalDenied });
         return toolResultToAgentMessage(toolCall, approvalDenied, true);
       }
 
-      const t0 = performance.now();
-      const executionSignal = toolSignal ?? signal;
       try {
-        const raw = await runWithCommMessage(contextForTools, () =>
-          executeCancellableTool(
-            legacy.execute,
-            effectiveArgs,
-            contextForTools,
-            {
-              signal: executionSignal,
-              sessionId,
-              toolCallId: toolCall.id,
-              toolName: resolvedName,
-            },
-          ),
+        const outcome = await runWithCommMessage(contextForTools, () =>
+          toolRuntime.execute(legacy, effectiveArgs, { toolCallId: toolCall.id }),
         );
-        const durationMs = performance.now() - t0;
-        const rawText = await applyToolToModelOutput(legacy, raw, effectiveArgs);
+        if (outcome.denied) {
+          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: String(outcome.output) });
+          return toolResultToAgentMessage(toolCall, outcome.output, true);
+        }
+        const rawText = await applyToolToModelOutput(legacy, outcome.output, effectiveArgs);
 
         // PostToolUse interception
         let resultText = rawText;
@@ -698,7 +671,7 @@ export async function* runAgentLoopTextTurnRun(
             toolName: resolvedName,
             toolInput: effectiveArgs,
             toolOutput: rawText,
-            durationMs,
+            durationMs: outcome.durationMs,
             sessionId,
             commMessage: contextForTools,
           });
@@ -728,7 +701,9 @@ export async function* runAgentLoopTextTurnRun(
         }));
         return toolResultToAgentMessage(toolCall, finalText, false);
       } catch (err) {
-        throwIfToolExecutionAborted(executionSignal);
+        if (signal?.aborted) {
+          throw signal.reason instanceof Error ? signal.reason : new Error('Tool execution cancelled');
+        }
         const message = err instanceof Error ? err.message : String(err);
         const failure = `工具「${resolvedName}」执行失败：${message}`;
         toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: failure });

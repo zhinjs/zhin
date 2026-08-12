@@ -7,7 +7,6 @@ import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/c
 import {
   MAX_READ_FILE_SIZE,
 } from '../security/file-policy.js';
-import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -62,26 +61,12 @@ export class ReadFileBuiltinTool extends BuiltinBaseTool {
       return 'Error: file_path is required';
     }
 
-    // 统一安全策略门面（与原四层手写链等价）：
-    // role-gate → file-permission-matrix(read) → sensitive-path → blocked-device-path（读类措辞）
     let fp: string;
     try {
       fp = expandHome(filePathArg);
     } catch (e: unknown) {
       return nodeErrToFileMessage(e, String(filePathArg), 'read');
     }
-    const policyGate = toolPolicyResultToMessage(
-      runToolPolicies({
-        toolName: 'read_file',
-        filePath: fp,
-        rawFilePath: filePathArg,
-        fileOperation: 'read',
-        devicePathGuard: true,
-        commMessage,
-      }),
-      'read_file',
-    );
-    if (policyGate) return policyGate;
 
     try {
       const stat = await fs.stat(fp);

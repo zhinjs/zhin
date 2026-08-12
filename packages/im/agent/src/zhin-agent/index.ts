@@ -136,6 +136,11 @@ export interface AgentTurnRequest {
   readonly scheduleContext?: ScheduleTurnContext;
   /** Structured turn telemetry for execution domains. */
   readonly onTurnEvent?: (event: TurnEvent) => void;
+  /**
+   * Snapshot generation for ToolRuntime (Plugin Runtime hosts).
+   * Must match stamps applied by agentToolsFromCapabilities / stampToolGeneration.
+   */
+  readonly generation?: number;
 }
 
 export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAgentDiagnostics, IAgentConfigurator {
@@ -520,6 +525,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
         signal: request.signal,
         onTurnEvent: request.onTurnEvent,
         isolated: request.scheduleContext !== undefined,
+        generation: request.generation,
       },
     );
     return runWithAgentTurnConfiguration(request.configuration ?? {}, () =>

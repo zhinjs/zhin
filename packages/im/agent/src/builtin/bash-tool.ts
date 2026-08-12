@@ -7,7 +7,6 @@ import { type Plugin, type Tool, type Message, type ToolParametersSchema, type T
 import {
   classifyBashCommand,
 } from '../security/file-policy.js';
-import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 import { getSandbox } from '../security/sandbox.js';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
@@ -56,14 +55,6 @@ export class BashBuiltinTool extends BuiltinBaseTool {
     try {
       const cmd = String(args.command || '');
       if (!cmd.trim()) return 'Error: command is required';
-
-      // 统一安全策略门面（与原三层手写链等价；不传 config，exec-policy 层不激活）：
-      // bash-command-safety → bash-sensitive-read → bash-file-permission
-      const policyGate = toolPolicyResultToMessage(
-        runToolPolicies({ toolName: 'bash', command: cmd, commMessage, hostPlugin: this.hostPlugin }),
-        'bash',
-      );
-      if (policyGate) return policyGate;
 
       const timeout = (args.timeout as number | undefined) ?? 30000;
       const classification = classifyBashCommand(cmd);

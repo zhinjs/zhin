@@ -17,10 +17,6 @@ import {
 import type { ZhinAgentConfig } from '../../src/config/index.js';
 import { EditFileBuiltinTool } from '../../src/builtin/edit-file-tool.js';
 import { WriteFileBuiltinTool } from '../../src/builtin/write-file-tool.js';
-import { ReadFileBuiltinTool } from '../../src/builtin/read-file-tool.js';
-import { GrepBuiltinTool } from '../../src/builtin/grep-tool.js';
-import { WebFetchBuiltinTool } from '../../src/builtin/web-fetch-tool.js';
-import { BashBuiltinTool } from '../../src/builtin/bash-tool.js';
 
 function makeExecConfig(overrides: Partial<ZhinAgentConfig> = {}): Required<ZhinAgentConfig> {
   return {
@@ -267,8 +263,8 @@ describe('policy-facade', () => {
     });
   });
 
-  describe('edit_file 全链与旧行为等价（工具级对照）', () => {
-    it('trusted 未 allowlist：工具返回值与门面映射逐字一致', async () => {
+  describe('edit_file 全链（门面侧验证；工具不再自行检查策略）', () => {
+    it('trusted 未 allowlist：门面返回 ZHIN_NEEDS_OWNER', async () => {
       mockPlugin('owner1', ['admin1'], []);
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
       const fp = path.join(tmpDir, 'eq.txt');
@@ -278,15 +274,10 @@ describe('policy-facade', () => {
         runToolPolicies({ toolName: 'edit_file', filePath: fp, rawFilePath: fp, commMessage: ctx }),
         'edit_file',
       );
-      const toolOut = String(
-        await new EditFileBuiltinTool().run({ file_path: fp, old_string: 'before', new_string: 'after' }, ctx),
-      );
       expect(facadeMsg).toBe('ZHIN_NEEDS_OWNER:\n权限不足：执行「edit_file」需要 Owner 确认。');
-      expect(toolOut).toBe(facadeMsg);
-      expect(fs.readFileSync(fp, 'utf-8')).toBe('before');
     });
 
-    it('普通用户：工具返回值与门面映射逐字一致', async () => {
+    it('普通用户：门面返回 Error', async () => {
       mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
       const fp = path.join(tmpDir, 'eq2.txt');
@@ -296,11 +287,7 @@ describe('policy-facade', () => {
         runToolPolicies({ toolName: 'edit_file', filePath: fp, rawFilePath: fp, commMessage: ctx }),
         'edit_file',
       );
-      const toolOut = String(
-        await new EditFileBuiltinTool().run({ file_path: fp, old_string: 'before', new_string: 'after' }, ctx),
-      );
       expect(facadeMsg).toBe('Error: 权限不足：当前策略不允许执行「edit_file」。');
-      expect(toolOut).toBe(facadeMsg);
     });
 
     it('master 全链通过后工具正常写入（edit_file / write_file）', async () => {
@@ -387,7 +374,7 @@ describe('policy-facade', () => {
       expect(toolPolicyResultToMessage(result, 'write_file')).toBeNull();
     });
 
-    it('普通用户读敏感路径在 file-permission-matrix 拒绝，且与工具返回逐字一致', async () => {
+    it('普通用户读敏感路径在 file-permission-matrix 拒绝（门面侧验证）', async () => {
       mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
       const fp = path.join(tmpDir, '.env');
@@ -396,12 +383,10 @@ describe('policy-facade', () => {
         runToolPolicies({ toolName: 'read_file', filePath: fp, rawFilePath: fp, fileOperation: 'read', devicePathGuard: true, commMessage: ctx }),
         'read_file',
       );
-      const toolOut = String(await new ReadFileBuiltinTool().run({ file_path: fp }, ctx));
       expect(facadeMsg).toBe(`Error: 当前角色为「普通用户」，禁止访问敏感路径「${fp}」。`);
-      expect(toolOut).toBe(facadeMsg);
     });
 
-    it('trusted 读敏感路径为 needsOwnerConfirmation gate，与工具返回逐字一致', async () => {
+    it('trusted 读敏感路径为 needsOwnerConfirmation gate（门面侧验证）', async () => {
       mockPlugin('owner1', ['admin1'], []);
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
       const fp = path.join(tmpDir, '.env');
@@ -410,11 +395,9 @@ describe('policy-facade', () => {
         runToolPolicies({ toolName: 'read_file', filePath: fp, rawFilePath: fp, fileOperation: 'read', devicePathGuard: true, commMessage: ctx }),
         'read_file',
       );
-      const toolOut = String(await new ReadFileBuiltinTool().run({ file_path: fp }, ctx));
       expect(facadeMsg).toBe(
         `ZHIN_NEEDS_OWNER:\n管理员对敏感路径「${fp}」执行「read」操作需要 Owner 确认。\n\n（管理员执行敏感文件操作需 Owner 确认；请 Owner 回复确认或拒绝。）`,
       );
-      expect(toolOut).toBe(facadeMsg);
     });
   });
 
@@ -425,7 +408,7 @@ describe('policy-facade', () => {
       expect(result.decisions.map((d) => d.policy)).toEqual(['role-gate', 'sensitive-path']);
     });
 
-    it('master 搜索敏感目录在 sensitive-path gate，与工具返回逐字一致', async () => {
+    it('master 搜索敏感目录在 sensitive-path gate（门面侧验证）', async () => {
       mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['master'] });
       const fp = path.join(tmpDir, '.ssh');
@@ -434,9 +417,7 @@ describe('policy-facade', () => {
         runToolPolicies({ toolName: 'grep', filePath: fp, commMessage: ctx }),
         'grep',
       );
-      const toolOut = String(await new GrepBuiltinTool().run({ pattern: 'x', path: fp }, ctx));
       expect(facadeMsg).toBe('ZHIN_NEEDS_OWNER:\n工具「grep」访问敏感路径需二次确认：拒绝访问敏感目录: .ssh');
-      expect(toolOut).toBe(facadeMsg);
     });
   });
 
@@ -447,7 +428,7 @@ describe('policy-facade', () => {
       expect(result.decisions.map((d) => d.policy)).toEqual(['dangerous-tool-approval']);
     });
 
-    it('trusted 未 allowlist 时 gate，与工具返回逐字一致', async () => {
+    it('trusted 未 allowlist 时 gate（门面侧验证）', async () => {
       mockPlugin('owner1', ['admin1'], []);
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
 
@@ -455,9 +436,7 @@ describe('policy-facade', () => {
         runToolPolicies({ toolName: 'web_fetch', commMessage: ctx }),
         'web_fetch',
       );
-      const toolOut = String(await new WebFetchBuiltinTool().run({ url: 'http://example.com' }, ctx));
       expect(facadeMsg).toBe('ZHIN_NEEDS_OWNER:\n权限不足：执行「web_fetch」需要 Owner 确认。');
-      expect(toolOut).toBe(facadeMsg);
     });
   });
 
@@ -472,19 +451,15 @@ describe('policy-facade', () => {
       ]);
     });
 
-    it('环境变量导出命令在 bash-command-safety 短路，与工具返回逐字一致', async () => {
+    it('环境变量导出命令在 bash-command-safety 短路（门面侧验证）', async () => {
       const facadeMsg = toolPolicyResultToMessage(
         runToolPolicies({ toolName: 'bash', command: 'printenv' }),
         'bash',
       );
-      const toolOut = String(
-        await new BashBuiltinTool(async () => ({ stdout: '', stderr: '' }), { useSandbox: false }).run({ command: 'printenv' }),
-      );
       expect(facadeMsg).toBe('Error: 禁止执行环境变量导出命令（env/printenv/export/set），可能泄漏密钥');
-      expect(toolOut).toBe(facadeMsg);
     });
 
-    it('普通用户删除命令在 bash-file-permission 拒绝，与工具返回逐字一致', async () => {
+    it('普通用户删除命令在 bash-file-permission 拒绝（门面侧验证）', async () => {
       const plugin = mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
       const cmd = `rm -rf ${path.join(tmpDir, 'x')}`;
@@ -493,11 +468,7 @@ describe('policy-facade', () => {
         runToolPolicies({ toolName: 'bash', command: cmd, commMessage: ctx, hostPlugin: plugin }),
         'bash',
       );
-      const toolOut = String(
-        await new BashBuiltinTool(async () => ({ stdout: '', stderr: '' }), { useSandbox: false, plugin }).run({ command: cmd }, ctx),
-      );
       expect(facadeMsg).toBe('Error: 当前角色为「普通用户」，仅允许读取文件；请求的操作「delete」被拒绝。');
-      expect(toolOut).toBe(facadeMsg);
     });
   });
 });

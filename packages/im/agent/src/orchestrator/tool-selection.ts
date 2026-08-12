@@ -225,6 +225,8 @@ export function normalizeTool(input: NormalizableTool, message?: Message): Agent
   if (tool.toModelOutput) agentTool.toModelOutput = tool.toModelOutput;
   const toolTimeout = (tool as { timeout?: number }).timeout;
   if (toolTimeout != null) agentTool.timeout = toolTimeout;
+  const toolGeneration = (tool as { generation?: number }).generation;
+  if (toolGeneration != null) agentTool.generation = toolGeneration;
   return agentTool;
 }
 

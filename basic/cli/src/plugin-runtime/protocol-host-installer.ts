@@ -1,4 +1,5 @@
 import { rootPluginId, type SnapshotStore } from '@zhin.js/plugin-runtime';
+import { join } from 'node:path';
 import type { HttpHostOptions } from '@zhin.js/host-http';
 import type { RuntimeMcpConfig } from '@zhin.js/mcp/runtime';
 import type { RuntimeA2aConfig } from '@zhin.js/a2a/runtime';
@@ -21,6 +22,7 @@ export interface InstallProtocolHostsOptions {
   readonly http: HttpHostOptions;
   readonly snapshots: SnapshotStore;
   readonly production: boolean;
+  readonly projectRoot: string;
 }
 
 /**
@@ -34,11 +36,17 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
     const http = resources.use(httpHostToken);
 
     if (resolved.mcp && resolved.mcp.enabled !== false) {
-      const [{ installRuntimeMcp }, { CapabilityLeaseRuntime }] = await Promise.all([
+      const [{ installRuntimeMcp }, { FileJournalStore, ToolIngressRuntime, turnJournalStoreToken }] = await Promise.all([
         import('@zhin.js/mcp/runtime'),
         import('@zhin.js/agent/runtime'),
       ]);
-      const runtime = new CapabilityLeaseRuntime();
+      if (!resources.has(turnJournalStoreToken)) {
+        resources.provide(
+          turnJournalStoreToken,
+          new FileJournalStore(join(options.projectRoot, '.zhin', 'agent-journal')),
+        );
+      }
+      const runtime = new ToolIngressRuntime();
       runtime.attach(options.snapshots);
       lifecycle.add(installRuntimeMcp({
         http,
@@ -46,13 +54,28 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
         fallbackToken: resolved.httpToken,
         production: options.production,
         tools: {
-          withTools: (operation) => runtime.withCapabilities(rootPluginId(), async (capabilities) => {
-            const tools = capabilities.tools.map((tool) => ({
+          withTools: (invocation, operation) => runtime.withTools(rootPluginId(), {
+            identity: { traceId: invocation.traceId, turnId: invocation.turnId },
+            origin: { kind: 'http', sessionId: invocation.sessionKey },
+            principal: invocation.principal,
+            input: { text: 'MCP tool protocol request' },
+            session: { key: invocation.sessionKey },
+            policy: { permissions: invocation.principal.roles, unattended: true },
+            signal: invocation.signal,
+            ports: {},
+          }, async (capabilities) => {
+            const tools = capabilities.map((tool) => ({
               name: tool.name,
               description: tool.description,
               inputSchema: tool.inputSchema,
-              approval: tool.approval,
-              execute: (input: unknown) => tool.execute(input),
+              execute: async (input: unknown) => {
+                const outcome = await tool.execute(
+                  (input ?? {}) as Readonly<Record<string, unknown>>,
+                  `${invocation.turnId}:${tool.name}`,
+                );
+                if (outcome.status === 'completed') return outcome.output;
+                throw new Error(outcome.status === 'failed' ? outcome.error : outcome.reason);
+              },
             }));
             return operation(tools);
           }),

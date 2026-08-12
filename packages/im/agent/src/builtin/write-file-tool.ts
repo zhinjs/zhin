@@ -4,7 +4,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -49,20 +48,12 @@ export class WriteFileBuiltinTool extends BuiltinBaseTool {
       return 'Error: content is required';
     }
 
-    // 统一安全策略门面（与原七层手写链等价）：
-    // role-gate → dangerous-tool-approval → file-permission-matrix(create) →
-    // memory-write-path → sensitive-path → blocked-device-path → workspace-access
     let fp: string;
     try {
       fp = expandHome(filePathArg);
     } catch (e: unknown) {
       return nodeErrToFileMessage(e, String(filePathArg), 'write');
     }
-    const policyGate = toolPolicyResultToMessage(
-      runToolPolicies({ toolName: 'write_file', filePath: fp, rawFilePath: filePathArg, commMessage }),
-      'write_file',
-    );
-    if (policyGate) return policyGate;
 
     try {
       await fs.mkdir(path.dirname(fp), { recursive: true });
