@@ -10,9 +10,9 @@ import { ProcessAdapter } from '../src/built/adapter-process';
 
 createAdapterTestSuite({
   adapterName: 'harness-test',
-  endpointId: 'bot-1',
+  endpointKey: 'bot-1',
   createAdapter: (plugin) =>
-    new HarnessTestAdapter(plugin, 'harness-test' as any, [{ name: 'bot-1' }]),
+    new HarnessTestAdapter(plugin, 'harness-test' as any, [{ id: 'bot-1' }]),
   createRawEvent: () => ({
     id: `msg-${Date.now()}`,
     text: '你好，世界',
@@ -24,7 +24,7 @@ createAdapterTestSuite({
 
 createAdapterTestSuite({
   adapterName: 'process',
-  endpointId: `${process.pid}`,
+  endpointKey: `${process.pid}`,
   createAdapter: (plugin) => new ProcessAdapter(plugin),
   createRawEvent: () => ({
     content: 'hello from test',

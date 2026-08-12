@@ -125,7 +125,7 @@ describe('resolveAiOutboundToMessageElements', () => {
   const ctx = {
     message: stubMessage,
     mentionResolver: (ref: string) => (ref === 'researcher' ? 'ep-researcher' : undefined),
-    atIdResolver: (endpointId: string) => `qq:${endpointId}`,
+    atIdResolver: (endpointKey: string) => `qq:${endpointKey}`,
   };
 
   it('resolves mentions to canonical mention segments', async () => {

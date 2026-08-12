@@ -18,8 +18,8 @@ export function rewritePlainTextMentions(
   for (const match of trimmed.matchAll(PLAIN_MENTION_PATTERN)) {
     const token = match[1];
     if (!token) continue;
-    const endpointId = mentionResolver(token);
-    if (!endpointId) continue;
+    const endpointKey = mentionResolver(token);
+    if (!endpointKey) continue;
     const ref = token;
     if (!mentions.includes(ref)) mentions.push(ref);
   }
@@ -27,8 +27,8 @@ export function rewritePlainTextMentions(
   if (mentions.length === 0) return null;
 
   rewritten = trimmed.replace(PLAIN_MENTION_PATTERN, (full, token: string) => {
-    const endpointId = mentionResolver(token);
-    return endpointId ? '' : full;
+    const endpointKey = mentionResolver(token);
+    return endpointKey ? '' : full;
   });
   rewritten = rewritten
     .replace(/[ \t]+\n/g, '\n')

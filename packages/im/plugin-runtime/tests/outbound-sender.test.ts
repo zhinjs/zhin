@@ -32,7 +32,7 @@ describe('createOutboundSender', () => {
     expect(host.calls).toHaveLength(1);
     expect(host.calls[0]).toEqual({
       adapter: 'root/icqq',
-      endpointId: 'main',
+      endpointKey: 'main',
       conversation: { kind: 'group', id: '67890' },
       content: 'hello',
     });
@@ -46,18 +46,18 @@ describe('createOutboundSender', () => {
 
     expect(host.calls[0]).toEqual({
       adapter: 'root/telegram',
-      endpointId: 'bot1',
+      endpointKey: 'bot1',
       conversation: { kind: 'private', id: '12345', threadId: 't1' },
       content: 'DM',
     });
   });
 
-  it('exposes adapter, endpointId, host', () => {
+  it('exposes adapter, endpointKey, host', () => {
     const host = stubHost();
     const sender = createOutboundSender(makeUse(host), 'root/qq', 'ep1');
 
     expect(sender.adapter).toBe('root/qq');
-    expect(sender.endpointId).toBe('ep1');
+    expect(sender.endpointKey).toBe('ep1');
     expect(sender.host).toBe(host);
   });
 
@@ -73,14 +73,14 @@ describe('sendTo', () => {
     const host = stubHost();
     const result = await sendTo(makeUse(host), {
       adapter: 'root/icqq',
-      endpointId: 'main',
+      endpointKey: 'main',
       conversation: { kind: 'group', id: '99999' },
     }, 'broadcast');
 
     expect(result).toBe('msg-1');
     expect(host.calls[0]).toEqual({
       adapter: 'root/icqq',
-      endpointId: 'main',
+      endpointKey: 'main',
       conversation: { kind: 'group', id: '99999' },
       content: 'broadcast',
     });

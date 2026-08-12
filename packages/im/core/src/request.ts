@@ -13,7 +13,7 @@ export type { RequestKind, ComposedRequestName } from './side-event/types.js';
  * const request = Request.from(rawEvent, {
  *   $id: rawEvent.flag,
  *   $adapter: 'icqq',
- *   $endpoint: endpointId,
+ *   $endpoint: endpointKey,
  *   $type: 'request',
  *   $scene_id: groupId,
  *   $scene_type: 'group',

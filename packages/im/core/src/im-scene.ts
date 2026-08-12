@@ -17,7 +17,7 @@ export interface IMSceneParentRef {
 
 export interface IMSceneRef {
   platform: string;
-  endpointId: string;
+  endpointKey: string;
   sceneId: string;
   kind: IMSceneKind;
   senderId?: string;
@@ -44,9 +44,9 @@ export function normalizeIMSceneParentKind(value: unknown): IMSceneParentKind | 
 
 export function sceneRefFromMessage(message: Partial<Message<any>>): IMSceneRef | undefined {
   const platform = nonEmptyString(message.$adapter);
-  const endpointId = nonEmptyString(message.$endpoint);
+  const endpointKey = nonEmptyString(message.$endpoint);
   const kind = message.$channel?.type;
-  if (!platform || !endpointId || !kind) return undefined;
+  if (!platform || !endpointKey || !kind) return undefined;
 
   const senderId = nonEmptyString(message.$sender?.id);
   const channelId = nonEmptyString(message.$channel?.id);
@@ -67,7 +67,7 @@ export function sceneRefFromMessage(message: Partial<Message<any>>): IMSceneRef 
 
   return {
     platform,
-    endpointId,
+    endpointKey,
     sceneId,
     kind,
     ...(senderId ? { senderId } : {}),
@@ -82,7 +82,7 @@ export function sceneRefToSendOptions(
   const { scene } = target;
   return {
     context: scene.platform,
-    endpoint: scene.endpointId,
+    endpoint: scene.endpointKey,
     id: scene.sceneId,
     type: scene.kind,
     parent: scene.parent
@@ -97,7 +97,7 @@ export function sceneRefToSendOptions(
 export function resolveIMSceneSessionId(scene: IMSceneRef): string {
   return resolveIMSceneSessionIdKernel({
     platform: scene.platform,
-    endpointId: scene.endpointId,
+    endpointKey: scene.endpointKey,
     sceneId: scene.sceneId,
     kind: scene.kind as KernelIMSceneKind,
   });

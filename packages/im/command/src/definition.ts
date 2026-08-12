@@ -357,7 +357,7 @@ export function resolveCommandSession(input: unknown): CommandSession {
     : undefined;
 
   const adapter = input.conversation.endpoint.adapter || undefined;
-  const endpoint = (input as { endpointName?: string }).endpointName
+  const endpoint = (input as { endpointId?: string }).endpointId
     || (typeof metadata?.endpoint === 'string' && metadata.endpoint ? metadata.endpoint : undefined);
 
   const scene = resolveScene(input, metadata);

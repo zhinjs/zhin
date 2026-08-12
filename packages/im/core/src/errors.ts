@@ -22,12 +22,12 @@ import { ZhinError } from '@zhin.js/kernel';
  */
 export class AdapterError extends ZhinError {
     public readonly adapterName: string
-    public readonly endpointId?: string
+    public readonly endpointKey?: string
 
-    constructor(message: string, adapterName: string, endpointId?: string, context?: Record<string, any>) {
-        super(message, 'ADAPTER_ERROR', { ...context, adapterName, endpointId })
+    constructor(message: string, adapterName: string, endpointKey?: string, context?: Record<string, any>) {
+        super(message, 'ADAPTER_ERROR', { ...context, adapterName, endpointKey })
         this.adapterName = adapterName
-        this.endpointId = endpointId
+        this.endpointKey = endpointKey
     }
 }
 

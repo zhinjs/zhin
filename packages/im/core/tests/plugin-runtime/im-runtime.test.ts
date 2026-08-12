@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   SnapshotStore,
   capabilityId,
@@ -32,6 +32,7 @@ import {
 } from '@zhin.js/middleware';
 import {
   ImRuntime,
+  ingressRouteToken,
   Message,
   MessageDispatcher,
   component,
@@ -43,6 +44,52 @@ import {
 import { resetKeyboardFallbackStoreForTests } from '../../src/built/interactive-segments/index.js';
 
 describe('IM Runtime', () => {
+  it('resolves unmatched ingress from the held generation snapshot', async () => {
+    const events: string[] = [];
+    const fixture = await createFixture(events, []);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const current = fixture.store.current;
+    const resources = new Map(current.resources);
+    resources.set(current.root, new Map([
+      [ingressRouteToken.id, Object.freeze({
+        async route() {
+          events.push('fallback:g1');
+          await gate;
+          return true;
+        },
+      })],
+    ]));
+    fixture.store.commit(0, {
+      snapshot: { ...snapshotState(current), resources },
+      dispose: () => undefined,
+    });
+
+    const conversation = {
+      endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+      kind: 'private' as const,
+      id: 'alice',
+    };
+    const inFlight = fixture.im.receive({ conversation, content: 'hello' });
+    await vi.waitFor(() => expect(events).toContain('fallback:g1'));
+
+    const generationOne = fixture.store.current;
+    fixture.store.commit(1, {
+      snapshot: {
+        ...snapshotState(generationOne),
+        resources: new Map([[generationOne.root, new Map()]]),
+      },
+      dispose: () => undefined,
+    });
+    release();
+    await expect(inFlight).resolves.toMatchObject({ matched: true, command: 'ai' });
+    await expect(fixture.im.receive({ conversation, content: 'next' }))
+      .resolves.toEqual({ matched: false });
+
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
   it('uses the matched child Command owner as the automatic reply requester', async () => {
     const root = rootPluginId();
     const child = childPluginId(root, 'child');
@@ -134,7 +181,7 @@ describe('IM Runtime', () => {
         projections: new Map([[commandFeatureId, new CommandIndex([command], base)]]),
       });
     };
-    const send = (content: string, metadata?: Record<string, unknown>) => new Message(
+    const send = (content: string, opts?: { endpoint?: string }) => new Message(
       {
         endpoint: {
           id: String(capabilityId(root, adapterFeatureId, 'memory')),
@@ -147,7 +194,10 @@ describe('IM Runtime', () => {
       1,
       async () => ({ status: 'sent' as const }),
       undefined,
-      metadata ? Object.freeze({ ...metadata }) : undefined,
+      undefined,
+      undefined,
+      undefined,
+      opts?.endpoint,
     );
 
     // 默认 ''：无前缀直接匹配；带 / 反而不匹配
@@ -165,7 +215,7 @@ describe('IM Runtime', () => {
     // endpoints[i].commandPrefix 逐项覆盖顶层
     const snapshot = makeSnapshot({
       commandPrefix: '/',
-      endpoints: [{ name: 'bot-1', commandPrefix: '!' }, { name: 'bot-2' }],
+      endpoints: [{ id: 'bot-1', commandPrefix: '!' }, { id: 'bot-2' }],
     });
     await expect(new MessageDispatcher().dispatch(send('!zt', { endpoint: 'bot-1' }), snapshot))
       .resolves.toMatchObject({ matched: true });
@@ -329,7 +379,7 @@ describe('IM Runtime', () => {
 
     await fixture.im.sendEndpointMessage({
       adapter: 'memory',
-      endpointId: 'memory',
+      endpointKey: 'memory',
       conversation,
       content: 'host structured send',
     });
@@ -368,15 +418,15 @@ describe('IM Runtime', () => {
     };
     const message = { conversation, id: 'message-1' };
 
-    await fixture.im.recallEndpointMessage({ adapter: 'memory', endpointId: 'memory', message });
+    await fixture.im.recallEndpointMessage({ adapter: 'memory', endpointKey: 'memory', message });
     await expect(fixture.im.editEndpointMessage({
-      adapter: 'memory', endpointId: 'memory', message, content: 'updated',
+      adapter: 'memory', endpointKey: 'memory', message, content: 'updated',
     })).resolves.toBe('edited');
     await expect(fixture.im.addEndpointReaction({
-      adapter: 'memory', endpointId: 'memory', message, emoji: '👍',
+      adapter: 'memory', endpointKey: 'memory', message, emoji: '👍',
     })).resolves.toBe('👍');
     await fixture.im.setEndpointTyping({
-      adapter: 'memory', endpointId: 'memory', conversation, active: true,
+      adapter: 'memory', endpointKey: 'memory', conversation, active: true,
     });
 
     expect(calls).toEqual([

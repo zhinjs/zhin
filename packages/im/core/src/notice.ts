@@ -20,7 +20,7 @@ export {
  * const notice = Notice.from(rawEvent, {
  *   $id: rawEvent.id,
  *   $adapter: 'icqq',
- *   $endpoint: endpointId,
+ *   $endpoint: endpointKey,
  *   $type: 'notice',
  *   $scene_id: groupId,
  *   $scene_type: 'group',

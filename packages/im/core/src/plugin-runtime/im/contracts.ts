@@ -1,4 +1,4 @@
-import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import type { PluginId } from '@zhin.js/plugin-runtime';
 import type { ConversationRef, DeliveryReceipt, MessageRef } from '@zhin.js/im-contract';
 import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
 // 入站段统一使用 canonical Segment SSOT（built/segment-contract）；
@@ -74,7 +74,7 @@ export interface IncomingMessage {
   readonly segments?: readonly Segment[];
   readonly sender?: MessageSenderRef;
   /** Endpoint 实例名（如 ICQQ uin、sandbox bot name），区别于 conversation.endpoint.id（CapabilityId）。 */
-  readonly endpointName?: string;
+  readonly endpointId?: string;
   /** 消息是否 @了机器人。 */
   readonly mentioned?: boolean;
   /** 引用/回复的原始消息。 */
@@ -97,7 +97,7 @@ export interface IncomingContext {
   /** 消息到达时间戳（ms）。 */
   readonly timestamp: number;
   /** Endpoint 实例名（如 ICQQ uin、sandbox bot name）。 */
-  readonly endpointName?: string;
+  readonly endpointId?: string;
   /** 消息是否 @了机器人。 */
   readonly mentioned?: boolean;
 }
@@ -112,7 +112,7 @@ export interface SendRequest {
 
 /**
  * Host 侧未锚定 endpoint 的会话地址（Console RPC / OutboundHost 入参）；
- * ImRuntime 解析 adapter/endpointId 后锚定为完整 ConversationRef。
+ * ImRuntime 解析 adapter/endpointKey 后锚定为完整 ConversationRef。
  */
 export type ConversationAddress = Omit<ConversationRef, 'endpoint'>;
 
@@ -136,18 +136,6 @@ export interface MessageGateway {
     prefix: string,
     handler: (message: Message) => Promise<boolean> | boolean,
   ): () => void;
-  /**
-   * Command miss（或非前缀文本）后的回退处理：Host AI 对话、单文件 bot 用。
-   * 返回 true 表示已处理（回复已发送）；后注册者覆盖前者。
-   * `requester` 是消息所属 Adapter Endpoint 的 owner（用于 CapabilityIngress 继承）。
-   */
-  setUnmatchedHandler(
-    handler: (
-      message: Message,
-      snapshot: RuntimeSnapshot,
-      requester: PluginId,
-    ) => Promise<boolean>,
-  ): void;
 }
 
 
@@ -173,7 +161,7 @@ export class Message {
     readonly segments?: readonly Segment[],
     /** 结构化入站消息身份（平台原生 message id 经 MessageRef 传递）。 */
     readonly message?: MessageRef,
-    readonly endpointName?: string,
+    readonly endpointId?: string,
     readonly mentioned?: boolean,
     readonly replyTo?: { readonly id: string },
   ) {

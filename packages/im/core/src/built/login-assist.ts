@@ -35,7 +35,7 @@ export interface PendingLoginTaskPayload {
 export interface PendingLoginTask {
   id: string;
   adapter: string;
-  endpointId: string;
+  endpointKey: string;
   type: LoginAssistType;
   payload: PendingLoginTaskPayload;
   createdAt: number;
@@ -80,7 +80,7 @@ export class LoginAssist {
    */
   waitForInput(
     adapter: string,
-    endpointId: string,
+    endpointKey: string,
     type: LoginAssistType,
     payload: PendingLoginTaskPayload = {},
     options?: WaitForInputOptions,
@@ -91,7 +91,7 @@ export class LoginAssist {
     const task: PendingLoginTask = {
       id,
       adapter,
-      endpointId,
+      endpointKey,
       type,
       payload: { message: payload.message ?? '', ...payload },
       createdAt,

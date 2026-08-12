@@ -42,7 +42,7 @@ const incoming: IncomingContext = {
   content: '你好机器人',
   messageId: 'msg-12345',
   timestamp: 1723370000000,
-  endpointName: 'test-bot',
+  endpointId: 'test-bot',
   mentioned: true,
 };
 
@@ -135,8 +135,8 @@ describe('OutboundRenderer template compilation', () => {
       expect(result).toBe('时间=1723370000000');
     });
 
-    it('exposes endpointName', async () => {
-      const result = await renderer.render('机器人=${endpointName}', requester, snapshotWithHost(), conversation, incoming);
+    it('exposes endpointId', async () => {
+      const result = await renderer.render('机器人=${endpointId}', requester, snapshotWithHost(), conversation, incoming);
       expect(result).toBe('机器人=test-bot');
     });
 

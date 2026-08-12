@@ -106,7 +106,7 @@ describe('queue IM field contract', () => {
         channel: 'im',
         scene: {
           platform: 'qq',
-          endpointId: 'bot1',
+          endpointKey: 'bot1',
           sceneId: 'g1',
           kind: 'group',
         },
@@ -127,7 +127,7 @@ describe('queue IM field contract', () => {
         channel: 'im',
         scene: {
           platform: 'qq',
-          endpointId: 'bot1',
+          endpointKey: 'bot1',
           sceneId: 'ch1',
           kind: 'channel',
         },

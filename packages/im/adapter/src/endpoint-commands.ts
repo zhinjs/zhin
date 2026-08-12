@@ -16,7 +16,7 @@
  * 接入步骤（以 telegram 为例）：
  * 1. plugin.ts setup 里 `context.resources.provide(telegramRuntimeStateToken, createEndpointRuntimeState())`，
  *    token 由 `defineEndpointRuntimeStateToken('telegram')` 创建。
- * 2. adapters/telegram.ts create() 里 `context.use(token).endpoints.set(config.name, { name, mode })`。
+ * 2. adapters/telegram.ts create() 里 `context.use(token).endpoints.set(config.id, { id, mode })`。
  * 3. src 下 `export const telegramEndpointCommands = createEndpointCommands({ adapterKey: 'telegram', ... }, defineCommand)`
  *    （defineCommand 由调用方从 @zhin.js/command 传入——provider 包之间禁止互相 import，
  *    见 scripts/check-architecture-layers.mjs，故 defineCommand 走依赖注入）。
@@ -126,12 +126,12 @@ function readOutboundSendTarget(input: unknown): Omit<OutboundSendInput, 'conten
     metadata?: Readonly<Record<string, unknown>>;
   } | null | undefined;
   const conversation = message?.conversation;
-  const endpointIdRaw = conversation?.endpoint?.id;
+  const endpointKeyRaw = conversation?.endpoint?.id;
   const adapterRaw = conversation?.endpoint?.adapter;
   const kind = conversation?.kind;
   const id = conversation?.id;
   if (
-    endpointIdRaw == null
+    endpointKeyRaw == null
     || adapterRaw == null
     || (kind !== 'private' && kind !== 'group' && kind !== 'channel')
     || typeof id !== 'string'
@@ -139,10 +139,10 @@ function readOutboundSendTarget(input: unknown): Omit<OutboundSendInput, 'conten
   ) {
     return undefined;
   }
-  const live = String(message?.metadata?.endpoint ?? message?.metadata?.endpointId ?? '').trim();
+  const live = String(message?.metadata?.endpoint ?? message?.metadata?.endpointKey ?? '').trim();
   return {
     adapter: String(adapterRaw),
-    endpointId: live || String(endpointIdRaw),
+    endpointKey: live || String(endpointKeyRaw),
     conversation: {
       kind,
       id,
@@ -157,13 +157,13 @@ function readOutboundSendTarget(input: unknown): Omit<OutboundSendInput, 'conten
 // ---------------------------------------------------------------------------
 
 export interface EndpointRunningInfo {
-  readonly name: string;
+  readonly id: string;
   /** 连接模式（ws / wss / polling / socket-mode …），仅用于 list 展示。 */
   readonly mode?: string;
 }
 
 export interface EndpointRuntimeState {
-  /** 当前 generation 已成功创建的 endpoint（name → 描述） */
+  /** 当前 generation 已成功创建的 endpoint（id → 描述） */
   readonly endpoints: Map<string, EndpointRunningInfo>;
 }
 
@@ -199,10 +199,10 @@ function envSlug(text: string): string {
 /** 派生 endpoint 凭据的 env 键：`${ADAPTER}_${NAME}_${FIELD}`（如 `TELEGRAM_MY_BOT_TOKEN`） */
 export function buildEndpointEnvKey(
   adapterKey: string,
-  endpointName: string,
+  endpointId: string,
   fieldKey: string,
 ): string {
-  return `${envSlug(adapterKey)}_${envSlug(endpointName)}_${envSlug(fieldKey)}`;
+  return `${envSlug(adapterKey)}_${envSlug(endpointId)}_${envSlug(fieldKey)}`;
 }
 
 function escapeRegExp(text: string): string {
@@ -242,7 +242,7 @@ export function persistEndpointEnvValues(
 // ---------------------------------------------------------------------------
 
 export interface ConfiguredEndpointEntry {
-  name: string;
+  id: string;
   [key: string]: unknown;
 }
 
@@ -295,14 +295,14 @@ export function listConfiguredEndpoints(
   if (!Array.isArray(endpoints)) return [];
   return endpoints.filter(
     (entry): entry is ConfiguredEndpointEntry =>
-      !!entry && typeof entry === 'object' && typeof (entry as { name?: unknown }).name === 'string',
+      !!entry && typeof entry === 'object' && typeof (entry as { id?: unknown }).id === 'string',
   );
 }
 
-function entryName(item: unknown): string | undefined {
+function entryId(item: unknown): string | undefined {
   if (!isMap(item)) return undefined;
-  const name = item.get('name');
-  return typeof name === 'string' && name ? name : undefined;
+  const id = item.get('id');
+  return typeof id === 'string' && id ? id : undefined;
 }
 
 /**
@@ -341,7 +341,7 @@ function ensureEndpointsSeq(
   return doc.getIn(['plugins', adapterKey, 'endpoints']) as YAMLSeq;
 }
 
-/** 追加 endpoint 到 plugins.<adapterKey>.endpoints；name 已存在时报错 */
+/** 追加 endpoint 到 plugins.<adapterKey>.endpoints；id 已存在时报错 */
 export function addEndpointToConfig(
   adapterKey: string,
   entry: ConfiguredEndpointEntry,
@@ -349,23 +349,23 @@ export function addEndpointToConfig(
 ): string {
   const document = readConfigDocument(adapterKey, projectRoot);
   const seq = ensureEndpointsSeq(document.doc, adapterKey);
-  if (seq.items.some((item) => entryName(item) === entry.name)) {
-    throw new Error(`配置中已存在 ${adapterKey} endpoint「${entry.name}」，可先 ${adapterKey}.endpoint remove ${entry.name} 再重新添加`);
+  if (seq.items.some((item) => entryId(item) === entry.id)) {
+    throw new Error(`配置中已存在 ${adapterKey} endpoint「${entry.id}」，可先 ${adapterKey}.endpoint remove ${entry.id} 再重新添加`);
   }
   seq.items.push(document.doc.createNode(entry));
   writeConfigDocument(document);
   return document.filePath;
 }
 
-/** 按 name 移除 plugins.<adapterKey>.endpoints 项；不存在返回 false */
+/** 按 id 移除 plugins.<adapterKey>.endpoints 项；不存在返回 false */
 export function removeEndpointFromConfig(
   adapterKey: string,
-  name: string,
+  id: string,
   projectRoot?: string,
 ): { removed: boolean; filePath: string } {
   const document = readConfigDocument(adapterKey, projectRoot);
   const seq = ensureEndpointsSeq(document.doc, adapterKey);
-  const next = seq.items.filter((item) => entryName(item) !== name);
+  const next = seq.items.filter((item) => entryId(item) !== id);
   if (next.length === seq.items.length) {
     return { removed: false, filePath: document.filePath };
   }
@@ -394,8 +394,8 @@ export type EndpointCommandUse = <T>(token: Token<T>) => T;
 
 /** bindFlow 钩子上下文：接管 add 命令的自定义绑定流程（如 QQ 扫码）。 */
 export interface EndpointBindFlowContext {
-  /** 命令参数 name（未指定时为 undefined，流程可自行决定终名） */
-  readonly name?: string;
+  /** 命令参数 id（未指定时为 undefined，流程可自行决定终名） */
+  readonly id?: string;
   /** 向当前会话推送后续状态（二维码刷新 / 成功 / 失败；走 durable OutboundHost，可在命令 reply scope 结束后调用） */
   readonly reply: EndpointCommandReply;
   readonly config: unknown;
@@ -478,9 +478,9 @@ export interface EndpointCommands<TCommand = EndpointCommandDefinition> {
   readonly remove: TCommand;
 }
 
-function endpointNameParam(params: Readonly<Record<string, unknown>>): string | undefined {
-  const name = params.name;
-  return typeof name === 'string' && name.trim() ? name.trim() : undefined;
+function endpointIdParam(params: Readonly<Record<string, unknown>>): string | undefined {
+  const id = params.id;
+  return typeof id === 'string' && id.trim() ? id.trim() : undefined;
 }
 
 /** list 文案：运行中 + 配置中两段，footer 可选。 */
@@ -499,7 +499,7 @@ export function formatEndpointList(
     lines.push('  （无）');
   } else {
     for (const endpoint of running) {
-      lines.push(endpoint.mode ? `  - ${endpoint.name}（${endpoint.mode}）` : `  - ${endpoint.name}`);
+      lines.push(endpoint.mode ? `  - ${endpoint.id}（${endpoint.mode}）` : `  - ${endpoint.id}`);
     }
   }
   lines.push(`【配置中的 ${spec.adapterDisplayName} endpoints】（zhin.config.yml → plugins.${spec.adapterKey}.endpoints）`);
@@ -508,7 +508,7 @@ export function formatEndpointList(
   } else {
     for (const entry of source.configured) {
       const detail = spec.describeEntry?.(entry);
-      lines.push(detail ? `  - ${entry.name}（${detail}）` : `  - ${entry.name}`);
+      lines.push(detail ? `  - ${entry.id}（${detail}）` : `  - ${entry.id}`);
     }
   }
   if (source.footer) lines.push(source.footer);
@@ -527,13 +527,13 @@ function addUsage(spec: EndpointCommandsSpec): string {
       ].filter(Boolean).join('，');
       return marks ? `${field.key}（${marks}）` : field.key;
     }).join('、')}`;
-  return `用法：${spec.adapterKey}.endpoint add <name> <key=value...>${fieldText}`;
+  return `用法：${spec.adapterKey}.endpoint add <id> <key=value...>${fieldText}`;
 }
 
 /** add（kv 模式）的完整业务逻辑：解析 kv → 凭据写 .env → 追加 yaml；返回回复文本。 */
 export function addEndpointFromKeyValues(
   spec: EndpointCommandsSpec,
-  name: string,
+  id: string,
   args: readonly string[],
   projectRoot?: string,
 ): string {
@@ -556,13 +556,13 @@ export function addEndpointFromKeyValues(
   if (missing.length > 0) {
     return `缺少必填字段：${missing.map((field) => field.key).join('、')}。${addUsage(spec)}`;
   }
-  const entry: ConfiguredEndpointEntry = { name };
+  const entry: ConfiguredEndpointEntry = { id };
   const envValues: Record<string, string> = {};
   for (const field of fields) {
     const value = values.get(field.key);
     if (value === undefined) continue;
     if (field.env) {
-      const envKey = buildEndpointEnvKey(spec.adapterKey, name, field.key);
+      const envKey = buildEndpointEnvKey(spec.adapterKey, id, field.key);
       envValues[envKey] = value;
       entry[field.key] = `\${${envKey}}`;
     } else {
@@ -570,11 +570,10 @@ export function addEndpointFromKeyValues(
     }
   }
   try {
-    // 先写配置（重名等校验失败时不留孤儿 .env 键），再落 .env 凭据
     const filePath = addEndpointToConfig(spec.adapterKey, entry, projectRoot);
     if (Object.keys(envValues).length > 0) persistEndpointEnvValues(envValues, projectRoot);
     return (
-      `✅ endpoint「${name}」已追加到 ${filePath} 的 plugins.${spec.adapterKey}.endpoints` +
+      `✅ endpoint「${id}」已追加到 ${filePath} 的 plugins.${spec.adapterKey}.endpoints` +
       `${Object.keys(envValues).length > 0 ? '（凭据已写入 .env）' : ''}。\n` +
       '⚠️ 需重启 zhin 后新 endpoint 才会生效。'
     );
@@ -584,13 +583,13 @@ export function addEndpointFromKeyValues(
 }
 
 /** remove 的完整业务逻辑：从 yaml 移除；返回回复文本。 */
-export function removeEndpointByName(
+export function removeEndpointById(
   spec: Pick<EndpointCommandsSpec, 'adapterKey'>,
-  name: string,
+  id: string,
   projectRoot?: string,
 ): string {
-  const trimmed = name.trim();
-  if (!trimmed) return `用法：${spec.adapterKey}.endpoint remove <name>`;
+  const trimmed = id.trim();
+  if (!trimmed) return `用法：${spec.adapterKey}.endpoint remove <id>`;
   try {
     const { removed, filePath } = removeEndpointFromConfig(spec.adapterKey, trimmed, projectRoot);
     if (!removed) {
@@ -625,29 +624,29 @@ export function createEndpointCommands<TCommand>(
     add: defineCommand({
       description: spec.addDescription
         ?? `手动添加 ${spec.adapterDisplayName} endpoint（凭据写入 .env 并追加到 zhin.config.yml，重启生效）`,
-      params: { name: { type: 'string', description: 'endpoint 名称' } },
+      params: { id: { type: 'string', description: 'endpoint ID' } },
       execute({ config, input, params, args, use }) {
         if (!isEndpointOperator(config, input)) return forbidden;
-        const name = endpointNameParam(params);
+        const id = endpointIdParam(params);
         if (spec.bindFlow) {
           return spec.bindFlow({
-            name,
+            id,
             reply: createDurableEndpointCommandReply(input, use),
             config,
             input,
             use,
           });
         }
-        if (!name) return addUsage(spec);
-        return addEndpointFromKeyValues(spec, name, args);
+        if (!id) return addUsage(spec);
+        return addEndpointFromKeyValues(spec, id, args);
       },
     }),
     remove: defineCommand({
       description: `从 zhin.config.yml 的 plugins.${spec.adapterKey}.endpoints 移除指定 endpoint（重启生效）`,
-      params: { name: { type: 'string', description: 'endpoint 名称' } },
+      params: { id: { type: 'string', description: 'endpoint ID' } },
       execute({ config, input, params }) {
         if (!isEndpointOperator(config, input)) return forbidden;
-        return removeEndpointByName(spec, String(params.name ?? ''));
+        return removeEndpointById(spec, String(params.id ?? ''));
       },
     }),
   });

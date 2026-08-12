@@ -1,7 +1,7 @@
 /**
  * IM 会话 ID 解析（SSOT 在 @zhin.js/kernel + im-scene）
  *
- * 格式：`platform:endpointId:kind:sceneId`
+ * 格式：`platform:endpointKey:kind:sceneId`
  */
 
 import {
@@ -45,7 +45,7 @@ export function resolveIMSessionIdFromMessage(message: {
   const kind = (message.$channel?.type || 'private') as IMSceneKind;
   return resolveIMSessionId({
     platform: String(message.$adapter || ''),
-    endpointId: String(message.$endpoint || ''),
+    endpointKey: String(message.$endpoint || ''),
     kind,
     sceneId: resolveIMSceneIdForSession(kind, message.$channel?.id, message.$sender?.id),
   });
@@ -59,7 +59,7 @@ export function resolveSceneFieldsFromMessage(message: {
   $sender?: { id?: string };
 }): {
   platform: string;
-  endpointId: string;
+  endpointKey: string;
   sceneId: string;
   sceneType: IMSceneKind;
 } {
@@ -67,7 +67,7 @@ export function resolveSceneFieldsFromMessage(message: {
   if (scene) {
     return {
       platform: scene.platform,
-      endpointId: scene.endpointId,
+      endpointKey: scene.endpointKey,
       sceneId: scene.sceneId,
       sceneType: scene.kind,
     };
@@ -75,7 +75,7 @@ export function resolveSceneFieldsFromMessage(message: {
   const sceneType = (message.$channel?.type || 'private') as IMSceneKind;
   return {
     platform: String(message.$adapter || ''),
-    endpointId: String(message.$endpoint || ''),
+    endpointKey: String(message.$endpoint || ''),
     sceneType,
     sceneId: resolveIMSceneIdForSession(sceneType, message.$channel?.id, message.$sender?.id),
   };

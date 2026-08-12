@@ -50,7 +50,7 @@ export interface OutboundSender {
   send(conversation: OutboundConversation, content: string): Promise<string | null>;
   readonly host: OutboundHost;
   readonly adapter: string;
-  readonly endpointId: string;
+  readonly endpointKey: string;
 }
 
 /**
@@ -67,20 +67,20 @@ export interface OutboundSender {
  * const sender = createOutboundSender(
  *   (token) => context.resources.use(token),
  *   config.adapter,
- *   config.endpointId,
+ *   config.endpointKey,
  * );
  * ```
  */
 export function createOutboundSender(
   use: UseAccessor,
   adapter: string,
-  endpointId: string,
+  endpointKey: string,
 ): OutboundSender {
   const host = use(outboundHostToken);
   return Object.freeze({
     host,
     adapter,
-    endpointId,
+    endpointKey,
     send(
       kindOrConversation: OutboundConversation['kind'] | OutboundConversation,
       idOrContent: string,
@@ -89,14 +89,14 @@ export function createOutboundSender(
       if (typeof kindOrConversation === 'string' && maybeContent !== undefined) {
         return host.send({
           adapter,
-          endpointId,
+          endpointKey,
           conversation: { kind: kindOrConversation, id: idOrContent },
           content: maybeContent,
         });
       }
       return host.send({
         adapter,
-        endpointId,
+        endpointKey,
         conversation: kindOrConversation as OutboundConversation,
         content: idOrContent,
       });
@@ -110,7 +110,7 @@ export function createOutboundSender(
  * ```ts
  * await sendTo(context.use, {
  *   adapter: 'root/icqq',
- *   endpointId: 'main',
+ *   endpointKey: 'main',
  *   conversation: { kind: 'group', id: '67890' },
  * }, 'hello');
  * ```

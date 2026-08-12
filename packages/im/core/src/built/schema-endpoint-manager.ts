@@ -33,17 +33,17 @@ export class SchemaEndpointManager implements EndpointManager {
   async addEndpoint(ctx: ProvisionContext): Promise<EndpointConfigRecord> {
     const prompt = new Prompt(this.adapter.plugin, ctx.message);
     await ctx.onStatusUpdate(`请按提示填写 ${String(this.adapter.name)} endpoint 配置：`);
-    const name = await prompt.text('Endpoint 名称（zhin.config endpoints[].name）：');
+    const name = await prompt.text('Endpoint id（zhin.config endpoints[].id）：');
     const fields = await prompt.getValueWithSchema(this.schema);
     return {
       context: String(this.adapter.name),
-      name: name.trim(),
+      id: name.trim(),
       ...(fields as Record<string, unknown>),
     };
   }
 
   async editEndpoint(name: string, ctx: ProvisionContext): Promise<EndpointConfigRecord> {
-    const existing = this.listEndpoints().find((e) => e.name === name);
+    const existing = this.listEndpoints().find((e) => e.id === name);
     if (!existing) {
       throw new Error(`配置中不存在 ${String(this.adapter.name)}/${name}`);
     }
@@ -54,16 +54,16 @@ export class SchemaEndpointManager implements EndpointManager {
       ...existing,
       ...(fields as Record<string, unknown>),
       context: String(this.adapter.name),
-      name,
+      id: name,
     };
   }
 
   async removeEndpoint(name: string): Promise<boolean> {
-    return this.listEndpoints().some((e) => e.name === name);
+    return this.listEndpoints().some((e) => e.id === name);
   }
 
   async startEndpoint(name: string, ctx: ProvisionContext): Promise<void> {
-    const rec = this.listEndpoints().find((e) => e.name === name);
+    const rec = this.listEndpoints().find((e) => e.id === name);
     if (!rec) throw new Error(`配置中不存在 ${String(this.adapter.name)}/${name}`);
     await ctx.onStatusUpdate(`正在连接 ${String(this.adapter.name)}/${name}…`);
   }

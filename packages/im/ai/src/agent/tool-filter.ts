@@ -5,10 +5,23 @@
 
 import type { AgentTool, ToolFilterOptions } from '../types.js';
 
-/** 中英文混合分词：按标点/空格切分，保留 ≥2 字符的 token */
+/** 中英文混合分词：标点切分 + 中文 bigram */
 const TOKENIZE_RE = /[\s,.:;!?，。：；！？、()（）【】\[\]"'"'「」『』]+/;
+const CJK_RANGE = /[一-鿿㐀-䶿]/;
 export function tokenize(text: string): string[] {
-  return text.split(TOKENIZE_RE).filter(w => w.length >= 2);
+  const raw = text.split(TOKENIZE_RE).filter(w => w.length >= 2);
+  const result: string[] = [];
+  for (const token of raw) {
+    result.push(token);
+    if (CJK_RANGE.test(token) && token.length >= 2) {
+      for (let i = 0; i < token.length - 1; i++) {
+        if (CJK_RANGE.test(token[i]) && CJK_RANGE.test(token[i + 1])) {
+          result.push(token[i] + token[i + 1]);
+        }
+      }
+    }
+  }
+  return result;
 }
 
 /**
@@ -99,11 +112,20 @@ export function filterTools(
       else if (nameLower.startsWith('mcp_')) score *= 0.12;
     }
 
-    // 1. keywords（最高基础权重）
+    // 1. keywords（最高基础权重）—— 双向匹配：查询包含关键词 或 关键词包含查询 token
     if (tool.keywords?.length) {
       for (const kw of tool.keywords) {
-        if (kw && msgLower.includes(kw.toLowerCase())) {
-          score += 1.0 * idf(kw.toLowerCase());
+        if (!kw) continue;
+        const kwLower = kw.toLowerCase();
+        if (msgLower.includes(kwLower)) {
+          score += 1.0 * idf(kwLower);
+        } else {
+          for (const mt of msgTokens) {
+            if (kwLower.includes(mt) || mt.includes(kwLower)) {
+              score += 0.6 * idf(kwLower);
+              break;
+            }
+          }
         }
       }
     }

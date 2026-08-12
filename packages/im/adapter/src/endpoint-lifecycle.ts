@@ -19,7 +19,7 @@
  *
  * 迁移指引（以 napcat/milky/onebot WS endpoint 为例）：
  * 1. 删除 #started / #stopping / #reconnectTimer / #heartbeatTimer / opened 旗标，
- *    构造器里 `this.#lifecycle = createEndpointLifecycle({ name: config.name, reconnect, heartbeat })`。
+ *    构造器里 `this.#lifecycle = createEndpointLifecycle({ name: config.id, reconnect, heartbeat })`。
  * 2. `start()` 改为：
  *    ```ts
  *    this.#unregisterAgent = registerXxxAgentEndpoint(name, this); // agent 注册仍在适配器侧

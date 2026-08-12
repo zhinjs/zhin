@@ -7,7 +7,7 @@ export type EndpointLifecycleKind = 'connect' | 'disconnect' | 'error';
 
 export interface EndpointLifecyclePayload {
   adapter: string;
-  endpointId: string;
+  endpointKey: string;
   endpoint: Endpoint;
   kind: EndpointLifecycleKind;
   error?: string;
@@ -19,12 +19,12 @@ export interface EndpointLifecyclePayload {
 export function serializeEndpointLifecyclePayload(
   payload: Pick<
     EndpointLifecyclePayload,
-    'adapter' | 'endpointId' | 'kind' | 'error' | 'phase' | 'detail'
+    'adapter' | 'endpointKey' | 'kind' | 'error' | 'phase' | 'detail'
   >,
 ) {
   return {
     adapter: payload.adapter,
-    endpointId: payload.endpointId,
+    endpointKey: payload.endpointKey,
     kind: payload.kind,
     error: payload.error,
     phase: payload.phase,
@@ -41,7 +41,7 @@ export async function emitEndpointLifecycle(
 ): Promise<void> {
   const payload: EndpointLifecyclePayload = {
     adapter: String(adapter.name),
-    endpointId: endpoint.$id,
+    endpointKey: endpoint.$id,
     endpoint,
     kind,
     ...detail,

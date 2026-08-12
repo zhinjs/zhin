@@ -29,13 +29,11 @@ export const defaultCommandPrefixResolver: CommandPrefixResolver = (message, sna
     | { commandPrefix?: unknown; endpoints?: unknown }
     | undefined;
   if (!config) return '';
-  const endpointName = typeof message.metadata?.endpoint === 'string'
-    ? message.metadata.endpoint
-    : undefined;
-  if (endpointName && Array.isArray(config.endpoints)) {
+  const endpointId = message.endpointId;
+  if (endpointId && Array.isArray(config.endpoints)) {
     const entry = config.endpoints.find((item) =>
       !!item && typeof item === 'object'
-      && (item as { name?: unknown }).name === endpointName) as
+      && (item as { id?: unknown }).id === endpointId) as
       | { commandPrefix?: unknown }
       | undefined;
     if (typeof entry?.commandPrefix === 'string') return entry.commandPrefix;

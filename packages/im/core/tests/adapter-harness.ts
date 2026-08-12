@@ -5,7 +5,7 @@
  *   - createAdapter: 创建 Adapter 实例的工厂
  *   - createRawEvent: 创建平台原始消息事件
  *   - adapterName: 适配器标识名
- *   - endpointId: 预期的 Endpoint ID
+ *   - endpointKey: 预期的 Endpoint ID
  *
  * 即可自动获得：
  *   ✅ Endpoint 接口合规性验证
@@ -22,8 +22,8 @@
  *
  * createAdapterTestSuite({
  *   adapterName: 'my-platform',
- *   endpointId: 'test-bot',
- *   createAdapter: (plugin) => new MyAdapter(plugin, [{ name: 'test-bot', token: 'xxx' }]),
+ *   endpointKey: 'test-bot',
+ *   createAdapter: (plugin) => new MyAdapter(plugin, [{ id: 'test-bot', token: 'xxx' }]),
  *   createRawEvent: () => ({ id: '1', content: 'hello', author: { id: 'u1', name: 'User' } }),
  * })
  * ```
@@ -49,7 +49,7 @@ export interface AdapterTestSuiteOptions<
   adapterName: string;
 
   /** 预期的 Endpoint ID（start 后第一个 Endpoint 的 $id） */
-  endpointId: string;
+  endpointKey: string;
 
   /**
    * 创建适配器实例。
@@ -102,7 +102,7 @@ export function createAdapterTestSuite<
 >(options: AdapterTestSuiteOptions<A, E>): void {
   const {
     adapterName,
-    endpointId,
+    endpointKey,
     createAdapter,
     createRawEvent,
     setupEndpoint,
@@ -136,7 +136,7 @@ export function createAdapterTestSuite<
       await adapter.start();
 
       // 获取第一个 endpoint
-      endpoint = adapter.endpoints.get(endpointId)!;
+      endpoint = adapter.endpoints.get(endpointKey)!;
       expect(endpoint).toBeDefined();
 
       if (setupEndpoint) {
@@ -161,7 +161,7 @@ export function createAdapterTestSuite<
       });
 
       it('$id 应匹配预期值', () => {
-        expect(endpoint.$id).toBe(endpointId);
+        expect(endpoint.$id).toBe(endpointKey);
       });
 
       it('$connected 启动后应为 true', () => {
@@ -189,7 +189,7 @@ export function createAdapterTestSuite<
 
     describe('生命周期', () => {
       it('start() 应将 Endpoint 注册到 endpoints Map', () => {
-        expect(adapter.endpoints.has(endpointId)).toBe(true);
+        expect(adapter.endpoints.has(endpointKey)).toBe(true);
       });
 
       it('start() 应将适配器名注册到 plugin.root.adapters', () => {
@@ -212,7 +212,7 @@ export function createAdapterTestSuite<
         adapter = createAdapter(plugin);
         if (beforeStart) beforeStart(adapter);
         await adapter.start();
-        const newEndpoint = adapter.endpoints.get(endpointId);
+        const newEndpoint = adapter.endpoints.get(endpointKey);
         expect(newEndpoint).toBeDefined();
         expect(newEndpoint!.$connected).toBe(true);
       });
@@ -322,7 +322,7 @@ export function createAdapterTestSuite<
 
           const options: SendOptions = {
             context: adapterName,
-            endpoint: endpointId,
+            endpoint: endpointKey,
             id: 'target-1',
             type: 'private',
             content: [{ type: 'text', data: { text: 'hello' } }],
@@ -336,7 +336,7 @@ export function createAdapterTestSuite<
         it('sendMessage 应返回消息 ID 字符串', async () => {
           const options: SendOptions = {
             context: adapterName,
-            endpoint: endpointId,
+            endpoint: endpointKey,
             id: 'target-1',
             type: 'private',
             content: [{ type: 'text', data: { text: 'hello' } }],
@@ -365,7 +365,7 @@ export function createAdapterTestSuite<
 
           const options: SendOptions = {
             context: adapterName,
-            endpoint: endpointId,
+            endpoint: endpointKey,
             id: 'target-1',
             type: 'private',
             content: [{ type: 'text', data: { text: 'test' } }],
@@ -384,7 +384,7 @@ export function createAdapterTestSuite<
       describe('消息撤回', () => {
         it('call.recallMessage 应调用 endpoint.$recallMessage', async () => {
           const recallSpy = vi.spyOn(endpoint, '$recallMessage');
-          adapter.emit('call.recallMessage', endpointId, 'msg-123');
+          adapter.emit('call.recallMessage', endpointKey, 'msg-123');
           await new Promise(r => setTimeout(r, 50));
 
           expect(recallSpy).toHaveBeenCalledWith('msg-123');
@@ -420,15 +420,15 @@ export function createAdapterTestSuite<
 // 辅助：快速创建 Mock 适配器用于测试 harness 本身
 // ============================================================================
 
-export class HarnessTestEndpoint implements Endpoint<{ name: string }, { id: string; text: string; from: string }> {
+export class HarnessTestEndpoint implements Endpoint<{ id: string }, { id: string; text: string; from: string }> {
   $id: string;
   $connected = false;
 
   constructor(
     public adapter: Adapter,
-    public $config: { name: string },
+    public $config: { id: string },
   ) {
-    this.$id = $config.name;
+    this.$id = $config.id;
   }
 
   $formatMessage(event: { id: string; text: string; from: string }): Message<typeof event> {
@@ -466,7 +466,7 @@ export class HarnessTestEndpoint implements Endpoint<{ name: string }, { id: str
 export class HarnessTestAdapter extends Adapter<HarnessTestEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
 
-  createEndpoint(config: { name: string }): HarnessTestEndpoint {
+  createEndpoint(config: { id: string }): HarnessTestEndpoint {
     return new HarnessTestEndpoint(this, config);
   }
 }

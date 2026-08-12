@@ -11,14 +11,14 @@ function sleep(ms: number): Promise<void> {
 }
 
 function endpointDisplayName(config: Record<string, unknown>): string {
-  return String(config.name ?? config.context ?? 'unknown');
+  return String(config.id ?? config.context ?? 'unknown');
 }
 
-/** 检测 zhin.config endpoints[].name 是否仍为未展开的 ${ENV} 占位符。 */
-export function validateEndpointConfigName(config: Record<string, unknown>): string | null {
-  const name = String(config.name ?? '').trim();
-  if (!name) return 'endpoint name 为空';
-  if (/^\$\{[^}]+\}$/.test(name)) return `环境变量未解析: ${name}`;
+/** 检测 zhin.config endpoints[].id 是否仍为未展开的 ${ENV} 占位符。 */
+export function validateEndpointConfigId(config: Record<string, unknown>): string | null {
+  const id = String(config.id ?? '').trim();
+  if (!id) return 'endpoint id 为空';
+  if (/^\$\{[^}]+\}$/.test(id)) return `环境变量未解析: ${id}`;
   return null;
 }
 
@@ -66,7 +66,7 @@ export async function connectEndpoints(plugin: Plugin, appConfig: AppConfig): Pr
       for (const rawConfig of endpointsForContext) {
         const config = rawConfig as unknown as Record<string, unknown>;
         const name = endpointDisplayName(config);
-        const invalid = validateEndpointConfigName(config);
+        const invalid = validateEndpointConfigId(config);
         if (invalid) {
           skipped++;
           adapter.logger.error(formatCompactLog('Endpoint', {
@@ -81,7 +81,7 @@ export async function connectEndpoints(plugin: Plugin, appConfig: AppConfig): Pr
           adapter.logger.error(formatCompactLog('Endpoint', {
             adapter: adapter.name,
             name,
-            skip: 'duplicate_name',
+            skip: 'duplicate_id',
           }));
           continue;
         }

@@ -11,7 +11,7 @@ function mockMessage(senderId: string, permissions: string[] = []) {
   } as any;
 }
 
-function mockPlugin(config: { ai?: { trigger?: { masters?: string[]; trusted?: string[] } }; endpoints?: Array<{ context: string; name: string; master?: number; trusted?: number[] }>; plugins?: Record<string, any> }) {
+function mockPlugin(config: { ai?: { trigger?: { masters?: string[]; trusted?: string[] } }; endpoints?: Array<{ context: string; id: string; master?: number; trusted?: number[] }>; plugins?: Record<string, any> }) {
   return {
     root: {
       inject: (name: string) => {
@@ -30,7 +30,7 @@ function mockPlugin(config: { ai?: { trigger?: { masters?: string[]; trusted?: s
 describe('resolveSubjectRoles', () => {
   it('从 yaml endpoints[] 匹配 master', () => {
     const plugin = mockPlugin({
-      endpoints: [{ context: 'icqq', name: '8596238', master: 1659488338 }],
+      endpoints: [{ context: 'icqq', id: '8596238', master: 1659488338 }],
     });
     const result = resolveSubjectRoles(plugin, mockMessage('1659488338'));
     expect(result.roles).toContain('master');
@@ -41,7 +41,7 @@ describe('resolveSubjectRoles', () => {
       plugins: {
         icqq: {
           master: 1659488338,
-          endpoints: [{ name: '8596238' }],
+          endpoints: [{ id: '8596238' }],
         },
       },
     });
@@ -54,7 +54,7 @@ describe('resolveSubjectRoles', () => {
       plugins: {
         icqq: {
           master: 1659488338,
-          endpoints: [{ name: '8596238' }],
+          endpoints: [{ id: '8596238' }],
         },
       },
     });
@@ -65,7 +65,7 @@ describe('resolveSubjectRoles', () => {
   it('与 resolveSenderRoles 在相同输入下一致', () => {
     const plugin = mockPlugin({
       ai: { trigger: { trusted: ['t1'] } },
-      endpoints: [{ context: 'icqq', name: '8596238', trusted: [999] }],
+      endpoints: [{ context: 'icqq', id: '8596238', trusted: [999] }],
     });
     const message = mockMessage('t1');
     const fromAuth = resolveSubjectRoles(plugin, message);

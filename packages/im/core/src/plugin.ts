@@ -738,7 +738,7 @@ export namespace Plugin {
     path?: 'chat' | 'fast' | 'agent' | 'multimodal' | 'rate_limited';
     userId?: string;
     platform?: string;
-    endpointId?: string;
+    endpointKey?: string;
     sceneId?: string;
     messageId?: string;
     scope?: string;

@@ -41,8 +41,8 @@ export const QUOTE_CONTEXT_SYSTEM_EXTRA_KEY = 'quoteContextSystemHint';
 /** `Message.extra` 键：引用消息 context 块（入库 `agent_messages.extra.quote`，不拼进 payload） */
 export const QUOTE_CONTEXT_BLOCK_EXTRA_KEY = 'quoteContextBlock';
 
-function cacheKey(adapter: string, endpointId: string, messageId: string): string {
-  return `${adapter}:${endpointId}:${messageId}`;
+function cacheKey(adapter: string, endpointKey: string, messageId: string): string {
+  return `${adapter}:${endpointKey}:${messageId}`;
 }
 
 function isQuotableEndpoint(endpoint: unknown): endpoint is QuotableEndpoint {
@@ -118,14 +118,14 @@ async function fetchQuotedPayload(
   if (!quoteId) return null;
 
   const adapterName = String(message.$adapter);
-  const endpointId = String(message.$endpoint);
+  const endpointKey = String(message.$endpoint);
   const adapter = root.inject(adapterName as RegisteredAdapter) as
     | { endpoints?: Map<string, unknown> }
     | undefined;
-  const endpoint = adapter?.endpoints?.get(endpointId);
+  const endpoint = adapter?.endpoints?.get(endpointKey);
   if (!isQuotableEndpoint(endpoint)) return null;
 
-  const key = cacheKey(adapterName, endpointId, quoteId);
+  const key = cacheKey(adapterName, endpointKey, quoteId);
   const now = Date.now();
   sweepQuoteCache(now);
   const hit = cache.get(key);

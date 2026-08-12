@@ -8,8 +8,8 @@ import { registerSideEventSchemaMigrationHook } from './upgrade-side-event-schem
 
 async function tryRegisterAgentMigrationHook(logger: Plugin['logger']): Promise<void> {
   try {
-    const { registerEndpointIdColumnMigrationHook } = await import('@zhin.js/agent');
-    registerEndpointIdColumnMigrationHook(logger);
+    const { registerEndpointKeyColumnMigrationHook } = await import('@zhin.js/agent');
+    registerEndpointKeyColumnMigrationHook(logger);
   } catch {
     // IM-only install without agent
   }

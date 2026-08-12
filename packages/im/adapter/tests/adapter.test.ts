@@ -477,8 +477,8 @@ describe('Adapter Feature', () => {
     const index = await AdapterIndex.create([slot], snapshot([slot], new Map([[root, {
       master: '1659488338',
       endpoints: [
-        { name: '111111' },
-        { name: '222222', outboundMedia: 'base64' },
+        { id: '111111' },
+        { id: '222222', outboundMedia: 'base64' },
       ],
     }]])));
 
@@ -486,8 +486,8 @@ describe('Adapter Feature', () => {
     expect(new Set(index.describe().map((summary) => summary.id)).size).toBe(2);
     expect(seen).toHaveLength(2);
     // 顶层字段共享，entry 逐项覆盖；endpoints 键不传给适配器
-    expect(seen[0].config).toMatchObject({ name: '111111', master: '1659488338' });
-    expect(seen[1].config).toMatchObject({ name: '222222', master: '1659488338', outboundMedia: 'base64' });
+    expect(seen[0].config).toMatchObject({ id: '111111', master: '1659488338' });
+    expect(seen[1].config).toMatchObject({ id: '222222', master: '1659488338', outboundMedia: 'base64' });
     expect(seen[0].config).not.toHaveProperty('endpoints');
     expect(seen[0].id).toContain('~111111');
     expect(seen[1].id).toContain('~222222');
@@ -505,13 +505,13 @@ describe('Adapter Feature', () => {
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
         create: (context) => ({
-          name: (context.config as { name?: string }).name,
+          name: (context.config as { id?: string }).id,
           send: async () => 'ok',
         }),
       }),
     });
     const index = await AdapterIndex.create([slot], snapshot([slot], new Map([[root, {
-      endpoints: [{ name: '8596238' }, { name: '1234567' }],
+      endpoints: [{ id: '8596238' }, { id: '1234567' }],
     }]])));
 
     expect(index.resolve('icqq~8596238', '8596238')).toBe(`${slot.id}~8596238`);

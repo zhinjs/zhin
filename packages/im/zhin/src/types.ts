@@ -56,7 +56,7 @@ export interface AppConfig<T extends keyof Databases = keyof Databases> {
       notify?: {
         channel: 'im' | 'silent' | 'log' | 'ha';
         platform?: string;
-        endpointId?: string;
+        endpointKey?: string;
         senderId?: string;
         sceneId?: string;
         scope?: string;

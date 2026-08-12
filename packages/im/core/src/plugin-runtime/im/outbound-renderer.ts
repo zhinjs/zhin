@@ -88,7 +88,7 @@ function buildTemplateContext(
     segments: incoming?.segments,
     messageId: incoming?.messageId,
     timestamp: incoming?.timestamp,
-    endpointName: incoming?.endpointName,
+    endpointId: incoming?.endpointId,
     mentioned: incoming?.mentioned,
   };
 }

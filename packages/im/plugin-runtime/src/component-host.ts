@@ -31,7 +31,7 @@ export interface TemplateContext {
   /** Message arrival timestamp in ms. */
   readonly timestamp?: number;
   /** Endpoint instance name (e.g. ICQQ uin, sandbox bot name). */
-  readonly endpointName?: string;
+  readonly endpointId?: string;
   /** Whether the bot was @mentioned. */
   readonly mentioned?: boolean;
 }

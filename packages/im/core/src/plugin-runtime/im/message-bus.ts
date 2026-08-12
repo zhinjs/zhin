@@ -12,14 +12,14 @@ import type { IncomingMessage, Message, OutboundEnvelope, SendContent } from './
 
 export interface EndpointEvent {
   readonly adapter: string;
-  readonly endpointId: string;
+  readonly endpointKey: string;
   readonly error?: Error;
 }
 
 export interface MessageBusEventMap {
   'message.receive': [message: Message];
   'before.sendMessage': [envelope: OutboundEnvelope];
-  'message.send': [payload: { adapter: string; endpointId: string; content: SendContent; receipt: DeliveryReceipt }];
+  'message.send': [payload: { adapter: string; endpointKey: string; content: SendContent; receipt: DeliveryReceipt }];
   'endpoint.connect': [event: EndpointEvent];
   'endpoint.disconnect': [event: EndpointEvent];
   'endpoint.error': [event: EndpointEvent];

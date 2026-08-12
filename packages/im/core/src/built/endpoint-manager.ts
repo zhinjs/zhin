@@ -6,7 +6,7 @@ import type { SendContent } from '../types.js';
 /** zhin.config.endpoints[] 单条记录 */
 export type EndpointConfigRecord = Record<string, unknown> & {
   context: string;
-  name: string;
+  id: string;
 };
 
 export type EndpointStatusExtra = Record<string, unknown>;

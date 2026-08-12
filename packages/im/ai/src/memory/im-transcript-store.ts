@@ -12,7 +12,7 @@ const logger = getLogger('ImTranscriptStore');
 
 export interface ImTranscriptQuery {
   platform: string;
-  endpointId: string;
+  endpointKey: string;
   sceneId: string;
 }
 
@@ -70,7 +70,7 @@ function isQueryChain(result: WhereResult): result is {
 function sceneWhere(query: ImTranscriptQuery): Record<string, unknown> {
   return {
     platform: query.platform,
-    endpoint_id: query.endpointId,
+    endpoint_id: query.endpointKey,
     scene_id: query.sceneId,
   };
 }
@@ -227,7 +227,7 @@ export class MemoryImTranscriptStore implements ImTranscriptStore {
     const sceneRows = this.rows.filter(
       (r) =>
         r.platform === query.platform
-        && r.endpoint_id === query.endpointId
+        && r.endpoint_id === query.endpointKey
         && r.scene_id === query.sceneId
         && r.time >= since,
     );

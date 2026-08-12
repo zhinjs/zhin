@@ -15,10 +15,10 @@ function collectRuntimeEndpoints(root: Plugin): EndpointRow[] {
   for (const adapterName of root.adapters) {
     const adapter = root.inject(adapterName);
     if (!(adapter instanceof Adapter)) continue;
-    for (const [endpointId, endpoint] of adapter.endpoints.entries()) {
+    for (const [endpointKey, endpoint] of adapter.endpoints.entries()) {
       rows.push({
         adapter: String(adapterName),
-        name: endpointId,
+        name: endpointKey,
         online: !!(endpoint as { $connected?: boolean }).$connected,
       });
     }

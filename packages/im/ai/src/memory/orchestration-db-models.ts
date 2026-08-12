@@ -36,7 +36,7 @@ export type OrchestrationSceneKind = 'private' | 'group' | 'channel';
 
 export interface OrchestrationSceneRef {
   platform: string;
-  endpointId: string;
+  endpointKey: string;
   sceneId: string;
   kind: OrchestrationSceneKind;
   senderId?: string;

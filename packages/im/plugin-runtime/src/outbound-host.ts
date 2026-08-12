@@ -22,14 +22,14 @@ export interface OutboundConversation {
  */
 export interface OutboundSendInput {
   readonly adapter: string;
-  readonly endpointId: string;
+  readonly endpointKey: string;
   readonly conversation: OutboundConversation;
   readonly content: string;
 }
 
 export interface OutboundReactionInput {
   readonly adapter: string;
-  readonly endpointId: string;
+  readonly endpointKey: string;
   readonly messageId: string;
   readonly emoji: string;
   readonly sceneType?: string;
@@ -38,14 +38,14 @@ export interface OutboundReactionInput {
 
 export interface OutboundRemoveReactionInput {
   readonly adapter: string;
-  readonly endpointId: string;
+  readonly endpointKey: string;
   readonly messageId: string;
   readonly reactionId: string;
 }
 
 export interface OutboundRecallInput {
   readonly adapter: string;
-  readonly endpointId: string;
+  readonly endpointKey: string;
   readonly messageId: string;
 }
 

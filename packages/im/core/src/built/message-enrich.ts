@@ -87,12 +87,12 @@ export function commMessageFromHookContext(context: Record<string, unknown>): Me
   return undefined;
 }
 
-/** 兼容 tool parameters 上的 contextKey（endpointId / sceneId / scope 等） */
+/** 兼容 tool parameters 上的 contextKey（endpointKey / sceneId / scope 等） */
 export function resolveContextKey(message: Message<any>, key: string): unknown {
   switch (key) {
     case 'platform':
       return message.$adapter;
-    case 'endpointId':
+    case 'endpointKey':
       return message.$endpoint;
     case 'messageId':
       return message.$id;

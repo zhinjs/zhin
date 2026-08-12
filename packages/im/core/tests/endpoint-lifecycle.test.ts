@@ -47,7 +47,7 @@ describe('emitEndpointLifecycle', () => {
 
     expect(pluginDispatch).toHaveBeenCalledWith(
       'endpoint.connect',
-      expect.objectContaining({ endpointId: 'test-bot', kind: 'connect' }),
+      expect.objectContaining({ endpointKey: 'test-bot', kind: 'connect' }),
     );
     expect(noticeSpy).toHaveBeenCalledWith(
       'notice.receive',

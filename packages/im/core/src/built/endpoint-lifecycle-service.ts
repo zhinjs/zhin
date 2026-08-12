@@ -44,7 +44,7 @@ function assertUniqueName(
   replaceIndex?: number,
 ): void {
   const conflict = endpoints.findIndex(
-    (e) => e.context === context && e.name === name,
+    (e) => e.context === context && e.id === name,
   );
   if (conflict >= 0 && conflict !== replaceIndex) {
     throw new Error(`zhin.config 中已存在 ${context}/${name}`);
@@ -113,14 +113,14 @@ export class EndpointLifecycleService {
     const endpoints = readAllEndpoints(this.root);
     await this.persistEndpoints(endpoints);
     const configPath = formatDisplayPath(loader.resolvedPath);
-    const names = endpoints.map((e) => `${e.context}/${e.name}`).join(', ') || '（无）';
+    const names = endpoints.map((e) => `${e.context}/${e.id}`).join(', ') || '（无）';
     return {
       message: `✅ 已将 ${endpoints.length} 个 endpoint 写入 \`${configPath}\`：${names}`,
     };
   }
 
   async connectConfig(adapter: Adapter, config: EndpointConfigRecord): Promise<Endpoint> {
-    const name = config.name;
+    const name = config.id;
     if (adapter.endpoints.has(name)) {
       throw new Error(`Endpoint ${name} 已在线，请先 /endpoint stop ${String(adapter.name)} ${name}`);
     }
@@ -150,16 +150,16 @@ export class EndpointLifecycleService {
 
     const config = await manager.addEndpoint(ctx);
     if (!config.context) config.context = adapterKey;
-    if (!config.name?.trim()) {
-      throw new Error('Endpoint 名称不能为空');
+    if (!config.id?.trim()) {
+      throw new Error('Endpoint id 不能为空');
     }
 
     const endpoints = readAllEndpoints(this.root);
     try {
-      assertUniqueName(endpoints, config.context, config.name);
+      assertUniqueName(endpoints, config.context, config.id);
     } catch (err) {
       if (err instanceof Error && err.message.includes('已存在')) {
-        const online = adapter.endpoints.has(config.name);
+        const online = adapter.endpoints.has(config.id);
         const hint = online
           ? '该 Endpoint 已在运行时注册，无需重复扫码；可发 /endpoints 确认。若 zhin.config.yml 未更新，请 /endpoint sync。'
           : '可用 /endpoint start 重试连接，或 /endpoint remove 后重新添加。';
@@ -177,7 +177,7 @@ export class EndpointLifecycleService {
         (adapter.constructor as typeof Adapter & { endpointNeedsRestart?: boolean }).endpointNeedsRestart;
       const hint = needsRestart
         ? '配置已写入，请重启进程后连接。'
-        : `配置已写入，可用 /endpoint start ${adapterKey} ${config.name} 重试。`;
+        : `配置已写入，可用 /endpoint start ${adapterKey} ${config.id} 重试。`;
       throw new Error(
         `${err instanceof Error ? err.message : String(err)}（${hint}）`,
       );
@@ -186,7 +186,7 @@ export class EndpointLifecycleService {
     const prefix = initialReply ? `${initialReply}\n` : '';
     return {
       message:
-        `${prefix}✅ 已添加并连接 endpoint \`${config.name}\`（${adapterKey}），已写入 zhin.config。`,
+        `${prefix}✅ 已添加并连接 endpoint \`${config.id}\`（${adapterKey}），已写入 zhin.config。`,
       config,
     };
   }
@@ -195,7 +195,7 @@ export class EndpointLifecycleService {
     const adapter = this.resolveAdapter(adapterKey);
     const manager = this.resolveManager(adapterKey);
     const endpoints = readAllEndpoints(this.root);
-    const index = endpoints.findIndex((e) => e.context === adapterKey && e.name === name);
+    const index = endpoints.findIndex((e) => e.context === adapterKey && e.id === name);
     if (index < 0) {
       throw new Error(`zhin.config 中不存在 ${adapterKey}/${name}`);
     }
@@ -207,7 +207,7 @@ export class EndpointLifecycleService {
     const ctx = buildProvisionContext(this.root, message);
     const updated = await manager.editEndpoint(name, ctx);
     updated.context = adapterKey;
-    updated.name = name;
+    updated.id = name;
     endpoints[index] = updated;
     await this.persistEndpoints(endpoints);
 
@@ -238,7 +238,7 @@ export class EndpointLifecycleService {
     }
 
     const endpoints = readAllEndpoints(this.root);
-    const next = endpoints.filter((e) => !(e.context === adapterKey && e.name === name));
+    const next = endpoints.filter((e) => !(e.context === adapterKey && e.id === name));
     if (next.length === endpoints.length) {
       throw new Error(`zhin.config 中不存在 ${adapterKey}/${name}`);
     }
@@ -251,7 +251,7 @@ export class EndpointLifecycleService {
     const adapter = this.resolveAdapter(adapterKey);
     const manager = this.resolveManager(adapterKey);
     const endpoints = readAllEndpoints(this.root);
-    const config = endpoints.find((e) => e.context === adapterKey && e.name === name);
+    const config = endpoints.find((e) => e.context === adapterKey && e.id === name);
     if (!config) {
       throw new Error(`zhin.config 中不存在 ${adapterKey}/${name}`);
     }

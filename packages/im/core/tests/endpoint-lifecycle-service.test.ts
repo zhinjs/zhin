@@ -4,7 +4,7 @@ import type { EndpointConfigRecord, EndpointManager, ProvisionContext } from '..
 import { EndpointLifecycleService } from '../src/built/endpoint-lifecycle-service.js';
 
 class MockEndpointManager implements EndpointManager {
-  addResult: EndpointConfigRecord = { context: 'mock', name: 'bot1', token: 'x' };
+  addResult: EndpointConfigRecord = { context: 'mock', id: 'bot1', token: 'x' };
   addCalls = 0;
 
   supportsProvision() { return true; }
@@ -14,7 +14,7 @@ class MockEndpointManager implements EndpointManager {
     return { ...this.addResult };
   }
   async editEndpoint(name: string, _ctx: ProvisionContext) {
-    return { context: 'mock', name, token: 'edited' };
+    return { context: 'mock', id: name, token: 'edited' };
   }
   async removeEndpoint(_name: string) { return true; }
   async startEndpoint(_name: string, _ctx: ProvisionContext) {}
@@ -25,9 +25,9 @@ class MockAdapter extends Adapter {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
   readonly manager = new MockEndpointManager();
 
-  createEndpoint(config: { name: string }) {
+  createEndpoint(config: { id: string }) {
     const endpoint = {
-      $id: config.name,
+      $id: config.id,
       $config: config,
       $connected: false,
       async $connect() {
@@ -88,13 +88,13 @@ describe('EndpointLifecycleService', () => {
     expect(result.message).toMatch(/已添加并连接/);
     expect(configFeature.loader.patchKey).toHaveBeenCalledWith(
       'endpoints',
-      [{ context: 'mock', name: 'bot1', token: 'x' }],
+      [{ context: 'mock', id: 'bot1', token: 'x' }],
     );
     expect(adapter.endpoints.has('bot1')).toBe(true);
   });
 
   it('add rejects duplicate name in config', async () => {
-    configFeature = createConfigFeature([{ context: 'mock', name: 'bot1' }]);
+    configFeature = createConfigFeature([{ context: 'mock', id: 'bot1' }]);
     root.provide({ name: 'config', description: 'test', value: configFeature });
     service = new EndpointLifecycleService(root);
     await expect(service.add('mock', {} as never)).rejects.toThrow(/已存在/);
@@ -102,8 +102,8 @@ describe('EndpointLifecycleService', () => {
 
   it('syncToDisk persists in-memory endpoints', async () => {
     configFeature = createConfigFeature([
-      { context: 'mock', name: 'bot1', token: 'x' },
-      { context: 'qq', name: 'mock-qq-bot', appid: '900000001', secret: 'mock-sec' },
+      { context: 'mock', id: 'bot1', token: 'x' },
+      { context: 'qq', id: 'mock-qq-bot', appid: '900000001', secret: 'mock-sec' },
     ]);
     root.provide({ name: 'config', description: 'test', value: configFeature });
     service = new EndpointLifecycleService(root);
@@ -111,7 +111,7 @@ describe('EndpointLifecycleService', () => {
     expect(result.message).toMatch(/写入/);
     expect(configFeature.loader.patchKey).toHaveBeenCalledWith(
       'endpoints',
-      expect.arrayContaining([expect.objectContaining({ name: 'mock-qq-bot' })]),
+      expect.arrayContaining([expect.objectContaining({ id: 'mock-qq-bot' })]),
     );
   });
 
@@ -128,7 +128,7 @@ describe('EndpointLifecycleService', () => {
   });
 
   it('remove stops runtime and splices config', async () => {
-    configFeature = createConfigFeature([{ context: 'mock', name: 'bot1', token: 'x' }]);
+    configFeature = createConfigFeature([{ context: 'mock', id: 'bot1', token: 'x' }]);
     root.provide({ name: 'config', description: 'test', value: configFeature });
     service = new EndpointLifecycleService(root);
     adapter.endpoints.set('bot1', {

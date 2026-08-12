@@ -79,7 +79,7 @@ function persistMessage(plugin: Plugin, msg: Message): void {
   const Message = getModel(plugin, TABLE_MESSAGE);
   if (!Message) return;
   const adapter = String(msg?.$adapter ?? '');
-  const endpointId = String(msg?.$endpoint ?? '');
+  const endpointKey = String(msg?.$endpoint ?? '');
   const channel = msg?.$channel ?? {};
   const sender = msg?.$sender ?? {};
   const parent = channel?.parent;
@@ -87,7 +87,7 @@ function persistMessage(plugin: Plugin, msg: Message): void {
     parent?.type === 'group' || parent?.type === 'guild' ? parent.type : null;
   Message.create({
     adapter,
-    endpoint_id: endpointId,
+    endpoint_id: endpointKey,
     platform_message_id: String(msg?.$id ?? ''),
     channel_id: String(channel?.id ?? ''),
     channel_type: String(channel?.type ?? 'private'),
@@ -111,11 +111,11 @@ function persistRequest(plugin: Plugin, req: Request): void {
   const Request = getModel(plugin, TABLE_REQUEST);
   if (!Request) return;
   const adapter = String(req?.$adapter ?? '');
-  const endpointId = String(req?.$endpoint ?? '');
+  const endpointKey = String(req?.$endpoint ?? '');
   const actor = req?.$actor ?? {};
   Request.create({
     adapter,
-    endpoint_id: endpointId,
+    endpoint_id: endpointKey,
     platform_request_id: String(req?.$id ?? ''),
     type: String(req?.$type ?? ''),
     scene_type: req?.$scene_type != null ? String(req.$scene_type) : null,
@@ -136,7 +136,7 @@ function persistNotice(plugin: Plugin, notice: Notice): void {
   const Notice = getModel(plugin, TABLE_NOTICE);
   if (!Notice) return;
   const adapter = String(notice?.$adapter ?? '');
-  const endpointId = String(notice?.$endpoint ?? '');
+  const endpointKey = String(notice?.$endpoint ?? '');
   const actor = notice?.$actor ?? {} as MessageSender;
   const target = notice?.$target ?? {} as MessageSender;
   const payload: Record<string, unknown> = {};
@@ -150,7 +150,7 @@ function persistNotice(plugin: Plugin, notice: Notice): void {
   }
   Notice.create({
     adapter,
-    endpoint_id: endpointId,
+    endpoint_id: endpointKey,
     platform_notice_id: String(notice?.$id ?? ''),
     type: String(notice?.$type ?? ''),
     scene_type: notice?.$scene_type != null ? String(notice.$scene_type) : null,

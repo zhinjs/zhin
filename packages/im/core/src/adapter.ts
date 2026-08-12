@@ -299,15 +299,15 @@ export abstract class Adapter<
    * 经 canonical `EndpointControl` 端口撤回，classic 端点的 `$` 方法由
    * `resolveEndpointControl` 迁移桥适配。
    */
-  private async recallEndpointMessage(endpointId: string, messageId: string): Promise<void> {
-    const endpoint = this.endpoints.get(endpointId);
-    if (!endpoint) throw new Error(`Endpoint ${endpointId} not found`);
+  private async recallEndpointMessage(endpointKey: string, messageId: string): Promise<void> {
+    const endpoint = this.endpoints.get(endpointKey);
+    if (!endpoint) throw new Error(`Endpoint ${endpointKey} not found`);
     assertOutbound(endpoint);
     const control = resolveEndpointControl(endpoint);
     if (!control?.recall) {
-      throw new Error(`Endpoint ${endpointId} does not support recall`);
+      throw new Error(`Endpoint ${endpointKey} does not support recall`);
     }
-    this.logger.debug(formatCompact({ op: 'recall_message', msgId: messageId, endpoint: endpointId }));
+    this.logger.debug(formatCompact({ op: 'recall_message', msgId: messageId, endpoint: endpointKey }));
     await control.recall(messageId);
   }
 

@@ -44,15 +44,15 @@ export interface AiOutboundMentionResolver {
 }
 
 export interface AiOutboundAtIdResolver {
-  (endpointId: string): string;
+  (endpointKey: string): string;
 }
 
 /** 解析 AI 出站 JSON 时的上下文。 */
 export interface AiOutboundParseContext {
   message: Message;
-  /** 将 peer ref（role/endpoint/primary）解析为 endpointId */
+  /** 将 peer ref（role/endpoint/primary）解析为 endpointKey */
   mentionResolver?: AiOutboundMentionResolver;
-  /** 将 endpointId 解析为 platform @ id */
+  /** 将 endpointKey 解析为 platform @ id */
   atIdResolver?: AiOutboundAtIdResolver;
   /** Adapter 声明的 extensions（运行时从 Adapter 静态属性注入） */
   extensions?: readonly AiOutboundExtensionDefinition[];

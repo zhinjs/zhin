@@ -199,7 +199,7 @@ export type BeforeSendHandler=(options:SendOptions)=>MaybePromise<SendOptions|vo
  * JSON Schema 定义，用于描述工具参数
  */
 /** Message 通讯上下文上可经 resolveContextKey 自动注入的字段名 */
-export type ContextInjectableKey = 'platform' | 'endpointId' | 'sceneId' | 'senderId' | 'scope';
+export type ContextInjectableKey = 'platform' | 'endpointKey' | 'sceneId' | 'senderId' | 'scope';
 
 export interface ToolJsonSchema {
   type: string;
@@ -215,7 +215,7 @@ export interface ToolJsonSchema {
   /**
    * 自动从 Message 通讯上下文注入的字段名（经 resolveContextKey 映射 $ 字段）。
    * 设置后该参数对 AI 隐藏，执行时自动从上下文填充。
-   * 例如: contextKey: 'endpointId' → 执行时自动填入 message.$endpoint
+   * 例如: contextKey: 'endpointKey' → 执行时自动填入 message.$endpoint
    */
   contextKey?: ContextInjectableKey;
   [key: string]: any;

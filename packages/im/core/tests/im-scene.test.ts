@@ -15,7 +15,7 @@ describe('IM scene contract', () => {
       $sender: { id: 'u1' },
     })).toEqual({
       platform: 'qq',
-      endpointId: 'bot1',
+      endpointKey: 'bot1',
       sceneId: 'g1',
       kind: 'group',
       senderId: 'u1',
@@ -105,7 +105,7 @@ describe('IM scene contract', () => {
       channel: 'im',
       scene: {
         platform: 'qq',
-        endpointId: 'bot1',
+        endpointKey: 'bot1',
         sceneId: 'g1',
         kind: 'group',
       },
@@ -123,7 +123,7 @@ describe('IM scene contract', () => {
   it('keeps session id format stable across scene kinds', () => {
     expect(resolveIMSceneSessionId({
       platform: 'telegram',
-      endpointId: 'bot1',
+      endpointKey: 'bot1',
       sceneId: 'c1',
       kind: 'channel',
     })).toBe('telegram:bot1:channel:c1');
@@ -140,7 +140,7 @@ describe('IM scene contract', () => {
       channel: 'im',
       scene: {
         platform: 'qq',
-        endpointId: 'bot1',
+        endpointKey: 'bot1',
         sceneId: 'ch1',
         kind: 'channel',
         senderId: 'u1',

@@ -10,7 +10,7 @@ const logger = getLogger('Authorization');
 
 interface YamlEndpointEntry {
   context?: string;
-  name?: string;
+  id?: string;
   master?: unknown;
   trusted?: unknown;
   [key: string]: unknown;
@@ -32,13 +32,13 @@ interface PrimaryConfig {
 function findEndpointEntryFromConfig(
   config: PrimaryConfig,
   adapter: string,
-  endpointId: string,
+  endpointKey: string,
 ): YamlEndpointEntry | undefined {
   // 1) top-level endpoints[] (legacy / flat format)
   const topLevel = config.endpoints;
   if (Array.isArray(topLevel)) {
     const found = topLevel.find(
-      (b) => b.context === adapter && String(b.name) === endpointId,
+      (b) => b.context === adapter && String(b.id) === endpointKey,
     );
     if (found) return found;
   }
@@ -49,14 +49,14 @@ function findEndpointEntryFromConfig(
 
   const nested = adapterConfig.endpoints;
   const entry = Array.isArray(nested)
-    ? nested.find((b) => String(b.name) === endpointId)
+    ? nested.find((b) => String(b.id) === endpointKey)
     : undefined;
 
   // Merge adapter-level master/trusted onto the matched endpoint entry
   // so that resolveSenderRoles sees them in one place
   const merged: YamlEndpointEntry = {
     context: adapter,
-    ...(entry ?? { name: endpointId }),
+    ...(entry ?? { id: endpointKey }),
   };
   if (adapterConfig.master != null && merged.master == null) {
     merged.master = adapterConfig.master;

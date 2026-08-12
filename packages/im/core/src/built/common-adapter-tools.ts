@@ -25,16 +25,16 @@ import { registerDefaultScenePlatformPermitChecker } from './platform-permit.js'
  * Adapter 基类通过此接口声明方法签名，子类选择性覆写。
  */
 export interface ISceneManagement {
-  removeMember?(endpointId: string, sceneId: string, userId: string): Promise<any>;
-  muteMember?(endpointId: string, sceneId: string, userId: string, duration?: number): Promise<any>;
-  setMemberNickname?(endpointId: string, sceneId: string, userId: string, nickname: string): Promise<any>;
-  setModerator?(endpointId: string, sceneId: string, userId: string, enable?: boolean): Promise<any>;
-  listMembers?(endpointId: string, sceneId: string): Promise<any>;
-  banMember?(endpointId: string, sceneId: string, userId: string, reason?: string): Promise<any>;
-  unbanMember?(endpointId: string, sceneId: string, userId: string): Promise<any>;
-  renameScene?(endpointId: string, sceneId: string, name: string): Promise<any>;
-  setSceneMuted?(endpointId: string, sceneId: string, enable?: boolean): Promise<any>;
-  getSceneInfo?(endpointId: string, sceneId: string): Promise<any>;
+  removeMember?(endpointKey: string, sceneId: string, userId: string): Promise<any>;
+  muteMember?(endpointKey: string, sceneId: string, userId: string, duration?: number): Promise<any>;
+  setMemberNickname?(endpointKey: string, sceneId: string, userId: string, nickname: string): Promise<any>;
+  setModerator?(endpointKey: string, sceneId: string, userId: string, enable?: boolean): Promise<any>;
+  listMembers?(endpointKey: string, sceneId: string): Promise<any>;
+  banMember?(endpointKey: string, sceneId: string, userId: string, reason?: string): Promise<any>;
+  unbanMember?(endpointKey: string, sceneId: string, userId: string): Promise<any>;
+  renameScene?(endpointKey: string, sceneId: string, name: string): Promise<any>;
+  setSceneMuted?(endpointKey: string, sceneId: string, enable?: boolean): Promise<any>;
+  getSceneInfo?(endpointKey: string, sceneId: string): Promise<any>;
 }
 
 // ============================================================================
@@ -218,7 +218,7 @@ export function createSceneManagementTools(
       parameters: {
         type: 'object' as const,
         properties: {
-          endpoint_id: { type: 'string', description: 'Endpoint ID', contextKey: 'endpointId' },
+          endpoint_id: { type: 'string', description: 'Endpoint ID', contextKey: 'endpointKey' },
           scene_id: { type: 'string', description: 'IM 场景 ID', contextKey: 'sceneId' },
           ...Object.fromEntries(Object.entries(spec.extraParams)),
         },
@@ -262,21 +262,21 @@ export function createSceneManagementToolsRaw<T>(
 
 export function buildSceneMethodArgs(
   method: keyof ISceneManagement,
-  endpointId: string,
+  endpointKey: string,
   sceneId: string,
   rest: Record<string, any>,
 ): any[] {
   switch (method) {
-    case 'removeMember':    return [endpointId, sceneId, rest.user_id];
-    case 'muteMember':      return [endpointId, sceneId, rest.user_id, rest.duration ?? 600];
-    case 'setMemberNickname': return [endpointId, sceneId, rest.user_id, rest.nickname];
-    case 'setModerator':    return [endpointId, sceneId, rest.user_id, rest.enable ?? true];
-    case 'listMembers':     return [endpointId, sceneId];
-    case 'banMember':       return [endpointId, sceneId, rest.user_id, rest.reason];
-    case 'unbanMember':     return [endpointId, sceneId, rest.user_id];
-    case 'renameScene':     return [endpointId, sceneId, rest.name];
-    case 'setSceneMuted':   return [endpointId, sceneId, rest.enable ?? true];
-    case 'getSceneInfo':    return [endpointId, sceneId];
-    default:                return [endpointId, sceneId, ...(Object.values(rest) as any[])];
+    case 'removeMember':    return [endpointKey, sceneId, rest.user_id];
+    case 'muteMember':      return [endpointKey, sceneId, rest.user_id, rest.duration ?? 600];
+    case 'setMemberNickname': return [endpointKey, sceneId, rest.user_id, rest.nickname];
+    case 'setModerator':    return [endpointKey, sceneId, rest.user_id, rest.enable ?? true];
+    case 'listMembers':     return [endpointKey, sceneId];
+    case 'banMember':       return [endpointKey, sceneId, rest.user_id, rest.reason];
+    case 'unbanMember':     return [endpointKey, sceneId, rest.user_id];
+    case 'renameScene':     return [endpointKey, sceneId, rest.name];
+    case 'setSceneMuted':   return [endpointKey, sceneId, rest.enable ?? true];
+    case 'getSceneInfo':    return [endpointKey, sceneId];
+    default:                return [endpointKey, sceneId, ...(Object.values(rest) as any[])];
   }
 }

@@ -40,15 +40,15 @@ export type CapableEndpoint<
   ('outbound' extends Caps[number] ? OutboundEndpoint<Config> : object);
 
 export class OutboundNotSupportedError extends Error {
-  constructor(endpointId?: string) {
-    super(endpointId ? `Endpoint ${endpointId} does not support outbound` : 'Outbound not supported');
+  constructor(endpointKey?: string) {
+    super(endpointKey ? `Endpoint ${endpointKey} does not support outbound` : 'Outbound not supported');
     this.name = 'OutboundNotSupportedError';
   }
 }
 
 export class InboundNotSupportedError extends Error {
-  constructor(endpointId?: string) {
-    super(endpointId ? `Endpoint ${endpointId} does not support inbound` : 'Inbound not supported');
+  constructor(endpointKey?: string) {
+    super(endpointKey ? `Endpoint ${endpointKey} does not support inbound` : 'Inbound not supported');
     this.name = 'InboundNotSupportedError';
   }
 }

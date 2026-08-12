@@ -63,6 +63,17 @@ const logger = getLogger('im');
 
 export const messageGatewayToken = createToken<MessageGateway>('zhin.im.message-gateway');
 
+/** Generation-owned terminal route after interactive/command routing misses. */
+export interface IngressRoute {
+  route(
+    message: Message,
+    snapshot: RuntimeSnapshot,
+    requester: PluginId,
+  ): Promise<boolean>;
+}
+
+export const ingressRouteToken = createToken<IngressRoute>('zhin.im.ingress-route');
+
 /** Console 实时消息事件（SSE 推送源；content 仅为截断预览，不含完整原始段）。 */
 export interface RuntimeMessageEvent {
   readonly direction: 'inbound' | 'outbound';
@@ -94,11 +105,6 @@ export class ImRuntime implements MessageGateway {
   readonly #messageListeners = new Set<(event: RuntimeMessageEvent) => void>();
   readonly #interactiveHandlers: RegisteredRuntimeInteractiveHandler[] = [];
   #snapshots?: SnapshotStore;
-  #unmatchedHandler?: (
-    message: Message,
-    snapshot: RuntimeSnapshot,
-    requester: PluginId,
-  ) => Promise<boolean>;
 
   constructor(options: ImRuntimeOptions = {}) {
     this.#dispatcher = new MessageDispatcher(
@@ -114,21 +120,6 @@ export class ImRuntime implements MessageGateway {
       throw new Error('ImRuntime is already attached to another Root');
     }
     this.#snapshots = snapshots;
-  }
-
-  /**
-   * Optional Host AI / fallback path after Command miss (or non-prefixed text).
-   * Return true when the message was handled (reply already sent).
-   * `requester` is the Adapter Endpoint owner (for CapabilityIngress inheritance).
-   */
-  setUnmatchedHandler(
-    handler: (
-      message: Message,
-      snapshot: RuntimeSnapshot,
-      requester: PluginId,
-    ) => Promise<boolean>,
-  ): void {
-    this.#unmatchedHandler = handler;
   }
 
   readonly permissionHost = createPermissionHost();
@@ -204,7 +195,7 @@ export class ImRuntime implements MessageGateway {
               segments: input.segments,
               messageId: input.message?.id,
               timestamp: Date.now(),
-              endpointName: input.endpointName,
+              endpointId: input.endpointId,
               mentioned: input.mentioned,
             },
           }, lease.value);
@@ -213,7 +204,7 @@ export class ImRuntime implements MessageGateway {
         Object.freeze({ ...input.metadata }),
         input.segments ? Object.freeze([...input.segments]) : undefined,
         input.message,
-        input.endpointName,
+        input.endpointId,
         input.mentioned,
         input.replyTo,
       );
@@ -224,9 +215,10 @@ export class ImRuntime implements MessageGateway {
         async () => {
           result = await this.#dispatchInteractive(message, requester)
             ?? await this.#dispatcher.dispatch(message, lease.value);
-          if (!result.matched && this.#unmatchedHandler) {
+          const ingressRoute = resolveIngressRoute(lease.value);
+          if (!result.matched && ingressRoute) {
             logger.debug(formatCompact({ op: 'unmatched', conv: formatConversationLog(conversation) }));
-            const handled = await this.#unmatchedHandler(message, lease.value, requester);
+            const handled = await ingressRoute.route(message, lease.value, requester);
             if (handled) {
               result = Object.freeze({ matched: true, command: 'ai', owner: requester });
             }
@@ -328,7 +320,7 @@ export class ImRuntime implements MessageGateway {
     }
   }
 
-  getEndpoint(adapter: string, endpointId: string): {
+  getEndpoint(adapter: string, endpointKey: string): {
     readonly name: string;
     readonly adapter: string;
     readonly connected: boolean;
@@ -340,7 +332,7 @@ export class ImRuntime implements MessageGateway {
       const lease = this.#acquire();
       try {
         const index = requireAdapters(lease.value);
-        const id = index.resolve(adapter, endpointId);
+        const id = index.resolve(adapter, endpointKey);
         if (!id) return null;
         const row = index.describe().find((item) => item.id === id);
         if (!row) return null;
@@ -364,14 +356,14 @@ export class ImRuntime implements MessageGateway {
 
   async sendEndpointMessage(input: {
     readonly adapter: string;
-    readonly endpointId: string;
+    readonly endpointKey: string;
     readonly conversation: ConversationAddress;
     readonly content: unknown;
   }): Promise<{ messageId: string }> {
     const lease = this.#acquire();
     try {
       const index = requireAdapters(lease.value);
-      const resolved = index.resolve(input.adapter, input.endpointId);
+      const resolved = index.resolve(input.adapter, input.endpointKey);
       if (!resolved) throw new Error('endpoint not found');
       const requester = index.owner(resolved);
       const conversation: ConversationRef = {
@@ -393,14 +385,14 @@ export class ImRuntime implements MessageGateway {
   /** Activity-feedback: add a message reaction when the live Endpoint supports it. */
   async addEndpointReaction(input: {
     readonly adapter: string;
-    readonly endpointId: string;
+    readonly endpointKey: string;
     readonly message?: MessageRef;
     readonly messageId?: string;
     readonly emoji: string;
     readonly sceneType?: string;
     readonly channelId?: string;
   }): Promise<string | null> {
-    const control = this.#liveEndpointControl(input.adapter, input.endpointId);
+    const control = this.#liveEndpointControl(input.adapter, input.endpointKey);
     return control?.addReaction?.(legacyMessageTarget(input.message, input.messageId), input.emoji, {
       sceneType: input.sceneType,
       channelId: input.channelId,
@@ -409,52 +401,52 @@ export class ImRuntime implements MessageGateway {
 
   async removeEndpointReaction(input: {
     readonly adapter: string;
-    readonly endpointId: string;
+    readonly endpointKey: string;
     readonly message?: MessageRef;
     readonly messageId?: string;
     readonly reactionId: string;
   }): Promise<void> {
-    await this.#liveEndpointControl(input.adapter, input.endpointId)
+    await this.#liveEndpointControl(input.adapter, input.endpointKey)
       ?.removeReaction?.(legacyMessageTarget(input.message, input.messageId), input.reactionId);
   }
 
   /** Activity-feedback autoRemove: recall a previously sent status message. */
   async recallEndpointMessage(input: {
     readonly adapter: string;
-    readonly endpointId: string;
+    readonly endpointKey: string;
     readonly message?: MessageRef;
     readonly messageId?: string;
   }): Promise<void> {
-    await this.#liveEndpointControl(input.adapter, input.endpointId)
+    await this.#liveEndpointControl(input.adapter, input.endpointKey)
       ?.recall?.(legacyMessageTarget(input.message, input.messageId));
   }
 
   async editEndpointMessage(input: {
     readonly adapter: string;
-    readonly endpointId: string;
+    readonly endpointKey: string;
     readonly message?: MessageRef;
     readonly messageId?: string;
     readonly content: unknown;
   }): Promise<string | null> {
-    return this.#liveEndpointControl(input.adapter, input.endpointId)
+    return this.#liveEndpointControl(input.adapter, input.endpointKey)
       ?.edit?.(legacyMessageTarget(input.message, input.messageId), input.content) ?? null;
   }
 
   async setEndpointTyping(input: {
     readonly adapter: string;
-    readonly endpointId: string;
+    readonly endpointKey: string;
     readonly conversation: ConversationRef;
     readonly active?: boolean;
   }): Promise<void> {
-    await this.#liveEndpointControl(input.adapter, input.endpointId)
+    await this.#liveEndpointControl(input.adapter, input.endpointKey)
       ?.typing?.(input.conversation, input.active);
   }
 
-  #liveEndpoint(adapter: string, endpointId: string): unknown | null {
+  #liveEndpoint(adapter: string, endpointKey: string): unknown | null {
     try {
       const lease = this.#acquire();
       try {
-        const endpoint = requireAdapters(lease.value).instance(adapter, endpointId);
+        const endpoint = requireAdapters(lease.value).instance(adapter, endpointKey);
         return endpoint ?? null;
       } finally {
         lease.release();
@@ -464,8 +456,8 @@ export class ImRuntime implements MessageGateway {
     }
   }
 
-  #liveEndpointControl(adapter: string, endpointId: string): EndpointControl | null {
-    const endpoint = this.#liveEndpoint(adapter, endpointId);
+  #liveEndpointControl(adapter: string, endpointKey: string): EndpointControl | null {
+    const endpoint = this.#liveEndpoint(adapter, endpointKey);
     return resolveEndpointControl(endpoint) ?? null;
   }
 
@@ -474,8 +466,8 @@ export class ImRuntime implements MessageGateway {
    * the Endpoint exists but implements no management operations; null means it
    * cannot be resolved.
    */
-  getEndpointManagement(adapter: string, endpointId: string): EndpointManagement | null {
-    const endpoint = this.#liveEndpoint(adapter, endpointId);
+  getEndpointManagement(adapter: string, endpointKey: string): EndpointManagement | null {
+    const endpoint = this.#liveEndpoint(adapter, endpointKey);
     if (!endpoint) return null;
     return resolveEndpointManagement(endpoint) ?? Object.freeze({});
   }
@@ -574,6 +566,15 @@ export class ImRuntime implements MessageGateway {
       ? Object.freeze({ matched: true, command: 'interactive', owner: requester })
       : undefined;
   }
+}
+
+function resolveIngressRoute(snapshot: RuntimeSnapshot): IngressRoute | undefined {
+  const candidate = snapshot.resources.get(snapshot.root)?.get(ingressRouteToken.id);
+  return candidate
+    && typeof candidate === 'object'
+    && typeof (candidate as IngressRoute).route === 'function'
+    ? candidate as IngressRoute
+    : undefined;
 }
 
 function requireAdapters(snapshot: RuntimeSnapshot): AdapterIndex {

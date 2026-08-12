@@ -89,13 +89,13 @@ export class AdapterIndex {
       for (const slot of [...slots].sort((left, right) => left.id.localeCompare(right.id))) {
         for (const expansion of expandEndpointConfigs(slot, snapshot)) {
           const endpoint = await createEndpointSoft(slot, snapshot, expansion);
-          if (endpoint.unconfigured) unconfigured.push(expansion.name);
+          if (endpoint.unconfigured) unconfigured.push(expansion.endpointId);
           records.push({
             id: expansion.id,
             owner: slot.owner,
-            // 展开模式下 record name 即 endpoint 名（entry.name），
-            // 保证 Console 展示与 resolve/instance 按 entry name 命中唯一 record
-            name: expansion.name,
+            // 展开模式下 record name 即 endpoint id（entry.id），
+            // 保证 Console 展示与 resolve/instance 按 entry id 命中唯一 record
+            name: expansion.endpointId,
             source: slot.source,
             capabilities: slot.definition.capabilities,
             endpoint: endpoint.instance,
@@ -155,21 +155,21 @@ export class AdapterIndex {
    * Resolve a Console `$adapter` + `$endpoint` pair to a capability id.
    * Matches local name, capability id, or owner path segments.
    */
-  resolve(adapter: string, endpointId: string): CapabilityId | undefined {
+  resolve(adapter: string, endpointKey: string): CapabilityId | undefined {
     const matches = this.#order.filter((record) =>
-      matchesEndpoint(record, adapter, endpointId));
+      matchesEndpoint(record, adapter, endpointKey));
     if (matches.length === 1) return matches[0]?.id;
     if (matches.length === 0) return undefined;
-    // Prefer exact localName === endpointId when ambiguous.
-    const exact = matches.find((record) => record.name === endpointId);
+    // Prefer exact localName === endpointKey when ambiguous.
+    const exact = matches.find((record) => record.name === endpointKey);
     return exact?.id ?? matches[0]?.id;
   }
 
   /**
    * Resolve a live EndpointInstance for Host-side side channels (reactions, etc.).
    */
-  instance(adapter: string, endpointId: string): EndpointInstance | undefined {
-    const id = this.resolve(adapter, endpointId);
+  instance(adapter: string, endpointKey: string): EndpointInstance | undefined {
+    const id = this.resolve(adapter, endpointKey);
     if (!id) return undefined;
     return this.#records.get(id)?.endpoint;
   }
@@ -341,7 +341,7 @@ export function isAdapterIndex(value: unknown): value is AdapterIndex {
 function matchesEndpoint(
   record: AdapterRecord,
   adapter: string,
-  endpointId: string,
+  endpointKey: string,
 ): boolean {
   // 消息上的 $adapter 是 CapabilityId 的 localName 段（多 endpoint 展开后形如
   // `icqq~8596238`）。CapabilityId 段分隔符是 \0（owner\0feature\0localName），
@@ -357,10 +357,10 @@ function matchesEndpoint(
   // activity-feedback resolve with that id; slot.localName alone is not enough
   // when multiple plugin instances share localName "icqq".
   const liveName = endpointLiveName(record.endpoint);
-  const endpointOk = record.name === endpointId
-    || record.id === endpointId
-    || record.id.endsWith(`/${endpointId}`)
-    || (liveName !== undefined && liveName === endpointId);
+  const endpointOk = record.name === endpointKey
+    || record.id === endpointKey
+    || record.id.endsWith(`/${endpointKey}`)
+    || (liveName !== undefined && liveName === endpointKey);
   return adapterOk && endpointOk;
 }
 
@@ -397,12 +397,12 @@ function isUnconfiguredError(error: unknown): boolean {
 /** 单个实例配置展开的 endpoint 描述（多账号适配器经 `endpoints` 数组声明）。 */
 interface EndpointExpansion {
   readonly id: CapabilityId;
-  readonly name: string;
+  readonly endpointId: string;
   readonly config?: Readonly<Record<string, unknown>>;
 }
 
 /**
- * 实例配置的 endpoint 展开：插件实例 config 含非空 `endpoints: [{name, ...覆盖}]` 时
+ * 实例配置的 endpoint 展开：插件实例 config 含非空 `endpoints: [{id, ...覆盖}]` 时
  * 按数组一一创建 endpoint（基础配置为实例 config 去掉 `endpoints` 键，逐项合并），
  * 否则按实例 config 创建单个 endpoint（历史行为）。
  */
@@ -415,55 +415,55 @@ function expandEndpointConfigs(
     | undefined;
   const raw = config?.endpoints;
   const entries = Array.isArray(raw)
-    ? raw.filter((entry): entry is Record<string, unknown> & { name: string } =>
+    ? raw.filter((entry): entry is Record<string, unknown> & { id: string } =>
       !!entry && typeof entry === 'object'
-      && typeof (entry as { name?: unknown }).name === 'string'
-      && (entry as { name: string }).name.length > 0)
+      && typeof (entry as { id?: unknown }).id === 'string'
+      && (entry as { id: string }).id.length > 0)
     : [];
   if (entries.length === 0) {
     if (Array.isArray(raw) && raw.length > 0) {
       logger.warn(formatCompact({
         op: 'adapter_endpoints_entries_dropped',
         id: slot.id,
-        reason: 'every endpoints entry is missing a non-empty string name',
+        reason: 'every endpoints entry is missing a non-empty string id',
       }));
     }
-    return Object.freeze([{ id: slot.id, name: slot.localName }]);
+    return Object.freeze([{ id: slot.id, endpointId: slot.localName }]);
   }
   // `~` 是 record id 的分隔符、\0 是 CapabilityId 的分隔符，混入会破坏解析
   const valid = entries.filter((entry) => {
-    if (/[~\0]/u.test(entry.name)) {
+    if (/[~\0]/u.test(entry.id)) {
       logger.warn(formatCompact({
-        op: 'adapter_endpoint_name_invalid',
+        op: 'adapter_endpoint_id_invalid',
         id: slot.id,
-        name: entry.name,
+        endpointId: entry.id,
       }));
       return false;
     }
     return true;
   });
-  // 重名会让 #records 覆盖与 #order/resolve 三者不一致；保留首个并告警
+  // 重 id 会让 #records 覆盖与 #order/resolve 三者不一致；保留首个并告警
   const seen = new Set<string>();
   const deduped = valid.filter((entry) => {
-    if (seen.has(entry.name)) {
+    if (seen.has(entry.id)) {
       logger.warn(formatCompact({
-        op: 'adapter_endpoint_name_duplicate',
+        op: 'adapter_endpoint_id_duplicate',
         id: slot.id,
-        name: entry.name,
+        endpointId: entry.id,
       }));
       return false;
     }
-    seen.add(entry.name);
+    seen.add(entry.id);
     return true;
   });
   if (deduped.length === 0) {
-    return Object.freeze([{ id: slot.id, name: slot.localName }]);
+    return Object.freeze([{ id: slot.id, endpointId: slot.localName }]);
   }
   const { endpoints: _drop, ...base } = (config ?? {}) as Record<string, unknown>;
   return Object.freeze(deduped.map((entry) => Object.freeze({
-    id: `${slot.id}~${entry.name}` as CapabilityId,
-    name: entry.name,
-    config: Object.freeze({ ...base, ...entry, name: entry.name }),
+    id: `${slot.id}~${entry.id}` as CapabilityId,
+    endpointId: entry.id,
+    config: Object.freeze({ ...base, ...entry, id: entry.id }),
   })));
 }
 
@@ -492,7 +492,7 @@ async function createEndpointSoft(
     log(formatCompact({
       op: 'adapter_create_soft_fail',
       id: expansion?.id ?? slot.id,
-      name: expansion?.name ?? slot.localName,
+      name: expansion?.endpointId ?? slot.localName,
       error: message,
     }));
     return {

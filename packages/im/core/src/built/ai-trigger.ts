@@ -129,23 +129,23 @@ function segmentAtUserId(seg: MessageElement): string {
   return readMentionSegmentTarget(seg);
 }
 
-function isAtSegmentForEndpoint(seg: MessageElement, endpointIds: string[]): boolean {
+function isAtSegmentForEndpoint(seg: MessageElement, endpointKeys: string[]): boolean {
   if (seg.type !== 'at' && seg.type !== 'mention') return false;
   const uid = segmentAtUserId(seg);
-  return uid !== '' && endpointIds.includes(uid);
+  return uid !== '' && endpointKeys.includes(uid);
 }
 
-function textMentionsEndpoint(text: string, endpointIds: string[]): boolean {
-  for (const id of endpointIds) {
+function textMentionsEndpoint(text: string, endpointKeys: string[]): boolean {
+  for (const id of endpointKeys) {
     const re = new RegExp(`@${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$|[\\u200b\\uFEFF])`);
     if (re.test(text)) return true;
   }
   return false;
 }
 
-function stripTextAtEndpoint(text: string, endpointIds: string[]): string {
+function stripTextAtEndpoint(text: string, endpointKeys: string[]): string {
   let result = text;
-  for (const id of endpointIds) {
+  for (const id of endpointKeys) {
     const re = new RegExp(`@${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|[\\u200b\\uFEFF])?`, 'g');
     result = result.replace(re, '');
   }
@@ -173,14 +173,14 @@ export function isAtEndpoint<T extends object>(
   message: Message<T>,
   endpointAtIds?: string[],
 ): boolean {
-  const endpointIds = normalizeAtIds(
+  const endpointKeys = normalizeAtIds(
     endpointAtIds?.length ? endpointAtIds : collectEndpointAtIds(message),
   );
-  if (message.$content.some((seg) => isAtSegmentForEndpoint(seg, endpointIds))) {
+  if (message.$content.some((seg) => isAtSegmentForEndpoint(seg, endpointKeys))) {
     return true;
   }
   for (const seg of message.$content) {
-    if (seg.type === 'text' && seg.data?.text && textMentionsEndpoint(seg.data.text, endpointIds)) {
+    if (seg.type === 'text' && seg.data?.text && textMentionsEndpoint(seg.data.text, endpointKeys)) {
       return true;
     }
   }
@@ -240,14 +240,14 @@ export function removeAtEndpoint<T extends object>(
   message: Message<T>,
   endpointAtIds?: string[],
 ): MessageElement[] {
-  const endpointIds = normalizeAtIds(
+  const endpointKeys = normalizeAtIds(
     endpointAtIds?.length ? endpointAtIds : collectEndpointAtIds(message),
   );
   return message.$content
-    .filter((seg) => !isAtSegmentForEndpoint(seg, endpointIds))
+    .filter((seg) => !isAtSegmentForEndpoint(seg, endpointKeys))
     .map((seg) => {
       if (seg.type !== 'text' || !seg.data?.text) return seg;
-      const stripped = stripTextAtEndpoint(seg.data.text, endpointIds).trim();
+      const stripped = stripTextAtEndpoint(seg.data.text, endpointKeys).trim();
       if (!stripped) return null;
       return { ...seg, data: { ...seg.data, text: stripped } };
     })
