@@ -34,6 +34,10 @@ describe('Plugin Runtime kernel', () => {
     );
     expect(capabilityId(root, featureId('test.command'), '赞我')).toContain('赞我');
     expect(capabilityId(root, featureId('test.command'), '工具/赞我')).toContain('工具/赞我');
+    expect(capabilityId(root, featureId('test.command'), 'voice_stt')).toContain('voice_stt');
+    expect(capabilityId(root, featureId('test.command'), 'schedule_list')).toContain(
+      'schedule_list',
+    );
     expect(() => capabilityId(root, featureId('test.command'), 'gh//list')).toThrow(
       'Invalid capability local name',
     );

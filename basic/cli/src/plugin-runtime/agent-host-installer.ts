@@ -11,9 +11,6 @@ import {
   type AITriggerConfig,
   type Tool,
 } from '@zhin.js/core';
-import {
-  toolInputSchemaToParameters,
-} from '@zhin.js/core/tool-zod';
 import { ingressRouteToken, type ImRuntime, type Message, type SendContent } from '@zhin.js/core/runtime';
 import {
   expandEnvironmentValue,
@@ -24,7 +21,6 @@ import {
 import { databaseRootHostToken, type DisposeStack, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   AIService,
-  McpClientManager,
   ZhinAgent,
   composeZhinAgentRuntime,
   AgentOrchestrator,
@@ -90,10 +86,14 @@ import {
 } from '@zhin.js/agent';
 import {
   agentHostToken,
-  toolsFromCapabilities,
   CapabilityIngress,
   projectHostTool,
+  projectHostMcp,
   turnJournalStoreToken,
+  expandMcpTools,
+  capabilityToTool,
+  toolInvocationFromTurn,
+  toolsFromCapabilities,
   type AgentCapabilities,
   type ToolCapability,
 } from '@zhin.js/agent/runtime';
@@ -150,9 +150,9 @@ export async function resolveAiConfig(
   if (!document || typeof document !== 'object') return undefined;
   const ai = (document as Record<string, unknown>).ai;
   if (!ai || typeof ai !== 'object') return undefined;
-  // Top-level `ai` bypasses Plugin ConfigView; expand + soft-prune like adapters.
-  // `${VAR}` / `${VAR:-default}` expand from process.env; missing → "" (soft-fail).
-  return softPruneAiConfig(expandEnvironmentValue(ai, (key) => process.env[key]) as AIConfig);
+  // Top-level `ai` bypasses Plugin ConfigView, so expand environment values
+  // here. Validation remains fail-closed; missing secrets are errors.
+  return expandEnvironmentValue(ai, (key) => process.env[key]) as AIConfig;
 }
 
 export async function resolveAssistantConfigDocument(
@@ -215,37 +215,27 @@ export interface InstallAgentHostOptions {
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
   return async ({ resources, lifecycle, handoff, config: primaryConfig, addFeature }) => {
     const configuredAi = options.ai ?? primaryConfig.get<AIConfig>('ai');
-    const aiConfig = configuredAi ? softPruneAiConfig(configuredAi) : undefined;
+    const aiConfig = configuredAi;
     const assistantConfig = options.assistant
       ?? primaryConfig.get<AssistantConfig>('assistant');
     const collaborationConfig = options.collaboration
       ?? primaryConfig.get('collaboration');
     if (!aiConfig || typeof aiConfig !== 'object') return;
+    const mcpEntries = parseMcpServers(aiConfig.mcpServers);
 
     let service: AIService;
     try {
       service = new AIService(aiConfig);
     } catch (error) {
-      logger.warn(formatCompact({
-        op: 'agent_host_skip',
-        reason: 'invalid_ai_config',
-        error: error instanceof Error ? error.message : String(error),
-      }));
-      return;
+      throw new Error('Agent Host rejected invalid AI configuration', { cause: error });
     }
     if (!service.isReady()) {
-      logger.info(formatCompact({ op: 'agent_host_skip', reason: 'no_providers' }));
-      return;
+      service.dispose();
+      throw new Error('Agent Host requires at least one ready AI provider');
     }
     if (!service.getBindingRegistry().getBinding('zhin')) {
-      logger.warn(formatCompact({
-        op: 'agent_host_skip',
-        reason: 'zhin_binding_unavailable',
-        hint: 'ai.agents.zhin provider missing credentials after env expand',
-        providers: service.listProviders().join(',') || '-',
-      }));
       service.dispose();
-      return;
+      throw new Error('Agent Host requires a ready ai.agents.zhin binding');
     }
 
     let zhinAgent: ZhinAgent;
@@ -397,18 +387,20 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       skillMaxChars: 4_000,
     });
     const ingress = new CapabilityIngress();
-    const mcp = new McpClientManager();
-    const mcpEntries = parseMcpServers(aiConfig.mcpServers);
     let bootstrapText = '';
     let bootstrapLoaded = false;
-    let mcpEnsured = false;
 
     // Register before any await so a cancelled generation cannot leak Agent
     // Resources. DisposeStack continues through later cleanup when one
     // Resource fails.
     lifecycle.add(() => service.dispose());
     lifecycle.add(() => zhinAgent.dispose());
-    lifecycle.add(() => mcp.disconnectAll());
+    // Configured MCP joins the candidate's MCP projection. Its connection is
+    // opened by generation activation and closed by rollback/retirement.
+    for (const entry of mcpEntries) {
+      const projected = projectHostMcp(entry);
+      addFeature(projected.feature, projected.name, projected.definition);
+    }
 
     for (const tool of [
       ...(options.extraTools ?? []),
@@ -470,11 +462,14 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 
     const presetCount = await seedPresets();
 
+    const binding = service.getBindingRegistry().requireZhinBinding();
+
     resources.provide(ingressRouteToken, Object.freeze({ route: async (
       message: Message,
-      snapshot: RuntimeSnapshot,
+      lease: import('@zhin.js/plugin-runtime').SnapshotLease,
       requester: PluginId,
     ) => {
+      const snapshot = lease.value;
       const trigger = service.getTriggerConfig();
       const matched = matchAiTrigger(message, trigger);
 
@@ -553,9 +548,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           bootstrapText = await loadBootstrap(options.projectRoot);
           bootstrapLoaded = true;
         }
-        if (!mcpEnsured) {
-          mcpEnsured = await ensureMcpConnections(mcp, mcpEntries);
-        }
         const inbound = await preprocessInboundTurn(
           message,
           matched.content,
@@ -570,7 +562,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           () => capabilityActive,
         );
         const routed = routeSpecialistAgent(inbound.text, capabilities);
-        const binding = service.getBindingRegistry().requireZhinBinding();
         const collab = await applyRuntimeCollaborationInbound({
           message: commMessage,
           content: routed.userText,
@@ -583,8 +574,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         });
         if (collab.action === 'skip') return true;
         if (collab.action === 'done') return true;
-
-        let toolCount = 0;
 
         // thinkingMessage：进入 AI 处理前先回占位（对齐 legacy inbound-turn-pipeline）。
         // 占位消息不 await 回包——平台 ack 慢（实测 icqq 守护进程 10s+）不应拖住 turn 启动；
@@ -603,6 +592,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           });
         }
 
+        let toolCount = 0;
         const elements = await withTriggerTimeout(
           async (signal) => {
             const request = createRuntimeTurnRequest(message, routed.userText, senderRoles, {
@@ -613,8 +603,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
             });
             const tools = [
               ...toolsFromCapabilities(capabilities, request),
-              ...await mcpToolsAsTools(capabilities),
-              ...configMcpToolsAsTools(mcp),
+              ...(await expandMcpTools(capabilities, binding.mcpServers))
+                .map((tool) => capabilityToTool(tool, toolInvocationFromTurn(request))),
               ...(options.extraTools ?? []).map(toTool),
               ...deferredMetaTools,
               ...scheduleTools,
@@ -677,7 +667,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       }
     }}));
 
-    const binding = service.getBindingRegistry().requireZhinBinding();
     const providers = service.listProviders();
     const features = [
       zhinAgent.getSubagentSystem() ? 'subagent' : '',
@@ -1118,9 +1107,7 @@ export function bridgeRuntimeMessage(
 }
 
 /**
- * Target IM → Agent boundary mapper. Production cutover is intentionally
- * blocked until every builtin/Host capability and the durable Journal are
- * generation-owned; Runtime Message remains owned by the IM domain.
+ * Canonical IM → Agent TurnRequest mapper. Runtime Message remains owned by IM.
  */
 export function createRuntimeTurnRequest(
   message: Message,
@@ -1480,8 +1467,6 @@ function toTool(tool: AgentToolLike): Tool {
       return await tool.execute(args as Record<string, unknown>) as Awaited<ReturnType<Tool['execute']>>;
     },
   };
-  // ZhinAgent accepts the richer orchestrator Tool structurally; Core Tool is
-  // the common transport shape and intentionally does not own approval policy.
   return result as Tool;
 }
 
@@ -1501,81 +1486,14 @@ export function createDeterministicApprovalPort(
   };
 }
 
-async function mcpToolsAsTools(capabilities: AgentCapabilities): Promise<Tool[]> {
-  const tools: Tool[] = [];
-  for (const connection of capabilities.mcp) {
-    let listed: readonly { readonly name: string; readonly description?: string; readonly inputSchema?: unknown }[];
-    try {
-      listed = await connection.listTools();
-    } catch (error) {
-      logger.debug(formatCompact({
-        op: 'agent_host_mcp_list_fail',
-        name: connection.name,
-        error: error instanceof Error ? error.message : String(error),
-      }));
-      continue;
-    }
-    for (const tool of listed) {
-      const parameters = toolInputSchemaToParameters(tool.inputSchema);
-      tools.push({
-        name: `${connection.name}__${tool.name}`,
-        description: tool.description ?? `MCP ${connection.name}/${tool.name}`,
-        parameters: {
-          type: 'object',
-          properties: (parameters.properties ?? {}) as Tool['parameters']['properties'],
-          required: parameters.required,
-        },
-        source: `mcp:${connection.name}`,
-        async execute(args) {
-          return await connection.callTool(tool.name, args as Record<string, unknown>) as Awaited<ReturnType<Tool['execute']>>;
-        },
-      });
-    }
-  }
-  return tools;
-}
-
-function configMcpToolsAsTools(mcp: McpClientManager): Tool[] {
-  return mcp.getAllTools().map((tool) => ({
-    name: tool.name,
-    description: tool.description,
-    parameters: tool.parameters as Tool['parameters'],
-    source: tool.source,
-    execute: async (args) =>
-      await tool.execute(args as Record<string, unknown>) as Awaited<ReturnType<Tool['execute']>>,
-  }));
-}
-
-async function ensureMcpConnections(
-  mcp: McpClientManager,
-  entries: readonly McpServerEntry[],
-): Promise<boolean> {
-  for (const entry of entries) {
-    if (mcp.isConnected(entry.name)) continue;
-    try {
-      await mcp.connect(entry);
-      logger.info(formatCompact({ op: 'agent_host_mcp_connected', name: entry.name }));
-    } catch (error) {
-      logger.warn(formatCompact({
-        op: 'agent_host_mcp_connect_fail',
-        name: entry.name,
-        transport: entry.transport,
-        url: entry.url ?? entry.command ?? '-',
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    }
-  }
-  return entries.every((entry) => mcp.isConnected(entry.name));
-}
-
 function parseMcpServers(raw: AIConfig['mcpServers']): McpServerEntry[] {
-  if (!Array.isArray(raw)) return [];
-  const out: McpServerEntry[] = [];
-  for (const item of raw) {
+  if (raw == null) return [];
+  if (!Array.isArray(raw)) throw new TypeError('ai.mcpServers must be an array');
+  return raw.map((item, index) => {
     const entry = toMcpServerEntry(item);
-    if (entry) out.push(entry);
-  }
-  return out;
+    if (!entry) throw new TypeError(`Invalid ai.mcpServers[${index}] declaration`);
+    return entry;
+  });
 }
 
 function toMcpServerEntry(raw: McpServerConfig): McpServerEntry | null {
@@ -1596,69 +1514,6 @@ function toMcpServerEntry(raw: McpServerConfig): McpServerEntry | null {
     env: raw.env,
     headers: raw.headers,
   };
-}
-
-/**
- * Drop providers that cannot form an SDK adapter (empty credentials after expand),
- * and drop agent bindings whose provider was removed.
- */
-function softPruneAiConfig(ai: AIConfig): AIConfig {
-  const providers = ai.providers ?? {};
-  const keptProviders: NonNullable<AIConfig['providers']> = {};
-  for (const [alias, cfg] of Object.entries(providers)) {
-    if (isUsableProvider(cfg as unknown as Record<string, unknown>)) {
-      keptProviders[alias] = cfg;
-    } else {
-      logger.debug(formatCompact({ op: 'agent_host_provider_skip', alias, reason: 'missing_credentials' }));
-    }
-  }
-
-  const agents = ai.agents ?? {};
-  const keptAgents: NonNullable<AIConfig['agents']> = {};
-  for (const [name, binding] of Object.entries(agents)) {
-    if (keptProviders[binding.provider]) {
-      keptAgents[name] = binding;
-    } else {
-      const level = name === 'zhin' ? 'warn' : 'debug';
-      logger[level](formatCompact({
-        op: 'agent_host_agent_skip',
-        name,
-        provider: binding.provider,
-        reason: 'provider_unavailable',
-      }));
-    }
-  }
-
-  const mcpServers = Array.isArray(ai.mcpServers)
-    ? ai.mcpServers.filter((entry) => toMcpServerEntry(entry) != null)
-    : ai.mcpServers;
-
-  return {
-    ...ai,
-    providers: keptProviders,
-    agents: keptAgents,
-    mcpServers,
-  };
-}
-
-function isUsableProvider(cfg: Record<string, unknown>): boolean {
-  const sdk = typeof cfg.sdk === 'string' ? cfg.sdk.trim().toLowerCase() : '';
-  const apiKey = typeof cfg.apiKey === 'string' ? cfg.apiKey.trim() : '';
-  const baseUrl = typeof cfg.baseUrl === 'string' ? cfg.baseUrl.trim() : '';
-  const host = typeof cfg.host === 'string' ? cfg.host.trim() : '';
-  const accountId = typeof cfg.accountId === 'string' ? cfg.accountId.trim() : '';
-
-  if (sdk === 'ollama') return Boolean(host || baseUrl);
-  if (sdk === 'openai-compatible' || (!sdk && (baseUrl || accountId))) {
-    if (accountId) return Boolean(apiKey || accountId);
-    return Boolean(baseUrl && apiKey);
-  }
-  // sdk filled by normalize later (alias presets); require apiKey or ollama host
-  if (!sdk) {
-    if (host) return true;
-    return Boolean(apiKey && (baseUrl || true));
-  }
-  return Boolean(apiKey);
 }
 
 function buildBootstrapContext(

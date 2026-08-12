@@ -6,6 +6,7 @@ import {
   type HtmlRendererHost,
   type PluginId,
   type RuntimeSnapshot,
+  type SnapshotLease,
   type SnapshotStore,
 } from '@zhin.js/plugin-runtime';
 import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
@@ -67,7 +68,7 @@ export const messageGatewayToken = createToken<MessageGateway>('zhin.im.message-
 export interface IngressRoute {
   route(
     message: Message,
-    snapshot: RuntimeSnapshot,
+    lease: SnapshotLease,
     requester: PluginId,
   ): Promise<boolean>;
 }
@@ -218,7 +219,7 @@ export class ImRuntime implements MessageGateway {
           const ingressRoute = resolveIngressRoute(lease.value);
           if (!result.matched && ingressRoute) {
             logger.debug(formatCompact({ op: 'unmatched', conv: formatConversationLog(conversation) }));
-            const handled = await ingressRoute.route(message, lease.value, requester);
+            const handled = await ingressRoute.route(message, lease, requester);
             if (handled) {
               result = Object.freeze({ matched: true, command: 'ai', owner: requester });
             }

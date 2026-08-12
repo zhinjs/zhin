@@ -33,6 +33,7 @@ import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 import {
   AgentRuntime,
+  AgentTurnCoordinator,
   ToolIngressRuntime,
   CapabilityIngress,
   capabilityToTool,
@@ -41,9 +42,33 @@ import {
 } from '../../src/plugin-runtime/index.js';
 
 describe('Agent CapabilityIngress', () => {
+  it('serializes turns for the same session across generation runtimes', async () => {
+    const coordinator = new AgentTurnCoordinator();
+    let release!: () => void;
+    let entered!: () => void;
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const order: string[] = [];
+    const signal = new AbortController().signal;
+    const first = coordinator.run('session', signal, async () => {
+      order.push('first:start');
+      entered();
+      await blocked;
+      order.push('first:end');
+    });
+    const second = coordinator.run('session', signal, async () => {
+      order.push('second');
+    });
+    await started;
+    expect(order).toEqual(['first:start']);
+    release();
+    await Promise.all([first, second]);
+    expect(order).toEqual(['first:start', 'first:end', 'second']);
+  });
+
   it('builds a collision-free Agent Tool catalog across plugin owners', async () => {
     const fixture = await createFixture();
-    const capabilities = await new CapabilityIngress().read(fixture.snapshot, rootPluginId());
+    const capabilities = await new CapabilityIngress().read(fixture.snapshot, fixture.child);
 
     expect(capabilities.tools.map((tool) => tool.name)).toEqual(['child__lookup']);
     expect(capabilities.skills.map((skill) => skill.name)).toEqual(['research']);
@@ -140,6 +165,9 @@ describe('Agent CapabilityIngress', () => {
     const runtime = new AgentRuntime(async function* ({ turn, capabilities, tools }) {
       seen.push(turn);
       expect(capabilities.tools[0]?.name).toBe('child__lookup');
+      expect(capabilities.tools.map((tool) => tool.name)).toContain('child__memory__search');
+      expect(capabilities.tools.find((tool) => tool.name === 'child__memory__search')?.approval)
+        .toBe('on-risk');
       expect('execute' in capabilities.tools[0]!).toBe(false);
       await expect(tools.execute('child__lookup', { value: 'runner' }, 'call-1')).resolves.toMatchObject({
         status: 'completed', output: 'old:runner',
@@ -149,7 +177,7 @@ describe('Agent CapabilityIngress', () => {
         output: [{ type: 'text', content: 'done' }],
         usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 },
       };
-    });
+    }, { coordinator: new AgentTurnCoordinator() });
     runtime.attach(store);
 
     const outcome = await runtime.execute(fixture.child, {
@@ -161,14 +189,110 @@ describe('Agent CapabilityIngress', () => {
       policy: { permissions: ['user'], unattended: false },
       signal: new AbortController().signal,
       ports: {},
-    });
+    }, { mcpServers: ['memory'] });
 
     expect(outcome).toMatchObject({ status: 'completed' });
     expect(seen).toHaveLength(1);
     expect(seen[0]).toMatchObject({
       identity: { rootId: 'root', generation: 0, traceId: 'trace-1', turnId: 'turn-1' },
-      capabilities: { tools: ['child__lookup'], skills: ['research'] },
+      capabilities: { tools: ['child__lookup', 'child__memory__search'], skills: ['research'] },
     });
+    await fixture.mcp.stop();
+    await store.close();
+  });
+
+  it('rejects a released generation lease at the canonical execution boundary', async () => {
+    const fixture = await createFixture();
+    const store = new SnapshotStore(stateFrom(fixture.snapshot));
+    const runtime = new AgentRuntime(async function* () {
+      yield {
+        type: 'turn_end', output: [],
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      };
+    }, { coordinator: new AgentTurnCoordinator() });
+    runtime.attach(store);
+    const lease = store.acquire();
+    lease.release();
+
+    await expect(runtime.executeLeased(
+      lease, fixture.child, externalRequest('released'), { mcpServers: [] },
+    ))
+      .rejects.toThrow('active generation lease');
+    await fixture.mcp.stop();
+    await store.close();
+  });
+
+  it('rejects a generation lease owned by another Root', async () => {
+    const fixture = await createFixture();
+    const attached = new SnapshotStore(stateFrom(fixture.snapshot));
+    const other = new SnapshotStore(stateFrom(fixture.snapshot));
+    const runtime = new AgentRuntime(async function* () {
+      yield {
+        type: 'turn_end', output: [],
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      };
+    }, { coordinator: new AgentTurnCoordinator() });
+    runtime.attach(attached);
+    const foreignLease = other.acquire();
+    await expect(runtime.executeLeased(
+      foreignLease, fixture.child, externalRequest('foreign'), { mcpServers: [] },
+    ))
+      .rejects.toThrow('another Root');
+    foreignLease.release();
+    await fixture.mcp.stop();
+    await attached.close();
+    await other.close();
+  });
+
+  it('exposes only MCP servers selected by the active binding', async () => {
+    const fixture = await createFixture();
+    const store = new SnapshotStore(stateFrom(fixture.snapshot));
+    let names: readonly string[] = [];
+    const runtime = new AgentRuntime(async function* ({ capabilities }) {
+      names = capabilities.tools.map((tool) => tool.name);
+      yield {
+        type: 'turn_end', output: [],
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      };
+    }, { coordinator: new AgentTurnCoordinator() });
+    runtime.attach(store);
+    await runtime.execute(fixture.child, externalRequest('mcp-filter'), { mcpServers: [] });
+    expect(names).toEqual(['child__lookup']);
+    await fixture.mcp.stop();
+    await store.close();
+  });
+
+  it('shares one session queue across distinct generation runtime instances', async () => {
+    const fixture = await createFixture();
+    const store = new SnapshotStore(stateFrom(fixture.snapshot));
+    const coordinator = new AgentTurnCoordinator();
+    let release!: () => void;
+    let entered!: () => void;
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const order: string[] = [];
+    const firstRuntime = new AgentRuntime(async function* () {
+      order.push('old:start');
+      entered();
+      await blocked;
+      order.push('old:end');
+      yield terminalEvent();
+    }, { coordinator });
+    const nextRuntime = new AgentRuntime(async function* () {
+      order.push('next');
+      yield terminalEvent();
+    }, { coordinator });
+    firstRuntime.attach(store);
+    nextRuntime.attach(store);
+
+    const first = firstRuntime.execute(fixture.child, externalRequest('shared'), { mcpServers: [] });
+    await started;
+    const next = nextRuntime.execute(fixture.child, externalRequest('shared'), { mcpServers: [] });
+    await Promise.resolve();
+    expect(order).toEqual(['old:start']);
+    release();
+    await Promise.all([first, next]);
+    expect(order).toEqual(['old:start', 'old:end', 'next']);
     await fixture.mcp.stop();
     await store.close();
   });
@@ -254,7 +378,7 @@ async function createFixture(access: {
     )),
   });
   const mcpSlot = createCapabilitySlot({
-    owner: root,
+    owner: child,
     feature: mcpFeatureId,
     localName: 'memory',
     source: '/mcp/memory.ts',
@@ -317,6 +441,14 @@ function externalRequest(id: string) {
     policy: { permissions: ['authenticated'], unattended: true },
     signal: new AbortController().signal,
     ports: {},
+  };
+}
+
+function terminalEvent() {
+  return {
+    type: 'turn_end' as const,
+    output: [],
+    usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
   };
 }
 

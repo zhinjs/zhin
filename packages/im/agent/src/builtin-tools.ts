@@ -5,7 +5,7 @@
  * Shell:     bash（builtin/bash-tool）
  * 网络:      web_search, web_fetch（builtin/web-*-tool）
  * 计划:      todo_read, todo_write（builtin/todo-*-tool）
- * 记忆 MCP:  mcp_memory_*（ai.memoryMcp: true 时注册 server-memory）
+ * 外部 MCP 工具由 generation MCPFeature 投影按 active binding 注入。
  * 技能:      load_skill, install_skill（builtin/load-skill-tool, install-skill-tool）
  * 交互:      ask_user（builtin/ask-user-tool）
  *

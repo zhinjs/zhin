@@ -26,6 +26,19 @@ describe('validateAiRoutingConfig', () => {
     expect(errors.some(e => e.includes('vision') && e.includes('priority'))).toBe(true);
   });
 
+  it('拒绝 binding 引用未声明的 MCP server', () => {
+    const cfg = normalizeAiRoutingConfig({
+      providers: { p: { sdk: 'openai', apiKey: 'k' } },
+      agents: {
+        zhin: { provider: 'p', model: 'm', mcpServers: ['missing'] },
+      },
+      mcpServers: [],
+    } as any);
+    expect(validateAiRoutingConfig(cfg)).toContain(
+      'ai.agents.zhin: unknown MCP server "missing"',
+    );
+  });
+
   it('agents 内联 priority/match 可通过校验', () => {
     const cfg = normalizeAiRoutingConfig({
       providers: { p: { sdk: 'openai', apiKey: 'k' } },

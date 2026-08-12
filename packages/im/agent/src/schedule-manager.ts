@@ -132,6 +132,9 @@ export function createScheduleTools(): ZhinTool[] {
     });
 
   const removeTool = new ZhinTool('schedule_remove')
+    .desc('删除持久化调度任务（按任务 ID）')
+    .keyword('删除定时', '取消任务', 'schedule remove')
+    .tag('schedule', '定时')
     .param('id', { type: 'string', description: '任务 ID' }, true)
     .execute(async (args) => {
       const m = getScheduleManager();
@@ -142,6 +145,9 @@ export function createScheduleTools(): ZhinTool[] {
     });
 
   const pauseTool = new ZhinTool('schedule_pause')
+    .desc('暂停持久化调度任务（按任务 ID，可 resume 恢复）')
+    .keyword('暂停定时', 'schedule pause')
+    .tag('schedule', '定时')
     .param('id', { type: 'string', description: '任务 ID' }, true)
     .execute(async (args) => {
       const m = getScheduleManager();
@@ -150,6 +156,9 @@ export function createScheduleTools(): ZhinTool[] {
     });
 
   const resumeTool = new ZhinTool('schedule_resume')
+    .desc('恢复已暂停的持久化调度任务（按任务 ID）')
+    .keyword('恢复定时', 'schedule resume')
+    .tag('schedule', '定时')
     .param('id', { type: 'string', description: '任务 ID' }, true)
     .execute(async (args) => {
       const m = getScheduleManager();

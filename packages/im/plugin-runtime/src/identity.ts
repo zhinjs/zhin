@@ -13,8 +13,11 @@ const namespacePattern = /^[a-z][a-z0-9.-]*$/;
 const localNamePattern = /^[a-z0-9][a-z0-9-]*$/;
 /** 动态参数段（`[name].ts` → `$name`），标识符仍为 ASCII。 */
 const dynamicCapabilitySegment = /^\$[a-z][a-zA-Z0-9]*$/u;
-/** 静态 Capability / 命令路径段：ASCII kebab，或含非 ASCII 字母的 Unicode 名（如 `赞我`）。 */
-const asciiKebabSegment = /^[a-z0-9][a-z0-9-]*$/u;
+/**
+ * 静态 Capability / 命令路径段：ASCII kebab 或 snake（Host / agent tools 如 `voice_stt`），
+ * 或含非 ASCII 字母的 Unicode 名（如 `赞我`）。
+ */
+const asciiNameSegment = /^[a-z0-9][a-z0-9_-]*$/u;
 const unicodeNameSegment = /^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*$/u;
 
 function assertNamespace(value: string, label: string): void {
@@ -48,13 +51,13 @@ export function childPluginId(parent: PluginId, instanceKey: string): PluginId {
  * Capability localName 的单段校验（`/` 分隔前的一段）。
  *
  * - `$name`：动态参数段（ASCII）
- * - ASCII kebab：`hello` / `lottery-today`
- * - Unicode 名：须含至少一个非 ASCII 字符，且不得含 ASCII 大写（拉丁仍走 kebab）
+ * - ASCII kebab / snake：`hello` / `lottery-today` / `voice_stt`
+ * - Unicode 名：须含至少一个非 ASCII 字符，且不得含 ASCII 大写（拉丁仍走 kebab/snake）
  */
 export function isCapabilityLocalSegment(segment: string): boolean {
   if (!segment || segment.includes('/') || segment.includes('\0')) return false;
   if (dynamicCapabilitySegment.test(segment)) return true;
-  if (asciiKebabSegment.test(segment)) return true;
+  if (asciiNameSegment.test(segment)) return true;
   if (/[A-Z]/.test(segment)) return false;
   if (!/[^\x00-\x7F]/u.test(segment)) return false;
   return unicodeNameSegment.test(segment);

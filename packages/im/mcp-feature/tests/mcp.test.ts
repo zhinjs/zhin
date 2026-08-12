@@ -142,7 +142,7 @@ describe('MCP Feature', () => {
     expect(events).toEqual(['start', 'stop', 'stop']);
   });
 
-  it('quiesces the previous generation before activating the next', async () => {
+  it('keeps the previous generation active until its snapshot is disposed', async () => {
     const events: string[] = [];
     const root = rootPluginId();
     const slot = (tag: string) => createCapabilitySlot({
@@ -167,14 +167,16 @@ describe('MCP Feature', () => {
 
     const newSlot = slot('new');
     const newProjection = await mcpFeature.runtime.project([newSlot], { snapshot: snapshot([newSlot]) });
-    // RootController.transact 顺序：quiescePrevious → activateNext。
-    await newProjection.handoff?.quiescePrevious?.(oldSnapshot);
     await newProjection.handoff?.activateNext?.();
 
-    expect(events).toEqual(['old:start', 'old:stop', 'new:start']);
+    expect(events).toEqual(['old:start', 'new:start']);
+    await expect((oldProjection.value as McpIndex).listTools(root, 'server')).resolves.toEqual([]);
+    await oldProjection.dispose?.();
+    expect(events).toEqual(['old:start', 'new:start', 'old:stop']);
+    await newProjection.dispose?.();
   });
 
-  it('resumes the previous generation when activation of the next fails', async () => {
+  it('leaves the previous generation untouched when candidate activation fails', async () => {
     const events: string[] = [];
     const root = rootPluginId();
     let failStart = false;
@@ -204,14 +206,12 @@ describe('MCP Feature', () => {
     failStart = true;
     const newSlot = slot('new');
     const newProjection = await mcpFeature.runtime.project([newSlot], { snapshot: snapshot([newSlot]) });
-    // RootController 回滚顺序：deactivateNext（未激活则跳过）→ resumePrevious → dispose。
-    await newProjection.handoff?.quiescePrevious?.(oldSnapshot);
     await expect(newProjection.handoff?.activateNext?.()).rejects.toThrow('bind failed');
-    await newProjection.handoff?.resumePrevious?.();
     await newProjection.dispose?.();
 
-    expect(events).toEqual(['old:start', 'old:stop', 'new:start', 'new:stop', 'old:start']);
+    expect(events).toEqual(['old:start', 'new:start', 'new:stop']);
     await expect((oldProjection.value as McpIndex).listTools(root, 'server')).resolves.toEqual([]);
+    await oldProjection.dispose?.();
   });
 });
 

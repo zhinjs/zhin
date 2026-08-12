@@ -57,13 +57,22 @@ export class GenerationConflictError extends Error {
   }
 }
 
+const snapshotLeaseAuthority = Symbol('SnapshotLeaseAuthority');
+
 export class SnapshotLease {
   #released = false;
 
   constructor(
     readonly value: RuntimeSnapshot,
     private readonly releaseRecord: () => void,
-  ) {}
+    authority: typeof snapshotLeaseAuthority,
+  ) {
+    if (authority !== snapshotLeaseAuthority) throw new TypeError('SnapshotLease is owned by SnapshotStore');
+  }
+
+  get active(): boolean {
+    return !this.#released;
+  }
 
   release(): void {
     if (this.#released) return;
@@ -75,6 +84,7 @@ export class SnapshotLease {
 export class SnapshotStore {
   #current: SnapshotRecord;
   readonly #retired = new Set<SnapshotRecord>();
+  readonly #leases = new WeakSet<SnapshotLease>();
   #closed = false;
 
   constructor(initial: SnapshotState) {
@@ -94,10 +104,16 @@ export class SnapshotStore {
     if (this.#closed) throw new Error('SnapshotStore is closed');
     const record = this.#current;
     record.leases += 1;
-    return new SnapshotLease(record.snapshot, () => {
+    const lease = new SnapshotLease(record.snapshot, () => {
       record.leases -= 1;
       this.#disposeIfReady(record);
-    });
+    }, snapshotLeaseAuthority);
+    this.#leases.add(lease);
+    return lease;
+  }
+
+  owns(lease: SnapshotLease): boolean {
+    return this.#leases.has(lease);
   }
 
   commit(

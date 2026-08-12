@@ -96,7 +96,7 @@ ai:
 
 ## ai.mcpServers
 
-Register MCP (Model Context Protocol) servers; lazy-connected before each turn. Successfully connected server tools are merged into the tool pool. Requires the peer dependency `@modelcontextprotocol/sdk`.
+Register MCP (Model Context Protocol) servers. Candidate generation activation connects every configured server before publication; ready tools enter the owner-scoped capability index. Requires the peer dependency `@modelcontextprotocol/sdk`.
 
 ```yaml
 ai:
@@ -112,7 +112,7 @@ ai:
       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/zhin-mcp-test"]
 ```
 
-A single server connection failure only logs a warning and does not block the turn (the next turn will retry). Additionally, setting `ai.memoryMcp: true` registers the built-in `@modelcontextprotocol/server-memory` knowledge graph (disabled by default).
+A configured server must become ready while the candidate generation activates. Failure aborts that candidate and leaves the previous generation serving traffic (fail-closed). Agent bindings may reference only servers declared here; unknown names fail configuration validation.
 
 ## Trigger rules (ai.trigger)
 

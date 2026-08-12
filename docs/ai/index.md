@@ -96,7 +96,7 @@ ai:
 
 ## ai.mcpServers
 
-注册 MCP（Model Context Protocol）server，回合前懒连接；连接成功的 server 工具并入工具池。需安装 peer `@modelcontextprotocol/sdk`。
+注册 MCP（Model Context Protocol）server。声明进入候选 generation，激活时连接；未 ready 会阻止候选代发布，旧代继续服务。连接成功的工具以 owner-qualified 名称进入工具池。需安装 peer `@modelcontextprotocol/sdk`。
 
 ```yaml
 ai:
@@ -112,7 +112,7 @@ ai:
       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/zhin-mcp-test"]
 ```
 
-单个 server 连接失败只记 warn，不阻塞回合（下一回合会重试）。另设 `ai.memoryMcp: true` 可注册内置 `@modelcontextprotocol/server-memory` 知识图谱（默认关闭）。
+配置的 server 必须在候选 generation 激活时 ready；任一连接失败都会阻止候选代发布，旧代继续服务（fail-closed）。Agent binding 只能引用这里已声明的 server，未知名称会使配置校验失败。
 
 ## 触发规则（ai.trigger）
 

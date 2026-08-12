@@ -11,16 +11,19 @@ immutable snapshot，并从 Tool、Skill、Agent、MCP 四个 Feature projection
 owner-visible 能力句柄；公开输入/输出只有 `TurnRequest` / `TurnOutcome`：
 
 ```ts
-import { AgentRuntime } from '@zhin.js/agent/runtime';
+import { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 
+const coordinator = new AgentTurnCoordinator(); // one per Root, shared by all generations
 const runtime = new AgentRuntime(async function* ({ turn, capabilities }) {
   // Runner 注入点：能力句柄 → 带 generation 戳的工具（ToolRuntime 执行前校验）
   const tools = toolsFromCapabilities(capabilities);
   yield* orchestrator.run({ turn, capabilities, tools });
-});
+}, { coordinator });
 runtime.attach(snapshotReader);
 
-const outcome = await runtime.execute(pluginId, request);
+const outcome = await runtime.execute(pluginId, request, {
+  mcpServers: activeBinding.mcpServers,
+});
 ```
 
 Tool/MCP 执行 handle 只在 turn lease 内有效，防止访问已 retire 的 generation。
@@ -239,13 +242,12 @@ declare module '@zhin.js/core' {
 
 ## MCP（Client）
 
-默认**不**注册 `@modelcontextprotocol/server-memory`；设 `ai.memoryMcp: true` 启用（`data/knowledge-graph.jsonl`）。另可通过 `ai.mcpServers`（或 `ctx.agent.addMcp`）注册更多 Server；每次 AI 回合前懒连接，`mcp_{server}_{tool}` 并入 ZhinAgent 工具池。需可选安装 `@modelcontextprotocol/sdk`（peer dependency）。
+通过 `ai.mcpServers` 注册 Server；MCP 声明进入候选 generation，激活时建立连接，工具以 owner-qualified 名称进入能力目录。任一已配置连接未 ready 都会阻止候选代发布（fail-closed）。需可选安装 `@modelcontextprotocol/sdk`（peer dependency）。
 
-**记忆**：默认 **文件三层**（`ai.memory` → `data/memory/`）；内置 `read_memory` / `write_memory` 已移除。`ai.memoryMcp: true` 时另注册 MCP 图谱（弃用路径）。工作区 `AGENTS.md` / `TOOLS.md` 由 bootstrap 注入。
+**记忆**：默认 **文件三层**（`ai.memory` → `data/memory/`）；内置 `read_memory` / `write_memory` 与旧 `ai.memoryMcp` 配置均已移除。工作区 `AGENTS.md` / `TOOLS.md` 由 bootstrap 注入。
 
 ```yaml
 ai:
-  memoryMcp: true   # 默认 false，显式开启
   mcpServers:
     - name: filesystem
       transport: stdio
@@ -253,7 +255,7 @@ ai:
       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/zhin-mcp-test"]
 ```
 
-**限制**：单 server 连接失败仅 warn，不阻塞回合；resources/prompts 暂不注入模型。与 **`packages/host/mcp`**（MCP **Server**）方向相反。验收见 [examples/test-bot/ACCEPTANCE.md](../../examples/test-bot/ACCEPTANCE.md)。
+**限制**：已配置 server 未 ready 时候选 generation 激活失败，旧 generation 原样继续（fail-closed）；resources/prompts 暂不注入模型。与 **`packages/host/mcp`**（MCP **Server**）方向相反。验收见 [examples/test-bot/ACCEPTANCE.md](../../examples/test-bot/ACCEPTANCE.md)。
 
 ## 多 Agent 使用方式
 

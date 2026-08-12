@@ -14,7 +14,7 @@
 | **IM** | `pnpm add zhin.js` + 适配器（如 `@zhin.js/adapter-sandbox`）；dev：`@zhin.js/cli` | **<10MB**（库包） | Plugin Runtime、命令/组件/适配器约定目录（Stable Features 由 `@zhin.js/core` 的 `zhin.features` 继承；Host 为 optional peer + `zhin.plugins`，见 [ADR 0053](/adr/0053-platform-stable-features)） |
 | **AI** | `+ @zhin.js/agent zod ai` | +~12–15MB | ZhinAgent、会话、工具、压缩 |
 | **Provider** | `+ @ai-sdk/openai` 等 | 按厂商 | 大模型调用 |
-| **MCP** | `+ @modelcontextprotocol/sdk` | +~数 MB | MCP Client / memoryMcp |
+| **MCP** | `+ @modelcontextprotocol/sdk` | +~数 MB | MCP Client |
 | **Rich media** | `+ @zhin.js/html-renderer` | +~数 MB | 出站 `html` / `markdown` 转 PNG（未装则降级 text） |
 | **Speech** | `+ @zhin.js/speech` | +~数 MB | 入站 STT、出站 TTS、`segment.tts`（未装则 warn 降级） |
 <!-- #endregion tiers-table -->

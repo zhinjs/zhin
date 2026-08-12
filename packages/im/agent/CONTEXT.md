@@ -157,7 +157,7 @@ _避免使用_：私有 `resolveTurnSessionKey`、snapshot 与 cell 双轨 key
 ## 关系
 
 - 插件与文件发现向 **Capability Feature** 写入；**Capability Ingress** 在 Boot（常驻核心）与入站（命中 **Agent Binding** 作用域）把能力装入 **Agent Orchestrator**；回合只读 Orchestrator。
-- **ZhinAgent** 通过 **Agent Orchestrator** 发现已装载的 **Tool**、**Skill**、**Subagent** 与 Hook；MCP **声明** 在 **MCPFeature**，入站按 **Agent Binding** 的 `mcpServers` 装入 Orchestrator 后再懒连接，工具以 `mcp_{server}_{tool}` 并入工具池。
+- **ZhinAgent** 通过 **Agent Orchestrator** 发现已装载的 **Tool**、**Skill**、**Subagent** 与 Hook；MCP **声明** 在 **MCPFeature**，generation 激活时连接，入站再按 **Agent Binding** 的 `mcpServers` 过滤；工具以 `${qualifiedServer}__${tool}` 的 owner-qualified 名称并入工具池。
 - 主路径 Agent 选用由配置 **Agent Binding**（`agents[].match`）决定；**AgentFeature** 仅提供专长 / **Subagent** 预设。
 - **Tool Selection** 在 **Permission Level** 检查后把 **Tool** 转换为 **AgentTool**；装载过滤与 Selection 共用 `platforms` / `scopes` / `permissions`。
 - **Tool Runtime** 基于 **Tool Selection** 的结果补充上下文工具，并决定 **Pre-executable Tool** 是走快速路径还是完整 Agent 路径。
@@ -178,7 +178,7 @@ _避免使用_：私有 `resolveTurnSessionKey`、snapshot 与 cell 双轨 key
 
 - “tool” 过去同时指 Zhin 运行时工具和 Provider 工具。已决议：**Tool** 是面向 Zhin 的契约；**AgentTool** 是 `@zhin.js/ai` 的契约。
 - “maxTokens” 过去混用了生成预算和上下文容量。已决议：**Context Budget** 表示历史/模型窗口；生成限制仍属于模型或 Provider 选项。
-- **MCP Client vs Server**：Client（`mcp-client/`）消费外部 MCP 工具；`packages/host/mcp` 为 MCP **Server**（向外暴露 Zhin 工具）。SDK 为可选 peer；单 server 连接失败不阻塞 AI 回合。
+- **MCP Client vs Server**：Client（`mcp-client/`）消费外部 MCP 工具；`packages/host/mcp` 为 MCP **Server**（向外暴露 Zhin 工具）。SDK 为可选 peer；已配置 server 激活失败会使候选 generation 整体失败，旧代继续服务。
 - **Kernel vs Dispatcher**：编排 Task 的 `completed` / `failed` / `cancelled` 仅由 **OrchestrationKernel** 写库；**AgentDispatcher** `recordResult` 不得作为编排终态权威（ADR 0027）。Port 契约见 [`src/orchestrator/PORTS.md`](src/orchestrator/PORTS.md)。
 
 ## 模块化重构（理想蓝图映射）

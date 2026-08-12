@@ -80,6 +80,7 @@ function rejectRemovedAiConfigFields(ai: AIConfig | undefined): void {
 export interface NormalizedAiRoutingConfig {
   providers: Record<string, ProviderInstanceConfig>;
   agents: Record<string, AgentBindingConfig>;
+  mcpServerNames: readonly string[];
 }
 
 /**
@@ -103,5 +104,8 @@ export function normalizeAiRoutingConfig(ai: AIConfig | undefined): NormalizedAi
 
   const agents = { ...((ai as AIConfig & { agents?: Record<string, AgentBindingConfig> })?.agents ?? {}) };
 
-  return { providers, agents };
+  const mcpServerNames = (ai?.mcpServers ?? [])
+    .map((server) => typeof server?.name === 'string' ? server.name.trim() : '')
+    .filter(Boolean);
+  return { providers, agents, mcpServerNames };
 }

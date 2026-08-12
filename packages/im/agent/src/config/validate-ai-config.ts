@@ -5,6 +5,10 @@ import type { NormalizedAiRoutingConfig } from './normalize-ai-config.js';
 
 export function validateAiRoutingConfig(cfg: NormalizedAiRoutingConfig): string[] {
   const errors: string[] = [];
+  const configuredMcp = new Set(cfg.mcpServerNames);
+  if (configuredMcp.size !== cfg.mcpServerNames.length) {
+    errors.push('ai.mcpServers: duplicate server name');
+  }
 
   for (const [alias, prov] of Object.entries(cfg.providers)) {
     if (!prov.sdk?.trim()) {
@@ -35,6 +39,11 @@ export function validateAiRoutingConfig(cfg: NormalizedAiRoutingConfig): string[
     }
     for (const srv of binding.mcpServers ?? []) {
       if (!srv?.trim()) errors.push(`ai.agents.${name}: empty mcpServers entry`);
+      else if (srv !== srv.trim()) {
+        errors.push(`ai.agents.${name}: MCP server names must not contain surrounding whitespace`);
+      } else if (!configuredMcp.has(srv.trim())) {
+        errors.push(`ai.agents.${name}: unknown MCP server "${srv}"`);
+      }
     }
 
     const matchRules = normalizeMatchRules(binding.match);
