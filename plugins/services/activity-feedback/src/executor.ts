@@ -6,7 +6,7 @@ import type { OutboundHost } from '@zhin.js/plugin-runtime';
 export interface ActivityFeedbackEndpointAccess {
   resolve(
     platform: string,
-    endpointId: string,
+    endpointKey: string,
   ): { endpoint: EndpointWithActivityFeedback; adapter: Adapter } | undefined;
 }
 
@@ -42,7 +42,7 @@ function stringifySendContent(content: unknown): string {
  * Plugin Runtime: resolve endpoints via OutboundHost → ImRuntime.sendEndpointMessage.
  * Typing/reaction text goes through the unified outbound chain (no legacy Adapter.inject).
  *
- * 按 platform:endpointId 缓存 { endpoint, adapter }：activity manager 挂在
+ * 按 platform:endpointKey 缓存 { endpoint, adapter }：activity manager 挂在
  * endpoint.$activityFeedback 上，start/stop 必须解析到同一个对象，否则
  * stop 时拿不到 manager，typing 指示器永远无法停止。
  */
@@ -52,19 +52,19 @@ export function createOutboundEndpointAccess(
 ): ActivityFeedbackEndpointAccess {
   const cache = new Map<string, { endpoint: EndpointWithActivityFeedback; adapter: Adapter }>();
   return {
-    resolve(platform, endpointId) {
-      const key = `${platform}:${endpointId}`;
+    resolve(platform, endpointKey) {
+      const key = `${platform}:${endpointKey}`;
       const cached = cache.get(key);
       if (cached) return cached;
       const addReaction = outbound.addReaction;
       const removeReaction = outbound.removeReaction;
       const endpoint = {
-        $id: endpointId,
+        $id: endpointKey,
         // Prefer real OutboundHost.recall when available (icqq RECALL_MSG).
         $recallMessage: async (messageId: string) => {
           if (outbound.recall) {
             try {
-              await outbound.recall({ adapter: platform, endpointId, messageId });
+              await outbound.recall({ adapter: platform, endpointKey, messageId });
               return;
             } catch (error) {
               logger?.debug(
@@ -85,7 +85,7 @@ export function createOutboundEndpointAccess(
             hint?: { sceneType?: 'private' | 'group' | 'channel'; channelId?: string },
           ) => addReaction({
             adapter: platform,
-            endpointId,
+            endpointKey,
             messageId,
             emoji,
             sceneType: hint?.sceneType,
@@ -96,7 +96,7 @@ export function createOutboundEndpointAccess(
           ? async (messageId: string, reactionId: string) => {
             await removeReaction({
               adapter: platform,
-              endpointId,
+              endpointKey,
               messageId,
               reactionId,
             });
@@ -114,7 +114,7 @@ export function createOutboundEndpointAccess(
           try {
             const messageId = await outbound.send({
               adapter: platform,
-              endpointId,
+              endpointKey,
               conversation: {
                 kind: (options.type as 'private' | 'group' | 'channel' | undefined) || 'private',
                 id: options.id,
@@ -133,7 +133,7 @@ export function createOutboundEndpointAccess(
           }
         },
         endpoints: {
-          get: (id: string) => (id === endpointId ? endpoint : undefined),
+          get: (id: string) => (id === endpointKey ? endpoint : undefined),
         },
       };
       const resolved = { endpoint, adapter: adapter as unknown as Adapter };
@@ -256,21 +256,21 @@ export class ActivityFeedbackExecutor {
     phase: ActivityFeedbackPhase,
     phaseConfig: ResolvedActivityFeedbackPhaseConfig,
   ): Promise<void> {
-    const resolved = this.access.resolve(ctx.platform, ctx.endpointId);
+    const resolved = this.access.resolve(ctx.platform, ctx.endpointKey);
     if (!resolved) return;
     const driver = createPhaseDriver(resolved.endpoint, ctx.platform, resolved.adapter);
     await driver.start(ctx, phase, phaseConfig);
   }
 
   async stop(ctx: ActivityFeedbackEventContext, phase: ActivityFeedbackPhase): Promise<void> {
-    const resolved = this.access.resolve(ctx.platform, ctx.endpointId);
+    const resolved = this.access.resolve(ctx.platform, ctx.endpointKey);
     if (!resolved?.endpoint.$activityFeedback) return;
     const driver = createPhaseDriver(resolved.endpoint, ctx.platform, resolved.adapter);
     await driver.stop(ctx, phase);
   }
 
   async updateThinkingText(ctx: ActivityFeedbackEventContext, text: string): Promise<void> {
-    const resolved = this.access.resolve(ctx.platform, ctx.endpointId);
+    const resolved = this.access.resolve(ctx.platform, ctx.endpointKey);
     if (!resolved) return;
     const driver = createPhaseDriver(resolved.endpoint, ctx.platform, resolved.adapter);
     await driver.updateThinkingText(ctx, text);

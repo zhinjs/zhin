@@ -23,7 +23,7 @@ export class ActivityFeedbackPolicy {
 
   resolvePhase(
     platform: string,
-    endpointId: string,
+    endpointKey: string,
     phase: ActivityFeedbackPhase,
     sceneType: ActivitySceneType,
   ): PhaseResolution {
@@ -34,7 +34,7 @@ export class ActivityFeedbackPolicy {
     const policy = mergeActivityFeedbackLayers(
       this.service.defaults,
       this.service.platforms?.[platform],
-      this.service.endpoints?.[`${platform}:${endpointId}`],
+      this.service.endpoints?.[`${platform}:${endpointKey}`],
     );
 
     if (policy?.enabled === false) {

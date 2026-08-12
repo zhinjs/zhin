@@ -48,7 +48,7 @@ export default defineCommand<RssConfig>({
       url,
       feed_title: feedTitle,
       adapter_name: channel.adapterName,
-      endpoint_id: channel.endpointId,
+      endpoint_id: channel.endpointKey,
       channel_type: channel.channelType,
       channel_id: channel.channelId,
       creator_id: channel.senderId,

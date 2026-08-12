@@ -10,13 +10,13 @@ import { ActivityFeedbackExecutor, createOutboundEndpointAccess } from '../src/e
 function createCtx(): ActivityFeedbackEventContext {
   return {
     platform: 'sandbox',
-    endpointId: 'bot1',
+    endpointKey: 'bot1',
     sessionId: 'sandbox:bot1:private:u1',
     sceneType: 'private',
     userId: 'u1',
     options: {
       platform: 'sandbox',
-      endpointId: 'bot1',
+      endpointKey: 'bot1',
       sessionId: 'sandbox:bot1:private:u1',
       sceneType: 'private',
       userId: 'u1',
@@ -30,7 +30,7 @@ const phaseConfig: ResolvedActivityFeedbackPhaseConfig = {
 };
 
 describe('createOutboundEndpointAccess', () => {
-  it('按 platform:endpointId 缓存同一 { endpoint, adapter }', () => {
+  it('按 platform:endpointKey 缓存同一 { endpoint, adapter }', () => {
     const access = createOutboundEndpointAccess({ send: vi.fn() });
     const first = access.resolve('sandbox', 'bot1');
     expect(first).toBeDefined();
@@ -53,7 +53,7 @@ describe('createOutboundEndpointAccess', () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({
       adapter: 'sandbox',
-      endpointId: 'bot1',
+      endpointKey: 'bot1',
       conversation: { kind: 'private', id: 'u1' },
     });
 
@@ -77,7 +77,7 @@ describe('createOutboundEndpointAccess', () => {
   });
 
   it('wires $recallMessage to OutboundHost.recall when available', async () => {
-    const recalled: Array<{ adapter: string; endpointId: string; messageId: string }> = [];
+    const recalled: Array<{ adapter: string; endpointKey: string; messageId: string }> = [];
     const access = createOutboundEndpointAccess({
       send: vi.fn(async () => 'mid-1'),
       recall: vi.fn(async (input) => {
@@ -86,6 +86,6 @@ describe('createOutboundEndpointAccess', () => {
     });
     const endpoint = access.resolve('sandbox', 'bot1')!.endpoint;
     await endpoint.$recallMessage?.('mid-1');
-    expect(recalled).toEqual([{ adapter: 'sandbox', endpointId: 'bot1', messageId: 'mid-1' }]);
+    expect(recalled).toEqual([{ adapter: 'sandbox', endpointKey: 'bot1', messageId: 'mid-1' }]);
   });
 });

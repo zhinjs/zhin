@@ -44,12 +44,12 @@ describe('@zhin.js/plugin-lottery runtime', () => {
   it('resolves pushTargets for OutboundHost', () => {
     const cfg = resolveLotteryConfig({
       pushTargets: [
-        { adapter: 'sandbox', channelId: 'u1', endpointId: 'bot', channelType: 'private' },
+        { adapter: 'sandbox', channelId: 'u1', endpointKey: 'bot', channelType: 'private' },
         { adapter: '', channelId: 'bad' } as never,
       ],
     });
     expect(cfg.pushTargets).toEqual([
-      { adapter: 'sandbox', endpointId: 'bot', channelType: 'private', channelId: 'u1' },
+      { adapter: 'sandbox', endpointKey: 'bot', channelType: 'private', channelId: 'u1' },
     ]);
   });
 

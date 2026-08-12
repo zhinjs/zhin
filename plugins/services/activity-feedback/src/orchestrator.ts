@@ -31,17 +31,17 @@ export class ActivityFeedbackOrchestrator {
     if (!ctx) {
       this.log.debug(
         `[ActivityFeedback] skip ${phase} (${reason}): unresolvable context`
-        + ` (platform=${String(payload.platform)} endpoint=${String(payload.endpointId)})`,
+        + ` (platform=${String(payload.platform)} endpoint=${String(payload.endpointKey)})`,
       );
       return;
     }
 
     try {
-      const resolution = this.policy.resolvePhase(ctx.platform, ctx.endpointId, phase, ctx.sceneType);
+      const resolution = this.policy.resolvePhase(ctx.platform, ctx.endpointKey, phase, ctx.sceneType);
       if (resolution.kind !== 'active') {
         this.log.debug(
           `[ActivityFeedback] skip ${phase} (${reason}): policy=${resolution.kind}`
-          + ` (${ctx.platform}:${ctx.endpointId} ${ctx.sceneType})`,
+          + ` (${ctx.platform}:${ctx.endpointKey} ${ctx.sceneType})`,
         );
         return;
       }

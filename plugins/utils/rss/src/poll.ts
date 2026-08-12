@@ -6,7 +6,7 @@ import { getRssSeen, getRssSubs } from './db-store.js';
 
 export type RssOutboundPush = (input: {
   readonly adapterName: string;
-  readonly endpointId: string;
+  readonly endpointKey: string;
   readonly channelType: string;
   readonly channelId: string;
   readonly content: string;
@@ -75,7 +75,7 @@ async function pushToSubscribers(feedUrl: string, content: string): Promise<numb
     try {
       await push({
         adapterName,
-        endpointId: String(sub.endpoint_id ?? adapterName),
+        endpointKey: String(sub.endpoint_id ?? adapterName),
         channelType: String(sub.channel_type ?? 'private'),
         channelId,
         content,

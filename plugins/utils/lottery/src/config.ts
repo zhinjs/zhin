@@ -23,7 +23,7 @@ export interface LotteryConfig {
 
 export interface LotteryPushTargetConfig {
   readonly adapter: string;
-  readonly endpointId?: string;
+  readonly endpointKey?: string;
   readonly channelType?: string;
   readonly channelId: string;
 }
@@ -60,7 +60,7 @@ export function resolveLotteryConfig(raw: Partial<LotteryConfig> | undefined): L
           && t.channelId.length > 0)
         .map((t) => Object.freeze({
           adapter: t.adapter,
-          endpointId: typeof t.endpointId === 'string' ? t.endpointId : t.adapter,
+          endpointKey: typeof t.endpointKey === 'string' ? t.endpointKey : t.adapter,
           channelType: typeof t.channelType === 'string' ? t.channelType : 'private',
           channelId: t.channelId,
         }))

@@ -1,6 +1,6 @@
 export interface LotteryPushTarget {
   readonly adapter: string;
-  readonly endpointId: string;
+  readonly endpointKey: string;
   readonly channelType?: string;
   readonly channelId: string;
 }

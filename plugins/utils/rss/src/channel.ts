@@ -5,7 +5,7 @@
 
 export interface ChannelInfo {
   adapterName: string;
-  endpointId: string;
+  endpointKey: string;
   channelType: string;
   channelId: string;
   senderId: string;
@@ -15,7 +15,7 @@ export interface ChannelInfo {
 /** Smoke / agent / execute()-without-dispatch fallback. */
 export const SMOKE_CHANNEL: ChannelInfo = {
   adapterName: 'smoke',
-  endpointId: 'local',
+  endpointKey: 'local',
   channelType: 'private',
   channelId: 'global',
   senderId: '',
@@ -50,17 +50,17 @@ export function extractChannelInfo(input: unknown): ChannelInfo {
     ?? meta.adapter
     ?? SMOKE_CHANNEL.adapterName,
   );
-  const endpointId = String(
-    meta.endpoint ?? meta.endpointId ?? meta.endpoint_id ?? adapterName,
+  const endpointKey = String(
+    meta.endpoint ?? meta.endpointKey ?? meta.endpoint_id ?? adapterName,
   );
   const senderId = String(msg.sender ?? meta.senderId ?? '');
   const senderName = String(meta.senderName ?? meta.name ?? '');
 
-  if (!channelId) return { ...SMOKE_CHANNEL, adapterName, endpointId, senderId, senderName };
+  if (!channelId) return { ...SMOKE_CHANNEL, adapterName, endpointKey, senderId, senderName };
 
   return {
     adapterName,
-    endpointId,
+    endpointKey,
     channelType,
     channelId,
     senderId,

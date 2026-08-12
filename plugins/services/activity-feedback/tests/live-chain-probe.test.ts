@@ -28,7 +28,7 @@ describe('live chain probe', () => {
       mode: 'text',
       userId: 'u1',
       platform: 'icqq',
-      endpointId: '8596238',
+      endpointKey: '8596238',
       sceneId: '1001',
       messageId: 'm1',
       scope: 'group',
@@ -38,7 +38,7 @@ describe('live chain probe', () => {
     expect(sent.length).toBeGreaterThan(0);
     expect(sent[0]).toMatchObject({
       adapter: 'icqq',
-      endpointId: '8596238',
+      endpointKey: '8596238',
       conversation: { kind: 'group', id: '1001' },
     });
   });

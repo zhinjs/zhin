@@ -110,7 +110,7 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
       sessionId: 's1',
       source: 'zhin-agent',
       platform: 'sandbox',
-      endpointId: 'bot',
+      endpointKey: 'bot',
       hookContext: { activityFeedbackEligible: true },
     } as never);
     await Promise.resolve();
@@ -129,7 +129,7 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
           sessionId: 's1',
           source: 'zhin-agent',
           platform: 'sandbox',
-          endpointId: 'bot',
+          endpointKey: 'bot',
           scope: 'private',
           sceneId: 'u1',
           hookContext: { activityFeedbackEligible: true },

@@ -121,7 +121,7 @@ describe.skipIf(!DatabaseSync)('rss against real sqlite (no id column)', () => {
         url: 'https://example.com/feed.xml',
         feed_title: 'Example',
         adapter_name: SMOKE_CHANNEL.adapterName,
-        endpoint_id: SMOKE_CHANNEL.endpointId,
+        endpoint_id: SMOKE_CHANNEL.endpointKey,
         channel_type: SMOKE_CHANNEL.channelType,
         channel_id: SMOKE_CHANNEL.channelId,
         creator_id: '',

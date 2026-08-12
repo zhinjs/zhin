@@ -79,7 +79,7 @@ export default defineMiddleware<Message, ModerationConfig>({
             if (!host.recall) return false;
             await host.recall({
               adapter: message.conversation.endpoint.adapter,
-              endpointId: message.conversation.endpoint.id,
+              endpointKey: message.conversation.endpoint.id,
               messageId,
             });
             return true;

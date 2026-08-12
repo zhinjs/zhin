@@ -66,7 +66,7 @@ export function loadActivityFeedbackServiceConfig(
 export function resolveActivityFeedbackForTarget(
   service: ActivityFeedbackServiceConfig,
   platform: string,
-  endpointId: string,
+  endpointKey: string,
 ): ActivityFeedbackConfig | undefined {
   if (service.enabled === false) {
     return { enabled: false };
@@ -74,6 +74,6 @@ export function resolveActivityFeedbackForTarget(
   return mergeActivityFeedbackLayers(
     service.defaults,
     service.platforms?.[platform],
-    service.endpoints?.[`${platform}:${endpointId}`],
+    service.endpoints?.[`${platform}:${endpointKey}`],
   );
 }

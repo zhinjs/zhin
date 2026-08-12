@@ -105,7 +105,7 @@ describe('@zhin.js/plugin-tic-tac-toe runtime (slice-2)', () => {
 
     expect(send).toHaveBeenCalledWith(expect.objectContaining({
       adapter: 'sandbox',
-      endpointId: 'default',
+      endpointKey: 'default',
       conversation: { kind: 'private', id: 'watcher' },
     }));
     await lifecycle.dispose();

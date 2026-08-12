@@ -68,7 +68,7 @@ describe('ActivityFeedbackOrchestrator', () => {
     await orchestrator.startPhase(
       {
         platform: 'icqq',
-        endpointId: '75318',
+        endpointKey: '75318',
         sessionId: 'icqq:75318:group:1:u',
         scope: 'group',
         sceneId: 'group:1',
@@ -110,7 +110,7 @@ describe('ActivityFeedbackOrchestrator', () => {
       agentId: 'researcher',
       taskId: '91a68419',
       platform: 'qq',
-      endpointId: '知音',
+      endpointKey: '知音',
       sessionId: 'qq:知音:private:477561',
       sceneId: '477561',
       userId: '477561',
