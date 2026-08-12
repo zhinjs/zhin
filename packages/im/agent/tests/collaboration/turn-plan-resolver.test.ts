@@ -8,8 +8,8 @@ const cell: CollaborationScene = {
   adapter: 'sandbox',
   sceneId: 'group-1',
   members: [
-    { endpointId: 'planner-bot', primary: 'planner' },
-    { endpointId: 'researcher-bot', primary: 'researcher' },
+    { endpointKey: 'planner-bot', primary: 'planner' },
+    { endpointKey: 'researcher-bot', primary: 'researcher' },
   ],
 };
 
@@ -28,7 +28,7 @@ describe('buildTurnPlan', () => {
     const plan = buildTurnPlan({
       message: mockMessage('researcher-bot'),
       contentText: 'hi',
-      endpointId: 'researcher-bot',
+      endpointKey: 'researcher-bot',
       cells: [cell],
       agents: { zhin: { provider: 'mock', model: 'm' } },
       discoveredAgentNames: new Set(['zhin']),
@@ -43,7 +43,7 @@ describe('buildTurnPlan', () => {
     const plan = buildTurnPlan({
       message: mockMessage(),
       contentText: 'hi',
-      endpointId: 'planner-bot',
+      endpointKey: 'planner-bot',
       cells: [],
       agents: { zhin: { provider: 'mock', model: 'm' } },
       discoveredAgentNames: new Set(['zhin']),
@@ -59,7 +59,7 @@ describe('buildTurnPlan', () => {
         $content: [{ type: 'image', data: { url: 'http://x/img.png' } }],
       },
       contentText: '',
-      endpointId: 'planner-bot',
+      endpointKey: 'planner-bot',
       cells: [cell],
       agents: {
         zhin: { provider: 'mock', model: 'm' },
@@ -84,7 +84,7 @@ describe('buildTurnPlan', () => {
         $content: [{ type: 'image', data: { url: 'http://x/img.png' } }],
       },
       contentText: '',
-      endpointId: 'solo-bot',
+      endpointKey: 'solo-bot',
       cells: [],
       agents: {
         zhin: { provider: 'mock', model: 'm' },

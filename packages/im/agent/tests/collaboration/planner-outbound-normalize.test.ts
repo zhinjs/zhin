@@ -7,9 +7,9 @@ const cell: CollaborationScene = {
   adapter: 'icqq',
   sceneId: '373460458',
   members: [
-    { endpointId: '8596238', primary: 'planner', pipelineRole: 'planner' },
-    { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
-    { endpointId: '1689919782', primary: 'evaluator', pipelineRole: 'evaluator' },
+    { endpointKey: '8596238', primary: 'planner', pipelineRole: 'planner' },
+    { endpointKey: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
+    { endpointKey: '1689919782', primary: 'evaluator', pipelineRole: 'evaluator' },
   ],
 };
 

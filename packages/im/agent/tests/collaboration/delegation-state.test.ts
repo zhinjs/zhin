@@ -14,8 +14,8 @@ const cell: CollaborationScene = {
   adapter: 'icqq',
   sceneId: '1',
   members: [
-    { endpointId: 'planner', primary: 'planner', pipelineRole: 'planner' },
-    { endpointId: 'researcher', primary: 'researcher', pipelineRole: 'researcher' },
+    { endpointKey: 'planner', primary: 'planner', pipelineRole: 'planner' },
+    { endpointKey: 'researcher', primary: 'researcher', pipelineRole: 'researcher' },
   ],
   pipelineState: {
     runId: 'run-1',
@@ -25,7 +25,7 @@ const cell: CollaborationScene = {
     allowedNextStages: ['evaluator'],
     todo: [],
     activeDelegations: [{
-      targetEndpointId: 'researcher',
+      targetEndpointKey: 'researcher',
       targetRole: 'researcher',
       runId: 'run-1',
       requireArtifact: true,
@@ -51,7 +51,7 @@ describe('delegation-state', () => {
 
   it('upsert and remove active delegations', () => {
     let list = upsertActiveDelegation(cell.pipelineState!.activeDelegations, {
-      targetEndpointId: 'evaluator',
+      targetEndpointKey: 'evaluator',
       targetRole: 'evaluator',
       runId: 'run-1',
       requireArtifact: false,
@@ -61,7 +61,7 @@ describe('delegation-state', () => {
     expect(list).toHaveLength(2);
     list = removeActiveDelegationForEndpoint(list, 'researcher');
     expect(list).toHaveLength(1);
-    expect(list[0]?.targetEndpointId).toBe('evaluator');
+    expect(list[0]?.targetEndpointKey).toBe('evaluator');
   });
 
   it('resolveArtifactSubmitRunId uses active delegation runId', () => {
@@ -86,7 +86,7 @@ describe('delegation-state', () => {
           reviewCycles: 0,
           todo: [],
           activeDelegationsAtArchive: [{
-            targetEndpointId: 'researcher',
+            targetEndpointKey: 'researcher',
             targetRole: 'researcher',
             runId: 'run-1',
             requireArtifact: true,

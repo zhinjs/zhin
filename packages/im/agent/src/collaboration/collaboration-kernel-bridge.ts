@@ -10,7 +10,7 @@ import { getOrchestrationService } from '../orchestrator/orchestration-service.j
 import { normalizeExecutorKind } from '../orchestrator/orchestration-mappers.js';
 import {
   isSubstantiveGroupTaskReply,
-  resolvePlannerEndpointId,
+  resolvePlannerEndpointKey,
   summarizeDelegateeReply,
 } from './collaboration-delegation.js';
 import { sendGroupPeerMention } from './im-mention-delegate.js';
@@ -50,7 +50,7 @@ export function orchestrationSourceFromMessage(
   }
   const orchestrationScene: OrchestrationSceneRef = {
     platform: scene.platform,
-    endpointId: scene.endpointId,
+    endpointKey: scene.endpointKey,
     sceneId: scene.sceneId,
     kind: scene.kind,
     ...(scene.senderId ? { senderId: scene.senderId } : {}),
@@ -70,24 +70,24 @@ export function orchestrationSourceFromMessage(
 
 export function findActiveImProjectionTasksForEndpoint(
   tasks: OrchestrationTaskRecord[],
-  endpointId: string,
+  endpointKey: string,
 ): OrchestrationTaskRecord[] {
   return tasks.filter((task) =>
     normalizeExecutorKind(task.executor_kind) === 'im_projection'
-    && task.assigned_to === endpointId
+    && task.assigned_to === endpointKey
     && ACTIVE_GROUP_TASK_STATUSES.has(task.status),
   );
 }
 
 export async function listActiveImProjectionTasks(
   message: Message,
-  endpointId: string,
+  endpointKey: string,
 ): Promise<OrchestrationTaskRecord[]> {
   const orch = getOrchestrationService();
   if (!orch) return [];
   const sessionKey = resolveIMSessionIdFromMessage(message);
   const runs = await orch.listRuns(sessionKey);
-  return runs.flatMap((run) => findActiveImProjectionTasksForEndpoint(run.tasks, endpointId));
+  return runs.flatMap((run) => findActiveImProjectionTasksForEndpoint(run.tasks, endpointKey));
 }
 
 /**
@@ -97,7 +97,7 @@ export async function listActiveImProjectionTasks(
 export async function tryCompleteKernelImProjectionFromOutbound(input: {
   message: Message;
   cell: CollaborationScene;
-  endpointId: string;
+  endpointKey: string;
   outboundBatches: MessageElement[][];
   logger: { info: (...args: unknown[]) => void };
 }): Promise<void> {
@@ -107,7 +107,7 @@ export async function tryCompleteKernelImProjectionFromOutbound(input: {
   const publicText = flattenOutboundText(input.outboundBatches);
   if (!isSubstantiveGroupTaskReply(publicText)) return;
 
-  const active = await listActiveImProjectionTasks(input.message, input.endpointId);
+  const active = await listActiveImProjectionTasks(input.message, input.endpointKey);
   if (active.length !== 1) return;
 
   const task = active[0]!;
@@ -118,16 +118,16 @@ export async function tryCompleteKernelImProjectionFromOutbound(input: {
   input.logger.info(formatCompact({
     op: 'task_complete',
     task: task.id,
-    endpoint: input.endpointId,
+    endpoint: input.endpointKey,
   }));
 
-  const plannerId = resolvePlannerEndpointId(input.cell);
-  if (!plannerId || plannerId === input.endpointId) return;
+  const plannerId = resolvePlannerEndpointKey(input.cell);
+  if (!plannerId || plannerId === input.endpointKey) return;
 
   const handbackText = `#${task.id} 已完成：${summary}`;
   await sendGroupPeerMention({
-    message: { ...input.message, $endpoint: input.endpointId } as Message,
-    targetEndpointId: plannerId,
+    message: { ...input.message, $endpoint: input.endpointKey } as Message,
+    targetEndpointKey: plannerId,
     text: handbackText,
   });
 }

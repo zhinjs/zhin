@@ -13,8 +13,8 @@ describe('tryHandlePeerInboundHandback', () => {
     sceneId: '129043431',
     goal: 'test',
     members: [
-      { endpointId: 'planner-bot', primary: 'planner', pipelineRole: 'planner' },
-      { endpointId: 'worker-bot', primary: 'researcher', pipelineRole: 'researcher' },
+      { endpointKey: 'planner-bot', primary: 'planner', pipelineRole: 'planner' },
+      { endpointKey: 'worker-bot', primary: 'researcher', pipelineRole: 'researcher' },
     ],
   };
 
@@ -57,7 +57,7 @@ describe('tryHandlePeerInboundHandback', () => {
     const stopped = await tryHandlePeerInboundHandback({
       message,
       cell,
-      peerEndpointId: 'worker-bot',
+      peerEndpointKey: 'worker-bot',
       replyAi: async (payload) => { replies.push(payload); },
       logger: { debug: vi.fn(), info: vi.fn() },
     });
@@ -103,7 +103,7 @@ describe('tryHandlePeerInboundHandback', () => {
     const stopped = await tryHandlePeerInboundHandback({
       message,
       cell,
-      peerEndpointId: 'worker-bot',
+      peerEndpointKey: 'worker-bot',
       replyAi: async (payload) => { replies.push(payload); },
       logger: { debug: vi.fn(), info: vi.fn() },
     });

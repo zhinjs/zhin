@@ -12,7 +12,7 @@ import {
   upgradeAgentSessionTreeData,
   type AgentDbQueryable,
 } from './upgrade-agent-db-schema.js';
-import { registerEndpointIdColumnMigrationHook } from './upgrade-endpoint-id-schema.js';
+import { registerEndpointKeyColumnMigrationHook } from './upgrade-endpoint-id-schema.js';
 
 type SessionTreeUpgradeResult = Awaited<ReturnType<typeof upgradeAgentSessionTreeData>>;
 
@@ -46,7 +46,7 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
   const plugin = getPlugin();
   const { useContext, root, logger } = plugin;
 
-  registerEndpointIdColumnMigrationHook(logger);
+  registerEndpointKeyColumnMigrationHook(logger);
 
   useContext('ai', (ai) => {
     const configService = root.inject('config');

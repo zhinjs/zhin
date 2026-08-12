@@ -23,11 +23,11 @@ export function registerInitWizardGuardrail(): void {
       }
 
       try {
-        const endpointId = String(message.$endpoint ?? '');
-        const gate = await handleInitWizardInboundGate(message, endpointId, root);
+        const endpointKey = String(message.$endpoint ?? '');
+        const gate = await handleInitWizardInboundGate(message, endpointKey, root);
         if (gate.action === 'block') {
           if (gate.replied) {
-            logger.info(formatCompact({ op: 'init_wizard_prompt', endpoint: endpointId }));
+            logger.info(formatCompact({ op: 'init_wizard_prompt', endpoint: endpointKey }));
           }
           return;
         }

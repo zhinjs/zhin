@@ -19,26 +19,26 @@ export interface GroupMessageAdapterView {
 
 export function resolvePlatformAtId(
   adapter: GroupMessageAdapterView,
-  endpointId: string,
+  endpointKey: string,
 ): string {
-  const peer = adapter.endpoints?.get(endpointId);
+  const peer = adapter.endpoints?.get(endpointKey);
   return (
     (peer?.$platformUserId as string | undefined)
     ?? (peer?.$config?.name as string | undefined)
-    ?? endpointId
+    ?? endpointKey
   );
 }
 
 /** 构建带一个或多个 platform @ segment 的消息内容。 */
 export function buildAtMessageContent(
   adapter: GroupMessageAdapterView,
-  atEndpointIds: string[],
+  atEndpointKeys: string[],
   text: string,
 ): MessageElement[] {
   const trimmed = text.trim();
   const segments: MessageElement[] = [];
-  for (const endpointId of atEndpointIds) {
-    const atId = resolvePlatformAtId(adapter, endpointId);
+  for (const endpointKey of atEndpointKeys) {
+    const atId = resolvePlatformAtId(adapter, endpointKey);
     segments.push({ type: 'at', data: { id: atId, qq: atId } });
   }
   segments.push({ type: 'text', data: { text: trimmed.startsWith(' ') ? trimmed : ` ${trimmed}` } });
@@ -153,7 +153,7 @@ export interface SendGroupMessageInput {
   message: Message;
   text: string;
   /** 可选：在正文前 @ 目标 Endpoint（platform at segment） */
-  atTargetEndpointId?: string;
+  atTargetEndpointKey?: string;
   /** 单条 IM 分段长度上限（默认 4000） */
   maxChars?: number;
 }

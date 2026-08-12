@@ -135,9 +135,9 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
     const question = String(args.question ?? '');
 
     const platform = commMessage.$adapter!;
-    const endpointId = commMessage.$endpoint!;
+    const endpointKey = commMessage.$endpoint!;
     const adapter = this.plugin.inject(platform) as Adapter | undefined;
-    const bot = adapter?.endpoints?.get(endpointId);
+    const bot = adapter?.endpoints?.get(endpointKey);
     const botMaster: string | undefined = (bot?.$config as { master?: string })?.master;
     const isPrivateMaster = commMessage.$channel?.type === 'private'
       && botMaster != null && String(commMessage.$sender.id) === String(botMaster);

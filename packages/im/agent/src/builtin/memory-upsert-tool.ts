@@ -34,7 +34,7 @@ class MemoryUpsertTool extends BuiltinBaseTool {
   readonly name = 'memory_upsert';
   readonly description = 'Write or update a semantic memory entry (memory_entries) for memory_search recall.';
   readonly parameters = PARAMS;
-  readonly keywords = ['memory', 'remember', 'store', '记忆', '记住'];
+  readonly keywords = ['memory', 'remember', 'store', '记忆', '记住', '记下', '备忘', '记录'];
 
   async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
     const repo = getMemoryEntryRepository();

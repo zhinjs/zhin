@@ -29,10 +29,11 @@ import {
   defineAgentTool,
   toolFeatureId,
 } from '@zhin.js/tool';
-import { createSyntheticMessage } from '@zhin.js/core';
 import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
+import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 import {
   AgentRuntime,
+  CapabilityLeaseRuntime,
   CapabilityIngress,
   type ToolCapability,
 } from '../../src/plugin-runtime/index.js';
@@ -56,7 +57,7 @@ describe('Agent CapabilityIngress', () => {
   it('holds one generation for the complete Agent turn', async () => {
     const fixture = await createFixture();
     const store = new SnapshotStore(stateFrom(fixture.snapshot));
-    const runtime = new AgentRuntime();
+    const runtime = new CapabilityLeaseRuntime();
     runtime.attach(store);
     let release!: () => void;
     let entered!: () => void;
@@ -64,7 +65,7 @@ describe('Agent CapabilityIngress', () => {
     const started = new Promise<void>((resolve) => { entered = resolve; });
     let captured: ToolCapability | undefined;
 
-    const turn = runtime.runTurn(fixture.child, async (capabilities) => {
+    const turn = runtime.withCapabilities(fixture.child, async (capabilities) => {
       captured = capabilities.tools[0];
       entered();
       await gate;
@@ -95,9 +96,45 @@ describe('Agent CapabilityIngress', () => {
     release();
 
     await expect(turn).resolves.toBe('old:leased');
-    await expect(runtime.runTurn(fixture.child, (next) =>
+    await expect(runtime.withCapabilities(fixture.child, (next) =>
       next.tools[0]?.execute({ value: 'turn' }))).resolves.toBe('new:turn');
     expect(() => captured?.execute({ value: 'late' })).toThrow('scope has ended');
+    await fixture.mcp.stop();
+    await store.close();
+  });
+
+  it('executes one canonical TurnIngress with snapshot-owned capabilities', async () => {
+    const fixture = await createFixture();
+    const store = new SnapshotStore(stateFrom(fixture.snapshot));
+    const seen: import('../../src/turn/turn-ingress.js').TurnIngress[] = [];
+    const runtime = new AgentRuntime(async function* ({ turn, capabilities }) {
+      seen.push(turn);
+      expect(capabilities.tools[0]?.name).toBe('lookup');
+      yield {
+        type: 'turn_end',
+        output: [{ type: 'text', content: 'done' }],
+        usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 },
+      };
+    });
+    runtime.attach(store);
+
+    const outcome = await runtime.execute(fixture.child, {
+      identity: { traceId: 'trace-1', turnId: 'turn-1' },
+      origin: { kind: 'http', sessionId: 'http-1' },
+      principal: { subjectId: 'user-1', roles: ['user'] },
+      input: { text: 'hello' },
+      session: { key: 'http:http-1' },
+      policy: { permissions: ['user'], unattended: false },
+      signal: new AbortController().signal,
+      ports: { journal: { append: () => undefined } },
+    });
+
+    expect(outcome).toMatchObject({ status: 'completed' });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
+      identity: { rootId: 'root', generation: 0, traceId: 'trace-1', turnId: 'turn-1' },
+      capabilities: { tools: ['lookup'], skills: ['research'] },
+    });
     await fixture.mcp.stop();
     await store.close();
   });
@@ -111,25 +148,15 @@ describe('Agent CapabilityIngress', () => {
     const ingress = new CapabilityIngress();
     expect((await ingress.read(restricted.snapshot, restricted.child)).tools).toEqual([]);
 
-    const allowedMessage = createSyntheticMessage({
-      adapter: 'qq',
-      endpoint: 'bot',
-      sender: { id: 'trusted-user', isTrusted: true },
-      channel: { type: 'group', id: '100' },
-    });
+    const allowedTurn = accessTurn('qq');
     expect((await ingress.read(
       restricted.snapshot,
       restricted.child,
       () => true,
-      allowedMessage,
+      allowedTurn,
     )).tools.map((tool) => tool.name)).toEqual(['lookup']);
 
-    const wrongPlatform = createSyntheticMessage({
-      adapter: 'telegram',
-      endpoint: 'bot',
-      sender: { id: 'trusted-user', isTrusted: true },
-      channel: { type: 'group', id: '100' },
-    });
+    const wrongPlatform = accessTurn('telegram');
     expect((await ingress.read(
       restricted.snapshot,
       restricted.child,
@@ -217,6 +244,20 @@ async function createFixture(access: {
     ]),
   });
   return { snapshot, child, mcp };
+}
+
+function accessTurn(platform: string) {
+  return createTurnIngress({
+    identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn' },
+    origin: { kind: 'im', platform, endpoint: 'bot', scope: 'group', sceneId: '100' },
+    principal: { subjectId: 'trusted-user', roles: ['trusted'] },
+    input: { text: 'lookup' },
+    session: { key: `im:${platform}:bot:group:100` },
+    policy: { permissions: ['trusted'], unattended: false },
+    capabilities: { tools: [], skills: [] },
+    signal: new AbortController().signal,
+    ports: { journal: { append: () => undefined } },
+  });
 }
 
 

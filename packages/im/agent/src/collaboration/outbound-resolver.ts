@@ -31,7 +31,7 @@ export interface ResolveOutboundBatchesInput {
   elements: OutputElement[];
   inboundContent?: string;
   cell?: CollaborationScene;
-  endpointId: string;
+  endpointKey: string;
   adapterView?: GroupMessageAdapterView;
   selfMember?: CollaborationScene['members'][number];
   warn?: (message: string) => void;
@@ -70,13 +70,13 @@ function batchPlainText(batch: MessageElement[]): string {
 export function isPlannerDelegateBatch(
   batch: MessageElement[],
   cell: CollaborationScene,
-  selfEndpointId: string,
+  selfEndpointKey: string,
   adapter?: GroupMessageAdapterView,
 ): boolean {
   if (!batchHasAtSegment(batch)) return false;
   for (const member of cell.members) {
-    if (member.endpointId === selfEndpointId) continue;
-    if (segmentsMentionEndpoint(batch, member.endpointId, adapter, cell)) return true;
+    if (member.endpointKey === selfEndpointKey) continue;
+    if (segmentsMentionEndpoint(batch, member.endpointKey, adapter, cell)) return true;
   }
   return false;
 }
@@ -101,19 +101,19 @@ function resolveRoleCallInProse(
 
 function buildDelegateBatch(
   adapter: GroupMessageAdapterView,
-  endpointIds: string[],
+  endpointKeys: string[],
   text: string,
 ): MessageElement[] {
-  return buildAtMessageContent(adapter, endpointIds, text.trim() || '请处理。');
+  return buildAtMessageContent(adapter, endpointKeys, text.trim() || '请处理。');
 }
 
 function splitProseIntoDelegateBatches(
   batch: MessageElement[],
   cell: CollaborationScene,
-  selfEndpointId: string,
+  selfEndpointKey: string,
   adapter: GroupMessageAdapterView,
 ): MessageElement[][] {
-  if (isPlannerDelegateBatch(batch, cell, selfEndpointId, adapter)) {
+  if (isPlannerDelegateBatch(batch, cell, selfEndpointKey, adapter)) {
     return [batch];
   }
 
@@ -127,7 +127,7 @@ function splitProseIntoDelegateBatches(
       const ids: string[] = [];
       for (const ref of payload.mentions) {
         const ep = resolvePeerEndpointInCell(cell, ref);
-        if (ep && ep !== selfEndpointId && !ids.includes(ep)) ids.push(ep);
+        if (ep && ep !== selfEndpointKey && !ids.includes(ep)) ids.push(ep);
       }
       if (ids.length) {
         const out: MessageElement[][] = [];
@@ -142,13 +142,13 @@ function splitProseIntoDelegateBatches(
 
   const rewritten = rewritePlainTextMentions(plain, (ref) => {
     const ep = resolvePeerEndpointInCell(cell, ref);
-    if (!ep || ep === selfEndpointId) return undefined;
+    if (!ep || ep === selfEndpointKey) return undefined;
     return ep;
   });
   if (rewritten?.mentions?.length && rewritten.text?.trim()) {
     const ids = rewritten.mentions
       .map((ref) => resolvePeerEndpointInCell(cell, ref))
-      .filter((ep): ep is string => Boolean(ep && ep !== selfEndpointId));
+      .filter((ep): ep is string => Boolean(ep && ep !== selfEndpointKey));
     if (ids.length) {
       const out: MessageElement[][] = [];
       if (rewritten.text.trim()) {
@@ -161,8 +161,8 @@ function splitProseIntoDelegateBatches(
 
   const roleCall = resolveRoleCallInProse(plain, cell);
   if (roleCall) {
-    const ep = cell.members.find((m) => m.pipelineRole === roleCall.role)?.endpointId;
-    if (ep && ep !== selfEndpointId) {
+    const ep = cell.members.find((m) => m.pipelineRole === roleCall.role)?.endpointKey;
+    if (ep && ep !== selfEndpointKey) {
       const withoutCall = plain
         .replace(new RegExp(`\\*\\*${roleCall.role}\\*\\*[^。！!]*`, 'i'), '')
         .trim();
@@ -182,21 +182,21 @@ function splitProseIntoDelegateBatches(
 export function normalizePlannerOutboundBatches(
   batches: MessageElement[][],
   cell: CollaborationScene,
-  selfEndpointId: string,
+  selfEndpointKey: string,
   adapter: GroupMessageAdapterView,
 ): MessageElement[][] {
   const expanded: MessageElement[][] = [];
   for (const batch of batches) {
-    expanded.push(...splitProseIntoDelegateBatches(batch, cell, selfEndpointId, adapter));
+    expanded.push(...splitProseIntoDelegateBatches(batch, cell, selfEndpointKey, adapter));
   }
 
   const normalized: MessageElement[][] = [];
   for (const batch of expanded) {
-    if (isPlannerDelegateBatch(batch, cell, selfEndpointId, adapter)) {
+    if (isPlannerDelegateBatch(batch, cell, selfEndpointKey, adapter)) {
       normalized.push(batch);
       continue;
     }
-    const stripped = stripPlannerPublicMentionsFromSegments(batch, cell, selfEndpointId, adapter);
+    const stripped = stripPlannerPublicMentionsFromSegments(batch, cell, selfEndpointKey, adapter);
     if (stripped.length) normalized.push(stripped);
   }
   return normalized;
@@ -223,7 +223,7 @@ export async function resolveOutboundBatches(
     elements,
     inboundContent,
     cell,
-    endpointId,
+    endpointKey,
     adapterView,
     selfMember,
     warn,
@@ -241,7 +241,7 @@ export async function resolveOutboundBatches(
   ];
 
   if (cell && selfMember?.pipelineRole === 'planner' && adapterView) {
-    batches = normalizePlannerOutboundBatches(batches, cell, endpointId, adapterView);
+    batches = normalizePlannerOutboundBatches(batches, cell, endpointKey, adapterView);
   }
 
   batches = batches

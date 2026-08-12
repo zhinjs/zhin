@@ -23,9 +23,9 @@ function parseSceneRef(raw: unknown): OrchestrationSceneRef | undefined {
   const o = raw as Record<string, unknown>;
   if (!isSceneKind(o.kind)) return undefined;
   const platform = typeof o.platform === 'string' ? o.platform : '';
-  const endpointId = typeof o.endpointId === 'string' ? o.endpointId : '';
+  const endpointKey = typeof o.endpointKey === 'string' ? o.endpointKey : '';
   const sceneId = typeof o.sceneId === 'string' ? o.sceneId : '';
-  if (!platform || !endpointId || !sceneId) return undefined;
+  if (!platform || !endpointKey || !sceneId) return undefined;
   const parentRaw = o.parent;
   const parent = parentRaw && typeof parentRaw === 'object'
     ? (() => {
@@ -40,7 +40,7 @@ function parseSceneRef(raw: unknown): OrchestrationSceneRef | undefined {
     : undefined;
   return {
     platform,
-    endpointId,
+    endpointKey,
     sceneId,
     kind: o.kind,
     ...(typeof o.senderId === 'string' ? { senderId: o.senderId } : {}),
@@ -76,7 +76,7 @@ export function normalizeRunSource(raw: unknown): OrchestrationRunSource | undef
       collaborationSceneId,
       scene: {
         platform: adapter,
-        endpointId: '',
+        endpointKey: '',
         sceneId,
         kind: 'group',
       },
@@ -84,14 +84,14 @@ export function normalizeRunSource(raw: unknown): OrchestrationRunSource | undef
   }
   if (o.kind === 'im_session') {
     const adapter = typeof o.adapter === 'string' ? o.adapter : '';
-    const endpointId = typeof o.endpointId === 'string' ? o.endpointId : '';
-    if (!adapter || !endpointId) return undefined;
-    const sceneId = typeof o.sceneId === 'string' ? o.sceneId : endpointId;
+    const endpointKey = typeof o.endpointKey === 'string' ? o.endpointKey : '';
+    if (!adapter || !endpointKey) return undefined;
+    const sceneId = typeof o.sceneId === 'string' ? o.sceneId : endpointKey;
     return {
       kind: 'im_scene',
       scene: {
         platform: adapter,
-        endpointId,
+        endpointKey,
         sceneId,
         kind: 'private',
       },

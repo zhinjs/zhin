@@ -210,7 +210,7 @@ export interface AgentProcessContext {
   /** 平台 */
   platform: string;
   /** Endpoint ID */
-  endpointId: string;
+  endpointKey: string;
   /** 场景类型 */
   sceneType: 'private' | 'group' | 'channel';
 }
@@ -225,7 +225,7 @@ export interface AgentProcessContext {
  * // 开始处理时
  * const indicator = await manager.start({
  *   platform: 'icqq',
- *   endpointId: '75318',
+ *   endpointKey: '75318',
  *   sessionId: 'private:liuchunlang',
  *   messageId: '123456',
  *   sceneType: 'private',
@@ -250,7 +250,7 @@ export async function withTypingIndicator<T>(
     userId: context.userId,
     groupId: context.groupId,
     platform: context.platform,
-    endpointId: context.endpointId,
+    endpointKey: context.endpointKey,
     sceneType: context.sceneType,
   };
 

@@ -70,7 +70,7 @@ agents: |
           channel: 'im' as const,
           scene: {
             platform: 'icqq',
-            endpointId: '8596238',
+            endpointKey: '8596238',
             sceneId: '1659488338',
             kind: 'private' as const,
           },
@@ -104,7 +104,7 @@ agents: |
           channel: 'im' as const,
           scene: {
             platform: 'icqq',
-            endpointId: '1',
+            endpointKey: '1',
             sceneId: 'u1',
             kind: 'private' as const,
           },

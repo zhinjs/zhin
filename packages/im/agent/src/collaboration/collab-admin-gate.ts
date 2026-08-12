@@ -21,18 +21,18 @@ interface EndpointLike {
 /**
  * 获取当前 endpoint 在平台上可被 @ 到的所有 id。
  */
-function resolveLocalEndpointIds(
+function resolveLocalEndpointKeys(
   root: Plugin,
   adapter: string,
-  endpointId: string,
+  endpointKey: string,
 ): Set<string> {
-  const ids = new Set<string>([endpointId]);
+  const ids = new Set<string>([endpointKey]);
   try {
     const ad = root.inject(adapter) as
       | { endpoints?: Map<string, EndpointLike> }
       | undefined;
-    const ep = ad?.endpoints?.get(endpointId);
-    if (ep?.$config?.name) ids.add(String(ep.$config.name));
+    const ep = ad?.endpoints?.get(endpointKey);
+    if (ep?.$config?.id) ids.add(String(ep.$config.id));
     if (ep?.$config?.appid) ids.add(String(ep.$config.appid));
     if (ep?.$platformUserId) ids.add(String(ep.$platformUserId));
   } catch {
@@ -72,14 +72,14 @@ export interface AdminGateResult {
  */
 export function checkCollabAdminGate(
   message: Message,
-  endpointId: string,
+  endpointKey: string,
   root: Plugin,
 ): AdminGateResult {
   const adapter = String(message.$adapter ?? '');
   const atTargets = extractAtTargets(message);
 
   if (atTargets.length > 0) {
-    const myIds = resolveLocalEndpointIds(root, adapter, endpointId);
+    const myIds = resolveLocalEndpointKeys(root, adapter, endpointKey);
     const isMentioned = atTargets.some((t) => myIds.has(t));
     if (isMentioned) {
       return { allowed: true };

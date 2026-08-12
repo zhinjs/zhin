@@ -17,8 +17,8 @@ describe('tryCompleteKernelImProjectionFromOutbound', () => {
     sceneId: '129043431',
     goal: 'test',
     members: [
-      { endpointId: 'planner-bot', primary: 'planner', pipelineRole: 'planner' },
-      { endpointId: 'worker-bot', primary: 'researcher', pipelineRole: 'researcher' },
+      { endpointKey: 'planner-bot', primary: 'planner', pipelineRole: 'planner' },
+      { endpointKey: 'worker-bot', primary: 'researcher', pipelineRole: 'researcher' },
     ],
   };
 
@@ -54,7 +54,7 @@ describe('tryCompleteKernelImProjectionFromOutbound', () => {
     await tryCompleteKernelImProjectionFromOutbound({
       message,
       cell,
-      endpointId: 'worker-bot',
+      endpointKey: 'worker-bot',
       outboundBatches: [[{ type: 'text', data: { text: '#task done\n调研结论：市场增长 12%' } }]],
       logger: { info: vi.fn() },
     });

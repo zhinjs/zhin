@@ -341,8 +341,8 @@ describe('ToolSelection', () => {
       adapter: 'icqq',
       sceneId: '373460458',
       members: [
-        { endpointId: '8596238', primary: 'planner', pipelineRole: 'planner' },
-        { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
+        { endpointKey: '8596238', primary: 'planner', pipelineRole: 'planner' },
+        { endpointKey: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
       ],
     });
     getCollaborationSceneService().setRepository(repo);

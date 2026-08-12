@@ -2,7 +2,7 @@
  * Endpoint identity — 通过 Adapter Endpoint 注册表反查 peer Bot（ADR 0024 D5）。
  *
  * 取代废弃的 `peerSenderId`：群内某条消息的 `$sender.id` 若匹配到 Cell 成员
- * Endpoint 在平台上的身份（platformUserId / config.name / appid / endpointId），
+ * Endpoint 在平台上的身份（platformUserId / config.id / appid / endpointKey），
  * 则该消息来自 peer Bot；否则视为人类（非 roster sender）。
  */
 import { type Message, type Plugin } from '@zhin.js/core';
@@ -14,24 +14,24 @@ interface EndpointLike {
 }
 
 /** 解析某个 Endpoint 在平台上可被识别的 id 集合。 */
-export function resolveEndpointIdsForMember(
+export function resolveEndpointKeysForMember(
   root: Plugin | undefined,
   adapter: string,
-  endpointId: string,
+  endpointKey: string,
 ): string[] {
-  const ids = new Set<string>([endpointId]);
+  const ids = new Set<string>([endpointKey]);
   if (!root) return [...ids];
   try {
     const ad = root.inject(adapter) as
       | { endpoints?: Map<string, EndpointLike> }
       | undefined;
-    const endpoint = ad?.endpoints?.get(endpointId);
+    const endpoint = ad?.endpoints?.get(endpointKey);
     const cfg = endpoint?.$config;
-    if (cfg?.name) ids.add(String(cfg.name));
+    if (cfg?.id) ids.add(String(cfg.id));
     if (cfg?.appid) ids.add(String(cfg.appid));
     if (endpoint?.$platformUserId) ids.add(String(endpoint.$platformUserId));
   } catch {
-    // adapter 未就绪：仅用 endpointId
+    // adapter 未就绪：仅用 endpointKey
   }
   return [...ids];
 }
@@ -45,10 +45,10 @@ export function resolveMemberBySender(
   if (!cell || !senderId) return undefined;
   const plugin = root ?? undefined;
   for (const member of cell.members) {
-    const ids = resolveEndpointIdsForMember(
+    const ids = resolveEndpointKeysForMember(
       plugin,
       memberTransportAdapter(cell, member),
-      member.endpointId,
+      member.endpointKey,
     );
     if (ids.includes(senderId)) return member;
   }
@@ -73,9 +73,9 @@ export function isInboundFromPeerBot(
  * 反查目标在该 adapter 平台上的 id。
  *
  * 策略：
- * 1. 目标 member 的 transport adapter 与发送方相同 → 直接用 endpointId / platformUserId
+ * 1. 目标 member 的 transport adapter 与发送方相同 → 直接用 endpointKey / platformUserId
  * 2. 不同 adapter → 尝试通过 scenes 表 + 注册表交叉反查平台 id
- * 3. fallback → 使用 endpointId
+ * 3. fallback → 使用 endpointKey
  */
 export function resolveOutboundMentionId(
   cell: CollaborationScene,
@@ -87,12 +87,12 @@ export function resolveOutboundMentionId(
   const targetAdapter = memberTransportAdapter(cell, targetMember);
 
   if (targetAdapter === senderAdapter) {
-    if (!plugin) return targetMember.endpointId;
-    const ids = resolveEndpointIdsForMember(plugin, targetAdapter, targetMember.endpointId);
-    return ids.find((id) => id !== targetMember.endpointId) ?? targetMember.endpointId;
+    if (!plugin) return targetMember.endpointKey;
+    const ids = resolveEndpointKeysForMember(plugin, targetAdapter, targetMember.endpointKey);
+    return ids.find((id) => id !== targetMember.endpointKey) ?? targetMember.endpointKey;
   }
 
-  if (!plugin) return targetMember.endpointId;
+  if (!plugin) return targetMember.endpointKey;
 
   try {
     const senderAd = plugin.inject(senderAdapter) as
@@ -108,6 +108,6 @@ export function resolveOutboundMentionId(
     // adapter not ready
   }
 
-  const ids = resolveEndpointIdsForMember(plugin, targetAdapter, targetMember.endpointId);
-  return ids.find((id) => id !== targetMember.endpointId) ?? targetMember.endpointId;
+  const ids = resolveEndpointKeysForMember(plugin, targetAdapter, targetMember.endpointKey);
+  return ids.find((id) => id !== targetMember.endpointKey) ?? targetMember.endpointKey;
 }

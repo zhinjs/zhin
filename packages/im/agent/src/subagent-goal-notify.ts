@@ -63,12 +63,12 @@ export function formatSubagentProcessingMessage(notice: SubagentProcessingNotice
  */
 export function shouldSuppressSubagentGoalNotifyToIm(
   message: Message,
-  cell?: { members: { endpointId: string }[] },
+  cell?: { members: { endpointKey: string }[] },
 ): boolean {
   const scope = message.$channel?.type;
   if (scope !== 'group' && scope !== 'channel') return false;
   if (!cell?.members?.length) return false;
-  const endpoints = new Set(cell.members.map((m) => m.endpointId));
+  const endpoints = new Set(cell.members.map((m) => m.endpointKey));
   return endpoints.size >= 2;
 }
 

@@ -93,7 +93,7 @@ describe('SceneIdentityService', () => {
     await svc.createInitSession({
       id: 'init-only',
       logicalSceneId: 'cell-a',
-      plannerEndpointId: 'bot-planner',
+      plannerEndpointKey: 'bot-planner',
       plannerAdapter: 'icqq',
       plannerSceneId: '373460458',
     });
@@ -128,7 +128,7 @@ describe('Init Wizard', () => {
 
   it('startInitWizard creates session and returns researcher prompt', async () => {
     const result = await startInitWizard({
-      plannerEndpointId: '8596238',
+      plannerEndpointKey: '8596238',
       plannerAdapter: 'icqq',
       plannerSceneId: '373460458',
     });
@@ -139,12 +139,12 @@ describe('Init Wizard', () => {
 
   it('duplicate startInitWizard returns existing session warning', async () => {
     await startInitWizard({
-      plannerEndpointId: '8596238',
+      plannerEndpointKey: '8596238',
       plannerAdapter: 'icqq',
       plannerSceneId: '373460458',
     });
     const dup = await startInitWizard({
-      plannerEndpointId: '8596238',
+      plannerEndpointKey: '8596238',
       plannerAdapter: 'icqq',
       plannerSceneId: '373460458',
     });
@@ -154,7 +154,7 @@ describe('Init Wizard', () => {
 
   it('cancelInitWizard cancels active session', async () => {
     await startInitWizard({
-      plannerEndpointId: '8596238',
+      plannerEndpointKey: '8596238',
       plannerAdapter: 'icqq',
       plannerSceneId: '373460458',
     });
@@ -162,7 +162,7 @@ describe('Init Wizard', () => {
     expect(result.ok).toBe(true);
 
     const after = await startInitWizard({
-      plannerEndpointId: '8596238',
+      plannerEndpointKey: '8596238',
       plannerAdapter: 'icqq',
       plannerSceneId: '373460458',
     });
@@ -171,7 +171,7 @@ describe('Init Wizard', () => {
 
   it('advanceWizardStep CAS prevents double skip on concurrent @', async () => {
     const { sessionId } = await startInitWizard({
-      plannerEndpointId: 'bot-planner',
+      plannerEndpointKey: 'bot-planner',
       plannerAdapter: 'icqq',
       plannerSceneId: '373460458',
     });
@@ -206,7 +206,7 @@ describe('5 Bot observation aggregation', () => {
 
   it('aggregates observations from 5 bots into 1 cell', async () => {
     const { sessionId } = await startInitWizard({
-      plannerEndpointId: 'bot-planner',
+      plannerEndpointKey: 'bot-planner',
       plannerAdapter: 'icqq',
       plannerSceneId: '373460458',
     });
@@ -221,7 +221,7 @@ describe('5 Bot observation aggregation', () => {
       for (const bot of bots) {
         await sceneSvc.addObservation({
           sessionId: sessionId!,
-          observerEndpointId: bot,
+          observerEndpointKey: bot,
           observerAdapter: 'icqq',
           observerSceneId: '373460458',
           atTargetPlatformId: `target-${wizardStep}`,
@@ -234,10 +234,10 @@ describe('5 Bot observation aggregation', () => {
     expect(observations).toHaveLength(20);
 
     const registeredEndpoints = new Map([
-      ['target-researcher', { adapter: 'icqq', endpointId: 'bot-researcher' }],
-      ['target-evaluator', { adapter: 'icqq', endpointId: 'bot-evaluator' }],
-      ['target-executor', { adapter: 'icqq', endpointId: 'bot-executor' }],
-      ['target-reviewer', { adapter: 'icqq', endpointId: 'bot-reviewer' }],
+      ['target-researcher', { adapter: 'icqq', endpointKey: 'bot-researcher' }],
+      ['target-evaluator', { adapter: 'icqq', endpointKey: 'bot-evaluator' }],
+      ['target-executor', { adapter: 'icqq', endpointKey: 'bot-executor' }],
+      ['target-reviewer', { adapter: 'icqq', endpointKey: 'bot-reviewer' }],
     ]);
 
     const session = (await sceneSvc.getInitSession(sessionId!))!;
@@ -254,14 +254,14 @@ describe('5 Bot observation aggregation', () => {
 
   it('warns about missing roles', async () => {
     const { sessionId } = await startInitWizard({
-      plannerEndpointId: 'bot-planner',
+      plannerEndpointKey: 'bot-planner',
       plannerAdapter: 'icqq',
       plannerSceneId: '373460458',
     });
 
     await sceneSvc.addObservation({
       sessionId: sessionId!,
-      observerEndpointId: 'bot-1',
+      observerEndpointKey: 'bot-1',
       observerAdapter: 'icqq',
       observerSceneId: '373460458',
       atTargetPlatformId: 'target-researcher',
@@ -269,7 +269,7 @@ describe('5 Bot observation aggregation', () => {
     });
 
     const registeredEndpoints = new Map([
-      ['target-researcher', { adapter: 'icqq', endpointId: 'bot-researcher' }],
+      ['target-researcher', { adapter: 'icqq', endpointKey: 'bot-researcher' }],
     ]);
 
     const session = (await sceneSvc.getInitSession(sessionId!))!;
@@ -297,14 +297,14 @@ describe('Cross-adapter scene aliases', () => {
 
   it('icqq + qq observations create cross-adapter scene aliases', async () => {
     const { sessionId } = await startInitWizard({
-      plannerEndpointId: 'bot-planner',
+      plannerEndpointKey: 'bot-planner',
       plannerAdapter: 'icqq',
       plannerSceneId: '373460458',
     });
 
     await sceneSvc.addObservation({
       sessionId: sessionId!,
-      observerEndpointId: 'bot-icqq-1',
+      observerEndpointKey: 'bot-icqq-1',
       observerAdapter: 'icqq',
       observerSceneId: '373460458',
       atTargetPlatformId: 'target-r',
@@ -312,7 +312,7 @@ describe('Cross-adapter scene aliases', () => {
     });
     await sceneSvc.addObservation({
       sessionId: sessionId!,
-      observerEndpointId: 'bot-qq-1',
+      observerEndpointKey: 'bot-qq-1',
       observerAdapter: 'qq',
       observerSceneId: 'group_openid_xyz',
       atTargetPlatformId: 'target-r',
@@ -320,7 +320,7 @@ describe('Cross-adapter scene aliases', () => {
     });
 
     const registeredEndpoints = new Map([
-      ['target-r', { adapter: 'icqq', endpointId: 'bot-researcher' }],
+      ['target-r', { adapter: 'icqq', endpointKey: 'bot-researcher' }],
     ]);
 
     const session = (await sceneSvc.getInitSession(sessionId!))!;
@@ -351,7 +351,7 @@ describe('handleInitWizardInboundGate', () => {
 
   it('blocks non-planner bot during active wizard', async () => {
     await startInitWizard({
-      plannerEndpointId: '8596238',
+      plannerEndpointKey: '8596238',
       plannerAdapter: 'icqq',
       plannerSceneId: '373460458',
     });
@@ -454,10 +454,10 @@ describe('checkCollabAdminGate', () => {
 });
 
 describe('buildRegisteredEndpointMap', () => {
-  it('maps platform ids to adapter/endpointId refs', () => {
+  it('maps platform ids to adapter/endpointKey refs', () => {
     const root = makeRoot({
       icqq: {
-        ep1: { $platformUserId: '8596238', $config: { name: 'planner-bot' } },
+        ep1: { $platformUserId: '8596238', $config: { id: 'planner-bot' } },
         ep2: { $platformUserId: '210723495' },
       },
       qq: {
@@ -466,10 +466,10 @@ describe('buildRegisteredEndpointMap', () => {
     });
     const map = buildRegisteredEndpointMap(root);
 
-    expect(map.get('8596238')).toEqual({ adapter: 'icqq', endpointId: 'ep1' });
-    expect(map.get('planner-bot')).toEqual({ adapter: 'icqq', endpointId: 'ep1' });
-    expect(map.get('ep2')).toEqual({ adapter: 'icqq', endpointId: 'ep2' });
-    expect(map.get('app123')).toEqual({ adapter: 'qq', endpointId: 'ep3' });
+    expect(map.get('8596238')).toEqual({ adapter: 'icqq', endpointKey: 'ep1' });
+    expect(map.get('planner-bot')).toEqual({ adapter: 'icqq', endpointKey: 'ep1' });
+    expect(map.get('ep2')).toEqual({ adapter: 'icqq', endpointKey: 'ep2' });
+    expect(map.get('app123')).toEqual({ adapter: 'qq', endpointKey: 'ep3' });
   });
 });
 
@@ -488,14 +488,14 @@ describe('Member channels (identity edge table)', () => {
 
   it('aggregation produces per-member per-adapter channels', async () => {
     const { sessionId } = await startInitWizard({
-      plannerEndpointId: 'bot-planner',
+      plannerEndpointKey: 'bot-planner',
       plannerAdapter: 'icqq',
       plannerSceneId: '373460458',
     });
 
     await sceneSvc.addObservation({
       sessionId: sessionId!,
-      observerEndpointId: 'bot-icqq-obs',
+      observerEndpointKey: 'bot-icqq-obs',
       observerAdapter: 'icqq',
       observerSceneId: '373460458',
       atTargetPlatformId: 'imarndde',
@@ -503,7 +503,7 @@ describe('Member channels (identity edge table)', () => {
     });
     await sceneSvc.addObservation({
       sessionId: sessionId!,
-      observerEndpointId: 'bot-qq-obs',
+      observerEndpointKey: 'bot-qq-obs',
       observerAdapter: 'qq',
       observerSceneId: 'mtzpaqker',
       atTargetPlatformId: 'wbuaobfpgug',
@@ -511,8 +511,8 @@ describe('Member channels (identity edge table)', () => {
     });
 
     const registeredEndpoints = new Map([
-      ['imarndde', { adapter: 'icqq', endpointId: 'bot-researcher' }],
-      ['wbuaobfpgug', { adapter: 'qq', endpointId: 'bot-researcher' }],
+      ['imarndde', { adapter: 'icqq', endpointKey: 'bot-researcher' }],
+      ['wbuaobfpgug', { adapter: 'qq', endpointKey: 'bot-researcher' }],
     ]);
 
     const session = (await sceneSvc.getInitSession(sessionId!))!;
@@ -539,7 +539,7 @@ describe('Member channels (identity edge table)', () => {
 
   it('buildGroupView outputs expected { group_id, agents[].channels[] } format', async () => {
     const { sessionId } = await startInitWizard({
-      plannerEndpointId: 'bot-planner',
+      plannerEndpointKey: 'bot-planner',
       plannerAdapter: 'icqq',
       plannerSceneId: '373460458',
     });
@@ -550,7 +550,7 @@ describe('Member channels (identity edge table)', () => {
 
       await sceneSvc.addObservation({
         sessionId: sessionId!,
-        observerEndpointId: 'bot-icqq-obs',
+        observerEndpointKey: 'bot-icqq-obs',
         observerAdapter: 'icqq',
         observerSceneId: '373460458',
         atTargetPlatformId: `icqq-${role}-id`,
@@ -558,7 +558,7 @@ describe('Member channels (identity edge table)', () => {
       });
       await sceneSvc.addObservation({
         sessionId: sessionId!,
-        observerEndpointId: 'bot-qq-obs',
+        observerEndpointKey: 'bot-qq-obs',
         observerAdapter: 'qq',
         observerSceneId: 'mtzpaqker',
         atTargetPlatformId: `qq-${role}-id`,
@@ -566,10 +566,10 @@ describe('Member channels (identity edge table)', () => {
       });
     }
 
-    const registeredEndpoints = new Map<string, { adapter: string; endpointId: string }>();
+    const registeredEndpoints = new Map<string, { adapter: string; endpointKey: string }>();
     for (const role of roles) {
-      registeredEndpoints.set(`icqq-${role}-id`, { adapter: 'icqq', endpointId: `bot-${role}` });
-      registeredEndpoints.set(`qq-${role}-id`, { adapter: 'qq', endpointId: `bot-${role}` });
+      registeredEndpoints.set(`icqq-${role}-id`, { adapter: 'icqq', endpointKey: `bot-${role}` });
+      registeredEndpoints.set(`qq-${role}-id`, { adapter: 'qq', endpointKey: `bot-${role}` });
     }
 
     const session = (await sceneSvc.getInitSession(sessionId!))!;
@@ -605,14 +605,14 @@ describe('Member channels (identity edge table)', () => {
 
   it('planInitFromObservations ignores wizard_step done', async () => {
     const { sessionId } = await startInitWizard({
-      plannerEndpointId: 'bot-planner',
+      plannerEndpointKey: 'bot-planner',
       plannerAdapter: 'icqq',
       plannerSceneId: '373460458',
     });
 
     await sceneSvc.addObservation({
       sessionId: sessionId!,
-      observerEndpointId: 'bot-1',
+      observerEndpointKey: 'bot-1',
       observerAdapter: 'icqq',
       observerSceneId: '373460458',
       atTargetPlatformId: 'target-reviewer',
@@ -620,7 +620,7 @@ describe('Member channels (identity edge table)', () => {
     });
     await sceneSvc.addObservation({
       sessionId: sessionId!,
-      observerEndpointId: 'bot-1',
+      observerEndpointKey: 'bot-1',
       observerAdapter: 'icqq',
       observerSceneId: '373460458',
       atTargetPlatformId: 'target-planner',
@@ -628,8 +628,8 @@ describe('Member channels (identity edge table)', () => {
     });
 
     const registeredEndpoints = new Map([
-      ['target-reviewer', { adapter: 'icqq', endpointId: 'bot-reviewer' }],
-      ['target-planner', { adapter: 'icqq', endpointId: 'bot-planner' }],
+      ['target-reviewer', { adapter: 'icqq', endpointKey: 'bot-reviewer' }],
+      ['target-planner', { adapter: 'icqq', endpointKey: 'bot-planner' }],
     ]);
 
     const observations = await sceneSvc.listObservations(sessionId!);
@@ -639,8 +639,8 @@ describe('Member channels (identity edge table)', () => {
 
   it('saveMemberChannels + listMemberChannels round-trip (memory)', async () => {
     const channels = [
-      { logicalSceneId: 'cell-1', endpointId: 'ep1', pipelineRole: 'planner', adapter: 'icqq', sceneId: '111', botId: 'bid1' },
-      { logicalSceneId: 'cell-1', endpointId: 'ep2', pipelineRole: 'researcher', adapter: 'qq', sceneId: '222', botId: 'bid2' },
+      { logicalSceneId: 'cell-1', endpointKey: 'ep1', pipelineRole: 'planner', adapter: 'icqq', sceneId: '111', botId: 'bid1' },
+      { logicalSceneId: 'cell-1', endpointKey: 'ep2', pipelineRole: 'researcher', adapter: 'qq', sceneId: '222', botId: 'bid2' },
     ];
     await sceneSvc.saveMemberChannels('cell-1', channels);
 

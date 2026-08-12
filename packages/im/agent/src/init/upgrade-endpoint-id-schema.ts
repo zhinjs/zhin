@@ -23,7 +23,7 @@ async function listSqliteUserTables(
   return rows.map((r) => String(r.name ?? '')).filter(Boolean);
 }
 
-export async function upgradeBotIdToEndpointIdColumns(
+export async function upgradeBotIdToEndpointKeyColumns(
   dbFeature: AgentDbQueryable,
 ): Promise<string[]> {
   const queryFn = resolveAgentDbQuery(dbFeature);
@@ -54,7 +54,7 @@ export async function upgradeBotIdToEndpointIdColumns(
 }
 
 /** 在 db.start() 后、任何 ORM 写入前注册（可重复调用，仅注册一次） */
-export function registerEndpointIdColumnMigrationHook(
+export function registerEndpointKeyColumnMigrationHook(
   logger: { info: (msg: string) => void; error: (msg: string, err?: unknown) => void },
 ): void {
   if (migrationHookRegistered) return;
@@ -62,7 +62,7 @@ export function registerEndpointIdColumnMigrationHook(
 
   onDatabaseAfterStart(async (db) => {
     try {
-      const renamed = await upgradeBotIdToEndpointIdColumns({ db } as AgentDbQueryable);
+      const renamed = await upgradeBotIdToEndpointKeyColumns({ db } as AgentDbQueryable);
       if (renamed.length > 0) {
         logger.info(`Database: renamed bot_id → endpoint_id (${renamed.join(', ')})`);
       }

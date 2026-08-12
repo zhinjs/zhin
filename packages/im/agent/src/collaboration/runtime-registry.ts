@@ -18,8 +18,8 @@ export class AgentRuntimeRegistry {
     };
   }
 
-  registerForEndpoint(endpointId: string, agent: ZhinAgent): void {
-    this.byEndpoint.set(endpointId, agent);
+  registerForEndpoint(endpointKey: string, agent: ZhinAgent): void {
+    this.byEndpoint.set(endpointKey, agent);
     if (this.defaultRuntimes.length === 0) this.defaultRuntimes.push(agent);
   }
 
@@ -27,11 +27,11 @@ export class AgentRuntimeRegistry {
     return this.defaultRuntimes[this.defaultRuntimes.length - 1] ?? null;
   }
 
-  getForEndpoint(endpointId: string): ZhinAgent | null {
-    return this.byEndpoint.get(endpointId) ?? this.getDefault();
+  getForEndpoint(endpointKey: string): ZhinAgent | null {
+    return this.byEndpoint.get(endpointKey) ?? this.getDefault();
   }
 
-  listEndpointIds(): string[] {
+  listEndpointKeys(): string[] {
     return [...this.byEndpoint.keys()];
   }
 

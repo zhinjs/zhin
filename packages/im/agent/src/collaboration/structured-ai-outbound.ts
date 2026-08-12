@@ -56,7 +56,7 @@ function buildParseContext(message: Message, root?: Plugin): AiOutboundParseCont
     mentionResolver: cell
       ? (ref) => resolvePeerEndpointInCell(cell, ref)
       : undefined,
-    atIdResolver: (endpointId) => resolvePlatformAtId(adapter, endpointId),
+    atIdResolver: (endpointKey) => resolvePlatformAtId(adapter, endpointKey),
     extensions: adapterInstance ? getAdapterAiOutboundExtensions(adapterInstance) : [],
   };
 }

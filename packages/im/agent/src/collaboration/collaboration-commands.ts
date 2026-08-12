@@ -49,7 +49,7 @@ function listBindableEndpointsForAdapter(
 }
 
 function resolveEndpointAcrossAdapters(
-  _endpointId: string,
+  _endpointKey: string,
   _preferAdapter?: string,
 ): BindableEndpointRef | undefined {
   return undefined;
@@ -130,7 +130,7 @@ function formatRoleBindPrompt(
 
 function formatMemberEndpointLabel(cell: CollaborationScene, member: CollaborationScene['members'][number]): string {
   const adapter = memberTransportAdapter(cell, member);
-  return adapter === cell.adapter ? member.endpointId : `${adapter}/${member.endpointId}`;
+  return adapter === cell.adapter ? member.endpointKey : `${adapter}/${member.endpointKey}`;
 }
 
 function parseBindArgs(
@@ -374,14 +374,14 @@ export async function handleCollabBind(
   }
 
   const ref = endpointRef.trim();
-  const endpointId = resolvePeerEndpointInCell(cell, ref) ?? ref;
+  const endpointKey = resolvePeerEndpointInCell(cell, ref) ?? ref;
   const primary = primaryArg?.trim() || pipelineRoleRaw;
   const transportAdapter = memberAdapter?.trim()
-    || resolveEndpointAcrossAdapters(endpointId, cell.adapter)?.adapter
+    || resolveEndpointAcrossAdapters(endpointKey, cell.adapter)?.adapter
     || cell.adapter;
 
   const added = await svc.addMember(cell.id, {
-    endpointId,
+    endpointKey,
     adapter: transportAdapter !== cell.adapter ? transportAdapter : undefined,
     primary,
     pipelineRole: pipelineRoleRaw,
@@ -391,8 +391,8 @@ export async function handleCollabBind(
   cell = (await svc.getSceneFresh(cell.id)) ?? cell;
   await rebootstrapEndpointRuntimes();
   const label = transportAdapter === cell.adapter
-    ? endpointId
-    : `${transportAdapter}/${endpointId}`;
+    ? endpointKey
+    : `${transportAdapter}/${endpointKey}`;
   return `✅ 已绑定 ${label} → ${pipelineRoleRaw}\n${await formatStatus(cell)}`;
 }
 
@@ -407,13 +407,13 @@ export async function handleCollabUnbind(message: Message, endpointRef: string):
   if (!cell) return '⚠️ 当前群未注册协作 Cell。';
 
   const ref = endpointRef.trim();
-  const endpointId = resolvePeerEndpointInCell(cell, ref) ?? ref;
-  const ok = await svc.removeMember(cell.id, endpointId);
-  if (!ok) return `⚠️ 未找到成员 ${endpointId}`;
+  const endpointKey = resolvePeerEndpointInCell(cell, ref) ?? ref;
+  const ok = await svc.removeMember(cell.id, endpointKey);
+  if (!ok) return `⚠️ 未找到成员 ${endpointKey}`;
 
   const fresh = (await svc.getSceneFresh(cell.id)) ?? cell;
   await rebootstrapEndpointRuntimes();
-  return `✅ 已移除 ${endpointId}\n${await formatStatus(fresh)}`;
+  return `✅ 已移除 ${endpointKey}\n${await formatStatus(fresh)}`;
 }
 
 export async function handleCollabReset(message: Message, force = true): Promise<string> {

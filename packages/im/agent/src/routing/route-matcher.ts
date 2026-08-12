@@ -8,8 +8,8 @@ export interface RouteMatchInput {
   message: Message;
   contentText: string;
   discoveredAgentNames: Set<string>;
-  /** Resolved endpoint aliases (config.name, appid, platformUserId, …). */
-  endpointIds?: string[];
+  /** Resolved endpoint aliases (config.id, appid, platformUserId, …). */
+  endpointKeys?: string[];
 }
 
 function endpointMatchesRule(matchEndpoint: string | undefined, input: RouteMatchInput): boolean {
@@ -17,7 +17,7 @@ function endpointMatchesRule(matchEndpoint: string | undefined, input: RouteMatc
   const want = String(matchEndpoint);
   const candidates = new Set<string>([
     String(input.message.$endpoint ?? ''),
-    ...(input.endpointIds ?? []),
+    ...(input.endpointKeys ?? []),
   ]);
   for (const id of candidates) {
     if (id && (id === want || id === String(matchEndpoint))) return true;

@@ -35,14 +35,14 @@ function assertImJobNotify(notify: ImJobNotify): void {
     throw new Error('IM notify requires target (IMDeliveryTarget)');
   }
   const scene = target.scene;
-  if (!scene?.platform || !scene.endpointId || !scene.sceneId || !scene.kind) {
-    throw new Error('IM notify target.scene requires platform, endpointId, sceneId, kind');
+  if (!scene?.platform || !scene.endpointKey || !scene.sceneId || !scene.kind) {
+    throw new Error('IM notify target.scene requires platform, endpointKey, sceneId, kind');
   }
 }
 
 function hasImTarget(notify: ImJobNotify): boolean {
   const scene = notify.target?.scene;
-  return !!(scene?.platform && scene.endpointId && scene.sceneId && scene.kind);
+  return !!(scene?.platform && scene.endpointKey && scene.sceneId && scene.kind);
 }
 
 /** 解析并校验 notify（须为 canonical JobNotify + IMDeliveryTarget） */
@@ -52,9 +52,19 @@ export function parseJobNotify(notify: unknown): JobNotify {
   }
   const parsed = notify as JobNotify;
   if (parsed.channel === 'im') {
+    migrateImSceneEndpointKey(parsed);
     assertImJobNotify(parsed);
   }
   return parsed;
+}
+
+/** 向后兼容：存量 schedule-jobs.json 中 scene.endpointId → scene.endpointKey */
+function migrateImSceneEndpointKey(notify: ImJobNotify): void {
+  const scene = notify.target?.scene as unknown as Record<string, unknown> | undefined;
+  if (scene && !scene.endpointKey && scene.endpointId) {
+    scene.endpointKey = scene.endpointId;
+    delete scene.endpointId;
+  }
 }
 
 function mergeImTargets(primary: ImJobNotify, fallback: ImJobNotify): ImJobNotify {
@@ -66,7 +76,7 @@ function mergeImTargets(primary: ImJobNotify, fallback: ImJobNotify): ImJobNotif
       channel: 'im',
       scene: {
         platform: p.scene.platform || f.scene.platform,
-        endpointId: p.scene.endpointId || f.scene.endpointId,
+        endpointKey: p.scene.endpointKey || f.scene.endpointKey,
         sceneId: p.scene.sceneId || f.scene.sceneId,
         kind: p.scene.kind || f.scene.kind,
         ...(p.scene.senderId ?? f.scene.senderId
@@ -112,12 +122,12 @@ export function imNotifyToSendOptions(notify: ImJobNotify, content: string): Sen
 export function createNotificationRouter(deps: NotificationRouterDeps) {
   async function deliverIm(notify: ImJobNotify, content: string, source?: string): Promise<DeliverResult> {
     const scene = notify.target.scene;
-    if (!scene.platform || !scene.endpointId || !scene.sceneId) {
+    if (!scene.platform || !scene.endpointKey || !scene.sceneId) {
       logger.warn(formatCompact({
         op: 'notify_im_skip',
         reason: 'missing_routing',
         platform: scene.platform,
-        endpointId: scene.endpointId,
+        endpointKey: scene.endpointKey,
         sceneId: scene.sceneId,
       }));
       return { delivered: false, channel: 'im' };

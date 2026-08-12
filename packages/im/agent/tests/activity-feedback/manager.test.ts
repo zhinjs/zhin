@@ -26,7 +26,7 @@ describe('ActivityFeedbackManager', () => {
 
     const base = {
       platform: 'test',
-      endpointId: 'ep1',
+      endpointKey: 'ep1',
       sessionId: 'group:123:456',
       messageId: 'msg1',
       sceneType: 'group' as const,
@@ -62,7 +62,7 @@ describe('ActivityFeedbackManager', () => {
 
     const base = {
       platform: 'test',
-      endpointId: 'ep1',
+      endpointKey: 'ep1',
       sessionId: 'group:1:2',
       sceneType: 'group' as const,
     };

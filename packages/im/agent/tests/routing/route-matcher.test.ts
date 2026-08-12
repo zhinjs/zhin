@@ -79,7 +79,7 @@ describe('resolveRoutedAgentName', () => {
     expect(name).toBe('reviewer');
   });
 
-  it('endpoint 可通过 endpointIds 别名命中', () => {
+  it('endpoint 可通过 endpointKeys 别名命中', () => {
     const groupMsg = makeMessage({
       $endpoint: 'internal-key',
       $channel: { id: '129043431', type: 'group' },
@@ -96,7 +96,7 @@ describe('resolveRoutedAgentName', () => {
       message: groupMsg,
       contentText: 'review',
       discoveredAgentNames: new Set(['reviewer']),
-      endpointIds: ['717505091', 'internal-key'],
+      endpointKeys: ['717505091', 'internal-key'],
     });
     expect(name).toBe('reviewer');
   });

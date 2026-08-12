@@ -5,6 +5,38 @@
 export { processTextTurn } from './turn-pipeline.js';
 export type { ProcessTextTurnOptions } from './turn-pipeline.js';
 
+export { executeAgentTurn } from './execute-agent-turn.js';
+export type { TurnEventObserver, TurnEventSource } from './execute-agent-turn.js';
+
+export {
+  createTurnIngress,
+  resolveTurnContextValue,
+  turnPermissionSubject,
+} from './turn-ingress.js';
+export type {
+  ActivityPort,
+  DeliveryIntent,
+  DeliveryOutcome,
+  DeliveryPort,
+  FrozenCapabilityCatalog,
+  ReplyPort,
+  TurnIdentity,
+  TurnAccessContext,
+  TurnIngress,
+  TurnIngressInput,
+  TurnJournalPort,
+  TurnInput,
+  TurnMedia,
+  TurnOrigin,
+  TurnOutcome,
+  TurnPolicyContext,
+  TurnPorts,
+  TurnPrincipal,
+  TurnRequest,
+  TurnScope,
+  TurnSessionAddress,
+} from './turn-ingress.js';
+
 export { processTextTurnStream } from './process-stream.js';
 
 export {

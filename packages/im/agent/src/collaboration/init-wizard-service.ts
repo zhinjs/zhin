@@ -36,7 +36,7 @@ export function getWizardPrompt(step: WizardStep): string {
 }
 
 export interface StartWizardInput {
-  plannerEndpointId: string;
+  plannerEndpointKey: string;
   plannerAdapter: string;
   plannerSceneId: string;
 }
@@ -73,7 +73,7 @@ export async function startInitWizard(input: StartWizardInput): Promise<StartWiz
   await svc.createInitSession({
     id: sessionId,
     logicalSceneId,
-    plannerEndpointId: input.plannerEndpointId,
+    plannerEndpointKey: input.plannerEndpointKey,
     plannerAdapter: input.plannerAdapter,
     plannerSceneId: input.plannerSceneId,
   });
@@ -144,7 +144,7 @@ export interface AggregateResult {
  */
 export async function aggregateAndActivate(
   session: InitSessionRecord,
-  registeredEndpoints: Map<string, { adapter: string; endpointId: string }>,
+  registeredEndpoints: Map<string, { adapter: string; endpointKey: string }>,
   plannerPrimary: string,
 ): Promise<AggregateResult> {
   const sceneSvc = getSceneIdentityService();
@@ -160,7 +160,7 @@ export async function aggregateAndActivate(
     logicalSceneId,
     observations,
     registeredEndpoints,
-    { plannerEndpointId: session.plannerEndpointId },
+    { plannerEndpointKey: session.plannerEndpointKey },
   );
 
   const plannerSceneAlias = {
@@ -176,11 +176,11 @@ export async function aggregateAndActivate(
 
   const plannerChannels = [...sceneAliasDedup.values()].map((alias) => ({
     logicalSceneId,
-    endpointId: session.plannerEndpointId,
+    endpointKey: session.plannerEndpointKey,
     pipelineRole: 'planner',
     adapter: alias.adapter,
     sceneId: alias.sceneId,
-    botId: session.plannerEndpointId,
+    botId: session.plannerEndpointKey,
   }));
   const allChannels = [...plannerChannels, ...plan.channels];
 
@@ -192,13 +192,13 @@ export async function aggregateAndActivate(
 
   const memberInputs = [
     {
-      endpointId: session.plannerEndpointId,
+      endpointKey: session.plannerEndpointKey,
       primary: plannerPrimary || 'planner',
       pipelineRole: 'planner' as PipelineRole,
       adapter: session.plannerAdapter,
     },
     ...plan.members.map((m) => ({
-      endpointId: m.endpointId,
+      endpointKey: m.endpointKey,
       primary: m.pipelineRole,
       pipelineRole: m.pipelineRole as PipelineRole,
       adapter: m.adapter,
@@ -207,8 +207,8 @@ export async function aggregateAndActivate(
 
   const deduped = new Map<string, (typeof memberInputs)[number]>();
   for (const m of memberInputs) {
-    if (!deduped.has(m.endpointId)) {
-      deduped.set(m.endpointId, m);
+    if (!deduped.has(m.endpointKey)) {
+      deduped.set(m.endpointKey, m);
     }
   }
 

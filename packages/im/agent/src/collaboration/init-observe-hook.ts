@@ -24,7 +24,7 @@ export { atSegmentPlatformId, extractAtTargets } from './collab-utils.js';
 export function isRegisteredEndpoint(
   root: Plugin,
   platformId: string,
-): { adapter: string; endpointId: string } | undefined {
+): { adapter: string; endpointKey: string } | undefined {
   for (const adapterName of root.adapters) {
     const name = String(adapterName);
     try {
@@ -34,11 +34,11 @@ export function isRegisteredEndpoint(
       if (!adapter?.endpoints) continue;
       for (const [epId, ep] of adapter.endpoints) {
         const ids = new Set([epId]);
-        if (ep.$config?.name) ids.add(String(ep.$config.name));
+        if (ep.$config?.id) ids.add(String(ep.$config.id));
         if (ep.$config?.appid) ids.add(String(ep.$config.appid));
         if (ep.$platformUserId) ids.add(String(ep.$platformUserId));
         if (ids.has(platformId)) {
-          return { adapter: name, endpointId: epId };
+          return { adapter: name, endpointKey: epId };
         }
       }
     } catch {
@@ -49,12 +49,12 @@ export function isRegisteredEndpoint(
 }
 
 /**
- * 列出所有已注册的系统 Bot 的 (platformId → adapter, endpointId) 映射。
+ * 列出所有已注册的系统 Bot 的 (platformId → adapter, endpointKey) 映射。
  */
 export function buildRegisteredEndpointMap(
   root: Plugin,
-): Map<string, { adapter: string; endpointId: string }> {
-  const map = new Map<string, { adapter: string; endpointId: string }>();
+): Map<string, { adapter: string; endpointKey: string }> {
+  const map = new Map<string, { adapter: string; endpointKey: string }>();
   for (const adapterName of root.adapters) {
     const name = String(adapterName);
     try {
@@ -63,9 +63,9 @@ export function buildRegisteredEndpointMap(
         | undefined;
       if (!adapter?.endpoints) continue;
       for (const [epId, ep] of adapter.endpoints) {
-        const ref = { adapter: name, endpointId: epId };
+        const ref = { adapter: name, endpointKey: epId };
         map.set(epId, ref);
-        if (ep.$config?.name) map.set(String(ep.$config.name), ref);
+        if (ep.$config?.id) map.set(String(ep.$config.id), ref);
         if (ep.$config?.appid) map.set(String(ep.$config.appid), ref);
         if (ep.$platformUserId) map.set(String(ep.$platformUserId), ref);
       }
@@ -96,7 +96,7 @@ export type InitWizardInboundGateResult =
  */
 export async function handleInitWizardInboundGate(
   message: Message,
-  endpointId: string,
+  endpointKey: string,
   root: Plugin,
 ): Promise<InitWizardInboundGateResult> {
   const adapter = String(message.$adapter ?? '');
@@ -113,8 +113,8 @@ export async function handleInitWizardInboundGate(
     .trim();
   if (text.startsWith('/collab')) return { action: 'continue' };
 
-  const isPlanner = endpointId === session.plannerEndpointId;
-  const result = await observeAtForInitWizard(message, endpointId, root);
+  const isPlanner = endpointKey === session.plannerEndpointKey;
+  const result = await observeAtForInitWizard(message, endpointKey, root);
 
   if (isPlanner && result.advanceResult && message.$reply) {
     await message.$reply(result.advanceResult.nextPrompt);
@@ -136,7 +136,7 @@ export async function handleInitWizardInboundGate(
  */
 export async function observeAtForInitWizard(
   message: Message,
-  endpointId: string,
+  endpointKey: string,
   root: Plugin,
 ): Promise<ObserveAtResult> {
   const adapter = String(message.$adapter ?? '');
@@ -162,11 +162,11 @@ export async function observeAtForInitWizard(
   for (const target of atTargets) {
     const resolved = registeredMap.get(target);
     if (!resolved) continue;
-    if (resolved.endpointId === session.plannerEndpointId) continue;
+    if (resolved.endpointKey === session.plannerEndpointKey) continue;
 
     await sceneSvc.addObservation({
       sessionId: session.id,
-      observerEndpointId: endpointId,
+      observerEndpointKey: endpointKey,
       observerAdapter: adapter,
       observerSceneId: sceneId,
       atTargetPlatformId: target,
@@ -178,7 +178,7 @@ export async function observeAtForInitWizard(
 
   if (!matchedAny) return { observed: false };
 
-  if (endpointId === session.plannerEndpointId && roleAssigneeMatched) {
+  if (endpointKey === session.plannerEndpointKey && roleAssigneeMatched) {
     const messageId = String(message.$id ?? '');
     if (messageId && plannerAdvanceByMessage.get(session.id) === messageId) {
       return { observed: true };

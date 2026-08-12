@@ -81,7 +81,7 @@ export interface CollaborationSceneMemberRow {
 }
 
 export interface CollaborationSceneMemberRecord {
-  endpointId: string;
+  endpointKey: string;
   adapter?: string;
   primary: string;
   role?: string;
@@ -102,7 +102,7 @@ export interface UpsertCollaborationSceneInput {
 }
 
 export interface UpsertCollaborationMemberInput {
-  endpointId: string;
+  endpointKey: string;
   adapter?: string;
   primary: string;
   role?: string;
@@ -113,7 +113,7 @@ export interface UpsertCollaborationMemberInput {
 
 export function memberRowToRecord(row: CollaborationSceneMemberRow): CollaborationSceneMemberRecord {
   return {
-    endpointId: row.endpoint_id,
+    endpointKey: row.endpoint_id,
     adapter: row.adapter || undefined,
     primary: row.primary,
     role: row.role || undefined,
@@ -131,7 +131,7 @@ export function memberInputToRow(
 ): CollaborationSceneMemberRow {
   return {
     collaboration_scene_id: collaborationSceneId,
-    endpoint_id: input.endpointId,
+    endpoint_id: input.endpointKey,
     adapter: input.adapter ?? existing?.adapter ?? '',
     primary: input.primary,
     role: input.role ?? existing?.role ?? '',

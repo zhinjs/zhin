@@ -38,11 +38,11 @@ describe('PipelineService', () => {
       adapter: 'sandbox',
       sceneId: 'g1',
       members: [
-        { endpointId: 'p', primary: 'planner', pipelineRole: 'planner' },
-        { endpointId: 'r', primary: 'researcher', pipelineRole: 'researcher' },
-        { endpointId: 'e', primary: 'evaluator', pipelineRole: 'evaluator' },
-        { endpointId: 'x', primary: 'executor', pipelineRole: 'executor' },
-        { endpointId: 'v', primary: 'reviewer', pipelineRole: 'reviewer' },
+        { endpointKey: 'p', primary: 'planner', pipelineRole: 'planner' },
+        { endpointKey: 'r', primary: 'researcher', pipelineRole: 'researcher' },
+        { endpointKey: 'e', primary: 'evaluator', pipelineRole: 'evaluator' },
+        { endpointKey: 'x', primary: 'executor', pipelineRole: 'executor' },
+        { endpointKey: 'v', primary: 'reviewer', pipelineRole: 'reviewer' },
       ],
     };
     svc = new PipelineService({
@@ -113,7 +113,7 @@ describe('PipelineService', () => {
         ...(cell.pipelineState ?? first),
         stage: 'researcher',
         activeDelegations: [{
-          targetEndpointId: 'r',
+          targetEndpointKey: 'r',
           targetRole: 'researcher',
           runId: first.runId,
           mode: 'pipeline',
@@ -188,7 +188,7 @@ describe('PipelineService', () => {
       pipelineState: {
         ...first,
         activeDelegations: [{
-          targetEndpointId: 'r',
+          targetEndpointKey: 'r',
           targetRole: 'researcher',
           runId: first.runId,
           requireArtifact: false,
@@ -210,7 +210,7 @@ describe('PipelineService', () => {
       pipelineState: {
         ...first,
         activeDelegations: [{
-          targetEndpointId: 'r',
+          targetEndpointKey: 'r',
           targetRole: 'researcher',
           runId: first.runId,
           requireArtifact: false,
@@ -236,7 +236,7 @@ describe('PipelineService', () => {
       pipelineState: {
         ...second.state,
         activeDelegations: [{
-          targetEndpointId: 'r',
+          targetEndpointKey: 'r',
           targetRole: 'researcher',
           runId: second.state.runId,
           requireArtifact: false,

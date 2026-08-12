@@ -12,7 +12,7 @@ const cell: CollaborationScene = {
   id: 'c1',
   adapter: 'icqq',
   sceneId: '373460458',
-  members: [{ endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' }],
+  members: [{ endpointKey: '210723495', primary: 'researcher', pipelineRole: 'researcher' }],
   pipelineState: {
     runId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
     stage: 'researcher',
@@ -48,7 +48,7 @@ describe('resolveAgentTurnSessionKey', () => {
     pipelineState: {
       ...cell.pipelineState!,
       activeDelegations: [{
-        targetEndpointId: '210723495',
+        targetEndpointKey: '210723495',
         targetRole: 'researcher',
         runId: 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff',
         requireArtifact: true,

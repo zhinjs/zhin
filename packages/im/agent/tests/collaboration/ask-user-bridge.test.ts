@@ -23,8 +23,8 @@ async function seedCollabCell(): Promise<void> {
     adapter: 'icqq',
     sceneId: GROUP_ID,
     members: [
-      { endpointId: '8596238', primary: 'planner', pipelineRole: 'planner' },
-      { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
+      { endpointKey: '8596238', primary: 'planner', pipelineRole: 'planner' },
+      { endpointKey: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
     ],
   });
   getCollaborationSceneService().setRepository(repo);

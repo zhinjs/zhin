@@ -8,6 +8,11 @@ import type { SessionStrategy, SessionSystemConfig } from './contracts.js';
 import { type SessionIODeps, beginTurnSession, resolveSessionIsNewBeforeCreate, touchSession, archiveSessionByKey } from './session-io.js';
 import { consumePassiveGroupContextForTurn } from './passive-group-session.js';
 import { CollaborationSessionStrategy } from './strategies.js';
+import type { TurnIngress } from '../turn/turn-ingress.js';
+import {
+  beginIngressTurnSession,
+  resolveIngressUserMessage,
+} from './turn-ingress-session.js';
 export type { SessionIODeps } from './session-io.js';
 
 const logger = getLogger('SessionSystem');
@@ -19,6 +24,18 @@ export interface TurnSessionPrep {
   isNewSession: boolean;
   passiveBlock: string | null;
   turnUser: ReturnType<typeof buildTurnUserMessages>;
+}
+
+export interface IngressTurnSessionPrep {
+  sessionKey: string;
+  userId: string;
+  sessionId: string;
+  isNewSession: boolean;
+  turnUser: {
+    rawContent: string;
+    userMessageExtra?: import('@zhin.js/ai').AgentMessageExtra;
+    promptMessages: import('@zhin.js/ai').UserMessage[];
+  };
 }
 
 export class SessionSystem {
@@ -117,6 +134,38 @@ export class SessionSystem {
       isNewSession,
       passiveBlock,
       turnUser,
+    };
+  }
+
+  async prepareIngressTurn(
+    host: ZhinAgentPrivate,
+    turn: TurnIngress,
+    options?: { deferredAutoContinue?: boolean },
+  ): Promise<IngressTurnSessionPrep> {
+    const deps = this.sessionDeps(host);
+    const sessionKey = turn.session.key;
+    const userId = turn.principal.subjectId;
+    const resolved = resolveIngressUserMessage(turn);
+    const isNewSession = await resolveSessionIsNewBeforeCreate(deps, sessionKey);
+
+    if (options?.deferredAutoContinue) {
+      logPhase(host.phaseConfig, 'turn.deferred_auto_continue', sessionKey, {});
+    } else {
+      host.deferred.resetAutoContinueDepth(sessionKey);
+    }
+
+    await host.waitForMemoryPersistence();
+    const { sessionId } = await beginIngressTurnSession(deps, turn);
+    return {
+      sessionKey,
+      userId,
+      sessionId,
+      isNewSession,
+      turnUser: {
+        rawContent: resolved.content,
+        ...(resolved.extra ? { userMessageExtra: resolved.extra } : {}),
+        promptMessages: [resolved.llmMessage],
+      },
     };
   }
 

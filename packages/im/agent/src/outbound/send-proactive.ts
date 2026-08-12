@@ -40,7 +40,7 @@ export interface ProactiveOutboundService {
 function syntheticFromScene(scene: IMSceneRef): Message {
   return createSyntheticMessage({
     adapter: scene.platform,
-    endpoint: scene.endpointId,
+    endpoint: scene.endpointKey,
     sender: { id: scene.senderId ?? 'system', name: 'system', isMaster: true },
     channel: {
       type: scene.kind,

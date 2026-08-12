@@ -60,8 +60,8 @@ export function buildGroupAskUserFollowUp(commMessage: Message, answer: string):
   );
   if (!cell || cell.members.length < 2) return answer;
 
-  const peer = cell.members.find((m) => m.endpointId !== String(commMessage.$endpoint));
-  const peerEp = peer?.endpointId ?? '<peerEndpoint>';
+  const peer = cell.members.find((m) => m.endpointKey !== String(commMessage.$endpoint));
+  const peerEp = peer?.endpointKey ?? '<peerEndpoint>';
   const roleLabel = peer?.pipelineRole ?? peer?.primary ?? 'next peer';
 
   return [

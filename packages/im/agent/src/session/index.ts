@@ -11,7 +11,7 @@ export type {
 } from './contracts.js';
 
 export type { SessionIODeps } from './session-io.js';
-export type { TurnSessionPrep } from './session-system.js';
+export type { IngressTurnSessionPrep, TurnSessionPrep } from './session-system.js';
 
 export { SessionSystem, createSessionSystem } from './session-system.js';
 export {
@@ -67,3 +67,11 @@ export {
   summarizeAbandonedBranchIfNeeded,
 } from './branch-summarization-runtime.js';
 export type { BranchSummarizationOptions } from './branch-summarization-runtime.js';
+export {
+  beginIngressTurnSession,
+  buildTurnSessionCreateInput,
+  buildTurnTranscriptQuery,
+  layerIngressUserBody,
+  resolveIngressUserMessage,
+} from './turn-ingress-session.js';
+export type { ResolvedIngressUserMessage } from './turn-ingress-session.js';

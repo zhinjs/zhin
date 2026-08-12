@@ -4,8 +4,8 @@
 import { type Message, extractEmbeddedAiOutboundJson } from '@zhin.js/core';
 import type { CollaborationScene, PipelineArtifactKind } from './types.js';
 import { findActiveDelegation } from './delegation-state.js';
-import { resolvePlannerEndpointId } from './collab-utils.js';
-export { resolvePlannerEndpointId } from './collab-utils.js';
+import { resolvePlannerEndpointKey } from './collab-utils.js';
+export { resolvePlannerEndpointKey } from './collab-utils.js';
 export function messageTextContent(message: Message): string {
   const parts: string[] = [];
   for (const seg of message.$content) {
@@ -186,9 +186,9 @@ function artifactSubmitInstructions(kinds: PipelineArtifactKind[]): string[] {
 
 export function formatActiveDelegationHint(
   cell: CollaborationScene,
-  endpointId: string,
+  endpointKey: string,
 ): string | undefined {
-  const delegation = findActiveDelegation(cell, endpointId);
+  const delegation = findActiveDelegation(cell, endpointKey);
   if (!delegation) return undefined;
   const lines = [
     `[Active delegation] From Planner; mode=${delegation.mode ?? 'pipeline'}.`,
@@ -217,7 +217,7 @@ export function formatPlannerHandbackHint(_cell: CollaborationScene): string | u
   return [
     '[Kernel handback] A peer task completed (internal_room) or an im_projection handback arrived.',
     'Check orchestration_status for results; #taskId in group text applies only to im_projection.',
-    'Dispatch the next peer with orchestration_add_task(executor="internal_room", assigned_to="<endpointId>").',
+    'Dispatch the next peer with orchestration_add_task(executor="internal_room", assigned_to="<endpointKey>").',
     'Add project_to_im: true when humans should see an @ in the group.',
   ].join('\n');
 }

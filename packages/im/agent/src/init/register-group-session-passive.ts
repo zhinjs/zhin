@@ -10,8 +10,8 @@ import { asPrivate } from '../internal/as-private.js';
 import type { AIServiceRefs } from './shared-refs.js';
 function isBotSelfMessage(message: Message): boolean {
   const senderId = String(message.$sender?.id ?? '');
-  const endpointId = String(message.$endpoint ?? '');
-  return senderId !== '' && endpointId !== '' && senderId === endpointId;
+  const endpointKey = String(message.$endpoint ?? '');
+  return senderId !== '' && endpointKey !== '' && senderId === endpointKey;
 }
 
 export function registerGroupSessionPassive(refs: AIServiceRefs): void {
@@ -43,7 +43,7 @@ export function registerGroupSessionPassive(refs: AIServiceRefs): void {
       const rawText = extractTextContent(message).trim();
       if (!rawText) return;
 
-      const endpointId = String(message.$endpoint ?? '');
+      const endpointKey = String(message.$endpoint ?? '');
       const channelScope = message.$channel?.type;
       const sceneId = message.$channel?.id ?? '';
       let cell =
@@ -52,7 +52,7 @@ export function registerGroupSessionPassive(refs: AIServiceRefs): void {
             getCollaborationSceneService().listScenes(),
             String(message.$adapter),
             String(sceneId),
-            endpointId,
+            endpointKey,
           )
           : undefined;
       if (cell) {

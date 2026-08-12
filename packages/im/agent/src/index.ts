@@ -39,9 +39,40 @@ export type {
   ToolCallEvent as TurnToolCallEvent,
   ToolResultEvent,
   ThinkingEvent, TurnEndEvent, TurnErrorEvent,
+  TurnBudgetExceededEvent,
   SubagentStartEvent, SubagentProgressEvent, SubagentEndEvent,
   McpConnectEvent, McpToolCallEvent,
 } from './event/turn-event.js';
+export {
+  createTurnIngress,
+  resolveTurnContextValue,
+  turnPermissionSubject,
+} from './turn/turn-ingress.js';
+export { executeAgentTurn } from './turn/execute-agent-turn.js';
+export type { TurnEventObserver, TurnEventSource } from './turn/execute-agent-turn.js';
+export type {
+  ActivityPort,
+  DeliveryIntent,
+  DeliveryOutcome,
+  DeliveryPort,
+  FrozenCapabilityCatalog,
+  ReplyPort,
+  TurnIdentity,
+  TurnAccessContext,
+  TurnIngress,
+  TurnIngressInput,
+  TurnJournalPort,
+  TurnInput,
+  TurnMedia,
+  TurnOrigin,
+  TurnOutcome,
+  TurnPolicyContext,
+  TurnPorts,
+  TurnPrincipal,
+  TurnRequest,
+  TurnScope,
+  TurnSessionAddress,
+} from './turn/turn-ingress.js';
 
 export {
   DEFAULT_CONFIG as ZHIN_AGENT_DEFAULT_CONFIG,
@@ -331,6 +362,7 @@ export type {
 export { HttpStepProjector } from './session/http-step-projector.js';
 export { HttpApprovalWaiter } from './session/http-approval-waiter.js';
 export type { ApprovalPort, ApprovalRequestInput } from './session/session-interaction-port.js';
+export { beginIngressTurnSession } from './session/turn-ingress-session.js';
 
 export {
   provideOrchestrationRuntime,

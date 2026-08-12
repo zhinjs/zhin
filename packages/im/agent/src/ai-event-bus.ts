@@ -25,7 +25,7 @@ function resolveSessionId(event: AIHookEvent): string {
   }
   return resolveIMSessionId({
     platform: 'system',
-    endpointId: 'default',
+    endpointKey: 'default',
     kind: 'private',
     sceneId: 'unknown',
   });
@@ -46,7 +46,7 @@ export function createAIHookBusPayload(
     messages: event.messages,
     agentId,
     platform: commMessage?.$adapter != null ? String(commMessage.$adapter) : undefined,
-    endpointId: commMessage?.$endpoint,
+    endpointKey: commMessage?.$endpoint,
     userId: commMessage?.$sender?.id,
     sceneId: commMessage?.$channel?.id,
     messageId: typeof event.context.messageId === 'string' ? event.context.messageId : commMessage?.$id,

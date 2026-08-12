@@ -10,7 +10,7 @@ describe('typing 反馈事件链探针', () => {
     activityFeedbackAiBus.clear();
   });
 
-  it('processTurn(eligible) → ai.processing.start 携带 platform/endpointId/eligible', async () => {
+  it('processTurn(eligible) → ai.processing.start 携带 platform/endpointKey/eligible', async () => {
     resetLlmApiRegistryForTests();
     const llm = wireMockLlmApi({ responder: () => assistantTextReply('好的') });
     const agent = new ZhinAgent(llm.provider as never, { maxIterations: 2 });
@@ -34,7 +34,7 @@ describe('typing 反馈事件链探针', () => {
     expect(received.length).toBeGreaterThan(0);
     const payload = received[0]!;
     expect(payload.platform).toBe('icqq');
-    expect(payload.endpointId).toBe('8596238');
+    expect(payload.endpointKey).toBe('8596238');
     expect((payload.hookContext as Record<string, unknown> | undefined)?.activityFeedbackEligible).toBe(true);
     agent.dispose();
     activityFeedbackAiBus.off('ai.processing.start', listener);

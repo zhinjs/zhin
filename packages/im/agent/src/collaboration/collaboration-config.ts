@@ -84,7 +84,7 @@ export function configCellToRuntime(cell: CollaborationSceneConfig): Collaborati
     goal: cell.goal,
     missionRunId: cell.missionRunId,
     members: cell.members.map((m) => ({
-      endpointId: m.endpoint,
+      endpointKey: m.endpoint,
       primary: m.primary,
       role: m.role,
       pipelineRole: m.pipelineRole,
@@ -117,17 +117,17 @@ export function findCellForInbound(
   cells: CollaborationScene[],
   adapter: string,
   sceneId: string,
-  endpointId?: string,
+  endpointKey?: string,
 ): CollaborationScene | undefined {
-  const fromSceneIndex = getSceneIdentityService().resolveLogicalScene(adapter, sceneId, endpointId);
+  const fromSceneIndex = getSceneIdentityService().resolveLogicalScene(adapter, sceneId, endpointKey);
   if (fromSceneIndex) return fromSceneIndex;
 
   const direct = findCellForMessage(cells, adapter, sceneId);
   if (direct) return direct;
-  if (!endpointId) return undefined;
+  if (!endpointKey) return undefined;
   return cells.find((c) =>
     c.members.some(
-      (m) => m.endpointId === endpointId && memberTransportAdapter(c, m) === adapter,
+      (m) => m.endpointKey === endpointKey && memberTransportAdapter(c, m) === adapter,
     ),
   );
 }
@@ -138,43 +138,43 @@ export function findCellForInbound(
 export function resolveCellForScene(
   adapter: string,
   sceneId: string,
-  endpointId?: string,
+  endpointKey?: string,
 ): CollaborationScene | undefined {
-  return getSceneIdentityService().resolveLogicalScene(adapter, sceneId, endpointId);
+  return getSceneIdentityService().resolveLogicalScene(adapter, sceneId, endpointKey);
 }
 
 export function findCellMemberByEndpoint(
   cell: CollaborationScene,
-  endpointId: string,
+  endpointKey: string,
   adapter?: string,
 ): CollaborationScene['members'][number] | undefined {
   if (adapter) {
     return cell.members.find(
-      (m) => m.endpointId === endpointId && memberTransportAdapter(cell, m) === adapter,
+      (m) => m.endpointKey === endpointKey && memberTransportAdapter(cell, m) === adapter,
     );
   }
-  return cell.members.find((m) => m.endpointId === endpointId);
+  return cell.members.find((m) => m.endpointKey === endpointKey);
 }
 
 export function resolvePrimaryForEndpoint(
   cell: CollaborationScene | undefined,
-  endpointId: string,
+  endpointKey: string,
   fallback: string,
 ): string {
   if (!cell) return fallback;
-  return findCellMemberByEndpoint(cell, endpointId)?.primary ?? fallback;
+  return findCellMemberByEndpoint(cell, endpointKey)?.primary ?? fallback;
 }
 
 export function endpointHasPeerInCell(
   cell: CollaborationScene | undefined,
   agentName: string,
-): { hasPeer: boolean; peerEndpointId?: string } {
+): { hasPeer: boolean; peerEndpointKey?: string } {
   if (!cell) return { hasPeer: false };
   const member = cell.members.find((m) => m.primary === agentName);
   if (!member) return { hasPeer: false };
-  const peer = cell.members.find((m) => m.endpointId !== member.endpointId);
+  const peer = cell.members.find((m) => m.endpointKey !== member.endpointKey);
   if (!peer) return { hasPeer: false };
-  return { hasPeer: true, peerEndpointId: peer.endpointId };
+  return { hasPeer: true, peerEndpointKey: peer.endpointKey };
 }
 
 /**
@@ -187,20 +187,20 @@ export function resolvePeerEndpointInCell(
   const ref = peerRef.trim();
   if (!ref) return undefined;
 
-  const byEndpoint = cell.members.find((m) => m.endpointId === ref);
-  if (byEndpoint) return byEndpoint.endpointId;
+  const byEndpoint = cell.members.find((m) => m.endpointKey === ref);
+  if (byEndpoint) return byEndpoint.endpointKey;
 
   const refLower = ref.toLowerCase();
   const byPipelineRole = cell.members.find(
     (m) => m.pipelineRole?.toLowerCase() === refLower,
   );
-  if (byPipelineRole) return byPipelineRole.endpointId;
+  if (byPipelineRole) return byPipelineRole.endpointKey;
 
   const byPrimary = cell.members.find((m) => m.primary.toLowerCase() === refLower);
-  if (byPrimary) return byPrimary.endpointId;
+  if (byPrimary) return byPrimary.endpointKey;
 
   const byRole = cell.members.find((m) => m.role?.toLowerCase() === refLower);
-  if (byRole) return byRole.endpointId;
+  if (byRole) return byRole.endpointKey;
 
   return undefined;
 }

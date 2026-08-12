@@ -6,24 +6,24 @@ Zhin AI Agent 组合层：在 `@zhin.js/core` 的类型与 Provider 之上，提
 
 ## Plugin Runtime 入口
 
-`@zhin.js/agent/runtime` 提供面向新 Plugin Runtime 的 `AgentRuntime` 与
-`CapabilityIngress`。一次 `runTurn()` 在完整回调期间持有同一个 immutable snapshot，
-并从 Tool、Skill、Agent、MCP 四个 Feature projection 生成 owner-visible 能力视图：
+`@zhin.js/agent/runtime` 提供目标执行边界 `AgentRuntime`。一次 `execute()` 在完整执行期间持有同一个
+immutable snapshot，并从 Tool、Skill、Agent、MCP 四个 Feature projection 生成
+owner-visible 能力句柄；公开输入/输出只有 `TurnRequest` / `TurnOutcome`：
 
 ```ts
 import { AgentRuntime } from '@zhin.js/agent/runtime';
 
-const runtime = new AgentRuntime();
-runtime.attach(root.controller.snapshots);
-
-await runtime.runTurn(pluginId, async (capabilities) => {
-  return orchestrator.run({ request, capabilities });
+const runtime = new AgentRuntime(async function* ({ turn, capabilities }) {
+  yield* orchestrator.run({ turn, capabilities });
 });
+runtime.attach(snapshotReader);
+
+const outcome = await runtime.execute(pluginId, request);
 ```
 
 Tool/MCP 执行 handle 只在 turn lease 内有效，防止访问已 retire 的 generation。
-当前 `src/ingress/` 是旧 Feature registry 到 `AgentOrchestrator` 的兼容桥；迁移期间允许
-旧入口读取新投影，但 RuntimeSnapshot 是唯一权威，禁止双写两套 registry。
+这是迁移完成后的唯一权威契约；当前生产切换必须等 builtin/Host 能力全部进入
+generation projection、Journal 与可取消 Tool Runtime 闭环后一次完成，不能用缩减执行器替代。
 
 ## Turn Isolation
 

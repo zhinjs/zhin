@@ -23,7 +23,7 @@ export interface SceneAliasRecord {
 export interface InitSessionRecord {
   id: string;
   logicalSceneId: string;
-  plannerEndpointId: string;
+  plannerEndpointKey: string;
   plannerAdapter: string;
   plannerSceneId: string;
   status: string;
@@ -34,7 +34,7 @@ export interface InitSessionRecord {
 
 export interface InitObservationRecord {
   sessionId: string;
-  observerEndpointId: string;
+  observerEndpointKey: string;
   observerAdapter: string;
   observerSceneId: string;
   atTargetPlatformId: string;
@@ -44,7 +44,7 @@ export interface InitObservationRecord {
 
 export interface MemberChannelRecord {
   logicalSceneId: string;
-  endpointId: string;
+  endpointKey: string;
   pipelineRole: string;
   adapter: string;
   sceneId: string;
@@ -88,7 +88,7 @@ function rowToInitSession(row: Record<string, unknown>): InitSessionRecord {
   return {
     id: String(row.id ?? ''),
     logicalSceneId: String(row.logical_scene_id ?? ''),
-    plannerEndpointId: String(row.planner_endpoint_id ?? ''),
+    plannerEndpointKey: String(row.planner_endpoint_id ?? ''),
     plannerAdapter: String(row.planner_adapter ?? ''),
     plannerSceneId: String(row.planner_scene_id ?? ''),
     status: String(row.status ?? ''),
@@ -101,7 +101,7 @@ function rowToInitSession(row: Record<string, unknown>): InitSessionRecord {
 function rowToObservation(row: Record<string, unknown>): InitObservationRecord {
   return {
     sessionId: String(row.session_id ?? ''),
-    observerEndpointId: String(row.observer_endpoint_id ?? ''),
+    observerEndpointKey: String(row.observer_endpoint_id ?? ''),
     observerAdapter: String(row.observer_adapter ?? ''),
     observerSceneId: String(row.observer_scene_id ?? ''),
     atTargetPlatformId: String(row.at_target_platform_id ?? ''),
@@ -140,7 +140,7 @@ export class SceneIdentityService {
   /**
    * 解析逻辑 Cell：先 scene_aliases 表，再 fallback 到 CellService.findByScene。
    */
-  resolveLogicalScene(adapter: string, sceneId: string, endpointId?: string): CollaborationScene | undefined {
+  resolveLogicalScene(adapter: string, sceneId: string, endpointKey?: string): CollaborationScene | undefined {
     const svc = getCollaborationSceneService();
 
     const logicalSceneId = this.sceneIndex.get(this.sceneKey(adapter, sceneId));
@@ -152,10 +152,10 @@ export class SceneIdentityService {
     const direct = svc.findByScene(adapter, sceneId);
     if (direct) return direct;
 
-    if (!endpointId) return undefined;
+    if (!endpointKey) return undefined;
     return svc.listScenes().find((c) =>
       c.members.some(
-        (m) => m.endpointId === endpointId && (m.adapter ?? c.adapter) === adapter,
+        (m) => m.endpointKey === endpointKey && (m.adapter ?? c.adapter) === adapter,
       ),
     );
   }
@@ -195,7 +195,7 @@ export class SceneIdentityService {
   async createInitSession(input: {
     id: string;
     logicalSceneId: string;
-    plannerEndpointId: string;
+    plannerEndpointKey: string;
     plannerAdapter: string;
     plannerSceneId: string;
   }): Promise<InitSessionRecord> {
@@ -203,7 +203,7 @@ export class SceneIdentityService {
     const record: InitSessionRecord = {
       id: input.id,
       logicalSceneId: input.logicalSceneId,
-      plannerEndpointId: input.plannerEndpointId,
+      plannerEndpointKey: input.plannerEndpointKey,
       plannerAdapter: input.plannerAdapter,
       plannerSceneId: input.plannerSceneId,
       status: 'wizard',
@@ -216,7 +216,7 @@ export class SceneIdentityService {
       await this.sessionModel.create({
         id: record.id,
         logical_scene_id: record.logicalSceneId,
-        planner_endpoint_id: record.plannerEndpointId,
+        planner_endpoint_id: record.plannerEndpointKey,
         planner_adapter: record.plannerAdapter,
         planner_scene_id: record.plannerSceneId,
         status: record.status,
@@ -358,7 +358,7 @@ export class SceneIdentityService {
 
   async addObservation(input: {
     sessionId: string;
-    observerEndpointId: string;
+    observerEndpointKey: string;
     observerAdapter: string;
     observerSceneId: string;
     atTargetPlatformId: string;
@@ -366,7 +366,7 @@ export class SceneIdentityService {
   }): Promise<void> {
     const record: InitObservationRecord = {
       sessionId: input.sessionId,
-      observerEndpointId: input.observerEndpointId,
+      observerEndpointKey: input.observerEndpointKey,
       observerAdapter: input.observerAdapter,
       observerSceneId: input.observerSceneId,
       atTargetPlatformId: input.atTargetPlatformId,
@@ -377,7 +377,7 @@ export class SceneIdentityService {
     if (this.observationModel) {
       await this.observationModel.create({
         session_id: record.sessionId,
-        observer_endpoint_id: record.observerEndpointId,
+        observer_endpoint_id: record.observerEndpointKey,
         observer_adapter: record.observerAdapter,
         observer_scene_id: record.observerSceneId,
         at_target_platform_id: record.atTargetPlatformId,
@@ -401,11 +401,11 @@ export class SceneIdentityService {
   planInitFromObservations(
     logicalSceneId: string,
     observations: InitObservationRecord[],
-    registeredEndpoints: Map<string, { adapter: string; endpointId: string }>,
-    options?: { plannerEndpointId?: string },
+    registeredEndpoints: Map<string, { adapter: string; endpointKey: string }>,
+    options?: { plannerEndpointKey?: string },
   ): {
     sceneAliases: SceneAliasRecord[];
-    members: Array<{ endpointId: string; adapter: string; pipelineRole: string }>;
+    members: Array<{ endpointKey: string; adapter: string; pipelineRole: string }>;
     channels: MemberChannelRecord[];
   } {
     const sceneSet = new Map<string, SceneAliasRecord>();
@@ -420,12 +420,12 @@ export class SceneIdentityService {
       }
     }
 
-    const roleMap = new Map<string, { endpointId: string; adapter: string; pipelineRole: string }>();
+    const roleMap = new Map<string, { endpointKey: string; adapter: string; pipelineRole: string }>();
     const channelDedup = new Set<string>();
     const channels: MemberChannelRecord[] = [];
 
-    const roleObs = options?.plannerEndpointId
-      ? observations.filter((o) => o.observerEndpointId === options.plannerEndpointId)
+    const roleObs = options?.plannerEndpointKey
+      ? observations.filter((o) => o.observerEndpointKey === options.plannerEndpointKey)
       : observations;
 
     const assignRole = (obs: InitObservationRecord) => {
@@ -435,14 +435,14 @@ export class SceneIdentityService {
       if (!ep) return;
       if (roleMap.has(obs.wizardStep)) return;
       roleMap.set(obs.wizardStep, {
-        endpointId: ep.endpointId,
+        endpointKey: ep.endpointKey,
         adapter: ep.adapter,
         pipelineRole: obs.wizardStep,
       });
     };
 
     for (const obs of roleObs) assignRole(obs);
-    if (options?.plannerEndpointId) {
+    if (options?.plannerEndpointKey) {
       for (const obs of observations) assignRole(obs);
     }
 
@@ -457,7 +457,7 @@ export class SceneIdentityService {
         channelDedup.add(chKey);
         channels.push({
           logicalSceneId,
-          endpointId: ep.endpointId,
+          endpointKey: ep.endpointKey,
           pipelineRole: obs.wizardStep,
           adapter: obs.observerAdapter,
           sceneId: obs.observerSceneId,
@@ -491,10 +491,10 @@ export class SceneIdentityService {
   async aggregateObservations(
     sessionId: string,
     logicalSceneId: string,
-    registeredEndpoints: Map<string, { adapter: string; endpointId: string }>,
+    registeredEndpoints: Map<string, { adapter: string; endpointKey: string }>,
   ): Promise<{
     sceneAliases: SceneAliasRecord[];
-    members: Array<{ endpointId: string; adapter: string; pipelineRole: string }>;
+    members: Array<{ endpointKey: string; adapter: string; pipelineRole: string }>;
     channels: MemberChannelRecord[];
   }> {
     const observations = await this.listObservations(sessionId);
@@ -521,7 +521,7 @@ export class SceneIdentityService {
     for (const ch of channels) {
       await this.channelModel.create({
         logical_scene_id: ch.logicalSceneId,
-        endpoint_id: ch.endpointId,
+        endpoint_id: ch.endpointKey,
         pipeline_role: ch.pipelineRole,
         adapter: ch.adapter,
         scene_id: ch.sceneId,
@@ -536,7 +536,7 @@ export class SceneIdentityService {
       const rows = await this.channelModel.select().where({ logical_scene_id: logicalSceneId });
       return rows.map((row) => ({
         logicalSceneId: String(row.logical_scene_id ?? ''),
-        endpointId: String(row.endpoint_id ?? ''),
+        endpointKey: String(row.endpoint_id ?? ''),
         pipelineRole: String(row.pipeline_role ?? ''),
         adapter: String(row.adapter ?? ''),
         sceneId: String(row.scene_id ?? ''),

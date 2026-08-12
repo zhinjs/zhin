@@ -35,8 +35,8 @@ describe('collaboration outbound harness helpers', () => {
     adapter: 'icqq',
     sceneId: '1',
     members: [
-      { endpointId: '8596238', primary: 'planner', pipelineRole: 'planner' as const },
-      { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' as const },
+      { endpointKey: '8596238', primary: 'planner', pipelineRole: 'planner' as const },
+      { endpointKey: '210723495', primary: 'researcher', pipelineRole: 'researcher' as const },
     ],
   };
 

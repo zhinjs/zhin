@@ -11,10 +11,10 @@ function pipelinePrefixedSessionKey(transport: string, bindRun: string): string 
   return `pipeline:${bindRun.slice(0, 8)}:${transport}`;
 }
 
-function resolveBindRunFromCell(cell: CollaborationScene, endpointId: string): string | undefined {
+function resolveBindRunFromCell(cell: CollaborationScene, endpointKey: string): string | undefined {
   const runId = cell.pipelineState?.runId;
   if (!runId) return undefined;
-  const delegation = findActiveDelegation(cell, endpointId);
+  const delegation = findActiveDelegation(cell, endpointKey);
   return delegation?.runId ?? runId;
 }
 

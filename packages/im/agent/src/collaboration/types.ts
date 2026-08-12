@@ -67,7 +67,7 @@ export interface PipelineRunArchive {
 export type PipelineManageAction = 'create' | 'reset' | 'update' | 'activate' | 'list';
 
 export interface ActiveDelegation {
-  targetEndpointId: string;
+  targetEndpointKey: string;
   targetRole: PipelineRole;
   /** 委派创建时的 pipeline runId（产物提交 SSOT，防 reset 竞态） */
   runId: string;
@@ -133,7 +133,7 @@ export interface CollaborationConfig {
 }
 
 export interface CollaborationSceneMemberRuntime {
-  endpointId: string;
+  endpointKey: string;
   /** 成员所属 adapter；缺省与 Cell.adapter 相同（跨 adapter 同群协作时显式填写）。 */
   adapter?: string;
   primary: string;
@@ -157,14 +157,14 @@ export interface TurnPlanDelegation {
   /** Cross-endpoint peer in the same CollaborationScene (default delivery: internal_room). */
   delegateToPeer?: string;
   /** @deprecated use delegateToPeer */
-  targetEndpointId?: string;
+  targetEndpointKey?: string;
   targetAgentId?: string;
 }
 
 export interface TurnPlan {
-  inboundEndpointId: string;
+  inboundEndpointKey: string;
   handlerProfile: string;
-  outboundEndpointId: string;
+  outboundEndpointKey: string;
   collaborationSceneId?: string;
   sessionKeys: {
     transport: string;
@@ -175,7 +175,7 @@ export interface TurnPlan {
 
 export interface PeerTriggerResult {
   isPeer: boolean;
-  peerEndpointId?: string;
+  peerEndpointKey?: string;
   shouldTrigger: boolean;
   reason?: string;
 }

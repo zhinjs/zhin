@@ -7,7 +7,7 @@
 export * from '../collaboration/index.js';
 export {
   resolveMemberBySender,
-  resolveEndpointIdsForMember,
+  resolveEndpointKeysForMember,
   isInboundFromPeerBot,
 } from '../collaboration/endpoint-identity.js';
 export * from './pipeline/index.js';

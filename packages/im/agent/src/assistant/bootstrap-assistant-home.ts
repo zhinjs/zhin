@@ -62,7 +62,7 @@ function zhinToolsToCoreTools(tools: ReturnType<typeof createHomeTools>): Tool[]
 function isDeliverableImNotify(notify: JobNotify | undefined): notify is Extract<JobNotify, { channel: 'im' }> {
   if (!notify || notify.channel !== 'im') return false;
   const scene = notify.target?.scene;
-  return Boolean(scene?.platform && scene.endpointId && scene.sceneId && scene.kind);
+  return Boolean(scene?.platform && scene.endpointKey && scene.sceneId && scene.kind);
 }
 
 export async function bootstrapAssistantHome(

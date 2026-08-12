@@ -45,8 +45,8 @@ interface OwnerQueue {
   waiting: PendingEntry[];
 }
 
-function ownerKey(endpointId: string, masterId: string): string {
-  return `${endpointId}:${masterId}`;
+function ownerKey(endpointKey: string, masterId: string): string {
+  return `${endpointKey}:${masterId}`;
 }
 
 function promptKey(message: Message): string {
@@ -117,16 +117,16 @@ export class AskUserSessionService {
   private hasPendingForMessage(message: Message, root?: Plugin): boolean {
     if (this.promptWaits.has(promptKey(message))) return true;
 
-    const endpointId = String(message.$endpoint ?? '');
+    const endpointKey = String(message.$endpoint ?? '');
     const senderId = String(message.$sender?.id ?? '');
-    if (endpointId && senderId) {
-      const direct = this.ownerQueues.get(ownerKey(endpointId, senderId));
+    if (endpointKey && senderId) {
+      const direct = this.ownerQueues.get(ownerKey(endpointKey, senderId));
       if (direct?.active || direct?.waiting.length) return true;
     }
 
     const ids = this.resolveEndpointMaster(message, root);
     if (!ids) return false;
-    const queue = this.ownerQueues.get(ownerKey(ids.endpointId, ids.masterId));
+    const queue = this.ownerQueues.get(ownerKey(ids.endpointKey, ids.masterId));
     return Boolean(queue?.active || queue?.waiting.length);
   }
 
@@ -137,15 +137,15 @@ export class AskUserSessionService {
   private tryMatchSensitiveDm(message: Message, root?: Plugin): boolean {
     if (message.$channel?.type !== 'private') return false;
     const senderId = String(message.$sender?.id ?? '');
-    const endpointId = String(message.$endpoint ?? '');
-    if (!senderId || !endpointId) return false;
+    const endpointKey = String(message.$endpoint ?? '');
+    if (!senderId || !endpointKey) return false;
 
-    const direct = this.ownerQueues.get(ownerKey(endpointId, senderId));
+    const direct = this.ownerQueues.get(ownerKey(endpointKey, senderId));
     if (direct?.active) return true;
 
     const ids = this.resolveEndpointMaster(message, root);
     if (!ids || senderId !== ids.masterId) return false;
-    return Boolean(this.ownerQueues.get(ownerKey(ids.endpointId, ids.masterId))?.active);
+    return Boolean(this.ownerQueues.get(ownerKey(ids.endpointKey, ids.masterId))?.active);
   }
 
   private async openPrompt(spec: AskUserOpenSpec): Promise<string> {
@@ -208,8 +208,8 @@ export class AskUserSessionService {
 
   private openSensitiveDm(spec: AskUserOpenSpec): Promise<string> {
     const masterId = String(spec.botMaster ?? '');
-    const endpointId = String(spec.message.$endpoint ?? '');
-    const key = ownerKey(endpointId, masterId);
+    const endpointKey = String(spec.message.$endpoint ?? '');
+    const key = ownerKey(endpointKey, masterId);
 
     return new Promise<string>((resolve) => {
       const entry: PendingEntry = {
@@ -294,16 +294,16 @@ export class AskUserSessionService {
   private resolveEndpointMaster(
     message: Message,
     root?: Plugin,
-  ): { endpointId: string; masterId: string } | undefined {
-    const endpointId = String(message.$endpoint ?? '');
-    if (!endpointId || !root) return undefined;
+  ): { endpointKey: string; masterId: string } | undefined {
+    const endpointKey = String(message.$endpoint ?? '');
+    if (!endpointKey || !root) return undefined;
     try {
       const adapter = root.inject(message.$adapter) as
         | { endpoints?: Map<string, { $config?: { master?: string } }> }
         | undefined;
-      const master = adapter?.endpoints?.get(endpointId)?.$config?.master;
+      const master = adapter?.endpoints?.get(endpointKey)?.$config?.master;
       if (master == null) return undefined;
-      return { endpointId, masterId: String(master) };
+      return { endpointKey, masterId: String(master) };
     } catch {
       return undefined;
     }
@@ -324,13 +324,13 @@ export class AskUserSessionService {
     }
 
     const senderId = String(message.$sender?.id ?? '');
-    const endpointId = String(message.$endpoint ?? '');
-    let key = ownerKey(endpointId, senderId);
+    const endpointKey = String(message.$endpoint ?? '');
+    let key = ownerKey(endpointKey, senderId);
     let queue = this.ownerQueues.get(key);
     if (!queue?.active) {
       const ids = this.resolveEndpointMaster(message, this.plugin.root ?? this.plugin);
       if (ids) {
-        key = ownerKey(ids.endpointId, ids.masterId);
+        key = ownerKey(ids.endpointKey, ids.masterId);
         queue = this.ownerQueues.get(key);
       }
     }

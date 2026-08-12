@@ -49,7 +49,7 @@ export interface TypingIndicatorOptions {
   /** 平台 */
   platform: string;
   /** Endpoint ID */
-  endpointId: string;
+  endpointKey: string;
   /** 场景类型 */
   sceneType: 'private' | 'group' | 'channel';
 }
@@ -427,7 +427,7 @@ export class TypingIndicatorManager {
    * 生成指示器键
    */
   private getIndicatorKey(options: TypingIndicatorOptions): string {
-    return `${options.platform}:${options.endpointId}:${options.sessionId || options.messageId}`;
+    return `${options.platform}:${options.endpointKey}:${options.sessionId || options.messageId}`;
   }
 
   async dispose(): Promise<void> {

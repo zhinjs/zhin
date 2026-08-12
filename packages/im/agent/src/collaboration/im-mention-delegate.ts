@@ -6,7 +6,7 @@ import { sendGroupMessageFromEndpoint } from './group-message.js';
 
 export interface GroupPeerMentionInput {
   message: Message;
-  targetEndpointId: string;
+  targetEndpointKey: string;
   text: string;
 }
 
@@ -14,11 +14,11 @@ export interface GroupPeerMentionInput {
 export async function sendGroupPeerMention(
   input: GroupPeerMentionInput,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { message, targetEndpointId, text } = input;
+  const { message, targetEndpointKey, text } = input;
   return sendGroupMessageFromEndpoint({
     message,
     text,
-    atTargetEndpointId: targetEndpointId,
+    atTargetEndpointKey: targetEndpointKey,
   });
 }
 

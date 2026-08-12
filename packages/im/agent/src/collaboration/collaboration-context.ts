@@ -4,15 +4,15 @@ import { resolveCellForScene, findCellMemberByEndpoint } from './collaboration-c
 /** 每轮 turn envelope 用的精简 Cell 提示（勿重复 buildAiOutboundPromptHint 长文）。 */
 export function formatCollaborationTurnCellHint(
   cell: CollaborationScene,
-  currentEndpointId: string,
+  currentEndpointKey: string,
 ): string {
-  const self = findCellMemberByEndpoint(cell, currentEndpointId);
-  const peers = cell.members.filter((m) => m.endpointId !== currentEndpointId);
+  const self = findCellMemberByEndpoint(cell, currentEndpointKey);
+  const peers = cell.members.filter((m) => m.endpointKey !== currentEndpointKey);
   const peerBrief = peers
-    .map((p) => `${p.primary}=${p.endpointId}`)
+    .map((p) => `${p.primary}=${p.endpointKey}`)
     .join(', ');
   const lines = [
-    `[Cell ${cell.id}] You: ${self?.primary ?? currentEndpointId} (${currentEndpointId})`,
+    `[Cell ${cell.id}] You: ${self?.primary ?? currentEndpointKey} (${currentEndpointKey})`,
   ];
   if (cell.goal?.trim()) lines.push(`Goal: ${cell.goal.trim()}`);
   if (peerBrief) lines.push(`Peers: ${peerBrief}`);
@@ -23,11 +23,11 @@ export function formatCollaborationTurnCellHint(
 
 export function formatCollaborationSceneHint(
   cell: CollaborationScene,
-  currentEndpointId: string,
+  currentEndpointKey: string,
   options?: { forceJsonOnly?: boolean },
 ): string {
-  const self = findCellMemberByEndpoint(cell, currentEndpointId);
-  const peers = cell.members.filter((m) => m.endpointId !== currentEndpointId);
+  const self = findCellMemberByEndpoint(cell, currentEndpointKey);
+  const peers = cell.members.filter((m) => m.endpointKey !== currentEndpointKey);
   const cellLines = [
     '[Collaboration cell]',
     `Cell: ${cell.id} (adapter ${cell.adapter}, scene ${cell.sceneId})`,
@@ -35,14 +35,14 @@ export function formatCollaborationSceneHint(
   if (cell.goal?.trim()) cellLines.push(`Goal: ${cell.goal.trim()}`);
   if (self) {
     cellLines.push(
-      `You: endpoint ${currentEndpointId}, agent "${self.primary}"${self.role ? ` (${self.role})` : ''}.`,
+      `You: endpoint ${currentEndpointKey}, agent "${self.primary}"${self.role ? ` (${self.role})` : ''}.`,
     );
   }
   if (peers.length > 0) {
     cellLines.push('Peers:');
     for (const peer of peers) {
       cellLines.push(
-        `- "${peer.endpointId}": agent "${peer.primary}"${peer.role ? ` (${peer.role})` : ''}`,
+        `- "${peer.endpointKey}": agent "${peer.primary}"${peer.role ? ` (${peer.role})` : ''}`,
       );
     }
   }
@@ -66,15 +66,15 @@ export function resolveCollaborationSceneForMessage(
   if (scope !== 'group' && scope !== 'channel') return undefined;
   const sceneId = message.$channel?.id;
   if (!sceneId) return undefined;
-  const endpointId = String(message.$endpoint ?? '');
-  if (!endpointId) return undefined;
+  const endpointKey = String(message.$endpoint ?? '');
+  if (!endpointKey) return undefined;
 
   const cell = resolveCellForScene(
     String(message.$adapter ?? ''),
     String(sceneId),
   );
   if (!cell || cell.members.length < 2) return undefined;
-  if (!findCellMemberByEndpoint(cell, endpointId)) return undefined;
+  if (!findCellMemberByEndpoint(cell, endpointKey)) return undefined;
   return cell;
 }
 
@@ -85,9 +85,9 @@ export function resolveCollaborationTurnHint(
 ): string | undefined {
   const cell = resolveCollaborationSceneForMessage(message);
   if (!cell) return undefined;
-  const endpointId = String(message!.$endpoint);
+  const endpointKey = String(message!.$endpoint);
   const lines = [
-    formatCollaborationTurnCellHint(cell, endpointId),
+    formatCollaborationTurnCellHint(cell, endpointKey),
   ].filter(Boolean);
   return lines.join('\n');
 }

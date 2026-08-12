@@ -14,7 +14,7 @@ describe('activity-feedback event-context', () => {
   it('cron 私聊任务应回退 sceneId 为 userId', () => {
     const ctx = toActivityFeedbackEventContext({
       platform: 'icqq',
-      endpointId: '75318',
+      endpointKey: '75318',
       sessionId: 'icqq:75318:private:123',
       sceneId: '123',
       userId: 'system',
@@ -27,7 +27,7 @@ describe('activity-feedback event-context', () => {
   it('Slack 私聊应保留 DM channel 为 groupId 供出站 targeting', () => {
     const ctx = toActivityFeedbackEventContext({
       platform: 'slack',
-      endpointId: 'zhin',
+      endpointKey: 'zhin',
       sessionId: 'slack:zhin:private:U0AR2NQHRFV#1783730885856-1',
       sceneId: 'D0BGBM1S1J9',
       userId: 'U0AR2NQHRFV',

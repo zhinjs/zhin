@@ -17,7 +17,7 @@ export interface PeerPolicyInput {
 export interface CellAtOwnershipResult {
   /** 当前 Endpoint 是否应处理这条入站（Cell 内仅被 @ 的成员响应） */
   shouldHandle: boolean;
-  mentionedEndpointIds?: string[];
+  mentionedEndpointKeys?: string[];
   reason?: string;
 }
 
@@ -25,13 +25,13 @@ function segmentAtUserId(seg: { type: string; data?: Record<string, unknown> }):
   return readMentionSegmentTarget(seg);
 }
 
-/** 按消息顺序收集 @ 到的 Cell 成员 endpointId */
-export function resolveCellAtMentionedEndpointIds(
+/** 按消息顺序收集 @ 到的 Cell 成员 endpointKey */
+export function resolveCellAtMentionedEndpointKeys(
   message: Message,
   cell: CollaborationScene,
   root?: Plugin,
 ): string[] {
-  const memberIds = new Set(cell.members.map((m) => m.endpointId));
+  const memberIds = new Set(cell.members.map((m) => m.endpointKey));
   const ordered: string[] = [];
   const fromPeer = isInboundFromCollaborationPeer(message, cell, root);
 
@@ -53,24 +53,24 @@ export function resolveCellAtMentionedEndpointIds(
   return ordered;
 }
 
-/** @deprecated 使用 resolveCellAtMentionedEndpointIds；保留首个 @ 以兼容旧调用 */
-export function resolveCellAtWinnerEndpointId(
+/** @deprecated 使用 resolveCellAtMentionedEndpointKeys；保留首个 @ 以兼容旧调用 */
+export function resolveCellAtWinnerEndpointKey(
   message: Message,
   cell: CollaborationScene,
 ): string | undefined {
-  return resolveCellAtMentionedEndpointIds(message, cell)[0];
+  return resolveCellAtMentionedEndpointKeys(message, cell)[0];
 }
 
 /** 同群多 Bot：仅被 @ 的 Cell 成员响应；未 @ 任何成员时不触发 */
 export function evaluateCellAtOwnership(
   message: Message,
   cell: CollaborationScene | undefined,
-  endpointId: string,
+  endpointKey: string,
   root?: Plugin,
 ): CellAtOwnershipResult {
   if (!cell) return { shouldHandle: true };
 
-  const mentioned = resolveCellAtMentionedEndpointIds(message, cell, root);
+  const mentioned = resolveCellAtMentionedEndpointKeys(message, cell, root);
 
   // Delegation ownership is owned by the OrchestrationKernel (ADR 0027):
   // active group_mention tasks, not cell.pipelineState. The inbound pipeline
@@ -80,7 +80,7 @@ export function evaluateCellAtOwnership(
   if (mentioned.length === 0) {
     return {
       shouldHandle: false,
-      mentionedEndpointIds: mentioned,
+      mentionedEndpointKeys: mentioned,
       reason: 'cell_mention_required',
     };
   }
@@ -88,22 +88,22 @@ export function evaluateCellAtOwnership(
   // Bot 编排消息 @ 多个成员时，只认消息序第一个（防 Planner @all 引发全员响应）
   if (mentioned.length > 1 && isInboundFromCollaborationPeer(message, cell, root)) {
     const winner = mentioned[0]!;
-    if (endpointId !== winner) {
+    if (endpointKey !== winner) {
       return {
         shouldHandle: false,
-        mentionedEndpointIds: mentioned,
+        mentionedEndpointKeys: mentioned,
         reason: 'peer_multi_mention_first_only',
       };
     }
-    return { shouldHandle: true, mentionedEndpointIds: mentioned };
+    return { shouldHandle: true, mentionedEndpointKeys: mentioned };
   }
 
-  if (mentioned.includes(endpointId)) {
-    return { shouldHandle: true, mentionedEndpointIds: mentioned };
+  if (mentioned.includes(endpointKey)) {
+    return { shouldHandle: true, mentionedEndpointKeys: mentioned };
   }
   return {
     shouldHandle: false,
-    mentionedEndpointIds: mentioned,
+    mentionedEndpointKeys: mentioned,
     reason: 'cell_not_mentioned',
   };
 }
@@ -121,7 +121,7 @@ export function evaluatePeerTrigger(input: PeerPolicyInput): PeerTriggerResult {
   }
 
   if (peerMode === 'off') {
-    return { isPeer: true, peerEndpointId: member.endpointId, shouldTrigger: true };
+    return { isPeer: true, peerEndpointKey: member.endpointKey, shouldTrigger: true };
   }
 
   if (peerMode === 'mention-only') {
@@ -130,7 +130,7 @@ export function evaluatePeerTrigger(input: PeerPolicyInput): PeerTriggerResult {
     if (cell) {
       return {
         isPeer: true,
-        peerEndpointId: member.endpointId,
+        peerEndpointKey: member.endpointKey,
         shouldTrigger: atSelf,
         reason: atSelf ? 'peer_mentioned' : 'peer_mention_required',
       };
@@ -140,13 +140,13 @@ export function evaluatePeerTrigger(input: PeerPolicyInput): PeerTriggerResult {
     const shouldTrigger = atSelf || atInText;
     return {
       isPeer: true,
-      peerEndpointId: member.endpointId,
+      peerEndpointKey: member.endpointKey,
       shouldTrigger,
       reason: shouldTrigger ? 'peer_mentioned' : 'peer_mention_required',
     };
   }
 
-  return { isPeer: true, peerEndpointId: member.endpointId, shouldTrigger: true };
+  return { isPeer: true, peerEndpointKey: member.endpointKey, shouldTrigger: true };
 }
 
 /** 入站是否来自同 Cell 的另一 Endpoint（Bot↔Bot 协作，非人类用户） */

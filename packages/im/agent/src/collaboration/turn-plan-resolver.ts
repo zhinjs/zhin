@@ -15,35 +15,35 @@ import type { CollaborationScene, TurnPlan } from './types.js';
 export interface TurnPlanResolverInput {
   message: Message;
   contentText: string;
-  endpointId: string;
-  endpointIds?: string[];
+  endpointKey: string;
+  endpointKeys?: string[];
   cells: CollaborationScene[];
   agents: Record<string, AgentBindingConfig>;
   discoveredAgentNames: Set<string>;
 }
 
-function findEndpointIdForAgent(cell: CollaborationScene, agentName: string): string | undefined {
-  return cell.members.find((m) => m.primary === agentName)?.endpointId;
+function findEndpointKeyForAgent(cell: CollaborationScene, agentName: string): string | undefined {
+  return cell.members.find((m) => m.primary === agentName)?.endpointKey;
 }
 
 export function buildTurnPlan(input: TurnPlanResolverInput): TurnPlan {
-  const { message, contentText, endpointId, endpointIds, cells, agents, discoveredAgentNames } = input;
+  const { message, contentText, endpointKey, endpointKeys, cells, agents, discoveredAgentNames } = input;
   const scope = message.$channel?.type || 'private';
   const sceneId = message.$channel?.id ?? '';
   const adapter = String(message.$adapter || '');
 
   const cell =
     (scope === 'group' || scope === 'channel') && sceneId
-      ? (resolveCellForScene(adapter, sceneId, endpointId) ?? findCellForMessage(cells, adapter, sceneId))
+      ? (resolveCellForScene(adapter, sceneId, endpointKey) ?? findCellForMessage(cells, adapter, sceneId))
       : undefined;
 
-  const primary = resolvePrimaryForEndpoint(cell, endpointId, DEFAULT_ZHIN_AGENT_NAME);
+  const primary = resolvePrimaryForEndpoint(cell, endpointKey, DEFAULT_ZHIN_AGENT_NAME);
 
   const routedAgent = resolveRoutedAgentName(agents, {
     message,
     contentText,
     discoveredAgentNames,
-    endpointIds,
+    endpointKeys,
   });
 
   const handlerProfile =
@@ -53,9 +53,9 @@ export function buildTurnPlan(input: TurnPlanResolverInput): TurnPlan {
   const cellKey = resolveCollaborationSceneContextKeyFromMessage(message);
 
   const plan: TurnPlan = {
-    inboundEndpointId: endpointId,
+    inboundEndpointKey: endpointKey,
     handlerProfile,
-    outboundEndpointId: endpointId,
+    outboundEndpointKey: endpointKey,
     collaborationSceneId: cell?.id,
     sessionKeys: {
       transport,
@@ -64,9 +64,9 @@ export function buildTurnPlan(input: TurnPlanResolverInput): TurnPlan {
     delegation: { mode: 'local_process' },
   };
 
-  const handlerEndpointId = cell ? findEndpointIdForAgent(cell, handlerProfile) : undefined;
+  const handlerEndpointKey = cell ? findEndpointKeyForAgent(cell, handlerProfile) : undefined;
   const isOwnEndpointHandler =
-    !handlerEndpointId || handlerEndpointId === endpointId;
+    !handlerEndpointKey || handlerEndpointKey === endpointKey;
   const isRouteOverlay =
     routedAgent !== DEFAULT_ZHIN_AGENT_NAME && routedAgent !== primary;
 
@@ -77,10 +77,10 @@ export function buildTurnPlan(input: TurnPlanResolverInput): TurnPlan {
     return plan;
   }
 
-  if (handlerEndpointId) {
+  if (handlerEndpointKey) {
     plan.delegation = {
       mode: 'local_process',
-      delegateToPeer: handlerEndpointId,
+      delegateToPeer: handlerEndpointKey,
       targetAgentId: handlerProfile,
     };
     return plan;

@@ -8,7 +8,7 @@ describe('buildTypingSendContent', () => {
   it('QQ 群聊应附带 reply 引用', () => {
     const content = buildTypingSendContent('qq', {
       platform: 'qq',
-      endpointId: 'zhin',
+      endpointKey: 'zhin',
       sessionId: 'qq:zhin:group:g1#u1',
       messageId: 'msg-trigger',
       sceneType: 'group',
@@ -24,7 +24,7 @@ describe('buildTypingSendContent', () => {
   it('QQ 群聊无 messageId 时应跳过发送', () => {
     expect(buildTypingSendContent('qq', {
       platform: 'qq',
-      endpointId: 'zhin',
+      endpointKey: 'zhin',
       sessionId: 'qq:zhin:group:g1#u1',
       sceneType: 'group',
       groupId: 'g1',

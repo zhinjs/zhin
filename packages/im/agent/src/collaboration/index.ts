@@ -44,7 +44,7 @@ export {
   DatabaseCollaborationArtifactRepository,
 } from './collaboration-artifact-repository.js';
 export { resolveEndpointConfig, resolveEndpointAtIds, resolveEndpointAiAccess } from './inbound-turn-endpoint.js';
-export { resolvePlannerEndpointId } from './collaboration-delegation.js';
+export { resolvePlannerEndpointKey } from './collaboration-delegation.js';
 export {
   applyRuntimeCollaborationInbound,
 } from './runtime-inbound-gate.js';

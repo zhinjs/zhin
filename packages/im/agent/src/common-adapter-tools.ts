@@ -20,7 +20,7 @@ export function createSceneManagementTools(
     parameters: {
       type: 'object' as const,
       properties: {
-        endpoint_id: { type: 'string', description: 'Endpoint ID', contextKey: 'endpointId' },
+        endpoint_id: { type: 'string', description: 'Endpoint ID', contextKey: 'endpointKey' },
         scene_id: { type: 'string', description: 'IM 场景 ID', contextKey: 'sceneId' },
         ...Object.fromEntries(Object.entries(spec.extraParams)),
       },

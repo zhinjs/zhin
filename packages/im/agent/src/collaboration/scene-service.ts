@@ -125,8 +125,8 @@ export class CollaborationSceneService {
     return this.repository.listMembers(collaborationSceneId);
   }
 
-  async findScenesByEndpoint(endpointId: string): Promise<CollaborationScene[]> {
-    const cells = await this.repository.findScenesByEndpoint(endpointId);
+  async findScenesByEndpoint(endpointKey: string): Promise<CollaborationScene[]> {
+    const cells = await this.repository.findScenesByEndpoint(endpointKey);
     for (const cell of cells) this.cache.set(cell.id, cell);
     return cells;
   }
@@ -144,18 +144,18 @@ export class CollaborationSceneService {
 
   async updateMember(
     collaborationSceneId: string,
-    endpointId: string,
+    endpointKey: string,
     patch: Partial<import('./collaboration-db-model.js').UpsertCollaborationMemberInput>,
   ): Promise<{ ok: boolean; member?: import('./collaboration-db-model.js').CollaborationSceneMemberRecord; error?: string }> {
-    const result = await this.repository.updateMember(collaborationSceneId, endpointId, patch);
+    const result = await this.repository.updateMember(collaborationSceneId, endpointKey, patch);
     if (!result.ok) return result;
     const cell = await this.repository.getById(collaborationSceneId);
     if (cell) this.cache.set(collaborationSceneId, cell);
     return { ok: true, member: result.member };
   }
 
-  async removeMember(collaborationSceneId: string, endpointId: string): Promise<boolean> {
-    const ok = await this.repository.removeMember(collaborationSceneId, endpointId);
+  async removeMember(collaborationSceneId: string, endpointKey: string): Promise<boolean> {
+    const ok = await this.repository.removeMember(collaborationSceneId, endpointKey);
     if (ok) {
       const cell = await this.repository.getById(collaborationSceneId);
       if (cell) this.cache.set(collaborationSceneId, cell);

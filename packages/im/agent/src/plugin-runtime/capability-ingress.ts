@@ -1,6 +1,6 @@
 import type { FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { canAccessTool, type Message, type Tool as CoreTool } from '@zhin.js/core';
 import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
+import { turnPermissionSubject, type TurnAccessContext } from '../turn/turn-ingress.js';
 import {
   AgentIndex,
   agentFeatureId,
@@ -46,7 +46,7 @@ export class CapabilityIngress {
     snapshot: RuntimeSnapshot,
     owner: PluginId,
     isActive: () => boolean = () => true,
-    message?: Message,
+    turn?: TurnAccessContext,
   ): Promise<AgentCapabilities> {
     if (!snapshot.tree.has(owner)) throw new Error(`Unknown Agent capability owner: ${owner}`);
     const tools = projection(snapshot, toolFeatureId, ToolIndex);
@@ -54,7 +54,7 @@ export class CapabilityIngress {
     return Object.freeze({
       generation: snapshot.generation,
       owner,
-      tools: await bindTools(tools, owner, isActive, message, resolvePermissionHost(snapshot)),
+      tools: await bindTools(tools, owner, isActive, turn, resolvePermissionHost(snapshot)),
       skills: Object.freeze([
         ...(projection(snapshot, skillFeatureId, SkillIndex)?.visible(owner) ?? []),
       ]),
@@ -70,7 +70,7 @@ async function bindTools(
   index: ToolIndex | undefined,
   owner: PluginId,
   isActive: () => boolean,
-  message?: Message,
+  turn?: TurnAccessContext,
   host?: PermissionHost,
 ): Promise<readonly ToolCapability[]> {
   if (!index) return Object.freeze([]);
@@ -78,7 +78,7 @@ async function bindTools(
   const accessResults = await Promise.all(
     visibleDescriptors.map(async (descriptor) => ({
       descriptor,
-      allowed: !descriptor.hidden && await canAccessDescriptor(descriptor, message, host),
+      allowed: !descriptor.hidden && await canAccessDescriptor(descriptor, turn, host),
     })),
   );
   return Object.freeze(accessResults
@@ -94,18 +94,22 @@ async function bindTools(
 
 async function canAccessDescriptor(
   descriptor: ToolDescriptor,
-  message: Message | undefined,
+  turn: TurnAccessContext | undefined,
   host?: PermissionHost,
 ): Promise<boolean> {
-  return canAccessTool({
-    name: descriptor.name,
-    description: descriptor.description,
-    parameters: { type: 'object', properties: {} },
-    execute: () => undefined,
-    platforms: descriptor.platforms ? [...descriptor.platforms] : undefined,
-    scopes: descriptor.scopes ? [...descriptor.scopes] : undefined,
-    permissions: descriptor.permissions ? [...descriptor.permissions] : undefined,
-  } satisfies CoreTool, message, host);
+  if (descriptor.platforms?.length) {
+    if (turn?.origin.kind !== 'im' || !descriptor.platforms.includes(turn.origin.platform)) {
+      return false;
+    }
+  }
+  if (descriptor.scopes?.length) {
+    if (turn?.origin.kind !== 'im' || !descriptor.scopes.includes(turn.origin.scope)) {
+      return false;
+    }
+  }
+  if (!descriptor.permissions?.length) return true;
+  if (!turn || !host) return false;
+  return host.checkAll(descriptor.permissions, turnPermissionSubject(turn));
 }
 
 /** Root resources 上的 PermissionHost（command-index 同款解析；未安装时 fail-closed）。 */

@@ -16,7 +16,7 @@ describe('MemoryCollaborationSceneRepository', () => {
       id: 'room-alpha',
       adapter: 'sandbox',
       sceneId: 'g1',
-      members: [{ endpointId: 'planner-bot', primary: 'planner' }],
+      members: [{ endpointKey: 'planner-bot', primary: 'planner' }],
       goal: 'demo',
     });
     const cells = await repo.listEnabled();
@@ -29,7 +29,7 @@ describe('MemoryCollaborationSceneRepository', () => {
       id: 'room-alpha',
       adapter: 'sandbox',
       sceneId: 'g1',
-      members: [{ endpointId: 'a', primary: 'planner' }],
+      members: [{ endpointKey: 'a', primary: 'planner' }],
     });
     const ok = await repo.updateGoal('room-alpha', '新目标', 0);
     expect(ok.ok).toBe(true);
@@ -42,7 +42,7 @@ describe('MemoryCollaborationSceneRepository', () => {
       id: 'c1',
       adapter: 'qq',
       sceneId: '123',
-      members: [{ endpointId: 'bot-a', primary: 'planner' }],
+      members: [{ endpointKey: 'bot-a', primary: 'planner' }],
     });
     const found = await repo.findByScene('qq', '123');
     expect(found?.id).toBe('c1');
@@ -53,12 +53,12 @@ describe('MemoryCollaborationSceneRepository', () => {
     const before = await repo.getById('empty-room');
     expect(before?.members).toEqual([]);
 
-    const added = await repo.addMember('empty-room', { endpointId: 'bot-b', primary: 'writer' });
+    const added = await repo.addMember('empty-room', { endpointKey: 'bot-b', primary: 'writer' });
     expect(added.ok).toBe(true);
 
     const cell = await repo.getById('empty-room');
     expect(cell?.members).toHaveLength(1);
-    expect(cell?.members[0]?.endpointId).toBe('bot-b');
+    expect(cell?.members[0]?.endpointKey).toBe('bot-b');
   });
 
   it('finds cells by endpoint', async () => {
@@ -66,15 +66,15 @@ describe('MemoryCollaborationSceneRepository', () => {
       id: 'room-a',
       adapter: 'sandbox',
       sceneId: 'g1',
-      members: [{ endpointId: 'planner-bot', primary: 'planner' }],
+      members: [{ endpointKey: 'planner-bot', primary: 'planner' }],
     });
     await repo.upsert({
       id: 'room-b',
       adapter: 'sandbox',
       sceneId: 'g2',
       members: [
-        { endpointId: 'planner-bot', primary: 'planner' },
-        { endpointId: 'writer-bot', primary: 'writer' },
+        { endpointKey: 'planner-bot', primary: 'planner' },
+        { endpointKey: 'writer-bot', primary: 'writer' },
       ],
     });
     const cells = await repo.findScenesByEndpoint('planner-bot');
@@ -86,7 +86,7 @@ describe('MemoryCollaborationSceneRepository', () => {
       id: 'room-m',
       adapter: 'sandbox',
       sceneId: 'g3',
-      members: [{ endpointId: 'bot-x', primary: 'planner', role: 'lead' }],
+      members: [{ endpointKey: 'bot-x', primary: 'planner', role: 'lead' }],
     });
     const updated = await repo.updateMember('room-m', 'bot-x', { role: 'coordinator' });
     expect(updated.ok).toBe(true);
@@ -104,7 +104,7 @@ describe('MemoryCollaborationSceneRepository', () => {
       adapter: 'sandbox',
       sceneId: 'g5',
       members: [{
-        endpointId: 'bot-reviewer',
+        endpointKey: 'bot-reviewer',
         primary: 'reviewer',
         pipelineRole: 'reviewer',
         enabled: false,
@@ -129,9 +129,9 @@ describe('MemoryCollaborationSceneRepository', () => {
       id: 'room-dup',
       adapter: 'sandbox',
       sceneId: 'g4',
-      members: [{ endpointId: 'bot-a', primary: 'planner' }],
+      members: [{ endpointKey: 'bot-a', primary: 'planner' }],
     });
-    const dup = await repo.addMember('room-dup', { endpointId: 'bot-a', primary: 'writer' });
+    const dup = await repo.addMember('room-dup', { endpointKey: 'bot-a', primary: 'writer' });
     expect(dup.ok).toBe(false);
   });
 });

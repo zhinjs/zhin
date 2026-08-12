@@ -182,12 +182,12 @@ export class AdapterActivityFeedbackManager {
     return manager;
   }
 
-  getManager(platform: string, endpointId: string): ActivityFeedbackManager | undefined {
-    return this.managers.get(`${platform}:${endpointId}`);
+  getManager(platform: string, endpointKey: string): ActivityFeedbackManager | undefined {
+    return this.managers.get(`${platform}:${endpointKey}`);
   }
 
-  async stopAll(platform: string, endpointId: string): Promise<void> {
-    await this.managers.get(`${platform}:${endpointId}`)?.stopAll();
+  async stopAll(platform: string, endpointKey: string): Promise<void> {
+    await this.managers.get(`${platform}:${endpointKey}`)?.stopAll();
   }
 
   clearAll(): void {

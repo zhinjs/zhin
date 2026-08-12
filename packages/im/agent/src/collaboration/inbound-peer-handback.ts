@@ -17,7 +17,7 @@ import type { CollaborationScene } from './types.js';
 export interface PeerInboundHandbackInput {
   message: Message;
   cell: CollaborationScene;
-  peerEndpointId: string;
+  peerEndpointKey: string;
   replyAi: (payload: unknown) => Promise<unknown>;
   logger: { debug: (...args: unknown[]) => void; info: (...args: unknown[]) => void };
 }
@@ -27,13 +27,13 @@ export async function tryHandlePeerInboundHandback(input: PeerInboundHandbackInp
   const orch = getOrchestrationService();
   if (!orch) return false;
 
-  const { message, cell, peerEndpointId, replyAi, logger } = input;
+  const { message, cell, peerEndpointKey, replyAi, logger } = input;
   const rawText = messageTextContent(message);
   const explicitTaskId = rawText.match(/(?:^|[\s(（])#([A-Za-z0-9_-]{4,})(?=$|[\s),，。.!！?:：）])/u)?.[1];
   const sessionKey = resolveIMSessionIdFromMessage(message);
   const runs = await orch.listRuns(sessionKey);
   const activeGroupTasks = runs.flatMap((run) =>
-    findActiveImProjectionTasksForEndpoint(run.tasks, peerEndpointId),
+    findActiveImProjectionTasksForEndpoint(run.tasks, peerEndpointKey),
   );
   const target = explicitTaskId
     ? activeGroupTasks.find((task) => task.id === explicitTaskId)
@@ -45,15 +45,15 @@ export async function tryHandlePeerInboundHandback(input: PeerInboundHandbackInp
   if (!explicitTaskId && activeGroupTasks.length > 1) {
     const hint = `检测到 ${activeGroupTasks.length} 个活跃任务，请在回复中带上 #taskId，例如 #${activeGroupTasks[0]!.id}`;
     for (const task of activeGroupTasks) {
-      await orch.taskProgress(task.id, `ambiguous handback from ${peerEndpointId}; taskId required`);
+      await orch.taskProgress(task.id, `ambiguous handback from ${peerEndpointKey}; taskId required`);
     }
     await replyAi(hint);
     return true;
   }
 
   if (target && normalizeExecutorKind(target.executor_kind) === 'im_projection') {
-    const assignee = target.assigned_to || peerEndpointId;
-    if (assignee !== peerEndpointId) {
+    const assignee = target.assigned_to || peerEndpointKey;
+    if (assignee !== peerEndpointKey) {
       logger.debug(formatCompact({
         op: 'handback_skip',
         reason: 'assignee_mismatch',
@@ -74,7 +74,7 @@ export async function tryHandlePeerInboundHandback(input: PeerInboundHandbackInp
         logger.info(formatCompact({
           op: 'handback_complete',
           task: target.id,
-          from: peerEndpointId,
+          from: peerEndpointKey,
         }));
       }
     }

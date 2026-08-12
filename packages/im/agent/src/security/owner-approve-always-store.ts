@@ -70,8 +70,8 @@ function emptyV2(): StoreV2 {
   return { version: STORE_VERSION, endpoints: {} };
 }
 
-function normalizeBotKey(adapter: string, endpointId: string, ownerId: string): string {
-  return `${adapter}|${endpointId}|${ownerId}`;
+function normalizeBotKey(adapter: string, endpointKey: string, ownerId: string): string {
+  return `${adapter}|${endpointKey}|${ownerId}`;
 }
 
 function migrateV1ToV2(data: StoreV1): StoreV2 {
@@ -80,9 +80,9 @@ function migrateV1ToV2(data: StoreV1): StoreV2 {
     if (typeof e !== 'string') continue;
     const parts = e.split('|');
     if (parts.length !== 4) continue;
-    const [adapter, endpointId, ownerId, scope] = parts;
+    const [adapter, endpointKey, ownerId, scope] = parts;
     if (scope === 'orchestration:bash') {
-      const k = normalizeBotKey(adapter, endpointId, ownerId);
+      const k = normalizeBotKey(adapter, endpointKey, ownerId);
       if (!out.endpoints[k]) out.endpoints[k] = { bashRules: [] };
       out.endpoints[k].bashAlways = true;
     }
@@ -264,7 +264,7 @@ export function addOwnerApproveAlways(
   toolName: string,
 ): { ok: true } | { ok: false; error: string } {
   if (!commMessage.$adapter || !commMessage.$endpoint) {
-    return { ok: false, error: '缺少 platform / endpointId' };
+    return { ok: false, error: '缺少 platform / endpointKey' };
   }
   if (toolName.trim().toLowerCase() !== OWNER_APPROVE_ALWAYS_TOOL) {
     return { ok: false, error: '永久放行仅支持 bash（shell 安全确认）。' };
@@ -282,7 +282,7 @@ export function removeOwnerApproveAlways(
   toolName: string,
 ): { ok: true } | { ok: false; error: string } {
   if (!commMessage.$adapter || !commMessage.$endpoint) {
-    return { ok: false, error: '缺少 platform / endpointId' };
+    return { ok: false, error: '缺少 platform / endpointKey' };
   }
   if (toolName.trim().toLowerCase() !== OWNER_APPROVE_ALWAYS_TOOL) {
     return { ok: false, error: '仅可撤销 bash 的永久放行。' };
@@ -314,7 +314,7 @@ export function addBashApproveRule(
     return { ok: false, error: `无效正则: ${e instanceof Error ? e.message : String(e)}` };
   }
   if (!commMessage.$adapter || !commMessage.$endpoint || getEndpointMaster(plugin, commMessage) == null) {
-    return { ok: false, error: '缺少 platform/endpointId 或未配置 owner。' };
+    return { ok: false, error: '缺少 platform/endpointKey 或未配置 owner。' };
   }
   const ownerId = getEndpointMaster(plugin, commMessage)!;
   const key = normalizeBotKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId);
@@ -336,7 +336,7 @@ export function removeBashApproveRule(
   const id = ruleId.trim();
   if (!id) return { ok: false, error: '请提供规则 id。' };
   if (!commMessage.$adapter || !commMessage.$endpoint || getEndpointMaster(plugin, commMessage) == null) {
-    return { ok: false, error: '缺少 platform/endpointId 或未配置 owner。' };
+    return { ok: false, error: '缺少 platform/endpointKey 或未配置 owner。' };
   }
   const ownerId = getEndpointMaster(plugin, commMessage)!;
   const key = normalizeBotKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId);
@@ -411,8 +411,8 @@ export function isIcqqSensitiveSubcommand(fullSubCommand: string): boolean {
 type Pending = { toolName: string; expiresAt: number };
 const pendingOrchestration = new Map<string, Pending>();
 
-function pendingKey(adapter: string, endpointId: string, ownerId: string): string {
-  return `${adapter}|${endpointId}|${ownerId}`;
+function pendingKey(adapter: string, endpointKey: string, ownerId: string): string {
+  return `${adapter}|${endpointKey}|${ownerId}`;
 }
 
 export function getPendingOrchestrationCount(): number {

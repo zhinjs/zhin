@@ -64,7 +64,7 @@ describe('subagent activity prefix', () => {
       agentId: 'researcher',
       taskId: '91a68419',
       platform: 'qq',
-      endpointId: '知音',
+      endpointKey: '知音',
       sessionId: 'qq:知音:private:477561',
       sceneId: '477561',
       userId: '477561',

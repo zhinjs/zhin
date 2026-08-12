@@ -21,25 +21,25 @@ export const COLLABORATION_REPLY_JSON_HINT = buildAiOutboundPromptHint({
   forceJsonOnly: true,
 });
 
-export function resolveMentionEndpointIds(
+export function resolveMentionEndpointKeys(
   cell: import('./types.js').CollaborationScene,
   mentions: string[] | undefined,
-): { ok: true; endpointIds: string[] } | { ok: false; error: string } {
+): { ok: true; endpointKeys: string[] } | { ok: false; error: string } {
   if (!mentions?.length) {
     return { ok: false, error: 'mentions 不能为空' };
   }
-  const endpointIds: string[] = [];
+  const endpointKeys: string[] = [];
   for (const ref of mentions) {
     const resolved = resolvePeerEndpointInCell(cell, ref);
     if (!resolved) {
       const roster = cell.members
-        .map((m) => `${m.endpointId}${m.pipelineRole ? `(${m.pipelineRole})` : ''}`)
+        .map((m) => `${m.endpointKey}${m.pipelineRole ? `(${m.pipelineRole})` : ''}`)
         .join(', ');
       return { ok: false, error: `未知 peer "${ref}"，可用 roster: ${roster}` };
     }
-    if (!endpointIds.includes(resolved)) endpointIds.push(resolved);
+    if (!endpointKeys.includes(resolved)) endpointKeys.push(resolved);
   }
-  return { ok: true, endpointIds };
+  return { ok: true, endpointKeys };
 }
 
 export function buildCollaborationMentionSegmentsFromPayload(
@@ -58,20 +58,20 @@ export function buildCollaborationMentionSegmentsFromPayload(
     return [{ type: 'text', data: { text } }];
   }
 
-  const resolved = resolveMentionEndpointIds(cell, payload.mentions);
+  const resolved = resolveMentionEndpointKeys(cell, payload.mentions);
   if (!resolved.ok) return null;
 
   const text = payload.text?.trim() ?? '';
   if (!text) return null;
 
-  return buildAtMessageContent(adapter, resolved.endpointIds, text);
+  return buildAtMessageContent(adapter, resolved.endpointKeys, text);
 }
 
 /** 发送协作 JSON @ 消息（普通回复解析与 group_delegate 共用）。 */
 export async function sendCollaborationMentionPayload(
   message: Message,
   payload: ZhinAiOutboundPayload,
-): Promise<{ ok: boolean; error?: string; endpointIds?: string[] }> {
+): Promise<{ ok: boolean; error?: string; endpointKeys?: string[] }> {
   const cell = resolveCollaborationSceneForMessage(message);
   if (!cell) return { ok: false, error: '不在协作 Cell 群场景' };
 
@@ -80,10 +80,10 @@ export async function sendCollaborationMentionPayload(
 
   if (!payload.mentions?.length) {
     const sent = await sendGroupMessageFromEndpoint({ message, text });
-    return sent.ok ? { ok: true, endpointIds: [] } : sent;
+    return sent.ok ? { ok: true, endpointKeys: [] } : sent;
   }
 
-  const resolved = resolveMentionEndpointIds(cell, payload.mentions);
+  const resolved = resolveMentionEndpointKeys(cell, payload.mentions);
   if (!resolved.ok) return { ok: false, error: resolved.error };
 
   const segments = buildCollaborationMentionSegmentsFromPayload(message, payload);
@@ -91,7 +91,7 @@ export async function sendCollaborationMentionPayload(
 
   const sent = await sendGroupMessageContent({ message, content: segments });
   return sent.ok
-    ? { ok: true, endpointIds: resolved.endpointIds }
+    ? { ok: true, endpointKeys: resolved.endpointKeys }
     : sent;
 }
 
@@ -101,18 +101,18 @@ function segmentAtUserId(seg: { type: string; data?: Record<string, unknown> }):
 
 function collectPeerMentionTokens(
   cell: CollaborationScene,
-  selfEndpointId: string,
+  selfEndpointKey: string,
   adapter?: GroupMessageAdapterView,
 ): Set<string> {
   const tokens = new Set<string>();
   for (const member of cell.members) {
-    if (member.endpointId === selfEndpointId) continue;
-    tokens.add(member.endpointId);
+    if (member.endpointKey === selfEndpointKey) continue;
+    tokens.add(member.endpointKey);
     if (member.primary) tokens.add(member.primary);
     if (member.pipelineRole) tokens.add(member.pipelineRole);
     if (member.role) tokens.add(member.role);
     if (adapter) {
-      tokens.add(resolvePlatformAtId(adapter, member.endpointId));
+      tokens.add(resolvePlatformAtId(adapter, member.endpointKey));
     }
   }
   return tokens;
@@ -134,19 +134,19 @@ function stripPlainMentionTokens(text: string, tokens: Set<string>): string {
 export function stripCellPeerMentionsFromSegments(
   segments: MessageElement[],
   cell: CollaborationScene,
-  selfEndpointId: string,
+  selfEndpointKey: string,
   adapter?: GroupMessageAdapterView,
 ): MessageElement[] {
-  const peerTokens = collectPeerMentionTokens(cell, selfEndpointId, adapter);
-  const peerEndpointIds = new Set(
-    cell.members.filter((m) => m.endpointId !== selfEndpointId).map((m) => m.endpointId),
+  const peerTokens = collectPeerMentionTokens(cell, selfEndpointKey, adapter);
+  const peerEndpointKeys = new Set(
+    cell.members.filter((m) => m.endpointKey !== selfEndpointKey).map((m) => m.endpointKey),
   );
   const out: MessageElement[] = [];
 
   for (const seg of segments) {
     if (seg.type === 'at' || seg.type === 'mention') {
       const uid = segmentAtUserId(seg as { type: string; data?: Record<string, unknown> });
-      if (uid && (peerEndpointIds.has(uid) || peerTokens.has(uid))) continue;
+      if (uid && (peerEndpointKeys.has(uid) || peerTokens.has(uid))) continue;
       out.push(seg);
       continue;
     }
@@ -166,16 +166,16 @@ export function stripCellPeerMentionsFromSegments(
 
 function collectSelfMentionTokens(
   cell: CollaborationScene,
-  selfEndpointId: string,
+  selfEndpointKey: string,
   adapter?: GroupMessageAdapterView,
 ): Set<string> {
-  const member = cell.members.find((m) => m.endpointId === selfEndpointId);
+  const member = cell.members.find((m) => m.endpointKey === selfEndpointKey);
   if (!member) return new Set();
-  const tokens = new Set<string>([member.endpointId]);
+  const tokens = new Set<string>([member.endpointKey]);
   if (member.primary) tokens.add(member.primary);
   if (member.pipelineRole) tokens.add(member.pipelineRole);
   if (member.role) tokens.add(member.role);
-  if (adapter) tokens.add(resolvePlatformAtId(adapter, member.endpointId));
+  if (adapter) tokens.add(resolvePlatformAtId(adapter, member.endpointKey));
   return tokens;
 }
 
@@ -183,11 +183,11 @@ function collectSelfMentionTokens(
 export function stripCellSelfMentionsFromSegments(
   segments: MessageElement[],
   cell: CollaborationScene,
-  selfEndpointId: string,
+  selfEndpointKey: string,
   adapter?: GroupMessageAdapterView,
 ): MessageElement[] {
-  const selfTokens = collectSelfMentionTokens(cell, selfEndpointId, adapter);
-  const selfIds = new Set([selfEndpointId]);
+  const selfTokens = collectSelfMentionTokens(cell, selfEndpointKey, adapter);
+  const selfIds = new Set([selfEndpointKey]);
   const out: MessageElement[] = [];
   for (const seg of segments) {
     if (seg.type === 'at' || seg.type === 'mention') {
@@ -214,11 +214,11 @@ export function stripCellSelfMentionsFromSegments(
 export function stripPlannerPublicMentionsFromSegments(
   segments: MessageElement[],
   cell: CollaborationScene,
-  selfEndpointId: string,
+  selfEndpointKey: string,
   adapter?: GroupMessageAdapterView,
 ): MessageElement[] {
-  let out = stripCellPeerMentionsFromSegments(segments, cell, selfEndpointId, adapter);
-  out = stripCellSelfMentionsFromSegments(out, cell, selfEndpointId, adapter);
+  let out = stripCellPeerMentionsFromSegments(segments, cell, selfEndpointKey, adapter);
+  out = stripCellSelfMentionsFromSegments(out, cell, selfEndpointKey, adapter);
   return out;
 }
 
@@ -240,27 +240,27 @@ export function isCollaborationNoOpReasoningOutbound(batches: MessageElement[][]
 }
 
 function collectEndpointMentionTokens(
-  endpointId: string,
+  endpointKey: string,
   adapter?: GroupMessageAdapterView,
   cell?: CollaborationScene,
 ): Set<string> {
-  const tokens = new Set<string>([endpointId]);
-  const member = cell?.members.find((m) => m.endpointId === endpointId);
+  const tokens = new Set<string>([endpointKey]);
+  const member = cell?.members.find((m) => m.endpointKey === endpointKey);
   if (member?.primary) tokens.add(member.primary);
   if (member?.pipelineRole) tokens.add(member.pipelineRole);
   if (member?.role) tokens.add(member.role);
-  if (adapter) tokens.add(resolvePlatformAtId(adapter, endpointId));
+  if (adapter) tokens.add(resolvePlatformAtId(adapter, endpointKey));
   return tokens;
 }
 
 /** 出站 segments 是否包含对指定 endpoint 的真实 @ segment。 */
 export function segmentsMentionEndpoint(
   segments: MessageElement[],
-  endpointId: string,
+  endpointKey: string,
   adapter?: GroupMessageAdapterView,
   cell?: CollaborationScene,
 ): boolean {
-  const tokens = collectEndpointMentionTokens(endpointId, adapter, cell);
+  const tokens = collectEndpointMentionTokens(endpointKey, adapter, cell);
   for (const seg of segments) {
     if (seg.type !== 'at' && seg.type !== 'mention') continue;
     const uid = segmentAtUserId(seg as { type: string; data?: Record<string, unknown> });

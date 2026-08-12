@@ -10,8 +10,8 @@ import type { CollaborationScene } from './types.js';
 import { findCellMemberByEndpoint } from './collaboration-config.js';
 export interface DispatchPeerTaskInput {
   cell: CollaborationScene;
-  fromEndpointId: string;
-  toEndpointId: string;
+  fromEndpointKey: string;
+  toEndpointKey: string;
   goal: string;
   handlerProfile?: string;
   message?: Message;
@@ -25,9 +25,9 @@ export interface DispatchPeerTaskResult {
   projectionTaskId?: string;
 }
 
-export function assertPeerMember(cell: CollaborationScene, endpointId: string): void {
-  if (!findCellMemberByEndpoint(cell, endpointId)) {
-    throw new Error(`endpoint "${endpointId}" is not a member of collaboration scene "${cell.id}"`);
+export function assertPeerMember(cell: CollaborationScene, endpointKey: string): void {
+  if (!findCellMemberByEndpoint(cell, endpointKey)) {
+    throw new Error(`endpoint "${endpointKey}" is not a member of collaboration scene "${cell.id}"`);
   }
 }
 
@@ -35,7 +35,7 @@ export async function projectInternalRoomTaskToIm(input: {
   runId: string;
   taskId: string;
   message: Message;
-  toEndpointId: string;
+  toEndpointKey: string;
   goal: string;
 }): Promise<string> {
   const orch = getOrchestrationService();
@@ -43,12 +43,12 @@ export async function projectInternalRoomTaskToIm(input: {
   const delegateText = input.goal.trim() || '请处理上述协作请求。';
   const projection = await orch.dispatchTask({
     runId: input.runId,
-    name: `project:${input.toEndpointId}`,
+    name: `project:${input.toEndpointKey}`,
     description: delegateText,
     role: 'worker',
     goal: `#${input.taskId}\n${delegateText}`,
     executorKind: 'im_projection',
-    assignedTo: input.toEndpointId,
+    assignedTo: input.toEndpointKey,
     context: { parentTaskId: input.taskId },
     message: input.message,
     autoStart: true,
@@ -60,8 +60,8 @@ export async function dispatchPeerTask(input: DispatchPeerTaskInput): Promise<Di
   const orch = getOrchestrationService();
   if (!orch) throw new Error('OrchestrationService is not initialized');
 
-  assertPeerMember(input.cell, input.fromEndpointId);
-  assertPeerMember(input.cell, input.toEndpointId);
+  assertPeerMember(input.cell, input.fromEndpointKey);
+  assertPeerMember(input.cell, input.toEndpointKey);
 
   const delegateText = input.goal.trim() || '请处理上述协作请求。';
   const message = input.message;
@@ -77,7 +77,7 @@ export async function dispatchPeerTask(input: DispatchPeerTaskInput): Promise<Di
           collaborationSceneId: input.cell.id,
           scene: {
             platform: input.cell.adapter,
-            endpointId: input.fromEndpointId,
+            endpointKey: input.fromEndpointKey,
             sceneId: input.cell.sceneId,
             kind: 'group',
           },
@@ -86,15 +86,15 @@ export async function dispatchPeerTask(input: DispatchPeerTaskInput): Promise<Di
 
   const dispatched = await orch.dispatchTask({
     runId: run.id,
-    name: `@${input.toEndpointId}`,
+    name: `@${input.toEndpointKey}`,
     description: delegateText,
     role: 'worker',
     goal: delegateText,
     executorKind: 'internal_room',
-    assignedTo: input.toEndpointId,
+    assignedTo: input.toEndpointKey,
     context: {
       collaborationSceneId: input.cell.id,
-      fromEndpointId: input.fromEndpointId,
+      fromEndpointKey: input.fromEndpointKey,
       handlerProfile: input.handlerProfile,
       projectToIm: input.projectToIm === true,
     },
@@ -108,7 +108,7 @@ export async function dispatchPeerTask(input: DispatchPeerTaskInput): Promise<Di
       runId: run.id,
       taskId: dispatched.task.id,
       message,
-      toEndpointId: input.toEndpointId,
+      toEndpointKey: input.toEndpointKey,
       goal: delegateText,
     });
   }

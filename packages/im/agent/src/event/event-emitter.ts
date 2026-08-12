@@ -54,7 +54,7 @@ export class ZhinAgentEventEmitter {
       mode,
       userId: commMessage.$sender.id,
       platform: String(commMessage.$adapter),
-      endpointId: commMessage.$endpoint,
+      endpointKey: commMessage.$endpoint,
       sceneId: commMessage.$channel?.id ?? commMessage.$sender.id,
       messageId: commMessage.$id,
       scope: commMessage.$channel?.type ?? 'private',

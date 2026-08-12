@@ -27,10 +27,10 @@ const bootstrapOptionsStore = createGenerationStore<BootstrapRuntimesOptions>('z
 
 function resolveMemberForEndpoint(
   cells: CollaborationScene[],
-  endpointId: string,
+  endpointKey: string,
 ): { primary: string; pipelineRole?: string } {
   for (const cell of cells) {
-    const member = findCellMemberByEndpoint(cell, endpointId);
+    const member = findCellMemberByEndpoint(cell, endpointKey);
     if (member) return { primary: member.primary, pipelineRole: member.pipelineRole };
   }
   return { primary: DEFAULT_ZHIN_AGENT_NAME };
@@ -62,19 +62,19 @@ function applyEndpointRuntimes(options: BootstrapRuntimesOptions): void {
   const cellList = getCollaborationSceneService().listScenes();
   if (cellList.length === 0) return;
 
-  const endpointIds = [...new Set(cellList.flatMap((c) => c.members.map((m) => m.endpointId)))].sort();
-  if (endpointIds.length === 1) {
-    const endpointId = endpointIds[0]!;
-    const member = resolveMemberForEndpoint(cellList, endpointId);
+  const endpointKeys = [...new Set(cellList.flatMap((c) => c.members.map((m) => m.endpointKey)))].sort();
+  if (endpointKeys.length === 1) {
+    const endpointKey = endpointKeys[0]!;
+    const member = resolveMemberForEndpoint(cellList, endpointKey);
     const binding = resolveEndpointBinding(ai, member);
     primaryAgent.configure({ activeBinding: binding });
-    registry.registerForEndpoint(endpointId, primaryAgent);
+    registry.registerForEndpoint(endpointKey, primaryAgent);
     return;
   }
 
   const orchestrator = plugin.root.inject('agent');
   const modelRegistry = ai.getModelRegistry();
-  const primaryEndpointId = endpointIds[0]!;
+  const primaryEndpointKey = endpointKeys[0]!;
 
   const collabTail = agentConfig?.contextTailMessageLimit ?? COLLABORATION_CONTEXT_TAIL_MESSAGE_LIMIT;
   const runtimeConfig = {
@@ -82,13 +82,13 @@ function applyEndpointRuntimes(options: BootstrapRuntimesOptions): void {
     contextTailMessageLimit: collabTail,
   };
 
-  for (const endpointId of endpointIds) {
-    const member = resolveMemberForEndpoint(cellList, endpointId);
+  for (const endpointKey of endpointKeys) {
+    const member = resolveMemberForEndpoint(cellList, endpointKey);
     const binding = resolveEndpointBinding(ai, member);
 
-    if (endpointId === primaryEndpointId) {
+    if (endpointKey === primaryEndpointKey) {
       primaryAgent.configure({ activeBinding: binding });
-      registry.registerForEndpoint(endpointId, primaryAgent);
+      registry.registerForEndpoint(endpointKey, primaryAgent);
       continue;
     }
     const provider = ai.getProvider(binding.providerAlias);
@@ -105,7 +105,7 @@ function applyEndpointRuntimes(options: BootstrapRuntimesOptions): void {
       skillRegistry: orchestrator?.skills,
       orchestrator: orchestrator ?? undefined,
     });
-    registry.registerForEndpoint(endpointId, runtime);
+    registry.registerForEndpoint(endpointKey, runtime);
     primaryAgent.sharePersistenceWith(runtime);
   }
 }
@@ -113,8 +113,8 @@ function applyEndpointRuntimes(options: BootstrapRuntimesOptions): void {
 /** DB 就绪后，将持久化层同步到协作 Cell 内各 Endpoint Runtime */
 export function syncCollaborationRuntimePersistence(primary: ZhinAgent): void {
   const registry = getAgentRuntimeRegistry();
-  for (const endpointId of registry.listEndpointIds()) {
-    const runtime = registry.getForEndpoint(endpointId);
+  for (const endpointKey of registry.listEndpointKeys()) {
+    const runtime = registry.getForEndpoint(endpointKey);
     if (runtime && runtime !== primary) {
       primary.sharePersistenceWith(runtime);
     }

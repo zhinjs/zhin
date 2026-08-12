@@ -7,9 +7,9 @@ const cell: CollaborationScene = {
   adapter: 'sandbox',
   sceneId: 'group-1',
   members: [
-    { endpointId: 'planner-bot', primary: 'planner', pipelineRole: 'planner' },
-    { endpointId: 'researcher-bot', primary: 'researcher', pipelineRole: 'researcher' },
-    { endpointId: 'evaluator-bot', primary: 'evaluator', pipelineRole: 'evaluator' },
+    { endpointKey: 'planner-bot', primary: 'planner', pipelineRole: 'planner' },
+    { endpointKey: 'researcher-bot', primary: 'researcher', pipelineRole: 'researcher' },
+    { endpointKey: 'evaluator-bot', primary: 'evaluator', pipelineRole: 'evaluator' },
   ],
 };
 

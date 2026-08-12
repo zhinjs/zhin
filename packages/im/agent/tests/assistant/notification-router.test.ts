@@ -12,7 +12,7 @@ const groupTarget = {
     channel: 'im' as const,
     scene: {
       platform: 'qq',
-      endpointId: 'bot1',
+      endpointKey: 'bot1',
       sceneId: 'group1',
       kind: 'group' as const,
     },
@@ -25,7 +25,7 @@ const privateTarget = {
     channel: 'im' as const,
     scene: {
       platform: 'icqq',
-      endpointId: '1',
+      endpointKey: '1',
       sceneId: 's2',
       kind: 'private' as const,
     },
@@ -45,7 +45,7 @@ describe('NotificationRouter', () => {
 
   it('parseJobNotify 拒绝 legacy flat im notify', () => {
     expect(() =>
-      parseJobNotify({ channel: 'im', platform: 'icqq', endpointId: '1' }),
+      parseJobNotify({ channel: 'im', platform: 'icqq', endpointKey: '1' }),
     ).toThrow(/target/);
   });
 
@@ -65,7 +65,7 @@ describe('NotificationRouter', () => {
           channel: 'im',
           scene: {
             platform: 'icqq',
-            endpointId: '1',
+            endpointKey: '1',
             sceneId: 's2',
             kind: 'private',
           },
@@ -79,7 +79,7 @@ describe('NotificationRouter', () => {
         channel: 'im',
         scene: {
           platform: 'icqq',
-          endpointId: '1',
+          endpointKey: '1',
           sceneId: 's2',
           kind: 'private',
         },
@@ -113,7 +113,7 @@ describe('NotificationRouter', () => {
           channel: 'im',
           scene: {
             platform: 'icqq',
-            endpointId: '8596238',
+            endpointKey: '8596238',
             sceneId: '1659488338',
             kind: 'private',
           },

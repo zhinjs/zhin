@@ -33,7 +33,7 @@ export type AIEventPayload = Plugin.AIEventPayload;
 export interface AIEventFilter {
   sessionId?: string;
   platform?: string;
-  endpointId?: string;
+  endpointKey?: string;
   sceneId?: string;
   source?: Plugin.AIEventPayload['source'];
 }
@@ -105,7 +105,7 @@ function matchesFilter(payload: AIEventPayload, filter?: AIEventFilter): boolean
   if (!filter) return true;
   if (filter.sessionId && payload.sessionId !== filter.sessionId) return false;
   if (filter.platform && payload.platform !== filter.platform) return false;
-  if (filter.endpointId && payload.endpointId !== filter.endpointId) return false;
+  if (filter.endpointKey && payload.endpointKey !== filter.endpointKey) return false;
   if (filter.sceneId && payload.sceneId !== filter.sceneId) return false;
   if (filter.source && payload.source !== filter.source) return false;
   return true;

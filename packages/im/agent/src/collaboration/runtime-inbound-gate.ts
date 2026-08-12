@@ -48,7 +48,7 @@ export async function applyRuntimeCollaborationInbound(
     logger,
   } = input;
 
-  const endpointId = String(message.$endpoint ?? '');
+  const endpointKey = String(message.$endpoint ?? '');
   const cellService = getCollaborationSceneService();
   const scope = message.$channel?.type || 'private';
   const sceneId = message.$channel?.id ?? '';
@@ -58,7 +58,7 @@ export async function applyRuntimeCollaborationInbound(
         cellService.listScenes(),
         String(message.$adapter),
         String(sceneId),
-        endpointId,
+        endpointKey,
       )
       : undefined;
   if (cell) {
@@ -75,28 +75,28 @@ export async function applyRuntimeCollaborationInbound(
   if (peerResult.isPeer && !peerResult.shouldTrigger) {
     logger.debug(formatCompact({
       op: 'skip_peer',
-      peer: peerResult.peerEndpointId,
+      peer: peerResult.peerEndpointKey,
       reason: peerResult.reason,
     }));
     return { action: 'skip', reason: peerResult.reason ?? 'peer_mention_required' };
   }
 
-  const atOwnership = evaluateCellAtOwnership(message, cell, endpointId);
+  const atOwnership = evaluateCellAtOwnership(message, cell, endpointKey);
   if (!atOwnership.shouldHandle) {
     logger.debug(formatCompact({
       op: 'skip_at_filter',
       reason: atOwnership.reason,
-      endpoint: endpointId,
+      endpoint: endpointKey,
     }));
     return { action: 'skip', reason: atOwnership.reason ?? 'cell_at_filter' };
   }
 
   const peerInbound = isInboundFromCollaborationPeer(message, cell);
-  if (peerInbound && cell && peerResult.peerEndpointId) {
+  if (peerInbound && cell && peerResult.peerEndpointKey) {
     const handbackDone = await tryHandlePeerInboundHandback({
       message,
       cell,
-      peerEndpointId: peerResult.peerEndpointId,
+      peerEndpointKey: peerResult.peerEndpointKey,
       replyAi,
       logger,
     });
@@ -108,21 +108,21 @@ export async function applyRuntimeCollaborationInbound(
   const turnPlan = buildTurnPlan({
     message,
     contentText: content,
-    endpointId,
-    endpointIds: endpointAtIds,
+    endpointKey,
+    endpointKeys: endpointAtIds,
     cells: cellService.listScenes(),
     agents,
     discoveredAgentNames,
   });
 
-  const peerTarget = turnPlan.delegation?.delegateToPeer ?? turnPlan.delegation?.targetEndpointId;
-  if (peerTarget && peerTarget !== endpointId && cell) {
+  const peerTarget = turnPlan.delegation?.delegateToPeer ?? turnPlan.delegation?.targetEndpointKey;
+  if (peerTarget && peerTarget !== endpointKey && cell) {
     const delegateText = content.trim() || '请处理上述协作请求。';
     try {
       const dispatched = await dispatchPeerTask({
         cell,
-        fromEndpointId: endpointId,
-        toEndpointId: peerTarget,
+        fromEndpointKey: endpointKey,
+        toEndpointKey: peerTarget,
         goal: delegateText,
         handlerProfile: turnPlan.handlerProfile,
         message,
@@ -135,7 +135,7 @@ export async function applyRuntimeCollaborationInbound(
         logger.info(formatCompact({
           op: 'peer_dispatch',
           task: dispatched.taskId,
-          from: endpointId,
+          from: endpointKey,
           to: peerTarget,
         }));
         return { action: 'done', reason: 'peer_dispatch' };

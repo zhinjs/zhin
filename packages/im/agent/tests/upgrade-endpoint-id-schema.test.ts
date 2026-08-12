@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { upgradeBotIdToEndpointIdColumns } from '../src/init/upgrade-endpoint-id-schema.js';
+import { upgradeBotIdToEndpointKeyColumns } from '../src/init/upgrade-endpoint-id-schema.js';
 
-describe('upgradeBotIdToEndpointIdColumns', () => {
+describe('upgradeBotIdToEndpointKeyColumns', () => {
   it('renames bot_id on any user table that still has it', async () => {
     const tables: Record<string, string[]> = {
       unified_inbox_notice: ['id', 'adapter', 'bot_id'],
@@ -21,7 +21,7 @@ describe('upgradeBotIdToEndpointIdColumns', () => {
       return [];
     });
 
-    const renamed = await upgradeBotIdToEndpointIdColumns({
+    const renamed = await upgradeBotIdToEndpointKeyColumns({
       db: { query, dialect: { name: 'sqlite' } },
     });
 
@@ -36,7 +36,7 @@ describe('upgradeBotIdToEndpointIdColumns', () => {
 
   it('skips non-sqlite dialects', async () => {
     const query = vi.fn();
-    const renamed = await upgradeBotIdToEndpointIdColumns({
+    const renamed = await upgradeBotIdToEndpointKeyColumns({
       db: { query, dialect: { name: 'postgres' } },
     });
     expect(renamed).toEqual([]);

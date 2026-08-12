@@ -13,8 +13,8 @@ const cell: CollaborationScene = {
   sceneId: '1',
   version: 3,
   members: [
-    { endpointId: 'planner', primary: 'planner', pipelineRole: 'planner' },
-    { endpointId: 'researcher', primary: 'researcher', pipelineRole: 'researcher' },
+    { endpointKey: 'planner', primary: 'planner', pipelineRole: 'planner' },
+    { endpointKey: 'researcher', primary: 'researcher', pipelineRole: 'researcher' },
   ],
   pipelineState: {
     runId: 'run-abc-111',
@@ -24,7 +24,7 @@ const cell: CollaborationScene = {
     allowedNextStages: ['evaluator'],
     todo: [],
     activeDelegations: [{
-      targetEndpointId: 'researcher',
+      targetEndpointKey: 'researcher',
       targetRole: 'researcher',
       runId: 'run-abc-111',
       requireArtifact: true,

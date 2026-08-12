@@ -6,7 +6,7 @@ import { resolveActivityFeedbackSessionId } from './subagent-prefix.js';
 /** 单次 activity phase 操作的归一化上下文（由 AI 事件 payload 解析） */
 export interface ActivityFeedbackEventContext {
   platform: string;
-  endpointId: string;
+  endpointKey: string;
   sessionId: string;
   messageId?: string;
   sceneType: ActivitySceneType;
@@ -63,8 +63,8 @@ export function resolveActivityEventTargets(
 export function toActivityFeedbackEventContext(
   payload: AIEventPayload,
 ): ActivityFeedbackEventContext | null {
-  const { platform, endpointId, sessionId } = payload;
-  if (!platform || !endpointId) return null;
+  const { platform, endpointKey, sessionId } = payload;
+  if (!platform || !endpointKey) return null;
 
   const sceneType = resolveActivitySceneType(payload);
   const targets = resolveActivityEventTargets(payload, sceneType);
@@ -73,7 +73,7 @@ export function toActivityFeedbackEventContext(
 
   return {
     platform,
-    endpointId,
+    endpointKey,
     sessionId: activitySessionId,
     messageId: payload.messageId,
     sceneType,
@@ -81,7 +81,7 @@ export function toActivityFeedbackEventContext(
     groupId: targets.groupId,
     options: {
       platform,
-      endpointId,
+      endpointKey,
       sessionId: activitySessionId,
       messageId: payload.messageId,
       sceneType,

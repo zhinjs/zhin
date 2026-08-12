@@ -115,11 +115,11 @@ export function buildSessionCreateInput(
   sessionKey: string,
   commMessage: Message,
 ): CreateIMSessionInput & CreateAgentSessionInput {
-  const { platform, endpointId, sceneId, sceneType } = resolveSceneFieldsFromMessage(commMessage);
+  const { platform, endpointKey, sceneId, sceneType } = resolveSceneFieldsFromMessage(commMessage);
   return {
     session_key: sessionKey,
     platform,
-    endpoint_id: endpointId,
+    endpoint_id: endpointKey,
     scene_id: sceneId,
     scene_type: sceneType,
   };
@@ -128,10 +128,10 @@ export function buildSessionCreateInput(
 export function buildImTranscriptQuery(
   commMessage: Message,
 ): import('@zhin.js/ai').ImTranscriptQuery {
-  const { platform, endpointId, sceneId } = resolveSceneFieldsFromMessage(commMessage);
+  const { platform, endpointKey, sceneId } = resolveSceneFieldsFromMessage(commMessage);
   return {
     platform,
-    endpointId,
+    endpointKey,
     sceneId,
   };
 }

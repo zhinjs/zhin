@@ -15,7 +15,7 @@ describe('deliverScheduleToAdapter', () => {
         channel: 'im',
         scene: {
           platform: 'test',
-          endpointId: 'default',
+          endpointKey: 'default',
           sceneId: 'room-1',
           kind: 'group',
         },
@@ -49,7 +49,7 @@ describe('deliverScheduleToAdapter', () => {
         channel: 'im',
         scene: {
           platform: 'test',
-          endpointId: 'ep1',
+          endpointKey: 'ep1',
           sceneId: 'room-1',
           kind: 'group',
         },
@@ -67,7 +67,7 @@ describe('deliverScheduleToAdapter', () => {
 
   it('returns not delivered when no router provided', async () => {
     const result = await deliverScheduleToAdapter({
-      notify: { channel: 'im', target: { channel: 'im', scene: { platform: 'x', endpointId: 'e', sceneId: 's', kind: 'group' } } },
+      notify: { channel: 'im', target: { channel: 'im', scene: { platform: 'x', endpointKey: 'e', sceneId: 's', kind: 'group' } } },
       content: 'text',
     });
     expect(result.delivered).toBe(false);

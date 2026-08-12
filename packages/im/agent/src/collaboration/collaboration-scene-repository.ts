@@ -36,7 +36,7 @@ export interface CollaborationSceneRepository {
   listEnabled(): Promise<CollaborationScene[]>;
   getById(id: string): Promise<CollaborationScene | null>;
   findByScene(adapter: string, sceneId: string): Promise<CollaborationScene | null>;
-  findScenesByEndpoint(endpointId: string): Promise<CollaborationScene[]>;
+  findScenesByEndpoint(endpointKey: string): Promise<CollaborationScene[]>;
   upsert(input: UpsertCollaborationSceneInput): Promise<CollaborationScene>;
   updateGoal(id: string, goal: string, expectedVersion?: number): Promise<
     { ok: true; scene: CollaborationScene } | { ok: false; error: string }
@@ -58,10 +58,10 @@ export interface CollaborationSceneRepository {
   >;
   updateMember(
     collaborationSceneId: string,
-    endpointId: string,
+    endpointKey: string,
     patch: Partial<UpsertCollaborationMemberInput>,
   ): Promise<{ ok: true; member: CollaborationSceneMemberRecord } | { ok: false; error: string }>;
-  removeMember(collaborationSceneId: string, endpointId: string): Promise<boolean>;
+  removeMember(collaborationSceneId: string, endpointKey: string): Promise<boolean>;
 }
 
 /** node:sqlite 方言会把 JSON 形态的 TEXT 预解析为 object，不能直接 String()。 */
@@ -124,7 +124,7 @@ function assembleScene(record: CollaborationSceneRecord, members: CollaborationS
     members: members
       .filter((m) => m.enabled !== false)
       .map((m) => ({
-        endpointId: m.endpointId,
+        endpointKey: m.endpointKey,
         adapter: m.adapter,
         primary: m.primary,
         role: m.role,
@@ -141,10 +141,10 @@ abstract class CollaborationSceneRepositoryBase implements CollaborationSceneRep
   protected abstract writeSceneRecord(record: CollaborationSceneRecord): Promise<void>;
   protected abstract deleteSceneRecord(id: string): Promise<boolean>;
   protected abstract listMemberRows(collaborationSceneId: string): Promise<CollaborationSceneMemberRow[]>;
-  protected abstract listMemberRowsByEndpoint(endpointId: string): Promise<CollaborationSceneMemberRow[]>;
-  protected abstract getMemberRow(collaborationSceneId: string, endpointId: string): Promise<CollaborationSceneMemberRow | null>;
+  protected abstract listMemberRowsByEndpoint(endpointKey: string): Promise<CollaborationSceneMemberRow[]>;
+  protected abstract getMemberRow(collaborationSceneId: string, endpointKey: string): Promise<CollaborationSceneMemberRow | null>;
   protected abstract writeMemberRow(row: CollaborationSceneMemberRow): Promise<void>;
-  protected abstract deleteMemberRow(collaborationSceneId: string, endpointId: string): Promise<boolean>;
+  protected abstract deleteMemberRow(collaborationSceneId: string, endpointKey: string): Promise<boolean>;
   protected abstract deleteMembersForScene(collaborationSceneId: string): Promise<void>;
   protected abstract replaceMembers(collaborationSceneId: string, members: CollaborationSceneMemberRecord[]): Promise<void>;
 
@@ -176,8 +176,8 @@ abstract class CollaborationSceneRepositoryBase implements CollaborationSceneRep
     return assembleScene(record, rows.map(memberRowToRecord));
   }
 
-  async findScenesByEndpoint(endpointId: string): Promise<CollaborationScene[]> {
-    const memberRows = await this.listMemberRowsByEndpoint(endpointId);
+  async findScenesByEndpoint(endpointKey: string): Promise<CollaborationScene[]> {
+    const memberRows = await this.listMemberRowsByEndpoint(endpointKey);
     const cellIds = [...new Set(memberRows.filter((m) => m.enabled !== 0).map((m) => m.collaboration_scene_id))];
     const cells: CollaborationScene[] = [];
     for (const collaborationSceneId of cellIds) {
@@ -303,8 +303,8 @@ abstract class CollaborationSceneRepositoryBase implements CollaborationSceneRep
   ): Promise<{ ok: true; member: CollaborationSceneMemberRecord } | { ok: false; error: string }> {
     const cell = await this.getSceneRecord(collaborationSceneId);
     if (!cell) return { ok: false, error: `Cell ${collaborationSceneId} not found` };
-    const dup = await this.getMemberRow(collaborationSceneId, input.endpointId);
-    if (dup) return { ok: false, error: `Member ${input.endpointId} already exists` };
+    const dup = await this.getMemberRow(collaborationSceneId, input.endpointKey);
+    if (dup) return { ok: false, error: `Member ${input.endpointKey} already exists` };
     const row = memberInputToRow(collaborationSceneId, input);
     await this.writeMemberRow(row);
     await this.bumpSceneVersion(collaborationSceneId);
@@ -313,13 +313,13 @@ abstract class CollaborationSceneRepositoryBase implements CollaborationSceneRep
 
   async updateMember(
     collaborationSceneId: string,
-    endpointId: string,
+    endpointKey: string,
     patch: Partial<UpsertCollaborationMemberInput>,
   ): Promise<{ ok: true; member: CollaborationSceneMemberRecord } | { ok: false; error: string }> {
-    const existing = await this.getMemberRow(collaborationSceneId, endpointId);
-    if (!existing) return { ok: false, error: `Member ${endpointId} not found` };
+    const existing = await this.getMemberRow(collaborationSceneId, endpointKey);
+    if (!existing) return { ok: false, error: `Member ${endpointKey} not found` };
     const row = memberInputToRow(collaborationSceneId, {
-      endpointId,
+      endpointKey,
       primary: patch.primary ?? existing.primary,
       role: patch.role ?? (existing.role || undefined),
       pipelineRole: patch.pipelineRole ?? (existing.pipeline_role || undefined),
@@ -331,8 +331,8 @@ abstract class CollaborationSceneRepositoryBase implements CollaborationSceneRep
     return { ok: true, member: memberRowToRecord(row) };
   }
 
-  async removeMember(collaborationSceneId: string, endpointId: string): Promise<boolean> {
-    const ok = await this.deleteMemberRow(collaborationSceneId, endpointId);
+  async removeMember(collaborationSceneId: string, endpointKey: string): Promise<boolean> {
+    const ok = await this.deleteMemberRow(collaborationSceneId, endpointKey);
     if (ok) await this.bumpSceneVersion(collaborationSceneId);
     return ok;
   }
@@ -379,18 +379,18 @@ export class MemoryCollaborationSceneRepository extends CollaborationSceneReposi
     return [...(this.members.get(collaborationSceneId) ?? [])];
   }
 
-  protected async listMemberRowsByEndpoint(endpointId: string): Promise<CollaborationSceneMemberRow[]> {
+  protected async listMemberRowsByEndpoint(endpointKey: string): Promise<CollaborationSceneMemberRow[]> {
     const out: CollaborationSceneMemberRow[] = [];
     for (const rows of this.members.values()) {
       for (const row of rows) {
-        if (row.endpoint_id === endpointId) out.push(row);
+        if (row.endpoint_id === endpointKey) out.push(row);
       }
     }
     return out;
   }
 
-  protected async getMemberRow(collaborationSceneId: string, endpointId: string): Promise<CollaborationSceneMemberRow | null> {
-    return (this.members.get(collaborationSceneId) ?? []).find((m) => m.endpoint_id === endpointId) ?? null;
+  protected async getMemberRow(collaborationSceneId: string, endpointKey: string): Promise<CollaborationSceneMemberRow | null> {
+    return (this.members.get(collaborationSceneId) ?? []).find((m) => m.endpoint_id === endpointKey) ?? null;
   }
 
   protected async writeMemberRow(row: CollaborationSceneMemberRow): Promise<void> {
@@ -402,10 +402,10 @@ export class MemoryCollaborationSceneRepository extends CollaborationSceneReposi
     this.members.set(row.collaboration_scene_id, list);
   }
 
-  protected async deleteMemberRow(collaborationSceneId: string, endpointId: string): Promise<boolean> {
+  protected async deleteMemberRow(collaborationSceneId: string, endpointKey: string): Promise<boolean> {
     const list = this.members.get(collaborationSceneId);
     if (!list) return false;
-    const next = list.filter((m) => m.endpoint_id !== endpointId);
+    const next = list.filter((m) => m.endpoint_id !== endpointKey);
     if (next.length === list.length) return false;
     this.members.set(collaborationSceneId, next);
     return true;
@@ -472,13 +472,13 @@ export class DatabaseCollaborationSceneRepository extends CollaborationSceneRepo
     return rows.map(rowToMemberRow).sort((a, b) => a.sort_order - b.sort_order);
   }
 
-  protected async listMemberRowsByEndpoint(endpointId: string): Promise<CollaborationSceneMemberRow[]> {
-    const rows = await this.memberModel.select().where({ endpoint_id: endpointId, enabled: 1 });
+  protected async listMemberRowsByEndpoint(endpointKey: string): Promise<CollaborationSceneMemberRow[]> {
+    const rows = await this.memberModel.select().where({ endpoint_id: endpointKey, enabled: 1 });
     return rows.map(rowToMemberRow);
   }
 
-  protected async getMemberRow(collaborationSceneId: string, endpointId: string): Promise<CollaborationSceneMemberRow | null> {
-    const rows = await this.memberModel.select().where({ collaboration_scene_id: collaborationSceneId, endpoint_id: endpointId });
+  protected async getMemberRow(collaborationSceneId: string, endpointKey: string): Promise<CollaborationSceneMemberRow | null> {
+    const rows = await this.memberModel.select().where({ collaboration_scene_id: collaborationSceneId, endpoint_id: endpointKey });
     if (!rows.length) return null;
     return rowToMemberRow(rows[0]!);
   }
@@ -492,11 +492,11 @@ export class DatabaseCollaborationSceneRepository extends CollaborationSceneRepo
     await this.memberModel.update({ ...row }).where({ collaboration_scene_id: row.collaboration_scene_id, endpoint_id: row.endpoint_id });
   }
 
-  protected async deleteMemberRow(collaborationSceneId: string, endpointId: string): Promise<boolean> {
+  protected async deleteMemberRow(collaborationSceneId: string, endpointKey: string): Promise<boolean> {
     if (!this.memberModel.delete) return false;
-    const existing = await this.getMemberRow(collaborationSceneId, endpointId);
+    const existing = await this.getMemberRow(collaborationSceneId, endpointKey);
     if (!existing) return false;
-    await this.memberModel.delete().where({ collaboration_scene_id: collaborationSceneId, endpoint_id: endpointId });
+    await this.memberModel.delete().where({ collaboration_scene_id: collaborationSceneId, endpoint_id: endpointKey });
     return true;
   }
 
@@ -510,7 +510,7 @@ export class DatabaseCollaborationSceneRepository extends CollaborationSceneRepo
 
   protected async replaceMembers(collaborationSceneId: string, members: CollaborationSceneMemberRecord[]): Promise<void> {
     const existing = await this.listMemberRows(collaborationSceneId);
-    const nextIds = new Set(members.map((m) => m.endpointId));
+    const nextIds = new Set(members.map((m) => m.endpointKey));
     for (const row of existing) {
       if (!nextIds.has(row.endpoint_id)) {
         await this.deleteMemberRow(collaborationSceneId, row.endpoint_id);
@@ -518,7 +518,7 @@ export class DatabaseCollaborationSceneRepository extends CollaborationSceneRepo
     }
     for (let i = 0; i < members.length; i++) {
       const m = members[i]!;
-      const prev = existing.find((r) => r.endpoint_id === m.endpointId);
+      const prev = existing.find((r) => r.endpoint_id === m.endpointKey);
       await this.writeMemberRow(memberInputToRow(collaborationSceneId, { ...m, sortOrder: m.sortOrder ?? i }, Date.now(), prev));
     }
   }

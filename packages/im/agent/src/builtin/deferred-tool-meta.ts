@@ -54,8 +54,18 @@ export function getDeferredToolRuntime(message?: Message): DeferredToolRuntime |
   return deferredRuntime.get(message);
 }
 
-function formatDiscoverResults(items: ReturnType<typeof discoverInCatalog>): string {
-  if (items.length === 0) return 'No matches.';
+const MEMORY_HINT_KEYWORDS = ['memory', 'remember', 'recall', 'store', '记忆', '记住', '记下', '回忆', '备忘'];
+const MEMORY_FALLBACK_HINT =
+  'No matches. 语义记忆工具未启用（需配置 ai.memory.semantic.enabled: true）。'
+  + '可使用 write_file 将信息写入 data/memory/sessions/…/MEMORY.md 作为文件记忆替代。';
+
+function formatDiscoverResults(items: ReturnType<typeof discoverInCatalog>, query?: string): string {
+  if (items.length === 0) {
+    if (query && MEMORY_HINT_KEYWORDS.some(kw => query.toLowerCase().includes(kw))) {
+      return MEMORY_FALLBACK_HINT;
+    }
+    return 'No matches.';
+  }
   return items
     .map(i => `- [${i.kind}] ${i.name}: ${i.brief}`)
     .join('\n');
@@ -96,7 +106,7 @@ export class DiscoverBuiltinTool extends BuiltinBaseTool {
       skillRegistry: runtime.skillRegistry,
       catalog: runtime.catalog,
     });
-    return formatDiscoverResults(items);
+    return formatDiscoverResults(items, query);
   }
 }
 

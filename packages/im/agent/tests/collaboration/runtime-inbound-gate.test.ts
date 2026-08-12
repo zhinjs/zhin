@@ -38,8 +38,8 @@ describe('applyRuntimeCollaborationInbound', () => {
       sceneId: 'group-1',
       enabled: true,
       members: [
-        { endpointId: 'bot-a', primary: 'zhin' },
-        { endpointId: 'bot-b', primary: 'zhin' },
+        { endpointKey: 'bot-a', primary: 'zhin' },
+        { endpointKey: 'bot-b', primary: 'zhin' },
       ],
     });
     const message = createSyntheticMessage({

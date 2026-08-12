@@ -18,8 +18,8 @@ const cell: CollaborationScene = {
   sceneId: '373460458',
   goal: 'ICQQ 多 Bot 同群协作',
   members: [
-    { endpointId: '8596238', primary: 'planner', role: 'coordinator' },
-    { endpointId: '210723495', primary: 'executor', role: 'worker' },
+    { endpointKey: '8596238', primary: 'planner', role: 'coordinator' },
+    { endpointKey: '210723495', primary: 'executor', role: 'worker' },
   ],
 };
 
@@ -99,8 +99,8 @@ describe('resolveCollaborationTurnHint', () => {
       adapter: cell.adapter,
       sceneId: cell.sceneId,
       members: [
-        { endpointId: '8596238', primary: 'planner', pipelineRole: 'planner' },
-        { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
+        { endpointKey: '8596238', primary: 'planner', pipelineRole: 'planner' },
+        { endpointKey: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
       ],
     });
     svc.setRepository(repo);
@@ -114,7 +114,7 @@ describe('resolveCollaborationTurnHint', () => {
       allowedNextStages: ['evaluator'],
       todo: [],
       activeDelegations: [{
-        targetEndpointId: '210723495',
+        targetEndpointKey: '210723495',
         targetRole: 'researcher',
         runId: 'run-1',
         requireArtifact: false,
@@ -140,8 +140,8 @@ describe('resolveCollaborationTurnHint', () => {
       adapter: cell.adapter,
       sceneId: cell.sceneId,
       members: [
-        { endpointId: '8596238', primary: 'planner', pipelineRole: 'planner' },
-        { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
+        { endpointKey: '8596238', primary: 'planner', pipelineRole: 'planner' },
+        { endpointKey: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
       ],
     });
     svc.setRepository(repo);
@@ -155,7 +155,7 @@ describe('resolveCollaborationTurnHint', () => {
       allowedNextStages: ['evaluator'],
       todo: [],
       activeDelegations: [{
-        targetEndpointId: '210723495',
+        targetEndpointKey: '210723495',
         targetRole: 'researcher',
         runId: 'run-1',
         requireArtifact: true,
@@ -181,8 +181,8 @@ describe('resolveCollaborationTurnHint', () => {
       adapter: cell.adapter,
       sceneId: cell.sceneId,
       members: [
-        { endpointId: '8596238', primary: 'planner', pipelineRole: 'planner' },
-        { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
+        { endpointKey: '8596238', primary: 'planner', pipelineRole: 'planner' },
+        { endpointKey: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
       ],
     });
     svc.setRepository(repo);
@@ -204,8 +204,8 @@ describe('resolveCollaborationTurnHint', () => {
       adapter: cell.adapter,
       sceneId: cell.sceneId,
       members: [
-        { endpointId: '8596238', primary: 'planner', pipelineRole: 'planner' },
-        { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
+        { endpointKey: '8596238', primary: 'planner', pipelineRole: 'planner' },
+        { endpointKey: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
       ],
     });
     svc.setRepository(repo);

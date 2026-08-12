@@ -5,7 +5,7 @@ import type { Message, Plugin } from '@zhin.js/core';
 import { AskUserSessionService } from './ask-user-session-service.js';
 
 export interface PendingAskUserSession {
-  endpointId: string;
+  endpointKey: string;
   masterId: string;
   groupOrigin?: Message;
   registeredAt: number;
@@ -15,11 +15,11 @@ export function registerPendingAskUser(_session: PendingAskUserSession): void {
   // legacy no-op：排队与会话状态由 AskUserSessionService 管理
 }
 
-export function clearPendingAskUser(_endpointId: string, _masterId: string): void {
+export function clearPendingAskUser(_endpointKey: string, _masterId: string): void {
   // legacy no-op
 }
 
-export function getPendingAskUser(_endpointId: string, _masterId: string): PendingAskUserSession | undefined {
+export function getPendingAskUser(_endpointKey: string, _masterId: string): PendingAskUserSession | undefined {
   return undefined;
 }
 

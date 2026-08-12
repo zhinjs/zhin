@@ -68,8 +68,8 @@ export function registerDefaultExecutors(
   const internalRoomExecutor: AgentExecutor = {
     kind: 'internal_room',
     async *execute({ task, message, run }) {
-      const targetEndpointId = task.assignedTo;
-      if (!targetEndpointId) {
+      const targetEndpointKey = task.assignedTo;
+      if (!targetEndpointKey) {
         yield { type: 'error', error: 'internal_room task has no assignedTo endpoint' };
         return;
       }
@@ -84,17 +84,17 @@ export function registerDefaultExecutors(
           return;
         }
         try {
-          assertPeerMember(cell, targetEndpointId);
+          assertPeerMember(cell, targetEndpointKey);
         } catch (err) {
           yield { type: 'error', error: err instanceof Error ? err.message : String(err) };
           return;
         }
       }
 
-      const peerAgent = getAgentRuntimeRegistry().getForEndpoint(targetEndpointId);
+      const peerAgent = getAgentRuntimeRegistry().getForEndpoint(targetEndpointKey);
       const subagentSystem = peerAgent?.getSubagentSystem();
       if (!peerAgent || !subagentSystem) {
-        yield { type: 'error', error: `no ZhinAgent runtime for endpoint ${targetEndpointId}` };
+        yield { type: 'error', error: `no ZhinAgent runtime for endpoint ${targetEndpointKey}` };
         return;
       }
       if (!message) {
@@ -103,20 +103,20 @@ export function registerDefaultExecutors(
       }
 
       const delegateText = task.goal || task.description || '请处理上述协作请求。';
-      yield { type: 'progress', text: `internal_room dispatch to ${targetEndpointId}` };
+      yield { type: 'progress', text: `internal_room dispatch to ${targetEndpointKey}` };
 
-      if (task.context?.projectToIm === true && message && targetEndpointId) {
+      if (task.context?.projectToIm === true && message && targetEndpointKey) {
         await projectInternalRoomTaskToIm({
           runId: run.id,
           taskId: task.id,
           message,
-          toEndpointId: targetEndpointId,
+          toEndpointKey: targetEndpointKey,
           goal: delegateText,
         });
       }
 
       const bindingRegistry = refs.aiService?.getBindingRegistry();
-      const routeBinding = bindingRegistry?.getBinding(targetEndpointId) ?? null;
+      const routeBinding = bindingRegistry?.getBinding(targetEndpointKey) ?? null;
       const routeProvider = routeBinding && refs.aiService?.isReady()
         ? refs.aiService!.getProvider(routeBinding.providerAlias)
         : undefined;
@@ -132,8 +132,8 @@ export function registerDefaultExecutors(
       const result = await subagentSystem.spawnSync({
         task: delegateText.trim() || '请处理上述协作请求。',
         runInput,
-        label: targetEndpointId,
-        agent: targetEndpointId,
+        label: targetEndpointKey,
+        agent: targetEndpointKey,
         binding: routeBinding ?? undefined,
         origin: { message },
         notifyContext: message,
@@ -150,23 +150,23 @@ export function registerDefaultExecutors(
         yield { type: 'error', error: 'im_projection executor requires an inbound message' };
         return;
       }
-      const targetEndpointId = task.assignedTo;
-      if (!targetEndpointId) {
+      const targetEndpointKey = task.assignedTo;
+      if (!targetEndpointKey) {
         yield { type: 'error', error: 'im_projection task has no assignedTo endpoint' };
         return;
       }
       const delegateText = task.goal || task.description || '请处理上述协作请求。';
-      yield { type: 'progress', text: `projecting IM @ to ${targetEndpointId}` };
+      yield { type: 'progress', text: `projecting IM @ to ${targetEndpointKey}` };
       const sent = await sendGroupPeerMention({
         message,
-        targetEndpointId,
+        targetEndpointKey,
         text: delegateText.includes(`#${task.id}`) ? delegateText : `#${task.id}\n${delegateText}`,
       });
       if (!sent.ok) {
         yield { type: 'error', error: sent.error ?? 'im projection failed' };
         return;
       }
-      yield { type: 'progress', text: `waiting_result from ${targetEndpointId}` };
+      yield { type: 'progress', text: `waiting_result from ${targetEndpointKey}` };
     },
   };
 

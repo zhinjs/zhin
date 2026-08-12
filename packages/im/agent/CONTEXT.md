@@ -5,8 +5,20 @@ Agent Runtime 在 Core IM 概念之上负责 AI 编排：ZhinAgent 回合、工�
 ## 语言
 
 **ZhinAgent**:
-理解 IM 上下文的 Agent 运行时，负责准备提示词、收集工具、运行模型回合，并通过 Core 回复。
+消费 **Turn Ingress** 的 Agent 运行时，负责准备提示词、收集工具、运行模型回合，并产出 **Turn Outcome**；不接收或保存任何 IM `Message` 对象。
 _避免使用_：assistant、bot brain、AI plugin
+
+**Turn Ingress**:
+Agent 唯一入站契约；由 IM、HTTP、A2A、Schedule 等入口在 composition root 构造。包含不可变的 origin、principal、content/media、session address、generation/trace/turn identity、policy context 和 cancellation signal，并注入 turn-scoped ports。它属于 Agent 域，不是 IM Message 的别名。
+_避免使用_：commMessage、synthetic Message、bridge message、Message.extra
+
+**Turn Ports**:
+仅在当前 turn 或明确派生 operation 内有效的能力端口，包括 `ReplyPort`、`DeliveryPort`、`ApprovalPort`、`ActivityPort`；Agent 核心通过端口请求副作用，不持有 Adapter、Endpoint、Plugin 或 Message。
+_避免使用_：Message.$reply、Adapter.sendMessage、host Plugin、回调字段包
+
+**Turn Outcome**:
+Agent 执行的唯一终态，判别为 `completed | failed | cancelled | budget_exceeded`，包含输出内容、usage、tool calls 与 terminal reason；每个 turn 恰好产生一次，并先进入 Event Journal，再由入口决定同步返回、流式投影或投递。
+_避免使用_：string reply、throw-or-message 双轨、无终态 generator
 
 **Agent Orchestrator**:
 工具、技能、子代理、MCP 服务和 AI 生命周期 Hook 的注册表所有者。
@@ -113,8 +125,8 @@ _避免使用_：SSOT、source of truth、终态写入方
 _避免使用_：optimizePrompt、extra 上的 executionPlan
 
 **Schedule Turn**:
-带 TurnContext ALS `scheduleContext` 的 agent turn（`preview` 预演或 `scheduled` 到点执行）；`TaskExecutor` 提供降权 synthetic 载体，hookContext 由 event-emitter 从 ALS 投影。
-_避免使用_：mutate 入站 Message.extra、augmentPromptWithExecutionPlan
+由 Schedule Execution Domain 直接构造的 **Turn Ingress**（`preview` 预演或 `scheduled` 到点执行）；没有 synthetic IM 载体，也不继承会话回复能力。正式执行的 Delivery Intent 在新 operation 中通过 `DeliveryPort` 投递并独立记录终态。
+_避免使用_：synthetic Message、scheduleContext 兼容分支、mutate Message.extra
 
 **Passive Group Context**:
 群/频道未 @ 入站消息写入进程内 buffer（`MAX_PASSIVE_LINES=50`、`PASSIVE_TTL_MS=30min`），@ 触发时 drain 合并进 turn；session key 与 `resolveAgentTurnSessionKey` SSOT 一致；pipeline reset 后不继承旧 run buffer。
@@ -154,6 +166,8 @@ _避免使用_：私有 `resolveTurnSessionKey`、snapshot 与 cell 双轨 key
 - **Pre-executable Tool** 在主模型回合前产出上下文。
 - **Subagent** 使用与父级 Agent Runtime 相同的 Provider 和预算词汇。
 - **Schedule Turn** 在 turn-pipeline 中顺序执行 resolve → preload → capture before → rehydrate skills；预演 delta 由 `getLastTurnToolSnapshot` 采集本 turn 新增 tools/skills。
+- IM、HTTP、A2A、Schedule 只在 composition root 适配为 **Turn Ingress**；从该边界起，Session、Tool、Policy、Event、Subagent 与 Agent Core 不得读取 IM `Message`、`Plugin`、`Adapter` 或 `$adapter/$endpoint/$channel/$sender` 字段。
+- 同步 IM 回复由 snapshot-bound `ReplyPort` 完成；HTTP 流由 Event Journal projection 完成；主动或延迟投递持久化为 `DeliveryIntent`，以带 `parentTurnId` 的新 operation 执行，不偷偷重新获取 current generation 后冒充原 turn。
 
 ## 示例对话
 
@@ -176,9 +190,9 @@ _避免使用_：私有 `resolveTurnSessionKey`、snapshot 与 cell 双轨 key
 ```
 @zhin.js/ai          stream / agentLoop / Context / Memory / Compaction
        ↑ 仅类型与循环，无 Message / Plugin / Endpoint
-@zhin.js/agent       ZhinAgent 门面 + 8 理想模块（包内 src/*）+ Orchestration + Security
-       ↑ 理解 IM，出站仍走 Message.$reply / Adapter.sendMessage（ADR 0004）
-zhin.js + plugins    createZhinAgent、activity-feedback、adapter 绑定
+@zhin.js/agent       TurnIngress / TurnOutcome + 8 理想模块 + Orchestration + Security
+       ↑ 不依赖 Message / Plugin / Adapter；副作用仅通过 Turn Ports
+zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery projections
 ```
 
 | 理想模块 | 包内路径 | 主要落层 | 与下层关系 |
@@ -222,14 +236,14 @@ zhin.js + plugins    createZhinAgent、activity-feedback、adapter 绑定
 | **EventSystem**（蓝图，`src/event/`） | Agent turn：`turn_start`、`tool_call`、`chunk`、`turn_end` |
 | **ZhinAgentEventEmitter** | 现有订阅方、`scheduleContext` 投影；迁移期作 EventSystem 后端 |
 | **OrchestrationKernel RunEvent** | Run/Task 持久化事件流；**不合并** |
-| **Plugin `before.*` / hooks** | IM 发送链、AI hook；仍走 `@zhin.js/core` |
+| **Runtime Event Journal** | ingress / delivery / failure 的事实源；IM/Console/日志只做投影 |
 
 ### ADR 对齐确认（阶段 0）
 
 | ADR | 约束 | 模块化重构符合性 |
 |-----|------|------------------|
 | [0009](../../../docs/adr/0009-pi-aligned-ai-agent-core.md) | 唯一 LLM 入口 `stream` / `agentLoop` | `AgentCore.runText()` AsyncGenerator + `runTextTurn` collector |
-| [0004](../../../docs/adr/0004-normalize-queue-outbound-fields-before-im-send.md) | 出站走 `Message.$reply` / Adapter | Subagent `ResultSink`、proactive 不得旁路发送链 |
+| [0004](../../../docs/adr/0004-normalize-queue-outbound-fields-before-im-send.md) | 出站不得旁路统一 delivery pipeline | ReplyPort / DeliveryPort 是唯一入口；Agent 不直接依赖 Message / Adapter |
 | [0027](../../../docs/adr/0027-agent-run-orchestration-kernel.md) | Kernel 为 Run/Task 终态 SSOT | Orchestration 保持 `src/orchestrator/`；Dispatcher 仅投影 |
 | [0019](../../../docs/adr/0019-install-size-layering.md) | agent 可选 peer、依赖扁平 | 迁移期单包 + 子目录；阶段 5 前不拆 8 个 npm 包 |
 

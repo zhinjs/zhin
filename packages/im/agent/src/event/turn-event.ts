@@ -21,6 +21,7 @@ export type TurnEvent =
   | TurnEndEvent
   | TurnErrorEvent
   | TurnCancelledEvent
+  | TurnBudgetExceededEvent
   | SubagentStartEvent
   | SubagentProgressEvent
   | SubagentEndEvent
@@ -84,10 +85,19 @@ export interface TurnCancelledEvent {
   code: 'cancelled' | 'superseded' | 'timeout' | 'disposed';
 }
 
-export type TurnTerminalEvent = TurnEndEvent | TurnErrorEvent | TurnCancelledEvent;
+export interface TurnBudgetExceededEvent {
+  type: 'budget_exceeded';
+  budget: string;
+  usage: TurnUsage;
+}
+
+export type TurnTerminalEvent = TurnEndEvent | TurnErrorEvent | TurnCancelledEvent | TurnBudgetExceededEvent;
 
 export function isTurnTerminalEvent(event: TurnEvent): event is TurnTerminalEvent {
-  return event.type === 'turn_end' || event.type === 'error' || event.type === 'turn_cancelled';
+  return event.type === 'turn_end'
+    || event.type === 'error'
+    || event.type === 'turn_cancelled'
+    || event.type === 'budget_exceeded';
 }
 
 export interface SubagentStartEvent {

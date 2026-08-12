@@ -27,7 +27,7 @@ class MemorySearchTool extends BuiltinBaseTool {
   readonly name = 'memory_search';
   readonly description = 'Search semantic memory (memory_entries) for facts related to query.';
   readonly parameters = PARAMS;
-  readonly keywords = ['memory', 'recall', 'remember', '记忆', '回忆'];
+  readonly keywords = ['memory', 'recall', 'remember', '记忆', '回忆', '记得', '记下', '备忘'];
 
   async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
     const repo = getMemoryEntryRepository();

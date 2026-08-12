@@ -17,19 +17,19 @@ import type { CollaborationScene } from '../../src/collaboration/types.js';
 const fullCell: CollaborationScene = {
   id: 'c', adapter: 'sandbox', sceneId: 'g',
   members: [
-    { endpointId: 'p', primary: 'planner', pipelineRole: 'planner' },
-    { endpointId: 'r', primary: 'researcher', pipelineRole: 'researcher' },
-    { endpointId: 'e', primary: 'evaluator', pipelineRole: 'evaluator' },
-    { endpointId: 'x', primary: 'executor', pipelineRole: 'executor' },
-    { endpointId: 'v', primary: 'reviewer', pipelineRole: 'reviewer' },
+    { endpointKey: 'p', primary: 'planner', pipelineRole: 'planner' },
+    { endpointKey: 'r', primary: 'researcher', pipelineRole: 'researcher' },
+    { endpointKey: 'e', primary: 'evaluator', pipelineRole: 'evaluator' },
+    { endpointKey: 'x', primary: 'executor', pipelineRole: 'executor' },
+    { endpointKey: 'v', primary: 'reviewer', pipelineRole: 'reviewer' },
   ],
 };
 
 const compactCell: CollaborationScene = {
   id: 'c2', adapter: 'sandbox', sceneId: 'g2',
   members: [
-    { endpointId: 'p', primary: 'planner', pipelineRole: 'planner' },
-    { endpointId: 'x', primary: 'executor', pipelineRole: 'executor' },
+    { endpointKey: 'p', primary: 'planner', pipelineRole: 'planner' },
+    { endpointKey: 'x', primary: 'executor', pipelineRole: 'executor' },
   ],
 };
 

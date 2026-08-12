@@ -37,6 +37,6 @@ export function extractAtTargets(message: Message): string[] {
 }
 
 /** cell 中 planner 角色的 endpoint id。 */
-export function resolvePlannerEndpointId(cell: CollaborationScene): string | undefined {
-  return cell.members.find((m) => m.pipelineRole === 'planner')?.endpointId;
+export function resolvePlannerEndpointKey(cell: CollaborationScene): string | undefined {
+  return cell.members.find((m) => m.pipelineRole === 'planner')?.endpointKey;
 }

@@ -76,8 +76,8 @@ describe('subagent-goal-notify', () => {
   it('shouldSuppressSubagentGoalNotifyToIm 多 Bot 同群协作时抑制 IM', () => {
     const cell = {
       members: [
-        { endpointId: '8596238' },
-        { endpointId: '210723495' },
+        { endpointKey: '8596238' },
+        { endpointKey: '210723495' },
       ],
     };
     const groupMsg = {
@@ -88,6 +88,6 @@ describe('subagent-goal-notify', () => {
     } as Message;
     expect(shouldSuppressSubagentGoalNotifyToIm(groupMsg, cell)).toBe(true);
     expect(shouldSuppressSubagentGoalNotifyToIm(privateMsg, cell)).toBe(false);
-    expect(shouldSuppressSubagentGoalNotifyToIm(groupMsg, { members: [{ endpointId: 'a' }] })).toBe(false);
+    expect(shouldSuppressSubagentGoalNotifyToIm(groupMsg, { members: [{ endpointKey: 'a' }] })).toBe(false);
   });
 });
