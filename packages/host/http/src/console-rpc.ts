@@ -93,7 +93,7 @@ export type RuntimeConsoleRpcContext = {
   getAllSchemas?(): Promise<Record<string, unknown>>;
   /** Optional Adapter endpoint Console surface (Sandbox / Remote Console). */
   listEndpoints?(): Promise<readonly RuntimeEndpointSummary[]>;
-  getEndpoint?(adapter: string, endpointId: string): Promise<RuntimeEndpointSummary | null>;
+  getEndpoint?(adapter: string, endpointKey: string): Promise<RuntimeEndpointSummary | null>;
   sendEndpointMessage?(input: RuntimeEndpointSendInput): Promise<{ messageId: string }>;
   /** Optional Database host surface (CLI wires DatabaseHost from plugin-runtime). */
   dbInfo?(): Promise<RuntimeDatabaseInfo> | RuntimeDatabaseInfo;
@@ -123,7 +123,7 @@ export type RuntimeDatabaseInfo = {
 
 export type RuntimeEndpointSendInput = {
   readonly adapter: string;
-  readonly endpointId: string;
+  readonly endpointKey: string;
   readonly conversation: ConversationAddress;
   readonly content: unknown;
 };
@@ -630,8 +630,8 @@ export async function dispatchRuntimeConsoleRpc(
       try {
         const data = message as Record<string, unknown>;
         const adapter = String(data.$adapter ?? '');
-        const endpointId = String(data.$endpoint ?? '');
-        if (!adapter || !endpointId) {
+        const endpointKey = String(data.$endpoint ?? '');
+        if (!adapter || !endpointKey) {
           emit({ requestId, error: '$adapter and $endpoint required' });
           return payloads;
         }
@@ -639,7 +639,7 @@ export async function dispatchRuntimeConsoleRpc(
           emit({ requestId, error: 'Endpoint registry is not configured' });
           return payloads;
         }
-        const endpoint = await ctx.getEndpoint(adapter, endpointId);
+        const endpoint = await ctx.getEndpoint(adapter, endpointKey);
         if (!endpoint) {
           emit({ requestId, error: 'endpoint not found' });
           return payloads;
@@ -657,12 +657,12 @@ export async function dispatchRuntimeConsoleRpc(
       try {
         const data = message as Record<string, unknown>;
         const adapter = String(data.$adapter ?? '');
-        const endpointId = String(data.$endpoint ?? '');
+        const endpointKey = String(data.$endpoint ?? '');
         const channelId = String(data.$channel_id ?? '');
         const channelType = String(data.$channel_type ?? '');
         const content = data.$content;
         // channelType 可省：wireConversation 归一为 private（与旧 RPC 行为对齐）。
-        if (!adapter || !endpointId || !channelId || content === undefined) {
+        if (!adapter || !endpointKey || !channelId || content === undefined) {
           emit({
             requestId,
             error: '$adapter, $endpoint, $channel_id, $content required',
@@ -675,7 +675,7 @@ export async function dispatchRuntimeConsoleRpc(
         }
         const result = await ctx.sendEndpointMessage({
           adapter,
-          endpointId,
+          endpointKey,
           conversation: wireConversation(channelType, channelId, data.$parent),
           content,
         });

@@ -35,7 +35,7 @@ export const sendCommand = new Command('send')
     const opts = sendCommand.opts();
     const sceneType = (opts.scene as string) || 'private';
     const adapterName = (opts.adapter as string) || 'process';
-    const endpointId = opts.endpoint as string | undefined;
+    const endpointKey = opts.endpoint as string | undefined;
 
     let content: string;
     if (Array.isArray(contentParts) && contentParts.length > 0) {
@@ -60,7 +60,7 @@ export const sendCommand = new Command('send')
     }
 
     const token = httpOpts.token;
-    let endpoint_id = endpointId;
+    let endpoint_id = endpointKey;
     if (!endpoint_id) {
       const ep = await getFirstEndpointForAdapter(httpOpts.baseUrl, token, adapterName);
       if (!ep) {

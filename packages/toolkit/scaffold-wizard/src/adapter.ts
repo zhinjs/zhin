@@ -87,7 +87,7 @@ export const ADAPTERS: AdapterDefinition[] = [
     setupHint: '先安装 icqq CLI 并登录：pnpm dlx icqq login <QQ号>，登录态保存在 ~/.icqq/。',
     docUrl: adapterDocsUrl('icqq'),
     fields: [
-      { key: 'name', message: 'QQ 号（与 icqq login 时一致）:', required: true, envKey: 'ICQQ_ACCOUNT' },
+      { key: 'id', message: 'QQ 号（与 icqq login 时一致）:', required: true, envKey: 'ICQQ_ACCOUNT' },
       // schema 顶层 required: master（所有 endpoint 共享）
       { key: 'master', message: '主人 QQ 号（master，/approve 等管理命令）:', required: true, scope: 'shared' },
     ],
@@ -411,7 +411,7 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
         package: adapterDef.package,
         instanceKey: 'sandbox',
         config: {
-          endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }],
+          endpoints: [{ context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' }],
         },
       });
       continue;
@@ -491,11 +491,11 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
 
 /**
  * 字段式适配器（无自定义 configure）的实例配置整形，对齐各插件 schema.json 新格式：
- * - endpoint 级字段（name + 凭据等，字段默认 scope: 'endpoint'）进 `endpoints: [{ name, ... }]`
+ * - endpoint 级字段（id + 凭据等，字段默认 scope: 'endpoint'）进 `endpoints: [{ id, ... }]`
  * - scope: 'shared' 的字段（如 lark/wechat-mp 的 webhookPath）留顶层
  * - wechat-mp：顶层字段名为 path（向导沿用 webhookPath 提问）
  * - email：smtp/imap 平铺字段 → endpoint 内 smtp/imap 嵌套对象
- * - 未单独询问 name 的适配器用 `<adapter>-bot` 兜底
+ * - 未单独询问 id 的适配器用 `<adapter>-bot` 兜底
  */
 export function buildFieldBasedInstanceConfig(adapter: AdapterDefinition, values: Record<string, any>): Record<string, unknown> {
   if (adapter.value === 'email') {
@@ -503,7 +503,7 @@ export function buildFieldBasedInstanceConfig(adapter: AdapterDefinition, values
     const password = values.password ?? '';
     return {
       endpoints: [{
-        name: 'email-bot',
+        id: 'email-bot',
         smtp: {
           host: values.smtpHost,
           port: Number(values.smtpPort) || 465,
@@ -536,8 +536,8 @@ export function buildFieldBasedInstanceConfig(adapter: AdapterDefinition, values
     shared.path = shared.webhookPath;
     delete shared.webhookPath;
   }
-  if (!endpoint.name) {
-    endpoint.name = `${adapter.value}-bot`;
+  if (!endpoint.id) {
+    endpoint.id = `${adapter.value}-bot`;
   }
   return { ...shared, endpoints: [endpoint] };
 }

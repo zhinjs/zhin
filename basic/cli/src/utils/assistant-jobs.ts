@@ -7,7 +7,7 @@ import path from 'node:path';
 export const SCHEDULE_JOBS_FILENAME = 'schedule-jobs.json';
 
 export type JobNotifyCli =
-  | { channel: 'im'; platform?: string; endpointId?: string; senderId?: string; sceneId?: string; scope?: string }
+  | { channel: 'im'; platform?: string; endpointKey?: string; senderId?: string; sceneId?: string; scope?: string }
   | { channel: 'silent' }
   | { channel: 'log' };
 

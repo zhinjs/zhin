@@ -91,7 +91,7 @@ defaults:
       channel: im
       scene:
         platform: icqq
-        endpointId: "<endpoint_id>"
+        endpointKey: "<endpoint_id>"
         sceneId: "<master_user_id>"
         kind: private
   notifyOnFailure: false

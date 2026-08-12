@@ -14,7 +14,7 @@ import {
   parseToolInputSchema,
   toolInputSchemaToParameters,
 } from '@zhin.js/core/tool-zod';
-import type { ImRuntime, Message, SendContent } from '@zhin.js/core/runtime';
+import { ingressRouteToken, type ImRuntime, type Message, type SendContent } from '@zhin.js/core/runtime';
 import {
   expandEnvironmentValue,
   type ConfigDocumentPort,
@@ -81,6 +81,9 @@ import {
   type ImTranscriptWriteInput,
   type PeerTriggerMode,
   type ApprovalPort,
+  type TurnPorts,
+  type TurnRequest,
+  type TurnAccessContext,
 } from '@zhin.js/agent';
 import {
   agentHostToken,
@@ -177,12 +180,12 @@ export interface InstallAgentHostOptions {
    * Resolve Endpoint Owner id for `/approve` + bashAlways key.
    * Key: `localName` (e.g. icqq) or live endpoint name (uin).
    */
-  readonly resolveEndpointOwner?: (adapterLocalName: string, endpointId: string) => string | undefined;
+  readonly resolveEndpointOwner?: (adapterLocalName: string, endpointKey: string) => string | undefined;
   /**
    * Resolve Endpoint trusted id 列表（plugins.<key>.trusted / endpoints[].trusted）。
    * 对齐 legacy resolveSenderRoles：trusted 角色弱于 master（不参与 Owner 审批放行）。
    */
-  readonly resolveEndpointTrusted?: (adapterLocalName: string, endpointId: string) => readonly string[];
+  readonly resolveEndpointTrusted?: (adapterLocalName: string, endpointKey: string) => readonly string[];
   /** Extra Host tools (e.g. Speech Host voice_stt / voice_tts). */
   readonly extraTools?: readonly AgentToolLike[];
   /** Optional inbound STT (Speech Host). */
@@ -385,7 +388,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       skillDirList: () => [join(options.projectRoot, 'skills')],
       skillMaxChars: 4_000,
     });
-
     const ingress = new CapabilityIngress();
     const mcp = new McpClientManager();
     const mcpEntries = parseMcpServers(aiConfig.mcpServers);
@@ -394,8 +396,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     let mcpEnsured = false;
 
     // Register before any await so a cancelled generation cannot leak Agent
-    // Resources. Separate disposers let DisposeStack await MCP shutdown and
-    // continue through later cleanup when one Resource fails.
+    // Resources. DisposeStack continues through later cleanup when one
+    // Resource fails.
     lifecycle.add(() => service.dispose());
     lifecycle.add(() => zhinAgent.dispose());
     lifecycle.add(() => mcp.disconnectAll());
@@ -415,7 +417,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 
     const presetCount = await seedPresets();
 
-    options.im.setUnmatchedHandler(async (message, snapshot, requester) => {
+    resources.provide(ingressRouteToken, Object.freeze({ route: async (
+      message: Message,
+      snapshot: RuntimeSnapshot,
+      requester: PluginId,
+    ) => {
       const trigger = service.getTriggerConfig();
       const matched = matchAiTrigger(message, trigger);
 
@@ -429,7 +435,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       // Runtime message.adapter is a CapabilityId (\0-separated); strip it and
       // use Endpoint liveName so the OutboundHost resolve() succeeds.
       const effectiveAdapter = capabilityLocalName(String(message.conversation.endpoint.id));
-      const effectiveEndpoint = adapterLiveEndpointName(message);
+      const effectiveEndpoint = adapterLiveEndpointId(message);
       if (effectiveAdapter && effectiveEndpoint) {
         (commMessage as { $adapter?: string }).$adapter = effectiveAdapter;
         (commMessage as { $endpoint?: string }).$endpoint = effectiveEndpoint;
@@ -488,14 +494,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         return true;
       }
 
+      let capabilityActive = true;
       try {
         if (!bootstrapLoaded) {
           bootstrapText = await loadBootstrap(options.projectRoot);
           bootstrapLoaded = true;
         }
         if (!mcpEnsured) {
-          // Only latch when every configured server connected; a partial
-          // failure must be retried on the next inbound turn.
           mcpEnsured = await ensureMcpConnections(mcp, mcpEntries);
         }
         const inbound = await preprocessInboundTurn(
@@ -503,7 +508,14 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           matched.content,
           options.transcribeUrl,
         );
-        const capabilities = await readCapabilities(ingress, snapshot, requester, commMessage);
+        const capabilities = await readCapabilities(
+          ingress,
+          snapshot,
+          requester,
+          message,
+          senderRoles,
+          () => capabilityActive,
+        );
         const routed = routeSpecialistAgent(inbound.text, capabilities);
         const binding = service.getBindingRegistry().requireZhinBinding();
         const collab = await applyRuntimeCollaborationInbound({
@@ -516,28 +528,14 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           },
           logger,
         });
-        if (collab.action === 'skip') {
-          logger.debug(formatCompact({
-            op: 'agent_host_collab_skip',
-            reason: collab.reason,
-          }));
-          return true;
-        }
-        if (collab.action === 'done') {
-          logger.debug(formatCompact({
-            op: 'agent_host_collab_done',
-            reason: collab.reason,
-          }));
-          return true;
-        }
+        if (collab.action === 'skip') return true;
+        if (collab.action === 'done') return true;
 
         const tools = [
           ...capabilities.tools.map(toTool),
           ...await mcpToolsAsTools(capabilities),
           ...configMcpToolsAsTools(mcp),
           ...(options.extraTools ?? []).map(toTool),
-          // discover / load_tool / load_skill — always-on deferred meta (ADR 0029).
-          // spawn_task is injected by ToolSystem when SubagentSystem is attached.
           ...deferredMetaTools,
           ...scheduleTools,
           ...homeTools,
@@ -610,8 +608,10 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           /* ignore reply failure */
         }
         return true;
+      } finally {
+        capabilityActive = false;
       }
-    });
+    }}));
 
     const binding = service.getBindingRegistry().requireZhinBinding();
     const providers = service.listProviders();
@@ -954,7 +954,7 @@ function createRuntimeProactiveOutbound(im: ImRuntime): ProactiveOutboundService
     async send(ctx, content) {
       const result = await im.sendEndpointMessage({
         adapter: ctx.scene.platform,
-        endpointId: ctx.scene.endpointId,
+        endpointKey: ctx.scene.endpointKey,
         conversation: {
           kind: ctx.scene.kind as 'private' | 'group' | 'channel',
           id: ctx.scene.sceneId,
@@ -1007,8 +1007,8 @@ export function bridgeRuntimeMessage(
   const localName = capabilityLocalName(String(message.conversation.endpoint.id));
   const channelType = resolveChannelType(message);
   const channelId = resolveChannelId(message);
-  const endpointId = message.endpointName
-    || String(message.metadata?.endpoint ?? message.metadata?.endpointId ?? localName);
+  const endpointKey = message.endpointId
+    || String(message.metadata?.endpoint ?? message.metadata?.endpointKey ?? localName);
   const senderId = resolveStableSenderId(message);
   const quoteId = message.replyTo?.id ?? (typeof message.metadata?.quote_id === 'string' ? message.metadata.quote_id : undefined);
   // 入站结构化段：纯文本视图（matched.content）会丢弃媒体，这里把 canonical
@@ -1021,7 +1021,7 @@ export function bridgeRuntimeMessage(
   );
   return createSyntheticMessage({
     adapter: localName,
-    endpoint: endpointId,
+    endpoint: endpointKey,
     id: message.id,
     ...(typeof quoteId === 'string' && quoteId ? { quote_id: quoteId } : {}),
     sender: {
@@ -1049,18 +1049,103 @@ export function bridgeRuntimeMessage(
   });
 }
 
+/**
+ * Target IM → Agent boundary mapper. Production cutover is intentionally
+ * blocked until every builtin/Host capability and the durable Journal are
+ * generation-owned; Runtime Message remains owned by the IM domain.
+ */
+export function createRuntimeTurnRequest(
+  message: Message,
+  text: string,
+  roles: RuntimeSenderRoles,
+  input: Readonly<{
+    traceId: string;
+    turnId: string;
+    signal: AbortSignal;
+    ports: TurnPorts;
+  }>,
+): TurnRequest {
+  const access = createRuntimeTurnAccess(message, roles);
+  const origin = access.origin;
+  if (origin.kind !== 'im') throw new Error('Runtime IM ingress must produce an IM origin');
+  const media = collectSegmentMedia(
+    message.segments ? toCanonicalSegments(message.segments) : undefined,
+  ).map(({ type, media: ref }) => Object.freeze({
+    kind: type as 'image' | 'audio' | 'video' | 'file',
+    source: Object.freeze({
+      kind: ref.kind === 'file' ? 'platform_ref' as const : ref.kind,
+      value: ref.value,
+    }),
+    ...(ref.mime_type ? { mimeType: ref.mime_type } : {}),
+    ...(ref.file_name ? { name: ref.file_name } : {}),
+  }));
+  const quoteId = message.replyTo?.id
+    ?? (typeof message.metadata?.quote_id === 'string' ? message.metadata.quote_id : undefined);
+
+  return Object.freeze({
+    identity: Object.freeze({ traceId: input.traceId, turnId: input.turnId }),
+    origin,
+    principal: access.principal,
+    input: Object.freeze({
+      text,
+      ...(media.length > 0 ? { media: Object.freeze(media) } : {}),
+      ...(quoteId ? { quote: Object.freeze({ messageId: quoteId }) } : {}),
+      metadata: Object.freeze({ ...message.metadata }),
+    }),
+    session: Object.freeze({
+      key: `${origin.platform}:${origin.endpoint}:${origin.scope}:${origin.sceneId}`,
+    }),
+    policy: access.policy,
+    signal: input.signal,
+    ports: Object.freeze({ ...input.ports }),
+  });
+}
+
+function createRuntimeTurnAccess(
+  message: Message,
+  roles: RuntimeSenderRoles,
+): TurnAccessContext {
+  const platform = capabilityLocalName(String(message.conversation.endpoint.id));
+  const endpoint = message.endpointId?.trim();
+  if (!endpoint) throw new TypeError('Runtime IM ingress requires endpoint identity');
+  const subjectId = message.sender?.id?.trim();
+  if (!subjectId) throw new TypeError('Runtime IM ingress requires authenticated sender identity');
+  const scope = resolveChannelType(message);
+  const trustRole = roles.isMaster ? 'master' : roles.isTrusted ? 'trusted' : 'user';
+  const principalRoles = [...new Set([...(message.sender?.roles ?? []), trustRole])];
+  return Object.freeze({
+    origin: Object.freeze({
+      kind: 'im' as const,
+      platform,
+      endpoint,
+      scope,
+      sceneId: resolveChannelId(message),
+      ...(message.id ? { messageId: message.id } : {}),
+    }),
+    principal: Object.freeze({
+      subjectId,
+      ...(message.sender?.name ? { displayName: message.sender.name } : {}),
+      roles: Object.freeze(principalRoles),
+    }),
+    policy: Object.freeze({
+      permissions: Object.freeze(principalRoles),
+      unattended: false,
+    }),
+  });
+}
+
 function resolveOwnerForRuntimeMessage(
   message: Message,
   resolve?: InstallAgentHostOptions['resolveEndpointOwner'],
 ): string | undefined {
   if (!resolve) return undefined;
   const localName = capabilityLocalName(String(message.conversation.endpoint.id));
-  const endpointId = String(
+  const endpointKey = String(
     message.metadata?.endpoint
-    ?? message.metadata?.endpointId
+    ?? message.metadata?.endpointKey
     ?? localName,
   );
-  return resolve(localName, endpointId) ?? resolve(endpointId, endpointId);
+  return resolve(localName, endpointKey) ?? resolve(endpointKey, endpointKey);
 }
 
 function resolveTrustedForRuntimeMessage(
@@ -1069,12 +1154,12 @@ function resolveTrustedForRuntimeMessage(
 ): readonly string[] {
   if (!resolve) return [];
   const localName = capabilityLocalName(String(message.conversation.endpoint.id));
-  const endpointId = String(
+  const endpointKey = String(
     message.metadata?.endpoint
-    ?? message.metadata?.endpointId
+    ?? message.metadata?.endpointKey
     ?? localName,
   );
-  const merged = [...resolve(localName, endpointId), ...resolve(endpointId, endpointId)];
+  const merged = [...resolve(localName, endpointKey), ...resolve(endpointKey, endpointKey)];
   return [...new Set(merged.map((id) => String(id).trim()).filter(Boolean))];
 }
 
@@ -1103,11 +1188,11 @@ export function recordRuntimeTranscript(
   const input: ImTranscriptWriteInput = {
     message_id: draft.messageId ?? '',
     platform: scene.platform,
-    endpoint_id: scene.endpointId,
+    endpoint_id: scene.endpointKey,
     scene_id: scene.sceneId,
     scene_type: scene.sceneType,
-    sender_id: draft.senderId ?? scene.endpointId,
-    sender_name: draft.senderName ?? scene.endpointId,
+    sender_id: draft.senderId ?? scene.endpointKey,
+    sender_name: draft.senderName ?? scene.endpointKey,
     sender_role: draft.senderRole ?? 'user',
     direction: draft.direction,
     body,
@@ -1138,15 +1223,15 @@ export async function recordPassiveGroupContext(
   if (!rawText) return;
   // 机器人自身消息不旁听（对齐 legacy isBotSelfMessage）。
   const senderId = resolveStableSenderId(message);
-  const endpointId = String(commMessage.$endpoint ?? '');
-  if (senderId !== '' && endpointId !== '' && senderId === endpointId) return;
+  const endpointKey = String(commMessage.$endpoint ?? '');
+  if (senderId !== '' && endpointKey !== '' && senderId === endpointKey) return;
   try {
     const sceneService = getCollaborationSceneService();
     let cell = findCellForInbound(
       sceneService.listScenes(),
       String(commMessage.$adapter),
       String(commMessage.$channel?.id ?? ''),
-      endpointId,
+      endpointKey,
     );
     if (cell) {
       cell = (await sceneService.getSceneFresh(cell.id)) ?? cell;
@@ -1235,9 +1320,9 @@ function capabilityLocalName(id: string): string {
 }
 
 /** Endpoint liveName (e.g. ICQQ uin, sandbox bot name) — first-class field, metadata fallback. */
-function adapterLiveEndpointName(message: Message): string {
-  if (message.endpointName) return message.endpointName;
-  const live = String(message.metadata?.endpoint ?? message.metadata?.endpointId ?? '');
+function adapterLiveEndpointId(message: Message): string {
+  if (message.endpointId) return message.endpointId;
+  const live = String(message.metadata?.endpoint ?? message.metadata?.endpointKey ?? '');
   if (live) return live;
   return capabilityLocalName(String(message.conversation.endpoint.id));
 }
@@ -1299,20 +1384,11 @@ async function readCapabilities(
   ingress: CapabilityIngress,
   snapshot: RuntimeSnapshot,
   requester: PluginId,
-  message: ReturnType<typeof createSyntheticMessage>,
+  message: Message,
+  roles: RuntimeSenderRoles,
+  isActive: () => boolean,
 ): Promise<AgentCapabilities> {
-  try {
-    return await ingress.read(snapshot, requester, () => true, message);
-  } catch {
-    return Object.freeze({
-      generation: snapshot.generation,
-      owner: requester,
-      tools: Object.freeze([]),
-      skills: Object.freeze([]),
-      agents: Object.freeze([]),
-      mcp: Object.freeze([]),
-    });
-  }
+  return ingress.read(snapshot, requester, isActive, createRuntimeTurnAccess(message, roles));
 }
 
 function toTool(tool: AgentToolLike | ToolCapability): Tool {
@@ -1408,11 +1484,7 @@ export function toRegisteredAgentTool(
 async function mcpToolsAsTools(capabilities: AgentCapabilities): Promise<Tool[]> {
   const tools: Tool[] = [];
   for (const connection of capabilities.mcp) {
-    let listed: readonly {
-      readonly name: string;
-      readonly description?: string;
-      readonly inputSchema?: unknown;
-    }[];
+    let listed: readonly { readonly name: string; readonly description?: string; readonly inputSchema?: unknown }[];
     try {
       listed = await connection.listTools();
     } catch (error) {
@@ -1424,10 +1496,9 @@ async function mcpToolsAsTools(capabilities: AgentCapabilities): Promise<Tool[]>
       continue;
     }
     for (const tool of listed) {
-      const qualified = `${connection.name}__${tool.name}`;
       const parameters = toolInputSchemaToParameters(tool.inputSchema);
       tools.push({
-        name: qualified,
+        name: `${connection.name}__${tool.name}`,
         description: tool.description ?? `MCP ${connection.name}/${tool.name}`,
         parameters: {
           type: 'object',
@@ -1471,9 +1542,6 @@ async function ensureMcpConnections(
         transport: entry.transport,
         url: entry.url ?? entry.command ?? '-',
         error: error instanceof Error ? error.message : String(error),
-        hint: entry.transport === 'streamable-http' || entry.transport === 'sse'
-          ? 'check MCP URL/token and that the server is listening'
-          : 'check MCP command/args and process env',
       }));
     }
   }
@@ -1580,7 +1648,6 @@ function buildBootstrapContext(
 ): string {
   const parts: string[] = [];
   if (bootstrap) parts.push(bootstrap);
-
   if (activeAgent) {
     parts.push(`## Active specialist: ${activeAgent.name}`);
     parts.push(activeAgent.description);
@@ -1588,18 +1655,13 @@ function buildBootstrapContext(
   } else if (capabilities.agents.length > 0) {
     parts.push('Available specialist agents (prefix user text with `@name` to route):');
     for (const agent of capabilities.agents) {
-      const excerpt = truncate(agent.instructions, 400);
-      parts.push(`### ${agent.name}\n${agent.description}\n${excerpt}`);
+      parts.push(`### ${agent.name}\n${agent.description}\n${truncate(agent.instructions, 400)}`);
     }
   }
-
   if (capabilities.skills.length > 0) {
     parts.push('Available skills:');
-    for (const skill of capabilities.skills) {
-      parts.push(`- ${skill.name}: ${skill.description}`);
-    }
+    for (const skill of capabilities.skills) parts.push(`- ${skill.name}: ${skill.description}`);
   }
-
   return parts.join('\n\n');
 }
 
@@ -1651,19 +1713,13 @@ function stripAudioPlaceholders(content: string): string {
 function routeSpecialistAgent(
   userText: string,
   capabilities: AgentCapabilities,
-): {
-  readonly userText: string;
-  readonly agent?: AgentCapabilities['agents'][number];
-} {
+): { readonly userText: string; readonly agent?: AgentCapabilities['agents'][number] } {
   const match = userText.match(/^@([^\s:：]+)[:：]?\s*/u);
   if (!match) return { userText };
   const name = match[1]!.toLowerCase();
   const agent = capabilities.agents.find((item) => item.name.toLowerCase() === name);
   if (!agent) return { userText };
-  return {
-    userText: userText.slice(match[0].length).trim() || userText,
-    agent,
-  };
+  return { userText: userText.slice(match[0].length).trim() || userText, agent };
 }
 
 /**

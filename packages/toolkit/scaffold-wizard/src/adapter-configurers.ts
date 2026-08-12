@@ -22,10 +22,10 @@ export interface EndpointConfigureContext {
 export async function configureTelegramEndpoint(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
   console.log(chalk.gray('     文档: ' + adapterDocsUrl('telegram')));
 
-  const { endpointName } = await inquirer.prompt([
+  const { endpointId } = await inquirer.prompt([
     {
       type: 'input',
-      name: 'endpointName',
+      name: 'endpointId',
       message: '  Endpoint 标识名称:',
       default: 'telegram-bot',
       validate: (v: string) => (v.trim() ? true : '名称不能为空'),
@@ -61,10 +61,10 @@ export async function configureTelegramEndpoint(ctx: EndpointConfigureContext): 
     },
   ]);
 
-  // schema：polling / webhook 为顶层共享字段；name / token 为 endpoint 级
+  // schema：polling / webhook 为顶层共享字段；id / token 为 endpoint 级
   const config: Record<string, unknown> = {
     polling: transport === 'polling',
-    endpoints: [{ name: endpointName.trim(), token: '${TELEGRAM_TOKEN}' }],
+    endpoints: [{ id: endpointId.trim(), token: '${TELEGRAM_TOKEN}' }],
   };
 
   if (transport === 'webhook') {
@@ -106,10 +106,10 @@ export async function configureGitHubEndpoint(ctx: EndpointConfigureContext): Pr
   console.log(chalk.gray('     文档: ' + adapterDocsUrl('github')));
   ctx.markRequiresDatabase();
 
-  const { endpointName } = await inquirer.prompt([
+  const { endpointId } = await inquirer.prompt([
     {
       type: 'input',
-      name: 'endpointName',
+      name: 'endpointId',
       message: '  Endpoint 标识名称:',
       default: 'github-bot',
       validate: (v: string) => (v.trim() ? true : '名称不能为空'),
@@ -137,7 +137,7 @@ export async function configureGitHubEndpoint(ctx: EndpointConfigureContext): Pr
 
   // schema：app_id / private_key / webhook_secret 为 endpoint 级；webhook_path / poll_interval 为顶层共享字段
   const endpointConfig: Record<string, unknown> = {
-    name: endpointName.trim(),
+    id: endpointId.trim(),
   };
   const sharedConfig: Record<string, unknown> = {};
 
@@ -267,19 +267,19 @@ export async function configureOneBot11Bot(ctx: EndpointConfigureContext): Promi
     },
   ]);
 
-  const { endpointName } = await inquirer.prompt([
+  const { endpointId } = await inquirer.prompt([
     {
       type: 'input',
-      name: 'endpointName',
+      name: 'endpointId',
       message: '  Endpoint 标识名称:',
       default: 'onebot-bot',
       validate: (v: string) => (v.trim() ? true : '名称不能为空'),
     },
   ]);
 
-  // schema：connection 为顶层共享字段；name / url / path / access_token 为 endpoint 级
+  // schema：connection 为顶层共享字段；id / url / path / access_token 为 endpoint 级
   const endpointConfig: Record<string, unknown> = {
-    name: endpointName.trim(),
+    id: endpointId.trim(),
   };
 
   if (connection === 'ws') {
@@ -402,7 +402,7 @@ export async function configureQQBot(ctx: EndpointConfigureContext): Promise<Rec
     mode,
     sandbox,
     endpoints: [{
-      name: credentials.name.trim(),
+      id: credentials.name.trim(),
       appid: '${QQ_APP_ID}',
       secret: '${QQ_SECRET}',
       botKind,
@@ -427,10 +427,10 @@ export async function configureDiscordEndpoint(ctx: EndpointConfigureContext): P
     },
   ]);
 
-  const { endpointName, token } = await inquirer.prompt([
+  const { endpointId, token } = await inquirer.prompt([
     {
       type: 'input',
-      name: 'endpointName',
+      name: 'endpointId',
       message: '  Endpoint 标识名称:',
       default: 'discord-bot',
       validate: (v: string) => (v.trim() ? true : '名称不能为空'),
@@ -444,10 +444,10 @@ export async function configureDiscordEndpoint(ctx: EndpointConfigureContext): P
   ]);
   ctx.envVars.DISCORD_TOKEN = token;
 
-  // schema：connection / applicationId / publicKey / interactionsPath 为顶层共享字段；name / token 为 endpoint 级
+  // schema：connection / applicationId / publicKey / interactionsPath 为顶层共享字段；id / token 为 endpoint 级
   const config: Record<string, unknown> = {
     connection,
-    endpoints: [{ name: endpointName.trim(), token: '${DISCORD_TOKEN}' }],
+    endpoints: [{ id: endpointId.trim(), token: '${DISCORD_TOKEN}' }],
   };
 
   if (connection === 'interactions') {
@@ -496,10 +496,10 @@ export async function configureSlackEndpoint(ctx: EndpointConfigureContext): Pro
     },
   ]);
 
-  const { endpointName, token, signingSecret } = await inquirer.prompt([
+  const { endpointId, token, signingSecret } = await inquirer.prompt([
     {
       type: 'input',
-      name: 'endpointName',
+      name: 'endpointId',
       message: '  Endpoint 标识名称:',
       default: 'slack-bot',
       validate: (v: string) => (v.trim() ? true : '名称不能为空'),
@@ -521,9 +521,9 @@ export async function configureSlackEndpoint(ctx: EndpointConfigureContext): Pro
   ctx.envVars.SLACK_BOT_TOKEN = token;
   ctx.envVars.SLACK_SIGNING_SECRET = signingSecret;
 
-  // schema：socketMode 为顶层共享字段；name / token / signingSecret / appToken 为 endpoint 级
+  // schema：socketMode 为顶层共享字段；id / token / signingSecret / appToken 为 endpoint 级
   const endpointConfig: Record<string, unknown> = {
-    name: endpointName.trim(),
+    id: endpointId.trim(),
     token: '${SLACK_BOT_TOKEN}',
     signingSecret: '${SLACK_SIGNING_SECRET}',
   };
@@ -563,19 +563,19 @@ export async function configureNapcatBot(ctx: EndpointConfigureContext): Promise
     },
   ]);
 
-  const { endpointName } = await inquirer.prompt([
+  const { endpointId } = await inquirer.prompt([
     {
       type: 'input',
-      name: 'endpointName',
+      name: 'endpointId',
       message: '  Endpoint 标识名称:',
       default: 'napcat-bot',
       validate: (v: string) => (v.trim() ? true : '名称不能为空'),
     },
   ]);
 
-  // schema：connection 为顶层共享字段；name / url / path / http_url / post_path / access_token 为 endpoint 级
+  // schema：connection 为顶层共享字段；id / url / path / http_url / post_path / access_token 为 endpoint 级
   const endpointConfig: Record<string, unknown> = {
-    name: endpointName.trim(),
+    id: endpointId.trim(),
   };
 
   if (connection === 'ws') {
@@ -655,19 +655,19 @@ export async function configureOneBot12Bot(ctx: EndpointConfigureContext): Promi
     },
   ]);
 
-  const { endpointName } = await inquirer.prompt([
+  const { endpointId } = await inquirer.prompt([
     {
       type: 'input',
-      name: 'endpointName',
+      name: 'endpointId',
       message: '  Endpoint 标识名称:',
       default: 'onebot12-bot',
       validate: (v: string) => (v.trim() ? true : '名称不能为空'),
     },
   ]);
 
-  // schema：connection 为顶层共享字段；name / url / path / api_url / access_token 为 endpoint 级
+  // schema：connection 为顶层共享字段；id / url / path / api_url / access_token 为 endpoint 级
   const endpointConfig: Record<string, unknown> = {
-    name: endpointName.trim(),
+    id: endpointId.trim(),
   };
 
   if (connection === 'ws') {
@@ -748,10 +748,10 @@ export async function configureMilkyBot(ctx: EndpointConfigureContext): Promise<
     },
   ]);
 
-  const { endpointName, baseUrl } = await inquirer.prompt([
+  const { endpointId, baseUrl } = await inquirer.prompt([
     {
       type: 'input',
-      name: 'endpointName',
+      name: 'endpointId',
       message: '  Endpoint 标识名称:',
       default: 'milky-bot',
       validate: (v: string) => (v.trim() ? true : '名称不能为空'),
@@ -765,9 +765,9 @@ export async function configureMilkyBot(ctx: EndpointConfigureContext): Promise<
     },
   ]);
 
-  // schema：connection 为顶层共享字段；name / baseUrl / path / access_token 为 endpoint 级
+  // schema：connection 为顶层共享字段；id / baseUrl / path / access_token 为 endpoint 级
   const endpointConfig: Record<string, unknown> = {
-    name: endpointName.trim(),
+    id: endpointId.trim(),
     baseUrl: baseUrl.trim(),
   };
 
@@ -816,10 +816,10 @@ export async function configureSatoriBot(ctx: EndpointConfigureContext): Promise
     },
   ]);
 
-  const { endpointName, baseUrl } = await inquirer.prompt([
+  const { endpointId, baseUrl } = await inquirer.prompt([
     {
       type: 'input',
-      name: 'endpointName',
+      name: 'endpointId',
       message: '  Endpoint 标识名称:',
       default: 'satori-bot',
       validate: (v: string) => (v.trim() ? true : '名称不能为空'),
@@ -833,9 +833,9 @@ export async function configureSatoriBot(ctx: EndpointConfigureContext): Promise
     },
   ]);
 
-  // schema：connection 为顶层共享字段；name / baseUrl / token / path 为 endpoint 级
+  // schema：connection 为顶层共享字段；id / baseUrl / token / path 为 endpoint 级
   const endpointConfig: Record<string, unknown> = {
-    name: endpointName.trim(),
+    id: endpointId.trim(),
     baseUrl: baseUrl.trim(),
   };
 
@@ -877,10 +877,10 @@ export async function configureWeixinIlinkBot(ctx: EndpointConfigureContext): Pr
   console.log(chalk.gray('     文档: ' + adapterDocsUrl('weixin-ilink')));
   console.log(chalk.gray('     需最新版微信 + ClawBot 灰度资格（仅私聊）'));
 
-  const { endpointName } = await inquirer.prompt([
+  const { endpointId } = await inquirer.prompt([
     {
       type: 'input',
-      name: 'endpointName',
+      name: 'endpointId',
       message: '  Endpoint 标识名称:',
       default: 'weixin-bot',
       validate: (v: string) => (v.trim() ? true : '名称不能为空'),
@@ -904,7 +904,7 @@ export async function configureWeixinIlinkBot(ctx: EndpointConfigureContext): Pr
     const scanned = await tryQrLogin(ctx);
     if (scanned) {
       return {
-        endpoints: [{ name: endpointName.trim(), botToken: '${WEIXIN_ILINK_TOKEN}' }],
+        endpoints: [{ id: endpointId.trim(), botToken: '${WEIXIN_ILINK_TOKEN}' }],
       };
     }
     console.log(chalk.yellow('     扫码未完成，降级为手动输入 bot_token'));
@@ -920,7 +920,7 @@ export async function configureWeixinIlinkBot(ctx: EndpointConfigureContext): Pr
   ]);
   ctx.envVars.WEIXIN_ILINK_TOKEN = token.trim();
   return {
-    endpoints: [{ name: endpointName.trim(), botToken: '${WEIXIN_ILINK_TOKEN}' }],
+    endpoints: [{ id: endpointId.trim(), botToken: '${WEIXIN_ILINK_TOKEN}' }],
   };
 }
 

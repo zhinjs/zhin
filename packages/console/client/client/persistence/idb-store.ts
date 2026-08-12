@@ -61,7 +61,7 @@ export async function idbListInbox(
     (r) =>
       r.adapter === adapter &&
       (r.endpoint_id === endpoint_id ||
-        (r as { endpointId?: string }).endpointId === endpoint_id) &&
+        (r as { endpointKey?: string }).endpointKey === endpoint_id) &&
       r.kind === kind,
   );
 }
@@ -72,9 +72,9 @@ export async function applyConsoleEvent(event: { type: string; data?: unknown })
   const updatedAt = Date.now();
   await idbPutInbox({
     // 追加自增+随机后缀：同毫秒同会话的两条事件不会因主键相同而互相覆盖
-    id: `${parsed.adapter}:${parsed.endpointId}:${parsed.type}:${updatedAt}:${inboxEventSeq++}:${Math.random().toString(36).slice(2, 8)}`,
+    id: `${parsed.adapter}:${parsed.endpointKey}:${parsed.type}:${updatedAt}:${inboxEventSeq++}:${Math.random().toString(36).slice(2, 8)}`,
     adapter: parsed.adapter,
-    endpoint_id: parsed.endpointId,
+    endpoint_id: parsed.endpointKey,
     kind: parsed.kind,
     payload: parsed.payload,
     updatedAt,

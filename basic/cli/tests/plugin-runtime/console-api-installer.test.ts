@@ -622,7 +622,7 @@ describe('console SSE events', () => {
     const frames = await readUntil('event: message.receive');
     expect(frames).not.toContain('event: endpoint:message');
     expect(frames).toContain('"adapter":"icqq"');
-    expect(frames).toContain('"endpointId":"icqq"');
+    expect(frames).toContain('"endpointKey":"icqq"');
     expect(frames).toContain('"endpoint":"icqq"');
     expect(frames).toContain('"sender":{"id":"alice"}');
     expect(frames).toContain('"content":"hello console"');

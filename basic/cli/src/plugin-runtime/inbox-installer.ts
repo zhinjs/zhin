@@ -18,10 +18,10 @@ const inboxRecorderInstallations = new WeakSet<ImRuntime>();
 export function installInboxMessageRecorder(im: ImRuntime, databaseHost: DatabaseHost): void {
   if (inboxRecorderInstallations.has(im)) return;
   inboxRecorderInstallations.add(im);
-  const endpointNames = new Map<string, string>();
+  const endpointIds = new Map<string, string>();
   im.onMessage((event) => {
     const row = buildInboxMessageRow(event, (capabilityId) =>
-      resolveEndpointName(im, capabilityId, endpointNames));
+      resolveEndpointId(im, capabilityId, endpointIds));
     void insertInboxRow(databaseHost, INBOX_TABLE_MESSAGE, row).catch((error: unknown) => {
       logger.warn(formatCompact({
         op: 'inbox_message_insert',
@@ -45,11 +45,11 @@ export function buildInboxMessageRow(
 ): Record<string, unknown> {
   const capabilityId = String(event.conversation.endpoint.id);
   const localName = capabilityId.split('\0').pop() ?? capabilityId;
-  const endpointName = resolveEndpoint(capabilityId) || localName;
+  const endpointId = resolveEndpoint(capabilityId) || localName;
   const channel = conversationToInboxChannel(event.conversation);
   return {
     adapter: localName,
-    endpoint_id: endpointName,
+    endpoint_id: endpointId,
     platform_message_id: event.messageId != null && event.messageId !== ''
       ? String(event.messageId)
       : `local:${event.timestamp}`,
@@ -59,7 +59,7 @@ export function buildInboxMessageRow(
     channel_parent_type: channel.parentType,
     channel_parent_id: channel.parentId,
     sender_id: event.direction === 'outbound'
-      ? endpointName
+      ? endpointId
       : (event.sender?.id ?? ''),
     sender_name: event.direction === 'outbound'
       ? null
@@ -72,7 +72,7 @@ export function buildInboxMessageRow(
 }
 
 /** capabilityId → live endpoint 名（uin 等）；仅命中时写缓存，解析失败回退 localName（不写缓存，待下次重试）。 */
-function resolveEndpointName(
+function resolveEndpointId(
   im: ImRuntime,
   capabilityId: string,
   cache: Map<string, string>,

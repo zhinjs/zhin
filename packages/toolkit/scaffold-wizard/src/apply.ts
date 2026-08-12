@@ -50,14 +50,14 @@ export function applyAdaptersToConfig(config: Record<string, unknown>, result: A
   delete config.endpoints;
 }
 
-function endpointName(endpoint: unknown): string | undefined {
+function endpointId(endpoint: unknown): string | undefined {
   if (!endpoint || typeof endpoint !== 'object' || Array.isArray(endpoint)) return undefined;
-  const name = (endpoint as Record<string, unknown>).name;
-  return typeof name === 'string' ? name : undefined;
+  const id = (endpoint as Record<string, unknown>).id;
+  return typeof id === 'string' ? id : undefined;
 }
 
 /**
- * 重跑向导时按实例合并配置而非整体覆盖：保留现有 endpoints 中 name 不冲突的项
+ * 重跑向导时按实例合并配置而非整体覆盖：保留现有 endpoints 中 id 不冲突的项
  * 与其他实例级键；被向导结果覆盖的 endpoints / 键在覆盖前打印提示。
  */
 function mergeAdapterInstanceConfig(
@@ -74,9 +74,9 @@ function mergeAdapterInstanceConfig(
   const currentEndpoints = Array.isArray(current.endpoints) ? current.endpoints : [];
   const nextEndpoints = Array.isArray(next.endpoints) ? next.endpoints : [];
   if (currentEndpoints.length > 0 && nextEndpoints.length > 0) {
-    const nextNames = new Set(nextEndpoints.map(endpointName));
+    const nextNames = new Set(nextEndpoints.map(endpointId));
     const kept = currentEndpoints.filter((endpoint) => {
-      const name = endpointName(endpoint);
+      const name = endpointId(endpoint);
       if (name != null && nextNames.has(name)) {
         dropped.push(`endpoint "${name}"`);
         return false;

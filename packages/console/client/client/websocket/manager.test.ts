@@ -185,7 +185,7 @@ describe("WebSocketManager REST/SSE transport", () => {
 
     expect(received).toEqual([expect.objectContaining({
       type: "message.receive",
-      data: expect.objectContaining({ adapter: "sandbox", endpointId: "bot" }),
+      data: expect.objectContaining({ adapter: "sandbox", endpointKey: "bot" }),
     })]);
     expect(mockApplyConsoleEvent).toHaveBeenCalledWith(expect.objectContaining({
       type: "message.receive",

@@ -34,10 +34,10 @@ export interface ConsoleRpcExtendedCtx {
   /** 经 ImRuntime / AdapterEndpointIndex 解析管理语义端口。 */
   resolveEndpointManagement?: (
     adapter: string,
-    endpointId: string,
+    endpointKey: string,
   ) => EndpointManagementPort | null | undefined;
   /** @deprecated Use `resolveEndpointManagement`; accepted for one compatibility cycle. */
-  resolveEndpoint?: (adapter: string, endpointId: string) => unknown;
+  resolveEndpoint?: (adapter: string, endpointKey: string) => unknown;
   /** Plugin Runtime DatabaseHost 的 models 视图。 */
   databaseHost?: { models: { get(name: string): unknown } };
   /** Agent Host 持久化调度引擎（@zhin.js/agent getAssistantRuntime().engine），未 init 时返回 null。 */
@@ -340,13 +340,13 @@ async function listInbox(
   mapRow: (row: Record<string, unknown>) => Record<string, unknown>,
 ): Promise<ExtendedRpcResult> {
   const adapter = strField(d, '$adapter', 'adapter');
-  const endpointId = strField(d, '$endpoint', 'endpointId', 'endpoint');
-  if (!adapter || !endpointId) return { error: '$adapter and $endpoint required' };
+  const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
+  if (!adapter || !endpointKey) return { error: '$adapter and $endpoint required' };
   const limit = Math.min(numField(d, 30, '$limit', 'limit'), 100);
   const offset = Math.max(0, numField(d, 0, '$offset', 'offset'));
   const { rows, enabled } = await readInboxRows(ctx, table, {
     adapter,
-    endpoint_id: endpointId,
+    endpoint_id: endpointKey,
   }, {
     // sort/limit 下推到 DB 侧（内存 sort/slice 保留，作为无下推能力模型的兜底）
     orderBy: { field: 'created_at', direction: 'DESC' },
@@ -366,11 +366,11 @@ async function listPendingRequests(
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult> {
   const adapter = strField(d, '$adapter', 'adapter');
-  const endpointId = strField(d, '$endpoint', 'endpointId', 'endpoint');
-  if (!adapter || !endpointId) return { error: '$adapter and $endpoint required' };
+  const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
+  if (!adapter || !endpointKey) return { error: '$adapter and $endpoint required' };
   const { rows, enabled } = await readInboxRows(ctx, TABLE_REQUEST, {
     adapter,
-    endpoint_id: endpointId,
+    endpoint_id: endpointKey,
   }, {
     orderBy: { field: 'created_at', direction: 'ASC' },
   });
@@ -386,10 +386,10 @@ async function listInboxMessages(
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult> {
   const adapter = strField(d, '$adapter', 'adapter');
-  const endpointId = strField(d, '$endpoint', 'endpointId', 'endpoint');
+  const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
   const channelId = strField(d, '$channel_id', 'channelId', 'channel_id');
   const channelType = strField(d, '$channel_type', 'channelType', 'channel_type');
-  if (!adapter || !endpointId || !channelId || !channelType) {
+  if (!adapter || !endpointKey || !channelId || !channelType) {
     return { error: '$adapter, $endpoint, $channel_id, $channel_type required' };
   }
   const limit = Math.min(numField(d, 50, '$limit', 'limit'), 100);
@@ -399,7 +399,7 @@ async function listInboxMessages(
 
   const where: Record<string, unknown> = {
     adapter,
-    endpoint_id: endpointId,
+    endpoint_id: endpointKey,
     channel_id: channelId,
     channel_type: channelType,
   };
@@ -525,12 +525,12 @@ async function actOnRequest(
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult> {
   const adapter = strField(d, '$adapter', 'adapter');
-  const endpointId = strField(d, '$endpoint', 'endpointId', 'endpoint');
+  const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
   const requestId = strField(d, '$id', 'id', 'platformRequestId', 'platform_request_id', 'requestId');
-  if (!adapter || !endpointId || !requestId) {
+  if (!adapter || !endpointKey || !requestId) {
     return { error: '$adapter, $endpoint, $id required' };
   }
-  const resolved = resolveLiveEndpoint(ctx, adapter, endpointId);
+  const resolved = resolveLiveEndpoint(ctx, adapter, endpointKey);
   if ('error' in resolved) return resolved;
   const management = resolved.management;
   const approve = type === 'request.approve';
@@ -613,12 +613,12 @@ async function listGroupMembers(
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult> {
   const adapter = strField(d, '$adapter', 'adapter');
-  const endpointId = strField(d, '$endpoint', 'endpointId', 'endpoint');
+  const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
   const groupId = strField(d, '$group_id', 'groupId', 'group_id');
-  if (!adapter || !endpointId || !groupId) {
+  if (!adapter || !endpointKey || !groupId) {
     return { error: '$adapter, $endpoint, $group_id required' };
   }
-  const resolved = resolveLiveEndpoint(ctx, adapter, endpointId);
+  const resolved = resolveLiveEndpoint(ctx, adapter, endpointKey);
   if ('error' in resolved) return resolved;
   const { management } = resolved;
   try {
@@ -649,16 +649,16 @@ async function groupWriteOp(
   spec: GroupWriteSpec,
 ): Promise<ExtendedRpcResult> {
   const adapter = strField(d, '$adapter', 'adapter');
-  const endpointId = strField(d, '$endpoint', 'endpointId', 'endpoint');
+  const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
   const groupId = strField(d, '$group_id', 'groupId', 'group_id');
   const userId = strField(d, '$user_id', 'userId', 'user_id');
-  if (!adapter || !endpointId || !groupId) {
+  if (!adapter || !endpointKey || !groupId) {
     return { error: '$adapter, $endpoint, $group_id required' };
   }
   if (spec.requireUser && !userId) {
     return { error: '$user_id required' };
   }
-  const resolved = resolveLiveEndpoint(ctx, adapter, endpointId);
+  const resolved = resolveLiveEndpoint(ctx, adapter, endpointKey);
   if ('error' in resolved) return resolved;
   const { management } = resolved;
   const method = management[spec.method];
@@ -686,12 +686,12 @@ async function deleteFriend(
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult> {
   const adapter = strField(d, '$adapter', 'adapter');
-  const endpointId = strField(d, '$endpoint', 'endpointId', 'endpoint');
+  const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
   const userId = strField(d, '$user_id', 'userId', 'user_id');
-  if (!adapter || !endpointId || !userId) {
+  if (!adapter || !endpointKey || !userId) {
     return { error: '$adapter, $endpoint, $user_id required' };
   }
-  const resolved = resolveLiveEndpoint(ctx, adapter, endpointId);
+  const resolved = resolveLiveEndpoint(ctx, adapter, endpointKey);
   if ('error' in resolved) return resolved;
   const { management } = resolved;
   const method = management.deleteFriend;
@@ -749,23 +749,23 @@ function numArrayField(d: Record<string, unknown>, ...keys: string[]): number[] 
 type ResolveOk = {
   management: EndpointManagementPort;
   adapter: string;
-  endpointId: string;
+  endpointKey: string;
 };
 
 function resolveLiveEndpoint(
   ctx: ConsoleRpcExtendedCtx,
   adapter: string,
-  endpointId: string,
+  endpointKey: string,
 ): ResolveOk | { error: string } {
   if (ctx.resolveEndpointManagement) {
-    const management = ctx.resolveEndpointManagement(adapter, endpointId);
+    const management = ctx.resolveEndpointManagement(adapter, endpointKey);
     if (!management) return { error: 'endpoint not found' };
-    return { management, adapter, endpointId };
+    return { management, adapter, endpointKey };
   }
   if (!ctx.resolveEndpoint) {
     return { error: 'Endpoint registry is not configured' };
   }
-  const endpoint = ctx.resolveEndpoint(adapter, endpointId);
+  const endpoint = ctx.resolveEndpoint(adapter, endpointKey);
   if (!endpoint || typeof endpoint !== 'object') {
     return { error: 'endpoint not found' };
   }
@@ -775,7 +775,7 @@ function resolveLiveEndpoint(
       ? management as EndpointManagementPort
       : {},
     adapter,
-    endpointId,
+    endpointKey,
   };
 }
 
@@ -784,9 +784,9 @@ function requireEndpoint(
   ctx: ConsoleRpcExtendedCtx,
 ): ResolveOk | { error: string } {
   const adapter = strField(d, '$adapter', 'adapter');
-  const endpointId = strField(d, '$endpoint', 'endpointId', 'endpoint');
-  if (!adapter || !endpointId) return { error: '$adapter and $endpoint required' };
-  return resolveLiveEndpoint(ctx, adapter, endpointId);
+  const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
+  if (!adapter || !endpointKey) return { error: '$adapter and $endpoint required' };
+  return resolveLiveEndpoint(ctx, adapter, endpointKey);
 }
 
 function normalizeParent(raw: unknown): { type: 'group' | 'guild'; id: string; name?: string } | undefined {

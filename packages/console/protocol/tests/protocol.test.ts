@@ -23,7 +23,7 @@ describe('Console RPC protocol', () => {
         $adapter: 'sandbox',
         adapter: 'sandbox',
         endpoint: 'bot',
-        endpointId: 'bot',
+        endpointKey: 'bot',
         channel_id: 'room',
         channelId: 'room',
       },
@@ -38,12 +38,12 @@ describe('Console RPC protocol', () => {
       type: 'request.receive',
       kind: 'request',
       adapter: 'icqq',
-      endpointId: '10001',
+      endpointKey: '10001',
       payload: {
         $adapter: 'icqq',
         adapter: 'icqq',
         bot: '10001',
-        endpointId: '10001',
+        endpointKey: '10001',
         comment: 'hello',
       },
     });
@@ -66,7 +66,7 @@ describe('Console RPC protocol', () => {
       $endpoint: 'wrong-bot',
       data: {
         adapter: 'sandbox',
-        endpointId: 'bot',
+        endpointKey: 'bot',
         id: 'room',
         type: 'group',
         content: 'hello',

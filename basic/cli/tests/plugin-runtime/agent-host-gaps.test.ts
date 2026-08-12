@@ -5,6 +5,7 @@ import { resolveIMSessionIdFromMessage, type AITriggerConfig } from '@zhin.js/co
 import type { ImTranscriptWriteInput } from '@zhin.js/agent';
 import {
   bridgeRuntimeMessage,
+  createRuntimeTurnRequest,
   recordRuntimeTranscript,
   recordPassiveGroupContext,
   resolveRuntimeSenderRoles,
@@ -32,6 +33,78 @@ describe('Plugin Runtime Tool policy bridge', () => {
   });
 });
 
+describe('canonical IM TurnRequest ingress', () => {
+  it('maps runtime identity, scene, media, policy, and session without classic Message fields', () => {
+    const message = makeMessage({
+      content: 'look',
+      target: 'group:100',
+      sender: { id: 'user-1', name: 'Alice' },
+      metadata: { endpoint: '10001' },
+      segments: [{
+        type: 'image',
+        data: { media: { kind: 'url', value: 'https://example.com/a.png', mime_type: 'image/png' } },
+      }],
+    });
+    const signal = new AbortController().signal;
+    const request = createRuntimeTurnRequest(message, 'look closer', {
+      isMaster: false,
+      isTrusted: true,
+    }, {
+      traceId: 'trace-1',
+      turnId: 'turn-1',
+      signal,
+      ports: { journal: { append: () => undefined } },
+    });
+
+    expect(request).toMatchObject({
+      identity: { traceId: 'trace-1', turnId: 'turn-1' },
+      origin: {
+        kind: 'im',
+        platform: 'icqq',
+        endpoint: '10001',
+        scope: 'group',
+        sceneId: '100',
+        messageId: 'm1',
+      },
+      principal: { subjectId: 'user-1', displayName: 'Alice', roles: ['trusted'] },
+      input: {
+        text: 'look closer',
+        media: [{
+          kind: 'image',
+          source: { kind: 'url', value: 'https://example.com/a.png' },
+          mimeType: 'image/png',
+        }],
+      },
+      session: { key: 'icqq:10001:group:100' },
+      policy: { permissions: ['trusted'], unattended: false },
+    });
+    expect(request.signal).toBe(signal);
+  });
+
+  it('fails closed when authenticated sender or endpoint identity is absent', () => {
+    const signal = new AbortController().signal;
+    const options = { traceId: 't', turnId: 'u', signal, ports: { journal: { append: () => undefined } } } as const;
+    expect(() => createRuntimeTurnRequest(makeMessage({
+      content: 'x', sender: null, metadata: { endpoint: 'bot' },
+    }), 'x', { isMaster: false, isTrusted: false }, options)).toThrow('sender identity');
+    expect(() => createRuntimeTurnRequest(makeMessage({
+      content: 'x', sender: 'u', metadata: {},
+    }), 'x', { isMaster: false, isTrusted: false }, options)).toThrow('endpoint identity');
+  });
+
+  it('preserves platform roles alongside framework trust roles', () => {
+    const message = makeMessage({
+      content: 'x', sender: { id: 'u', roles: ['owner', 'admin'] }, metadata: { endpoint: 'bot' },
+    });
+    const request = createRuntimeTurnRequest(message, 'x', {
+      isMaster: false,
+      isTrusted: true,
+    }, { traceId: 't', turnId: 'u', signal: new AbortController().signal, ports: { journal: { append: () => undefined } } });
+    expect(request.principal.roles).toEqual(['owner', 'admin', 'trusted']);
+    expect(request.policy.permissions).toEqual(['owner', 'admin', 'trusted']);
+  });
+});
+
 /** 测试便利：legacy `kind:id` 串 → ConversationRef（仅测试侧组帧用）。 */
 function conversationFromTarget(target: string) {
   const match = /^(private|group|channel):(.+)$/.exec(target);
@@ -45,7 +118,7 @@ function conversationFromTarget(target: string) {
 function makeMessage(input: {
   content: string;
   target?: string;
-  sender?: string | { id: string; name?: string } | null;
+  sender?: string | { id: string; name?: string; roles?: readonly string[] } | null;
   metadata?: Record<string, unknown>;
   segments?: ConstructorParameters<typeof Message>[6];
 }): Message {
@@ -64,6 +137,7 @@ function makeMessage(input: {
     Object.freeze(input.metadata ?? {}),
     input.segments,
     { conversation, id: 'm1' },
+    typeof input.metadata?.endpoint === 'string' ? input.metadata.endpoint : undefined,
   );
 }
 
@@ -144,7 +218,7 @@ describe('缺口 1：im_transcripts 流水写入（recordRuntimeTranscript）', 
     });
   });
 
-  it('出站：assistant 角色，sender_id 回退为 endpointId', () => {
+  it('出站：assistant 角色，sender_id 回退为 endpointKey', () => {
     const agent = makeAgentStub();
     const message = groupMessage('在吗');
     const commMessage = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });

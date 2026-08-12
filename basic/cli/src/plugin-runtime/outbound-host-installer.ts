@@ -15,7 +15,7 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
       try {
         const result = await im.sendEndpointMessage({
           adapter: input.adapter,
-          endpointId: input.endpointId,
+          endpointKey: input.endpointKey,
           conversation: input.conversation,
           content: input.content,
         });
@@ -27,7 +27,7 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
         logger.debug(formatCompact({
           op: 'outbound_send_failed',
           adapter: input.adapter,
-          endpointId: input.endpointId,
+          endpointKey: input.endpointKey,
           error: error instanceof Error ? error.message : String(error),
         }));
         // Do NOT re-throw — a failed typing indicator must never fail the
@@ -38,7 +38,7 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
     async addReaction(input) {
       return im.addEndpointReaction({
         adapter: input.adapter,
-        endpointId: input.endpointId,
+        endpointKey: input.endpointKey,
         messageId: input.messageId,
         emoji: input.emoji,
         sceneType: input.sceneType,
@@ -48,7 +48,7 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
     async removeReaction(input) {
       await im.removeEndpointReaction({
         adapter: input.adapter,
-        endpointId: input.endpointId,
+        endpointKey: input.endpointKey,
         messageId: input.messageId,
         reactionId: input.reactionId,
       });
@@ -56,7 +56,7 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
     async recall(input) {
       await im.recallEndpointMessage({
         adapter: input.adapter,
-        endpointId: input.endpointId,
+        endpointKey: input.endpointKey,
         messageId: input.messageId,
       });
     },

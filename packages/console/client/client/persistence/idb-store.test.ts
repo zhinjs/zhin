@@ -84,7 +84,7 @@ function createFakeIndexedDB() {
 
 const PUSH = {
   type: "message.receive",
-  data: { adapter: "icqq", endpointId: "bot-1", channelId: "1001" },
+  data: { adapter: "icqq", endpointKey: "bot-1", channelId: "1001" },
 };
 
 describe("applyConsoleEvent inbox record ids", () => {
@@ -98,7 +98,7 @@ describe("applyConsoleEvent inbox record ids", () => {
   });
 
   it("keeps two events of the same conversation within one millisecond (no key overwrite)", async () => {
-    // 回归：旧主键 `${adapter}:${endpointId}:${type}:${Date.now()}` 在同毫秒会互相覆盖。
+    // 回归：旧主键 `${adapter}:${endpointKey}:${type}:${Date.now()}` 在同毫秒会互相覆盖。
     vi.spyOn(Date, "now").mockReturnValue(1700000000000);
     await applyConsoleEvent(PUSH);
     await applyConsoleEvent(PUSH);
@@ -108,13 +108,13 @@ describe("applyConsoleEvent inbox record ids", () => {
     expect(new Set(rows.map((r) => r.id)).size).toBe(2);
   });
 
-  it("reads legacy records that only carry endpointId (camelCase)", async () => {
-    // 旧版（DB v1 时代）记录只有 endpointId 字段，升级后仍需能被列出
+  it("reads legacy records that only carry endpointKey (camelCase)", async () => {
+    // 旧版（DB v1 时代）记录只有 endpointKey 字段，升级后仍需能被列出
     const { idbPutInbox } = await import("./idb-store.js");
     const legacy = {
       id: "icqq:bot-1:message:1700000000000:legacy",
       adapter: "icqq",
-      endpointId: "bot-1",
+      endpointKey: "bot-1",
       kind: "message",
       payload: {},
       updatedAt: 1700000000000,

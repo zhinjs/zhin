@@ -92,7 +92,7 @@ export default function OrchestrationRunsPage() {
       <h1 className="text-lg font-semibold">编排 Run / Task / Event</h1>
       <p className="text-sm text-muted-foreground">
         从 OrchestrationKernel 投影（`GET /api/agent/orchestration/*`）。sessionKey 格式：
-        <code className="mx-1">platform:endpointId:kind:sceneId</code>
+        <code className="mx-1">platform:endpointKey:kind:sceneId</code>
       </p>
 
       <div className="flex flex-wrap gap-2 items-end">

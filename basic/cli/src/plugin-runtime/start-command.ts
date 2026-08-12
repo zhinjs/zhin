@@ -600,8 +600,8 @@ function parseMode(value: string | undefined): RuntimeMode {
 export async function createEndpointRoleResolver(
   config: RuntimeConfigDocument | ConfigDocumentPort,
 ): Promise<{
-  resolveOwner: (adapterLocalName: string, endpointId: string) => string | undefined;
-  resolveTrusted: (adapterLocalName: string, endpointId: string) => readonly string[];
+  resolveOwner: (adapterLocalName: string, endpointKey: string) => string | undefined;
+  resolveTrusted: (adapterLocalName: string, endpointKey: string) => readonly string[];
 }> {
   const document = await readConfigDocumentValue(config);
   const map = new Map<string, string>();
@@ -645,11 +645,11 @@ export async function createEndpointRoleResolver(
     }
   }
   return {
-    resolveOwner: (adapterLocalName, endpointId) =>
-      map.get(endpointId) ?? map.get(adapterLocalName),
-    resolveTrusted: (adapterLocalName, endpointId) => [
+    resolveOwner: (adapterLocalName, endpointKey) =>
+      map.get(endpointKey) ?? map.get(adapterLocalName),
+    resolveTrusted: (adapterLocalName, endpointKey) => [
       ...new Set([
-        ...(trustedMap.get(endpointId) ?? []),
+        ...(trustedMap.get(endpointKey) ?? []),
         ...(trustedMap.get(adapterLocalName) ?? []),
       ]),
     ],

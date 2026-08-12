@@ -142,7 +142,7 @@ export function defineGamePlugin<
                 const outbound = context.resources.use(outboundHostToken);
                 await outbound.send({
                   adapter: row.adapter,
-                  endpointId: row.endpoint,
+                  endpointKey: row.endpoint,
                   conversation: {
                     kind: row.channel_type as 'private' | 'group' | 'channel',
                     id: row.channel_id,

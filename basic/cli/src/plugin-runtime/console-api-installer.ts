@@ -262,7 +262,7 @@ export function publishMessageEvent(hub: ConsoleEventHub, event: RuntimeMessageE
     const data = {
       direction: 'inbound' as const,
       adapter: localName,
-      endpointId: localName,
+      endpointKey: localName,
       endpoint: localName,
       sender: event.sender,
       channelType: event.conversation.kind,
@@ -277,7 +277,7 @@ export function publishMessageEvent(hub: ConsoleEventHub, event: RuntimeMessageE
   hub.publish('message.receive', {
     direction: 'outbound' as const,
     adapter: localName,
-    endpointId: localName,
+    endpointKey: localName,
     endpoint: localName,
     requester: event.requester,
     channelType: event.conversation.kind,
@@ -517,7 +517,7 @@ export function registerConsoleApiRoutes(
           ? async () => im.listEndpoints()
           : undefined,
         getEndpoint: im
-          ? async (adapter, endpointId) => im.getEndpoint(adapter, endpointId)
+          ? async (adapter, endpointKey) => im.getEndpoint(adapter, endpointKey)
           : undefined,
         sendEndpointMessage: im
           ? async (input) => im.sendEndpointMessage(input)
@@ -540,7 +540,7 @@ export function registerConsoleApiRoutes(
           projectRoot,
           scheduleHost,
           resolveEndpointManagement: im
-            ? (adapter, endpointId) => im.getEndpointManagement(adapter, endpointId)
+            ? (adapter, endpointKey) => im.getEndpointManagement(adapter, endpointKey)
             : undefined,
           databaseHost: databaseHost
             ? { models: databaseHost.models }

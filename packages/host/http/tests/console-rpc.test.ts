@@ -93,8 +93,8 @@ describe('runtime console RPC', () => {
       authScope: 'full' as const,
       listPages: async () => [],
       listEndpoints: async () => endpoints,
-      getEndpoint: async (adapter: string, endpointId: string) =>
-        (adapter === 'sandbox' && endpointId === 'bot' ? endpoints[0] : null),
+      getEndpoint: async (adapter: string, endpointKey: string) =>
+        (adapter === 'sandbox' && endpointKey === 'bot' ? endpoints[0] : null),
       sendEndpointMessage: async (input: unknown) => {
         sent.push(input);
         return { messageId: 'msg-1' };
@@ -108,7 +108,7 @@ describe('runtime console RPC', () => {
     });
 
     const info = await dispatchRuntimeConsoleRpc(
-      { type: 'endpoint:info', requestId: 61, data: { adapter: 'sandbox', endpointId: 'bot' } },
+      { type: 'endpoint:info', requestId: 61, data: { adapter: 'sandbox', endpointKey: 'bot' } },
       ctx,
     );
     expect(pickRpcReply({ type: 'endpoint:info', requestId: 61 }, info)).toMatchObject({
@@ -129,7 +129,7 @@ describe('runtime console RPC', () => {
         requestId: 63,
         data: {
           adapter: 'sandbox',
-          endpointId: 'bot',
+          endpointKey: 'bot',
           id: '10001',
           type: 'private',
           content: [{ type: 'text', data: { text: 'hi' } }],
@@ -142,7 +142,7 @@ describe('runtime console RPC', () => {
       .toMatchObject({ requestId: 63, data: { message_id: 'msg-1', messageId: 'msg-1' } });
     expect(sent).toEqual([{
       adapter: 'sandbox',
-      endpointId: 'bot',
+      endpointKey: 'bot',
       conversation: { kind: 'private', id: '10001', parent: { kind: 'group', id: 'g1' } },
       content: [{ type: 'text', data: { text: 'hi' } }],
     }]);
@@ -162,7 +162,7 @@ describe('runtime console RPC', () => {
       {
         type: 'endpoint:sendMessage',
         requestId: 71,
-        data: { adapter: 'sandbox', endpointId: 'bot', id: '1', type: 'private', content: 'hi' },
+        data: { adapter: 'sandbox', endpointKey: 'bot', id: '1', type: 'private', content: 'hi' },
       },
       ctx,
     );

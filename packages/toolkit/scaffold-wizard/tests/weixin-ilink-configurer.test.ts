@@ -30,7 +30,7 @@ afterEach(() => {
 
 describe('configureWeixinIlinkBot', () => {
   it('扫码绑定成功：token 写入 envVars，配置引用 ${WEIXIN_ILINK_TOKEN}', async () => {
-    mockPrompt({ endpointName: 'weixin-bot', method: 'qr' });
+    mockPrompt({ endpointId: 'weixin-bot', method: 'qr' });
     vi.mocked(loginWithIlinkQr).mockResolvedValue({
       botToken: 'scanned-token',
       baseUrl: 'https://ilinkai.weixin.qq.com',
@@ -39,37 +39,37 @@ describe('configureWeixinIlinkBot', () => {
     const config = await configureWeixinIlinkBot(ctx);
 
     expect(config).toEqual({
-      endpoints: [{ name: 'weixin-bot', botToken: '${WEIXIN_ILINK_TOKEN}' }],
+      endpoints: [{ id: 'weixin-bot', botToken: '${WEIXIN_ILINK_TOKEN}' }],
     });
     expect(ctx.envVars.WEIXIN_ILINK_TOKEN).toBe('scanned-token');
   });
 
   it('手动输入 token：同样的配置形状', async () => {
-    mockPrompt({ endpointName: 'my-wechat', method: 'manual', token: 'manual-token' });
+    mockPrompt({ endpointId: 'my-wechat', method: 'manual', token: 'manual-token' });
     const ctx = configureCtx();
     const config = await configureWeixinIlinkBot(ctx);
 
     expect(config).toEqual({
-      endpoints: [{ name: 'my-wechat', botToken: '${WEIXIN_ILINK_TOKEN}' }],
+      endpoints: [{ id: 'my-wechat', botToken: '${WEIXIN_ILINK_TOKEN}' }],
     });
     expect(ctx.envVars.WEIXIN_ILINK_TOKEN).toBe('manual-token');
     expect(loginWithIlinkQr).not.toHaveBeenCalled();
   });
 
   it('扫码过期且用户放弃重试 → 降级手动输入', async () => {
-    mockPrompt({ endpointName: 'weixin-bot', method: 'qr', retry: false, token: 'fallback-token' });
+    mockPrompt({ endpointId: 'weixin-bot', method: 'qr', retry: false, token: 'fallback-token' });
     vi.mocked(loginWithIlinkQr).mockRejectedValue(new IlinkQrLoginError('二维码已过期', 'expired'));
     const ctx = configureCtx();
     const config = await configureWeixinIlinkBot(ctx);
 
     expect(config).toEqual({
-      endpoints: [{ name: 'weixin-bot', botToken: '${WEIXIN_ILINK_TOKEN}' }],
+      endpoints: [{ id: 'weixin-bot', botToken: '${WEIXIN_ILINK_TOKEN}' }],
     });
     expect(ctx.envVars.WEIXIN_ILINK_TOKEN).toBe('fallback-token');
   });
 
   it('扫码过期后用户选择重试并最终成功', async () => {
-    mockPrompt({ endpointName: 'weixin-bot', method: 'qr', retry: true });
+    mockPrompt({ endpointId: 'weixin-bot', method: 'qr', retry: true });
     vi.mocked(loginWithIlinkQr)
       .mockRejectedValueOnce(new IlinkQrLoginError('二维码已过期', 'expired'))
       .mockResolvedValueOnce({ botToken: 'retry-token', baseUrl: 'https://ilinkai.weixin.qq.com' });

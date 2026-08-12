@@ -113,7 +113,7 @@ export interface ConsoleInboxEvent {
   readonly type: string;
   readonly kind: ConsoleInboxEventKind;
   readonly adapter: string;
-  readonly endpointId: string;
+  readonly endpointKey: string;
   readonly payload: Readonly<Record<string, unknown>>;
 }
 
@@ -129,13 +129,13 @@ export function parseConsoleInboxEvent(
   const kind = inboxKindForPushType(message.type);
   if (!kind) return null;
   const adapter = nonEmptyString(message.data.adapter);
-  const endpointId = nonEmptyString(message.data.endpointId);
-  if (!adapter || !endpointId) return null;
+  const endpointKey = nonEmptyString(message.data.endpointKey);
+  if (!adapter || !endpointKey) return null;
   return Object.freeze({
     type: message.type,
     kind,
     adapter,
-    endpointId,
+    endpointKey,
     payload: message.data,
   });
 }
@@ -154,8 +154,8 @@ function normalizeConsolePushData(
   aliasField(data, 'adapter', input.adapter, input.$adapter);
   aliasField(
     data,
-    'endpointId',
-    input.endpointId,
+    'endpointKey',
+    input.endpointKey,
     input.endpoint_id,
     input.endpoint,
     input.$endpoint,
@@ -211,8 +211,8 @@ export function normalizeConsoleRpcMessage(
   const merged: Record<string, unknown> = { ...input, ...data };
   const payloadType = data.type;
   aliasField(merged, '$adapter', data.$adapter, data.adapter, input.$adapter, input.adapter);
-  aliasField(merged, '$endpoint', data.$endpoint, data.endpointId, data.endpoint,
-    input.$endpoint, input.endpointId, input.endpoint);
+  aliasField(merged, '$endpoint', data.$endpoint, data.endpointKey, data.endpoint,
+    input.$endpoint, input.endpointKey, input.endpoint);
   aliasField(merged, '$id', data.$id, data.id, input.$id, input.id);
   aliasField(merged, '$type', data.$type, payloadType, input.$type);
   aliasField(merged, '$channel_id', data.$channel_id, data.channelId, data.channel_id, data.id,

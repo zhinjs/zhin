@@ -43,7 +43,7 @@ describe('adapter setup notes', () => {
         config: {
           polling: false,
           webhook: { domain: 'https://bot.example.com', path: '/telegram/webhook' },
-          endpoints: [{ name: 'tg', token: '${TELEGRAM_TOKEN}' }],
+          endpoints: [{ id: 'tg', token: '${TELEGRAM_TOKEN}' }],
         },
       }],
       envVars: { TELEGRAM_TOKEN: 'secret' },
@@ -63,7 +63,7 @@ describe('adapter setup notes', () => {
         config: {
           webhook_path: '/github/webhook',
           endpoints: [{
-            name: 'gh',
+            id: 'gh',
             app_id: '${GITHUB_APP_ID}',
             private_key: './data/github-app.pem',
             webhook_secret: '${GITHUB_WEBHOOK_SECRET}',
@@ -90,14 +90,14 @@ describe('buildFieldBasedInstanceConfig', () => {
     fields,
   });
 
-  it('puts endpoint-level fields into endpoints[0] and defaults name', () => {
+  it('puts endpoint-level fields into endpoints[0] and defaults id', () => {
     const config = buildFieldBasedInstanceConfig(
       def('kook', [{ key: 'token', message: 'Token:' }]),
       { token: '${KOOK_TOKEN}' },
     );
 
     expect(config).toEqual({
-      endpoints: [{ name: 'kook-bot', token: '${KOOK_TOKEN}' }],
+      endpoints: [{ id: 'kook-bot', token: '${KOOK_TOKEN}' }],
     });
   });
 
@@ -113,7 +113,7 @@ describe('buildFieldBasedInstanceConfig', () => {
 
     expect(config).toEqual({
       webhookPath: '/lark/webhook',
-      endpoints: [{ name: 'lark-bot', appId: '${LARK_APP_ID}', appSecret: '${LARK_APP_SECRET}' }],
+      endpoints: [{ id: 'lark-bot', appId: '${LARK_APP_ID}', appSecret: '${LARK_APP_SECRET}' }],
     });
   });
 
@@ -130,22 +130,22 @@ describe('buildFieldBasedInstanceConfig', () => {
 
     expect(config).toEqual({
       path: '/wechat/webhook',
-      endpoints: [{ name: 'wechat-mp-bot', appId: 'a', appSecret: 's', token: 't' }],
+      endpoints: [{ id: 'wechat-mp-bot', appId: 'a', appSecret: 's', token: 't' }],
     });
   });
 
-  it('keeps icqq master at top level and name in endpoints', () => {
+  it('keeps icqq master at top level and id in endpoints', () => {
     const config = buildFieldBasedInstanceConfig(
       def('icqq', [
-        { key: 'name', message: 'QQ 号:' },
+        { key: 'id', message: 'QQ 号:' },
         { key: 'master', message: '主人 QQ 号:', scope: 'shared' },
       ]),
-      { name: '${ICQQ_ACCOUNT}', master: '1659488338' },
+      { id: '${ICQQ_ACCOUNT}', master: '1659488338' },
     );
 
     expect(config).toEqual({
       master: '1659488338',
-      endpoints: [{ name: '${ICQQ_ACCOUNT}' }],
+      endpoints: [{ id: '${ICQQ_ACCOUNT}' }],
     });
   });
 
@@ -167,7 +167,7 @@ describe('buildFieldBasedInstanceConfig', () => {
 
     expect(config).toEqual({
       endpoints: [{
-        name: 'email-bot',
+        id: 'email-bot',
         smtp: {
           host: 'smtp.qq.com',
           port: 465,
@@ -194,13 +194,13 @@ describe('collectAdapterPluginConfigs', () => {
       instances: [{
         package: '@zhin.js/adapter-sandbox',
         instanceKey: 'sandbox',
-        config: { endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }] },
+        config: { endpoints: [{ context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' }] },
       }],
       envVars: {},
     });
 
     expect(plugins).toEqual({
-      sandbox: { endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }] },
+      sandbox: { endpoints: [{ context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' }] },
     });
   });
 });
@@ -266,7 +266,7 @@ describe('field-based adapters (line / wecom / weixin-ilink)', () => {
     expect(config).toEqual({
       webhookPath: '/line/webhook',
       endpoints: [{
-        name: 'line-bot',
+        id: 'line-bot',
         channelSecret: '${LINE_CHANNEL_SECRET}',
         channelAccessToken: '${LINE_CHANNEL_ACCESS_TOKEN}',
       }],
@@ -294,7 +294,7 @@ describe('field-based adapters (line / wecom / weixin-ilink)', () => {
     expect(config).toEqual({
       webhookPath: '/wecom/callback',
       endpoints: [{
-        name: 'wecom-bot',
+        id: 'wecom-bot',
         corpId: '${WECOM_CORP_ID}',
         agentSecret: '${WECOM_AGENT_SECRET}',
         token: '${WECOM_TOKEN}',
@@ -310,7 +310,7 @@ describe('field-based adapters (line / wecom / weixin-ilink)', () => {
     );
 
     expect(config).toEqual({
-      endpoints: [{ name: 'weixin-ilink-bot', botToken: '${WEIXIN_ILINK_TOKEN}' }],
+      endpoints: [{ id: 'weixin-ilink-bot', botToken: '${WEIXIN_ILINK_TOKEN}' }],
     });
   });
 });
@@ -319,7 +319,7 @@ describe('connection-aware configurers (napcat / onebot12 / milky / satori)', ()
   it('napcat ws：connection 顶层，url/access_token 进 endpoints[0]', async () => {
     mockPrompt({
       connection: 'ws',
-      endpointName: 'napcat-bot',
+      endpointId: 'napcat-bot',
       url: 'ws://127.0.0.1:3001',
       accessToken: 'tok',
     });
@@ -328,7 +328,7 @@ describe('connection-aware configurers (napcat / onebot12 / milky / satori)', ()
 
     expect(config).toEqual({
       connection: 'ws',
-      endpoints: [{ name: 'napcat-bot', url: 'ws://127.0.0.1:3001', access_token: '${NAPCAT_TOKEN}' }],
+      endpoints: [{ id: 'napcat-bot', url: 'ws://127.0.0.1:3001', access_token: '${NAPCAT_TOKEN}' }],
     });
     expect(ctx.envVars.NAPCAT_TOKEN).toBe('tok');
   });
@@ -336,7 +336,7 @@ describe('connection-aware configurers (napcat / onebot12 / milky / satori)', ()
   it('napcat http：http_url/post_path 进 endpoints[0]', async () => {
     mockPrompt({
       connection: 'http',
-      endpointName: 'napcat-bot',
+      endpointId: 'napcat-bot',
       http_url: 'http://127.0.0.1:3000',
       post_path: '/napcat/post',
       accessToken: '',
@@ -346,7 +346,7 @@ describe('connection-aware configurers (napcat / onebot12 / milky / satori)', ()
 
     expect(config).toEqual({
       connection: 'http',
-      endpoints: [{ name: 'napcat-bot', http_url: 'http://127.0.0.1:3000', post_path: '/napcat/post' }],
+      endpoints: [{ id: 'napcat-bot', http_url: 'http://127.0.0.1:3000', post_path: '/napcat/post' }],
     });
     expect(ctx.envVars.NAPCAT_TOKEN).toBeUndefined();
   });
@@ -354,7 +354,7 @@ describe('connection-aware configurers (napcat / onebot12 / milky / satori)', ()
   it('onebot12 webhook：path/api_url 进 endpoints[0]', async () => {
     mockPrompt({
       connection: 'webhook',
-      endpointName: 'ob12-bot',
+      endpointId: 'ob12-bot',
       path: '/onebot12/webhook',
       api_url: 'http://127.0.0.1:6700',
       accessToken: 'x',
@@ -365,7 +365,7 @@ describe('connection-aware configurers (napcat / onebot12 / milky / satori)', ()
     expect(config).toEqual({
       connection: 'webhook',
       endpoints: [{
-        name: 'ob12-bot',
+        id: 'ob12-bot',
         path: '/onebot12/webhook',
         api_url: 'http://127.0.0.1:6700',
         access_token: '${ONEBOT12_ACCESS_TOKEN}',
@@ -377,7 +377,7 @@ describe('connection-aware configurers (napcat / onebot12 / milky / satori)', ()
   it('milky ws：baseUrl 进 endpoints[0]，无 path', async () => {
     mockPrompt({
       connection: 'ws',
-      endpointName: 'milky-bot',
+      endpointId: 'milky-bot',
       baseUrl: 'http://127.0.0.1:8080',
       accessToken: 'm',
     });
@@ -386,7 +386,7 @@ describe('connection-aware configurers (napcat / onebot12 / milky / satori)', ()
 
     expect(config).toEqual({
       connection: 'ws',
-      endpoints: [{ name: 'milky-bot', baseUrl: 'http://127.0.0.1:8080', access_token: '${MILKY_ACCESS_TOKEN}' }],
+      endpoints: [{ id: 'milky-bot', baseUrl: 'http://127.0.0.1:8080', access_token: '${MILKY_ACCESS_TOKEN}' }],
     });
     expect(ctx.envVars.MILKY_ACCESS_TOKEN).toBe('m');
   });
@@ -394,7 +394,7 @@ describe('connection-aware configurers (napcat / onebot12 / milky / satori)', ()
   it('satori webhook：baseUrl/path/token 进 endpoints[0]', async () => {
     mockPrompt({
       connection: 'webhook',
-      endpointName: 'satori-bot',
+      endpointId: 'satori-bot',
       baseUrl: 'http://127.0.0.1:5140',
       path: '/satori/webhook',
       token: 't',
@@ -405,7 +405,7 @@ describe('connection-aware configurers (napcat / onebot12 / milky / satori)', ()
     expect(config).toEqual({
       connection: 'webhook',
       endpoints: [{
-        name: 'satori-bot',
+        id: 'satori-bot',
         baseUrl: 'http://127.0.0.1:5140',
         path: '/satori/webhook',
         token: '${SATORI_TOKEN}',

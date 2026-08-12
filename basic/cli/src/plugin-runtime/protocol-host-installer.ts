@@ -34,11 +34,11 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
     const http = resources.use(httpHostToken);
 
     if (resolved.mcp && resolved.mcp.enabled !== false) {
-      const [{ installRuntimeMcp }, { AgentRuntime }] = await Promise.all([
+      const [{ installRuntimeMcp }, { CapabilityLeaseRuntime }] = await Promise.all([
         import('@zhin.js/mcp/runtime'),
         import('@zhin.js/agent/runtime'),
       ]);
-      const runtime = new AgentRuntime();
+      const runtime = new CapabilityLeaseRuntime();
       runtime.attach(options.snapshots);
       lifecycle.add(installRuntimeMcp({
         http,
@@ -46,7 +46,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
         fallbackToken: resolved.httpToken,
         production: options.production,
         tools: {
-          withTools: (operation) => runtime.runTurn(rootPluginId(), async (capabilities) => {
+          withTools: (operation) => runtime.withCapabilities(rootPluginId(), async (capabilities) => {
             const tools = capabilities.tools.map((tool) => ({
               name: tool.name,
               description: tool.description,

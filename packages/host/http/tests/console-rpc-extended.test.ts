@@ -511,7 +511,7 @@ describe('dispatchExtendedConsoleRpc', () => {
       await expect(
         dispatchExtendedConsoleRpc(
           'endpoint:friends',
-          { adapter: 'weixin', endpointId: 'bot' },
+          { adapter: 'weixin', endpointKey: 'bot' },
           ctx,
         ),
       ).resolves.toEqual({ error: '当前适配器（weixin）不支持好友列表' });

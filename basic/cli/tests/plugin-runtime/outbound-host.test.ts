@@ -8,13 +8,13 @@ describe('OutboundHost', () => {
     const host = createOutboundHost({ sendEndpointMessage } as unknown as ImRuntime);
     await host.send({
       adapter: 'sandbox',
-      endpointId: 'bot',
+      endpointKey: 'bot',
       conversation: { kind: 'private', id: 'u1' },
       content: 'hello',
     });
     expect(sendEndpointMessage).toHaveBeenCalledWith({
       adapter: 'sandbox',
-      endpointId: 'bot',
+      endpointKey: 'bot',
       conversation: { kind: 'private', id: 'u1' },
       content: 'hello',
     });

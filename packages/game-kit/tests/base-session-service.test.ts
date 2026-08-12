@@ -230,7 +230,7 @@ describe('BaseSessionService', () => {
 
     expect(send).toHaveBeenCalledWith({
       adapter: 'sandbox',
-      endpointId: 'default',
+      endpointKey: 'default',
       conversation: { kind: 'group', id: 'room' },
       content: 'Alpha timed out',
     });

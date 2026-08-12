@@ -76,7 +76,7 @@ export function messageFromCommandInput(input: unknown): GameMessageLike {
       ? (endpointCapabilityId.split('\0').pop() ?? endpointCapabilityId).split('~')[0]
       : undefined;
     const adapter = String(adapterName ?? meta.adapter ?? 'runtime');
-    const endpoint = String(meta.endpoint ?? meta.endpointId ?? 'default');
+    const endpoint = String(meta.endpoint ?? meta.endpointKey ?? 'default');
     const channelType = String(meta.type ?? meta.channelType ?? conversation?.kind ?? 'private');
     const channelId = String(meta.channelId ?? conversation?.id ?? 'smoke');
     const senderId = String(input.sender ?? meta.senderId ?? 'smoke');
