@@ -6,7 +6,7 @@ In the Plugin Runtime, plugins consume Host capabilities by token: `context.use(
 
 | Token | Yields | Key methods |
 | --- | --- | --- |
-| `messageGatewayToken` (`@zhin.js/core/runtime`) | `MessageGateway` | `receive` / `send(request) → DeliveryReceipt` / `sendEndpointMessage` / `onMessage` / `registerInteractiveHandler` / `setUnmatchedHandler` |
+| `messageGatewayToken` (`@zhin.js/core/runtime`) | `MessageGateway` | `receive` / `send(request) → DeliveryReceipt` / `sendEndpointMessage` / `onMessage` / `registerInteractiveHandler` |
 | `outboundHostToken` (`@zhin.js/plugin-runtime`) | `OutboundHost` | `send({ adapter, endpointId, conversation, content })` — cross-platform outbound, addressed by ConversationRef |
 | `runtimeEventPublisherToken` (`@zhin.js/plugin-runtime`) | `RuntimeEventPublisher` | Broadcasts runtime events (source of inbox/Console message stream) |
 
@@ -54,3 +54,8 @@ export default definePlugin({
 ```
 
 Rules: call `use()` during setup; `use()` throws when the backing Host is not installed (e.g. `agentHostToken` without `@zhin.js/agent`). Scoped tokens (database/schedule) isolate data per plugin owner automatically; root-level process tokens are for the composition root (`basic/cli`) or explicit root scenarios only.
+
+AI fallback is not a mutable `MessageGateway` plugin API. During generation setup,
+the composition root provides the internal `ingressRouteToken` in root resources;
+`ImRuntime.receive` resolves it only from the snapshot held by that message. Regular
+plugins must not register or replace this token.

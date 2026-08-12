@@ -9,7 +9,7 @@ plugins:
   sandbox:
     endpoints:
       - context: sandbox
-        name: assistant
+        id: assistant
         owner: assistant-user
 
 # --- HTTP 服务 ---
@@ -67,7 +67,7 @@ ai:
 #         channel: im
 #         scene:
 #           platform: sandbox
-#           endpointId: assistant
+#           endpointKey: assistant
 #           sceneId: owner
 #           kind: private
 #   home:

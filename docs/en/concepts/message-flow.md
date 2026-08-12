@@ -12,7 +12,7 @@ flowchart LR
     L --> M["new Message(...)"]
     M --> MW["Middleware inbound<br/>before-dispatch -> after-dispatch"]
     MW --> D{MessageDispatcher}
-    D -->|"Prefix mismatch / no such command"| U{unmatchedHandler?}
+    D -->|"Prefix mismatch / no such command"| U{snapshot IngressRoute?}
     U -->|"Agent installed"| AI[AI fallback reply]
     U -->|"Not installed"| N[Silent discard]
     D -->|"Command hit with return value"| R["$replyFrom(owner, value)"]
@@ -52,7 +52,7 @@ The actual code locations for each step:
 
 4. **Command dispatch**. `MessageDispatcher` first resolves the command prefix (by default based on the message's adapter instance configuration: `endpoints[i].commandPrefix` overrides the top-level `commandPrefix`, defaulting to `''` with no prefix, see [Config as Data](./config-as-data.md)). If the prefix doesn't match, it's an immediate miss; if the prefix matches, it is stripped and passed to `CommandIndex.dispatch`. When a command has a return value, the dispatcher automatically replies using the command owner's identity via `$replyFrom(owner, value)`.
 
-5. **AI fallback**. On command miss (or unmatched plain text), the `unmatchedHandler` takes over -- a Host with `@zhin.js/agent` installed routes it to the Agent for reply; without it, the message is silently discarded.
+5. **AI fallback**. On command miss (or unmatched plain text), `ImRuntime` resolves a generation-owned `IngressRoute` from the root resources of the snapshot held by the message. The composition root provides this internal route during generation setup when `@zhin.js/agent` is installed; without it, the message is silently discarded. It is not a mutable plugin setter on `MessageGateway`.
 
 6. **Event broadcast**. After dispatch completes, a `RuntimeMessageEvent` is emitted to `onMessage` subscribers (containing direction, conversation, sender, a `contentPreview` of up to 200 characters, and timestamp). The Console's real-time message stream consumes this.
 

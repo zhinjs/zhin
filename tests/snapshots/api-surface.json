@@ -242,6 +242,7 @@
     "export type{PluginLike}from '@zhin.js/kernel'",
     "export type{RunInboundMessageOptions,InboundRunResult}from './built/inbound-runner.js'",
     "export type{ScheduleDescriptor,ScheduleHandle,ScheduleContextExtensions}from './built/schedule.js'",
+    "export type{SegmentMediaRef}from './built/segment-contract/media.js'",
     "export{Feature,ScheduleEngine,getScheduleEngine,setScheduleEngine,Scheduler,getScheduler,setScheduler,}from '@zhin.js/kernel'",
     "export{Schema}from '@zhin.js/schema'",
     "export{loadHtmlRenderer,seedHtmlRenderer,HTML_RENDERER_PACKAGE}from './built/html-renderer-loader.js'",

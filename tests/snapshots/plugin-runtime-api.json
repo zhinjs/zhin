@@ -120,6 +120,7 @@
   "plugin-runtime": [
     "export * from './agent-tools-host.js';",
     "export * from './capability.js';",
+    "export * from './component-host.js';",
     "export * from './database-host.js';",
     "export * from './dispose.js';",
     "export * from './generation-store.js';",

@@ -48,10 +48,10 @@ export class TerminalEndpoint implements EndpointInstance {
         this.#schedulePrompt();
         return;
       }
-      const endpointId = String(this.#options.id);
+      const endpointKey = String(this.#options.id);
       void this.#options.gateway.receive({
         conversation: {
-          endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+          endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
           kind: 'private',
           id: 'terminal',
         },

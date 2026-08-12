@@ -18,7 +18,7 @@ interface ShowcaseConfig {
   pushOnBoot?: boolean;
   pushTarget?: {
     adapter: string;
-    endpointId: string;
+    endpointKey: string;
     conversation: {
       kind: 'private' | 'group' | 'channel';
       id: string;
@@ -90,7 +90,7 @@ export default definePlugin<ShowcaseConfig>({
         activateNext: async () => {
           await outbound.send({
             adapter: target.adapter,
-            endpointId: target.endpointId,
+            endpointKey: target.endpointKey,
             conversation: target.conversation,
             content: `${config.greeting}，capabilities-bot 已上线`,
           });

@@ -18,7 +18,7 @@ plugin:
   pushOnBoot: true
   pushTarget:
     adapter: sandbox
-    endpointId: sandbox-bot
+    endpointKey: sandbox-bot
     conversation:
       kind: private
       id: sandbox-user
@@ -27,5 +27,5 @@ plugins:
   sandbox:
     endpoints:
       - context: sandbox
-        name: sandbox-bot
+        id: sandbox-bot
         owner: sandbox-user

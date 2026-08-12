@@ -37,11 +37,14 @@ The package, runtime instance, and hot-reload slot are deliberately different:
    registry can be a second source of truth.
 3. A runtime reads one immutable generation snapshot for the whole operation.
    A reload either commits atomically or leaves the prior snapshot live.
-4. A Feature file reload replaces only that slot. A manifest, schema, child, or
-   feature topology change replaces the shallowest affected subtree. Package ABI
-   or unclassifiable importer changes require an explicit process restart.
-5. All IM output travels through `Message.$reply` / `gateway.send` and the
-   outbound pipeline. Adapters never become a side channel around middleware,
+4. A Feature file reload replaces only that slot when the change is generation-safe.
+   A manifest, schema, child, or feature topology change replaces the shallowest
+   affected subtree. Package ABI, unclassifiable importer, or Adapter change that
+   affects Endpoint credentials, identity, connection address, or transport
+   implementation requires an explicit process restart.
+5. All IM output travels through a snapshot-bound `ReplyPort` or traceable
+   `DeliveryPort`, then the outbound pipeline. Agent code never receives an IM
+   Message or Adapter and cannot become a side channel around policy,
    components, rendering, or observability.
 6. All Agent work has a turn identity, fixed capability snapshot, cancellation
    signal, and exactly one terminal event.
@@ -153,8 +156,9 @@ flowchart LR
   Gateway --> Normalize["canonical Segment + ConversationRef"]
   Normalize --> Middleware["inbound middleware"]
   Middleware --> Command["CommandIndex"]
-  Command --> Fallback["Agent unmatched handler"]
-  Command & Fallback --> Outbound["reply / gateway.send"]
+  Command --> Route["typed route outcome"]
+  Route -->|not_found| Agent["Agent TurnIngress adapter"]
+  Command & Agent --> Outbound["ReplyPort / DeliveryPort"]
   Outbound --> Render["components + canonical segments"]
   Render --> OutboundMW["outbound middleware"]
   OutboundMW --> Adapter["AdapterIndex -> Endpoint.send"]
@@ -179,9 +183,11 @@ The target operation matrix is:
 
 ## Agent Runtime
 
-An Agent turn fixes its input conversation, capability projection, policy context,
-and abort signal before execution. HMR affects the next turn; it never swaps a
-tool closure under a running turn.
+An Agent turn consumes one Agent-owned immutable `TurnIngress`. It fixes origin,
+principal, canonical content/media, session address, capability projection,
+policy context, scoped ports, and abort signal before execution. It does not
+receive an IM `Message`, `Plugin`, `Adapter`, or synthetic compatibility object.
+HMR affects the next turn; it never swaps a tool closure under a running turn.
 
 ```mermaid
 flowchart LR
@@ -206,6 +212,13 @@ Tool execution receives the turn abort signal. A tool that cannot be cancelled
 must declare it, and cancellation prevents subsequent delivery or persistence
 writes. Approval is a real `ApprovalPort`: unavailable approval means deny, not
 a silent conversion of `on-risk` into unconditional execution.
+
+Every turn ends exactly once with a discriminated `TurnOutcome`: `completed`,
+`failed`, `cancelled`, or `budget_exceeded`. IM adapts a completed outcome to a
+snapshot-bound reply; HTTP projects journal events to a stream; A2A maps the
+same outcome to its protocol response. Schedule and deferred work persist a
+`DeliveryIntent` and execute it as a new operation carrying `parentTurnId`;
+they never fabricate an IM message or silently borrow the current generation.
 
 ## Console Pages and Navigation
 
