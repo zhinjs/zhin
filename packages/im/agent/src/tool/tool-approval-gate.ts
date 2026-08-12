@@ -8,8 +8,7 @@ import type { AgentStreamBus, AgentStreamPublishContext } from '../event/agent-s
 import { isApprovalPortAvailable, type ApprovalPort } from '../session/session-interaction-port.js';
 import type { ToolApprovalOnceStore } from './tool-approval-once-store.js';
 
-/** Plugin Runtime's `on-risk` policy is conservatively approval-required in P2. */
-export type ToolApprovalGatePolicy = ToolApprovalPolicy | 'on-risk';
+export type ToolApprovalGatePolicy = ToolApprovalPolicy;
 
 export async function resolveToolApprovalRequired(
   policy: ToolApprovalGatePolicy | undefined,

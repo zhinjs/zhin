@@ -78,7 +78,7 @@ async function bindTools(
   host?: PermissionHost,
 ): Promise<readonly ToolCapability[]> {
   if (!index) return Object.freeze([]);
-  const visibleDescriptors = index.visible(owner);
+  const visibleDescriptors = index.list();
   const accessResults = await Promise.all(
     visibleDescriptors.map(async (descriptor) => ({
       descriptor,
@@ -89,9 +89,10 @@ async function bindTools(
     .filter((r) => r.allowed)
     .map((r) => Object.freeze({
       ...r.descriptor,
+      name: r.descriptor.qualifiedName,
       execute: <TInput, TResult>(input: TInput, invocation: ToolInvocationContext) => {
         assertActive(isActive);
-        return index.execute<TInput, TResult>(owner, r.descriptor.name, input, invocation);
+        return index.execute<TInput, TResult>(r.descriptor.owner, r.descriptor.name, input, invocation);
       },
     })));
 }

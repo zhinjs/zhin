@@ -1,6 +1,5 @@
 import {
   definePlugin,
-  agentToolsHostToken,
   databaseHostToken,
   outboundHostToken,
   scheduleHostToken,
@@ -12,12 +11,9 @@ import {
   type LotteryConfig,
 } from './src/config.js';
 import { defineLotteryTables, type LotteryDb } from './src/db.js';
-import { registerLotteryDb } from './src/db-store.js';
-import { registerLotteryAgentDeps } from './src/lottery-agent-deps.js';
 import { createInMemoryLotteryDb } from './src/memory-db.js';
 import { lotteryRuntimeToken } from './src/runtime-state.js';
 import { runLotteryPipeline } from './src/pipeline.js';
-import { registerLotteryOutboundPush } from './src/push.js';
 
 /**
  * Plugin Runtime:
@@ -41,9 +37,6 @@ export default definePlugin<LotteryConfig>({
       }
       return createInMemoryLotteryDb();
     })();
-    context.resources.provide(lotteryRuntimeToken, { db });
-    context.lifecycle.add(registerLotteryDb(db));
-
     let outboundPush: ((text: string) => Promise<void>) | null = null;
     if (context.resources.has(outboundHostToken) && config.pushTargets.length > 0) {
       const outbound = context.resources.use(outboundHostToken);
@@ -65,28 +58,12 @@ export default definePlugin<LotteryConfig>({
         }
       };
     }
-    context.lifecycle.add(registerLotteryOutboundPush(outboundPush));
-
-    context.lifecycle.add(registerLotteryAgentDeps({
-      getDb: () => db,
-      getConfig: () => ({
-        pickCount: config.pickCount,
-        historyLimit: config.historyLimit,
-        kl8: lotteryKl8(config),
-      }),
-      enabledGames: () => lotteryEnabledGames(config),
-      scheduleCron: () => config.scheduleCron,
-      scheduleEnabled: () => config.scheduleEnabled,
-      pipelinePush: config.pushTargets.length > 0,
+    context.resources.provide(lotteryRuntimeToken, Object.freeze({
+      db,
+      config: Object.freeze({ ...config }),
+      enabledGames: Object.freeze([...lotteryEnabledGames(config)]),
+      outbound: outboundPush,
     }));
-
-    // Agent tools (agent/tools/*): register into the Runtime Agent Host when AI
-    // is installed. Lazy import keeps @zhin.js/agent out of IM-only installs.
-    if (context.resources.has(agentToolsHostToken)) {
-      const agentTools = context.resources.use(agentToolsHostToken);
-      const { registerLotteryAgentTools } = await import('./agent/runtime-tools.js');
-      context.lifecycle.add(registerLotteryAgentTools(agentTools));
-    }
 
     if (!context.resources.has(scheduleHostToken) || !config.scheduleEnabled) {
       return;
@@ -98,7 +75,7 @@ export default definePlugin<LotteryConfig>({
       description: 'Daily lottery pipeline',
       async execute() {
         await runLotteryPipeline({
-          getDb: () => db,
+          db,
           enabledGames: () => lotteryEnabledGames(config),
           historyLimit: config.historyLimit,
           pickCount: config.pickCount,
@@ -112,6 +89,7 @@ export default definePlugin<LotteryConfig>({
           },
           weightPersist: config.weightPersistEnabled,
           weightHoldoutFallback: config.weightHoldoutFallback,
+          outbound: outboundPush,
         }, { push: config.pushTargets.length > 0 });
       },
     });

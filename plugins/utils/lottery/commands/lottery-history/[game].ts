@@ -1,17 +1,16 @@
 import { defineCommand } from '@zhin.js/command';
 import { parseGameId } from '../../src/games/registry.js';
 import { loadDraws } from '../../src/db.js';
-import { getLotteryDb, type LotteryConfig } from '../../src/command-helpers.js';
-import { resolveLotteryRuntime } from '../../src/runtime-state.js';
+import type { LotteryConfig } from '../../src/command-helpers.js';
+import { lotteryRuntimeToken } from '../../src/runtime-state.js';
 
 export default defineCommand<LotteryConfig>({
   description: 'List historical draw results',
   params: { game: { type: 'string' } },
-  async execute({ params, args, owner, use }) {
+  async execute({ params, args, use }) {
     const gid = parseGameId(String(params.game ?? ''));
     if (!gid) return '请指定玩法';
-    const db = resolveLotteryRuntime({ owner, use })?.db ?? getLotteryDb();
-    if (!db) return '数据库未就绪';
+    const { db } = use(lotteryRuntimeToken);
     // count 原来是第二动态段，约定式命令只支持单动态文件参数，改从 args 取
     const count = Math.min(50, Math.max(1, Number(args[0]) || 10));
     const draws = await loadDraws(db, gid, count);

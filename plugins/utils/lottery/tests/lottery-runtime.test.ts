@@ -1,30 +1,32 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import plugin from '../plugin.ts';
 import lotteryCommand from '../commands/lottery/[[game]].ts';
 import todayCommand from '../commands/lottery-today.ts';
 import historyCommand from '../commands/lottery-history/[game].ts';
-import { resolveLotteryConfig } from '../src/config.js';
-import { resetLotteryDb, ensureLotteryMemoryDb, getLotteryDb } from '../src/db-store.js';
+import { resolveLotteryConfig, lotteryEnabledGames } from '../src/config.js';
+import { createInMemoryLotteryDb } from '../src/memory-db.js';
+import { lotteryRuntimeToken } from '../src/runtime-state.js';
+
+const config = resolveLotteryConfig({});
+const runtime = Object.freeze({
+  db: createInMemoryLotteryDb(),
+  config,
+  enabledGames: Object.freeze(lotteryEnabledGames(config)),
+  outbound: null,
+});
 
 const emptyCtx = {
   owner: {} as never,
   generation: 0,
   config: {},
-  use: () => {
-    throw new Error('unused');
-  },
+  use: (token: typeof lotteryRuntimeToken) => token === lotteryRuntimeToken ? runtime : neverToken(),
   args: [],
   params: {},
   input: undefined,
 };
 
 describe('@zhin.js/plugin-lottery runtime', () => {
-  beforeEach(() => {
-    resetLotteryDb();
-    ensureLotteryMemoryDb();
-  });
-
   it('defines a valid Plugin Runtime entry', () => {
     expect(plugin.name).toBe('lottery');
   });
@@ -53,10 +55,6 @@ describe('@zhin.js/plugin-lottery runtime', () => {
     ]);
   });
 
-  it('memory db is ready for smoke commands', () => {
-    expect(getLotteryDb()).not.toBeNull();
-  });
-
   it('lottery-today works without host database (empty report)', async () => {
     const result = await todayCommand.execute({ ...emptyCtx });
     expect(String(result)).toMatch(/今日尚无推荐|可执行 lottery/);
@@ -80,3 +78,7 @@ describe('@zhin.js/plugin-lottery runtime', () => {
     expect(String(result)).not.toContain('数据库未就绪');
   });
 });
+
+function neverToken(): never {
+  throw new Error('unexpected token');
+}

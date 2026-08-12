@@ -35,16 +35,17 @@ import {
   AgentRuntime,
   ToolIngressRuntime,
   CapabilityIngress,
+  capabilityToTool,
   turnJournalStoreToken,
   type ExternalToolCapability,
 } from '../../src/plugin-runtime/index.js';
 
 describe('Agent CapabilityIngress', () => {
-  it('builds an owner-visible immutable view across four Feature projections', async () => {
+  it('builds a collision-free Agent Tool catalog across plugin owners', async () => {
     const fixture = await createFixture();
-    const capabilities = await new CapabilityIngress().read(fixture.snapshot, fixture.child);
+    const capabilities = await new CapabilityIngress().read(fixture.snapshot, rootPluginId());
 
-    expect(capabilities.tools.map((tool) => tool.name)).toEqual(['lookup']);
+    expect(capabilities.tools.map((tool) => tool.name)).toEqual(['child__lookup']);
     expect(capabilities.skills.map((skill) => skill.name)).toEqual(['research']);
     expect(capabilities.agents.map((agent) => agent.name)).toEqual(['planner']);
     expect(capabilities.mcp.map((connection) => connection.name)).toEqual(['memory']);
@@ -109,6 +110,13 @@ describe('Agent CapabilityIngress', () => {
     await store.close();
   });
 
+  it('preserves fail-closed approval semantics in the production Tool projection', async () => {
+    const fixture = await createFixture({ approval: 'on-risk' });
+    const [capability] = (await new CapabilityIngress().read(fixture.snapshot, rootPluginId())).tools;
+    expect(capabilityToTool(capability!, invocation()).approval).toBe('on-risk');
+    await fixture.mcp.stop();
+  });
+
   it('fails closed for approval-gated external protocol tools', async () => {
     const fixture = await createFixture({ approval: 'always' });
     const store = new SnapshotStore(stateFrom(fixture.snapshot));
@@ -131,9 +139,9 @@ describe('Agent CapabilityIngress', () => {
     const seen: import('../../src/turn/turn-ingress.js').TurnIngress[] = [];
     const runtime = new AgentRuntime(async function* ({ turn, capabilities, tools }) {
       seen.push(turn);
-      expect(capabilities.tools[0]?.name).toBe('lookup');
+      expect(capabilities.tools[0]?.name).toBe('child__lookup');
       expect('execute' in capabilities.tools[0]!).toBe(false);
-      await expect(tools.execute('lookup', { value: 'runner' }, 'call-1')).resolves.toMatchObject({
+      await expect(tools.execute('child__lookup', { value: 'runner' }, 'call-1')).resolves.toMatchObject({
         status: 'completed', output: 'old:runner',
       });
       yield {
@@ -159,7 +167,7 @@ describe('Agent CapabilityIngress', () => {
     expect(seen).toHaveLength(1);
     expect(seen[0]).toMatchObject({
       identity: { rootId: 'root', generation: 0, traceId: 'trace-1', turnId: 'turn-1' },
-      capabilities: { tools: ['lookup'], skills: ['research'] },
+      capabilities: { tools: ['child__lookup'], skills: ['research'] },
     });
     await fixture.mcp.stop();
     await store.close();
@@ -180,7 +188,7 @@ describe('Agent CapabilityIngress', () => {
       restricted.child,
       () => true,
       allowedTurn,
-    )).tools.map((tool) => tool.name)).toEqual(['lookup']);
+    )).tools.map((tool) => tool.name)).toEqual(['child__lookup']);
 
     const wrongPlatform = accessTurn('telegram');
     expect((await ingress.read(
@@ -202,7 +210,7 @@ async function createFixture(access: {
   readonly scopes?: readonly ('private' | 'group' | 'channel')[];
   readonly permissions?: readonly string[];
   readonly hidden?: boolean;
-  readonly approval?: 'never' | 'always';
+  readonly approval?: 'never' | 'on-risk' | 'always';
 } = {}) {
   const root = rootPluginId();
   const child = childPluginId(root, 'child');

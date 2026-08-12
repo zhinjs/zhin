@@ -50,7 +50,7 @@ Definition fields (`packages/im/tool/src/definition.ts`):
 | `hidden` | No | Registered but not exposed to the model (callable by name only) |
 | `execute(input, context)` | Yes | `context` is the capability context (`config` / `use(token)` / `owner` / `generation`) |
 
-The tool name is the file name -- this is the name exposed to the model; note it must be unique across plugins. Child plugins can see and override parent plugins' same-named tools (resolved upward along the plugin tree). The descriptor also has `qualifiedName` (owner path segments and file name joined with `__`) for disambiguation.
+The file name is the owner-local name. Agent turns expose the complete tool tree to the model by `qualifiedName`: root tools keep their local name, while child tools join owner path segments and the file name with `__` (for example, `maps__get-weather`). Execution remains bound to the original owner's fixed-generation capability context; it is not re-resolved through the caller's owner.
 
 ## Path Two: Conditional setup Declaration
 

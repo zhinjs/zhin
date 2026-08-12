@@ -389,6 +389,9 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
    * 执行此工具需要的权限列表
    */
   permissions?: string[];
+
+  /** Per-tool approval policy; `on-risk` remains fail-closed at Agent boundaries. */
+  approval?: 'always' | 'once' | 'never' | 'on-risk';
   
   /**
    * 支持的平台列表

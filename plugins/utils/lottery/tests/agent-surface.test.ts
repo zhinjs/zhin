@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { defineTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
-import { namespaceAuthoringName } from '@zhin.js/agent';
+import { buildDailyPipelinePrompt } from '../src/agent/prompts.js';
 
 describe('lottery agent/ surface', () => {
-  it('namespaces tool slots with plugin prefix', () => {
-    expect(namespaceAuthoringName('lottery', 'sync')).toBe('lottery_sync');
-    expect(namespaceAuthoringName('lottery', 'compute_recommend')).toBe('lottery_compute_recommend');
+  it('does not hard-code a runtime instanceKey into prompts', () => {
+    const prompt = buildDailyPipelinePrompt({ games: ['ssq'] });
+    expect(prompt).toContain('synchronize draws');
+    expect(prompt).not.toMatch(/lottery_{1,2}/u);
   });
 
   it('defineTool accepts zod schema', () => {

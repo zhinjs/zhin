@@ -10,7 +10,7 @@ tools/
 └── search.ts
 ```
 
-Tool 目录只允许一级 `.ts` 文件。文件 basename 是 local name；Root 的 `get-weather` qualified name 仍是 `get-weather`，child `root/maps` 的同名 Tool 是 `maps__get-weather`。嵌套目录、TSX 和旧 `agent/tools` 不属于绿地接口。
+Tool 目录只允许一级 `.ts` 文件。文件 basename 是 owner 内部使用的 local name；Agent turn 对模型发布 owner-qualified name。Root 的 `get-weather` 仍是 `get-weather`，child `root/maps` 的同名 Tool 是 `maps__get-weather`。嵌套目录、TSX 和旧 `agent/tools` 不属于绿地接口。
 
 ## 定义 Tool
 

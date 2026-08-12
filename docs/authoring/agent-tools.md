@@ -50,7 +50,7 @@ export default defineAgentTool<{ message: string }>({
 | `hidden` | 否 | 注册但不提供给模型（可按名调用） |
 | `execute(input, context)` | 是 | `context` 是能力上下文（`config` / `use(token)` / `owner` / `generation`） |
 
-工具名即文件名——对模型暴露的就是这个名字，注意跨插件唯一；子插件可以看到并覆盖父插件的同名工具（沿插件树向上解析）。描述符上另有 `qualifiedName`（owner 路径段与文件名以 `__` 连接）用于消歧。
+文件名是 owner 内部的 local name。Agent turn 会把全树工具按 `qualifiedName` 暴露给模型：root 工具保持 local name，子插件工具由 owner 路径段与文件名以 `__` 连接（例如 `maps__get-weather`）。执行仍绑定原 owner 的固定 generation capability context，不通过调用方 owner 重新解析。
 
 ## 路径二：setup 条件式声明
 

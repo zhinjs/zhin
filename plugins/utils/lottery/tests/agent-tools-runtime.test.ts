@@ -1,72 +1,78 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentToolRegistration, AgentToolsHost } from '@zhin.js/plugin-runtime';
+import { readFile } from 'node:fs/promises';
+import { parseAgentToolDefinition } from '@zhin.js/tool';
 import { createInMemoryLotteryDb } from '../src/memory-db.js';
-import {
-  registerLotteryAgentDeps,
-  type LotteryAgentDeps,
-} from '../src/lottery-agent-deps.js';
-import { registerLotteryAgentTools } from '../agent/runtime-tools.js';
+import { upsertDraws } from '../src/db.js';
+import { lotteryRuntimeToken, type LotteryRuntime } from '../src/runtime-state.js';
+import { resolveLotteryConfig } from '../src/config.js';
+import computeRecommend from '../tools/compute-recommend.js';
+import getModelState from '../tools/get-model-state.js';
+import history from '../tools/history.js';
+import listPending from '../tools/list-pending.js';
+import savePrediction from '../tools/save-prediction.js';
+import statsSnapshot from '../tools/stats-snapshot.js';
+import sync from '../tools/sync.js';
 
-function createHost() {
-  const tools = new Map<string, AgentToolRegistration>();
-  const host: AgentToolsHost = {
-    register: (tool) => {
-      tools.set(tool.name, tool);
-      return () => { tools.delete(tool.name); };
-    },
-  };
-  return { host, tools };
-}
+const TOOLS = [
+  computeRecommend,
+  getModelState,
+  history,
+  listPending,
+  savePrediction,
+  statsSnapshot,
+  sync,
+] as const;
 
-function memoryDeps(): LotteryAgentDeps {
-  const db = createInMemoryLotteryDb();
+function runtime(): LotteryRuntime {
   return {
-    getDb: () => db,
-    getConfig: () => ({ pickCount: 1, historyLimit: 10, kl8: {} }),
-    enabledGames: () => [],
-    scheduleCron: () => '0 0 18 * * *',
-    scheduleEnabled: () => false,
-    pipelinePush: false,
+    db: createInMemoryLotteryDb(),
+    config: resolveLotteryConfig({ pickCount: 1, historyLimit: 10 }),
+    enabledGames: [],
+    outbound: null,
   };
 }
 
-describe('lottery runtime agent tools (agentToolsHostToken)', () => {
-  it('registers every agent/tools slot with the lottery_ prefix', () => {
-    const { host, tools } = createHost();
-    const dispose = registerLotteryAgentTools(host);
+function context(value: LotteryRuntime) {
+  return {
+    use: (token: typeof lotteryRuntimeToken) => {
+      expect(token).toBe(lotteryRuntimeToken);
+      return value;
+    },
+  } as never;
+}
 
-    expect([...tools.keys()].sort()).toEqual([
-      'lottery_compute_recommend',
-      'lottery_get_model_state',
-      'lottery_history',
-      'lottery_list_pending',
-      'lottery_save_prediction',
-      'lottery_stats_snapshot',
-      'lottery_sync',
-    ]);
-
-    dispose();
-    expect(tools.size).toBe(0);
+describe('lottery ToolFeature definitions', () => {
+  it('ships the convention directory and declares its Feature provider', async () => {
+    const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as {
+      files?: string[];
+      scripts?: { build?: string };
+      dependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
+      zhin?: { features?: Array<{ package: string }> };
+    };
+    expect(manifest.files).toContain('tools');
+    expect(manifest.scripts?.build).toContain('pnpm run clean');
+    expect(manifest.dependencies?.zod).toBeDefined();
+    expect(manifest.peerDependencies?.zod).toBeUndefined();
+    expect(manifest.zhin?.features?.map((feature) => feature.package)).toContain('@zhin.js/tool');
   });
 
-  it('shares one lottery-agent-deps module instance with plugin setup', async () => {
-    const { host, tools } = createHost();
-    const disposeTools = registerLotteryAgentTools(host);
-    const history = tools.get('lottery_history');
-    expect(history).toBeDefined();
+  it('uses only validated tools/*.ts convention definitions', () => {
+    expect(TOOLS.map(parseAgentToolDefinition)).toEqual([...TOOLS]);
+  });
 
-    // 复现线上错误：setup() 尚未注册 deps 时工具报错。
-    await expect(history!.execute({ game: 'ssq' }))
-      .rejects.toThrow('lottery agent deps not initialized');
+  it('resolves data from the invoking owner capability context without cross-instance state', async () => {
+    const first = runtime();
+    const second = runtime();
+    await upsertDraws(first.db, [{
+      gameId: 'ssq',
+      issue: '001',
+      drawTime: '2026-01-01',
+      numbers: { red: [1, 2, 3, 4, 5, 6], blue: [7] },
+      source: 'fucai',
+    }]);
 
-    // 与 plugin.ts setup() 相同的注册路径：同一模块实例 → 工具立即可用。
-    const disposeDeps = registerLotteryAgentDeps(memoryDeps());
-    await expect(history!.execute({ game: 'ssq' })).resolves.toBe('[]');
-
-    // generation 销毁后回到未初始化状态（新 generation 会重新注册）。
-    disposeDeps();
-    await expect(history!.execute({ game: 'ssq' }))
-      .rejects.toThrow('lottery agent deps not initialized');
-    disposeTools();
+    await expect(history.execute({ game: 'ssq' }, context(first))).resolves.toContain('001');
+    await expect(history.execute({ game: 'ssq' }, context(second))).resolves.toBe('[]');
   });
 });

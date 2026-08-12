@@ -16,11 +16,10 @@ import {
   runHoldoutBacktest,
 } from './evaluate/weight-guard.js';
 import { cancelTodayPendingPredictions } from './evaluate/tracker.js';
-import { pushLotteryReport, getLotteryOutboundPush } from './push.js';
 import type { Kl8Config } from './games/kl8-groups.js';
 
 export interface PipelineDeps {
-  getDb: () => LotteryDb | null;
+  db: LotteryDb;
   enabledGames: () => GameId[];
   historyLimit: number;
   pickCount: number;
@@ -34,6 +33,7 @@ export interface PipelineDeps {
   };
   weightPersist: boolean;
   weightHoldoutFallback: boolean;
+  outbound: ((text: string) => Promise<void>) | null;
 }
 
 function backtestOpts(deps: PipelineDeps) {
@@ -77,16 +77,7 @@ export async function runLotteryPipeline(
   deps: PipelineDeps,
   options: PipelineOptions = {},
 ): Promise<PipelineStepResult> {
-  const db = deps.getDb();
-  if (!db) {
-    return {
-      sync: 'db not ready',
-      review: 'skipped',
-      recommend: 'skipped',
-      pushed: false,
-      reportText: '数据库未就绪',
-    };
-  }
+  const { db } = deps;
 
   const gameIds = options.gameId ? [options.gameId] : deps.enabledGames();
   const syncParts: string[] = [];
@@ -179,8 +170,8 @@ export async function runLotteryPipeline(
   }
 
   let pushed = false;
-  if (options.push && reportText && getLotteryOutboundPush()) {
-    await pushLotteryReport(reportText);
+  if (options.push && reportText && deps.outbound) {
+    await deps.outbound(reportText);
     pushed = true;
   }
 

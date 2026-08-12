@@ -30,6 +30,7 @@ export function capabilityToTool(
     scopes: tool.scopes ? [...tool.scopes] : undefined,
     permissions: tool.permissions ? [...tool.permissions] : undefined,
     hidden: tool.hidden,
+    approval: tool.approval,
     async execute(args) {
       return await tool.execute(args, invocation) as Awaited<ReturnType<Tool['execute']>>;
     },

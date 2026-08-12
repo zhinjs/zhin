@@ -127,6 +127,58 @@ describe('Tool Feature', () => {
       .resolves.toBe('root:q:root:root-secret');
     expect(index.visible(child).map((tool) => tool.qualifiedName)).toEqual(['child__lookup']);
   });
+
+  it('publishes every plugin-owned Tool under one collision-free qualified identity', async () => {
+    const root = rootPluginId();
+    const child = childPluginId(root, 'child');
+    const slot = createCapabilitySlot({
+      owner: child,
+      feature: toolFeatureId,
+      localName: 'history',
+      source: '/plugins/lottery/tools/history.ts',
+      definition: defineAgentTool<{ game: string }>({
+        description: 'Lottery history',
+        approval: 'never',
+        execute: ({ game }) => `history:${game}`,
+      }),
+    });
+    const snapshot = createSnapshot([slot], createToken('unused').id);
+    const index = new ToolIndex([slot], snapshot);
+
+    expect(index.list().map((tool) => tool.qualifiedName)).toEqual(['child__history']);
+    await expect(index.execute(child, 'history', { game: 'ssq' }, invocation()))
+      .resolves.toBe('history:ssq');
+  });
+
+  it('fails closed at the Tool execution boundary when an executable input schema rejects', async () => {
+    const root = rootPluginId();
+    const executed: string[] = [];
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: toolFeatureId,
+      localName: 'save',
+      source: '/tools/save.ts',
+      definition: defineAgentTool<{ value: string }>({
+        description: 'Save value',
+        approval: 'never',
+        inputSchema: {
+          safeParse: (input: unknown) => {
+            const value = (input as { value?: unknown })?.value;
+            return typeof value === 'string' && value.length > 0
+              ? { success: true as const, data: { value } }
+              : { success: false as const, error: { issues: [{ path: ['value'], message: 'too small' }] } };
+          },
+        },
+        execute: ({ value }) => { executed.push(value); return value; },
+      }),
+    });
+    const snapshot = createSnapshot([slot], createToken('unused').id);
+    const index = new ToolIndex([slot], snapshot);
+
+    await expect(index.execute(root, 'save', { value: '' }, invocation()))
+      .rejects.toThrow('Invalid Agent Tool input for save');
+    expect(executed).toEqual([]);
+  });
 });
 
 function invocation() {

@@ -60,9 +60,8 @@ import { defineCommand } from '@zhin.js/command';
 
 export default defineCommand<LotteryConfig>({
   description: 'Show today published recommendation report',
-  async execute({ owner, use }) {
-    const db = resolveLotteryRuntime({ owner, use })?.db ?? getLotteryDb();
-    if (!db) return '数据库未就绪';
+  async execute({ use }) {
+    const { db } = use(lotteryRuntimeToken);
     // ...return a string to reply
   },
 });

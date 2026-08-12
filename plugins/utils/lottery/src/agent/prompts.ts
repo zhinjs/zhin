@@ -15,7 +15,7 @@ export function buildDailyPipelinePrompt(ctx: LotteryAgentContext): string {
   return [
     '[lottery daily_pipeline]',
     `games: ${games}`,
-    'Steps: lottery_sync → review pending (skip if empty) → lottery_compute_recommend → lottery_publish_report',
+    'Steps: synchronize draws → list pending predictions → compute recommendations → save predictions',
     ctx.push ? 'push: true' : 'push: false',
   ].join('\n');
 }

@@ -5,19 +5,17 @@ import {
   trainAllGameWeights,
 } from '../../src/evaluate/backtest.js';
 import {
-  getLotteryDb,
   resolveLotteryConfig,
   type LotteryConfig,
 } from '../../src/command-helpers.js';
 import { lotteryEnabledGames } from '../../src/config.js';
-import { resolveLotteryRuntime } from '../../src/runtime-state.js';
+import { lotteryRuntimeToken } from '../../src/runtime-state.js';
 
 export default defineCommand<LotteryConfig>({
   description: 'Full-history weight training',
   params: { game: { type: 'string', default: '' } },
-  async execute({ params, config, owner, use }) {
-    const db = resolveLotteryRuntime({ owner, use })?.db ?? getLotteryDb();
-    if (!db) return '数据库未就绪';
+  async execute({ params, config, use }) {
+    const { db } = use(lotteryRuntimeToken);
     const cfg = resolveLotteryConfig(config);
     const gid = parseGameId(String(params.game ?? ''));
     const gameIds = gid ? [gid] : lotteryEnabledGames(cfg);

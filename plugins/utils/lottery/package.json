@@ -20,11 +20,12 @@
     "src",
     "lib",
     "agent",
+    "tools",
     "evals",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "pnpm run clean && tsc",
     "clean": "rimraf lib",
     "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/utils/lottery/tests",
     "prepublishOnly": "pnpm run build",
@@ -50,23 +51,20 @@
   "license": "MIT",
   "dependencies": {
     "@zhin.js/command": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*"
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/tool": "workspace:*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@zhin.js/agent": "workspace:*",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10",
-    "zod": "^4.4.3"
+    "vitest": "^4.1.10"
   },
   "peerDependencies": {
-    "@zhin.js/agent": "workspace:*",
-    "zod": "^4.0.0"
+    "@zhin.js/agent": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@zhin.js/agent": {
-      "optional": true
-    },
-    "zod": {
       "optional": true
     }
   },
@@ -91,6 +89,10 @@
     "features": [
       {
         "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/tool",
         "api": "^1.0.0"
       }
     ],

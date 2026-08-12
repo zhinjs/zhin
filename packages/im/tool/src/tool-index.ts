@@ -60,6 +60,7 @@ export class ToolIndex {
   ): Promise<TResult> {
     const entry = this.#index.resolve(requester, name);
     if (!entry) throw new Error(`Unknown Agent Tool ${name} for ${requester}`);
+    const parsedInput = parseExecutableInputSchema<TInput>(entry.qualifiedName, entry.slot.definition.inputSchema, input);
     const capability = createCapabilityContext(this.snapshot, entry.owner);
     const context: ToolExecutionContext = Object.freeze({
       ...capability,
@@ -72,8 +73,27 @@ export class ToolIndex {
         roles: Object.freeze([...invocation.principal.roles]),
       }),
     });
-    return entry.slot.definition.execute(input, context) as TResult | Promise<TResult>;
+    return entry.slot.definition.execute(parsedInput, context) as TResult | Promise<TResult>;
   }
+}
+
+interface ExecutableInputSchema<T> {
+  safeParse(input: unknown):
+    | Readonly<{ success: true; data: T }>
+    | Readonly<{ success: false; error?: Readonly<{ issues?: readonly Readonly<{ path?: readonly PropertyKey[]; message?: string }>[] }> }>;
+}
+
+function parseExecutableInputSchema<T>(name: string, schema: unknown, input: unknown): T {
+  if (!schema || typeof schema !== 'object' || typeof (schema as ExecutableInputSchema<T>).safeParse !== 'function') {
+    return input as T;
+  }
+  const result = (schema as ExecutableInputSchema<T>).safeParse(input);
+  if (result.success) return result.data;
+  const detail = result.error?.issues?.map((issue) => {
+    const path = issue.path?.map(String).join('.') || 'root';
+    return `${path}: ${issue.message ?? 'invalid'}`;
+  }).join('; ') || 'invalid input';
+  throw new TypeError(`Invalid Agent Tool input for ${name}: ${detail}`);
 }
 
 function toDescriptor(entry: OwnerCapabilityEntry<AgentToolDefinition>): ToolDescriptor {

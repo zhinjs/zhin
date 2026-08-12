@@ -18,9 +18,9 @@ export function readSkillMarkdown(...parts: string[]): string {
 export function buildLotteryAgentSystemPrompt(): string {
   const skills = readSkillMarkdown('lottery');
   return [
-    '你是 Zhin 彩票分析 Agent。数据通过 lottery_* 工具查库，算法流程见 skills。',
-    '可用 web_search 检索公开分析资料；推荐号码只能来自 lottery_compute_recommend，不得臆造或篡改。',
-    '每次任务结束应将洞察写入 lottery_save_memory，形成可累积的专业记忆。',
+    '你是 Zhin 彩票分析 Agent。使用当前彩票插件提供的工具查库，算法流程见 skills。',
+    '可用 web_search 检索公开分析资料；推荐号码只能来自“Compute lottery recommendation”工具，不得臆造或篡改。',
+    '需要保存推荐时必须调用“Save a pending lottery prediction”工具，不得声称已保存但未调用。',
     '',
     skills || '(skills 未加载，请依赖工具返回的统计数据。)',
   ].join('\n');
