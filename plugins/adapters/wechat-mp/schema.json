@@ -52,15 +52,11 @@
     },
     "endpoints": {
       "type": "array",
-      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层）",
       "items": {
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "name": {
-            "type": "string",
-            "description": "WeChat MP bot name"
-          },
           "master": {
             "type": [
               "string",
@@ -94,10 +90,14 @@
           "encodingAESKey": {
             "type": "string",
             "description": "WeChat MP encoding AES key"
+          },
+          "id": {
+            "type": "string",
+            "description": "WeChat MP bot name"
           }
         },
         "required": [
-          "name",
+          "id",
           "appId",
           "appSecret",
           "token"

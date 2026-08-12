@@ -20,7 +20,7 @@ const hosts: ReturnType<typeof createHttpHost>[] = [];
 const WEBHOOK_SECRET = 'test-webhook-secret';
 
 const baseConfig = resolveGithubConfig({
-  name: 'test-github-bot',
+  id: 'test-github-bot',
   app_id: 1,
   private_key: '-----BEGIN RSA PRIVATE KEY-----\nMIIB\n-----END RSA PRIVATE KEY-----',
   webhook_secret: WEBHOOK_SECRET,
@@ -57,7 +57,7 @@ describe('github protocol helpers', () => {
       private_key: 'key',
     });
     expect(resolved.webhookPath).toBe('/github/webhook');
-    expect(resolved.name).toBe('github-bot');
+    expect(resolved.id).toBe('github-bot');
     expect(resolved.appId).toBe(42);
   });
 
@@ -202,7 +202,7 @@ describe('github plugin runtime adapter', () => {
     const endpoint = new GithubEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'github'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
-      config: resolveGithubConfig({ name: 'api-only', app_id: 1, private_key: 'k' }),
+      config: resolveGithubConfig({ id: 'api-only', app_id: 1, private_key: 'k' }),
       createClient: () => mockGhClient(),
     });
     await endpoint.start();
@@ -224,7 +224,7 @@ describe('github plugin runtime adapter', () => {
     const endpoint = new GithubEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'github'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: resolveGithubConfig({ name: 'api-only', app_id: 1, private_key: 'k' }),
+      config: resolveGithubConfig({ id: 'api-only', app_id: 1, private_key: 'k' }),
       createClient: () => gh,
     });
     await endpoint.start();
@@ -247,7 +247,7 @@ describe('github plugin runtime adapter', () => {
     const endpoint = new GithubEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'github'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: resolveGithubConfig({ name: 'agent-bot', app_id: 1, private_key: 'k' }),
+      config: resolveGithubConfig({ id: 'agent-bot', app_id: 1, private_key: 'k' }),
       createClient: () => mockGhClient(),
     });
     await endpoint.start();

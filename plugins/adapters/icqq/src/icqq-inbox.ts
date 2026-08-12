@@ -11,7 +11,7 @@ import type { IpcSystemMessage } from './types.js';
 /** 行级公共前缀：adapter 槽 localName + endpoint live 名（uin）。 */
 export interface IcqqInboxBase {
   readonly adapter: string;
-  readonly endpointId: string;
+  readonly endpointKey: string;
 }
 
 /** post_type=request / request.* 判定（OneBot 事件壳）。 */
@@ -46,7 +46,7 @@ export function buildIcqqInboxRequestRow(
   const isGroup = requestType === 'group' || groupId != null;
   return {
     adapter: base.adapter,
-    endpoint_id: base.endpointId,
+    endpoint_id: base.endpointKey,
     platform_request_id: platformRequestId,
     type: isGroup ? 'group' : (requestType ?? 'friend'),
     scene_type: isGroup ? 'group' : null,
@@ -85,7 +85,7 @@ export function buildIcqqInboxNoticeRow(
   const targetId = userId != null && String(userId) !== String(actorId ?? '') ? userId : undefined;
   return {
     adapter: base.adapter,
-    endpoint_id: base.endpointId,
+    endpoint_id: base.endpointKey,
     platform_notice_id: platformNoticeId,
     type: noticeType,
     scene_type: groupId != null ? 'group' : null,
@@ -117,7 +117,7 @@ export function buildIcqqSystemRequestRow(
   if (!platformRequestId) return null;
   return {
     adapter: base.adapter,
-    endpoint_id: base.endpointId,
+    endpoint_id: base.endpointKey,
     platform_request_id: platformRequestId,
     type: kind,
     scene_type: kind === 'group' ? 'group' : null,

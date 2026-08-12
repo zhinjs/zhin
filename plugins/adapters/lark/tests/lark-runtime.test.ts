@@ -19,7 +19,7 @@ const hosts: ReturnType<typeof createHttpHost>[] = [];
 const ENCRYPT_KEY = 'test-encrypt-key';
 
 const baseConfig = resolveLarkConfig({
-  name: 'test-lark-bot',
+  id: 'test-lark-bot',
   appId: 'cli_test',
   appSecret: 'secret-test',
   webhookPath: '/lark/webhook',
@@ -94,7 +94,7 @@ describe('lark protocol helpers', () => {
     });
     expect(resolved.webhookPath).toBe('/lark/webhook');
     expect(resolved.apiBaseUrl).toBe('https://open.feishu.cn/open-apis');
-    expect(resolved.name).toBe('lark-bot');
+    expect(resolved.id).toBe('lark-bot');
     expect(resolved.isFeishu).toBe(true);
   });
 
@@ -329,7 +329,7 @@ describe('lark plugin runtime adapter', () => {
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const config = resolveLarkConfig({
-      name: 'token-lark',
+      id: 'token-lark',
       appId: 'cli_test',
       appSecret: 'secret-test',
       verificationToken: 'vt-secret',
@@ -372,7 +372,7 @@ describe('lark plugin runtime adapter', () => {
         id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
         gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
         http,
-        config: resolveLarkConfig({ name: 'noauth-lark', appId: 'cli_test', appSecret: 'secret-test' }),
+        config: resolveLarkConfig({ id: 'noauth-lark', appId: 'cli_test', appSecret: 'secret-test' }),
         fetch: mockFetchOk(),
       });
       await endpoint.start();

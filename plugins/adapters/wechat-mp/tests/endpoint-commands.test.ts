@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import { createEndpointRuntimeState } from '@zhin.js/adapter';
 import listCommand from '../commands/endpoint/list.js';
-import addCommand from '../commands/endpoint/add/[name].js';
-import removeCommand from '../commands/endpoint/remove/[name].js';
+import addCommand from '../commands/endpoint/add/[id].js';
+import removeCommand from '../commands/endpoint/remove/[id].js';
 import { wechatMpRuntimeStateToken } from '../src/wechat-mp-runtime-state.js';
 
 /**
@@ -55,7 +55,7 @@ describe('wechat-mp.endpoint command definitions', () => {
 
   it('add 走 kv 参数：凭据写 .env，yaml 存 ${REF}', () => {
     const text = addCommand.execute(fakeContext({
-      params: { name: 'bot1' },
+      params: { id: 'bot1' },
       args: ['appId=wx-1', 'appSecret=sec-1', 'token=tok-1'],
     })) as string;
 
@@ -69,15 +69,15 @@ describe('wechat-mp.endpoint command definitions', () => {
   });
 
   it('add 缺少必填字段时报错', () => {
-    expect(addCommand.execute(fakeContext({ params: { name: 'bot1' } })))
+    expect(addCommand.execute(fakeContext({ params: { id: 'bot1' } })))
       .toContain('缺少必填字段：appId、appSecret、token');
   });
 
   it('list 显示运行中 + 配置中的 endpoints', () => {
     const context = fakeContext();
     (context as { state: ReturnType<typeof createEndpointRuntimeState> }).state
-      .endpoints.set('bot1', { name: 'bot1', mode: 'webhook' });
-    addCommand.execute(fakeContext({ params: { name: 'conf-bot' }, args: ['appId=wx-1', 'appSecret=sec-1', 'token=tok-1'] }));
+      .endpoints.set('bot1', { id: 'bot1', mode: 'webhook' });
+    addCommand.execute(fakeContext({ params: { id: 'conf-bot' }, args: ['appId=wx-1', 'appSecret=sec-1', 'token=tok-1'] }));
 
     const text = listCommand.execute(context) as string;
 
@@ -86,20 +86,20 @@ describe('wechat-mp.endpoint command definitions', () => {
   });
 
   it('remove 从配置移除并提示重启', () => {
-    addCommand.execute(fakeContext({ params: { name: 'bot1' }, args: ['appId=wx-1', 'appSecret=sec-1', 'token=tok-1'] }));
+    addCommand.execute(fakeContext({ params: { id: 'bot1' }, args: ['appId=wx-1', 'appSecret=sec-1', 'token=tok-1'] }));
 
-    const text = removeCommand.execute(fakeContext({ params: { name: 'bot1' } })) as string;
+    const text = removeCommand.execute(fakeContext({ params: { id: 'bot1' } })) as string;
 
     expect(text).toContain('移除');
     expect(text).toContain('重启');
-    expect(fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8')).not.toContain('name: bot1');
+    expect(fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8')).not.toContain('id: bot1');
   });
 
   it('配置 master 后非 master 拒绝 add/remove', () => {
     const denied = fakeContext({
       config: { master: 'alice' },
       input: { sender: { id: 'bob' } },
-      params: { name: 'bot1' },
+      params: { id: 'bot1' },
       args: ['appId=wx-1', 'appSecret=sec-1', 'token=tok-1'],
     });
 

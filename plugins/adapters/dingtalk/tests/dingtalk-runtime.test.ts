@@ -18,7 +18,7 @@ const hosts: ReturnType<typeof createHttpHost>[] = [];
 const APP_SECRET = 'test-app-secret';
 
 const baseConfig = resolveDingTalkConfig({
-  name: 'test-dingtalk-bot',
+  id: 'test-dingtalk-bot',
   appKey: 'test-app-key',
   appSecret: APP_SECRET,
   webhookPath: '/dingtalk/webhook',
@@ -76,7 +76,7 @@ describe('dingtalk protocol helpers', () => {
     });
     expect(resolved.webhookPath).toBe('/dingtalk/webhook');
     expect(resolved.apiBaseUrl).toBe('https://oapi.dingtalk.com');
-    expect(resolved.name).toBe('dingtalk-bot');
+    expect(resolved.id).toBe('dingtalk-bot');
   });
 
   it('verifies HMAC-SHA256 signatures', () => {
@@ -283,7 +283,7 @@ describe('dingtalk plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('marks metadata.mentioned when the robot is @ed', async () => {
+  it('marks mentioned when the robot is @ed', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
@@ -306,13 +306,12 @@ describe('dingtalk plugin runtime adapter', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
     expect(receive).toHaveBeenNthCalledWith(1, expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'group', id: 'cid-1' }),
-      metadata: expect.objectContaining({ mentioned: true }),
+      mentioned: true,
     }));
 
     endpoint.admit({ ...textMessage({ msgId: 'msg-2', conversationType: '2' }), isInAtList: false });
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
-    const metadata = receive.mock.calls[1]?.[0]?.metadata as Record<string, unknown>;
-    expect(metadata?.mentioned).toBeUndefined();
+    expect(receive.mock.calls[1]?.[0]?.mentioned).toBeFalsy();
     await endpoint.stop();
   });
 

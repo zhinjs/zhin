@@ -13,7 +13,7 @@ const logger = getLogger('onebot12');
 export interface OneBot12LegacyEndpointRow {
   readonly context?: string;
   readonly connection?: 'ws' | 'webhook' | 'wss';
-  readonly name?: string;
+  readonly id?: string;
   readonly access_token?: string;
   readonly url?: string;
   readonly path?: string;
@@ -25,7 +25,7 @@ export interface OneBot12LegacyEndpointRow {
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface OneBot12AdapterConfig {
   readonly connection?: 'ws' | 'webhook' | 'wss';
-  readonly name?: string;
+  readonly id?: string;
   readonly access_token?: string;
   readonly url?: string;
   readonly path?: string;
@@ -38,7 +38,7 @@ export interface OneBot12AdapterConfig {
 
 export interface OneBot12ConfigBase {
   readonly context: 'onebot12';
-  readonly name: string;
+  readonly id: string;
   readonly access_token?: string;
 }
 
@@ -124,8 +124,8 @@ export function resolveOneBot12Config(config: OneBot12AdapterConfig = {}): Resol
   const connection = config.connection
     ?? entry?.connection
     ?? 'ws';
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.ONEBOT12_BOT_NAME
     || 'onebot12-bot';
   const access_token = config.access_token ?? entry?.access_token;
@@ -140,7 +140,7 @@ export function resolveOneBot12Config(config: OneBot12AdapterConfig = {}): Resol
     return {
       context: 'onebot12',
       connection: 'ws',
-      name,
+      id,
       access_token,
       url,
       reconnect_interval: config.reconnect_interval ?? entry?.reconnect_interval ?? 5000,
@@ -156,7 +156,7 @@ export function resolveOneBot12Config(config: OneBot12AdapterConfig = {}): Resol
     return {
       context: 'onebot12',
       connection: 'webhook',
-      name,
+      id,
       access_token,
       path,
       api_url: config.api_url ?? entry?.api_url,
@@ -171,7 +171,7 @@ export function resolveOneBot12Config(config: OneBot12AdapterConfig = {}): Resol
     return {
       context: 'onebot12',
       connection: 'wss',
-      name,
+      id,
       access_token,
       path,
       heartbeat_interval: config.heartbeat_interval ?? entry?.heartbeat_interval ?? 30_000,
@@ -203,8 +203,8 @@ export function getChannelId(ev: OneBot12Event): string {
  * 进 `parent`（kind 'channel'）；私聊临时会话（private 事件携带 group_id）映射为
  * group 容器内的 private 会话。
  */
-export function onebot12InboundConversation(endpointId: string, ev: OneBot12Event): ConversationRef {
-  const endpoint = { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId };
+export function onebot12InboundConversation(endpointKey: string, ev: OneBot12Event): ConversationRef {
+  const endpoint = { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey };
   if (ev.detail_type === 'group' && ev.group_id) {
     return { endpoint, kind: 'group', id: ev.group_id };
   }

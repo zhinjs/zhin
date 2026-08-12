@@ -13,7 +13,7 @@ const logger = getLogger('line');
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface LineAdapterConfig {
-  readonly name?: string;
+  readonly id?: string;
   readonly channelSecret?: string;
   readonly channelAccessToken?: string;
   readonly webhookPath?: string;
@@ -26,7 +26,7 @@ export interface LineAdapterConfig {
 
 export interface ResolvedLineConfig {
   readonly context: 'line';
-  readonly name: string;
+  readonly id: string;
   readonly channelSecret: string;
   readonly channelAccessToken: string;
   readonly webhookPath: string;
@@ -174,8 +174,8 @@ export function resolveLineConfig(config: LineAdapterConfig = {}): ResolvedLineC
       'LINE adapter requires channelSecret + channelAccessToken (plugins.<key> or endpoints with context: line)',
     );
   }
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.LINE_BOT_NAME
     || 'line-bot';
   const webhookPath = normalizeWebhookPath(
@@ -184,7 +184,7 @@ export function resolveLineConfig(config: LineAdapterConfig = {}): ResolvedLineC
   const apiBaseUrl = (config.apiBaseUrl ?? entry?.apiBaseUrl ?? 'https://api.line.me').replace(/\/$/, '');
   return {
     context: 'line',
-    name,
+    id,
     channelSecret,
     channelAccessToken,
     webhookPath,
@@ -222,10 +222,10 @@ export function resolveChannel(source: LineSource): LineChannel {
  * 入站归一化 → ConversationRef：LINE user → private、group → group、room → channel。
  * LINE 没有 guild/频道容器概念，无 parent；recipient id 前缀（U/G/R）自带场景信息。
  */
-export function lineInboundConversation(endpointId: string, source: LineSource): ConversationRef {
+export function lineInboundConversation(endpointKey: string, source: LineSource): ConversationRef {
   const channel = resolveChannel(source);
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind: channel.channelType,
     id: channel.channelId,
   };

@@ -25,8 +25,8 @@ export default defineAdapter<WeChatMpAdapterConfig>({
   create(context) {
     const config = resolveWeChatMpConfig(context.config);
     // 注册到插件运行时状态（wechat-mp.endpoint list 的"运行中"数据源）
-    context.use(wechatMpRuntimeStateToken).endpoints.set(config.name, {
-      name: config.name,
+    context.use(wechatMpRuntimeStateToken).endpoints.set(config.id, {
+      id: config.id,
       mode: 'webhook',
     });
     return new WeChatMpEndpoint({

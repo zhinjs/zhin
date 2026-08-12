@@ -68,7 +68,7 @@ describe('resolveQqConfig intents', () => {
     const resolved = resolveQqConfig({
       endpoints: [
         {
-          name: 'g',
+          id: 'g',
           appid: 'a',
           secret: 's',
           botKind: 'private',

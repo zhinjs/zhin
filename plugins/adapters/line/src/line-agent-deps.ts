@@ -15,13 +15,13 @@ const endpoints = new Map<string, LineAgentEndpoint>();
 let override: LineAgentDeps | null = null;
 
 export function registerLineAgentEndpoint(
-  endpointId: string,
+  endpointKey: string,
   endpoint: LineAgentEndpoint,
 ): () => void {
-  endpoints.set(endpointId, endpoint);
+  endpoints.set(endpointKey, endpoint);
   return () => {
-    if (endpoints.get(endpointId) === endpoint) {
-      endpoints.delete(endpointId);
+    if (endpoints.get(endpointKey) === endpoint) {
+      endpoints.delete(endpointKey);
     }
   };
 }

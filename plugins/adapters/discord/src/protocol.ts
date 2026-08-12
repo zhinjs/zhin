@@ -13,7 +13,7 @@ const logger = getLogger('discord');
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface DiscordAdapterConfig {
-  readonly name?: string;
+  readonly id?: string;
   readonly token?: string;
   /** Default `gateway`. `interactions` uses httpHostToken POST + Ed25519 verify. */
   readonly connection?: 'gateway' | 'interactions';
@@ -33,7 +33,7 @@ export interface DiscordAdapterConfig {
   /** Transitional: legacy root `endpoints[]` with `context: discord`. */
   readonly endpoints?: ReadonlyArray<{
     readonly context?: string;
-    readonly name?: string;
+    readonly id?: string;
     readonly token?: string;
     readonly connection?: 'gateway' | 'interactions';
     readonly intents?: readonly number[];
@@ -50,7 +50,7 @@ export interface DiscordAdapterConfig {
 export interface ResolvedDiscordGatewayConfig {
   readonly context: 'discord';
   readonly connection: 'gateway';
-  readonly name: string;
+  readonly id: string;
   readonly token: string;
   readonly intents?: readonly number[];
   readonly enableSlashCommands: boolean;
@@ -62,7 +62,7 @@ export interface ResolvedDiscordGatewayConfig {
 export interface ResolvedDiscordInteractionsConfig {
   readonly context: 'discord';
   readonly connection: 'interactions';
-  readonly name: string;
+  readonly id: string;
   readonly token: string;
   readonly applicationId: string;
   readonly publicKey: string;
@@ -152,8 +152,8 @@ export function resolveDiscordConfig(config: DiscordAdapterConfig = {}): Resolve
       'Discord adapter requires token (plugins.<key>.token or endpoints with context: discord)',
     );
   }
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.DISCORD_BOT_NAME
     || 'discord-bot';
   const connection = config.connection
@@ -171,7 +171,7 @@ export function resolveDiscordConfig(config: DiscordAdapterConfig = {}): Resolve
     return {
       context: 'discord',
       connection: 'interactions',
-      name,
+      id,
       token,
       applicationId,
       publicKey,
@@ -182,7 +182,7 @@ export function resolveDiscordConfig(config: DiscordAdapterConfig = {}): Resolve
   return {
     context: 'discord',
     connection: 'gateway',
-    name,
+    id,
     token,
     intents: config.intents ?? entry?.intents,
     enableSlashCommands: config.enableSlashCommands === true
@@ -206,7 +206,7 @@ export function resolveChannelKind(channelType: number | string | undefined): 'p
  * endpoint.adapter = owner PluginId（CapabilityId 以 \0 分隔）。
  */
 export function discordInboundConversation(
-  endpointId: string,
+  endpointKey: string,
   msg: {
     readonly channelId: string;
     readonly channelKind: 'private' | 'group' | 'channel';
@@ -214,7 +214,7 @@ export function discordInboundConversation(
   },
 ): ConversationRef {
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind: msg.channelKind,
     id: msg.channelId,
     ...(msg.guildId && msg.channelKind === 'channel'

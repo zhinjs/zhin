@@ -42,7 +42,7 @@ function makeConversation(
 
 const baseConfig: OneBot12WsConfig = resolveOneBot12Config({
   connection: 'ws',
-  name: 'test-ob12',
+  id: 'test-ob12',
   url: 'ws://127.0.0.1:6700',
   access_token: 'secret',
   reconnect_interval: 50,
@@ -98,12 +98,12 @@ describe('onebot12 protocol helpers', () => {
   it('resolves ws config from plugin config', () => {
     const resolved = resolveOneBot12Config({
       connection: 'ws',
-      name: 'bot',
+      id: 'bot',
       url: 'ws://localhost:1',
     });
     expect(resolved).toMatchObject({
       connection: 'ws',
-      name: 'bot',
+      id: 'bot',
       url: 'ws://localhost:1',
       reconnect_interval: 5000,
       heartbeat_interval: 30_000,
@@ -327,7 +327,7 @@ describe('onebot12 plugin runtime adapter', () => {
     expect(ws.close).toHaveBeenCalled();
   });
 
-  it('marks metadata.mentioned when a mention segment targets self.user_id', async () => {
+  it('marks mentioned when a mention segment targets self.user_id', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
     const ws = createMockWs();
@@ -363,12 +363,12 @@ describe('onebot12 plugin runtime adapter', () => {
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: makeConversation('group', '200'),
       sender: expect.objectContaining({ id: '9' }),
-      metadata: expect.objectContaining({ mentioned: true }),
+      mentioned: true,
     }));
     await endpoint.stop();
   });
 
-  it('does not mark metadata.mentioned when the mention targets someone else', async () => {
+  it('does not mark mentioned when the mention targets someone else', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
     const ws = createMockWs();
@@ -402,7 +402,7 @@ describe('onebot12 plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
-    expect(metadata?.mentioned).toBeUndefined();
+    expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
     await endpoint.stop();
   });
 
@@ -645,7 +645,7 @@ describe('onebot12 plugin runtime adapter', () => {
       name: 'onebot12',
       config: {
         connection: 'webhook',
-        name: 'hook',
+        id: 'hook',
         path: '/onebot12/webhook',
         api_url: 'http://127.0.0.1:6700',
       },
@@ -665,7 +665,7 @@ describe('onebot12 plugin runtime adapter', () => {
     const endpoint = defineOneBot12Adapter.create({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
       name: 'onebot12',
-      config: { connection: 'wss', name: 'rev', path: '/onebot12/ws' },
+      config: { connection: 'wss', id: 'rev', path: '/onebot12/ws' },
       use: (token: unknown) => {
         if (token === httpHostToken) return http;
         if (token === messageGatewayToken) {
@@ -695,7 +695,7 @@ describe('onebot12 plugin runtime adapter', () => {
       http,
       config: resolveOneBot12Config({
         connection: 'webhook',
-        name: 'hook',
+        id: 'hook',
         path: '/onebot12/webhook',
         api_url: 'http://127.0.0.1:6700',
       }) as ReturnType<typeof resolveOneBot12Config> & { connection: 'webhook' },
@@ -808,7 +808,7 @@ describe('onebot12 ws lifecycle', () => {
         http,
         config: resolveOneBot12Config({
           connection: 'wss',
-          name: 'wss-noauth',
+          id: 'wss-noauth',
           path: '/ob12/ws',
         }) as import('../src/protocol.js').OneBot12WssConfig,
       });
@@ -832,7 +832,7 @@ describe('onebot12 ws lifecycle', () => {
         http,
         config: resolveOneBot12Config({
           connection: 'webhook',
-          name: 'hook-noauth',
+          id: 'hook-noauth',
           path: '/ob12/hook',
         }) as ReturnType<typeof resolveOneBot12Config> & { connection: 'webhook' },
       });

@@ -11,20 +11,20 @@ export interface WecomAgentEndpoint {
 }
 
 export interface WecomAgentDeps {
-  getEndpoint: (endpointId: string) => WecomAgentEndpoint;
+  getEndpoint: (endpointKey: string) => WecomAgentEndpoint;
 }
 
 const endpoints = new Map<string, WecomAgentEndpoint>();
 let override: WecomAgentDeps | null = null;
 
 export function registerWecomAgentEndpoint(
-  endpointId: string,
+  endpointKey: string,
   endpoint: WecomAgentEndpoint,
 ): () => void {
-  endpoints.set(endpointId, endpoint);
+  endpoints.set(endpointKey, endpoint);
   return () => {
-    if (endpoints.get(endpointId) === endpoint) {
-      endpoints.delete(endpointId);
+    if (endpoints.get(endpointKey) === endpoint) {
+      endpoints.delete(endpointKey);
     }
   };
 }
@@ -37,9 +37,9 @@ export function setWecomAgentDeps(deps: WecomAgentDeps | null): void {
 export function getWecomAgentDeps(): WecomAgentDeps {
   if (override) return override;
   return {
-    getEndpoint(endpointId) {
-      const endpoint = endpoints.get(endpointId);
-      if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    getEndpoint(endpointKey) {
+      const endpoint = endpoints.get(endpointKey);
+      if (!endpoint) throw new Error(`Endpoint ${endpointKey} 不存在`);
       return endpoint;
     },
   };

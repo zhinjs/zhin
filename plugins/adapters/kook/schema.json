@@ -70,15 +70,11 @@
     },
     "endpoints": {
       "type": "array",
-      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层）",
       "items": {
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "name": {
-            "type": "string",
-            "description": "KOOK bot name"
-          },
           "master": {
             "type": [
               "string",
@@ -108,10 +104,14 @@
           "encrypt_key": {
             "type": "string",
             "description": "Optional Encrypt Key when message encryption is enabled in KOOK console."
+          },
+          "id": {
+            "type": "string",
+            "description": "KOOK bot name"
           }
         },
         "required": [
-          "name",
+          "id",
           "token"
         ]
       }

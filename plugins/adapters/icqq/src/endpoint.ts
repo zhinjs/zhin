@@ -131,9 +131,9 @@ export class IcqqIpcEndpoint implements EndpointInstance {
   #reconnectRunning = false;
 
   constructor(options: IcqqEndpointOptions) {
-    this.#logger = getAdapterLogger('icqq', options.config.name);
+    this.#logger = getAdapterLogger('icqq', options.config.id);
     this.#options = options;
-    this.name = options.config.name;
+    this.name = options.config.id;
     this.#createIpc = options.createIpc ?? defaultCreateIpc;
   }
 
@@ -650,17 +650,20 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       + (mentioned ? ' (mentioned)' : '')
       + ` | ${truncatePreview(msg.content, 80)}`,
     );
+    const quoteId = msg.metadata?.quote_id;
+    const { quote_id: _dropQuoteId, ...restMetadata } = msg.metadata ?? {};
     void this.#options.gateway.receive({
       conversation,
       message: { conversation, id: msg.id },
       content: msg.content,
       ...(msg.segments ? { segments: msg.segments } : {}),
       sender: msg.sender,
+      endpointId: this.name,
+      ...(mentioned ? { mentioned: true } : {}),
+      ...(quoteId ? { replyTo: { id: String(quoteId) } } : {}),
       metadata: Object.freeze({
-        endpoint: this.name,
         channelType: msg.channelType,
-        ...msg.metadata,
-        ...(mentioned ? { mentioned: true } : {}),
+        ...restMetadata,
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -804,9 +807,9 @@ export class IcqqIpcEndpoint implements EndpointInstance {
   }
 
   /** 收件箱行公共前缀：adapter 槽 localName + endpoint live 名（uin）。 */
-  #inboxBase(): { adapter: string; endpointId: string } {
+  #inboxBase(): { adapter: string; endpointKey: string } {
     const id = String(this.#options.id);
-    return { adapter: id.split('\0').pop() ?? id, endpointId: this.name };
+    return { adapter: id.split('\0').pop() ?? id, endpointKey: this.name };
   }
 
   #recordInboxRequest(payload: Record<string, unknown>): void {
@@ -907,7 +910,7 @@ function toNumericId(value: number | string, label: string): number {
 }
 
 async function defaultCreateIpc(config: ResolvedIcqqConfig): Promise<IcqqIpcTransport> {
-  const uin = Number(config.name);
+  const uin = Number(config.id);
   if (config.rpc) {
     return IpcClient.connectRpc(config.rpc);
   }

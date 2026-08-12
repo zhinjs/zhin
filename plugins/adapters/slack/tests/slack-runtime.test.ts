@@ -20,14 +20,14 @@ const hosts: ReturnType<typeof createHttpHost>[] = [];
 const SIGNING_SECRET = 'test-signing-secret';
 
 const socketConfig = resolveSlackConfig({
-  name: 'test-slack-bot',
+  id: 'test-slack-bot',
   token: 'xoxb-test-token',
   appToken: 'xapp-test-token',
   socketMode: true,
 });
 
 const httpConfig = resolveSlackConfig({
-  name: 'test-slack-http',
+  id: 'test-slack-http',
   token: 'xoxb-test-token',
   signingSecret: SIGNING_SECRET,
   socketMode: false,
@@ -123,7 +123,7 @@ describe('slack protocol helpers', () => {
       appToken: 'xapp-a',
     });
     expect(resolved.mode).toBe('socket');
-    expect(resolved.name).toBe('slack-bot');
+    expect(resolved.id).toBe('slack-bot');
     expect(resolved.webhookPath).toBe('/slack/events');
   });
 

@@ -6,13 +6,13 @@
 import { createToken } from '@zhin.js/plugin-runtime';
 
 export interface QqRunningEndpoint {
-  name: string;
+  id: string;
   mode: string;
 }
 
 export interface QqBindFlowHandle {
-  /** 绑定期望的 endpoint 名（未指定时为 undefined，成功后取 appId） */
-  name?: string;
+  /** 绑定期望的 endpoint id（未指定时为 undefined，成功后取 appId） */
+  id?: string;
   stop: () => void;
 }
 
@@ -21,7 +21,7 @@ export interface QqBindFlowHandle {
  * （提前写 .env 会触发 HMR，冲掉 pending。）
  */
 export interface QqPendingBotKind {
-  readonly endpointName: string;
+  readonly endpointId: string;
   readonly appId: string;
   readonly appSecret: string;
   /** 发起 add 的会话键；仅同会话回复可完成选择 */
@@ -29,7 +29,7 @@ export interface QqPendingBotKind {
 }
 
 export interface QqRuntimeState {
-  /** 当前 generation 已成功创建的 endpoint（name → 描述） */
+  /** 当前 generation 已成功创建的 endpoint（id → 描述） */
   readonly endpoints: Map<string, QqRunningEndpoint>;
   /** 全局单例：同一时间只允许一个扫码绑定流程 */
   bindFlow: QqBindFlowHandle | null;

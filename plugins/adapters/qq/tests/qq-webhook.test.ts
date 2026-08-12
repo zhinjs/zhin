@@ -72,7 +72,7 @@ async function startWebhook(bot: QqHttpBotTransport | null) {
   const config: ResolvedQqHttpConfig = {
     context: 'qq',
     mode: 'webhook',
-    name: 'qq-test',
+    id: 'qq-test',
     appid: 'appid',
     secret: 'secret',
     webhookPath: '/qq/webhook',

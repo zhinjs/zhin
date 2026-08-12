@@ -104,7 +104,7 @@ export class TelegramEndpoint implements EndpointInstance {
   });
 
   constructor(options: TelegramEndpointOptions) {
-    this.#logger = getAdapterLogger('telegram', options.config.name);
+    this.#logger = getAdapterLogger('telegram', options.config.id);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
@@ -134,7 +134,7 @@ export class TelegramEndpoint implements EndpointInstance {
     if (this.#started) return;
     this.#started = true;
     try {
-      this.#unregisterAgent = registerTelegramAgentEndpoint(this.#options.config.name, this);
+      this.#unregisterAgent = registerTelegramAgentEndpoint(this.#options.config.id, this);
       const me = await this.callApi<{ id?: number; username?: string; first_name?: string }>('getMe');
       this.#botUserId = me.id;
       this.#botUsername = me.username;
@@ -149,7 +149,7 @@ export class TelegramEndpoint implements EndpointInstance {
           // 未配 secretToken 时 webhook 无鉴权：任何人知道 path 即可注入假 update。
           this.#logger.warn(formatCompact({
             op: 'webhook_no_secret',
-            endpoint: this.#options.config.name,
+            endpoint: this.#options.config.id,
             path: webhook.path,
             hint: 'set webhook.secretToken to authenticate Telegram callbacks',
           }));
@@ -162,7 +162,7 @@ export class TelegramEndpoint implements EndpointInstance {
         });
         this.#logger.info(formatCompact({
           op: 'connect',
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           mode: 'webhook',
           path: webhook.path,
           username: me.username,
@@ -175,7 +175,7 @@ export class TelegramEndpoint implements EndpointInstance {
       this.#pollPromise = runTelegramPollLoop(this, this.#pollAbort.signal);
       this.#logger.info(formatCompact({
         op: 'connect',
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         mode: 'polling',
         username: me.username,
       }));
@@ -292,15 +292,15 @@ export class TelegramEndpoint implements EndpointInstance {
         name: senderDisplayName(msg.from) || undefined,
         ...(permit?.role ? { roles: [permit.role] } : {}),
       },
+      endpointId: this.#options.config.id,
+      ...(mentioned ? { mentioned: true } : {}),
       metadata: Object.freeze({
-        endpoint: this.#options.config.name,
         channelType: resolveTelegramChannelType(msg.chat.type),
         chatType: msg.chat.type,
         userId: msg.from?.id,
         date: msg.date,
         ...(permit?.role ? { senderRole: permit.role } : {}),
         ...(permit?.permissions.length ? { senderPermissions: [...permit.permissions] } : {}),
-        ...(mentioned ? { mentioned: true } : {}),
       }),
     });
   }
@@ -363,20 +363,20 @@ export class TelegramEndpoint implements EndpointInstance {
   /** Test / internal: admit a callback query when open. */
   admitCallback(query: TelegramCallbackQuery): void {
     if (!this.#open) return;
-    const endpointId = String(this.#options.id);
+    const endpointKey = String(this.#options.id);
     const msg = query.message;
     // 无挂载消息的 callback（如 inline 模式）退化为 sender 私聊会话
     const conversation = msg
-      ? telegramInboundConversation(endpointId, msg.chat)
-      : telegramInboundConversation(endpointId, { id: query.from.id, type: 'private' });
+      ? telegramInboundConversation(endpointKey, msg.chat)
+      : telegramInboundConversation(endpointKey, { id: query.from.id, type: 'private' });
     void this.#options.gateway.receive({
       conversation,
       message: { conversation, id: query.id },
       content: formatCallbackContent(query),
       segments: formatCallbackSegments(query),
       sender: { id: String(query.from?.id ?? ''), name: senderDisplayName(query.from) || undefined },
+      endpointId: this.#options.config.id,
       metadata: Object.freeze({
-        endpoint: this.#options.config.name,
         eventType: 'callback_query',
         payload: query.data,
         sourceMessageId: msg ? String(msg.message_id) : undefined,

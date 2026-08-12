@@ -66,7 +66,7 @@ export class DingTalkEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: DingTalkEndpointOptions) {
-    this.#logger = getAdapterLogger('dingtalk', options.config.name);
+    this.#logger = getAdapterLogger('dingtalk', options.config.id);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
@@ -85,10 +85,10 @@ export class DingTalkEndpoint implements EndpointInstance {
     this.#started = true;
     try {
       await this.#refreshAccessToken();
-      this.#unregisterAgent = registerDingtalkAgentEndpoint(this.#options.config.name, this);
+      this.#unregisterAgent = registerDingtalkAgentEndpoint(this.#options.config.id, this);
       this.#routeReleases.push(...registerDingTalkWebhookRoutes(this.#options.http, this));
       this.#logger.debug(formatCompact({
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         op: 'webhook',
         path: this.#options.config.webhookPath,
       }));
@@ -132,7 +132,7 @@ export class DingTalkEndpoint implements EndpointInstance {
       }
       this.#logger.debug(formatCompact({
         op: 'send',
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         via: 'sessionWebhook',
         to: conversation.id,
       }));
@@ -174,15 +174,15 @@ export class DingTalkEndpoint implements EndpointInstance {
         name: event.senderNick || undefined,
         ...(permit.role ? { roles: [permit.role] } : {}),
       },
+      endpointId: this.#options.config.id,
+      ...(isDingtalkBotMentioned(event, this.#options.config.robotCode) ? { mentioned: true } : {}),
       metadata: Object.freeze({
         msgtype: event.msgtype,
         chatType,
-        endpoint: this.#options.config.name,
         senderNick: event.senderNick,
         role: permit.role,
         permissions: permit.permissions,
         conversationType: event.conversationType,
-        ...(isDingtalkBotMentioned(event, this.#options.config.robotCode) ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({

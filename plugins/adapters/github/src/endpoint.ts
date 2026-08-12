@@ -6,7 +6,7 @@ import type { EndpointInstance, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import type { CapabilityId, DatabaseHost, PluginDatabaseHost } from '@zhin.js/plugin-runtime';
+import type { CapabilityId, PluginDatabaseHost } from '@zhin.js/plugin-runtime';
 import { GhClient } from './gh-client.js';
 import { registerGithubAgentEndpoint } from './github-agent-deps.js';
 import { lookupGithubOauthAccessToken } from './oauth-users.js';
@@ -26,7 +26,7 @@ export interface GithubEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
   readonly http?: HttpHost;
-  readonly database?: DatabaseHost | PluginDatabaseHost;
+  readonly database?: PluginDatabaseHost;
   readonly config: ResolvedGithubConfig;
   readonly createClient?: (config: ResolvedGithubConfig) => GhClient;
 }
@@ -49,10 +49,10 @@ export class GithubEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: GithubEndpointOptions) {
-    this.#logger = getAdapterLogger('github', options.config.name);
+    this.#logger = getAdapterLogger('github', options.config.id);
     this.#options = options;
     this.config = options.config;
-    this.name = options.config.name;
+    this.name = options.config.id;
     this.gh = options.createClient?.(options.config) ?? defaultCreateClient(options.config);
   }
 
@@ -96,7 +96,7 @@ export class GithubEndpoint implements EndpointInstance {
     return this.#workspaceManager;
   }
 
-  getDatabase(): DatabaseHost | PluginDatabaseHost | undefined {
+  getDatabase(): PluginDatabaseHost | undefined {
     return this.#options.database;
   }
 
@@ -183,8 +183,8 @@ export class GithubEndpoint implements EndpointInstance {
       message: { conversation, id: comment.id },
       content,
       sender: { id: comment.sender, name: comment.sender },
+      endpointId: this.name,
       metadata: Object.freeze({
-        endpoint: this.name,
         repo: comment.repo,
         kind: comment.kind,
         createdAt: comment.createdAt,

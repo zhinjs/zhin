@@ -25,7 +25,7 @@ const CORP_ID = 'wwtestcorpid';
 const TOKEN = 'wecom-test-token';
 
 const baseConfig = resolveWecomConfig({
-  name: 'test-wecom-bot',
+  id: 'test-wecom-bot',
   corpId: CORP_ID,
   agentSecret: 'test-agent-secret',
   token: TOKEN,
@@ -110,7 +110,7 @@ describe('wecom protocol helpers', () => {
     });
     expect(resolved.webhookPath).toBe('/wecom/callback');
     expect(resolved.apiBaseUrl).toBe('https://qyapi.weixin.qq.com');
-    expect(resolved.name).toBe('wecom-bot');
+    expect(resolved.id).toBe('wecom-bot');
   });
 
   it('verifies SHA1 msg_signature', () => {

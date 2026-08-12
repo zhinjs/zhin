@@ -12,7 +12,7 @@ import type { WeixinMessage } from './ilink-types.js';
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface WeixinIlinkAdapterConfig {
-  readonly name?: string;
+  readonly id?: string;
   readonly botAgent?: string;
   readonly baseUrl?: string;
   readonly cdnBaseUrl?: string;
@@ -26,7 +26,7 @@ export interface WeixinIlinkAdapterConfig {
 
 export interface ResolvedWeixinIlinkConfig {
   readonly context: 'weixin-ilink';
-  readonly name: string;
+  readonly id: string;
   readonly botAgent?: string;
   readonly baseUrl: string;
   readonly cdnBaseUrl: string;
@@ -58,8 +58,8 @@ export function resolveWeixinIlinkConfig(
   config: WeixinIlinkAdapterConfig = {},
 ): ResolvedWeixinIlinkConfig {
   const entry = config.endpoints?.find((item) => item.context === 'weixin-ilink');
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.WEIXIN_ILINK_BOT_NAME
     || 'weixin-ilink-bot';
   const botToken = pickCredential(
@@ -71,7 +71,7 @@ export function resolveWeixinIlinkConfig(
   // (sidecar credentials file / QR login) during endpoint.start().
   return {
     context: 'weixin-ilink',
-    name,
+    id,
     botAgent: config.botAgent ?? entry?.botAgent,
     baseUrl: config.baseUrl ?? entry?.baseUrl ?? DEFAULT_API_BASE_URL,
     cdnBaseUrl: config.cdnBaseUrl ?? entry?.cdnBaseUrl ?? DEFAULT_CDN_BASE_URL,
@@ -112,9 +112,9 @@ export function inboundMessageId(msg: WeixinMessage): string {
  * 入站归一化 → ConversationRef：个人微信无群/频道概念，全部会话都是
  * 与 `from_user_id` 的 private 会话（无 parent）。
  */
-export function weixinIlinkInboundConversation(endpointId: string, userId: string): ConversationRef {
+export function weixinIlinkInboundConversation(endpointKey: string, userId: string): ConversationRef {
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind: 'private',
     id: userId,
   };

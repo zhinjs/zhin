@@ -60,10 +60,6 @@
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "name": {
-            "type": "string",
-            "description": "GitHub App bot name"
-          },
           "master": {
             "type": [
               "string",
@@ -111,10 +107,14 @@
           "webhookSecret": {
             "type": "string",
             "description": "Webhook HMAC secret (camelCase alias)"
+          },
+          "id": {
+            "type": "string",
+            "description": "GitHub App bot name"
           }
         },
         "required": [
-          "name"
+          "id"
         ]
       }
     },

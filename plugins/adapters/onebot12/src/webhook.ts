@@ -53,7 +53,7 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
     if (!this.#options.config.access_token) {
       // webhook 模式未配 access_token 时任何 POST 都会被放行（verifyOneBotAccessToken 直接 return true）
       logger.warn(formatCompact({
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         mode: 'webhook',
         ok: false,
         error: 'missing access_token',
@@ -62,7 +62,7 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
     this.#setupRoutes();
     logger.info(formatCompact({
       op: 'listen',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       mode: 'webhook',
       path: this.#options.config.path,
     }));
@@ -80,7 +80,7 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
     this.#open = false;
     for (const release of this.#routeReleases.splice(0)) release();
     this.#started = false;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.id }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -90,7 +90,7 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
       (error) => {
         logger.warn(formatCompact({
           op: 'onebot12_upload_failed',
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           error: error instanceof Error ? error.message : String(error),
         }));
       },
@@ -101,7 +101,7 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
     const messageId = data?.message_id ?? '';
     logger.debug(formatCompact({
       op: 'onebot12_send',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       kind: conversation.kind,
       conversationId: conversation.id,
       messageId,
@@ -134,16 +134,16 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
       message: { conversation, id: ev.message_id },
       content,
       sender: { id: senderUserId(ev), ...(nickname ? { name: nickname } : {}) },
+      endpointId: this.#options.config.id,
+      ...(mentioned ? { mentioned: true } : {}),
       metadata: Object.freeze({
         detail_type: ev.detail_type,
         user_id: ev.user_id,
         group_id: ev.group_id,
         channel_id: ev.channel_id,
         guild_id: ev.guild_id,
-        endpoint: this.#options.config.name,
         time: ev.time,
         ...(nickname ? { nickname } : {}),
-        ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       logger.warn(formatCompact({

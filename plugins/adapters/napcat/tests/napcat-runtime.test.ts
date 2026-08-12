@@ -35,7 +35,7 @@ const testConversation = (kind: ConversationRef['kind'], id: string): Conversati
 
 const baseConfig: NapCatWsConfig = resolveNapCatConfig({
   connection: 'ws',
-  name: 'test-napcat',
+  id: 'test-napcat',
   url: 'ws://127.0.0.1:3001',
   access_token: 'secret',
   reconnect_interval: 50,
@@ -92,12 +92,12 @@ describe('napcat protocol helpers', () => {
   it('resolves ws config from plugin config', () => {
     const resolved = resolveNapCatConfig({
       connection: 'ws',
-      name: 'bot',
+      id: 'bot',
       url: 'ws://localhost:1',
     });
     expect(resolved).toMatchObject({
       connection: 'ws',
-      name: 'bot',
+      id: 'bot',
       url: 'ws://localhost:1',
       reconnect_interval: 5000,
       heartbeat_interval: 30_000,
@@ -109,14 +109,14 @@ describe('napcat protocol helpers', () => {
       endpoints: [{
         context: 'napcat',
         connection: 'http',
-        name: 'http-bot',
+        id: 'http-bot',
         http_url: 'http://127.0.0.1:3000',
         post_path: '/napcat/post',
       }],
     });
     expect(resolved).toMatchObject({
       connection: 'http',
-      name: 'http-bot',
+      id: 'http-bot',
       http_url: 'http://127.0.0.1:3000',
       post_path: '/napcat/post',
     });
@@ -362,7 +362,7 @@ describe('napcat plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('marks metadata.mentioned when group message @s the bot uin (self_id)', async () => {
+  it('marks mentioned when group message @s the bot uin (self_id)', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const ws = createMockWs();
     const endpoint = new NapCatWsEndpoint({
@@ -394,12 +394,12 @@ describe('napcat plugin runtime adapter', () => {
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'group', id: '200' }),
       sender: expect.objectContaining({ id: '2' }),
-      metadata: expect.objectContaining({ mentioned: true }),
+      mentioned: true,
     }));
     await endpoint.stop();
   });
 
-  it('does not mark metadata.mentioned when @ targets someone else', async () => {
+  it('does not mark mentioned when @ targets someone else', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
     const endpoint = new NapCatWsEndpoint({
@@ -427,11 +427,11 @@ describe('napcat plugin runtime adapter', () => {
     });
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
-    expect(metadata?.mentioned).toBeUndefined();
+    expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
     await endpoint.stop();
   });
 
-  it("does not mark metadata.mentioned for qq='all'", async () => {
+  it("does not mark mentioned for qq='all'", async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
     const endpoint = new NapCatWsEndpoint({
@@ -459,7 +459,7 @@ describe('napcat plugin runtime adapter', () => {
     });
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
-    expect(metadata?.mentioned).toBeUndefined();
+    expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
     await endpoint.stop();
   });
 
@@ -545,7 +545,7 @@ describe('napcat plugin runtime adapter', () => {
     const endpoint = defineNapCatAdapter.create({
       id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
       name: 'napcat',
-      config: { connection: 'wss', name: 'rev', path: '/napcat/ws' },
+      config: { connection: 'wss', id: 'rev', path: '/napcat/ws' },
       use: (token: unknown) => {
         if (token === httpHostToken) return http;
         if (token === messageGatewayToken) {
@@ -566,7 +566,7 @@ describe('napcat plugin runtime adapter', () => {
       name: 'napcat',
       config: {
         connection: 'http',
-        name: 'http-bot',
+        id: 'http-bot',
         http_url: 'http://127.0.0.1:3000',
         post_path: '/napcat/post',
       },
@@ -598,7 +598,7 @@ describe('napcat plugin runtime adapter', () => {
       http,
       config: resolveNapCatConfig({
         connection: 'http',
-        name: 'http-bot',
+        id: 'http-bot',
         http_url: 'http://127.0.0.1:3000',
         post_path: '/napcat/post',
       }) as ReturnType<typeof resolveNapCatConfig> & { connection: 'http' },
@@ -695,7 +695,7 @@ describe('napcat ws lifecycle', () => {
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: resolveNapCatConfig({
         connection: 'ws',
-        name: 'hb-napcat',
+        id: 'hb-napcat',
         url: 'ws://127.0.0.1:3001',
         access_token: 'secret',
         reconnect_interval: 10_000,

@@ -23,7 +23,7 @@ export interface GithubAgentEndpoint {
 }
 
 export interface GithubAgentDeps {
-  getEndpoint: (endpointId?: string) => GithubAgentEndpoint;
+  getEndpoint: (endpointKey?: string) => GithubAgentEndpoint;
   /** Alias kept for existing agent handlers that call getAdapter(). */
   getAdapter: () => GithubAgentEndpoint;
   getWorkspaceManager: () => WorkspaceManager;
@@ -39,13 +39,13 @@ const endpoints = new Map<string, GithubAgentEndpoint>();
 let override: GithubAgentDeps | null = null;
 
 export function registerGithubAgentEndpoint(
-  endpointId: string,
+  endpointKey: string,
   endpoint: GithubAgentEndpoint,
 ): () => void {
-  endpoints.set(endpointId, endpoint);
+  endpoints.set(endpointKey, endpoint);
   return () => {
-    if (endpoints.get(endpointId) === endpoint) {
-      endpoints.delete(endpointId);
+    if (endpoints.get(endpointKey) === endpoint) {
+      endpoints.delete(endpointKey);
     }
   };
 }
@@ -55,10 +55,10 @@ export function setGithubAgentDeps(deps: GithubAgentDeps | null): void {
   override = deps;
 }
 
-function lookup(endpointId?: string): GithubAgentEndpoint {
-  if (endpointId) {
-    const registered = endpoints.get(endpointId);
-    if (!registered) throw new Error(`Endpoint ${endpointId} 不存在`);
+function lookup(endpointKey?: string): GithubAgentEndpoint {
+  if (endpointKey) {
+    const registered = endpoints.get(endpointKey);
+    if (!registered) throw new Error(`Endpoint ${endpointKey} 不存在`);
     return registered;
   }
   const first = endpoints.values().next().value;

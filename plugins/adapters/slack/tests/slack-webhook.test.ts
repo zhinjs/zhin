@@ -8,7 +8,7 @@ import { resolveSlackConfig } from '../src/protocol.js';
 const SIGNING_SECRET = 'test-signing-secret';
 
 const config = resolveSlackConfig({
-  name: 'webhook-bot',
+  id: 'webhook-bot',
   token: 'xoxb-test-token',
   signingSecret: SIGNING_SECRET,
   socketMode: false,

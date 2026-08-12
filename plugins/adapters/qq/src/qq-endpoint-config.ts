@@ -11,7 +11,7 @@ import {
 } from '@zhin.js/adapter';
 
 export interface QqEndpointConfigEntry {
-  name: string;
+  id: string;
   appid: string;
   secret: string;
   [key: string]: unknown;
@@ -27,7 +27,7 @@ export function listQqEndpointEntries(projectRoot?: string): QqEndpointConfigEnt
   return listConfiguredEndpoints('qq', projectRoot) as QqEndpointConfigEntry[];
 }
 
-/** 追加 endpoint 到 plugins.qq.endpoints；name 已存在时报错 */
+/** 追加 endpoint 到 plugins.qq.endpoints；id 已存在时报错 */
 export function addQqEndpointToConfig(
   entry: QqEndpointConfigEntry,
   projectRoot?: string,
@@ -35,10 +35,10 @@ export function addQqEndpointToConfig(
   return addEndpointToConfig('qq', entry, projectRoot);
 }
 
-/** 按 name 移除 plugins.qq.endpoints 项；不存在返回 false */
+/** 按 id 移除 plugins.qq.endpoints 项；不存在返回 false */
 export function removeQqEndpointFromConfig(
-  name: string,
+  id: string,
   projectRoot?: string,
 ): { removed: boolean; filePath: string } {
-  return removeEndpointFromConfig('qq', name, projectRoot);
+  return removeEndpointFromConfig('qq', id, projectRoot);
 }

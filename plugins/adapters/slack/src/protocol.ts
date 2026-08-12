@@ -21,7 +21,7 @@ const MAX_TIMESTAMP_DRIFT_SECONDS = 300;
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface SlackAdapterConfig {
-  readonly name?: string;
+  readonly id?: string;
   readonly token?: string;
   readonly signingSecret?: string;
   readonly appToken?: string;
@@ -42,7 +42,7 @@ export interface SlackAdapterConfig {
 
 export interface ResolvedSlackConfig {
   readonly context: 'slack';
-  readonly name: string;
+  readonly id: string;
   readonly token: string;
   readonly mode: 'socket' | 'http';
   readonly signingSecret: string;
@@ -139,8 +139,8 @@ export function resolveSlackConfig(config: SlackAdapterConfig = {}): ResolvedSla
     );
   }
 
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.SLACK_BOT_NAME
     || 'slack-bot';
 
@@ -170,7 +170,7 @@ export function resolveSlackConfig(config: SlackAdapterConfig = {}): ResolvedSla
 
   return {
     context: 'slack',
-    name,
+    id,
     token,
     mode,
     signingSecret,
@@ -199,7 +199,7 @@ export function resolveSlackChannelType(event: Pick<SlackEvent, 'channel_type'>)
  * guild 容器概念（team 为 workspace 级，不进 parent）；线程根 ts 进 `threadId`。
  */
 export function slackInboundConversation(
-  endpointId: string,
+  endpointKey: string,
   opts: {
     readonly channelId: string;
     readonly channelType?: string;
@@ -210,7 +210,7 @@ export function slackInboundConversation(
     ? (opts.channelType === 'im' ? 'private' : 'group')
     : (opts.channelId.startsWith('D') ? 'private' : 'group');
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind,
     id: opts.channelId,
     ...(opts.threadId ? { threadId: opts.threadId } : {}),

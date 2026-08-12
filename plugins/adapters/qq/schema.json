@@ -19,18 +19,27 @@
     },
     "botKind": {
       "type": "string",
-      "enum": ["public", "private"],
+      "enum": [
+        "public",
+        "private"
+      ],
       "default": "public",
       "description": "公域/私域：均含 GROUP_AND_C2C_EVENT；频道消息分别为 PUBLIC_GUILD_MESSAGES / GUILD_MESSAGES。未显式配置 intents 时按此展开"
     },
     "master": {
-      "type": ["string", "number"],
+      "type": [
+        "string",
+        "number"
+      ],
       "description": "框架 master（endpoint 管理命令、AI/工具权限）；openid。endpoints[i].master 可逐项覆盖"
     },
     "trusted": {
       "type": "array",
       "items": {
-        "type": ["string", "number"],
+        "type": [
+          "string",
+          "number"
+        ],
         "description": "Trusted openid"
       },
       "description": "框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加"
@@ -63,15 +72,11 @@
     },
     "endpoints": {
       "type": "array",
-      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层）",
       "items": {
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "name": {
-            "type": "string",
-            "description": "QQ bot name"
-          },
           "appid": {
             "type": "string",
             "description": "QQ official bot app ID"
@@ -81,30 +86,45 @@
             "description": "QQ official bot secret"
           },
           "master": {
-            "type": ["string", "number"],
+            "type": [
+              "string",
+              "number"
+            ],
             "description": "本 endpoint 的框架 master（openid）；覆盖顶层 master"
           },
           "trusted": {
             "type": "array",
             "items": {
-              "type": ["string", "number"],
+              "type": [
+                "string",
+                "number"
+              ],
               "description": "Trusted openid"
             },
             "description": "本 endpoint 的 trusted 列表"
           },
           "botKind": {
             "type": "string",
-            "enum": ["public", "private"],
+            "enum": [
+              "public",
+              "private"
+            ],
             "description": "覆盖顶层 botKind（公域/私域），用于按 endpoint 生成 intents"
           },
           "intents": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "覆盖顶层 intents"
+          },
+          "id": {
+            "type": "string",
+            "description": "QQ bot name"
           }
         },
         "required": [
-          "name",
+          "id",
           "appid",
           "secret"
         ]

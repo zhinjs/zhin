@@ -62,11 +62,11 @@ export class OneBot11WsEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: OneBot11WsEndpointOptions) {
-    this.#logger = getAdapterLogger('onebot11', options.config.name);
+    this.#logger = getAdapterLogger('onebot11', options.config.id);
     this.#options = options;
     const { config } = options;
     this.#lifecycle = createEndpointLifecycle({
-      name: config.name,
+      name: config.id,
       reconnect: {
         initialIntervalMs: config.reconnect_interval,
         // 固定间隔（multiplier 1、无抖动），对齐旧 reconnect_interval 语义
@@ -81,7 +81,7 @@ export class OneBot11WsEndpoint implements EndpointInstance {
   async start(): Promise<void> {
     if (this.#lifecycle.started) return;
     // agent 注册/反注册是适配器专有依赖，留在适配器侧（见 endpoint-lifecycle 迁移指引）
-    this.#unregisterAgent = registerOnebot11AgentEndpoint(this.#options.config.name, this);
+    this.#unregisterAgent = registerOnebot11AgentEndpoint(this.#options.config.id, this);
     try {
       await this.#lifecycle.start((handle) => this.#connect(handle));
     } catch (err) {
@@ -125,7 +125,7 @@ export class OneBot11WsEndpoint implements EndpointInstance {
     const messageId = data?.message_id != null ? String(data.message_id) : '';
     this.#logger.debug(formatCompact({
       op: 'onebot11_send',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       target: `${conversation.kind}:${conversation.id}`,
       messageId,
     }));
@@ -162,6 +162,7 @@ export class OneBot11WsEndpoint implements EndpointInstance {
     if (!this.#open || !isMessageEvent(ev)) return;
     const conversation = onebot11InboundConversation(String(this.#options.id), ev);
     const content = formatInboundContent(ev);
+    const inbound = formatInboundMetadata(ev, this.#options.config.id);
     void this.#options.gateway.receive({
       conversation,
       message: { conversation, id: String(ev.message_id) },
@@ -171,7 +172,10 @@ export class OneBot11WsEndpoint implements EndpointInstance {
         name: senderDisplayName(ev) || undefined,
         ...(ev.sender?.role ? { roles: [ev.sender.role] } : {}),
       },
-      metadata: formatInboundMetadata(ev, this.#options.config.name),
+      endpointId: inbound.endpointId,
+      ...(inbound.mentioned ? { mentioned: true } : {}),
+      ...(inbound.replyTo ? { replyTo: inbound.replyTo } : {}),
+      metadata: inbound.metadata,
     }).catch((err) => {
       this.#logger.warn(formatCompact({
         op: 'onebot11_gateway_receive_failed',
@@ -204,13 +208,13 @@ export class OneBot11WsEndpoint implements EndpointInstance {
         settled = true;
         if (!this.#options.config.access_token) {
           this.#logger.warn(formatCompact({
-            endpoint: this.#options.config.name,
+            endpoint: this.#options.config.id,
             ok: false,
             error: 'missing access_token',
           }));
         }
         this.#logger.debug(formatCompact({
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           mode: 'ws',
           url: safeUrl,
         }));
@@ -220,7 +224,7 @@ export class OneBot11WsEndpoint implements EndpointInstance {
 
       ws.on('message', (data) => {
         handleOneBot11WsMessage(data, {
-          endpointName: this.#options.config.name,
+          endpointId: this.#options.config.id,
           pending: this.#pending,
           admit: (ev) => this.admit(ev),
         });
@@ -251,7 +255,7 @@ export class OneBot11WsEndpoint implements EndpointInstance {
         const error = err instanceof Error ? err : new Error(String(err));
         this.#logger.warn(formatCompact({
           op: 'ws_error',
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           ok: false,
           error: error.message,
         }));

@@ -63,11 +63,11 @@ export class OneBot12WsEndpoint implements EndpointInstance {
   #open = false;
 
   constructor(options: OneBot12WsEndpointOptions) {
-    this.#logger = getAdapterLogger('onebot12', options.config.name);
+    this.#logger = getAdapterLogger('onebot12', options.config.id);
     this.#options = options;
     const { config } = options;
     this.#lifecycle = createEndpointLifecycle({
-      name: config.name,
+      name: config.id,
       reconnect: {
         initialIntervalMs: config.reconnect_interval,
         // 固定间隔（multiplier 1、无抖动），对齐旧 reconnect_interval 语义
@@ -124,7 +124,7 @@ export class OneBot12WsEndpoint implements EndpointInstance {
       (error) => {
         this.#logger.warn(formatCompact({
           op: 'onebot12_upload_failed',
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           error: error instanceof Error ? error.message : String(error),
         }));
       },
@@ -135,7 +135,7 @@ export class OneBot12WsEndpoint implements EndpointInstance {
     const messageId = data?.message_id ?? '';
     this.#logger.debug(formatCompact({
       op: 'onebot12_send',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       kind: conversation.kind,
       conversationId: conversation.id,
       messageId,
@@ -165,16 +165,16 @@ export class OneBot12WsEndpoint implements EndpointInstance {
       message: { conversation, id: ev.message_id },
       content,
       sender: { id: senderUserId(ev), name: senderNickname(ev) },
+      endpointId: this.#options.config.id,
+      ...(mentioned ? { mentioned: true } : {}),
       metadata: Object.freeze({
         detail_type: ev.detail_type,
         user_id: ev.user_id,
         group_id: ev.group_id,
         channel_id: ev.channel_id,
         guild_id: ev.guild_id,
-        endpoint: this.#options.config.name,
         time: ev.time,
         ...(nickname ? { nickname } : {}),
-        ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -208,7 +208,7 @@ export class OneBot12WsEndpoint implements EndpointInstance {
         if (settled) return;
         settled = true;
         this.#logger.debug(formatCompact({
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           mode: 'ws',
           url: safeUrl,
         }));
@@ -242,7 +242,7 @@ export class OneBot12WsEndpoint implements EndpointInstance {
         const error = err instanceof Error ? err : new Error(String(err));
         this.#logger.warn(formatCompact({
           op: 'ws_error',
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           ok: false,
           error: error.message,
         }));
@@ -279,7 +279,7 @@ export class OneBot12WsEndpoint implements EndpointInstance {
     } catch (error) {
       this.#logger.warn(formatCompact({
         op: 'onebot12_parse_failed',
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         error: error instanceof Error ? error.message : String(error),
       }));
     }

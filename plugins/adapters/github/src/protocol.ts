@@ -40,7 +40,7 @@ export { buildChannelId, parseChannelId } from './types.js';
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface GithubAdapterConfig {
-  readonly name?: string;
+  readonly id?: string;
   readonly host?: string;
   readonly app_id?: string | number;
   readonly appId?: string | number;
@@ -74,7 +74,7 @@ export interface GithubAdapterConfig {
 
 export interface ResolvedGithubConfig {
   readonly context: 'github';
-  readonly name: string;
+  readonly id: string;
   readonly host?: string;
   readonly appId?: string | number;
   readonly privateKey?: string;
@@ -107,11 +107,11 @@ export interface GithubInboundComment {
  * 在平台边界还原 repo/type/number。
  */
 export function githubInboundConversation(
-  endpointId: string,
+  endpointKey: string,
   comment: GithubInboundComment,
 ): ConversationRef {
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind: 'channel',
     id: comment.channelId,
     parent: { kind: 'channel', id: comment.repo },
@@ -139,8 +139,8 @@ export function resolveGithubConfig(config: GithubAdapterConfig = {}): ResolvedG
       'GitHub adapter requires app_id + private_key (plugins.<key> or GITHUB_APP_ID)',
     );
   }
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.GITHUB_BOT_NAME
     || 'github-bot';
   const webhookSecret = config.webhookSecret ?? config.webhook_secret
@@ -165,7 +165,7 @@ export function resolveGithubConfig(config: GithubAdapterConfig = {}): ResolvedG
 
   return {
     context: 'github',
-    name,
+    id,
     ...(host ? { host } : {}),
     ...(appId != null ? { appId } : {}),
     ...(privateKey ? { privateKey } : {}),

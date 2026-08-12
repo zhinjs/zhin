@@ -69,10 +69,10 @@ export class NapCatWsEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: NapCatWsEndpointOptions) {
-    this.#logger = getAdapterLogger('napcat', options.config.name);
+    this.#logger = getAdapterLogger('napcat', options.config.id);
     this.#options = options;
     this.#lifecycle = createEndpointLifecycle({
-      name: options.config.name,
+      name: options.config.id,
       // reconnect_interval 旧语义为固定间隔：multiplier 1 + 无 jitter + 不封顶
       reconnect: {
         initialIntervalMs: options.config.reconnect_interval,
@@ -85,7 +85,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
 
   async start(): Promise<void> {
     if (this.#lifecycle.started) return;
-    this.#unregisterAgent = registerNapcatAgentEndpoint(this.#options.config.name, this);
+    this.#unregisterAgent = registerNapcatAgentEndpoint(this.#options.config.id, this);
     try {
       await this.#lifecycle.start((handle) => this.#connect(handle));
     } catch (err) {
@@ -128,7 +128,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
     const messageId = data?.message_id != null ? String(data.message_id) : '';
     this.#logger.debug(formatCompact({
       op: 'napcat_send',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       target: `${conversation.kind}:${conversation.id}`,
       messageId,
     }));
@@ -342,16 +342,16 @@ export class NapCatWsEndpoint implements EndpointInstance {
         name: nickname,
         ...(ev.sender?.role ? { roles: [ev.sender.role] } : {}),
       },
+      endpointId: this.#options.config.id,
+      ...(mentioned ? { mentioned: true } : {}),
       metadata: Object.freeze({
         message_type: ev.message_type,
         user_id: ev.user_id != null ? String(ev.user_id) : undefined,
         group_id: ev.group_id != null ? String(ev.group_id) : undefined,
-        endpoint: this.#options.config.name,
         time: ev.time,
         self_id: ev.self_id != null ? String(ev.self_id) : undefined,
         role: ev.sender?.role,
         ...(nickname ? { nickname } : {}),
-        ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -385,13 +385,13 @@ export class NapCatWsEndpoint implements EndpointInstance {
         settled = true;
         if (!this.#options.config.access_token) {
           this.#logger.warn(formatCompact({
-            endpoint: this.#options.config.name,
+            endpoint: this.#options.config.id,
             ok: false,
             error: 'missing access_token',
           }));
         }
         this.#logger.debug(formatCompact({
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           mode: 'ws',
           url: safeUrl,
         }));
@@ -410,7 +410,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
 
       ws.on('message', (data) => {
         handleNapCatWsMessage(data, {
-          endpointName: this.#options.config.name,
+          endpointId: this.#options.config.id,
           pending: this.#pending,
           admit: (event) => this.admit(event),
         });
@@ -446,7 +446,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
         const error = err instanceof Error ? err : new Error(String(err));
         this.#logger.warn(formatCompact({
           op: 'ws_error',
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           ok: false,
           error: error.message,
         }));

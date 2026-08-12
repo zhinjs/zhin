@@ -9,7 +9,7 @@ import * as xml2js from 'xml2js';
 import type { ConversationRef } from '@zhin.js/im-contract';
 
 export interface WeChatMpAdapterConfig {
-  readonly name?: string;
+  readonly id?: string;
   readonly appId?: string;
   readonly appSecret?: string;
   readonly token?: string;
@@ -37,7 +37,7 @@ export interface WeChatMpAdapterConfig {
 
 export interface ResolvedWeChatMpConfig {
   readonly context: 'wechat-mp';
-  readonly name: string;
+  readonly id: string;
   readonly appId: string;
   readonly appSecret: string;
   readonly token: string;
@@ -99,8 +99,8 @@ export function resolveWeChatMpConfig(config: WeChatMpAdapterConfig = {}): Resol
       'WeChat MP adapter requires appId + appSecret + token (plugins.<key> or endpoints with context: wechat-mp)',
     );
   }
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.WECHAT_BOT_NAME
     || 'wechat-mp-bot';
   const path = config.path ?? entry?.path ?? '/wechat/webhook';
@@ -113,7 +113,7 @@ export function resolveWeChatMpConfig(config: WeChatMpAdapterConfig = {}): Resol
     ?? 4500;
   return {
     context: 'wechat-mp',
-    name,
+    id,
     appId,
     appSecret,
     token,
@@ -316,11 +316,11 @@ export function buildTextReply(
  * 无群/频道容器（parent 恒缺省）。
  */
 export function wechatMpInboundConversation(
-  endpointId: string,
+  endpointKey: string,
   msg: WeChatMessage,
 ): ConversationRef {
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind: 'private',
     id: msg.FromUserName,
   };

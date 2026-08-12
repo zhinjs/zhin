@@ -36,20 +36,20 @@ export interface SlackUserInfo {
 }
 
 export interface SlackAgentDeps {
-  getEndpoint: (endpointId: string) => SlackAgentEndpoint;
+  getEndpoint: (endpointKey: string) => SlackAgentEndpoint;
 }
 
 const endpoints = new Map<string, SlackAgentEndpoint>();
 let override: SlackAgentDeps | null = null;
 
 export function registerSlackAgentEndpoint(
-  endpointId: string,
+  endpointKey: string,
   endpoint: SlackAgentEndpoint,
 ): () => void {
-  endpoints.set(endpointId, endpoint);
+  endpoints.set(endpointKey, endpoint);
   return () => {
-    if (endpoints.get(endpointId) === endpoint) {
-      endpoints.delete(endpointId);
+    if (endpoints.get(endpointKey) === endpoint) {
+      endpoints.delete(endpointKey);
     }
   };
 }
@@ -62,9 +62,9 @@ export function setSlackAgentDeps(deps: SlackAgentDeps | null): void {
 export function getSlackAgentDeps(): SlackAgentDeps {
   if (override) return override;
   return {
-    getEndpoint(endpointId: string): SlackAgentEndpoint {
-      const registered = endpoints.get(endpointId);
-      if (!registered) throw new Error(`Endpoint ${endpointId} 不存在`);
+    getEndpoint(endpointKey: string): SlackAgentEndpoint {
+      const registered = endpoints.get(endpointKey);
+      if (!registered) throw new Error(`Endpoint ${endpointKey} 不存在`);
       return registered;
     },
   };

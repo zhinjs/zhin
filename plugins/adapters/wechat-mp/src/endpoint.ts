@@ -86,7 +86,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createWeChatMpEndpointManagement(this);
 
   constructor(options: WeChatMpEndpointOptions) {
-    this.#logger = getAdapterLogger('wechat-mp', options.config.name);
+    this.#logger = getAdapterLogger('wechat-mp', options.config.id);
     this.#options = options;
     this.#fetch = options.fetch ?? defaultFetch;
   }
@@ -131,7 +131,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
       this.#routeReleases.push(...registerWeChatMpWebhookRoutes(this.#options.http, this));
       this.#startTokenRefreshTimer();
       this.#logger.debug(formatCompact({
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         op: 'webhook',
         path: this.#options.config.path,
       }));
@@ -175,7 +175,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
     this.#logger.warn(formatCompact({
       op: 'send',
       skip: 'passive_outside_webhook',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       target: `${conversation.kind}:${conversation.id}`,
     }));
     return `passive_skipped_${Date.now()}`;
@@ -190,10 +190,10 @@ export class WeChatMpEndpoint implements EndpointInstance {
       message: { conversation, id: formatInboundId(msg) },
       content: formatInboundContent(msg),
       sender: { id: msg.FromUserName },
+      endpointId: this.#options.config.id,
       metadata: Object.freeze({
         msgType: msg.MsgType,
         event: msg.Event,
-        endpoint: this.#options.config.name,
         toUserName: msg.ToUserName,
       }),
     }).catch((err) => {
@@ -253,7 +253,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
         if (typeof data.media_id === 'string' && data.media_id) return item;
         this.#logger.warn(formatCompact({
           op: 'wechat_mp_outbound_media_dropped',
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           type: seg.type,
           reason: 'missing_media_ref',
         }));
@@ -266,7 +266,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
       if (!uploadType) {
         this.#logger.warn(formatCompact({
           op: 'wechat_mp_outbound_media_dropped',
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           type: seg.type,
           reason: 'unsupported_segment_type',
         }));
@@ -278,7 +278,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
       } catch (error) {
         this.#logger.warn(formatCompact({
           op: 'wechat_mp_media_upload_failed',
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           error: error instanceof Error ? error.message : String(error),
         }));
         const alt = typeof data.alt === 'string' && data.alt ? data.alt : `[${seg.type}]`;

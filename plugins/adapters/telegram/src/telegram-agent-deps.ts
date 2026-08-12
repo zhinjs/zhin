@@ -28,20 +28,20 @@ export interface TelegramAgentEndpoint {
 }
 
 export interface TelegramAgentDeps {
-  getEndpoint: (endpointId: string) => TelegramAgentEndpoint;
+  getEndpoint: (endpointKey: string) => TelegramAgentEndpoint;
 }
 
 const endpoints = new Map<string, TelegramAgentEndpoint>();
 let override: TelegramAgentDeps | null = null;
 
 export function registerTelegramAgentEndpoint(
-  endpointId: string,
+  endpointKey: string,
   endpoint: TelegramAgentEndpoint,
 ): () => void {
-  endpoints.set(endpointId, endpoint);
+  endpoints.set(endpointKey, endpoint);
   return () => {
-    if (endpoints.get(endpointId) === endpoint) {
-      endpoints.delete(endpointId);
+    if (endpoints.get(endpointKey) === endpoint) {
+      endpoints.delete(endpointKey);
     }
   };
 }
@@ -54,9 +54,9 @@ export function setTelegramAgentDeps(deps: TelegramAgentDeps | null): void {
 export function getTelegramAgentDeps(): TelegramAgentDeps {
   if (override) return override;
   return {
-    getEndpoint(endpointId: string): TelegramAgentEndpoint {
-      const registered = endpoints.get(endpointId);
-      if (!registered) throw new Error(`Endpoint ${endpointId} 不存在`);
+    getEndpoint(endpointKey: string): TelegramAgentEndpoint {
+      const registered = endpoints.get(endpointKey);
+      if (!registered) throw new Error(`Endpoint ${endpointKey} 不存在`);
       return registered;
     },
   };

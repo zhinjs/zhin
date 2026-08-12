@@ -27,13 +27,13 @@ import defineTelegramAdapter from '../adapters/telegram.js';
 const adapterFeature = featureId('zhin.adapter');
 
 const baseConfig = resolveTelegramConfig({
-  name: 'test-telegram-bot',
+  id: 'test-telegram-bot',
   token: '123456:TEST-TOKEN',
   apiBaseUrl: 'https://api.telegram.test',
 });
 
 const webhookConfig = resolveTelegramConfig({
-  name: 'test-telegram-bot',
+  id: 'test-telegram-bot',
   token: '123456:TEST-TOKEN',
   apiBaseUrl: 'https://api.telegram.test',
   polling: false,
@@ -118,7 +118,7 @@ describe('telegram protocol helpers', () => {
   it('resolves plugin config with polling default', () => {
     const resolved = resolveTelegramConfig({ token: 'tok' });
     expect(resolved.mode).toBe('polling');
-    expect(resolved.name).toBe('telegram-bot');
+    expect(resolved.id).toBe('telegram-bot');
     expect(resolved.apiBaseUrl).toBe('https://api.telegram.org');
   });
 
@@ -366,7 +366,7 @@ describe('telegram plugin runtime adapter', () => {
     expect(fetch.calls.some((c) => c.method === 'deleteWebhook')).toBe(true);
   });
 
-  it('marks metadata.mentioned when entities @ the bot username', async () => {
+  it('marks mentioned when entities @ the bot username', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
     const endpoint = new TelegramEndpoint({
@@ -386,13 +386,13 @@ describe('telegram plugin runtime adapter', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'private', id: '1001' }),
-      metadata: expect.objectContaining({ mentioned: true }),
+      mentioned: true,
     }));
 
     await endpoint.stop();
   });
 
-  it('does not mark metadata.mentioned when @ targets someone else', async () => {
+  it('does not mark mentioned when @ targets someone else', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const endpoint = new TelegramEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
@@ -410,7 +410,7 @@ describe('telegram plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown> | undefined;
-    expect(metadata?.mentioned).toBeUndefined();
+    expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
 
     await endpoint.stop();
   });
@@ -687,7 +687,7 @@ describe('telegram webhook auth', () => {
       },
       http,
       config: resolveTelegramConfig({
-        name: 'no-secret-bot',
+        id: 'no-secret-bot',
         token: '123456:TEST-TOKEN',
         apiBaseUrl: 'https://api.telegram.test',
         polling: false,

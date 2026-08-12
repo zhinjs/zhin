@@ -16,11 +16,11 @@ import {
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
-const endpointId = String(capabilityId(rootPluginId(), adapterFeature, 'sandbox'));
+const endpointKey = String(capabilityId(rootPluginId(), adapterFeature, 'sandbox'));
 
 function sandboxConversation(id: string, kind: ConversationRef['kind'] = 'private'): ConversationRef {
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind,
     id,
   };
@@ -37,7 +37,7 @@ describe('sandbox plugin runtime adapter', () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'pong' }));
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
     const defaults = resolveSandboxEndpoint({
-      endpoints: [{ context: 'sandbox', name: 'demo-bot', owner: 'sandbox-user' }],
+      endpoints: [{ context: 'sandbox', id: 'demo-bot', owner: 'sandbox-user' }],
     });
     const endpoint = new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
@@ -81,7 +81,7 @@ describe('sandbox plugin runtime adapter', () => {
       send: vi.fn(async () => 'sent'),
     };
     const defaults = resolveSandboxEndpoint({
-      endpoints: [{ context: 'sandbox', name: 'demo-bot', owner: 'sandbox-user' }],
+      endpoints: [{ context: 'sandbox', id: 'demo-bot', owner: 'sandbox-user' }],
     });
     const endpoint = new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
@@ -123,14 +123,14 @@ describe('sandbox plugin runtime adapter', () => {
     expect(parsed.type).toBe('private');
   });
 
-  it('prefers top-level name/owner over legacy endpoints[] entries', () => {
-    // Runtime expands endpoints[i] onto the top level ({ ...base, ...entry, name }).
+  it('prefers top-level id/owner over legacy endpoints[] entries', () => {
+    // Runtime expands endpoints[i] onto the top level ({ ...base, ...entry, id }).
     const resolved = resolveSandboxEndpoint({
-      name: 'expanded-bot',
+      id: 'expanded-bot',
       owner: 'expanded-user',
-      endpoints: [{ context: 'sandbox', name: 'legacy-bot', owner: 'legacy-user' }],
+      endpoints: [{ context: 'sandbox', id: 'legacy-bot', owner: 'legacy-user' }],
     });
-    expect(resolved.name).toBe('expanded-bot');
+    expect(resolved.id).toBe('expanded-bot');
     expect(resolved.owner).toBe('expanded-user');
     expect(resolved.randomNamePerConnection).toBe(false);
   });
@@ -146,13 +146,13 @@ describe('sandbox plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
       gateway: gatewayA,
       http,
-      defaults: resolveSandboxEndpoint({ name: 'alpha-bot', owner: 'user-a' }),
+      defaults: resolveSandboxEndpoint({ id: 'alpha-bot', owner: 'user-a' }),
     });
     const endpointB = new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
       gateway: gatewayB,
       http,
-      defaults: resolveSandboxEndpoint({ name: 'beta-bot', owner: 'user-b' }),
+      defaults: resolveSandboxEndpoint({ id: 'beta-bot', owner: 'user-b' }),
     });
     endpointA.start();
     endpointA.open();
@@ -192,19 +192,19 @@ describe('sandbox plugin runtime adapter', () => {
       }, 20);
     });
 
-    // No cross-talk: each gateway saw exactly its own message (metadata.endpoint
+    // No cross-talk: each gateway saw exactly its own message (endpointId
     // distinguishes them — both test endpoints share one CapabilityId).
     expect(receiveA).toHaveBeenCalledTimes(1);
     expect(receiveA).toHaveBeenCalledWith(expect.objectContaining({
       conversation: sandboxConversation('sandbox-user'),
       content: 'to-alpha',
-      metadata: expect.objectContaining({ endpoint: 'alpha-bot' }),
+      endpointId: 'alpha-bot',
     }));
     expect(receiveB).toHaveBeenCalledTimes(1);
     expect(receiveB).toHaveBeenCalledWith(expect.objectContaining({
       conversation: sandboxConversation('sandbox-user'),
       content: 'to-beta',
-      metadata: expect.objectContaining({ endpoint: 'beta-bot' }),
+      endpointId: 'beta-bot',
     }));
 
     // Outbound reaches only the endpoint's own connection.
@@ -338,7 +338,7 @@ describe('sandbox plugin runtime adapter', () => {
       send: vi.fn(async () => 'sent'),
     };
     const defaults = resolveSandboxEndpoint({
-      endpoints: [{ context: 'sandbox', name: 'demo-bot', owner: 'sandbox-user' }],
+      endpoints: [{ context: 'sandbox', id: 'demo-bot', owner: 'sandbox-user' }],
     });
     const endpoint = new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
@@ -384,7 +384,7 @@ describe('sandbox plugin runtime adapter', () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'pong' }));
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
     const defaults = resolveSandboxEndpoint({
-      endpoints: [{ context: 'sandbox', name: 'demo-bot', owner: 'sandbox-user' }],
+      endpoints: [{ context: 'sandbox', id: 'demo-bot', owner: 'sandbox-user' }],
     });
     const endpoint = new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),

@@ -18,13 +18,13 @@ import { setIcqqAgentDeps } from '../src/icqq-agent-deps.js';
 const adapterFeature = featureId('zhin.adapter');
 
 const baseConfig = resolveIcqqConfig({
-  name: '10001',
+  id: '10001',
   autoReconnect: false,
 });
 
 /** base64 出站模式：canonical MediaRef base64 直接编码 base64://，不落盘。 */
 const base64MediaConfig = resolveIcqqConfig({
-  name: '10001',
+  id: '10001',
   autoReconnect: false,
   outboundMedia: 'base64',
 });
@@ -166,8 +166,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
       type: 'reply',
       data: { message_id: 'quoted-1' },
     });
-    // metadata quote 链路保持既有行为
-    expect(inbound.metadata).toMatchObject({ quote_id: 'quoted-1' });
+    expect(inbound.replyTo).toEqual({ id: 'quoted-1' });
     await endpoint.stop();
   });
 
@@ -198,7 +197,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
       metadata: Record<string, unknown>;
     };
     expect(inbound.segments[0]).toEqual({ type: 'mention', data: { target: '10001' } });
-    expect(inbound.metadata).toMatchObject({ mentioned: true });
+    expect(inbound.mentioned).toBe(true);
     await endpoint.stop();
   });
 });

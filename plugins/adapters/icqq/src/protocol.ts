@@ -273,7 +273,7 @@ export const Actions = {
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface IcqqAdapterConfig {
-  readonly name?: string;
+  readonly id?: string;
   readonly autoReconnect?: boolean;
   readonly outboundMedia?: 'file' | 'base64';
   readonly rpc?: {
@@ -284,7 +284,7 @@ export interface IcqqAdapterConfig {
   /** Transitional: legacy root `endpoints[]` with `context: icqq`. */
   readonly endpoints?: ReadonlyArray<{
     readonly context?: string;
-    readonly name?: string;
+    readonly id?: string;
     readonly autoReconnect?: boolean;
     readonly outboundMedia?: 'file' | 'base64';
     readonly rpc?: {
@@ -297,7 +297,7 @@ export interface IcqqAdapterConfig {
 
 export interface ResolvedIcqqConfig {
   readonly context: 'icqq';
-  readonly name: string;
+  readonly id: string;
   readonly autoReconnect: boolean;
   readonly outboundMedia?: 'file' | 'base64';
   readonly rpc?: {
@@ -334,10 +334,10 @@ export type ParsedIcqqSendTarget =
 
 export function resolveIcqqConfig(config: IcqqAdapterConfig = {}): ResolvedIcqqConfig {
   const entry = config.endpoints?.find((item) => item.context === 'icqq');
-  const name = pickCredential(config.name, entry?.name, process.env.ICQQ_ACCOUNT);
-  if (!/^\d+$/.test(name)) {
+  const id = pickCredential(config.id, entry?.id, process.env.ICQQ_ACCOUNT);
+  if (!/^\d+$/.test(id)) {
     throw new TypeError(
-      'ICQQ adapter requires numeric name (QQ uin) via plugins.<key>.name or ICQQ_ACCOUNT',
+      'ICQQ adapter requires numeric id (QQ uin) via plugins.<key>.id or ICQQ_ACCOUNT',
     );
   }
   const autoReconnect = config.autoReconnect ?? entry?.autoReconnect ?? true;
@@ -348,7 +348,7 @@ export function resolveIcqqConfig(config: IcqqAdapterConfig = {}): ResolvedIcqqC
     : undefined;
   return {
     context: 'icqq',
-    name,
+    id,
     autoReconnect,
     ...(outboundMedia ? { outboundMedia } : {}),
     ...(rpc ? { rpc } : {}),
@@ -359,13 +359,13 @@ export function resolveIcqqConfig(config: IcqqAdapterConfig = {}): ResolvedIcqqC
  * 入站归一化 → ConversationRef：群临时会话（temp）映射为群容器内的 private
  * 会话（parent kind 'group'）；频道消息的所属 guild 进 `parent`（kind 'channel'）。
  */
-export function icqqInboundConversation(endpointId: string, input: {
+export function icqqInboundConversation(endpointKey: string, input: {
   readonly channelType: 'private' | 'group' | 'channel';
   readonly channelId: string;
   readonly channelParentGroupId?: string;
   readonly guildId?: string;
 }): ConversationRef {
-  const endpoint = { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId };
+  const endpoint = { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey };
   if (input.channelType === 'private' && input.channelParentGroupId) {
     return {
       endpoint,

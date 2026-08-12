@@ -116,13 +116,13 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
   readonly management: EndpointManagement = createSlackEndpointManagement(this);
 
   constructor(options: SlackEndpointOptions) {
-    this.#logger = getAdapterLogger('slack', options.config.name);
+    this.#logger = getAdapterLogger('slack', options.config.id);
     this.#options = options;
   }
 
   /** Console 展示 / AdapterIndex live name（多 endpoint 时与 entry name 一致）。 */
   get name(): string {
-    return this.#options.config.name;
+    return this.#options.config.id;
   }
 
   get client(): SlackWebClientLike | undefined {
@@ -145,7 +145,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
       this.#client = this.#options.createClient?.(config.token)
         ?? (new WebClient(config.token) as unknown as SlackWebClientLike);
 
-      this.#unregisterAgent = registerSlackAgentEndpoint(config.name, this);
+      this.#unregisterAgent = registerSlackAgentEndpoint(config.id, this);
 
       if (config.mode === 'socket') {
         await this.#startSocket();
@@ -156,7 +156,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
         }
         this.#routeReleases.push(...registerSlackWebhookRoutes(http, this));
         this.#logger.debug(formatCompact({
-          endpoint: config.name,
+          endpoint: config.id,
           op: 'webhook',
           path: config.webhookPath,
         }));
@@ -236,14 +236,13 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
       message: { conversation, id: msg.ts },
       content: formatInboundContent(msg),
       sender: { id: msg.user ?? msg.channel ?? '' },
+      endpointId: this.#options.config.id,
+      ...(msg.type === 'app_mention' ? { mentioned: true } : {}),
       metadata: Object.freeze({
-        endpoint: this.#options.config.name,
         channelType: resolveSlackChannelType(msg),
         userId: msg.user,
         threadTs,
         ts: msg.ts,
-        // app_mention 事件本身即 @ 机器人；新 Runtime 纯文本 content 需经 metadata 传递
-        ...(msg.type === 'app_mention' ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -274,8 +273,8 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
       message: { conversation, id: actionTs },
       content: formatInteractionContent(payload),
       sender: { id: userId },
+      endpointId: this.#options.config.id,
       metadata: Object.freeze({
-        endpoint: this.#options.config.name,
         eventType: 'block_actions',
         actionId: payload.actions[0]?.action_id,
         threadTs: messageTs || undefined,
@@ -300,8 +299,8 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
       message: { conversation, id: cmd.trigger_id },
       content: formatSlashContent(cmd),
       sender: { id: cmd.user_id, name: cmd.user_name },
+      endpointId: this.#options.config.id,
       metadata: Object.freeze({
-        endpoint: this.#options.config.name,
         eventType: 'slash_command',
         command: cmd.command,
       }),

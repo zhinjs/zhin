@@ -23,7 +23,7 @@ export function decodeWsPayload(data: unknown): string {
 export function handleNapCatWsMessage(
   data: unknown,
   options: {
-    readonly endpointName: string;
+    readonly endpointId: string;
     readonly pending: Map<string, NapCatPendingAction>;
     readonly admit: (ev: NapCatEvent) => void;
   },
@@ -50,7 +50,7 @@ export function handleNapCatWsMessage(
   } catch (error) {
     logger.warn(formatCompact({
       op: 'napcat_parse_failed',
-      endpoint: options.endpointName,
+      endpoint: options.endpointId,
       error: error instanceof Error ? error.message : String(error),
     }));
   }

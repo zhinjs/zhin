@@ -20,20 +20,20 @@ export interface KookAgentEndpoint {
 }
 
 export interface KookAgentDeps {
-  getEndpoint: (endpointId: string) => KookAgentEndpoint;
+  getEndpoint: (endpointKey: string) => KookAgentEndpoint;
 }
 
 const endpoints = new Map<string, KookAgentEndpoint>();
 let override: KookAgentDeps | null = null;
 
 export function registerKookAgentEndpoint(
-  endpointId: string,
+  endpointKey: string,
   endpoint: KookAgentEndpoint,
 ): () => void {
-  endpoints.set(endpointId, endpoint);
+  endpoints.set(endpointKey, endpoint);
   return () => {
-    if (endpoints.get(endpointId) === endpoint) {
-      endpoints.delete(endpointId);
+    if (endpoints.get(endpointKey) === endpoint) {
+      endpoints.delete(endpointKey);
     }
   };
 }
@@ -46,9 +46,9 @@ export function setKookAgentDeps(deps: KookAgentDeps | null): void {
 export function getKookAgentDeps(): KookAgentDeps {
   if (override) return override;
   return {
-    getEndpoint(endpointId: string): KookAgentEndpoint {
-      const registered = endpoints.get(endpointId);
-      if (!registered) throw new Error(`Endpoint ${endpointId} 不存在`);
+    getEndpoint(endpointKey: string): KookAgentEndpoint {
+      const registered = endpoints.get(endpointKey);
+      if (!registered) throw new Error(`Endpoint ${endpointKey} 不存在`);
       return registered;
     },
   };

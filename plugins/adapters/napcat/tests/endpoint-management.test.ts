@@ -15,7 +15,7 @@ import { NapCatWsEndpoint } from '../src/ws-endpoint.js';
 import { NapCatWssEndpoint } from '../src/wss-endpoint.js';
 
 const adapterFeature = featureId('zhin.adapter');
-const endpointId = capabilityId(rootPluginId(), adapterFeature, 'napcat');
+const endpointKey = capabilityId(rootPluginId(), adapterFeature, 'napcat');
 const gateway: MessageGateway = { receive: vi.fn(), send: vi.fn(async () => 'sent') };
 const httpStub = { ws: vi.fn(), route: vi.fn() } as unknown as HttpHost;
 
@@ -95,25 +95,25 @@ describe('napcat.endpoint management wiring', () => {
   it('ws/wss/http 三种传输都暴露 management 语义端口', async () => {
     const wsConfig = resolveNapCatConfig({
       connection: 'ws',
-      name: 'test-napcat',
+      id: 'test-napcat',
       url: 'ws://127.0.0.1:3001',
     }) as NapCatWsConfig;
     const wssConfig = resolveNapCatConfig({
       connection: 'wss',
-      name: 'test-napcat',
+      id: 'test-napcat',
       path: '/napcat',
     }) as NapCatWssConfig;
     const httpConfig = resolveNapCatConfig({
       connection: 'http',
-      name: 'test-napcat',
+      id: 'test-napcat',
       http_url: 'http://127.0.0.1:3000',
       post_path: '/napcat/post',
     }) as NapCatHttpConfig;
 
     const endpoints = [
-      new NapCatWsEndpoint({ id: endpointId, gateway, config: wsConfig }),
-      new NapCatWssEndpoint({ id: endpointId, gateway, http: httpStub, config: wssConfig }),
-      new NapCatHttpEndpoint({ id: endpointId, gateway, http: httpStub, config: httpConfig }),
+      new NapCatWsEndpoint({ id: endpointKey, gateway, config: wsConfig }),
+      new NapCatWssEndpoint({ id: endpointKey, gateway, http: httpStub, config: wssConfig }),
+      new NapCatHttpEndpoint({ id: endpointKey, gateway, http: httpStub, config: httpConfig }),
     ];
     for (const endpoint of endpoints) {
       expect(listEndpointManagementCapabilities(endpoint)).toEqual(expectedCapabilities);

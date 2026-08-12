@@ -92,7 +92,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
   });
 
   constructor(options: DiscordEndpointOptions) {
-    this.#logger = getAdapterLogger('discord', options.config.name);
+    this.#logger = getAdapterLogger('discord', options.config.id);
     this.#options = options;
     this.#createClient = options.createClient ?? defaultCreateClient;
   }
@@ -101,7 +101,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
     if (this.#started) return;
     this.#started = true;
     try {
-      this.#unregisterAgent = registerDiscordAgentEndpoint(this.#options.config.name, this);
+      this.#unregisterAgent = registerDiscordAgentEndpoint(this.#options.config.id, this);
       const intents = this.#options.config.intents?.length
         ? [...this.#options.config.intents]
         : DEFAULT_INTENTS;
@@ -112,7 +112,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
       });
       this.#logger.info(formatCompact({
         op: 'connect',
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         mode: 'gateway',
         user: this.#client.user?.tag,
       }));
@@ -155,7 +155,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
     const messageId = formatLegacyMessageRef({ conversation, id: snowflake });
     this.#logger.debug(formatCompact({
       op: 'discord_send',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       target: formatLegacyConversationRef(conversation),
       messageId,
     }));
@@ -189,14 +189,14 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
         name: senderDisplayName(msg) || undefined,
         ...(resolveSenderRole(msg) ? { roles: [resolveSenderRole(msg)!] } : {}),
       },
+      endpointId: this.#options.config.id,
+      ...(msg.mentionedBot ? { mentioned: true } : {}),
       metadata: Object.freeze({
-        endpoint: this.#options.config.name,
         channelKind: msg.channelKind,
         userId: msg.authorId,
         guildId: msg.guildId,
         permissions: msg.permissionTokens,
         role: resolveSenderRole(msg),
-        ...(msg.mentionedBot ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -217,8 +217,8 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
       content: formatButtonContent(interaction),
       segments: formatButtonSegments(interaction),
       sender: { id: interaction.userId, name: interaction.userName },
+      endpointId: this.#options.config.id,
       metadata: Object.freeze({
-        endpoint: this.#options.config.name,
         eventType: 'button',
         payload: interaction.customId,
         sourceMessageId: interaction.sourceMessageId,
@@ -435,7 +435,7 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
   });
 
   constructor(options: DiscordInteractionsEndpointOptions) {
-    this.#logger = getAdapterLogger('discord', options.config.name);
+    this.#logger = getAdapterLogger('discord', options.config.id);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
@@ -454,7 +454,7 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
     this.#routeReleases.push(...registerDiscordInteractionRoutes(this.#options.http, this));
     this.#logger.info(formatCompact({
       op: 'connect',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       mode: 'interactions',
       path: this.#options.config.interactionsPath,
     }));
@@ -527,8 +527,8 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
         name: senderDisplayName(msg) || undefined,
         ...(resolveSenderRole(msg) ? { roles: [resolveSenderRole(msg)!] } : {}),
       },
+      endpointId: this.#options.config.id,
       metadata: Object.freeze({
-        endpoint: this.#options.config.name,
         channelKind: msg.channelKind,
         userId: msg.authorId,
         guildId: msg.guildId,

@@ -106,7 +106,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createWeixinIlinkEndpointManagement(this);
 
   constructor(options: WeixinIlinkEndpointOptions) {
-    this.#logger = getAdapterLogger('weixin-ilink', options.config.name);
+    this.#logger = getAdapterLogger('weixin-ilink', options.config.id);
     this.#options = options;
     this.#resolveCredentials = options.resolveCredentials ?? resolveCredentials;
     this.#notifyStart = options.notifyStart ?? notifyStart;
@@ -121,7 +121,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
 
   /** Live endpoint 名（context token 按 account 名分桶，management 推导对端用）。 */
   get configName(): string {
-    return this.#options.config.name;
+    return this.#options.config.id;
   }
 
   apiBaseUrl(): string {
@@ -140,7 +140,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
       // QR 登录最长 8 分钟：stop() 必须能打断
       this.#loginAbort = new AbortController();
       this.#creds = await this.#resolveCredentials(this.#options.config, this.#loginAbort.signal);
-      restoreContextTokens(this.#options.config.name);
+      restoreContextTokens(this.#options.config.id);
 
       await this.#notifyStart({
         baseUrl: this.apiBaseUrl(),
@@ -157,7 +157,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
       this.#startMediaSweep();
       this.#logger.info(formatCompact({
         op: 'connect',
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
       }));
     } catch (error) {
       await this.stop();
@@ -185,7 +185,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
     }
     this.#stopMediaSweep();
     // 防抖中的 context token 落盘，避免 stop 丢尾部写入
-    flushContextTokenPersist(this.#options.config.name);
+    flushContextTokenPersist(this.#options.config.id);
     if (this.#creds?.botToken) {
       try {
         await this.#notifyStop({ baseUrl: this.apiBaseUrl(), token: this.#creds.botToken });
@@ -209,7 +209,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
     }
     // 个人微信仅 private 会话，对端 user_id 即 conversation.id
     const target = conversation.id;
-    const contextToken = getContextToken(this.#options.config.name, target);
+    const contextToken = getContextToken(this.#options.config.id, target);
     if (!contextToken) {
       this.#logger.warn(formatCompact({
         op: 'send',
@@ -294,7 +294,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
     if (!this.#open) return;
     const userId = msg.from_user_id ?? '';
     if (msg.context_token && userId) {
-      setContextToken(this.#options.config.name, userId, msg.context_token);
+      setContextToken(this.#options.config.id, userId, msg.context_token);
     }
     const conversation = weixinIlinkInboundConversation(String(this.#options.id), userId);
     void this.#options.gateway.receive({
@@ -302,8 +302,8 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
       message: { conversation, id: inboundMessageId(msg) },
       content: formatInboundContent(msg),
       sender: { id: userId },
+      endpointId: this.#options.config.id,
       metadata: Object.freeze({
-        endpoint: this.#options.config.name,
         messageType: msg.message_type,
         createTimeMs: msg.create_time_ms,
       }),
@@ -318,7 +318,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
 
   async sendTypingToUser(userId: string, status: number): Promise<void> {
     if (!this.#creds?.botToken || !this.#configManager) return;
-    const contextToken = getContextToken(this.#options.config.name, userId);
+    const contextToken = getContextToken(this.#options.config.id, userId);
     const cfg = await this.#configManager.getForUser(userId, contextToken);
     if (!cfg.typingTicket) {
       this.#logger.debug(formatCompact({
@@ -342,14 +342,14 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
   async #pollLoop(abortSignal: AbortSignal): Promise<void> {
     if (!this.#creds?.botToken) return;
 
-    const endpointName = this.#options.config.name;
-    let getUpdatesBuf = loadSyncBuf(endpointName);
+    const endpointId = this.#options.config.id;
+    let getUpdatesBuf = loadSyncBuf(endpointId);
     let nextTimeoutMs = this.#options.config.longPollTimeoutMs;
     let consecutiveFailures = 0;
 
     while (!abortSignal.aborted) {
-      if (isSessionPaused(endpointName)) {
-        await sleep(getRemainingPauseMs(endpointName), abortSignal);
+      if (isSessionPaused(endpointId)) {
+        await sleep(getRemainingPauseMs(endpointId), abortSignal);
         continue;
       }
 
@@ -374,9 +374,9 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
           const sessionExpired =
             resp.errcode === SESSION_EXPIRED_ERRCODE || resp.ret === SESSION_EXPIRED_ERRCODE;
           if (sessionExpired) {
-            pauseSession(endpointName);
+            pauseSession(endpointId);
             consecutiveFailures = 0;
-            await sleep(getRemainingPauseMs(endpointName), abortSignal);
+            await sleep(getRemainingPauseMs(endpointId), abortSignal);
             continue;
           }
           consecutiveFailures += 1;
@@ -397,7 +397,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
         }
         if (nextBuf) {
           getUpdatesBuf = nextBuf;
-          saveSyncBuf(endpointName, getUpdatesBuf);
+          saveSyncBuf(endpointId, getUpdatesBuf);
         }
       } catch (err) {
         if (abortSignal.aborted) return;
@@ -419,14 +419,14 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
   async #handleInboundMessage(full: WeixinMessage): Promise<void> {
     const fromUserId = full.from_user_id ?? '';
     if (full.context_token && fromUserId) {
-      setContextToken(this.#options.config.name, fromUserId, full.context_token);
+      setContextToken(this.#options.config.id, fromUserId, full.context_token);
     }
 
     const mediaOpts = await this.#downloadInboundMedia(full);
     this.admit({ ...full, _media: mediaOpts });
     this.#logger.debug(formatCompact({
       op: 'recv',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       target: fromUserId,
       preview: formatInboundContent({ ...full, _media: mediaOpts }).slice(0, 80),
     }));
@@ -523,7 +523,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
         fs.unlinkSync(filePath);
         this.#logger.debug(formatCompact({
           op: 'media_sweep',
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           file: entry.name,
         }));
       } catch {

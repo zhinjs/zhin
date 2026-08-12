@@ -13,7 +13,7 @@ const logger = getLogger('lark');
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface LarkAdapterConfig {
-  readonly name?: string;
+  readonly id?: string;
   readonly appId?: string;
   readonly appSecret?: string;
   readonly encryptKey?: string;
@@ -29,7 +29,7 @@ export interface LarkAdapterConfig {
 
 export interface ResolvedLarkConfig {
   readonly context: 'lark';
-  readonly name: string;
+  readonly id: string;
   readonly appId: string;
   readonly appSecret: string;
   readonly encryptKey?: string;
@@ -119,8 +119,8 @@ export function resolveLarkConfig(config: LarkAdapterConfig = {}): ResolvedLarkC
     );
   }
   const isFeishu = config.isFeishu ?? entry?.isFeishu ?? true;
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.LARK_BOT_NAME
     || 'lark-bot';
   const webhookPath = normalizeWebhookPath(
@@ -136,7 +136,7 @@ export function resolveLarkConfig(config: LarkAdapterConfig = {}): ResolvedLarkC
   const verificationToken = config.verificationToken ?? entry?.verificationToken;
   return {
     context: 'lark',
-    name,
+    id,
     appId,
     appSecret,
     ...(encryptKey ? { encryptKey } : {}),
@@ -164,9 +164,9 @@ export function resolveChatType(chatId?: string, chatType?: string): 'group' | '
  * p2p 单聊映射为 private；id 一律为平台 chat_id。Lark 无 guild/频道容器，
  * 不产生 `parent`。
  */
-export function larkInboundConversation(endpointId: string, msg: LarkMessage): ConversationRef {
+export function larkInboundConversation(endpointKey: string, msg: LarkMessage): ConversationRef {
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind: resolveChatType(msg.chat_id, msg.chat_type),
     id: msg.chat_id || 'unknown',
   };

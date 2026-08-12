@@ -61,7 +61,7 @@ export class LineEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createLineEndpointManagement(this);
 
   constructor(options: LineEndpointOptions) {
-    this.#logger = getAdapterLogger('line', options.config.name);
+    this.#logger = getAdapterLogger('line', options.config.id);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
@@ -86,10 +86,10 @@ export class LineEndpoint implements EndpointInstance {
     if (this.#started) return;
     this.#started = true;
     try {
-      this.#unregisterAgent = registerLineAgentEndpoint(this.#options.config.name, this);
+      this.#unregisterAgent = registerLineAgentEndpoint(this.#options.config.id, this);
       this.#routeReleases.push(...registerLineWebhookRoutes(this.#options.http, this));
       this.#logger.debug(formatCompact({
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         op: 'webhook',
         path: this.#options.config.webhookPath,
       }));
@@ -137,7 +137,7 @@ export class LineEndpoint implements EndpointInstance {
           if ((error as { status?: number }).status !== 400) throw error;
           this.#logger.warn(formatCompact({
             op: 'line_reply_fallback_push',
-            endpoint: this.#options.config.name,
+            endpoint: this.#options.config.id,
             target,
           }));
         }
@@ -164,10 +164,10 @@ export class LineEndpoint implements EndpointInstance {
       message: { conversation, id: generateMessageId(event) },
       content: formatInboundContent(event),
       sender: { id: event.source.userId || conversation.id },
+      endpointId: this.#options.config.id,
       metadata: Object.freeze({
         eventType: event.type,
         sourceType: event.source.type,
-        endpoint: this.#options.config.name,
         timestamp: event.timestamp,
         ...(isMessageEvent(event) ? { messageType: event.message.type } : {}),
       }),

@@ -17,7 +17,7 @@ import { MilkyWsEndpoint } from '../src/ws-endpoint.js';
 import { MilkyWssEndpoint } from '../src/wss-endpoint.js';
 
 const adapterFeature = featureId('zhin.adapter');
-const endpointId = capabilityId(rootPluginId(), adapterFeature, 'milky');
+const endpointKey = capabilityId(rootPluginId(), adapterFeature, 'milky');
 const gateway: MessageGateway = { receive: vi.fn(), send: vi.fn(async () => 'sent') };
 const httpStub = { ws: vi.fn(), route: vi.fn() } as unknown as HttpHost;
 
@@ -101,32 +101,32 @@ describe('milky.endpoint management wiring', () => {
   it('ws/wss/sse/webhook 四种传输都暴露 management 语义端口', async () => {
     const wsConfig = resolveMilkyConfig({
       connection: 'ws',
-      name: 'test-milky',
+      id: 'test-milky',
       baseUrl: 'http://127.0.0.1:3000',
     }) as MilkyWsConfig;
     const wssConfig = resolveMilkyConfig({
       connection: 'wss',
-      name: 'test-milky',
+      id: 'test-milky',
       baseUrl: 'http://127.0.0.1:3000',
       path: '/milky',
     }) as MilkyWssConfig;
     const sseConfig = resolveMilkyConfig({
       connection: 'sse',
-      name: 'test-milky',
+      id: 'test-milky',
       baseUrl: 'http://127.0.0.1:3000',
     }) as MilkySseConfig;
     const webhookConfig = resolveMilkyConfig({
       connection: 'webhook',
-      name: 'test-milky',
+      id: 'test-milky',
       baseUrl: 'http://127.0.0.1:3000',
       path: '/milky/webhook',
     }) as MilkyWebhookConfig;
 
     const endpoints = [
-      new MilkyWsEndpoint({ id: endpointId, gateway, config: wsConfig }),
-      new MilkyWssEndpoint({ id: endpointId, gateway, http: httpStub, config: wssConfig }),
-      new MilkySseEndpoint({ id: endpointId, gateway, config: sseConfig }),
-      new MilkyWebhookEndpoint({ id: endpointId, gateway, http: httpStub, config: webhookConfig }),
+      new MilkyWsEndpoint({ id: endpointKey, gateway, config: wsConfig }),
+      new MilkyWssEndpoint({ id: endpointKey, gateway, http: httpStub, config: wssConfig }),
+      new MilkySseEndpoint({ id: endpointKey, gateway, config: sseConfig }),
+      new MilkyWebhookEndpoint({ id: endpointKey, gateway, http: httpStub, config: webhookConfig }),
     ];
     for (const endpoint of endpoints) {
       expect(listEndpointManagementCapabilities(endpoint)).toEqual(expectedCapabilities);

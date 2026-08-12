@@ -18,20 +18,20 @@ export interface MilkyAgentEndpoint {
 }
 
 export interface MilkyAgentDeps {
-  getEndpoint: (endpointId: string) => MilkyAgentEndpoint;
+  getEndpoint: (endpointKey: string) => MilkyAgentEndpoint;
 }
 
 const endpoints = new Map<string, MilkyAgentEndpoint>();
 let override: MilkyAgentDeps | null = null;
 
 export function registerMilkyAgentEndpoint(
-  endpointId: string,
+  endpointKey: string,
   endpoint: MilkyAgentEndpoint,
 ): () => void {
-  endpoints.set(endpointId, endpoint);
+  endpoints.set(endpointKey, endpoint);
   return () => {
-    if (endpoints.get(endpointId) === endpoint) {
-      endpoints.delete(endpointId);
+    if (endpoints.get(endpointKey) === endpoint) {
+      endpoints.delete(endpointKey);
     }
   };
 }
@@ -44,9 +44,9 @@ export function setMilkyAgentDeps(deps: MilkyAgentDeps | null): void {
 export function getMilkyAgentDeps(): MilkyAgentDeps {
   if (override) return override;
   return {
-    getEndpoint(endpointId: string): MilkyAgentEndpoint {
-      const registered = endpoints.get(endpointId);
-      if (!registered) throw new Error(`Endpoint ${endpointId} 不存在`);
+    getEndpoint(endpointKey: string): MilkyAgentEndpoint {
+      const registered = endpoints.get(endpointKey);
+      if (!registered) throw new Error(`Endpoint ${endpointKey} 不存在`);
       return registered;
     },
   };

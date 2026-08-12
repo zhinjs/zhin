@@ -68,7 +68,7 @@ describe('isQqEndpointOperator', () => {
 
   it('未配置 master 时放行（首个绑定者即 owner）', () => {
     expect(isQqEndpointOperator({}, message('alice'))).toBe(true);
-    expect(isQqEndpointOperator({ endpoints: [{ name: 'a' }] }, message('alice'))).toBe(true);
+    expect(isQqEndpointOperator({ endpoints: [{ id: 'a' }] }, message('alice'))).toBe(true);
   });
 
   it('顶层 master 命中放行，不命中拒绝', () => {
@@ -78,7 +78,7 @@ describe('isQqEndpointOperator', () => {
   });
 
   it('endpoints[i].master 逐项命中同样放行', () => {
-    const config = { endpoints: [{ name: 'a', master: 8596238 }] };
+    const config = { endpoints: [{ id: 'a', master: 8596238 }] };
     expect(isQqEndpointOperator(config, message('8596238'))).toBe(true);
     expect(isQqEndpointOperator(config, message('111'))).toBe(false);
   });
@@ -116,7 +116,7 @@ describe('runQqEndpointAdd', () => {
 
     expect(state.bindFlow).toBeNull();
     expect(state.pendingBotKind).toMatchObject({
-      endpointName: 'newbot',
+      endpointId: 'newbot',
       appId: '102000009',
       appSecret: 'sec-9',
     });
@@ -176,7 +176,7 @@ describe('runQqEndpointAdd', () => {
     await lastCallbacks().onSuccess([{ appId: '102000010', appSecret: 's' }]);
 
     expect(fs.existsSync(path.join(root, '.env'))).toBe(false);
-    expect(state.pendingBotKind?.endpointName).toBe('102000010');
+    expect(state.pendingBotKind?.endpointId).toBe('102000010');
   });
 
   it('已有进行中的绑定时拒绝并发', async () => {
@@ -243,7 +243,7 @@ describe('runQqEndpointCancel', () => {
   it('有进行中流程时 stop 并释放单例', () => {
     const state = createQqRuntimeState();
     const stop = vi.fn();
-    state.bindFlow = { name: 'a', stop };
+    state.bindFlow = { id: 'a', stop };
 
     expect(runQqEndpointCancel(state)).toContain('已取消');
     expect(stop).toHaveBeenCalledTimes(1);
@@ -253,7 +253,7 @@ describe('runQqEndpointCancel', () => {
   it('可取消待确认的公域/私域选择', () => {
     const state = createQqRuntimeState();
     state.pendingBotKind = {
-      endpointName: 'x',
+      endpointId: 'x',
       appId: '1',
       appSecret: '2',
       sessionKey: 'k',
@@ -273,7 +273,7 @@ describe('runQqEndpointRemove', () => {
   it('存在时从配置移除并提示重启', () => {
     fs.writeFileSync(
       path.join(root, 'zhin.config.yml'),
-      'plugins:\n  qq:\n    endpoints:\n      - { name: a, appid: "1", secret: "2" }\n',
+      'plugins:\n  qq:\n    endpoints:\n      - { id: a, appid: "1", secret: "2" }\n',
     );
     const state = createQqRuntimeState();
 
@@ -281,7 +281,7 @@ describe('runQqEndpointRemove', () => {
 
     expect(text).toContain('移除');
     expect(text).toContain('重启');
-    expect(fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8')).not.toContain('name: a');
+    expect(fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8')).not.toContain('id: a');
   });
 
   it('不存在时提示未找到', () => {
@@ -295,10 +295,10 @@ describe('runQqEndpointRemove', () => {
 describe('runQqEndpointList', () => {
   it('同时列出运行中与配置中的 endpoints', () => {
     const state = createQqRuntimeState();
-    state.endpoints.set('running-bot', { name: 'running-bot', mode: 'websocket' });
+    state.endpoints.set('running-bot', { id: 'running-bot', mode: 'websocket' });
     fs.writeFileSync(
       path.join(root, 'zhin.config.yml'),
-      'plugins:\n  qq:\n    endpoints:\n      - { name: conf-bot, appid: "${QQ_CONF_BOT_APPID}", secret: "${QQ_CONF_BOT_SECRET}" }\n',
+      'plugins:\n  qq:\n    endpoints:\n      - { id: conf-bot, appid: "${QQ_CONF_BOT_APPID}", secret: "${QQ_CONF_BOT_SECRET}" }\n',
     );
 
     const text = runQqEndpointList(state, root);
@@ -319,7 +319,7 @@ describe('runQqEndpointList', () => {
 
   it('有进行中绑定时 footer 提示 qq.endpoint cancel', () => {
     const state = createQqRuntimeState();
-    state.bindFlow = { name: 'a', stop: vi.fn() };
+    state.bindFlow = { id: 'a', stop: vi.fn() };
 
     const text = runQqEndpointList(state, root);
 
@@ -329,7 +329,7 @@ describe('runQqEndpointList', () => {
   it('待选 botKind 时 footer 提示', () => {
     const state = createQqRuntimeState();
     state.pendingBotKind = {
-      endpointName: 'wait-bot',
+      endpointId: 'wait-bot',
       appId: '1',
       appSecret: '2',
       sessionKey: 'k',

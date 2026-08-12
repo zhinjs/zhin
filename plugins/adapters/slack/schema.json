@@ -37,15 +37,11 @@
     },
     "endpoints": {
       "type": "array",
-      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层）",
       "items": {
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "name": {
-            "type": "string",
-            "description": "Slack bot name"
-          },
           "master": {
             "type": [
               "string",
@@ -75,10 +71,14 @@
           "appToken": {
             "type": "string",
             "description": "App-Level Token (xapp-...) for Socket Mode"
+          },
+          "id": {
+            "type": "string",
+            "description": "Slack bot name"
           }
         },
         "required": [
-          "name",
+          "id",
           "token"
         ]
       }

@@ -14,20 +14,20 @@ export interface Onebot11AgentEndpoint {
 }
 
 export interface Onebot11AgentDeps {
-  getEndpoint: (endpointId: string) => Onebot11AgentEndpoint;
+  getEndpoint: (endpointKey: string) => Onebot11AgentEndpoint;
 }
 
 const endpoints = new Map<string, Onebot11AgentEndpoint>();
 let override: Onebot11AgentDeps | null = null;
 
 export function registerOnebot11AgentEndpoint(
-  endpointId: string,
+  endpointKey: string,
   endpoint: Onebot11AgentEndpoint,
 ): () => void {
-  endpoints.set(endpointId, endpoint);
+  endpoints.set(endpointKey, endpoint);
   return () => {
-    if (endpoints.get(endpointId) === endpoint) {
-      endpoints.delete(endpointId);
+    if (endpoints.get(endpointKey) === endpoint) {
+      endpoints.delete(endpointKey);
     }
   };
 }
@@ -40,9 +40,9 @@ export function setOnebot11AgentDeps(deps: Onebot11AgentDeps): void {
 export function getOnebot11AgentDeps(): Onebot11AgentDeps {
   if (override) return override;
   return {
-    getEndpoint(endpointId: string): Onebot11AgentEndpoint {
-      const registered = endpoints.get(endpointId);
-      if (!registered) throw new Error(`Endpoint ${endpointId} 不存在`);
+    getEndpoint(endpointKey: string): Onebot11AgentEndpoint {
+      const registered = endpoints.get(endpointKey);
+      if (!registered) throw new Error(`Endpoint ${endpointKey} 不存在`);
       return registered;
     },
   };

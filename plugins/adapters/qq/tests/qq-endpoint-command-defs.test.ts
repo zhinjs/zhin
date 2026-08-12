@@ -4,9 +4,9 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import listCommand from '../commands/endpoint/list.js';
-import addCommand from '../commands/endpoint/add/[[name]].js';
+import addCommand from '../commands/endpoint/add/[[id]].js';
 import cancelCommand from '../commands/endpoint/cancel.js';
-import removeCommand from '../commands/endpoint/remove/[name].js';
+import removeCommand from '../commands/endpoint/remove/[id].js';
 import { createQqRuntimeState, qqRuntimeStateToken } from '../src/qq-runtime-state.js';
 
 /**
@@ -48,7 +48,7 @@ describe('qq.endpoint command definitions', () => {
 
   it('list execute 返回运行中 + 配置清单', () => {
     const state = createQqRuntimeState();
-    state.endpoints.set('bot-1', { name: 'bot-1', mode: 'websocket' });
+    state.endpoints.set('bot-1', { id: 'bot-1', mode: 'websocket' });
 
     const text = listCommand.execute(fakeContext(state)) as string;
 
@@ -57,7 +57,7 @@ describe('qq.endpoint command definitions', () => {
 
   it('list execute 在有进行中绑定时提示 qq.endpoint cancel', () => {
     const state = createQqRuntimeState();
-    state.bindFlow = { name: 'a', stop: vi.fn() };
+    state.bindFlow = { id: 'a', stop: vi.fn() };
 
     const text = listCommand.execute(fakeContext(state)) as string;
 

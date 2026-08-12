@@ -12,7 +12,7 @@ const logger = getLogger('qq');
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface QqAdapterConfig {
-  readonly name?: string;
+  readonly id?: string;
   readonly appid?: string;
   readonly secret?: string;
   /** Default `websocket`. `webhook` / `middleware` use httpHostToken POST. */
@@ -30,7 +30,7 @@ export interface QqAdapterConfig {
   /** Transitional: legacy root `endpoints[]` with `context: qq`. */
   readonly endpoints?: ReadonlyArray<{
     readonly context?: string;
-    readonly name?: string;
+    readonly id?: string;
     readonly appid?: string;
     readonly secret?: string;
     readonly mode?: 'websocket' | 'webhook' | 'middleware';
@@ -48,7 +48,7 @@ export interface QqAdapterConfig {
 export interface ResolvedQqWebsocketConfig {
   readonly context: 'qq';
   readonly mode: 'websocket';
-  readonly name: string;
+  readonly id: string;
   readonly appid: string;
   readonly secret: string;
   readonly sandbox: boolean;
@@ -60,7 +60,7 @@ export interface ResolvedQqWebsocketConfig {
 export interface ResolvedQqHttpConfig {
   readonly context: 'qq';
   readonly mode: 'webhook' | 'middleware';
-  readonly name: string;
+  readonly id: string;
   readonly appid: string;
   readonly secret: string;
   readonly webhookPath: string;
@@ -107,8 +107,8 @@ export function resolveQqConfig(config: QqAdapterConfig = {}): ResolvedQqConfig 
       'QQ adapter requires appid + secret (plugins.<key>.appid/secret or endpoints with context: qq)',
     );
   }
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.QQ_BOT_NAME
     || 'qq-bot';
   const mode = config.mode ?? entry?.mode ?? 'websocket';
@@ -119,7 +119,7 @@ export function resolveQqConfig(config: QqAdapterConfig = {}): ResolvedQqConfig 
     return {
       context: 'qq',
       mode,
-      name,
+      id,
       appid,
       secret,
       webhookPath,
@@ -130,7 +130,7 @@ export function resolveQqConfig(config: QqAdapterConfig = {}): ResolvedQqConfig 
   return {
     context: 'qq',
     mode: 'websocket',
-    name,
+    id,
     appid,
     secret,
     sandbox: config.sandbox === true || entry?.sandbox === true,
@@ -147,10 +147,10 @@ export function resolveQqConfig(config: QqAdapterConfig = {}): ResolvedQqConfig 
  * 入站归一化 → ConversationRef：`direct`（频道私信）映射为 guild 容器内的
  * private 会话；频道消息的所属 guild 进 `parent`。
  */
-export function qqInboundConversation(endpointId: string, msg: QqInboundMessage): ConversationRef {
+export function qqInboundConversation(endpointKey: string, msg: QqInboundMessage): ConversationRef {
   const kind: ConversationKind = msg.channelKind === 'direct' ? 'private' : msg.channelKind;
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind,
     id: msg.channelId,
     ...(msg.guildId && (msg.channelKind === 'channel' || msg.channelKind === 'direct')

@@ -29,8 +29,8 @@ export default defineAdapter<OneBot11AdapterConfig>({
     const config = resolveOneBot11Config(context.config);
     const gateway = context.use(messageGatewayToken);
     // 注册到插件运行时状态（onebot11.endpoint list 的"运行中"数据源）
-    context.use(onebot11RuntimeStateToken).endpoints.set(config.name, {
-      name: config.name,
+    context.use(onebot11RuntimeStateToken).endpoints.set(config.id, {
+      id: config.id,
       mode: config.connection,
     });
     if (config.connection === 'wss') {

@@ -23,7 +23,7 @@ export function decodeWsPayload(data: unknown): string {
 export function handleOneBot11WsMessage(
   data: unknown,
   options: {
-    readonly endpointName: string;
+    readonly endpointId: string;
     readonly pending: Map<string, OneBot11PendingAction>;
     readonly admit: (ev: OneBot11Event) => void;
   },
@@ -46,7 +46,7 @@ export function handleOneBot11WsMessage(
   } catch (error) {
     logger.warn(formatCompact({
       op: 'onebot11_parse_failed',
-      endpoint: options.endpointName,
+      endpoint: options.endpointId,
       error: error instanceof Error ? error.message : String(error),
     }));
   }

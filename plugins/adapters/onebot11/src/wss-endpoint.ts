@@ -56,7 +56,7 @@ export class OneBot11WssEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: OneBot11WssEndpointOptions) {
-    this.#logger = getAdapterLogger('onebot11', options.config.name);
+    this.#logger = getAdapterLogger('onebot11', options.config.id);
     this.#options = options;
   }
 
@@ -66,14 +66,14 @@ export class OneBot11WssEndpoint implements EndpointInstance {
     if (!this.#options.config.access_token) {
       // wss 模式未配 access_token 时任何连接都会被放行（verifyOneBotAccessToken 直接 return true）
       this.#logger.warn(formatCompact({
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         mode: 'wss',
         ok: false,
         error: 'missing access_token',
       }));
     }
     this.#unregisterAgent = registerOnebot11AgentEndpoint(
-      this.#options.config.name,
+      this.#options.config.id,
       this as unknown as OneBot11WsEndpoint,
     );
     const handle = this.#options.http.ws(this.#options.config.path);
@@ -82,7 +82,7 @@ export class OneBot11WssEndpoint implements EndpointInstance {
     });
     this.#logger.info(formatCompact({
       op: 'listen',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       mode: 'wss',
       path: this.#options.config.path,
     }));
@@ -147,6 +147,7 @@ export class OneBot11WssEndpoint implements EndpointInstance {
   admit(ev: OneBot11Event): void {
     if (!this.#open || !isMessageEvent(ev)) return;
     const conversation = onebot11InboundConversation(String(this.#options.id), ev);
+    const inbound = formatInboundMetadata(ev, this.#options.config.id);
     void this.#options.gateway.receive({
       conversation,
       message: { conversation, id: String(ev.message_id) },
@@ -156,7 +157,10 @@ export class OneBot11WssEndpoint implements EndpointInstance {
         name: senderDisplayName(ev) || undefined,
         ...(ev.sender?.role ? { roles: [ev.sender.role] } : {}),
       },
-      metadata: formatInboundMetadata(ev, this.#options.config.name),
+      endpointId: inbound.endpointId,
+      ...(inbound.mentioned ? { mentioned: true } : {}),
+      ...(inbound.replyTo ? { replyTo: inbound.replyTo } : {}),
+      metadata: inbound.metadata,
     }).catch((err) => {
       this.#logger.warn(formatCompact({
         op: 'onebot11_gateway_receive_failed',
@@ -187,7 +191,7 @@ export class OneBot11WssEndpoint implements EndpointInstance {
     );
     socket.on('message', (data) => {
       handleOneBot11WsMessage(data, {
-        endpointName: this.#options.config.name,
+        endpointId: this.#options.config.id,
         pending: this.#pending,
         admit: (ev) => this.admit(ev),
       });
@@ -202,7 +206,7 @@ export class OneBot11WssEndpoint implements EndpointInstance {
       }
     });
     this.#logger.debug(formatCompact({
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       mode: 'wss',
       peer: connection.request.socket.remoteAddress,
     }));

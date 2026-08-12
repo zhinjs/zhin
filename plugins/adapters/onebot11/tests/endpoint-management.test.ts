@@ -13,7 +13,7 @@ import { OneBot11WsEndpoint } from '../src/ws-endpoint.js';
 import { OneBot11WssEndpoint } from '../src/wss-endpoint.js';
 
 const adapterFeature = featureId('zhin.adapter');
-const endpointId = capabilityId(rootPluginId(), adapterFeature, 'onebot11');
+const endpointKey = capabilityId(rootPluginId(), adapterFeature, 'onebot11');
 const gateway: MessageGateway = { receive: vi.fn(), send: vi.fn(async () => 'sent') };
 const httpStub = { ws: vi.fn(), route: vi.fn() } as unknown as HttpHost;
 
@@ -93,18 +93,18 @@ describe('onebot11.endpoint management wiring', () => {
   it('ws/wss 两种传输都暴露 management 语义端口', async () => {
     const wsConfig = resolveOneBot11Config({
       connection: 'ws',
-      name: 'test-ob11',
+      id: 'test-ob11',
       url: 'ws://127.0.0.1:6700',
     }) as OneBot11WsConfig;
     const wssConfig = resolveOneBot11Config({
       connection: 'wss',
-      name: 'test-ob11',
+      id: 'test-ob11',
       path: '/onebot11',
     }) as OneBot11WssConfig;
 
     const endpoints = [
-      new OneBot11WsEndpoint({ id: endpointId, gateway, config: wsConfig }),
-      new OneBot11WssEndpoint({ id: endpointId, gateway, http: httpStub, config: wssConfig }),
+      new OneBot11WsEndpoint({ id: endpointKey, gateway, config: wsConfig }),
+      new OneBot11WssEndpoint({ id: endpointKey, gateway, http: httpStub, config: wssConfig }),
     ];
     for (const endpoint of endpoints) {
       expect(listEndpointManagementCapabilities(endpoint)).toEqual(expectedCapabilities);

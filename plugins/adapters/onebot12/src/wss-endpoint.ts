@@ -51,7 +51,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
   #started = false;
 
   constructor(options: OneBot12WssEndpointOptions) {
-    this.#logger = getAdapterLogger('onebot12', options.config.name);
+    this.#logger = getAdapterLogger('onebot12', options.config.id);
     this.#options = options;
   }
 
@@ -61,7 +61,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
     if (!this.#options.config.access_token) {
       // wss 模式未配 access_token 时任何连接都会被放行（verifyOneBotAccessToken 直接 return true）
       this.#logger.warn(formatCompact({
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         mode: 'wss',
         ok: false,
         error: 'missing access_token',
@@ -73,7 +73,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
     });
     this.#logger.info(formatCompact({
       op: 'listen',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       mode: 'wss',
       path: this.#options.config.path,
     }));
@@ -118,7 +118,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
       (error) => {
         this.#logger.warn(formatCompact({
           op: 'onebot12_upload_failed',
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           error: error instanceof Error ? error.message : String(error),
         }));
       },
@@ -149,16 +149,16 @@ export class OneBot12WssEndpoint implements EndpointInstance {
       message: { conversation, id: ev.message_id },
       content: formatInboundContent(ev),
       sender: { id: senderUserId(ev), name: senderNickname(ev) },
+      endpointId: this.#options.config.id,
+      ...(mentioned ? { mentioned: true } : {}),
       metadata: Object.freeze({
         detail_type: ev.detail_type,
         user_id: ev.user_id,
         group_id: ev.group_id,
         channel_id: ev.channel_id,
         guild_id: ev.guild_id,
-        endpoint: this.#options.config.name,
         time: ev.time,
         ...(nickname ? { nickname } : {}),
-        ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -198,7 +198,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
       }
     });
     this.#logger.debug(formatCompact({
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       mode: 'wss',
       peer: connection.request.socket.remoteAddress,
     }));
@@ -229,7 +229,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
     } catch (error) {
       this.#logger.warn(formatCompact({
         op: 'onebot12_parse_failed',
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         error: error instanceof Error ? error.message : String(error),
       }));
     }

@@ -63,7 +63,7 @@ export class NapCatWssEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: NapCatWssEndpointOptions) {
-    this.#logger = getAdapterLogger('napcat', options.config.name);
+    this.#logger = getAdapterLogger('napcat', options.config.id);
     this.#options = options;
   }
 
@@ -71,7 +71,7 @@ export class NapCatWssEndpoint implements EndpointInstance {
     if (this.#started) return;
     this.#started = true;
     this.#unregisterAgent = registerNapcatAgentEndpoint(
-      this.#options.config.name,
+      this.#options.config.id,
       this as unknown as NapCatWsEndpoint,
     );
     const handle = this.#options.http.ws(this.#options.config.path);
@@ -80,7 +80,7 @@ export class NapCatWssEndpoint implements EndpointInstance {
     });
     this.#logger.info(formatCompact({
       op: 'listen',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       mode: 'wss',
       path: this.#options.config.path,
     }));
@@ -153,16 +153,16 @@ export class NapCatWssEndpoint implements EndpointInstance {
         name: nickname,
         ...(ev.sender?.role ? { roles: [ev.sender.role] } : {}),
       },
+      endpointId: this.#options.config.id,
+      ...(mentioned ? { mentioned: true } : {}),
       metadata: Object.freeze({
         message_type: ev.message_type,
         user_id: ev.user_id != null ? String(ev.user_id) : undefined,
         group_id: ev.group_id != null ? String(ev.group_id) : undefined,
-        endpoint: this.#options.config.name,
         time: ev.time,
         self_id: ev.self_id != null ? String(ev.self_id) : undefined,
         role: ev.sender?.role,
         ...(nickname ? { nickname } : {}),
-        ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -194,7 +194,7 @@ export class NapCatWssEndpoint implements EndpointInstance {
     );
     socket.on('message', (data) => {
       handleNapCatWsMessage(data, {
-        endpointName: this.#options.config.name,
+        endpointId: this.#options.config.id,
         pending: this.#pending,
         admit: (event) => this.admit(event),
       });
@@ -209,7 +209,7 @@ export class NapCatWssEndpoint implements EndpointInstance {
       }
     });
     this.#logger.debug(formatCompact({
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       mode: 'wss',
       peer: connection.request.socket.remoteAddress,
     }));

@@ -106,7 +106,7 @@ export async function resolveCredentials(
 ): Promise<WeixinIlinkCredentials> {
   const envToken = process.env.WEIXIN_ILINK_TOKEN?.trim() || config.botToken?.trim();
   if (envToken) {
-    const stored = loadCredentials(config.name);
+    const stored = loadCredentials(config.id);
     return {
       botToken: envToken,
       ilinkUserId: stored?.ilinkUserId,
@@ -115,7 +115,7 @@ export async function resolveCredentials(
     };
   }
 
-  const stored = loadCredentials(config.name);
+  const stored = loadCredentials(config.id);
   if (stored?.botToken) {
     return {
       ...stored,
@@ -135,7 +135,7 @@ export async function loginWithQr(
   const qrcodeUrl = qr.qrcode_img_content || qr.qrcode;
 
   logger.info(
-    `weixin-ilink QR login for ${config.name}: scan with WeChat ClawBot entry — ${qrcodeUrl.slice(0, 120)}${qrcodeUrl.length > 120 ? '…' : ''}`,
+    `weixin-ilink QR login for ${config.id}: scan with WeChat ClawBot entry — ${qrcodeUrl.slice(0, 120)}${qrcodeUrl.length > 120 ? '…' : ''}`,
   );
 
   const deadline = Date.now() + LOGIN_TIMEOUT_MS;
@@ -157,7 +157,7 @@ export async function loginWithQr(
         throw new Error('扫码成功但未返回 bot_token');
       }
       const creds: WeixinIlinkCredentials = {
-        botToken: status.bot_token ?? loadCredentials(config.name)?.botToken ?? '',
+        botToken: status.bot_token ?? loadCredentials(config.id)?.botToken ?? '',
         ilinkUserId: status.ilink_user_id,
         ilinkBotId: status.ilink_endpoint_id,
         baseUrl: status.baseurl ?? currentBaseUrl,
@@ -165,7 +165,7 @@ export async function loginWithQr(
       if (!creds.botToken) {
         throw new Error('binded_redirect 但本地无有效 bot_token');
       }
-      saveCredentials(config.name, creds);
+      saveCredentials(config.id, creds);
       return creds;
     }
 

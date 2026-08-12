@@ -8,7 +8,7 @@ import { resolveSlackConfig } from '../src/protocol.js';
 const adapterFeature = featureId('zhin.adapter');
 
 const socketConfig = resolveSlackConfig({
-  name: 'test-slack-mgmt',
+  id: 'test-slack-mgmt',
   token: 'xoxb-test-token',
   appToken: 'xapp-test-token',
   socketMode: true,

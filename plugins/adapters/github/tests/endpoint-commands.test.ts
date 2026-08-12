@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import { createEndpointRuntimeState } from '@zhin.js/adapter';
 import listCommand from '../commands/endpoint/list.js';
-import addCommand from '../commands/endpoint/add/[name].js';
-import removeCommand from '../commands/endpoint/remove/[name].js';
+import addCommand from '../commands/endpoint/add/[id].js';
+import removeCommand from '../commands/endpoint/remove/[id].js';
 import { githubRuntimeStateToken } from '../src/github-runtime-state.js';
 
 /**
@@ -54,7 +54,7 @@ describe('github.endpoint command definitions', () => {
 
   it('add：app_id/webhook_secret 写 .env，private_key 内联为文件路径', () => {
     const text = addCommand.execute(fakeContext({
-      params: { name: 'bot1' },
+      params: { id: 'bot1' },
       args: ['app_id=123456', 'private_key=./data/bot1.pem', 'webhook_secret=sec-1'],
     })) as string;
 
@@ -63,7 +63,7 @@ describe('github.endpoint command definitions', () => {
     expect(envContent).toContain('GITHUB_BOT1_APP_ID=123456');
     expect(envContent).toContain('GITHUB_BOT1_WEBHOOK_SECRET=sec-1');
     const config = fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8');
-    expect(config).toContain('name: bot1');
+    expect(config).toContain('id: bot1');
     expect(config).toContain('${GITHUB_BOT1_APP_ID}');
     expect(config).toContain('${GITHUB_BOT1_WEBHOOK_SECRET}');
     // private_key 走内联路径（gh-client resolvePrivateKey 支持 PEM 内容或路径）
@@ -71,16 +71,16 @@ describe('github.endpoint command definitions', () => {
   });
 
   it('add 缺少必填字段时报错', () => {
-    expect(addCommand.execute(fakeContext({ params: { name: 'bot1' } })))
+    expect(addCommand.execute(fakeContext({ params: { id: 'bot1' } })))
       .toContain('缺少必填字段：app_id、private_key');
   });
 
   it('list 显示运行中 + 配置中的 endpoints', () => {
     const context = fakeContext();
     (context as { state: ReturnType<typeof createEndpointRuntimeState> }).state
-      .endpoints.set('bot1', { name: 'bot1', mode: 'webhook' });
+      .endpoints.set('bot1', { id: 'bot1', mode: 'webhook' });
     addCommand.execute(fakeContext({
-      params: { name: 'conf-bot' },
+      params: { id: 'conf-bot' },
       args: ['app_id=1', 'private_key=./k.pem'],
     }));
 
@@ -92,22 +92,22 @@ describe('github.endpoint command definitions', () => {
 
   it('remove 从配置移除并提示重启', () => {
     addCommand.execute(fakeContext({
-      params: { name: 'bot1' },
+      params: { id: 'bot1' },
       args: ['app_id=1', 'private_key=./k.pem'],
     }));
 
-    const text = removeCommand.execute(fakeContext({ params: { name: 'bot1' } })) as string;
+    const text = removeCommand.execute(fakeContext({ params: { id: 'bot1' } })) as string;
 
     expect(text).toContain('移除');
     expect(text).toContain('重启');
-    expect(fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8')).not.toContain('name: bot1');
+    expect(fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8')).not.toContain('id: bot1');
   });
 
   it('配置 master 后非 master 拒绝 add/remove', () => {
     const denied = fakeContext({
       config: { master: 'alice' },
       input: { sender: { id: 'bob' } },
-      params: { name: 'bot1' },
+      params: { id: 'bot1' },
       args: ['app_id=1', 'private_key=./k.pem'],
     });
 

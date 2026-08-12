@@ -34,7 +34,7 @@ export interface SandboxWsSocket {
 
 export type ResolvedSandboxBot = {
   readonly context: 'sandbox';
-  readonly name: string;
+  readonly id: string;
   readonly owner: string;
   readonly randomNamePerConnection: boolean;
 };
@@ -42,12 +42,12 @@ export type ResolvedSandboxBot = {
 export interface SandboxAdapterConfig {
   /** Runtime expands `endpoints[i]` onto the top level — prefer these. */
   readonly context?: string;
-  readonly name?: string;
+  readonly id?: string;
   readonly owner?: string;
   /** Legacy shape: endpoint entries nested under `endpoints[]`. */
   readonly endpoints?: ReadonlyArray<{
     readonly context?: string;
-    readonly name?: string;
+    readonly id?: string;
     readonly owner?: string;
   }>;
 }
@@ -56,19 +56,19 @@ export function resolveSandboxEndpoint(
   appConfig: SandboxAdapterConfig,
 ): ResolvedSandboxBot {
   const entry = appConfig.endpoints?.find((item) => item.context === 'sandbox');
-  const fixedName = typeof appConfig.name === 'string' && appConfig.name
-    ? appConfig.name
-    : typeof entry?.name === 'string' && entry.name
-      ? entry.name
+  const fixedName = typeof appConfig.id === 'string' && appConfig.id
+    ? appConfig.id
+    : typeof entry?.id === 'string' && entry.id
+      ? entry.id
       : undefined;
-  const name = fixedName || process.env.SANDBOX_BOT_NAME || 'sandbox-bot';
+  const id = fixedName || process.env.SANDBOX_BOT_NAME || 'sandbox-bot';
   const owner = (typeof appConfig.owner === 'string' && appConfig.owner)
     || (typeof entry?.owner === 'string' && entry.owner)
     || process.env.SANDBOX_BOT_OWNER
     || 'sandbox-user';
   return {
     context: 'sandbox',
-    name,
+    id,
     owner,
     randomNamePerConnection: !fixedName,
   };
@@ -184,7 +184,7 @@ export function parseSandboxWsPayload(raw: string): {
  * `guild`（频道容器语义）归 'channel'。无 guild/temp 容器信息，不产生 parent。
  */
 export function sandboxInboundConversation(
-  endpointId: string,
+  endpointKey: string,
   msg: { readonly type: MessageType; readonly id: string },
 ): ConversationRef {
   const kind: ConversationKind = msg.type === 'direct'
@@ -193,7 +193,7 @@ export function sandboxInboundConversation(
       ? 'channel'
       : msg.type;
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind,
     id: msg.id,
   };

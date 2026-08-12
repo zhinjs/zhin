@@ -26,8 +26,8 @@ export default defineAdapter<TelegramAdapterConfig>({
   create(context) {
     const config = resolveTelegramConfig(context.config);
     // 注册到插件运行时状态（telegram.endpoint list 的"运行中"数据源）
-    context.use(telegramRuntimeStateToken).endpoints.set(config.name, {
-      name: config.name,
+    context.use(telegramRuntimeStateToken).endpoints.set(config.id, {
+      id: config.id,
       mode: config.mode,
     });
     return new TelegramEndpoint({

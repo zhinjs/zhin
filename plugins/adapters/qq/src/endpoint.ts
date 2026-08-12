@@ -60,21 +60,21 @@ export class QqWebsocketEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createQqEndpointManagement(this);
 
   constructor(options: QqEndpointOptions) {
-    this.#logger = getAdapterLogger('qq', options.config.name);
+    this.#logger = getAdapterLogger('qq', options.config.id);
     this.#options = options;
     this.#createBot = options.createBot ?? defaultCreateBot;
   }
 
   /** Live endpoint 名（Console/AdapterIndex 展示用，如 bot appid 别名）。 */
   get name(): string {
-    return this.#options.config.name;
+    return this.#options.config.id;
   }
 
   async start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
     try {
-      this.#unregisterAgent = registerQqAgentEndpoint(this.#options.config.name, this);
+      this.#unregisterAgent = registerQqAgentEndpoint(this.#options.config.id, this);
       this.#bot = this.#createBot(this.#options.config);
       this.#bindBot(this.#bot);
       await this.#bot.start();
@@ -165,7 +165,7 @@ export class QqWebsocketEndpoint implements EndpointInstance {
     }
     this.#logger.debug(formatCompact({
       op: 'qq_recall',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       kind,
       messageId,
     }));
@@ -192,14 +192,13 @@ export class QqWebsocketEndpoint implements EndpointInstance {
         name: senderDisplayName(msg) || undefined,
         ...(msg.authorRoles?.length ? { roles: msg.authorRoles } : {}),
       },
+      endpointId: this.#options.config.id,
+      ...(msg.mentioned ? { mentioned: true } : {}),
       metadata: Object.freeze({
-        endpoint: this.#options.config.name,
         channelKind: msg.channelKind,
         userId: msg.authorId,
         guildId: msg.guildId,
         roles: msg.authorRoles,
-        // AT 事件本身即 @ 机器人；新 Runtime 纯文本 content 需经 metadata 传递
-        ...(msg.mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -277,14 +276,14 @@ export class QqHttpEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createQqEndpointManagement(this);
 
   constructor(options: QqHttpEndpointOptions) {
-    this.#logger = getAdapterLogger('qq', options.config.name);
+    this.#logger = getAdapterLogger('qq', options.config.id);
     this.#options = options;
     this.#createBot = options.createBot ?? defaultCreateHttpBot;
   }
 
   /** Live endpoint 名（Console/AdapterIndex 展示用）。 */
   get name(): string {
-    return this.#options.config.name;
+    return this.#options.config.id;
   }
 
   async start(): Promise<void> {
@@ -292,7 +291,7 @@ export class QqHttpEndpoint implements EndpointInstance {
     this.#started = true;
     try {
       this.#unregisterAgent = registerQqAgentEndpoint(
-        this.#options.config.name,
+        this.#options.config.id,
         this as unknown as QqWebsocketEndpoint,
       );
       this.#setupRoutes();
@@ -383,7 +382,7 @@ export class QqHttpEndpoint implements EndpointInstance {
     }
     this.#logger.debug(formatCompact({
       op: 'qq_recall',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       kind,
       messageId,
     }));
@@ -409,14 +408,13 @@ export class QqHttpEndpoint implements EndpointInstance {
         name: senderDisplayName(msg) || undefined,
         ...(msg.authorRoles?.length ? { roles: msg.authorRoles } : {}),
       },
+      endpointId: this.#options.config.id,
+      ...(msg.mentioned ? { mentioned: true } : {}),
       metadata: Object.freeze({
-        endpoint: this.#options.config.name,
         channelKind: msg.channelKind,
         userId: msg.authorId,
         guildId: msg.guildId,
         roles: msg.authorRoles,
-        // AT 事件本身即 @ 机器人；新 Runtime 纯文本 content 需经 metadata 传递
-        ...(msg.mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({

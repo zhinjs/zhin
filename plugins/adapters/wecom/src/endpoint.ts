@@ -66,7 +66,7 @@ export class WecomEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: WecomEndpointOptions) {
-    this.#logger = getAdapterLogger('wecom', options.config.name);
+    this.#logger = getAdapterLogger('wecom', options.config.id);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
@@ -85,10 +85,10 @@ export class WecomEndpoint implements EndpointInstance {
     this.#started = true;
     try {
       await this.#refreshAccessToken();
-      this.#unregisterAgent = registerWecomAgentEndpoint(this.#options.config.name, this);
+      this.#unregisterAgent = registerWecomAgentEndpoint(this.#options.config.id, this);
       this.#routeReleases.push(...registerWecomWebhookRoutes(this.#options.http, this));
       this.#logger.debug(formatCompact({
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         op: 'webhook',
         path: this.#options.config.webhookPath,
       }));
@@ -162,7 +162,7 @@ export class WecomEndpoint implements EndpointInstance {
       if (!media) {
         this.#logger.warn(formatCompact({
           op: 'wecom_outbound_media_dropped',
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           type: 'image',
           reason: 'missing_media_ref',
         }));
@@ -177,7 +177,7 @@ export class WecomEndpoint implements EndpointInstance {
       } catch (error) {
         this.#logger.warn(formatCompact({
           op: 'wecom_media_upload_failed',
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           error: error instanceof Error ? error.message : String(error),
         }));
         const alt = typeof data.alt === 'string' && data.alt ? data.alt : '[image]';
@@ -209,11 +209,11 @@ export class WecomEndpoint implements EndpointInstance {
       message: { conversation, id: msg.MsgId || `${msg.CreateTime}` },
       content: formatInboundContent(msg),
       sender: { id: msg.FromUserName },
+      endpointId: this.#options.config.id,
       metadata: Object.freeze({
         msgType: msg.MsgType,
         event: msg.Event,
         chatType,
-        endpoint: this.#options.config.name,
         toUserName: msg.ToUserName,
         agentId: msg.AgentID,
       }),
@@ -267,10 +267,10 @@ export class WecomEndpoint implements EndpointInstance {
 
   async sendTextMessage(userId: string, content: string): Promise<boolean> {
     try {
-      const endpointId = String(this.#options.id);
+      const endpointKey = String(this.#options.id);
       await this.send({
         conversation: {
-          endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+          endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
           kind: resolveChatType(userId),
           id: userId,
         },

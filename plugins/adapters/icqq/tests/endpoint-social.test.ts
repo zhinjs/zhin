@@ -11,7 +11,7 @@ import { setIcqqAgentDeps } from '../src/icqq-agent-deps.js';
 const adapterFeature = featureId('zhin.adapter');
 
 const baseConfig = resolveIcqqConfig({
-  name: '10001',
+  id: '10001',
   autoReconnect: false,
 });
 

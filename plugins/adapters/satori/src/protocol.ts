@@ -84,7 +84,7 @@ export interface SatoriWireSegment {
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface SatoriAdapterConfig {
-  readonly name?: string;
+  readonly id?: string;
   readonly connection?: 'ws' | 'webhook';
   readonly baseUrl?: string;
   readonly token?: string;
@@ -102,7 +102,7 @@ export interface SatoriAdapterConfig {
 export interface ResolvedSatoriWsConfig {
   readonly context: 'satori';
   readonly connection: 'ws';
-  readonly name: string;
+  readonly id: string;
   readonly baseUrl: string;
   readonly token?: string;
   readonly heartbeat_interval: number;
@@ -111,7 +111,7 @@ export interface ResolvedSatoriWsConfig {
 export interface ResolvedSatoriWebhookConfig {
   readonly context: 'satori';
   readonly connection: 'webhook';
-  readonly name: string;
+  readonly id: string;
   readonly baseUrl: string;
   readonly token?: string;
   readonly path: string;
@@ -128,8 +128,8 @@ export function resolveSatoriConfig(config: SatoriAdapterConfig = {}): ResolvedS
       'Satori adapter requires baseUrl (plugins.<key>.baseUrl or endpoints with context: satori)',
     );
   }
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.SATORI_BOT_NAME
     || 'satori-bot';
   const token = (typeof config.token === 'string' && config.token)
@@ -145,7 +145,7 @@ export function resolveSatoriConfig(config: SatoriAdapterConfig = {}): ResolvedS
     return {
       context: 'satori',
       connection: 'webhook',
-      name,
+      id,
       baseUrl,
       token,
       path,
@@ -158,7 +158,7 @@ export function resolveSatoriConfig(config: SatoriAdapterConfig = {}): ResolvedS
   return {
     context: 'satori',
     connection: 'ws',
-    name,
+    id,
     baseUrl,
     token,
     heartbeat_interval: heartbeat,
@@ -234,13 +234,13 @@ export function formatInboundContent(body: SatoriEventBody & { message: SatoriMe
  * 其余频道消息 → kind 'group'，所属 guild 容器进 `parent`（kind 'channel'）。
  */
 export function satoriInboundConversation(
-  endpointId: string,
+  endpointKey: string,
   body: SatoriEventBody & { message: SatoriMessage },
 ): ConversationRef {
   const channel = body.channel ?? body.message.channel;
   const kind: ConversationKind = isPrivateChannel(channel) ? 'private' : 'group';
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind,
     id: channel?.id ?? '',
     ...(kind === 'group' && body.guild?.id

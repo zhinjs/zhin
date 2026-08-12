@@ -14,9 +14,9 @@ export interface QqCredentialEnvKeys {
 }
 
 /** 按 endpoint 名称生成唯一 env 键（如 `QQ_MY_BOT_APPID`） */
-export function buildQqCredentialEnvKeys(endpointName: string): QqCredentialEnvKeys {
-  const appidKey = buildEndpointEnvKey('qq', endpointName, 'appid');
-  const secretKey = buildEndpointEnvKey('qq', endpointName, 'secret');
+export function buildQqCredentialEnvKeys(endpointId: string): QqCredentialEnvKeys {
+  const appidKey = buildEndpointEnvKey('qq', endpointId, 'appid');
+  const secretKey = buildEndpointEnvKey('qq', endpointId, 'secret');
   return {
     appidKey,
     secretKey,
@@ -27,12 +27,12 @@ export function buildQqCredentialEnvKeys(endpointName: string): QqCredentialEnvK
 
 /** 写入或更新 `.env` 中的键值，并同步到当前进程 `process.env` */
 export function persistQqCredentialsToEnv(
-  endpointName: string,
+  endpointId: string,
   appId: string,
   appSecret: string,
   projectRoot?: string,
 ): QqCredentialEnvKeys {
-  const keys = buildQqCredentialEnvKeys(endpointName);
+  const keys = buildQqCredentialEnvKeys(endpointId);
   persistEndpointEnvValues(
     {
       [keys.appidKey]: appId,

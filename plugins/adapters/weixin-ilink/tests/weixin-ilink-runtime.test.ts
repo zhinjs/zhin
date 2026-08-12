@@ -39,7 +39,7 @@ function privateConversation(userId: string) {
 }
 
 const baseConfig: ResolvedWeixinIlinkConfig = resolveWeixinIlinkConfig({
-  name: 'test-ilink',
+  id: 'test-ilink',
   botToken: 'test-token',
   longPollTimeoutMs: 1000,
 });
@@ -65,7 +65,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  clearContextTokensForAccount(baseConfig.name);
+  clearContextTokensForAccount(baseConfig.id);
   flushContextTokenPersist();
   vi.unstubAllEnvs();
   fs.rmSync(tmpDataDir, { recursive: true, force: true });
@@ -75,13 +75,13 @@ afterEach(() => {
 describe('weixin-ilink protocol helpers', () => {
   it('resolves config from plugin config', () => {
     const resolved = resolveWeixinIlinkConfig({
-      name: 'my-wechat',
+      id: 'my-wechat',
       botToken: 'tok',
       longPollTimeoutMs: 20_000,
     });
     expect(resolved).toMatchObject({
       context: 'weixin-ilink',
-      name: 'my-wechat',
+      id: 'my-wechat',
       botToken: 'tok',
       longPollTimeoutMs: 20_000,
     });
@@ -218,7 +218,7 @@ describe('weixin-ilink plugin runtime adapter', () => {
 
     await endpoint.start();
     endpoint.open();
-    setContextToken(baseConfig.name, 'user-1', 'ctx-token');
+    setContextToken(baseConfig.id, 'user-1', 'ctx-token');
 
     const messageId = await endpoint.send({ conversation: privateConversation('user-1'), payload: 'hello world' });
     expect(messageId).toBe('mid-1');
@@ -263,7 +263,7 @@ describe('weixin-ilink plugin runtime adapter', () => {
     endpoint.open();
     await endpoint.start();
     await vi.waitFor(() => {
-      expect(mockedSaveSyncBuf).toHaveBeenCalledWith(baseConfig.name, 'buf-1');
+      expect(mockedSaveSyncBuf).toHaveBeenCalledWith(baseConfig.id, 'buf-1');
     });
     expect(receive).toHaveBeenCalled();
     // 旧实现先 saveSyncBuf 再分发；现在必须先 receive 后推进 buf
@@ -273,17 +273,17 @@ describe('weixin-ilink plugin runtime adapter', () => {
   });
 
   it('context token 防抖批量落盘', () => {
-    setContextToken(baseConfig.name, 'u1', 't1');
-    setContextToken(baseConfig.name, 'u2', 't2');
+    setContextToken(baseConfig.id, 'u1', 't1');
+    setContextToken(baseConfig.id, 'u2', 't2');
     const file = path.join(
       tmpDataDir,
       'weixin-ilink',
       'context-tokens',
-      `${baseConfig.name}.context-tokens.json`,
+      `${baseConfig.id}.context-tokens.json`,
     );
     // 防抖窗口内不落盘
     expect(fs.existsSync(file)).toBe(false);
-    flushContextTokenPersist(baseConfig.name);
+    flushContextTokenPersist(baseConfig.id);
     expect(fs.existsSync(file)).toBe(true);
     const tokens = JSON.parse(fs.readFileSync(file, 'utf-8')) as Record<string, string>;
     expect(tokens).toEqual({ u1: 't1', u2: 't2' });

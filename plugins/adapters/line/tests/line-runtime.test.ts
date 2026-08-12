@@ -24,7 +24,7 @@ const userConversation = {
 };
 
 const baseConfig = resolveLineConfig({
-  name: 'test-line-bot',
+  id: 'test-line-bot',
   channelSecret: CHANNEL_SECRET,
   channelAccessToken: 'test-access-token',
   webhookPath: '/line/webhook',
@@ -68,7 +68,7 @@ describe('line protocol helpers', () => {
     });
     expect(resolved.webhookPath).toBe('/line/webhook');
     expect(resolved.apiBaseUrl).toBe('https://api.line.me');
-    expect(resolved.name).toBe('line-bot');
+    expect(resolved.id).toBe('line-bot');
   });
 
   it('verifies HMAC-SHA256 signatures', () => {

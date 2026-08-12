@@ -21,7 +21,7 @@ import {
 const adapterFeature = featureId('zhin.adapter');
 
 const baseConfig = resolveEmailConfig({
-  name: 'test-endpoint',
+  id: 'test-endpoint',
   smtp: {
     host: 'smtp.mock',
     port: 465,
@@ -88,11 +88,11 @@ afterEach(() => {
 describe('email protocol helpers', () => {
   it('resolves smtp/imap from plugin config', () => {
     const resolved = resolveEmailConfig({
-      name: 'mail-bot',
+      id: 'mail-bot',
       smtp: baseConfig.smtp,
       imap: baseConfig.imap,
     });
-    expect(resolved.name).toBe('mail-bot');
+    expect(resolved.id).toBe('mail-bot');
     expect(resolved.imap.mailbox).toBe('INBOX');
     expect(resolved.imap.markSeen).toBe(true);
   });
@@ -299,7 +299,7 @@ describe('email plugin runtime adapter', () => {
       const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
       const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
       const config = resolveEmailConfig({
-        name: 'test-endpoint',
+        id: 'test-endpoint',
         smtp: {
           host: 'smtp.mock',
           port: 465,
@@ -363,7 +363,7 @@ describe('email plugin runtime adapter', () => {
       const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
       const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
       const config = resolveEmailConfig({
-        name: 'test-endpoint',
+        id: 'test-endpoint',
         smtp: {
           host: 'smtp.mock',
           port: 465,
@@ -428,7 +428,7 @@ describe('email plugin runtime adapter', () => {
       const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
       const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
       const config = resolveEmailConfig({
-        name: 'test-endpoint',
+        id: 'test-endpoint',
         smtp: {
           host: 'smtp.mock',
           port: 465,
@@ -601,10 +601,10 @@ describe('email plugin runtime adapter', () => {
     });
     await endpoint.start();
     endpoint.open();
-    const endpointId = capabilityId(rootPluginId(), adapterFeature, 'email');
+    const endpointKey = capabilityId(rootPluginId(), adapterFeature, 'email');
     const messageId = await endpoint.send({
       conversation: {
-        endpoint: { id: String(endpointId), adapter: String(endpointId).split('\0')[0]! },
+        endpoint: { id: String(endpointKey), adapter: String(endpointKey).split('\0')[0]! },
         kind: 'private',
         id: 'user@example.com',
       },

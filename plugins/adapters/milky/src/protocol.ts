@@ -15,7 +15,7 @@ const logger = getLogger('milky');
 export interface MilkyLegacyEndpointRow {
   readonly context?: string;
   readonly connection?: 'ws' | 'sse' | 'webhook' | 'wss';
-  readonly name?: string;
+  readonly id?: string;
   readonly baseUrl?: string;
   readonly access_token?: string;
   readonly path?: string;
@@ -26,7 +26,7 @@ export interface MilkyLegacyEndpointRow {
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface MilkyAdapterConfig {
   readonly connection?: 'ws' | 'sse' | 'webhook' | 'wss';
-  readonly name?: string;
+  readonly id?: string;
   readonly baseUrl?: string;
   readonly access_token?: string;
   readonly path?: string;
@@ -38,7 +38,7 @@ export interface MilkyAdapterConfig {
 
 export interface MilkyConfigBase {
   readonly context: 'milky';
-  readonly name: string;
+  readonly id: string;
   readonly baseUrl: string;
   readonly access_token?: string;
 }
@@ -130,8 +130,8 @@ function normalizeConnection(connection: string | undefined): 'ws' | 'sse' | 'we
 export function resolveMilkyConfig(config: MilkyAdapterConfig = {}): ResolvedMilkyConfig {
   const entry = config.endpoints?.find((item) => item.context === 'milky');
   const connection = normalizeConnection(config.connection ?? entry?.connection);
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.MILKY_BOT_NAME
     || 'milky-bot';
   const baseUrl = config.baseUrl ?? entry?.baseUrl;
@@ -143,7 +143,7 @@ export function resolveMilkyConfig(config: MilkyAdapterConfig = {}): ResolvedMil
   const access_token = config.access_token ?? entry?.access_token;
   const base = {
     context: 'milky' as const,
-    name,
+    id,
     baseUrl,
     access_token,
   };
@@ -262,11 +262,11 @@ export function isMessageReceiveEvent(
  * `temp`（群临时会话）→ 群容器内的 `private` 会话（parent = 来源群）。
  */
 export function milkyInboundConversation(
-  endpointId: string,
+  endpointKey: string,
   data: MilkyIncomingMessage,
 ): ConversationRef {
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind: data.message_scene === 'group' ? 'group' : 'private',
     id: String(data.peer_id),
     ...(data.message_scene === 'temp' && data.group

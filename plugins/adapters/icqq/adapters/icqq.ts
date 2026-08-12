@@ -42,8 +42,8 @@ export default defineAdapter<IcqqAdapterConfig>({
     // Console loginAssist + host-router routes deferred.
     const config = resolveIcqqConfig(context.config);
     // 注册到插件运行时状态（icqq.endpoint list 的"运行中"数据源）
-    context.use(icqqRuntimeStateToken).endpoints.set(config.name, {
-      name: config.name,
+    context.use(icqqRuntimeStateToken).endpoints.set(config.id, {
+      id: config.id,
       mode: config.rpc ? 'rpc' : 'ipc',
     });
     const inbox = resolveInboxHooks(context);

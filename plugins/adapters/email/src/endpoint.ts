@@ -53,14 +53,14 @@ export class EmailEndpoint implements EndpointInstance {
   #started = false;
 
   constructor(options: EmailEndpointOptions) {
-    this.#logger = getAdapterLogger('email', options.config.name);
+    this.#logger = getAdapterLogger('email', options.config.id);
     this.#options = options;
   }
 
   async start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
-    const { smtp, imap, name } = this.#options.config;
+    const { smtp, imap, id } = this.#options.config;
     try {
       this.#smtp = await (this.#options.createSmtp?.(smtp) ?? defaultCreateSmtp(smtp));
       await this.#smtp.verify();
@@ -157,13 +157,13 @@ export class EmailEndpoint implements EndpointInstance {
       content,
       segments: formatInboundSegments(email, savedAttachments),
       sender: { id: sender, name: senderDisplayName(sender) || undefined },
+      endpointId: this.#options.config.id,
       metadata: Object.freeze({
         subject: email.subject,
         to: email.to,
         cc: email.cc,
         uid: email.uid,
         date: email.date.toISOString(),
-        endpoint: this.#options.config.name,
         ...(savedAttachments.length ? { attachments: savedAttachments } : {}),
       }),
     });
@@ -238,7 +238,7 @@ export class EmailEndpoint implements EndpointInstance {
     this.#reconnectAttempts += 1;
     this.#logger.warn(formatCompact({
       op: 'imap_reconnect_scheduled',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       reconnect_ms: delay,
     }));
     this.#reconnectTimer = setTimeout(() => {
@@ -262,14 +262,14 @@ export class EmailEndpoint implements EndpointInstance {
       this.#reconnectAttempts = 0;
       this.#logger.info(formatCompact({
         op: 'imap_reconnect',
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         ok: true,
       }));
       void this.#checkForNewEmails();
     } catch (error) {
       this.#logger.warn(formatCompact({
         op: 'imap_reconnect',
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         ok: false,
         error: error instanceof Error ? error.message : String(error),
       }));

@@ -55,20 +55,20 @@ export interface NapcatAgentEndpoint {
 }
 
 export interface NapcatAgentDeps {
-  getEndpoint: (endpointId: string) => NapcatAgentEndpoint;
+  getEndpoint: (endpointKey: string) => NapcatAgentEndpoint;
 }
 
 const endpoints = new Map<string, NapcatAgentEndpoint>();
 let override: NapcatAgentDeps | null = null;
 
 export function registerNapcatAgentEndpoint(
-  endpointId: string,
+  endpointKey: string,
   endpoint: NapcatAgentEndpoint,
 ): () => void {
-  endpoints.set(endpointId, endpoint);
+  endpoints.set(endpointKey, endpoint);
   return () => {
-    if (endpoints.get(endpointId) === endpoint) {
-      endpoints.delete(endpointId);
+    if (endpoints.get(endpointKey) === endpoint) {
+      endpoints.delete(endpointKey);
     }
   };
 }
@@ -78,9 +78,9 @@ export function setNapcatAgentDeps(deps: NapcatAgentDeps | null): void {
   override = deps;
 }
 
-function lookup(endpointId: string): NapcatAgentEndpoint {
-  const registered = endpoints.get(endpointId);
-  if (!registered) throw new Error(`Endpoint ${endpointId} not found`);
+function lookup(endpointKey: string): NapcatAgentEndpoint {
+  const registered = endpoints.get(endpointKey);
+  if (!registered) throw new Error(`Endpoint ${endpointKey} not found`);
   return registered;
 }
 
@@ -90,6 +90,6 @@ export function getNapcatAgentDeps(): NapcatAgentDeps {
 }
 
 /** Convenience for agent/tools (unchanged call sites). */
-export function getEndpoint(endpointId: string): NapcatAgentEndpoint {
-  return getNapcatAgentDeps().getEndpoint(endpointId);
+export function getEndpoint(endpointKey: string): NapcatAgentEndpoint {
+  return getNapcatAgentDeps().getEndpoint(endpointKey);
 }

@@ -36,8 +36,8 @@ export default defineAdapter<NapCatAdapterConfig>({
     const config = resolveNapCatConfig(context.config);
     const gateway = context.use(messageGatewayToken);
     // 注册到插件运行时状态（napcat.endpoint list 的"运行中"数据源）
-    context.use(napcatRuntimeStateToken).endpoints.set(config.name, {
-      name: config.name,
+    context.use(napcatRuntimeStateToken).endpoints.set(config.id, {
+      id: config.id,
       mode: config.connection,
     });
     if (config.connection === 'wss') {

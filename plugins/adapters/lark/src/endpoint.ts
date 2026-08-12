@@ -93,7 +93,7 @@ export class LarkEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: LarkEndpointOptions) {
-    this.#logger = getAdapterLogger('lark', options.config.name);
+    this.#logger = getAdapterLogger('lark', options.config.id);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
@@ -114,17 +114,17 @@ export class LarkEndpoint implements EndpointInstance {
       if (!this.#options.config.encryptKey && !this.#options.config.verificationToken) {
         // encryptKey / verificationToken 都未配置时 webhook 完全无鉴权，任何人可伪造事件
         this.#logger.warn(formatCompact({
-          endpoint: this.#options.config.name,
+          endpoint: this.#options.config.id,
           op: 'webhook',
           ok: false,
           error: 'neither encryptKey nor verificationToken configured; webhook is unauthenticated',
         }));
       }
       await this.#refreshAccessToken();
-      this.#unregisterAgent = registerLarkAgentEndpoint(this.#options.config.name, this);
+      this.#unregisterAgent = registerLarkAgentEndpoint(this.#options.config.id, this);
       this.#routeReleases.push(...registerLarkWebhookRoutes(this.#options.http, this));
       this.#logger.debug(formatCompact({
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         op: 'webhook',
         path: this.#options.config.webhookPath,
       }));
@@ -238,10 +238,10 @@ export class LarkEndpoint implements EndpointInstance {
       message: { conversation, id: generateMessageId(msg) },
       content: formatInboundContent(msg),
       sender: { id: resolveSender(msg) },
+      endpointId: this.#options.config.id,
       metadata: Object.freeze({
         messageType: msg.message_type,
         chatType: resolveChatType(msg.chat_id, msg.chat_type),
-        endpoint: this.#options.config.name,
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({

@@ -13,7 +13,7 @@ const logger = getLogger('telegram');
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface TelegramAdapterConfig {
-  readonly name?: string;
+  readonly id?: string;
   readonly token?: string;
   /** Default true. `false` selects webhook mode (requires httpHostToken). */
   readonly polling?: boolean;
@@ -36,7 +36,7 @@ export interface TelegramAdapterConfig {
 
 export interface ResolvedTelegramConfig {
   readonly context: 'telegram';
-  readonly name: string;
+  readonly id: string;
   readonly token: string;
   readonly mode: 'polling' | 'webhook';
   readonly allowedUpdates: readonly string[];
@@ -250,8 +250,8 @@ export function resolveTelegramConfig(config: TelegramAdapterConfig = {}): Resol
       'Telegram adapter requires token (plugins.<key>.token or endpoints with context: telegram)',
     );
   }
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.TELEGRAM_BOT_NAME
     || 'telegram-bot';
   const polling = config.polling ?? entry?.polling;
@@ -277,7 +277,7 @@ export function resolveTelegramConfig(config: TelegramAdapterConfig = {}): Resol
     : undefined;
   return {
     context: 'telegram',
-    name,
+    id,
     token,
     mode,
     allowedUpdates: [...allowedUpdates],
@@ -336,11 +336,11 @@ export function resolveTelegramChannelType(
  * kind 直取 chat.type（private/group/supergroup/channel），无 parent。
  */
 export function telegramInboundConversation(
-  endpointId: string,
+  endpointKey: string,
   chat: Pick<TelegramChat, 'id' | 'type'>,
 ): ConversationRef {
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind: resolveTelegramChannelType(chat.type),
     id: String(chat.id),
   };

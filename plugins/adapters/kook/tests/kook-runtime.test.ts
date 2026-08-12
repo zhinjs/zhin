@@ -31,13 +31,13 @@ const hosts: ReturnType<typeof createHttpHost>[] = [];
 const VERIFY_TOKEN = 'verify-tok';
 
 const baseConfig = resolveKookConfig({
-  name: 'test-kook-bot',
+  id: 'test-kook-bot',
   token: 'test-token',
   connection: 'websocket',
 }) as ReturnType<typeof resolveKookConfig> & { connection: 'websocket' };
 
 const webhookConfig = resolveKookConfig({
-  name: 'test-kook-bot',
+  id: 'test-kook-bot',
   token: 'test-token',
   connection: 'webhook',
   verify_token: VERIFY_TOKEN,
@@ -142,7 +142,7 @@ describe('kook protocol helpers', () => {
   it('resolves plugin config with websocket default', () => {
     const resolved = resolveKookConfig({ token: 'tok' });
     expect(resolved.connection).toBe('websocket');
-    expect(resolved.name).toBe('kook-bot');
+    expect(resolved.id).toBe('kook-bot');
   });
 
   it('selects webhook mode when configured', () => {
@@ -269,7 +269,7 @@ describe('kook plugin runtime adapter', () => {
     expect(mock.disconnect).toHaveBeenCalled();
   });
 
-  it('marks metadata.mentioned when channel message @s the bot', async () => {
+  it('marks mentioned when channel message @s the bot', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
     const mock = createMockClient(); // self_id = 'bot-1'
@@ -286,13 +286,13 @@ describe('kook plugin runtime adapter', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
     expect(receive).toHaveBeenNthCalledWith(1, expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'channel', id: 'chan-1' }),
-      metadata: expect.objectContaining({ mentioned: true }),
+      mentioned: true,
     }));
 
     endpoint.admit(textMessage({ id: 'msg-2', content: '(met)someone-else(met) 在吗' }));
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
     const metadata = receive.mock.calls[1]?.[0]?.metadata as Record<string, unknown>;
-    expect(metadata?.mentioned).toBeUndefined();
+    expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
     await endpoint.stop();
   });
 

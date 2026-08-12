@@ -26,7 +26,7 @@ const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
 
 const baseConfig = resolveSatoriConfig({
-  name: 'test-satori',
+  id: 'test-satori',
   connection: 'ws',
   baseUrl: 'http://127.0.0.1:5140',
   token: 'secret',
@@ -74,14 +74,14 @@ afterEach(async () => {
 describe('satori protocol helpers', () => {
   it('resolves ws config from plugin config', () => {
     const resolved = resolveSatoriConfig({
-      name: 'bot',
+      id: 'bot',
       baseUrl: 'http://sdk.local',
       token: 't',
     });
     expect(resolved).toMatchObject({
       context: 'satori',
       connection: 'ws',
-      name: 'bot',
+      id: 'bot',
       baseUrl: 'http://sdk.local',
       token: 't',
       heartbeat_interval: 10_000,
@@ -209,7 +209,7 @@ describe('satori plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('marks metadata.mentioned when an at element targets the login selfId', async () => {
+  it('marks mentioned when an at element targets the login selfId', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
     const socket = createMockSocket();
@@ -234,12 +234,12 @@ describe('satori plugin runtime adapter', () => {
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'group', id: 'ch-1' }),
       content: '<at id="bot-1"/> 在吗',
-      metadata: expect.objectContaining({ mentioned: true }),
+      mentioned: true,
     }));
     await endpoint.stop();
   });
 
-  it('does not mark metadata.mentioned when the at element targets someone else', async () => {
+  it('does not mark mentioned when the at element targets someone else', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
     const socket = createMockSocket();
@@ -262,7 +262,7 @@ describe('satori plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
-    expect(metadata?.mentioned).toBeUndefined();
+    expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
     await endpoint.stop();
   });
 
@@ -384,7 +384,7 @@ describe('satori plugin runtime adapter', () => {
       http,
       config: resolveSatoriConfig({
         connection: 'webhook',
-        name: 'hook',
+        id: 'hook',
         baseUrl: 'http://127.0.0.1:5140',
         path: '/satori/webhook',
         token: 'secret',
@@ -478,7 +478,7 @@ describe('satori ws heartbeat', () => {
         send: vi.fn(async () => 'sent'),
       },
       config: resolveSatoriConfig({
-        name: 'test-satori',
+        id: 'test-satori',
         connection: 'ws',
         baseUrl: 'http://127.0.0.1:5140',
         token: 'secret',
@@ -605,7 +605,7 @@ describe('satori.endpoint management', () => {
       http,
       config: resolveSatoriConfig({
         connection: 'webhook',
-        name: 'hook',
+        id: 'hook',
         baseUrl: 'http://127.0.0.1:5140',
         path: '/satori/webhook',
         token: 'secret',

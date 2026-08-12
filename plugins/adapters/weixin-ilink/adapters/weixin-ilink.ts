@@ -30,8 +30,8 @@ export default defineAdapter<WeixinIlinkAdapterConfig>({
   create(context) {
     const config = resolveWeixinIlinkConfig(context.config);
     // 注册到插件运行时状态（weixin-ilink.endpoint list 的"运行中"数据源）
-    context.use(weixinIlinkRuntimeStateToken).endpoints.set(config.name, {
-      name: config.name,
+    context.use(weixinIlinkRuntimeStateToken).endpoints.set(config.id, {
+      id: config.id,
       // iLink 仅长轮询一种接入方式，无 config.connection 字段
       mode: 'long-poll',
     });

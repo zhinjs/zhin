@@ -14,7 +14,7 @@ const logger = getLogger('dingtalk');
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface DingTalkAdapterConfig {
-  readonly name?: string;
+  readonly id?: string;
   readonly appKey?: string;
   readonly appSecret?: string;
   readonly webhookPath?: string;
@@ -28,7 +28,7 @@ export interface DingTalkAdapterConfig {
 
 export interface ResolvedDingTalkConfig {
   readonly context: 'dingtalk';
-  readonly name: string;
+  readonly id: string;
   readonly appKey: string;
   readonly appSecret: string;
   readonly webhookPath: string;
@@ -124,8 +124,8 @@ export function resolveDingTalkConfig(config: DingTalkAdapterConfig = {}): Resol
       'DingTalk adapter requires appKey + appSecret (plugins.<key> or endpoints with context: dingtalk)',
     );
   }
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.DINGTALK_BOT_NAME
     || 'dingtalk-bot';
   const webhookPath = normalizeWebhookPath(
@@ -137,7 +137,7 @@ export function resolveDingTalkConfig(config: DingTalkAdapterConfig = {}): Resol
   const robotCode = config.robotCode ?? entry?.robotCode;
   return {
     context: 'dingtalk',
-    name,
+    id,
     appKey,
     appSecret,
     webhookPath,
@@ -160,9 +160,9 @@ export function resolveChatType(conversationType?: string): 'group' | 'private' 
  * 其余为单聊（kind 'private'）；会话原生 id 取 conversationId，缺省回退 senderId。
  * 钉钉无 guild/频道容器概念，不产生 parent。
  */
-export function dingtalkInboundConversation(endpointId: string, msg: DingTalkMessage): ConversationRef {
+export function dingtalkInboundConversation(endpointKey: string, msg: DingTalkMessage): ConversationRef {
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind: resolveChatType(msg.conversationType),
     id: msg.conversationId || msg.senderId || 'unknown',
   };

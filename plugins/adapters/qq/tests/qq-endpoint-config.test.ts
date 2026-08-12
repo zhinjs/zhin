@@ -27,20 +27,20 @@ function writeConfig(content: string): void {
 describe('addQqEndpointToConfig', () => {
   it('配置文件不存在时新建并写入 plugins.qq.endpoints', () => {
     const filePath = addQqEndpointToConfig(
-      { name: 'bot1', appid: '${QQ_BOT1_APPID}', secret: '${QQ_BOT1_SECRET}' },
+      { id: 'bot1', appid: '${QQ_BOT1_APPID}', secret: '${QQ_BOT1_SECRET}' },
       root,
     );
 
     expect(filePath).toBe(configPath);
     expect(listQqEndpointEntries(root)).toEqual([
-      { name: 'bot1', appid: '${QQ_BOT1_APPID}', secret: '${QQ_BOT1_SECRET}' },
+      { id: 'bot1', appid: '${QQ_BOT1_APPID}', secret: '${QQ_BOT1_SECRET}' },
     ]);
   });
 
   it('写入扫码绑定生成的 botKind 与 intents', () => {
     addQqEndpointToConfig(
       {
-        name: 'bot1',
+        id: 'bot1',
         appid: '${QQ_BOT1_APPID}',
         secret: '${QQ_BOT1_SECRET}',
         botKind: 'public',
@@ -57,7 +57,7 @@ describe('addQqEndpointToConfig', () => {
 
     expect(listQqEndpointEntries(root)).toEqual([
       {
-        name: 'bot1',
+        id: 'bot1',
         appid: '${QQ_BOT1_APPID}',
         secret: '${QQ_BOT1_SECRET}',
         botKind: 'public',
@@ -82,7 +82,7 @@ describe('addQqEndpointToConfig', () => {
         '    # qq 注释',
         '    sandbox: false',
         '    endpoints:',
-        '      - name: old-bot',
+        '      - id: old-bot',
         '        appid: "${QQ_OLD_BOT_APPID}"',
         '        secret: "${QQ_OLD_BOT_SECRET}"',
         '',
@@ -90,22 +90,22 @@ describe('addQqEndpointToConfig', () => {
     );
 
     addQqEndpointToConfig(
-      { name: 'new-bot', appid: '${QQ_NEW_BOT_APPID}', secret: '${QQ_NEW_BOT_SECRET}' },
+      { id: 'new-bot', appid: '${QQ_NEW_BOT_APPID}', secret: '${QQ_NEW_BOT_SECRET}' },
       root,
     );
 
     const text = fs.readFileSync(configPath, 'utf-8');
     expect(text).toContain('# 顶层注释');
     expect(text).toContain('# qq 注释');
-    expect(listQqEndpointEntries(root).map((e) => e.name)).toEqual(['old-bot', 'new-bot']);
+    expect(listQqEndpointEntries(root).map((e) => e.id)).toEqual(['old-bot', 'new-bot']);
   });
 
-  it('name 重复时报错且不写文件', () => {
-    writeConfig('plugins:\n  qq:\n    endpoints:\n      - { name: dup, appid: a, secret: s }\n');
+  it('id 重复时报错且不写文件', () => {
+    writeConfig('plugins:\n  qq:\n    endpoints:\n      - { id: dup, appid: a, secret: s }\n');
     const before = fs.readFileSync(configPath, 'utf-8');
 
     expect(() =>
-      addQqEndpointToConfig({ name: 'dup', appid: 'x', secret: 'y' }, root),
+      addQqEndpointToConfig({ id: 'dup', appid: 'x', secret: 'y' }, root),
     ).toThrow(/已存在/);
     expect(fs.readFileSync(configPath, 'utf-8')).toBe(before);
   });
@@ -113,29 +113,29 @@ describe('addQqEndpointToConfig', () => {
   it('plugins 为空数组（legacy 形态）时替换为 map', () => {
     writeConfig('plugins: []\n');
 
-    addQqEndpointToConfig({ name: 'bot1', appid: 'a', secret: 's' }, root);
+    addQqEndpointToConfig({ id: 'bot1', appid: 'a', secret: 's' }, root);
 
-    expect(listQqEndpointEntries(root).map((e) => e.name)).toEqual(['bot1']);
+    expect(listQqEndpointEntries(root).map((e) => e.id)).toEqual(['bot1']);
   });
 
   it('plugins 为非空数组时拒绝写入', () => {
     writeConfig('plugins:\n  - "@zhin.js/adapter-sandbox"\n');
 
     expect(() =>
-      addQqEndpointToConfig({ name: 'bot1', appid: 'a', secret: 's' }, root),
+      addQqEndpointToConfig({ id: 'bot1', appid: 'a', secret: 's' }, root),
     ).toThrow(/数组形态/);
   });
 });
 
 describe('removeQqEndpointFromConfig', () => {
-  it('按 name 移除，存在返回 removed: true', () => {
+  it('按 id 移除，存在返回 removed: true', () => {
     writeConfig(
       [
         'plugins:',
         '  qq:',
         '    endpoints:',
-        '      - { name: a, appid: "1", secret: "2" }',
-        '      - { name: b, appid: "3", secret: "4" }',
+        '      - { id: a, appid: "1", secret: "2" }',
+        '      - { id: b, appid: "3", secret: "4" }',
         '',
       ].join('\n'),
     );
@@ -143,11 +143,11 @@ describe('removeQqEndpointFromConfig', () => {
     const result = removeQqEndpointFromConfig('a', root);
 
     expect(result.removed).toBe(true);
-    expect(listQqEndpointEntries(root).map((e) => e.name)).toEqual(['b']);
+    expect(listQqEndpointEntries(root).map((e) => e.id)).toEqual(['b']);
   });
 
   it('不存在时 removed: false 且文件不变', () => {
-    writeConfig('plugins:\n  qq:\n    endpoints:\n      - { name: a, appid: "1", secret: "2" }\n');
+    writeConfig('plugins:\n  qq:\n    endpoints:\n      - { id: a, appid: "1", secret: "2" }\n');
     const before = fs.readFileSync(configPath, 'utf-8');
 
     const result = removeQqEndpointFromConfig('missing', root);

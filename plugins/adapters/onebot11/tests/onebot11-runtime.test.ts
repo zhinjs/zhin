@@ -30,7 +30,7 @@ const endpointRef = {
 
 const baseConfig: OneBot11WsConfig = resolveOneBot11Config({
   connection: 'ws',
-  name: 'test-ob11',
+  id: 'test-ob11',
   url: 'ws://127.0.0.1:6700',
   access_token: 'secret',
   reconnect_interval: 50,
@@ -86,12 +86,12 @@ describe('onebot11 protocol helpers', () => {
   it('resolves ws config from plugin config', () => {
     const resolved = resolveOneBot11Config({
       connection: 'ws',
-      name: 'bot',
+      id: 'bot',
       url: 'ws://localhost:1',
     });
     expect(resolved).toMatchObject({
       connection: 'ws',
-      name: 'bot',
+      id: 'bot',
       url: 'ws://localhost:1',
       reconnect_interval: 5000,
       heartbeat_interval: 30_000,
@@ -103,13 +103,13 @@ describe('onebot11 protocol helpers', () => {
       endpoints: [{
         context: 'onebot11',
         type: 'ws_reverse',
-        name: 'rev',
+        id: 'rev',
         path: '/onebot/ws',
       }],
     });
     expect(resolved).toMatchObject({
       connection: 'wss',
-      name: 'rev',
+      id: 'rev',
       path: '/onebot/ws',
     });
   });
@@ -306,7 +306,7 @@ describe('onebot11 plugin runtime adapter', () => {
     expect(ws.close).toHaveBeenCalled();
   });
 
-  it('marks metadata.mentioned when a group message @s the bot self_id', async () => {
+  it('marks mentioned when a group message @s the bot self_id', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const ws = createMockWs();
     const endpoint = new OneBot11WsEndpoint({
@@ -339,12 +339,12 @@ describe('onebot11 plugin runtime adapter', () => {
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: { endpoint: endpointRef, kind: 'group', id: '200' },
       sender: expect.objectContaining({ id: '9' }),
-      metadata: expect.objectContaining({ mentioned: true, nickname: 'bob' }),
+      mentioned: true, metadata: expect.objectContaining({ nickname: 'bob' }),
     }));
     await endpoint.stop();
   });
 
-  it('does not mark metadata.mentioned when @ targets someone else or @all', async () => {
+  it('does not mark mentioned when @ targets someone else or @all', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const ws = createMockWs();
     const endpoint = new OneBot11WsEndpoint({
@@ -373,7 +373,7 @@ describe('onebot11 plugin runtime adapter', () => {
     });
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
     let metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
-    expect(metadata?.mentioned).toBeUndefined();
+    expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
 
     endpoint.admit({
       post_type: 'message',
@@ -389,11 +389,11 @@ describe('onebot11 plugin runtime adapter', () => {
     });
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
     metadata = receive.mock.calls[1]?.[0]?.metadata as Record<string, unknown>;
-    expect(metadata?.mentioned).toBeUndefined();
+    expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
     await endpoint.stop();
   });
 
-  it('forwards reply segment id as metadata.quote_id', async () => {
+  it('forwards reply segment id as replyTo', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const ws = createMockWs();
     const endpoint = new OneBot11WsEndpoint({
@@ -422,7 +422,7 @@ describe('onebot11 plugin runtime adapter', () => {
     });
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      metadata: expect.objectContaining({ quote_id: '555' }),
+      replyTo: { id: '555' },
     }));
     await endpoint.stop();
   });
@@ -533,7 +533,7 @@ describe('onebot11 plugin runtime adapter', () => {
     const endpoint = adapter.create({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
       name: 'onebot11',
-      config: { connection: 'wss', name: 'rev', path: '/onebot/ws' },
+      config: { connection: 'wss', id: 'rev', path: '/onebot/ws' },
       use: (token: unknown) => {
         if (token === httpHostToken) return http;
         if (token === messageGatewayToken) {
@@ -619,7 +619,7 @@ describe('onebot11 ws lifecycle', () => {
         http,
         config: resolveOneBot11Config({
           connection: 'wss',
-          name: 'wss-noauth',
+          id: 'wss-noauth',
           path: '/ob11/ws',
         }) as import('../src/protocol.js').OneBot11WssConfig,
       });

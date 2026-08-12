@@ -9,7 +9,7 @@ import type { ConversationRef } from '@zhin.js/im-contract';
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface WecomAdapterConfig {
-  readonly name?: string;
+  readonly id?: string;
   readonly corpId?: string;
   readonly agentSecret?: string;
   readonly token?: string;
@@ -24,7 +24,7 @@ export interface WecomAdapterConfig {
 
 export interface ResolvedWecomConfig {
   readonly context: 'wecom';
-  readonly name: string;
+  readonly id: string;
   readonly corpId: string;
   readonly agentSecret: string;
   readonly token: string;
@@ -97,13 +97,13 @@ export function resolveWecomConfig(config: WecomAdapterConfig = {}): ResolvedWec
       'WeCom adapter requires corpId + agentSecret + token + encodingAESKey (plugins.<key> or endpoints with context: wecom)',
     );
   }
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.WECOM_BOT_NAME
     || 'wecom-bot';
   return {
     context: 'wecom',
-    name,
+    id,
     corpId,
     agentSecret,
     token,
@@ -260,9 +260,9 @@ export function resolveChatType(fromUserName: string): 'group' | 'private' {
  * 入站归一化 → ConversationRef：WeCom 无 guild/channel 容器概念，
  * `@chatroom` 群会话 → kind 'group'，其余（应用消息/单聊）→ kind 'private'。
  */
-export function wecomInboundConversation(endpointId: string, msg: WecomMessage): ConversationRef {
+export function wecomInboundConversation(endpointKey: string, msg: WecomMessage): ConversationRef {
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind: resolveChatType(msg.FromUserName),
     id: msg.FromUserName,
   };

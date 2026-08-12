@@ -226,10 +226,10 @@ export async function collectPassiveReply(
         message: { conversation, id: formatInboundId(wechatMsg) },
         content: formatInboundContent(wechatMsg),
         sender: { id: wechatMsg.FromUserName },
+        endpointId: handler.config.id,
         metadata: Object.freeze({
           msgType: wechatMsg.MsgType,
           event: wechatMsg.Event,
-          endpoint: handler.config.name,
           toUserName: wechatMsg.ToUserName,
         }),
       }),

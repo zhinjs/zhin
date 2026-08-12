@@ -43,8 +43,8 @@ export default defineAdapter<MilkyAdapterConfig>({
     const config = resolveMilkyConfig(context.config);
     const gateway = context.use(messageGatewayToken);
     // 注册到插件运行时状态（milky.endpoint list 的"运行中"数据源）
-    context.use(milkyRuntimeStateToken).endpoints.set(config.name, {
-      name: config.name,
+    context.use(milkyRuntimeStateToken).endpoints.set(config.id, {
+      id: config.id,
       mode: config.connection,
     });
     if (config.connection === 'webhook') {

@@ -39,22 +39,22 @@ export interface DiscordAgentEndpoint {
 }
 
 export interface DiscordAgentDeps {
-  getEndpoint: (endpointId: string) => DiscordAgentEndpoint;
+  getEndpoint: (endpointKey: string) => DiscordAgentEndpoint;
   /** Alias kept for existing agent/tools that call getGatewayEndpoint. */
-  getGatewayEndpoint: (endpointId: string) => DiscordAgentEndpoint;
+  getGatewayEndpoint: (endpointKey: string) => DiscordAgentEndpoint;
 }
 
 const endpoints = new Map<string, DiscordAgentEndpoint>();
 let override: DiscordAgentDeps | null = null;
 
 export function registerDiscordAgentEndpoint(
-  endpointId: string,
+  endpointKey: string,
   endpoint: DiscordAgentEndpoint,
 ): () => void {
-  endpoints.set(endpointId, endpoint);
+  endpoints.set(endpointKey, endpoint);
   return () => {
-    if (endpoints.get(endpointId) === endpoint) {
-      endpoints.delete(endpointId);
+    if (endpoints.get(endpointKey) === endpoint) {
+      endpoints.delete(endpointKey);
     }
   };
 }
@@ -64,9 +64,9 @@ export function setDiscordAgentDeps(deps: DiscordAgentDeps | null): void {
   override = deps;
 }
 
-function lookup(endpointId: string): DiscordAgentEndpoint {
-  const registered = endpoints.get(endpointId);
-  if (!registered) throw new Error(`Endpoint ${endpointId} 不存在`);
+function lookup(endpointKey: string): DiscordAgentEndpoint {
+  const registered = endpoints.get(endpointKey);
+  if (!registered) throw new Error(`Endpoint ${endpointKey} 不存在`);
   return registered;
 }
 

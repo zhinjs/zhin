@@ -16,7 +16,7 @@ import { resolveWeixinIlinkConfig } from '../src/protocol.js';
 const adapterFeature = featureId('zhin.adapter');
 
 const baseConfig = resolveWeixinIlinkConfig({
-  name: 'test-ilink-mgmt',
+  id: 'test-ilink-mgmt',
   botToken: 'test-token',
   longPollTimeoutMs: 1000,
 });
@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  clearContextTokensForAccount(baseConfig.name);
+  clearContextTokensForAccount(baseConfig.id);
   flushContextTokenPersist();
   vi.unstubAllEnvs();
 });
@@ -53,8 +53,8 @@ describe('weixin-ilink.endpoint management', () => {
   });
 
   it('listFriends：从 context_token 存储推导对端，nickname 用 user_id 占位并注明来源', async () => {
-    setContextToken(baseConfig.name, 'wxid_alice', 'token-a');
-    setContextToken(baseConfig.name, 'wxid_bob', 'token-b');
+    setContextToken(baseConfig.id, 'wxid_alice', 'token-a');
+    setContextToken(baseConfig.id, 'wxid_bob', 'token-b');
     // 其他 account 的对端不应混入
     setContextToken('other-account', 'wxid_other', 'token-x');
     const endpoint = makeEndpoint();

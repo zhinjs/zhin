@@ -47,7 +47,7 @@ function milkyConversation(kind: 'private' | 'group', id: string) {
 
 const baseConfig: MilkyWsConfig = resolveMilkyConfig({
   connection: 'ws',
-  name: 'test-milky',
+  id: 'test-milky',
   baseUrl: 'http://127.0.0.1:8080',
   access_token: 'secret',
   reconnect_interval: 50,
@@ -98,12 +98,12 @@ describe('milky protocol helpers', () => {
   it('resolves ws config from plugin config', () => {
     const resolved = resolveMilkyConfig({
       connection: 'ws',
-      name: 'bot',
+      id: 'bot',
       baseUrl: 'http://localhost:1',
     });
     expect(resolved).toMatchObject({
       connection: 'ws',
-      name: 'bot',
+      id: 'bot',
       baseUrl: 'http://localhost:1',
       reconnect_interval: 5000,
       heartbeat_interval: 30_000,
@@ -115,14 +115,14 @@ describe('milky protocol helpers', () => {
       endpoints: [{
         context: 'milky',
         connection: 'webhook',
-        name: 'hook',
+        id: 'hook',
         baseUrl: 'http://127.0.0.1:8080',
         path: '/milky/webhook',
       }],
     });
     expect(resolved).toMatchObject({
       connection: 'webhook',
-      name: 'hook',
+      id: 'hook',
       path: '/milky/webhook',
     });
   });
@@ -471,7 +471,7 @@ describe('milky plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('marks metadata.mentioned when a mention segment targets the bot self_id', async () => {
+  it('marks mentioned when a mention segment targets the bot self_id', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const ws = createMockWs();
     const endpoint = new MilkyWsEndpoint({
@@ -507,12 +507,12 @@ describe('milky plugin runtime adapter', () => {
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: milkyConversation('group', '200'),
       sender: expect.objectContaining({ id: '9' }),
-      metadata: expect.objectContaining({ mentioned: true, nickname: 'bob' }),
+      mentioned: true, metadata: expect.objectContaining({ nickname: 'bob' }),
     }));
     await endpoint.stop();
   });
 
-  it('does not mark metadata.mentioned when a mention targets someone else', async () => {
+  it('does not mark mentioned when a mention targets someone else', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
     const endpoint = new MilkyWsEndpoint({
@@ -545,7 +545,7 @@ describe('milky plugin runtime adapter', () => {
     });
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
-    expect(metadata?.mentioned).toBeUndefined();
+    expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
     await endpoint.stop();
   });
 
@@ -557,7 +557,7 @@ describe('milky plugin runtime adapter', () => {
       name: 'milky',
       config: {
         connection: 'webhook',
-        name: 'hook',
+        id: 'hook',
         baseUrl: 'http://127.0.0.1:8080',
         path: '/milky/webhook',
       },
@@ -581,7 +581,7 @@ describe('milky plugin runtime adapter', () => {
       name: 'milky',
       config: {
         connection: 'wss',
-        name: 'rev',
+        id: 'rev',
         baseUrl: 'http://127.0.0.1:8080',
         path: '/milky/ws',
       },
@@ -607,7 +607,7 @@ describe('milky plugin runtime adapter', () => {
       gateway,
       config: resolveMilkyConfig({
         connection: 'sse',
-        name: 'sse-bot',
+        id: 'sse-bot',
         baseUrl: 'http://127.0.0.1:8080',
       }) as never,
       createSseStream: (options) => {
@@ -646,7 +646,9 @@ describe('milky plugin runtime adapter', () => {
         { type: 'text', data: { text: 'hi' } },
         { type: 'audio', data: { media: { kind: 'url', value: 'https://cdn.example/a.silk' } } },
       ],
-      metadata: expect.objectContaining({ audio_url: 'https://cdn.example/a.silk' }),
+      segments: expect.arrayContaining([
+        expect.objectContaining({ type: 'audio', data: { media: { kind: 'url', value: 'https://cdn.example/a.silk' } } }),
+      ]),
     });
     await endpoint.stop();
 
@@ -655,7 +657,7 @@ describe('milky plugin runtime adapter', () => {
       name: 'milky',
       config: {
         connection: 'sse',
-        name: 'sse-bot',
+        id: 'sse-bot',
         baseUrl: 'http://127.0.0.1:8080',
       },
       use: (token: unknown) => {
@@ -698,7 +700,7 @@ describe('milky plugin runtime adapter', () => {
       http,
       config: resolveMilkyConfig({
         connection: 'webhook',
-        name: 'hook',
+        id: 'hook',
         baseUrl: 'http://127.0.0.1:8080',
         path: '/milky/webhook',
       }) as ReturnType<typeof resolveMilkyConfig> & { connection: 'webhook' },
@@ -809,7 +811,7 @@ describe('milky ws lifecycle', () => {
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: resolveMilkyConfig({
         connection: 'ws',
-        name: 'hb-milky',
+        id: 'hb-milky',
         baseUrl: 'http://127.0.0.1:8080',
         access_token: 'secret',
         reconnect_interval: 10_000,
@@ -843,7 +845,7 @@ describe('milky sse lifecycle', () => {
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: resolveMilkyConfig({
         connection: 'sse',
-        name: 'sse-retry-bot',
+        id: 'sse-retry-bot',
         baseUrl: 'http://127.0.0.1:8080',
         reconnect_interval: 50,
       }) as never,
@@ -880,7 +882,7 @@ describe('milky sse lifecycle', () => {
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: resolveMilkyConfig({
         connection: 'sse',
-        name: 'sse-stop-bot',
+        id: 'sse-stop-bot',
         baseUrl: 'http://127.0.0.1:8080',
       }) as never,
       createSseStream: () => ({

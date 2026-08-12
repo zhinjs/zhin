@@ -11,7 +11,7 @@ import {
   extractEndpointCommandReply,
   formatEndpointList,
   isEndpointOperator,
-  removeEndpointByName,
+  removeEndpointById,
   type ConfiguredEndpointEntry,
   type EndpointCommandReply,
 } from '@zhin.js/adapter';
@@ -50,7 +50,7 @@ export function extractQqCommandReply(input: unknown): QqCommandReply {
 function busyFooter(state: QqRuntimeState): string | undefined {
   if (state.bindFlow) return '⚠️ 有进行中的扫码绑定，可用 qq.endpoint cancel 取消';
   if (state.pendingBotKind) {
-    return `⚠️ endpoint「${state.pendingBotKind.endpointName}」等待公域/私域选择，回复 public/private 或 qq.endpoint cancel`;
+    return `⚠️ endpoint「${state.pendingBotKind.endpointId}」等待公域/私域选择，回复 public/private 或 qq.endpoint cancel`;
   }
   return undefined;
 }
@@ -76,7 +76,7 @@ function writeEndpointWithBotKind(
   projectRoot?: string,
 ): string {
   const envKeys = persistQqCredentialsToEnv(
-    pending.endpointName,
+    pending.endpointId,
     pending.appId,
     pending.appSecret,
     projectRoot,
@@ -84,7 +84,7 @@ function writeEndpointWithBotKind(
   const intentFields = defaultQqEndpointIntentFields(botKind);
   const filePath = addQqEndpointToConfig(
     {
-      name: pending.endpointName,
+      id: pending.endpointId,
       appid: envKeys.appidRef,
       secret: envKeys.secretRef,
       botKind: intentFields.botKind,
@@ -93,7 +93,7 @@ function writeEndpointWithBotKind(
     projectRoot,
   );
   return (
-    `✅ 已按 botKind=${intentFields.botKind} 将 endpoint「${pending.endpointName}」写入 .env 与 ${filePath}。\n` +
+    `✅ 已按 botKind=${intentFields.botKind} 将 endpoint「${pending.endpointId}」写入 .env 与 ${filePath}。\n` +
     `intents: ${intentFields.intents.join(', ')}。\n` +
     '⚠️ 需重启 zhin 后新 endpoint 才会生效。'
   );
@@ -112,14 +112,14 @@ export function completeQqPendingBotKind(
 }
 
 /**
- * `qq.endpoint add [name]`：启动扫码绑定流程。
+ * `qq.endpoint add [id]`：启动扫码绑定流程。
  * 返回的 Promise 在二维码链接就绪（或前置失败）时 resolve 为首条回复；
  * 后续状态（已扫码 / 成功 / 失败 / 过期刷新）通过 reply 推回当前会话。
  * 扫码成功后凭据暂存内存并询问公域/私域；确认后一次性写 .env + yaml。
  */
 export function runQqEndpointAdd(
   state: QqRuntimeState,
-  name: string | undefined,
+  id: string | undefined,
   reply: QqCommandReply,
   projectRoot?: string,
   input?: unknown,
@@ -129,7 +129,7 @@ export function runQqEndpointAdd(
       '已有进行中的 QQ 机器人绑定或待确认的公域/私域选择，请先发送 qq.endpoint cancel 取消后再试',
     );
   }
-  const endpointName = name?.trim() || undefined;
+  const endpointId = id?.trim() || undefined;
   const sessionKey = qqCommandSessionKey(input);
   return new Promise<string>((resolve) => {
     let firstReplied = false;
@@ -163,14 +163,14 @@ export function runQqEndpointAdd(
           state.bindFlow = null;
           try {
             const [{ appId, appSecret }] = credentials;
-            const finalName = endpointName ?? appId;
+            const finalName = endpointId ?? appId;
 
             // 无会话上下文（Host 等）时无法追问，直接按公域一次性写入
             if (!sessionKey) {
               settle(
                 writeEndpointWithBotKind(
                   {
-                    endpointName: finalName,
+                    endpointId: finalName,
                     appId,
                     appSecret,
                     sessionKey: '',
@@ -184,7 +184,7 @@ export function runQqEndpointAdd(
             }
 
             state.pendingBotKind = {
-              endpointName: finalName,
+              endpointId: finalName,
               appId,
               appSecret,
               sessionKey,
@@ -204,7 +204,7 @@ export function runQqEndpointAdd(
       },
       { source: 'zhin' },
     );
-    state.bindFlow = { name: endpointName, stop };
+    state.bindFlow = { id: endpointId, stop };
   });
 }
 
@@ -216,20 +216,20 @@ export function runQqEndpointCancel(state: QqRuntimeState): string {
     return '已取消进行中的 QQ 绑定流程';
   }
   if (state.pendingBotKind) {
-    const name = state.pendingBotKind.endpointName;
+    const name = state.pendingBotKind.endpointId;
     state.pendingBotKind = null;
     return `已取消 endpoint「${name}」的绑定（尚未写入任何文件）`;
   }
   return '当前没有进行中的 QQ 绑定流程';
 }
 
-/** `qq.endpoint remove <name>`：从 zhin.config.yml 移除对应 endpoints 项 */
+/** `qq.endpoint remove <id>`：从 zhin.config.yml 移除对应 endpoints 项 */
 export function runQqEndpointRemove(
   _state: QqRuntimeState,
-  name: string,
+  id: string,
   projectRoot?: string,
 ): string {
-  return removeEndpointByName(qqEndpointListSpec, name, projectRoot);
+  return removeEndpointById(qqEndpointListSpec, id, projectRoot);
 }
 
 /**
@@ -246,6 +246,6 @@ export const qqEndpointCommands = createEndpointCommands({
   listFooter: (use) => busyFooter(use(qqRuntimeStateToken)),
   addDescription:
     '手机 QQ 扫码绑定机器人：确认公域/私域后一次性写入 .env 与 zhin.config.yml（重启生效）',
-  bindFlow: ({ name, reply, input, use }) =>
-    runQqEndpointAdd(use(qqRuntimeStateToken), name, reply, undefined, input),
+  bindFlow: ({ id, reply, input, use }) =>
+    runQqEndpointAdd(use(qqRuntimeStateToken), id, reply, undefined, input),
 }, defineCommand);

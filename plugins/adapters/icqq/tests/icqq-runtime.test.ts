@@ -18,7 +18,7 @@ import { getIcqqAgentDeps, setIcqqAgentDeps } from '../src/icqq-agent-deps.js';
 const adapterFeature = featureId('zhin.adapter');
 
 const baseConfig = resolveIcqqConfig({
-  name: '10001',
+  id: '10001',
   autoReconnect: false,
 });
 
@@ -66,15 +66,15 @@ afterEach(() => {
 });
 
 describe('icqq protocol helpers', () => {
-  it('resolves numeric name config', () => {
-    const resolved = resolveIcqqConfig({ name: '12345' });
-    expect(resolved.name).toBe('12345');
+  it('resolves numeric id config', () => {
+    const resolved = resolveIcqqConfig({ id: '12345' });
+    expect(resolved.id).toBe('12345');
     expect(resolved.autoReconnect).toBe(true);
     expect(resolved.context).toBe('icqq');
   });
 
-  it('rejects non-numeric name', () => {
-    expect(() => resolveIcqqConfig({ name: 'bot' })).toThrow(/numeric name/);
+  it('rejects non-numeric id', () => {
+    expect(() => resolveIcqqConfig({ id: 'bot' })).toThrow(/numeric id/);
   });
 
   it('derives outbound targets from conversations', () => {
@@ -205,8 +205,8 @@ describe('icqq plugin runtime adapter', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       message: expect.objectContaining({ id: 'm-quote' }),
+      replyTo: { id: 'quoted-1' },
       metadata: expect.objectContaining({
-        quote_id: 'quoted-1',
         quote_sender_id: '3',
         quote_sender_name: 'alice',
         quote_content: '原文内容',
@@ -240,14 +240,15 @@ describe('icqq plugin runtime adapter', () => {
     });
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
-    const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
-    expect(metadata?.quote_id).toBeUndefined();
+    const input = receive.mock.calls[0]?.[0];
+    expect(input?.replyTo).toBeUndefined();
+    const metadata = input?.metadata as Record<string, unknown>;
     expect(metadata?.quote_sender_id).toBeUndefined();
     expect(metadata?.quote_content).toBeUndefined();
     await endpoint.stop();
   });
 
-  it('marks metadata.mentioned when group message @s the bot uin', async () => {
+  it('marks mentioned when group message @s the bot uin', async () => {
     const mock = createMockIpc();
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
@@ -275,12 +276,12 @@ describe('icqq plugin runtime adapter', () => {
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'group', id: '100' }),
       content: '[CQ:at,qq=10001] 在吗',
-      metadata: expect.objectContaining({ mentioned: true }),
+      mentioned: true,
     }));
     await endpoint.stop();
   });
 
-  it('does not mark metadata.mentioned when @ targets someone else', async () => {
+  it('does not mark mentioned when @ targets someone else', async () => {
     const mock = createMockIpc();
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
@@ -306,7 +307,7 @@ describe('icqq plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
-    expect(metadata?.mentioned).toBeUndefined();
+    expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
     await endpoint.stop();
   });
 

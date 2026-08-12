@@ -63,11 +63,11 @@ export class MilkySseEndpoint implements EndpointInstance {
   #unregisterAgent?: () => void;
 
   constructor(options: MilkySseEndpointOptions) {
-    this.#logger = getAdapterLogger('milky', options.config.name);
+    this.#logger = getAdapterLogger('milky', options.config.id);
     this.#options = options;
     this.#callApi = options.callApi ?? callApi;
     this.#lifecycle = createEndpointLifecycle({
-      name: options.config.name,
+      name: options.config.id,
       // reconnect_interval 旧语义为固定间隔：multiplier 1 + 无 jitter + 不封顶
       reconnect: {
         initialIntervalMs: options.config.reconnect_interval,
@@ -80,7 +80,7 @@ export class MilkySseEndpoint implements EndpointInstance {
 
   async start(): Promise<void> {
     if (this.#lifecycle.started) return;
-    this.#unregisterAgent = registerMilkyAgentEndpoint(this.#options.config.name, this);
+    this.#unregisterAgent = registerMilkyAgentEndpoint(this.#options.config.id, this);
     try {
       await this.#lifecycle.start((handle) => this.#connect(handle));
     } catch (err) {
@@ -115,7 +115,7 @@ export class MilkySseEndpoint implements EndpointInstance {
     const messageId = formatOutboundMessageId(conversation, data?.message_seq);
     this.#logger.debug(formatCompact({
       op: 'milky_send',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       target: `${conversation.kind}:${conversation.id}`,
       messageId,
       mode: 'sse',
@@ -233,17 +233,16 @@ export class MilkySseEndpoint implements EndpointInstance {
       content,
       segments,
       sender: { id: String(data.sender_id), name: nickname },
+      endpointId: this.#options.config.id,
+      ...(mentioned ? { mentioned: true } : {}),
       metadata: Object.freeze({
         message_scene: data.message_scene,
         peer_id: String(data.peer_id),
         sender_id: String(data.sender_id),
         message_seq: data.message_seq,
-        endpoint: this.#options.config.name,
         time: data.time ?? event.time,
         self_id: event.self_id != null ? String(event.self_id) : undefined,
         ...(nickname ? { nickname } : {}),
-        ...(mentioned ? { mentioned: true } : {}),
-        ...(audioUrl ? { audio_url: audioUrl } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -267,7 +266,7 @@ export class MilkySseEndpoint implements EndpointInstance {
           if (settled) return;
           settled = true;
           this.#logger.debug(formatCompact({
-            endpoint: this.#options.config.name,
+            endpoint: this.#options.config.id,
             mode: 'sse',
             url: safeUrl,
           }));
@@ -277,7 +276,7 @@ export class MilkySseEndpoint implements EndpointInstance {
         onError: (error) => {
           this.#logger.warn(formatCompact({
             op: 'sse_error',
-            endpoint: this.#options.config.name,
+            endpoint: this.#options.config.id,
             ok: false,
             error: error.message,
           }));
@@ -321,7 +320,7 @@ export class MilkySseEndpoint implements EndpointInstance {
     } catch (error) {
       this.#logger.warn(formatCompact({
         op: 'milky_parse_failed',
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         mode: 'sse',
         error: error instanceof Error ? error.message : String(error),
       }));

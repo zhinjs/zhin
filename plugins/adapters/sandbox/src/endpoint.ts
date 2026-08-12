@@ -89,20 +89,20 @@ export class SandboxWsEndpoint implements EndpointInstance {
   #started = false;
 
   constructor(options: SandboxEndpointOptions) {
-    this.#logger = getAdapterLogger('sandbox', options.defaults.name);
+    this.#logger = getAdapterLogger('sandbox', options.defaults.id);
     this.#options = options;
   }
 
-  /** Live endpoint name (config `name`) — Console endpoint.list/resolve uses it. */
+  /** Live endpoint id (config `id`) — Console endpoint.list/resolve uses it. */
   get name(): string {
-    return this.#options.defaults.name;
+    return this.#options.defaults.id;
   }
 
   start(): void {
     if (this.#started) return;
     this.#started = true;
     // 多 endpoint 同 path 会被全部回调（入站重复、出站互窜），按名隔离。
-    const claim = claimSandboxWsPath(this.#options.http, this.#options.defaults.name);
+    const claim = claimSandboxWsPath(this.#options.http, this.#options.defaults.id);
     this.#wsPathRelease = claim.release;
     this.#wsPath = claim.path;
     const handle = this.#options.http.ws(claim.path);
@@ -110,7 +110,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
       this.#acceptConnection(connection);
     });
     if (!this.#options.defaults.randomNamePerConnection) {
-      this.#ensurePlaceholder(this.#options.defaults.name, this.#options.defaults.owner);
+      this.#ensurePlaceholder(this.#options.defaults.id, this.#options.defaults.owner);
     }
     this.#logger.info(`ws mounted ${claim.path}`);
   }
@@ -148,7 +148,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
     if (!this.#open) return undefined;
     // Reply targets this endpoint's own live socket (fixed bot name, or the
     // only live random-name connection); conversation carries kind/id stamp.
-    const connection = this.#connections.get(this.#options.defaults.name)
+    const connection = this.#connections.get(this.#options.defaults.id)
       ?? this.#findLiveConnection();
     if (!connection) {
       this.#logger.debug(formatCompact({
@@ -168,7 +168,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
     connection.socket.send(formatSandboxOutbound(payload, {
       type: conversation.kind,
       id: conversation.id,
-      bot: this.#options.defaults.name,
+      bot: this.#options.defaults.id,
       endpoint: connection.target,
     }));
     this.#logger.debug(formatCompact({
@@ -191,7 +191,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
   #acceptConnection(connection: WsConnection): void {
     const target = this.#options.defaults.randomNamePerConnection
       ? `sandbox-${randomUUID().slice(0, 8)}`
-      : this.#options.defaults.name;
+      : this.#options.defaults.id;
     const owner = this.#options.defaults.owner;
     const socket = connection.socket as SandboxWsSocket;
     // Fixed-name mode reuses `target`; dropping the prior entry without
@@ -231,11 +231,11 @@ export class SandboxWsEndpoint implements EndpointInstance {
           conversation,
           content: parsed.text,
           sender: { id: sender },
+          endpointId: target,
           metadata: Object.freeze({
             type: parsed.type,
             channelType: parsed.type,
             channelId: parsed.id || owner,
-            endpoint: target,
             elements: parsed.content,
             timestamp: parsed.timestamp,
             ...(parsed.action ? { action: parsed.action } : {}),

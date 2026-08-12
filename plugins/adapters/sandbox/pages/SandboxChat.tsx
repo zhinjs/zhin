@@ -32,7 +32,7 @@ export default function Sandbox() {
     const [faceList, setFaceList] = useState<Face[]>([])
     const [activeChannel, setActiveChannel] = useState<Channel>(channels[0])
     const [inputText, setInputText] = useState('')
-    const [endpointName, setBotName] = useState('ProcessEndpoint')
+    const [endpointId, setBotName] = useState('ProcessEndpoint')
     const [connected, setConnected] = useState(false)
     const [showFacePicker, setShowFacePicker] = useState(false)
     /** 输入区：插入图片 / 视频 / 音频 URL */
@@ -79,7 +79,7 @@ export default function Sandbox() {
             : Array.isArray(data.content) ? data.content as MessageSegment[] : parseTextToSegments(String(data.content ?? ''))
 
         const channelName = data.type === 'private'
-            ? `私聊-${data.bot || endpointName}`
+            ? `私聊-${data.bot || endpointId}`
             : data.type === 'group'
             ? `群组-${data.id}`
             : `频道-${data.id}`
@@ -95,7 +95,7 @@ export default function Sandbox() {
         setMessages((prev) => [...prev, {
             id: data.messageId ?? `bot_${data.timestamp}`, type: 'received', channelType,
             channelId: data.id, channelName, senderId: 'endpoint',
-            senderName: data.bot || endpointName, content, timestamp: data.timestamp,
+            senderName: data.bot || endpointId, content, timestamp: data.timestamp,
         }])
     }
 
@@ -509,7 +509,7 @@ export default function Sandbox() {
                             </span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <input value={endpointName} onChange={(e) => setBotName(e.target.value)} placeholder="机器人名称"
+                            <input value={endpointId} onChange={(e) => setBotName(e.target.value)} placeholder="机器人名称"
                                 className="h-8 w-28 rounded-md border bg-transparent px-2 text-sm" />
                             <button className="inline-flex items-center gap-1 h-8 px-3 rounded-md bg-secondary text-secondary-foreground text-sm hover:bg-secondary/80" onClick={clearMessages}>
                                 <Trash2 size={14} /> 清空

@@ -28,7 +28,7 @@ import { getDiscordAgentDeps, setDiscordAgentDeps } from '../src/discord-agent-d
 const adapterFeature = featureId('zhin.adapter');
 
 const baseConfig = resolveDiscordConfig({
-  name: 'test-discord-bot',
+  id: 'test-discord-bot',
   token: 'test-token',
   connection: 'gateway',
 }) as ReturnType<typeof resolveDiscordConfig> & { connection: 'gateway' };
@@ -203,7 +203,7 @@ describe('discord protocol helpers', () => {
   it('resolves plugin config with gateway default', () => {
     const resolved = resolveDiscordConfig({ token: 'tok' });
     expect(resolved.connection).toBe('gateway');
-    expect(resolved.name).toBe('discord-bot');
+    expect(resolved.id).toBe('discord-bot');
   });
 
   it('selects interactions mode when configured', () => {
@@ -404,7 +404,7 @@ describe('discord plugin runtime adapter', () => {
     expect(mock.destroy).toHaveBeenCalled();
   });
 
-  it('marks metadata.mentioned when inbound mentions include the bot user', async () => {
+  it('marks mentioned when inbound mentions include the bot user', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
     const mock = createMockClient();
@@ -434,13 +434,13 @@ describe('discord plugin runtime adapter', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'channel', id: 'chan-1' }),
-      metadata: expect.objectContaining({ mentioned: true }),
+      mentioned: true,
     }));
 
     await endpoint.stop();
   });
 
-  it('does not mark metadata.mentioned when mentions target someone else', async () => {
+  it('does not mark mentioned when mentions target someone else', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const mock = createMockClient();
     const endpoint = new DiscordGatewayEndpoint({
@@ -468,7 +468,7 @@ describe('discord plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown> | undefined;
-    expect(metadata?.mentioned).toBeUndefined();
+    expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
 
     await endpoint.stop();
   });
@@ -623,7 +623,7 @@ describe('discord plugin runtime adapter', () => {
         id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
         gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
         config: resolveDiscordConfig({
-          name: 'slash-bot',
+          id: 'slash-bot',
           token: 'tok',
           connection: 'gateway',
           enableSlashCommands: true,

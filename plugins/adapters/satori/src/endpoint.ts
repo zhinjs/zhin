@@ -67,11 +67,11 @@ export class SatoriWsEndpoint implements EndpointInstance {
   );
 
   constructor(options: SatoriWsEndpointOptions) {
-    this.#logger = getAdapterLogger('satori', options.config.name);
+    this.#logger = getAdapterLogger('satori', options.config.id);
     this.#options = options;
     const { config } = options;
     this.#lifecycle = createEndpointLifecycle({
-      name: config.name,
+      name: config.id,
       reconnect: {
         initialIntervalMs: 5_000,
         // 固定间隔（multiplier 1、无抖动），对齐旧 5s 固定重连语义
@@ -128,7 +128,7 @@ export class SatoriWsEndpoint implements EndpointInstance {
     const msgId = extractCreatedMessageId(result);
     this.#logger.debug(formatCompact({
       op: 'satori_send',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       channel: conversation.id,
       messageId: msgId || undefined,
     }));
@@ -150,13 +150,13 @@ export class SatoriWsEndpoint implements EndpointInstance {
       message: { conversation, id: body.message.id },
       content,
       sender,
+      endpointId: this.#options.config.id,
+      ...(mentioned ? { mentioned: true } : {}),
       metadata: Object.freeze({
         type: body.type,
         channelType: isPrivateChannelType(body) ? 'private' : 'group',
         sn: body.sn,
         platform: this.#login?.platform,
-        endpoint: this.#options.config.name,
-        ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -223,7 +223,7 @@ export class SatoriWsEndpoint implements EndpointInstance {
         } catch (error) {
           this.#logger.warn(formatCompact({
             op: 'ws_parse_error',
-            endpoint: config.name,
+            endpoint: config.id,
             error: error instanceof Error ? error.message : String(error),
           }));
         }
@@ -248,7 +248,7 @@ export class SatoriWsEndpoint implements EndpointInstance {
       ws.on('error', (error) => {
         this.#logger.warn(formatCompact({
           op: 'ws_error',
-          endpoint: config.name,
+          endpoint: config.id,
           ok: false,
           error: error instanceof Error ? error.message : String(error),
         }));
@@ -325,7 +325,7 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
   );
 
   constructor(options: SatoriWebhookEndpointOptions) {
-    this.#logger = getAdapterLogger('satori', options.config.name);
+    this.#logger = getAdapterLogger('satori', options.config.id);
     this.#options = options;
   }
 
@@ -345,7 +345,7 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
       // 未配 token 时 webhook 无鉴权：任何人知道 path 即可注入假事件。
       this.#logger.warn(formatCompact({
         op: 'webhook_no_token',
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         path: this.#options.config.path,
         hint: 'set token to authenticate Satori webhook callbacks',
       }));
@@ -353,7 +353,7 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
     this.#routeReleases.push(...registerSatoriWebhookRoutes(this.#options.http, this));
     this.#logger.info(formatCompact({
       op: 'listen',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       mode: 'webhook',
       path: this.#options.config.path,
     }));
@@ -385,7 +385,7 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
     const msgId = extractCreatedMessageId(result);
     this.#logger.debug(formatCompact({
       op: 'satori_send',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       channel: conversation.id,
       messageId: msgId || undefined,
     }));
@@ -406,13 +406,13 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
       message: { conversation, id: body.message.id },
       content,
       sender,
+      endpointId: this.#options.config.id,
+      ...(mentioned ? { mentioned: true } : {}),
       metadata: Object.freeze({
         type: body.type,
         channelType: isPrivateChannelType(body) ? 'private' : 'group',
         sn: body.sn,
         platform: this.#login?.platform,
-        endpoint: this.#options.config.name,
-        ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({

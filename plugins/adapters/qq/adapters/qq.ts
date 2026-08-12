@@ -37,8 +37,8 @@ export default defineAdapter<QqAdapterConfig>({
     const gateway = context.use(messageGatewayToken);
     // 注册到插件运行时状态（qq.endpoint list 的"运行中"数据源）
     const state = context.use(qqRuntimeStateToken);
-    state.endpoints.set(config.name, {
-      name: config.name,
+    state.endpoints.set(config.id, {
+      id: config.id,
       mode: config.mode,
     });
     // 正向判 websocket：TS 对 `mode === 'webhook' || mode === 'middleware'` 的
@@ -58,7 +58,7 @@ export default defineAdapter<QqAdapterConfig>({
     // 运行状态表只增不减：stop 时同步摘除，避免 stop 后 qq.endpoint list 仍显示运行中。
     const stopEndpoint = endpoint.stop.bind(endpoint);
     endpoint.stop = async () => {
-      state.endpoints.delete(config.name);
+      state.endpoints.delete(config.id);
       await stopEndpoint();
     };
     return endpoint;

@@ -52,7 +52,7 @@ export class KookWebsocketEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
 
   constructor(options: KookEndpointOptions) {
-    this.#logger = getAdapterLogger('kook', options.config.name);
+    this.#logger = getAdapterLogger('kook', options.config.id);
     this.#options = options;
     this.#createClient = options.createClient ?? (defaultCreateClient as CreateKookClient);
   }
@@ -61,13 +61,13 @@ export class KookWebsocketEndpoint implements EndpointInstance {
     if (this.#started) return;
     this.#started = true;
     try {
-      this.#unregisterAgent = registerKookAgentEndpoint(this.#options.config.name, this);
+      this.#unregisterAgent = registerKookAgentEndpoint(this.#options.config.id, this);
       this.#client = this.#createClient(this.#options.config);
       this.#bindClient(this.#client);
       await this.#client.connect();
       this.#logger.info(formatCompact({
         op: 'connect',
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         mode: 'websocket',
         self_id: this.#client.self_id != null ? String(this.#client.self_id) : undefined,
       }));
@@ -112,7 +112,7 @@ export class KookWebsocketEndpoint implements EndpointInstance {
     const messageId = result?.msg_id != null ? String(result.msg_id) : '';
     this.#logger.debug(formatCompact({
       op: 'kook_send',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       target: `${conversation.kind}:${conversation.id}`,
       messageId,
     }));
@@ -134,13 +134,13 @@ export class KookWebsocketEndpoint implements EndpointInstance {
         name: senderDisplayName(msg) || undefined,
         ...(msg.authorRoles?.length ? { roles: msg.authorRoles.map(String) } : {}),
       },
+      endpointId: this.#options.config.id,
+      ...(isKookBotMentioned(msg, selfId) ? { mentioned: true } : {}),
       metadata: Object.freeze({
-        endpoint: this.#options.config.name,
         channelKind: msg.channelKind,
         userId: msg.authorId,
         guildId: msg.guildId,
         roles: msg.authorRoles,
-        ...(isKookBotMentioned(msg, selfId) ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -221,7 +221,7 @@ export class KookWebhookEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
 
   constructor(options: KookWebhookEndpointOptions) {
-    this.#logger = getAdapterLogger('kook', options.config.name);
+    this.#logger = getAdapterLogger('kook', options.config.id);
     this.#options = options;
     this.#createClient = options.createClient ?? (defaultCreateWebhookClient as CreateKookClient);
   }
@@ -243,13 +243,13 @@ export class KookWebhookEndpoint implements EndpointInstance {
     if (this.#started) return;
     this.#started = true;
     try {
-      this.#unregisterAgent = registerKookAgentEndpoint(this.#options.config.name, this);
+      this.#unregisterAgent = registerKookAgentEndpoint(this.#options.config.id, this);
       this.#client = this.#createClient(this.#options.config);
       await (this.#client as Client).init();
       this.#routeReleases.push(...registerKookWebhookRoutes(this.#options.http, this));
       this.#logger.info(formatCompact({
         op: 'connect',
-        endpoint: this.#options.config.name,
+        endpoint: this.#options.config.id,
         mode: 'webhook',
         path: this.#options.config.webhookPath,
         self_id: this.#client.self_id != null ? String(this.#client.self_id) : undefined,
@@ -297,7 +297,7 @@ export class KookWebhookEndpoint implements EndpointInstance {
     const messageId = result?.msg_id != null ? String(result.msg_id) : '';
     this.#logger.debug(formatCompact({
       op: 'kook_send',
-      endpoint: this.#options.config.name,
+      endpoint: this.#options.config.id,
       target: `${conversation.kind}:${conversation.id}`,
       messageId,
     }));
@@ -319,13 +319,13 @@ export class KookWebhookEndpoint implements EndpointInstance {
         name: senderDisplayName(msg) || undefined,
         ...(msg.authorRoles?.length ? { roles: msg.authorRoles.map(String) } : {}),
       },
+      endpointId: this.#options.config.id,
+      ...(isKookBotMentioned(msg, selfId) ? { mentioned: true } : {}),
       metadata: Object.freeze({
-        endpoint: this.#options.config.name,
         channelKind: msg.channelKind,
         userId: msg.authorId,
         guildId: msg.guildId,
         roles: msg.authorRoles,
-        ...(isKookBotMentioned(msg, selfId) ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({

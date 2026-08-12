@@ -43,7 +43,7 @@ export interface EmailAttachmentsConfig {
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface EmailAdapterConfig {
-  readonly name?: string;
+  readonly id?: string;
   readonly smtp?: SmtpConfig;
   readonly imap?: ImapConfig;
   readonly attachments?: EmailAttachmentsConfig;
@@ -55,7 +55,7 @@ export interface EmailAdapterConfig {
 
 export interface ResolvedEmailConfig {
   readonly context: 'email';
-  readonly name: string;
+  readonly id: string;
   readonly smtp: SmtpConfig;
   readonly imap: Required<Pick<ImapConfig, 'checkInterval' | 'reconnectInterval' | 'mailbox' | 'markSeen'>> & ImapConfig;
   readonly attachments?: {
@@ -94,8 +94,8 @@ export function resolveEmailConfig(config: EmailAdapterConfig = {}): ResolvedEma
       'Email adapter requires smtp + imap config (plugins.<key>.smtp/imap or endpoints with context: email)',
     );
   }
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.EMAIL_BOT_NAME
     || 'email-bot';
   const attachmentsSource = config.attachments ?? entry?.attachments;
@@ -109,7 +109,7 @@ export function resolveEmailConfig(config: EmailAdapterConfig = {}): ResolvedEma
     : undefined;
   return {
     context: 'email',
-    name,
+    id,
     smtp,
     imap: {
       ...imap,
@@ -232,9 +232,9 @@ export function formatInboundSegments(
  * 入站归一化 → ConversationRef：Email 无群/频道概念，所有入站邮件都是
  * 与发件人地址的 private 会话（id = 发件人地址）。
  */
-export function emailInboundConversation(endpointId: string, email: EmailMessage): ConversationRef {
+export function emailInboundConversation(endpointKey: string, email: EmailMessage): ConversationRef {
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind: 'private',
     id: email.from,
   };

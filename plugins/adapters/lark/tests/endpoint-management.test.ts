@@ -8,7 +8,7 @@ import { resolveLarkConfig } from '../src/protocol.js';
 const adapterFeature = featureId('zhin.adapter');
 
 const baseConfig = resolveLarkConfig({
-  name: 'test-lark-bot',
+  id: 'test-lark-bot',
   appId: 'cli_test',
   appSecret: 'secret-test',
   webhookPath: '/lark/webhook',

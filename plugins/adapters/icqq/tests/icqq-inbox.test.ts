@@ -17,11 +17,11 @@ import { Actions, resolveIcqqConfig } from '../src/protocol.js';
 import type { IpcSystemMessage } from '../src/types.js';
 
 const adapterFeature = featureId('zhin.adapter');
-const endpointId = capabilityId(rootPluginId(), adapterFeature, 'icqq');
+const endpointKey = capabilityId(rootPluginId(), adapterFeature, 'icqq');
 
-const baseConfig = resolveIcqqConfig({ name: '10001', autoReconnect: false });
+const baseConfig = resolveIcqqConfig({ id: '10001', autoReconnect: false });
 
-const base = { adapter: 'icqq', endpointId: '10001' };
+const base = { adapter: 'icqq', endpointKey: '10001' };
 
 function createMockIpc(systemMsg?: { friendRequests?: IpcSystemMessage[]; groupRequests?: IpcSystemMessage[] }) {
   const handlers: Array<(event: { id: string; event: string; data: unknown }) => void> = [];
@@ -82,7 +82,7 @@ async function startEndpoint(
     send: vi.fn(async () => 'sent'),
   };
   const endpoint = new IcqqIpcEndpoint({
-    id: endpointId,
+    id: endpointKey,
     gateway,
     config: baseConfig,
     createIpc: async () => mock,

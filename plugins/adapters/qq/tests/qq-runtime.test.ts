@@ -24,7 +24,7 @@ import { stopQqOfficialBot } from '../src/ws.js';
 const adapterFeature = featureId('zhin.adapter');
 
 const baseConfig = resolveQqConfig({
-  name: 'test-qq-bot',
+  id: 'test-qq-bot',
   appid: 'app-1',
   secret: 'secret-1',
   mode: 'websocket',
@@ -120,7 +120,7 @@ describe('qq protocol helpers', () => {
   it('resolves plugin config with websocket default', () => {
     const resolved = resolveQqConfig({ appid: 'a', secret: 's' });
     expect(resolved.mode).toBe('websocket');
-    expect(resolved.name).toBe('qq-bot');
+    expect(resolved.id).toBe('qq-bot');
     if (resolved.mode === 'websocket') {
       expect(resolved.intents).toEqual([
         'GROUP_AND_C2C_EVENT',
@@ -254,7 +254,7 @@ describe('qq plugin runtime adapter', () => {
     const endpoint = defineQqAdapter.create({
       id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
       name: 'qq',
-      config: { appid: 'a', secret: 's', mode: 'websocket', name: 'ep-stop' },
+      config: { appid: 'a', secret: 's', mode: 'websocket', id: 'ep-stop' },
       use: (token: unknown) => {
         if (token === messageGatewayToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
@@ -515,7 +515,7 @@ describe('qq plugin runtime adapter', () => {
       config: {
         context: 'qq',
         mode: 'middleware',
-        name: 'test-qq-bot',
+        id: 'test-qq-bot',
         appid: 'app-1',
         secret: 'secret-1',
         webhookPath: '/qq/webhook',

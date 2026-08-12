@@ -32,7 +32,7 @@ export enum KookPermission {
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface KookAdapterConfig {
-  readonly name?: string;
+  readonly id?: string;
   readonly token?: string;
   /** Default `websocket`. `webhook` requires httpHostToken + verify_token. */
   readonly connection?: 'websocket' | 'webhook';
@@ -47,7 +47,7 @@ export interface KookAdapterConfig {
   /** Transitional: legacy root `endpoints[]` with `context: kook`. */
   readonly endpoints?: ReadonlyArray<{
     readonly context?: string;
-    readonly name?: string;
+    readonly id?: string;
     readonly token?: string;
     readonly connection?: 'websocket' | 'webhook';
     readonly webhookPath?: string;
@@ -64,7 +64,7 @@ export interface KookAdapterConfig {
 export interface ResolvedKookWebsocketConfig {
   readonly context: 'kook';
   readonly connection: 'websocket';
-  readonly name: string;
+  readonly id: string;
   readonly token: string;
   readonly data_dir?: string;
   readonly timeout: number;
@@ -76,7 +76,7 @@ export interface ResolvedKookWebsocketConfig {
 export interface ResolvedKookWebhookConfig {
   readonly context: 'kook';
   readonly connection: 'webhook';
-  readonly name: string;
+  readonly id: string;
   readonly token: string;
   readonly webhookPath: string;
   readonly verifyToken: string;
@@ -142,8 +142,8 @@ export function resolveKookConfig(config: KookAdapterConfig = {}): ResolvedKookC
       'KOOK adapter requires token (plugins.<key>.token or endpoints with context: kook)',
     );
   }
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.KOOK_BOT_NAME
     || 'kook-bot';
   const connection = config.connection
@@ -164,7 +164,7 @@ export function resolveKookConfig(config: KookAdapterConfig = {}): ResolvedKookC
     return {
       context: 'kook',
       connection: 'webhook',
-      name,
+      id,
       token,
       webhookPath: normalizeWebhookPath(
         config.webhookPath ?? entry?.webhookPath ?? process.env.KOOK_WEBHOOK_PATH ?? '/kook/webhook',
@@ -179,7 +179,7 @@ export function resolveKookConfig(config: KookAdapterConfig = {}): ResolvedKookC
   return {
     context: 'kook',
     connection: 'websocket',
-    name,
+    id,
     token,
     data_dir: config.data_dir ?? entry?.data_dir,
     timeout: config.timeout ?? entry?.timeout ?? 10_000,
@@ -193,9 +193,9 @@ export function resolveKookConfig(config: KookAdapterConfig = {}): ResolvedKookC
  * 入站归一化 → ConversationRef：频道消息的所属 guild 进 `parent`（guild 容器
  * 映射为 channel 容器）；私聊（PERSON）无容器，直接 kind 'private'。
  */
-export function kookInboundConversation(endpointId: string, msg: KookInboundMessage): ConversationRef {
+export function kookInboundConversation(endpointKey: string, msg: KookInboundMessage): ConversationRef {
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind: msg.channelKind,
     id: msg.channelId,
     ...(msg.guildId && msg.channelKind === 'channel'

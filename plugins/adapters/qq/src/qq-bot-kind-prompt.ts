@@ -12,13 +12,13 @@ export function qqCommandSessionKey(input: unknown): string | undefined {
   } | null | undefined;
   const conversation = message?.conversation;
   const adapter = conversation?.endpoint?.adapter;
-  const endpointId = conversation?.endpoint?.id;
+  const endpointKey = conversation?.endpoint?.id;
   const kind = conversation?.kind;
   const id = conversation?.id;
   const sender = message?.sender;
   if (
     adapter == null
-    || endpointId == null
+    || endpointKey == null
     || (kind !== 'private' && kind !== 'group' && kind !== 'channel')
     || typeof id !== 'string'
     || !id
@@ -27,7 +27,7 @@ export function qqCommandSessionKey(input: unknown): string | undefined {
   ) {
     return undefined;
   }
-  return `${String(adapter)}\0${String(endpointId)}\0${kind}\0${id}\0${String(sender).trim()}`;
+  return `${String(adapter)}\0${String(endpointKey)}\0${kind}\0${id}\0${String(sender).trim()}`;
 }
 
 /**

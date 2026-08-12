@@ -27,20 +27,20 @@ export interface LarkAgentEndpoint {
 }
 
 export interface LarkAgentDeps {
-  getEndpoint: (endpointId: string) => LarkAgentEndpoint;
+  getEndpoint: (endpointKey: string) => LarkAgentEndpoint;
 }
 
 const endpoints = new Map<string, LarkAgentEndpoint>();
 let override: LarkAgentDeps | null = null;
 
 export function registerLarkAgentEndpoint(
-  endpointId: string,
+  endpointKey: string,
   endpoint: LarkAgentEndpoint,
 ): () => void {
-  endpoints.set(endpointId, endpoint);
+  endpoints.set(endpointKey, endpoint);
   return () => {
-    if (endpoints.get(endpointId) === endpoint) {
-      endpoints.delete(endpointId);
+    if (endpoints.get(endpointKey) === endpoint) {
+      endpoints.delete(endpointKey);
     }
   };
 }
@@ -53,9 +53,9 @@ export function setLarkAgentDeps(deps: LarkAgentDeps | null): void {
 export function getLarkAgentDeps(): LarkAgentDeps {
   if (override) return override;
   return {
-    getEndpoint(endpointId) {
-      const endpoint = endpoints.get(endpointId);
-      if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    getEndpoint(endpointKey) {
+      const endpoint = endpoints.get(endpointKey);
+      if (!endpoint) throw new Error(`Endpoint ${endpointKey} 不存在`);
       return endpoint;
     },
   };

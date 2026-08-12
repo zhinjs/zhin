@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import { createEndpointRuntimeState } from '@zhin.js/adapter';
 import listCommand from '../commands/endpoint/list.js';
-import addCommand from '../commands/endpoint/add/[[name]].js';
-import removeCommand from '../commands/endpoint/remove/[name].js';
+import addCommand from '../commands/endpoint/add/[[id]].js';
+import removeCommand from '../commands/endpoint/remove/[id].js';
 import { icqqRuntimeStateToken } from '../src/icqq-runtime-state.js';
 
 /**
@@ -50,38 +50,38 @@ describe('icqq.endpoint command definitions', () => {
     }
   });
 
-  it('add 无 name 时回复用法与 icqq login 引导', () => {
+  it('add 无 id 时回复用法与 icqq login 引导', () => {
     const text = addCommand.execute(fakeContext()) as string;
     expect(text).toContain('用法：icqq.endpoint add <uin>');
     expect(text).toContain('icqq login');
   });
 
-  it('add 非数字 name 拒绝', () => {
-    expect(addCommand.execute(fakeContext({ params: { name: 'my-bot' } })))
+  it('add 非数字 id 拒绝', () => {
+    expect(addCommand.execute(fakeContext({ params: { id: 'my-bot' } })))
       .toContain('纯数字');
   });
 
-  it('add 合法 uin：写入 { name } 配置项并引导 icqq login + 重启', () => {
-    const text = addCommand.execute(fakeContext({ params: { name: '8596238' } })) as string;
+  it('add 合法 uin：写入 { id } 配置项并引导 icqq login + 重启', () => {
+    const text = addCommand.execute(fakeContext({ params: { id: '8596238' } })) as string;
 
     expect(text).toContain('✅');
     expect(text).toContain('icqq login 8596238');
     expect(text).toContain('重启');
     const config = fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8');
-    expect(config).toContain('name: "8596238"');
+    expect(config).toContain('id: "8596238"');
   });
 
   it('add 重名时报添加失败', () => {
-    addCommand.execute(fakeContext({ params: { name: '8596238' } }));
-    expect(addCommand.execute(fakeContext({ params: { name: '8596238' } })))
+    addCommand.execute(fakeContext({ params: { id: '8596238' } }));
+    expect(addCommand.execute(fakeContext({ params: { id: '8596238' } })))
       .toContain('已存在');
   });
 
   it('list 显示运行中 + 配置中的 endpoints', () => {
     const context = fakeContext();
     (context as { state: ReturnType<typeof createEndpointRuntimeState> }).state
-      .endpoints.set('8596238', { name: '8596238', mode: 'ipc' });
-    addCommand.execute(fakeContext({ params: { name: '10001' } }));
+      .endpoints.set('8596238', { id: '8596238', mode: 'ipc' });
+    addCommand.execute(fakeContext({ params: { id: '10001' } }));
 
     const text = listCommand.execute(context) as string;
 
@@ -90,9 +90,9 @@ describe('icqq.endpoint command definitions', () => {
   });
 
   it('remove 从配置移除并提示重启', () => {
-    addCommand.execute(fakeContext({ params: { name: '8596238' } }));
+    addCommand.execute(fakeContext({ params: { id: '8596238' } }));
 
-    const text = removeCommand.execute(fakeContext({ params: { name: '8596238' } })) as string;
+    const text = removeCommand.execute(fakeContext({ params: { id: '8596238' } })) as string;
 
     expect(text).toContain('移除');
     expect(text).toContain('重启');
@@ -103,7 +103,7 @@ describe('icqq.endpoint command definitions', () => {
     const denied = fakeContext({
       config: { master: 'alice' },
       input: { sender: { id: 'bob' } },
-      params: { name: '8596238' },
+      params: { id: '8596238' },
     });
 
     expect(addCommand.execute(denied)).toBe('仅 master 可执行 ICQQ endpoint 管理命令');

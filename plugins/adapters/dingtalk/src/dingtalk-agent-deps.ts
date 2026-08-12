@@ -23,20 +23,20 @@ export interface DingtalkAgentEndpoint {
 }
 
 export interface DingtalkAgentDeps {
-  getEndpoint: (endpointId: string) => DingtalkAgentEndpoint;
+  getEndpoint: (endpointKey: string) => DingtalkAgentEndpoint;
 }
 
 const endpoints = new Map<string, DingtalkAgentEndpoint>();
 let override: DingtalkAgentDeps | null = null;
 
 export function registerDingtalkAgentEndpoint(
-  endpointId: string,
+  endpointKey: string,
   endpoint: DingtalkAgentEndpoint,
 ): () => void {
-  endpoints.set(endpointId, endpoint);
+  endpoints.set(endpointKey, endpoint);
   return () => {
-    if (endpoints.get(endpointId) === endpoint) {
-      endpoints.delete(endpointId);
+    if (endpoints.get(endpointKey) === endpoint) {
+      endpoints.delete(endpointKey);
     }
   };
 }
@@ -49,9 +49,9 @@ export function setDingtalkAgentDeps(deps: DingtalkAgentDeps | null): void {
 export function getDingtalkAgentDeps(): DingtalkAgentDeps {
   if (override) return override;
   return {
-    getEndpoint(endpointId) {
-      const endpoint = endpoints.get(endpointId);
-      if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    getEndpoint(endpointKey) {
+      const endpoint = endpoints.get(endpointKey);
+      if (!endpoint) throw new Error(`Endpoint ${endpointKey} 不存在`);
       return endpoint;
     },
   };

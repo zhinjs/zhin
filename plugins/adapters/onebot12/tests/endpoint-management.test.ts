@@ -15,7 +15,7 @@ import { OneBot12WsEndpoint } from '../src/ws-endpoint.js';
 import { OneBot12WssEndpoint } from '../src/wss-endpoint.js';
 
 const adapterFeature = featureId('zhin.adapter');
-const endpointId = capabilityId(rootPluginId(), adapterFeature, 'onebot12');
+const endpointKey = capabilityId(rootPluginId(), adapterFeature, 'onebot12');
 const gateway: MessageGateway = { receive: vi.fn(), send: vi.fn(async () => 'sent') };
 const httpStub = { ws: vi.fn(), route: vi.fn() } as unknown as HttpHost;
 
@@ -88,18 +88,18 @@ describe('onebot12.endpoint management wiring', () => {
   it('ws/wss 传输经公共 callApi 暴露 management', async () => {
     const wsConfig = resolveOneBot12Config({
       connection: 'ws',
-      name: 'test-ob12',
+      id: 'test-ob12',
       url: 'ws://127.0.0.1:6701',
     }) as OneBot12WsConfig;
     const wssConfig = resolveOneBot12Config({
       connection: 'wss',
-      name: 'test-ob12',
+      id: 'test-ob12',
       path: '/onebot12',
     }) as OneBot12WssConfig;
 
     const endpoints = [
-      new OneBot12WsEndpoint({ id: endpointId, gateway, config: wsConfig }),
-      new OneBot12WssEndpoint({ id: endpointId, gateway, http: httpStub, config: wssConfig }),
+      new OneBot12WsEndpoint({ id: endpointKey, gateway, config: wsConfig }),
+      new OneBot12WssEndpoint({ id: endpointKey, gateway, http: httpStub, config: wssConfig }),
     ];
     for (const endpoint of endpoints) {
       expect(listEndpointManagementCapabilities(endpoint)).toEqual(expectedCapabilities);
@@ -116,7 +116,7 @@ describe('onebot12.endpoint management wiring', () => {
   it('webhook 传输经 api_url + callAction 暴露 management', async () => {
     const config = resolveOneBot12Config({
       connection: 'webhook',
-      name: 'test-ob12',
+      id: 'test-ob12',
       path: '/onebot12/webhook',
       api_url: 'http://127.0.0.1:5701',
     }) as OneBot12WebhookConfig;
@@ -127,7 +127,7 @@ describe('onebot12.endpoint management wiring', () => {
       data: [{ user_id: '10001', user_name: 'Alice' }],
     }));
     const endpoint = new OneBot12WebhookEndpoint({
-      id: endpointId,
+      id: endpointKey,
       gateway,
       http: httpStub,
       config,
@@ -147,11 +147,11 @@ describe('onebot12.endpoint management wiring', () => {
   it('webhook 未配置 api_url 时 callApi 报错', async () => {
     const config = resolveOneBot12Config({
       connection: 'webhook',
-      name: 'test-ob12',
+      id: 'test-ob12',
       path: '/onebot12/webhook',
     }) as OneBot12WebhookConfig;
     const endpoint = new OneBot12WebhookEndpoint({
-      id: endpointId,
+      id: endpointKey,
       gateway,
       http: httpStub,
       config,

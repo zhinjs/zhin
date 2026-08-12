@@ -15,7 +15,7 @@ export interface OneBot11LegacyEndpointRow {
   readonly connection?: 'ws' | 'wss';
   /** Legacy alias: `type: 'ws' | 'ws_reverse'` */
   readonly type?: string;
-  readonly name?: string;
+  readonly id?: string;
   readonly access_token?: string;
   readonly url?: string;
   readonly path?: string;
@@ -26,7 +26,7 @@ export interface OneBot11LegacyEndpointRow {
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface OneBot11AdapterConfig {
   readonly connection?: 'ws' | 'wss';
-  readonly name?: string;
+  readonly id?: string;
   readonly access_token?: string;
   readonly url?: string;
   readonly path?: string;
@@ -38,7 +38,7 @@ export interface OneBot11AdapterConfig {
 
 export interface OneBot11ConfigBase {
   readonly context: 'onebot11';
-  readonly name: string;
+  readonly id: string;
   readonly access_token?: string;
 }
 
@@ -123,8 +123,8 @@ export function resolveOneBot11Config(config: OneBot11AdapterConfig = {}): Resol
     config.connection ?? entry?.connection,
     entry?.type,
   );
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.ONEBOT11_BOT_NAME
     || 'onebot11-bot';
   const access_token = config.access_token ?? entry?.access_token;
@@ -139,7 +139,7 @@ export function resolveOneBot11Config(config: OneBot11AdapterConfig = {}): Resol
     return {
       context: 'onebot11',
       connection: 'ws',
-      name,
+      id,
       access_token,
       url,
       reconnect_interval: config.reconnect_interval ?? entry?.reconnect_interval ?? 5000,
@@ -155,7 +155,7 @@ export function resolveOneBot11Config(config: OneBot11AdapterConfig = {}): Resol
     return {
       context: 'onebot11',
       connection: 'wss',
-      name,
+      id,
       access_token,
       path,
       heartbeat_interval: config.heartbeat_interval ?? entry?.heartbeat_interval ?? 30_000,
@@ -185,12 +185,12 @@ export function getChannelId(ev: OneBot11Event): string {
  * 其余（private 及带 group_id 的非 private 事件按群处理）→ kind 'private'。
  * OneBot 11 无 guild/temp 容器概念，不填 parent。
  */
-export function onebot11InboundConversation(endpointId: string, ev: OneBot11Event): ConversationRef {
+export function onebot11InboundConversation(endpointKey: string, ev: OneBot11Event): ConversationRef {
   const kind = ev.message_type === 'group' || (ev.group_id != null && ev.message_type !== 'private')
     ? 'group' as const
     : 'private' as const;
   return {
-    endpoint: { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId },
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind,
     id: getChannelId(ev),
   };
@@ -259,27 +259,37 @@ export function isOneBot11BotMentioned(input: {
   });
 }
 
-/** 构造 gateway.receive 的 metadata（ws / wss 两个 endpoint 共用）。 */
+/** Inbound fields extracted from an event for gateway.receive (ws / wss 两个 endpoint 共用). */
+export interface OneBot11InboundFields {
+  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly endpointId: string;
+  readonly mentioned: boolean;
+  readonly replyTo: { readonly id: string } | undefined;
+}
+
+/** 构造 gateway.receive 的 metadata 与提升字段（ws / wss 两个 endpoint 共用）。 */
 export function formatInboundMetadata(
   ev: OneBot11Event,
   endpoint: string,
-): Readonly<Record<string, unknown>> {
+): OneBot11InboundFields {
   const selfId = ev.self_id != null ? String(ev.self_id) : undefined;
   const nickname = senderNickname(ev);
   const quoteId = extractQuoteId(ev);
   const mentioned = isOneBot11BotMentioned({ selfId, message: ev.message });
-  return Object.freeze({
-    message_type: ev.message_type,
-    user_id: ev.user_id != null ? String(ev.user_id) : undefined,
-    group_id: ev.group_id != null ? String(ev.group_id) : undefined,
-    endpoint,
-    time: ev.time,
-    self_id: selfId,
-    role: ev.sender?.role,
-    ...(nickname ? { nickname } : {}),
-    ...(quoteId ? { quote_id: quoteId } : {}),
-    ...(mentioned ? { mentioned: true } : {}),
-  });
+  return {
+    metadata: Object.freeze({
+      message_type: ev.message_type,
+      user_id: ev.user_id != null ? String(ev.user_id) : undefined,
+      group_id: ev.group_id != null ? String(ev.group_id) : undefined,
+      time: ev.time,
+      self_id: selfId,
+      role: ev.sender?.role,
+      ...(nickname ? { nickname } : {}),
+    }),
+    endpointId: endpoint,
+    mentioned,
+    replyTo: quoteId ? { id: quoteId } : undefined,
+  };
 }
 
 /**

@@ -13,7 +13,7 @@ const logger = getLogger('napcat');
 export interface NapCatLegacyEndpointRow {
   readonly context?: string;
   readonly connection?: 'ws' | 'wss' | 'http';
-  readonly name?: string;
+  readonly id?: string;
   readonly access_token?: string;
   readonly url?: string;
   readonly path?: string;
@@ -27,7 +27,7 @@ export interface NapCatLegacyEndpointRow {
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface NapCatAdapterConfig {
   readonly connection?: 'ws' | 'wss' | 'http';
-  readonly name?: string;
+  readonly id?: string;
   readonly access_token?: string;
   readonly url?: string;
   readonly path?: string;
@@ -42,7 +42,7 @@ export interface NapCatAdapterConfig {
 
 export interface NapCatConfigBase {
   readonly context: 'napcat';
-  readonly name: string;
+  readonly id: string;
   readonly access_token?: string;
 }
 
@@ -143,8 +143,8 @@ function normalizeConnection(
 export function resolveNapCatConfig(config: NapCatAdapterConfig = {}): ResolvedNapCatConfig {
   const entry = config.endpoints?.find((item) => item.context === 'napcat');
   const connection = normalizeConnection(config.connection ?? entry?.connection);
-  const name = (typeof config.name === 'string' && config.name)
-    || (typeof entry?.name === 'string' && entry.name)
+  const id = (typeof config.id === 'string' && config.id)
+    || (typeof entry?.id === 'string' && entry.id)
     || process.env.NAPCAT_BOT_NAME
     || 'napcat-bot';
   const access_token = config.access_token ?? entry?.access_token;
@@ -159,7 +159,7 @@ export function resolveNapCatConfig(config: NapCatAdapterConfig = {}): ResolvedN
     return {
       context: 'napcat',
       connection: 'ws',
-      name,
+      id,
       access_token,
       url,
       reconnect_interval: config.reconnect_interval ?? entry?.reconnect_interval ?? 5000,
@@ -173,7 +173,7 @@ export function resolveNapCatConfig(config: NapCatAdapterConfig = {}): ResolvedN
     return {
       context: 'napcat',
       connection: 'wss',
-      name,
+      id,
       access_token,
       path,
       heartbeat_interval: config.heartbeat_interval ?? entry?.heartbeat_interval ?? 30_000,
@@ -189,7 +189,7 @@ export function resolveNapCatConfig(config: NapCatAdapterConfig = {}): ResolvedN
     return {
       context: 'napcat',
       connection: 'http',
-      name,
+      id,
       access_token,
       http_url,
       post_path,
@@ -218,8 +218,8 @@ export function getChannelId(ev: NapCatEvent): string {
  * 入站归一化 → ConversationRef：群消息 → kind 'group'；私聊临时会话
  * （sub_type 'group'）→ kind 'private' + 群容器进 `parent`；其余私聊 → 'private'。
  */
-export function napcatInboundConversation(endpointId: string, ev: NapCatEvent): ConversationRef {
-  const endpoint = { id: endpointId, adapter: endpointId.split('\0')[0] ?? endpointId };
+export function napcatInboundConversation(endpointKey: string, ev: NapCatEvent): ConversationRef {
+  const endpoint = { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey };
   const isGroup = ev.message_type === 'group' || (ev.group_id != null && ev.message_type !== 'private');
   if (isGroup && ev.group_id != null) {
     return { endpoint, kind: 'group', id: String(ev.group_id) };

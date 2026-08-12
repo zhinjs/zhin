@@ -25,20 +25,20 @@ export interface QqAgentEndpoint {
 }
 
 export interface QqAgentDeps {
-  getEndpoint: (endpointId: string) => QqAgentEndpoint;
+  getEndpoint: (endpointKey: string) => QqAgentEndpoint;
 }
 
 const endpoints = new Map<string, QqAgentEndpoint>();
 let override: QqAgentDeps | null = null;
 
 export function registerQqAgentEndpoint(
-  endpointId: string,
+  endpointKey: string,
   endpoint: QqAgentEndpoint,
 ): () => void {
-  endpoints.set(endpointId, endpoint);
+  endpoints.set(endpointKey, endpoint);
   return () => {
-    if (endpoints.get(endpointId) === endpoint) {
-      endpoints.delete(endpointId);
+    if (endpoints.get(endpointKey) === endpoint) {
+      endpoints.delete(endpointKey);
     }
   };
 }
@@ -51,9 +51,9 @@ export function setQqAgentDeps(deps: QqAgentDeps | null): void {
 export function getQqAgentDeps(): QqAgentDeps {
   if (override) return override;
   return {
-    getEndpoint(endpointId: string): QqAgentEndpoint {
-      const registered = endpoints.get(endpointId);
-      if (!registered) throw new Error(`Endpoint ${endpointId} 不存在`);
+    getEndpoint(endpointKey: string): QqAgentEndpoint {
+      const registered = endpoints.get(endpointKey);
+      if (!registered) throw new Error(`Endpoint ${endpointKey} 不存在`);
       return registered;
     },
   };

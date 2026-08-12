@@ -9,7 +9,7 @@ import { resolveLineConfig } from '../src/protocol.js';
 const adapterFeature = featureId('zhin.adapter');
 
 const baseConfig = resolveLineConfig({
-  name: 'test-line-mgmt',
+  id: 'test-line-mgmt',
   channelSecret: 'sec',
   channelAccessToken: 'test-access-token',
   webhookPath: '/line/webhook',

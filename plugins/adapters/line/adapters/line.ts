@@ -24,8 +24,8 @@ export default defineAdapter<LineAdapterConfig>({
   create(context) {
     const config = resolveLineConfig(context.config);
     // 注册到插件运行时状态（line.endpoint list 的"运行中"数据源）
-    context.use(lineRuntimeStateToken).endpoints.set(config.name, {
-      name: config.name,
+    context.use(lineRuntimeStateToken).endpoints.set(config.id, {
+      id: config.id,
       mode: 'webhook',
     });
     return new LineEndpoint({

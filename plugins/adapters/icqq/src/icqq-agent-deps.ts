@@ -18,7 +18,7 @@ export interface IcqqAgentEndpoint {
 }
 
 export interface IcqqAgentDeps {
-  getEndpoint: (endpointId: string) => IcqqAgentEndpoint;
+  getEndpoint: (endpointKey: string) => IcqqAgentEndpoint;
   getAdapter?: () => { getEndpoint: (id: string) => IcqqAgentEndpoint };
 }
 
@@ -26,13 +26,13 @@ const endpoints = new Map<string, IcqqAgentEndpoint>();
 let override: IcqqAgentDeps | null = null;
 
 export function registerIcqqAgentEndpoint(
-  endpointId: string,
+  endpointKey: string,
   endpoint: IcqqAgentEndpoint,
 ): () => void {
-  endpoints.set(endpointId, endpoint);
+  endpoints.set(endpointKey, endpoint);
   return () => {
-    if (endpoints.get(endpointId) === endpoint) {
-      endpoints.delete(endpointId);
+    if (endpoints.get(endpointKey) === endpoint) {
+      endpoints.delete(endpointKey);
     }
   };
 }
@@ -42,9 +42,9 @@ export function setIcqqAgentDeps(deps: IcqqAgentDeps | null): void {
   override = deps;
 }
 
-function lookup(endpointId: string): IcqqAgentEndpoint {
-  const registered = endpoints.get(endpointId);
-  if (!registered) throw new Error(`Endpoint ${endpointId} 不存在`);
+function lookup(endpointKey: string): IcqqAgentEndpoint {
+  const registered = endpoints.get(endpointKey);
+  if (!registered) throw new Error(`Endpoint ${endpointKey} 不存在`);
   return registered;
 }
 

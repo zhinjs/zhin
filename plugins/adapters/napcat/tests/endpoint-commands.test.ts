@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import { createEndpointRuntimeState } from '@zhin.js/adapter';
 import listCommand from '../commands/endpoint/list.js';
-import addCommand from '../commands/endpoint/add/[name].js';
-import removeCommand from '../commands/endpoint/remove/[name].js';
+import addCommand from '../commands/endpoint/add/[id].js';
+import removeCommand from '../commands/endpoint/remove/[id].js';
 import { napcatRuntimeStateToken } from '../src/napcat-runtime-state.js';
 
 /**
@@ -53,20 +53,20 @@ describe('napcat.endpoint command definitions', () => {
 
   it('add 走 kv 参数：凭据写 .env，yaml 存 ${REF}，连接字段内联', () => {
     const text = addCommand.execute(fakeContext({
-      params: { name: 'bot1' },
+      params: { id: 'bot1' },
       args: ['url=ws://127.0.0.1:3001', 'access_token=sec-1'],
     })) as string;
 
     expect(text).toContain('✅');
     expect(fs.readFileSync(path.join(root, '.env'), 'utf-8')).toContain('NAPCAT_BOT1_ACCESS_TOKEN=sec-1');
     const config = fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8');
-    expect(config).toContain('name: bot1');
+    expect(config).toContain('id: bot1');
     expect(config).toContain('url: ws://127.0.0.1:3001');
     expect(config).toContain('${NAPCAT_BOT1_ACCESS_TOKEN}');
   });
 
   it('add 遇到未知字段时报错', () => {
-    expect(addCommand.execute(fakeContext({ params: { name: 'bot1' }, args: ['ghost=x'] })))
+    expect(addCommand.execute(fakeContext({ params: { id: 'bot1' }, args: ['ghost=x'] })))
       .toContain('未知字段「ghost」');
   });
 
@@ -74,8 +74,8 @@ describe('napcat.endpoint command definitions', () => {
   it('list 显示运行中 + 配置中的 endpoints', () => {
     const context = fakeContext();
     (context as { state: ReturnType<typeof createEndpointRuntimeState> }).state
-      .endpoints.set('bot1', { name: 'bot1', mode: 'ws' });
-    addCommand.execute(fakeContext({ params: { name: 'conf-bot' }, args: ['url=ws://127.0.0.1:3001', 'access_token=sec-1'] }));
+      .endpoints.set('bot1', { id: 'bot1', mode: 'ws' });
+    addCommand.execute(fakeContext({ params: { id: 'conf-bot' }, args: ['url=ws://127.0.0.1:3001', 'access_token=sec-1'] }));
 
     const text = listCommand.execute(context) as string;
 
@@ -84,9 +84,9 @@ describe('napcat.endpoint command definitions', () => {
   });
 
   it('remove 从配置移除并提示重启', () => {
-    addCommand.execute(fakeContext({ params: { name: 'bot1' }, args: ['url=ws://127.0.0.1:3001', 'access_token=sec-1'] }));
+    addCommand.execute(fakeContext({ params: { id: 'bot1' }, args: ['url=ws://127.0.0.1:3001', 'access_token=sec-1'] }));
 
-    const text = removeCommand.execute(fakeContext({ params: { name: 'bot1' } })) as string;
+    const text = removeCommand.execute(fakeContext({ params: { id: 'bot1' } })) as string;
 
     expect(text).toContain('移除');
     expect(text).toContain('重启');
@@ -97,7 +97,7 @@ describe('napcat.endpoint command definitions', () => {
     const denied = fakeContext({
       config: { master: 'alice' },
       input: { sender: { id: 'bob' } },
-      params: { name: 'bot1' },
+      params: { id: 'bot1' },
       args: ['url=ws://127.0.0.1:3001', 'access_token=sec-1'],
     });
 

@@ -48,9 +48,9 @@ beforeEach(() => {
 
 describe('weixin-ilink login fallback (no botToken)', () => {
   it('resolveWeixinIlinkConfig does not throw without botToken', () => {
-    const resolved = resolveWeixinIlinkConfig({ name: 'no-token-bot' });
+    const resolved = resolveWeixinIlinkConfig({ id: 'no-token-bot' });
     expect(resolved.botToken).toBeFalsy();
-    expect(resolved.name).toBe('no-token-bot');
+    expect(resolved.id).toBe('no-token-bot');
   });
 
   it('falls back to sidecar credentials when no config/env token', async () => {
@@ -58,7 +58,7 @@ describe('weixin-ilink login fallback (no botToken)', () => {
       botToken: 'sidecar-token',
       ilinkUserId: 'u-sidecar',
     });
-    const config = resolveWeixinIlinkConfig({ name: 'sidecar-bot' });
+    const config = resolveWeixinIlinkConfig({ id: 'sidecar-bot' });
     const creds = await resolveCredentials(config);
     expect(creds.botToken).toBe('sidecar-token');
     expect(mockedApiPostFetch).not.toHaveBeenCalled();
@@ -66,7 +66,7 @@ describe('weixin-ilink login fallback (no botToken)', () => {
 
   it('falls back to QR login when no token anywhere (network mocked)', async () => {
     delete process.env.WEIXIN_ILINK_TOKEN;
-    const config = resolveWeixinIlinkConfig({ name: 'qr-bot' });
+    const config = resolveWeixinIlinkConfig({ id: 'qr-bot' });
     const creds = await resolveCredentials(config);
     expect(creds.botToken).toBe('qr-token');
     expect(creds.ilinkUserId).toBe('user-1');
@@ -81,7 +81,7 @@ describe('weixin-ilink login fallback (no botToken)', () => {
     delete process.env.WEIXIN_ILINK_TOKEN;
     // 一直 wait：不 abort 就要跑到 8 分钟超时
     mockedApiGetFetch.mockResolvedValue(JSON.stringify({ status: 'wait' }));
-    const config = resolveWeixinIlinkConfig({ name: 'qr-abort-bot' });
+    const config = resolveWeixinIlinkConfig({ id: 'qr-abort-bot' });
     const abort = new AbortController();
     const started = Date.now();
     const promise = resolveCredentials(config, abort.signal);
