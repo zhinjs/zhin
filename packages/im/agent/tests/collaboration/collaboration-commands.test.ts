@@ -13,10 +13,6 @@ import {
 } from '../../src/collaboration/scene-service.js';
 import { MemoryCollaborationSceneRepository } from '../../src/collaboration/collaboration-scene-repository.js';
 
-vi.mock('../../src/collaboration/bootstrap-agent-runtimes.js', () => ({
-  rebootstrapEndpointRuntimes: vi.fn(async () => {}),
-}));
-
 function groupMessage(
   sceneId = '373460458',
   endpoint = '8596238',

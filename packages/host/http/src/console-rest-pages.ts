@@ -32,7 +32,10 @@ export interface ConsoleRestCtx {
    * 可选：返回新 Runtime 的 agent 门面（见 {@link ConsoleAgentRuntime}）。
    * 未接线时 introspection 降级为空列表 + note，session tree 返回 503。
    */
-  readonly getAgentRuntime?: () => unknown;
+  readonly acquireAgentRuntime?: () => {
+    readonly value: ConsoleAgentRuntime;
+    release(): void;
+  } | null;
   /** Database host（logs 页数据源：SystemLog 模型）。 */
   readonly databaseHost?: {
     readonly dialect: string;
@@ -65,7 +68,7 @@ export interface ConsoleAgentSessionTree {
   ): Promise<{ ok: boolean; message: string }>;
 }
 
-/** `ctx.getAgentRuntime()` 返回值的最小结构约定（全部可选，逐项降级）。 */
+/** `ctx.acquireAgentRuntime()` 返回值的最小结构约定（全部可选，逐项降级）。 */
 export interface ConsoleAgentRuntime {
   readonly introspection?: ConsoleAgentIntrospection;
   readonly sessionTree?: ConsoleAgentSessionTree;
@@ -626,7 +629,7 @@ function registerIntrospectionRoutes(
         const degradedNote = note ?? (missing
           ? kind === 'endpoints'
             ? 'Endpoints 数据源未接线（ctx.getEndpoints 缺失）'
-            : 'Agent runtime 未装配（basic/cli 未接线 getAgentRuntime）'
+            : 'Agent runtime 未装配（basic/cli 未接线 acquireAgentRuntime）'
           : undefined);
         writeJson(response, 200, {
           success: true,
@@ -644,8 +647,13 @@ function registerIntrospectionRoutes(
 }
 
 function agentIntrospection(ctx: ConsoleRestCtx): ConsoleAgentIntrospection | undefined {
-  const runtime = ctx.getAgentRuntime?.() as ConsoleAgentRuntime | null | undefined;
-  return runtime && typeof runtime === 'object' ? runtime.introspection : undefined;
+  const lease = ctx.acquireAgentRuntime?.();
+  if (!lease) return undefined;
+  try {
+    return lease.value.introspection;
+  } finally {
+    lease.release();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -658,17 +666,22 @@ function registerAgentSessionRoutes(
   ctx: ConsoleRestCtx,
 ): void {
   const prefix = `${base}/agent/sessions/`;
-  const getSessionTree = (): ConsoleAgentSessionTree | null => {
-    const runtime = ctx.getAgentRuntime?.() as ConsoleAgentRuntime | null | undefined;
-    const tree = runtime && typeof runtime === 'object' ? runtime.sessionTree : undefined;
-    if (!tree) return null;
-    if (typeof tree.resolveActiveSessionId !== 'function') return null;
-    return tree;
+  const acquireSessionTree = (): {
+    readonly tree: ConsoleAgentSessionTree;
+    release(): void;
+  } | null => {
+    const lease = ctx.acquireAgentRuntime?.();
+    const tree = lease?.value.sessionTree;
+    if (!lease || !tree || typeof tree.resolveActiveSessionId !== 'function') {
+      lease?.release();
+      return null;
+    }
+    return { tree, release: () => lease.release() };
   };
   const unavailable = (response: ServerResponse) => {
     writeJson(response, 503, {
       success: false,
-      error: 'Agent session tree runtime 未就绪（新 Runtime 需经 getAgentRuntime 装配 sessionTree）',
+      error: 'Agent session tree runtime 未就绪（新 Runtime 需经 acquireAgentRuntime 装配 sessionTree）',
     });
   };
 
@@ -679,32 +692,36 @@ function registerAgentSessionRoutes(
       writeJson(response, 404, { success: false, error: 'Not found' });
       return;
     }
-    const runtime = getSessionTree();
-    if (!runtime) {
+    const lease = acquireSessionTree();
+    if (!lease) {
       unavailable(response);
       return;
     }
+    const runtime = lease.tree;
+    try {
+      const sessionId = await runtime.resolveActiveSessionId(parsed.sessionKey);
+      if (!sessionId) {
+        writeJson(response, 404, {
+          success: false,
+          error: `未找到活跃会话：${parsed.sessionKey}`,
+        });
+        return;
+      }
 
-    const sessionId = await runtime.resolveActiveSessionId(parsed.sessionKey);
-    if (!sessionId) {
-      writeJson(response, 404, {
-        success: false,
-        error: `未找到活跃会话：${parsed.sessionKey}`,
+      const session = await runtime.agentSessionStore.getBySessionId(sessionId);
+      const points = await runtime.listBranchPoints(sessionId);
+      writeJson(response, 200, {
+        success: true,
+        data: {
+          sessionKey: parsed.sessionKey,
+          sessionId,
+          activeLeafMessageId: session?.active_leaf_message_id ?? null,
+          points,
+        },
       });
-      return;
+    } finally {
+      lease.release();
     }
-
-    const session = await runtime.agentSessionStore.getBySessionId(sessionId);
-    const points = await runtime.listBranchPoints(sessionId);
-    writeJson(response, 200, {
-      success: true,
-      data: {
-        sessionKey: parsed.sessionKey,
-        sessionId,
-        activeLeafMessageId: session?.active_leaf_message_id ?? null,
-        points,
-      },
-    });
   }, { summary: 'Get agent session tree', tags: ['console', 'agent'] });
 
   route('POST', `${base}/agent/sessions/*`, async (request, response, url, authScope) => {
@@ -714,21 +731,6 @@ function registerAgentSessionRoutes(
       return;
     }
     if (!requireWriteScope(response, ctx, authScope)) return;
-    const runtime = getSessionTree();
-    if (!runtime) {
-      unavailable(response);
-      return;
-    }
-
-    const sessionId = await runtime.resolveActiveSessionId(parsed.sessionKey);
-    if (!sessionId) {
-      writeJson(response, 404, {
-        success: false,
-        error: `未找到活跃会话：${parsed.sessionKey}`,
-      });
-      return;
-    }
-
     let body: Record<string, unknown>;
     try {
       body = (await readJsonBody(request) ?? {}) as Record<string, unknown>;
@@ -741,49 +743,72 @@ function registerAgentSessionRoutes(
     }
     const messageIdRaw = body.messageId;
     const indexRaw = body.index;
-
     let messageId: number | undefined;
+    let branchIndex: number | undefined;
     if (messageIdRaw != null && messageIdRaw !== '') {
-      const n = Number(messageIdRaw);
-      if (!Number.isFinite(n) || n < 1) {
+      const value = Number(messageIdRaw);
+      if (!Number.isFinite(value) || value < 1) {
         writeJson(response, 400, { success: false, error: 'messageId 须为正整数' });
         return;
       }
-      messageId = n;
+      messageId = value;
     } else if (indexRaw != null && indexRaw !== '') {
-      const index = Number(indexRaw);
-      if (!Number.isFinite(index) || index < 1) {
+      const value = Number(indexRaw);
+      if (!Number.isFinite(value) || value < 1) {
         writeJson(response, 400, { success: false, error: 'index 须为正整数' });
         return;
       }
-      const result = await runtime.jumpToBranchIndex(sessionId, index);
+      branchIndex = value;
+    } else {
+      writeJson(response, 400, { success: false, error: '需要 messageId 或 index 之一' });
+      return;
+    }
+
+    const lease = acquireSessionTree();
+    if (!lease) {
+      unavailable(response);
+      return;
+    }
+    const runtime = lease.tree;
+    try {
+      const sessionId = await runtime.resolveActiveSessionId(parsed.sessionKey);
+      if (!sessionId) {
+        writeJson(response, 404, {
+          success: false,
+          error: `未找到活跃会话：${parsed.sessionKey}`,
+        });
+        return;
+      }
+
+      if (branchIndex !== undefined) {
+        const result = await runtime.jumpToBranchIndex(sessionId, branchIndex);
+        const session = await runtime.agentSessionStore.getBySessionId(sessionId);
+        writeJson(response, result.ok ? 200 : 400, {
+          success: result.ok,
+          message: result.message,
+          data: {
+            sessionKey: parsed.sessionKey,
+            sessionId,
+            activeLeafMessageId: session?.active_leaf_message_id ?? null,
+          },
+        });
+        return;
+      }
+
+      const ok = await runtime.switchActiveLeaf(sessionId, messageId!);
       const session = await runtime.agentSessionStore.getBySessionId(sessionId);
-      writeJson(response, result.ok ? 200 : 400, {
-        success: result.ok,
-        message: result.message,
+      writeJson(response, ok ? 200 : 400, {
+        success: ok,
+        message: ok ? `已切换 active leaf 至消息 #${messageId}` : '切换失败',
         data: {
           sessionKey: parsed.sessionKey,
           sessionId,
           activeLeafMessageId: session?.active_leaf_message_id ?? null,
         },
       });
-      return;
-    } else {
-      writeJson(response, 400, { success: false, error: '需要 messageId 或 index 之一' });
-      return;
+    } finally {
+      lease.release();
     }
-
-    const ok = await runtime.switchActiveLeaf(sessionId, messageId);
-    const session = await runtime.agentSessionStore.getBySessionId(sessionId);
-    writeJson(response, ok ? 200 : 400, {
-      success: ok,
-      message: ok ? `已切换 active leaf 至消息 #${messageId}` : '切换失败',
-      data: {
-        sessionKey: parsed.sessionKey,
-        sessionId,
-        activeLeafMessageId: session?.active_leaf_message_id ?? null,
-      },
-    });
   }, { summary: 'Switch agent session active leaf', tags: ['console', 'agent'] });
 }
 

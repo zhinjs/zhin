@@ -10,6 +10,8 @@ import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';
 import {
   createCapabilitySlot,
   featureId,
+  rootPluginId,
+  tokenId,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import {
@@ -24,6 +26,8 @@ import {
   jsonSchemaToConsoleSchema,
   listSnapshotPlugins,
   registerConsoleApiRoutes,
+  resolveGenerationAgentIntrospection,
+  resolveGenerationAgentConsole,
   setProjectConfigKey,
   writeConfigKey,
 } from '../../src/plugin-runtime/console-api-installer.js';
@@ -319,6 +323,49 @@ describe('displayConsolePath', () => {
     // 在常见 mac 开发机 home 下会变成 ~/…；否则至少不是 project 前缀泄露
     expect(out === outside || out.startsWith('~/')).toBe(true);
     expect(out.includes(projectRoot)).toBe(false);
+  });
+});
+
+describe('generation-owned Agent introspection', () => {
+  it('resolves the read-only port only from the snapshot root resource', () => {
+    const root = rootPluginId();
+    const token = { id: tokenId('zhin.host.agent') };
+    const introspection = { listTools: () => [], listMcpServers: () => [] };
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[token.id, { introspection }]])]]),
+    } as unknown as RuntimeSnapshot;
+
+    expect(resolveGenerationAgentIntrospection(snapshot, token)).toBe(introspection);
+    expect(resolveGenerationAgentIntrospection(undefined, token)).toBeNull();
+  });
+
+  it('does not scan another owner as a fallback authority', () => {
+    const root = rootPluginId();
+    const child = `${root}/child` as RuntimeSnapshot['root'];
+    const token = { id: tokenId('zhin.host.agent') };
+    const snapshot = {
+      root,
+      resources: new Map([[child, new Map([[token.id, { introspection: {} }]])]]),
+    } as unknown as RuntimeSnapshot;
+
+    expect(resolveGenerationAgentIntrospection(snapshot, token)).toBeNull();
+  });
+
+  it('reads all Console Agent ports from the same root generation resource', () => {
+    const root = rootPluginId();
+    const token = { id: tokenId('zhin.host.agent') };
+    const consolePort = {
+      sessionTree: {},
+      orchestration: {},
+      assistant: null,
+    };
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[token.id, { console: consolePort }]])]]),
+    } as unknown as RuntimeSnapshot;
+
+    expect(resolveGenerationAgentConsole(snapshot, token)).toBe(consolePort);
   });
 });
 

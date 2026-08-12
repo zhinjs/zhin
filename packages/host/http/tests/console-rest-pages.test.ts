@@ -32,6 +32,10 @@ function baseCtx(overrides: Partial<ConsoleRestCtx> = {}): ConsoleRestCtx {
   return { fullScope: true, projectRoot: '/nonexistent', ...overrides };
 }
 
+function lease(value: ConsoleAgentRuntime) {
+  return { value, release: () => undefined };
+}
+
 async function json(response: Response): Promise<Record<string, unknown>> {
   return (await response.json()) as Record<string, unknown>;
 }
@@ -394,7 +398,7 @@ function fakeAgentRuntime(overrides: Partial<ConsoleAgentRuntime> = {}): Console
 
 describe('console-rest-pages introspection', () => {
   it('GET /api/introspection/commands 返回 legacy 分页信封并支持 filter', async () => {
-    const base = await startHost(baseCtx({ getAgentRuntime: () => fakeAgentRuntime() }));
+    const base = await startHost(baseCtx({ acquireAgentRuntime: () => lease(fakeAgentRuntime()) }));
     const body = await json(await fetch(`${base}/api/introspection/commands`));
     expect(body.success).toBe(true);
     expect(body.data).toMatchObject({ page: 1, pageSize: 25, total: 2, totalPages: 1 });
@@ -421,7 +425,7 @@ describe('console-rest-pages introspection', () => {
   });
 
   it('GET /api/introspection/tools|bindings|mcp 形状与 note', async () => {
-    const base = await startHost(baseCtx({ getAgentRuntime: () => fakeAgentRuntime() }));
+    const base = await startHost(baseCtx({ acquireAgentRuntime: () => lease(fakeAgentRuntime()) }));
     const tools = await json(await fetch(`${base}/api/introspection/tools`));
     expect((tools.data as { items: unknown[] }).items[0]).toMatchObject({
       name: 'search',
@@ -441,7 +445,7 @@ describe('console-rest-pages introspection', () => {
     });
   });
 
-  it('未接线 getAgentRuntime 时降级为空列表 + note（200）', async () => {
+  it('未接线 acquireAgentRuntime 时降级为空列表 + note（200）', async () => {
     const base = await startHost(baseCtx());
     const body = await json(await fetch(`${base}/api/introspection/tools`));
     expect(body.success).toBe(true);
@@ -451,7 +455,7 @@ describe('console-rest-pages introspection', () => {
 
   it('collector 抛错时按 legacy err 路径返回 503', async () => {
     const base = await startHost(baseCtx({
-      getAgentRuntime: () => ({
+      acquireAgentRuntime: () => lease({
         introspection: {
           commands: () => {
             throw new Error('CommandFeature 不可用');
@@ -490,12 +494,39 @@ function fakeSessionTree() {
 
 function sessionCtx(overrides: Partial<ConsoleRestCtx> = {}): ConsoleRestCtx {
   return baseCtx({
-    getAgentRuntime: () => ({ sessionTree: fakeSessionTree() } satisfies ConsoleAgentRuntime),
+    acquireAgentRuntime: () => lease({ sessionTree: fakeSessionTree() } satisfies ConsoleAgentRuntime),
     ...overrides,
   });
 }
 
 describe('console-rest-pages agent sessions', () => {
+  it('holds the Agent generation lease until the async session operation settles', async () => {
+    let resolveSession!: (value: string | null) => void;
+    let markEntered!: () => void;
+    const entered = new Promise<void>((resolve) => { markEntered = resolve; });
+    let releases = 0;
+    const tree = {
+      ...fakeSessionTree(),
+      resolveActiveSessionId: () => new Promise<string | null>((resolve) => {
+        resolveSession = resolve;
+        markEntered();
+      }),
+    };
+    const base = await startHost(baseCtx({
+      acquireAgentRuntime: () => ({
+        value: { sessionTree: tree },
+        release: () => { releases += 1; },
+      }),
+    }));
+
+    const pending = fetch(`${base}/api/agent/sessions/known/tree`);
+    await entered;
+    expect(releases).toBe(0);
+    resolveSession('sid-1');
+    expect((await pending).status).toBe(200);
+    expect(releases).toBe(1);
+  });
+
   it('GET /api/agent/sessions/:key/tree 返回 legacy 形状', async () => {
     const base = await startHost(sessionCtx());
     const body = await json(await fetch(`${base}/api/agent/sessions/known/tree`));

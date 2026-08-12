@@ -11,12 +11,35 @@ import { readInboundMediaRefs } from '../media/inbound-refs.js';
 import { buildSubagentInboundTask } from '../media/index.js';
 import type { AgentRunInput } from '../media/media-types.js';
 import { sendGroupPeerMention } from '../collaboration/im-mention-delegate.js';
-import { getAgentRuntimeRegistry } from '../collaboration/runtime-registry.js';
 import { getCollaborationSceneService } from '../collaboration/scene-service.js';
 import { assertPeerMember, projectInternalRoomTaskToIm } from '../collaboration/collaboration-dispatch.js';
+import { findCellMemberByEndpoint } from '../collaboration/collaboration-config.js';
+import { isPipelineRole, type CollaborationScene } from '../collaboration/types.js';
+import { resolvePipelineRoleBinding } from '../config/resolve-pipeline-binding.js';
 import { executeRemoteOrchestrationTask } from './remote-task-executor.js';
+import type { AIService } from '../service.js';
+import type { ResolvedAgentBinding } from '../config/types.js';
 export interface RegisterExecutorsDeps {
   refs: AIServiceRefs;
+}
+
+export function resolveInternalRoomBinding(
+  aiService: AIService,
+  cell: CollaborationScene,
+  endpointKey: string,
+): ResolvedAgentBinding {
+  const member = findCellMemberByEndpoint(cell, endpointKey);
+  if (!member) {
+    throw new Error(`endpoint "${endpointKey}" is not a member of collaboration scene "${cell.id}"`);
+  }
+  if (isPipelineRole(member.pipelineRole)) {
+    return resolvePipelineRoleBinding(member.pipelineRole, aiService.getRoutingConfig());
+  }
+  const binding = aiService.getBindingRegistry().getBinding(member.primary);
+  if (!binding) {
+    throw new Error(`agent binding "${member.primary}" is not configured for endpoint ${endpointKey}`);
+  }
+  return binding;
 }
 
 export function registerDefaultExecutors(
@@ -77,24 +100,26 @@ export function registerDefaultExecutors(
       const sceneId = typeof task.context?.collaborationSceneId === 'string'
         ? task.context.collaborationSceneId
         : undefined;
-      if (sceneId) {
-        const cell = getCollaborationSceneService().getScene(sceneId);
-        if (!cell) {
-          yield { type: 'error', error: `collaboration scene "${sceneId}" not found` };
-          return;
-        }
-        try {
-          assertPeerMember(cell, targetEndpointKey);
-        } catch (err) {
-          yield { type: 'error', error: err instanceof Error ? err.message : String(err) };
-          return;
-        }
+      if (!sceneId) {
+        yield { type: 'error', error: 'internal_room task requires collaborationSceneId' };
+        return;
+      }
+      const cell = getCollaborationSceneService().getScene(sceneId);
+      if (!cell) {
+        yield { type: 'error', error: `collaboration scene "${sceneId}" not found` };
+        return;
+      }
+      try {
+        assertPeerMember(cell, targetEndpointKey);
+      } catch (err) {
+        yield { type: 'error', error: err instanceof Error ? err.message : String(err) };
+        return;
       }
 
-      const peerAgent = getAgentRuntimeRegistry().getForEndpoint(targetEndpointKey);
-      const subagentSystem = peerAgent?.getSubagentSystem();
-      if (!peerAgent || !subagentSystem) {
-        yield { type: 'error', error: `no ZhinAgent runtime for endpoint ${targetEndpointKey}` };
+      const runtime = refs.zhinAgent;
+      const subagentSystem = runtime?.getSubagentSystem();
+      if (!runtime || !subagentSystem) {
+        yield { type: 'error', error: 'zhin agent or subagent manager not initialized' };
         return;
       }
       if (!message) {
@@ -115,10 +140,20 @@ export function registerDefaultExecutors(
         });
       }
 
-      const bindingRegistry = refs.aiService?.getBindingRegistry();
-      const routeBinding = bindingRegistry?.getBinding(targetEndpointKey) ?? null;
-      const routeProvider = routeBinding && refs.aiService?.isReady()
-        ? refs.aiService!.getProvider(routeBinding.providerAlias)
+      const aiService = refs.aiService;
+      if (!aiService) {
+        yield { type: 'error', error: 'AI service is not initialized' };
+        return;
+      }
+      let routeBinding: ResolvedAgentBinding;
+      try {
+        routeBinding = resolveInternalRoomBinding(aiService, cell, targetEndpointKey);
+      } catch (error) {
+        yield { type: 'error', error: error instanceof Error ? error.message : String(error) };
+        return;
+      }
+      const routeProvider = aiService.isReady()
+        ? aiService.getProvider(routeBinding.providerAlias)
         : undefined;
 
       let runInput: AgentRunInput | undefined = delegateText;
@@ -133,8 +168,8 @@ export function registerDefaultExecutors(
         task: delegateText.trim() || '请处理上述协作请求。',
         runInput,
         label: targetEndpointKey,
-        agent: targetEndpointKey,
-        binding: routeBinding ?? undefined,
+        agent: routeBinding.name,
+        binding: routeBinding,
         origin: { message },
         notifyContext: message,
         orchestrationTaskId: task.id,

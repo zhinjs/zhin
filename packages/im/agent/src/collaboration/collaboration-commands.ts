@@ -8,7 +8,6 @@ import {
   memberTransportAdapter,
   resolvePeerEndpointInCell,
 } from './collaboration-config.js';
-import { rebootstrapEndpointRuntimes } from './bootstrap-agent-runtimes.js';
 import { getPipelineService } from '../aop/pipeline/pipeline-service.js';
 import {
   isPipelineRole,
@@ -389,7 +388,6 @@ export async function handleCollabBind(
   if (!added.ok) return `⚠️ 绑定失败：${added.error ?? 'unknown'}`;
 
   cell = (await svc.getSceneFresh(cell.id)) ?? cell;
-  await rebootstrapEndpointRuntimes();
   const label = transportAdapter === cell.adapter
     ? endpointKey
     : `${transportAdapter}/${endpointKey}`;
@@ -412,7 +410,6 @@ export async function handleCollabUnbind(message: Message, endpointRef: string):
   if (!ok) return `⚠️ 未找到成员 ${endpointKey}`;
 
   const fresh = (await svc.getSceneFresh(cell.id)) ?? cell;
-  await rebootstrapEndpointRuntimes();
   return `✅ 已移除 ${endpointKey}\n${await formatStatus(fresh)}`;
 }
 

@@ -7,7 +7,6 @@ import type { AIConfig } from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
 import { activateAiDatabaseStorage } from './activate-ai-database-storage.js';
 import { wireCollaborationStorage } from '../collaboration/wire-collaboration-storage.js';
-import { markAllRuntimesPersistenceReady } from '../collaboration/bootstrap-agent-runtimes.js';
 import {
   upgradeAgentSessionTreeData,
   type AgentDbQueryable,
@@ -52,7 +51,7 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
     const configService = root.inject('config');
     const appConfig = configService?.getPrimary<{ ai?: AIConfig; collaboration?: unknown }>() || {};
     if (appConfig.ai?.sessions?.useDatabase === false) {
-      if (refs.zhinAgent) markAllRuntimesPersistenceReady(refs.zhinAgent);
+      refs.zhinAgent?.markMemoryPersistenceReady();
       void wireCollaborationStorage(undefined, appConfig.collaboration);
       return;
     }
@@ -67,7 +66,7 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
         .then(() => activateAiDatabaseStorage(db, refs, appConfig.ai || {}, appConfig.collaboration))
         .catch((e) => logger.error('AI Session: database setup failed:', e))
         .finally(() => {
-          if (refs.zhinAgent) markAllRuntimesPersistenceReady(refs.zhinAgent);
+          refs.zhinAgent?.markMemoryPersistenceReady();
         });
     }
   });
@@ -88,7 +87,7 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
     } catch (e) {
       logger.error('AI Session: database setup failed:', e);
     } finally {
-      if (refs.zhinAgent) markAllRuntimesPersistenceReady(refs.zhinAgent);
+      refs.zhinAgent?.markMemoryPersistenceReady();
     }
   });
 }

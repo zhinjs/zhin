@@ -24,6 +24,7 @@ import {
   createConsoleEventHub,
   registerConsoleRestPages,
   type ConsoleAgentRuntime,
+  type ConsoleScheduleEngine,
   type ConsoleEventHub,
   type HttpHost,
   type RuntimeConsolePage,
@@ -36,35 +37,23 @@ import {
   type DatabaseHost,
   type PluginNodeSnapshot,
   type RuntimeSnapshot,
+  type SnapshotStore,
+  type TokenId,
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller, RuntimeConfigDocument } from '@zhin.js/runtime';
 import { installInboxMessageRecorder } from './inbox-installer.js';
 
 /**
- * 新 Runtime 的 agent 门面。agent 包在 init 时已向 registry 注册 session tree
- * （create-zhin-agent.ts setSessionTreeRuntime）；模块加载后按请求惰性解析，
- * agent 未安装/未 init 时降级（host-http 返回 503 / 空列表 + note）。
+ * 新 Runtime 的 agent 门面。Session tree 仍由独立服务端口提供；Agent 本体只从
+ * 当前 generation snapshot 的 agentHostToken 解析。模块按请求惰性加载，agent
+ * 未安装/未 init 时降级（host-http 返回 503 / 空列表 + note）。
  */
 let agentModule: {
-  getSessionTreeRuntime?: () => ConsoleAgentRuntime['sessionTree'];
-  getAssistantRuntime?: () => {
-    engine: import('@zhin.js/host-http').ConsoleScheduleEngine;
-  } | null;
-  getAgentRuntimeRegistry?: () => {
-    getDefault(): {
-      orchestrator?: unknown;
-      listRegisteredTools?: () => readonly {
-        name: string;
-        description?: string;
-        hidden?: boolean;
-        source?: string;
-      }[];
-    } | null;
-  };
+  agentHostToken?: { readonly id: TokenId };
 } | null | undefined;
 
-void import('@zhin.js/agent')
-  .then((mod) => { agentModule = mod as typeof agentModule; })
+void import('@zhin.js/agent/runtime')
+  .then((runtime) => { agentModule = runtime as typeof agentModule; })
   .catch(() => { agentModule = null; });
 
 function createAgentRuntimeResolver(
@@ -73,7 +62,7 @@ function createAgentRuntimeResolver(
 ): () => ConsoleAgentRuntime | undefined {
   const display = (value: string) => displayConsolePath(value, projectRoot);
   return () => ({
-    sessionTree: agentModule?.getSessionTreeRuntime?.() ?? undefined,
+    sessionTree: resolveAgentConsole(getSnapshot)?.sessionTree,
     introspection: {
       commands: () => {
         const snap = getSnapshot?.();
@@ -107,10 +96,10 @@ function createAgentRuntimeResolver(
             }
           }
         }
-        const orchestrator = resolveOrchestrator();
-        if (orchestrator) {
-          for (const tool of orchestrator.tools.getAll()) {
-            if ((tool as { hidden?: boolean }).hidden || seen.has(tool.name)) continue;
+        const introspection = resolveAgentIntrospection(getSnapshot);
+        if (introspection) {
+          for (const tool of introspection.listTools()) {
+            if (tool.hidden || seen.has(tool.name)) continue;
             seen.set(tool.name, {
               name: tool.name,
               source: 'agent',
@@ -126,13 +115,13 @@ function createAgentRuntimeResolver(
         for (const entry of listConfigMcpServers(projectRoot)) {
           rows.set(entry.name, { name: entry.name, connected: false, toolCount: 0, transport: entry.transport });
         }
-        const orchestrator = resolveOrchestrator();
-        if (orchestrator) {
-          for (const entry of orchestrator.mcps.getAll()) {
+        const introspection = resolveAgentIntrospection(getSnapshot);
+        if (introspection) {
+          for (const entry of introspection.listMcpServers()) {
             rows.set(entry.name, {
               name: entry.name,
-              connected: orchestrator.mcps.isConnected(entry.name),
-              toolCount: orchestrator.mcps.getToolsFromServer(entry.name).length,
+              connected: entry.connected,
+              toolCount: entry.toolCount,
             });
           }
         }
@@ -140,6 +129,27 @@ function createAgentRuntimeResolver(
       },
     },
   });
+}
+
+function createAgentRuntimeLeaseResolver(
+  projectRoot: string,
+  snapshots?: SnapshotStore,
+): (() => { value: ConsoleAgentRuntime; release(): void } | null) | undefined {
+  if (!snapshots) return undefined;
+  return () => {
+    let lease: ReturnType<SnapshotStore['acquire']>;
+    try {
+      lease = snapshots.acquire();
+    } catch {
+      return null;
+    }
+    const value = createAgentRuntimeResolver(projectRoot, () => lease.value)();
+    if (!value) {
+      lease.release();
+      return null;
+    }
+    return { value, release: () => lease.release() };
+  };
 }
 
 /**
@@ -151,20 +161,77 @@ export function displayConsolePath(value: string, projectRoot: string): string {
   return formatDisplayPath(value, { projectRoot });
 }
 
-function resolveOrchestrator(): {
-  tools: { getAll(): { name: string; hidden?: boolean; description?: string }[] };
-  mcps: {
-    getAll(): { name: string }[];
-    isConnected(name: string): boolean;
-    getToolsFromServer(name: string): readonly unknown[];
-  };
+type AgentIntrospection = {
+  listTools(): readonly { name: string; hidden?: boolean; description?: string }[];
+  listMcpServers(): readonly { name: string; connected: boolean; toolCount: number }[];
+};
+
+export function resolveGenerationAgentIntrospection(
+  snapshot: RuntimeSnapshot | undefined,
+  token: { readonly id: TokenId } | undefined,
+): AgentIntrospection | null {
+  if (!snapshot || !token) return null;
+  const host = snapshot.resources.get(snapshot.root)?.get(token.id) as {
+    introspection?: AgentIntrospection;
+  } | undefined;
+  return host?.introspection ?? null;
+}
+
+type AgentConsolePort = {
+  readonly sessionTree: ConsoleAgentRuntime['sessionTree'];
+  readonly orchestration: OrchestrationRuntime;
+  readonly assistant: AssistantRuntime | null;
+};
+
+export function resolveGenerationAgentConsole(
+  snapshot: RuntimeSnapshot | undefined,
+  token: { readonly id: TokenId } | undefined,
+): AgentConsolePort | null {
+  if (!snapshot || !token) return null;
+  const host = snapshot.resources.get(snapshot.root)?.get(token.id) as {
+    console?: AgentConsolePort;
+  } | undefined;
+  return host?.console ?? null;
+}
+
+function resolveAgentIntrospection(getSnapshot?: () => RuntimeSnapshot | undefined): AgentIntrospection | null {
+  return resolveGenerationAgentIntrospection(getSnapshot?.(), agentModule?.agentHostToken);
+}
+
+function resolveAgentConsole(getSnapshot?: () => RuntimeSnapshot | undefined): AgentConsolePort | null {
+  return resolveGenerationAgentConsole(getSnapshot?.(), agentModule?.agentHostToken);
+}
+
+function acquireGenerationAgentConsole(snapshots?: SnapshotStore): {
+  readonly value: AgentConsolePort | null;
+  release(): void;
 } | null {
+  if (!snapshots) return null;
   try {
-    const registry = agentModule?.getAgentRuntimeRegistry?.();
-    const orchestrator = registry?.getDefault?.()?.orchestrator;
-    return (orchestrator as never) ?? null;
+    const lease = snapshots.acquire();
+    return {
+      value: resolveGenerationAgentConsole(lease.value, agentModule?.agentHostToken),
+      release: () => lease.release(),
+    };
   } catch {
     return null;
+  }
+}
+
+async function withGenerationAgentConsole(
+  snapshots: SnapshotStore | undefined,
+  operation: (value: AgentConsolePort) => Promise<void>,
+): Promise<boolean> {
+  const lease = acquireGenerationAgentConsole(snapshots);
+  if (!lease?.value) {
+    lease?.release();
+    return false;
+  }
+  try {
+    await operation(lease.value);
+    return true;
+  } finally {
+    lease.release();
   }
 }
 
@@ -274,6 +341,8 @@ export function installConsoleApi(options: {
   readonly databaseHost?: DatabaseHost;
   /** Snapshot accessor backing `/api/stats` and `/api/plugins*`. */
   readonly snapshot?: () => RuntimeSnapshot | undefined;
+  /** Snapshot lease authority for Agent-backed async operations. */
+  readonly snapshots?: SnapshotStore;
   /** ScheduleHost — wires `schedule:list`/`cron:list` extended RPC. */
   readonly scheduleHost?: unknown;
   /** Full-scope `system:restart` — typically `process.exit(51)` for CLI daemon. */
@@ -300,6 +369,7 @@ export function installConsoleApi(options: {
       options.scheduleHost,
       hub,
       config.document,
+      options.snapshots,
     );
   };
 }
@@ -316,6 +386,7 @@ export function registerConsoleApiRoutes(
   scheduleHost?: unknown,
   eventHub?: ConsoleEventHub,
   primaryConfigDocument?: RuntimeConfigDocument,
+  snapshots?: SnapshotStore,
 ): void {
   const base = normalizeBase(apiBase);
   const hub = eventHub ?? createConsoleEventHub();
@@ -340,7 +411,7 @@ export function registerConsoleApiRoutes(
     getEndpoints: im
       ? () => im.listEndpoints()
       : undefined,
-    getAgentRuntime: createAgentRuntimeResolver(projectRoot, snapshot),
+    acquireAgentRuntime: createAgentRuntimeLeaseResolver(projectRoot, snapshots),
     databaseHost: databaseHost
       ? {
         dialect: databaseHost.dialect,
@@ -468,7 +539,10 @@ export function registerConsoleApiRoutes(
   http.route('POST', `${base}/console/request`, async (request, response, _url, authScope) => {
     try {
       const message = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
-      const payloads = await dispatchRuntimeConsoleRpc(message, {
+      const agentLease = acquireGenerationAgentConsole(snapshots);
+      let payloads: Awaited<ReturnType<typeof dispatchRuntimeConsoleRpc>>;
+      try {
+        payloads = await dispatchRuntimeConsoleRpc(message, {
         authScope,
         listPages: () => listPages(consoleRuntime),
         readConfigYaml: () => readProjectConfigYaml(projectRoot),
@@ -522,11 +596,14 @@ export function registerConsoleApiRoutes(
           databaseHost: databaseHost
             ? { models: databaseHost.models }
             : undefined,
-          resolveScheduleEngine: () => agentModule?.getAssistantRuntime?.()?.engine ?? null,
+          resolveScheduleEngine: () => agentLease?.value?.assistant?.engine ?? null,
         },
         listPluginKeys: () => listConsoleConfigKeys(projectRoot, primaryConfigDocument),
         publishEvent: (type, data) => hub.publish(type, data),
-      });
+        });
+      } finally {
+        agentLease?.release();
+      }
       const match = pickRpcReply(message, payloads);
       if (!match) {
         writeJson(response, 500, { success: false, error: 'No response' });
@@ -598,32 +675,40 @@ export function registerConsoleApiRoutes(
 
   // Assistant Event Ingress (M2) — needs Agent Host setAssistantRuntime.
   http.route('POST', `${base}/assistant/events`, async (request, response) => {
-    const agent = await loadAgentConsoleApi();
-    if (!agent?.isAssistantEventsEndpointActive()) {
-      writeJson(response, 404, { success: false, error: 'assistant.events is not enabled' });
-      return;
-    }
-    const runtime = agent.getAssistantRuntime();
-    if (!runtime?.ingress) {
-      writeJson(response, 503, { success: false, error: 'assistant runtime unavailable' });
-      return;
-    }
+    let body: unknown;
     try {
-      const body = await readJsonBody(request);
-      const result = await runtime.ingress.handle(body);
-      if (!result.ok) {
-        const status = result.error?.includes('rate limit') ? 429
-          : result.error?.includes('not found') ? 404
-            : 400;
-        writeJson(response, status, { success: false, error: result.error, data: result });
-        return;
-      }
-      writeJson(response, result.deduped ? 200 : 202, { success: true, data: result });
+      body = await readJsonBody(request);
     } catch (error) {
-      writeJson(response, 500, {
+      writeJson(response, 400, {
         success: false,
         error: error instanceof Error ? error.message : String(error),
       });
+      return;
+    }
+    const handled = await withGenerationAgentConsole(snapshots, async ({ assistant: runtime }) => {
+      if (!runtime?.ingress.isEnabled()) {
+        writeJson(response, 404, { success: false, error: 'assistant.events is not enabled' });
+        return;
+      }
+      try {
+        const result = await runtime.ingress.handle(body);
+        if (!result.ok) {
+          const status = result.error?.includes('rate limit') ? 429
+            : result.error?.includes('not found') ? 404
+              : 400;
+          writeJson(response, status, { success: false, error: result.error, data: result });
+          return;
+        }
+        writeJson(response, result.deduped ? 200 : 202, { success: true, data: result });
+      } catch (error) {
+        writeJson(response, 500, {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+    if (!handled) {
+      writeJson(response, 404, { success: false, error: 'assistant.events is not enabled' });
     }
   }, {
     summary: 'Assistant event ingress',
@@ -631,26 +716,26 @@ export function registerConsoleApiRoutes(
   });
 
   http.route('GET', `${base}/assistant/jobs`, async (_request, response) => {
-    const agent = await loadAgentConsoleApi();
-    const runtime = agent?.getAssistantRuntime();
-    if (!runtime?.config.enabled) {
+    const handled = await withGenerationAgentConsole(snapshots, async ({ assistant: runtime }) => {
+      if (!runtime?.config.enabled) {
+        writeJson(response, 404, { success: false, error: 'assistant.enabled is false' });
+        return;
+      }
+      try {
+        const jobs = await runtime.engine.listJobs();
+        writeJson(response, 200, {
+          success: true,
+          data: { jobs, eventsActive: runtime.ingress.isEnabled() },
+        });
+      } catch (error) {
+        writeJson(response, 500, {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+    if (!handled) {
       writeJson(response, 404, { success: false, error: 'assistant.enabled is false' });
-      return;
-    }
-    try {
-      const jobs = await runtime.engine.listJobs();
-      writeJson(response, 200, {
-        success: true,
-        data: {
-          jobs,
-          eventsActive: agent?.isAssistantEventsActive(runtime.config) ?? false,
-        },
-      });
-    } catch (error) {
-      writeJson(response, 500, {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
     }
   }, {
     summary: 'List assistant jobs',
@@ -664,16 +749,16 @@ export function registerConsoleApiRoutes(
       writeJson(response, 400, { success: false, error: '请提供 sessionKey 查询参数' });
       return;
     }
-    const runtime = await loadOrchestrationRuntime();
-    if (!runtime) {
+    const handled = await withGenerationAgentConsole(snapshots, async ({ orchestration }) => {
+      const runs = await orchestration.listRuns(sessionKey);
+      writeJson(response, 200, { success: true, data: { sessionKey, runs } });
+    });
+    if (!handled) {
       writeJson(response, 503, {
         success: false,
         error: 'Orchestration runtime 未就绪（未安装或未初始化 @zhin.js/agent）',
       });
-      return;
     }
-    const runs = await runtime.listRuns(sessionKey);
-    writeJson(response, 200, { success: true, data: { sessionKey, runs } });
   }, {
     summary: 'List orchestration runs',
     tags: ['agent', 'orchestration'],
@@ -688,20 +773,20 @@ export function registerConsoleApiRoutes(
       writeJson(response, 404, { success: false, error: 'Run not found' });
       return;
     }
-    const runtime = await loadOrchestrationRuntime();
-    if (!runtime) {
+    const handled = await withGenerationAgentConsole(snapshots, async ({ orchestration }) => {
+      const runSnapshot = await orchestration.getRun(runId);
+      if (!runSnapshot) {
+        writeJson(response, 404, { success: false, error: `Run ${runId} 不存在` });
+        return;
+      }
+      writeJson(response, 200, { success: true, data: runSnapshot });
+    });
+    if (!handled) {
       writeJson(response, 503, {
         success: false,
         error: 'Orchestration runtime 未就绪（未安装或未初始化 @zhin.js/agent）',
       });
-      return;
     }
-    const snapshot = await runtime.getRun(runId);
-    if (!snapshot) {
-      writeJson(response, 404, { success: false, error: `Run ${runId} 不存在` });
-      return;
-    }
-    writeJson(response, 200, { success: true, data: snapshot });
   }, {
     summary: 'Get orchestration run',
     tags: ['agent', 'orchestration'],
@@ -1562,33 +1647,9 @@ type OrchestrationRuntime = {
 
 type AssistantRuntime = {
   readonly config: { readonly enabled?: boolean };
-  readonly ingress?: {
+  readonly ingress: {
+    isEnabled(): boolean;
     handle(body: unknown): Promise<{ ok: boolean; deduped?: boolean; error?: string }>;
   };
-  readonly engine: { listJobs(): Promise<unknown[]> };
+  readonly engine: ConsoleScheduleEngine;
 };
-
-type AgentConsoleApi = {
-  getAssistantRuntime(): AssistantRuntime | null;
-  isAssistantEventsEndpointActive(): boolean;
-  isAssistantEventsActive(config: AssistantRuntime['config']): boolean;
-};
-
-async function loadAgentConsoleApi(): Promise<AgentConsoleApi | null> {
-  try {
-    return await import('@zhin.js/agent') as unknown as AgentConsoleApi;
-  } catch {
-    return null;
-  }
-}
-
-async function loadOrchestrationRuntime(): Promise<OrchestrationRuntime | null> {
-  try {
-    const mod = await import('@zhin.js/agent') as {
-      getOrchestrationRuntime?: () => OrchestrationRuntime | null;
-    };
-    return mod.getOrchestrationRuntime?.() ?? null;
-  } catch {
-    return null;
-  }
-}

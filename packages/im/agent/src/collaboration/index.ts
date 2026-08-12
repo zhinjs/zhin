@@ -3,9 +3,7 @@ export * from './scene-context.js';
 export * from './collaboration-config.js';
 export * from './peer-policy.js';
 export * from './turn-plan-resolver.js';
-export * from './runtime-registry.js';
 export * from './scene-service.js';
-export * from './bootstrap-agent-runtimes.js';
 export * from './endpoint-identity.js';
 export { wireCollaborationStorage } from './wire-collaboration-storage.js';
 export {

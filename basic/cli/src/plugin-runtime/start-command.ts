@@ -180,6 +180,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
         scheduleHost,
         eventHub: consoleEventHub,
         snapshot: () => host.runtime.controller.snapshots.current,
+        snapshots: host.runtime.controller.snapshots,
         onRestart: () => {
           // Exit 51: CLI daemon (`zhin runtime start`) auto-restarts the process.
           process.exit(51);

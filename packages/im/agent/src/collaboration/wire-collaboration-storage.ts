@@ -10,7 +10,6 @@ import {
   setCollaborationArtifactRepository,
 } from './collaboration-artifact-repository.js';
 import { getCollaborationSceneService, initCollaborationSceneService } from './scene-service.js';
-import { rebootstrapEndpointRuntimes } from './bootstrap-agent-runtimes.js';
 import {
   createSceneIdentityService,
   setSceneIdentityService,
@@ -52,5 +51,4 @@ export async function wireCollaborationStorage(
   await sceneSvc.loadSceneIndex();
 
   await initCollaborationSceneService();
-  await rebootstrapEndpointRuntimes();
 }

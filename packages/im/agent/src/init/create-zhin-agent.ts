@@ -51,7 +51,6 @@ import {
   provideSessionTreeRuntime,
 } from '../session-tree-runtime-registry.js';
 import { createAgentSessionHostPort, type AgentSessionHostPort } from '../session/agent-session-host-port.js';
-import { getAgentRuntimeRegistry } from '../collaboration/runtime-registry.js';
 import { MemoryOrchestrationRepository } from '../orchestrator/orchestration-repository.js';
 import {
   createOrchestrationService,
@@ -70,7 +69,6 @@ import type { AIService } from '../service.js';
 import { createExecPolicyHook } from '../security/exec-policy-hook.js';
 import { createFilePolicyHook } from '../security/file-policy-hook.js';
 import { createDangerousToolPolicyHook } from '../security/dangerous-tool-policy-hook.js';
-import { bootstrapEndpointRuntimes, markAllRuntimesPersistenceReady } from '../collaboration/bootstrap-agent-runtimes.js';
 /** yaml 中显式 models 列表：覆盖 provider.models 与 ModelRegistry 缓存，避免 /v1/models 发现结果污染白名单 */
 function applyExplicitModelLists(ai: AIService, modelRegistry: ModelRegistry): void {
   for (const alias of ai.listProviders()) {
@@ -141,13 +139,6 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     };
     const agent = new ZhinAgent(provider, zhinAgentCfg);
     refs.zhinAgent = agent;
-    bootstrapEndpointRuntimes({
-      refs,
-      plugin,
-      ai,
-      primaryAgent: agent,
-      agentConfig: zhinAgentCfg,
-    }, { lifecycle: generationLifecycle });
     provideSessionTreeRuntime({ lifecycle: generationLifecycle }, createSessionTreeRuntimeFromAgent(asPrivate(agent)));
     void provideRemoteAgentRegistry({ lifecycle: generationLifecycle }, appConfig.ai).then((registry) => registry.healthCheckAll());
     provideRemoteTaskPoller({ lifecycle: generationLifecycle }, { intervalMs: 15_000 });
@@ -172,15 +163,15 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       if (semanticMemory) {
         provideMemoryEntryRepository({ lifecycle: generationLifecycle }, new InMemoryMemoryEntryRepository());
       }
-      markAllRuntimesPersistenceReady(agent);
+      agent.markMemoryPersistenceReady();
       void wireCollaborationStorage(undefined, appConfig.collaboration);
     } else if (db) {
       void activateAiDatabaseStorage(db, refs, appConfig.ai || {}, appConfig.collaboration)
         .catch((e) => logger.error('AI Session: database setup failed:', e))
-        .finally(() => markAllRuntimesPersistenceReady(agent));
+        .finally(() => agent.markMemoryPersistenceReady());
     } else {
       // useDb requested but no database plugin present: keep the Memory kernel.
-      markAllRuntimesPersistenceReady(agent);
+      agent.markMemoryPersistenceReady();
     }
 
     const orchestrator = root.inject('agent');
@@ -192,7 +183,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       });
 
       agentSessionHost = createAgentSessionHostPort({
-        getAgent: () => getAgentRuntimeRegistry().getDefault(),
+        getAgent: () => agent,
         bus: orchestrator.agentStreamBus,
       });
       asPrivate(agent).httpApprovalAdapter = agentSessionHost.httpApprovalAdapter;

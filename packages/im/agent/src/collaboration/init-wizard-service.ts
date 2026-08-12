@@ -11,7 +11,6 @@ import { randomUUID } from 'node:crypto';
 import { WIZARD_STEPS, isAssignableWizardRole, type WizardStep, type AssignableWizardRole } from './collaboration-db-model.js';
 import { getSceneIdentityService, type InitSessionRecord } from './scene-identity-service.js';
 import { getCollaborationSceneService } from './scene-service.js';
-import { rebootstrapEndpointRuntimes } from './bootstrap-agent-runtimes.js';
 import { defaultCellId } from './collab-utils.js';
 
 const WIZARD_PROMPTS: Record<WizardStep, string> = {
@@ -228,7 +227,6 @@ export async function aggregateAndActivate(
   });
 
   await sceneSvc.updateInitSessionStatus(session.id, 'active', logicalSceneId);
-  await rebootstrapEndpointRuntimes();
 
   return {
     ok: true,

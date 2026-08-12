@@ -68,7 +68,6 @@ import {
   provideSessionTreeRuntime,
   createSessionTreeRuntimeFromAgent,
   asPrivate,
-  getAgentRuntimeRegistry,
   wireCollaborationStorage,
   applyRuntimeCollaborationInbound,
   findCellForInbound,
@@ -78,6 +77,9 @@ import {
   publishOutboundElements,
   type ProactiveOutboundService,
   type AssistantConfig,
+  type AssistantRuntimeHandle,
+  type OrchestrationRuntimeHandle,
+  type SessionTreeRuntimeHandle,
   type ImTranscriptWriteInput,
   type PeerTriggerMode,
   type ApprovalPort,
@@ -253,6 +255,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     let assistantEnabled = false;
     let collaborationReady = false;
     let orchService: OrchestrationService;
+    let orchestrationRuntime: OrchestrationRuntimeHandle;
+    let sessionTreeRuntime: SessionTreeRuntimeHandle;
+    let schedule: ReturnType<typeof wireRuntimeSchedule>;
     try {
       const created = createRuntimeZhinAgent(
         service,
@@ -268,14 +273,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       registerDefaultExecutors(orchService, {
         refs: { zhinAgent, aiService: service },
       });
-      // Console REST（/api/agent/orchestration/*、session tree）读这两个 registry；
-      // 与 legacy create-zhin-agent 对齐，此前 Runtime 路径漏接 → 两个页面 503
-      provideOrchestrationRuntime({ lifecycle }, createOrchestrationRuntimeFromService(orchService));
-      provideSessionTreeRuntime({ lifecycle }, createSessionTreeRuntimeFromAgent(asPrivate(zhinAgent)));
-      const disposeDefaultAgent = getAgentRuntimeRegistry().registerDefault(zhinAgent);
-      lifecycle.add(disposeDefaultAgent);
-
-      const schedule = wireRuntimeSchedule(
+      // Console REST（/api/agent/orchestration/*、session tree）读取这两个
+      // generation-scoped 服务端口；此前 Runtime 路径漏接会令两个页面返回 503。
+      orchestrationRuntime = createOrchestrationRuntimeFromService(orchService);
+      sessionTreeRuntime = createSessionTreeRuntimeFromAgent(asPrivate(zhinAgent));
+      provideOrchestrationRuntime({ lifecycle }, orchestrationRuntime);
+      provideSessionTreeRuntime({ lifecycle }, sessionTreeRuntime);
+      schedule = wireRuntimeSchedule(
         zhinAgent,
         options.im,
         options.projectRoot,
@@ -413,6 +417,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       ...homeTools,
       bashTool,
     ]) {
+      if (!tool.description?.trim()) {
+        throw new TypeError(`Host tool "${tool.name}" description cannot be empty`);
+      }
       const projected = projectHostTool({
         name: tool.name,
         description: tool.description,
@@ -427,10 +434,35 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       addFeature(projected.feature, projected.name, projected.definition);
     }
 
-    // Protocol Hosts (MCP/A2A) consume this narrow generation-owned port.
+    const orchestrator = zhinAgent.orchestrator;
+    if (!orchestrator) {
+      throw new Error('Agent Host requires a ready orchestrator before generation publication');
+    }
+
+    // Protocol Hosts (MCP/A2A) and Console consume this generation-owned port.
     // The Scope is sealed after all Root installers finish, so publication must
     // happen here rather than through a mutable process-global registry.
-    resources.provide(agentHostToken, Object.freeze({ service, agent: zhinAgent }));
+    resources.provide(agentHostToken, Object.freeze({
+      service,
+      agent: zhinAgent,
+      introspection: Object.freeze({
+        listTools: () => orchestrator.tools.getAll().map((tool) => Object.freeze({
+          name: tool.name,
+          description: tool.description,
+          hidden: 'hidden' in tool && tool.hidden === true,
+        })),
+        listMcpServers: () => orchestrator.mcps.getAll().map((entry) => Object.freeze({
+          name: entry.name,
+          connected: orchestrator.mcps.isConnected(entry.name),
+          toolCount: orchestrator.mcps.getToolsFromServer(entry.name).length,
+        })),
+      }),
+      console: Object.freeze({
+        sessionTree: sessionTreeRuntime,
+        orchestration: orchestrationRuntime,
+        assistant: schedule.assistantRuntime,
+      }),
+    }));
     resources.provide(
       turnJournalStoreToken,
       new FileJournalStore(join(options.projectRoot, '.zhin', 'agent-journal')),
@@ -690,6 +722,7 @@ function wireRuntimeSchedule(
   notificationRouter: ReturnType<typeof createNotificationRouter>;
   defaultNotify: ReturnType<typeof parseJobNotify> | undefined;
   bindCallHaService: (fn: (service: string, target?: string, data?: unknown) => Promise<void>) => void;
+  assistantRuntime: AssistantRuntimeHandle | null;
 } {
   const dataDir = join(projectRoot, 'data');
   mkdirSync(dataDir, { recursive: true });
@@ -763,18 +796,20 @@ function wireRuntimeSchedule(
     previewTask: (prompt, message, options) => executor.preview(prompt, message, options),
   });
 
+  let assistantRuntime: AssistantRuntimeHandle | null = null;
   if (assistantCfg.enabled) {
     const ingress = new AssistantEventIngress({
       store,
       engine: jobEngine,
       eventsConfig: assistantCfg.events,
     });
-    provideAssistantRuntime({ lifecycle }, {
+    assistantRuntime = {
       config: assistantCfg,
       store,
       engine: jobEngine,
       ingress,
-    });
+    };
+    provideAssistantRuntime({ lifecycle }, assistantRuntime);
     void (async () => {
       const profile = await loadAssistantProfileFile(projectRoot, assistantCfg.profile);
       if (profile) {
@@ -823,6 +858,7 @@ function wireRuntimeSchedule(
     notificationRouter,
     defaultNotify,
     bindCallHaService,
+    assistantRuntime,
     // assistant / schedule-manager 注册随 generation lifecycle 反注册（provide 时挂接）
     dispose: () => {
       jobEngine.unload();

@@ -683,8 +683,6 @@ export type {
 
 // ── Collaboration (GroupCell multi-endpoint) ──
 export {
-  getAgentRuntimeRegistry,
-  resetAgentRuntimeRegistry,
   getCollaborationSceneService,
   initCollaborationSceneService,
   resetCollaborationSceneService,
@@ -697,7 +695,6 @@ export {
   COLLABORATION_SCENE_MODEL,
   COLLABORATION_SCENE_MEMBER_MODEL,
   COLLABORATION_SCENE_ARTIFACT_MODEL,
-  bootstrapEndpointRuntimes,
   buildTurnPlan,
   evaluatePeerTrigger,
   applyRuntimeCollaborationInbound,
