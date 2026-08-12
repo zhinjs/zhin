@@ -266,11 +266,11 @@ export {
   addScheduleJob,
   parseScheduleAddFromToolArgs,
   parseScheduleAddFromRpcMessage,
-  buildScheduleTurnPrompt,
   bootstrapAssistantHome,
   isAssistantHomeActive,
   resolveAssistantHomeConfig,
 } from './assistant/index.js';
+export * from './schedule-domain/index.js';
 export type {
   AssistantConfig,
   AssistantDefaultsConfig,
@@ -490,7 +490,7 @@ export type {
 } from './ai-event-subscriber.js';
 
 export { initAgentModule } from './init.js';
-export { registerEndpointIdColumnMigrationHook } from './init/upgrade-endpoint-id-schema.js';
+export { registerEndpointKeyColumnMigrationHook } from './init/upgrade-endpoint-id-schema.js';
 
 // ── Activity Feedback（替代 endpoint typingIndicator）──
 export {
@@ -670,7 +670,7 @@ export type {
 } from './collaboration/index.js';
 export {
   resolveMemberBySender,
-  resolveEndpointIdsForMember,
+  resolveEndpointKeysForMember,
   isInboundFromPeerBot,
 } from './collaboration/endpoint-identity.js';
 

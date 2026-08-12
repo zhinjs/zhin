@@ -23,6 +23,8 @@ export type {
   CompactionConfig,
   InboundQueueConfig,
   InboundGroupQueueMode,
+  ScheduleBudgetConfig,
+  ScheduleDomainConfig,
 } from './zhin-agent-config.js';
 
 export { KEYWORD_TRIGGERS } from './keyword-triggers.js';

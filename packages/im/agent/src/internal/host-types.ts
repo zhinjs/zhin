@@ -47,6 +47,29 @@ export interface HostScheduleTurnContext {
   preview?: boolean;
   activityFeedback?: boolean;
   createdBy?: ScheduleJobCreator;
+  security: HostScheduleSecurityContext;
+  toolResolution?: HostScheduleToolResolution;
+  securityDenials: HostScheduleSecurityDenial[];
+}
+
+export interface HostScheduleSecurityContext {
+  execPreset: 'readonly' | 'network';
+  rejectOwnerApproval: true;
+  allowedDomains: string[];
+}
+
+export interface HostScheduleSecurityDenial {
+  tool: string;
+  policy: string;
+  reason: string;
+}
+
+export interface HostScheduleToolResolution {
+  tools: string[];
+  skills: string[];
+  resolvedBy: 'execution-plan' | 'affinity';
+  missingTools: string[];
+  missingSkills: string[];
 }
 
 export interface HostEventEmitter {

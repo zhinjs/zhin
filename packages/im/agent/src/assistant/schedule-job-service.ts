@@ -26,6 +26,7 @@ export interface ScheduleAddInput {
   createdBy?: ScheduleJobCreator;
   executionPlan?: ScheduleJobExecutionPlan;
   activityFeedback?: boolean;
+  budget?: ScheduleJob['budget'];
   enabled?: boolean;
 }
 
@@ -45,6 +46,7 @@ export async function addScheduleJob(
     createdBy: input.createdBy,
     executionPlan: input.executionPlan,
     activityFeedback: input.activityFeedback || undefined,
+    budget: input.budget,
   });
 }
 
@@ -97,6 +99,21 @@ function resolveNotifyFromToolArgs(
   return target ? { channel: 'im', target } : { channel: 'silent' };
 }
 
+function positiveNumber(value: unknown): number | undefined {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : undefined;
+}
+
+function parseScheduleBudget(record: Record<string, unknown>): ScheduleJob['budget'] {
+  const raw = record.budget && typeof record.budget === 'object'
+    ? record.budget as Record<string, unknown>
+    : record;
+  const maxTokens = positiveNumber(raw.maxTokens ?? raw.max_tokens ?? raw.budget_max_tokens);
+  const maxToolCalls = positiveNumber(raw.maxToolCalls ?? raw.max_tool_calls ?? raw.budget_max_tool_calls);
+  const timeoutMs = positiveNumber(raw.timeoutMs ?? raw.timeout_ms ?? raw.budget_timeout_ms);
+  return maxTokens || maxToolCalls || timeoutMs ? { maxTokens, maxToolCalls, timeoutMs } : undefined;
+}
+
 export function parseScheduleNotifyFromRpc(message: Record<string, unknown>): JobNotify {
   const raw = message.notify;
   if (raw && typeof raw === 'object' && raw !== null && 'channel' in raw) {
@@ -135,6 +152,7 @@ export function parseScheduleAddFromToolArgs(
     createdBy: captureScheduleJobCreator(commMessage),
     executionPlan,
     activityFeedback: args.activity_feedback === true ? true : undefined,
+    budget: parseScheduleBudget(args),
   };
 }
 
@@ -166,5 +184,6 @@ export function parseScheduleAddFromRpcMessage(
     createdBy: parseScheduleJobCreator(message.createdBy),
     executionPlan,
     activityFeedback: message.activityFeedback === true ? true : undefined,
+    budget: parseScheduleBudget(message),
   };
 }

@@ -17,6 +17,7 @@ export type TurnEvent =
   | ToolCallEvent
   | ToolResultEvent
   | ThinkingEvent
+  | UsageEvent
   | TurnEndEvent
   | TurnErrorEvent
   | TurnCancelledEvent
@@ -56,6 +57,12 @@ export interface ToolResultEvent {
 export interface ThinkingEvent {
   type: 'thinking';
   text: string;
+}
+
+/** Per-model-iteration usage, emitted before the next tool/model iteration. */
+export interface UsageEvent {
+  type: 'usage';
+  usage: TurnUsage;
 }
 
 export interface TurnEndEvent {

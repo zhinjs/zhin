@@ -4,14 +4,19 @@ import {
   ensureMcpConnectionsForBinding,
   getMcpToolsForBinding,
 } from '../orchestrator/mcp-lifecycle.js';
-import { preloadScheduleToolsFromContext } from '../assistant/schedule-tool-runtime.js';
 import { rehydrateTurnActiveSkills } from '../assistant/schedule-skills.js';
-import { captureDeferredSnapshotBefore, cloneDeferredSnapshot } from '../internal/turn-context.js';
+import { captureDeferredSnapshotBefore, cloneDeferredSnapshot, getScheduleTurnContext, setTurnActiveSkills } from '../internal/turn-context.js';
 import { attachWebSearchLocale } from './web-search-locale-attach.js';
 import type { ZhinAgentPrivate, Tool } from '../internal/agent-host.js';
 import { defaultToolSystem } from '../tool/tool-system.js';
 import { applyDynamicTurnOverrides } from '../dynamic/dynamic-registry.js';
 import type { ResolvedToolsForTurn } from './deferred-resolution.js';
+import { resolveScheduleTools } from '../schedule-domain/tool-resolver.js';
+import { secureScheduleTools } from '../schedule-domain/security-harness.js';
+import { loadScheduleSkillContext } from '../schedule-domain/prompt-assembler.js';
+import { getLogger } from '@zhin.js/logger';
+
+const scheduleLogger = getLogger('schedule-execution-domain');
 
 function listSpawnableAgentNames(host: ZhinAgentPrivate): string[] {
   const presets = host.orchestrator?.subagents.getAllPresets().map((p) => p.name) ?? [];
@@ -96,11 +101,60 @@ export async function prepareTurnTools(
   allTools = dynamicApplied.tools;
   host.turnDynamicInstructions = dynamicApplied.additionalInstructions;
 
+  const scheduleContext = getScheduleTurnContext();
+  if (scheduleContext) {
+    const resolution = resolveScheduleTools({
+      prompt: opts.content,
+      executionPlan: scheduleContext.executionPlan,
+      tools: allTools,
+      skillRegistry: host.skillRegistry,
+    });
+    const resolvedTools = secureScheduleTools({
+      tools: resolution.tools,
+      message: contextForTools,
+      config: host.config,
+      context: scheduleContext.security,
+      onDenial: denial => scheduleContext.securityDenials.push(denial),
+    });
+    const catalog: ResolvedToolsForTurn['catalog'] = [];
+    const sessionSnapshot: ResolvedToolsForTurn['sessionSnapshot'] = {
+      loadedTools: {},
+      loadedSkills: [],
+    };
+    scheduleContext.toolResolution = {
+      tools: resolvedTools.map(tool => tool.name),
+      skills: resolution.skills,
+      resolvedBy: resolution.resolvedBy,
+      missingTools: resolution.missingTools,
+      missingSkills: resolution.missingSkills,
+    };
+    for (const name of resolution.missingTools) {
+      scheduleLogger.warn(`Schedule execution plan tool not found: ${name}`);
+    }
+    for (const name of resolution.missingSkills) {
+      scheduleLogger.warn(`Schedule execution plan skill not found: ${name}`);
+    }
+    setTurnActiveSkills(await loadScheduleSkillContext(host, resolution.skills));
+    const resolved: ResolvedToolsForTurn = {
+      tools: resolvedTools,
+      catalog,
+      deferred: false,
+      sessionSnapshot,
+    };
+    return {
+      contextForTools,
+      allTools,
+      resolved,
+      resolvedTools,
+      catalog,
+      sessionSnapshot,
+    };
+  }
+
   const resolved = await toolSystem.resolveForTurn(host, allTools, opts.sessionId);
   const { tools: resolvedTools, deferredStats, catalog, sessionSnapshot: initialSnapshot } = resolved;
 
-  let sessionSnapshot = initialSnapshot;
-  sessionSnapshot = await preloadScheduleToolsFromContext(host, opts.sessionId, catalog, sessionSnapshot);
+  const sessionSnapshot = initialSnapshot;
   captureDeferredSnapshotBefore(sessionSnapshot);
   host.deferred.lastSnapshotBefore = cloneDeferredSnapshot(sessionSnapshot);
   await rehydrateTurnActiveSkills(host, opts.sessionId, host.getAlwaysSkillsBaseline());

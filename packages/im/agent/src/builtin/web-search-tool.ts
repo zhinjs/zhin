@@ -15,6 +15,8 @@ import {
   type BingSearchResultRow,
 } from './bing-search-html.js';
 import { resolveWebSearchMarketFromContext } from './web-search-locale.js';
+import { getToolNetworkPolicy } from '../security/network-policy-context.js';
+import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 
 export const MAX_WEB_SEARCH_COUNT = 20;
 
@@ -112,6 +114,13 @@ export class WebSearchBuiltinTool extends BuiltinBaseTool {
 
       const market = resolveWebSearchMarketFromContext(_commMessage);
       const url = buildBingSearchUrl(query, market);
+      const networkPolicy = getToolNetworkPolicy();
+      if (networkPolicy) {
+        const denied = toolPolicyResultToMessage(runToolPolicies({
+          toolName: 'web_search', networkUrl: url, networkPolicy,
+        }), 'web_search');
+        if (denied) return denied;
+      }
       const res = await fetch(url, {
         headers: bingSearchFetchHeaders(market),
         redirect: 'follow',

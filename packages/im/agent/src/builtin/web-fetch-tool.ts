@@ -6,6 +6,7 @@ import { errMsg } from '../discovery/utils.js';
 import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { WEB_TOOL_FETCH_TIMEOUT_MS, ZHIN_WEB_USER_AGENT } from './web-tool-utils.js';
+import { getToolNetworkPolicy } from '../security/network-policy-context.js';
 export const WEB_FETCH_DEFAULT_MAX_LENGTH = 20 * 1024;
 
 export const WEB_FETCH_PARAMETERS: ToolParametersSchema = {
@@ -24,7 +25,6 @@ export function stripFetchedHtmlToText(html: string): string {
 
 /** SSRF 防护：检查主机名是否属于内网/私有/危险地址 */
 export { isBlockedSsrfHostname } from '../security/network-policy.js';
-import { isBlockedSsrfHostname } from '../security/network-policy.js';
 
 export class WebFetchBuiltinTool extends BuiltinBaseTool {
   readonly name = 'web_fetch';
@@ -57,20 +57,6 @@ export class WebFetchBuiltinTool extends BuiltinBaseTool {
       );
       if (policyGate) return policyGate;
 
-      let parsedUrl: URL;
-      try {
-        parsedUrl = new URL(String(args.url ?? ''));
-      } catch {
-        return `Error: 无效的 URL 格式`;
-      }
-      if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-        return `Error: 仅支持 http/https 协议，拒绝 ${parsedUrl.protocol}`;
-      }
-      const hostname = parsedUrl.hostname.toLowerCase();
-      if (isBlockedSsrfHostname(hostname)) {
-        return `ZHIN_NEEDS_OWNER:\n禁止访问内网地址 ${hostname}（SSRF 防护）。若确有需要，请 Owner 确认风险后调整策略或在受控环境代为抓取。`;
-      }
-
       const MAX_REDIRECTS = 5;
       let currentUrl = String(args.url ?? '');
       let redirectCount = 0;
@@ -78,6 +64,11 @@ export class WebFetchBuiltinTool extends BuiltinBaseTool {
 
       // Manual redirect following with SSRF check at each hop
       while (true) {
+        const networkPolicy = getToolNetworkPolicy() ?? {};
+        const networkGate = toolPolicyResultToMessage(runToolPolicies({
+          toolName: 'web_fetch', networkUrl: currentUrl, networkPolicy,
+        }), 'web_fetch');
+        if (networkGate) return networkGate;
         response = await fetch(currentUrl, {
           headers: { 'User-Agent': ZHIN_WEB_USER_AGENT },
           signal: AbortSignal.timeout(WEB_TOOL_FETCH_TIMEOUT_MS),
@@ -95,18 +86,6 @@ export class WebFetchBuiltinTool extends BuiltinBaseTool {
 
           // Resolve relative redirects
           const redirectUrl = new URL(location, currentUrl);
-          const redirectHostname = redirectUrl.hostname.toLowerCase();
-
-          // SSRF check on each redirect target
-          if (isBlockedSsrfHostname(redirectHostname)) {
-            return `ZHIN_NEEDS_OWNER:\n重定向目标 ${redirectHostname} 被 SSRF 防护拦截。`;
-          }
-
-          // Only follow http/https redirects
-          if (!['http:', 'https:'].includes(redirectUrl.protocol)) {
-            return `Error: 不允许重定向到 ${redirectUrl.protocol} 协议`;
-          }
-
           currentUrl = redirectUrl.href;
           continue;
         }

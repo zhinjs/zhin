@@ -1,7 +1,7 @@
 /**
  * Maps @zhin.js/ai agentLoop AgentEvent stream to TurnEvent union.
  */
-import type { AgentEvent } from '@zhin.js/ai';
+import type { AgentEvent, AssistantMessage } from '@zhin.js/ai';
 import type { TurnEvent } from '../event/turn-event.js';
 
 export interface TurnEventMapperState {
@@ -19,6 +19,19 @@ export function* mapAgentEventToTurnEvents(
   state: TurnEventMapperState,
 ): Generator<TurnEvent> {
   switch (event.type) {
+    case 'message_end':
+      if (event.message.role === 'assistant') {
+        const usage = (event.message as AssistantMessage).usage;
+        yield {
+          type: 'usage',
+          usage: {
+            promptTokens: usage.input,
+            completionTokens: usage.output,
+            totalTokens: usage.totalTokens,
+          },
+        };
+      }
+      break;
     case 'message_update':
       if (event.delta?.type === 'text_delta') {
         state.accumulatedText += event.delta.text;

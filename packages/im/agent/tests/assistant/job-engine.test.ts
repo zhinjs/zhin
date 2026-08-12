@@ -21,12 +21,12 @@ describe('ScheduleJobEngine', () => {
   });
 
   it('addJob 持久化并在 every 调度触发时调用 worker', async () => {
-    const executeTask = vi.fn(async () => ({
+    const execute = vi.fn(async () => ({
       success: true,
       responseText: 'ok',
       durationMs: 10,
     }));
-    const executor = { executeTask } as unknown as TaskExecutor;
+    const executor = { execute } as unknown as TaskExecutor;
     const store = new ScheduleJobStore({ dataDir });
     const worker = new JobWorker({ executor });
 
@@ -46,10 +46,8 @@ describe('ScheduleJobEngine', () => {
     expect(jobs[0]?.action.prompt).toBe('echo schedule');
 
     await vi.advanceTimersByTimeAsync(2_500);
-    expect(executeTask).toHaveBeenCalled();
-    expect(executeTask.mock.calls[0]?.[0]).toMatchObject({
-      createdBy: undefined,
-    });
+    expect(execute).toHaveBeenCalled();
+    expect(execute.mock.calls[0]?.[0]).toMatchObject({ id: 'sched-echo' });
 
     const stored = await store.getJob('sched-echo');
     expect(stored?.state.lastStatus).toBe('ok');
@@ -58,12 +56,12 @@ describe('ScheduleJobEngine', () => {
   });
 
   it('runJob passes createdBy to task executor', async () => {
-    const executeTask = vi.fn(async () => ({
+    const execute = vi.fn(async () => ({
       success: true,
       responseText: 'ok',
       durationMs: 10,
     }));
-    const executor = { executeTask } as unknown as TaskExecutor;
+    const executor = { execute } as unknown as TaskExecutor;
     const store = new ScheduleJobStore({ dataDir });
     const worker = new JobWorker({ executor });
     const engine = new ScheduleJobEngine({ store, worker });
@@ -79,7 +77,7 @@ describe('ScheduleJobEngine', () => {
     engine.registerOne((await store.getJob('sched-owner'))!);
     await engine.runJobNow('sched-owner');
 
-    expect(executeTask).toHaveBeenCalledWith(
+    expect(execute).toHaveBeenCalledWith(
       expect.objectContaining({
         createdBy: {
           userId: '1659488338',
@@ -92,12 +90,12 @@ describe('ScheduleJobEngine', () => {
   });
 
   it('runJob passes executionPlan and activityFeedback to task executor', async () => {
-    const executeTask = vi.fn(async () => ({
+    const execute = vi.fn(async () => ({
       success: true,
       responseText: 'ok',
       durationMs: 10,
     }));
-    const executor = { executeTask } as unknown as TaskExecutor;
+    const executor = { execute } as unknown as TaskExecutor;
     const store = new ScheduleJobStore({ dataDir });
     const worker = new JobWorker({ executor });
     const engine = new ScheduleJobEngine({ store, worker });
@@ -118,7 +116,7 @@ describe('ScheduleJobEngine', () => {
     });
     await engine.runJobNow('sched-plan');
 
-    expect(executeTask).toHaveBeenCalledWith(
+    expect(execute).toHaveBeenCalledWith(
       expect.objectContaining({
         executionPlan: {
           prompt: 'refined weather',
@@ -127,7 +125,6 @@ describe('ScheduleJobEngine', () => {
           confirmed: true,
         },
         activityFeedback: true,
-        scheduleJobId: 'sched-plan',
       }),
     );
     engine.unload();

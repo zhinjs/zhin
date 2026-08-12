@@ -94,6 +94,39 @@ export interface NetworkPolicyConfig {
   allowedDomains?: string[];
 }
 
+export interface UrlNetworkPolicyConfig {
+  httpsOnly?: boolean;
+  allowedDomains: string[];
+}
+
+export function checkUrlNetworkAccess(
+  url: string,
+  config: UrlNetworkPolicyConfig,
+): { allowed: boolean; reason?: string } {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return { allowed: false, reason: '网络请求必须提供可校验的绝对 URL' };
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return { allowed: false, reason: `网络策略仅支持 HTTP/HTTPS 请求，拒绝 ${parsed.protocol}` };
+  }
+  if (config.httpsOnly && parsed.protocol !== 'https:') {
+    return { allowed: false, reason: `当前网络策略仅允许 HTTPS 请求，拒绝 ${parsed.protocol}` };
+  }
+  if (isBlockedSsrfHostname(parsed.hostname)) {
+    return { allowed: false, reason: `URL 目标 ${parsed.hostname} 属于内网/私有/危险地址` };
+  }
+  if (config.allowedDomains.length > 0 && !hostnameMatchesList(parsed.hostname, config.allowedDomains)) {
+    return {
+      allowed: false,
+      reason: `域名 ${parsed.hostname} 不在网络允许列表中（允许: ${config.allowedDomains.join(', ')}）`,
+    };
+  }
+  return { allowed: true };
+}
+
 /**
  * 检查网络命令访问权限（sandbox 层）
  * - enableNetwork: false → 阻断所有网络命令

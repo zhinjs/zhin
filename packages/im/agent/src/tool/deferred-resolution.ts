@@ -12,7 +12,7 @@ import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 export interface ResolvedToolsForTurn {
   tools: AgentTool[];
   catalog: ToolCatalogItem[];
-  deferred: true;
+  deferred: boolean;
   deferredStats?: string;
   sessionSnapshot: DeferredToolSessionSnapshot;
 }

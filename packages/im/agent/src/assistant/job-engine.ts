@@ -8,7 +8,6 @@ import type { ScheduleJobStore } from './job-store.js';
 import type { JobWorker } from './job-worker.js';
 import type { ScheduleJob } from './types.js';
 import { type NotificationRouter, resolveEffectiveNotify } from './notification-router.js';
-import { jobPrompt } from './job-utils.js';
 const logger = getLogger('schedule-job-engine');
 
 export interface ScheduleJobEngineOptions {
@@ -71,14 +70,7 @@ export class ScheduleJobEngine {
     if (!job || !job.enabled) return;
     if (job.action.kind !== 'agent' && job.action.kind !== 'heartbeat') return;
 
-    const result = await this.worker.run(jobId, jobPrompt(job), {
-      notify: job.notify,
-      label: job.label || jobId,
-      createdBy: job.createdBy,
-      executionPlan: job.executionPlan,
-      activityFeedback: job.activityFeedback,
-      scheduleJobId: jobId,
-    });
+    const result = await this.worker.run(job);
 
     await this.store.updateJobState(jobId, {
       lastExecutedAt: Date.now(),

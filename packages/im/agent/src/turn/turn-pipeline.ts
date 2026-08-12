@@ -28,6 +28,8 @@ import type {
   Tool,
 } from '../internal/agent-host.js';
 import type { Message } from '@zhin.js/core';
+import { randomUUID } from 'node:crypto';
+import { buildTurnUserMessages } from '../context/turn-user-message.js';
 
 function requireSessionSystem(host: ZhinAgentPrivate): SessionSystem {
   if (!host.sessionSystem) {
@@ -56,6 +58,8 @@ export interface ProcessTextTurnOptions {
   journal?: AgentRunJournal;
   /** Per-turn cancellation from an ingress owner such as the IM trigger host. */
   signal?: AbortSignal;
+  /** Stateless execution: no conversation session/history and eager tools only. */
+  isolated?: boolean;
 }
 
 export async function processTextTurn(
@@ -68,9 +72,18 @@ export async function processTextTurn(
 ): Promise<OutputElement[]> {
     const t0 = now();
     const sessionSystem = requireSessionSystem(host);
-    const prep = await sessionSystem.prepareTextTurn(host, commMessage, content, {
-      deferredAutoContinue: extras?.deferredAutoContinue,
-    });
+    const prep = extras?.isolated
+      ? {
+          sessionKey: `isolated:${randomUUID()}`,
+          sessionId: `isolated:${randomUUID()}`,
+          userId: commMessage.$sender.id || 'unknown',
+          isNewSession: false,
+          passiveBlock: null,
+          turnUser: buildTurnUserMessages(commMessage, content, null),
+        }
+      : await sessionSystem.prepareTextTurn(host, commMessage, content, {
+          deferredAutoContinue: extras?.deferredAutoContinue,
+        });
     const { sessionKey, userId, sessionId, isNewSession, turnUser } = prep;
 
     const httpSessionId = readHttpSessionId(commMessage);
@@ -89,7 +102,7 @@ export async function processTextTurn(
       provider: host.getTurnProvider().name,
     });
 
-    if (!extras?.deferredAutoContinue) {
+    if (!extras?.deferredAutoContinue && !extras?.isolated) {
       const rateCheck = host.rateLimiter.check(userId);
       if (!rateCheck.allowed) {
         logPhase(host.phaseConfig, 'turn.rate_limited', sessionId, { userId });
@@ -186,6 +199,8 @@ export async function processTextTurn(
           promptHooks: hooks,
           signal,
           deferredStats,
+          toolLoading: toolsPrep.resolved.deferred ? 'deferred' : 'direct',
+          conversationPersistence: extras?.isolated ? 'none' : 'session',
           onTurnEvent: extras?.onTurnEvent,
           journal: extras?.journal,
         }),
@@ -210,6 +225,7 @@ export async function processTextTurn(
       reply,
       filterMs,
       startedAt: t0,
+      persistSession: !extras?.isolated,
     });
 
     return buildTextTurnOutbound(reply, loopResult);

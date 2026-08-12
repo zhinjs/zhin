@@ -3,6 +3,7 @@
  */
 import type { FestivalName, HolidayInput, ScatterInput } from '@zhin.js/kernel';
 import type { IMDeliveryTarget, SenderRole } from '@zhin.js/core';
+import type { ScheduleBudgetConfig } from '../config/zhin-agent-config.js';
 
 export const SCHEDULE_JOBS_VERSION = 1;
 export const SCHEDULE_JOBS_FILENAME = 'schedule-jobs.json';
@@ -61,6 +62,8 @@ export interface ScheduleJob {
   executionPlan?: ScheduleJobExecutionPlan;
   /** 到点执行时是否向 IM 发送 activity feedback（reaction/typing），默认 false */
   activityFeedback?: boolean;
+  /** 覆盖全局无人值守执行预算。 */
+  budget?: ScheduleBudgetConfig;
   eventPayload?: unknown;
 }
 

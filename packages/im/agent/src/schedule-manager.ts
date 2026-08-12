@@ -1,22 +1,19 @@
 /**
  * 持久化调度任务 + AI 工具
  */
-import { ZhinTool, getLogger } from '@zhin.js/core';
+import { ZhinTool, type Message } from '@zhin.js/core';
 import {
   createGenerationStore,
   type Dispose,
   type GenerationStoreContext,
 } from '@zhin.js/plugin-runtime';
-import { captureScheduleJobCreator } from './assistant/job-creator.js';
 import {
   addScheduleJob,
   generateScheduleJobId,
   parseScheduleAddFromToolArgs,
 } from './assistant/schedule-job-service.js';
 import type { ScheduleJobEngine } from './assistant/job-engine.js';
-import type { TaskExecutionOptions, TaskExecutionResult } from './task-executor.js';
-
-const logger = getLogger('schedule-manager');
+import type { TaskExecutionResult } from './task-executor.js';
 
 export const SCHEDULE_JOBS_FILENAME = 'schedule-jobs.json';
 
@@ -33,7 +30,11 @@ export interface ScheduleManager {
   };
   engine: ScheduleJobEngine | null;
   /** 调度任务预演（dry-run） */
-  previewTask?: (options: TaskExecutionOptions) => Promise<TaskExecutionResult>;
+  previewTask?: (
+    prompt: string,
+    message: Message,
+    options?: { activityFeedback?: boolean },
+  ) => Promise<TaskExecutionResult>;
 }
 
 const store = createGenerationStore<ScheduleManager>('zhin.agent.schedule-manager');
@@ -101,6 +102,9 @@ export function createScheduleTools(): ZhinTool[] {
       type: 'boolean',
       description: '到点执行时是否向 IM 发送 reaction/typing，默认 false',
     })
+    .param('budget_max_tokens', { type: 'number', description: '本任务 token 硬上限（默认 32000）' })
+    .param('budget_max_tool_calls', { type: 'number', description: '本任务工具调用硬上限（默认 15）' })
+    .param('budget_timeout_ms', { type: 'number', description: '本任务执行超时毫秒数（默认 120000）' })
     .param('execution_plan', {
       type: 'object',
       description: '预演确认后的执行计划 { prompt, tools?, skills? }',
@@ -170,13 +174,8 @@ export function createScheduleTools(): ZhinTool[] {
       if (!commMessage) return { error: '缺少会话上下文，无法预演' };
 
       const prompt = String(args.prompt);
-      const result = await m.previewTask({
-        prompt,
-        preview: true,
-        previewCommMessage: commMessage,
-        createdBy: captureScheduleJobCreator(commMessage),
+      const result = await m.previewTask(prompt, commMessage, {
         activityFeedback: args.activity_feedback === true,
-        timeContext: false,
       });
 
       if (!result.success) {

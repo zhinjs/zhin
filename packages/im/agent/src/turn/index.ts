@@ -84,7 +84,6 @@ export { computeDeferredDelta } from './turn-deferred-delta.js';
 export { DeferredTurnState } from './deferred-turn-state.js';
 
 export {
-  initScheduleTurnContext,
   initInboundTurnContext,
   getTurnActiveSkills,
   runInTurnContext,

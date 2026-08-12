@@ -1,44 +1,24 @@
-/**
- * Unified task execution + delivery layer.
- */
-import type { OutputElement } from '@zhin.js/ai';
+/** Delivery boundary for the independent schedule execution domain. */
 import { type Message, createSyntheticMessage, resolveIMSessionIdFromMessage, getLogger } from '@zhin.js/core';
 import type { ZhinAgent } from './zhin-agent/index.js';
-import {
-  createNotificationRouter,
-  type NotificationRouter,
-} from './assistant/notification-router.js';
-import type {
-  JobNotify,
-  ScheduleJobCreator,
-  ScheduleJobExecutionPlan,
-} from './assistant/types.js';
-import { senderFromScheduleCreator } from './assistant/job-creator.js';
-import { buildScheduleTurnMessage } from './assistant/schedule-message.js';
-import { buildScheduleTurnPrompt } from './assistant/schedule-execution.js';
+import { createNotificationRouter, type NotificationRouter } from './assistant/notification-router.js';
+import type { ScheduleJob, ScheduleJobCreator, ScheduleJobExecutionPlan } from './assistant/types.js';
+import { captureScheduleJobCreator, senderFromScheduleCreator } from './assistant/job-creator.js';
 import { deliverScheduleToAdapter } from './assistant/deliver-schedule-to-adapter.js';
 import { KeyedMutex } from './utils/keyed-mutex.js';
+import {
+  ScheduleExecutionDomainImpl,
+  type ScheduleExecutionDomain,
+  type ScheduleExecutionResult,
+} from './schedule-domain/execution-domain.js';
+import { demoteScheduleCreator } from './schedule-domain/security-harness.js';
+import { JsonlScheduleAuditLogger } from './schedule-domain/audit-logger.js';
+
 const logger = getLogger('task-executor');
+const sceneLocks = new KeyedMutex();
 
-export interface TaskExecutionOptions {
-  prompt: string;
-  notify?: JobNotify;
-  timeContext?: boolean;
-  createdBy?: ScheduleJobCreator;
-  /** 预演模式：结果回创建者，不投递 notify 目标 */
-  preview?: boolean;
-  /** 预演时使用创建者入站 Message（保留 messageId / 角色） */
-  previewCommMessage?: Message;
-  executionPlan?: ScheduleJobExecutionPlan;
-  activityFeedback?: boolean;
-  scheduleJobId?: string;
-}
-
-export interface TaskExecutionResult {
-  success: boolean;
+export interface TaskExecutionResult extends ScheduleExecutionResult {
   responseText: string;
-  durationMs: number;
-  error?: string;
   executionPlan?: ScheduleJobExecutionPlan;
 }
 
@@ -46,156 +26,129 @@ export interface TaskExecutorDeps {
   agent: ZhinAgent;
   resolveAdapter: (platform: string) => { sendMessage: (opts: import('@zhin.js/core').SendOptions) => Promise<string> } | undefined;
   router?: NotificationRouter;
-  defaultNotify?: JobNotify;
+  defaultNotify?: import('./assistant/types.js').JobNotify;
+  domain?: ScheduleExecutionDomain;
+  dataDir?: string;
 }
 
-const sceneLocks = new KeyedMutex();
+export interface TaskExecutionOptions {
+  previewSourceMessage?: Message;
+}
 
-function elementsToText(elements: OutputElement[]): string {
-  return elements.map(el => {
-    if (el.type === 'text') return el.content || '';
-    if (el.type === 'image') return `<image url="${el.url}"/>`;
-    return '';
-  }).join('\n').trim();
+function buildExecutionMessage(job: ScheduleJob, notify: import('./assistant/types.js').JobNotify): Message {
+  const im = notify.channel === 'im' ? notify : undefined;
+  const scene = im?.target.scene;
+  const sceneId = scene?.sceneId || 'cron';
+  const scope = scene?.kind || 'private';
+  const creator = job.createdBy ? demoteScheduleCreator(job.createdBy) : undefined;
+  const sender = creator
+    ? senderFromScheduleCreator(creator)
+    : { id: 'schedule', name: 'schedule', isMaster: false, isTrusted: false };
+  return createSyntheticMessage({
+    adapter: scene?.platform || 'cron',
+    endpoint: scene?.endpointKey || 'default',
+    sender,
+    channel: { type: scope, id: sceneId },
+  });
+}
+
+function buildPreviewMessage(job: ScheduleJob, source: Message): Message {
+  const creator = demoteScheduleCreator(job.createdBy ?? {
+    userId: String(source.$sender.id),
+    name: source.$sender.name,
+    roles: source.$sender.isMaster ? ['master'] : source.$sender.isTrusted ? ['trusted'] : ['user'],
+  });
+  return createSyntheticMessage({
+    adapter: String(source.$adapter),
+    endpoint: source.$endpoint,
+    sender: senderFromScheduleCreator(creator),
+    channel: source.$channel ?? { type: 'private', id: creator.userId },
+    id: source.$id,
+  });
 }
 
 export function createTaskExecutor(deps: TaskExecutorDeps) {
-  const router = deps.router ?? createNotificationRouter({
-    resolveAdapter: deps.resolveAdapter,
+  const router = deps.router ?? createNotificationRouter({ resolveAdapter: deps.resolveAdapter });
+  const domain = deps.domain ?? new ScheduleExecutionDomainImpl({
+    agent: deps.agent,
+    auditLogger: new JsonlScheduleAuditLogger(deps.dataDir),
   });
 
-  async function executeTask(options: TaskExecutionOptions): Promise<TaskExecutionResult> {
-    const {
-      prompt,
-      notify,
-      timeContext,
-      createdBy,
-      preview,
-      previewCommMessage,
-      executionPlan,
-      activityFeedback,
-      scheduleJobId,
-    } = options;
-    const t0 = Date.now();
-
-    const effectiveNotify = router.resolveEffectiveNotify(notify, deps.defaultNotify);
-    const basePrompt = executionPlan?.prompt?.trim() || prompt;
-    const finalPrompt = preview
-      ? buildScheduleTurnPrompt({ basePrompt, mode: 'preview' })
-      : timeContext
-        ? buildScheduleTurnPrompt({ basePrompt, mode: 'scheduled' })
-        : basePrompt;
-
-    deps.agent.initScheduleTurnContext({
-      executionPlan,
-      createdBy,
-      preview: preview || undefined,
-      activityFeedback: activityFeedback || undefined,
-      jobId: scheduleJobId,
-    });
-
-    const emitter = deps.agent.getEventEmitter?.() ?? {
-      emit: () => {},
-      createPayload: (_sessionId: string, comm: Message) => ({
-        sessionId: resolveIMSessionIdFromMessage(comm),
-        source: 'zhin-agent' as const,
-      }),
-    };
-
-    let commMessage: Message;
-    if (preview && previewCommMessage) {
-      commMessage = buildScheduleTurnMessage({ sourceMessage: previewCommMessage });
-    } else {
-      const im = effectiveNotify.channel === 'im' ? effectiveNotify : undefined;
-      const scene = im?.target.scene;
-      const sceneId = scene?.sceneId || 'cron';
-      const scope = scene?.kind || 'private';
-      const sender = createdBy
-        ? senderFromScheduleCreator(createdBy)
-        : scope === 'private'
-          ? {
-              id: scene?.senderId || sceneId,
-              name: scene?.senderId || sceneId,
-              isMaster: true,
-              isTrusted: false as const,
-            }
-          : { id: 'system', name: 'system', isMaster: true, isTrusted: false as const };
-      commMessage = createSyntheticMessage({
-        adapter: scene?.platform || 'cron',
-        endpoint: scene?.endpointId || 'default',
-        sender,
-        channel: { type: scope, id: sceneId },
-      });
-    }
-
-    const dispatchSchedule = (name: 'schedule.start' | 'schedule.finish' | 'schedule.error') => {
-      if (!activityFeedback) return;
+  async function execute(job: ScheduleJob, options: TaskExecutionOptions = {}): Promise<TaskExecutionResult> {
+    const previewSource = options.previewSourceMessage;
+    const effectiveNotify = router.resolveEffectiveNotify(job.notify, deps.defaultNotify);
+    const commMessage = previewSource
+      ? buildPreviewMessage(job, previewSource)
+      : buildExecutionMessage(job, effectiveNotify);
+    const emitter = deps.agent.getEventEmitter();
+    const event = (name: 'schedule.start' | 'schedule.finish' | 'schedule.error') => {
+      if (!job.activityFeedback) return;
       const sessionId = resolveIMSessionIdFromMessage(commMessage);
       emitter.emit(name, emitter.createPayload(sessionId, commMessage, 'text'));
     };
-
-    const lockKey = preview
-      ? `preview:${resolveIMSessionIdFromMessage(previewCommMessage ?? commMessage)}`
+    const lockKey = previewSource
+      ? `preview:${resolveIMSessionIdFromMessage(previewSource)}`
       : (commMessage.$channel?.id ?? 'cron');
 
-    try {
-      dispatchSchedule('schedule.start');
-      const elements = await sceneLocks.run(lockKey, () =>
-        deps.agent.process(finalPrompt, commMessage),
-      );
-
-      const text = elementsToText(elements);
-      const captured = preview && typeof deps.agent.getLastTurnToolSnapshot === 'function'
-        ? deps.agent.getLastTurnToolSnapshot()
-        : { tools: [] as string[], skills: [] as string[] };
-      const resultPlan: ScheduleJobExecutionPlan | undefined = preview
-        ? {
-            prompt: basePrompt,
-            tools: captured.tools.length ? captured.tools : executionPlan?.tools,
-            skills: captured.skills.length ? captured.skills : executionPlan?.skills,
-            previewSample: text || undefined,
-            previewedAt: Date.now(),
-            confirmed: false,
-          }
-        : executionPlan;
-
-      if (preview) {
-        if (text && previewCommMessage && typeof previewCommMessage.$reply === 'function') {
-          await previewCommMessage.$reply(text);
+    event('schedule.start');
+    const result = await sceneLocks.run(lockKey, () => domain.execute(job, commMessage, {
+      preview: Boolean(previewSource),
+    }));
+    const executionPlan = previewSource
+      ? {
+          prompt: job.action.prompt,
+          tools: result.toolsUsed.length ? result.toolsUsed : undefined,
+          skills: result.audit.skillsResolved?.length ? result.audit.skillsResolved : undefined,
+          previewSample: result.output || undefined,
+          previewedAt: Date.now(),
+          confirmed: false,
         }
-        return {
-          success: true,
-          responseText: text,
-          durationMs: Date.now() - t0,
-          executionPlan: resultPlan,
-        };
-      }
+      : job.executionPlan;
 
-      if (!text) {
-        if (timeContext && typeof deps.agent.waitForIdle === 'function') {
-          await deps.agent.waitForIdle();
-        }
-        dispatchSchedule('schedule.finish');
-        return { success: true, responseText: '', durationMs: Date.now() - t0, executionPlan: resultPlan };
+    if (!result.success) {
+      event('schedule.error');
+      logger.error(`[TaskExecutor] 执行失败: ${result.error ?? 'unknown error'}`);
+    } else if (previewSource) {
+      if (result.output && typeof previewSource.$reply === 'function') await previewSource.$reply(result.output);
+      event('schedule.finish');
+    } else {
+      if (result.output) {
+        await deliverScheduleToAdapter({
+          notify: effectiveNotify,
+          content: result.output,
+          router,
+          source: 'scheduled',
+        });
       }
-
-      await deliverScheduleToAdapter({
-        notify: effectiveNotify,
-        content: text,
-        router,
-        source: 'scheduled',
-      });
-      dispatchSchedule('schedule.finish');
-      return { success: true, responseText: text, durationMs: Date.now() - t0, executionPlan: resultPlan };
-    } catch (e) {
-      dispatchSchedule('schedule.error');
-      const error = (e as Error).message || String(e);
-      logger.error(`[TaskExecutor] 执行失败: ${error}`);
-      return { success: false, responseText: '', durationMs: Date.now() - t0, error };
+      event('schedule.finish');
     }
+
+    return { ...result, responseText: result.output, executionPlan };
   }
 
-  return { executeTask, resolveAdapter: deps.resolveAdapter };
+  async function preview(
+    prompt: string,
+    sourceMessage: Message,
+    options: { createdBy?: ScheduleJobCreator; activityFeedback?: boolean } = {},
+  ): Promise<TaskExecutionResult> {
+    const now = Date.now();
+    const job: ScheduleJob = {
+      id: `preview-${sourceMessage.$id ?? now}`,
+      enabled: true,
+      schedule: { kind: 'at', atMs: now },
+      action: { kind: 'agent', prompt },
+      notify: { channel: 'silent' },
+      createdAt: now,
+      updatedAt: now,
+      state: {},
+      source: 'manual',
+      createdBy: options.createdBy ?? captureScheduleJobCreator(sourceMessage),
+      activityFeedback: options.activityFeedback,
+    };
+    return execute(job, { previewSourceMessage: sourceMessage });
+  }
+
+  return { execute, preview, resolveAdapter: deps.resolveAdapter };
 }
 
 export async function drainTaskExecutorLocks(timeoutMs: number): Promise<void> {

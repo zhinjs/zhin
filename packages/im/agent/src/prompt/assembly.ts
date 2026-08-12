@@ -12,8 +12,32 @@ import { resolveWorkspacePrompt } from './workspace-prompt.js';
 import { getGitStatusLine } from './git-context.js';
 import { buildPreExecFastPathPrompt } from '../tool/runtime.js';
 import type { AgentContextHost, ZhinAgentPrivate } from '../internal/agent-host.js';
-import type { AgentMessage } from '@zhin.js/ai';
-import { getLlmTransportModel } from '@zhin.js/ai';
+import { getLlmTransportModel, type AgentMessage } from '@zhin.js/ai';
+import { getScheduleTurnContext } from '../internal/turn-context.js';
+import { assembleSchedulePrompt } from '../schedule-domain/prompt-assembler.js';
+import { getFileMemoryContext } from '../memory-layers.js';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
+
+function scheduleSystemPrompt(
+  agent: ZhinAgentPrivate,
+  commMessage: Message,
+  platformContext?: string,
+): string | null {
+  const context = getScheduleTurnContext();
+  if (!context?.jobId) return null;
+  const platform = String(commMessage.$adapter);
+  const sessionKey = resolveIMSessionIdFromMessage(commMessage);
+  return assembleSchedulePrompt({
+    jobId: context.jobId,
+    prompt: context.executionPlan?.prompt ?? '',
+    createdBy: context.createdBy,
+    security: context.security,
+    platformContext,
+    memoryContext: getFileMemoryContext(undefined, platform, sessionKey),
+    skillContext: agent.getTurnActiveSkills(),
+    bootstrapContext: [agent.globalContext, agent.bootstrapContext].filter(Boolean).join('\n\n'),
+  }).systemPrompt;
+}
 
 export function buildDisciplinedPrompt(_host: AgentContextHost, basePrompt: string): string {
   const guidance = [
@@ -49,6 +73,7 @@ export async function describeAgentPathPromptSections(
     config: agent.config,
     sessionId: options.sessionId,
   });
+
   return describePromptSectionsForDebug({
     config: agent.config,
     skillRegistry: agent.skillRegistry,
@@ -92,6 +117,9 @@ export async function buildAgentPathSystemPrompt(
     sessionId,
   });
 
+  const schedulePrompt = scheduleSystemPrompt(agent, commMessage, platformMarkdown);
+  if (schedulePrompt) return schedulePrompt;
+
   const gitStatus = agent.config.gitStatus
     ? await getGitStatusLine(process.cwd())
     : null;
@@ -132,6 +160,8 @@ export function buildFastPathSystemPrompt(
   preData: string | undefined,
   _commMessage: Message,
 ): string {
+  const schedulePrompt = scheduleSystemPrompt(agent, _commMessage);
+  if (schedulePrompt) return schedulePrompt;
   return buildDisciplinedPrompt(agent, buildPreExecFastPathPrompt(personaEnhanced, preData ?? ''));
 }
 
@@ -140,6 +170,8 @@ export function buildChatPathSystemPrompt(
   personaEnhanced: string,
   _commMessage: Message,
 ): string {
+  const schedulePrompt = scheduleSystemPrompt(agent, _commMessage);
+  if (schedulePrompt) return schedulePrompt;
   return buildDisciplinedPrompt(agent, personaEnhanced);
 }
 

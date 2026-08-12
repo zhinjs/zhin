@@ -54,57 +54,31 @@ describe('schedule job creator', () => {
 });
 
 describe('task executor schedule creator', () => {
-  it('passes createdBy sender snapshot into agent.process commMessage', async () => {
-    const process = vi.fn(async () => [{ type: 'text', content: 'ok' }]);
-    const initScheduleTurnContext = vi.fn();
-    const executor = createTaskExecutor({
-      agent: { process, initScheduleTurnContext } as any,
-      resolveAdapter: () => undefined,
-    });
-
-    await executor.executeTask({
-      prompt: 'weather',
-      notify: { channel: 'silent' },
-      createdBy: { userId: '1659488338', roles: ['master'], name: 'Owner' },
-    });
-
-    expect(process).toHaveBeenCalledTimes(1);
-    const commMessage = process.mock.calls[0][1];
-    expect(commMessage.$sender).toMatchObject({
-      id: '1659488338',
-      name: 'Owner',
-      isMaster: true,
-      isTrusted: false,
-    });
-    expect(initScheduleTurnContext).toHaveBeenCalledWith(expect.objectContaining({
-      createdBy: { userId: '1659488338', roles: ['master'], name: 'Owner' },
-    }));
-    expect(commMessage.extra?.scheduleCreatedBy).toBeUndefined();
-  });
-
-  it('preview mode replies to creator and captures execution plan', async () => {
+  it('preview replies to the creator and captures the domain tool resolution', async () => {
     const reply = vi.fn(async () => 'msg-id');
     const commMessage = mockCommMessage({ senderId: 'u1', sender_roles: ['master'] });
     (commMessage as { $reply?: typeof reply }).$reply = reply;
-
-    const process = vi.fn(async () => [{ type: 'text', content: 'preview output' }]);
-    const initScheduleTurnContext = vi.fn();
-    const getLastTurnToolSnapshot = vi.fn(() => ({
-      tools: ['web_search'],
-      skills: ['weather'],
-    }));
-
     const executor = createTaskExecutor({
-      agent: { process, initScheduleTurnContext, getLastTurnToolSnapshot } as any,
+      agent: { getEventEmitter: () => ({ emit: vi.fn(), createPayload: vi.fn() }) } as any,
+      domain: { execute: vi.fn(async (job) => ({
+        success: true,
+        output: 'preview output',
+        durationMs: 1,
+        toolsUsed: ['web_search'],
+        tokenUsage: { input: 1, output: 1 },
+        audit: {
+          jobId: job.id, executionId: 'e1', timestamp: 1, createdBy: job.createdBy,
+          prompt: job.action.prompt, toolsResolved: ['web_search', 'unused_tool'], toolsResolvedBy: 'affinity' as const,
+          skillsResolved: ['weather'], missingTools: [], missingSkills: [],
+          toolsUsed: ['web_search'], toolCallCount: 1, tokenUsage: { input: 1, output: 1 },
+          durationMs: 1, securityDenials: [], success: true, outputLength: 14, outputStripped: [],
+        },
+      })) },
       resolveAdapter: () => undefined,
     });
 
-    const result = await executor.executeTask({
-      prompt: 'daily weather',
-      preview: true,
-      previewCommMessage: commMessage,
+    const result = await executor.preview('daily weather', commMessage, {
       createdBy: { userId: 'u1', roles: ['master'] },
-      notify: { channel: 'silent' },
     });
 
     expect(result.success).toBe(true);
@@ -117,10 +91,5 @@ describe('task executor schedule creator', () => {
       confirmed: false,
     });
     expect(reply).toHaveBeenCalledWith('preview output');
-    expect(initScheduleTurnContext).toHaveBeenCalledWith(expect.objectContaining({
-      preview: true,
-      createdBy: { userId: 'u1', roles: ['master'] },
-    }));
-    expect(commMessage.extra?.schedulePreview).toBeUndefined();
   });
 });

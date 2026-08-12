@@ -26,6 +26,20 @@ export interface CompactionConfig {
   minKeepCount?: number;
 }
 
+export interface ScheduleBudgetConfig {
+  maxTokens?: number;
+  maxToolCalls?: number;
+  timeoutMs?: number;
+}
+
+export interface ScheduleDomainConfig {
+  budget?: ScheduleBudgetConfig;
+  security?: {
+    execPreset?: 'readonly' | 'network';
+    allowedDomains?: string[];
+  };
+}
+
 export interface ZhinAgentConfig {
   persona?: string;
   maxIterations?: number;
@@ -98,4 +112,6 @@ export interface ZhinAgentConfig {
   contextPaths?: string[];
   /** 系统提示词总字符上限，超出按牺牲顺序截断可截断段（skills → globalContext → bootstrap） */
   systemPromptMaxChars?: number;
+  /** 无人值守 schedule execution domain。 */
+  schedule?: ScheduleDomainConfig;
 }

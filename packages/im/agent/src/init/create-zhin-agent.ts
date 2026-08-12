@@ -313,6 +313,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     const executor = createTaskExecutor({
       agent,
       resolveAdapter,
+      dataDir,
       defaultNotify: defaultNotifyCfg.notify,
       router: notificationRouter,
     });
@@ -416,11 +417,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       provideScheduleManager({ lifecycle: generationLifecycle }, {
         scheduleFeature,
         engine: jobEngine,
-        previewTask: (opts) => executor.executeTask({
-          ...opts,
-          preview: true,
-          timeContext: false,
-        }),
+        previewTask: (prompt, message, options) => executor.preview(prompt, message, options),
       });
     }
 
@@ -432,9 +429,17 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         heartbeatEnabled: true,
         onJob: async (job) => {
           if (!refs.zhinAgent) return;
-          await executor.executeTask({
-            prompt: job.payload.message,
+          const now = Date.now();
+          await executor.execute({
+            id: `heartbeat-${job.id}`,
+            enabled: true,
+            schedule: { kind: 'at', atMs: now },
+            action: { kind: 'heartbeat', prompt: job.payload.message },
             notify: { channel: 'silent' },
+            createdAt: now,
+            updatedAt: now,
+            state: {},
+            source: 'profile',
           });
         },
       });

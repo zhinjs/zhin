@@ -42,6 +42,7 @@ export interface FinalizeTurnAfterLoopParams {
   finishPath?: AgentLoopTurnResult['path'];
   filterMs?: string;
   startedAt?: number;
+  persistSession?: boolean;
 }
 
 export async function finalizeTurnAfterAgentLoop(p: FinalizeTurnAfterLoopParams): Promise<void> {
@@ -53,8 +54,8 @@ export async function finalizeTurnAfterAgentLoop(p: FinalizeTurnAfterLoopParams)
     iterations: p.loopResult.iterations,
     reply: p.reply,
   }));
-  await p.sessionSystem.touchAfterTurn(p.host, p.sessionId);
-  if (p.isNewSession) {
+  if (p.persistSession !== false) await p.sessionSystem.touchAfterTurn(p.host, p.sessionId);
+  if (p.persistSession !== false && p.isNewSession) {
     p.host.emitSessionNewEvent(p.sessionId, p.commMessage, p.mode, p.rawContent, p.reply);
   }
   await p.host.finalizeActiveTurn({

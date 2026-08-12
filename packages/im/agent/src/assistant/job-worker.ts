@@ -5,7 +5,8 @@ import { getLogger } from '@zhin.js/core';
 import { getTaskQueue } from '../orchestrator/task-queue.js';
 import type { TaskExecutionResult, TaskExecutor } from '../task-executor.js';
 import { type AssistantQueueConfig, resolveAssistantQueueConfig } from './config.js';
-import type { JobNotify, ScheduleJobCreator, ScheduleJobExecutionPlan } from './types.js';
+import type { ScheduleJob } from './types.js';
+import { createScheduleAuditRecord } from '../schedule-domain/audit-logger.js';
 const logger = getLogger('assistant-job-worker');
 
 export interface JobWorkerOptions {
@@ -24,40 +25,23 @@ export class JobWorker {
   }
 
   async run(
-    jobId: string,
-    prompt: string,
-    options?: {
-      notify?: JobNotify;
-      label?: string;
-      createdBy?: ScheduleJobCreator;
-      executionPlan?: ScheduleJobExecutionPlan;
-      activityFeedback?: boolean;
-      scheduleJobId?: string;
-    },
+    job: ScheduleJob,
   ): Promise<TaskExecutionResult> {
     if (!this.queueCfg.enabled) {
-      return this.executeDirect(jobId, prompt, options);
+      return this.executeDirect(job);
     }
 
-    const label = options?.label || jobId;
+    const label = job.label || job.id;
     try {
       return await getTaskQueue().enqueueAndWait({
         name: label,
-        description: jobId,
+        description: job.id,
         priority: 'medium',
         maxRetries: this.queueCfg.maxRetries,
         timeout: this.queueCfg.defaultTimeoutMs,
-        metadata: { assistantJobId: jobId },
+        metadata: { assistantJobId: job.id },
         execute: async () => {
-          const result = await this.executor.executeTask({
-            prompt,
-            notify: options?.notify,
-            timeContext: true,
-            createdBy: options?.createdBy,
-            executionPlan: options?.executionPlan,
-            activityFeedback: options?.activityFeedback,
-            scheduleJobId: options?.scheduleJobId,
-          });
+          const result = await this.executor.execute(job);
           if (!result.success) {
             throw new Error(result.error || 'job failed');
           }
@@ -67,34 +51,46 @@ export class JobWorker {
     } catch (e: unknown) {
       const error = (e as Error)?.message || String(e);
       logger.warn(`Job ${label} dead-letter: ${error}`);
-      return { success: false, error, responseText: '', durationMs: 0 };
+      const timestamp = Date.now();
+      return {
+        success: false,
+        error,
+        responseText: '',
+        output: '',
+        durationMs: 0,
+        toolsUsed: [],
+        tokenUsage: { input: 0, output: 0 },
+        audit: createScheduleAuditRecord({
+          jobId: job.id,
+          executionId: `queue-${timestamp}`,
+          timestamp,
+          createdBy: job.createdBy,
+          prompt: job.action.prompt,
+          toolsResolved: [],
+          toolsResolvedBy: job.executionPlan ? 'execution-plan' : 'affinity',
+          skillsResolved: [],
+          missingTools: [],
+          missingSkills: [],
+          toolsUsed: [],
+          tokenUsage: { input: 0, output: 0 },
+          durationMs: 0,
+          securityDenials: [],
+          success: false,
+          outputLength: 0,
+          outputStripped: [],
+          error,
+        }),
+      };
     }
   }
 
   private async executeDirect(
-    jobId: string,
-    prompt: string,
-    options?: {
-      notify?: JobNotify;
-      label?: string;
-      createdBy?: ScheduleJobCreator;
-      executionPlan?: ScheduleJobExecutionPlan;
-      activityFeedback?: boolean;
-      scheduleJobId?: string;
-    },
+    job: ScheduleJob,
   ): Promise<TaskExecutionResult> {
-    const result = await this.executor.executeTask({
-      prompt,
-      notify: options?.notify,
-      timeContext: true,
-      createdBy: options?.createdBy,
-      executionPlan: options?.executionPlan,
-      activityFeedback: options?.activityFeedback,
-      scheduleJobId: options?.scheduleJobId,
-    });
-    const label = options?.label;
+    const result = await this.executor.execute(job);
+    const label = job.label;
     if (!result.success) {
-      logger.warn(`Job ${label || jobId} failed: ${result.error || 'unknown'}`);
+      logger.warn(`Job ${label || job.id} failed: ${result.error || 'unknown'}`);
     }
     return result;
   }

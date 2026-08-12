@@ -188,6 +188,7 @@ function scheduleJobBusiness(job: ScheduleJob): unknown {
     createdBy: job.createdBy,
     executionPlan: job.executionPlan,
     activityFeedback: job.activityFeedback,
+    budget: job.budget,
     eventPayload: job.eventPayload,
   };
 }
@@ -216,6 +217,9 @@ function normalizeJob(raw: Record<string, unknown>, defaultNotify?: JobNotify): 
     createdBy: parseScheduleJobCreator(raw.createdBy),
     executionPlan: parseScheduleJobExecutionPlan(raw.executionPlan),
     activityFeedback: raw.activityFeedback === true ? true : undefined,
+    budget: raw.budget && typeof raw.budget === 'object'
+      ? raw.budget as ScheduleJob['budget']
+      : undefined,
     eventPayload: raw.eventPayload,
   };
 }

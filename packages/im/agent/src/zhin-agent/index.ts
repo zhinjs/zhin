@@ -81,7 +81,6 @@ import {
   appendActiveSkills,
   getTurnActiveSkills,
   initInboundTurnContext as bridgeInitInboundTurnContext,
-  initScheduleTurnContext as bridgeInitScheduleTurnContext,
   runInTurnContext as bridgeRunInTurnContext,
   type TurnContextBridgeState,
   type TurnContextRunOptions,
@@ -133,6 +132,10 @@ export interface AgentTurnRequest {
   readonly activityFeedbackEligible?: boolean;
   /** Per-message routing state. Never call configure() for these values. */
   readonly configuration?: AgentTurnConfiguration;
+  /** Unattended execution state owned by ScheduleExecutionDomain. */
+  readonly scheduleContext?: ScheduleTurnContext;
+  /** Structured turn telemetry for execution domains. */
+  readonly onTurnEvent?: (event: TurnEvent) => void;
 }
 
 export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAgentDiagnostics, IAgentConfigurator {
@@ -256,10 +259,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   getAlwaysSkillsBaseline(): string {
     return this.alwaysSkillsBaseline;
-  }
-
-  initScheduleTurnContext(ctx: ScheduleTurnContext): void {
-    bridgeInitScheduleTurnContext(this.turnContextState, ctx);
   }
 
   initInboundTurnContext(): void {
@@ -511,23 +510,33 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
    * concurrent IM messages from overwriting activeBinding/bootstrapContext.
    */
   async processTurn(request: AgentTurnRequest): Promise<OutputElement[]> {
+    const executeTurn = (content: string) => processTextTurn(
+      asPrivate(this),
+      content,
+      request.message,
+      [...(request.tools ?? [])],
+      request.onChunk,
+      {
+        signal: request.signal,
+        onTurnEvent: request.onTurnEvent,
+        isolated: request.scheduleContext !== undefined,
+      },
+    );
     return runWithAgentTurnConfiguration(request.configuration ?? {}, () =>
       this.runInTurnContext(randomUUID(), () =>
-        runWithInboundQueue(request.message, this.inboundQueueConfig, this.inboundTurnQueue, {
-          content: request.content,
-          signal: request.signal,
-          run: (mergedContent) => processTextTurn(
-            asPrivate(this),
-            mergedContent,
-            request.message,
-            [...(request.tools ?? [])],
-            request.onChunk,
-            { signal: request.signal },
-          ),
-        }),
-        request.activityFeedbackEligible === undefined
+        request.scheduleContext
+          ? executeTurn(request.content)
+          : runWithInboundQueue(request.message, this.inboundQueueConfig, this.inboundTurnQueue, {
+              content: request.content,
+              signal: request.signal,
+              run: executeTurn,
+            }),
+        request.scheduleContext === undefined && request.activityFeedbackEligible === undefined
           ? undefined
-          : { activityFeedbackEligible: request.activityFeedbackEligible },
+          : {
+              scheduleContext: request.scheduleContext,
+              activityFeedbackEligible: request.activityFeedbackEligible,
+            },
       ),
     );
   }

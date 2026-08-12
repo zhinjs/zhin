@@ -44,6 +44,8 @@ import {
 } from './dangerous-tool-policy.js';
 import { checkExecPolicyWithOptions } from './exec-policy.js';
 import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approve-always-store.js';
+import { checkUrlNetworkAccess } from './network-policy.js';
+import type { ToolNetworkPolicy } from './network-policy-context.js';
 
 // ── 输入 / 输出类型 ─────────────────────────────────────────────────
 
@@ -71,6 +73,10 @@ export interface ToolPolicyInput {
   commMessage?: Message;
   /** exec policy 用配置 */
   config?: Required<ZhinAgentConfig>;
+  /** URL-bearing unattended tool invocation. */
+  networkUrl?: string;
+  /** Optional generic network constraint supplied by an execution harness. */
+  networkPolicy?: ToolNetworkPolicy;
 }
 
 export interface ToolPolicyDecision {
@@ -145,6 +151,18 @@ function sortByPriority(layers: ToolPolicyLayer[]): ToolPolicyLayer[] {
 }
 
 const TOOL_POLICIES: ToolPolicyLayer[] = sortByPriority([
+  {
+    name: 'network-access',
+    priority: 5,
+    applies: (input) => Boolean(input.networkPolicy && input.networkUrl),
+    check: (input) => {
+      const result = checkUrlNetworkAccess(input.networkUrl!, {
+        httpsOnly: input.networkPolicy!.httpsOnly,
+        allowedDomains: [...(input.networkPolicy!.allowedDomains ?? [])],
+      });
+      return { allowed: result.allowed, reason: result.reason, payload: result };
+    },
+  },
   {
     name: 'role-gate',
     priority: 10,

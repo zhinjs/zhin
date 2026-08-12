@@ -68,4 +68,15 @@ export const DEFAULT_CONFIG = {
   gitStatus: true,
   contextPaths: [],
   systemPromptMaxChars: 100_000,
+  schedule: {
+    budget: {
+      maxTokens: 32_000,
+      maxToolCalls: 15,
+      timeoutMs: 120_000,
+    },
+    security: {
+      execPreset: 'readonly',
+      allowedDomains: [],
+    },
+  },
 } as unknown as Required<ZhinAgentConfig>;

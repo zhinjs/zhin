@@ -109,11 +109,11 @@ _避免使用_：SSOT、source of truth、终态写入方
 ## 调度（Schedule）
 
 **Schedule Execution Plan**:
-预演确认后固化的 prompt / tools / skills 快照，经 `addScheduleJob` 持久化到 `schedule-jobs.json`；到点执行时由 `schedule-tool-runtime` 预加载 deferred snapshot，不再写入 `commMessage.extra`。
+预演确认后固化的 prompt / tools / skills 快照，经 `addScheduleJob` 持久化到 `schedule-jobs.json`；到点执行时由 **Schedule Execution Domain** 直接解析并装载，完全跳过 deferred snapshot 与 meta tools。
 _避免使用_：optimizePrompt、extra 上的 executionPlan
 
 **Schedule Turn**:
-带 TurnContext ALS `scheduleContext` 的 agent turn（`preview` 预演或 `scheduled` 到点执行）；`buildScheduleTurnMessage` 提供 synthetic 载体，hookContext 由 event-emitter 从 ALS 投影。
+带 TurnContext ALS `scheduleContext` 的 agent turn（`preview` 预演或 `scheduled` 到点执行）；`TaskExecutor` 提供降权 synthetic 载体，hookContext 由 event-emitter 从 ALS 投影。
 _避免使用_：mutate 入站 Message.extra、augmentPromptWithExecutionPlan
 
 **Passive Group Context**:
@@ -234,4 +234,3 @@ zhin.js + plugins    createZhinAgent、activity-feedback、adapter 绑定
 | [0019](../../../docs/adr/0019-install-size-layering.md) | agent 可选 peer、依赖扁平 | 迁移期单包 + 子目录；阶段 5 前不拆 8 个 npm 包 |
 
 **公开 API**：`ZhinAgent` 实现 `config/agent-interfaces.ts` 四接口（`IAgentTurnProcessor` 等）；`@zhin.js/agent` 与 `@zhin.js/agent/config` 均可 import 类型。
-

@@ -14,6 +14,7 @@ import {
   resolveQuoteSystemHint,
 } from './turn-envelope.js';
 import { resolveModelCandidates } from './model-resolver.js';
+import { getScheduleTurnContext } from '../internal/turn-context.js';
 export type { TurnEnvelopeParts } from './envelope-parts.js';
 export {
   ProfileContextBuilder,
@@ -89,6 +90,7 @@ export class ContextSystem {
   async buildTextTurnContext(input: TextTurnContextInput): Promise<TextTurnContextOutput> {
     const { host, commMessage, content, turnUser, deferredStats, prebuiltMessages } = input;
     const mode = input.mode ?? 'chat';
+    const isScheduleTurn = Boolean(getScheduleTurnContext());
     const envelopeParts: Partial<TurnEnvelopeParts> = {};
     const buildCtx: BuildContext = {
       message: commMessage,
@@ -97,7 +99,7 @@ export class ContextSystem {
       envelope: envelopeParts,
     };
 
-    const extraMessages = await this.runPipeline(buildCtx, host);
+    const extraMessages = isScheduleTurn ? [] : await this.runPipeline(buildCtx, host);
     const personaEnhanced = host.buildDisciplinedPrompt(host.config.persona);
 
     const modelCandidates = resolveModelCandidates(
@@ -112,7 +114,7 @@ export class ContextSystem {
     const llmModel = getLlmTransportModel(providerAlias, modelId);
     const agentsContext = await buildAgentsEnvelopeContext();
 
-    const turnEnvelope = buildTurnContextEnvelope({
+    const turnEnvelope = isScheduleTurn ? null : buildTurnContextEnvelope({
       commMessage,
       profileSummary: envelopeParts.profileSummary,
       toneHint: envelopeParts.toneHint,
@@ -125,9 +127,15 @@ export class ContextSystem {
       agentsContext: agentsContext ?? undefined,
     });
 
-    let userMessages = prebuiltMessages?.length
-      ? prependEnvelopeToFirstUserText(prebuiltMessages, turnEnvelope)
-      : applyTurnContextToUserMessages(turnUser.promptMessages, turnEnvelope);
+    let userMessages = isScheduleTurn
+      ? [{
+          role: 'user' as const,
+          content: [{ type: 'text' as const, text: content }],
+          timestamp: Date.now(),
+        }]
+      : prebuiltMessages?.length
+        ? prependEnvelopeToFirstUserText(prebuiltMessages, turnEnvelope)
+        : applyTurnContextToUserMessages(turnUser.promptMessages, turnEnvelope);
 
     if (extraMessages.length > 0) {
       userMessages = [...extraMessages, ...userMessages];

@@ -130,6 +130,10 @@ export interface AgentLoopTurnInput {
   promptHooks?: HostPromptTurnHooks;
   signal?: AbortSignal;
   deferredStats?: string;
+  /** Direct tool sets bypass deferred catalog/snapshot/meta-tool machinery. */
+  toolLoading?: 'deferred' | 'direct';
+  /** Isolated executions neither load nor append conversational history. */
+  conversationPersistence?: 'session' | 'none';
   /** Tool name aliases: LLM-facing name → actual tool name */
   toolAliases?: Record<string, string>;
   /** Optional TurnEvent tap (processStream / diagnostics) */
@@ -393,17 +397,21 @@ export async function* runAgentLoopTextTurnRun(
 
   const providerAlias = host.getTurnProvider().name;
   const llmModel = getLlmTransportModel(providerAlias, modelId);
-  const loaded = await repo.loadContext(sessionId);
+  const persistentConversation = input.conversationPersistence !== 'none';
+  const loaded = persistentConversation
+    ? await repo.loadContext(sessionId)
+    : { messages: [] as AgentMessage[] };
   const promptMessages = input.initialMessages?.length
     ? input.initialMessages
     : [createUserMessage(input.rawContent)];
 
-  const toolRun = allTools.length > 0
+  const directTools = input.toolLoading === 'direct';
+  const hasTools = directTools ? resolvedTools.length > 0 : allTools.length > 0;
+  const toolRun = hasTools && !directTools
     ? await planToolRun(resolvedTools, host.config.preExecTimeout)
     : { mode: 'agent' as const, preExecution: { tools: [], data: '' } };
 
   const preData = toolRun.preExecution.data;
-  const hasTools = allTools.length > 0;
   const outputSchema = resolveAgentOutputSchema(host.config.outputSchema);
   let systemPrompt = hasTools
     ? await buildAgentPathSystemPrompt(host, {
@@ -426,11 +434,13 @@ export async function* runAgentLoopTextTurnRun(
       })
     : [];
 
-  let sessionSnapshot = host.deferred.lastSessionSnapshot ?? { loadedTools: {}, loadedSkills: [] };
-  const catalog = host.deferred.lastCatalog ?? [];
+  let sessionSnapshot = directTools
+    ? { loadedTools: {}, loadedSkills: [] }
+    : (host.deferred.lastSessionSnapshot ?? { loadedTools: {}, loadedSkills: [] });
+  const catalog = directTools ? [] : (host.deferred.lastCatalog ?? []);
   const deferredCfg = resolveDeferredToolsConfig(host.config);
 
-  if (hasTools && catalog.length > 0) {
+  if (!directTools && hasTools && catalog.length > 0) {
     const skillLoadOpts = buildSkillLoadOptsForAgent(host);
     bindDeferredToolRuntime(contextForTools, {
       sessionId,
@@ -452,6 +462,7 @@ export async function* runAgentLoopTextTurnRun(
   }
 
   const refreshResolvedTools = () => {
+    if (directTools) return resolvedTools;
     const alwaysLoaded = resolveAlwaysLoadedSet(host.config);
     const loaded = getLoadedToolNamesFromSnapshot(sessionSnapshot);
     return resolveDeferredApiTools(catalog, alwaysLoaded, loaded);
@@ -509,13 +520,15 @@ export async function* runAgentLoopTextTurnRun(
   });
 
   const legacyByName = new Map(agentTools.map((t) => [t.name, t]));
-  let llmTools = buildLlmToolsForProvider(
-    llmModel.sdk,
-    catalog,
-    agentTools,
-    resolveAlwaysLoadedSet(host.config),
-    getLoadedToolNamesFromSnapshot(sessionSnapshot),
-  );
+  let llmTools = directTools
+    ? agentToolsToLlmTools(agentTools)
+    : buildLlmToolsForProvider(
+        llmModel.sdk,
+        catalog,
+        agentTools,
+        resolveAlwaysLoadedSet(host.config),
+        getLoadedToolNamesFromSnapshot(sessionSnapshot),
+      );
   const toolCalls: ToolCallRecord[] = [];
   let iterations = 0;
   let lastAssistantText = '';
@@ -546,13 +559,15 @@ export async function* runAgentLoopTextTurnRun(
     });
     legacyByName.clear();
     for (const t of nextAgentTools) legacyByName.set(t.name, t);
-    llmTools = buildLlmToolsForProvider(
-      llmModel.sdk,
-      catalog,
-      nextAgentTools,
-      resolveAlwaysLoadedSet(host.config),
-      getLoadedToolNamesFromSnapshot(sessionSnapshot),
-    );
+    llmTools = directTools
+      ? agentToolsToLlmTools(nextAgentTools)
+      : buildLlmToolsForProvider(
+          llmModel.sdk,
+          catalog,
+          nextAgentTools,
+          resolveAlwaysLoadedSet(host.config),
+          getLoadedToolNamesFromSnapshot(sessionSnapshot),
+        );
     return llmTools;
   };
 
@@ -575,7 +590,7 @@ export async function* runAgentLoopTextTurnRun(
     },
     convertToLlm: (messages: AgentMessage[]) => messages,
     transformContext: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
-      transformContextWithCompaction(messages, ctxSignal, {
+      persistentConversation ? transformContextWithCompaction(messages, ctxSignal, {
         host,
         sessionId,
         commMessage: contextForTools,
@@ -584,9 +599,9 @@ export async function* runAgentLoopTextTurnRun(
         contextWindow,
         mode: 'text',
         loopHooks,
-      }),
+      }) : messages,
     onContextOverflow: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
-      transformContextWithCompaction(messages, ctxSignal, {
+      persistentConversation ? transformContextWithCompaction(messages, ctxSignal, {
         host,
         sessionId,
         commMessage: contextForTools,
@@ -596,7 +611,7 @@ export async function* runAgentLoopTextTurnRun(
         mode: 'text',
         force: true,
         loopHooks,
-      }),
+      }) : messages,
     getSteeringMessages: promptHooks?.getSteeringMessages,
     getFollowUpMessages: promptHooks?.getFollowUpMessages,
     executeTool: async (toolCall: ParsedToolCall, _tools: typeof llmTools, toolSignal?: AbortSignal) => {
@@ -631,7 +646,9 @@ export async function* runAgentLoopTextTurnRun(
       }
 
       const httpSessionId = readHttpSessionId(contextForTools);
-      const approvalDenied = await runToolApprovalGate({
+      const approvalDenied = directTools && legacy.approval && legacy.approval !== 'never'
+        ? 'Error: unattended execution rejects tools that require approval'
+        : await runToolApprovalGate({
         toolName: resolvedName,
         args: effectiveArgs,
         sessionId,
@@ -648,7 +665,7 @@ export async function* runAgentLoopTextTurnRun(
         publishCtx: { sessionId, httpSessionId },
         onceStore: host.orchestrator?.approvalOnce,
         journal: input.journal,
-      });
+          });
       if (approvalDenied) {
         toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: approvalDenied });
         return toolResultToAgentMessage(toolCall, approvalDenied, true);
@@ -786,7 +803,9 @@ export async function* runAgentLoopTextTurnRun(
       const messageExtras = batch.map((msg, i) => (
         msg.role === 'user' && i < userBatch.length ? userMessageExtra : undefined
       ));
-      await repo.appendMessages(sessionId, batch, { messageExtras });
+      if (persistentConversation) {
+        await repo.appendMessages(sessionId, batch, { messageExtras });
+      }
     }
   }
 

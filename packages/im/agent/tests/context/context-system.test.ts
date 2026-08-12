@@ -10,6 +10,9 @@ import {
 } from '../../src/context/context-system.js';
 import type { ContextBuilder } from '../../src/context/contracts.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
+import { runInTurnContext } from '../../src/internal/turn-context.js';
+import { TurnTracker } from '../../src/turn/turn-tracker.js';
+import { createScheduleSecurityContext } from '../../src/schedule-domain/security-harness.js';
 
 describe('ContextSystem', () => {
   it('buildTextTurnContext merges registered builder messages and injectors', async () => {
@@ -63,6 +66,43 @@ describe('ContextSystem', () => {
     expect(messages).toEqual([]);
     expect(envelope.profileSummary).toBe('User prefers concise replies.');
     expect(typeof envelope.toneHint).toBe('string');
+  });
+
+  it('schedule turns contain only the current task and no conversation history or profile builders', async () => {
+    vi.spyOn(ai, 'getLlmTransportModel').mockReturnValue({ id: 'gpt-4o-mini', sdk: 'openai' } as any);
+    const host = {
+      config: { persona: 'chat persona', toneAwareness: true },
+      userProfiles: { buildProfileSummary: async () => 'interactive profile' },
+      getTurnProvider: () => ({ name: 'openai', models: ['gpt-4o-mini'] }),
+      modelRegistry: null,
+      buildDisciplinedPrompt: (prompt: string) => prompt,
+      getTurnActiveSkills: () => '',
+    } as any;
+    const system = createContextSystemForHost(host);
+    system.addBuilder({ name: 'history-leak', build: async () => [createUserMessage('must not leak')] });
+
+    const result = await runInTurnContext('schedule-turn', new TurnTracker(1_000), () =>
+      system.buildTextTurnContext({
+        host,
+        commMessage: mockCommMessage({ senderId: 'u1' }),
+        content: 'publish report',
+        turnUser: {
+          rawContent: 'publish report',
+          promptMessages: [createUserMessage('old conversation'), createUserMessage('publish report')],
+        },
+      }), {
+        scheduleContext: {
+          jobId: 'sched-1',
+          security: createScheduleSecurityContext(),
+          securityDenials: [],
+        },
+      });
+
+    expect(result.userMessages).toEqual([expect.objectContaining({
+      role: 'user',
+      content: [{ type: 'text', text: 'publish report' }],
+    })]);
+    expect(result.turnEnvelope).toBeNull();
   });
 
   it('ToneInjector respects toneAwareness config via inject pipeline', () => {

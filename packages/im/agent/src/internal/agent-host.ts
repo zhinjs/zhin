@@ -75,7 +75,6 @@ export interface AgentTurnLifecycleHost {
   readonly phaseConfig: HostPhaseTraceConfig;
   readonly promptTraceConfig: HostPromptTraceConfig;
   readonly rateLimiter: RateLimiter;
-  initScheduleTurnContext(ctx: HostScheduleTurnContext): void;
   initInboundTurnContext(): void;
   beginActiveTurn(): void;
   finalizeActiveTurn(

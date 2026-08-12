@@ -701,6 +701,7 @@ function wireRuntimeSchedule(
   });
   const executor = createTaskExecutor({
     agent,
+    dataDir,
     resolveAdapter: () => undefined,
     router: notificationRouter,
     defaultNotify,
@@ -727,11 +728,7 @@ function wireRuntimeSchedule(
       getStatus: () => [],
     },
     engine: jobEngine,
-    previewTask: (opts) => executor.executeTask({
-      ...opts,
-      preview: true,
-      timeContext: false,
-    }),
+    previewTask: (prompt, message, options) => executor.preview(prompt, message, options),
   });
 
   if (assistantCfg.enabled) {
