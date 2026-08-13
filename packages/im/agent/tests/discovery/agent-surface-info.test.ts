@@ -11,7 +11,8 @@ describe('agent-surface-info', () => {
     const report = await buildAgentSurfaceInfoReport(repoRoot);
     const lottery = report.plugins.find((p) => p.pluginName.includes('lottery'));
     expect(lottery).toBeDefined();
-    expect(lottery!.tools.length).toBeGreaterThan(0);
+    expect(lottery!.tools).toContain('lottery_history');
+    expect(new Set(lottery!.tools).size).toBe(lottery!.tools.length);
     const text = formatAgentSurfaceInfoReport(report);
     expect(text).toContain('Totals:');
   });

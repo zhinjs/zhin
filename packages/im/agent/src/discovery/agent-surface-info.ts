@@ -59,6 +59,10 @@ function listFiles(dir: string, ext: RegExp): string[] {
   }
 }
 
+function uniqueNames(names: readonly string[]): string[] {
+  return [...new Set(names)];
+}
+
 function listSubdirs(dir: string): string[] {
   if (!fs.existsSync(dir)) return [];
   try {
@@ -118,8 +122,10 @@ function scanPluginSurface(packageRoot: string): AgentSurfacePluginInfo | null {
   if (!fs.existsSync(agentDir) && !fs.existsSync(evalsDir)) return null;
 
   const pluginName = resolvePluginId(packageRoot);
-  const tools = listFiles(path.join(agentDir, 'tools'), /\.(ts|js)$/i)
-    .map((f) => namespaceAuthoringName(pluginName, slotNameFromFile(f)));
+  const tools = uniqueNames([
+    ...listFiles(path.join(agentDir, 'tools'), /\.(ts|js)$/i),
+    ...listFiles(path.join(packageRoot, 'tools'), /\.(ts|js)$/i),
+  ].map((f) => namespaceAuthoringName(pluginName, slotNameFromFile(f))));
   const skills = [
     ...listFiles(path.join(agentDir, 'skills'), /\.(md|ts|js)$/i),
   ].map((f) => namespaceAuthoringName(pluginName, slotNameFromFile(f)));

@@ -7,6 +7,8 @@ export type { ProcessTextTurnOptions } from './turn-pipeline.js';
 
 export { executeAgentTurn } from './execute-agent-turn.js';
 export type { TurnEventObserver, TurnEventSource } from './execute-agent-turn.js';
+export { streamTurnEvents } from './turn-event-source.js';
+export type { TurnEventSink, TurnEventSourceInput } from './turn-event-source.js';
 
 export {
   createTurnIngress,

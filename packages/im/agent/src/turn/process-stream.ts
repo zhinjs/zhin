@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
-import type { OutputElement } from '@zhin.js/ai';
 import { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import type { Message, Tool } from '../orchestrator/types.js';
 import type { TurnEvent } from '../event/turn-event.js';
@@ -10,7 +9,8 @@ import type { InboundTurnQueue } from '../turn/inbound-turn-queue.js';
 import type { ResolvedInboundQueueConfig } from '../turn/inbound-queue-config.js';
 import { runWithInboundQueue } from '../turn/inbound-queue-runtime.js';
 import { processTextTurn } from './turn-pipeline.js';
-import { TurnTerminalGate, isTurnCancellation, turnCancelledEvent } from './turn-terminal.js';
+import { isTurnCancellation, turnCancelledEvent } from './turn-terminal.js';
+import { streamTurnEvents } from './turn-event-source.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 
 export async function* processTextTurnStream(
@@ -39,65 +39,27 @@ export async function* processTextTurnStream(
   yield turnStart;
   publishTurnStreamEvents(agent, turnStart, streamCtx(), journal);
 
-  const eventQueue: TurnEvent[] = [];
-  let resolveWaiting: (() => void) | undefined;
-  let done = false;
-  const terminal = new TurnTerminalGate();
-  let finalOutput: OutputElement[] = [];
-  let finalError: Error | undefined;
-
-  const onTurnEvent = (event: TurnEvent) => {
-    if (!terminal.accept(event)) return;
-    eventQueue.push(event);
-    publishTurnStreamEvents(agent, event, streamCtx(), journal);
-    resolveWaiting?.();
-  };
-
-  const runPromise = runInTurnContext(turnId, () =>
-    runWithInboundQueue(commMessage, inboundQueueConfig, inboundTurnQueue, {
-      content,
-      run: (mergedContent) =>
-        processTextTurn(agent, mergedContent, commMessage, externalTools, undefined, { onTurnEvent, journal }),
-    }),
-  ).then((output) => {
-    finalOutput = output;
-    done = true;
-    resolveWaiting?.();
-  }).catch((err) => {
-    finalError = err instanceof Error ? err : new Error(String(err));
-    done = true;
-    resolveWaiting?.();
+  const source = streamTurnEvents({
+    execute: (emit) => runInTurnContext(turnId, () =>
+      runWithInboundQueue(commMessage, inboundQueueConfig, inboundTurnQueue, {
+        content,
+        run: (mergedContent) =>
+          processTextTurn(agent, mergedContent, commMessage, externalTools, undefined, {
+            onTurnEvent: emit,
+            journal,
+          }),
+      })),
+    mapError: (error) => isTurnCancellation(error)
+      ? turnCancelledEvent(error)
+      : {
+          type: 'error',
+          error: error instanceof Error ? error : new Error(String(error)),
+          recoverable: false,
+        },
   });
 
-  while (!done || eventQueue.length > 0) {
-    if (eventQueue.length > 0) {
-      yield eventQueue.shift()!;
-      continue;
-    }
-    if (!done) {
-      await new Promise<void>((resolve) => { resolveWaiting = resolve; });
-      resolveWaiting = undefined;
-    }
+  for await (const event of source) {
+    publishTurnStreamEvents(agent, event, streamCtx(), journal);
+    yield event;
   }
-
-  if (!terminal.terminal && finalError) {
-    const terminalEvent: TurnEvent = isTurnCancellation(finalError)
-      ? turnCancelledEvent(finalError)
-      : { type: 'error', error: finalError, recoverable: false };
-    terminal.accept(terminalEvent);
-    publishTurnStreamEvents(agent, terminalEvent, streamCtx(), journal);
-    yield terminalEvent;
-  } else if (!terminal.terminal) {
-    const syntheticEnd: TurnEvent = {
-      type: 'turn_end',
-      output: finalOutput,
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-    };
-    if (terminal.accept(syntheticEnd)) {
-      publishTurnStreamEvents(agent, syntheticEnd, streamCtx(), journal);
-      yield syntheticEnd;
-    }
-  }
-
-  await runPromise.catch(() => {});
 }
