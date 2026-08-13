@@ -68,8 +68,10 @@ export class ToolIndex {
       traceId: invocation.traceId,
       turnId: invocation.turnId,
       sessionKey: invocation.sessionKey,
+      origin: Object.freeze({ ...invocation.origin }),
       principal: Object.freeze({
         subjectId: invocation.principal.subjectId,
+        displayName: invocation.principal.displayName,
         roles: Object.freeze([...invocation.principal.roles]),
       }),
     });

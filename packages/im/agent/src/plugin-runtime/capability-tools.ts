@@ -54,8 +54,10 @@ export function toolInvocationFromTurn(turn: TurnIngress | TurnRequest): ToolInv
     traceId: turn.identity.traceId,
     turnId: turn.identity.turnId,
     sessionKey: turn.session.key,
+    origin: turn.origin,
     principal: Object.freeze({
       subjectId: turn.principal.subjectId,
+      displayName: turn.principal.displayName,
       roles: Object.freeze([...turn.principal.roles]),
     }),
   });

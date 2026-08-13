@@ -161,6 +161,7 @@ function mcpInvocationContext(
     traceId: `mcp:${id}:${invocationId}`,
     turnId: `mcp:${invocationId}`,
     sessionKey: 'mcp:stateless',
+    origin: Object.freeze({ kind: 'mcp', requestId: id }),
     principal: Object.freeze({
       subjectId: 'mcp-client',
       roles: Object.freeze([bearerAuthenticated ? 'authenticated' : 'localhost']),

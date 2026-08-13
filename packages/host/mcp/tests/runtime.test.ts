@@ -38,6 +38,7 @@ describe('Runtime MCP Host', () => {
     })).toContain('echo:hello');
     expect(execute).toHaveBeenCalledWith({ value: 'hello' }, expect.objectContaining({
       signal: expect.any(AbortSignal),
+      origin: { kind: 'mcp', requestId: expect.any(String) },
       principal: { subjectId: 'mcp-client', roles: ['authenticated'] },
     }));
   });

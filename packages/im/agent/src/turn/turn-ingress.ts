@@ -1,23 +1,11 @@
 import type { OutputElement, Usage } from '@zhin.js/ai';
 import type { ApprovalPort } from '../session/session-interaction-port.js';
 import type { PermissionSubject } from '@zhin.js/permission';
+import type { ToolInvocationOrigin } from '@zhin.js/tool';
 
 export type TurnScope = 'private' | 'group' | 'channel';
 
-export type TurnOrigin =
-  | Readonly<{
-      kind: 'im';
-      platform: string;
-      endpoint: string;
-      scope: TurnScope;
-      sceneId: string;
-      messageId?: string;
-      threadId?: string;
-    }>
-  | Readonly<{ kind: 'http'; sessionId: string }>
-  | Readonly<{ kind: 'a2a'; taskId: string }>
-  | Readonly<{ kind: 'schedule'; jobId: string }>
-  | Readonly<{ kind: 'internal'; source: string }>;
+export type TurnOrigin = Exclude<ToolInvocationOrigin, Readonly<{ kind: 'mcp'; requestId: string }>>;
 
 export interface TurnIdentity {
   readonly rootId: string;

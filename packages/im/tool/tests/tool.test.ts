@@ -112,7 +112,7 @@ describe('Tool Feature', () => {
         description: `Lookup ${value}`,
         approval: 'never',
         execute(input, context) {
-          return `${value}:${input.query}:${(context.config as { scope: string }).scope}:${context.use(secret)}`;
+          return `${value}:${input.query}:${context.origin.kind}:${(context.config as { scope: string }).scope}:${context.use(secret)}`;
         },
       }),
     });
@@ -122,9 +122,9 @@ describe('Tool Feature', () => {
     const index = new ToolIndex([rootSlot, childSlot], snapshot);
 
     await expect(index.execute(child, 'lookup', { query: 'q' }, invocation()))
-      .resolves.toBe('child:q:child:child-secret');
+      .resolves.toBe('child:q:http:child:child-secret');
     await expect(index.execute(root, 'lookup', { query: 'q' }, invocation()))
-      .resolves.toBe('root:q:root:root-secret');
+      .resolves.toBe('root:q:http:root:root-secret');
     expect(index.visible(child).map((tool) => tool.qualifiedName)).toEqual(['child__lookup']);
   });
 
@@ -187,6 +187,7 @@ function invocation() {
     traceId: 'trace-1',
     turnId: 'turn-1',
     sessionKey: 'session-1',
+    origin: { kind: 'http', sessionId: 'session-1' },
     principal: { subjectId: 'user-1', roles: ['user'] },
   } as const;
 }

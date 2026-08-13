@@ -5,13 +5,31 @@ const toolBrand = 'zhin.agent-tool/1' as const;
 export type ToolApproval = 'never' | 'on-risk' | 'once' | 'always';
 export type ToolScope = 'private' | 'group' | 'channel';
 
+export type ToolInvocationOrigin =
+  | Readonly<{
+      kind: 'im';
+      platform: string;
+      endpoint: string;
+      scope: ToolScope;
+      sceneId: string;
+      messageId?: string;
+      threadId?: string;
+    }>
+  | Readonly<{ kind: 'http'; sessionId: string }>
+  | Readonly<{ kind: 'a2a'; taskId: string }>
+  | Readonly<{ kind: 'schedule'; jobId: string }>
+  | Readonly<{ kind: 'internal'; source: string }>
+  | Readonly<{ kind: 'mcp'; requestId: string }>;
+
 export interface ToolInvocationContext {
   readonly signal: AbortSignal;
   readonly traceId: string;
   readonly turnId: string;
   readonly sessionKey: string;
+  readonly origin: ToolInvocationOrigin;
   readonly principal: Readonly<{
     subjectId: string;
+    displayName?: string;
     roles: readonly string[];
   }>;
 }
@@ -21,6 +39,7 @@ export interface ToolExecutionContext<TConfig = unknown> extends CapabilityConte
   readonly traceId: string;
   readonly turnId: string;
   readonly sessionKey: string;
+  readonly origin: ToolInvocationOrigin;
   readonly principal: ToolInvocationContext['principal'];
 }
 
