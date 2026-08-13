@@ -7,6 +7,7 @@ import type { TurnEvent } from '../../src/event/turn-event.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { createTurnIngress, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
+import { NetworkAccessDeniedError } from '../../src/security/network-policy.js';
 
 describe('TurnToolRuntime', () => {
   it('records a pre-aborted invocation as cancelled without running policies or the tool', async () => {
@@ -182,6 +183,21 @@ describe('TurnToolRuntime', () => {
       'call-network-domain',
     )).resolves.toMatchObject({ status: 'denied', policy: 'network-access' });
     expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('records a transport-level network policy rejection as denied', async () => {
+    const execute = vi.fn(async () => { throw new NetworkAccessDeniedError('redirect denied'); });
+    const { turn, events } = fixture({
+      network: { enabled: true, httpsOnly: true, allowedDomains: ['allowed.example'] },
+    });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'web_fetch')]);
+
+    await expect(runtime.execute('web_fetch', {
+      url: 'https://allowed.example/start',
+    }, 'call-redirect')).resolves.toMatchObject({
+      status: 'denied', policy: 'network-access', reason: 'redirect denied',
+    });
+    expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_denied']);
   });
 
   it('denies Bash network commands without a verifiable absolute URL', async () => {

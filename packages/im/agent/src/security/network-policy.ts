@@ -28,9 +28,12 @@ export const NETWORK_COMMAND_PATTERNS: ReadonlyArray<RegExp> = [
 
 // ── SSRF 防护 ─────────────────────────────────────────────────────────
 
+import { isIP } from 'node:net';
+
 /** SSRF 防护：检查主机名是否属于内网/私有/危险地址 */
 export function isBlockedSsrfHostname(hostname: string): boolean {
-  const h = hostname.toLowerCase();
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (isIP(h)) return isBlockedIpAddress(h);
   return (
     // Localhost
     h === 'localhost' ||
@@ -47,13 +50,50 @@ export function isBlockedSsrfHostname(hostname: string): boolean {
     h === 'metadata.google.internal' ||
     h === 'metadata.google.com' ||
     // IPv6 private/link-local ranges
-    /^fd[0-9a-f]{2}:/i.test(h) ||
+    /^(?:fc|fd)[0-9a-f]{2}:/i.test(h) ||
     /^fe80:/i.test(h) ||
+    /^::ffff:(?:127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)/i.test(h) ||
     // System-level domain blocklist
     h.endsWith('.onion') ||
     h.endsWith('.internal') ||
     h.endsWith('.localhost')
   );
+}
+
+export function isBlockedIpAddress(address: string): boolean {
+  const normalized = address.toLowerCase().replace(/^\[|\]$/g, '');
+  if (isIP(normalized) === 4) {
+    const octets = normalized.split('.').map(Number);
+    const [a, b] = octets;
+    return a === 0
+      || a === 10
+      || a === 127
+      || (a === 100 && b! >= 64 && b! <= 127)
+      || (a === 169 && b === 254)
+      || (a === 172 && b! >= 16 && b! <= 31)
+      || (a === 192 && b === 0)
+      || (a === 192 && b === 168)
+      || (a === 198 && (b === 18 || b === 19))
+      || a! >= 224;
+  }
+  if (isIP(normalized) === 6) {
+    if (normalized === '::' || normalized === '::1') return true;
+    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(normalized)?.[1];
+    if (mapped) return isBlockedIpAddress(mapped);
+    return /^(?:fc|fd)/i.test(normalized)
+      || /^fe[89ab]/i.test(normalized)
+      || /^ff/i.test(normalized);
+  }
+  return true;
+}
+
+export class NetworkAccessDeniedError extends Error {
+  readonly policy = 'network-access';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'NetworkAccessDeniedError';
+  }
 }
 
 // ── 域名匹配 ──────────────────────────────────────────────────────────

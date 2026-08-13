@@ -6,6 +6,7 @@ import { isApprovalPortAvailable } from '../session/session-interaction-port.js'
 import type { AgentTool } from '@zhin.js/ai';
 import type { ToolExecutionAuthority } from '../core/tool-execution-authority.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
+import { NetworkAccessDeniedError } from '../security/network-policy.js';
 
 export type TurnToolOutcome =
   | Readonly<{ status: 'completed'; output: unknown; durationMs: number }>
@@ -62,6 +63,9 @@ export class TurnToolRuntime {
       if (error instanceof TurnJournalCommitError) throw error;
       const durationMs = Date.now() - startedAt;
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, durationMs);
+      if (error instanceof NetworkAccessDeniedError) {
+        return this.#deny(name, toolUseId, error.policy, error.message);
+      }
       const message = error instanceof Error ? error.message : String(error);
       await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: message, durationMs });
       return Object.freeze({ status: 'failed', error: message, retryable: false });

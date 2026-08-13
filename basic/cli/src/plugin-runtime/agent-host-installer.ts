@@ -95,6 +95,7 @@ import {
   agentTurnEngineToken,
   createFullAgentTurnEngine,
   createNativeFileToolFeatures,
+  createNativeWebToolFeatures,
   AgentRuntime,
   type AgentCapabilities,
   type ToolCapability,
@@ -427,6 +428,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     for (const tool of createNativeFileToolFeatures()) {
       addFeature(tool.feature, tool.name, tool.definition);
     }
+    for (const tool of createNativeWebToolFeatures()) {
+      addFeature(tool.feature, tool.name, tool.definition);
+    }
 
     const orchestrator = zhinAgent.orchestrator;
     if (!orchestrator) {
@@ -605,6 +609,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               turnId: randomUUID(),
               signal,
               workspaceRoot: options.projectRoot,
+              network: interactiveNetworkPolicy(service.getAgentConfig()),
               ports: {
                 ...(options.approvalPort ? { approval: options.approvalPort } : {}),
                 reply: {
@@ -1101,6 +1106,7 @@ export function createRuntimeTurnRequest(
     turnId: string;
     signal: AbortSignal;
     workspaceRoot: string;
+    network?: TurnRequest['policy']['network'];
     ports: TurnRequestPorts;
   }>,
 ): TurnRequest {
@@ -1142,10 +1148,23 @@ export function createRuntimeTurnRequest(
     policy: Object.freeze({
       ...access.policy,
       filesystem: Object.freeze({ workspaceRoot: input.workspaceRoot }),
+      ...(input.network ? { network: Object.freeze({
+        enabled: input.network.enabled,
+        httpsOnly: input.network.httpsOnly,
+        allowedDomains: Object.freeze([...(input.network.allowedDomains ?? [])]),
+      }) } : {}),
     }),
     signal: input.signal,
     ports: Object.freeze({ ...input.ports }),
   });
+}
+
+function interactiveNetworkPolicy(
+  config: ReturnType<AIService['getAgentConfig']>,
+): TurnRequest['policy']['network'] | undefined {
+  return config?.execPreset === 'network'
+    ? Object.freeze({ enabled: true, httpsOnly: true, allowedDomains: Object.freeze([]) })
+    : undefined;
 }
 
 function createRuntimeTurnAccess(

@@ -3,7 +3,6 @@
  * https://github.com/claude-code-best/claude-code/blob/main/packages/builtin-tools/src/tools/WebSearchTool/adapters/bingAdapter.ts
  */
 import he from 'he';
-import { htmlToPlainText } from '@zhin.js/core';
 import { acceptLanguageForMarket, DEFAULT_WEB_SEARCH_MARKET } from './web-search-locale.js';
 
 export interface BingSearchResultRow {
@@ -13,6 +12,15 @@ export interface BingSearchResultRow {
 }
 
 export const decodeHtmlEntities = (s: string): string => he.decode(s);
+
+export function htmlToPlainSearchText(html: string): string {
+  return he.decode(html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' '))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 /**
  * 从 Bing 结果页 HTML 提取有机结果。
@@ -34,7 +42,7 @@ export function extractBingResults(html: string): BingSearchResultRow[] {
     const url = resolveBingUrl(rawUrl);
     if (!url) continue;
 
-    const title = decodeHtmlEntities(htmlToPlainText(titleHtml));
+    const title = htmlToPlainSearchText(titleHtml);
     const snippet = extractSnippet(block);
     results.push({ title, url, snippet });
   }
@@ -46,20 +54,20 @@ function extractSnippet(block: string): string | undefined {
   const lineclampRegex = /<p[^>]*class="b_lineclamp[^"]*"[^>]*>([\s\S]*?)<\/p>/i;
   let match = lineclampRegex.exec(block);
   if (match) {
-    return decodeHtmlEntities(htmlToPlainText(match[1]));
+    return htmlToPlainSearchText(match[1]);
   }
 
   const captionPRegex =
     /<div[^>]*class="b_caption[^"]*"[^>]*>[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/i;
   match = captionPRegex.exec(block);
   if (match) {
-    return decodeHtmlEntities(htmlToPlainText(match[1]));
+    return htmlToPlainSearchText(match[1]);
   }
 
   const fallbackRegex = /<div[^>]*class="b_caption[^"]*"[^>]*>([\s\S]*?)<\/div>/i;
   const fallbackMatch = fallbackRegex.exec(block);
   if (fallbackMatch) {
-    const text = htmlToPlainText(fallbackMatch[1]);
+    const text = htmlToPlainSearchText(fallbackMatch[1]);
     if (text) return decodeHtmlEntities(text);
   }
 

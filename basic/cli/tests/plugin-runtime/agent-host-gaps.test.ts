@@ -56,6 +56,7 @@ describe('canonical IM TurnRequest ingress', () => {
       turnId: 'turn-1',
       signal,
       workspaceRoot: '/workspace',
+      network: { enabled: true, httpsOnly: true, allowedDomains: ['example.com'] },
       ports: {},
     });
 
@@ -80,7 +81,12 @@ describe('canonical IM TurnRequest ingress', () => {
         quote: { messageId: 'quoted-1', text: 'quoted body' },
       },
       session: { key: 'icqq:10001:group:100' },
-      policy: { permissions: ['trusted'], unattended: false, filesystem: { workspaceRoot: '/workspace' } },
+      policy: {
+        permissions: ['trusted'],
+        unattended: false,
+        filesystem: { workspaceRoot: '/workspace' },
+        network: { enabled: true, httpsOnly: true, allowedDomains: ['example.com'] },
+      },
     });
     expect(request.signal).toBe(signal);
   });
