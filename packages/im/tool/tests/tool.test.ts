@@ -128,6 +128,29 @@ describe('Tool Feature', () => {
     expect(index.visible(child).map((tool) => tool.qualifiedName)).toEqual(['child__lookup']);
   });
 
+  it('passes immutable invocation policy into the Tool execution context', async () => {
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: toolFeatureId,
+      localName: 'network-policy',
+      source: '/tools/network-policy.ts',
+      definition: defineAgentTool({
+        description: 'Inspect execution policy',
+        approval: 'never',
+        execute: (_input, context) => context.policy,
+      }),
+    });
+    const snapshot = createSnapshot([slot], createToken('unused').id);
+    const index = new ToolIndex([slot], snapshot);
+
+    await expect(index.execute(root, 'network-policy', {}, invocation())).resolves.toEqual({
+      permissions: ['user'],
+      unattended: false,
+      network: { enabled: false, httpsOnly: undefined, allowedDomains: [] },
+    });
+  });
+
   it('publishes every plugin-owned Tool under one collision-free qualified identity', async () => {
     const root = rootPluginId();
     const child = childPluginId(root, 'child');
@@ -189,6 +212,7 @@ function invocation() {
     sessionKey: 'session-1',
     origin: { kind: 'http', sessionId: 'session-1' },
     principal: { subjectId: 'user-1', roles: ['user'] },
+    policy: { permissions: ['user'], unattended: false, network: { enabled: false } },
   } as const;
 }
 

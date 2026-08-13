@@ -74,6 +74,15 @@ export class ToolIndex {
         displayName: invocation.principal.displayName,
         roles: Object.freeze([...invocation.principal.roles]),
       }),
+      policy: Object.freeze({
+        permissions: Object.freeze([...invocation.policy.permissions]),
+        unattended: invocation.policy.unattended,
+        network: Object.freeze({
+          enabled: invocation.policy.network.enabled,
+          httpsOnly: invocation.policy.network.httpsOnly,
+          allowedDomains: Object.freeze([...(invocation.policy.network.allowedDomains ?? [])]),
+        }),
+      }),
     });
     return entry.slot.definition.execute(parsedInput, context) as TResult | Promise<TResult>;
   }

@@ -60,5 +60,14 @@ export function toolInvocationFromTurn(turn: TurnIngress | TurnRequest): ToolInv
       displayName: turn.principal.displayName,
       roles: Object.freeze([...turn.principal.roles]),
     }),
+    policy: Object.freeze({
+      permissions: Object.freeze([...turn.policy.permissions]),
+      unattended: turn.policy.unattended,
+      network: Object.freeze({
+        enabled: turn.policy.network?.enabled === true,
+        httpsOnly: turn.policy.network?.httpsOnly,
+        allowedDomains: Object.freeze([...(turn.policy.network?.allowedDomains ?? [])]),
+      }),
+    }),
   });
 }

@@ -166,6 +166,11 @@ function mcpInvocationContext(
       subjectId: 'mcp-client',
       roles: Object.freeze([bearerAuthenticated ? 'authenticated' : 'localhost']),
     }),
+    policy: Object.freeze({
+      permissions: Object.freeze([bearerAuthenticated ? 'authenticated' : 'localhost']),
+      unattended: true,
+      network: Object.freeze({ enabled: false }),
+    }),
   });
 }
 

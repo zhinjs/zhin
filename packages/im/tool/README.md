@@ -41,7 +41,7 @@ export default defineAgentTool<{ city: string }>({
 
 ## Owner 解析
 
-`ToolIndex.execute(requester, name, input, invocation)` 从 requester 向 Root 查找最近 definition。`invocation` 必须包含所属 Turn 的 `AbortSignal`、trace/turn/session identity 与 principal；这些字段会连同声明 owner 的 config/resource 组成 `ToolExecutionContext`。child 可覆盖继承的 Root Tool。
+`ToolIndex.execute(requester, name, input, invocation)` 从 requester 向 Root 查找最近 definition。`invocation` 必须包含所属 Turn 的 `AbortSignal`、trace/turn/session identity、principal 与不可变 policy（permissions / unattended / network authority）；这些字段会连同声明 owner 的 config/resource 组成 `ToolExecutionContext`。网络 transport 必须读取该 context 的 authority，不能读取模块全局或自行猜测执行域。child 可覆盖继承的 Root Tool。
 
 `list()` 返回全树 qualified descriptors；`visible(owner)` 返回该 owner 可见且完成 override 后的 local descriptors。
 
