@@ -64,7 +64,7 @@ basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp
 ### zhin.js 4.x 安装分档
 
 - 默认安装仅 IM（<10MB）；AI 另装 `@zhin.js/agent` + `zod` + `ai` + 所选 `@ai-sdk/*`。
-- 用户向分档表 SSOT：[`docs/snippets/install-tiers.md`](docs/snippets/install-tiers.md)（根 README 的 Install tiers 表必须与之一致，`pnpm check:install-tiers-ssot` 门禁）。
+- 用户向分档表 SSOT：[`docs/snippets/install-tiers.md`](docs/snippets/install-tiers.md)（中文 [`README.zh-CN.md`](README.zh-CN.md) 的 Install tiers 表必须与之一致，`pnpm check:install-tiers-ssot` 门禁；根 [`README.md`](README.md) 为英文入口）。
 - 安装分档（IM 核心 <10MB）见 [docs/snippets/install-tiers.md](docs/snippets/install-tiers.md)。Breaking（4.x）：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。
 - `pnpm check:install-size`：IM 核心 production `node_modules` ≤10MB。
 

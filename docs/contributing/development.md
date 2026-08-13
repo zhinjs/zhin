@@ -108,7 +108,7 @@ pnpm --filter @zhin.js/scaffold-wizard build   # 或 pnpm prepare:cli
 | ADR Manifest（`pnpm check:adr-manifest`） | ADR README 与侧栏覆盖所有 ADR |
 | README Exports（`pnpm check:readme-exports`） | README import 与包导出一致 |
 | Config Docs（`pnpm check:config-docs`） | 配置文档与 DEFAULT_CONFIG 关键字段对齐 |
-| Install Tiers SSOT（`pnpm check:install-tiers-ssot`） | 根 README Install tiers 表与 `docs/snippets/install-tiers.md` 一致 |
+| Install Tiers SSOT（`pnpm check:install-tiers-ssot`） | 中文 `README.zh-CN.md` Install tiers 表与 `docs/snippets/install-tiers.md` 一致 |
 | Adapter Docs Sync（`pnpm check:adapter-docs`） | 平台适配器文档与 `plugins/adapters/*/README.md` 同步（修复用 `pnpm sync:adapter-docs`） |
 | Platform Tiers SSOT（`pnpm check:platform-tiers-ssot`） | 能力分档/适配器索引与 `scripts/adapter-meta.mjs` 一致 |
 

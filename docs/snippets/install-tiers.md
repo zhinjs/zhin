@@ -6,7 +6,7 @@
 <<< ../snippets/install-tiers.md#tiers-table
 ```
 
-维护：改表只改本文件，然后 `pnpm docs:build` 验证。仓库根 `README.md` 保留简表并注明 SSOT 路径。
+维护：改表只改本文件，然后 `pnpm docs:build` 验证。仓库根英文 `README.md` 为入口；中文 `README.zh-CN.md` 保留简表并由 `pnpm check:install-tiers-ssot` 对齐。
 
 <!-- #region tiers-table -->
 | 档位 | 安装 | 约 production 体积 | 能力 |

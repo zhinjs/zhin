@@ -13,6 +13,7 @@ const repoRoot = path.resolve(__dirname, '..');
 const scanRoots = [
   'AGENTS.md',
   'README.md',
+  'README.zh-CN.md',
   'CLAUDE.md',
   '.github/copilot-instructions.md',
   'docs/getting-started',

@@ -23,7 +23,7 @@
       "additionalProperties": false,
       "properties": {
         "adapter": { "type": "string", "default": "sandbox" },
-        "endpointId": { "type": "string", "default": "sandbox-bot" },
+        "endpointKey": { "type": "string", "default": "sandbox-bot" },
         "conversation": {
           "type": "object",
           "additionalProperties": false,

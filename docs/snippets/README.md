@@ -24,7 +24,7 @@
 
 ### 非 VitePress 文件
 
-仓库根 `README.md`、`packages/im/zhin/README.md` 无法使用 `<<<`，改表时请**同步** `install-tiers.md`，或链到 [快速开始 — Install tiers](https://zhin.js.org/getting-started/#install-tierszhinjs-4x)。
+仓库根英文 [`README.md`](../../README.md)、中文 [`README.zh-CN.md`](../../README.zh-CN.md)、`packages/im/zhin/README.md` 无法使用 `<<<`。中文根 README 的分档表由 `pnpm check:install-tiers-ssot` 与本文件对齐；改表时请**同步** `install-tiers.md`，或链到 [快速开始 — Install tiers](https://zhin.js.org/getting-started/#install-tierszhinjs-4x)。
 
 ### 验证
 

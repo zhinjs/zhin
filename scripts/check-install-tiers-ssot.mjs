@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * 校验仓库根 README 的 Install tiers 表与 docs/snippets/install-tiers.md#tiers-table 一致。
+ * 校验中文 README 的 Install tiers 表与 docs/snippets/install-tiers.md#tiers-table 一致。
+ * 根 README.md 为英文入口；中文表 SSOT 落在 README.zh-CN.md。
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const snippetPath = path.join(repoRoot, 'docs/snippets/install-tiers.md');
-const readmePath = path.join(repoRoot, 'README.md');
+const readmePath = path.join(repoRoot, 'README.zh-CN.md');
 
 /** @param {string} text @param {string} region */
 function extractRegion(text, region) {
@@ -55,4 +56,4 @@ if (missing.length || extra.length) {
   process.exit(1);
 }
 
-console.log('Install tiers SSOT check passed (README ↔ snippets/install-tiers.md).');
+console.log('Install tiers SSOT check passed (README.zh-CN.md ↔ snippets/install-tiers.md).');
