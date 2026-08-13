@@ -1,9 +1,9 @@
 ---
-"@zhin.js/tool": major
-"@zhin.js/agent": major
-"@zhin.js/core": minor
-"@zhin.js/ai": minor
-"@zhin.js/plugin-lottery": major
+"@zhin.js/tool": patch
+"@zhin.js/agent": patch
+"@zhin.js/core": patch
+"@zhin.js/ai": patch
+"@zhin.js/plugin-lottery": patch
 ---
 
 将彩票 Agent 工具迁入正式 `tools/*.ts` ToolFeature 约定目录。

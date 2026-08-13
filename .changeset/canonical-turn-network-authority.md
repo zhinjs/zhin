@@ -1,5 +1,5 @@
 ---
-'@zhin.js/agent': major
+'@zhin.js/agent': patch
 ---
 
 Add explicit, fail-closed network authority to canonical Turn policy. Web tools and Bash network commands are denied unless the Turn grants network access; URL-bearing operations enforce absolute URLs, HTTPS constraints, SSRF protection, and domain allowlists before execution.

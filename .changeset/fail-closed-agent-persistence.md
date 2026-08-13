@@ -1,6 +1,6 @@
 ---
-'@zhin.js/ai': major
-'@zhin.js/agent': major
+'@zhin.js/ai': patch
+'@zhin.js/agent': patch
 ---
 
 Fail closed on Agent session and context persistence failures. Database errors now surface as typed `PersistenceUnavailableError` instead of being reinterpreted as Not Found, empty history, or successful metadata writes.

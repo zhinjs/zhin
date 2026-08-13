@@ -1,7 +1,7 @@
 ---
-"@zhin.js/agent": major
-"@zhin.js/host-http": major
-"@zhin.js/cli": minor
+"@zhin.js/agent": patch
+"@zhin.js/host-http": patch
+"@zhin.js/cli": patch
 ---
 
 删除进程级 `AgentRuntimeRegistry` 与按 Endpoint 复制 `ZhinAgent` 的运行时子图。

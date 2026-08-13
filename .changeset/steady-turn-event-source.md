@@ -1,5 +1,5 @@
 ---
-"@zhin.js/agent": minor
+"@zhin.js/agent": patch
 ---
 
 Add one Turn Event source module that owns concurrent worker-to-stream bridging,

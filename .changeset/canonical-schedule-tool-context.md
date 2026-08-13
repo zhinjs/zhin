@@ -1,6 +1,6 @@
 ---
-'@zhin.js/agent': major
-'@zhin.js/cli': minor
+'@zhin.js/agent': patch
+'@zhin.js/cli': patch
 ---
 
 Replace schedule management tools' legacy `ZhinTool` and IM `Message` boundary with native Agent Tool definitions and canonical invocation identity. Schedule creation now derives creator and delivery target from the authenticated tool principal and origin.

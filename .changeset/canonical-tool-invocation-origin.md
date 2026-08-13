@@ -1,7 +1,7 @@
 ---
-"@zhin.js/tool": major
-"@zhin.js/agent": minor
-"@zhin.js/mcp": minor
+"@zhin.js/tool": patch
+"@zhin.js/agent": patch
+"@zhin.js/mcp": patch
 ---
 
 Make canonical invocation origin and principal display identity part of every

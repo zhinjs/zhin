@@ -1,10 +1,10 @@
 ---
-"@zhin.js/tool": major
-"@zhin.js/ai": major
-"@zhin.js/mcp": major
-"@zhin.js/plugin-runtime": minor
-"@zhin.js/runtime": minor
-"@zhin.js/agent": minor
+"@zhin.js/tool": patch
+"@zhin.js/ai": patch
+"@zhin.js/mcp": patch
+"@zhin.js/plugin-runtime": patch
+"@zhin.js/runtime": patch
+"@zhin.js/agent": patch
 "@zhin.js/cli": patch
 ---
 
