@@ -3,7 +3,7 @@ import {
   createMemoryContextRepository,
   type AgentMessage,
 } from '@zhin.js/ai';
-import { appendPassiveGroupMessageToContext } from '../src/session/passive-group-session.js';
+import { recordPassiveGroupObservation } from '../src/session/passive-group-session.js';
 import {
   drainPassiveGroupBuffer,
   formatPassiveGroupContextBlock,
@@ -52,7 +52,7 @@ describe('passive group buffer', () => {
   });
 });
 
-describe('appendPassiveGroupMessageToContext', () => {
+describe('recordPassiveGroupObservation', () => {
   it('旁听消息写入内存缓冲，不直接进入 loadContext', async () => {
     const { repository, sessionStore: agentSessionStore } = createMemoryContextRepository();
     const agent = {
@@ -61,8 +61,12 @@ describe('appendPassiveGroupMessageToContext', () => {
       contextRepository: repository,
     } as unknown as ZhinAgentPrivate;
 
-    const msg = groupMessage('上面有人说好慢');
-    await appendPassiveGroupMessageToContext(agent, msg as never, '上面有人说好慢');
+    await recordPassiveGroupObservation(agent, {
+      sessionKey: SESSION_KEY,
+      senderId: 'u-peer',
+      senderName: 'Peer',
+      text: '上面有人说好慢',
+    });
 
     const active = await agentSessionStore.findActive(SESSION_KEY);
     expect(active).toBeTruthy();

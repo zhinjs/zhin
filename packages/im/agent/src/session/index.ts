@@ -41,11 +41,10 @@ export {
 } from '../collaboration/resolve-agent-session-key.js';
 
 export {
-  resolvePassiveGroupSessionKey,
-  recordPassiveGroupMessage,
+  recordPassiveGroupObservation,
   consumePassiveGroupContextForTurn,
-  appendPassiveGroupMessageToContext,
 } from './passive-group-session.js';
+export type { PassiveGroupObservation } from './passive-group-session.js';
 
 export {
   pushPassiveGroupLine,

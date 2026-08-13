@@ -5,7 +5,8 @@
 import { getPlugin, isActionMessage, mergeAITriggerConfig, resolveSenderRoles, extractTextContent, type Message } from '@zhin.js/core';
 import { findCellForInbound } from '../collaboration/collaboration-config.js';
 import { getCollaborationSceneService } from '../collaboration/scene-service.js';
-import { recordPassiveGroupMessage } from '../session/passive-group-session.js';
+import { recordPassiveGroupObservation } from '../session/passive-group-session.js';
+import { resolveAgentTurnSessionKey } from '../collaboration/resolve-agent-session-key.js';
 import { asPrivate } from '../internal/as-private.js';
 import type { AIServiceRefs } from './shared-refs.js';
 function isBotSelfMessage(message: Message): boolean {
@@ -60,7 +61,12 @@ export function registerGroupSessionPassive(refs: AIServiceRefs): void {
       }
 
       const agent = asPrivate(refs.zhinAgent);
-      await recordPassiveGroupMessage(agent, message, rawText, cell);
+      await recordPassiveGroupObservation(agent, {
+        sessionKey: resolveAgentTurnSessionKey(message, cell),
+        senderId: String(message.$sender?.id ?? 'unknown'),
+        senderName: String(message.$sender?.name ?? message.$sender?.id ?? 'unknown'),
+        text: rawText,
+      });
     });
 
     logger.debug('Group passive context handler registered');

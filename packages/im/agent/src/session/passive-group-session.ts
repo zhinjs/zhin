@@ -1,10 +1,8 @@
 /**
- * 群/频道 Passive Group 上下文 — session key SSOT + buffer record/drain。
+ * Passive group context is keyed by the canonical Agent session identity.
+ * IM and collaboration adapters resolve that identity before entering here.
  */
-import type { Message } from '@zhin.js/core';
-import type { CollaborationScene } from '../collaboration/types.js';
-import { resolveAgentTurnSessionKey } from '../collaboration/resolve-agent-session-key.js';
-import { buildAgentSessionCreateInput, prepareUserContentForSession } from './session-io.js';
+import { buildAgentSessionCreateInput } from './session-io.js';
 import {
   drainPassiveGroupBuffer,
   formatPassiveGroupContextBlock,
@@ -12,52 +10,38 @@ import {
 } from './passive-group-buffer.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 
-function resolveSenderDisplayName(message: Message): string {
-  if (!message?.$sender) return 'unknown';
-  const sender = message.$sender as { nickname?: string; name?: string; id?: string };
-  const raw = sender.nickname || sender.name || sender.id;
-  return raw != null ? String(raw).trim().slice(0, 64) : 'unknown';
+export interface PassiveGroupObservation {
+  readonly sessionKey: string;
+  readonly senderId: string;
+  readonly senderName: string;
+  readonly text: string;
 }
 
-export function resolvePassiveGroupSessionKey(
-  message: Message,
-  cell?: CollaborationScene,
-): string {
-  return resolveAgentTurnSessionKey(message, cell);
-}
-
-export async function recordPassiveGroupMessage(
-  agent: ZhinAgentPrivate,
-  message: Message,
-  rawText: string,
-  cell?: CollaborationScene,
+export async function recordPassiveGroupObservation(
+  agent: Pick<ZhinAgentPrivate, 'agentSessionStore'>,
+  observation: PassiveGroupObservation,
 ): Promise<void> {
-  const { content } = prepareUserContentForSession(message, rawText);
-  if (!content.trim()) return;
+  const sessionKey = observation.sessionKey.trim();
+  const text = observation.text.trim();
+  if (!sessionKey) throw new TypeError('Passive group observation requires a session key');
+  if (!text) return;
 
-  const sessionKey = resolvePassiveGroupSessionKey(message, cell);
-  const sessionInput = buildAgentSessionCreateInput(sessionKey);
-  await agent.agentSessionStore.getOrCreateActive(sessionInput);
-
+  await agent.agentSessionStore.getOrCreateActive(buildAgentSessionCreateInput(sessionKey));
   pushPassiveGroupLine(sessionKey, {
-    senderId: String(message.$sender?.id ?? 'unknown'),
-    senderName: resolveSenderDisplayName(message),
-    text: content,
+    senderId: normalizeIdentity(observation.senderId),
+    senderName: normalizeIdentity(observation.senderName),
+    text,
     at: Date.now(),
   });
 }
 
-export function consumePassiveGroupContextForTurn(message: Message): string | null {
-  const sessionKey = resolvePassiveGroupSessionKey(message);
-  return formatPassiveGroupContextBlock(drainPassiveGroupBuffer(sessionKey));
+export function consumePassiveGroupContextForTurn(sessionKey: string): string | null {
+  const key = sessionKey.trim();
+  if (!key) throw new TypeError('Passive group context requires a session key');
+  return formatPassiveGroupContextBlock(drainPassiveGroupBuffer(key));
 }
 
-/** @deprecated use recordPassiveGroupMessage */
-export async function appendPassiveGroupMessageToContext(
-  agent: ZhinAgentPrivate,
-  message: Message,
-  rawText: string,
-  cell?: CollaborationScene,
-): Promise<void> {
-  await recordPassiveGroupMessage(agent, message, rawText, cell);
+function normalizeIdentity(value: string): string {
+  const normalized = value.trim().replace(/[\]\s]+/g, '_');
+  return normalized ? normalized.slice(0, 64) : 'unknown';
 }

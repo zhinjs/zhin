@@ -162,15 +162,20 @@ function privateMessage(content: string, metadata?: Record<string, unknown>): Me
 
 function makeAgentStub() {
   const transcripts: ImTranscriptWriteInput[] = [];
-  const passive: { rawText: string }[] = [];
+  const passive: Array<{
+    sessionKey: string;
+    senderId: string;
+    senderName: string;
+    text: string;
+  }> = [];
   return {
     transcripts,
     passive,
     async recordImTranscript(input: ImTranscriptWriteInput) {
       transcripts.push(input);
     },
-    async recordPassiveGroupMessage(_message: unknown, rawText: string) {
-      passive.push({ rawText });
+    async recordPassiveGroupObservation(observation: typeof passive[number]) {
+      passive.push(observation);
     },
   };
 }
@@ -270,7 +275,11 @@ describe('缺口 2：群聊旁听（recordPassiveGroupContext）', () => {
     const message = groupMessage('大家今晚吃什么');
     const commMessage = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
     await recordPassiveGroupContext(agent, message, commMessage);
-    expect(agent.passive).toEqual([{ rawText: '大家今晚吃什么' }]);
+    expect(agent.passive).toEqual([expect.objectContaining({
+      sessionKey: expect.stringContaining('group:100'),
+      senderId: 'user-1',
+      text: '大家今晚吃什么',
+    })]);
   });
 
   it('频道（channel）同样旁听', async () => {
@@ -282,7 +291,10 @@ describe('缺口 2：群聊旁听（recordPassiveGroupContext）', () => {
     });
     const commMessage = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
     await recordPassiveGroupContext(agent, message, commMessage);
-    expect(agent.passive).toEqual([{ rawText: '频道消息' }]);
+    expect(agent.passive).toEqual([expect.objectContaining({
+      sessionKey: expect.stringContaining('channel:ch-1'),
+      text: '频道消息',
+    })]);
   });
 
   it('私聊不旁听（sandbox/私聊无噪音）', async () => {
@@ -520,7 +532,12 @@ describe('conversation.kind 场景映射', () => {
     });
     const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
     await recordPassiveGroupContext(agent, message, comm);
-    expect(agent.passive).toEqual([{ rawText: 'Telegram 群聊消息' }]);
+    expect(agent.passive).toEqual([expect.objectContaining({
+      sessionKey: expect.stringContaining('group:-100123'),
+      senderId: 'telegram-user-1',
+      senderName: 'Alice',
+      text: 'Telegram 群聊消息',
+    })]);
   });
 });
 

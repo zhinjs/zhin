@@ -31,6 +31,7 @@ export interface IngressTurnSessionPrep {
   userId: string;
   sessionId: string;
   isNewSession: boolean;
+  passiveBlock: string | null;
   turnUser: {
     rawContent: string;
     userMessageExtra?: import('@zhin.js/ai').AgentMessageExtra;
@@ -91,12 +92,6 @@ export class SessionSystem {
     return resolveAgentTurnSessionKey(message);
   }
 
-  resolvePassiveBlock(message: Message): string | null {
-    const channelScope = message.$channel?.type;
-    if (channelScope !== 'group' && channelScope !== 'channel') return null;
-    return consumePassiveGroupContextForTurn(message);
-  }
-
   sessionDeps(host: ZhinAgentPrivate): SessionIODeps {
     return {
       agentSessionStore: host.agentSessionStore,
@@ -113,7 +108,10 @@ export class SessionSystem {
     const deps = this.sessionDeps(host);
     const sessionKey = this.resolveSessionKey(commMessage, options?.strategyName);
     const userId = commMessage.$sender.id || 'unknown';
-    const passiveBlock = this.resolvePassiveBlock(commMessage);
+    const channelScope = commMessage.$channel?.type;
+    const passiveBlock = channelScope === 'group' || channelScope === 'channel'
+      ? consumePassiveGroupContextForTurn(sessionKey)
+      : null;
     const turnUser = buildTurnUserMessages(commMessage, content, passiveBlock);
     const isNewSession = await resolveSessionIsNewBeforeCreate(deps, sessionKey);
 
@@ -144,7 +142,11 @@ export class SessionSystem {
     const deps = this.sessionDeps(host);
     const sessionKey = turn.session.key;
     const userId = turn.principal.subjectId;
-    const resolved = resolveIngressUserMessage(turn);
+    const passiveBlock = turn.origin.kind === 'im'
+      && (turn.origin.scope === 'group' || turn.origin.scope === 'channel')
+      ? consumePassiveGroupContextForTurn(sessionKey)
+      : null;
+    const resolved = resolveIngressUserMessage(turn, { passiveBlock });
     const isNewSession = await resolveSessionIsNewBeforeCreate(deps, sessionKey);
 
     if (options?.deferredAutoContinue) {
@@ -160,6 +162,7 @@ export class SessionSystem {
       userId,
       sessionId,
       isNewSession,
+      passiveBlock,
       turnUser: {
         rawContent: resolved.content,
         ...(resolved.extra ? { userMessageExtra: resolved.extra } : {}),

@@ -6,11 +6,9 @@
  */
 
 import * as os from 'node:os';
-import type { AgentTurnMessage } from '@zhin.js/core';
 import type { AgentMessage, AssistantMessage, UserMessage } from '@zhin.js/ai';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import { type ZhinAgentConfig, SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from '../config/index.js';
-import { resolveQuoteSystemHint } from '../context/im-turn-context-adapter.js';
 import { formatMemoryPathsHint } from '../memory-layers.js';
 import { buildSenderRolesFilePermissionsPrompt } from '../security/file-role-policy.js';
 import type { TurnContextView } from '../context/turn-envelope.js';
@@ -443,11 +441,4 @@ export function buildLiteSystemPromptWithPlatform(
   const hint = contextHint?.trim();
   if (hint) parts.push(hint);
   return parts.join('\n\n');
-}
-
-/** @deprecated 引用说明已迁入 context/turn-envelope [Turn context] */
-export function appendQuoteContextSystemHint(prompt: string, commMessage?: AgentTurnMessage): string {
-  const hint = resolveQuoteSystemHint(commMessage);
-  if (!hint) return prompt;
-  return `${prompt.trim()}\n\n${hint}`;
 }

@@ -83,6 +83,7 @@ import {
   type TurnAccessContext,
   FileJournalStore,
 } from '@zhin.js/agent';
+import { resolveAgentTurnSessionKey } from '@zhin.js/agent/session';
 import {
   agentHostToken,
   CapabilityIngress,
@@ -1237,7 +1238,7 @@ export function recordRuntimeTranscript(
  * 仅群/频道生效（私聊 / sandbox 不旁听，与 legacy dispatcher 适用范围一致）。
  */
 export async function recordPassiveGroupContext(
-  agent: Pick<ZhinAgent, 'recordPassiveGroupMessage'>,
+  agent: Pick<ZhinAgent, 'recordPassiveGroupObservation'>,
   message: Message,
   commMessage: ReturnType<typeof createSyntheticMessage>,
 ): Promise<void> {
@@ -1260,7 +1261,12 @@ export async function recordPassiveGroupContext(
     if (cell) {
       cell = (await sceneService.getSceneFresh(cell.id)) ?? cell;
     }
-    await agent.recordPassiveGroupMessage(commMessage, rawText, cell);
+    await agent.recordPassiveGroupObservation({
+      sessionKey: resolveAgentTurnSessionKey(commMessage, cell),
+      senderId: resolveStableSenderId(message),
+      senderName: message.sender?.name ?? resolveStableSenderId(message),
+      text: rawText,
+    });
   } catch (error) {
     logger.debug(formatCompact({
       op: 'agent_host_passive_fail',
