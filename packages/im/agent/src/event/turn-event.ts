@@ -103,6 +103,8 @@ export interface TurnErrorEvent {
   type: 'error';
   error: Error;
   recoverable: boolean;
+  /** Stable failure taxonomy persisted with the terminal fact. */
+  code?: string;
 }
 
 /** A turn stopped by timeout, replacement, explicit cancellation, or disposal. */

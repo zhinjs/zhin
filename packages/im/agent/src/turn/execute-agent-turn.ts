@@ -43,20 +43,50 @@ export async function executeAgentTurn(
     }
   } catch (error) {
     if (gate.terminal) return outcomeFromTerminal(gate.terminal, observedUsage);
-    if (turn.signal.aborted) {
-      return cancelledOutcome(turn.signal.reason ?? error, observedUsage);
-    }
-    return failedOutcome('turn_engine_failed', error, true, observedUsage);
+    const terminal: TurnTerminalEvent = turn.signal.aborted
+      ? {
+          type: 'turn_cancelled',
+          code: 'cancelled',
+          reason: errorMessage(turn.signal.reason ?? error, 'cancelled'),
+        }
+      : {
+          type: 'error',
+          code: 'turn_engine_failed',
+          error: asError(error),
+          recoverable: true,
+        };
+    return commitSyntheticTerminal(turn, gate, terminal, observedUsage);
   }
 
-  return gate.terminal
-    ? outcomeFromTerminal(gate.terminal, observedUsage)
-    : failedOutcome(
-        'turn_terminal_missing',
-        new Error('Agent turn engine ended without a terminal event'),
-        false,
-        observedUsage,
-      );
+  if (gate.terminal) return outcomeFromTerminal(gate.terminal, observedUsage);
+  return commitSyntheticTerminal(turn, gate, {
+    type: 'error',
+    code: 'turn_terminal_missing',
+    error: new Error('Agent turn engine ended without a terminal event'),
+    recoverable: false,
+  }, observedUsage);
+}
+
+async function commitSyntheticTerminal(
+  turn: TurnIngress,
+  gate: TurnTerminalGate,
+  terminal: TurnTerminalEvent,
+  usage: Usage,
+): Promise<TurnOutcome> {
+  try {
+    await turn.ports.journal.append(terminal);
+  } catch (error) {
+    return failedOutcome('turn_journal_commit_failed', error, true, usage);
+  }
+  if (!gate.accept(terminal) || !gate.terminal) {
+    return failedOutcome(
+      'turn_terminal_commit_rejected',
+      new Error('Turn terminal gate rejected a synthesized terminal fact'),
+      false,
+      usage,
+    );
+  }
+  return outcomeFromTerminal(gate.terminal, usage);
 }
 
 function outcomeFromTerminal(event: TurnTerminalEvent, observedUsage: Usage): TurnOutcome {
@@ -74,7 +104,7 @@ function outcomeFromTerminal(event: TurnTerminalEvent, observedUsage: Usage): Tu
         usage: observedUsage,
       });
     case 'error':
-      return failedOutcome('turn_failed', event.error, event.recoverable, observedUsage);
+      return failedOutcome(event.code ?? 'turn_failed', event.error, event.recoverable, observedUsage);
     case 'budget_exceeded':
       return Object.freeze({
         status: 'budget_exceeded',
@@ -96,14 +126,6 @@ function usageFromTurn(usage: {
   });
 }
 
-function cancelledOutcome(reason: unknown, usage: Usage): TurnOutcome {
-  return Object.freeze({
-    status: 'cancelled',
-    reason: reason instanceof Error ? reason.message : String(reason ?? 'cancelled'),
-    usage,
-  });
-}
-
 function failedOutcome(code: string, error: unknown, retryable: boolean, usage: Usage): TurnOutcome {
   return Object.freeze({
     status: 'failed',
@@ -114,6 +136,14 @@ function failedOutcome(code: string, error: unknown, retryable: boolean, usage: 
     }),
     usage,
   });
+}
+
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+function errorMessage(reason: unknown, fallback: string): string {
+  return reason instanceof Error ? reason.message : String(reason ?? fallback);
 }
 
 function addUsage(current: Usage, next: {

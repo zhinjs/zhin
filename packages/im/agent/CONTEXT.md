@@ -183,10 +183,12 @@ Session lifecycle 写权威只有 `ContextRepository`；archive 不得再代理�
 - **Schedule Turn** 在 turn-pipeline 中顺序执行 resolve → preload → capture before → rehydrate skills；预演 delta 由 `getLastTurnToolSnapshot` 采集本 turn 新增 tools/skills。
 - IM、HTTP、A2A、Schedule 只在 composition root 适配为 **Turn Ingress**；从该边界起，Session、Tool、Policy、Event、Subagent 与 Agent Core 不得读取 IM `Message`、`Plugin`、`Adapter` 或 `$adapter/$endpoint/$channel/$sender` 字段。
 - 每个启用 Agent 的 generation 必须在 root resources 提供唯一 `AgentTurnEngine`；`AgentRuntime` 只从当前 turn 所持 snapshot 解析它。缺失时 fail-closed，禁止构造器捕获 runner、进程全局 runner 或跨 generation fallback。
+- `PromptController` 直接调度 canonical `TurnEvent` stream；Promise/collector 只是兼容内部调用形态，不得为 streaming ingress 建第二套队列或绕过 steering / supersede / cancellation。
 - Prompt contributor 与 PromptController 只消费 canonical platform / session identity；不得接收或保存 IM `Message`。平台 Prompt 仅对 IM origin 生效，其他 origin 不伪造 IM 载体。
 - Passive Group Context 只按 canonical session key 记录与 drain；IM/协作 adapter 在边界外解析 session、sender 后提交 observation，Session System 不保存 `Message` 或 `CollaborationScene`。
 - 入站媒体处理只消费 `TurnMedia[]`；平台 segment / opaque file id 到 canonical media 的投影只存在于 ingress adapter，STT、物化与模型注入不得反向读取 IM `Message`。
 - 完整 Agent Core 只依赖必需的 `ToolExecutionAuthority`；policy、approval、journal 与实际执行由每个 Turn 的 authority 独占。Core 禁止自行创建 ToolRuntime，canonical 与 classic 执行不得双审批或双记账。
+- Engine 异常、取消或漏发终态时，执行权威必须合成并提交恰好一个 durable terminal fact；未写入 Journal 的 success/failure/cancellation 都不是可公开的 TurnOutcome。
 - Agent Core 的模型循环只发出 canonical `TurnEvent`，工具 Hook 只接收 `TurnContextView`；不得从 Core 发射旧 Plugin AI lifecycle 事件、注入 `Message`，或在 Core 内做 owner-confirm / Message-shaped 安全判断。
 - 同步 IM 回复由 snapshot-bound `ReplyPort` 完成；HTTP 流由 Event Journal projection 完成；主动或延迟投递持久化为 `DeliveryIntent`，以带 `parentTurnId` 的新 operation 执行，不偷偷重新获取 current generation 后冒充原 turn。
 

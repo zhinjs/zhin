@@ -88,10 +88,23 @@ export interface HostEventEmitter {
 
 export interface HostPromptController {
   schedule(request: HostPromptTurnRequest): Promise<HostAgentLoopTurnResult>;
+  scheduleStream(request: HostPromptStreamTurnRequest): AsyncGenerator<
+    import('../event/turn-event.js').TurnEvent,
+    HostAgentLoopTurnResult
+  >;
   abort(): void;
   waitForIdle(): Promise<void>;
   isBusy(): boolean;
   subscribe(listener: (event: unknown, signal: AbortSignal) => void | Promise<void>): () => void;
+}
+
+export interface HostPromptStreamTurnRequest extends Omit<HostPromptTurnRequest, 'execute'> {
+  execute: (
+    initialMessages: import('@zhin.js/ai').AgentMessage[],
+    hooks: HostPromptTurnHooks,
+    signal: AbortSignal,
+    turnId: string,
+  ) => AsyncGenerator<import('../event/turn-event.js').TurnEvent, HostAgentLoopTurnResult>;
 }
 
 export interface HostPromptTurnRequest {

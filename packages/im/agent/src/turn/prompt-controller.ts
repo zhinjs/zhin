@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { AgentEvent, AgentMessage, QueueMode } from '@zhin.js/ai';
 import type { OnChunkCallback } from '../config/index.js';
 import type { AgentLoopTurnResult } from '../core/agent-loop-turn.js';
+import type { TurnEvent } from '../event/turn-event.js';
 import { SessionMessageQueue } from './session-message-queue.js';
 
 export interface PromptTurnHooks {
@@ -22,6 +23,15 @@ export interface PromptTurnRequest {
     signal: AbortSignal,
     turnId: string,
   ) => Promise<AgentLoopTurnResult>;
+}
+
+export interface PromptStreamTurnRequest extends Omit<PromptTurnRequest, 'execute'> {
+  execute: (
+    initialMessages: AgentMessage[],
+    hooks: PromptTurnHooks,
+    signal: AbortSignal,
+    turnId: string,
+  ) => AsyncGenerator<TurnEvent, AgentLoopTurnResult>;
 }
 
 /** 同 session 新入站消息取代仍在执行的旧 turn 时抛出；调用方应跳过出站回复。 */
@@ -144,11 +154,21 @@ export class PromptController {
 
   /** 同 session 串行：新 turn 开始前 abort 仍在执行的旧 turn，避免过期回复污染群上下文。 */
   schedule(request: PromptTurnRequest): Promise<AgentLoopTurnResult> {
+    return collectPromptStream(this.scheduleStream({
+      ...request,
+      execute: (initialMessages, hooks, signal, turnId) => promiseAsPromptStream(
+        request.execute(initialMessages, hooks, signal, turnId),
+      ),
+    }));
+  }
+
+  /** Schedule the authoritative TurnEvent stream under the same steering/cancellation lifecycle. */
+  scheduleStream(request: PromptStreamTurnRequest): AsyncGenerator<TurnEvent, AgentLoopTurnResult> {
     for (const turn of this.activeTurns.values()) {
       if (turn.sessionKey !== request.sessionKey) continue;
       turn.abortController.abort(new TurnSupersededError(request.sessionKey));
     }
-    return this.runTurn(request);
+    return this.runTurnStream(request);
   }
 
   private resolveLatestTurn(sessionKey: string): ActiveTurn | undefined {
@@ -186,7 +206,9 @@ export class PromptController {
     }
   }
 
-  private async runTurn(request: PromptTurnRequest): Promise<AgentLoopTurnResult> {
+  private async *runTurnStream(
+    request: PromptStreamTurnRequest,
+  ): AsyncGenerator<TurnEvent, AgentLoopTurnResult> {
     const turnId = randomUUID();
     const abortController = new AbortController();
     const signal = abortController.signal;
@@ -219,7 +241,7 @@ export class PromptController {
       };
 
       try {
-        lastResult = await request.execute(request.userMessages, hooks, signal, turnId);
+        lastResult = yield* request.execute(request.userMessages, hooks, signal, turnId);
       } catch (error) {
         throwIfAborted(signal, request.sessionKey);
         throw error;
@@ -228,7 +250,7 @@ export class PromptController {
       while (queue.hasFollowUp() && !signal.aborted) {
         const batch = queue.drainFollowUp();
         try {
-          lastResult = await request.execute(batch, hooks, signal, turnId);
+          lastResult = yield* request.execute(batch, hooks, signal, turnId);
         } catch (error) {
           throwIfAborted(signal, request.sessionKey);
           throw error;
@@ -264,6 +286,22 @@ export class PromptController {
     for (const resolve of waiters) resolve();
     this.lastResult = null;
   }
+}
+
+async function collectPromptStream(
+  stream: AsyncGenerator<TurnEvent, AgentLoopTurnResult>,
+): Promise<AgentLoopTurnResult> {
+  while (true) {
+    const step = await stream.next();
+    if (step.done) return step.value;
+  }
+}
+
+async function* promiseAsPromptStream(
+  result: Promise<AgentLoopTurnResult>,
+): AsyncGenerator<TurnEvent, AgentLoopTurnResult> {
+  for (const event of [] as TurnEvent[]) yield event;
+  return await result;
 }
 
 function throwIfAborted(signal: AbortSignal, sessionKey: string): void {

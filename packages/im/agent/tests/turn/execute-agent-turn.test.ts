@@ -17,6 +17,13 @@ function turn(): ReturnType<typeof createTurnIngress> {
   } satisfies TurnIngressInput);
 }
 
+function turnWithJournal(events: TurnEvent[]): ReturnType<typeof createTurnIngress> {
+  return createTurnIngress({
+    ...turn(),
+    ports: { journal: { append: (event) => { events.push(event); } } },
+  });
+}
+
 async function* events(items: readonly TurnEvent[]): AsyncGenerator<TurnEvent, void> {
   for (const event of items) yield event;
 }
@@ -57,12 +64,51 @@ describe('executeAgentTurn', () => {
   });
 
   it('fails closed when the engine ends without a terminal event', async () => {
-    const outcome = await executeAgentTurn(turn(), () => events([
+    const journal: TurnEvent[] = [];
+    const outcome = await executeAgentTurn(turnWithJournal(journal), () => events([
       { type: 'chunk', text: 'partial', accumulated: 'partial' },
     ]));
     expect(outcome).toMatchObject({
       status: 'failed',
       error: { code: 'turn_terminal_missing', retryable: false },
+    });
+    expect(journal.at(-1)).toMatchObject({ type: 'error', recoverable: false });
+  });
+
+  it('commits one durable error terminal when the engine throws', async () => {
+    const journal: TurnEvent[] = [];
+    const outcome = await executeAgentTurn(turnWithJournal(journal), async function* () {
+      yield { type: 'usage', usage: { promptTokens: 3, completionTokens: 1, totalTokens: 4 } };
+      throw new Error('provider offline');
+    });
+
+    expect(outcome).toMatchObject({
+      status: 'failed',
+      error: { code: 'turn_engine_failed', message: 'provider offline' },
+      usage: { total_tokens: 4 },
+    });
+    expect(journal.filter((event) => event.type === 'error')).toHaveLength(1);
+    expect(journal.at(-1)).toMatchObject({ type: 'error', recoverable: true });
+  });
+
+  it('commits one durable cancellation terminal when the ingress aborts', async () => {
+    const journal: TurnEvent[] = [];
+    const controller = new AbortController();
+    const source = createTurnIngress({
+      ...turnWithJournal(journal),
+      signal: controller.signal,
+    });
+    const outcome = await executeAgentTurn(source, async function* () {
+      yield* events([]);
+      controller.abort(new Error('deadline'));
+      throw new Error('transport aborted');
+    });
+
+    expect(outcome).toMatchObject({ status: 'cancelled', reason: 'deadline' });
+    expect(journal.at(-1)).toMatchObject({
+      type: 'turn_cancelled',
+      code: 'cancelled',
+      reason: 'deadline',
     });
   });
 

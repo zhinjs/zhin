@@ -16,6 +16,34 @@ const makeResult = (reply: string) => ({
 });
 
 describe('PromptController', () => {
+  it('schedules the canonical TurnEvent stream without collecting it first', async () => {
+    const controller = new PromptController('one-at-a-time', 'one-at-a-time');
+    const stream = controller.scheduleStream({
+      sessionKey: 's1',
+      sessionId: 's1#1',
+      userMessages: [createUserMessage('stream')],
+      execute: async function* () {
+        yield { type: 'chunk' as const, text: 'a', accumulated: 'a' };
+        yield { type: 'chunk' as const, text: 'b', accumulated: 'ab' };
+        return makeResult('ab');
+      },
+    });
+    const chunks: string[] = [];
+    let result: ReturnType<typeof makeResult> | undefined;
+    while (true) {
+      const step = await stream.next();
+      if (step.done) {
+        result = step.value;
+        break;
+      }
+      if (step.value.type === 'chunk') chunks.push(step.value.text);
+    }
+
+    expect(chunks).toEqual(['a', 'b']);
+    expect(result?.reply).toBe('ab');
+    expect(controller.isIdle()).toBe(true);
+  });
+
   it('runs turns on different sessions in parallel', async () => {
     const controller = new PromptController('one-at-a-time', 'one-at-a-time');
     const order: string[] = [];
