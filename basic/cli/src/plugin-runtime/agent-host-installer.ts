@@ -596,8 +596,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               ...toolsFromCapabilities(capabilities, request),
               ...(await expandMcpTools(capabilities, binding.mcpServers))
                 .map((tool) => capabilityToTool(tool, toolInvocationFromTurn(request))),
-              ...(options.extraTools ?? []).map(toTool),
-              bashTool,
             ];
             toolCount = tools.length;
             return zhinAgent.processTurn({
@@ -1415,30 +1413,6 @@ async function readCapabilities(
   isActive: () => boolean,
 ): Promise<AgentCapabilities> {
   return ingress.read(snapshot, requester, isActive, createRuntimeTurnAccess(message, roles));
-}
-
-function toTool(tool: AgentToolLike): Tool {
-  const parameters = tool.parameters;
-  const source = tool.source;
-  const result: AgentToolLike = {
-    name: tool.name,
-    description: tool.description,
-    parameters: {
-      type: 'object',
-      properties: (parameters.properties ?? {}) as Tool['parameters']['properties'],
-      required: parameters.required,
-    },
-    source,
-    platforms: tool.platforms,
-    scopes: tool.scopes,
-    permissions: tool.permissions,
-    hidden: tool.hidden,
-    approval: tool.approval,
-    async execute(args) {
-      return await tool.execute(args as Record<string, unknown>) as Awaited<ReturnType<Tool['execute']>>;
-    },
-  };
-  return result as Tool;
 }
 
 export function runtimeApprovalPolicy(
