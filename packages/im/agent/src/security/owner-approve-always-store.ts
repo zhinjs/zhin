@@ -1,7 +1,7 @@
 /**
  * Owner 对 bash / icqq CLI 的放行策略（持久化 data/owner-approve-always.json）。
  *
- * - **bashAlways**：跳过 shell 需 Owner 审批（含 ZHIN_NEEDS_OWNER 硬编排）的全局开关（仅 bash 工具链）。
+ * - **bashAlways**：由 Owner `/approve` 显式持久化的 shell 放行开关（仅 bash 工具链）。
  * - **bashRules**：正则列表；在 exec 策略中若 **整条待检子命令** 匹配任一规则，则视为已放行（不固化解参数，例如 `^icqq\\s+friend\\s+like\\b`）。
  *
  * icqq 子命令：非敏感操作默认直接放行；仅命中 {@link ICQQ_SENSITIVE_SUBCOMMAND_REGEXES} 时需审批，除非 always 或规则匹配。
@@ -231,7 +231,7 @@ export function getOwnerCommMessageOrUndefined(
   return message;
 }
 
-/** 编排层：是否已「永久放行」bash 的 Owner 硬确认（ZHIN_NEEDS_OWNER 路径） */
+/** 是否已由 Owner `/approve always bash` 永久放行。 */
 export function hasOwnerApproveAlways(
   plugin: Plugin | null | undefined,
   commMessage: Message,

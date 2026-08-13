@@ -29,8 +29,6 @@ export function registerAIService(refs: AIServiceRefs): void {
 
       const service = new AIService(config);
       refs.aiService = service;
-      service.setPlugin(root);
-
       const providers = service.listProviders();
       if (providers.length === 0) {
         logger.warn('未配置任何 AI 提供方');

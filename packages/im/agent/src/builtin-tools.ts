@@ -7,7 +7,7 @@
  * 计划:      todo_read, todo_write（builtin/todo-*-tool）
  * 外部 MCP 工具由 generation MCPFeature 投影按 active binding 注入。
  * 技能:      load_skill, install_skill（builtin/load-skill-tool, install-skill-tool）
- * 交互:      ask_user（builtin/ask-user-tool）
+ * 交互工具由 Plugin Runtime 以 turn-scoped ToolFeature 发布。
  *
  * 发现逻辑已拆分到 discovery/skills.ts、agents.ts、tools.ts
  */
@@ -26,14 +26,13 @@ import { createWebFetchTool } from './builtin/web-fetch-tool.js';
 import { createTodoReadTool } from './builtin/todo-read-tool.js';
 import { createTodoWriteTool } from './builtin/todo-write-tool.js';
 import { createInstallSkillTool } from './builtin/install-skill-tool.js';
-import { createAskUserTool } from './builtin/ask-user-tool.js';
 import { createAnalyzeMediaTool } from './builtin/analyze-media-tool.js';
 import { createMemorySearchTool } from './builtin/memory-search-tool.js';
 import { createMemoryUpsertTool } from './builtin/memory-upsert-tool.js';
 import { createKnowledgeSearchTool } from './builtin/knowledge-search-tool.js';
 
 export interface BuiltinToolsOptions {
-  /** 插件实例，用于 ask_user 工具创建 Prompt 交互 */
+  /** Classic Plugin authority still required by the legacy bash definition. */
   plugin: Plugin;
   /** L4 语义记忆：注册 memory_search / memory_upsert */
   semanticMemory?: boolean;
@@ -64,8 +63,6 @@ export function createBuiltinTools(options: BuiltinToolsOptions): ToolInput[] {
   tools.push(createTodoWriteTool(DATA_DIR));
 
   tools.push(createInstallSkillTool());
-
-  tools.push(createAskUserTool(pluginRef));
 
   if (options?.semanticMemory) {
     tools.push(createMemorySearchTool());

@@ -300,7 +300,7 @@ describe('TurnToolRuntime', () => {
 
 function fixture(options: {
   signal?: AbortSignal;
-  approval?: import('../../src/session/session-interaction-port.js').ApprovalPort;
+  approval?: import('../../src/session/approval-port.js').ApprovalPort;
   network?: TurnPolicyContext['network'];
   journalError?: Error;
   roles?: readonly string[];

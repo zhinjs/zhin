@@ -270,7 +270,7 @@ plugins:
 
 | 键 | 位置 | 说明 |
 | --- | --- | --- |
-| `master` | 实例顶层 | Endpoint Owner：该实例所有账号的主人 id（`ask_user` 安全确认目标） |
+| `master` | 实例顶层 | Endpoint Owner：用于权限判定与显式 `/approve` 管理命令的稳定用户 id |
 | `trusted` | 实例顶层 / endpoints 逐项 | 受信任用户 id 列表；数组或空白/逗号分隔字符串 |
 | `commandPrefix` | 实例顶层 / endpoints 逐项 | 命令前缀，默认 `''`；endpoints 逐项的值覆盖顶层 |
 

@@ -1,7 +1,4 @@
-/**
- * ApprovalPort — blocking HITL only (ADR 0041).
- * Stream events publish via AgentStreamBus separately.
- */
+/** Blocking human-in-the-loop security authority. */
 export interface ApprovalRequestInput {
   requestId: string;
   toolName: string;
@@ -17,9 +14,6 @@ export interface ApprovalPort {
   requestApproval(input: ApprovalRequestInput): Promise<boolean>;
   resolveApproval?(requestId: string, approved: boolean): boolean;
 }
-
-/** @deprecated Use ApprovalPort. Kept for existing IM/HTTP adapters. */
-export type SessionInteractionPort = ApprovalPort;
 
 export function isApprovalPortAvailable(port: ApprovalPort | undefined): port is ApprovalPort {
   return Boolean(port && port.available !== false);

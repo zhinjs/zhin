@@ -7,7 +7,7 @@
  *   4. 复合命令拆分   — `&&` `||` `;` 与管道 `|` 逐段独立检查，deny 优先
  *   5. Shell 语法 fail-closed — 非 full 模式拒绝含换行 / `$(...)` / 反引号的命令
  *   6. 只读命令自动放行 — 与 file-policy classifyBashCommand 集成
- *   7. Owner 信号 — execApprovalMode=ask 时返回需审批（ZHIN_NEEDS_OWNER），由编排层可硬触发 ask_user
+ *   7. Owner 信号 — execApprovalMode=ask 时返回拒绝事实；后续放行只走显式 ApprovalPort 或 `/approve`
  */
 
 import type { AgentTool } from '@zhin.js/ai';

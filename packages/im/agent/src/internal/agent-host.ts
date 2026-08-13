@@ -15,7 +15,7 @@ import type { ToolSystem } from '../tool/tool-system.js';
 import type { ContextSystem } from '../context/context-system.js';
 import type { SessionSystem } from '../session/session-system.js';
 import type { HttpApprovalAdapter } from '../session/http-approval-adapter.js';
-import type { ApprovalPort } from '../session/session-interaction-port.js';
+import type { ApprovalPort } from '../session/approval-port.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { RegisteredAgentTool } from '../tool/contracts.js';
 import type { DeferredTurnState } from '../turn/deferred-turn-state.js';

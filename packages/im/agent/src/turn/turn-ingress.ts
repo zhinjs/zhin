@@ -1,5 +1,5 @@
 import type { OutputElement, Usage } from '@zhin.js/ai';
-import type { ApprovalPort } from '../session/session-interaction-port.js';
+import type { ApprovalPort } from '../session/approval-port.js';
 import type { PermissionSubject } from '@zhin.js/permission';
 import type { ToolInvocationOrigin, ToolQuestionPort } from '@zhin.js/tool';
 

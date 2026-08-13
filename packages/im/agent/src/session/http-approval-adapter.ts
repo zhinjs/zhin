@@ -2,9 +2,9 @@
  * HTTP approval park adapter — instance-scoped waiter (ADR 0041).
  */
 import { HttpApprovalWaiter } from './http-approval-waiter.js';
-import type { ApprovalRequestInput, SessionInteractionPort } from './session-interaction-port.js';
+import type { ApprovalPort, ApprovalRequestInput } from './approval-port.js';
 
-export class HttpApprovalAdapter implements SessionInteractionPort {
+export class HttpApprovalAdapter implements ApprovalPort {
   readonly waiter = new HttpApprovalWaiter();
 
   async requestApproval(input: ApprovalRequestInput): Promise<boolean> {

@@ -270,7 +270,7 @@ Platform adapter plugin instance configurations support three common keys:
 
 | Key | Location | Description |
 | --- | --- | --- |
-| `master` | Instance top-level | Endpoint Owner: the owner ID for all accounts in this instance (`ask_user` security confirmation target) |
+| `master` | Instance top-level | Stable Endpoint Owner ID used for authorization and explicit `/approve` management commands |
 | `trusted` | Instance top-level / per-endpoint | Trusted user ID list; array or whitespace/comma-separated string |
 | `commandPrefix` | Instance top-level / per-endpoint | Command prefix, default `''`; per-endpoint values override top-level |
 

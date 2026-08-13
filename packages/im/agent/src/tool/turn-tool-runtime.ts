@@ -2,7 +2,7 @@ import { runTurnToolPolicies } from '../security/policy-facade.js';
 import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
 import { toolInvocationFromTurn } from '../plugin-runtime/capability-tools.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
-import { isApprovalPortAvailable } from '../session/session-interaction-port.js';
+import { isApprovalPortAvailable } from '../session/approval-port.js';
 import type { AgentTool } from '@zhin.js/ai';
 import type { ToolExecutionAuthority } from '../core/tool-execution-authority.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';

@@ -14,7 +14,6 @@ import {
   resolveDeferredToolsForPlatform,
 } from './agent-prompt/index.js';
 import { resolveWorkerSlowToolTimeout, isPromptTraceEnabled, isPromptTraceVerbose, isPhaseTraceEnabled, buildAgentPromptCacheStreamOptions, type ZhinAgentConfig, type ExecApprovalMode, DEFAULT_ALWAYS_LOADED_TOOLS } from './config/index.js';
-import { createOwnerOrchestratedToolResultTransform } from './orchestrator/owner-confirm-orchestration.js';
 import { applyExecPolicyToTools } from './security/exec-policy.js';
 import { logPromptComposition } from './internal/prompt-trace.js';
 import { resolveWorkspacePrompt } from './prompt/workspace-prompt.js';
@@ -209,10 +208,6 @@ ${goal}${platformBlock}`;
               label: 'deferred_worker',
             }
           : undefined,
-        transformToolResult: createOwnerOrchestratedToolResultTransform({
-          commMessage: origin,
-          disableHardOrchestration: true,
-        }),
       });
       const hitMaxIter = result.iterations >= maxIterations;
       const summary = buildWorkerSummary(result, summaryMaxChars, hitMaxIter);

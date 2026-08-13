@@ -7,7 +7,7 @@ import type {
 } from '../core/tool-execution-authority.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { runWithCommMessage } from '../security/comm-message-context.js';
-import { readHttpSessionId, resolveSessionInteractionPort } from '../session/resolve-session-interaction-port.js';
+import { readHttpSessionId, resolveApprovalPort } from '../session/resolve-approval-port.js';
 import { runWithDeferredTurnController, type DeferredTurnController } from '../tool-catalog/deferred-turn-controller.js';
 import { registerBuiltinPolicyExtractors } from './builtin-policy-extractors.js';
 import { runToolApprovalGate } from './tool-approval-gate.js';
@@ -61,9 +61,8 @@ export function createClassicToolExecutionAuthority(
           policy: tool.approval,
           plugin: options.plugin,
           bus: options.host.orchestrator?.agentStreamBus,
-          port: resolveSessionInteractionPort(
+          port: resolveApprovalPort(
             options.message,
-            options.plugin,
             options.host.httpApprovalAdapter,
             options.host.approvalPort,
           ),

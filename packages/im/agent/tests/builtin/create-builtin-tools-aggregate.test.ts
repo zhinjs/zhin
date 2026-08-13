@@ -14,9 +14,9 @@ describe('createBuiltinTools', () => {
     expect(names).toEqual(
       expect.arrayContaining([
         'install_skill',
-        'ask_user',
       ]),
     );
+    expect(names).not.toContain('ask_user');
     expect(names).not.toEqual(expect.arrayContaining(['discover', 'load_tool', 'load_skill']));
     expect(names).not.toContain('read_memory');
     expect(names).not.toContain('write_memory');

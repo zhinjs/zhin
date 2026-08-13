@@ -24,7 +24,6 @@ import { runAgentLoopStandaloneTurn } from '../core/agent-loop-standalone.js';
 import { DEFAULT_CONFIG, type ZhinAgentConfig } from '../config/index.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { resolveSubagentAgentTools } from '../orchestrator/resolve-subagent-tools.js';
-import { createOwnerOrchestratedToolResultTransform } from '../orchestrator/owner-confirm-orchestration.js';
 import {
   AgentDispatcher,
   type AgentRole,
@@ -580,10 +579,6 @@ export class SubagentRuntime {
         userInput: agentUserInput,
         maxIterations: effortIterations ?? this.maxIterations,
         commMessage: bashCommMessage,
-        transformToolResult: createOwnerOrchestratedToolResultTransform({
-          commMessage: bashCommMessage,
-          disableHardOrchestration: true,
-        }),
         callbacks: aiEvents?.createAgentLoopCallbacks(model),
       });
       this.onSubagentUsage?.(result.usage);

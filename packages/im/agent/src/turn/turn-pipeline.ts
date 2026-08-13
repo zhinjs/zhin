@@ -1,7 +1,7 @@
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { AgentStreamEventType, type AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { publishAgentStream } from '../event/publish-agent-stream.js';
-import { readHttpSessionId } from '../session/resolve-session-interaction-port.js';
+import { readHttpSessionId } from '../session/resolve-approval-port.js';
 import { parseOutput, type MediaContentBlock } from '@zhin.js/ai';
 import { TurnSupersededError } from './prompt-controller.js';
 import {

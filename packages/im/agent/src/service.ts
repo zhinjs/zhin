@@ -3,13 +3,12 @@
  * 统一管理多个模型提供商，提供会话和 Agent 能力
  */
 
-import { type Plugin, type AITriggerConfig, type AIAccessConfig, createSyntheticMessage, type Tool } from '@zhin.js/core';
+import { type AITriggerConfig, type AIAccessConfig, createSyntheticMessage, type Tool } from '@zhin.js/core';
 import { type AIProvider, type AIConfig, type AgentTool, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, registerLlmApiFromProviders } from '@zhin.js/ai';
 import type { AgentRunInput } from './media/media-types.js';
 import { DEFAULT_CONFIG } from './config/index.js';
 import { normalizeTool } from './orchestrator/tool-selection.js';
 import { createWebSearchTool } from './builtin/web-search-tool.js';
-import { createAskUserTool } from './builtin/ask-user-tool.js';
 import { registerProviderInstances } from './config/provider-instance.js';
 import { normalizeAiRoutingConfig, type NormalizedAiRoutingConfig } from './config/normalize-ai-config.js';
 import { validateAiRoutingConfig } from './config/validate-ai-config.js';
@@ -62,7 +61,6 @@ export class AIService {
   private accessConfig: AIAccessConfig;
   private agentConfig: AIConfig['agent'];
   private imageGenerationGlobal?: ImageGenerationDefaults;
-  private plugin?: Plugin;
   private customTools: Map<string, AgentTool> = new Map();
   private _modelRegistry: ModelRegistry | null = null;
   readonly loopHooks = new PluginAILoopHookRegistry();
@@ -108,10 +106,6 @@ export class AIService {
     return this.providers.size > 0;
   }
 
-  setPlugin(plugin: Plugin): void {
-    this.plugin = plugin;
-    this.refreshBuiltinAgentTools();
-  }
   setModelRegistry(registry: ModelRegistry): void { this._modelRegistry = registry; }
   getModelRegistry(): ModelRegistry | null { return this._modelRegistry; }
   registerTool(tool: AgentTool): () => void { this.customTools.set(tool.name, tool); return () => { this.customTools.delete(tool.name); }; }
@@ -139,16 +133,12 @@ export class AIService {
    * IM / ZhinAgent 流水线用的常驻 Tool 实例（未经 normalize；与 ToolFeature 工具合并后由 collectRelevantTools 绑定 context）。
    */
   getResidentToolsAsTools(): Tool[] {
-    const tools: Tool[] = [createWebSearchTool()];
-    if (this.plugin) tools.push(createAskUserTool(this.plugin));
-    return tools;
+    return [createWebSearchTool()];
   }
 
-  /** `web_search` 始终挂载；`ask_user` 在 {@link setPlugin} 之后挂载（依赖 Prompt / 中间件）。 */
+  /** Standalone service tools only; turn-owned interaction is projected by AgentRuntime. */
   private refreshBuiltinAgentTools(): void {
-    const next: AgentTool[] = [normalizeTool(createWebSearchTool())];
-    if (this.plugin) next.push(normalizeTool(createAskUserTool(this.plugin)));
-    this.builtinTools = next;
+    this.builtinTools = [normalizeTool(createWebSearchTool())];
   }
 
   getContextConfig(): ContextConfig { return this.contextConfig; }

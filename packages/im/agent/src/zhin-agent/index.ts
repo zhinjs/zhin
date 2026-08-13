@@ -93,7 +93,7 @@ import { applyZhinAgentConfigure, wireZhinAgentLlmApiLayer } from '../init/confi
 import { disposeZhinAgentResources } from '../init/dispose-zhin-agent.js';
 import type { PhaseTraceConfig } from '../internal/phase-trace.js';
 import type { HttpApprovalAdapter } from '../session/http-approval-adapter.js';
-import type { ApprovalPort } from '../session/session-interaction-port.js';
+import type { ApprovalPort } from '../session/approval-port.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import type {
   IAgentTurnProcessor,

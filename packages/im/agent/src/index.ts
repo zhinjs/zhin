@@ -88,14 +88,6 @@ export {
   type ExecPolicyResult,
 } from './security/exec-policy.js';
 export {
-  ZHIN_NEEDS_OWNER_FIRST_LINE,
-  OWNER_HARD_ORCHESTRATION_TOOLS,
-  parseNeedsOwnerSignal,
-  shouldHardOrchestrateOwnerConfirm,
-  createOwnerOrchestratedToolResultTransform,
-} from './orchestrator/owner-confirm-orchestration.js';
-export type { OwnerOrchestrationOptions } from './orchestrator/owner-confirm-orchestration.js';
-export {
   OWNER_APPROVE_ALWAYS_TOOL,
   handleRuntimeOwnerApproveCommand,
   getEndpointMaster,
@@ -237,13 +229,6 @@ export {
   INSTALL_SKILL_PARAMETERS,
   type InstallSkillToolOptions,
 } from './builtin/install-skill-tool.js';
-export {
-  AskUserBuiltinTool,
-  createAskUserTool,
-  ASK_USER_PARAMETERS,
-  askViaPrompt,
-  formatOwnerResponse,
-} from './builtin/ask-user-tool.js';
 export { createBuiltinTools, type BuiltinToolsOptions } from './builtin-tools.js';
 export {
   createToolRuntime,
@@ -366,7 +351,7 @@ export type {
 } from './session/http-session-persistence.js';
 export { HttpStepProjector } from './session/http-step-projector.js';
 export { HttpApprovalWaiter } from './session/http-approval-waiter.js';
-export type { ApprovalPort, ApprovalRequestInput } from './session/session-interaction-port.js';
+export type { ApprovalPort, ApprovalRequestInput } from './session/approval-port.js';
 export { beginIngressTurnSession } from './session/turn-ingress-session.js';
 
 export {
@@ -596,8 +581,6 @@ export {
   SKILL_DISCLOSURE_PROMPT_HINT,
 } from './skill/progressive-disclosure.js';
 export { resolveOutboundBatches, stripFakeAtTokens } from './collaboration/outbound-resolver.js';
-export { AskUserSessionService } from './builtin/ask-user-session-service.js';
-
 // ── Typing Indicator ──
 export {
   TypingIndicatorManager,

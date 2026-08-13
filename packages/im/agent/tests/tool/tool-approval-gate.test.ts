@@ -1,14 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Plugin } from '@zhin.js/core';
 import { AgentRunJournal, AgentStreamEventType } from '@zhin.js/ai/agent-stream';
 import { createAgentStreamBus } from '../../src/event/agent-stream-bus.js';
-import { ImApprovalAdapter } from '../../src/session/im-approval-adapter.js';
 import { ToolApprovalOnceStore } from '../../src/tool/tool-approval-once-store.js';
 import {
   resolveToolApprovalRequired,
   runToolApprovalGate,
 } from '../../src/tool/tool-approval-gate.js';
-import { AskUserBuiltinTool } from '../../src/builtin/ask-user-tool.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 describe('tool-approval-gate', () => {
@@ -16,7 +13,6 @@ describe('tool-approval-gate', () => {
 
   beforeEach(() => {
     onceStore = new ToolApprovalOnceStore();
-    vi.spyOn(AskUserBuiltinTool.prototype, 'run').mockResolvedValue('yes');
   });
 
   afterEach(() => {
@@ -39,7 +35,6 @@ describe('tool-approval-gate', () => {
       name: 'test',
       handle: (event) => { events.push(event); },
     });
-    const plugin = new Plugin('/virtual/approval.ts');
     const commMessage = mockCommMessage();
     const denied = await runToolApprovalGate({
       toolName: 'danger',
@@ -47,9 +42,8 @@ describe('tool-approval-gate', () => {
       sessionId: 'sess-1',
       commMessage,
       policy: 'always',
-      plugin,
       bus,
-      port: new ImApprovalAdapter(plugin, commMessage),
+      port: { requestApproval: async () => true },
       publishCtx: { sessionId: 'sess-1' },
       onceStore,
       signal: new AbortController().signal,

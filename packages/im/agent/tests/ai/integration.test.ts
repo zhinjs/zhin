@@ -178,13 +178,6 @@ describe('AI Service 集成测试', () => {
       expect(resident.map(t => t.name)).toEqual(['web_search']);
     });
 
-    it('setPlugin 后常驻工具含 ask_user', () => {
-      const plugin = { addMiddleware: vi.fn(), inject: vi.fn() } as unknown as import('@zhin.js/core').Plugin;
-      aiService.setPlugin(plugin);
-      expect(aiService.getResidentToolsAsTools().map(t => t.name)).toEqual(['web_search', 'ask_user']);
-      expect(aiService.collectAllTools().map(t => t.name)).toEqual(['web_search', 'ask_user']);
-    });
-
     it('应该注册自定义工具', () => {
       const customTool: AgentTool = {
         name: 'custom_tool',
