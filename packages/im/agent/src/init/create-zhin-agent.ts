@@ -63,9 +63,6 @@ import { provideRemoteTaskPoller } from '../orchestrator/remote-task-poller.js';
 import { provideTaskQueue } from '../orchestrator/task-queue.js';
 import { asPrivate } from '../internal/as-private.js';
 import type { AIService } from '../service.js';
-import { createExecPolicyHook } from '../security/exec-policy-hook.js';
-import { createFilePolicyHook } from '../security/file-policy-hook.js';
-import { createDangerousToolPolicyHook } from '../security/dangerous-tool-policy-hook.js';
 /** yaml 中显式 models 列表：覆盖 provider.models 与 ModelRegistry 缓存，避免 /v1/models 发现结果污染白名单 */
 function applyExplicitModelLists(ai: AIService, modelRegistry: ModelRegistry): void {
   for (const alias of ai.listProviders()) {
@@ -191,13 +188,6 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         dispose: (port) => { port?.dispose(); },
       }));
 
-      // Register security policy hooks (highest priority)
-      const fullAgentConfig = asPrivate(agent).config;
-      orchestrator.hooks.addPreToolUseHook(
-        createExecPolicyHook(fullAgentConfig),
-      );
-      orchestrator.hooks.addPreToolUseHook(createFilePolicyHook());
-      orchestrator.hooks.addPreToolUseHook(createDangerousToolPolicyHook());
     }
 
     // Model Registry: discover models and wire to agent

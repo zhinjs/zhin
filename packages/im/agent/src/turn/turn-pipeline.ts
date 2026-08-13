@@ -223,8 +223,6 @@ export async function processTextTurn(
             ? schedulePromptProfile(scheduleContext, content)
             : { kind: 'interactive' },
           turnContext,
-          commMessage,
-          contextForTools,
           allTools,
           resolvedTools,
           toolExecution,

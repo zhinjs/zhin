@@ -1,12 +1,11 @@
 import { autoCompactAgentMessagesIfNeeded, createAgentCompactionState, estimateAgentMessagesTokens, type AgentCompactionConfig, type AgentCompactionState, type ContextRepository, type Model, type AgentMessage } from '@zhin.js/ai';
 import type { CompactionConfig } from '../config/zhin-agent-config.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
-import type { AgentSessionHost, Message } from '../internal/agent-host.js';
+import type { AgentSessionHost } from '../internal/agent-host.js';
 import { resolveWorkspacePrompt } from '../prompt/workspace-prompt.js';
 export interface CompactionRuntimeOptions {
   host: AgentSessionHost;
   sessionId: string;
-  commMessage: Message;
   model: Model;
   compactionConfig?: CompactionConfig;
   contextWindow: number;
@@ -78,7 +77,6 @@ export async function transformContextWithCompaction(
   const cfg = resolveAgentCompactionConfig(options.compactionConfig, options.contextWindow);
   if (cfg.enabled === false) return messages;
 
-  const beforeTokens = estimateAgentMessagesTokens(messages);
   const state = getCompactionState(options.sessionId);
   const compactionPrompt = resolveWorkspacePrompt('compaction', options.model.sdk);
   const customInstructions = [
@@ -106,16 +104,6 @@ export async function transformContextWithCompaction(
       result.summary,
       anchorId,
     );
-  }
-
-  if (result.wasCompacted) {
-    const afterTokens = estimateAgentMessagesTokens(result.messages);
-    options.host.emitSessionCompactEvent(options.sessionId, options.commMessage, options.mode ?? 'text', {
-      microSavedTokens: result.microSavedTokens,
-      autoSavedTokens: result.autoSavedTokens,
-      totalTokensBefore: beforeTokens,
-      totalTokensAfter: afterTokens,
-    });
   }
 
   let out = result.messages;

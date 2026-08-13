@@ -2,14 +2,12 @@
  * agentLoop turn runner (ADR 0009) — used when ContextRepository is wired.
  */
 
-import { aiOutboundJsonSchema, buildAiOutboundPromptHint, type Plugin } from '@zhin.js/core';
-import type { AIService } from '../service.js';
+import { aiOutboundJsonSchema, buildAiOutboundPromptHint } from '@zhin.js/core';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
 import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, getLlmTransportModel, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
-import { createOwnerOrchestratedToolResultTransform } from '../orchestrator/owner-confirm-orchestration.js';
 import { resolveModelHarness } from '../config/model-harness-runtime.js';
 import { buildAgentPathSystemPrompt, buildChatPathSystemPrompt, describeAgentPathPromptSections } from '../prompt/assembly.js';
 import { logPromptComposition } from '../internal/prompt-trace.js';
@@ -22,7 +20,7 @@ import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../inte
 import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars } from '../config/index.js';
 import type { HostPromptTurnHooks } from '../internal/host-types.js';
 import type { AgentCore } from './agent-core.js';
-import type { ZhinAgentPrivate, OnChunkCallback, Message } from '../internal/agent-host.js';
+import type { ZhinAgentPrivate, OnChunkCallback } from '../internal/agent-host.js';
 import { buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
 import { applyToolToModelOutput } from '../tool/tool-model-output.js';
 import { resolveAlwaysLoadedSet } from '../tool-catalog/resolve-config.js';
@@ -37,6 +35,7 @@ import {
 import type { AgentPromptProfile } from '../prompt/turn-prompt-profile.js';
 import type { TurnContextView } from '../context/turn-envelope.js';
 import type { ToolExecutionAuthority } from './tool-execution-authority.js';
+import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
 /** 入库前解开模型误包的 JSON 字符串，避免下一轮历史继续叠转义。 */
@@ -70,15 +69,6 @@ function logAssistantIterationFailure(
     model: modelId,
     error: truncatePreview(assistant.errorMessage, 500),
   }));
-}
-
-function resolveAIService(plugin?: Plugin): AIService | undefined {
-  if (!plugin) return undefined;
-  try {
-    return plugin.inject?.('ai') as AIService | undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 /** ai.agent.outputSchema 配置 → 传给 LLM 的 JSON Schema（true/'segments' 用 zhin 出站契约）。 */
@@ -120,11 +110,10 @@ export interface AgentLoopTurnInput {
   rawContent: string;
   promptProfile: AgentPromptProfile;
   turnContext: TurnContextView;
-  commMessage: Message;
-  contextForTools: Message;
   allTools: AgentTool[];
   resolvedTools: AgentTool[];
   toolExecution: ToolExecutionAuthority;
+  loopHooks?: PluginAILoopHookRegistry;
   personaEnhanced: string;
   modelId: string;
   modelCandidates: string[];
@@ -169,7 +158,6 @@ export interface AgentLoopVisionTurnInput {
   host: ZhinAgentPrivate;
   core?: AgentCore;
   sessionId: string;
-  commMessage: Message;
   visionSystemPrompt: string;
   userMessages: AgentMessage[];
   modelCandidates: string[];
@@ -196,7 +184,7 @@ function turnEndFromLegacyUsage(reply: string, usage: Usage): TurnEvent {
 async function* runAgentLoopVisionTurnOnceRun(
   input: AgentLoopVisionTurnInput & { modelId: string },
 ): AsyncGenerator<TurnEvent, AgentLoopVisionTurnResult> {
-  const { host, sessionId, commMessage, visionSystemPrompt, modelId, onChunk, promptHooks, signal } = input;
+  const { host, sessionId, visionSystemPrompt, modelId, onChunk, promptHooks, signal } = input;
   const repo = host.contextRepository;
   const providerAlias = host.getTurnProvider().name;
   const llmModel = getLlmTransportModel(providerAlias, modelId);
@@ -356,8 +344,6 @@ export async function* runAgentLoopTextTurnRun(
     host,
     sessionId,
     userMessageExtra,
-    commMessage,
-    contextForTools,
     allTools,
     resolvedTools,
     personaEnhanced,
@@ -459,22 +445,6 @@ export async function* runAgentLoopTextTurnRun(
     ? (harness.maxIterations ?? host.config.maxIterations)
     : 1;
 
-  // Plugin Runtime Agent Host has no Feature root Plugin — skip owner hard-orch.
-  const orchestrationPlugin = host.emitter.getHostPlugin() ?? undefined;
-  const disableHardOrchestration = !orchestrationPlugin;
-  if (disableHardOrchestration) {
-    logger.debug(formatCompact({
-      note: 'no_host_plugin',
-      hint: 'runtime_agent_host; owner hard-orchestration disabled',
-    }));
-  }
-
-  const transformToolResult = createOwnerOrchestratedToolResultTransform({
-    commMessage: contextForTools,
-    disableHardOrchestration,
-    plugin: orchestrationPlugin,
-  });
-
   const legacyByName = new Map(agentTools.map((t) => [t.name, t]));
   let llmTools = directTools
     ? agentToolsToLlmTools(agentTools)
@@ -495,13 +465,6 @@ export async function* runAgentLoopTextTurnRun(
     maxIterations,
     toolCount: agentTools.length,
   });
-
-  if (hasTools) {
-    await host.emitter.dispatch('ai.agent.start', host.emitter.createPayload(sessionId, contextForTools, 'text', {
-      path: 'agent',
-      model: modelId,
-    }));
-  }
 
   const loopContext = agentContextFrom({
     systemPrompt,
@@ -528,8 +491,7 @@ export async function* runAgentLoopTextTurnRun(
   };
 
   const contextWindow = llmModel.contextWindow ?? host.config.contextTokens;
-  const aiService = resolveAIService(orchestrationPlugin);
-  const loopHooks = aiService?.loopHooks;
+  const loopHooks = input.loopHooks;
 
   const loopConfig = {
     model: llmModel,
@@ -549,7 +511,6 @@ export async function* runAgentLoopTextTurnRun(
       persistentConversation ? transformContextWithCompaction(messages, ctxSignal, {
         host,
         sessionId,
-        commMessage: contextForTools,
         model: llmModel,
         compactionConfig: host.config.compaction,
         contextWindow,
@@ -560,7 +521,6 @@ export async function* runAgentLoopTextTurnRun(
       persistentConversation ? transformContextWithCompaction(messages, ctxSignal, {
         host,
         sessionId,
-        commMessage: contextForTools,
         model: llmModel,
         compactionConfig: host.config.compaction,
         contextWindow,
@@ -584,7 +544,7 @@ export async function* runAgentLoopTextTurnRun(
           toolInput: effectiveArgs,
           toolSource: legacyByName.get(resolvedName)?.source,
           sessionId,
-          commMessage: contextForTools,
+          turn: input.turnContext,
         });
         if (preDecision.decision === 'deny') {
           const reason = preDecision.reason;
@@ -620,7 +580,7 @@ export async function* runAgentLoopTextTurnRun(
             toolOutput: rawText,
             durationMs: outcome.durationMs,
             sessionId,
-            commMessage: contextForTools,
+            turn: input.turnContext,
           });
           if (postDecision.decision === 'reject') {
             toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: postDecision.reason });
@@ -633,19 +593,8 @@ export async function* runAgentLoopTextTurnRun(
           }
         }
 
-        const transformed = await transformToolResult({
-          toolName: resolvedName,
-          toolCallId: toolCall.id,
-          args: effectiveArgs,
-          result: resultText,
-        });
-        const finalText = typeof transformed === 'string' ? transformed : String(transformed);
+        const finalText = resultText;
         toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText });
-        host.emitter.emit('ai.tool.result', host.emitter.createPayload(sessionId, contextForTools, 'text', {
-          path: 'agent',
-          toolName: resolvedName,
-          result: finalText,
-        }));
         return toolResultToAgentMessage(toolCall, finalText, false);
       } catch (err) {
         if (signal?.aborted) {
@@ -657,14 +606,8 @@ export async function* runAgentLoopTextTurnRun(
         return toolResultToAgentMessage(toolCall, failure, true);
       }
     },
-    beforeToolCall: async ({ toolCall }: { toolCall: ParsedToolCall }) => {
-      host.emitter.emit('ai.tool.call', host.emitter.createPayload(sessionId, contextForTools, 'text', {
-        path: 'agent',
-        toolName: toolCall.name,
-        args: toolCall.arguments,
-      }));
-      return loopHooks?.runBeforeToolCall({ toolCall, sessionId });
-    },
+    beforeToolCall: async ({ toolCall }: { toolCall: ParsedToolCall }) =>
+      loopHooks?.runBeforeToolCall({ toolCall, sessionId }),
     afterToolCall: async ({ toolCall, result }: { toolCall: ParsedToolCall; result: AgentMessage }) => {
       await loopHooks?.runAfterToolCall({ toolCall, result, sessionId });
     },
@@ -765,14 +708,6 @@ export async function* runAgentLoopTextTurnRun(
       && typeof (tc.result as Record<string, unknown>).image === 'string',
     );
   const finalReply = delegatedOnly ? '' : reply;
-
-  if (hasTools) {
-    await host.emitter.dispatch('ai.agent.finish', host.emitter.createPayload(sessionId, contextForTools, 'text', {
-      path: 'agent',
-      model: modelId,
-      iterations,
-    }));
-  }
 
   logPhase(host.phaseConfig, 'agent_loop.turn.end', sessionId, {
     iterations,

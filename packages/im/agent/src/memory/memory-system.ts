@@ -61,7 +61,6 @@ export class MemorySystem {
     return manualCompactSession(host.contextRepository, {
       host,
       sessionId,
-      commMessage,
       model: llmModel,
       compactionConfig: host.config.compaction,
       contextWindow,

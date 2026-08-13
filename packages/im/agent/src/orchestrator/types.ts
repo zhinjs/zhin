@@ -24,6 +24,7 @@ export interface ResourceEntry<T> {
 // ============================================================================
 
 import type { SenderRole, Message } from '@zhin.js/core';
+import type { TurnContextView } from '../context/turn-envelope.js';
 export type { SenderRole, Message };
 
 /**
@@ -212,7 +213,7 @@ export interface PreToolUseEvent {
   toolInput: Record<string, unknown>;
   toolSource?: string;
   sessionId: string;
-  commMessage?: Message;
+  turn: TurnContextView;
 }
 
 export interface PostToolUseEvent {
@@ -222,7 +223,7 @@ export interface PostToolUseEvent {
   toolOutput: unknown;
   durationMs: number;
   sessionId: string;
-  commMessage?: Message;
+  turn: TurnContextView;
 }
 
 export type PreToolUseHandler = (event: PreToolUseEvent) => Promise<ToolHookDecision> | ToolHookDecision;

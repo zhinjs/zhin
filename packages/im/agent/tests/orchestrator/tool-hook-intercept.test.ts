@@ -7,12 +7,19 @@ import type {
   PostToolHookDecision,
 } from '../../src/orchestrator/types.js';
 
+const turn = {
+  origin: { kind: 'internal', source: 'tool-hook-test' },
+  principal: { subjectId: 'test-user', roles: ['user'] },
+  session: { key: 'test-session' },
+} as const;
+
 function makePreEvent(overrides: Partial<PreToolUseEvent> = {}): PreToolUseEvent {
   return {
     type: 'preToolUse',
     toolName: 'bash',
     toolInput: { command: 'ls' },
     sessionId: 'test-session',
+    turn,
     ...overrides,
   };
 }
@@ -25,6 +32,7 @@ function makePostEvent(overrides: Partial<PostToolUseEvent> = {}): PostToolUseEv
     toolOutput: 'file.txt',
     durationMs: 42,
     sessionId: 'test-session',
+    turn,
     ...overrides,
   };
 }
