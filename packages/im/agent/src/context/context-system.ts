@@ -1,5 +1,4 @@
-import { type AgentMessage, getLlmTransportModel } from '@zhin.js/ai';
-import type { Message } from '@zhin.js/core';
+import { type AgentMessage, createUserMessage, getLlmTransportModel } from '@zhin.js/ai';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { createDefaultContextBuilders } from './default-builders.js';
 import type { BuildContext, ContextBuilder, ContextInjector, ContextSystemConfig, InjectContext } from './contracts.js';
@@ -11,13 +10,9 @@ import {
 import { buildAgentsEnvelopeContext } from './agents-instruction.js';
 import {
   buildTurnContextEnvelope,
+  type TurnContextView,
 } from './turn-envelope.js';
-import {
-  resolveQuoteSystemHint,
-  turnContextViewFromMessage,
-} from './im-turn-context-adapter.js';
 import { resolveModelCandidates } from './model-resolver.js';
-import { getScheduleTurnContext } from '../internal/turn-context.js';
 export type { TurnEnvelopeParts } from './envelope-parts.js';
 export {
   ProfileContextBuilder,
@@ -71,7 +66,7 @@ export class ContextSystem {
       built.push(...await builder.build(context));
     }
     const injectCtx: InjectContext = {
-      message: context.message,
+      turn: context.turn,
       inboundContent: context.inboundContent,
       envelope: context.envelope,
     };
@@ -91,12 +86,12 @@ export class ContextSystem {
 
   /** 生产 turn 路径：envelope 经 pipeline 收集，再组装 user 消息与模型候选。 */
   async buildTextTurnContext(input: TextTurnContextInput): Promise<TextTurnContextOutput> {
-    const { host, commMessage, content, turnUser, deferredStats, prebuiltMessages } = input;
+    const { host, turn, content, turnUser, deferredStats, prebuiltMessages } = input;
     const mode = input.mode ?? 'chat';
-    const isScheduleTurn = Boolean(getScheduleTurnContext());
+    const isScheduleTurn = turn.origin.kind === 'schedule';
     const envelopeParts: Partial<TurnEnvelopeParts> = {};
     const buildCtx: BuildContext = {
-      message: commMessage,
+      turn,
       inboundContent: content,
       host,
       envelope: envelopeParts,
@@ -117,13 +112,13 @@ export class ContextSystem {
     const llmModel = getLlmTransportModel(providerAlias, modelId);
     const agentsContext = await buildAgentsEnvelopeContext();
 
-    const turnEnvelope = isScheduleTurn ? null : buildTurnContextEnvelope({
-      turn: turnContextViewFromMessage(commMessage),
+    const turnEnvelope = buildTurnContextEnvelope({
+      turn,
       profileSummary: envelopeParts.profileSummary,
       toneHint: envelopeParts.toneHint,
       deferredStats,
       activeSkillsContext: host.getTurnActiveSkills() || undefined,
-      quoteSystemHint: resolveQuoteSystemHint(commMessage),
+      quoteSystemHint: input.quoteSystemHint,
       collaborationHint: envelopeParts.collaborationHint,
       modelLine: `${providerAlias}/${modelId}`,
       sdk: llmModel.sdk,
@@ -131,11 +126,7 @@ export class ContextSystem {
     });
 
     let userMessages = isScheduleTurn
-      ? [{
-          role: 'user' as const,
-          content: [{ type: 'text' as const, text: content }],
-          timestamp: Date.now(),
-        }]
+      ? applyTurnContextToUserMessages([createUserMessage(content)], turnEnvelope)
       : prebuiltMessages?.length
         ? prependEnvelopeToFirstUserText(prebuiltMessages, turnEnvelope)
         : applyTurnContextToUserMessages(turnUser.promptMessages, turnEnvelope);
@@ -157,7 +148,7 @@ export class ContextSystem {
 
 export interface TextTurnContextInput {
   host: ZhinAgentPrivate;
-  commMessage: Message;
+  turn: TurnContextView;
   content: string;
   turnUser: {
     rawContent: string;
@@ -165,6 +156,7 @@ export interface TextTurnContextInput {
     promptMessages: import('@zhin.js/ai').UserMessage[];
   };
   deferredStats?: string;
+  quoteSystemHint?: string;
   prebuiltMessages?: AgentMessage[];
   mode?: 'chat' | 'vision';
 }

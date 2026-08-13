@@ -6,12 +6,12 @@
  */
 
 import type { AgentMessage } from '@zhin.js/ai';
-import type { Message } from '@zhin.js/core';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { TurnEnvelopeParts } from './envelope-parts.js';
+import type { TurnContextView } from './turn-envelope.js';
 
 export interface BuildContext {
-  message: Message;
+  turn: TurnContextView;
   inboundContent?: string;
   sessionKey?: string;
   /** 生产 turn 路径注入；builder 写入 envelope 片段 */
@@ -20,7 +20,7 @@ export interface BuildContext {
 }
 
 export interface InjectContext {
-  message: Message;
+  turn: TurnContextView;
   inboundContent?: string;
   envelope?: Partial<TurnEnvelopeParts>;
 }

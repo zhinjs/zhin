@@ -30,6 +30,12 @@ import type {
 import type { Message } from '@zhin.js/core';
 import { randomUUID } from 'node:crypto';
 import { buildTurnUserMessages } from '../context/turn-user-message.js';
+import {
+  resolveQuoteSystemHint,
+  turnContextViewFromMessage,
+} from '../context/im-turn-context-adapter.js';
+import { getScheduleTurnContext } from '../internal/turn-context.js';
+import { scheduleTurnContextView } from '../schedule-domain/turn-context.js';
 
 function requireSessionSystem(host: ZhinAgentPrivate): SessionSystem {
   if (!host.sessionSystem) {
@@ -158,12 +164,16 @@ export async function processTextTurn(
     logger.debug(formatCompact({ op: 'tools_resolved', count: resolvedTools.length }));
 
     const inboundMedia = await resolveInboundMediaInjection(commMessage);
+    const scheduleContext = getScheduleTurnContext();
     const turnCtx = await requireContextSystem(host).buildTextTurnContext({
       host,
-      commMessage,
+      turn: scheduleContext
+        ? scheduleTurnContextView(scheduleContext)
+        : turnContextViewFromMessage(commMessage),
       content,
       turnUser,
       deferredStats,
+      quoteSystemHint: scheduleContext ? undefined : resolveQuoteSystemHint(commMessage),
       prebuiltMessages: extras?.prebuiltMessages,
       mode: inboundMedia.blocks.length > 0 ? 'vision' : undefined,
     });

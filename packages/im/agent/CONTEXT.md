@@ -215,7 +215,7 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 | Skill System | `src/skill/` | agent | 包装 `SkillRegistry` + discovery |
 | Memory System | `src/memory/` | agent → port → ai | `MemoryStore` 适配 `ContextRepository`；压缩委托 ai compaction |
 | Subagent System | `src/subagent/` | agent | `SubagentSystem` spawn/cancel；`ResultSink` 对接 outbound |
-| Context System | `src/context/` | agent | prompt-assembly / turn-user-message builder 链 |
+| Context System | `src/context/` | agent | 只读 canonical Turn 的 prompt-assembly / turn-user-message builder 链；IM `Message` 投影仅存在于外层 ingress adapter |
 | Orchestration（图内） | `src/orchestrator/` | agent | Kernel SSOT（ADR 0027）；不并入 Subagent |
 | IM 组合 | `src/init/`、`collaboration/` | agent | 协作入站：`collaboration-dispatch` / `inbound-spawn-task` / `inbound-peer-handback` / `collaboration-kernel-bridge` / `inbound-turn-endpoint` |
 

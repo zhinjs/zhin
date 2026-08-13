@@ -1,4 +1,5 @@
 import { type Message, buildAiOutboundPromptHint } from '@zhin.js/core';
+import type { TurnOrigin } from '../turn/turn-ingress.js';
 import type { CollaborationScene } from './types.js';
 import { resolveCellForScene, findCellMemberByEndpoint } from './collaboration-config.js';
 /** 每轮 turn envelope 用的精简 Cell 提示（勿重复 buildAiOutboundPromptHint 长文）。 */
@@ -69,12 +70,24 @@ export function resolveCollaborationSceneForMessage(
   const endpointKey = String(message.$endpoint ?? '');
   if (!endpointKey) return undefined;
 
-  const cell = resolveCellForScene(
-    String(message.$adapter ?? ''),
-    String(sceneId),
-  );
+  return resolveCollaborationScene({
+    platform: String(message.$adapter ?? ''),
+    endpoint: endpointKey,
+    scope,
+    sceneId: String(sceneId),
+  });
+}
+
+function resolveCollaborationScene(input: {
+  platform: string;
+  endpoint: string;
+  scope: 'private' | 'group' | 'channel';
+  sceneId: string;
+}): CollaborationScene | undefined {
+  if (input.scope !== 'group' && input.scope !== 'channel') return undefined;
+  const cell = resolveCellForScene(input.platform, input.sceneId);
   if (!cell || cell.members.length < 2) return undefined;
-  if (!findCellMemberByEndpoint(cell, endpointKey)) return undefined;
+  if (!findCellMemberByEndpoint(cell, input.endpoint)) return undefined;
   return cell;
 }
 
@@ -90,4 +103,16 @@ export function resolveCollaborationTurnHint(
     formatCollaborationTurnCellHint(cell, endpointKey),
   ].filter(Boolean);
   return lines.join('\n');
+}
+
+/** Canonical Turn variant used by Agent Context; no IM Message crosses the boundary. */
+export function resolveCollaborationTurnHintFromOrigin(origin: TurnOrigin): string | undefined {
+  if (origin.kind !== 'im') return undefined;
+  const cell = resolveCollaborationScene({
+    platform: origin.platform,
+    endpoint: origin.endpoint,
+    scope: origin.scope,
+    sceneId: origin.sceneId,
+  });
+  return cell ? formatCollaborationTurnCellHint(cell, origin.endpoint) : undefined;
 }

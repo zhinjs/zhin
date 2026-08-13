@@ -10,9 +10,7 @@ import {
 } from '../../src/context/context-system.js';
 import type { ContextBuilder } from '../../src/context/contracts.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
-import { runInTurnContext } from '../../src/internal/turn-context.js';
-import { TurnTracker } from '../../src/turn/turn-tracker.js';
-import { createScheduleSecurityContext } from '../../src/schedule-domain/security-harness.js';
+import { turnContextViewFromMessage } from '../../src/context/im-turn-context-adapter.js';
 
 describe('ContextSystem', () => {
   it('buildTextTurnContext merges registered builder messages and injectors', async () => {
@@ -37,7 +35,7 @@ describe('ContextSystem', () => {
     const commMessage = mockCommMessage({ senderId: 'u1' });
     const result = await system.buildTextTurnContext({
       host,
-      commMessage,
+      turn: turnContextViewFromMessage(commMessage),
       content: 'hello',
       turnUser: {
         rawContent: 'hello',
@@ -57,7 +55,7 @@ describe('ContextSystem', () => {
     const system = new ContextSystem();
     const envelope: Record<string, string | undefined> = {};
     const messages = await system.build({
-      message: mockCommMessage({ senderId: 'u1' }),
+      turn: turnContextViewFromMessage(mockCommMessage({ senderId: 'u1' })),
       inboundContent: 'I am very frustrated!!!',
       host,
       envelope,
@@ -81,35 +79,33 @@ describe('ContextSystem', () => {
     const system = createContextSystemForHost(host);
     system.addBuilder({ name: 'history-leak', build: async () => [createUserMessage('must not leak')] });
 
-    const result = await runInTurnContext('schedule-turn', new TurnTracker(1_000), () =>
-      system.buildTextTurnContext({
-        host,
-        commMessage: mockCommMessage({ senderId: 'u1' }),
-        content: 'publish report',
-        turnUser: {
-          rawContent: 'publish report',
-          promptMessages: [createUserMessage('old conversation'), createUserMessage('publish report')],
-        },
-      }), {
-        scheduleContext: {
-          jobId: 'sched-1',
-          security: createScheduleSecurityContext(),
-          securityDenials: [],
-        },
-      });
+    const result = await system.buildTextTurnContext({
+      host,
+      turn: {
+        origin: { kind: 'schedule', jobId: 'sched-1' },
+        principal: { subjectId: 'owner', roles: ['trusted'] },
+        session: { key: 'schedule:sched-1' },
+      },
+      content: 'publish report',
+      turnUser: {
+        rawContent: 'publish report',
+        promptMessages: [createUserMessage('old conversation'), createUserMessage('publish report')],
+      },
+    });
 
-    expect(result.userMessages).toEqual([expect.objectContaining({
-      role: 'user',
-      content: [{ type: 'text', text: 'publish report' }],
-    })]);
-    expect(result.turnEnvelope).toBeNull();
+    expect(result.userMessages).toHaveLength(1);
+    const text = result.userMessages[0]?.content.find(block => block.type === 'text');
+    expect(text?.type === 'text' ? text.text : '').toContain('publish report');
+    expect(text?.type === 'text' ? text.text : '').not.toContain('old conversation');
+    expect(text?.type === 'text' ? text.text : '').not.toContain('interactive profile');
+    expect(result.turnEnvelope).toContain('Session: origin:schedule | job_id:sched-1');
   });
 
   it('ToneInjector respects toneAwareness config via inject pipeline', () => {
     const off = new ToneInjector({ config: { toneAwareness: false } } as any);
     const envelope: Record<string, string | undefined> = {};
     off.inject([], {
-      message: mockCommMessage({ senderId: 'u1' }),
+      turn: turnContextViewFromMessage(mockCommMessage({ senderId: 'u1' })),
       inboundContent: 'angry text',
       envelope,
     });
@@ -118,7 +114,7 @@ describe('ContextSystem', () => {
     const on = new ToneInjector({ config: { toneAwareness: true } } as any);
     const envelopeOn: Record<string, string | undefined> = {};
     on.inject([], {
-      message: mockCommMessage({ senderId: 'u1' }),
+      turn: turnContextViewFromMessage(mockCommMessage({ senderId: 'u1' })),
       inboundContent: 'angry text',
       envelope: envelopeOn,
     });
@@ -129,7 +125,7 @@ describe('ContextSystem', () => {
     const builder = new CollaborationContextBuilder();
     const envelope: Record<string, string | undefined> = {};
     await builder.build({
-      message: mockCommMessage({ scope: 'group', sceneId: 'g1' }),
+      turn: turnContextViewFromMessage(mockCommMessage({ scope: 'group', sceneId: 'g1' })),
       inboundContent: 'status',
       envelope,
     });
@@ -142,7 +138,7 @@ describe('ContextSystem', () => {
     } as any);
     const envelope: Record<string, string | undefined> = {};
     await builder.build({
-      message: mockCommMessage({ senderId: 'u1' }),
+      turn: turnContextViewFromMessage(mockCommMessage({ senderId: 'u1' })),
       envelope,
     });
     expect(envelope.profileSummary).toBe('profile block');
