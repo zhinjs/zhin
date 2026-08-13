@@ -181,6 +181,8 @@ ai:
 
 网络工具仅在 `ai.agent.execPreset: network` 时获得 HTTPS authority。`web_fetch` 的初始 URL 与每个重定向目标都会重新检查协议、域名和 SSRF；DNS 结果中的私网、link-local、CGNAT 与 multicast 地址会被拒绝，实际连接固定到已审核地址。`readonly` 等其他 preset 不会隐式开放网络。
 
+`todo_read` / `todo_write` 只操作当前 canonical session 的计划，调用参数不再接受 `chat_id` 或路径。状态原子写入 `.zhin/todos`，且 `.zhin/` 整体属于 runtime-private state，不能通过文件工具读取或枚举。
+
 ## Assistant profile 与调度任务
 
 Assistant 运行时把「定时做事」产品化：持久化任务存 `data/schedule-jobs.json`，由 `ScheduleJobEngine` 到点执行并把结果推回 IM。

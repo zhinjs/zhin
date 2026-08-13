@@ -181,6 +181,8 @@ File tools run only inside the project workspace explicitly authorized for the c
 
 Network tools receive HTTPS authority only with `ai.agent.execPreset: network`. `web_fetch` revalidates protocol, domain, and SSRF policy for the initial URL and every redirect target. DNS results in private, link-local, CGNAT, or multicast ranges are denied, and the actual connection is pinned to the reviewed address. Other presets, including `readonly`, do not implicitly enable network access.
 
+`todo_read` and `todo_write` operate only on the plan owned by the current canonical session; their input no longer accepts a `chat_id` or filesystem path. State is atomically stored under `.zhin/todos`, and the entire `.zhin/` directory is runtime-private state that generic file tools cannot read or enumerate.
+
 ## Assistant profile and scheduled tasks
 
 The Assistant runtime productizes "doing things on a schedule": persistent tasks are stored in `data/schedule-jobs.json` and executed by `ScheduleJobEngine` at the designated time, with results pushed back to IM.

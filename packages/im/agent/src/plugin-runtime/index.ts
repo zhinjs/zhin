@@ -7,6 +7,7 @@ export * from './host-tool-projection.js';
 export * from './host-mcp-projection.js';
 export * from './native-file-tools.js';
 export * from './native-web-tools.js';
+export * from './native-todo-tools.js';
 export { FileJournalStore } from '../journal/file-journal-store.js';
 export {
   capabilityToTool,

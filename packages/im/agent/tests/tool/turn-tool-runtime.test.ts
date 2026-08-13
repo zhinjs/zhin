@@ -65,6 +65,19 @@ describe('TurnToolRuntime', () => {
     expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_denied']);
   });
 
+  it('keeps runtime-private .zhin state outside every file Tool capability', async () => {
+    const execute = vi.fn(async () => 'private state');
+    const { turn } = fixture({ roles: ['master'], workspaceRoot: process.cwd() });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'read_file')]);
+
+    await expect(runtime.execute('read_file', {
+      file_path: '.zhin/todos/secret.json',
+    }, 'call-runtime-private')).resolves.toMatchObject({
+      status: 'denied', policy: 'workspace-access',
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('fails closed when a file tool has no workspace authority', async () => {
     const execute = vi.fn(async () => 'contents');
     const { turn } = fixture({ roles: ['master'] });

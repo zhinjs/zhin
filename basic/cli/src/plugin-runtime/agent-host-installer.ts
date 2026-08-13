@@ -96,6 +96,8 @@ import {
   createFullAgentTurnEngine,
   createNativeFileToolFeatures,
   createNativeWebToolFeatures,
+  createNativeTodoToolFeatures,
+  FileTodoStore,
   AgentRuntime,
   type AgentCapabilities,
   type ToolCapability,
@@ -429,6 +431,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       addFeature(tool.feature, tool.name, tool.definition);
     }
     for (const tool of createNativeWebToolFeatures()) {
+      addFeature(tool.feature, tool.name, tool.definition);
+    }
+    for (const tool of createNativeTodoToolFeatures(
+      new FileTodoStore(join(options.projectRoot, '.zhin', 'todos')),
+    )) {
       addFeature(tool.feature, tool.name, tool.definition);
     }
 

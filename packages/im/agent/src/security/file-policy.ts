@@ -112,6 +112,7 @@ const SENSITIVE_BASENAME_PATTERNS: RegExp[] = [
  * 避免误伤 src/data/fixtures 之类的普通目录。
  */
 const SENSITIVE_DIR_NAMES: ReadonlySet<string> = new Set([
+  '.zhin',
   '.ssh',
   '.gnupg',
   '.gpg',
