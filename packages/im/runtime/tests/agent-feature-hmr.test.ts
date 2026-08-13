@@ -175,7 +175,13 @@ function toolInvocation() {
     traceId: 'trace',
     turnId: 'turn',
     sessionKey: 'session',
+    origin: { kind: 'internal', source: 'runtime-test' },
     principal: { subjectId: 'user', roles: ['user'] },
+    policy: {
+      permissions: ['user'],
+      unattended: false,
+      network: { enabled: false },
+    },
   } as const;
 }
 

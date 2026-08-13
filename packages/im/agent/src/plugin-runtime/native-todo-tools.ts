@@ -33,7 +33,7 @@ export interface NativeTodoToolFeature {
   readonly definition: Readonly<AgentToolDefinition<Record<string, unknown>, string>>;
 }
 
-/** Crash-safe, session-addressed TODO store. Callers never provide filesystem paths. */
+/** Crash-safe, session-addressed task-plan store. Callers never provide filesystem paths. */
 export class FileTodoStore implements TodoStore {
   readonly #tails = new Map<string, Promise<void>>();
 

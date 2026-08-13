@@ -25,7 +25,7 @@ describe('multi-agent-room 协作契约', () => {
 
   it('双 Endpoint + peer 入站策略', () => {
     expect(configText).toMatch(/peerMode:\s*mention-only/);
-    const endpointMatches = configText.match(/name:\s*\w+-bot/g) ?? [];
+    const endpointMatches = configText.match(/id:\s*\w+-bot/g) ?? [];
     expect(endpointMatches.length).toBeGreaterThanOrEqual(2);
   });
 

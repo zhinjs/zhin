@@ -642,11 +642,8 @@ describe('milky plugin runtime adapter', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive.mock.calls[0]?.[0]).toMatchObject({
       content: 'hi[audio:https://cdn.example/a.silk]',
-      segments: [
-        { type: 'text', data: { text: 'hi' } },
-        { type: 'audio', data: { media: { kind: 'url', value: 'https://cdn.example/a.silk' } } },
-      ],
       segments: expect.arrayContaining([
+        expect.objectContaining({ type: 'text', data: { text: 'hi' } }),
         expect.objectContaining({ type: 'audio', data: { media: { kind: 'url', value: 'https://cdn.example/a.silk' } } }),
       ]),
     });
