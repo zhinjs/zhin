@@ -1,6 +1,6 @@
 ---
-"@zhin.js/agent": major
-"@zhin.js/cli": major
+"@zhin.js/agent": patch
+"@zhin.js/cli": patch
 ---
 
 Publish `todo_read` and `todo_write` as native generation-owned ToolFeatures backed by a session-addressed, crash-safe TodoStore.

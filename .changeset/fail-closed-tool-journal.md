@@ -1,5 +1,5 @@
 ---
-'@zhin.js/agent': major
+'@zhin.js/agent': patch
 ---
 
 Fail closed when a required tool execution fact cannot be written to the Turn

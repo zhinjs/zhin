@@ -5,4 +5,4 @@ plugins:
     commandPrefix: ''
     master: "${ICQQ_MASTER:-1659488338}"
     endpoints:
-      - name: "${ICQQ_ACCOUNT_2:-1689919782}"
+      - id: "${ICQQ_ACCOUNT_2:-1689919782}"

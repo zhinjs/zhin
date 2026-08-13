@@ -1,5 +1,5 @@
 ---
-'@zhin.js/agent': major
+'@zhin.js/agent': patch
 ---
 
 Make the full Agent Core origin-neutral by removing legacy IM Message and Plugin

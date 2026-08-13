@@ -1,6 +1,6 @@
 ---
-'@zhin.js/agent': major
-'@zhin.js/cli': major
+'@zhin.js/agent': patch
+'@zhin.js/cli': patch
 ---
 
 Route production IM Agent turns through the Root-owned `AgentRuntime` and the

@@ -65,16 +65,16 @@ plugins:
   sandbox:
     endpoints:
       - context: sandbox
-        name: full-bot-sandbox
+        id: full-bot-sandbox
         owner: local-user
   napcat:
     connection: ws
     endpoints:
-      - name: full-bot-napcat
+      - id: full-bot-napcat
         url: ${ONEBOT11_WS_URL}
         access_token: ${ONEBOT11_ACCESS_TOKEN}
   kook:
     connection: websocket
     endpoints:
-      - name: full-bot-kook
+      - id: full-bot-kook
         token: ${KOOK_TOKEN}

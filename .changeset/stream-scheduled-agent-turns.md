@@ -1,5 +1,5 @@
 ---
-'@zhin.js/agent': major
+'@zhin.js/agent': patch
 ---
 
 Schedule the canonical Agent `TurnEvent` stream through `PromptController` and

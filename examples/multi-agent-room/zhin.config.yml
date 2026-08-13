@@ -17,10 +17,10 @@ plugins:
   sandbox:
     endpoints:
       - context: sandbox
-        name: planner-bot
+        id: planner-bot
         owner: planner-user
       - context: sandbox
-        name: researcher-bot
+        id: researcher-bot
         owner: researcher-user
 
 http:

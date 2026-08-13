@@ -1,6 +1,6 @@
 ---
-'@zhin.js/agent': major
-'@zhin.js/cli': major
+'@zhin.js/agent': patch
+'@zhin.js/cli': patch
 ---
 
 Commit the durable Agent terminal before conversation, session, metrics, and IM

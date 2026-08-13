@@ -1,7 +1,7 @@
 ---
-"@zhin.js/agent": major
-"@zhin.js/cli": major
-"@zhin.js/tool": minor
+"@zhin.js/agent": patch
+"@zhin.js/cli": patch
+"@zhin.js/tool": patch
 ---
 
 Publish the built-in file capability family as native, generation-owned ToolFeatures on the canonical IM Turn path.

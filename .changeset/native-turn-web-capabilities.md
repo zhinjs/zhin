@@ -1,6 +1,6 @@
 ---
-"@zhin.js/agent": major
-"@zhin.js/cli": major
+"@zhin.js/agent": patch
+"@zhin.js/cli": patch
 ---
 
 Publish `web_fetch` and `web_search` as native generation-owned ToolFeatures on the canonical IM Turn path.
