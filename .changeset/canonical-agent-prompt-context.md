@@ -1,8 +1,8 @@
 ---
-'@zhin.js/core': major
-'@zhin.js/agent': major
-'@zhin.js/adapter-icqq': major
-'@zhin.js/adapter-github': major
+'@zhin.js/core': patch
+'@zhin.js/agent': patch
+'@zhin.js/adapter-icqq': patch
+'@zhin.js/adapter-github': patch
 ---
 
 Replace `AgentPromptBuildContext.commMessage` with an authenticated platform projection and make Agent prompt assembly consume canonical Turn identity. Platform contributors and prompt hooks no longer receive a classic IM `Message`.
