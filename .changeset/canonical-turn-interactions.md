@@ -1,8 +1,8 @@
 ---
-"@zhin.js/agent": patch
-"@zhin.js/cli": patch
-"@zhin.js/core": patch
-"@zhin.js/tool": patch
+"@zhin.js/agent": major
+"@zhin.js/cli": major
+"@zhin.js/core": minor
+"@zhin.js/tool": minor
 ---
 
 Publish `ask_user` as a generation-owned ToolFeature backed by a Root-owned, origin-neutral InteractionRouter.

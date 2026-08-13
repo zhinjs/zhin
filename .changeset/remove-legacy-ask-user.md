@@ -1,5 +1,5 @@
 ---
-"@zhin.js/agent": patch
+"@zhin.js/agent": major
 ---
 
 Delete the classic Plugin/Message-based `ask_user` implementation and its global pending-session middleware.
