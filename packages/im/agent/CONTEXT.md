@@ -158,6 +158,8 @@ _避免使用_：经 HomeFacade 鉴权推送、createEndpointLifecycle 硬套 HA
 `resolveAgentTurnSessionKey`（transport + 可选 `pipeline:{runPrefix}:`）为 turn 级 SSOT；passive write / @ drain / auto-continue depth / persist 共用。
 _避免使用_：私有 `resolveTurnSessionKey`、snapshot 与 cell 双轨 key
 
+`agent_sessions` 只持有 origin-neutral session key / epoch / model / status；IM platform、endpoint、scene 仅属于 IM transcript projection。HTTP、A2A、Schedule 与 Internal turn 不得伪造 IM session address。
+
 ## 关系
 
 - 插件与文件发现向 **Capability Feature** 写入；**Capability Ingress** 在 Boot（常驻核心）与入站（命中 **Agent Binding** 作用域）把能力装入 **Agent Orchestrator**；回合只读 Orchestrator。

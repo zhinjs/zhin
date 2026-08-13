@@ -128,7 +128,7 @@ IM 主路径数据模型（见 [docs/advanced/ai.md](../../docs/advanced/ai.md)�
 |------|-----------|------|
 | `ImTranscriptStore` | `im_transcripts` | 入站/出站 IM 扁平静态行；`chat_history` 工具按需查询 |
 | `ContextRepository` | `agent_messages` | epoch 内 LLM `AgentMessage[]`（含 tool 轮） |
-| `AgentSessionStore` | `agent_sessions` | `session_key` → 活跃 `session_id`；`/reset` 归档 |
+| `AgentSessionStore` | `agent_sessions` | origin-neutral `session_key` → 活跃 `session_id`；`/reset` 归档；不保存 IM platform / endpoint / scene |
 
 ```typescript
 import {

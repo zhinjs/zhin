@@ -57,10 +57,6 @@ describe('TurnIngress session projection', () => {
   it('projects session and transcript identities from the typed origin', () => {
     expect(buildTurnSessionCreateInput(turn())).toEqual({
       session_key: 'im:qq:bot-1:group:group-9',
-      platform: 'qq',
-      endpoint_id: 'bot-1',
-      scene_id: 'group-9',
-      scene_type: 'group',
     });
     expect(buildTurnTranscriptQuery(turn())).toEqual({
       platform: 'qq',
@@ -69,7 +65,7 @@ describe('TurnIngress session projection', () => {
     });
   });
 
-  it('does not fabricate IM persistence identities for non-IM turns', () => {
+  it('opens origin-neutral Agent sessions while keeping transcript projection IM-only', () => {
     const http = createTurnIngress({
       ...turn(),
       origin: { kind: 'http', sessionId: 'http-1' },
@@ -77,7 +73,7 @@ describe('TurnIngress session projection', () => {
       principal: { subjectId: 'api-user', roles: ['user'] },
       input: { text: 'hello' },
     });
-    expect(() => buildTurnSessionCreateInput(http)).toThrow('IM origin');
+    expect(buildTurnSessionCreateInput(http)).toEqual({ session_key: 'http:http-1' });
     expect(() => buildTurnTranscriptQuery(http)).toThrow('IM origin');
   });
 

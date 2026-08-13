@@ -67,10 +67,6 @@ export type AgentSessionStatus = 'active' | 'archived';
 export const AGENT_SESSION_MODEL = {
   session_id: { type: 'text' as const, nullable: false },
   session_key: { type: 'text' as const, nullable: false },
-  platform: { type: 'text' as const, nullable: false },
-  endpoint_id: { type: 'text' as const, nullable: false },
-  scene_id: { type: 'text' as const, nullable: false },
-  scene_type: { type: 'text' as const, nullable: false },
   model: { type: 'text' as const, default: '' },
   status: { type: 'text' as const, default: 'active' },
   active_leaf_message_id: { type: 'integer' as const, nullable: true },
@@ -82,10 +78,6 @@ export interface AgentSessionRecord {
   id?: number;
   session_id: string;
   session_key: string;
-  platform: string;
-  endpoint_id: string;
-  scene_id: string;
-  scene_type: string;
   model: string;
   status: AgentSessionStatus;
   active_leaf_message_id?: number | null;
@@ -95,10 +87,6 @@ export interface AgentSessionRecord {
 
 export interface CreateAgentSessionInput {
   session_key: string;
-  platform: string;
-  endpoint_id: string;
-  scene_id: string;
-  scene_type: string;
   model?: string;
 }
 

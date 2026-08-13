@@ -51,10 +51,6 @@ describe('IM Harness — /tree 核心路径', () => {
     sessionStore = created.sessionStore
     const session = await sessionStore.getOrCreateActive({
       session_key: SESSION_KEY,
-      platform: 'test',
-      endpoint_id: 'bot1',
-      scene_id: 'user1',
-      scene_type: 'private',
     })
     sessionId = session.session_id
   })
@@ -119,10 +115,6 @@ describe('IM Harness — /tree N 跳转', () => {
     sessionStore = created.sessionStore
     const session = await sessionStore.getOrCreateActive({
       session_key: SESSION_KEY,
-      platform: 'test',
-      endpoint_id: 'bot1',
-      scene_id: 'user1',
-      scene_type: 'private',
     })
     sessionId = session.session_id
   })
@@ -174,10 +166,6 @@ describe('IM Harness — /reset 归档', () => {
     sessionStore = created.sessionStore
     const session = await sessionStore.getOrCreateActive({
       session_key: SESSION_KEY,
-      platform: 'test',
-      endpoint_id: 'bot1',
-      scene_id: 'user1',
-      scene_type: 'private',
     })
     sessionId = session.session_id
   })
@@ -201,10 +189,6 @@ describe('IM Harness — /reset 归档', () => {
     // 旧 sessionId 应该不再产生新消息（归档后 getOrCreateActive 创建新 epoch）
     const newSession = await sessionStore.getOrCreateActive({
       session_key: SESSION_KEY,
-      platform: 'test',
-      endpoint_id: 'bot1',
-      scene_id: 'user1',
-      scene_type: 'private',
     })
     expect(newSession.session_id).not.toBe(sessionId)
   })
@@ -215,10 +199,6 @@ describe('IM Harness — /reset 归档', () => {
 
     const newSession = await sessionStore.getOrCreateActive({
       session_key: SESSION_KEY,
-      platform: 'test',
-      endpoint_id: 'bot1',
-      scene_id: 'user1',
-      scene_type: 'private',
     })
     const ctx = await repo.loadContext(newSession.session_id)
     expect(ctx.messages).toHaveLength(0)
@@ -240,20 +220,12 @@ describe('IM Harness — /reset 归档', () => {
 
     const s2 = await sessionStore.getOrCreateActive({
       session_key: SESSION_KEY,
-      platform: 'test',
-      endpoint_id: 'bot1',
-      scene_id: 'user1',
-      scene_type: 'private',
     })
     await repo.appendMessages(s2.session_id, [createUserMessage('第二轮')])
     await repo.archiveSession(SESSION_KEY)
 
     const s3 = await sessionStore.getOrCreateActive({
       session_key: SESSION_KEY,
-      platform: 'test',
-      endpoint_id: 'bot1',
-      scene_id: 'user1',
-      scene_type: 'private',
     })
     expect(s3.session_id).not.toBe(sessionId)
     expect(s3.session_id).not.toBe(s2.session_id)
@@ -267,10 +239,6 @@ describe('IM Harness — /compact 压缩锚点', () => {
     sessionStore = created.sessionStore
     const session = await sessionStore.getOrCreateActive({
       session_key: SESSION_KEY,
-      platform: 'test',
-      endpoint_id: 'bot1',
-      scene_id: 'user1',
-      scene_type: 'private',
     })
     sessionId = session.session_id
   })

@@ -66,10 +66,6 @@ export class AgentSessionStore {
     const record: AgentSessionRecord = {
       session_id: createAgentSessionEpochId(input.session_key),
       session_key: input.session_key,
-      platform: input.platform,
-      endpoint_id: input.endpoint_id,
-      scene_id: input.scene_id,
-      scene_type: input.scene_type,
       model: input.model ?? '',
       status: 'active',
       created_at: now,
@@ -180,10 +176,6 @@ export class MemoryAgentSessionStore {
     const record: AgentSessionRecord = {
       session_id: createAgentSessionEpochId(input.session_key),
       session_key: input.session_key,
-      platform: input.platform,
-      endpoint_id: input.endpoint_id,
-      scene_id: input.scene_id,
-      scene_type: input.scene_type,
       model: input.model ?? '',
       status: 'active',
       created_at: now,

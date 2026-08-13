@@ -33,10 +33,6 @@ describe('DatabaseContextRepository (sqlite)', () => {
     const sessionStore = new AgentSessionStore(db.models.get('agent_sessions')!);
     const session = await sessionStore.getOrCreateActive({
       session_key: 'test:private:u1',
-      platform: 'test',
-      endpoint_id: 'b1',
-      scene_id: 'u1',
-      scene_type: 'private',
     });
     sessionId = session.session_id;
   });

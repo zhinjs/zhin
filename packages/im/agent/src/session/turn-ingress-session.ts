@@ -5,7 +5,6 @@ import {
   type AgentMessageSenderExtra,
   type AgentSessionStore,
   type CreateAgentSessionInput,
-  type CreateIMSessionInput,
   type MemoryAgentSessionStore,
   type UserMessage,
 } from '@zhin.js/ai';
@@ -52,15 +51,8 @@ export function resolveIngressUserMessage(
 
 export function buildTurnSessionCreateInput(
   turn: TurnIngress,
-): CreateIMSessionInput & CreateAgentSessionInput {
-  const address = sessionOriginAddress(turn);
-  return {
-    session_key: turn.session.key,
-    platform: address.platform,
-    endpoint_id: address.endpoint,
-    scene_id: address.sceneId,
-    scene_type: address.scope,
-  };
+): CreateAgentSessionInput {
+  return { session_key: turn.session.key };
 }
 
 export function buildTurnTranscriptQuery(

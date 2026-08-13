@@ -26,10 +26,6 @@ describe('ContextRepository', () => {
     sessionStore = bundle.sessionStore;
     const session = await sessionStore.getOrCreateActive({
       session_key: 'icqq:bot1:group:123',
-      platform: 'icqq',
-      endpoint_id: 'bot1',
-      scene_id: '123',
-      scene_type: 'group',
     });
     sessionId = session.session_id;
   });
@@ -183,10 +179,6 @@ describe('ContextRepository', () => {
 
     const next = await sessionStore.getOrCreateActive({
       session_key: 'icqq:bot1:group:123',
-      platform: 'icqq',
-      endpoint_id: 'bot1',
-      scene_id: '123',
-      scene_type: 'group',
     });
     expect(next.session_id).not.toBe(sessionId);
 
@@ -227,10 +219,6 @@ describe('DatabaseContextRepository parent_id chain', () => {
     const sessionStore = new MemoryAgentSessionStore();
     const session = await sessionStore.getOrCreateActive({
       session_key: 'db:test',
-      platform: 'test',
-      endpoint_id: 'b1',
-      scene_id: 'u1',
-      scene_type: 'private',
     });
     const repository = new DatabaseContextRepository(
       messageModel,

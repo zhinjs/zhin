@@ -61,10 +61,6 @@ describe('stability lifecycle (ADR 0014 P2-2)', () => {
       const store = new MemoryAgentSessionStore();
       await store.getOrCreateActive({
         session_key: 'k',
-        platform: 'p',
-        endpoint_id: 'b',
-        scene_id: 's',
-        scene_type: 'private',
       });
       expect(store.sessionCount).toBe(1);
       store.dispose();
