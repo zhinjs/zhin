@@ -18,12 +18,12 @@ export {
   appendQuoteContextSystemHint,
 } from './system-prompt.js';
 export type { RichSystemPromptContext, PromptSectionDebugInfo } from './system-prompt.js';
+export type { AgentPromptProfile } from './turn-prompt-profile.js';
 
 export {
   buildDisciplinedPrompt,
   describeAgentPathPromptSections,
   buildAgentPathSystemPrompt,
-  buildFastPathSystemPrompt,
   buildChatPathSystemPrompt,
   buildMultimodalVisionSystemPrompt,
   buildAgentUserMessage,

@@ -39,6 +39,7 @@ import {
   createTurnEventMapperState,
   mapAgentEventToTurnEvents,
 } from './turn-event-mapper.js';
+import type { AgentPromptProfile } from '../prompt/turn-prompt-profile.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
 /** 入库前解开模型误包的 JSON 字符串，避免下一轮历史继续叠转义。 */
@@ -120,6 +121,7 @@ export interface AgentLoopTurnInput {
   /** 本轮 user 消息 extra（入库 agent_messages.extra） */
   userMessageExtra?: import('@zhin.js/ai').AgentMessageExtra;
   rawContent: string;
+  promptProfile: AgentPromptProfile;
   commMessage: Message;
   contextForTools: Message;
   allTools: AgentTool[];
@@ -384,15 +386,16 @@ export async function* runAgentLoopTextTurnRun(
   const outputSchema = resolveAgentOutputSchema(host.config.outputSchema);
   let systemPrompt = hasTools
     ? await buildAgentPathSystemPrompt(host, {
+        profile: input.promptProfile,
         content: input.rawContent,
-        commMessage: contextForTools,
+        ...(input.promptProfile.kind === 'interactive' ? { commMessage: contextForTools } : {}),
         sessionId,
         personaEnhanced,
         preData,
         deferredStats: input.deferredStats,
         modelSdk: llmModel.sdk,
       })
-    : buildChatPathSystemPrompt(host, personaEnhanced, contextForTools);
+    : buildChatPathSystemPrompt(host, personaEnhanced, input.promptProfile);
   if (outputSchema) {
     systemPrompt = `${systemPrompt}\n\n${buildAiOutboundPromptHint({})}`;
   }
@@ -438,13 +441,15 @@ export async function* runAgentLoopTextTurnRun(
   };
 
   if (hasTools) {
-    const sections = await describeAgentPathPromptSections(host, {
-      commMessage: contextForTools,
-      content: input.rawContent,
-      sessionId,
-      deferredStats: input.deferredStats,
-      modelSdk: llmModel.sdk,
-    });
+    const sections = input.promptProfile.kind === 'interactive'
+      ? await describeAgentPathPromptSections(host, {
+          commMessage: contextForTools,
+          content: input.rawContent,
+          sessionId,
+          deferredStats: input.deferredStats,
+          modelSdk: llmModel.sdk,
+        })
+      : [];
     logPromptComposition({
       config: host.promptTraceConfig,
       sessionId,

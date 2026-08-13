@@ -10,30 +10,22 @@ import {
 } from './system-prompt.js';
 import { resolveWorkspacePrompt } from './workspace-prompt.js';
 import { getGitStatusLine } from './git-context.js';
-import { buildPreExecFastPathPrompt } from '../tool/runtime.js';
 import type { AgentContextHost, ZhinAgentPrivate } from '../internal/agent-host.js';
 import { getLlmTransportModel, type AgentMessage } from '@zhin.js/ai';
-import { getScheduleTurnContext } from '../internal/turn-context.js';
 import { assembleSchedulePrompt } from '../schedule-domain/prompt-assembler.js';
-import { getFileMemoryContext } from '../memory-layers.js';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import type { AgentPromptProfile } from './turn-prompt-profile.js';
 
 function scheduleSystemPrompt(
   agent: ZhinAgentPrivate,
-  commMessage: Message,
+  profile: Extract<AgentPromptProfile, { kind: 'schedule' }>,
   platformContext?: string,
-): string | null {
-  const context = getScheduleTurnContext();
-  if (!context?.jobId) return null;
-  const platform = String(commMessage.$adapter);
-  const sessionKey = resolveIMSessionIdFromMessage(commMessage);
+): string {
   return assembleSchedulePrompt({
-    jobId: context.jobId,
-    prompt: context.executionPlan?.prompt ?? '',
-    createdBy: context.createdBy,
-    security: context.security,
+    jobId: profile.jobId,
+    prompt: profile.prompt,
+    createdBy: profile.createdBy,
+    security: profile.security,
     platformContext,
-    memoryContext: getFileMemoryContext(undefined, platform, sessionKey),
     skillContext: agent.getTurnActiveSkills(),
     bootstrapContext: [agent.globalContext, agent.bootstrapContext].filter(Boolean).join('\n\n'),
   }).systemPrompt;
@@ -95,8 +87,9 @@ export async function describeAgentPathPromptSections(
 export async function buildAgentPathSystemPrompt(
   agent: ZhinAgentPrivate,
   options: {
+    profile: AgentPromptProfile;
     content: string;
-    commMessage: Message;
+    commMessage?: Message;
     sessionId: string;
     personaEnhanced: string;
     preData?: string;
@@ -104,7 +97,13 @@ export async function buildAgentPathSystemPrompt(
     modelSdk?: string;
   },
 ): Promise<string> {
-  const { content, commMessage, sessionId, personaEnhanced, preData, deferredStats, modelSdk } = options;
+  const { content, sessionId, personaEnhanced, preData, deferredStats, modelSdk } = options;
+
+  if (options.profile.kind === 'schedule') {
+    return scheduleSystemPrompt(agent, options.profile);
+  }
+  const commMessage = options.commMessage;
+  if (!commMessage) throw new TypeError('Interactive prompt requires an IM Message adapter input');
 
   const platformMarkdown = await resolveAgentPromptMarkdown({
     ctx: {
@@ -116,9 +115,6 @@ export async function buildAgentPathSystemPrompt(
     config: agent.config,
     sessionId,
   });
-
-  const schedulePrompt = scheduleSystemPrompt(agent, commMessage, platformMarkdown);
-  if (schedulePrompt) return schedulePrompt;
 
   const gitStatus = agent.config.gitStatus
     ? await getGitStatusLine(process.cwd())
@@ -154,24 +150,12 @@ export async function buildAgentPathSystemPrompt(
   return `${richPrompt}${dynamicSuffix}${preData ? `\n\nPre-fetched data:\n${preData}` : ''}`;
 }
 
-export function buildFastPathSystemPrompt(
-  agent: ZhinAgentPrivate,
-  personaEnhanced: string,
-  preData: string | undefined,
-  _commMessage: Message,
-): string {
-  const schedulePrompt = scheduleSystemPrompt(agent, _commMessage);
-  if (schedulePrompt) return schedulePrompt;
-  return buildDisciplinedPrompt(agent, buildPreExecFastPathPrompt(personaEnhanced, preData ?? ''));
-}
-
 export function buildChatPathSystemPrompt(
   agent: ZhinAgentPrivate,
   personaEnhanced: string,
-  _commMessage: Message,
+  profile: AgentPromptProfile,
 ): string {
-  const schedulePrompt = scheduleSystemPrompt(agent, _commMessage);
-  if (schedulePrompt) return schedulePrompt;
+  if (profile.kind === 'schedule') return scheduleSystemPrompt(agent, profile);
   return buildDisciplinedPrompt(agent, personaEnhanced);
 }
 

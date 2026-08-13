@@ -35,7 +35,7 @@ import {
   turnContextViewFromMessage,
 } from '../context/im-turn-context-adapter.js';
 import { getScheduleTurnContext } from '../internal/turn-context.js';
-import { scheduleTurnContextView } from '../schedule-domain/turn-context.js';
+import { schedulePromptProfile, scheduleTurnContextView } from '../schedule-domain/turn-context.js';
 
 function requireSessionSystem(host: ZhinAgentPrivate): SessionSystem {
   if (!host.sessionSystem) {
@@ -202,6 +202,9 @@ export async function processTextTurn(
           sessionId,
           userMessageExtra: turnUser.userMessageExtra,
           rawContent: turnUser.rawContent,
+          promptProfile: scheduleContext
+            ? schedulePromptProfile(scheduleContext, content)
+            : { kind: 'interactive' },
           commMessage,
           contextForTools,
           allTools,

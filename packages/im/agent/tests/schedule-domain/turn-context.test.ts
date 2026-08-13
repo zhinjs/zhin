@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { scheduleTurnContextView } from '../../src/schedule-domain/turn-context.js';
+import { schedulePromptProfile, scheduleTurnContextView } from '../../src/schedule-domain/turn-context.js';
 import { createScheduleSecurityContext } from '../../src/schedule-domain/security-harness.js';
 
 describe('scheduleTurnContextView', () => {
@@ -25,5 +25,19 @@ describe('scheduleTurnContextView', () => {
       security: createScheduleSecurityContext(),
       securityDenials: [],
     })).toThrow('Schedule Turn requires a jobId');
+  });
+
+  it('freezes prompt authority instead of retaining mutable schedule state', () => {
+    const context = {
+      jobId: 'daily-report',
+      createdBy: { userId: 'owner', roles: ['trusted'] as const },
+      security: createScheduleSecurityContext('network', ['api.example.com']),
+      securityDenials: [],
+    };
+    const profile = schedulePromptProfile(context, 'publish report');
+
+    context.security.allowedDomains.push('evil.example');
+    expect(profile.security.allowedDomains).toEqual(['api.example.com']);
+    expect(Object.isFrozen(profile.security.allowedDomains)).toBe(true);
   });
 });

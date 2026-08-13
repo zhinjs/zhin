@@ -20,6 +20,10 @@ _避免使用_：Message.$reply、Adapter.sendMessage、host Plugin、回调字�
 从 canonical Turn 的 origin、principal 与 session address 生成模型可见的运行时上下文。它不解析 IM `Message`；IM 入口只能在最外层 adapter 将已认证的平台字段投影为 Turn，Schedule、HTTP、A2A 与 Internal 直接使用各自 origin。
 _避免使用_：从 `$adapter/$endpoint/$channel/$sender` 读取上下文、为非 IM turn 伪造平台字段、Schedule 专用 prompt 分支
 
+**Agent Prompt Profile**:
+显式选择 `interactive | schedule` 的不可变 prompt 输入。Schedule profile 在进入公共 prompt assembly 前已固定 job、creator 与 security；公共层不得从 ALS 猜测执行域，也不得借用 synthetic IM identity 读取平台 prompt 或记忆。
+_避免使用_：`getScheduleTurnContext()`、ambient prompt mode、Schedule 借用 IM file memory
+
 **Turn Outcome**:
 Agent 执行的唯一终态，判别为 `completed | failed | cancelled | budget_exceeded`，包含输出内容、usage、tool calls 与 terminal reason；每个 turn 恰好产生一次，并先进入 Event Journal，再由入口决定同步返回、流式投影或投递。
 _避免使用_：string reply、throw-or-message 双轨、无终态 generator

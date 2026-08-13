@@ -14,7 +14,7 @@ export interface SchedulePromptAssemblerInput {
   memoryContext?: string;
   skillContext?: string;
   bootstrapContext?: string;
-  security?: HostScheduleSecurityContext;
+  security?: Readonly<Pick<HostScheduleSecurityContext, 'execPreset'>>;
 }
 
 export interface SchedulePromptAssembly {
