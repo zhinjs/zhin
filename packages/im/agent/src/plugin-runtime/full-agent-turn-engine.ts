@@ -2,7 +2,7 @@ import type { AgentMessage, Usage } from '@zhin.js/ai';
 import type { AgentDescriptor } from '@zhin.js/agent-feature';
 import type { SkillDescriptor } from '@zhin.js/skill';
 import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/inbound-media.js';
-import { isTurnTerminalEvent, type TurnEvent, type TurnTerminalEvent } from '../event/turn-event.js';
+import { isTurnTerminalEvent, type TurnEndEvent, type TurnEvent, type TurnTerminalEvent } from '../event/turn-event.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { AgentLoopTurnResult } from '../core/agent-core-run.js';
@@ -15,6 +15,7 @@ import type {
   AgentTurnEngine,
   AgentTurnExecutionContext,
 } from './agent-runtime.js';
+import type { TurnTerminalProjection } from '../turn/execute-agent-turn.js';
 
 export interface FullAgentTurnEngineOptions {
   readonly host: ZhinAgentPrivate;
@@ -35,15 +36,20 @@ export function createFullAgentTurnEngine(options: FullAgentTurnEngineOptions): 
 async function* runFullAgentTurn(
   options: FullAgentTurnEngineOptions,
   context: AgentTurnExecutionContext,
-): AsyncGenerator<TurnEvent, void> {
+): AsyncGenerator<TurnEvent, TurnTerminalProjection> {
   const { host, sessionSystem, contextSystem } = options;
   const prep = await sessionSystem.prepareIngressTurn(host, context.turn);
   const rate = host.rateLimiter.check(prep.userId);
   if (!rate.allowed) {
     const text = rate.message || '请稍后再试';
-    await sessionSystem.touchAfterTurn(host, prep.sessionId);
-    yield terminal(text, zeroUsage());
-    return;
+    const end = terminal(text, zeroUsage());
+    yield end;
+    return {
+      project: async () => {
+        await sessionSystem.touchAfterTurn(host, prep.sessionId);
+        if (context.turn.ports.reply) await context.turn.ports.reply.send(end.output);
+      },
+    };
   }
 
   const snapshot = await host.contextRepository.getDeferredToolSnapshot(prep.sessionId);
@@ -118,17 +124,28 @@ async function* runFullAgentTurn(
   });
 
   const completion = yield* bufferTerminal(stream);
-  await sessionSystem.touchAfterTurn(host, prep.sessionId);
-  await host.finalizeActiveTurn({
-    usage: completion.result.usage,
-    path: completion.result.path,
-    iterations: completion.result.iterations,
-    model: completion.result.model,
-    userInput: prep.turnUser.rawContent,
-    output: completion.result.reply,
-    thinking: completion.result.thinking,
-  });
   yield completion.terminal;
+  return {
+    project: async () => {
+      await completion.result.projectConversation?.();
+      await sessionSystem.touchAfterTurn(host, prep.sessionId);
+      await host.finalizeActiveTurn({
+        usage: completion.result.usage,
+        path: completion.result.path,
+        iterations: completion.result.iterations,
+        model: completion.result.model,
+        userInput: prep.turnUser.rawContent,
+        output: completion.result.reply,
+        thinking: completion.result.thinking,
+      });
+      if (completion.terminal.type === 'turn_end' && context.turn.ports.reply) {
+        const delivery = await context.turn.ports.reply.send(completion.terminal.output);
+        if (delivery.status === 'failed' || delivery.status === 'rejected') {
+          throw new Error(`Synchronous reply projection failed: ${delivery.code}`);
+        }
+      }
+    },
+  };
 }
 
 async function* bufferTerminal(
@@ -181,7 +198,7 @@ function buildCapabilityBootstrap(
   return parts.join('\n\n');
 }
 
-function terminal(text: string, usage: Usage): TurnTerminalEvent {
+function terminal(text: string, usage: Usage): TurnEndEvent {
   return {
     type: 'turn_end',
     output: [{ type: 'text', content: text }],

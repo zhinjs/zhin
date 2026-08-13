@@ -147,7 +147,10 @@ export class AgentTurnCoordinator {
 
 export type AgentTurnExecutor = (
   context: AgentTurnExecutionContext,
-) => AsyncGenerator<import('../event/turn-event.js').TurnEvent, void>;
+) => AsyncGenerator<
+  import('../event/turn-event.js').TurnEvent,
+  import('../turn/execute-agent-turn.js').TurnTerminalProjection | void
+>;
 
 /** Generation-owned complete Turn engine resolved from the held snapshot. */
 export interface AgentTurnEngine {

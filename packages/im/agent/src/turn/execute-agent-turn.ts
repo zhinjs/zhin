@@ -3,7 +3,13 @@ import type { TurnEvent, TurnTerminalEvent } from '../event/turn-event.js';
 import type { TurnIngress, TurnOutcome } from './turn-ingress.js';
 import { TurnTerminalGate } from './turn-terminal.js';
 
-export type TurnEventSource = (turn: TurnIngress) => AsyncGenerator<TurnEvent, void>;
+export interface TurnTerminalProjection {
+  project(): void | Promise<void>;
+}
+
+export type TurnEventSource = (
+  turn: TurnIngress,
+) => AsyncGenerator<TurnEvent, TurnTerminalProjection | void>;
 export type TurnEventObserver = (event: TurnEvent) => void | Promise<void>;
 
 const emptyUsage: Usage = Object.freeze({
@@ -25,7 +31,11 @@ export async function executeAgentTurn(
   const gate = new TurnTerminalGate();
   let observedUsage = emptyUsage;
   try {
-    for await (const event of run(turn)) {
+    const stream = run(turn);
+    while (true) {
+      const step = await stream.next();
+      if (step.done) break;
+      const event = step.value;
       try {
         await turn.ports.journal.append(event);
       } catch (error) {
@@ -39,7 +49,19 @@ export async function executeAgentTurn(
         // Observers are projections. Once an event is accepted by the terminal
         // gate, projection failure cannot rewrite the execution fact.
       }
-      if (gate.terminal) break;
+      if (gate.terminal) {
+        try {
+          const completion = await stream.next();
+          if (!completion.done) {
+            await publishProjectionFailure(turn, new Error('Agent engine emitted an event after terminal'));
+          } else if (completion.value) {
+            await runProjection(turn, completion.value);
+          }
+        } catch (error) {
+          await publishProjectionFailure(turn, error);
+        }
+        break;
+      }
     }
   } catch (error) {
     if (gate.terminal) return outcomeFromTerminal(gate.terminal, observedUsage);
@@ -65,6 +87,25 @@ export async function executeAgentTurn(
     error: new Error('Agent turn engine ended without a terminal event'),
     recoverable: false,
   }, observedUsage);
+}
+
+async function runProjection(turn: TurnIngress, projection: TurnTerminalProjection): Promise<void> {
+  try {
+    await projection.project();
+  } catch (error) {
+    await publishProjectionFailure(turn, error);
+  }
+}
+
+async function publishProjectionFailure(turn: TurnIngress, error: unknown): Promise<void> {
+  try {
+    await turn.ports.activity?.publish({
+      type: 'turn_projection_failed',
+      data: errorMessage(error, 'turn projection failed'),
+    });
+  } catch {
+    // Diagnostics are projections too; the durable terminal remains authority.
+  }
 }
 
 async function commitSyntheticTerminal(

@@ -252,6 +252,7 @@ export async function processTextTurn(
     }
 
     const reply = loopResult.reply;
+    await loopResult.projectConversation?.();
     await finalizeTurnAfterAgentLoop({
       host,
       sessionSystem,

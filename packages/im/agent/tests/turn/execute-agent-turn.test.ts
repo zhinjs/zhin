@@ -137,6 +137,45 @@ describe('executeAgentTurn', () => {
     expect(outcome).toMatchObject({ status: 'completed', output: [{ content: 'committed' }] });
   });
 
+  it('commits the terminal fact before applying its conversation projection', async () => {
+    const order: string[] = [];
+    const source = createTurnIngress({
+      ...turn(),
+      ports: { journal: { append: async (event) => { order.push(`journal:${event.type}`); } } },
+    });
+    const outcome = await executeAgentTurn(source, async function* () {
+      yield {
+        type: 'turn_end', output: [{ type: 'text', content: 'committed' }],
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      };
+      return { project: async () => { order.push('projection'); } };
+    });
+
+    expect(outcome.status).toBe('completed');
+    expect(order).toEqual(['journal:turn_end', 'projection']);
+  });
+
+  it('does not rewrite a committed terminal when a projection fails', async () => {
+    const diagnostics: string[] = [];
+    const source = createTurnIngress({
+      ...turn(),
+      ports: {
+        journal: { append: async () => undefined },
+        activity: { publish: (event) => { diagnostics.push(String(event.data)); } },
+      },
+    });
+    const outcome = await executeAgentTurn(source, async function* () {
+      yield {
+        type: 'turn_end', output: [{ type: 'text', content: 'committed' }],
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      };
+      return { project: async () => { throw new Error('projection unavailable'); } };
+    });
+
+    expect(outcome.status).toBe('completed');
+    expect(diagnostics).toEqual(['projection unavailable']);
+  });
+
   it('fails closed when the required journal cannot commit the terminal', async () => {
     const source = createTurnIngress({
       ...turn(),

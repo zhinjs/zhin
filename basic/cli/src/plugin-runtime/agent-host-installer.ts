@@ -620,14 +620,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           },
           resolveTriggerTimeoutMs(trigger),
         );
-        const elements = outcomeElements(outcome);
+        const elements = completedOutput(outcome);
         const transcriptBody = flattenOutputElements(elements).trim();
-        const content = await publishOutboundElements(elements, effectiveAdapter || undefined);
-        if (content.length > 0) {
-          await replyAndRecord(content, transcriptBody || sendContentToText(content));
-        } else if (transcriptBody) {
-          await replyAndRecord(transcriptBody, transcriptBody);
-        } else {
+        if (!transcriptBody) {
           // spawn_task 等委派回合 finalReply 为空：用户可见文案由 subagent auto-continue
           // + proactive 出站；勿把 '(empty AI response)' 当成正文发给用户。
           logger.debug(formatCompact({
@@ -1484,7 +1479,7 @@ function toMcpServerEntry(raw: McpServerConfig): McpServerEntry | null {
   };
 }
 
-function outcomeElements(
+function completedOutput(
   outcome: TurnOutcome,
 ): Array<Extract<TurnOutcome, { status: 'completed' }>['output'][number]> {
   if (outcome.status === 'completed') return [...outcome.output];

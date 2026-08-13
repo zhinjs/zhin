@@ -19,7 +19,10 @@ describe('FullAgentTurnEngine', () => {
       policy: { permissions: ['user'], unattended: false },
       capabilities: { tools: [], skills: [] },
       signal: new AbortController().signal,
-      ports: { journal: { append: async () => undefined } },
+      ports: {
+        journal: { append: async () => undefined },
+        reply: { send: async () => { order.push('reply'); return { status: 'sent' }; } },
+      },
     });
     const sessionSystem = {
       prepareIngressTurn: vi.fn(async () => ({
@@ -96,13 +99,19 @@ describe('FullAgentTurnEngine', () => {
       contextSystem: contextSystem as never,
     });
     const events: string[] = [];
-    for await (const event of engine.run(context)) {
-      events.push(event.type);
-      if (event.type === 'turn_end') order.push('terminal');
+    const stream = engine.run(context);
+    while (true) {
+      const step = await stream.next();
+      if (step.done) {
+        await step.value?.project();
+        break;
+      }
+      events.push(step.value.type);
+      if (step.value.type === 'turn_end') order.push('terminal');
     }
 
     expect(events).toEqual(['chunk', 'turn_end']);
-    expect(order).toEqual(['touch', 'finalize', 'terminal']);
+    expect(order).toEqual(['terminal', 'touch', 'finalize', 'reply']);
     expect(coreInput).toMatchObject({
       toolLoading: 'deferred',
       generation: 7,

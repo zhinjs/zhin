@@ -160,6 +160,8 @@ export interface AgentLoopTurnResult {
   model: string;
   toolCalls: ToolCallRecord[];
   thinking?: string;
+  /** Conversation projection applied only after the durable terminal commits. */
+  projectConversation?: () => Promise<void>;
 }
 
 export interface AgentLoopVisionTurnInput {
@@ -469,6 +471,10 @@ export async function* runAgentLoopTextTurnRun(
   let iterations = 0;
   let lastAssistantText = '';
   let lastUsage: TokenUsage | undefined;
+  const conversationBatches: Array<{
+    messages: AgentMessage[];
+    messageExtras: Array<import('@zhin.js/ai').AgentMessageExtra | undefined>;
+  }> = [];
 
   logPhase(host.phaseConfig, 'agent_loop.turn.start', sessionId, {
     model: modelId,
@@ -681,7 +687,7 @@ export async function* runAgentLoopTextTurnRun(
         msg.role === 'user' && i < userBatch.length ? userMessageExtra : undefined
       ));
       if (persistentConversation) {
-        await repo.appendMessages(sessionId, batch, { messageExtras });
+        conversationBatches.push({ messages: batch, messageExtras });
       }
     }
   }
@@ -700,6 +706,7 @@ export async function* runAgentLoopTextTurnRun(
       model: modelId,
       toolCalls,
       thinking,
+      projectConversation: () => appendConversationBatches(repo, sessionId, conversationBatches),
     };
   }
 
@@ -739,5 +746,19 @@ export async function* runAgentLoopTextTurnRun(
     model: modelId,
     toolCalls,
     thinking,
+    projectConversation: () => appendConversationBatches(repo, sessionId, conversationBatches),
   };
+}
+
+async function appendConversationBatches(
+  repo: import('@zhin.js/ai').ContextRepository,
+  sessionId: string,
+  batches: readonly {
+    messages: AgentMessage[];
+    messageExtras: Array<import('@zhin.js/ai').AgentMessageExtra | undefined>;
+  }[],
+): Promise<void> {
+  for (const batch of batches) {
+    await repo.appendMessages(sessionId, batch.messages, { messageExtras: batch.messageExtras });
+  }
 }
