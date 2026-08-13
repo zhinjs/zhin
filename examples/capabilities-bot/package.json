@@ -1,7 +1,7 @@
 {
   "name": "capabilities-bot",
   "private": true,
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "definePlugin 能力展示样板：一个插件 + 一个 zhin.config.yml 即可启动",
   "type": "module",
   "scripts": {

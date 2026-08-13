@@ -1,5 +1,28 @@
 # @zhin.js/adapter-process
 
+## 7.0.4
+
+### Patch Changes
+
+- Updated dependencies [0de46a8]
+- Updated dependencies [c106ecc]
+- Updated dependencies [b0f37ae]
+- Updated dependencies [daffd4c]
+- Updated dependencies [36c7400]
+- Updated dependencies [162fa34]
+- Updated dependencies [e40b048]
+- Updated dependencies [f1708c3]
+- Updated dependencies [e53444f]
+- Updated dependencies [92b0dd7]
+- Updated dependencies [a7df753]
+  - @zhin.js/host-http@1.0.8
+  - @zhin.js/im-contract@1.0.3
+  - @zhin.js/adapter@1.1.7
+  - @zhin.js/plugin-runtime@1.1.5
+  - @zhin.js/core@1.5.4
+  - @zhin.js/page@1.0.8
+  - @zhin.js/client@2.1.6
+
 ## 7.0.3
 
 ### Patch Changes

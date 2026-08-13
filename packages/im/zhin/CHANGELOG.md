@@ -1,5 +1,85 @@
 # zhin.js
 
+## 6.0.4
+
+### Patch Changes
+
+- ba08a2f: refactor(zhin): replace PermissionFeature with createPermissionHost
+
+  Zhin entry point now creates a standalone PermissionHost and passes it to
+  the message dispatcher, removing the legacy PermissionFeature registration.
+  Command permit checks are unified through the new permission system.
+
+- 92b0dd7: refactor: complete plugin dual-track elimination (Slices 3–4)
+
+  Remove all `getHostRootPlugin()` call sites (30+ occurrences across security,
+  collaboration, media, memory, prompt, and orchestrator modules); dead branches
+  collapse to defaults/fallbacks. Expand harness to ban `getHostRootPlugin()` in
+  all packages.
+
+  Stub `initAgentModule()` and `registerAI()` as throwing — the Plugin Runtime
+  (`zhin runtime start`) is the sole entry path; `basic/cli` assembles the Agent
+  stack directly.
+
+  Mark `PluginBase.provide()` / `.inject()` as `@deprecated @internal`; the
+  service bus is superseded by Scope + Token (introduced in Slice 2).
+
+  Simplify `host-plugin-registry.ts` to minimal no-op signatures. Move
+  `AIServiceRefs` type to `internal/` so live collaboration/orchestrator code
+  no longer depends on dead `init/` modules.
+
+  Clean `setHostRootPlugin` / `getHostRootPlugin` mocks from 8 test files;
+  update agent README to remove `initAgentModule` usage examples.
+
+- Updated dependencies [6f9c366]
+- Updated dependencies [373a56b]
+- Updated dependencies [0de46a8]
+- Updated dependencies [c106ecc]
+- Updated dependencies [b0f37ae]
+- Updated dependencies [c50aca3]
+- Updated dependencies [b08f7fe]
+- Updated dependencies [daffd4c]
+- Updated dependencies [36c7400]
+- Updated dependencies [a9fa72e]
+- Updated dependencies [c8de3ef]
+- Updated dependencies [60f0fc8]
+- Updated dependencies [574c990]
+- Updated dependencies [d096f16]
+- Updated dependencies [3f29623]
+- Updated dependencies [2916852]
+- Updated dependencies [d047869]
+- Updated dependencies [162fa34]
+- Updated dependencies [e62561e]
+- Updated dependencies [3eeeb46]
+- Updated dependencies [85d0f82]
+- Updated dependencies [61bfc1c]
+- Updated dependencies [04bad47]
+- Updated dependencies [e40b048]
+- Updated dependencies [5a5b1bb]
+- Updated dependencies [f1708c3]
+- Updated dependencies [d254a81]
+- Updated dependencies [7123c47]
+- Updated dependencies [05befc1]
+- Updated dependencies [0663b6a]
+- Updated dependencies [f28f9b3]
+- Updated dependencies [9f340f7]
+- Updated dependencies [e53444f]
+- Updated dependencies [5eedd26]
+- Updated dependencies [92b0dd7]
+- Updated dependencies [f919b6f]
+- Updated dependencies [098e411]
+- Updated dependencies [e1b7c01]
+- Updated dependencies [9b94f87]
+- Updated dependencies [a7df753]
+  - @zhin.js/agent@1.1.5
+  - @zhin.js/permission@1.0.1
+  - @zhin.js/plugin-runtime@1.1.5
+  - @zhin.js/core@1.5.4
+  - @zhin.js/ai@1.5.2
+  - @zhin.js/runtime@1.0.9
+  - @zhin.js/html-renderer@3.0.4
+  - @zhin.js/speech@3.0.4
+
 ## 6.0.3
 
 ### Patch Changes

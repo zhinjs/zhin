@@ -1,5 +1,11 @@
 # @zhin.js/client
 
+## 2.1.6
+
+### Patch Changes
+
+- @zhin.js/contract@1.0.11
+
 ## 2.1.5
 
 ### Patch Changes

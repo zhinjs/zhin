@@ -1,5 +1,24 @@
 # @zhin.js/command
 
+## 1.0.9
+
+### Patch Changes
+
+- ca92e03: feat(command): add alias/permit/shortcut fields and Unicode command names
+
+  Commands can now declare alias (multi-word static segment replacements),
+  permit (builtin DSL access control), and shortcut (global exact-match with
+  prefilled params). Static command filenames support Unicode names
+  (e.g. 赞我.ts) alongside ASCII kebab-case. Permit failures result in silent
+  non-match for graceful degradation.
+
+- Updated dependencies [c106ecc]
+- Updated dependencies [daffd4c]
+- Updated dependencies [e40b048]
+  - @zhin.js/permission@1.0.1
+  - @zhin.js/plugin-runtime@1.1.5
+  - @zhin.js/feature-kit@1.0.8
+
 ## 1.0.8
 
 ### Patch Changes
