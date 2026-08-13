@@ -12,7 +12,7 @@ export type {
 
 export type { TurnEnvelopeParts } from './envelope-parts.js';
 export type { TextTurnContextInput, TextTurnContextOutput } from './context-system.js';
-export type { TurnContextEnvelopeInput } from './turn-envelope.js';
+export type { TurnContextEnvelopeInput, TurnContextView } from './turn-envelope.js';
 export type { AgentsInstructionEntry } from './agents-instruction.js';
 export type { ModelResolverConfig } from './model-resolver.js';
 
@@ -29,7 +29,6 @@ export {
   buildTurnContextEnvelope,
   prependTurnContextEnvelope,
   formatSessionContextLine,
-  resolveQuoteSystemHint,
   TURN_CONTEXT_BEGIN,
   TURN_CONTEXT_END,
 } from './turn-envelope.js';

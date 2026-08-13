@@ -1,17 +1,13 @@
-import {
-  type AgentTurnMessage,
-  type Message,
-  QUOTE_CONTEXT_SYSTEM_EXTRA_KEY,
-  formatSenderRolesForLabel,
-  resolveIMSessionIdFromMessage,
-  senderRolesFromMessage,
-} from '@zhin.js/core';
 import { getFileMemoryContext, formatMemoryPathsHint } from '../memory-layers.js';
+import type { TurnRequest } from '../turn/turn-ingress.js';
+
 export const TURN_CONTEXT_BEGIN = '[Turn context]';
 export const TURN_CONTEXT_END = '[/Turn context]';
 
+export type TurnContextView = Pick<TurnRequest, 'origin' | 'principal' | 'session'>;
+
 export interface TurnContextEnvelopeInput {
-  commMessage?: Message;
+  turn?: TurnContextView;
   profileSummary?: string;
   toneHint?: string;
   deferredStats?: string;
@@ -23,30 +19,23 @@ export interface TurnContextEnvelopeInput {
   agentsContext?: string;
 }
 
-export function formatSessionContextLine(commMessage: Message): string | null {
-  const parts: string[] = [];
-  if (commMessage.$adapter) parts.push(`platform:${commMessage.$adapter}`);
-  if (commMessage.$endpoint) parts.push(`endpoint:${commMessage.$endpoint}`);
-  if (commMessage.$channel?.type && commMessage.$channel?.id) {
-    parts.push(`${commMessage.$channel.type}_id:${commMessage.$channel.id}`);
+export function formatSessionContextLine(turn: TurnContextView): string {
+  const origin = turn.origin;
+  if (origin.kind === 'im') {
+    return `Session: platform:${origin.platform} | endpoint:${origin.endpoint} | ${origin.scope}_id:${origin.sceneId}`;
   }
-  if (parts.length === 0) return null;
-  return `Session: ${parts.join(' | ')}`;
+  if (origin.kind === 'http') return `Session: origin:http | session_id:${origin.sessionId}`;
+  if (origin.kind === 'a2a') return `Session: origin:a2a | task_id:${origin.taskId}`;
+  if (origin.kind === 'schedule') return `Session: origin:schedule | job_id:${origin.jobId}`;
+  return `Session: origin:internal | source:${origin.source}`;
 }
 
-/** 当前发言者框架角色（master/trusted）；私聊无 `[sender:…]` 前缀时靠此行告知模型 */
-export function formatSenderContextLine(commMessage: Message): string | null {
-  const id = String(commMessage.$sender?.id ?? '').trim();
-  if (!id) return null;
-  const roles = formatSenderRolesForLabel([...senderRolesFromMessage(commMessage)]);
-  const name = commMessage.$sender?.name?.trim();
-  return name ? `Sender: id=${id} name=${name} roles=${roles}` : `Sender: id=${id} roles=${roles}`;
-}
-
-export function resolveQuoteSystemHint(commMessage?: AgentTurnMessage): string | undefined {
-  const hint = commMessage?.extra?.[QUOTE_CONTEXT_SYSTEM_EXTRA_KEY];
-  if (typeof hint !== 'string' || !hint.trim()) return undefined;
-  return hint.trim();
+export function formatSenderContextLine(turn: TurnContextView): string {
+  const { principal } = turn;
+  const roles = principal.roles.length > 0 ? principal.roles.join(',') : 'user';
+  return principal.displayName?.trim()
+    ? `Sender: id=${principal.subjectId} name=${principal.displayName.trim()} roles=${roles}`
+    : `Sender: id=${principal.subjectId} roles=${roles}`;
 }
 
 export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): string | null {
@@ -56,59 +45,36 @@ export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): strin
   const timeStr = now.toLocaleString('zh-CN', { timeZone: tz });
   lines.push(`Time: ${timeStr} (${tz})`);
 
-  if (input.modelLine?.trim()) {
-    lines.push(`Model: ${input.modelLine.trim()}`);
-  }
-  if (input.sdk?.trim()) {
-    lines.push(`Sdk: ${input.sdk.trim()}`);
-  }
+  if (input.modelLine?.trim()) lines.push(`Model: ${input.modelLine.trim()}`);
+  if (input.sdk?.trim()) lines.push(`Sdk: ${input.sdk.trim()}`);
 
-  if (input.commMessage) {
-    const sessionLine = formatSessionContextLine(input.commMessage);
-    if (sessionLine) lines.push(sessionLine);
-    const senderLine = formatSenderContextLine(input.commMessage);
-    if (senderLine) lines.push(senderLine);
-    const sessionKey = resolveIMSessionIdFromMessage(input.commMessage);
-    const memoryPaths = formatMemoryPathsHint(
-      String(input.commMessage.$adapter),
-      sessionKey,
-    );
-    if (memoryPaths) lines.push(`Memory paths: ${memoryPaths}`);
-    const fileMemory = getFileMemoryContext(
-      undefined,
-      String(input.commMessage.$adapter),
-      sessionKey,
-    );
-    if (fileMemory?.trim()) {
-      lines.push('Memory snapshot:');
-      lines.push(fileMemory.trim());
+  if (input.turn) {
+    lines.push(formatSessionContextLine(input.turn));
+    lines.push(formatSenderContextLine(input.turn));
+    if (input.turn.origin.kind === 'im') {
+      const platform = input.turn.origin.platform;
+      const sessionKey = input.turn.session.key;
+      const memoryPaths = formatMemoryPathsHint(platform, sessionKey);
+      if (memoryPaths) lines.push(`Memory paths: ${memoryPaths}`);
+      const fileMemory = getFileMemoryContext(undefined, platform, sessionKey);
+      if (fileMemory?.trim()) {
+        lines.push('Memory snapshot:');
+        lines.push(fileMemory.trim());
+      }
     }
   }
 
-  if (input.deferredStats?.trim()) {
-    lines.push(`Deferred catalog: ${input.deferredStats.trim()}`);
-  }
-  if (input.profileSummary?.trim()) {
-    lines.push(input.profileSummary.trim());
-  }
-  if (input.toneHint?.trim()) {
-    lines.push(`[Tone hint] ${input.toneHint.trim()}`);
-  }
-  if (input.activeSkillsContext?.trim()) {
-    lines.push(input.activeSkillsContext.trim());
-  }
-  if (input.quoteSystemHint?.trim()) {
-    lines.push(input.quoteSystemHint.trim());
-  }
-  if (input.collaborationHint?.trim()) {
-    lines.push(input.collaborationHint.trim());
-  }
-  if (input.agentsContext?.trim()) {
-    lines.push(input.agentsContext.trim());
-  }
+  if (input.deferredStats?.trim()) lines.push(`Deferred catalog: ${input.deferredStats.trim()}`);
+  if (input.profileSummary?.trim()) lines.push(input.profileSummary.trim());
+  if (input.toneHint?.trim()) lines.push(`[Tone hint] ${input.toneHint.trim()}`);
+  if (input.activeSkillsContext?.trim()) lines.push(input.activeSkillsContext.trim());
+  if (input.quoteSystemHint?.trim()) lines.push(input.quoteSystemHint.trim());
+  if (input.collaborationHint?.trim()) lines.push(input.collaborationHint.trim());
+  if (input.agentsContext?.trim()) lines.push(input.agentsContext.trim());
 
-  if (lines.length === 0) return null;
-  return `${TURN_CONTEXT_BEGIN}\n${lines.join('\n')}\n${TURN_CONTEXT_END}`;
+  return lines.length === 0
+    ? null
+    : `${TURN_CONTEXT_BEGIN}\n${lines.join('\n')}\n${TURN_CONTEXT_END}`;
 }
 
 export function prependTurnContextEnvelope(content: string, envelope: string | null | undefined): string {

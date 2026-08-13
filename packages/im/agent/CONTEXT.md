@@ -16,6 +16,10 @@ _避免使用_：commMessage、synthetic Message、bridge message、Message.extr
 仅在当前 turn 或明确派生 operation 内有效的能力端口，包括 `ReplyPort`、`DeliveryPort`、`ApprovalPort`、`ActivityPort`；Agent 核心通过端口请求副作用，不持有 Adapter、Endpoint、Plugin 或 Message。
 _避免使用_：Message.$reply、Adapter.sendMessage、host Plugin、回调字段包
 
+**Turn Context Envelope**:
+从 canonical Turn 的 origin、principal 与 session address 生成模型可见的运行时上下文。它不解析 IM `Message`；IM 入口只能在最外层 adapter 将已认证的平台字段投影为 Turn，Schedule、HTTP、A2A 与 Internal 直接使用各自 origin。
+_避免使用_：从 `$adapter/$endpoint/$channel/$sender` 读取上下文、为非 IM turn 伪造平台字段、Schedule 专用 prompt 分支
+
 **Turn Outcome**:
 Agent 执行的唯一终态，判别为 `completed | failed | cancelled | budget_exceeded`，包含输出内容、usage、tool calls 与 terminal reason；每个 turn 恰好产生一次，并先进入 Event Journal，再由入口决定同步返回、流式投影或投递。
 _避免使用_：string reply、throw-or-message 双轨、无终态 generator

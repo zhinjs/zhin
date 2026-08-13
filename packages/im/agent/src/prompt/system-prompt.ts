@@ -10,7 +10,7 @@ import { type AgentTurnMessage, type Message, resolveIMSessionIdFromMessage, sen
 import type { AgentMessage, AssistantMessage, UserMessage } from '@zhin.js/ai';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import { type ZhinAgentConfig, SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from '../config/index.js';
-import { resolveQuoteSystemHint } from '../context/turn-envelope.js';
+import { resolveQuoteSystemHint } from '../context/im-turn-context-adapter.js';
 import { getFileMemoryContext, formatMemoryPathsHint } from '../memory-layers.js';
 import {
   buildSenderRolesFilePermissionsPrompt,

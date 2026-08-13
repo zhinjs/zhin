@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import {
   buildTurnContextEnvelope,
   prependTurnContextEnvelope,
@@ -29,14 +28,13 @@ describe('buildTurnContextEnvelope', () => {
   });
 
   it('包含时间、Session、deferred 与 profile', () => {
-    const msg = mockCommMessage({
-      adapter: 'icqq',
-      endpoint: '8596238',
-      scope: 'group',
-      sceneId: '201193925',
-    });
     const envelope = buildTurnContextEnvelope({
-      commMessage: msg,
+      turn: turnContext({
+        origin: {
+          kind: 'im', platform: 'icqq', endpoint: '8596238',
+          scope: 'group', sceneId: '201193925',
+        },
+      }),
       profileSummary: 'User prefers concise answers.',
       toneHint: 'casual',
       deferredStats: 'weather(1)',
@@ -51,15 +49,27 @@ describe('buildTurnContextEnvelope', () => {
   });
 
   it('私聊也写入 Sender roles（无 group sender 前缀时模型仍能看见 master）', () => {
-    const msg = mockCommMessage({
-      adapter: 'qq',
-      endpoint: '知音',
-      scope: 'private',
-      senderId: '477561AD3A89AFCDABB6AFCB71FF54DF',
-      isMaster: true,
+    const envelope = buildTurnContextEnvelope({
+      turn: turnContext({
+        origin: { kind: 'im', platform: 'qq', endpoint: '知音', scope: 'private', sceneId: 'user' },
+        principal: { subjectId: '477561AD3A89AFCDABB6AFCB71FF54DF', roles: ['master'] },
+      }),
     });
-    const envelope = buildTurnContextEnvelope({ commMessage: msg });
     expect(envelope).toContain('Sender: id=477561AD3A89AFCDABB6AFCB71FF54DF roles=master');
+  });
+
+  it('describes non-IM turns without fabricating platform or endpoint fields', () => {
+    const envelope = buildTurnContextEnvelope({
+      turn: turnContext({
+        origin: { kind: 'schedule', jobId: 'daily-report' },
+        session: { key: 'schedule:daily-report' },
+        principal: { subjectId: 'owner', roles: ['trusted'] },
+      }),
+    });
+    expect(envelope).toContain('Session: origin:schedule | job_id:daily-report');
+    expect(envelope).toContain('Sender: id=owner roles=trusted');
+    expect(envelope).not.toContain('platform:');
+    expect(envelope).not.toContain('endpoint:');
   });
 
   it('prependTurnContextEnvelope 前缀到用户正文', () => {
@@ -95,3 +105,17 @@ describe('buildTurnContextEnvelope', () => {
     expect(out.content[1]?.type).toBe('image_url');
   });
 });
+
+function turnContext(overrides: Partial<import('../../src/turn/turn-ingress.js').TurnRequest> = {}) {
+  return {
+    identity: { traceId: 'trace', turnId: 'turn' },
+    origin: { kind: 'http', sessionId: 'http-1' } as const,
+    principal: { subjectId: 'user', roles: ['user'] },
+    input: { text: 'hello' },
+    session: { key: 'http:http-1' },
+    policy: { permissions: ['user'], unattended: false },
+    signal: new AbortController().signal,
+    ports: {},
+    ...overrides,
+  } satisfies import('../../src/turn/turn-ingress.js').TurnRequest;
+}

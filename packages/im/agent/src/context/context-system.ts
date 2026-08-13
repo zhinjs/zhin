@@ -11,8 +11,11 @@ import {
 import { buildAgentsEnvelopeContext } from './agents-instruction.js';
 import {
   buildTurnContextEnvelope,
-  resolveQuoteSystemHint,
 } from './turn-envelope.js';
+import {
+  resolveQuoteSystemHint,
+  turnContextViewFromMessage,
+} from './im-turn-context-adapter.js';
 import { resolveModelCandidates } from './model-resolver.js';
 import { getScheduleTurnContext } from '../internal/turn-context.js';
 export type { TurnEnvelopeParts } from './envelope-parts.js';
@@ -115,7 +118,7 @@ export class ContextSystem {
     const agentsContext = await buildAgentsEnvelopeContext();
 
     const turnEnvelope = isScheduleTurn ? null : buildTurnContextEnvelope({
-      commMessage,
+      turn: turnContextViewFromMessage(commMessage),
       profileSummary: envelopeParts.profileSummary,
       toneHint: envelopeParts.toneHint,
       deferredStats,
