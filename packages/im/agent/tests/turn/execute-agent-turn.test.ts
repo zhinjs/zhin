@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { TurnEvent } from '../../src/event/turn-event.js';
 import { executeAgentTurn } from '../../src/turn/execute-agent-turn.js';
 import { createTurnIngress, type TurnIngressInput } from '../../src/turn/turn-ingress.js';
+import { TurnJournalCommitError } from '../../src/turn/journal-integrity.js';
 
 function turn(): ReturnType<typeof createTurnIngress> {
   return createTurnIngress({
@@ -89,6 +90,28 @@ describe('executeAgentTurn', () => {
     });
     expect(journal.filter((event) => event.type === 'error')).toHaveLength(1);
     expect(journal.at(-1)).toMatchObject({ type: 'error', recoverable: true });
+  });
+
+  it('reports a tool fact integrity failure with the stable journal error code', async () => {
+    const journal: TurnEvent[] = [];
+    const outcome = await executeAgentTurn(turnWithJournal(journal), async function* () {
+      yield* events([]);
+      throw new TurnJournalCommitError(new Error('tool fact unavailable'));
+    });
+
+    expect(outcome).toMatchObject({
+      status: 'failed',
+      error: {
+        code: 'turn_journal_commit_failed',
+        message: 'tool fact unavailable',
+        retryable: false,
+      },
+    });
+    expect(journal.at(-1)).toMatchObject({
+      type: 'error',
+      code: 'turn_journal_commit_failed',
+      recoverable: false,
+    });
   });
 
   it('commits one durable cancellation terminal when the ingress aborts', async () => {

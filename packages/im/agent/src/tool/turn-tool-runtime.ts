@@ -5,6 +5,7 @@ import type { TurnIngress } from '../turn/turn-ingress.js';
 import { isApprovalPortAvailable } from '../session/session-interaction-port.js';
 import type { AgentTool } from '@zhin.js/ai';
 import type { ToolExecutionAuthority } from '../core/tool-execution-authority.js';
+import { TurnJournalCommitError } from '../turn/journal-integrity.js';
 
 export type TurnToolOutcome =
   | Readonly<{ status: 'completed'; output: unknown; durationMs: number }>
@@ -58,6 +59,7 @@ export class TurnToolRuntime {
       await this.#append({ type: 'tool_result', toolName: name, output, durationMs, toolUseId });
       return Object.freeze({ status: 'completed', output, durationMs });
     } catch (error) {
+      if (error instanceof TurnJournalCommitError) throw error;
       const durationMs = Date.now() - startedAt;
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, durationMs);
       const message = error instanceof Error ? error.message : String(error);
@@ -80,7 +82,11 @@ export class TurnToolRuntime {
   }
 
   async #append(event: import('../event/turn-event.js').TurnEvent): Promise<void> {
-    await this.turn.ports.journal.append(event);
+    try {
+      await this.turn.ports.journal.append(event);
+    } catch (error) {
+      throw new TurnJournalCommitError(error);
+    }
   }
 }
 

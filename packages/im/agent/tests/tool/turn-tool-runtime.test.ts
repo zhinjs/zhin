@@ -202,12 +202,23 @@ describe('TurnToolRuntime', () => {
     expect(execute).not.toHaveBeenCalled();
     expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_cancelled']);
   });
+
+  it('treats a tool journal failure as a non-recoverable turn integrity error', async () => {
+    const execute = vi.fn(async () => 'must not run');
+    const { turn } = fixture({ journalError: new Error('journal offline') });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never')]);
+
+    await expect(runtime.execute('danger', {}, 'call-journal'))
+      .rejects.toMatchObject({ name: 'TurnJournalCommitError', message: 'journal offline' });
+    expect(execute).not.toHaveBeenCalled();
+  });
 });
 
 function fixture(options: {
   signal?: AbortSignal;
   approval?: import('../../src/session/session-interaction-port.js').ApprovalPort;
   network?: TurnPolicyContext['network'];
+  journalError?: Error;
 } = {}) {
   const events: TurnEvent[] = [];
   const turn = createTurnIngress({
@@ -224,7 +235,12 @@ function fixture(options: {
     capabilities: { tools: ['danger'], skills: [] },
     signal: options.signal ?? new AbortController().signal,
     ports: {
-      journal: { append: (event) => { events.push(event); } },
+      journal: {
+        append: (event) => {
+          if (options.journalError) throw options.journalError;
+          events.push(event);
+        },
+      },
       ...(options.approval ? { approval: options.approval } : {}),
     },
   });

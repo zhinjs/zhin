@@ -35,6 +35,7 @@ import type { AgentPromptProfile } from '../prompt/turn-prompt-profile.js';
 import type { TurnContextView } from '../context/turn-envelope.js';
 import type { ToolExecutionAuthority } from './tool-execution-authority.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
+import { TurnJournalCommitError } from '../turn/journal-integrity.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
 /** 入库前解开模型误包的 JSON 字符串，避免下一轮历史继续叠转义。 */
@@ -613,6 +614,7 @@ export async function* runAgentLoopTextTurnRun(
         toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText });
         return toolResultToAgentMessage(toolCall, finalText, false);
       } catch (err) {
+        if (err instanceof TurnJournalCommitError) throw err;
         if (signal?.aborted) {
           throw signal.reason instanceof Error ? signal.reason : new Error('Tool execution cancelled');
         }

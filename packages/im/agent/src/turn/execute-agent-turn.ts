@@ -2,6 +2,7 @@ import type { Usage } from '@zhin.js/ai';
 import type { TurnEvent, TurnTerminalEvent } from '../event/turn-event.js';
 import type { TurnIngress, TurnOutcome } from './turn-ingress.js';
 import { TurnTerminalGate } from './turn-terminal.js';
+import { TurnJournalCommitError } from './journal-integrity.js';
 
 export interface TurnTerminalProjection {
   project(): void | Promise<void>;
@@ -73,9 +74,11 @@ export async function executeAgentTurn(
         }
       : {
           type: 'error',
-          code: 'turn_engine_failed',
+          code: error instanceof TurnJournalCommitError
+            ? 'turn_journal_commit_failed'
+            : 'turn_engine_failed',
           error: asError(error),
-          recoverable: true,
+          recoverable: !(error instanceof TurnJournalCommitError),
         };
     return commitSyntheticTerminal(turn, gate, terminal, observedUsage);
   }
