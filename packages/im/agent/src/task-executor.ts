@@ -2,8 +2,9 @@
 import { type Message, createSyntheticMessage, resolveIMSessionIdFromMessage, getLogger } from '@zhin.js/core';
 import type { ZhinAgent } from './zhin-agent/index.js';
 import { createNotificationRouter, type NotificationRouter } from './assistant/notification-router.js';
-import type { ScheduleJob, ScheduleJobCreator, ScheduleJobExecutionPlan } from './assistant/types.js';
-import { captureScheduleJobCreator, senderFromScheduleCreator } from './assistant/job-creator.js';
+import type { ScheduleJob, ScheduleJobExecutionPlan } from './assistant/types.js';
+import { scheduleJobCreatorFromPrincipal, senderFromScheduleCreator } from './assistant/job-creator.js';
+import type { ScheduleInvocationContext } from './assistant/schedule-job-service.js';
 import { deliverScheduleToAdapter } from './assistant/deliver-schedule-to-adapter.js';
 import { KeyedMutex } from './utils/keyed-mutex.js';
 import {
@@ -32,7 +33,7 @@ export interface TaskExecutorDeps {
 }
 
 export interface TaskExecutionOptions {
-  previewSourceMessage?: Message;
+  previewSource?: ScheduleInvocationContext;
 }
 
 function buildExecutionMessage(job: ScheduleJob, notify: import('./assistant/types.js').JobNotify): Message {
@@ -52,18 +53,17 @@ function buildExecutionMessage(job: ScheduleJob, notify: import('./assistant/typ
   });
 }
 
-function buildPreviewMessage(job: ScheduleJob, source: Message): Message {
-  const creator = demoteScheduleCreator(job.createdBy ?? {
-    userId: String(source.$sender.id),
-    name: source.$sender.name,
-    roles: source.$sender.isMaster ? ['master'] : source.$sender.isTrusted ? ['trusted'] : ['user'],
-  });
+function buildPreviewMessage(job: ScheduleJob, source: ScheduleInvocationContext): Message {
+  const creator = demoteScheduleCreator(
+    job.createdBy ?? scheduleJobCreatorFromPrincipal(source.principal),
+  );
+  const im = source.origin.kind === 'im' ? source.origin : undefined;
   return createSyntheticMessage({
-    adapter: String(source.$adapter),
-    endpoint: source.$endpoint,
+    adapter: im?.platform ?? source.origin.kind,
+    endpoint: im?.endpoint ?? 'preview',
     sender: senderFromScheduleCreator(creator),
-    channel: source.$channel ?? { type: 'private', id: creator.userId },
-    id: source.$id,
+    channel: { type: im?.scope ?? 'private', id: im?.sceneId ?? creator.userId },
+    id: im?.messageId,
   });
 }
 
@@ -75,7 +75,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
   });
 
   async function execute(job: ScheduleJob, options: TaskExecutionOptions = {}): Promise<TaskExecutionResult> {
-    const previewSource = options.previewSourceMessage;
+    const previewSource = options.previewSource;
     const effectiveNotify = router.resolveEffectiveNotify(job.notify, deps.defaultNotify);
     const commMessage = previewSource
       ? buildPreviewMessage(job, previewSource)
@@ -87,7 +87,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       emitter.emit(name, emitter.createPayload(sessionId, commMessage, 'text'));
     };
     const lockKey = previewSource
-      ? `preview:${resolveIMSessionIdFromMessage(previewSource)}`
+      ? `preview:${previewSource.sessionKey}`
       : (commMessage.$channel?.id ?? 'cron');
 
     event('schedule.start');
@@ -109,7 +109,6 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       event('schedule.error');
       logger.error(`[TaskExecutor] 执行失败: ${result.error ?? 'unknown error'}`);
     } else if (previewSource) {
-      if (result.output && typeof previewSource.$reply === 'function') await previewSource.$reply(result.output);
       event('schedule.finish');
     } else {
       if (result.output) {
@@ -128,12 +127,12 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
 
   async function preview(
     prompt: string,
-    sourceMessage: Message,
-    options: { createdBy?: ScheduleJobCreator; activityFeedback?: boolean } = {},
+    source: ScheduleInvocationContext,
+    options: { activityFeedback?: boolean } = {},
   ): Promise<TaskExecutionResult> {
     const now = Date.now();
     const job: ScheduleJob = {
-      id: `preview-${sourceMessage.$id ?? now}`,
+      id: `preview-${now}`,
       enabled: true,
       schedule: { kind: 'at', atMs: now },
       action: { kind: 'agent', prompt },
@@ -142,10 +141,10 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       updatedAt: now,
       state: {},
       source: 'manual',
-      createdBy: options.createdBy ?? captureScheduleJobCreator(sourceMessage),
+      createdBy: scheduleJobCreatorFromPrincipal(source.principal),
       activityFeedback: options.activityFeedback,
     };
-    return execute(job, { previewSourceMessage: sourceMessage });
+    return execute(job, { previewSource: source });
   }
 
   return { execute, preview, resolveAdapter: deps.resolveAdapter };

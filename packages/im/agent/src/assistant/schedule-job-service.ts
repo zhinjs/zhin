@@ -1,7 +1,7 @@
-import { type Message, messageToIMDeliveryTarget } from '@zhin.js/core';
+import type { ToolInvocationContext } from '@zhin.js/tool';
 import type { FestivalName } from '@zhin.js/kernel';
 import type { ScheduleJobEngine } from './job-engine.js';
-import { captureScheduleJobCreator, parseScheduleJobCreator } from './job-creator.js';
+import { parseScheduleJobCreator, scheduleJobCreatorFromPrincipal } from './job-creator.js';
 import { parseExecutionPlanFromArgs } from './schedule-execution.js';
 import { parseJobNotify } from './notification-router.js';
 import { buildJobScheduleFromCronInput } from '../schedule-cron.js';
@@ -29,6 +29,11 @@ export interface ScheduleAddInput {
   budget?: ScheduleJob['budget'];
   enabled?: boolean;
 }
+
+export type ScheduleInvocationContext = Pick<
+  ToolInvocationContext,
+  'origin' | 'principal' | 'sessionKey'
+>;
 
 export async function addScheduleJob(
   engine: ScheduleJobEngine,
@@ -89,14 +94,29 @@ function buildScheduleFromRecord(record: Record<string, unknown>): JobSchedule |
 
 function resolveNotifyFromToolArgs(
   args: Record<string, unknown>,
-  commMessage?: Message,
+  context: ScheduleInvocationContext,
 ): JobNotify | { error: string } {
   const notifyChannel = String(args.notify_channel || 'im').toLowerCase();
   if (notifyChannel === 'silent') return { channel: 'silent' };
   if (notifyChannel === 'log') return { channel: 'log' };
   if (notifyChannel !== 'im') return { error: `notify_channel 无效: ${notifyChannel}` };
-  const target = commMessage ? messageToIMDeliveryTarget(commMessage) : undefined;
-  return target ? { channel: 'im', target } : { channel: 'silent' };
+  if (context.origin.kind !== 'im') {
+    return { error: 'IM notify requires an IM invocation origin' };
+  }
+  return {
+    channel: 'im',
+    target: {
+      channel: 'im',
+      scene: {
+        platform: context.origin.platform,
+        endpointKey: context.origin.endpoint,
+        sceneId: context.origin.sceneId,
+        kind: context.origin.scope,
+        senderId: context.principal.subjectId,
+      },
+      ...(context.origin.threadId ? { threadId: context.origin.threadId } : {}),
+    },
+  };
 }
 
 function positiveNumber(value: unknown): number | undefined {
@@ -129,7 +149,7 @@ export function parseScheduleNotifyFromRpc(message: Record<string, unknown>): Jo
 
 export function parseScheduleAddFromToolArgs(
   args: Record<string, unknown>,
-  commMessage?: Message,
+  context: ScheduleInvocationContext,
 ): ScheduleAddInput | { error: string } {
   const built = buildScheduleFromRecord(args);
   if ('error' in built) return built;
@@ -137,7 +157,7 @@ export function parseScheduleAddFromToolArgs(
   const prompt = String(args.prompt ?? '');
   if (!prompt.trim()) return { error: '请提供 prompt' };
 
-  const notify = resolveNotifyFromToolArgs(args, commMessage);
+  const notify = resolveNotifyFromToolArgs(args, context);
   if ('error' in notify) return notify;
 
   const executionPlan = parseExecutionPlanFromArgs(args, prompt);
@@ -149,7 +169,7 @@ export function parseScheduleAddFromToolArgs(
     notify,
     label: args.label != null ? String(args.label) : undefined,
     source: 'schedule',
-    createdBy: captureScheduleJobCreator(commMessage),
+    createdBy: scheduleJobCreatorFromPrincipal(context.principal),
     executionPlan,
     activityFeedback: args.activity_feedback === true ? true : undefined,
     budget: parseScheduleBudget(args),

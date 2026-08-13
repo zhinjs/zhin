@@ -20,7 +20,6 @@ import {
   DEFAULT_ALWAYS_LOADED_TOOLS,
   type ZhinAgentConfig,
 } from '../config/index.js';
-import { provideScheduleManager } from '../schedule-manager.js';
 import { ScheduleEngine, getScheduleEngine, setScheduleEngine } from '@zhin.js/kernel';
 import { DisposeStack } from '@zhin.js/plugin-runtime';
 import { createTaskExecutor } from '../task-executor.js';
@@ -402,14 +401,6 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         events: ingress.isEnabled(),
         profile: assistantCfg.profile?.enabled === true,
       }));
-    }
-
-    if (scheduleFeature) {
-      provideScheduleManager({ lifecycle: generationLifecycle }, {
-        scheduleFeature,
-        engine: jobEngine,
-        previewTask: (prompt, message, options) => executor.preview(prompt, message, options),
-      });
     }
 
     // HEARTBEAT.md 周期检查（与 schedule-jobs 并行）

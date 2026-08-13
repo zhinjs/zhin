@@ -66,10 +66,10 @@ path, rather than racing a Promise and leaving work running in the background.
 `TurnCancelledError` means an explicit caller cancellation. Hosts should not
 turn either condition into an ordinary assistant reply.
 
-Composition root 挂载进程级调度或 Assistant 入口时，应使用
-`registerScheduleManager()` / `registerAssistantRuntime()` 并把返回的 disposer 交给当前
-generation lifecycle。旧式 `set*` API 仅供非 HMR 的 legacy bootstrap 使用；它不表达
-跨 generation 所有权。
+Composition root 为每个 generation 创建独立的 `ScheduleManager`，并将它传给
+`createScheduleTools(manager)`；返回的 Tool definitions 闭包绑定该 manager，随 snapshot
+一起发布和退休。禁止通过模块级注册表解析“最新”调度引擎，否则旧 generation 的在途
+turn 会跨代执行。
 
 ## 功能特性
 

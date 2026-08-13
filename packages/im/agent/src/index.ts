@@ -273,12 +273,10 @@ export { ZHIN_WEB_USER_AGENT, WEB_TOOL_FETCH_TIMEOUT_MS } from './builtin/web-to
 
 export {
   createScheduleTools,
-  provideScheduleManager,
-  getScheduleManager,
   generateScheduleJobId,
   SCHEDULE_JOBS_FILENAME,
 } from './schedule-manager.js';
-export type { ScheduleManager } from './schedule-manager.js';
+export type { ScheduleManager, ScheduleToolRegistration } from './schedule-manager.js';
 
 export {
   ScheduleJobEngine,
@@ -305,7 +303,7 @@ export {
   SCHEDULE_JOBS_VERSION,
   ASSISTANT_JOBS_FILENAME,
   syncProfileRoutinesToStore,
-  captureScheduleJobCreator,
+  scheduleJobCreatorFromPrincipal,
   parseScheduleJobCreator,
   parseExecutionPlanFromArgs,
   parseScheduleJobExecutionPlan,
@@ -330,6 +328,7 @@ export type {
   ScheduleJobFile,
   ScheduleJobCreator,
   ScheduleJobExecutionPlan,
+  ScheduleInvocationContext,
   AssistantJob,
   AssistantJobFile,
   AssistantEventRequest,

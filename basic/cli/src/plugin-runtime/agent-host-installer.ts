@@ -39,7 +39,6 @@ import {
   defineAiDatabaseModels,
   createScheduleJobStoreFromConfig,
   createScheduleTools,
-  provideScheduleManager,
   ScheduleJobEngine,
   JobWorker,
   createTaskExecutor,
@@ -242,7 +241,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 
     let zhinAgent: ZhinAgent | undefined;
     let seedPresets: () => Promise<number>;
-    let scheduleTools: Tool[] = [];
+    let scheduleTools: ReturnType<typeof createScheduleTools> = [];
     let homeTools: BootstrapAssistantHomeResult['tools'] = [];
     let assistantEnabled = false;
     let collaborationReady = false;
@@ -401,7 +400,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     for (const tool of [
       ...(options.extraTools ?? []),
       ...deferredMetaTools,
-      ...scheduleTools,
       bashTool,
     ]) {
       if (!tool.description?.trim()) {
@@ -421,7 +419,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       addFeature(projected.feature, projected.name, projected.definition);
     }
 
-    for (const tool of homeTools) {
+    for (const tool of [...scheduleTools, ...homeTools]) {
       addFeature(tool.definition.$feature, tool.name, tool.definition);
     }
 
@@ -606,7 +604,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 .map((tool) => capabilityToTool(tool, toolInvocationFromTurn(request))),
               ...(options.extraTools ?? []).map(toTool),
               ...deferredMetaTools,
-              ...scheduleTools,
               bashTool,
             ];
             toolCount = tools.length;
@@ -703,7 +700,7 @@ function wireRuntimeSchedule(
   assistantRaw: AssistantConfig | undefined,
   lifecycle: DisposeStack,
 ): {
-  tools: Tool[];
+  tools: ReturnType<typeof createScheduleTools>;
   dispose: () => void;
   assistantEnabled: boolean;
   notificationRouter: ReturnType<typeof createNotificationRouter>;
@@ -775,13 +772,14 @@ function wireRuntimeSchedule(
     defaultNotify,
   });
 
-  provideScheduleManager({ lifecycle }, {
+  const scheduleManager = {
     scheduleFeature: {
       getStatus: () => [],
     },
     engine: jobEngine,
-    previewTask: (prompt, message, options) => executor.preview(prompt, message, options),
-  });
+    previewTask: (prompt: string, context: import('@zhin.js/agent').ScheduleInvocationContext, options?: { activityFeedback?: boolean }) =>
+      executor.preview(prompt, context, options),
+  };
 
   let assistantRuntime: AssistantRuntimeHandle | null = null;
   if (assistantCfg.enabled) {
@@ -826,18 +824,7 @@ function wireRuntimeSchedule(
     jobEngine.load();
   }
 
-  const tools = createScheduleTools().map((tool) => {
-    const plain = tool.toTool();
-    return {
-      name: plain.name,
-      description: plain.description,
-      parameters: plain.parameters as Tool['parameters'],
-      source: 'builtin',
-      execute: plain.execute as Tool['execute'],
-      tags: plain.tags,
-      keywords: plain.keywords,
-    } satisfies Tool;
-  });
+  const tools = createScheduleTools(scheduleManager);
 
   return {
     tools,

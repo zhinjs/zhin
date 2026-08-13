@@ -1,16 +1,14 @@
-/**
- * 持久化调度任务 + AI 工具
- */
-import { ZhinTool, type Message } from '@zhin.js/core';
+/** Generation-owned schedule management and canonical Agent Tool definitions. */
 import {
-  createGenerationStore,
-  type Dispose,
-  type GenerationStoreContext,
-} from '@zhin.js/plugin-runtime';
+  defineAgentTool,
+  type AgentToolDefinition,
+  type ToolExecutionContext,
+} from '@zhin.js/tool';
 import {
   addScheduleJob,
   generateScheduleJobId,
   parseScheduleAddFromToolArgs,
+  type ScheduleInvocationContext,
 } from './assistant/schedule-job-service.js';
 import type { ScheduleJobEngine } from './assistant/job-engine.js';
 import type { TaskExecutionResult } from './task-executor.js';
@@ -29,175 +27,133 @@ export interface ScheduleManager {
     }>;
   };
   engine: ScheduleJobEngine | null;
-  /** 调度任务预演（dry-run） */
   previewTask?: (
     prompt: string,
-    message: Message,
+    context: ScheduleInvocationContext,
     options?: { activityFeedback?: boolean },
   ) => Promise<TaskExecutionResult>;
 }
 
-const store = createGenerationStore<ScheduleManager>('zhin.agent.schedule-manager');
-
-/** Generation-owned registration：随 `context.lifecycle` 反注册。 */
-export function provideScheduleManager(
-  context: GenerationStoreContext,
-  manager: ScheduleManager,
-): Dispose {
-  return store.provide(context, manager);
-}
-
-export function getScheduleManager(): ScheduleManager | null {
-  return store.tryUse() ?? null;
+export interface ScheduleToolRegistration {
+  readonly name: string;
+  readonly definition: Readonly<AgentToolDefinition<Record<string, unknown>, unknown>>;
 }
 
 export { generateScheduleJobId };
 
-export function createScheduleTools(): ZhinTool[] {
-  const listTool = new ZhinTool('schedule_list')
-    .desc('列出所有调度任务：内存任务与持久化 schedule-jobs.json')
-    .keyword('定时任务', 'schedule', '计划任务')
-    .tag('schedule', '定时')
-    .execute(async () => {
-      const m = getScheduleManager();
-      if (!m) return { error: '调度服务不可用' };
-      const memory = m.scheduleFeature.getStatus();
-      const persistent = m.engine
-        ? (await m.engine.listJobs()).map((j) => ({
-            type: 'persistent' as const,
-            id: j.id,
-            schedule: j.schedule,
-            prompt: j.action.kind === 'agent' ? j.action.prompt : undefined,
-            label: j.label,
-            enabled: j.enabled,
-            notify: j.notify,
-            createdAt: j.createdAt,
-            state: j.state,
-          }))
-        : [];
-      return { memory, persistent };
-    });
+function schema(
+  properties: Record<string, unknown> = {},
+  required: readonly string[] = [],
+): Readonly<Record<string, unknown>> {
+  return Object.freeze({ type: 'object', properties: Object.freeze(properties), required: Object.freeze([...required]) });
+}
 
-  const addTool = new ZhinTool('schedule_add')
-    .desc(
-      '添加持久化调度任务。schedule_kind: solar|lunar|workday|freeDay|holiday。'
-      + '中国大陆「工作日」必须用 workday（法定工作日含调休）。'
-      + 'workday 示例：schedule_kind=workday, cron="0 0 9 * * *"。'
-      + '或 delay_minutes 一次性。',
-    )
-    .tag('schedule', '定时')
-    .param('schedule_kind', {
-      type: 'string',
-      description: 'solar|lunar|workday|freeDay|holiday。（默认 solar）',
-    })
-    .param('cron', {
-      type: 'string',
-      description: '6 段 cron（秒 分 时 日 月 周）。workday 仅填时刻如 "0 0 9 * * *"，日/月/周用 *',
-    })
-    .param('delay_minutes', { type: 'number', description: '一次性延迟（分钟）' })
-    .param('prompt', { type: 'string', description: '到点 prompt' }, true)
-    .param('label', { type: 'string', description: '标签' })
-    .param('notify_channel', { type: 'string', description: 'im | silent | log' })
-    .param('activity_feedback', {
-      type: 'boolean',
-      description: '到点执行时是否向 IM 发送 reaction/typing，默认 false',
-    })
-    .param('budget_max_tokens', { type: 'number', description: '本任务 token 硬上限（默认 32000）' })
-    .param('budget_max_tool_calls', { type: 'number', description: '本任务工具调用硬上限（默认 15）' })
-    .param('budget_timeout_ms', { type: 'number', description: '本任务执行超时毫秒数（默认 120000）' })
-    .param('execution_plan', {
-      type: 'object',
-      description: '预演确认后的执行计划 { prompt, tools?, skills? }',
-    })
-    .param('refined_prompt', { type: 'string', description: '预演 refine 后的 prompt' })
-    .param('tools', { type: 'string', description: '逗号分隔的工具名（来自预演）' })
-    .param('skills', { type: 'string', description: '逗号分隔的技能名（来自预演）' })
-    .execute(async (args, commMessage) => {
-      const m = getScheduleManager();
-      if (!m?.engine) return { error: '持久化调度引擎不可用' };
+function registration(
+  name: string,
+  description: string,
+  inputSchema: Readonly<Record<string, unknown>>,
+  execute: (input: Record<string, unknown>, context: ToolExecutionContext) => unknown | Promise<unknown>,
+): ScheduleToolRegistration {
+  return Object.freeze({
+    name,
+    definition: defineAgentTool<Record<string, unknown>, unknown>({
+      description,
+      inputSchema,
+      execute,
+    }),
+  });
+}
 
-      const input = parseScheduleAddFromToolArgs(args, commMessage);
-      if ('error' in input) return { error: input.error };
-
-      const job = await addScheduleJob(m.engine, {
-        ...input,
-        id: generateScheduleJobId(),
-      });
-
-      if (job.schedule.kind === 'at') {
-        const timeStr = new Date(job.schedule.atMs).toLocaleString('zh-CN', { hour12: false });
-        return { success: true, id: job.id, message: `已安排一次性任务，将在 ${timeStr} 执行` };
-      }
-      return { success: true, id: job.id, message: '已添加调度任务' };
-    });
-
-  const removeTool = new ZhinTool('schedule_remove')
-    .desc('删除持久化调度任务（按任务 ID）')
-    .keyword('删除定时', '取消任务', 'schedule remove')
-    .tag('schedule', '定时')
-    .param('id', { type: 'string', description: '任务 ID' }, true)
-    .execute(async (args) => {
-      const m = getScheduleManager();
-      if (!m?.engine) return { error: '引擎不可用' };
-      return (await m.engine.removeJob(args.id as string))
-        ? { success: true }
-        : { error: '未找到' };
-    });
-
-  const pauseTool = new ZhinTool('schedule_pause')
-    .desc('暂停持久化调度任务（按任务 ID，可 resume 恢复）')
-    .keyword('暂停定时', 'schedule pause')
-    .tag('schedule', '定时')
-    .param('id', { type: 'string', description: '任务 ID' }, true)
-    .execute(async (args) => {
-      const m = getScheduleManager();
-      if (!m?.engine) return { error: '引擎不可用' };
-      return (await m.engine.pauseJob(args.id as string)) ? { success: true } : { error: '未找到' };
-    });
-
-  const resumeTool = new ZhinTool('schedule_resume')
-    .desc('恢复已暂停的持久化调度任务（按任务 ID）')
-    .keyword('恢复定时', 'schedule resume')
-    .tag('schedule', '定时')
-    .param('id', { type: 'string', description: '任务 ID' }, true)
-    .execute(async (args) => {
-      const m = getScheduleManager();
-      if (!m?.engine) return { error: '引擎不可用' };
-      return (await m.engine.resumeJob(args.id as string)) ? { success: true } : { error: '未找到' };
-    });
-
-  const previewTool = new ZhinTool('schedule_preview')
-    .desc(
-      '预演调度任务（dry-run）：按创建者身份执行一次，将结果与推荐 tools/skills 返回供确认；'
-      + '确认后请用 schedule_add 并传入 execution_plan 创建正式任务。',
-    )
-    .tag('schedule', '定时', '预演')
-    .param('prompt', { type: 'string', description: '任务 prompt' }, true)
-    .param('activity_feedback', {
-      type: 'boolean',
-      description: '预演时是否显示 reaction/typing，默认 false',
-    })
-    .execute(async (args, commMessage) => {
-      const m = getScheduleManager();
-      if (!m?.previewTask) return { error: '预演服务不可用' };
-      if (!commMessage) return { error: '缺少会话上下文，无法预演' };
-
-      const prompt = String(args.prompt);
-      const result = await m.previewTask(prompt, commMessage, {
-        activityFeedback: args.activity_feedback === true,
-      });
-
-      if (!result.success) {
-        return { error: result.error || '预演失败' };
-      }
-
-      return {
-        success: true,
-        preview: result.responseText,
-        execution_plan: result.executionPlan,
-        message: '预演完成。确认无误后使用 schedule_add 并传入 execution_plan 创建正式任务。',
-      };
-    });
-
-  return [listTool, addTool, previewTool, removeTool, pauseTool, resumeTool];
+export function createScheduleTools(manager: ScheduleManager): readonly ScheduleToolRegistration[] {
+  return Object.freeze([
+    registration(
+      'schedule_list',
+      '列出所有调度任务：内存任务与持久化 schedule-jobs.json',
+      schema(),
+      async () => {
+        const memory = manager.scheduleFeature.getStatus();
+        const persistent = manager.engine
+          ? (await manager.engine.listJobs()).map((job) => ({
+              type: 'persistent' as const,
+              id: job.id,
+              schedule: job.schedule,
+              prompt: job.action.kind === 'agent' ? job.action.prompt : undefined,
+              label: job.label,
+              enabled: job.enabled,
+              notify: job.notify,
+              createdAt: job.createdAt,
+              state: job.state,
+            }))
+          : [];
+        return { memory, persistent };
+      },
+    ),
+    registration(
+      'schedule_add',
+      '添加持久化调度任务。中国大陆工作日必须使用 workday；支持 6 段 cron 或 delay_minutes 一次性任务。',
+      schema({
+        schedule_kind: { type: 'string', description: 'solar|lunar|workday|freeDay|holiday，默认 solar' },
+        cron: { type: 'string', description: '6 段 cron（秒 分 时 日 月 周）' },
+        delay_minutes: { type: 'number', description: '一次性延迟（分钟）' },
+        prompt: { type: 'string', description: '到点 prompt' },
+        label: { type: 'string', description: '标签' },
+        notify_channel: { type: 'string', description: 'im | silent | log' },
+        activity_feedback: { type: 'boolean', description: '是否发布 activity feedback' },
+        budget_max_tokens: { type: 'number', description: 'token 硬上限' },
+        budget_max_tool_calls: { type: 'number', description: '工具调用硬上限' },
+        budget_timeout_ms: { type: 'number', description: '执行超时毫秒数' },
+        execution_plan: { type: 'object', description: '预演确认后的执行计划' },
+        refined_prompt: { type: 'string', description: '预演 refine 后的 prompt' },
+        tools: { type: 'string', description: '逗号分隔的工具名' },
+        skills: { type: 'string', description: '逗号分隔的技能名' },
+      }, ['prompt']),
+      async (input, context) => {
+        if (!manager?.engine) return { error: '持久化调度引擎不可用' };
+        const parsed = parseScheduleAddFromToolArgs(input, context);
+        if ('error' in parsed) return { error: parsed.error };
+        const job = await addScheduleJob(manager.engine, { ...parsed, id: generateScheduleJobId() });
+        if (job.schedule.kind === 'at') {
+          const time = new Date(job.schedule.atMs).toLocaleString('zh-CN', { hour12: false });
+          return { success: true, id: job.id, message: `已安排一次性任务，将在 ${time} 执行` };
+        }
+        return { success: true, id: job.id, message: '已添加调度任务' };
+      },
+    ),
+    registration(
+      'schedule_preview',
+      '预演调度任务；返回建议执行计划，确认后用 schedule_add 创建正式任务。',
+      schema({
+        prompt: { type: 'string', description: '任务 prompt' },
+        activity_feedback: { type: 'boolean', description: '是否发布 activity feedback' },
+      }, ['prompt']),
+      async (input, context) => {
+        if (!manager?.previewTask) return { error: '预演服务不可用' };
+        const result = await manager.previewTask(String(input.prompt), context, {
+          activityFeedback: input.activity_feedback === true,
+        });
+        if (!result.success) return { error: result.error || '预演失败' };
+        return {
+          success: true,
+          preview: result.responseText,
+          execution_plan: result.executionPlan,
+          message: '预演完成。确认无误后使用 schedule_add 并传入 execution_plan 创建正式任务。',
+        };
+      },
+    ),
+    ...(['remove', 'pause', 'resume'] as const).map((operation) => registration(
+      `schedule_${operation}`,
+      `${operation === 'remove' ? '删除' : operation === 'pause' ? '暂停' : '恢复'}持久化调度任务（按任务 ID）`,
+      schema({ id: { type: 'string', description: '任务 ID' } }, ['id']),
+      async (input) => {
+        if (!manager?.engine) return { error: '引擎不可用' };
+        const id = String(input.id ?? '');
+        const changed = operation === 'remove'
+          ? await manager.engine.removeJob(id)
+          : operation === 'pause'
+            ? await manager.engine.pauseJob(id)
+            : await manager.engine.resumeJob(id);
+        return changed ? { success: true } : { error: '未找到' };
+      },
+    )),
+  ]);
 }

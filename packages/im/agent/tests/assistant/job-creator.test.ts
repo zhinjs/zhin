@@ -1,22 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  captureScheduleJobCreator,
+  scheduleJobCreatorFromPrincipal,
   parseScheduleJobCreator,
   senderFromScheduleCreator,
 } from '../../src/assistant/job-creator.js';
 import { createTaskExecutor } from '../../src/task-executor.js';
-import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 describe('schedule job creator', () => {
-  it('captureScheduleJobCreator reads sender id and roles from commMessage', () => {
-    const message = mockCommMessage({
-      senderId: '1659488338',
-      sender_roles: ['master'],
-    });
-    expect(captureScheduleJobCreator(message)).toEqual({
+  it('captures the authenticated canonical principal without IM inference', () => {
+    expect(scheduleJobCreatorFromPrincipal({
+      subjectId: '1659488338',
+      displayName: 'Owner',
+      roles: ['master'],
+    })).toEqual({
       userId: '1659488338',
       roles: ['master'],
-      name: undefined,
+      name: 'Owner',
     });
   });
 
@@ -54,10 +53,7 @@ describe('schedule job creator', () => {
 });
 
 describe('task executor schedule creator', () => {
-  it('preview replies to the creator and captures the domain tool resolution', async () => {
-    const reply = vi.fn(async () => 'msg-id');
-    const commMessage = mockCommMessage({ senderId: 'u1', sender_roles: ['master'] });
-    (commMessage as { $reply?: typeof reply }).$reply = reply;
+  it('preview uses canonical creator context and captures the domain tool resolution', async () => {
     const executor = createTaskExecutor({
       agent: { getEventEmitter: () => ({ emit: vi.fn(), createPayload: vi.fn() }) } as any,
       domain: { execute: vi.fn(async (job) => ({
@@ -77,8 +73,10 @@ describe('task executor schedule creator', () => {
       resolveAdapter: () => undefined,
     });
 
-    const result = await executor.preview('daily weather', commMessage, {
-      createdBy: { userId: 'u1', roles: ['master'] },
+    const result = await executor.preview('daily weather', {
+      sessionKey: 'im:qq:bot:private:u1',
+      origin: { kind: 'im', platform: 'qq', endpoint: 'bot', scope: 'private', sceneId: 'u1' },
+      principal: { subjectId: 'u1', roles: ['master'] },
     });
 
     expect(result.success).toBe(true);
@@ -90,6 +88,5 @@ describe('task executor schedule creator', () => {
       previewSample: 'preview output',
       confirmed: false,
     });
-    expect(reply).toHaveBeenCalledWith('preview output');
   });
 });

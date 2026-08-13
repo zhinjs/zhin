@@ -101,7 +101,7 @@ export {
 
 export { jobPrompt } from './job-utils.js';
 export {
-  captureScheduleJobCreator,
+  scheduleJobCreatorFromPrincipal,
   parseScheduleJobCreator,
   senderFromScheduleCreator,
 } from './job-creator.js';
@@ -120,7 +120,7 @@ export {
   parseScheduleAddFromRpcMessage,
   parseScheduleNotifyFromRpc,
 } from './schedule-job-service.js';
-export type { ScheduleAddInput } from './schedule-job-service.js';
+export type { ScheduleAddInput, ScheduleInvocationContext } from './schedule-job-service.js';
 
 export {
   ScheduleJobStore,

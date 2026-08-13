@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DisposeStack } from '@zhin.js/plugin-runtime';
 import {
-  getScheduleManager,
-  provideScheduleManager,
-} from '../src/schedule-manager.js';
-import {
   getAssistantRuntime,
   provideAssistantRuntime,
 } from '../src/assistant/runtime-registry.js';
@@ -16,20 +12,6 @@ import {
 } from '../src/orchestrator/orchestration-service.js';
 
 describe('generation-owned Agent runtime registrations', () => {
-  it('keeps the latest schedule manager when the previous owner disposes', async () => {
-    const previous = { scheduleFeature: { getStatus: () => [] }, engine: null };
-    const next = { scheduleFeature: { getStatus: () => [] }, engine: null };
-    const genPrevious = new DisposeStack();
-    const genNext = new DisposeStack();
-    provideScheduleManager({ lifecycle: genPrevious }, previous);
-    provideScheduleManager({ lifecycle: genNext }, next);
-
-    await genPrevious.dispose();
-    expect(getScheduleManager()).toBe(next);
-    await genNext.dispose();
-    expect(getScheduleManager()).toBeNull();
-  });
-
   it('lets a disabled generation override and then reveal the previous Assistant', async () => {
     const previous = { id: 'previous' } as never;
     const genPrevious = new DisposeStack();

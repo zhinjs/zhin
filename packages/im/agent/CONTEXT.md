@@ -120,6 +120,10 @@ _避免使用_：SSOT、source of truth、终态写入方
 
 ## 调度（Schedule）
 
+**Schedule Tools**:
+`schedule_*` 是原生 `AgentToolDefinition`，创建者与 IM notify 目标只从 canonical invocation principal/origin 派生。每组 definitions 闭包绑定当前 generation 的 `ScheduleManager`，禁止模块级“最新 manager”注册表。
+_避免使用_：`ZhinTool`/`Message` 第二参数、跨 generation manager lookup、无 IM origin 时静默把 IM notify 降为 silent
+
 **Schedule Execution Plan**:
 预演确认后固化的 prompt / tools / skills 快照，经 `addScheduleJob` 持久化到 `schedule-jobs.json`；到点执行时由 **Schedule Execution Domain** 直接解析并装载，完全跳过 deferred snapshot 与 meta tools。
 _避免使用_：optimizePrompt、extra 上的 executionPlan

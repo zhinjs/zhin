@@ -18,7 +18,6 @@ import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../config/index
 import { loadBootstrapFiles, buildContextFiles, buildStableBootstrapSection, loadContextFiles, buildGlobalContextSection, DEFAULT_GLOBAL_CONTEXT_PATHS } from '../bootstrap.js';
 import { loadBootstrapWithProfile, resolveAssistantConfig } from '../assistant/index.js';
 import { createAIHookEvent } from '../orchestrator/hook-registry.js';
-import { createScheduleTools } from '../schedule-manager.js';
 import { createGenerateImageTool } from '../builtin/generate-image-tool.js';
 import { markAgentBootstrapReady } from './bootstrap-gate.js';
 import type { AIServiceRefs } from './shared-refs.js';
@@ -69,12 +68,6 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       const plain = isZhinTool(tool) ? tool.toTool() : tool;
       disposers.push(toolService.addTool({ ...plain, source: 'builtin' }, root.name));
     }
-    const scheduleTools = createScheduleTools();
-    for (const tool of scheduleTools) {
-      const plain = tool.toTool();
-      disposers.push(toolService.addTool({ ...plain, source: 'builtin' }, root.name));
-    }
-
     // Boot: reserved/builtin → Orchestrator via Capability Ingress
     const orchestratorBoot = root.inject?.('agent') as AgentOrchestrator | undefined;
     const ingress = root.inject?.('capabilityIngress');
@@ -352,7 +345,6 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
 
       logger.debug(formatCompact({
         builtin: builtinTools.length,
-        schedule: scheduleTools.length,
         skills: skillCount,
         workspace: toolCount,
         agents: agentCount,

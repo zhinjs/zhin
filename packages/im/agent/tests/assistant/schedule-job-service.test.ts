@@ -4,7 +4,12 @@ import {
   parseScheduleAddFromRpcMessage,
   parseScheduleAddFromToolArgs,
 } from '../../src/assistant/schedule-job-service.js';
-import { mockCommMessage } from '../helpers/mock-comm-message.js';
+
+const toolContext = {
+  sessionKey: 'im:qq:bot:private:u1',
+  origin: { kind: 'im', platform: 'qq', endpoint: 'bot', scope: 'private', sceneId: 'u1' },
+  principal: { subjectId: 'u1', displayName: 'Alice', roles: ['master'] },
+} as const;
 
 describe('addScheduleJob', () => {
   it('persists execution plan prompt as action prompt', async () => {
@@ -27,14 +32,13 @@ describe('addScheduleJob', () => {
 
 describe('parseScheduleAddFromToolArgs', () => {
   it('parses workday cron schedule with execution plan', () => {
-    const message = mockCommMessage({ senderId: 'u1' });
     const result = parseScheduleAddFromToolArgs({
       schedule_kind: 'workday',
       cron: '0 0 9 * * *',
       prompt: 'daily report',
-      notify_channel: 'silent',
+      notify_channel: 'im',
       execution_plan: { prompt: 'refined', tools: ['a'], skills: ['s1'] },
-    }, message);
+    }, toolContext);
 
     expect('error' in result).toBe(false);
     if ('error' in result) return;
@@ -46,6 +50,10 @@ describe('parseScheduleAddFromToolArgs', () => {
       confirmed: true,
     });
     expect(result.createdBy?.userId).toBe('u1');
+    expect(result.notify).toMatchObject({
+      channel: 'im',
+      target: { scene: { platform: 'qq', endpointKey: 'bot', sceneId: 'u1', kind: 'private' } },
+    });
   });
 
   it('parses delay_minutes as at schedule', () => {
@@ -53,12 +61,23 @@ describe('parseScheduleAddFromToolArgs', () => {
       delay_minutes: 30,
       prompt: 'remind me',
       notify_channel: 'silent',
-    });
+    }, toolContext);
 
     expect('error' in result).toBe(false);
     if ('error' in result) return;
     expect(result.schedule.kind).toBe('at');
     expect(result.schedule.atMs).toBeGreaterThan(Date.now());
+  });
+
+  it('fails closed when IM notify has no IM origin', () => {
+    const result = parseScheduleAddFromToolArgs({
+      delay_minutes: 30,
+      prompt: 'remind me',
+    }, {
+      ...toolContext,
+      origin: { kind: 'http', sessionId: 'http-1' },
+    });
+    expect(result).toEqual({ error: 'IM notify requires an IM invocation origin' });
   });
 });
 

@@ -1,24 +1,20 @@
 import {
   hasSenderRole,
   isFrameworkSenderRole,
-  senderRolesFromMessage,
-  type Message,
   type SenderRole,
 } from '@zhin.js/core';
+import type { ToolInvocationContext } from '@zhin.js/tool';
 import type { ScheduleJobCreator } from './types.js';
 
-/** 从入站 Message 捕获调度任务创建者（schedule_add / 对话内创建） */
-export function captureScheduleJobCreator(message?: Message): ScheduleJobCreator | undefined {
-  const senderId = message?.$sender?.id;
-  if (senderId == null || String(senderId).length === 0) return undefined;
-  const roles = [...senderRolesFromMessage(message)];
+/** Capture a persisted creator only from the authenticated invocation principal. */
+export function scheduleJobCreatorFromPrincipal(
+  principal: ToolInvocationContext['principal'],
+): ScheduleJobCreator {
+  const roles = principal.roles.filter(isFrameworkSenderRole);
   return {
-    userId: String(senderId),
+    userId: principal.subjectId,
     roles: roles.length > 0 ? roles : (['user'] as SenderRole[]),
-    name:
-      message?.$sender.name
-      ?? (message?.$sender as { nickname?: string }).nickname
-      ?? undefined,
+    name: principal.displayName,
   };
 }
 
