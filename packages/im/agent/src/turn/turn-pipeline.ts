@@ -168,11 +168,12 @@ export async function processTextTurn(
 
     const inboundMedia = await resolveInboundMediaInjection(commMessage);
     const scheduleContext = extras?.scheduleContext;
+    const turnContext = scheduleContext
+      ? scheduleTurnContextView(scheduleContext)
+      : turnContextViewFromMessage(commMessage);
     const turnCtx = await requireContextSystem(host).buildTextTurnContext({
       host,
-      turn: scheduleContext
-        ? scheduleTurnContextView(scheduleContext)
-        : turnContextViewFromMessage(commMessage),
+      turn: turnContext,
       content,
       turnUser,
       deferredStats,
@@ -197,10 +198,9 @@ export async function processTextTurn(
         sessionKey,
         sessionId,
         userMessages,
-      commMessage,
-      onChunk,
-      signal: extras?.signal,
-      execute: (initialMessages, hooks, signal, _turnId) => (host.agentCore ?? defaultAgentCore).runTextTurn({
+        onChunk,
+        signal: extras?.signal,
+        execute: (initialMessages, hooks, signal, _turnId) => (host.agentCore ?? defaultAgentCore).runTextTurn({
           host,
           sessionId,
           userMessageExtra: turnUser.userMessageExtra,
@@ -208,6 +208,7 @@ export async function processTextTurn(
           promptProfile: scheduleContext
             ? schedulePromptProfile(scheduleContext, content)
             : { kind: 'interactive' },
+          turnContext,
           commMessage,
           contextForTools,
           allTools,

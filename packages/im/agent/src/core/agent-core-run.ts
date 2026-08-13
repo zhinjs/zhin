@@ -43,6 +43,7 @@ import {
   mapAgentEventToTurnEvents,
 } from './turn-event-mapper.js';
 import type { AgentPromptProfile } from '../prompt/turn-prompt-profile.js';
+import type { TurnContextView } from '../context/turn-envelope.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
 /** 入库前解开模型误包的 JSON 字符串，避免下一轮历史继续叠转义。 */
@@ -125,6 +126,7 @@ export interface AgentLoopTurnInput {
   userMessageExtra?: import('@zhin.js/ai').AgentMessageExtra;
   rawContent: string;
   promptProfile: AgentPromptProfile;
+  turnContext: TurnContextView;
   commMessage: Message;
   contextForTools: Message;
   allTools: AgentTool[];
@@ -394,8 +396,8 @@ export async function* runAgentLoopTextTurnRun(
   let systemPrompt = hasTools
     ? await buildAgentPathSystemPrompt(host, {
         profile: input.promptProfile,
+        turn: input.turnContext,
         content: input.rawContent,
-        ...(input.promptProfile.kind === 'interactive' ? { commMessage: contextForTools } : {}),
         sessionId,
         personaEnhanced,
         preData,
@@ -429,7 +431,7 @@ export async function* runAgentLoopTextTurnRun(
   if (hasTools) {
     const sections = input.promptProfile.kind === 'interactive'
       ? await describeAgentPathPromptSections(host, {
-          commMessage: contextForTools,
+          turn: input.turnContext,
           content: input.rawContent,
           sessionId,
           deferredStats: input.deferredStats,

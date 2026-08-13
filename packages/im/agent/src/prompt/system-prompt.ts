@@ -6,17 +6,14 @@
  */
 
 import * as os from 'node:os';
-import { type AgentTurnMessage, type Message, resolveIMSessionIdFromMessage, senderRolesFromMessage } from '@zhin.js/core';
+import type { AgentTurnMessage } from '@zhin.js/core';
 import type { AgentMessage, AssistantMessage, UserMessage } from '@zhin.js/ai';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import { type ZhinAgentConfig, SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from '../config/index.js';
 import { resolveQuoteSystemHint } from '../context/im-turn-context-adapter.js';
-import { getFileMemoryContext, formatMemoryPathsHint } from '../memory-layers.js';
-import {
-  buildSenderRolesFilePermissionsPrompt,
-  inferFileRole,
-  type FileRole,
-} from '../security/file-role-policy.js';
+import { formatMemoryPathsHint } from '../memory-layers.js';
+import { buildSenderRolesFilePermissionsPrompt } from '../security/file-role-policy.js';
+import type { TurnContextView } from '../context/turn-envelope.js';
 import { resolveWorkspacePrompt } from '../prompt/workspace-prompt.js';
 import {
   CRITICAL_RULES,
@@ -66,17 +63,6 @@ export function buildUserMessageWithHistory(history: AgentMessage[], currentCont
   return `${HISTORY_CONTEXT_MARKER}\nNote: Prior assistant messages may contain errors or hallucinations. Do NOT treat them as ground truth. Only trust information from tool results.\n${historyBlock}\n\n${CURRENT_MESSAGE_MARKER}\n${currentContent}`;
 }
 
-/** 从 Message 重算 SenderRole 并推导文件策略档位（提示词 §3b） */
-export function resolvePromptFileRole(commMessage: Message): FileRole | undefined {
-  if (!commMessage) return undefined;
-  try {
-    const roles = senderRolesFromMessage(commMessage);
-    return inferFileRole({ roles: [...roles] });
-  } catch {
-    return undefined;
-  }
-}
-
 export interface RichSystemPromptContext {
   config: Required<ZhinAgentConfig>;
   skillRegistry: SkillRegistry | null;
@@ -87,8 +73,8 @@ export interface RichSystemPromptContext {
   toolSearchDeferredStats?: string;
   /** Per-platform markdown from AgentPromptContributor (§6c). */
   platformSections?: string;
-  /** 当前会话 Message（仅用于 # Runtime 中的 Session 行） */
-  commMessage?: Message;
+  /** Canonical turn identity; never an IM Message adapter. */
+  turn?: TurnContextView;
   /** SDK 分治编排片段（workspace prompts/orchestrator*.md） */
   orchestratorSdk?: string;
   /** ai.agents.*.nickname（经 activeBinding 解析） */
@@ -250,7 +236,6 @@ function resolvePersonaLead(
  */
 function buildContextSection(
   config: Required<ZhinAgentConfig>,
-  _commMessage?: Message,
   bootstrapContext?: string,
   agentNickname?: string,
   gitStatus?: string,
@@ -337,24 +322,6 @@ function buildActiveSkillsSection(activeSkillsContext: string): string | null {
   return '# Active Skills\n\n' + activeSkillsContext;
 }
 
-/**
- * §9 Memory（全局 / 平台 / 会话三层）
- */
-function buildMemorySection(commMessage?: Message): string | null {
-  const sessionKey = commMessage
-    ? resolveIMSessionIdFromMessage(commMessage)
-    : undefined;
-  const fileMemory = getFileMemoryContext(undefined, commMessage ? String(commMessage.$adapter) : undefined, sessionKey);
-  if (!fileMemory) return null;
-  return [
-    '# Memory',
-    '',
-    fileMemory,
-    '',
-    'Persist: session → data/memory/sessions/…/MEMORY.md (any user with write_file); global/platform → master only.',
-  ].join('\n');
-}
-
 /** 单段字符数统计（日志 / Harness debug；与 buildRichSystemPrompt 分段一致） */
 export interface PromptSectionDebugInfo {
   id: string;
@@ -374,7 +341,7 @@ export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): Pr
   const modelBuilder = new ModelAwarePromptBuilder(ctx.modelId);
   const contextWindow = ctx.contextWindow ?? 128000;
   const pairs: [string, string | null][] = [
-    ['§1_runtime', buildContextSection(config, ctx.commMessage, bootstrapContext, ctx.agentNickname, ctx.gitStatus)],
+    ['§1_runtime', buildContextSection(config, bootstrapContext, ctx.agentNickname, ctx.gitStatus)],
     ['§1b_critical_rules', CRITICAL_RULES],
     ['§1c_workflow', WORKFLOW_RULES],
     ['§1d_model_style', modelBuilder.buildStyleSection()],
@@ -435,7 +402,7 @@ export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
   } = ctx;
   const modelBuilder = new ModelAwarePromptBuilder(ctx.modelId);
 
-  const contextSection = buildContextSection(config, ctx.commMessage, bootstrapContext, ctx.agentNickname, ctx.gitStatus);
+  const contextSection = buildContextSection(config, bootstrapContext, ctx.agentNickname, ctx.gitStatus);
   const modelStyle = modelBuilder.buildStyleSection();
   const contextWindow = ctx.contextWindow ?? 128000;
   const contextModeHint = modelBuilder.buildContextModeHint(contextWindow);

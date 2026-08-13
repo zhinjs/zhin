@@ -30,7 +30,7 @@ export async function resolveAgentPromptSections(
       ?? DEFAULT_CONFIG.platformPromptMaxChars,
   };
 
-  const platform = String(ctx.commMessage.$adapter);
+  const platform = ctx.platform;
   const contributor = getAgentPromptContributor(platform);
   let sections: AgentPromptSection[] = [];
 
@@ -50,7 +50,7 @@ export async function resolveAgentPromptSections(
 
   const hookEvent = createAIHookEvent('agent', 'prompt', sessionId, {
     slot: ctx.slot,
-    commMessage: ctx.commMessage,
+    platform: ctx.platform,
     userMessagePreview: ctx.userMessagePreview,
     deferred: ctx.deferred,
     sections,
@@ -84,7 +84,7 @@ export function resolveDeferredToolsForPlatform(
     maxTools: number,
   ) => AgentTool[],
 ): AgentTool[] {
-  const contributor = getAgentPromptContributor(String(ctx.commMessage.$adapter));
+  const contributor = getAgentPromptContributor(ctx.platform);
   if (contributor?.matchesDeferredTask?.(ctx)) {
     const catalogLite = catalog.map((t) => ({ name: t.name, description: t.description }));
     const selected = contributor.selectDeferredTools?.(query, goal, catalogLite, maxTools);
@@ -103,7 +103,7 @@ export function platformMatchesDeferredTask(
   query: string,
   goal: string,
 ): boolean {
-  const contributor = getAgentPromptContributor(String(ctx.commMessage.$adapter));
+  const contributor = getAgentPromptContributor(ctx.platform);
   if (contributor?.matchesDeferredTask) {
     try {
       return contributor.matchesDeferredTask(ctx);

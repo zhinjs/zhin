@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { AgentPromptContributor } from '@zhin.js/core';
-import { mockCommMessage } from './helpers/mock-comm-message.js';
 import {
   clearAgentPromptContributors,
   registerAgentPromptContributor,
@@ -26,7 +25,7 @@ describe('resolveAgentPromptSections', () => {
     const sections = await resolveAgentPromptSections({
       ctx: {
         slot: 'orchestrator',
-        commMessage: mockCommMessage({ adapter: 'mock' }),
+        platform: 'mock',
       },
     });
     expect(sections).toHaveLength(1);
@@ -45,7 +44,7 @@ describe('resolveAgentPromptSections', () => {
     const sections = await resolveAgentPromptSections({
       ctx: {
         slot: 'orchestrator',
-        commMessage: mockCommMessage({ adapter: 'mock' }),
+        platform: 'mock',
       },
     });
     expect(sections.map(s => s.id)).toContain('hook.extra');
@@ -62,7 +61,7 @@ describe('resolveAgentPromptSections', () => {
     const sections = await resolveAgentPromptSections({
       ctx: {
         slot: 'orchestrator',
-        commMessage: mockCommMessage({ adapter: 'bad' }),
+        platform: 'bad',
       },
     });
     expect(sections).toHaveLength(0);

@@ -98,7 +98,6 @@ export interface HostPromptTurnRequest {
   sessionKey: string;
   sessionId: string;
   userMessages: import('@zhin.js/ai').AgentMessage[];
-  commMessage: Message;
   onChunk?: OnChunkCallback;
   signal?: AbortSignal;
   execute: (

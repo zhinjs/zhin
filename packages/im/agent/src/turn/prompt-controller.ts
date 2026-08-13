@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentEvent, AgentMessage, QueueMode } from '@zhin.js/ai';
-import type { Message } from '../orchestrator/types.js';
 import type { OnChunkCallback } from '../config/index.js';
 import type { AgentLoopTurnResult } from '../core/agent-loop-turn.js';
 import { SessionMessageQueue } from './session-message-queue.js';
@@ -14,7 +13,6 @@ export interface PromptTurnRequest {
   sessionKey: string;
   sessionId: string;
   userMessages: AgentMessage[];
-  commMessage: Message;
   onChunk?: OnChunkCallback;
   /** Cancels this turn without affecting other sessions or generations. */
   signal?: AbortSignal;
@@ -53,7 +51,6 @@ type PromptSubscriber = (event: AgentEvent, signal: AbortSignal) => void | Promi
 interface ActiveTurn {
   turnId: string;
   sessionKey: string;
-  commMessage: Message;
   queue: SessionMessageQueue;
   abortController: AbortController;
 }
@@ -85,12 +82,6 @@ export class PromptController {
   getActiveSessionKey(): string | null {
     const latest = [...this.latestTurnBySession.entries()].at(-1);
     return latest?.[0] ?? null;
-  }
-
-  getActiveContext(): Message | null {
-    const turnId = [...this.latestTurnBySession.values()].at(-1);
-    if (!turnId) return null;
-    return this.activeTurns.get(turnId)?.commMessage ?? null;
   }
 
   getLastResult(): AgentLoopTurnResult | null {
@@ -209,7 +200,6 @@ export class PromptController {
     const activeTurn: ActiveTurn = {
       turnId,
       sessionKey: request.sessionKey,
-      commMessage: request.commMessage,
       queue,
       abortController,
     };

@@ -80,7 +80,7 @@ export class DeferredWorkerRunner {
     const query = (toolQuery?.trim() || goal).trim();
     const promptCtx: AgentPromptBuildContext = {
       slot: 'deferred_worker',
-      commMessage: origin,
+      platform: String(origin.$adapter),
       deferred: { goal, toolQuery: query },
     };
     const loaded = resolveDeferredToolsForPlatform(

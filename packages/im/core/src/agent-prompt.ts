@@ -3,7 +3,6 @@
  *
  * Implementations live in adapter plugins; resolution runs in @zhin.js/agent.
  */
-import type { Message } from './message.js';
 
 export type AgentPromptSlot =
   | 'orchestrator'
@@ -17,8 +16,8 @@ export interface DeferredToolCatalogItem {
 
 export interface AgentPromptBuildContext {
   slot: AgentPromptSlot;
-  /** 当前 turn 的 Message 通讯上下文 */
-  commMessage: Message<any>;
+  /** Authenticated IM platform projected by the ingress adapter. */
+  platform: string;
   /** Truncated user message for intent hints (~500 chars). */
   userMessagePreview?: string;
   deferred?: {

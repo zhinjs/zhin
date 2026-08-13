@@ -5,15 +5,6 @@ import {
   TurnCancelledError,
   TurnSupersededError,
 } from '../../src/turn/prompt-controller.js';
-import { mockCommMessage } from '../helpers/mock-comm-message.js';
-
-const commMessage = mockCommMessage({
-  adapter: 'sandbox',
-  endpoint: 'b1',
-  sceneId: 'private:u1',
-  senderId: 'u1',
-  scope: 'private',
-});
 
 const makeResult = (reply: string) => ({
   reply,
@@ -34,7 +25,6 @@ describe('PromptController', () => {
         sessionKey,
         sessionId: `${sessionKey}#1`,
         userMessages: [createUserMessage(label)],
-        commMessage,
         execute: async (_initial, _hooks, _signal, _turnId) => {
           order.push(`start:${label}`);
           await new Promise((r) => setTimeout(r, 20));
@@ -63,7 +53,6 @@ describe('PromptController', () => {
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('first')],
-      commMessage,
       execute: async (_initial, _hooks, signal) => {
         await gate;
         firstAborted.push(signal.aborted);
@@ -77,7 +66,6 @@ describe('PromptController', () => {
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('second')],
-      commMessage,
       execute: async () => makeResult('second'),
     });
 
@@ -97,7 +85,6 @@ describe('PromptController', () => {
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('cancel me')],
-      commMessage,
       signal: abortController.signal,
       execute: async (_initial, _hooks, signal) => {
         observedSignal = signal;
@@ -131,7 +118,6 @@ describe('PromptController', () => {
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('first')],
-      commMessage,
       execute: async (_initial, hooks) => {
         await new Promise((r) => setTimeout(r, 10));
         await gate;
@@ -157,7 +143,6 @@ describe('PromptController', () => {
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('x')],
-      commMessage,
       execute: async () => makeResult('x'),
     });
     expect(controller.isBusy()).toBe(true);

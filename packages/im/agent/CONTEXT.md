@@ -183,6 +183,7 @@ Session lifecycle 写权威只有 `ContextRepository`；archive 不得再代理�
 - **Schedule Turn** 在 turn-pipeline 中顺序执行 resolve → preload → capture before → rehydrate skills；预演 delta 由 `getLastTurnToolSnapshot` 采集本 turn 新增 tools/skills。
 - IM、HTTP、A2A、Schedule 只在 composition root 适配为 **Turn Ingress**；从该边界起，Session、Tool、Policy、Event、Subagent 与 Agent Core 不得读取 IM `Message`、`Plugin`、`Adapter` 或 `$adapter/$endpoint/$channel/$sender` 字段。
 - 每个启用 Agent 的 generation 必须在 root resources 提供唯一 `AgentTurnEngine`；`AgentRuntime` 只从当前 turn 所持 snapshot 解析它。缺失时 fail-closed，禁止构造器捕获 runner、进程全局 runner 或跨 generation fallback。
+- Prompt contributor 与 PromptController 只消费 canonical platform / session identity；不得接收或保存 IM `Message`。平台 Prompt 仅对 IM origin 生效，其他 origin 不伪造 IM 载体。
 - 同步 IM 回复由 snapshot-bound `ReplyPort` 完成；HTTP 流由 Event Journal projection 完成；主动或延迟投递持久化为 `DeliveryIntent`，以带 `parentTurnId` 的新 operation 执行，不偷偷重新获取 current generation 后冒充原 turn。
 
 ## 示例对话
