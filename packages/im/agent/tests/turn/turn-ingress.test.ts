@@ -74,9 +74,9 @@ describe('TurnIngress', () => {
       .toThrow('TurnIngress session.key is required');
   });
 
-  it('requires unattended turns to omit interactive reply and approval ports', () => {
+  it('requires unattended turns to omit every interactive port', () => {
     expect(() => createTurnIngress(input({
       policy: { permissions: [], unattended: true },
-    }))).toThrow('Unattended TurnIngress cannot expose reply or approval ports');
+    }))).toThrow('Unattended TurnIngress cannot expose interactive ports');
   });
 });

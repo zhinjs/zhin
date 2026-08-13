@@ -39,6 +39,12 @@ Tool/MCP 执行 handle 只在 turn lease 内有效，防止访问已 retire 的 
 Turn engine 也只从该 lease 的 snapshot 解析；缺失时 fail-closed，不回退到进程全局
 runner 或其他 generation。这是迁移完成后的唯一权威契约，不能用缩减执行器替代。
 
+`ask_user` 也是 generation-owned ToolFeature：工具只拿当前 Turn 的 `QuestionPort`，
+Root-owned `InteractionRouter` 用 canonical session + authenticated subject 匹配后续回复。
+IM adapter 在 middleware/command/Agent fallback 前 claim 回复；Router 不保存 `Message`、
+Adapter 或过期回复句柄。HTTP/A2A 等入口若要支持交互，必须显式提供自己的 QuestionPort；
+Schedule 等 unattended Turn 缺省 fail-closed。
+
 ## Turn Isolation
 
 IM、HTTP、A2A 与 Schedule 只构造 immutable `TurnRequest`，再调用 process-owned

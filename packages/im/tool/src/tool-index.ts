@@ -86,6 +86,7 @@ export class ToolIndex {
           ? { filesystem: Object.freeze({ workspaceRoot: invocation.policy.filesystem.workspaceRoot }) }
           : {}),
       }),
+      ...(invocation.question ? { question: invocation.question } : {}),
     });
     return entry.slot.definition.execute(parsedInput, context) as TResult | Promise<TResult>;
   }

@@ -1,7 +1,7 @@
 import type { OutputElement, Usage } from '@zhin.js/ai';
 import type { ApprovalPort } from '../session/session-interaction-port.js';
 import type { PermissionSubject } from '@zhin.js/permission';
-import type { ToolInvocationOrigin } from '@zhin.js/tool';
+import type { ToolInvocationOrigin, ToolQuestionPort } from '@zhin.js/tool';
 
 export type TurnScope = 'private' | 'group' | 'channel';
 
@@ -97,6 +97,7 @@ export interface TurnPorts {
   readonly approval?: ApprovalPort;
   readonly activity?: ActivityPort;
   readonly delivery?: DeliveryPort;
+  readonly question?: ToolQuestionPort;
 }
 
 /** Ports supplied by an ingress adapter; Journal authority is injected by AgentRuntime. */
@@ -147,8 +148,8 @@ export function createTurnIngress(input: TurnIngressInput): TurnIngress {
   }
   requireText(input.session.key, 'session.key');
   requireText(input.principal.subjectId, 'principal.subjectId');
-  if (input.policy.unattended && (input.ports.reply || input.ports.approval)) {
-    throw new TypeError('Unattended TurnIngress cannot expose reply or approval ports');
+  if (input.policy.unattended && (input.ports.reply || input.ports.approval || input.ports.question)) {
+    throw new TypeError('Unattended TurnIngress cannot expose interactive ports');
   }
   if (!input.ports.journal || typeof input.ports.journal.append !== 'function') {
     throw new TypeError('TurnIngress ports.journal is required');

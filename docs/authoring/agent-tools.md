@@ -125,6 +125,11 @@ permit 语法（`packages/im/core/src/built/permit-parse.ts`）分三类：内�
 
 Anthropic SDK 通道会把未加载工具以 `deferLoading` 标记下发；其它通道只下发已加载集合。
 
+`ask_user` 是框架提供的 generation-owned ToolFeature，不是 Plugin Prompt/middleware。
+它通过当前 Turn 的 `QuestionPort` 请求输入，并按 canonical session 与认证主体匹配回复；
+插件工具若需要同类交互，应依赖 `ToolExecutionContext.question`，且必须处理端口缺失。
+unattended Turn（例如 Schedule）不会注入该端口，不能回退到全局 Message、Adapter 或用户队列。
+
 ## skills 与 agents/*.agent.md
 
 技能与命名 Agent 也是文件约定，分别由 `@zhin.js/skill` 与 `@zhin.js/agent-feature` 两个 Feature 发现。

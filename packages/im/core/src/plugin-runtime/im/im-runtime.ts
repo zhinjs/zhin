@@ -98,6 +98,8 @@ export interface ImRuntimeOptions {
    */
   readonly commandPrefix?: string;
   readonly renderer?: OutboundRenderer;
+  /** Process-root ingress claim (pending interaction, authentication challenge, etc.). */
+  readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
 }
 
 export class ImRuntime implements MessageGateway {
@@ -106,6 +108,7 @@ export class ImRuntime implements MessageGateway {
   readonly #messageListeners = new Set<(event: RuntimeMessageEvent) => void>();
   readonly #interactiveHandlers: RegisteredRuntimeInteractiveHandler[] = [];
   #snapshots?: SnapshotStore;
+  readonly #inboundClaim?: ImRuntimeOptions['inboundClaim'];
 
   constructor(options: ImRuntimeOptions = {}) {
     this.#dispatcher = new MessageDispatcher(
@@ -114,6 +117,7 @@ export class ImRuntime implements MessageGateway {
         : () => options.commandPrefix ?? '',
     );
     this.#renderer = options.renderer ?? new OutboundRenderer();
+    this.#inboundClaim = options.inboundClaim;
   }
 
   attach(snapshots: SnapshotStore): void {
@@ -210,23 +214,28 @@ export class ImRuntime implements MessageGateway {
         input.replyTo,
       );
       let result: MessageDispatchResult = Object.freeze({ matched: false });
-      await runMiddleware(
-        lease.value,
-        message,
-        async () => {
-          result = await this.#dispatchInteractive(message, requester)
-            ?? await this.#dispatcher.dispatch(message, lease.value);
-          const ingressRoute = resolveIngressRoute(lease.value);
-          if (!result.matched && ingressRoute) {
-            logger.debug(formatCompact({ op: 'unmatched', conv: formatConversationLog(conversation) }));
-            const handled = await ingressRoute.route(message, lease, requester);
-            if (handled) {
-              result = Object.freeze({ matched: true, command: 'ai', owner: requester });
+      const claimed = await this.#inboundClaim?.(message) === true;
+      if (claimed) {
+        result = Object.freeze({ matched: true, command: 'interaction', owner: requester });
+      } else {
+        await runMiddleware(
+          lease.value,
+          message,
+          async () => {
+            result = await this.#dispatchInteractive(message, requester)
+              ?? await this.#dispatcher.dispatch(message, lease.value);
+            const ingressRoute = resolveIngressRoute(lease.value);
+            if (!result.matched && ingressRoute) {
+              logger.debug(formatCompact({ op: 'unmatched', conv: formatConversationLog(conversation) }));
+              const handled = await ingressRoute.route(message, lease, requester);
+              if (handled) {
+                result = Object.freeze({ matched: true, command: 'ai', owner: requester });
+              }
             }
-          }
-        },
-        'inbound',
-      );
+          },
+          'inbound',
+        );
+      }
       if (result.matched) {
         logger.debug(formatCompact({
           op: 'dispatched',

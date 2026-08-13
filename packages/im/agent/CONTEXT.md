@@ -13,7 +13,7 @@ Agent 唯一入站契约；由 IM、HTTP、A2A、Schedule 等入口在 compositi
 _避免使用_：commMessage、synthetic Message、bridge message、Message.extra
 
 **Turn Ports**:
-仅在当前 turn 或明确派生 operation 内有效的能力端口，包括 `ReplyPort`、`DeliveryPort`、`ApprovalPort`、`ActivityPort`；Agent 核心通过端口请求副作用，不持有 Adapter、Endpoint、Plugin 或 Message。
+仅在当前 turn 或明确派生 operation 内有效的能力端口，包括 `ReplyPort`、`DeliveryPort`、`ApprovalPort`、`QuestionPort`、`ActivityPort`；Agent 核心通过端口请求副作用，不持有 Adapter、Endpoint、Plugin 或 Message。`QuestionPort` 由入口把 origin-neutral `InteractionRouter` 绑定到已认证 principal 与 canonical session；回复在 IM middleware、Command 与 Agent fallback 前被 claim。Router 不保存原始 IM Message 或跨 turn 发送句柄，校验提示必须使用当前回复 operation 的 delivery authority。
 _避免使用_：Message.$reply、Adapter.sendMessage、host Plugin、回调字段包
 
 **Turn Context Envelope**:
@@ -53,6 +53,8 @@ _避免使用_：tool glue、runtime helper
 网络 Tool 只使用 Turn-scoped `TurnNetworkClient`。它必须逐 redirect hop 授权 URL、解析并拒绝所有非公网地址，再把 HTTPS SNI/Host 保持为原域名而将 socket 固定连接到已审核 IP；禁止先检查后交给另一套 DNS resolver、`redirect: follow`、ALS network policy 或工具内手写 SSRF 分支。
 
 TODO capability 以 canonical session key 为唯一地址，由 `TodoStore` 哈希命名并原子替换；模型输入不得包含 `chat_id` 或文件路径。`.zhin/` 是 runtime-private state，所有通用文件 Tool 必须拒绝读取或枚举，Journal、TODO 与其他 authority-owned 文件只通过各自深模块访问。
+
+交互 Tool 只消费 canonical `QuestionPort`。Root-owned `InteractionRouter` 以 session + authenticated subject 作为唯一匹配键，一次 session 只允许一个待答问题；IM 只在 composition root 投影 address 与 delivery，`ask_user` 不得读取 Plugin、Adapter、Message、Prompt middleware 或模块级 generation store。unattended Turn 不提供 QuestionPort，调用必须 fail closed。
 
 **Capability Feature**:
 Plugin 侧可写能力表（Tool / Skill / Agent / MCP），承载装配与生命周期；**不是**回合执行时的运行时权威。

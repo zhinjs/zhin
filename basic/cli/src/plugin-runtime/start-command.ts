@@ -6,7 +6,7 @@ import chalk from 'chalk';
 import { parse as parseDotenv } from 'dotenv';
 import open from 'open';
 import { YamlConfigDocument } from '@zhin.js/config-yaml';
-import { ImRuntime } from '@zhin.js/core/runtime';
+import { ImRuntime, type Message } from '@zhin.js/core/runtime';
 import { createConsoleEventHub } from '@zhin.js/host-http';
 import { defineInboxTables } from '@zhin.js/plugin-runtime';
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
@@ -110,7 +110,9 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   const control: { stop(): Promise<void> } = {
     stop: async () => { throw new Error('RootHost stop is not bound'); },
   };
-  const im = new ImRuntime();
+  const im = new ImRuntime({
+    ...(agentHost ? { inboundClaim: agentHost.claimInbound } : {}),
+  });
   const databaseHost = createDatabaseHost(databaseConfig);
   // console endpoint-detail 收件箱三张表（unified_inbox_message/request/notice）；
   // 必须在 installResources（host.start）之前 define，写入订阅在 console-api-installer 挂载。
@@ -215,6 +217,9 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   agentHost?.attach(host.runtime.controller.snapshots);
   consoleHost.console.attach(host.runtime.controller.snapshots);
   control.stop = async () => {
+    // Stop interaction admission first. Pending questions hold Agent turns and
+    // therefore generation leases; cancelling them is required before drain.
+    agentHost?.close();
     try {
       await host.stop();
     } finally {
@@ -296,6 +301,8 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
 
 interface ConfiguredAgentHost {
   attach(snapshots: import('@zhin.js/plugin-runtime').SnapshotStore): void;
+  readonly claimInbound: (message: Message) => Promise<boolean>;
+  close(): void;
   install(options: {
     readonly im: ImRuntime;
     readonly projectRoot: string;
@@ -313,11 +320,15 @@ async function loadConfiguredAgentHost(
   if (!hasAgentConfiguration(document)) return undefined;
   const module = await import('./agent-host-installer.js');
   const runtime = new module.AgentRuntime({ coordinator: new module.AgentTurnCoordinator() });
+  const interactions = new module.InteractionRouter();
   const configured: ConfiguredAgentHost = {
     attach: (snapshots) => runtime.attach(snapshots),
+    claimInbound: (message) => module.consumeRuntimeInteraction(interactions, message),
+    close: () => interactions.close(),
     install: (options) => module.installAgentHost({
       ...options,
       runtime,
+      interactions,
       extraTools: options.extraTools as Parameters<typeof module.installAgentHost>[0]['extraTools'],
     }),
   };

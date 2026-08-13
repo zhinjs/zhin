@@ -83,6 +83,7 @@ import {
   type TurnOutcome,
   type TurnAccessContext,
   FileJournalStore,
+  InteractionRouter,
 } from '@zhin.js/agent';
 import { resolveAgentTurnSessionKey } from '@zhin.js/agent/session';
 import {
@@ -97,6 +98,7 @@ import {
   createNativeFileToolFeatures,
   createNativeWebToolFeatures,
   createNativeTodoToolFeatures,
+  createNativeInteractionToolFeatures,
   FileTodoStore,
   AgentRuntime,
   type AgentCapabilities,
@@ -104,6 +106,7 @@ import {
 } from '@zhin.js/agent/runtime';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
+export { InteractionRouter } from '@zhin.js/agent';
 
 /** Minimal OutputElement shape for reply flattening (avoid direct @zhin.js/ai dep). */
 type OutputElementLike = {
@@ -183,6 +186,8 @@ export async function resolveCollaborationConfigDocument(
 export interface InstallAgentHostOptions {
   /** Process-owned execution authority attached to exactly one Root. */
   readonly runtime: AgentRuntime;
+  /** Root-owned authority shared by every Agent generation. */
+  readonly interactions: InteractionRouter;
   /** @deprecated Prefer the generation-owned Primary Config. Test overrides only. */
   readonly ai?: AIConfig;
   /** @deprecated Prefer the generation-owned Primary Config. Test overrides only. */
@@ -438,6 +443,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     )) {
       addFeature(tool.feature, tool.name, tool.definition);
     }
+    for (const tool of createNativeInteractionToolFeatures()) {
+      addFeature(tool.feature, tool.name, tool.definition);
+    }
 
     const orchestrator = zhinAgent.orchestrator;
     if (!orchestrator) {
@@ -619,6 +627,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               network: interactiveNetworkPolicy(service.getAgentConfig()),
               ports: {
                 ...(options.approvalPort ? { approval: options.approvalPort } : {}),
+                question: createRuntimeQuestionPort(options.interactions, message),
                 reply: {
                   send: async (output) => {
                     const content = await publishOutboundElements([...output], effectiveAdapter || undefined);
@@ -1166,6 +1175,64 @@ export function createRuntimeTurnRequest(
   });
 }
 
+/** IM adapter for the origin-neutral interaction authority. */
+export function createRuntimeQuestionPort(
+  interactions: InteractionRouter,
+  message: Message,
+): NonNullable<TurnRequestPorts['question']> {
+  const address = requireRuntimeInteractionAddress(message);
+  return Object.freeze({
+    ask: (request: Parameters<NonNullable<TurnRequestPorts['question']>['ask']>[0]) => (
+      interactions.ask(address, request, (text) => deliverInteraction(message, text))
+    ),
+  });
+}
+
+/** Consume an interaction reply before middleware, commands, or Agent fallback. */
+export function consumeRuntimeInteraction(
+  interactions: InteractionRouter,
+  message: Message,
+): Promise<boolean> {
+  const address = runtimeInteractionAddress(message);
+  if (!address) return Promise.resolve(false);
+  return interactions.consume({
+    ...address,
+    text: message.content,
+    deliver: (text) => deliverInteraction(message, text),
+  });
+}
+
+function runtimeInteractionAddress(
+  message: Message,
+): Readonly<{ sessionKey: string; subjectId: string }> | undefined {
+  const platform = capabilityLocalName(String(message.conversation.endpoint.id)).trim();
+  const endpoint = message.endpointId?.trim();
+  const subjectId = message.sender?.id?.trim();
+  const sceneId = message.conversation.id.trim();
+  if (!platform || !endpoint || !subjectId || !sceneId) return undefined;
+  return Object.freeze({
+    sessionKey: `${platform}:${endpoint}:${message.conversation.kind}:${sceneId}`,
+    subjectId,
+  });
+}
+
+function requireRuntimeInteractionAddress(
+  message: Message,
+): Readonly<{ sessionKey: string; subjectId: string }> {
+  const address = runtimeInteractionAddress(message);
+  if (!address) {
+    throw new TypeError('Runtime interaction requires platform, endpoint, scene, and authenticated sender identity');
+  }
+  return address;
+}
+
+async function deliverInteraction(message: Message, text: string): Promise<void> {
+  const receipt = await message.$reply(text);
+  if (receipt.status !== 'sent') {
+    throw new Error(`Interaction delivery failed: ${receipt.status}${receipt.failure ? ` (${receipt.failure.code})` : ''}`);
+  }
+}
+
 function interactiveNetworkPolicy(
   config: ReturnType<AIService['getAgentConfig']>,
 ): TurnRequest['policy']['network'] | undefined {
@@ -1387,7 +1454,9 @@ export function withTriggerTimeout<T>(
 }
 
 function resolveChannelId(message: Message): string {
-  return message.conversation.id || (message.sender?.id ?? 'unknown');
+  const id = message.conversation.id.trim();
+  if (!id) throw new TypeError('Runtime IM ingress requires scene identity');
+  return id;
 }
 
 function capabilityLocalName(id: string): string {

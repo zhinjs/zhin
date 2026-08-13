@@ -44,6 +44,30 @@ import {
 import { resetKeyboardFallbackStoreForTests } from '../../src/built/interactive-segments/index.js';
 
 describe('IM Runtime', () => {
+  it('lets a root inbound claim consume pending interaction replies before middleware and commands', async () => {
+    const events: string[] = [];
+    const fixture = await createFixture(events, [], undefined, undefined, undefined, {
+      inboundClaim: async (message) => {
+        events.push(`claim:${message.content}`);
+        return true;
+      },
+    });
+    const result = await fixture.im.receive({
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private',
+        id: 'room',
+      },
+      content: '/gh issue list open',
+      sender: { id: 'alice' },
+    });
+
+    expect(result).toMatchObject({ matched: true, command: 'interaction' });
+    expect(events).toEqual(['endpoint:start', 'endpoint:open', 'claim:/gh issue list open']);
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
   it('resolves unmatched ingress from the held generation snapshot', async () => {
     const events: string[] = [];
     const fixture = await createFixture(events, []);
@@ -997,6 +1021,7 @@ async function createFixture(
     endpointSend?: (request: unknown) => unknown;
     endpointControl?: EndpointControl;
     outboundMiddleware?: (input: OutboundEnvelope, next: () => Promise<void>) => Promise<void> | void;
+    inboundClaim?: (message: Message) => boolean | Promise<boolean>;
   },
 ) {
   const root = rootPluginId();
@@ -1102,7 +1127,7 @@ async function createFixture(
       : []),
   ]);
   const store = new SnapshotStore({ ...base, projections });
-  const im = new ImRuntime();
+  const im = new ImRuntime({ inboundClaim: options?.inboundClaim });
   im.attach(store);
   await adapters.start();
   adapters.open();

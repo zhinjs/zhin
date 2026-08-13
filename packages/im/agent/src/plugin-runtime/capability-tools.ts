@@ -72,5 +72,6 @@ export function toolInvocationFromTurn(turn: TurnIngress | TurnRequest): ToolInv
         ? { filesystem: Object.freeze({ workspaceRoot: turn.policy.filesystem.workspaceRoot }) }
         : {}),
     }),
+    ...(turn.ports.question ? { question: turn.ports.question } : {}),
   });
 }

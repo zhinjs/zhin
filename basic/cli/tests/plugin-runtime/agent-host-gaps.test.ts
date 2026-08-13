@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { Message } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import { resolveIMSessionIdFromMessage, type AITriggerConfig } from '@zhin.js/core';
-import type { ImTranscriptWriteInput } from '@zhin.js/agent';
+import { InteractionRouter, type ImTranscriptWriteInput } from '@zhin.js/agent';
 import {
   bridgeRuntimeMessage,
   createRuntimeTurnRequest,
+  createRuntimeQuestionPort,
+  consumeRuntimeInteraction,
   recordRuntimeTranscript,
   recordPassiveGroupContext,
   resolveRuntimeSenderRoles,
@@ -115,6 +117,28 @@ describe('canonical IM TurnRequest ingress', () => {
   });
 });
 
+describe('canonical IM interaction adapter', () => {
+  it('routes a later message from the same authenticated session into QuestionPort', async () => {
+    const delivered: string[] = [];
+    const router = new InteractionRouter();
+    const questionMessage = makeMessageWithReply('start', delivered);
+    const port = createRuntimeQuestionPort(router, questionMessage);
+    const answer = port.ask({
+      requestId: 'q1', question: 'How many?', type: 'number', signal: new AbortController().signal,
+    });
+
+    await expect.poll(() => delivered[0]).toBe('How many?');
+    await expect(consumeRuntimeInteraction(router, makeMessageWithReply('42', delivered))).resolves.toBe(true);
+    await expect(answer).resolves.toEqual({ type: 'number', value: 42 });
+  });
+
+  it('does not claim messages without canonical endpoint identity', async () => {
+    const router = new InteractionRouter();
+    await expect(consumeRuntimeInteraction(router, makeMessage({ content: '42', metadata: {} })))
+      .resolves.toBe(false);
+  });
+});
+
 /** 测试便利：legacy `kind:id` 串 → ConversationRef（仅测试侧组帧用）。 */
 function conversationFromTarget(target: string) {
   const match = /^(private|group|channel):(.+)$/.exec(target);
@@ -148,6 +172,24 @@ function makeMessage(input: {
     input.segments,
     { conversation, id: 'm1' },
     typeof input.metadata?.endpoint === 'string' ? input.metadata.endpoint : undefined,
+  );
+}
+
+function makeMessageWithReply(content: string, delivered: string[]): Message {
+  const conversation = conversationFromTarget('group:100');
+  return new Message(
+    conversation,
+    content,
+    1,
+    async (output) => {
+      delivered.push(String(output));
+      return { status: 'sent' as const };
+    },
+    { id: 'user-1', name: 'Alice' },
+    Object.freeze({ endpoint: '10001' }),
+    undefined,
+    { conversation, id: `m${delivered.length + 1}` },
+    '10001',
   );
 }
 

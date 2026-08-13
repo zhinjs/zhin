@@ -18,6 +18,28 @@ export interface ToolInvocationPolicy {
   }>;
 }
 
+export type ToolQuestionType = 'text' | 'number' | 'confirm' | 'pick';
+
+export interface ToolQuestionRequest {
+  readonly requestId: string;
+  readonly question: string;
+  readonly type: ToolQuestionType;
+  readonly options?: readonly string[];
+  readonly defaultValue?: string;
+  readonly timeoutMs?: number;
+  readonly signal: AbortSignal;
+}
+
+export type ToolQuestionAnswer =
+  | Readonly<{ type: 'text'; value: string }>
+  | Readonly<{ type: 'number'; value: number }>
+  | Readonly<{ type: 'confirm'; value: boolean }>
+  | Readonly<{ type: 'pick'; value: string; index: number }>;
+
+export interface ToolQuestionPort {
+  ask(input: ToolQuestionRequest): Promise<ToolQuestionAnswer>;
+}
+
 export type ToolInvocationOrigin =
   | Readonly<{
       kind: 'im';
@@ -46,6 +68,7 @@ export interface ToolInvocationContext {
     roles: readonly string[];
   }>;
   readonly policy: ToolInvocationPolicy;
+  readonly question?: ToolQuestionPort;
 }
 
 export interface ToolExecutionContext<TConfig = unknown> extends CapabilityContext<TConfig> {
@@ -56,6 +79,7 @@ export interface ToolExecutionContext<TConfig = unknown> extends CapabilityConte
   readonly origin: ToolInvocationOrigin;
   readonly principal: ToolInvocationContext['principal'];
   readonly policy: ToolInvocationPolicy;
+  readonly question?: ToolQuestionPort;
 }
 
 export interface AgentToolDefinition<
