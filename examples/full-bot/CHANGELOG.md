@@ -1,5 +1,62 @@
 # full-bot
 
+## 0.0.23
+
+### Patch Changes
+
+- Updated dependencies [6f9c366]
+- Updated dependencies [373a56b]
+- Updated dependencies [0de46a8]
+- Updated dependencies [ba08a2f]
+- Updated dependencies [b08f7fe]
+- Updated dependencies [51015d6]
+- Updated dependencies [d99fd12]
+- Updated dependencies [daffd4c]
+- Updated dependencies [36c7400]
+- Updated dependencies [a9fa72e]
+- Updated dependencies [c8de3ef]
+- Updated dependencies [60f0fc8]
+- Updated dependencies [574c990]
+- Updated dependencies [d096f16]
+- Updated dependencies [3f29623]
+- Updated dependencies [2916852]
+- Updated dependencies [d047869]
+- Updated dependencies [162fa34]
+- Updated dependencies [e62561e]
+- Updated dependencies [3eeeb46]
+- Updated dependencies [85d0f82]
+- Updated dependencies [61bfc1c]
+- Updated dependencies [04bad47]
+- Updated dependencies [e40b048]
+- Updated dependencies [5a5b1bb]
+- Updated dependencies [f1708c3]
+- Updated dependencies [d254a81]
+- Updated dependencies [7123c47]
+- Updated dependencies [05befc1]
+- Updated dependencies [0663b6a]
+- Updated dependencies [f28f9b3]
+- Updated dependencies [9f340f7]
+- Updated dependencies [e53444f]
+- Updated dependencies [5eedd26]
+- Updated dependencies [92b0dd7]
+- Updated dependencies [f919b6f]
+- Updated dependencies [098e411]
+- Updated dependencies [e1b7c01]
+- Updated dependencies [9b94f87]
+- Updated dependencies [a7df753]
+  - @zhin.js/agent@1.1.5
+  - zhin.js@6.0.4
+  - @zhin.js/adapter-kook@7.0.5
+  - @zhin.js/adapter-napcat@6.0.5
+  - @zhin.js/mcp@6.0.4
+  - @zhin.js/tool@1.0.8
+  - @zhin.js/satori@1.0.19
+  - @zhin.js/a2a@3.0.5
+  - @zhin.js/adapter-sandbox@7.0.4
+  - @zhin.js/page@1.0.8
+  - @zhin.js/skill@1.0.8
+  - @zhin.js/client@2.1.6
+
 ## 0.0.22
 
 ### Patch Changes

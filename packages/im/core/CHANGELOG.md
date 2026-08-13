@@ -1,5 +1,113 @@
 # @zhin.js/core
 
+## 1.5.4
+
+### Patch Changes
+
+- b0f37ae: refactor(core): integrate permission host and canonical endpoint control
+
+  Adapter now routes recall/edit operations through the canonical EndpointControl
+  port, with classic $-prefixed methods bridged via resolveEndpointControl.
+  CommandFeature and MessageCommand accept PermissionHost for declarative
+  permit checks. Dispatcher accepts an optional permissionHost option.
+  ImRuntime provides the permission host via DI. MessageCommand uses
+  toPermissionSubject for duck-typed subject projection.
+
+- 36c7400: Replace `AgentPromptBuildContext.commMessage` with an authenticated platform projection and make Agent prompt assembly consume canonical Turn identity. Platform contributors and prompt hooks no longer receive a classic IM `Message`.
+
+  Remove the unused Message field and active-context escape hatch from PromptController; turn scheduling is keyed only by canonical session identity.
+
+- 162fa34: Publish `ask_user` as a generation-owned ToolFeature backed by a Root-owned, origin-neutral InteractionRouter.
+
+  Tool execution now receives an optional turn-scoped QuestionPort. The IM composition root binds that port to the canonical session and authenticated sender, and ImRuntime can claim pending interaction replies before middleware, commands, or Agent fallback. Invalid replies use the current message's delivery authority; the router never retains an expired Runtime Message or Adapter handle. Missing interactive authority, ambiguous sessions, delivery failures, cancellation, and Root shutdown fail closed.
+
+  BREAKING CHANGE: canonical Agent turns no longer rely on Plugin Prompt middleware or mutable global ask-user registries for `ask_user`. Ingress adapters that support interactive questions must provide a QuestionPort; unattended turns cannot expose one.
+
+- e40b048: Require generation leases at the IM ingress route instead of exposing a bare
+  snapshot. Snapshot leases are store-owned, expose their active state, and can
+  be rejected when presented to an Agent Runtime attached to another Root.
+
+  Project configured MCP clients into the generation lifecycle. Configured
+  servers must become ready during candidate activation; activation failure is
+  fail-closed and leaves the previous generation serving traffic. Agent bindings
+  filter the MCP servers visible to a turn, and MCP tools use owner-qualified
+  `${qualifiedServer}__${tool}` names with fail-closed approval metadata.
+
+- f1708c3: 将彩票 Agent 工具迁入正式 `tools/*.ts` ToolFeature 约定目录。
+
+  删除已移除的 `AgentToolsHost` 动态注册桥与 `agent/runtime-tools` 中间层；工具现在由 Plugin Runtime 在候选 generation 中发现，并由标准 prepack 构建器生成可发布的 JavaScript 入口。
+
+  Agent capability catalog 现在发布全树、owner-qualified 的 Tool identity（例如 `lottery__history`），避免子插件工具不可见及跨 owner 同名碰撞；执行边界会运行 Zod-like `safeParse` schema，非法输入在进入工具前 fail-closed。
+
+  Lottery 的 Tool、Command、pipeline 与 outbound 全部从 owner capability runtime 读取资源；删除进程级 DB、Agent deps、push 注册表和 fallback，多实例与跨 generation 执行因此保持隔离。插件将 `zod` 声明为真实运行时依赖，保证 ToolFeature 在不安装 Agent 的合法部署中也可被发现。
+
+  Tool approval 的 `on-risk` 语义现在完整贯穿 Core transport 与 Agent approval gate，不再在 Plugin Runtime capability 投影中丢失。
+
+- e53444f: refactor!: 架构债第二轮（asPrivate 零强转、窄接口域拆分、JSX 全局冲突根治、测试面真迁移）
+
+  - **agent**：`asPrivate` 强转彻底去除——门面类与 `ZhinAgentPrivate` 全量对齐，编译期校验恢复；接口按域拆窄（`AgentSessionHost` / `AgentContextHost` / `AgentTurnLifecycleHost` / `AgentEmitterHost`）；`HostPromptController.schedule` 伪泛型修正（toolCalls 收紧为 `ToolCallRecord[]`）；零调用门面成员删除。
+  - **core + satori**：两处全局 `JSX.Element` 声明改为模块作用域 `export namespace JSX`（语义不同的两套 JSX 模型不再互斥），`zhin.js/jsx-runtime` 类型前转补齐；examples components 回归 type-check 编译面。
+  - **ai**：OpenAI wire 类型（`ChatCompletionRequest/Response/Choice`、`ToolDefinition`/`ChatToolDefinition`）与 **`ContentPart` 本体及全部 shim**（`processMultimodal`、`normalizeContentPartsToPayloads`、`summarizeContentParts`、`prepareMultimodalBlocks`、`createInboundTurnPipeline` 兼容门面）从公共面彻底删除——agent 测试 mock 已迁 ai-sdk 原生面（`wireMockLlmApi` 直注册 ai-sdk stream，断言面收敛到 AgentMessage 层）；`ChatMessage.content` 收窄为 `string`；891 行死沙箱 `sandbox-enhanced.ts` 连文件删除；init 镜像入口的 `as unknown as` 强转消除。
+
+  BREAKING CHANGE：上述公共导出收窄项；JSX 全局命名空间不再由 `@zhin.js/core`/`@zhin.js/satori` 提供（经 jsxImportSource 的消费链不受影响）。
+
+- 92b0dd7: refactor: complete plugin dual-track elimination (Slices 3–4)
+
+  Remove all `getHostRootPlugin()` call sites (30+ occurrences across security,
+  collaboration, media, memory, prompt, and orchestrator modules); dead branches
+  collapse to defaults/fallbacks. Expand harness to ban `getHostRootPlugin()` in
+  all packages.
+
+  Stub `initAgentModule()` and `registerAI()` as throwing — the Plugin Runtime
+  (`zhin runtime start`) is the sole entry path; `basic/cli` assembles the Agent
+  stack directly.
+
+  Mark `PluginBase.provide()` / `.inject()` as `@deprecated @internal`; the
+  service bus is superseded by Scope + Token (introduced in Slice 2).
+
+  Simplify `host-plugin-registry.ts` to minimal no-op signatures. Move
+  `AIServiceRefs` type to `internal/` so live collaboration/orchestrator code
+  no longer depends on dead `init/` modules.
+
+  Clean `setHostRootPlugin` / `getHostRootPlugin` mocks from 8 test files;
+  update agent README to remove `initAgentModule` usage examples.
+
+- a7df753: refactor!: Wave 2 架构债清理（ContentPart 终结 + 死面清剿 + agent 结构收敛）
+
+  **AI 层**
+
+  - `preprocessInboundMedia` / `buildSubagentInboundTask` 入参收窄为 canonical 单形态（ContentPart union 臂删除）。
+  - 删除死面：`INBOUND_MEDIA_PARTS_EXTRA_KEY`、`userMessageToFilterText`、tool-policy `always/once/never` 别名、ContentPart `face` 变体、`describeVisionPartsAsText`；`processMultimodal` 等公网 shim 标 `@deprecated`（下个大版本删除）。
+  - 测试桥归位：`createOpenAiCompletionsStreamFn` 及 wire 转换器移出公共 API（入 agent 测试目录）；`openai-bridge` 只剩 `assistantText`；`legacy-tool-bridge.ts` 正名 `tool-bridge.ts`。
+  - 类型修复：`ModelApi = 'ai-sdk' | (string & {})`；`AgentTool.execute` 与实现对齐为三参（删 `as` 强转）。
+
+  **core 层**
+
+  - 死导出整批删除（均零引用）：`AITool`、撞名 `ToolDefinition`、`NoticeType/RequestType`、Interactive 别名全簇、`PermissionService`/`ConfigService` 别名、`getLiveEndpoint`、`qrcode-segment` 整文件；热路径不再自用 deprecated 别名（`resolveInteractiveSegments` 删除，改 `resolveKeyboardSegments`）。
+  - im-contract 双 legacy 格式化函数二合一（`formatLegacyMessageRef` 为唯一公开 API）；ai-outbound 的 legacy `kind` 回退分支删除。
+
+  **agent 层**
+
+  - `ZhinAgentPrivate` 58 → 43 成员：死成员/零读取成员删除，deferred 族收敛为 `DeferredTurnState` 模块，三份手工镜像改为权威接口 Pick，`readonly` 名不副实纠偏，AutoContinueHost 单参化。
+  - 4 个值导入循环解环（纯函数下沉 collab-utils / ask-user-format / memory-layers）；prompt 双轨收敛（3 个零调用导出 + 死分支删除）；死文件删除；`sandbox-enhanced` 挂 `@deprecated` 摘出公共导出；`tokenUsageToLegacy` 合一、`AGENT_ROLE_CONFIGS` 拆表。
+
+  BREAKING CHANGE：上述删除项均为公共导出面的收窄，详见各条。
+
+- Updated dependencies [c106ecc]
+- Updated dependencies [ca92e03]
+- Updated dependencies [daffd4c]
+- Updated dependencies [e40b048]
+- Updated dependencies [92b0dd7]
+- Updated dependencies [a7df753]
+  - @zhin.js/permission@1.0.1
+  - @zhin.js/im-contract@1.0.3
+  - @zhin.js/adapter@1.1.7
+  - @zhin.js/plugin-runtime@1.1.5
+  - @zhin.js/command@1.0.9
+  - @zhin.js/kernel@1.0.7
+  - @zhin.js/component@1.0.8
+  - @zhin.js/middleware@1.0.8
+
 ## 1.5.3
 
 ### Patch Changes

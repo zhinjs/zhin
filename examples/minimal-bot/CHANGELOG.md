@@ -1,5 +1,15 @@
 # minimal-bot
 
+## 0.0.24
+
+### Patch Changes
+
+- Updated dependencies [ba08a2f]
+- Updated dependencies [e53444f]
+- Updated dependencies [92b0dd7]
+  - zhin.js@6.0.4
+  - @zhin.js/satori@1.0.19
+
 ## 0.0.23
 
 ### Patch Changes

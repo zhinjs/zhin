@@ -1,5 +1,223 @@
 # @zhin.js/agent
 
+## 1.1.5
+
+### Patch Changes
+
+- 6f9c366: Make the full Agent Core origin-neutral by removing legacy IM Message and Plugin
+  lifecycle dependencies from model execution, compaction, and tool hooks. Tool
+  security remains exclusively owned by the required per-turn
+  `ToolExecutionAuthority`.
+- 373a56b: Make the full Agent Core depend on one required ToolExecutionAuthority. Policy, approval, journal, cancellation, and execution now remain behind a turn-owned adapter, allowing canonical TurnToolRuntime execution without a second Agent loop or duplicate approval path.
+- 0de46a8: 删除进程级 `AgentRuntimeRegistry` 与按 Endpoint 复制 `ZhinAgent` 的运行时子图。
+
+  Plugin Runtime 现在只有一个 generation-owned Agent 权威；协作任务通过显式 binding 在该 Agent 的 SubAgent 系统中执行，不再通过 Endpoint key 查找或隐式回退到另一个可变 Agent 实例。持久化就绪状态也只提交给当前 generation 的 Agent。
+
+  Console 的 Agent 工具、MCP、会话树、Assistant 与 Orchestration 端口统一从其正在观察的 `RuntimeSnapshot` 根资源读取 `agentHostToken`，不再拼接多个“最新 generation”全局 store。相应移除公开的 registry/bootstrap API。
+
+  Console Host 的 Agent runtime 接口改为 lease-bound `acquireAgentRuntime`；所有异步 Session、Assistant 与 Orchestration 操作在完成前持有 generation lease，避免 HMR 中途销毁正在使用的旧代资源。
+
+- b08f7fe: refactor(agent): migrate global registries to generation-scoped stores
+
+  Replace module-level global singletons with createGenerationStore across
+  orchestration, schedule, session-tree, typing-indicator, assistant,
+  collaboration, and memory-entry registries. Pattern changes from
+  set*/register* to provide\* with lifecycle-bound disposal. AgentDispatcher
+  is now owned by OrchestrationKernel instead of a global singleton.
+  AIService removes chat/chatStream/ask methods (use completeText).
+  New spawn-delegation module detects async vs sync spawn_task results.
+  KeyedMutex utility added for per-key async serialization.
+
+- daffd4c: 建立 generation-owned Agent Turn 基建并删除第二工具注册权威。
+
+  - Tool capability 统一由 `tools/*.ts` 或 `context.addTool()` 写入候选 generation，并在 commit 后通过唯一 `ToolIndex` 发布；删除 experimental `agentToolsHostToken`。
+  - Tool execution context 现必须携带 Turn AbortSignal、trace/turn/session identity 与 principal；生产工具执行等待真实 settlement 后再释放 generation lease。
+  - 新增 durable Turn Journal 与 crash-safe File Journal Store，按 sequence 原子发布、跨实例拒绝 stale writer，并保留可 replay 的 terminal facts。
+  - MCP 外部工具调用改走固定 snapshot 的 canonical Tool ingress、统一审批/Journal/取消链；删除 `allowApprovalTools` 绕过开关。
+  - ApprovalPort 现在必须消费所属 Turn 的 AbortSignal，取消审批等待时 fail closed。
+
+  BREAKING CHANGE: `ToolIndex.execute()` 新增必需的 invocation context；`JournalStore.append()` 新增 expected previous sequence；MCP 删除 `allowApprovalTools`；`agentToolsHostToken` 不再导出，条件式工具改用 `context.addTool()`。
+
+- 36c7400: Replace `AgentPromptBuildContext.commMessage` with an authenticated platform projection and make Agent prompt assembly consume canonical Turn identity. Platform contributors and prompt hooks no longer receive a classic IM `Message`.
+
+  Remove the unused Message field and active-context escape hatch from PromptController; turn scheduling is keyed only by canonical session identity.
+
+- a9fa72e: Make Context System builders and injectors consume canonical Turn identity rather than Core IM `Message`. Schedule context is now selected explicitly from the Turn origin, uses a native Schedule session/principal projection, and fails closed when the job identity is absent.
+- c8de3ef: Replace Home Assistant's legacy `ZhinTool` and IM `Message` execution boundary with native generation-owned Agent Tool definitions. Home authorization now consumes the authenticated canonical tool principal, and the CLI publishes Home tools only through the Tool Feature projection.
+
+  Configured Agent and Home candidate initialization now fail closed instead of publishing a generation with the requested capability silently absent.
+
+- 60f0fc8: Route production IM Agent turns through the Root-owned `AgentRuntime` and the
+  generation-owned full `AgentTurnEngine`. Add canonical deferred capability
+  loading for projected tools and skills, keep policy/audit execution under the
+  turn authority, and remove the production `ZhinAgent.processTurn` bridge.
+- 574c990: Replace Message-based passive group context APIs with canonical session/principal observations, remove the deprecated append API, and make TurnIngress session preparation drain passive context by its fixed session identity.
+- d096f16: Replace schedule management tools' legacy `ZhinTool` and IM `Message` boundary with native Agent Tool definitions and canonical invocation identity. Schedule creation now derives creator and delivery target from the authenticated tool principal and origin.
+
+  Remove the process-global Schedule manager registry. Every generated Schedule Tool set closes over its own generation manager, preventing in-flight old-generation turns from crossing into a newer engine.
+
+- 3f29623: Require every Tool invocation to carry immutable permission, unattended, and network policy into `ToolExecutionContext`. Tool transports can now enforce the exact fixed-Turn authority at each side-effect boundary without process-global execution context.
+- 2916852: Make canonical invocation origin and principal display identity part of every
+  Tool execution context. IM, HTTP, A2A, Schedule, Internal, and MCP callers now
+  carry structured origin data through ToolIndex instead of requiring tools to
+  read a legacy IM Message side channel.
+- d047869: Make the canonical Turn Tool Runtime enforce file and Bash policy before execution. File writes, sensitive reads, unsafe shell commands, shell mutations, and shell reads of sensitive paths now use the shared policy facade and fail closed from authenticated Turn principal roles.
+- 162fa34: Publish `ask_user` as a generation-owned ToolFeature backed by a Root-owned, origin-neutral InteractionRouter.
+
+  Tool execution now receives an optional turn-scoped QuestionPort. The IM composition root binds that port to the canonical session and authenticated sender, and ImRuntime can claim pending interaction replies before middleware, commands, or Agent fallback. Invalid replies use the current message's delivery authority; the router never retains an expired Runtime Message or Adapter handle. Missing interactive authority, ambiguous sessions, delivery failures, cancellation, and Root shutdown fail closed.
+
+  BREAKING CHANGE: canonical Agent turns no longer rely on Plugin Prompt middleware or mutable global ask-user registries for `ask_user`. Ingress adapters that support interactive questions must provide a QuestionPort; unattended turns cannot expose one.
+
+- e62561e: Replace Message-based inbound media resolution with canonical `TurnMedia` processing. IM segment fallback and platform references are projected only by the ingress adapter before media materialization, transcription, and model injection.
+- 3eeeb46: Add explicit, fail-closed network authority to canonical Turn policy. Web tools and Bash network commands are denied unless the Turn grants network access; URL-bearing operations enforce absolute URLs, HTTPS constraints, SSRF protection, and domain allowlists before execution.
+- 85d0f82: Require an explicit immutable Agent prompt profile for interactive and Schedule Turns. Prompt assembly no longer discovers Schedule mode from ambient storage or borrows synthetic IM platform/session fields, and the unused fast-path prompt API has been removed.
+- 61bfc1c: Fail closed on Agent session and context persistence failures. Database errors now surface as typed `PersistenceUnavailableError` instead of being reinterpreted as Not Found, empty history, or successful metadata writes.
+
+  Make `ContextRepository` the sole Agent session archive authority and remove the duplicate Store archive command that previously reported false after a successful archive.
+
+- 04bad47: Fail closed when a required tool execution fact cannot be written to the Turn
+  Journal. Journal integrity failures now abort the model loop and return the
+  stable `turn_journal_commit_failed` outcome instead of becoming tool output.
+- e40b048: Require generation leases at the IM ingress route instead of exposing a bare
+  snapshot. Snapshot leases are store-owned, expose their active state, and can
+  be rejected when presented to an Agent Runtime attached to another Root.
+
+  Project configured MCP clients into the generation lifecycle. Configured
+  servers must become ready during candidate activation; activation failure is
+  fail-closed and leaves the previous generation serving traffic. Agent bindings
+  filter the MCP servers visible to a turn, and MCP tools use owner-qualified
+  `${qualifiedServer}__${tool}` names with fail-closed approval metadata.
+
+- 5a5b1bb: Resolve the complete Agent Turn engine from the fixed generation snapshot instead of capturing a constructor callback. `AgentRuntime` now fails closed when the active generation does not provide `agentTurnEngineToken`.
+- f1708c3: 将彩票 Agent 工具迁入正式 `tools/*.ts` ToolFeature 约定目录。
+
+  删除已移除的 `AgentToolsHost` 动态注册桥与 `agent/runtime-tools` 中间层；工具现在由 Plugin Runtime 在候选 generation 中发现，并由标准 prepack 构建器生成可发布的 JavaScript 入口。
+
+  Agent capability catalog 现在发布全树、owner-qualified 的 Tool identity（例如 `lottery__history`），避免子插件工具不可见及跨 owner 同名碰撞；执行边界会运行 Zod-like `safeParse` schema，非法输入在进入工具前 fail-closed。
+
+  Lottery 的 Tool、Command、pipeline 与 outbound 全部从 owner capability runtime 读取资源；删除进程级 DB、Agent deps、push 注册表和 fallback，多实例与跨 generation 执行因此保持隔离。插件将 `zod` 声明为真实运行时依赖，保证 ToolFeature 在不安装 Agent 的合法部署中也可被发现。
+
+  Tool approval 的 `on-risk` 语义现在完整贯穿 Core transport 与 Agent approval gate，不再在 Plugin Runtime capability 投影中丢失。
+
+- d254a81: Publish the built-in file capability family as native, generation-owned ToolFeatures on the canonical IM Turn path.
+
+  File execution now requires explicit Turn workspace authority. The shared policy facade canonicalizes existing targets, symlinks, and missing write targets before checking workspace containment and sensitive paths, then passes that exact authorized input to the executor. Missing authority, home-relative paths, directory escape, and symlink escape fail closed. Native read, write, edit, list, glob, and grep tools consume ToolExecutionContext and AbortSignal directly; glob and grep no longer spawn shell commands.
+
+  BREAKING CHANGE: `runTurnToolPolicies` is asynchronous and successful/approval decisions carry the authorized input. `createRuntimeTurnRequest` requires `workspaceRoot`, and canonical file tools no longer permit paths outside that workspace.
+
+- 7123c47: Publish `web_fetch` and `web_search` as native generation-owned ToolFeatures on the canonical IM Turn path.
+
+  Both tools now use one Turn-scoped network module that authorizes every redirect hop, rejects non-public DNS results, pins the socket connection to the reviewed address while preserving HTTPS SNI and Host, enforces cancellation, timeout, redirect, and response-size limits, and records transport policy rejection as a canonical denied tool event. Interactive IM turns receive HTTPS authority only from the explicit `network` execution preset.
+
+  BREAKING CHANGE: the canonical web tools no longer consume ambient AsyncLocalStorage network policy or automatic fetch redirects. Deployments must explicitly select the `network` preset, and non-public or non-HTTPS targets fail closed.
+
+- 05befc1: Make Agent session persistence origin-neutral. `agent_sessions` now stores only Agent session identity and lifecycle metadata; IM platform, endpoint, and scene fields remain exclusively in the IM transcript/session projection. HTTP, A2A, Schedule, and internal Turns can open Agent sessions without fabricating IM identities.
+- 0663b6a: Make the public Turn Context Envelope consume canonical Turn origin, principal, and session data instead of IM `Message`. IM metadata is now validated and projected only by the ingress adapter, while Schedule, HTTP, A2A, and internal Turns describe their native origins without fabricated platform fields.
+- f28f9b3: Remove ambient mutable Schedule state from the Agent turn context. Schedule authority now flows explicitly through the existing Context, Prompt, and Tool pipelines, while Schedule feedback events publish their job identity directly from TaskExecutor instead of mirroring it through legacy plugin-event ALS.
+- 9f340f7: Delete the classic Plugin/Message-based `ask_user` implementation and its global pending-session middleware.
+
+  Interactive clarification now has one authority: the generation-owned `ask_user` ToolFeature and turn-scoped QuestionPort. Security approval remains a separate, explicit ApprovalPort and fails closed when the ingress does not provide one. AIService no longer accepts a Plugin to inject interactive tools, classic built-in aggregation no longer publishes `ask_user`, and post-tool owner prompting no longer bypasses the approval boundary.
+
+  BREAKING CHANGE: `AskUserBuiltinTool`, `AskUserSessionService`, `createAskUserTool`, `AIService.setPlugin`, `ImApprovalAdapter`, `SessionInteractionPort`, and owner hard-orchestration exports are removed. Hosts must provide QuestionPort for ordinary questions and ApprovalPort for security decisions.
+
+- e53444f: refactor!: 架构债第二轮（asPrivate 零强转、窄接口域拆分、JSX 全局冲突根治、测试面真迁移）
+
+  - **agent**：`asPrivate` 强转彻底去除——门面类与 `ZhinAgentPrivate` 全量对齐，编译期校验恢复；接口按域拆窄（`AgentSessionHost` / `AgentContextHost` / `AgentTurnLifecycleHost` / `AgentEmitterHost`）；`HostPromptController.schedule` 伪泛型修正（toolCalls 收紧为 `ToolCallRecord[]`）；零调用门面成员删除。
+  - **core + satori**：两处全局 `JSX.Element` 声明改为模块作用域 `export namespace JSX`（语义不同的两套 JSX 模型不再互斥），`zhin.js/jsx-runtime` 类型前转补齐；examples components 回归 type-check 编译面。
+  - **ai**：OpenAI wire 类型（`ChatCompletionRequest/Response/Choice`、`ToolDefinition`/`ChatToolDefinition`）与 **`ContentPart` 本体及全部 shim**（`processMultimodal`、`normalizeContentPartsToPayloads`、`summarizeContentParts`、`prepareMultimodalBlocks`、`createInboundTurnPipeline` 兼容门面）从公共面彻底删除——agent 测试 mock 已迁 ai-sdk 原生面（`wireMockLlmApi` 直注册 ai-sdk stream，断言面收敛到 AgentMessage 层）；`ChatMessage.content` 收窄为 `string`；891 行死沙箱 `sandbox-enhanced.ts` 连文件删除；init 镜像入口的 `as unknown as` 强转消除。
+
+  BREAKING CHANGE：上述公共导出收窄项；JSX 全局命名空间不再由 `@zhin.js/core`/`@zhin.js/satori` 提供（经 jsxImportSource 的消费链不受影响）。
+
+- 5eedd26: Publish `todo_read` and `todo_write` as native generation-owned ToolFeatures backed by a session-addressed, crash-safe TodoStore.
+
+  The canonical session key is now the only TODO identity. Storage filenames are hashes, replacements are serialized and atomically renamed, aborted writes are never published, and model input cannot select a chat identifier or filesystem path. `.zhin/` is now runtime-private state and generic file tools cannot read or enumerate journals, TODO documents, or other authority-owned files.
+
+  BREAKING CHANGE: `todo_read` and `todo_write` no longer accept `chat_id`; TODO state is isolated by the canonical Turn session and moved to `.zhin/todos`.
+
+- 92b0dd7: refactor: complete plugin dual-track elimination (Slices 3–4)
+
+  Remove all `getHostRootPlugin()` call sites (30+ occurrences across security,
+  collaboration, media, memory, prompt, and orchestrator modules); dead branches
+  collapse to defaults/fallbacks. Expand harness to ban `getHostRootPlugin()` in
+  all packages.
+
+  Stub `initAgentModule()` and `registerAI()` as throwing — the Plugin Runtime
+  (`zhin runtime start`) is the sole entry path; `basic/cli` assembles the Agent
+  stack directly.
+
+  Mark `PluginBase.provide()` / `.inject()` as `@deprecated @internal`; the
+  service bus is superseded by Scope + Token (introduced in Slice 2).
+
+  Simplify `host-plugin-registry.ts` to minimal no-op signatures. Move
+  `AIServiceRefs` type to `internal/` so live collaboration/orchestrator code
+  no longer depends on dead `init/` modules.
+
+  Clean `setHostRootPlugin` / `getHostRootPlugin` mocks from 8 test files;
+  update agent README to remove `initAgentModule` usage examples.
+
+- f919b6f: Add one Turn Event source module that owns concurrent worker-to-stream bridging,
+  exactly-once terminal emission, error mapping, and worker settlement. Reuse it
+  from the existing streaming turn path so future IM ingress adapters do not
+  reimplement event queues or release generation leases while work is active.
+
+  Agent surface diagnostics now include root `tools/` convention entries as well
+  as `agent/tools/`, matching Plugin Runtime discovery.
+
+- 098e411: Schedule the canonical Agent `TurnEvent` stream through `PromptController` and
+  persist synthesized failure, cancellation, and missing-terminal facts before
+  returning a `TurnOutcome`.
+- e1b7c01: Commit the durable Agent terminal before conversation, session, metrics, and IM
+  reply projections. Projection failures are isolated diagnostics and cannot
+  rewrite the committed `TurnOutcome`.
+- 9b94f87: Replace Message-keyed deferred tool state with a turn-owned deferred controller. Deferred meta tools are now created by the Agent turn, concurrent turns and subagents receive isolated state, and the legacy WeakMap binding API has been removed.
+- a7df753: refactor!: Wave 2 架构债清理（ContentPart 终结 + 死面清剿 + agent 结构收敛）
+
+  **AI 层**
+
+  - `preprocessInboundMedia` / `buildSubagentInboundTask` 入参收窄为 canonical 单形态（ContentPart union 臂删除）。
+  - 删除死面：`INBOUND_MEDIA_PARTS_EXTRA_KEY`、`userMessageToFilterText`、tool-policy `always/once/never` 别名、ContentPart `face` 变体、`describeVisionPartsAsText`；`processMultimodal` 等公网 shim 标 `@deprecated`（下个大版本删除）。
+  - 测试桥归位：`createOpenAiCompletionsStreamFn` 及 wire 转换器移出公共 API（入 agent 测试目录）；`openai-bridge` 只剩 `assistantText`；`legacy-tool-bridge.ts` 正名 `tool-bridge.ts`。
+  - 类型修复：`ModelApi = 'ai-sdk' | (string & {})`；`AgentTool.execute` 与实现对齐为三参（删 `as` 强转）。
+
+  **core 层**
+
+  - 死导出整批删除（均零引用）：`AITool`、撞名 `ToolDefinition`、`NoticeType/RequestType`、Interactive 别名全簇、`PermissionService`/`ConfigService` 别名、`getLiveEndpoint`、`qrcode-segment` 整文件；热路径不再自用 deprecated 别名（`resolveInteractiveSegments` 删除，改 `resolveKeyboardSegments`）。
+  - im-contract 双 legacy 格式化函数二合一（`formatLegacyMessageRef` 为唯一公开 API）；ai-outbound 的 legacy `kind` 回退分支删除。
+
+  **agent 层**
+
+  - `ZhinAgentPrivate` 58 → 43 成员：死成员/零读取成员删除，deferred 族收敛为 `DeferredTurnState` 模块，三份手工镜像改为权威接口 Pick，`readonly` 名不副实纠偏，AutoContinueHost 单参化。
+  - 4 个值导入循环解环（纯函数下沉 collab-utils / ask-user-format / memory-layers）；prompt 双轨收敛（3 个零调用导出 + 死分支删除）；死文件删除；`sandbox-enhanced` 挂 `@deprecated` 摘出公共导出；`tokenUsageToLegacy` 合一、`AGENT_ROLE_CONFIGS` 拆表。
+
+  BREAKING CHANGE：上述删除项均为公共导出面的收窄，详见各条。
+
+- Updated dependencies [c106ecc]
+- Updated dependencies [b0f37ae]
+- Updated dependencies [c50aca3]
+- Updated dependencies [daffd4c]
+- Updated dependencies [36c7400]
+- Updated dependencies [3f29623]
+- Updated dependencies [2916852]
+- Updated dependencies [162fa34]
+- Updated dependencies [61bfc1c]
+- Updated dependencies [e40b048]
+- Updated dependencies [f1708c3]
+- Updated dependencies [d254a81]
+- Updated dependencies [05befc1]
+- Updated dependencies [e53444f]
+- Updated dependencies [92b0dd7]
+- Updated dependencies [a7df753]
+  - @zhin.js/permission@1.0.1
+  - @zhin.js/im-contract@1.0.3
+  - @zhin.js/plugin-runtime@1.1.5
+  - @zhin.js/core@1.5.4
+  - @zhin.js/ai@1.5.2
+  - @zhin.js/tool@1.0.8
+  - @zhin.js/mcp-feature@1.0.8
+  - @zhin.js/kernel@1.0.7
+  - @zhin.js/agent-feature@1.0.8
+  - @zhin.js/skill@1.0.8
+
 ## 1.1.4
 
 ### Patch Changes

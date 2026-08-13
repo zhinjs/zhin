@@ -1,5 +1,110 @@
 # test-bot
 
+## 0.1.130
+
+### Patch Changes
+
+- Updated dependencies [6f9c366]
+- Updated dependencies [373a56b]
+- Updated dependencies [0de46a8]
+- Updated dependencies [aea1f37]
+- Updated dependencies [ba08a2f]
+- Updated dependencies [b08f7fe]
+- Updated dependencies [51015d6]
+- Updated dependencies [d99fd12]
+- Updated dependencies [931435e]
+- Updated dependencies [daffd4c]
+- Updated dependencies [36c7400]
+- Updated dependencies [a9fa72e]
+- Updated dependencies [c8de3ef]
+- Updated dependencies [60f0fc8]
+- Updated dependencies [574c990]
+- Updated dependencies [d096f16]
+- Updated dependencies [3f29623]
+- Updated dependencies [2916852]
+- Updated dependencies [d047869]
+- Updated dependencies [162fa34]
+- Updated dependencies [e62561e]
+- Updated dependencies [3eeeb46]
+- Updated dependencies [85d0f82]
+- Updated dependencies [61bfc1c]
+- Updated dependencies [04bad47]
+- Updated dependencies [e40b048]
+- Updated dependencies [5a5b1bb]
+- Updated dependencies [f1708c3]
+- Updated dependencies [d254a81]
+- Updated dependencies [7123c47]
+- Updated dependencies [05befc1]
+- Updated dependencies [0663b6a]
+- Updated dependencies [f28f9b3]
+- Updated dependencies [9f340f7]
+- Updated dependencies [e53444f]
+- Updated dependencies [5eedd26]
+- Updated dependencies [92b0dd7]
+- Updated dependencies [f919b6f]
+- Updated dependencies [098e411]
+- Updated dependencies [e1b7c01]
+- Updated dependencies [9b94f87]
+- Updated dependencies [a7df753]
+  - @zhin.js/agent@1.1.5
+  - @zhin.js/cli@3.0.4
+  - zhin.js@6.0.4
+  - @zhin.js/adapter-dingtalk@6.0.5
+  - @zhin.js/adapter-discord@7.0.5
+  - @zhin.js/adapter-kook@7.0.5
+  - @zhin.js/adapter-lark@6.0.5
+  - @zhin.js/adapter-napcat@6.0.5
+  - @zhin.js/adapter-onebot11@6.0.5
+  - @zhin.js/adapter-qq@7.0.5
+  - @zhin.js/adapter-slack@6.0.5
+  - @zhin.js/adapter-telegram@7.0.5
+  - @zhin.js/adapter-wecom@4.0.5
+  - @zhin.js/service-activity-feedback@3.0.5
+  - @zhin.js/mcp@6.0.4
+  - @zhin.js/tool@1.0.8
+  - @zhin.js/adapter-icqq@8.0.5
+  - @zhin.js/adapter-github@5.0.5
+  - @zhin.js/mcp-feature@1.0.8
+  - @zhin.js/plugin-lottery@2.0.5
+  - @zhin.js/satori@1.0.19
+  - @zhin.js/adapter-line@4.0.5
+  - @zhin.js/adapter-milky@6.0.5
+  - @zhin.js/plugin-60s@4.0.5
+  - @zhin.js/plugin-code-runner@4.0.5
+  - @zhin.js/plugin-group-suite@4.0.5
+  - @zhin.js/plugin-qrcode@4.0.5
+  - @zhin.js/plugin-rss@4.0.5
+  - @zhin.js/plugin-short-url@4.0.5
+  - @zhin.js/adapter-onebot12@5.0.4
+  - @zhin.js/adapter-sandbox@7.0.4
+  - @zhin.js/adapter-satori@5.0.4
+  - @zhin.js/adapter-wechat-mp@5.0.4
+  - @zhin.js/adapter-email@5.0.4
+  - @zhin.js/adapter-weixin-ilink@5.0.4
+  - @zhin.js/page@1.0.8
+  - @zhin.js/agent-feature@1.0.8
+  - @zhin.js/middleware@1.0.8
+  - @zhin.js/skill@1.0.8
+  - @zhin.js/process-monitor@3.0.11
+  - @zhin.js/plugin-blackjack@0.0.12
+  - @zhin.js/plugin-dice-duel@1.0.12
+  - @zhin.js/plugin-dungeon-expedition@1.0.8
+  - @zhin.js/plugin-guess-number@1.0.12
+  - @zhin.js/plugin-game-hub@1.0.11
+  - @zhin.js/plugin-idiom-chain@1.0.12
+  - @zhin.js/plugin-rps@1.0.12
+  - @zhin.js/plugin-text-adventure@1.0.12
+  - @zhin.js/plugin-tic-tac-toe@1.0.12
+  - @zhin.js/plugin-word-riddle@1.0.12
+  - @zhin.js/plugin-content-moderation@1.0.1
+  - @zhin.js/plugin-link-poster@3.0.12
+  - @zhin.js/plugin-music@7.0.5
+  - @zhin.js/plugin-repeater@3.0.12
+  - @zhin.js/html-renderer@3.0.4
+  - @zhin.js/speech@3.0.4
+  - @zhin.js/contract@1.0.11
+  - @zhin.js/client@2.1.6
+
 ## 0.1.129
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @zhin.js/config-yaml
 
+## 1.0.9
+
+### Patch Changes
+
+- Updated dependencies [daffd4c]
+  - @zhin.js/runtime@1.0.9
+
 ## 1.0.8
 
 ### Patch Changes

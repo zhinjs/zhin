@@ -1,5 +1,68 @@
 # @zhin.js/adapter-dingtalk
 
+## 6.0.5
+
+### Patch Changes
+
+- 51015d6: refactor(adapters): migrate platform-permit to PermissionSubject
+
+  All adapter platform-permit checkers now accept PermissionSubject
+  (duck-typed from Message/CommandSession) instead of Message directly.
+  registerPlatformPermitChecker is replaced by host.registerPlatform in
+  the adapter plugin setup. activity-feedback service updated for new
+  PermissionHost integration.
+
+- Updated dependencies [6f9c366]
+- Updated dependencies [373a56b]
+- Updated dependencies [0de46a8]
+- Updated dependencies [c106ecc]
+- Updated dependencies [ca92e03]
+- Updated dependencies [b0f37ae]
+- Updated dependencies [ba08a2f]
+- Updated dependencies [b08f7fe]
+- Updated dependencies [daffd4c]
+- Updated dependencies [36c7400]
+- Updated dependencies [a9fa72e]
+- Updated dependencies [c8de3ef]
+- Updated dependencies [60f0fc8]
+- Updated dependencies [574c990]
+- Updated dependencies [d096f16]
+- Updated dependencies [3f29623]
+- Updated dependencies [2916852]
+- Updated dependencies [d047869]
+- Updated dependencies [162fa34]
+- Updated dependencies [e62561e]
+- Updated dependencies [3eeeb46]
+- Updated dependencies [85d0f82]
+- Updated dependencies [61bfc1c]
+- Updated dependencies [04bad47]
+- Updated dependencies [e40b048]
+- Updated dependencies [5a5b1bb]
+- Updated dependencies [f1708c3]
+- Updated dependencies [d254a81]
+- Updated dependencies [7123c47]
+- Updated dependencies [05befc1]
+- Updated dependencies [0663b6a]
+- Updated dependencies [f28f9b3]
+- Updated dependencies [9f340f7]
+- Updated dependencies [e53444f]
+- Updated dependencies [5eedd26]
+- Updated dependencies [92b0dd7]
+- Updated dependencies [f919b6f]
+- Updated dependencies [098e411]
+- Updated dependencies [e1b7c01]
+- Updated dependencies [9b94f87]
+- Updated dependencies [a7df753]
+  - @zhin.js/agent@1.1.5
+  - @zhin.js/host-http@1.0.8
+  - @zhin.js/permission@1.0.1
+  - @zhin.js/im-contract@1.0.3
+  - @zhin.js/adapter@1.1.7
+  - @zhin.js/plugin-runtime@1.1.5
+  - @zhin.js/command@1.0.9
+  - @zhin.js/core@1.5.4
+  - zhin.js@6.0.4
+
 ## 6.0.4
 
 ### Patch Changes

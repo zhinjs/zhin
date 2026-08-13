@@ -1,5 +1,30 @@
 # @zhin.js/plugin-runtime
 
+## 1.1.5
+
+### Patch Changes
+
+- c106ecc: feat(permission): add unified @zhin.js/permission package with builtin DSL (adapter/group/private/channel/user/role), PermissionHost, and platform permit checker. Extract LegacyEndpointControlSurface to im-contract. Support Unicode capability local names in plugin-runtime.
+- daffd4c: 建立 generation-owned Agent Turn 基建并删除第二工具注册权威。
+
+  - Tool capability 统一由 `tools/*.ts` 或 `context.addTool()` 写入候选 generation，并在 commit 后通过唯一 `ToolIndex` 发布；删除 experimental `agentToolsHostToken`。
+  - Tool execution context 现必须携带 Turn AbortSignal、trace/turn/session identity 与 principal；生产工具执行等待真实 settlement 后再释放 generation lease。
+  - 新增 durable Turn Journal 与 crash-safe File Journal Store，按 sequence 原子发布、跨实例拒绝 stale writer，并保留可 replay 的 terminal facts。
+  - MCP 外部工具调用改走固定 snapshot 的 canonical Tool ingress、统一审批/Journal/取消链；删除 `allowApprovalTools` 绕过开关。
+  - ApprovalPort 现在必须消费所属 Turn 的 AbortSignal，取消审批等待时 fail closed。
+
+  BREAKING CHANGE: `ToolIndex.execute()` 新增必需的 invocation context；`JournalStore.append()` 新增 expected previous sequence；MCP 删除 `allowApprovalTools`；`agentToolsHostToken` 不再导出，条件式工具改用 `context.addTool()`。
+
+- e40b048: Require generation leases at the IM ingress route instead of exposing a bare
+  snapshot. Snapshot leases are store-owned, expose their active state, and can
+  be rejected when presented to an Agent Runtime attached to another Root.
+
+  Project configured MCP clients into the generation lifecycle. Configured
+  servers must become ready during candidate activation; activation failure is
+  fail-closed and leaves the previous generation serving traffic. Agent bindings
+  filter the MCP servers visible to a turn, and MCP tools use owner-qualified
+  `${qualifiedServer}__${tool}` names with fail-closed approval metadata.
+
 ## 1.1.4
 
 ### Patch Changes

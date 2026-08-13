@@ -1,5 +1,47 @@
 # @zhin.js/mcp
 
+## 6.0.4
+
+### Patch Changes
+
+- d99fd12: remove(host/mcp): delete legacy MCP scaffolding tools
+
+  Remove handlers.ts, tools.ts, prompts.ts, and resources.ts (1,358 lines)
+  which contained outdated scaffolding code for plugin/command/component
+  generation. These were not part of the core MCP server functionality and
+  had no active consumers. mesh-auth.ts updated to remove orphaned imports.
+
+- daffd4c: 建立 generation-owned Agent Turn 基建并删除第二工具注册权威。
+
+  - Tool capability 统一由 `tools/*.ts` 或 `context.addTool()` 写入候选 generation，并在 commit 后通过唯一 `ToolIndex` 发布；删除 experimental `agentToolsHostToken`。
+  - Tool execution context 现必须携带 Turn AbortSignal、trace/turn/session identity 与 principal；生产工具执行等待真实 settlement 后再释放 generation lease。
+  - 新增 durable Turn Journal 与 crash-safe File Journal Store，按 sequence 原子发布、跨实例拒绝 stale writer，并保留可 replay 的 terminal facts。
+  - MCP 外部工具调用改走固定 snapshot 的 canonical Tool ingress、统一审批/Journal/取消链；删除 `allowApprovalTools` 绕过开关。
+  - ApprovalPort 现在必须消费所属 Turn 的 AbortSignal，取消审批等待时 fail closed。
+
+  BREAKING CHANGE: `ToolIndex.execute()` 新增必需的 invocation context；`JournalStore.append()` 新增 expected previous sequence；MCP 删除 `allowApprovalTools`；`agentToolsHostToken` 不再导出，条件式工具改用 `context.addTool()`。
+
+- 2916852: Make canonical invocation origin and principal display identity part of every
+  Tool execution context. IM, HTTP, A2A, Schedule, Internal, and MCP callers now
+  carry structured origin data through ToolIndex instead of requiring tools to
+  read a legacy IM Message side channel.
+- Updated dependencies [b0f37ae]
+- Updated dependencies [ba08a2f]
+- Updated dependencies [daffd4c]
+- Updated dependencies [36c7400]
+- Updated dependencies [3f29623]
+- Updated dependencies [2916852]
+- Updated dependencies [162fa34]
+- Updated dependencies [e40b048]
+- Updated dependencies [f1708c3]
+- Updated dependencies [d254a81]
+- Updated dependencies [e53444f]
+- Updated dependencies [92b0dd7]
+- Updated dependencies [a7df753]
+  - @zhin.js/core@1.5.4
+  - zhin.js@6.0.4
+  - @zhin.js/tool@1.0.8
+
 ## 6.0.3
 
 ### Patch Changes
