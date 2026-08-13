@@ -177,6 +177,8 @@ ai:
 | Meta | `discover`, `load_tool`, `load_skill`, `install_skill` |
 | Scheduling | `schedule_list`, `schedule_add`, `schedule_remove`, `schedule_pause`, `schedule_resume`, `schedule_preview` |
 
+File tools run only inside the project workspace explicitly authorized for the current Turn. Relative paths resolve from that workspace; absolute paths must still remain inside it; `~`, directory traversal, and symlinks targeting paths outside the workspace fail closed in the shared policy facade. Only the canonical path approved by policy reaches the ToolFeature executor, and `glob` / `grep` do not spawn shell processes.
+
 ## Assistant profile and scheduled tasks
 
 The Assistant runtime productizes "doing things on a schedule": persistent tasks are stored in `data/schedule-jobs.json` and executed by `ScheduleJobEngine` at the designated time, with results pushed back to IM.

@@ -13,6 +13,9 @@ export interface ToolInvocationPolicy {
     readonly httpsOnly?: boolean;
     readonly allowedDomains?: readonly string[];
   }>;
+  readonly filesystem?: Readonly<{
+    readonly workspaceRoot: string;
+  }>;
 }
 
 export type ToolInvocationOrigin =

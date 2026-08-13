@@ -177,6 +177,8 @@ ai:
 | 元 | `discover`、`load_tool`、`load_skill`、`install_skill` |
 | 调度 | `schedule_list`、`schedule_add`、`schedule_remove`、`schedule_pause`、`schedule_resume`、`schedule_preview` |
 
+文件工具只在当前 Turn 显式授权的项目 workspace 内运行。相对路径以该 workspace 为根；绝对路径必须仍位于其中；`~`、目录逃逸以及经符号链接指向 workspace 外的路径都会在统一策略门面中 fail-closed。策略批准后的 canonical 路径才会传给 ToolFeature 执行器，`glob` / `grep` 不启动 shell 子进程。
+
 ## Assistant profile 与调度任务
 
 Assistant 运行时把「定时做事」产品化：持久化任务存 `data/schedule-jobs.json`，由 `ScheduleJobEngine` 到点执行并把结果推回 IM。

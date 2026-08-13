@@ -55,6 +55,7 @@ describe('canonical IM TurnRequest ingress', () => {
       traceId: 'trace-1',
       turnId: 'turn-1',
       signal,
+      workspaceRoot: '/workspace',
       ports: {},
     });
 
@@ -79,14 +80,14 @@ describe('canonical IM TurnRequest ingress', () => {
         quote: { messageId: 'quoted-1', text: 'quoted body' },
       },
       session: { key: 'icqq:10001:group:100' },
-      policy: { permissions: ['trusted'], unattended: false },
+      policy: { permissions: ['trusted'], unattended: false, filesystem: { workspaceRoot: '/workspace' } },
     });
     expect(request.signal).toBe(signal);
   });
 
   it('fails closed when authenticated sender or endpoint identity is absent', () => {
     const signal = new AbortController().signal;
-    const options = { traceId: 't', turnId: 'u', signal, ports: {} } as const;
+    const options = { traceId: 't', turnId: 'u', signal, workspaceRoot: '/workspace', ports: {} } as const;
     expect(() => createRuntimeTurnRequest(makeMessage({
       content: 'x', sender: null, metadata: { endpoint: 'bot' },
     }), 'x', { isMaster: false, isTrusted: false }, options)).toThrow('sender identity');
@@ -102,7 +103,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const request = createRuntimeTurnRequest(message, 'x', {
       isMaster: false,
       isTrusted: true,
-    }, { traceId: 't', turnId: 'u', signal: new AbortController().signal, ports: {} });
+    }, { traceId: 't', turnId: 'u', signal: new AbortController().signal, workspaceRoot: '/workspace', ports: {} });
     expect(request.principal.roles).toEqual(['owner', 'admin', 'trusted']);
     expect(request.policy.permissions).toEqual(['owner', 'admin', 'trusted']);
   });

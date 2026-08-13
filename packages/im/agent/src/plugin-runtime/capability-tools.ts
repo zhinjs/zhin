@@ -68,6 +68,9 @@ export function toolInvocationFromTurn(turn: TurnIngress | TurnRequest): ToolInv
         httpsOnly: turn.policy.network?.httpsOnly,
         allowedDomains: Object.freeze([...(turn.policy.network?.allowedDomains ?? [])]),
       }),
+      ...(turn.policy.filesystem
+        ? { filesystem: Object.freeze({ workspaceRoot: turn.policy.filesystem.workspaceRoot }) }
+        : {}),
     }),
   });
 }

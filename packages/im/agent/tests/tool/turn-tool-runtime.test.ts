@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm, symlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { TurnEvent } from '../../src/event/turn-event.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
@@ -37,10 +40,10 @@ describe('TurnToolRuntime', () => {
 
   it('denies canonical file writes for a non-owner before execution', async () => {
     const execute = vi.fn(async () => 'unsafe write');
-    const { turn, events } = fixture();
+    const { turn, events } = fixture({ workspaceRoot: process.cwd() });
     const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'write_file')]);
 
-    await expect(runtime.execute('write_file', { path: '/tmp/output.txt' }, 'call-file')).resolves.toMatchObject({
+    await expect(runtime.execute('write_file', { file_path: 'output.txt' }, 'call-file')).resolves.toMatchObject({
       status: 'denied',
       policy: 'file-permission-matrix',
     });
@@ -50,15 +53,67 @@ describe('TurnToolRuntime', () => {
 
   it('denies canonical sensitive file reads for a regular user', async () => {
     const execute = vi.fn(async () => 'sensitive contents');
-    const { turn, events } = fixture();
+    const { turn, events } = fixture({ workspaceRoot: process.cwd() });
     const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'read_file')]);
 
-    await expect(runtime.execute('read_file', { path: '/etc/passwd' }, 'call-read')).resolves.toMatchObject({
+    await expect(runtime.execute('read_file', { file_path: '.env' }, 'call-read')).resolves.toMatchObject({
       status: 'denied',
-      policy: 'file-permission-matrix',
+      policy: 'workspace-access',
     });
     expect(execute).not.toHaveBeenCalled();
     expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_denied']);
+  });
+
+  it('fails closed when a file tool has no workspace authority', async () => {
+    const execute = vi.fn(async () => 'contents');
+    const { turn } = fixture({ roles: ['master'] });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'read_file')]);
+
+    await expect(runtime.execute('read_file', { file_path: 'README.md' }, 'call-no-workspace'))
+      .resolves.toMatchObject({ status: 'denied', policy: 'workspace-access' });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('normalizes file targets inside the authorized workspace before execution', async () => {
+    const execute = vi.fn(async () => 'contents');
+    const { turn } = fixture({ roles: ['master'], workspaceRoot: process.cwd() });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'read_file')]);
+
+    await expect(runtime.execute('read_file', { file_path: 'README.md' }, 'call-workspace'))
+      .resolves.toMatchObject({ status: 'completed' });
+    expect(execute).toHaveBeenCalledWith(
+      { file_path: `${process.cwd()}/README.md` },
+      expect.objectContaining({ policy: expect.objectContaining({ filesystem: { workspaceRoot: process.cwd() } }) }),
+    );
+  });
+
+  it('denies absolute paths outside the authorized workspace even for master', async () => {
+    const execute = vi.fn(async () => 'contents');
+    const { turn } = fixture({ roles: ['master'], workspaceRoot: process.cwd() });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'read_file')]);
+
+    await expect(runtime.execute('read_file', { file_path: '/etc/hosts' }, 'call-outside'))
+      .resolves.toMatchObject({ status: 'denied', policy: 'workspace-access' });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('denies a missing write target reached through a workspace symlink', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'zhin-workspace-'));
+    const outside = await mkdtemp(join(tmpdir(), 'zhin-outside-'));
+    try {
+      await symlink(join(outside, 'missing.txt'), join(workspace, 'escape.txt'));
+      const execute = vi.fn(async () => 'unsafe write');
+      const { turn } = fixture({ roles: ['master'], workspaceRoot: workspace });
+      const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'write_file')]);
+
+      await expect(runtime.execute('write_file', {
+        file_path: 'escape.txt', content: 'secret',
+      }, 'call-symlink')).resolves.toMatchObject({ status: 'denied', policy: 'workspace-access' });
+      expect(execute).not.toHaveBeenCalled();
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
+    }
   });
 
   it('denies canonical Bash mutations for a regular user', async () => {
@@ -219,18 +274,21 @@ function fixture(options: {
   approval?: import('../../src/session/session-interaction-port.js').ApprovalPort;
   network?: TurnPolicyContext['network'];
   journalError?: Error;
+  roles?: readonly string[];
+  workspaceRoot?: string;
 } = {}) {
   const events: TurnEvent[] = [];
   const turn = createTurnIngress({
     identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn' },
     origin: { kind: 'http', sessionId: 'http-session' },
-    principal: { subjectId: 'user', roles: ['user'] },
+    principal: { subjectId: 'user', roles: options.roles ?? ['user'] },
     input: { text: 'run' },
     session: { key: 'http:http-session' },
     policy: {
       permissions: ['user'],
       unattended: false,
       ...(options.network ? { network: options.network } : {}),
+      ...(options.workspaceRoot ? { filesystem: { workspaceRoot: options.workspaceRoot } } : {}),
     },
     capabilities: { tools: ['danger'], skills: [] },
     signal: options.signal ?? new AbortController().signal,

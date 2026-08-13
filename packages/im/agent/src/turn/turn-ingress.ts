@@ -50,6 +50,10 @@ export interface TurnPolicyContext {
     readonly httpsOnly?: boolean;
     readonly allowedDomains?: readonly string[];
   }>;
+  /** Explicit filesystem authority; absence denies every file capability. */
+  readonly filesystem?: Readonly<{
+    readonly workspaceRoot: string;
+  }>;
 }
 
 export interface FrozenCapabilityCatalog {

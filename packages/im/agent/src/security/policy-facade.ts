@@ -57,6 +57,7 @@ import {
 import type { ToolNetworkPolicy } from './network-policy-context.js';
 import type { ToolDescriptor } from '@zhin.js/tool';
 import type { TurnIngress } from '../turn/turn-ingress.js';
+import { authorizeTurnFileInput } from './turn-file-authority.js';
 
 // ── 输入 / 输出类型 ─────────────────────────────────────────────────
 
@@ -113,9 +114,9 @@ export interface ToolPolicyResult extends ToolPolicyDecision {
 }
 
 export type TurnToolPolicyDecision =
-  | Readonly<{ status: 'allowed' }>
+  | Readonly<{ status: 'allowed'; input: Readonly<Record<string, unknown>> }>
   | Readonly<{ status: 'denied'; policy: string; reason: string }>
-  | Readonly<{ status: 'approval_required'; policy: string; reason: string }>;
+  | Readonly<{ status: 'approval_required'; policy: string; reason: string; input: Readonly<Record<string, unknown>> }>;
 
 export interface TurnToolPolicyInput {
   readonly turn: TurnIngress;
@@ -124,19 +125,29 @@ export interface TurnToolPolicyInput {
 }
 
 /** Generic, execution-domain-neutral policy facade for canonical Turn tools. */
-export function runTurnToolPolicies(input: TurnToolPolicyInput): TurnToolPolicyDecision {
+export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<TurnToolPolicyDecision> {
   const requesterRole = resolveTurnRequesterRole(input.turn);
   const networkDecision = checkTurnNetworkPolicy(input);
   if (networkDecision) return networkDecision;
   const fileOperation = resolveTurnFileOperation(input.tool.name);
+  let authorizedInput = input.input;
   if (fileOperation) {
-    const path = stringArgument(input.input, 'path', 'file_path', 'filePath');
+    const fileAuthority = await authorizeTurnFileInput(
+      input.tool.name,
+      input.input,
+      input.turn.policy.filesystem?.workspaceRoot,
+    );
+    if (!fileAuthority.allowed) {
+      return Object.freeze({ status: 'denied', policy: 'workspace-access', reason: fileAuthority.reason });
+    }
+    authorizedInput = fileAuthority.input;
+    const path = stringArgument(authorizedInput, 'path', 'file_path', 'filePath');
     const permission = checkFilePermission(
       toolRequesterRoleToFileRole(requesterRole),
       fileOperation,
       path,
     );
-    const decision = turnFilePermissionDecision(permission, 'file-permission-matrix');
+    const decision = turnFilePermissionDecision(permission, 'file-permission-matrix', authorizedInput);
     if (decision) return decision;
   }
   if (input.tool.name === 'bash') {
@@ -156,11 +167,11 @@ export function runTurnToolPolicies(input: TurnToolPolicyInput): TurnToolPolicyD
           'read',
           path,
         );
-        const decision = turnFilePermissionDecision(sensitiveRead, 'bash-sensitive-read');
+        const decision = turnFilePermissionDecision(sensitiveRead, 'bash-sensitive-read', input.input);
         if (decision) return decision;
       }
       const permission = checkBashFilePermission(toolRequesterRoleToFileRole(requesterRole), command);
-      const decision = turnFilePermissionDecision(permission, 'bash-file-permission');
+      const decision = turnFilePermissionDecision(permission, 'bash-file-permission', input.input);
       if (decision) return decision;
     }
   }
@@ -169,9 +180,10 @@ export function runTurnToolPolicies(input: TurnToolPolicyInput): TurnToolPolicyD
       status: 'approval_required',
       policy: 'approval',
       reason: `tool approval policy is ${input.tool.approval}`,
+      input: authorizedInput,
     });
   }
-  return Object.freeze({ status: 'allowed' });
+  return Object.freeze({ status: 'allowed', input: authorizedInput });
 }
 
 function checkTurnNetworkPolicy(input: TurnToolPolicyInput): TurnToolPolicyDecision | undefined {
@@ -220,6 +232,7 @@ function checkTurnNetworkPolicy(input: TurnToolPolicyInput): TurnToolPolicyDecis
 function turnFilePermissionDecision(
   permission: FilePermissionResult,
   policy: string,
+  input: Readonly<Record<string, unknown>>,
 ): TurnToolPolicyDecision | undefined {
   if (!permission.allowed) {
     return Object.freeze({
@@ -233,6 +246,7 @@ function turnFilePermissionDecision(
       status: 'approval_required',
       policy,
       reason: permission.reason ?? `file ${permission.operation} requires approval`,
+      input,
     });
   }
   return undefined;

@@ -48,6 +48,8 @@ _避免使用_：tool collection、tool filtering
 在 Tool Selection 之后决定最终运行时工具列表、上下文工具注入和 Pre-executable Tool 路径的 Agent Runtime 模块。每次执行只接收 canonical Tool Execution Context（origin / principal / session / trace / signal / policy），不得读取 IM Message 第二参数。执行前必须统一经过 `runTurnToolPolicies`；文件 CRUD、敏感路径和 Bash 命令不得在 Tool 实现内另建策略链。网络 transport 的每个真实 hop 必须消费同一 context policy，禁止依赖 ALS 或执行域特判。
 _避免使用_：tool glue、runtime helper
 
+文件 Tool 的 workspace authority 属于 Turn policy。策略门面必须 canonicalize 现存目标、symlink 与不存在写目标的最近父目录，并把批准后的绝对路径交给 ToolFeature；实现不得重新读取 `process.cwd()`、展开 `~` 或用 shell 模拟 glob/grep。
+
 **Capability Feature**:
 Plugin 侧可写能力表（Tool / Skill / Agent / MCP），承载装配与生命周期；**不是**回合执行时的运行时权威。
 _避免使用_：tool service 真相源、双注册、registry bag

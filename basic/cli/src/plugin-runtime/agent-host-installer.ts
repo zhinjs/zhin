@@ -90,9 +90,11 @@ import {
   CapabilityIngress,
   projectHostTool,
   projectHostMcp,
+  toolFeatureId,
   turnJournalStoreToken,
   agentTurnEngineToken,
   createFullAgentTurnEngine,
+  createNativeFileToolFeatures,
   AgentRuntime,
   type AgentCapabilities,
   type ToolCapability,
@@ -420,7 +422,10 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     }
 
     for (const tool of [...scheduleTools, ...homeTools]) {
-      addFeature(tool.definition.$feature, tool.name, tool.definition);
+      addFeature(toolFeatureId, tool.name, tool.definition);
+    }
+    for (const tool of createNativeFileToolFeatures()) {
+      addFeature(tool.feature, tool.name, tool.definition);
     }
 
     const orchestrator = zhinAgent.orchestrator;
@@ -599,6 +604,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               traceId: randomUUID(),
               turnId: randomUUID(),
               signal,
+              workspaceRoot: options.projectRoot,
               ports: {
                 ...(options.approvalPort ? { approval: options.approvalPort } : {}),
                 reply: {
@@ -1094,6 +1100,7 @@ export function createRuntimeTurnRequest(
     traceId: string;
     turnId: string;
     signal: AbortSignal;
+    workspaceRoot: string;
     ports: TurnRequestPorts;
   }>,
 ): TurnRequest {
@@ -1132,7 +1139,10 @@ export function createRuntimeTurnRequest(
     session: Object.freeze({
       key: `${origin.platform}:${origin.endpoint}:${origin.scope}:${origin.sceneId}`,
     }),
-    policy: access.policy,
+    policy: Object.freeze({
+      ...access.policy,
+      filesystem: Object.freeze({ workspaceRoot: input.workspaceRoot }),
+    }),
     signal: input.signal,
     ports: Object.freeze({ ...input.ports }),
   });

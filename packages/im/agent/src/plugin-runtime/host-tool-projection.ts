@@ -6,6 +6,8 @@ import {
   type ToolScope,
 } from '@zhin.js/tool';
 
+export { toolFeatureId };
+
 export interface HostToolProjectionInput {
   readonly name: string;
   readonly description: string;

@@ -82,6 +82,9 @@ export class ToolIndex {
           httpsOnly: invocation.policy.network.httpsOnly,
           allowedDomains: Object.freeze([...(invocation.policy.network.allowedDomains ?? [])]),
         }),
+        ...(invocation.policy.filesystem
+          ? { filesystem: Object.freeze({ workspaceRoot: invocation.policy.filesystem.workspaceRoot }) }
+          : {}),
       }),
     });
     return entry.slot.definition.execute(parsedInput, context) as TResult | Promise<TResult>;

@@ -33,7 +33,7 @@ export class TurnToolRuntime {
     if (!tool) return this.#deny(name, toolUseId, 'capability', `Unknown Tool capability: ${name}`);
     await this.#append({ type: 'tool_call', toolName: name, args: { ...input }, toolUseId });
     if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0);
-    const decision = runTurnToolPolicies({ turn: this.turn, tool, input });
+    const decision = await runTurnToolPolicies({ turn: this.turn, tool, input });
     if (decision.status === 'denied') {
       return this.#deny(name, toolUseId, decision.policy, decision.reason);
     }
@@ -53,7 +53,7 @@ export class TurnToolRuntime {
 
     const startedAt = Date.now();
     try {
-      const output = await tool.execute(input, toolInvocationFromTurn(this.turn));
+      const output = await tool.execute(decision.input, toolInvocationFromTurn(this.turn));
       const durationMs = Date.now() - startedAt;
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, durationMs);
       await this.#append({ type: 'tool_result', toolName: name, output, durationMs, toolUseId });
