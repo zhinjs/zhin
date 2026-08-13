@@ -1,5 +1,5 @@
 /**
- * 入站媒体注入 — commMessage 的 canonical 媒体段 → 当前 turn 的
+ * 入站媒体注入 — TurnIngress 的 canonical media → 当前 turn 的
  * `UserMessage.media`（MediaContentBlock，不随 session 持久化）。
  *
  * 策略（`ai.multimodal`）：
@@ -10,18 +10,17 @@
  * - video / file：占位文本（video 抽帧为既有配置面，不在此默认开启）。
  */
 import { type MediaContentBlock, type MediaBlockRef } from '@zhin.js/ai';
-import type { Message } from '@zhin.js/core';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   readLocalFileAsBase64,
 } from '../media/media-normalize.js';
-import { readInboundMediaRefs } from '../media/inbound-refs.js';
 import type { MediaBinaryPayload } from '../media/media-types.js';
 import { transcribeAudioPayload } from '../media/media-router.js';
 import {
   getPrimaryAppConfig,
   resolveMultimodalConfig,
 } from '../media/resolve-config.js';
+import type { TurnMedia } from './turn-ingress.js';
 
 const logger = getLogger('ZhinAgent');
 
@@ -61,10 +60,18 @@ function toBase64Block(
   };
 }
 
-export async function resolveInboundMediaInjection(
-  commMessage: Message,
+export async function resolveTurnMediaInjection(
+  turnMedia: readonly TurnMedia[] | undefined,
 ): Promise<InboundMediaInjection> {
-  const refs = readInboundMediaRefs(commMessage);
+  const refs = (turnMedia ?? []).map((entry) => ({
+    type: entry.kind,
+    media: {
+      kind: entry.source.kind === 'platform_ref' ? 'file' as const : entry.source.kind,
+      value: entry.source.value,
+      ...(entry.mimeType ? { mime_type: entry.mimeType } : {}),
+      ...(entry.name ? { file_name: entry.name } : {}),
+    } satisfies MediaBlockRef,
+  }));
   if (refs.length === 0) return EMPTY_INJECTION;
 
   const config = resolveMultimodalConfig();
@@ -92,7 +99,7 @@ export async function resolveInboundMediaInjection(
       continue;
     }
 
-    if (type === 'audio' || type === 'record' || type === 'voice') {
+    if (type === 'audio') {
       const payload = await resolveAudioPayload(media, config.maxFileBytes);
       if (payload && config.audio.strategy === 'transcribe') {
         try {

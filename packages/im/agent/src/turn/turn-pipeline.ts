@@ -6,7 +6,7 @@ import { parseOutput, type MediaContentBlock } from '@zhin.js/ai';
 import { TurnSupersededError } from './prompt-controller.js';
 import {
   applyInboundMediaInjection,
-  resolveInboundMediaInjection,
+  resolveTurnMediaInjection,
 } from './inbound-media.js';
 import { EMPTY_USAGE } from './turn-metrics.js';
 import { logPhase } from '../internal/phase-trace.js';
@@ -32,6 +32,7 @@ import { randomUUID } from 'node:crypto';
 import { buildTurnUserMessages } from '../context/turn-user-message.js';
 import {
   resolveQuoteSystemHint,
+  turnMediaFromMessage,
   turnContextViewFromMessage,
 } from '../context/im-turn-context-adapter.js';
 import { schedulePromptProfile, scheduleTurnContextView } from '../schedule-domain/turn-context.js';
@@ -166,7 +167,7 @@ export async function processTextTurn(
 
     logger.debug(formatCompact({ op: 'tools_resolved', count: resolvedTools.length }));
 
-    const inboundMedia = await resolveInboundMediaInjection(commMessage);
+    const inboundMedia = await resolveTurnMediaInjection(turnMediaFromMessage(commMessage));
     const scheduleContext = extras?.scheduleContext;
     const turnContext = scheduleContext
       ? scheduleTurnContextView(scheduleContext)

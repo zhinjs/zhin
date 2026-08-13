@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createUserMessage } from '@zhin.js/ai';
 import {
   applyInboundMediaInjection,
-  resolveInboundMediaInjection,
+  resolveTurnMediaInjection,
 } from '../../src/turn/inbound-media.js';
 
 let root: string;
@@ -18,24 +18,18 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-function commMessageWith(extra: Record<string, unknown>) {
-  return { extra } as never;
-}
-
-describe('resolveInboundMediaInjection', () => {
+describe('resolveTurnMediaInjection', () => {
   it('无媒体段 → 空注入', async () => {
-    const injection = await resolveInboundMediaInjection(commMessageWith({}));
+    const injection = await resolveTurnMediaInjection([]);
     expect(injection.blocks).toEqual([]);
     expect(injection.textAppends).toEqual([]);
   });
 
   it('image：url / base64 MediaRef 直挂为媒体块', async () => {
-    const injection = await resolveInboundMediaInjection(commMessageWith({
-      media: [
-        { type: 'image', media: { kind: 'url', value: 'https://cdn.example/a.jpg', mime_type: 'image/jpeg' } },
-        { type: 'image', media: { kind: 'base64', value: 'QUJD', mime_type: 'image/png' } },
-      ],
-    }));
+    const injection = await resolveTurnMediaInjection([
+      { kind: 'image', source: { kind: 'url', value: 'https://cdn.example/a.jpg' }, mimeType: 'image/jpeg' },
+      { kind: 'image', source: { kind: 'base64', value: 'QUJD' }, mimeType: 'image/png' },
+    ]);
     expect(injection.blocks).toEqual([
       { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example/a.jpg', mime_type: 'image/jpeg' } } },
       { type: 'image', data: { media: { kind: 'base64', value: 'QUJD', mime_type: 'image/png' } } },
@@ -46,9 +40,9 @@ describe('resolveInboundMediaInjection', () => {
   it('image：path 经 media pipeline 物化为 base64 块', async () => {
     const file = path.join(root, 'pic.png');
     fs.writeFileSync(file, Buffer.from('fake-png'));
-    const injection = await resolveInboundMediaInjection(commMessageWith({
-      media: [{ type: 'image', media: { kind: 'path', value: file } }],
-    }));
+    const injection = await resolveTurnMediaInjection([
+      { kind: 'image', source: { kind: 'path', value: file } },
+    ]);
     expect(injection.blocks).toHaveLength(1);
     const block = injection.blocks[0]!;
     expect(block.type).toBe('image');
@@ -58,35 +52,29 @@ describe('resolveInboundMediaInjection', () => {
   });
 
   it('image：path 读盘失败 → 占位文本', async () => {
-    const injection = await resolveInboundMediaInjection(commMessageWith({
-      media: [{ type: 'image', media: { kind: 'path', value: path.join(root, 'missing.png') } }],
-    }));
+    const injection = await resolveTurnMediaInjection([
+      { kind: 'image', source: { kind: 'path', value: path.join(root, 'missing.png') } },
+    ]);
     expect(injection.blocks).toEqual([]);
     expect(injection.textAppends).toEqual(['[图片]']);
   });
 
   it('audio：无 STT 管线时降级占位；video / file → 占位文本', async () => {
-    const injection = await resolveInboundMediaInjection(commMessageWith({
-      media: [
-        { type: 'audio', media: { kind: 'base64', value: 'QUJD', mime_type: 'audio/mpeg' } },
-        { type: 'video', media: { kind: 'url', value: 'https://cdn.example/v.mp4' } },
-        { type: 'file', media: { kind: 'url', value: 'https://cdn.example/f.zip', file_name: 'f.zip' } },
-      ],
-    }));
+    const injection = await resolveTurnMediaInjection([
+      { kind: 'audio', source: { kind: 'base64', value: 'QUJD' }, mimeType: 'audio/mpeg' },
+      { kind: 'video', source: { kind: 'url', value: 'https://cdn.example/v.mp4' } },
+      { kind: 'file', source: { kind: 'url', value: 'https://cdn.example/f.zip' }, name: 'f.zip' },
+    ]);
     expect(injection.blocks).toEqual([]);
     expect(injection.textAppends).toEqual(['[音频]', '[视频]', '[f.zip]']);
   });
 
-  it('extra.segments 兜底收集（无 extra.media 时）', async () => {
-    const injection = await resolveInboundMediaInjection(commMessageWith({
-      segments: [
-        { type: 'text', data: { text: '看图' } },
-        { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example/b.png' } } },
-      ],
-    }));
-    expect(injection.blocks).toEqual([
-      { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example/b.png' } } },
+  it('platform_ref 降级为占位文本', async () => {
+    const injection = await resolveTurnMediaInjection([
+      { kind: 'image', source: { kind: 'platform_ref', value: 'opaque-image-id' } },
     ]);
+    expect(injection.blocks).toEqual([]);
+    expect(injection.textAppends).toEqual(['[图片]']);
   });
 });
 
