@@ -34,8 +34,8 @@ import {
   resolveQuoteSystemHint,
   turnContextViewFromMessage,
 } from '../context/im-turn-context-adapter.js';
-import { getScheduleTurnContext } from '../internal/turn-context.js';
 import { schedulePromptProfile, scheduleTurnContextView } from '../schedule-domain/turn-context.js';
+import type { HostScheduleTurnContext } from '../internal/host-types.js';
 
 function requireSessionSystem(host: ZhinAgentPrivate): SessionSystem {
   if (!host.sessionSystem) {
@@ -71,6 +71,8 @@ export interface ProcessTextTurnOptions {
    * Plugin Runtime hosts pass AgentCapabilities.generation.
    */
   generation?: number;
+  /** Explicit unattended Schedule authority; never discovered from ambient state. */
+  scheduleContext?: HostScheduleTurnContext;
 }
 
 export async function processTextTurn(
@@ -145,6 +147,7 @@ export async function processTextTurn(
       sessionId,
       userId,
       mcpServerNames,
+      scheduleContext: extras?.scheduleContext,
     });
     const {
       contextForTools,
@@ -164,7 +167,7 @@ export async function processTextTurn(
     logger.debug(formatCompact({ op: 'tools_resolved', count: resolvedTools.length }));
 
     const inboundMedia = await resolveInboundMediaInjection(commMessage);
-    const scheduleContext = getScheduleTurnContext();
+    const scheduleContext = extras?.scheduleContext;
     const turnCtx = await requireContextSystem(host).buildTextTurnContext({
       host,
       turn: scheduleContext

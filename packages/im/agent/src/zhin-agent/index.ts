@@ -59,7 +59,8 @@ import { recordPassiveGroupMessage as recordPassiveGroupMessageInternal } from '
 import type { CollaborationScene } from '../collaboration/types.js';
 import { asPrivate } from '../internal/as-private.js';
 import { PromptController } from '../turn/prompt-controller.js';
-import { getActiveTurnTracker, type ScheduleTurnContext } from '../internal/turn-context.js';
+import { getActiveTurnTracker } from '../internal/turn-context.js';
+import type { HostScheduleTurnContext as ScheduleTurnContext } from '../internal/host-types.js';
 import { computeDeferredDelta } from '../turn/turn-deferred-delta.js';
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
@@ -525,6 +526,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
         onTurnEvent: request.onTurnEvent,
         isolated: request.scheduleContext !== undefined,
         generation: request.generation,
+        scheduleContext: request.scheduleContext,
       },
     );
     return runWithAgentTurnConfiguration(request.configuration ?? {}, () =>
@@ -536,10 +538,9 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
               signal: request.signal,
               run: executeTurn,
             }),
-        request.scheduleContext === undefined && request.activityFeedbackEligible === undefined
+        request.activityFeedbackEligible === undefined
           ? undefined
           : {
-              scheduleContext: request.scheduleContext,
               activityFeedbackEligible: request.activityFeedbackEligible,
             },
       ),

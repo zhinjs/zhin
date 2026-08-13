@@ -137,8 +137,8 @@ _避免使用_：`ZhinTool`/`Message` 第二参数、跨 generation manager look
 _避免使用_：optimizePrompt、extra 上的 executionPlan
 
 **Schedule Turn**:
-由 Schedule Execution Domain 直接构造的 **Turn Ingress**（`preview` 预演或 `scheduled` 到点执行）；没有 synthetic IM 载体，也不继承会话回复能力。正式执行的 Delivery Intent 在新 operation 中通过 `DeliveryPort` 投递并独立记录终态。
-_避免使用_：synthetic Message、scheduleContext 兼容分支、mutate Message.extra
+由 Schedule Execution Domain 直接构造的 **Turn Ingress**（`preview` 预演或 `scheduled` 到点执行）；没有 synthetic IM 载体，也不继承会话回复能力。Schedule authority 作为显式参数贯穿 Context、Prompt 与 Tool pipeline，不写入 ALS；正式执行的 Delivery Intent 在新 operation 中通过 `DeliveryPort` 投递并独立记录终态。
+_避免使用_：synthetic Message、ambient scheduleContext、scheduleContext 兼容分支、mutate Message.extra
 
 **Passive Group Context**:
 群/频道未 @ 入站消息写入进程内 buffer（`MAX_PASSIVE_LINES=50`、`PASSIVE_TTL_MS=30min`），@ 触发时 drain 合并进 turn；session key 与 `resolveAgentTurnSessionKey` SSOT 一致；pipeline reset 后不继承旧 run buffer。

@@ -84,7 +84,15 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
     const event = (name: 'schedule.start' | 'schedule.finish' | 'schedule.error') => {
       if (!job.activityFeedback) return;
       const sessionId = resolveIMSessionIdFromMessage(commMessage);
-      emitter.emit(name, emitter.createPayload(sessionId, commMessage, 'text'));
+      emitter.emit(name, emitter.createPayload(sessionId, commMessage, 'text', {
+        hookContext: {
+          scheduleJobId: job.id,
+          ...(job.createdBy ? { scheduleCreatedBy: job.createdBy } : {}),
+          ...(previewSource ? { schedulePreview: true } : {}),
+          scheduleActivityFeedback: true,
+          ...(job.executionPlan ? { scheduleExecutionPlan: job.executionPlan } : {}),
+        },
+      }));
     };
     const lockKey = previewSource
       ? `preview:${previewSource.sessionKey}`

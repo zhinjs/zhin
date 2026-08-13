@@ -5,7 +5,7 @@ import {
   getMcpToolsForBinding,
 } from '../orchestrator/mcp-lifecycle.js';
 import { rehydrateTurnActiveSkills } from '../assistant/schedule-skills.js';
-import { captureDeferredSnapshotBefore, cloneDeferredSnapshot, getScheduleTurnContext, setTurnActiveSkills } from '../internal/turn-context.js';
+import { captureDeferredSnapshotBefore, cloneDeferredSnapshot, setTurnActiveSkills } from '../internal/turn-context.js';
 import { attachWebSearchLocale } from './web-search-locale-attach.js';
 import type { ZhinAgentPrivate, Tool } from '../internal/agent-host.js';
 import { defaultToolSystem } from '../tool/tool-system.js';
@@ -15,6 +15,7 @@ import { resolveScheduleTools } from '../schedule-domain/tool-resolver.js';
 import { secureScheduleTools } from '../schedule-domain/security-harness.js';
 import { loadScheduleSkillContext } from '../schedule-domain/prompt-assembler.js';
 import { getLogger } from '@zhin.js/logger';
+import type { HostScheduleTurnContext } from '../internal/host-types.js';
 
 const scheduleLogger = getLogger('schedule-execution-domain');
 
@@ -42,6 +43,7 @@ export async function prepareTurnTools(
     sessionId: string;
     userId: string;
     mcpServerNames: string[];
+    scheduleContext?: HostScheduleTurnContext;
   },
 ): Promise<TurnToolsPrep> {
   const userId = opts.userId;
@@ -101,7 +103,7 @@ export async function prepareTurnTools(
   allTools = dynamicApplied.tools;
   host.turnDynamicInstructions = dynamicApplied.additionalInstructions;
 
-  const scheduleContext = getScheduleTurnContext();
+  const scheduleContext = opts.scheduleContext;
   if (scheduleContext) {
     const resolution = resolveScheduleTools({
       prompt: opts.content,

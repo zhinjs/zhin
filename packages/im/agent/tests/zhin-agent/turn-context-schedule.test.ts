@@ -3,16 +3,14 @@ import {
   appendTurnActiveSkills,
   captureDeferredSnapshotBefore,
   getDeferredSnapshotBefore,
-  getScheduleTurnContext,
   getTurnActiveSkillsFromContext,
   runInTurnContext,
-  setScheduleTurnContext,
   setTurnActiveSkills,
 } from '../../src/internal/turn-context.js';
 import { computeDeferredDelta } from '../../src/turn/turn-deferred-delta.js';
 import { TurnTracker } from '../../src/turn/turn-tracker.js';
 
-describe('turn context schedule ALS', () => {
+describe('turn-local runtime context', () => {
   it('stores and reads turnActiveSkills within runInTurnContext', async () => {
     const tracker = new TurnTracker();
     await runInTurnContext('t1', tracker, async () => {
@@ -21,26 +19,6 @@ describe('turn context schedule ALS', () => {
       expect(getTurnActiveSkillsFromContext()).toBe('baseline\n\nextra skill');
     });
     expect(getTurnActiveSkillsFromContext()).toBe('');
-  });
-
-  it('initializes scheduleContext from runInTurnContext init', async () => {
-    const tracker = new TurnTracker();
-    await runInTurnContext('t1', tracker, async () => {
-      expect(getScheduleTurnContext()).toEqual({
-        preview: true,
-        jobId: 'j1',
-      });
-    }, {
-      scheduleContext: { preview: true, jobId: 'j1' },
-    });
-  });
-
-  it('allows mutating scheduleContext during turn', async () => {
-    const tracker = new TurnTracker();
-    await runInTurnContext('t1', tracker, async () => {
-      setScheduleTurnContext({ activityFeedback: true });
-      expect(getScheduleTurnContext()?.activityFeedback).toBe(true);
-    });
   });
 
   it('captureDeferredSnapshotBefore stores immutable before snapshot', async () => {

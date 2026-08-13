@@ -54,4 +54,35 @@ describe('task executor outbound seam', () => {
       context: 'qq', endpoint: 'bot1', id: 'group1', type: 'group', content: 'hello',
     });
   });
+
+  it('publishes Schedule feedback identity explicitly instead of relying on turn ALS', async () => {
+    const emit = vi.fn();
+    const createPayload = vi.fn((_session, _message, _mode, extra) => extra);
+    const scheduled = {
+      ...job({ channel: 'silent' }),
+      activityFeedback: true,
+      createdBy: { userId: 'owner', roles: ['trusted'] as const },
+    };
+    const executor = createTaskExecutor({
+      agent: { getEventEmitter: () => ({ emit, createPayload }) } as any,
+      domain: { execute: vi.fn(async () => domainResult()) },
+      resolveAdapter: () => undefined,
+    });
+
+    await executor.execute(scheduled);
+
+    expect(createPayload).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.anything(),
+      'text',
+      expect.objectContaining({
+        hookContext: expect.objectContaining({
+          scheduleJobId: 'sched-1',
+          scheduleCreatedBy: scheduled.createdBy,
+          scheduleActivityFeedback: true,
+        }),
+      }),
+    );
+    expect(emit).toHaveBeenCalledTimes(2);
+  });
 });

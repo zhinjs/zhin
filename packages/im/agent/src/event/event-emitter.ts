@@ -2,7 +2,7 @@ import type { Message, Plugin } from '@zhin.js/core';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { EventSystem } from './event-system.js';
 import type { EventHandler } from './contracts.js';
-import { getScheduleTurnContext, getActivityFeedbackEligible } from '../internal/turn-context.js';
+import { getActivityFeedbackEligible } from '../internal/turn-context.js';
 import { activityFeedbackAiBus } from '../activity-feedback/ai-bus.js';
 
 const logger = getLogger('ZhinAgent');
@@ -38,15 +38,9 @@ export class ZhinAgentEventEmitter {
     extra: Partial<Plugin.AIEventPayload> = {},
   ): Plugin.AIEventPayload {
     const { source = 'zhin-agent', hookContext: extraHookContext, ...rest } = extra;
-    const scheduleCtx = getScheduleTurnContext();
     const hookContext: Record<string, unknown> = {
       ...(extraHookContext && typeof extraHookContext === 'object' ? extraHookContext : {}),
     };
-    if (scheduleCtx?.createdBy) hookContext.scheduleCreatedBy = scheduleCtx.createdBy;
-    if (scheduleCtx?.jobId) hookContext.scheduleJobId = scheduleCtx.jobId;
-    if (scheduleCtx?.preview === true) hookContext.schedulePreview = true;
-    if (scheduleCtx?.activityFeedback === true) hookContext.scheduleActivityFeedback = true;
-    if (scheduleCtx?.executionPlan) hookContext.scheduleExecutionPlan = scheduleCtx.executionPlan;
     if (getActivityFeedbackEligible()) hookContext.activityFeedbackEligible = true;
     return {
       sessionId,

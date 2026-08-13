@@ -1,16 +1,12 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { DeferredToolSessionSnapshot } from '@zhin.js/ai';
 import { TurnTracker } from '../turn/turn-tracker.js';
-import type { HostScheduleTurnContext as ScheduleTurnContext } from './host-types.js';
-
-export type { HostScheduleTurnContext as ScheduleTurnContext } from './host-types.js';
 
 export interface TurnContextStore {
   turnId: string;
   tracker: TurnTracker;
   turnActiveSkills: string;
   deferredSnapshotBefore?: DeferredToolSessionSnapshot;
-  scheduleContext?: ScheduleTurnContext;
   /** 仅人类 register-ai-trigger 入站为 true；TaskExecutor/subagent/deferred 为 false */
   activityFeedbackEligible?: boolean;
 }
@@ -21,13 +17,12 @@ export function runInTurnContext<T>(
   turnId: string,
   tracker: TurnTracker,
   fn: () => Promise<T>,
-  init?: Partial<Pick<TurnContextStore, 'scheduleContext' | 'activityFeedbackEligible'>>,
+  init?: Partial<Pick<TurnContextStore, 'activityFeedbackEligible'>>,
 ): Promise<T> {
   return turnContextStorage.run({
     turnId,
     tracker,
     turnActiveSkills: '',
-    scheduleContext: init?.scheduleContext,
     activityFeedbackEligible: init?.activityFeedbackEligible,
   }, fn);
 }
@@ -59,17 +54,8 @@ export function appendTurnActiveSkills(fragment: string): void {
     : trimmed;
 }
 
-export function getScheduleTurnContext(): ScheduleTurnContext | undefined {
-  return turnContextStorage.getStore()?.scheduleContext;
-}
-
 export function getActivityFeedbackEligible(): boolean {
   return turnContextStorage.getStore()?.activityFeedbackEligible === true;
-}
-
-export function setScheduleTurnContext(ctx: ScheduleTurnContext | undefined): void {
-  const store = turnContextStorage.getStore();
-  if (store) store.scheduleContext = ctx;
 }
 
 export function cloneDeferredSnapshot(snapshot: DeferredToolSessionSnapshot): DeferredToolSessionSnapshot {
