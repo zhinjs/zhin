@@ -220,6 +220,8 @@ export async function processTextTurn(
           promptHooks: hooks,
           signal,
           deferredStats,
+          deferredController: toolsPrep.resolved.controller,
+          toolCatalog: toolsPrep.catalog,
           toolLoading: toolsPrep.resolved.deferred ? 'deferred' : 'direct',
           conversationPersistence: extras?.isolated ? 'none' : 'session',
           onTurnEvent: extras?.onTurnEvent,

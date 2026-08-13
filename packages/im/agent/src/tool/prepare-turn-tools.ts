@@ -153,7 +153,12 @@ export async function prepareTurnTools(
     };
   }
 
-  const resolved = await toolSystem.resolveForTurn(host, allTools, opts.sessionId);
+  const resolved = await toolSystem.resolveForTurn(
+    host,
+    allTools,
+    opts.sessionId,
+    String(contextForTools.$adapter),
+  );
   const { tools: resolvedTools, deferredStats, catalog, sessionSnapshot: initialSnapshot } = resolved;
 
   const sessionSnapshot = initialSnapshot;

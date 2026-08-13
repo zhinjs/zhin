@@ -2,7 +2,7 @@
  * Standalone agentLoop runner (subagent / deferred worker) — isolated memory context.
  */
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { type AgentTool, type AIProvider, type Usage, type MediaContentBlock, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, getLlmTransportModel, agentToolsToLlmTools, registerLlmApiFromProviders, sdkEntryFromProvider, getLoadedToolNamesFromSnapshot, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
+import { type AgentTool, type AIProvider, type Usage, type MediaContentBlock, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, getLlmTransportModel, agentToolsToLlmTools, registerLlmApiFromProviders, sdkEntryFromProvider, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
 import { runWithCommMessage, runWithDirectAgentExecution } from '../security/comm-message-context.js';
 import type { Message } from '../orchestrator/types.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from '../core/text-sanitize.js';
@@ -10,11 +10,10 @@ import { type ToolCallRecord, formatToolCallsForUser } from '../core/tool-calls-
 import type { AgentRunInput } from '../media/media-types.js';
 import { type PhaseTraceConfig, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
 import {
-  getDeferredToolRuntime,
-  runWithDeferredToolRuntime,
+  getActiveDeferredTurnController,
+  runWithDeferredTurnController,
   TOOLS_MUTATED_MARKER,
-} from '../builtin/deferred-tool-meta.js';
-import { catalogToolByName } from '../tool-catalog/tool-catalog.js';
+} from '../tool-catalog/deferred-turn-controller.js';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { createToolRuntime } from '../tool/tool-runtime.js';
 import { registerBuiltinPolicyExtractors } from '../tool/builtin-policy-extractors.js';
@@ -127,28 +126,21 @@ export async function runAgentLoopStandaloneTurn(
   const loaded = await repository.loadContext(sessionId);
   const promptMessages = buildUserMessages(userInput);
 
-  const legacyByName = new Map(tools.map((t) => [t.name, t]));
-  let llmTools = agentToolsToLlmTools(tools);
-
-  // 子 agent 专属 deferred runtime：snapshot 从父会话克隆（看得见父已加载工具），
-  // 但 load_tool 的变更只活在本 loop（不写回父会话、不落库）。
-  const parentDeferred = getDeferredToolRuntime(commMessage);
-  const childDeferred = parentDeferred
-    ? {
-      ...parentDeferred,
-      snapshot: structuredClone(parentDeferred.snapshot),
-      persistSnapshot: async () => {},
-    }
-    : undefined;
+  // 子 agent 持有父 turn controller 的隔离 fork；加载只活在本 loop。
+  const childDeferred = getActiveDeferredTurnController()?.fork();
+  const initialTools = childDeferred
+    ? [...tools.filter(tool => !childDeferred.tools.some(meta => meta.name === tool.name)), ...childDeferred.tools as unknown as AgentTool[]]
+    : tools;
+  const legacyByName = new Map(initialTools.map((tool) => [tool.name, tool]));
+  let llmTools = agentToolsToLlmTools(initialTools);
 
   /** load_tool 命中后把 catalog 里的完整工具并入可执行集并重建 schema 列表 */
   const reloadDeferredTools = (): void => {
     if (!childDeferred) return;
-    const byName = catalogToolByName(childDeferred.catalog);
-    for (const name of getLoadedToolNamesFromSnapshot(childDeferred.snapshot)) {
+    for (const name of childDeferred.loadedToolNames()) {
       if (legacyByName.has(name)) continue;
-      const item = byName.get(name);
-      if (item) legacyByName.set(name, item.fullTool);
+      const tool = childDeferred.tool(name);
+      if (tool) legacyByName.set(name, tool);
     }
     llmTools = agentToolsToLlmTools([...legacyByName.values()]);
   };
@@ -287,9 +279,9 @@ export async function runAgentLoopStandaloneTurn(
     }
   };
 
-  // 独立 deferred runtime 下驱动 loop：load_tool 变更不污染父会话
+  // 独立 controller 下驱动 loop：load_tool 变更不污染父 turn。
   if (childDeferred) {
-    await runWithDeferredToolRuntime(childDeferred, drive);
+    await runWithDeferredTurnController(childDeferred, drive);
   } else {
     await drive();
   }

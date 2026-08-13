@@ -11,10 +11,8 @@ import { provideMemoryEntryRepository } from '../memory-entry-registry.js';
 import { ZhinAgent } from '../zhin-agent/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
 import { createGenerateImageTool } from '../builtin/generate-image-tool.js';
-import { collectPluginSkillSearchRoots } from '../discovery/utils.js';
 import { discoverWorkspaceAgents } from '../discovery/agents.js';
 import {
-  resolveSkillInstructionMaxChars,
   DEFAULT_CONFIG,
   DEFAULT_HARD_ORCHESTRATOR_TOOLS,
   DEFAULT_ALWAYS_LOADED_TOOLS,
@@ -238,15 +236,11 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     // Subagent manager for background tasks
     const orchestratorEarly = root.inject('agent');
     agent.initSubagentSystem(() => {
-      const modelName = zhinBinding.model || provider.models[0] || '';
-      const fullConfig = { ...DEFAULT_CONFIG, ...agentConfig } as Required<import('../config/index.js').ZhinAgentConfig>;
       const zhinTools = [
         ...createBuiltinTools({
           plugin,
           semanticMemory,
           knowledgeDir,
-          skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullConfig, modelName),
-          pluginSkillRootsResolver: () => collectPluginSkillSearchRoots(root),
         }),
         createGenerateImageTool(
           (alias) => ai.getProvider(alias),

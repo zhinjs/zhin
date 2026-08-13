@@ -9,12 +9,11 @@ import { formatCompact, getPlugin, isZhinTool } from '@zhin.js/core';
 import type { Tool } from '../orchestrator/types.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
-import { collectPluginSkillSearchRoots } from '../discovery/utils.js';
 import { discoverWorkspaceSkills, loadAlwaysSkillsContent, buildSkillsSummaryXML } from '../discovery/skills.js';
 import { discoverWorkspaceAgents, loadAgentInstructionsBody } from '../discovery/agents.js';
 import { registerPluginAgentSurfaces } from '../discovery/register-agent-surface.js';
 import { discoverWorkspaceTools, buildToolFromMeta } from '../discovery/tools.js';
-import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../config/index.js';
+import { DEFAULT_CONFIG } from '../config/index.js';
 import { loadBootstrapFiles, buildContextFiles, buildStableBootstrapSection, loadContextFiles, buildGlobalContextSection, DEFAULT_GLOBAL_CONTEXT_PATHS } from '../bootstrap.js';
 import { loadBootstrapWithProfile, resolveAssistantConfig } from '../assistant/index.js';
 import { createAIHookEvent } from '../orchestrator/hook-registry.js';
@@ -45,19 +44,10 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       ? path.resolve(appConfig.ai.knowledge.baseDir)
       : path.join(process.cwd(), 'knowledge');
     const fullCfg = { ...DEFAULT_CONFIG, ...agentCfg } as Required<import('../config/index.js').ZhinAgentConfig>;
-    const modelName = provider.models[0] || '';
     const builtinTools = createBuiltinTools({
       plugin,
       semanticMemory,
       knowledgeDir,
-      skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullCfg, modelName),
-      pluginSkillRootsResolver: () => collectPluginSkillSearchRoots(root),
-      skillFileLookup: (name: string) => {
-        const fromFeature = root.inject?.('skill')?.get(name)?.filePath;
-        if (fromFeature) return fromFeature;
-        const orchestrator = root.inject?.('agent') as AgentOrchestrator | undefined;
-        return orchestrator?.skills.getByName(name)?.filePath;
-      },
     });
     builtinTools.push(createGenerateImageTool(
       (alias) => ai.getProvider(alias),

@@ -8,18 +8,16 @@ import { Plugin } from '@zhin.js/core';
 const plugin = new Plugin();
 
 describe('createBuiltinTools', () => {
-  it('聚合包含技能与 ask_user 工具', () => {
+  it('只聚合无 turn 状态的 builtin；deferred control 由 Turn 创建', () => {
     const tools = createBuiltinTools({ plugin });
     const names = tools.map(t => t.name);
     expect(names).toEqual(
       expect.arrayContaining([
-        'discover',
-        'load_tool',
-        'load_skill',
         'install_skill',
         'ask_user',
       ]),
     );
+    expect(names).not.toEqual(expect.arrayContaining(['discover', 'load_tool', 'load_skill']));
     expect(names).not.toContain('read_memory');
     expect(names).not.toContain('write_memory');
   });

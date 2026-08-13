@@ -231,17 +231,6 @@ export {
   type LoadSkillToolOptions,
 } from './builtin/load-skill-tool.js';
 export {
-  DiscoverBuiltinTool,
-  LoadToolBuiltinTool,
-  LoadSkillBuiltinToolMeta,
-  createDeferredMetaTools,
-  bindDeferredToolRuntime,
-  getDeferredToolRuntime,
-  isToolsMutatedResult,
-  TOOLS_MUTATED_MARKER,
-  type DeferredToolRuntime,
-} from './builtin/deferred-tool-meta.js';
-export {
   InstallSkillBuiltinTool,
   createInstallSkillTool,
   INSTALL_SKILL_PARAMETERS,

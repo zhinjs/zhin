@@ -109,7 +109,7 @@ Permit syntax (`packages/im/core/src/built/permit-parse.ts`) has three categorie
 
 ## Deferred Catalog and load_tool
 
-Tools are not included in the full prompt. Each turn first builds a **catalog** of tools that pass access control; by default only `alwaysLoadedTools` are exposed to the model. Remaining tools are discovered and loaded on demand via three meta-tools (`packages/im/agent/src/builtin/deferred-tool-meta.ts`): `discover` searches tools/skills by query (can filter by MCP server), returning names with brief descriptions; `load_tool` loads a tool's schema into the session by name, making it callable; `load_skill` loads the complete skill instructions and unlocks its associated tools.
+Tools are not included in the full prompt. Each turn first builds a **catalog** of tools that pass access control and creates its own deferred controller (`packages/im/agent/src/tool-catalog/deferred-turn-controller.ts`); by default only `alwaysLoadedTools` are exposed to the model. The controller creates three meta-tools for that turn: `discover` searches tools/skills by query (and can filter by MCP server), `load_tool` loads a tool schema by name, and `load_skill` loads complete skill instructions and unlocks associated tools. Concurrent turns and subagents use isolated controllers; IM `Message` identity is not a state key.
 
 Loading state is persisted per session (`DeferredToolSessionSnapshot`), with an eviction limit. Configuration key `deferredTools` (`ZhinAgentConfig`):
 

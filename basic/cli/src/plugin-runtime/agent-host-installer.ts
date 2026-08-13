@@ -34,7 +34,6 @@ import {
   createWebSearchTool,
   createWebFetchTool,
   createBashTool,
-  createDeferredMetaTools,
   activateAiDatabaseStorage,
   defineAiDatabaseModels,
   createScheduleJobStoreFromConfig,
@@ -379,10 +378,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     }
 
     const bashTool = createBashTool();
-    const deferredMetaTools = createDeferredMetaTools({
-      skillDirList: () => [join(options.projectRoot, 'skills')],
-      skillMaxChars: 4_000,
-    });
     const ingress = new CapabilityIngress();
     let bootstrapText = '';
     let bootstrapLoaded = false;
@@ -399,7 +394,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 
     for (const tool of [
       ...(options.extraTools ?? []),
-      ...deferredMetaTools,
       bashTool,
     ]) {
       if (!tool.description?.trim()) {
@@ -603,7 +597,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               ...(await expandMcpTools(capabilities, binding.mcpServers))
                 .map((tool) => capabilityToTool(tool, toolInvocationFromTurn(request))),
               ...(options.extraTools ?? []).map(toTool),
-              ...deferredMetaTools,
               bashTool,
             ];
             toolCount = tools.length;
@@ -937,10 +930,6 @@ function buildRuntimeSubagentAgentTools(projectRoot: string) {
     createWebSearchTool(),
     createWebFetchTool(),
     createBashTool(),
-    ...createDeferredMetaTools({
-      skillDirList: () => [join(projectRoot, 'skills')],
-      skillMaxChars: 4_000,
-    }),
   ];
   return plainTools.map((tool) => ({
     name: tool.name,

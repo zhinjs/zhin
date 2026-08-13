@@ -3,7 +3,6 @@
  */
 import { type Message, type Tool, type ToolParametersSchema, type ToolResult, resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import {
-  getLoadedToolNamesFromSnapshot,
   type AgentTool,
   type OrchestrationRunSource,
 } from '@zhin.js/ai';
@@ -13,7 +12,7 @@ import type { SubagentContextMode } from '../subagent-preset.js';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
 import { executeRemoteOrchestrationTask } from '../orchestrator/remote-task-executor.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
-import { getDeferredToolRuntime } from './deferred-tool-meta.js';
+import { getActiveDeferredTurnController } from '../tool-catalog/deferred-turn-controller.js';
 import {
   assertSpawnAgentAllowed,
   type PermissionTaskRules,
@@ -180,11 +179,9 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
       : undefined;
     const requestedTools = parseStringArray(args.tools);
     const requestedSkills = parseStringArray(args.skills);
-    const deferredRuntime = getDeferredToolRuntime(this.sessionCommMessage);
-    const parentSessionLoaded = deferredRuntime
-      ? getLoadedToolNamesFromSnapshot(deferredRuntime.snapshot)
-      : undefined;
-    const parentLoadedSkills = deferredRuntime?.snapshot.loadedSkills;
+    const deferredController = getActiveDeferredTurnController();
+    const parentSessionLoaded = deferredController?.loadedToolNames();
+    const parentLoadedSkills = deferredController?.snapshot().loadedSkills;
 
     if (svc && !targetTaskId) {
       const sessionKey = resolveIMSessionIdFromMessage(this.sessionCommMessage);

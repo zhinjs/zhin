@@ -7,10 +7,9 @@ import { describe, expect, it } from 'vitest';
 import type { AgentTool, AIProvider } from '@zhin.js/ai';
 import { runAgentLoopStandaloneTurn } from '../../src/core/agent-loop-standalone.js';
 import {
-  LoadToolBuiltinTool,
-  bindDeferredToolRuntime,
-  type DeferredToolRuntime,
-} from '../../src/builtin/deferred-tool-meta.js';
+  createDeferredTurnController,
+  runWithDeferredTurnController,
+} from '../../src/tool-catalog/deferred-turn-controller.js';
 import { wireMockLlmApi, assistantTextReply, assistantToolCallReply } from '../helpers/mock-llm-api.js';
 
 describe('standalone loop 延迟加载', () => {
@@ -26,8 +25,6 @@ describe('standalone loop 延迟加载', () => {
         return 'bash-ok';
       },
     } as unknown as AgentTool;
-    const loadTool = new LoadToolBuiltinTool().toTool() as unknown as AgentTool;
-
     let phase = 0;
     const llm = wireMockLlmApi({
       name: 'test',
@@ -48,31 +45,29 @@ describe('standalone loop 延迟加载', () => {
     }) as unknown as AIProvider;
 
     const parentSnapshot = { loadedTools: {} as Record<string, number> };
-    const runtime: DeferredToolRuntime = {
+    const controller = createDeferredTurnController({
       sessionId: 'parent',
       catalog: [
-        { name: 'load_tool', brief: 'meta', fullTool: loadTool, source: 'meta', deferDefault: false },
         { name: 'bash', brief: 'shell', fullTool: bashTool, source: 'builtin', deferDefault: true },
       ],
       skillRegistry: null,
-      snapshot: parentSnapshot as DeferredToolRuntime['snapshot'],
+      snapshot: { ...parentSnapshot, loadedSkills: [] },
       maxLoadedPerSession: 12,
       discoverTopK: 5,
       persistSnapshot: async () => {},
-      skillLoadOpts: {} as DeferredToolRuntime['skillLoadOpts'],
-    };
+      skillLoadOpts: { skillDirList: () => [], skillMaxChars: 4_000 },
+    });
     const commMessage = {} as never;
-    bindDeferredToolRuntime(commMessage, runtime);
 
-    const result = await runAgentLoopStandaloneTurn({
+    const result = await runWithDeferredTurnController(controller, () => runAgentLoopStandaloneTurn({
       provider,
       model: 'mock',
       systemPrompt: '',
-      tools: [loadTool],
+      tools: [],
       userInput: '加载并运行 bash',
       maxIterations: 6,
       commMessage,
-    });
+    }));
 
     // 关键断言 1：bash 真正执行了（不再是 Unknown tool）
     expect(executed).toEqual(['bash']);

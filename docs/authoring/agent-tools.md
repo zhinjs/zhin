@@ -112,7 +112,7 @@ permit 语法（`packages/im/core/src/built/permit-parse.ts`）分三类：内�
 
 ## deferred catalog 与 load_tool
 
-工具不进全量 prompt。每个 turn 先把通过准入的工具建成 **catalog**，默认只对模型暴露 `alwaysLoadedTools`；其余工具由三个 meta 工具按需发现与加载（`packages/im/agent/src/builtin/deferred-tool-meta.ts`）：`discover` 按 query 搜索工具/技能（可按 MCP server 过滤），返回名称加简介；`load_tool` 按名把工具 schema 加载进会话，之后即可调用；`load_skill` 加载技能完整指令并解锁其关联工具。
+工具不进全量 prompt。每个 turn 先把通过准入的工具建成 **catalog**，并创建独占的 deferred controller（`packages/im/agent/src/tool-catalog/deferred-turn-controller.ts`）；默认只对模型暴露 `alwaysLoadedTools`。其余工具由 controller 为本 turn 创建的三个 meta 工具按需发现与加载：`discover` 按 query 搜索工具/技能（可按 MCP server 过滤），返回名称加简介；`load_tool` 按名加载工具 schema；`load_skill` 加载技能完整指令并解锁其关联工具。并发 turn 和 subagent 使用彼此隔离的 controller，不以 IM `Message` 作为状态键。
 
 加载状态按会话持久化（`DeferredToolSessionSnapshot`），有上限逐出。配置键 `deferredTools`（`ZhinAgentConfig`）：
 

@@ -92,8 +92,9 @@ export class ToolSystem {
     host: ZhinAgentPrivate,
     allTools: AgentTool[],
     sessionId: string,
+    platform?: string,
   ): Promise<ResolvedToolsForTurn> {
-    return resolveAgentToolsForTurn(host, allTools, sessionId);
+    return resolveAgentToolsForTurn(host, allTools, sessionId, platform);
   }
 }
 

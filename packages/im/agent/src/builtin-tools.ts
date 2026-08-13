@@ -13,7 +13,7 @@
  */
 
 import type { Plugin, ToolInput } from '@zhin.js/core';
-import { getDataDir, mergeSkillDirsWithResolver } from './discovery/utils.js';
+import { getDataDir } from './discovery/utils.js';
 import { createReadFileTool } from './builtin/read-file-tool.js';
 import { createWriteFileTool } from './builtin/write-file-tool.js';
 import { createEditFileTool } from './builtin/edit-file-tool.js';
@@ -25,7 +25,6 @@ import { createWebSearchTool } from './builtin/web-search-tool.js';
 import { createWebFetchTool } from './builtin/web-fetch-tool.js';
 import { createTodoReadTool } from './builtin/todo-read-tool.js';
 import { createTodoWriteTool } from './builtin/todo-write-tool.js';
-import { createDeferredMetaTools } from './builtin/deferred-tool-meta.js';
 import { createInstallSkillTool } from './builtin/install-skill-tool.js';
 import { createAskUserTool } from './builtin/ask-user-tool.js';
 import { createAnalyzeMediaTool } from './builtin/analyze-media-tool.js';
@@ -40,17 +39,6 @@ export interface BuiltinToolsOptions {
   semanticMemory?: boolean;
   /** 知识库目录（注册 knowledge_search 工具） */
   knowledgeDir?: string;
-  /** Max chars for skill instruction extraction (model-size-aware) */
-  skillInstructionMaxChars?: number;
-  /**
-   * 返回额外技能根目录（每个根下为 `<skillName>/SKILL.md`），通常为已加载插件的 `.../skills`
-   */
-  pluginSkillRootsResolver?: () => string[];
-  /**
-   * 按名称查找 SkillFeature 中已注册技能的 filePath
-   * 返回 SKILL.md 的绝对路径，或 undefined 表示未找到
-   */
-  skillFileLookup?: (name: string) => string | undefined;
 }
 
 /**
@@ -58,9 +46,6 @@ export interface BuiltinToolsOptions {
  */
 export function createBuiltinTools(options: BuiltinToolsOptions): ToolInput[] {
   const DATA_DIR = getDataDir();
-  const skillMaxChars = options?.skillInstructionMaxChars ?? 4000;
-  const skillDirList = () => mergeSkillDirsWithResolver(options?.pluginSkillRootsResolver);
-  const skillFileLookup = options?.skillFileLookup;
   const pluginRef = options?.plugin;
 
   const tools: ToolInput[] = [];
@@ -78,13 +63,6 @@ export function createBuiltinTools(options: BuiltinToolsOptions): ToolInput[] {
   tools.push(createTodoReadTool(DATA_DIR));
   tools.push(createTodoWriteTool(DATA_DIR));
 
-  tools.push(
-    ...createDeferredMetaTools({
-      skillFileLookup,
-      skillDirList,
-      skillMaxChars,
-    }),
-  );
   tools.push(createInstallSkillTool());
 
   tools.push(createAskUserTool(pluginRef));

@@ -6,7 +6,6 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { readSkillInstructions } from '../../src/builtin/load-skill-tool.js';
-import { LoadSkillBuiltinToolMeta } from '../../src/builtin/deferred-tool-meta.js';
 
 const SKILL_BODY = `---
 name: ninja
@@ -36,14 +35,5 @@ describe('load_skill', () => {
       skillMaxChars: 4000,
     });
     expect(text).toContain('Do the thing');
-  });
-
-  it('LoadSkillBuiltinToolMeta 未绑定 runtime 时返回错误', async () => {
-    const tool = new LoadSkillBuiltinToolMeta({
-      skillDirList: () => [],
-      skillMaxChars: 4000,
-    });
-    const result = await tool.run({ name: 'missing' });
-    expect(result).toBe('deferred runtime not available');
   });
 });

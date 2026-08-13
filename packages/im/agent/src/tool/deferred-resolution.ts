@@ -6,15 +6,18 @@ import {
   buildToolCatalog,
   resolveDeferredApiTools,
 } from '../tool-catalog/tool-catalog.js';
-import type { ToolCatalogItem } from '../tool-catalog/types.js';
+import { DEFERRED_META_TOOL_NAMES, type ToolCatalogItem } from '../tool-catalog/types.js';
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
+import { createDeferredTurnController, type DeferredTurnController } from '../tool-catalog/deferred-turn-controller.js';
+import { buildSkillLoadOptsForAgent } from '../skill/skill-load-opts.js';
 export interface ResolvedToolsForTurn {
   tools: AgentTool[];
   catalog: ToolCatalogItem[];
   deferred: boolean;
   deferredStats?: string;
   sessionSnapshot: DeferredToolSessionSnapshot;
+  controller?: DeferredTurnController;
 }
 
 function buildMcpServerMap(tools: AgentTool[]): Map<string, string> {
@@ -30,13 +33,15 @@ export async function resolveAgentToolsForTurn(
   agent: ZhinAgentPrivate,
   allTools: AgentTool[],
   sessionId: string,
+  platform?: string,
 ): Promise<ResolvedToolsForTurn> {
   const deferredCfg = resolveDeferredToolsConfig(agent.config);
   const alwaysLoaded = new Set(deferredCfg.alwaysLoadedTools);
-  const mcpServerByTool = buildMcpServerMap(allTools);
+  const baseTools = allTools.filter(tool => !DEFERRED_META_TOOL_NAMES.has(tool.name));
+  const mcpServerByTool = buildMcpServerMap(baseTools);
 
-  const catalog = buildToolCatalog({
-    tools: allTools,
+  const baseCatalog = buildToolCatalog({
+    tools: baseTools,
     mcpServerByTool,
     alwaysLoaded,
   });
@@ -60,6 +65,27 @@ export async function resolveAgentToolsForTurn(
   if (touched) {
     await persistDeferredToolSnapshot(agent, sessionId, sessionSnapshot);
   }
+  const controller = createDeferredTurnController({
+    sessionId,
+    platform,
+    catalog: baseCatalog,
+    skillRegistry: agent.skillRegistry,
+    snapshot: sessionSnapshot,
+    maxLoadedPerSession: deferredCfg.maxLoadedPerSession,
+    discoverTopK: deferredCfg.discoverTopK,
+    persistSnapshot: async (snapshot) => {
+      agent.deferred.lastSessionSnapshot = snapshot;
+      await persistDeferredToolSnapshot(agent, sessionId, snapshot);
+    },
+    onSkillLoaded: (_name, instructions) => agent.appendActiveSkillsContext(instructions),
+    skillLoadOpts: buildSkillLoadOptsForAgent(agent),
+  });
+  const turnTools = [...baseTools, ...controller.tools as unknown as AgentTool[]];
+  const catalog = buildToolCatalog({
+    tools: turnTools,
+    mcpServerByTool,
+    alwaysLoaded,
+  });
   const sessionLoaded = getLoadedToolNamesFromSnapshot(sessionSnapshot);
   const apiTools = resolveDeferredApiTools(catalog, alwaysLoaded, sessionLoaded);
   const deferredStats = buildDeferredStats(catalog, apiTools);
@@ -72,6 +98,7 @@ export async function resolveAgentToolsForTurn(
     deferred: true,
     deferredStats,
     sessionSnapshot,
+    controller,
   };
 }
 

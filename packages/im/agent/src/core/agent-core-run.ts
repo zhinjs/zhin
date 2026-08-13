@@ -5,7 +5,7 @@
 import { aiOutboundJsonSchema, buildAiOutboundPromptHint, type Plugin } from '@zhin.js/core';
 import type { AIService } from '../service.js';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, getLlmTransportModel, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, getLoadedToolNamesFromSnapshot } from '@zhin.js/ai';
+import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, getLlmTransportModel, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { runWithCommMessage } from '../security/comm-message-context.js';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
@@ -24,16 +24,19 @@ import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars, ty
 import type { HostPromptTurnHooks } from '../internal/host-types.js';
 import type { AgentCore } from './agent-core.js';
 import type { ZhinAgentPrivate, OnChunkCallback, Message } from '../internal/agent-host.js';
-import { bindDeferredToolRuntime } from '../builtin/deferred-tool-meta.js';
-import { persistDeferredToolSnapshot, buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
+import { buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
 import { runToolApprovalGate } from '../tool/tool-approval-gate.js';
 import { applyToolToModelOutput } from '../tool/tool-model-output.js';
 import { createToolRuntime, type ToolRuntimeTurnContext } from '../tool/tool-runtime.js';
 import { registerBuiltinPolicyExtractors } from '../tool/builtin-policy-extractors.js';
 import { resolveSessionInteractionPort, readHttpSessionId } from '../session/resolve-session-interaction-port.js';
-import { resolveDeferredToolsConfig, resolveAlwaysLoadedSet } from '../tool-catalog/resolve-config.js';
+import { resolveAlwaysLoadedSet } from '../tool-catalog/resolve-config.js';
 import { resolveDeferredApiTools } from '../tool-catalog/tool-catalog.js';
-import { buildSkillLoadOptsForAgent } from '../skill/skill-load-opts.js';
+import {
+  runWithDeferredTurnController,
+  type DeferredTurnController,
+} from '../tool-catalog/deferred-turn-controller.js';
+import type { ToolCatalogItem } from '../tool-catalog/types.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import {
   createTurnEventMapperState,
@@ -134,6 +137,10 @@ export interface AgentLoopTurnInput {
   promptHooks?: HostPromptTurnHooks;
   signal?: AbortSignal;
   deferredStats?: string;
+  /** Turn-owned deferred selection authority. Required for deferred loading. */
+  deferredController?: DeferredTurnController;
+  /** Catalog paired with deferredController for this exact Turn. */
+  toolCatalog?: readonly ToolCatalogItem[];
   /** Direct tool sets bypass deferred catalog/snapshot/meta-tool machinery. */
   toolLoading?: 'deferred' | 'direct';
   /** Isolated executions neither load nor append conversational history. */
@@ -406,37 +413,16 @@ export async function* runAgentLoopTextTurnRun(
       })
     : [];
 
-  let sessionSnapshot = directTools
-    ? { loadedTools: {}, loadedSkills: [] }
-    : (host.deferred.lastSessionSnapshot ?? { loadedTools: {}, loadedSkills: [] });
-  const catalog = directTools ? [] : (host.deferred.lastCatalog ?? []);
-  const deferredCfg = resolveDeferredToolsConfig(host.config);
-
-  if (!directTools && hasTools && catalog.length > 0) {
-    const skillLoadOpts = buildSkillLoadOptsForAgent(host);
-    bindDeferredToolRuntime(contextForTools, {
-      sessionId,
-      catalog,
-      skillRegistry: host.skillRegistry,
-      snapshot: sessionSnapshot,
-      maxLoadedPerSession: deferredCfg.maxLoadedPerSession,
-      discoverTopK: deferredCfg.discoverTopK,
-      persistSnapshot: async (snap) => {
-        sessionSnapshot = snap;
-        host.deferred.lastSessionSnapshot = snap;
-        await persistDeferredToolSnapshot(host, sessionId, snap);
-      },
-      onSkillLoaded: (_name, instructions) => {
-        host.appendActiveSkillsContext(instructions);
-      },
-      skillLoadOpts,
-    });
+  const deferredController = directTools ? undefined : input.deferredController;
+  const catalog = directTools ? [] : [...(input.toolCatalog ?? [])];
+  if (!directTools && hasTools && (!deferredController || catalog.length === 0)) {
+    throw new Error('Deferred tool loading requires a turn-owned controller and catalog');
   }
 
   const refreshResolvedTools = () => {
     if (directTools) return resolvedTools;
     const alwaysLoaded = resolveAlwaysLoadedSet(host.config);
-    const loaded = getLoadedToolNamesFromSnapshot(sessionSnapshot);
+    const loaded = deferredController!.loadedToolNames();
     return resolveDeferredApiTools(catalog, alwaysLoaded, loaded);
   };
 
@@ -501,7 +487,7 @@ export async function* runAgentLoopTextTurnRun(
         catalog,
         agentTools,
         resolveAlwaysLoadedSet(host.config),
-        getLoadedToolNamesFromSnapshot(sessionSnapshot),
+        deferredController?.loadedToolNames() ?? [],
       );
   const toolCalls: ToolCallRecord[] = [];
   let iterations = 0;
@@ -552,7 +538,7 @@ export async function* runAgentLoopTextTurnRun(
           catalog,
           nextAgentTools,
           resolveAlwaysLoadedSet(host.config),
-          getLoadedToolNamesFromSnapshot(sessionSnapshot),
+          deferredController?.loadedToolNames() ?? [],
         );
     return llmTools;
   };
@@ -659,9 +645,12 @@ export async function* runAgentLoopTextTurnRun(
       }
 
       try {
-        const outcome = await runWithCommMessage(contextForTools, () =>
+        const execute = () => runWithCommMessage(contextForTools, () =>
           toolRuntime.execute(legacy, effectiveArgs, { toolCallId: toolCall.id }),
         );
+        const outcome = deferredController
+          ? await runWithDeferredTurnController(deferredController, execute)
+          : await execute();
         if (outcome.denied) {
           toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: String(outcome.output) });
           return toolResultToAgentMessage(toolCall, outcome.output, true);
