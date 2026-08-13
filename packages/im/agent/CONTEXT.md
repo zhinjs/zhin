@@ -186,6 +186,7 @@ Session lifecycle 写权威只有 `ContextRepository`；archive 不得再代理�
 - Prompt contributor 与 PromptController 只消费 canonical platform / session identity；不得接收或保存 IM `Message`。平台 Prompt 仅对 IM origin 生效，其他 origin 不伪造 IM 载体。
 - Passive Group Context 只按 canonical session key 记录与 drain；IM/协作 adapter 在边界外解析 session、sender 后提交 observation，Session System 不保存 `Message` 或 `CollaborationScene`。
 - 入站媒体处理只消费 `TurnMedia[]`；平台 segment / opaque file id 到 canonical media 的投影只存在于 ingress adapter，STT、物化与模型注入不得反向读取 IM `Message`。
+- 完整 Agent Core 只依赖必需的 `ToolExecutionAuthority`；policy、approval、journal 与实际执行由每个 Turn 的 authority 独占。Core 禁止自行创建 ToolRuntime，canonical 与 classic 执行不得双审批或双记账。
 - 同步 IM 回复由 snapshot-bound `ReplyPort` 完成；HTTP 流由 Event Journal projection 完成；主动或延迟投递持久化为 `DeliveryIntent`，以带 `parentTurnId` 的新 operation 执行，不偷偷重新获取 current generation 后冒充原 turn。
 
 ## 示例对话

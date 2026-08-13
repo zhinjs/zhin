@@ -7,7 +7,6 @@ import type { AIService } from '../service.js';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
 import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, getLlmTransportModel, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
-import { runWithCommMessage } from '../security/comm-message-context.js';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { createOwnerOrchestratedToolResultTransform } from '../orchestrator/owner-confirm-orchestration.js';
@@ -20,22 +19,15 @@ import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-f
 import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
 import { transformContextWithCompaction } from '../memory/compaction-runtime.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
-import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars, type ZhinAgentConfig } from '../config/index.js';
+import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars } from '../config/index.js';
 import type { HostPromptTurnHooks } from '../internal/host-types.js';
 import type { AgentCore } from './agent-core.js';
 import type { ZhinAgentPrivate, OnChunkCallback, Message } from '../internal/agent-host.js';
 import { buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
-import { runToolApprovalGate } from '../tool/tool-approval-gate.js';
 import { applyToolToModelOutput } from '../tool/tool-model-output.js';
-import { createToolRuntime, type ToolRuntimeTurnContext } from '../tool/tool-runtime.js';
-import { registerBuiltinPolicyExtractors } from '../tool/builtin-policy-extractors.js';
-import { resolveSessionInteractionPort, readHttpSessionId } from '../session/resolve-session-interaction-port.js';
 import { resolveAlwaysLoadedSet } from '../tool-catalog/resolve-config.js';
 import { resolveDeferredApiTools } from '../tool-catalog/tool-catalog.js';
-import {
-  runWithDeferredTurnController,
-  type DeferredTurnController,
-} from '../tool-catalog/deferred-turn-controller.js';
+import type { DeferredTurnController } from '../tool-catalog/deferred-turn-controller.js';
 import type { ToolCatalogItem } from '../tool-catalog/types.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import {
@@ -44,6 +36,7 @@ import {
 } from './turn-event-mapper.js';
 import type { AgentPromptProfile } from '../prompt/turn-prompt-profile.js';
 import type { TurnContextView } from '../context/turn-envelope.js';
+import type { ToolExecutionAuthority } from './tool-execution-authority.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
 /** 入库前解开模型误包的 JSON 字符串，避免下一轮历史继续叠转义。 */
@@ -131,6 +124,7 @@ export interface AgentLoopTurnInput {
   contextForTools: Message;
   allTools: AgentTool[];
   resolvedTools: AgentTool[];
+  toolExecution: ToolExecutionAuthority;
   personaEnhanced: string;
   modelId: string;
   modelCandidates: string[];
@@ -496,18 +490,6 @@ export async function* runAgentLoopTextTurnRun(
   let lastAssistantText = '';
   let lastUsage: TokenUsage | undefined;
 
-  registerBuiltinPolicyExtractors();
-  const toolRuntimeCtx: ToolRuntimeTurnContext = {
-    generation: input.generation ?? 0,
-    signal: signal ?? AbortSignal.timeout(600_000),
-    sessionId,
-    commMessage: contextForTools,
-    journal: input.journal ? { append: (evt) => { input.journal!.append(evt); } } : undefined,
-    config: host.config as Required<ZhinAgentConfig>,
-    hostPlugin: orchestrationPlugin,
-  };
-  const toolRuntime = createToolRuntime(toolRuntimeCtx);
-
   logPhase(host.phaseConfig, 'agent_loop.turn.start', sessionId, {
     model: modelId,
     maxIterations,
@@ -619,43 +601,12 @@ export async function* runAgentLoopTextTurnRun(
         return toolResultToAgentMessage(toolCall, `工具「${resolvedName}」执行失败：工具不存在或所属插件未启用。`, true);
       }
 
-      const httpSessionId = readHttpSessionId(contextForTools);
-      const approvalDenied = directTools && legacy.approval && legacy.approval !== 'never'
-        ? 'Error: unattended execution rejects tools that require approval'
-        : await runToolApprovalGate({
-        toolName: resolvedName,
-        args: effectiveArgs,
-        sessionId,
-        commMessage: contextForTools,
-        policy: legacy.approval,
-        plugin: orchestrationPlugin,
-        bus: host.orchestrator?.agentStreamBus,
-        port: resolveSessionInteractionPort(
-          contextForTools,
-          orchestrationPlugin,
-          host.httpApprovalAdapter,
-          host.approvalPort,
-        ),
-        publishCtx: { sessionId, httpSessionId },
-        onceStore: host.orchestrator?.approvalOnce,
-        journal: input.journal,
-        signal: toolRuntimeCtx.signal,
-          });
-      if (approvalDenied) {
-        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: approvalDenied });
-        return toolResultToAgentMessage(toolCall, approvalDenied, true);
-      }
-
       try {
-        const execute = () => runWithCommMessage(contextForTools, () =>
-          toolRuntime.execute(legacy, effectiveArgs, { toolCallId: toolCall.id }),
-        );
-        const outcome = deferredController
-          ? await runWithDeferredTurnController(deferredController, execute)
-          : await execute();
-        if (outcome.denied) {
-          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: String(outcome.output) });
-          return toolResultToAgentMessage(toolCall, outcome.output, true);
+        const outcome = await input.toolExecution.execute(legacy, effectiveArgs, toolCall.id);
+        if (outcome.status !== 'completed') {
+          const reason = outcome.status === 'failed' ? outcome.error : outcome.reason;
+          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason });
+          return toolResultToAgentMessage(toolCall, reason, true);
         }
         const rawText = await applyToolToModelOutput(legacy, outcome.output, effectiveArgs);
 

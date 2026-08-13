@@ -41,6 +41,7 @@ import {
   turnJournalStoreToken,
   type ExternalToolCapability,
 } from '../../src/plugin-runtime/index.js';
+import { turnToolExecutionAuthority } from '../../src/tool/turn-tool-runtime.js';
 
 describe('Agent CapabilityIngress', () => {
   it('serializes turns for the same session across generation runtimes', async () => {
@@ -171,6 +172,14 @@ describe('Agent CapabilityIngress', () => {
       expect('execute' in capabilities.tools[0]!).toBe(false);
       await expect(tools.execute('child__lookup', { value: 'runner' }, 'call-1')).resolves.toMatchObject({
         status: 'completed', output: 'old:runner',
+      });
+      await expect(turnToolExecutionAuthority(tools).execute({
+        name: 'child__lookup',
+        description: 'Lookup',
+        parameters: { type: 'object', properties: {} },
+        execute: async () => 'must not execute transport adapter',
+      }, { value: 'authority' }, 'call-2')).resolves.toMatchObject({
+        status: 'completed', output: 'old:authority',
       });
       yield {
         type: 'turn_end',

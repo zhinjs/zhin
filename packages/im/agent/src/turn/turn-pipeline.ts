@@ -37,6 +37,7 @@ import {
 } from '../context/im-turn-context-adapter.js';
 import { schedulePromptProfile, scheduleTurnContextView } from '../schedule-domain/turn-context.js';
 import type { HostScheduleTurnContext } from '../internal/host-types.js';
+import { createClassicToolExecutionAuthority } from '../tool/classic-tool-execution-authority.js';
 
 function requireSessionSystem(host: ZhinAgentPrivate): SessionSystem {
   if (!host.sessionSystem) {
@@ -201,7 +202,19 @@ export async function processTextTurn(
         userMessages,
         onChunk,
         signal: extras?.signal,
-        execute: (initialMessages, hooks, signal, _turnId) => (host.agentCore ?? defaultAgentCore).runTextTurn({
+        execute: (initialMessages, hooks, signal, _turnId) => {
+          const toolExecution = createClassicToolExecutionAuthority({
+            host,
+            sessionId,
+            message: contextForTools,
+            signal,
+            generation: extras?.generation ?? 0,
+            rejectApproval: toolsPrep.resolved.deferred === false,
+            plugin: host.emitter.getHostPlugin() ?? undefined,
+            deferredController: toolsPrep.resolved.controller,
+            journal: extras?.journal,
+          });
+          return (host.agentCore ?? defaultAgentCore).runTextTurn({
           host,
           sessionId,
           userMessageExtra: turnUser.userMessageExtra,
@@ -214,6 +227,7 @@ export async function processTextTurn(
           contextForTools,
           allTools,
           resolvedTools,
+          toolExecution,
           personaEnhanced: personaForChat,
           modelId,
           modelCandidates: chatCandidates,
@@ -229,7 +243,8 @@ export async function processTextTurn(
           onTurnEvent: extras?.onTurnEvent,
           journal: extras?.journal,
           generation: extras?.generation,
-        }),
+          });
+        },
       });
     } catch (err) {
       if (err instanceof TurnSupersededError) {

@@ -3,6 +3,8 @@ import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
 import { toolInvocationFromTurn } from '../plugin-runtime/capability-tools.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import { isApprovalPortAvailable } from '../session/session-interaction-port.js';
+import type { AgentTool } from '@zhin.js/ai';
+import type { ToolExecutionAuthority } from '../core/tool-execution-authority.js';
 
 export type TurnToolOutcome =
   | Readonly<{ status: 'completed'; output: unknown; durationMs: number }>
@@ -76,4 +78,12 @@ export class TurnToolRuntime {
     await this.turn.ports.journal.append({ type: 'tool_cancelled', toolName, toolUseId, reason, durationMs });
     return Object.freeze({ status: 'cancelled', reason });
   }
+}
+
+/** Adapts canonical capability execution to the full AgentCore seam. */
+export function turnToolExecutionAuthority(runtime: TurnToolRuntime): ToolExecutionAuthority {
+  return Object.freeze({
+    execute: (tool: AgentTool, input: Readonly<Record<string, unknown>>, toolUseId: string) =>
+      runtime.execute(tool.name, input, toolUseId),
+  });
 }
