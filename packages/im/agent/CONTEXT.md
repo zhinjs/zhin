@@ -143,8 +143,8 @@ _避免使用_：HomeBackend、多 provider 工厂、Native 适配器
 _避免使用_：在每个 home_* tool 内重复 guard、把鉴权塞进 HaHomeBackend
 
 **Home Tool**:
-`home_*` ZhinTool：参数校验后委托 **HomeFacade**；Agent 可见契约保持稳定。
-_避免使用_：直接调 REST、暴露 entity_id
+`home_*` 是原生 `AgentToolDefinition`，只从 canonical `ToolExecutionContext.principal` 读取已认证角色，参数校验后委托 **HomeFacade**。
+_避免使用_：旧 `Message` 第二参数、直接调 REST、暴露 entity_id、在 Home 域重新推断平台身份
 
 **HomeStateWatch** / **HaWsTransport**:
 可选状态推送：Transport 负责 HA WebSocket 鉴权/订阅/重连；Watch 负责别名过滤、防抖与 NotificationRouter 投递。

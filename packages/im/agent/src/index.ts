@@ -325,6 +325,7 @@ export type {
   AssistantProfile,
   NotificationRouter,
   BootstrapAssistantHomeResult,
+  HomeToolRegistration,
   ScheduleJob,
   ScheduleJobFile,
   ScheduleJobCreator,

@@ -21,6 +21,7 @@ export type { HomeStateWatchOptions } from './domains/home-state-watch.js';
 export { HomeFacade, mapFacadeFailToToolError } from './home-facade.js';
 export type { HomeFacadeResult, HomeFacadeOk, HomeFacadeFail, HomeFacadeOptions } from './home-facade.js';
 export { createHomeTools } from './home-tools.js';
+export type { HomeToolRegistration, HomeToolsOptions } from './home-tools.js';
 export {
   bootstrapAssistantHome,
 } from './bootstrap-assistant-home.js';

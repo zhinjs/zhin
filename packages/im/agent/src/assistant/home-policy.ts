@@ -1,7 +1,7 @@
 /**
  * Home Domain 工具权限（M4）
  */
-import { hasSenderRole, mergeAITriggerConfig, resolveSenderRoles, senderRolesFromMessage, type Message } from '@zhin.js/core';
+import type { ToolInvocationContext } from '@zhin.js/tool';
 import { type ToolRequesterRole } from '../security/owner-approve-always-store.js';
 import type { HomePolicyConfig } from './home-config.js';
 import { parseEntityDomain } from './domains/home-entity.js';
@@ -12,38 +12,21 @@ export interface HomeToolDecision {
   role: ToolRequesterRole;
 }
 
-function resolveRole(commMessage?: Message): ToolRequesterRole {
-  if (!commMessage?.$adapter || !commMessage?.$endpoint || !commMessage?.$sender?.id) {
-    return 'unknown';
-  }
-  if (commMessage.$adapter === 'process') return 'master';
-  if (commMessage.$sender.isMaster !== undefined || commMessage.$sender.isTrusted !== undefined) {
-    const roles = senderRolesFromMessage(commMessage);
-    if (hasSenderRole(roles, 'master')) return 'master';
-    if (hasSenderRole(roles, 'trusted')) return 'trusted';
-    return 'other';
-  }
-  try {
-    const { roles } = resolveSenderRoles(
-      commMessage,
-      mergeAITriggerConfig({}),
-      undefined,
-    );
-    if (hasSenderRole(roles, 'master')) return 'master';
-    if (hasSenderRole(roles, 'trusted')) return 'trusted';
-    return 'other';
-  } catch {
-    return 'other';
-  }
+export type HomePrincipal = ToolInvocationContext['principal'];
+
+function resolveRole(principal: HomePrincipal): ToolRequesterRole {
+  if (principal.roles.includes('master')) return 'master';
+  if (principal.roles.includes('trusted')) return 'trusted';
+  return 'other';
 }
 
 export function checkHomeToolAccess(
   operation: 'read' | 'write',
   entityId: string,
-  commMessage: Message | undefined,
+  principal: HomePrincipal,
   policy: HomePolicyConfig & { requireMaster: boolean; confirmServices: string[] },
 ): HomeToolDecision {
-  const role = resolveRole(commMessage);
+  const role = resolveRole(principal);
   const domain = parseEntityDomain(entityId);
 
   if (policy.requireMaster && role !== 'master') {

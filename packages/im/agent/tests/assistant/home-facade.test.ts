@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { HomeFacade } from '../../src/assistant/home-facade.js';
 import { HaHomeBackend } from '../../src/assistant/domains/ha-home-backend.js';
-import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 const policy = {
   requireMaster: true,
@@ -9,21 +8,8 @@ const policy = {
   allowedServiceDomains: ['light', 'climate', 'scene', 'cover', 'script'],
 };
 
-const masterCtx = mockCommMessage({
-  adapter: 'process',
-  endpoint: '1',
-  senderId: '100',
-  scope: 'private',
-  sceneId: '100',
-});
-
-const otherCtx = mockCommMessage({
-  adapter: 'icqq',
-  endpoint: '1',
-  senderId: '999',
-  scope: 'private',
-  sceneId: '999',
-});
+const masterCtx = { subjectId: '100', roles: ['master'] } as const;
+const otherCtx = { subjectId: '999', roles: ['user'] } as const;
 
 function makeFacade(aliases: Record<string, string>, fetchMock = vi.fn()) {
   fetchMock.mockResolvedValue({ ok: true, status: 200, text: async () => '[]' });
@@ -67,6 +53,12 @@ describe('HomeFacade policy', () => {
     const { facade } = makeFacade({ 灯: 'light.x' });
     const r = await facade.listAliases(otherCtx);
     expect(r.ok).toBe(false);
+  });
+
+  it('listAliases 在空配置时仍先鉴权', async () => {
+    const { facade } = makeFacade({});
+    const r = await facade.listAliases(otherCtx);
+    expect(r).toMatchObject({ ok: false, kind: 'deny' });
   });
 
   it('callService 拒绝非白名单 domain', async () => {

@@ -1,16 +1,14 @@
 /**
  * bootstrapAssistantHome — Plugin Runtime 可注入装配（无 getPlugin）
  */
-import type { Tool } from '@zhin.js/core';
 import type { AIConfig } from '@zhin.js/ai';
 import {
   resolveAssistantHomeConfig,
-  isAssistantHomeActive,
   type AssistantHomeConfig,
 } from './home-config.js';
 import { HaHomeBackend } from './domains/ha-home-backend.js';
 import { HomeFacade } from './home-facade.js';
-import { createHomeTools } from './home-tools.js';
+import { createHomeTools, type HomeToolRegistration } from './home-tools.js';
 import {
   HomeStateWatch,
   buildWatchEntityMap,
@@ -18,9 +16,12 @@ import {
 } from './domains/home-state-watch.js';
 import { loadAssistantProfileFile, mergeProfileDeviceAliases } from './profile-loader.js';
 import { validateHomeMcpServer } from './home-mcp-bridge.js';
-import type { NotificationRouter } from './notification-router.js';
 import type { JobNotify } from './types.js';
-import { resolveEffectiveNotify, parseJobNotify } from './notification-router.js';
+import {
+  resolveEffectiveNotify,
+  parseJobNotify,
+  type NotificationRouter,
+} from './notification-router.js';
 
 export interface BootstrapAssistantHomeOptions {
   homeRaw?: AssistantHomeConfig;
@@ -37,26 +38,11 @@ export interface BootstrapAssistantHomeOptions {
 }
 
 export interface BootstrapAssistantHomeResult {
-  tools: Tool[];
+  tools: readonly HomeToolRegistration[];
   dispose: () => void;
   homeActive: boolean;
   watchActive: boolean;
   backend: HaHomeBackend | null;
-}
-
-function zhinToolsToCoreTools(tools: ReturnType<typeof createHomeTools>): Tool[] {
-  return tools.map((tool) => {
-    const plain = tool.toTool();
-    return {
-      name: plain.name,
-      description: plain.description,
-      parameters: plain.parameters as Tool['parameters'],
-      source: 'builtin',
-      execute: plain.execute as Tool['execute'],
-      tags: plain.tags,
-      keywords: plain.keywords,
-    } satisfies Tool;
-  });
 }
 
 function isDeliverableImNotify(notify: JobNotify | undefined): notify is Extract<JobNotify, { channel: 'im' }> {
@@ -77,8 +63,13 @@ export async function bootstrapAssistantHome(
     backend: null,
   };
 
-  if (!isAssistantHomeActive(options.homeRaw)) return empty;
-
+  if (options.homeRaw?.enabled !== true) return empty;
+  if (!options.homeRaw.restUrl?.trim()) {
+    throw new TypeError('assistant.home.restUrl is required when Home is enabled');
+  }
+  if (!options.homeRaw.restToken?.trim()) {
+    throw new TypeError('assistant.home.restToken is required when Home is enabled');
+  }
   const profile = await loadAssistantProfileFile(options.projectRoot, options.profile);
   const homeCfg = resolveAssistantHomeConfig({
     ...options.homeRaw,
@@ -94,7 +85,7 @@ export async function bootstrapAssistantHome(
   );
 
   const facade = new HomeFacade({ backend, policy: homeCfg.policy });
-  const tools = zhinToolsToCoreTools(createHomeTools({ facade }));
+  const tools = createHomeTools({ facade });
 
   let watch: HomeStateWatch | undefined;
   let watchActive = false;

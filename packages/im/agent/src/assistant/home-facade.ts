@@ -1,12 +1,12 @@
 /**
  * HomeFacade — 别名解析 + 权限 + 意图（tools 薄封装此门面）
  */
-import type { Message } from '@zhin.js/core';
 import type { HaHomeBackend, HaEntityState, HaServiceResult } from './domains/ha-home-backend.js';
 import { parseEntityDomain } from './domains/home-entity.js';
 import type { ResolvedHomePolicyConfig } from './home-config.js';
 import {
   checkHomeToolAccess,
+  type HomePrincipal,
   toHomeDenyError,
   toHomeOwnerSignal,
 } from './home-policy.js';
@@ -48,10 +48,10 @@ export class HomeFacade {
   private authorize(
     operation: 'read' | 'write',
     entityId: string,
-    message?: Message,
+    principal: HomePrincipal,
   ): HomeFacadeFail | null {
     return fromAccess(
-      checkHomeToolAccess(operation, entityId, message, this.options.policy),
+      checkHomeToolAccess(operation, entityId, principal, this.options.policy),
     );
   }
 
@@ -63,22 +63,21 @@ export class HomeFacade {
     }
   }
 
-  async listAliases(message?: Message): Promise<HomeFacadeResult<{ aliases: string[]; count: number } | { aliases: Record<string, never>; message: string }>> {
+  async listAliases(principal: HomePrincipal): Promise<HomeFacadeResult<{ aliases: string[]; count: number } | { aliases: Record<string, never>; message: string }>> {
+    const gate = this.authorize('read', 'light.__list__', principal);
+    if (gate) return gate;
     const names = Object.keys(this.options.backend.listAliases());
     if (names.length === 0) {
       return { ok: true, value: { aliases: {}, message: '未配置任何设备别名' } };
     }
-    // P1: list 也走 requireMaster（用假 entity 过 domain 无关的 master 检查）
-    const gate = this.authorize('read', 'light.__list__', message);
-    if (gate) return gate;
     return { ok: true, value: { aliases: names, count: names.length } };
   }
 
-  async getState(alias: string, message?: Message): Promise<HomeFacadeResult<HaEntityState & { alias: string }>> {
+  async getState(alias: string, principal: HomePrincipal): Promise<HomeFacadeResult<HaEntityState & { alias: string }>> {
     const resolved = this.resolve(alias);
     if ('ok' in resolved && resolved.ok === false) return resolved;
     const { entityId } = resolved as { entityId: string };
-    const gate = this.authorize('read', entityId, message);
+    const gate = this.authorize('read', entityId, principal);
     if (gate) return gate;
     try {
       const state = await this.options.backend.getState(alias);
@@ -88,15 +87,15 @@ export class HomeFacade {
     }
   }
 
-  async turnOn(alias: string, message?: Message): Promise<HomeFacadeResult<HaServiceResult & { message: string }>> {
-    return this.writeIntent(alias, message, async () => {
+  async turnOn(alias: string, principal: HomePrincipal): Promise<HomeFacadeResult<HaServiceResult & { message: string }>> {
+    return this.writeIntent(alias, principal, async () => {
       const result = await this.options.backend.turnOn(alias);
       return { ...result, message: `已执行 ${result.service}` };
     });
   }
 
-  async turnOff(alias: string, message?: Message): Promise<HomeFacadeResult<HaServiceResult & { message: string }>> {
-    return this.writeIntent(alias, message, async () => {
+  async turnOff(alias: string, principal: HomePrincipal): Promise<HomeFacadeResult<HaServiceResult & { message: string }>> {
+    return this.writeIntent(alias, principal, async () => {
       const result = await this.options.backend.turnOff(alias);
       return { ...result, message: `已执行 ${result.service}` };
     });
@@ -105,12 +104,12 @@ export class HomeFacade {
   async setBrightness(
     alias: string,
     brightness: number,
-    message?: Message,
+    principal: HomePrincipal,
   ): Promise<HomeFacadeResult<{ alias: string; brightness: number; message: string }>> {
     if (isNaN(brightness) || brightness < 0 || brightness > 255) {
       return fail('invalid', 'brightness 须为 0–255');
     }
-    return this.writeIntent(alias, message, async () => {
+    return this.writeIntent(alias, principal, async () => {
       await this.options.backend.callService(alias, 'turn_on', { brightness });
       return { alias, brightness, message: `已设置亮度 ${brightness}` };
     });
@@ -119,10 +118,10 @@ export class HomeFacade {
   async setTemperature(
     alias: string,
     temperature: number,
-    message?: Message,
+    principal: HomePrincipal,
   ): Promise<HomeFacadeResult<{ alias: string; temperature: number; message: string }>> {
     if (isNaN(temperature)) return fail('invalid', 'temperature 须为数字');
-    return this.writeIntent(alias, message, async () => {
+    return this.writeIntent(alias, principal, async () => {
       await this.options.backend.callService(alias, 'set_temperature', { temperature });
       return { alias, temperature, message: `已设置温度 ${temperature}°C` };
     });
@@ -130,7 +129,7 @@ export class HomeFacade {
 
   async activateScene(
     alias: string,
-    message?: Message,
+    principal: HomePrincipal,
   ): Promise<HomeFacadeResult<{ alias: string; domain: string; message: string }>> {
     const resolved = this.resolve(alias);
     if ('ok' in resolved && resolved.ok === false) return resolved;
@@ -139,7 +138,7 @@ export class HomeFacade {
     if (domain !== 'scene' && domain !== 'script') {
       return fail('invalid', `别名 "${alias}" 对应 ${domain}，不是 scene 或 script`);
     }
-    return this.writeIntent(alias, message, async () => {
+    return this.writeIntent(alias, principal, async () => {
       await this.options.backend.callService(alias, 'turn_on');
       return { alias, domain, message: `已触发 ${domain} "${alias}"` };
     });
@@ -148,12 +147,12 @@ export class HomeFacade {
   async setCoverPosition(
     alias: string,
     position: number,
-    message?: Message,
+    principal: HomePrincipal,
   ): Promise<HomeFacadeResult<{ alias: string; position: number; message: string }>> {
     if (isNaN(position) || position < 0 || position > 100) {
       return fail('invalid', 'position 须为 0–100');
     }
-    return this.writeIntent(alias, message, async () => {
+    return this.writeIntent(alias, principal, async () => {
       await this.options.backend.callService(alias, 'set_cover_position', { position });
       return { alias, position, message: `已设置窗帘位置 ${position}%` };
     });
@@ -163,7 +162,7 @@ export class HomeFacade {
     alias: string,
     service: string,
     data: Record<string, unknown> | undefined,
-    message?: Message,
+    principal: HomePrincipal,
   ): Promise<HomeFacadeResult<{ alias: string; domain: string; service: string; message: string }>> {
     if (!service.trim()) return fail('invalid', 'service 必填');
     const resolved = this.resolve(alias);
@@ -174,7 +173,7 @@ export class HomeFacade {
     if (!allowed.includes(domain)) {
       return fail('deny', `domain "${domain}" 不在允许的白名单中（允许: ${allowed.join(', ')}）`);
     }
-    return this.writeIntent(alias, message, async () => {
+    return this.writeIntent(alias, principal, async () => {
       await this.options.backend.callService(alias, service, data);
       return { alias, domain, service, message: `已执行 ${domain}.${service}` };
     });
@@ -182,13 +181,13 @@ export class HomeFacade {
 
   private async writeIntent<T>(
     alias: string,
-    message: Message | undefined,
+    principal: HomePrincipal,
     run: () => Promise<T>,
   ): Promise<HomeFacadeResult<T>> {
     const resolved = this.resolve(alias);
     if ('ok' in resolved && resolved.ok === false) return resolved;
     const { entityId } = resolved as { entityId: string };
-    const gate = this.authorize('write', entityId, message);
+    const gate = this.authorize('write', entityId, principal);
     if (gate) return gate;
     try {
       return { ok: true, value: await run() };

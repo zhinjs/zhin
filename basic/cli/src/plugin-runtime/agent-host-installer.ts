@@ -74,6 +74,7 @@ import {
   type ProactiveOutboundService,
   type AssistantConfig,
   type AssistantRuntimeHandle,
+  type BootstrapAssistantHomeResult,
   type OrchestrationRuntimeHandle,
   type SessionTreeRuntimeHandle,
   type ImTranscriptWriteInput,
@@ -237,11 +238,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       service.dispose();
       throw new Error('Agent Host requires a ready ai.agents.zhin binding');
     }
+    lifecycle.add(() => service.dispose());
 
-    let zhinAgent: ZhinAgent;
+    let zhinAgent: ZhinAgent | undefined;
     let seedPresets: () => Promise<number>;
     let scheduleTools: Tool[] = [];
-    let homeTools: Tool[] = [];
+    let homeTools: BootstrapAssistantHomeResult['tools'] = [];
     let assistantEnabled = false;
     let collaborationReady = false;
     let orchService: OrchestrationService;
@@ -256,6 +258,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         options.approvalPort,
       );
       zhinAgent = created.agent;
+      lifecycle.add(() => created.agent.dispose());
       seedPresets = created.seedPresets;
 
       orchService = new OrchestrationService(new MemoryOrchestrationRepository());
@@ -298,14 +301,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         }));
       }
     } catch (error) {
-      logger.warn(formatCompact({
-        op: 'agent_host_skip',
-        reason: 'zhin_agent_init_failed',
-        error: error instanceof Error ? error.message : String(error),
-      }));
-      service.dispose();
-      return;
+      throw new Error('Agent Host candidate initialization failed', { cause: error });
     }
+    if (!zhinAgent) throw new Error('Agent Host candidate did not create a ZhinAgent');
 
     const useDatabase = aiConfig.sessions?.useDatabase !== false;
     let persistencePendingActivate = false;
@@ -393,8 +391,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     // Register before any await so a cancelled generation cannot leak Agent
     // Resources. DisposeStack continues through later cleanup when one
     // Resource fails.
-    lifecycle.add(() => service.dispose());
-    lifecycle.add(() => zhinAgent.dispose());
     // Configured MCP joins the candidate's MCP projection. Its connection is
     // opened by generation activation and closed by rollback/retirement.
     for (const entry of mcpEntries) {
@@ -406,7 +402,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       ...(options.extraTools ?? []),
       ...deferredMetaTools,
       ...scheduleTools,
-      ...homeTools,
       bashTool,
     ]) {
       if (!tool.description?.trim()) {
@@ -424,6 +419,10 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         execute: (input) => tool.execute(input) as unknown | Promise<unknown>,
       });
       addFeature(projected.feature, projected.name, projected.definition);
+    }
+
+    for (const tool of homeTools) {
+      addFeature(tool.definition.$feature, tool.name, tool.definition);
     }
 
     const orchestrator = zhinAgent.orchestrator;
@@ -608,7 +607,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               ...(options.extraTools ?? []).map(toTool),
               ...deferredMetaTools,
               ...scheduleTools,
-              ...homeTools,
               bashTool,
             ];
             toolCount = tools.length;
@@ -862,31 +860,28 @@ async function wireRuntimeHome(
   notificationRouter: ReturnType<typeof createNotificationRouter>,
   bindCallHaService: (fn: (service: string, target?: string, data?: unknown) => Promise<void>) => void,
   defaultNotify: ReturnType<typeof parseJobNotify> | undefined,
-): Promise<{ tools: Tool[]; dispose: () => void; homeActive: boolean; watchActive: boolean }> {
+): Promise<{
+  tools: BootstrapAssistantHomeResult['tools'];
+  dispose: () => void;
+  homeActive: boolean;
+  watchActive: boolean;
+}> {
   const assistantCfg = resolveAssistantConfig(assistantRaw);
-  try {
-    const result = await bootstrapAssistantHome({
-      homeRaw: assistantCfg.home,
-      profile: assistantCfg.profile,
-      projectRoot,
-      notificationRouter,
-      defaultNotify,
-      bindCallHaService,
-      log: (payload) => logger.info(formatCompact(payload)),
-    });
-    return {
-      tools: result.tools,
-      dispose: result.dispose,
-      homeActive: result.homeActive,
-      watchActive: result.watchActive,
-    };
-  } catch (error) {
-    logger.warn(formatCompact({
-      op: 'agent_host_home_skip',
-      error: error instanceof Error ? error.message : String(error),
-    }));
-    return { tools: [], dispose: () => {}, homeActive: false, watchActive: false };
-  }
+  const result = await bootstrapAssistantHome({
+    homeRaw: assistantCfg.home,
+    profile: assistantCfg.profile,
+    projectRoot,
+    notificationRouter,
+    defaultNotify,
+    bindCallHaService,
+    log: (payload) => logger.info(formatCompact(payload)),
+  });
+  return {
+    tools: result.tools,
+    dispose: result.dispose,
+    homeActive: result.homeActive,
+    watchActive: result.watchActive,
+  };
 }
 
 function resolvePeerMode(trigger?: AITriggerConfig): PeerTriggerMode {
