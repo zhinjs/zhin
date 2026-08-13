@@ -80,6 +80,7 @@ import {
   type ApprovalPort,
   type TurnRequestPorts,
   type TurnRequest,
+  type TurnOutcome,
   type TurnAccessContext,
   FileJournalStore,
 } from '@zhin.js/agent';
@@ -90,13 +91,14 @@ import {
   projectHostTool,
   projectHostMcp,
   turnJournalStoreToken,
-  expandMcpTools,
-  capabilityToTool,
-  toolInvocationFromTurn,
-  toolsFromCapabilities,
+  agentTurnEngineToken,
+  createFullAgentTurnEngine,
+  AgentRuntime,
   type AgentCapabilities,
   type ToolCapability,
 } from '@zhin.js/agent/runtime';
+
+export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 
 /** Minimal OutputElement shape for reply flattening (avoid direct @zhin.js/ai dep). */
 type OutputElementLike = {
@@ -174,6 +176,8 @@ export async function resolveCollaborationConfigDocument(
 }
 
 export interface InstallAgentHostOptions {
+  /** Process-owned execution authority attached to exactly one Root. */
+  readonly runtime: AgentRuntime;
   /** @deprecated Prefer the generation-owned Primary Config. Test overrides only. */
   readonly ai?: AIConfig;
   /** @deprecated Prefer the generation-owned Primary Config. Test overrides only. */
@@ -240,6 +244,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     lifecycle.add(() => service.dispose());
 
     let zhinAgent: ZhinAgent | undefined;
+    let composedRuntime: ReturnType<typeof composeZhinAgentRuntime> | undefined;
     let seedPresets: () => Promise<number>;
     let scheduleTools: ReturnType<typeof createScheduleTools> = [];
     let homeTools: BootstrapAssistantHomeResult['tools'] = [];
@@ -257,6 +262,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         options.approvalPort,
       );
       zhinAgent = created.agent;
+      composedRuntime = created.runtime;
       lifecycle.add(() => created.agent.dispose());
       seedPresets = created.seedPresets;
 
@@ -302,7 +308,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     } catch (error) {
       throw new Error('Agent Host candidate initialization failed', { cause: error });
     }
-    if (!zhinAgent) throw new Error('Agent Host candidate did not create a ZhinAgent');
+    if (!zhinAgent || !composedRuntime) throw new Error('Agent Host candidate did not create a complete Agent runtime');
 
     const useDatabase = aiConfig.sessions?.useDatabase !== false;
     let persistencePendingActivate = false;
@@ -380,8 +386,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 
     const bashTool = createBashTool();
     const ingress = new CapabilityIngress();
-    let bootstrapText = '';
-    let bootstrapLoaded = false;
+    const bootstrapText = await loadBootstrap(options.projectRoot);
 
     // Register before any await so a cancelled generation cannot leak Agent
     // Resources. DisposeStack continues through later cleanup when one
@@ -451,6 +456,14 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       turnJournalStoreToken,
       new FileJournalStore(join(options.projectRoot, '.zhin', 'agent-journal')),
     );
+    resources.provide(agentTurnEngineToken, createFullAgentTurnEngine({
+      host: asPrivate(zhinAgent),
+      core: composedRuntime.agentCore,
+      sessionSystem: composedRuntime.sessionSystem,
+      contextSystem: composedRuntime.contextSystem,
+      loopHooks: service.loopHooks,
+      bootstrapContext: bootstrapText,
+    }));
 
     const presetCount = await seedPresets();
 
@@ -470,8 +483,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       const senderRoles = resolveRuntimeSenderRoles(message, ownerId, endpointTrusted, trigger);
       const commMessage = bridgeRuntimeMessage(message, ownerId, senderRoles);
 
-      // Record the adapter name and endpoint id on the synthetic commMessage
-      // so activity-feedback's typing indicator can resolve OutboundHost.
+      // Boundary-only management/transcript projection still needs the legacy
+      // command adapter; the Agent turn below consumes only TurnRequest.
       // Runtime message.adapter is a CapabilityId (\0-separated); strip it and
       // use Endpoint liveName so the OutboundHost resolve() succeeds.
       const effectiveAdapter = capabilityLocalName(String(message.conversation.endpoint.id));
@@ -481,8 +494,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         (commMessage as { $endpoint?: string }).$endpoint = effectiveEndpoint;
       }
 
-      // 入站流水 → im_transcripts（ADR 0009 D4；fire-and-forget，失败仅 debug）。
-      recordRuntimeTranscript(zhinAgent, commMessage, {
+      // 入站流水 → im_transcripts（等待 projection settle，不能逃出 generation lease）。
+      await recordRuntimeTranscript(zhinAgent, commMessage, {
         direction: 'inbound',
         body: message.content,
         messageId: message.id,
@@ -494,7 +507,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       /** 回复并记录出站流水（assistant 角色，对齐 legacy message.send 收集）。 */
       const replyAndRecord = async (content: SendContent, transcriptBody = sendContentToText(content)) => {
         await message.$reply(content);
-        recordRuntimeTranscript(zhinAgent, commMessage, {
+        await recordRuntimeTranscript(zhinAgent, commMessage, {
           direction: 'outbound',
           body: transcriptBody,
           senderRole: 'assistant',
@@ -524,7 +537,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 
       if (!matched) {
         // 群/频道旁听：未触发 AI 的共享会话消息写入会话背景（Passive Group Context）。
-        void recordPassiveGroupContext(zhinAgent, message, commMessage);
+        await recordPassiveGroupContext(zhinAgent, message, commMessage);
         return false;
       }
 
@@ -536,10 +549,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 
       let capabilityActive = true;
       try {
-        if (!bootstrapLoaded) {
-          bootstrapText = await loadBootstrap(options.projectRoot);
-          bootstrapLoaded = true;
-        }
         const inbound = await preprocessInboundTurn(
           message,
           matched.content,
@@ -577,43 +586,41 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               error: error instanceof Error ? error.message : String(error),
             }));
           });
-          recordRuntimeTranscript(zhinAgent, commMessage, {
+          await recordRuntimeTranscript(zhinAgent, commMessage, {
             direction: 'outbound',
             body: sendContentToText(trigger.thinkingMessage as SendContent),
             senderRole: 'assistant',
           });
         }
 
-        let toolCount = 0;
-        const elements = await withTriggerTimeout(
+        const outcome = await withTriggerTimeout(
           async (signal) => {
             const request = createRuntimeTurnRequest(message, routed.userText, senderRoles, {
               traceId: randomUUID(),
               turnId: randomUUID(),
               signal,
-              ports: options.approvalPort ? { approval: options.approvalPort } : {},
-            });
-            const tools = [
-              ...toolsFromCapabilities(capabilities, request),
-              ...(await expandMcpTools(capabilities, binding.mcpServers))
-                .map((tool) => capabilityToTool(tool, toolInvocationFromTurn(request))),
-            ];
-            toolCount = tools.length;
-            return zhinAgent.processTurn({
-              content: routed.userText,
-              message: commMessage,
-              tools,
-              signal,
-              activityFeedbackEligible: true,
-              generation: capabilities.generation,
-              configuration: {
-                activeBinding: binding,
-                bootstrapContext: buildBootstrapContext(bootstrapText, capabilities, routed.agent),
+              ports: {
+                ...(options.approvalPort ? { approval: options.approvalPort } : {}),
+                reply: {
+                  send: async (output) => {
+                    const content = await publishOutboundElements([...output], effectiveAdapter || undefined);
+                    if (content.length === 0) return { status: 'suppressed' as const };
+                    await replyAndRecord(content, flattenOutputElements(output).trim());
+                    return { status: 'sent' as const };
+                  },
+                },
               },
             });
+            return options.runtime.executeLeased(
+              lease,
+              requester,
+              request,
+              { mcpServers: binding.mcpServers, agent: routed.agent?.qualifiedName ?? routed.agent?.name },
+            );
           },
           resolveTriggerTimeoutMs(trigger),
         );
+        const elements = outcomeElements(outcome);
         const transcriptBody = flattenOutputElements(elements).trim();
         const content = await publishOutboundElements(elements, effectiveAdapter || undefined);
         if (content.length > 0) {
@@ -630,8 +637,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         }
         logger.debug(formatCompact({
           op: 'agent_host_turn',
-          turnMode: 'zhin_agent.process',
-          tools: toolCount,
+          turnMode: 'agent_runtime.execute',
+          tools: outcome.status === 'completed' ? capabilities.tools.length : 0,
           ingressTools: capabilities.tools.length,
           elements: elements.length,
           model: binding.model,
@@ -874,7 +881,11 @@ function createRuntimeZhinAgent(
   im: ImRuntime,
   projectRoot: string,
   approvalPort?: ApprovalPort,
-): { agent: ZhinAgent; seedPresets: () => Promise<number> } {
+): {
+  agent: ZhinAgent;
+  runtime: ReturnType<typeof composeZhinAgentRuntime>;
+  seedPresets: () => Promise<number>;
+} {
   const binding = service.getBindingRegistry().requireZhinBinding();
   const provider = service.getProvider(binding.providerAlias);
   const agent = new ZhinAgent(provider, {
@@ -914,6 +925,7 @@ function createRuntimeZhinAgent(
   // immediately when sessions.useDatabase === false / no DatabaseHost).
   return {
     agent,
+    runtime: composed,
     seedPresets: () => seedOrchestratorAgentPresets(orchestrator, projectRoot),
   };
 }
@@ -1106,6 +1118,9 @@ export function createRuntimeTurnRequest(
   }));
   const quoteId = message.replyTo?.id
     ?? (typeof message.metadata?.quote_id === 'string' ? message.metadata.quote_id : undefined);
+  const quoteText = typeof message.metadata?.quote_text === 'string'
+    ? message.metadata.quote_text.trim()
+    : undefined;
 
   return Object.freeze({
     identity: Object.freeze({ traceId: input.traceId, turnId: input.turnId }),
@@ -1114,7 +1129,9 @@ export function createRuntimeTurnRequest(
     input: Object.freeze({
       text,
       ...(media.length > 0 ? { media: Object.freeze(media) } : {}),
-      ...(quoteId ? { quote: Object.freeze({ messageId: quoteId }) } : {}),
+      ...(quoteId || quoteText
+        ? { quote: Object.freeze({ ...(quoteId ? { messageId: quoteId } : {}), ...(quoteText ? { text: quoteText } : {}) }) }
+        : {}),
       metadata: Object.freeze({ ...message.metadata }),
     }),
     session: Object.freeze({
@@ -1200,15 +1217,15 @@ interface RuntimeTranscriptDraft {
 /**
  * im_transcripts 落库（缺口 1，对齐 legacy register-chat-message-store）。
  * scene 字段经 resolveSceneFieldsFromMessage 计算，与 chat_history 工具查询
- * （buildImTranscriptQuery）保持同一 SSOT；fire-and-forget，失败仅 debug。
+ * （buildImTranscriptQuery）保持同一 SSOT；调用方等待 projection settle。
  */
 export function recordRuntimeTranscript(
   agent: Pick<ZhinAgent, 'recordImTranscript'>,
   commMessage: ReturnType<typeof createSyntheticMessage>,
   draft: RuntimeTranscriptDraft,
-): void {
+): Promise<void> {
   const body = draft.body ?? '';
-  if (!body.trim()) return;
+  if (!body.trim()) return Promise.resolve();
   const scene = resolveSceneFieldsFromMessage(commMessage);
   const input: ImTranscriptWriteInput = {
     message_id: draft.messageId ?? '',
@@ -1223,7 +1240,7 @@ export function recordRuntimeTranscript(
     body,
     time: Date.now(),
   };
-  void agent.recordImTranscript(input).catch((error) => {
+  return agent.recordImTranscript(input).catch((error) => {
     logger.debug(formatCompact({
       op: 'agent_host_transcript_fail',
       direction: draft.direction,
@@ -1467,28 +1484,17 @@ function toMcpServerEntry(raw: McpServerConfig): McpServerEntry | null {
   };
 }
 
-function buildBootstrapContext(
-  bootstrap: string,
-  capabilities: AgentCapabilities,
-  activeAgent?: AgentCapabilities['agents'][number],
-): string {
-  const parts: string[] = [];
-  if (bootstrap) parts.push(bootstrap);
-  if (activeAgent) {
-    parts.push(`## Active specialist: ${activeAgent.name}`);
-    parts.push(activeAgent.description);
-    if (activeAgent.instructions) parts.push(activeAgent.instructions);
-  } else if (capabilities.agents.length > 0) {
-    parts.push('Available specialist agents (prefix user text with `@name` to route):');
-    for (const agent of capabilities.agents) {
-      parts.push(`### ${agent.name}\n${agent.description}\n${truncate(agent.instructions, 400)}`);
-    }
+function outcomeElements(
+  outcome: TurnOutcome,
+): Array<Extract<TurnOutcome, { status: 'completed' }>['output'][number]> {
+  if (outcome.status === 'completed') return [...outcome.output];
+  if (outcome.status === 'cancelled') {
+    throw new Error(`Agent turn cancelled: ${outcome.reason}`);
   }
-  if (capabilities.skills.length > 0) {
-    parts.push('Available skills:');
-    for (const skill of capabilities.skills) parts.push(`- ${skill.name}: ${skill.description}`);
+  if (outcome.status === 'budget_exceeded') {
+    throw new Error(`Agent turn exceeded budget: ${outcome.budget}`);
   }
-  return parts.join('\n\n');
+  throw new Error(`${outcome.error.code}: ${outcome.error.message}`);
 }
 
 async function preprocessInboundTurn(

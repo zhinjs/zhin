@@ -212,6 +212,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   // Bind before start so Adapter definitions can resolve messageGatewayToken
   // while the first generation is still being prepared.
   im.attach(host.runtime.controller.snapshots);
+  agentHost?.attach(host.runtime.controller.snapshots);
   consoleHost.console.attach(host.runtime.controller.snapshots);
   control.stop = async () => {
     try {
@@ -294,6 +295,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
 }
 
 interface ConfiguredAgentHost {
+  attach(snapshots: import('@zhin.js/plugin-runtime').SnapshotStore): void;
   install(options: {
     readonly im: ImRuntime;
     readonly projectRoot: string;
@@ -310,9 +312,12 @@ async function loadConfiguredAgentHost(
   const document = isConfigDocumentPort(config) ? (await config.read()).document : config;
   if (!hasAgentConfiguration(document)) return undefined;
   const module = await import('./agent-host-installer.js');
+  const runtime = new module.AgentRuntime({ coordinator: new module.AgentTurnCoordinator() });
   const configured: ConfiguredAgentHost = {
+    attach: (snapshots) => runtime.attach(snapshots),
     install: (options) => module.installAgentHost({
       ...options,
+      runtime,
       extraTools: options.extraTools as Parameters<typeof module.installAgentHost>[0]['extraTools'],
     }),
   };

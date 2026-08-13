@@ -41,7 +41,7 @@ describe('canonical IM TurnRequest ingress', () => {
       content: 'look',
       target: 'group:100',
       sender: { id: 'user-1', name: 'Alice' },
-      metadata: { endpoint: '10001' },
+      metadata: { endpoint: '10001', quote_id: 'quoted-1', quote_text: 'quoted body' },
       segments: [{
         type: 'image',
         data: { media: { kind: 'url', value: 'https://example.com/a.png', mime_type: 'image/png' } },
@@ -76,6 +76,7 @@ describe('canonical IM TurnRequest ingress', () => {
           source: { kind: 'url', value: 'https://example.com/a.png' },
           mimeType: 'image/png',
         }],
+        quote: { messageId: 'quoted-1', text: 'quoted body' },
       },
       session: { key: 'icqq:10001:group:100' },
       policy: { permissions: ['trusted'], unattended: false },

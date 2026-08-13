@@ -55,6 +55,7 @@ export async function describeAgentPathPromptSections(
     sessionId: string;
     deferredStats?: string;
     modelSdk?: string;
+    runtime?: PromptRuntimeOverrides;
   },
 ): Promise<PromptSectionDebugInfo[]> {
   const platform = promptPlatform(options.turn);
@@ -75,8 +76,8 @@ export async function describeAgentPathPromptSections(
     config: agent.config,
     skillRegistry: agent.skillRegistry,
     skillsSummaryXML: agent.skillsSummaryXML,
-    activeSkillsContext: agent.getTurnActiveSkills(),
-    bootstrapContext: agent.bootstrapContext,
+    activeSkillsContext: options.runtime?.activeSkillsContext ?? agent.getTurnActiveSkills(),
+    bootstrapContext: options.runtime?.bootstrapContext ?? agent.bootstrapContext,
     globalContext: agent.globalContext,
     turn: options.turn,
     gitStatus: agent.config.gitStatus
@@ -85,7 +86,7 @@ export async function describeAgentPathPromptSections(
     toolSearchDeferredStats: options.deferredStats,
     platformSections: platformMarkdown,
     orchestratorSdk: options.modelSdk,
-    agentNickname: agent.activeBinding?.nickname,
+    agentNickname: options.runtime?.agentNickname ?? agent.activeBinding?.nickname,
   });
 }
 
@@ -100,6 +101,7 @@ export async function buildAgentPathSystemPrompt(
     preData?: string;
     deferredStats?: string;
     modelSdk?: string;
+    runtime?: PromptRuntimeOverrides;
   },
 ): Promise<string> {
   const { content, sessionId, personaEnhanced, preData, deferredStats, modelSdk } = options;
@@ -123,8 +125,10 @@ export async function buildAgentPathSystemPrompt(
     ? await getGitStatusLine(process.cwd())
     : null;
 
-  const bindingModel = agent.activeBinding?.model;
-  const providerAlias = agent.activeBinding?.providerAlias ?? agent.getTurnProvider().name;
+  const bindingModel = options.runtime?.modelId ?? agent.activeBinding?.model;
+  const providerAlias = options.runtime?.providerAlias
+    ?? agent.activeBinding?.providerAlias
+    ?? agent.getTurnProvider().name;
   const llmModel = bindingModel
     ? getLlmTransportModel(providerAlias, bindingModel)
     : undefined;
@@ -133,15 +137,15 @@ export async function buildAgentPathSystemPrompt(
     config: agent.config,
     skillRegistry: agent.skillRegistry,
     skillsSummaryXML: agent.skillsSummaryXML,
-    activeSkillsContext: agent.getTurnActiveSkills(),
-    bootstrapContext: agent.bootstrapContext,
+    activeSkillsContext: options.runtime?.activeSkillsContext ?? agent.getTurnActiveSkills(),
+    bootstrapContext: options.runtime?.bootstrapContext ?? agent.bootstrapContext,
     globalContext: agent.globalContext,
     turn: options.turn,
     gitStatus: gitStatus ?? undefined,
     toolSearchDeferredStats: deferredStats,
     platformSections: platformMarkdown,
     orchestratorSdk: modelSdk,
-    agentNickname: agent.activeBinding?.nickname,
+    agentNickname: options.runtime?.agentNickname ?? agent.activeBinding?.nickname,
     modelId: bindingModel,
     contextWindow: llmModel?.contextWindow ?? agent.config.contextTokens,
   };
@@ -151,6 +155,14 @@ export async function buildAgentPathSystemPrompt(
   const dynamicSuffix = dynamicBlock ? `\n\n# Dynamic context\n${dynamicBlock}` : '';
 
   return `${richPrompt}${dynamicSuffix}${preData ? `\n\nPre-fetched data:\n${preData}` : ''}`;
+}
+
+export interface PromptRuntimeOverrides {
+  readonly bootstrapContext?: string;
+  readonly activeSkillsContext?: string;
+  readonly agentNickname?: string;
+  readonly modelId?: string;
+  readonly providerAlias?: string;
 }
 
 export function buildChatPathSystemPrompt(

@@ -117,7 +117,7 @@ export class ContextSystem {
       profileSummary: envelopeParts.profileSummary,
       toneHint: envelopeParts.toneHint,
       deferredStats,
-      activeSkillsContext: host.getTurnActiveSkills() || undefined,
+      activeSkillsContext: (input.activeSkillsContext ?? host.getTurnActiveSkills()) || undefined,
       quoteSystemHint: input.quoteSystemHint,
       collaborationHint: envelopeParts.collaborationHint,
       modelLine: `${providerAlias}/${modelId}`,
@@ -159,6 +159,7 @@ export interface TextTurnContextInput {
   quoteSystemHint?: string;
   prebuiltMessages?: AgentMessage[];
   mode?: 'chat' | 'vision';
+  activeSkillsContext?: string;
 }
 
 export interface TextTurnContextOutput {

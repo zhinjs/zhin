@@ -30,7 +30,7 @@ export class TurnToolRuntime {
   ): Promise<TurnToolOutcome> {
     const tool = this.#tools.get(name);
     if (!tool) return this.#deny(name, toolUseId, 'capability', `Unknown Tool capability: ${name}`);
-    await this.turn.ports.journal.append({ type: 'tool_call', toolName: name, args: { ...input }, toolUseId });
+    await this.#append({ type: 'tool_call', toolName: name, args: { ...input }, toolUseId });
     if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0);
     const decision = runTurnToolPolicies({ turn: this.turn, tool, input });
     if (decision.status === 'denied') {
@@ -55,19 +55,19 @@ export class TurnToolRuntime {
       const output = await tool.execute(input, toolInvocationFromTurn(this.turn));
       const durationMs = Date.now() - startedAt;
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, durationMs);
-      await this.turn.ports.journal.append({ type: 'tool_result', toolName: name, output, durationMs, toolUseId });
+      await this.#append({ type: 'tool_result', toolName: name, output, durationMs, toolUseId });
       return Object.freeze({ status: 'completed', output, durationMs });
     } catch (error) {
       const durationMs = Date.now() - startedAt;
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, durationMs);
       const message = error instanceof Error ? error.message : String(error);
-      await this.turn.ports.journal.append({ type: 'tool_failed', toolName: name, toolUseId, error: message, durationMs });
+      await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: message, durationMs });
       return Object.freeze({ status: 'failed', error: message, retryable: false });
     }
   }
 
   async #deny(toolName: string, toolUseId: string, policy: string, reason: string): Promise<TurnToolOutcome> {
-    await this.turn.ports.journal.append({ type: 'tool_denied', toolName, toolUseId, policy, reason });
+    await this.#append({ type: 'tool_denied', toolName, toolUseId, policy, reason });
     return Object.freeze({ status: 'denied', policy, reason });
   }
 
@@ -75,8 +75,12 @@ export class TurnToolRuntime {
     const reason = this.turn.signal.reason instanceof Error
       ? this.turn.signal.reason.message
       : String(this.turn.signal.reason ?? 'turn cancelled');
-    await this.turn.ports.journal.append({ type: 'tool_cancelled', toolName, toolUseId, reason, durationMs });
+    await this.#append({ type: 'tool_cancelled', toolName, toolUseId, reason, durationMs });
     return Object.freeze({ status: 'cancelled', reason });
+  }
+
+  async #append(event: import('../event/turn-event.js').TurnEvent): Promise<void> {
+    await this.turn.ports.journal.append(event);
   }
 }
 

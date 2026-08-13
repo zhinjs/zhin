@@ -11,14 +11,24 @@ immutable snapshot，并从 Tool、Skill、Agent、MCP 四个 Feature projection
 owner-visible 能力句柄；公开输入/输出只有 `TurnRequest` / `TurnOutcome`：
 
 ```ts
-import { AgentRuntime, AgentTurnCoordinator, agentTurnEngineToken } from '@zhin.js/agent/runtime';
+import {
+  AgentRuntime,
+  AgentTurnCoordinator,
+  agentTurnEngineToken,
+  createFullAgentTurnEngine,
+} from '@zhin.js/agent/runtime';
 
 const coordinator = new AgentTurnCoordinator(); // one per Root, shared by all generations
 const runtime = new AgentRuntime({ coordinator });
 runtime.attach(snapshotReader);
 
 // Each Agent-enabled generation provides its complete engine during setup.
-resources.provide(agentTurnEngineToken, { run: orchestrator.run });
+resources.provide(agentTurnEngineToken, createFullAgentTurnEngine({
+  host,
+  core,
+  sessionSystem,
+  contextSystem,
+}));
 
 const outcome = await runtime.execute(pluginId, request, {
   mcpServers: activeBinding.mcpServers,
@@ -31,32 +41,15 @@ runner 或其他 generation。这是迁移完成后的唯一权威契约，不�
 
 ## Turn Isolation
 
-`ZhinAgent.configure()` is for long-lived runtime wiring only. Do not change
-`activeBinding` or `bootstrapContext` immediately before a message is handled:
-those values are mutable process state and concurrent conversations would race.
-Use `processTurn()` and its immutable `configuration` instead:
-
-```ts
-await agent.processTurn({
-  content: 'Summarize this thread',
-  message,
-  tools,
-  activityFeedbackEligible: true,
-  configuration: {
-    activeBinding: binding,
-    bootstrapContext,
-  },
-});
-```
-
-The configuration is carried in `AsyncLocalStorage` for the entire turn. A
-generation disposal still aborts its active turns, while unrelated concurrent
-conversations keep their own model binding and prompt context.
+IM、HTTP、A2A 与 Schedule 只构造 immutable `TurnRequest`，再调用 process-owned
+`AgentRuntime`。完整 engine、Tool/Skill/Agent/MCP capability 与 prompt runtime 均从
+该请求持有的 generation lease 解析；不得在消息前改写 `ZhinAgent.activeBinding`、
+`bootstrapContext`，也不得用 synthetic IM `Message` 调 `processTurn()` 充当新入口。
 
 ### Turn Cancellation
 
-`processTurn()` also accepts an `AbortSignal`. It is propagated through group
-FIFO queueing, `PromptController`, provider streaming, and tool execution. A
+`TurnRequest.signal` is propagated through `AgentTurnCoordinator`,
+`PromptController`, provider streaming, and tool execution. A
 cancelled queued message is removed before execution; a running turn receives
 the same signal and cannot publish a late reply. `ai.trigger.timeout` uses this
 path, rather than racing a Promise and leaving work running in the background.

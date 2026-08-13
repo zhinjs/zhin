@@ -116,6 +116,9 @@ export interface AgentTurnExecutionContext {
     readonly tools: readonly ToolDescriptor[];
   };
   readonly tools: TurnToolRuntime;
+  /** Executable descriptors bound to the same active generation lease. */
+  readonly toolCapabilities: readonly ToolCapability[];
+  readonly selection: AgentCapabilitySelection;
 }
 
 /** Root-owned serialization authority shared by every Agent generation. */
@@ -164,6 +167,8 @@ export interface AgentRuntimeOptions {
 export interface AgentCapabilitySelection {
   /** Binding-local MCP names. Empty means no MCP capability is exposed. */
   readonly mcpServers: readonly string[];
+  /** Optional owner-visible specialist selected by the ingress router. */
+  readonly agent?: string;
 }
 
 export class AgentRuntime extends SnapshotAttachedRuntime {
@@ -227,7 +232,13 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       });
       const tools = new TurnToolRuntime(turn, capabilities.tools);
       const engine = resolveTurnEngine(lease.value);
-      return await executeAgentTurn(turn, () => engine.run({ turn, capabilities: catalog, tools }), observe);
+      return await executeAgentTurn(turn, () => engine.run({
+        turn,
+        capabilities: catalog,
+        tools,
+        toolCapabilities: capabilities.tools,
+        selection,
+      }), observe);
     } finally {
       active = false;
     }

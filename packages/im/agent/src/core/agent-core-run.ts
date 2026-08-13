@@ -25,7 +25,6 @@ import { buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
 import { applyToolToModelOutput } from '../tool/tool-model-output.js';
 import { resolveAlwaysLoadedSet } from '../tool-catalog/resolve-config.js';
 import { resolveDeferredApiTools } from '../tool-catalog/tool-catalog.js';
-import type { DeferredTurnController } from '../tool-catalog/deferred-turn-controller.js';
 import type { ToolCatalogItem } from '../tool-catalog/types.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import {
@@ -113,7 +112,16 @@ export interface AgentLoopTurnInput {
   allTools: AgentTool[];
   resolvedTools: AgentTool[];
   toolExecution: ToolExecutionAuthority;
+  /** Canonical capability authority journals tool facts itself; classic loops map them. */
+  toolEventSource?: 'loop' | 'authority';
   loopHooks?: PluginAILoopHookRegistry;
+  promptRuntime?: Readonly<{
+    bootstrapContext?: string;
+    activeSkillsContext?: string;
+    agentNickname?: string;
+    modelId?: string;
+    providerAlias?: string;
+  }>;
   personaEnhanced: string;
   modelId: string;
   modelCandidates: string[];
@@ -123,7 +131,7 @@ export interface AgentLoopTurnInput {
   signal?: AbortSignal;
   deferredStats?: string;
   /** Turn-owned deferred selection authority. Required for deferred loading. */
-  deferredController?: DeferredTurnController;
+  deferredController?: Readonly<{ loadedToolNames(): string[] }>;
   /** Catalog paired with deferredController for this exact Turn. */
   toolCatalog?: readonly ToolCatalogItem[];
   /** Direct tool sets bypass deferred catalog/snapshot/meta-tool machinery. */
@@ -381,8 +389,9 @@ export async function* runAgentLoopTextTurnRun(
         sessionId,
         personaEnhanced,
         preData,
-        deferredStats: input.deferredStats,
-        modelSdk: llmModel.sdk,
+      deferredStats: input.deferredStats,
+      modelSdk: llmModel.sdk,
+      runtime: input.promptRuntime,
       })
     : buildChatPathSystemPrompt(host, personaEnhanced, input.promptProfile);
   if (outputSchema) {
@@ -416,6 +425,7 @@ export async function* runAgentLoopTextTurnRun(
           sessionId,
           deferredStats: input.deferredStats,
           modelSdk: llmModel.sdk,
+          runtime: input.promptRuntime,
         })
       : [];
     logPromptComposition({
@@ -633,6 +643,8 @@ export async function* runAgentLoopTextTurnRun(
 
   for await (const event of agentLoop(promptMessages, loopContext, loopConfig, signal)) {
     for (const te of mapAgentEventToTurnEvents(event, mapperState)) {
+      if (input.toolEventSource === 'authority'
+        && (te.type === 'tool_call' || te.type === 'tool_result')) continue;
       emitTurnEvent(te);
       yield te;
     }
