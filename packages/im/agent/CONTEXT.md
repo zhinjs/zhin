@@ -9,7 +9,7 @@ Agent Runtime 在 Core IM 概念之上负责 AI 编排：ZhinAgent 回合、工�
 _避免使用_：assistant、bot brain、AI plugin
 
 **Turn Ingress**:
-Agent 唯一入站契约；由 IM、HTTP、A2A、Schedule 等入口在 composition root 构造。包含不可变的 origin、principal、content/media、session address、generation/trace/turn identity、policy context 和 cancellation signal，并注入 turn-scoped ports。它属于 Agent 域，不是 IM Message 的别名。
+Agent 唯一入站契约；由 IM、HTTP、A2A、Schedule 等入口在 composition root 构造。包含不可变的 origin、principal、content/media、session address、generation/trace/turn identity、policy context 和 cancellation signal，并注入 turn-scoped ports。网络能力必须由 policy context 显式授予；缺省为禁用，HTTPS/域名约束随 turn 固定。它属于 Agent 域，不是 IM Message 的别名。
 _避免使用_：commMessage、synthetic Message、bridge message、Message.extra
 
 **Turn Ports**:

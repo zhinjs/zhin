@@ -44,6 +44,12 @@ export interface TurnSessionAddress {
 export interface TurnPolicyContext {
   readonly permissions: readonly string[];
   readonly unattended: boolean;
+  /** Explicit network authority; absence means network access is disabled. */
+  readonly network?: Readonly<{
+    readonly enabled: boolean;
+    readonly httpsOnly?: boolean;
+    readonly allowedDomains?: readonly string[];
+  }>;
 }
 
 export interface FrozenCapabilityCatalog {

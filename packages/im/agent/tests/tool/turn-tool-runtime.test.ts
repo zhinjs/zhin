@@ -3,7 +3,7 @@ import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { TurnEvent } from '../../src/event/turn-event.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
-import { createTurnIngress } from '../../src/turn/turn-ingress.js';
+import { createTurnIngress, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 
 describe('TurnToolRuntime', () => {
   it('records a pre-aborted invocation as cancelled without running policies or the tool', async () => {
@@ -87,6 +87,62 @@ describe('TurnToolRuntime', () => {
     expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_denied']);
   });
 
+  it('denies canonical network tools when the Turn has no network authority', async () => {
+    const execute = vi.fn(async () => 'remote response');
+    const { turn, events } = fixture();
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'web_fetch')]);
+
+    await expect(runtime.execute(
+      'web_fetch',
+      { url: 'https://api.example.com/data' },
+      'call-network',
+    )).resolves.toMatchObject({
+      status: 'denied',
+      policy: 'network-access',
+    });
+    expect(execute).not.toHaveBeenCalled();
+    expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_denied']);
+  });
+
+  it('allows only allowlisted HTTPS targets under canonical network authority', async () => {
+    const execute = vi.fn(async () => 'remote response');
+    const { turn } = fixture({
+      network: { enabled: true, httpsOnly: true, allowedDomains: ['api.example.com'] },
+    });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'web_fetch')]);
+
+    await expect(runtime.execute(
+      'web_fetch',
+      { url: 'https://api.example.com/data' },
+      'call-network-allowed',
+    )).resolves.toMatchObject({ status: 'completed' });
+    await expect(runtime.execute(
+      'web_fetch',
+      { url: 'http://api.example.com/data' },
+      'call-network-http',
+    )).resolves.toMatchObject({ status: 'denied', policy: 'network-access' });
+    await expect(runtime.execute(
+      'web_fetch',
+      { url: 'https://evil.example/data' },
+      'call-network-domain',
+    )).resolves.toMatchObject({ status: 'denied', policy: 'network-access' });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('denies Bash network commands without a verifiable absolute URL', async () => {
+    const execute = vi.fn(async () => 'remote response');
+    const { turn } = fixture({
+      network: { enabled: true, httpsOnly: true, allowedDomains: ['example.com'] },
+    });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'bash')]);
+
+    await expect(runtime.execute('bash', { command: 'curl example.com' }, 'call-network-bare')).resolves.toMatchObject({
+      status: 'denied',
+      policy: 'network-access',
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('passes the turn signal and waits for real settlement before cancelling', async () => {
     const controller = new AbortController();
     let release!: () => void;
@@ -151,6 +207,7 @@ describe('TurnToolRuntime', () => {
 function fixture(options: {
   signal?: AbortSignal;
   approval?: import('../../src/session/session-interaction-port.js').ApprovalPort;
+  network?: TurnPolicyContext['network'];
 } = {}) {
   const events: TurnEvent[] = [];
   const turn = createTurnIngress({
@@ -159,7 +216,11 @@ function fixture(options: {
     principal: { subjectId: 'user', roles: ['user'] },
     input: { text: 'run' },
     session: { key: 'http:http-session' },
-    policy: { permissions: ['user'], unattended: false },
+    policy: {
+      permissions: ['user'],
+      unattended: false,
+      ...(options.network ? { network: options.network } : {}),
+    },
     capabilities: { tools: ['danger'], skills: [] },
     signal: options.signal ?? new AbortController().signal,
     ports: {

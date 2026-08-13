@@ -49,7 +49,11 @@ import {
 } from './dangerous-tool-policy.js';
 import { checkExecPolicyWithOptions } from './exec-policy.js';
 import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approve-always-store.js';
-import { checkUrlNetworkAccess } from './network-policy.js';
+import {
+  checkUrlNetworkAccess,
+  extractUrlsFromCommand,
+  NETWORK_COMMAND_PATTERNS,
+} from './network-policy.js';
 import type { ToolNetworkPolicy } from './network-policy-context.js';
 import type { ToolDescriptor } from '@zhin.js/tool';
 import type { TurnIngress } from '../turn/turn-ingress.js';
@@ -122,6 +126,8 @@ export interface TurnToolPolicyInput {
 /** Generic, execution-domain-neutral policy facade for canonical Turn tools. */
 export function runTurnToolPolicies(input: TurnToolPolicyInput): TurnToolPolicyDecision {
   const requesterRole = resolveTurnRequesterRole(input.turn);
+  const networkDecision = checkTurnNetworkPolicy(input);
+  if (networkDecision) return networkDecision;
   const fileOperation = resolveTurnFileOperation(input.tool.name);
   if (fileOperation) {
     const path = stringArgument(input.input, 'path', 'file_path', 'filePath');
@@ -166,6 +172,49 @@ export function runTurnToolPolicies(input: TurnToolPolicyInput): TurnToolPolicyD
     });
   }
   return Object.freeze({ status: 'allowed' });
+}
+
+function checkTurnNetworkPolicy(input: TurnToolPolicyInput): TurnToolPolicyDecision | undefined {
+  const command = input.tool.name === 'bash' ? stringArgument(input.input, 'command') : undefined;
+  const isNetworkCommand = Boolean(command && NETWORK_COMMAND_PATTERNS.some((pattern) => pattern.test(command)));
+  const isNetworkTool = input.tool.name === 'web_fetch' || input.tool.name === 'web_search';
+  if (!isNetworkCommand && !isNetworkTool) return undefined;
+
+  const policy = input.turn.policy.network;
+  if (!policy?.enabled) {
+    return Object.freeze({
+      status: 'denied',
+      policy: 'network-access',
+      reason: 'Turn has no network authority',
+    });
+  }
+
+  const urls = input.tool.name === 'web_fetch'
+    ? [stringArgument(input.input, 'url')].filter((value): value is string => Boolean(value))
+    : command
+      ? extractUrlsFromCommand(command)
+      : [];
+  if ((input.tool.name === 'web_fetch' || isNetworkCommand) && urls.length === 0) {
+    return Object.freeze({
+      status: 'denied',
+      policy: 'network-access',
+      reason: 'Network access requires a verifiable absolute URL',
+    });
+  }
+  for (const url of urls) {
+    const decision = checkUrlNetworkAccess(url, {
+      httpsOnly: policy.httpsOnly,
+      allowedDomains: [...(policy.allowedDomains ?? [])],
+    });
+    if (!decision.allowed) {
+      return Object.freeze({
+        status: 'denied',
+        policy: 'network-access',
+        reason: decision.reason ?? 'Network target denied',
+      });
+    }
+  }
+  return undefined;
 }
 
 function turnFilePermissionDecision(
