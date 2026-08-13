@@ -34,6 +34,7 @@ import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 import {
   AgentRuntime,
   AgentTurnCoordinator,
+  agentTurnEngineToken,
   ToolIngressRuntime,
   CapabilityIngress,
   capabilityToTool,
@@ -160,9 +161,8 @@ describe('Agent CapabilityIngress', () => {
 
   it('executes one canonical TurnIngress with snapshot-owned capabilities', async () => {
     const fixture = await createFixture();
-    const store = new SnapshotStore(stateFrom(fixture.snapshot));
     const seen: import('../../src/turn/turn-ingress.js').TurnIngress[] = [];
-    const runtime = new AgentRuntime(async function* ({ turn, capabilities, tools }) {
+    const store = new SnapshotStore(stateWithEngine(fixture.snapshot, async function* ({ turn, capabilities, tools }) {
       seen.push(turn);
       expect(capabilities.tools[0]?.name).toBe('child__lookup');
       expect(capabilities.tools.map((tool) => tool.name)).toContain('child__memory__search');
@@ -177,7 +177,8 @@ describe('Agent CapabilityIngress', () => {
         output: [{ type: 'text', content: 'done' }],
         usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 },
       };
-    }, { coordinator: new AgentTurnCoordinator() });
+    }));
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() });
     runtime.attach(store);
 
     const outcome = await runtime.execute(fixture.child, {
@@ -201,15 +202,22 @@ describe('Agent CapabilityIngress', () => {
     await store.close();
   });
 
+  it('fails closed when the active generation has no Agent Turn Engine', async () => {
+    const fixture = await createFixture();
+    const store = new SnapshotStore(stateFrom(fixture.snapshot));
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() });
+    runtime.attach(store);
+
+    await expect(runtime.execute(fixture.child, externalRequest('no-engine'), { mcpServers: [] }))
+      .rejects.toThrow('Agent Turn Engine');
+    await fixture.mcp.stop();
+    await store.close();
+  });
+
   it('rejects a released generation lease at the canonical execution boundary', async () => {
     const fixture = await createFixture();
     const store = new SnapshotStore(stateFrom(fixture.snapshot));
-    const runtime = new AgentRuntime(async function* () {
-      yield {
-        type: 'turn_end', output: [],
-        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      };
-    }, { coordinator: new AgentTurnCoordinator() });
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() });
     runtime.attach(store);
     const lease = store.acquire();
     lease.release();
@@ -226,12 +234,7 @@ describe('Agent CapabilityIngress', () => {
     const fixture = await createFixture();
     const attached = new SnapshotStore(stateFrom(fixture.snapshot));
     const other = new SnapshotStore(stateFrom(fixture.snapshot));
-    const runtime = new AgentRuntime(async function* () {
-      yield {
-        type: 'turn_end', output: [],
-        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      };
-    }, { coordinator: new AgentTurnCoordinator() });
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() });
     runtime.attach(attached);
     const foreignLease = other.acquire();
     await expect(runtime.executeLeased(
@@ -246,15 +249,12 @@ describe('Agent CapabilityIngress', () => {
 
   it('exposes only MCP servers selected by the active binding', async () => {
     const fixture = await createFixture();
-    const store = new SnapshotStore(stateFrom(fixture.snapshot));
     let names: readonly string[] = [];
-    const runtime = new AgentRuntime(async function* ({ capabilities }) {
+    const store = new SnapshotStore(stateWithEngine(fixture.snapshot, async function* ({ capabilities }) {
       names = capabilities.tools.map((tool) => tool.name);
-      yield {
-        type: 'turn_end', output: [],
-        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      };
-    }, { coordinator: new AgentTurnCoordinator() });
+      yield terminalEvent();
+    }));
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() });
     runtime.attach(store);
     await runtime.execute(fixture.child, externalRequest('mcp-filter'), { mcpServers: [] });
     expect(names).toEqual(['child__lookup']);
@@ -264,30 +264,31 @@ describe('Agent CapabilityIngress', () => {
 
   it('shares one session queue across distinct generation runtime instances', async () => {
     const fixture = await createFixture();
-    const store = new SnapshotStore(stateFrom(fixture.snapshot));
     const coordinator = new AgentTurnCoordinator();
     let release!: () => void;
     let entered!: () => void;
     const blocked = new Promise<void>((resolve) => { release = resolve; });
     const started = new Promise<void>((resolve) => { entered = resolve; });
     const order: string[] = [];
-    const firstRuntime = new AgentRuntime(async function* () {
-      order.push('old:start');
-      entered();
-      await blocked;
-      order.push('old:end');
+    const store = new SnapshotStore(stateWithEngine(fixture.snapshot, async function* ({ turn }) {
+      if (turn.identity.turnId.endsWith('first')) {
+        order.push('old:start');
+        entered();
+        await blocked;
+        order.push('old:end');
+      } else {
+        order.push('next');
+      }
       yield terminalEvent();
-    }, { coordinator });
-    const nextRuntime = new AgentRuntime(async function* () {
-      order.push('next');
-      yield terminalEvent();
-    }, { coordinator });
+    }));
+    const firstRuntime = new AgentRuntime({ coordinator });
+    const nextRuntime = new AgentRuntime({ coordinator });
     firstRuntime.attach(store);
     nextRuntime.attach(store);
 
-    const first = firstRuntime.execute(fixture.child, externalRequest('shared'), { mcpServers: [] });
+    const first = firstRuntime.execute(fixture.child, externalRequest('first'), { mcpServers: [] });
     await started;
-    const next = nextRuntime.execute(fixture.child, externalRequest('shared'), { mcpServers: [] });
+    const next = nextRuntime.execute(fixture.child, externalRequest('next'), { mcpServers: [] });
     await Promise.resolve();
     expect(order).toEqual(['old:start']);
     release();
@@ -495,4 +496,14 @@ function stateFrom(snapshot: RuntimeSnapshot): SnapshotState {
     capabilities: snapshot.capabilities,
     projections: snapshot.projections,
   };
+}
+
+function stateWithEngine(
+  snapshot: RuntimeSnapshot,
+  run: import('../../src/plugin-runtime/agent-runtime.js').AgentTurnExecutor,
+): SnapshotState {
+  const state = stateFrom(snapshot);
+  const rootResources = new Map(state.resources.get(state.root));
+  rootResources.set(agentTurnEngineToken.id, Object.freeze({ run }));
+  return { ...state, resources: new Map(state.resources).set(state.root, rootResources) };
 }

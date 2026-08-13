@@ -11,15 +11,14 @@ immutable snapshot，并从 Tool、Skill、Agent、MCP 四个 Feature projection
 owner-visible 能力句柄；公开输入/输出只有 `TurnRequest` / `TurnOutcome`：
 
 ```ts
-import { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
+import { AgentRuntime, AgentTurnCoordinator, agentTurnEngineToken } from '@zhin.js/agent/runtime';
 
 const coordinator = new AgentTurnCoordinator(); // one per Root, shared by all generations
-const runtime = new AgentRuntime(async function* ({ turn, capabilities }) {
-  // Runner 注入点：能力句柄 → 带 generation 戳的工具（ToolRuntime 执行前校验）
-  const tools = toolsFromCapabilities(capabilities);
-  yield* orchestrator.run({ turn, capabilities, tools });
-}, { coordinator });
+const runtime = new AgentRuntime({ coordinator });
 runtime.attach(snapshotReader);
+
+// Each Agent-enabled generation provides its complete engine during setup.
+resources.provide(agentTurnEngineToken, { run: orchestrator.run });
 
 const outcome = await runtime.execute(pluginId, request, {
   mcpServers: activeBinding.mcpServers,
@@ -27,8 +26,8 @@ const outcome = await runtime.execute(pluginId, request, {
 ```
 
 Tool/MCP 执行 handle 只在 turn lease 内有效，防止访问已 retire 的 generation。
-这是迁移完成后的唯一权威契约；当前生产切换必须等 builtin/Host 能力全部进入
-generation projection、Journal 与可取消 Tool Runtime 闭环后一次完成，不能用缩减执行器替代。
+Turn engine 也只从该 lease 的 snapshot 解析；缺失时 fail-closed，不回退到进程全局
+runner 或其他 generation。这是迁移完成后的唯一权威契约，不能用缩减执行器替代。
 
 ## Turn Isolation
 

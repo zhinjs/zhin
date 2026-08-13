@@ -146,6 +146,16 @@ export type AgentTurnExecutor = (
   context: AgentTurnExecutionContext,
 ) => AsyncGenerator<import('../event/turn-event.js').TurnEvent, void>;
 
+/** Generation-owned complete Turn engine resolved from the held snapshot. */
+export interface AgentTurnEngine {
+  run: AgentTurnExecutor;
+}
+
+export const agentTurnEngineToken = createToken<AgentTurnEngine>(
+  'zhin.agent.turn-engine',
+  'Complete Agent Turn engine owned by one Root generation',
+);
+
 export interface AgentRuntimeOptions {
   /** Root-owned queue shared by every AgentRuntime generation of that Root. */
   readonly coordinator: AgentTurnCoordinator;
@@ -159,10 +169,7 @@ export interface AgentCapabilitySelection {
 export class AgentRuntime extends SnapshotAttachedRuntime {
   readonly #ingress = new CapabilityIngress();
 
-  constructor(
-    private readonly run: AgentTurnExecutor,
-    private readonly options: AgentRuntimeOptions,
-  ) {
+  constructor(private readonly options: AgentRuntimeOptions) {
     super();
   }
 
@@ -219,11 +226,20 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
         tools: Object.freeze(capabilities.tools.map(({ execute: _execute, ...tool }) => Object.freeze(tool))),
       });
       const tools = new TurnToolRuntime(turn, capabilities.tools);
-      return await executeAgentTurn(turn, () => this.run({ turn, capabilities: catalog, tools }), observe);
+      const engine = resolveTurnEngine(lease.value);
+      return await executeAgentTurn(turn, () => engine.run({ turn, capabilities: catalog, tools }), observe);
     } finally {
       active = false;
     }
   }
+}
+
+function resolveTurnEngine(snapshot: import('@zhin.js/plugin-runtime').RuntimeSnapshot): AgentTurnEngine {
+  const candidate = snapshot.resources.get(snapshot.root)?.get(agentTurnEngineToken.id);
+  if (!candidate || typeof (candidate as AgentTurnEngine).run !== 'function') {
+    throw new Error('Active generation does not provide an Agent Turn Engine');
+  }
+  return candidate as AgentTurnEngine;
 }
 
 async function waitForTurn(previous: Promise<void>, signal: AbortSignal): Promise<void> {
