@@ -35,6 +35,58 @@ describe('TurnToolRuntime', () => {
     expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_denied']);
   });
 
+  it('denies canonical file writes for a non-owner before execution', async () => {
+    const execute = vi.fn(async () => 'unsafe write');
+    const { turn, events } = fixture();
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'write_file')]);
+
+    await expect(runtime.execute('write_file', { path: '/tmp/output.txt' }, 'call-file')).resolves.toMatchObject({
+      status: 'denied',
+      policy: 'file-permission-matrix',
+    });
+    expect(execute).not.toHaveBeenCalled();
+    expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_denied']);
+  });
+
+  it('denies canonical sensitive file reads for a regular user', async () => {
+    const execute = vi.fn(async () => 'sensitive contents');
+    const { turn, events } = fixture();
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'read_file')]);
+
+    await expect(runtime.execute('read_file', { path: '/etc/passwd' }, 'call-read')).resolves.toMatchObject({
+      status: 'denied',
+      policy: 'file-permission-matrix',
+    });
+    expect(execute).not.toHaveBeenCalled();
+    expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_denied']);
+  });
+
+  it('denies canonical Bash mutations for a regular user', async () => {
+    const execute = vi.fn(async () => 'deleted');
+    const { turn, events } = fixture();
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'bash')]);
+
+    await expect(runtime.execute('bash', { command: 'rm /tmp/output.txt' }, 'call-bash')).resolves.toMatchObject({
+      status: 'denied',
+      policy: 'bash-file-permission',
+    });
+    expect(execute).not.toHaveBeenCalled();
+    expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_denied']);
+  });
+
+  it('denies canonical Bash reads of sensitive paths for a regular user', async () => {
+    const execute = vi.fn(async () => 'sensitive contents');
+    const { turn, events } = fixture();
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'bash')]);
+
+    await expect(runtime.execute('bash', { command: 'cat /etc/passwd' }, 'call-bash-read')).resolves.toMatchObject({
+      status: 'denied',
+      policy: 'bash-sensitive-read',
+    });
+    expect(execute).not.toHaveBeenCalled();
+    expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_denied']);
+  });
+
   it('passes the turn signal and waits for real settlement before cancelling', async () => {
     const controller = new AbortController();
     let release!: () => void;
@@ -121,11 +173,12 @@ function fixture(options: {
 function tool(
   execute: ToolCapability['execute'],
   approval: ToolCapability['approval'],
+  name = 'danger',
 ): ToolCapability {
   return {
     owner: rootPluginId(),
-    name: 'danger',
-    qualifiedName: 'danger',
+    name,
+    qualifiedName: name,
     description: 'Dangerous tool',
     approval,
     source: '/tools/danger.ts',

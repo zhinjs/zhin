@@ -23,7 +23,12 @@
 import type { Message, Plugin } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../config/index.js';
 import { checkMemoryWritePath } from '../memory-layers.js';
-import { checkFileAccess, checkBashCommandSafety, isBlockedDevicePath } from './file-policy.js';
+import {
+  checkFileAccess,
+  checkBashCommandSafety,
+  extractBashReadPaths,
+  isBlockedDevicePath,
+} from './file-policy.js';
 import {
   checkBashFilePermission,
   checkFilePermission,
@@ -116,6 +121,43 @@ export interface TurnToolPolicyInput {
 
 /** Generic, execution-domain-neutral policy facade for canonical Turn tools. */
 export function runTurnToolPolicies(input: TurnToolPolicyInput): TurnToolPolicyDecision {
+  const requesterRole = resolveTurnRequesterRole(input.turn);
+  const fileOperation = resolveTurnFileOperation(input.tool.name);
+  if (fileOperation) {
+    const path = stringArgument(input.input, 'path', 'file_path', 'filePath');
+    const permission = checkFilePermission(
+      toolRequesterRoleToFileRole(requesterRole),
+      fileOperation,
+      path,
+    );
+    const decision = turnFilePermissionDecision(permission, 'file-permission-matrix');
+    if (decision) return decision;
+  }
+  if (input.tool.name === 'bash') {
+    const command = stringArgument(input.input, 'command');
+    if (command) {
+      const safety = checkBashCommandSafety(command);
+      if (!safety.safe) {
+        return Object.freeze({
+          status: 'denied',
+          policy: 'bash-command-safety',
+          reason: safety.reason ?? 'unsafe Bash command',
+        });
+      }
+      for (const path of extractBashReadPaths(command)) {
+        const sensitiveRead = checkFilePermission(
+          toolRequesterRoleToFileRole(requesterRole),
+          'read',
+          path,
+        );
+        const decision = turnFilePermissionDecision(sensitiveRead, 'bash-sensitive-read');
+        if (decision) return decision;
+      }
+      const permission = checkBashFilePermission(toolRequesterRoleToFileRole(requesterRole), command);
+      const decision = turnFilePermissionDecision(permission, 'bash-file-permission');
+      if (decision) return decision;
+    }
+  }
   if (input.tool.approval !== 'never') {
     return Object.freeze({
       status: 'approval_required',
@@ -124,6 +166,52 @@ export function runTurnToolPolicies(input: TurnToolPolicyInput): TurnToolPolicyD
     });
   }
   return Object.freeze({ status: 'allowed' });
+}
+
+function turnFilePermissionDecision(
+  permission: FilePermissionResult,
+  policy: string,
+): TurnToolPolicyDecision | undefined {
+  if (!permission.allowed) {
+    return Object.freeze({
+      status: 'denied',
+      policy,
+      reason: permission.reason ?? `file ${permission.operation} denied`,
+    });
+  }
+  if (permission.needsConfirmation || permission.needsOwnerConfirmation) {
+    return Object.freeze({
+      status: 'approval_required',
+      policy,
+      reason: permission.reason ?? `file ${permission.operation} requires approval`,
+    });
+  }
+  return undefined;
+}
+
+function resolveTurnFileOperation(toolName: string): FileOperation | undefined {
+  if (toolName === 'write_file') return 'create';
+  if (toolName === 'edit_file') return 'update';
+  if (toolName === 'read_file' || toolName === 'list_dir' || toolName === 'glob'
+    || toolName === 'grep' || toolName === 'analyze_media') return 'read';
+  return undefined;
+}
+
+function resolveTurnRequesterRole(turn: TurnIngress): ToolRequesterRole {
+  if (turn.principal.roles.includes('master')) return 'master';
+  if (turn.principal.roles.includes('trusted')) return 'trusted';
+  return 'other';
+}
+
+function stringArgument(
+  input: Readonly<Record<string, unknown>>,
+  ...names: readonly string[]
+): string | undefined {
+  for (const name of names) {
+    const value = input[name];
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return undefined;
 }
 
 // ── 声明式策略表 ────────────────────────────────────────────────────

@@ -37,7 +37,7 @@ _避免使用_：raw tool、model tool、function
 _避免使用_：tool collection、tool filtering
 
 **Tool Runtime**:
-在 Tool Selection 之后决定最终运行时工具列表、上下文工具注入和 Pre-executable Tool 路径的 Agent Runtime 模块。每次执行只接收 canonical Tool Execution Context（origin / principal / session / trace / signal），不得读取 IM Message 第二参数。
+在 Tool Selection 之后决定最终运行时工具列表、上下文工具注入和 Pre-executable Tool 路径的 Agent Runtime 模块。每次执行只接收 canonical Tool Execution Context（origin / principal / session / trace / signal），不得读取 IM Message 第二参数。执行前必须统一经过 `runTurnToolPolicies`；文件 CRUD、敏感路径和 Bash 命令不得在 Tool 实现内另建策略链。
 _避免使用_：tool glue、runtime helper
 
 **Capability Feature**:

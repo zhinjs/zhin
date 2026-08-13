@@ -193,10 +193,7 @@ export function checkFilePermission(
 export function isDangerousFileOperation(operation: FileOperation, filePath: string): boolean {
   if (operation === 'delete') return true;
   if (!checkFileAccess(filePath).allowed) return true;
-  if (operation === 'create' || operation === 'update') {
-    return DANGEROUS_PATH_PATTERNS.some(p => p.test(filePath));
-  }
-  return false;
+  return DANGEROUS_PATH_PATTERNS.some(p => p.test(filePath));
 }
 
 /**
