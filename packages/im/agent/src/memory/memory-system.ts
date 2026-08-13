@@ -53,7 +53,7 @@ export class MemorySystem {
     deps: SessionIODeps,
   ): Promise<{ ok: boolean; message: string }> {
     const sessionKey = resolveIMSessionIdFromMessage(commMessage);
-    const { sessionId } = await beginTurnSession(deps, sessionKey, commMessage);
+    const { sessionId } = await beginTurnSession(deps, sessionKey);
     const provider = host.getTurnProvider();
     const modelId = host.config.chatModel || provider.models[0] || '';
     const llmModel = getLlmTransportModel(provider.name, modelId);

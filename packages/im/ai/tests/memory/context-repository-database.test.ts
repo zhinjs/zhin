@@ -80,3 +80,25 @@ describe('DatabaseContextRepository (sqlite)', () => {
     expect(session?.active_leaf_message_id).toBe(rows[2]?.id);
   });
 });
+
+describe('DatabaseContextRepository persistence failures', () => {
+  it('does not reinterpret a failed context read as empty history', async () => {
+    const failedModel = {
+      select: () => ({ where: () => { throw new Error('database offline'); } }),
+      create: async () => undefined,
+    };
+    const sessionStore = {
+      getBySessionId: async () => null,
+    };
+    const repository = new DatabaseContextRepository(
+      failedModel as never,
+      failedModel as never,
+      sessionStore as never,
+    );
+
+    await expect(repository.loadContext('session-1')).rejects.toMatchObject({
+      name: 'PersistenceUnavailableError',
+      operation: 'agent_context.load_summaries',
+    });
+  });
+});

@@ -371,6 +371,7 @@ export {
   createAgentSessionEpochId,
 } from './memory/agent-session-store.js';
 export type { AgentSessionStoreConfig } from './memory/agent-session-store.js';
+export { PersistenceUnavailableError } from './memory/persistence-error.js';
 
 export {
   DatabaseContextRepository,

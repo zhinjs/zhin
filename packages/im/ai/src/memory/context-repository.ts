@@ -2,7 +2,6 @@
  * ContextRepository — epoch-only LLM context load/save (ADR 0009 D4 / Grill #15).
  */
 
-import { getLogger } from '@zhin.js/logger';
 import { createUserMessage, type AgentMessage, type UserMessage } from '../llm/types/agent-message.js';
 
 import { createContext, type Context } from '../llm/types/context.js';
@@ -21,8 +20,7 @@ import {
 } from './session-tree.js';
 import { SessionWriteLock } from './session-write-lock.js';
 import { EMPTY_DEFERRED_TOOL_SNAPSHOT, type DeferredToolSessionSnapshot } from './deferred-tool-session.js';
-
-const logger = getLogger('ContextRepository');
+import { persistenceFailure } from './persistence-error.js';
 
 export interface ContextRepositoryConfig {
   /** Max messages loaded per session epoch (tail). */
@@ -355,8 +353,7 @@ export class DatabaseContextRepository implements ContextRepository {
       rows.sort((a, b) => a.created_at - b.created_at);
       return rows;
     } catch (err) {
-      logger.debug('loadAllSummaryRows failed:', err);
-      return [];
+      throw persistenceFailure('agent_context.load_summaries', err);
     }
   }
 
@@ -391,8 +388,7 @@ export class DatabaseContextRepository implements ContextRepository {
       rows.sort((a, b) => a.timestamp - b.timestamp || (a.id ?? 0) - (b.id ?? 0));
       return rows;
     } catch (err) {
-      logger.debug('loadAllMessageRows failed:', err);
-      return [];
+      throw persistenceFailure('agent_context.load_messages', err);
     }
   }
 }

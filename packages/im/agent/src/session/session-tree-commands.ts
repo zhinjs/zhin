@@ -15,11 +15,10 @@ export async function listSessionTreeForCommMessage(
 ): Promise<string> {
   const sessionKey = resolveIMSessionIdFromMessage(commMessage);
   const deps: SessionIODeps = {
-    imSessionStore: host.imSessionStore,
     agentSessionStore: host.agentSessionStore,
     contextRepository: host.contextRepository,
   };
-  const { sessionId } = await beginTurnSession(deps, sessionKey, commMessage);
+  const { sessionId } = await beginTurnSession(deps, sessionKey);
   const points = await host.contextRepository.listBranchPoints(sessionId);
   return `🌳 会话分支点（/tree N 跳转，/fork N 从该点继续）：\n${formatBranchList(points)}`;
 }
@@ -31,11 +30,10 @@ export async function jumpSessionTreeForCommMessage(
 ): Promise<string> {
   const sessionKey = resolveIMSessionIdFromMessage(commMessage);
   const deps: SessionIODeps = {
-    imSessionStore: host.imSessionStore,
     agentSessionStore: host.agentSessionStore,
     contextRepository: host.contextRepository,
   };
-  const { sessionId } = await beginTurnSession(deps, sessionKey, commMessage);
+  const { sessionId } = await beginTurnSession(deps, sessionKey);
   const result = await host.contextRepository.jumpToBranchIndex(sessionId, index);
   return result.ok ? `✅ ${result.message}` : `ℹ️ ${result.message}`;
 }

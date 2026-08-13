@@ -99,7 +99,6 @@ export class SessionSystem {
 
   sessionDeps(host: ZhinAgentPrivate): SessionIODeps {
     return {
-      imSessionStore: host.imSessionStore,
       agentSessionStore: host.agentSessionStore,
       contextRepository: host.contextRepository,
     };
@@ -125,7 +124,7 @@ export class SessionSystem {
     }
 
     await host.waitForMemoryPersistence();
-    const { sessionId } = await beginTurnSession(deps, sessionKey, commMessage);
+    const { sessionId } = await beginTurnSession(deps, sessionKey);
 
     return {
       sessionKey,

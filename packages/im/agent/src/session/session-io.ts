@@ -1,8 +1,7 @@
-import { type MemoryIMSessionStore, type IMSessionStore, type MemoryAgentSessionStore, type AgentSessionStore, type ContextRepository, type CreateIMSessionInput, type CreateAgentSessionInput, type AgentMessage, createUserMessage, renderUserMessageForLlm, type AgentMessageExtra, type AgentMessageSenderExtra, type UserMessage } from '@zhin.js/ai';
+import { type MemoryAgentSessionStore, type AgentSessionStore, type ContextRepository, type CreateAgentSessionInput, type AgentMessage, createUserMessage, renderUserMessageForLlm, type AgentMessageExtra, type AgentMessageSenderExtra, type UserMessage } from '@zhin.js/ai';
 import { type AgentTurnMessage, type Message, formatSenderRolesForLabel, QUOTE_CONTEXT_BLOCK_EXTRA_KEY, resolveSceneFieldsFromMessage, senderRolesFromMessage, stripUserSpoofedSenderPrefix } from '@zhin.js/core';
 import { CURRENT_MESSAGE_MARKER } from '../config/index.js';
 export interface SessionIODeps {
-  imSessionStore: IMSessionStore | MemoryIMSessionStore;
   agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
   contextRepository: ContextRepository;
 }
@@ -111,18 +110,10 @@ export function formatUserContentForSession(
   return block?.type === 'text' ? block.text : rawContent;
 }
 
-export function buildSessionCreateInput(
+export function buildAgentSessionCreateInput(
   sessionKey: string,
-  commMessage: Message,
-): CreateIMSessionInput & CreateAgentSessionInput {
-  const { platform, endpointKey, sceneId, sceneType } = resolveSceneFieldsFromMessage(commMessage);
-  return {
-    session_key: sessionKey,
-    platform,
-    endpoint_id: endpointKey,
-    scene_id: sceneId,
-    scene_type: sceneType,
-  };
+): CreateAgentSessionInput {
+  return { session_key: sessionKey };
 }
 
 export function buildImTranscriptQuery(
@@ -160,9 +151,8 @@ export async function resolveSessionIsNewBeforeCreate(
 export async function beginTurnSession(
   deps: SessionIODeps,
   sessionKey: string,
-  commMessage: Message,
 ): Promise<{ sessionKey: string; sessionId: string }> {
-  const input = buildSessionCreateInput(sessionKey, commMessage);
+  const input = buildAgentSessionCreateInput(sessionKey);
   const record = await deps.agentSessionStore.getOrCreateActive(input);
   return { sessionKey, sessionId: record.session_id };
 }
@@ -178,6 +168,5 @@ export async function archiveSessionByKey(
   deps: SessionIODeps,
   sessionKey: string,
 ): Promise<boolean> {
-  await deps.contextRepository.archiveSession(sessionKey);
-  return deps.agentSessionStore.archiveByKey(sessionKey);
+  return deps.contextRepository.archiveSession(sessionKey);
 }

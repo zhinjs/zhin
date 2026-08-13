@@ -480,7 +480,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     const sessionKey = resolveIMSessionIdFromMessage(commMessage);
     return archiveSessionByKey(
       {
-        imSessionStore: this.imSessionStore,
         agentSessionStore: this.agentSessionStore,
         contextRepository: this.contextRepository,
       },

@@ -25,7 +25,7 @@ export {
   layerInboundUserTurnBody,
   resolveTurnUserMessage,
   formatUserContentForSession,
-  buildSessionCreateInput,
+  buildAgentSessionCreateInput,
   buildImTranscriptQuery,
   buildHistoryMessagesFromContext,
   resolveSessionIsNewBeforeCreate,

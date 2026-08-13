@@ -130,6 +130,8 @@ IM 主路径数据模型（见 [docs/advanced/ai.md](../../docs/advanced/ai.md)�
 | `ContextRepository` | `agent_messages` | epoch 内 LLM `AgentMessage[]`（含 tool 轮） |
 | `AgentSessionStore` | `agent_sessions` | origin-neutral `session_key` → 活跃 `session_id`；`/reset` 归档；不保存 IM platform / endpoint / scene |
 
+数据库返回空集合才表示 Not Found；查询或写入异常统一抛出 `PersistenceUnavailableError`。Session/Context 调用方必须 fail closed，禁止把存储故障降级为空历史或新 epoch。
+
 ```typescript
 import {
   createMemoryContextRepository,

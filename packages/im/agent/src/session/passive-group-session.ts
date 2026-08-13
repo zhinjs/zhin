@@ -4,7 +4,7 @@
 import type { Message } from '@zhin.js/core';
 import type { CollaborationScene } from '../collaboration/types.js';
 import { resolveAgentTurnSessionKey } from '../collaboration/resolve-agent-session-key.js';
-import { buildSessionCreateInput, prepareUserContentForSession } from './session-io.js';
+import { buildAgentSessionCreateInput, prepareUserContentForSession } from './session-io.js';
 import {
   drainPassiveGroupBuffer,
   formatPassiveGroupContextBlock,
@@ -36,7 +36,7 @@ export async function recordPassiveGroupMessage(
   if (!content.trim()) return;
 
   const sessionKey = resolvePassiveGroupSessionKey(message, cell);
-  const sessionInput = buildSessionCreateInput(sessionKey, message);
+  const sessionInput = buildAgentSessionCreateInput(sessionKey);
   await agent.agentSessionStore.getOrCreateActive(sessionInput);
 
   pushPassiveGroupLine(sessionKey, {

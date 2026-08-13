@@ -159,6 +159,7 @@ _避免使用_：经 HomeFacade 鉴权推送、createEndpointLifecycle 硬套 HA
 _避免使用_：私有 `resolveTurnSessionKey`、snapshot 与 cell 双轨 key
 
 `agent_sessions` 只持有 origin-neutral session key / epoch / model / status；IM platform、endpoint、scene 仅属于 IM transcript projection。HTTP、A2A、Schedule 与 Internal turn 不得伪造 IM session address。
+Session lifecycle 写权威只有 `ContextRepository`；archive 不得再代理后重复调用底层 Store。持久化异常不是 Not Found，入口必须 fail closed。
 
 ## 关系
 

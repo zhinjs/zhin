@@ -2,13 +2,11 @@
  * agent_sessions CRUD — epoch-aware session metadata (ADR 0009 D4).
  */
 
-import { getLogger } from '@zhin.js/logger';
 import type {
   AgentSessionRecord,
   CreateAgentSessionInput,
 } from './agent-db-models.js';
-
-const logger = getLogger('AgentSessionStore');
+import { persistenceFailure } from './persistence-error.js';
 
 export interface AgentSessionStoreConfig {
   sessionIdleArchiveMs?: number;
@@ -50,8 +48,7 @@ export class AgentSessionStore {
       if (!rows?.length) return null;
       return rows.sort((a, b) => b.updated_at - a.updated_at)[0] ?? null;
     } catch (err) {
-      logger.debug('findActive failed:', err);
-      return null;
+      throw persistenceFailure('agent_session.find_active', err);
     }
   }
 
@@ -71,7 +68,11 @@ export class AgentSessionStore {
       created_at: now,
       updated_at: now,
     };
-    await this.model.create(record as unknown as Record<string, unknown>);
+    try {
+      await this.model.create(record as unknown as Record<string, unknown>);
+    } catch (err) {
+      throw persistenceFailure('agent_session.create', err);
+    }
     return record;
   }
 
@@ -79,7 +80,7 @@ export class AgentSessionStore {
     try {
       await this.model.update({ updated_at: Date.now() }).where({ session_id: sessionId });
     } catch (err) {
-      logger.debug('touch failed:', err);
+      throw persistenceFailure('agent_session.touch', err);
     }
   }
 
@@ -88,8 +89,7 @@ export class AgentSessionStore {
       const rows = await this.model.select().where({ session_id: sessionId });
       return rows?.[0] ?? null;
     } catch (err) {
-      logger.debug('getBySessionId failed:', err);
-      return null;
+      throw persistenceFailure('agent_session.get_by_id', err);
     }
   }
 
@@ -99,7 +99,7 @@ export class AgentSessionStore {
         .update({ active_leaf_message_id: messageId, updated_at: Date.now() })
         .where({ session_id: sessionId });
     } catch (err) {
-      logger.debug('setActiveLeafMessageId failed:', err);
+      throw persistenceFailure('agent_session.set_active_leaf', err);
     }
   }
 
@@ -115,8 +115,7 @@ export class AgentSessionStore {
       }
       return true;
     } catch (err) {
-      logger.debug('archiveByKey failed:', err);
-      return false;
+      throw persistenceFailure('agent_session.archive', err);
     }
   }
 
@@ -137,8 +136,7 @@ export class AgentSessionStore {
       }
       return n;
     } catch (err) {
-      logger.debug('archiveIdleForKey failed:', err);
-      return 0;
+      throw persistenceFailure('agent_session.archive_idle', err);
     }
   }
 }
