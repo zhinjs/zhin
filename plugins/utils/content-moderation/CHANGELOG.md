@@ -1,5 +1,11 @@
 # @zhin.js/plugin-content-moderation
 
+## 1.0.2
+
+### Patch Changes
+
+- @zhin.js/core@1.5.5
+
 ## 1.0.1
 
 ### Patch Changes

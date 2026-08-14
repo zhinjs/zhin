@@ -1,5 +1,15 @@
 # @zhin.js/example-plugin-runtime-migration-bot
 
+## 0.0.11
+
+### Patch Changes
+
+- Updated dependencies [2d0a622]
+  - @zhin.js/command@1.0.10
+  - @zhin.js/core@1.5.5
+  - @zhin.js/runtime@1.0.9
+  - zhin.js@6.0.5
+
 ## 0.0.10
 
 ### Patch Changes

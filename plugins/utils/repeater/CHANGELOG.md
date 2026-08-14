@@ -1,5 +1,13 @@
 # @zhin.js/plugin-repeater
 
+## 3.0.13
+
+### Patch Changes
+
+- Updated dependencies [2d0a622]
+  - @zhin.js/command@1.0.10
+  - @zhin.js/core@1.5.5
+
 ## 3.0.12
 
 ### Patch Changes

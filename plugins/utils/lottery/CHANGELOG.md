@@ -1,5 +1,13 @@
 # @zhin.js/plugin-lottery
 
+## 2.0.6
+
+### Patch Changes
+
+- Updated dependencies [2d0a622]
+  - @zhin.js/command@1.0.10
+  - @zhin.js/agent@1.1.6
+
 ## 2.0.5
 
 ### Patch Changes

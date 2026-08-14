@@ -1,5 +1,17 @@
 # @zhin.js/cli
 
+## 3.0.5
+
+### Patch Changes
+
+- Updated dependencies [2d0a622]
+  - @zhin.js/command@1.0.10
+  - @zhin.js/adapter@1.1.7
+  - @zhin.js/core@1.5.5
+  - @zhin.js/runtime@1.0.9
+  - @zhin.js/agent@1.1.6
+  - @zhin.js/speech@3.0.5
+
 ## 3.0.4
 
 ### Patch Changes
