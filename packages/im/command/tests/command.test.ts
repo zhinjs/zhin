@@ -510,6 +510,51 @@ describe('Command Feature', () => {
     });
   });
 
+  it('resolves dynamic shortcut values from CommandSession at dispatch time', async () => {
+    const owner = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'profile',
+      source: '/commands/profile.ts',
+      definition: defineCommand({
+        shortcut: {
+          '查看我的信息': {
+            user_id: (session) => session.sender?.id ?? 'unknown',
+          },
+        },
+        params: { user_id: { type: 'string' } },
+        execute: ({ params }) => `profile:${params.user_id}`,
+      }),
+    });
+    const index = new CommandIndex(
+      [slot],
+      snapshotWithOwners([owner], [slot]),
+    );
+
+    const fakeMessage = {
+      content: '查看我的信息',
+      conversation: {
+        endpoint: { id: 'ep1', adapter: 'icqq' },
+        kind: 'private' as const,
+        id: 'conv1',
+      },
+      sender: { id: '12345', name: 'Alice' },
+    };
+
+    const result = await index.dispatch('查看我的信息', fakeMessage);
+    expect(result).toMatchObject({
+      matched: true,
+      value: 'profile:12345',
+    });
+
+    const noSender = await index.dispatch('查看我的信息');
+    expect(noSender).toMatchObject({
+      matched: true,
+      value: 'profile:unknown',
+    });
+  });
+
   it('treats permit failure as silent miss and skips permit on execute', async () => {
     const owner = rootPluginId();
     const slot = createCapabilitySlot({

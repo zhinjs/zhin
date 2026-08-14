@@ -30,6 +30,29 @@ export type CommandParameterValue =
   | Readonly<Record<string, unknown>>
   | null;
 
+/**
+ * 可从运行时会话上下文动态解析的参数值。
+ *
+ * 静态值直接使用；函数值在命令派发时接收 {@link CommandSession}，
+ * 返回最终的 {@link CommandParameterValue}。适用于 shortcut 预填
+ * 和 params.default。
+ *
+ * ```ts
+ * defineCommand({
+ *   params: {
+ *     user_id: { type: 'string', default: (s) => s.sender?.id ?? '' },
+ *   },
+ *   shortcut: {
+ *     '查看我的信息': { user_id: (s) => s.sender?.id ?? '' },
+ *   },
+ *   execute: ({ params }) => `profile:${params.user_id}`,
+ * })
+ * ```
+ */
+export type CommandDynamicValue =
+  | CommandParameterValue
+  | ((session: CommandSession) => CommandParameterValue);
+
 export const commandParameterTypes: ReadonlySet<CommandParameterType> = new Set([
   'string',
   'number',
@@ -54,7 +77,7 @@ export const commandParameterTypes: ReadonlySet<CommandParameterType> = new Set(
  */
 export interface CommandParamSchema {
   readonly type: CommandParameterType;
-  readonly default?: CommandParameterValue;
+  readonly default?: CommandDynamicValue;
   readonly description?: string;
 }
 
@@ -67,7 +90,7 @@ export interface CommandSegment {
 export interface CommandParameterDefinition {
   readonly name: string;
   readonly type: CommandParameterType;
-  readonly defaultValue?: CommandParameterValue;
+  readonly defaultValue?: CommandDynamicValue;
   /** `[[name]]` / `[[...name]]` 可选段；缺省按 `defaultValue === undefined` 推断。 */
   readonly optional?: boolean;
   /** `[...name]` / `[[...name]]` 捕获所有段，运行时值为 `string[]`。 */
@@ -212,7 +235,7 @@ export interface CommandDefinition<
    * 全局整句快捷方式：触发串（trim 后全文相等）→ 预填 params。
    * 可打破 owner 命名空间。
    */
-  readonly shortcut?: Readonly<Record<string, Readonly<Record<string, CommandParameterValue>>>>;
+  readonly shortcut?: Readonly<Record<string, Readonly<Record<string, CommandDynamicValue>>>>;
   execute(context: CommandContext<TConfig, TInput>): TResult | Promise<TResult>;
 }
 
@@ -286,7 +309,7 @@ function validateCommandPermit(permit: readonly string[] | undefined): void {
 }
 
 function validateCommandShortcutShape(
-  shortcut: Readonly<Record<string, Readonly<Record<string, CommandParameterValue>>>> | undefined,
+  shortcut: Readonly<Record<string, Readonly<Record<string, CommandDynamicValue>>>> | undefined,
 ): void {
   if (shortcut === undefined) return;
   if (!shortcut || typeof shortcut !== 'object' || Array.isArray(shortcut)) {
@@ -323,6 +346,22 @@ export function parseCommandDefinition(value: unknown): CommandDefinition {
     throw new TypeError('Command module must default-export defineCommand(...)');
   }
   return definition as CommandDefinition;
+}
+
+/**
+ * 将动态参数值（可能包含函数）批量解析为静态值。
+ * 函数值接收从 `source`（通常是 IM Runtime `Message`）解析出的 {@link CommandSession}。
+ */
+export function resolveDynamicParams(
+  params: Readonly<Record<string, CommandDynamicValue>>,
+  source: unknown,
+): Readonly<Record<string, CommandParameterValue>> {
+  const session = resolveCommandSession(source);
+  const resolved: Record<string, CommandParameterValue> = {};
+  for (const [key, value] of Object.entries(params)) {
+    resolved[key] = typeof value === 'function' ? value(session) : value;
+  }
+  return Object.freeze(resolved);
 }
 
 export function createCommandContext(

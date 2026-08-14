@@ -16,6 +16,8 @@ import {
   type CommandParameterType,
   type CommandParameterValue,
   type CommandSegment,
+  type CommandDynamicValue,
+  resolveDynamicParams,
 } from './definition.js';
 import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
 import { toPermissionSubject } from '@zhin.js/permission';
@@ -57,12 +59,12 @@ interface CommandRoute {
 
 interface ShortcutEntry {
   readonly record: CommandRecord;
-  readonly params: Readonly<Record<string, CommandParameterValue>>;
+  readonly params: Readonly<Record<string, CommandDynamicValue>>;
 }
 
 interface CommandMatch {
   readonly command: CommandRecord;
-  readonly params: Readonly<Record<string, CommandParameterValue>>;
+  readonly params: Readonly<Record<string, CommandDynamicValue>>;
   readonly remaining: readonly Readonly<CommandSegment>[];
 }
 
@@ -197,13 +199,13 @@ export class CommandIndex {
       this.#diagnoseParameter(name);
       throw new Error(`Unknown Command: ${name}`);
     }
-    // Host / 无 session：跳过 permit。
+    // Host / 无 session：跳过 permit；无 source 时函数默认值得到空 session。
     return match.command.slot.definition.execute(
       createCommandContext(
         this.snapshot,
         match.command.slot.owner,
         args,
-        match.params,
+        resolveDynamicParams(match.params, undefined),
       ),
     );
   }
@@ -222,7 +224,7 @@ export class CommandIndex {
           this.snapshot,
           shortcut.record.slot.owner,
           Object.freeze([]),
-          shortcut.params,
+          resolveDynamicParams(shortcut.params, source),
           source,
           Object.freeze([]),
         ),
@@ -246,7 +248,7 @@ export class CommandIndex {
         this.snapshot,
         match.command.slot.owner,
         args,
-        match.params,
+        resolveDynamicParams(match.params, source),
         source,
         match.remaining,
       ),
@@ -302,7 +304,7 @@ export class CommandIndex {
       const result = route.matcher.match(asMatcherSegments(segments));
       if (!result || !hasCommandBoundary(result.remaining)) continue;
       const parameter = route.record.parameter;
-      const params: Record<string, CommandParameterValue> = { ...result.params };
+      const params: Record<string, CommandDynamicValue> = { ...result.params };
       if (parameter?.rest) {
         const raw = result.params[parameter.name];
         const coerced = coerceRestValues(parameter, Array.isArray(raw) ? raw : []);
@@ -390,9 +392,9 @@ function normalizeAliasList(
 
 function resolveShortcutParams(
   definition: CommandDefinition,
-  prefill: Readonly<Record<string, CommandParameterValue>>,
+  prefill: Readonly<Record<string, CommandDynamicValue>>,
   source: string,
-): Record<string, CommandParameterValue> {
+): Record<string, CommandDynamicValue> {
   const allowed = new Set<string>();
   const parameter = definition.$parameter;
   if (parameter) allowed.add(parameter.name);
@@ -408,7 +410,7 @@ function resolveShortcutParams(
     }
   }
 
-  const result: Record<string, CommandParameterValue> = { ...prefill };
+  const result: Record<string, CommandDynamicValue> = { ...prefill };
 
   if (parameter) {
     if (result[parameter.name] === undefined) {
@@ -508,7 +510,7 @@ function matcherPattern(
     if (isRequiredParameter(parameter)) return `<${parameter.name}:${type}>`;
     return parameter.defaultValue === undefined
       ? `[${parameter.name}:${type}]`
-      : `[${parameter.name}:${type}=${String(parameter.defaultValue)}]`;
+      : `[${parameter.name}:${type}=${typeof parameter.defaultValue === 'function' ? '<dynamic>' : String(parameter.defaultValue)}]`;
   }).join(' ');
 }
 
