@@ -13,6 +13,19 @@ export type AgentDbQueryable = {
 
 type PragmaColumnRow = { name?: string };
 
+/**
+ * Pre-origin-neutral `agent_sessions` IM address columns (05befc1).
+ * CREATE TABLE IF NOT EXISTS does not drop them; leftover NOT NULL columns
+ * make `agent_session.create` fail on existing SQLite files.
+ */
+export const LEGACY_AGENT_SESSION_IM_COLUMNS = [
+  'platform',
+  'endpoint_id',
+  'scene_id',
+  'scene_type',
+  'bot_id',
+] as const;
+
 /** table → column → SQLite type for ALTER TABLE ADD COLUMN */
 export const AGENT_SESSION_TREE_SCHEMA_PATCHES: Record<string, Record<string, string>> = {
   agent_messages: {
@@ -54,6 +67,34 @@ export async function listSqliteTableColumns(
   const rows = (await query(`PRAGMA table_info("${tableName}")`)) as PragmaColumnRow[];
   if (!Array.isArray(rows)) return new Set();
   return new Set(rows.map((r) => String(r.name ?? '')).filter(Boolean));
+}
+
+export async function dropLegacyAgentSessionImColumns(
+  dbFeature: AgentDbQueryable,
+): Promise<string[]> {
+  const queryFn = resolveAgentDbQuery(dbFeature);
+  if (!queryFn) return [];
+
+  const dialect = resolveAgentDbDialect(dbFeature);
+  if (dialect && dialect !== 'sqlite') {
+    return [];
+  }
+
+  let existing: Set<string>;
+  try {
+    existing = await listSqliteTableColumns((sql) => queryFn(sql), 'agent_sessions');
+  } catch {
+    return [];
+  }
+  if (existing.size === 0) return [];
+
+  const dropped: string[] = [];
+  for (const column of LEGACY_AGENT_SESSION_IM_COLUMNS) {
+    if (!existing.has(column)) continue;
+    await queryFn(`ALTER TABLE "agent_sessions" DROP COLUMN "${column}"`);
+    dropped.push(`agent_sessions.${column}`);
+  }
+  return dropped;
 }
 
 export async function upgradeAgentSessionTreeSchema(
@@ -215,13 +256,15 @@ export async function upgradeAgentSessionTreeData(
   dbFeature: AgentDbQueryable,
 ): Promise<{
   columns: string[];
+  dropped: string[];
   idsBackfilled: number;
   parentLinks: number;
   activeLeaves: number;
 }> {
+  const dropped = await dropLegacyAgentSessionImColumns(dbFeature);
   const columns = await upgradeAgentSessionTreeSchema(dbFeature);
   const idsBackfilled = await backfillAgentMessageIdsFromRowid(dbFeature);
   const parentLinks = await backfillAgentMessageParentChains(dbFeature);
   const activeLeaves = await repairAgentSessionActiveLeaves(dbFeature);
-  return { columns, idsBackfilled, parentLinks, activeLeaves };
+  return { columns, dropped, idsBackfilled, parentLinks, activeLeaves };
 }

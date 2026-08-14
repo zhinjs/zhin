@@ -555,6 +555,68 @@ describe('Command Feature', () => {
     });
   });
 
+  it('resolves $sender.isMaster and $sender.isTrusted into sender.role', async () => {
+    const owner = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'whoami',
+      source: '/commands/whoami.ts',
+      definition: defineCommand({
+        shortcut: {
+          '我是谁': {
+            identity: (session) => session.sender?.role?.join(',') ?? 'none',
+          },
+        },
+        params: { identity: { type: 'string' } },
+        execute: ({ params }) => params.identity,
+      }),
+    });
+    const index = new CommandIndex(
+      [slot],
+      snapshotWithOwners([owner], [slot]),
+    );
+
+    const masterMessage = {
+      content: '我是谁',
+      conversation: {
+        endpoint: { id: 'ep1', adapter: 'icqq' },
+        kind: 'group' as const,
+        id: 'g1',
+      },
+      sender: { id: '100' },
+      $sender: { id: '100', name: 'Admin', isMaster: true, role: 'owner' },
+    };
+    const masterResult = await index.dispatch('我是谁', masterMessage);
+    expect(masterResult).toMatchObject({ matched: true, value: 'master,owner' });
+
+    const trustedMessage = {
+      content: '我是谁',
+      conversation: {
+        endpoint: { id: 'ep1', adapter: 'icqq' },
+        kind: 'group' as const,
+        id: 'g1',
+      },
+      sender: { id: '200' },
+      $sender: { id: '200', isTrusted: true },
+    };
+    const trustedResult = await index.dispatch('我是谁', trustedMessage);
+    expect(trustedResult).toMatchObject({ matched: true, value: 'trusted' });
+
+    const plainMessage = {
+      content: '我是谁',
+      conversation: {
+        endpoint: { id: 'ep1', adapter: 'icqq' },
+        kind: 'group' as const,
+        id: 'g1',
+      },
+      sender: { id: '300' },
+      $sender: { id: '300', role: 'admin' },
+    };
+    const plainResult = await index.dispatch('我是谁', plainMessage);
+    expect(plainResult).toMatchObject({ matched: true, value: 'admin' });
+  });
+
   it('treats permit failure as silent miss and skips permit on execute', async () => {
     const owner = rootPluginId();
     const slot = createCapabilitySlot({

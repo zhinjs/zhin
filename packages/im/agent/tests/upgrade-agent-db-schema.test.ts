@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   AGENT_SESSION_TREE_SCHEMA_PATCHES,
+  dropLegacyAgentSessionImColumns,
   listSqliteTableColumns,
   resolveAgentDbQuery,
   upgradeAgentSessionTreeSchema,
@@ -70,6 +71,54 @@ describe('upgradeAgentSessionTreeSchema', () => {
     });
     expect(added).toEqual([]);
     expect(query.mock.calls.filter(([s]) => s.startsWith('ALTER'))).toHaveLength(0);
+  });
+});
+
+describe('dropLegacyAgentSessionImColumns', () => {
+  it('drops leftover origin-neutral IM columns from agent_sessions', async () => {
+    const columns = [
+      'session_id',
+      'session_key',
+      'platform',
+      'endpoint_id',
+      'scene_id',
+      'scene_type',
+      'status',
+    ];
+    const executed: string[] = [];
+    const query = vi.fn(async (sql: string) => {
+      executed.push(sql);
+      const pragma = sql.match(/^PRAGMA table_info\("(\w+)"\)$/);
+      if (pragma) return columns.map((name) => ({ name }));
+      return [];
+    });
+
+    const dropped = await dropLegacyAgentSessionImColumns({
+      db: { query, dialect: { name: 'sqlite' } },
+    });
+
+    expect(dropped).toEqual([
+      'agent_sessions.platform',
+      'agent_sessions.endpoint_id',
+      'agent_sessions.scene_id',
+      'agent_sessions.scene_type',
+    ]);
+    expect(executed).toContain('ALTER TABLE "agent_sessions" DROP COLUMN "platform"');
+    expect(executed).toContain('ALTER TABLE "agent_sessions" DROP COLUMN "scene_id"');
+  });
+
+  it('skips when IM columns are already gone', async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.startsWith('PRAGMA')) {
+        return ['session_id', 'session_key', 'status'].map((name) => ({ name }));
+      }
+      return [];
+    });
+    const dropped = await dropLegacyAgentSessionImColumns({
+      db: { query, dialect: { name: 'sqlite' } },
+    });
+    expect(dropped).toEqual([]);
+    expect(query.mock.calls.filter(([s]) => String(s).includes('DROP COLUMN'))).toHaveLength(0);
   });
 });
 

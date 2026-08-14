@@ -14,6 +14,11 @@ import {
 } from '../orchestrator/orchestration-service.js';
 import type { AIServiceRefs } from './shared-refs.js';
 import { wireCollaborationStorage } from '../collaboration/wire-collaboration-storage.js';
+import {
+  upgradeAgentSessionTreeData,
+  type AgentDbQueryable,
+} from './upgrade-agent-db-schema.js';
+
 export async function activateAiDatabaseStorage(
   db: any,
   refs: AIServiceRefs,
@@ -23,6 +28,8 @@ export async function activateAiDatabaseStorage(
 ): Promise<void> {
   if (!refs.zhinAgent) return;
   if (config.sessions?.useDatabase === false) return;
+
+  await upgradeAgentSessionTreeData(db as AgentDbQueryable);
 
   const agentSessionModel = db.models?.get('agent_sessions');
   const agentMessageModel = db.models?.get('agent_messages');

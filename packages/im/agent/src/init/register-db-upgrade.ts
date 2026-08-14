@@ -21,11 +21,12 @@ function logSessionTreeUpgrade(
 ): void {
   const changed =
     result.columns.length > 0
+    || result.dropped.length > 0
     || result.idsBackfilled > 0
     || result.parentLinks > 0
     || result.activeLeaves > 0;
   const summary =
-    `AI Session: session tree upgrade checked (columns=${result.columns.length}, ids=${result.idsBackfilled}, parent_links=${result.parentLinks}, active_leaves=${result.activeLeaves})`;
+    `AI Session: session tree upgrade checked (columns=${result.columns.length}, dropped=${result.dropped.length}, ids=${result.idsBackfilled}, parent_links=${result.parentLinks}, active_leaves=${result.activeLeaves})`;
   if (!changed) {
     logger.debug(summary);
     return;
@@ -33,6 +34,9 @@ function logSessionTreeUpgrade(
   logger.info(summary);
   if (result.columns.length > 0) {
     logger.info(`AI Session: migrated agent_* columns: ${result.columns.join(', ')}`);
+  }
+  if (result.dropped.length > 0) {
+    logger.info(`AI Session: dropped legacy agent_sessions columns: ${result.dropped.join(', ')}`);
   }
   if (result.idsBackfilled > 0 || result.parentLinks > 0 || result.activeLeaves > 0) {
     logger.info(
