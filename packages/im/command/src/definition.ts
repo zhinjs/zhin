@@ -458,15 +458,10 @@ function resolveSender(
     return freezeSender(structured);
   }
 
-  const $sender = (input as { readonly $sender?: Readonly<Record<string, unknown>> }).$sender;
-  const id = input.sender?.id
-    || (typeof $sender?.id === 'string' ? $sender.id : undefined)
-    || firstString(metadata?.user_id, metadata?.userId);
+  const id = input.sender?.id || firstString(metadata?.user_id, metadata?.userId);
   if (!id) return undefined;
 
-  const name = input.sender?.name
-    || (typeof $sender?.name === 'string' ? $sender.name : undefined)
-    || firstString(metadata?.nickname, metadata?.senderName, metadata?.name);
+  const name = input.sender?.name || firstString(metadata?.nickname, metadata?.senderName, metadata?.name);
   const role = resolveRoles(input, metadata);
 
   return Object.freeze({
@@ -490,18 +485,13 @@ function resolveRoles(
     if (trimmed && !roles.includes(trimmed)) roles.push(trimmed);
   };
 
-  // IM Message 的 $sender 携带 enrich 快照（isMaster/isTrusted）和平台群角色（role）
-  const $sender = (input as { readonly $sender?: Readonly<Record<string, unknown>> }).$sender;
-
-  if ($sender?.isMaster === true || metadata?.isMaster === true) push('master');
-  else if ($sender?.isTrusted === true || metadata?.isTrusted === true) push('trusted');
-
-  push($sender?.role);
   if (Array.isArray(metadata?.roles)) {
     for (const item of metadata.roles) push(item);
   }
   push(metadata?.senderRole);
   push(metadata?.role);
+  if (metadata?.isMaster === true) push('master');
+  if (metadata?.isTrusted === true) push('trusted');
   if (roles.length === 0) roles.push('user');
   return Object.freeze(roles);
 }

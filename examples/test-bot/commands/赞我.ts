@@ -82,6 +82,7 @@ export default defineCommand({
   alias: ['zan'],
   permit: ['adapter(icqq)'],
   execute: async ({ endpoint, sender, args, segments }) => {
+    console.log(sender);
     if (!endpoint) {
       return '无法解析当前 ICQQ Endpoint';
     }

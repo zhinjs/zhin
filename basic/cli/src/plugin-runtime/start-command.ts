@@ -110,8 +110,10 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   const control: { stop(): Promise<void> } = {
     stop: async () => { throw new Error('RootHost stop is not bound'); },
   };
+  const senderEnricher = await createSenderEnricher(config, endpointRoles);
   const im = new ImRuntime({
     ...(agentHost ? { inboundClaim: agentHost.claimInbound } : {}),
+    enrichSender: senderEnricher,
   });
   const databaseHost = createDatabaseHost(databaseConfig);
   // console endpoint-detail 收件箱三张表（unified_inbox_message/request/notice）；
@@ -681,6 +683,42 @@ function normalizeTrustedIdList(input: unknown): string[] {
     return input.split(/[\s,]+/).map((v) => v.trim()).filter(Boolean);
   }
   return [];
+}
+
+async function createSenderEnricher(
+  config: RuntimeConfigDocument | ConfigDocumentPort,
+  endpointRoles: Awaited<ReturnType<typeof createEndpointRoleResolver>>,
+): Promise<NonNullable<ConstructorParameters<typeof ImRuntime>[0]>['enrichSender']> {
+  const document = await readConfigDocumentValue(config);
+  const ai = (document as Record<string, unknown> | undefined)?.ai as
+    | { trigger?: { masters?: unknown; trusted?: unknown } }
+    | undefined;
+  const globalMasters = normalizeTrustedIdList(ai?.trigger?.masters);
+  const globalTrusted = normalizeTrustedIdList(ai?.trigger?.trusted);
+
+  return (sender, conversation) => {
+    if (!sender?.id) return sender;
+    const senderId = sender.id;
+    const capId = String(conversation.endpoint.id);
+    const parts = capId.split('\0');
+    const adapterLocalName = (parts.length >= 3 ? parts[2]! : capId).split('~')[0]!;
+    const endpointKey = sender.name ?? adapterLocalName;
+
+    const endpointMaster = endpointRoles.resolveOwner(adapterLocalName, endpointKey);
+    const endpointTrustedIds = endpointRoles.resolveTrusted(adapterLocalName, endpointKey);
+
+    const isMaster = globalMasters.includes(senderId)
+      || (endpointMaster != null && senderId === endpointMaster);
+    const isTrusted = !isMaster
+      && (globalTrusted.includes(senderId) || endpointTrustedIds.includes(senderId));
+
+    if (!isMaster && !isTrusted) return sender;
+
+    const role = isMaster ? 'master' : 'trusted';
+    const existing = sender.roles ?? [];
+    if (existing.includes(role)) return sender;
+    return { ...sender, roles: [role, ...existing] };
+  };
 }
 
 async function applyRuntimeLogLevel(

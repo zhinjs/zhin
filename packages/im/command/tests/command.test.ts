@@ -555,7 +555,7 @@ describe('Command Feature', () => {
     });
   });
 
-  it('resolves $sender.isMaster and $sender.isTrusted into sender.role', async () => {
+  it('reads enriched sender.roles including master/trusted from upstream', async () => {
     const owner = rootPluginId();
     const slot = createCapabilitySlot({
       owner,
@@ -584,8 +584,7 @@ describe('Command Feature', () => {
         kind: 'group' as const,
         id: 'g1',
       },
-      sender: { id: '100' },
-      $sender: { id: '100', name: 'Admin', isMaster: true, role: 'owner' },
+      sender: { id: '100', name: 'Admin', roles: ['master', 'owner'] },
     };
     const masterResult = await index.dispatch('我是谁', masterMessage);
     expect(masterResult).toMatchObject({ matched: true, value: 'master,owner' });
@@ -597,8 +596,7 @@ describe('Command Feature', () => {
         kind: 'group' as const,
         id: 'g1',
       },
-      sender: { id: '200' },
-      $sender: { id: '200', isTrusted: true },
+      sender: { id: '200', roles: ['trusted'] },
     };
     const trustedResult = await index.dispatch('我是谁', trustedMessage);
     expect(trustedResult).toMatchObject({ matched: true, value: 'trusted' });
@@ -610,8 +608,7 @@ describe('Command Feature', () => {
         kind: 'group' as const,
         id: 'g1',
       },
-      sender: { id: '300' },
-      $sender: { id: '300', role: 'admin' },
+      sender: { id: '300', roles: ['admin'] },
     };
     const plainResult = await index.dispatch('我是谁', plainMessage);
     expect(plainResult).toMatchObject({ matched: true, value: 'admin' });

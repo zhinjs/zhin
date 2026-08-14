@@ -100,6 +100,17 @@ export interface ImRuntimeOptions {
   readonly renderer?: OutboundRenderer;
   /** Process-root ingress claim (pending interaction, authentication challenge, etc.). */
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
+  /**
+   * 入站 sender 增强：在构造 Message 前，将框架级角色（master / trusted）
+   * 合并到 sender.roles，使整个下游链路（命令分发、agent ingress 等）都能读到完整角色。
+   *
+   * 返回增强后的 sender（可原样返回）。缺省时 sender 保留适配器给出的平台角色。
+   */
+  readonly enrichSender?: (
+    sender: MessageSenderRef | undefined,
+    conversation: IncomingMessage['conversation'],
+    snapshot: RuntimeSnapshot,
+  ) => MessageSenderRef | undefined;
 }
 
 export class ImRuntime implements MessageGateway {
@@ -109,6 +120,7 @@ export class ImRuntime implements MessageGateway {
   readonly #interactiveHandlers: RegisteredRuntimeInteractiveHandler[] = [];
   #snapshots?: SnapshotStore;
   readonly #inboundClaim?: ImRuntimeOptions['inboundClaim'];
+  readonly #enrichSender?: ImRuntimeOptions['enrichSender'];
 
   constructor(options: ImRuntimeOptions = {}) {
     this.#dispatcher = new MessageDispatcher(
@@ -118,6 +130,7 @@ export class ImRuntime implements MessageGateway {
     );
     this.#renderer = options.renderer ?? new OutboundRenderer();
     this.#inboundClaim = options.inboundClaim;
+    this.#enrichSender = options.enrichSender;
   }
 
   attach(snapshots: SnapshotStore): void {
@@ -181,6 +194,9 @@ export class ImRuntime implements MessageGateway {
         sender: `${input.sender?.name||'undefined'}(${input.sender?.id||'undefined'})`,
         preview: truncatePreview(input.content),
       }));
+      const enrichedSender = this.#enrichSender
+        ? this.#enrichSender(input.sender, conversation, lease.value)
+        : input.sender;
       const message = new Message(
         conversation,
         input.content,
@@ -195,7 +211,7 @@ export class ImRuntime implements MessageGateway {
             requester: replyRequester,
             content,
             incoming: {
-              sender: input.sender,
+              sender: enrichedSender,
               content: input.content,
               segments: input.segments,
               messageId: input.message?.id,
@@ -205,7 +221,7 @@ export class ImRuntime implements MessageGateway {
             },
           }, lease.value);
         },
-        input.sender,
+        enrichedSender,
         Object.freeze({ ...input.metadata }),
         input.segments ? Object.freeze([...input.segments]) : undefined,
         input.message,
