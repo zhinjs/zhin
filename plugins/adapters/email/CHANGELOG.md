@@ -1,5 +1,13 @@
 # @zhin.js/adapter-email
 
+## 5.0.5
+
+### Patch Changes
+
+- @zhin.js/adapter@1.1.7
+- @zhin.js/core@1.5.5
+- zhin.js@6.0.5
+
 ## 5.0.4
 
 ### Patch Changes

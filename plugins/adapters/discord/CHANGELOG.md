@@ -1,5 +1,16 @@
 # @zhin.js/adapter-discord
 
+## 7.0.6
+
+### Patch Changes
+
+- Updated dependencies [2d0a622]
+  - @zhin.js/command@1.0.10
+  - @zhin.js/adapter@1.1.7
+  - @zhin.js/core@1.5.5
+  - @zhin.js/agent@1.1.6
+  - zhin.js@6.0.5
+
 ## 7.0.5
 
 ### Patch Changes

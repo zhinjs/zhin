@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/command",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Convention-based Command Feature for Zhin Plugin Runtime",
   "type": "module",
   "main": "./lib/index.js",
