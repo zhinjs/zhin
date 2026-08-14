@@ -1,5 +1,13 @@
 # @zhin.js/core
 
+## 1.5.6
+
+### Patch Changes
+
+- Updated dependencies [7945544]
+  - @zhin.js/command@1.0.11
+  - @zhin.js/adapter@1.1.7
+
 ## 1.5.5
 
 ### Patch Changes

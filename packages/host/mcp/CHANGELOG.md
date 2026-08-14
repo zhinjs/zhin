@@ -1,5 +1,12 @@
 # @zhin.js/mcp
 
+## 6.0.6
+
+### Patch Changes
+
+- @zhin.js/core@1.5.6
+- zhin.js@6.0.6
+
 ## 6.0.5
 
 ### Patch Changes

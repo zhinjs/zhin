@@ -1,7 +1,7 @@
 {
   "name": "minimal-bot",
   "private": true,
-  "version": "0.0.25",
+  "version": "0.0.26",
   "description": "Zhin.js Plugin Runtime Stable golden path",
   "type": "module",
   "scripts": {
