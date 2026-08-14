@@ -169,7 +169,7 @@ Key config (`vitest.config.ts`):
 
 ## CI
 
-GitHub Actions (`ci.yml`): Install → changeset check → build → type-check → lint → 15+ harness checks → test+coverage → codecov. Runs on PR to and push on `main`, matrix Node.js 22/24 (full checks + coverage only on 24), ubuntu-latest, 25-min timeout, concurrency-cancelled per ref.
+GitHub Actions (`ci.yml`): Install → changeset check → build → type-check → lint → 15+ harness checks → test+coverage → codecov. Runs on PR to and push on `main`, matrix OS (ubuntu/macos/windows) × Node.js (22/24/26), `fail-fast: false`. Full checks + coverage only on `ubuntu-latest` + Node 24; other combinations run build + tests only. 25-min timeout, concurrency-cancelled per ref.
 
 Publish workflow (`publish.yml`): On push to `main`, auto-bumps versions via Changesets and publishes to npm.
 
