@@ -148,6 +148,26 @@ export * from './interaction/index.js';
 
 export { UserProfileStore, AI_USER_PROFILE_MODEL } from './user-profile.js';
 
+// ── Capability Seam ────────────────────────────────────────────────────────
+export { SeamProviderRegistry, SeamIntegration } from './seam/index.js';
+export type {
+  SeamProvider,
+  SeamScope,
+  ToolService,
+  ToolServiceProvider,
+  ToolSchema,
+  ToolExecutionResult,
+  SkillService,
+  SkillServiceProvider,
+  SkillMetadata,
+  SkillInvocationRequest,
+  SkillInvocationResult,
+  SeamIntegrationToken,
+} from './seam/index.js';
+export { seamIntegrationToken } from './seam/index.js';
+export { BuiltinToolService } from './builtins/builtin-tool-service.js';
+export { SkillRegistryAsService } from './skill/skill-registry-as-service.js';
+
 export { SubagentSystem } from './subagent/index.js';
 export { SubagentRuntime } from './subagent/subagent-runtime.js';
 export type {
