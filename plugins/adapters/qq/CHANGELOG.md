@@ -1,5 +1,14 @@
 # @zhin.js/adapter-qq
 
+## 7.0.8
+
+### Patch Changes
+
+- Updated dependencies [36cb1ca]
+  - @zhin.js/core@1.5.7
+  - @zhin.js/agent@1.1.8
+  - zhin.js@6.0.7
+
 ## 7.0.7
 
 ### Patch Changes

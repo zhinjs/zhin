@@ -1,5 +1,13 @@
 # single-file-bot
 
+## 0.1.14
+
+### Patch Changes
+
+- zhin.js@6.0.7
+- @zhin.js/adapter-icqq@8.0.8
+- @zhin.js/adapter-sandbox@7.0.7
+
 ## 0.1.13
 
 ### Patch Changes

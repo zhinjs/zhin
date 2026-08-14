@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-music",
-  "version": "7.0.7",
+  "version": "7.0.8",
   "description": "Music search and sharing plugin for Zhin.js (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",

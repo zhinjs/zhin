@@ -1,5 +1,20 @@
 # @zhin.js/cli
 
+## 3.0.7
+
+### Patch Changes
+
+- 36cb1ca: fix(core): 入站 Message 的 sender.roles 携带 master/trusted 框架角色
+
+  ImRuntime 新增 `enrichSender` 选项，在构造 Message 前由组合根（start-command）注入，
+  从 config 的 `ai.trigger.masters`/`ai.trigger.trusted` 及 endpoint 级 master/trusted 判定后
+  将框架角色合并进 `sender.roles`。整个下游链路（命令分发、agent ingress）均可直接读取。
+
+- Updated dependencies [36cb1ca]
+  - @zhin.js/core@1.5.7
+  - @zhin.js/agent@1.1.8
+  - @zhin.js/speech@3.0.7
+
 ## 3.0.6
 
 ### Patch Changes
