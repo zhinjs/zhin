@@ -79,6 +79,7 @@ turn 会跨代执行。
 - 🛡️ **6 层 Bash 安全**：`ExecPolicy` 纵深防御（危险黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、交互式审批）
 - 📂 **文件访问安全**：`FilePolicy` 路径检查、设备路径拦截、命令读写分类
 - 📋 **精简系统提示词**：`PromptBuilder` 组装 Context、Style、Tools、Safety，并按需注入 Platform、Skills、Memory、Bootstrap
+- 🧩 **提示词注册表**：`PromptAssemblyRegistry` 先注册默认系统提示分段，再按 `priority` 合并插件扩展/覆盖，并在 `systemPromptMaxChars` 预算下统一截断
 - 🔌 **框架挂载**：Plugin Runtime (basic/cli) 装配 Agent 服务，通过 Scope+Token 提供
 - 📦 **上下文与记忆**：`ContextRepository`（`agent_messages`）、`AgentSessionStore`、`ImTranscriptStore`（`im_transcripts` + `chat_history`）；辅助：`ContextManager`、`ConversationMemory`、`UserProfileStore`
 - ⏰ **跟进与定时**：`FollowUpManager`、`PersistentCronEngine`、cron 工具
@@ -91,6 +92,12 @@ turn 会跨代执行。
 
 - 依赖 **@zhin.js/core**（IM 类型与消息链）与 **@zhin.js/ai**（`agentLoop`、Provider 抽象）
 - **zhin.js 4.x** 主包为 optional peer；运行时通过 `zhin.js/agent` 子路径或本包 import
+
+## PromptAssemblyRegistry
+
+`buildRichSystemPrompt()` 现在会先创建默认提示词分段注册表，再合并调用方/插件注册的 `PromptAssemblyRegistry`。
+扩展方可使用稳定 section id 覆盖默认段，或用新 id 插入额外段；最终内容按 `priority` 排序，并复用同一预算截断逻辑。
+`ZhinAgent` 通过 `getPromptRegistry()` 暴露该注册表，Plugin Runtime 组合根也会提供 `promptAssemblyRegistry` 上下文供 generation 内扩展使用。
 
 ## 模块化架构（理想蓝图 8 模块）
 

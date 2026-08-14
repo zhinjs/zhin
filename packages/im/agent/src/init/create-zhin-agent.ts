@@ -133,6 +133,11 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     };
     const agent = new ZhinAgent(provider, zhinAgentCfg);
     refs.zhinAgent = agent;
+    plugin.provide(defineContext({
+      name: 'promptAssemblyRegistry',
+      description: 'Agent prompt assembly registry',
+      value: agent.getPromptRegistry(),
+    }));
     provideSessionTreeRuntime({ lifecycle: generationLifecycle }, createSessionTreeRuntimeFromAgent(asPrivate(agent)));
     void provideRemoteAgentRegistry({ lifecycle: generationLifecycle }, appConfig.ai).then((registry) => registry.healthCheckAll());
     provideRemoteTaskPoller({ lifecycle: generationLifecycle }, { intervalMs: 15_000 });

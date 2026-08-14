@@ -10,6 +10,7 @@ import type { AgentSessionHostPort } from '../session/agent-session-host-port.js
 import type { AgentFeature } from '../features/agent-feature.js';
 import type { MCPFeature } from '../features/mcp-feature.js';
 import type { FeatureCapabilityIngress } from '../ingress/capability-ingress.js';
+import type { PromptAssemblyRegistry } from '../prompt/prompt-assembly-registry.js';
 
 declare module '@zhin.js/core' {
   namespace Plugin {
@@ -17,6 +18,7 @@ declare module '@zhin.js/core' {
       ai: AIService;
       agent: AgentOrchestrator;
       agentSessionHost?: AgentSessionHostPort;
+      promptAssemblyRegistry?: PromptAssemblyRegistry;
       agentFeature: AgentFeature;
       mcpFeature: MCPFeature;
       /** Optional — provided after ZhinAgent boot when Ingress is wired */

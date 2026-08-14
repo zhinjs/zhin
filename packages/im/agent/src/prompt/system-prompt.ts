@@ -8,8 +8,7 @@
 import * as os from 'node:os';
 import type { AgentMessage, AssistantMessage, UserMessage } from '@zhin.js/ai';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
-import { type ZhinAgentConfig, SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from '../config/index.js';
-import { formatMemoryPathsHint } from '../memory-layers.js';
+import { type ZhinAgentConfig, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from '../config/index.js';
 import { buildSenderRolesFilePermissionsPrompt } from '../security/file-role-policy.js';
 import type { TurnContextView } from '../context/turn-envelope.js';
 import { resolveWorkspacePrompt } from '../prompt/workspace-prompt.js';
@@ -23,6 +22,9 @@ import {
   CODE_REFERENCE_RULES,
 } from './rules/index.js';
 import { ModelAwarePromptBuilder } from './model-aware-builder.js';
+import { PromptAssemblyRegistry } from './prompt-assembly-registry.js';
+export { enforcePromptBudget } from './prompt-budget.js';
+import type { PromptLayer } from './prompt-builder.js';
 export const FIXED_DISCIPLINE_RULES = [
   'Never claim actions, results, or system state unless confirmed by tool output.',
   'If a capability is unavailable, state it honestly and suggest the closest valid alternative.',
@@ -85,6 +87,8 @@ export interface RichSystemPromptContext {
   modelId?: string;
   /** 模型上下文窗口大小 */
   contextWindow?: number;
+  /** 可选的提示词组装注册表；默认段会先注册，再应用该注册表中的覆盖/扩展。 */
+  registry?: PromptAssemblyRegistry;
 }
 
 // ── Section builders ──
@@ -326,106 +330,184 @@ export interface PromptSectionDebugInfo {
   approxChars: number;
 }
 
+interface DefaultPromptSectionDefinition {
+  id: string;
+  layer: PromptLayer;
+  title: string;
+  priority: number;
+  truncatable: boolean;
+  content: (ctx: RichSystemPromptContext) => string | null;
+}
+
+const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
+  {
+    id: '§1_runtime',
+    layer: 'context',
+    title: 'Runtime',
+    priority: 160,
+    truncatable: false,
+    content: (ctx) => buildContextSection(ctx.config, ctx.bootstrapContext, ctx.agentNickname, ctx.gitStatus),
+  },
+  {
+    id: '§1b_critical_rules',
+    layer: 'system',
+    title: 'Critical Rules',
+    priority: 150,
+    truncatable: false,
+    content: () => CRITICAL_RULES,
+  },
+  {
+    id: '§1c_workflow',
+    layer: 'task',
+    title: 'Workflow',
+    priority: 140,
+    truncatable: false,
+    content: () => WORKFLOW_RULES,
+  },
+  {
+    id: '§1d_model_style',
+    layer: 'role',
+    title: 'Style',
+    priority: 130,
+    truncatable: false,
+    content: (ctx) => new ModelAwarePromptBuilder(ctx.modelId).buildStyleSection(),
+  },
+  {
+    id: '§3_tools',
+    layer: 'tools',
+    title: 'Orchestration',
+    priority: 120,
+    truncatable: false,
+    content: (ctx) => buildOrchestrationSection(ctx.orchestratorSdk),
+  },
+  {
+    id: '§4_security',
+    layer: 'safety',
+    title: 'Security',
+    priority: 110,
+    truncatable: false,
+    content: () => buildSecuritySection(),
+  },
+  {
+    id: '§5_error_handling',
+    layer: 'constraints',
+    title: 'Error Handling',
+    priority: 90,
+    truncatable: true,
+    content: () => ERROR_HANDLING_RULES,
+  },
+  {
+    id: '§5b_editing',
+    layer: 'constraints',
+    title: 'Editing',
+    priority: 80,
+    truncatable: true,
+    content: () => EDITING_RULES,
+  },
+  {
+    id: '§5c_task_completion',
+    layer: 'constraints',
+    title: 'Task Completion',
+    priority: 70,
+    truncatable: true,
+    content: () => TASK_COMPLETION_RULES,
+  },
+  {
+    id: '§5d_code_references',
+    layer: 'constraints',
+    title: 'Code References',
+    priority: 60,
+    truncatable: true,
+    content: () => CODE_REFERENCE_RULES,
+  },
+  {
+    id: '§5e_memory_instructions',
+    layer: 'memory',
+    title: 'Memory Instructions',
+    priority: 50,
+    truncatable: true,
+    content: () => MEMORY_INSTRUCTIONS,
+  },
+  {
+    id: '§5f_context_mode',
+    layer: 'context',
+    title: 'Context Mode',
+    priority: 40,
+    truncatable: true,
+    content: (ctx) => new ModelAwarePromptBuilder(ctx.modelId)
+      .buildContextModeHint(ctx.contextWindow ?? 128000),
+  },
+  {
+    id: '§6c_platform',
+    layer: 'context',
+    title: 'Platform',
+    priority: 100,
+    truncatable: false,
+    content: (ctx) => buildPlatformSection(ctx.platformSections),
+  },
+  {
+    id: '§8_skills',
+    layer: 'tools',
+    title: 'Skills',
+    priority: 30,
+    truncatable: true,
+    content: (ctx) => buildSkillsSection(ctx.skillRegistry, ctx.skillsSummaryXML),
+  },
+  {
+    id: '§10_global',
+    layer: 'context',
+    title: 'Global Context',
+    priority: 20,
+    truncatable: true,
+    content: (ctx) => ctx.globalContext?.trim() ? ctx.globalContext : null,
+  },
+  {
+    id: '§11_bootstrap',
+    layer: 'context',
+    title: 'Bootstrap',
+    priority: 10,
+    truncatable: true,
+    content: (ctx) => ctx.bootstrapContext?.trim() ? ctx.bootstrapContext : null,
+  },
+];
+
+export function createDefaultPromptAssemblyRegistry(
+  ctx: RichSystemPromptContext,
+): PromptAssemblyRegistry {
+  const registry = new PromptAssemblyRegistry();
+  for (const definition of DEFAULT_PROMPT_SECTION_DEFINITIONS) {
+    registry.register(definition.id, {
+      layer: definition.layer,
+      title: definition.title,
+      priority: definition.priority,
+      truncatable: definition.truncatable,
+      content: definition.content(ctx) ?? '',
+    });
+  }
+  return registry;
+}
+
+function resolvePromptAssemblyRegistry(ctx: RichSystemPromptContext): PromptAssemblyRegistry {
+  const registry = createDefaultPromptAssemblyRegistry(ctx);
+  if (ctx.registry) {
+    registry.merge(ctx.registry);
+  }
+  return registry;
+}
+
 /**
  * 返回当前上下文中**实际注入**的系统提示各段大小（不含 SECTION_SEP）。
  * 用于观测渐进披露与 token 压力，不改变线上 prompt 拼接逻辑。
  */
 export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): PromptSectionDebugInfo[] {
-  const {
-    config, skillRegistry, skillsSummaryXML, bootstrapContext,
-    toolSearchDeferredStats, platformSections, orchestratorSdk,
-  } = ctx;
-  const boot = bootstrapContext?.trim() ? bootstrapContext : null;
-  const modelBuilder = new ModelAwarePromptBuilder(ctx.modelId);
-  const contextWindow = ctx.contextWindow ?? 128000;
-  const pairs: [string, string | null][] = [
-    ['§1_runtime', buildContextSection(config, bootstrapContext, ctx.agentNickname, ctx.gitStatus)],
-    ['§1b_critical_rules', CRITICAL_RULES],
-    ['§1c_workflow', WORKFLOW_RULES],
-    ['§1d_model_style', modelBuilder.buildStyleSection()],
-    ['§3_tools', buildOrchestrationSection(orchestratorSdk)],
-    ['§4_security', buildSecuritySection()],
-    ['§5_error_handling', ERROR_HANDLING_RULES],
-    ['§5b_editing', EDITING_RULES],
-    ['§5c_task_completion', TASK_COMPLETION_RULES],
-    ['§5d_code_references', CODE_REFERENCE_RULES],
-    ['§5e_memory_instructions', MEMORY_INSTRUCTIONS],
-    ['§5f_context_mode', modelBuilder.buildContextModeHint(contextWindow)],
-    ['§6c_platform', buildPlatformSection(platformSections)],
-    ['§8_skills', buildSkillsSection(skillRegistry, skillsSummaryXML)],
-    ['§10_global', ctx.globalContext?.trim() ? ctx.globalContext : null],
-    ['§11_bootstrap', boot],
-  ];
-  return pairs
-    .filter(([, c]) => c != null && c.trim().length > 0)
-    .map(([id, c]) => ({ id, approxChars: c!.length }));
-}
-
-const TRUNCATED_MARK = '\n… (truncated)';
-
-/**
- * 系统提示词总量护栏：超预算时按牺牲顺序（数组靠前的可截断段先压缩）
- * 尾部截断，仍超长再整段丢弃；truncatable=false 段（runtime/orchestration/security）不动。
- */
-export function enforcePromptBudget(
-  sections: { content: string | null; truncatable: boolean }[],
-  maxChars: number,
-): string {
-  const present = sections.filter(
-    (s): s is { content: string; truncatable: boolean } => !!s.content && s.content.trim().length > 0,
-  );
-  const total = () =>
-    present.reduce((n, s, i) => n + s.content.length + (i > 0 ? SECTION_SEP.length : 0), 0);
-  if (maxChars <= 0 || total() <= maxChars) {
-    return present.map(s => s.content).join(SECTION_SEP);
-  }
-  for (let i = 0; i < present.length && total() > maxChars; i++) {
-    const s = present[i];
-    if (!s.truncatable) continue;
-    const keep = s.content.length - (total() - maxChars) - TRUNCATED_MARK.length;
-    if (keep > 0) {
-      s.content = s.content.slice(0, keep) + TRUNCATED_MARK;
-    } else {
-      present.splice(i, 1);
-      i--;
-    }
-  }
-  return present.map(s => s.content).join(SECTION_SEP);
+  return resolvePromptAssemblyRegistry(ctx)
+    .entries(ctx)
+    .map(({ id, content }) => ({ id, approxChars: content.length }));
 }
 
 export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
-  const {
-    config, skillRegistry, skillsSummaryXML, bootstrapContext,
-    toolSearchDeferredStats, platformSections, orchestratorSdk,
-  } = ctx;
-  const modelBuilder = new ModelAwarePromptBuilder(ctx.modelId);
-
-  const contextSection = buildContextSection(config, bootstrapContext, ctx.agentNickname, ctx.gitStatus);
-  const modelStyle = modelBuilder.buildStyleSection();
-  const contextWindow = ctx.contextWindow ?? 128000;
-  const contextModeHint = modelBuilder.buildContextModeHint(contextWindow);
-
-  const sections: { content: string | null; truncatable: boolean }[] = [
-    { content: contextSection, truncatable: false },
-    { content: CRITICAL_RULES, truncatable: false },
-    { content: WORKFLOW_RULES, truncatable: false },
-    { content: modelStyle, truncatable: false },
-    { content: buildOrchestrationSection(orchestratorSdk), truncatable: false },
-    { content: buildSecuritySection(), truncatable: false },
-    { content: buildPlatformSection(platformSections), truncatable: false },
-    // 可截断段（牺牲顺序：error-handling → editing → task-completion → code-ref → memory → context-mode → skills → globalContext → bootstrap）
-    { content: ERROR_HANDLING_RULES, truncatable: true },
-    { content: EDITING_RULES, truncatable: true },
-    { content: TASK_COMPLETION_RULES, truncatable: true },
-    { content: CODE_REFERENCE_RULES, truncatable: true },
-    { content: MEMORY_INSTRUCTIONS, truncatable: true },
-    { content: contextModeHint, truncatable: true },
-    { content: buildSkillsSection(skillRegistry, skillsSummaryXML), truncatable: true },
-    { content: ctx.globalContext || null, truncatable: true },
-    { content: bootstrapContext || null, truncatable: true },
-  ];
-
-  return enforcePromptBudget(sections, config.systemPromptMaxChars);
+  return resolvePromptAssemblyRegistry(ctx)
+    .build(ctx.config.systemPromptMaxChars, ctx);
 }
 
 
