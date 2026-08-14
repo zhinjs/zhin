@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-onebot12",
-  "version": "5.0.6",
+  "version": "5.0.7",
   "description": "Zhin.js OneBot 12 adapter for Plugin Runtime (WebSocket client)",
   "type": "module",
   "main": "./lib/index.js",

@@ -1,5 +1,12 @@
 # @zhin.js/agent
 
+## 1.1.8
+
+### Patch Changes
+
+- Updated dependencies [36cb1ca]
+  - @zhin.js/core@1.5.7
+
 ## 1.1.7
 
 ### Patch Changes

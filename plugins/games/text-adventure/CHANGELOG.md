@@ -1,5 +1,13 @@
 # @zhin.js/plugin-text-adventure
 
+## 1.0.15
+
+### Patch Changes
+
+- Updated dependencies [36cb1ca]
+  - @zhin.js/core@1.5.7
+  - @zhin.js/game-kit@3.0.7
+
 ## 1.0.14
 
 ### Patch Changes

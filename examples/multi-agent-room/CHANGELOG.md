@@ -1,5 +1,12 @@
 # multi-agent-room
 
+## 0.0.19
+
+### Patch Changes
+
+- @zhin.js/agent@1.1.8
+- @zhin.js/adapter-sandbox@7.0.7
+
 ## 0.0.18
 
 ### Patch Changes
