@@ -107,8 +107,18 @@ export {
   buildLiteSystemPromptWithPlatform,
   buildUserMessageWithHistory,
   describePromptSectionsForDebug,
+  createDefaultPromptAssemblyRegistry,
+  enforcePromptBudget,
 } from './prompt/system-prompt.js';
 export type { RichSystemPromptContext, PromptSectionDebugInfo } from './prompt/system-prompt.js';
+export { PromptAssemblyRegistry } from './prompt/prompt-assembly-registry.js';
+export type {
+  PromptAssemblyEntry,
+  PromptAssemblySection,
+  PromptSectionRegistry,
+} from './prompt/prompt-assembly-registry.js';
+export { promptAssemblyToken } from './prompt/tokens.js';
+export type { PromptAssemblyToken, PromptAssemblyResource } from './prompt/tokens.js';
 export {
   buildAgentsEnvelopeContext,
   collectAgentsInstructionChain,
