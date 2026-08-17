@@ -137,8 +137,6 @@ ai:
     trusted: []              # Trigger-level trusted (weaker than master)
 ```
 
-`peerMode` (`mention-only` / `off`) controls whether peer Bot messages within a collaboration unit trigger AI; default is `mention-only`.
-
 ## Access gating (ai.access)
 
 Controls which conversations the LLM reply path is open to (useful for platform AIGC compliance scenarios):

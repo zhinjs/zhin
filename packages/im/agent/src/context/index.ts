@@ -21,7 +21,6 @@ export {
   createContextSystemForHost,
   ProfileContextBuilder,
   ToneInjector,
-  CollaborationContextBuilder,
   createDefaultContextBuilders,
 } from './context-system.js';
 

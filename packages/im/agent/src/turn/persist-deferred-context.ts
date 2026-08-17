@@ -6,7 +6,7 @@ import {
   EMPTY_TOKEN_USAGE,
   type AssistantMessage,
 } from '@zhin.js/ai';
-import { resolveAgentTurnSessionKey } from '../collaboration/resolve-agent-session-key.js';
+import { resolveAgentTurnSessionKey } from '../session/session-key.js';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 import { resolveSubagentDisplayLabel } from '../subagent-goal-notify.js';
 import { packageSubagentResult } from '../subagent-artifact.js';

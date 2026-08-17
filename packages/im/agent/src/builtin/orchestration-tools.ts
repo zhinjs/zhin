@@ -1,14 +1,14 @@
 /**
  * Project director orchestration tools — Agent Mesh hard orchestration v1.
  */
-import { type Message, type Tool, type ToolParametersSchema, type ToolResult, sceneRefFromMessage, resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import { type Message, type Tool, type ToolParametersSchema, type ToolResult, resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import type { AgentRole } from '../orchestrator/agent-dispatcher.js';
 import {
   getOrchestrationService,
   type OrchestrationAddTaskInput,
 } from '../orchestrator/orchestration-service.js';
-import { orchestrationSourceFromMessage } from '../collaboration/collaboration-kernel-bridge.js';
+import { orchestrationSourceFromMessage } from '../orchestrator/orchestration-source.js';
 import { writeOrchestrationRunSummaryToMemory } from '../orchestration-memory-hook.js';
 function sessionKeyFromContext(commMessage: Message<any>): string {
   return resolveIMSessionIdFromMessage(commMessage);
@@ -51,10 +51,6 @@ const START_PARAMS: ToolParametersSchema = {
       type: 'string',
       description: 'Optional: run Validate on remote:<agentId>',
     },
-    collaboration_scene_id: {
-      type: 'string',
-      description: 'Optional: collaboration scene ID; binds Mission run to GroupCell (ADR 0023)',
-    },
   },
 };
 
@@ -77,16 +73,12 @@ const ADD_TASK_PARAMS: ToolParametersSchema = {
     },
     executor: {
       type: 'string',
-      enum: ['local', 'internal_room', 'im_projection', 'remote_mesh', 'scene_mention'],
-      description: 'Executor: local (local sub-agent), internal_room (same-instance peer), im_projection (IM group projection only), remote_mesh (A2A remote)',
+      enum: ['local', 'remote_mesh'],
+      description: 'Executor: local (configured Agent binding) or remote_mesh (A2A remote)',
     },
     assigned_to: {
       type: 'string',
-      description: 'Target endpoint ID (required for internal_room / im_projection)',
-    },
-    project_to_im: {
-      type: 'boolean',
-      description: 'After internal_room dispatch, project @mention to the group (default false)',
+      description: 'Configured Agent binding for local, or remote Agent ID for remote_mesh',
     },
     auto_start: {
       type: 'boolean',
@@ -129,16 +121,11 @@ class OrchestrationStartTool extends BuiltinBaseTool {
     const svc = requireService();
     const sessionKey = sessionKeyFromContext(this.sessionContext);
     const title = typeof args.title === 'string' ? args.title : undefined;
-    const collaborationSceneId = typeof args.collaboration_scene_id === 'string' ? args.collaboration_scene_id : undefined;
     const snapshot = await svc.startRun({
       sessionKey,
       title,
-      source: orchestrationSourceFromMessage(this.sessionContext, collaborationSceneId),
+      source: orchestrationSourceFromMessage(this.sessionContext),
     });
-    if (collaborationSceneId) {
-      const { getCollaborationSceneService } = await import('../collaboration/scene-service.js');
-      await getCollaborationSceneService().setMissionRunId(collaborationSceneId, snapshot.run.id);
-    }
     return (
       `编排 run 已创建：${snapshot.run.id}\n`
       + `session: ${sessionKey}\n`
@@ -150,7 +137,7 @@ class OrchestrationStartTool extends BuiltinBaseTool {
 
 class OrchestrationAddTaskTool extends BuiltinBaseTool {
   readonly name = 'orchestration_add_task';
-  readonly description = 'Add a DAG node to a run and optionally execute immediately (supports internal_room / im_projection).';
+  readonly description = 'Add a DAG node to a run and optionally execute it with a configured local Agent or remote A2A Agent.';
   readonly parameters = ADD_TASK_PARAMS;
 
   constructor(private readonly sessionContext: Message<any>) {
@@ -166,16 +153,8 @@ class OrchestrationAddTaskTool extends BuiltinBaseTool {
     const autoStart = args.auto_start !== false;
     const executorKind = typeof args.executor === 'string' ? args.executor : undefined;
     const assignedTo = typeof args.assigned_to === 'string' ? args.assigned_to : undefined;
-    const projectToIm = args.project_to_im === true;
-    const sceneKind = sceneRefFromMessage(this.sessionContext)?.kind;
-
-    if (executorKind === 'internal_room' || executorKind === 'im_projection' || executorKind === 'scene_mention') {
-      if (!assignedTo) {
-        return 'executor=internal_room 或 im_projection 时必须提供 assigned_to（目标 endpoint ID）';
-      }
-      if (sceneKind === 'private') {
-        return 'internal_room / im_projection 不支持 private 场景，请使用 local 或 spawn_task';
-      }
+    if (executorKind && executorKind !== 'local' && executorKind !== 'remote_mesh') {
+      return `不支持的 executor: ${executorKind}`;
     }
 
     if (autoStart) {
@@ -186,21 +165,15 @@ class OrchestrationAddTaskTool extends BuiltinBaseTool {
         role: typeof args.role === 'string' ? (args.role as AgentRole) : undefined,
         goal: typeof args.goal === 'string' ? args.goal : undefined,
         dependsOn: Array.isArray(args.depends_on) ? args.depends_on.map(String) : undefined,
-        executorKind: executorKind as 'local' | 'internal_room' | 'im_projection' | 'remote_mesh' | undefined,
+        executorKind: executorKind as 'local' | 'remote_mesh' | undefined,
         assignedTo,
-        context: {
-          ...(args.context && typeof args.context === 'object'
-            ? (args.context as Record<string, unknown>)
-            : {}),
-          ...(projectToIm ? { projectToIm: true } : {}),
-        },
+        context: args.context && typeof args.context === 'object'
+          ? (args.context as Record<string, unknown>)
+          : undefined,
         message: this.sessionContext,
         autoStart: true,
       });
       const status = task.status;
-      if (status === 'waiting_result') {
-        return `任务已派发并 @ 通知 ${assignedTo ?? ''}：${task.id} (${task.role}) status=${status}\n等待对方 handback 后自动完成。`;
-      }
       return `任务已派发：${task.id} (${task.role}) status=${status}`;
     }
 

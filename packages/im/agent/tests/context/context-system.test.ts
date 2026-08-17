@@ -4,7 +4,6 @@ import { createUserMessage } from '@zhin.js/ai';
 import {
   ContextSystem,
   ToneInjector,
-  CollaborationContextBuilder,
   ProfileContextBuilder,
   createContextSystemForHost,
 } from '../../src/context/context-system.js';
@@ -119,17 +118,6 @@ describe('ContextSystem', () => {
       envelope: envelopeOn,
     });
     expect(typeof envelopeOn.toneHint).toBe('string');
-  });
-
-  it('CollaborationContextBuilder writes hint into envelope via build pipeline', async () => {
-    const builder = new CollaborationContextBuilder();
-    const envelope: Record<string, string | undefined> = {};
-    await builder.build({
-      turn: turnContextViewFromMessage(mockCommMessage({ scope: 'group', sceneId: 'g1' })),
-      inboundContent: 'status',
-      envelope,
-    });
-    expect(envelope.collaborationHint === undefined || typeof envelope.collaborationHint === 'string').toBe(true);
   });
 
   it('ProfileContextBuilder writes profile summary into envelope via build pipeline', async () => {

@@ -94,11 +94,8 @@ function normalizeExecutor(input?: OrchestrationAddTaskInput['executor']): {
   if (value.startsWith('remote:')) {
     return { executorKind: 'remote_mesh', remoteAgentId: value.slice('remote:'.length) };
   }
-  if (value === 'group_mention' || value === 'scene_mention') return { executorKind: 'im_projection' };
-  if (value === 'internal_room' || value === 'im_projection' || value === 'remote_mesh') {
-    return { executorKind: value };
-  }
-  return { executorKind: 'local' };
+  if (value === 'remote_mesh') return { executorKind: value };
+  throw new TypeError(`Unsupported orchestration executor: ${value}`);
 }
 
 async function* resultIterable(result: Promise<string> | string): AsyncIterable<AgentExecutionEvent> {

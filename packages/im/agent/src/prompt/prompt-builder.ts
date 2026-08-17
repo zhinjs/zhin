@@ -189,7 +189,7 @@ const ROLE_TEMPLATES: Record<AgentRole, {
   planner: {
     systemPrompt: 'You are a planner agent creating implementation plans and directing the pipeline.',
     communicationStyle: 'Be strategic and thorough. Consider all aspects.',
-    toolUsage: 'Use cell orchestration tools and spawn_task. Avoid direct file writes.',
+    toolUsage: 'Use orchestration tools and spawn_task. Avoid direct file writes.',
   },
 };
 

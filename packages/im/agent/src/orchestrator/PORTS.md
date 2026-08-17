@@ -3,7 +3,7 @@
 > SSOT：`docs/adr/0027-agent-run-orchestration-kernel.md`  
 > 词汇：`packages/im/agent/CONTEXT.md` §编排
 
-本文件描述 **OrchestrationKernel** 与 **AgentDispatcher** 的边界 Port，供 IM 组合层（`collaboration/`、`init/`）与 Executor 实现方遵守。
+本文件描述 **OrchestrationKernel** 与 **AgentDispatcher** 的 Port，供 Executor 实现方与 composition root 遵守。
 
 ## 原则
 
@@ -13,7 +13,7 @@
 | **OrchestrationRepository** | Run/Task/RunEvent 持久化 | 业务逻辑 |
 | **AgentExecutor** (`AgentExecutor` 接口) | 执行 Task；向 Kernel **上报** progress/result event | 直接写 Task 终态到 DB |
 | **AgentDispatcher** (`agent-dispatcher.ts`) | 内存投影、`syncTaskFromRecord`、依赖调度缓存 | 作为编排终态权威（`recordResult` 不得替代 Kernel） |
-| **IM 组合层** (`collaboration/` 等) | peer 策略、handback、出站 batch；**委托** Kernel 写终态 | 绕过 Kernel 改 Task status |
+| **Delivery Projection** | 将 Kernel 事件投影到 IM / Console | 把 IM 消息当作 Agent 间通信或终态事实源 |
 
 ## 对外 Port（组合层应使用的 Kernel API）
 
@@ -31,19 +31,12 @@ listRuns(sessionKey) → RunWithTasks[]
 repositoryHandle.getTask(taskId) → TaskRecord | null
 ```
 
-**IM 入站典型路径**（协作入站模块；legacy `inbound-turn-pipeline` 组合层已删除）
+Agent 委派只有两条执行路径：
 
-| 阶段 | 模块 | Kernel Port |
-|------|------|-------------|
-| Peer 委派 | `collaboration-dispatch.ts` (`dispatchPeerTask`) | `dispatchTask` |
-| Handback | `inbound-peer-handback.ts` | `completeTask` / `taskProgress` |
-| spawn_task 路由 | `inbound-spawn-task.ts` (`executeInboundSpawnTaskTurn`) | `dispatchTask` + `runTask` |
-| 出站完成投影 | `collaboration-kernel-bridge.ts` (`tryCompleteKernelImProjectionFromOutbound`) | `completeTask` |
+1. **本地 Agent**：`dispatchTask(executorKind='local', assignedTo='<binding>')` → `runTask` → **SubagentSystem**。
+2. **远程 Agent**：`dispatchTask(executorKind='remote_mesh')` → A2A transport。
 
-1. **Peer 委派**：`dispatchPeerTask` → Kernel `dispatchTask` + `internal_room` / `scene_mention` executor
-2. **Peer handback**：`tryHandlePeerInboundHandback` → Kernel `completeTask`（含 `#taskId` 解析）  
-3. **spawn_task 路由**：`executeInboundSpawnTaskTurn` → Kernel `dispatchTask` + `runTask`（`local` executor → **SubagentSystem**）  
-4. **出站完成投影**：`tryCompleteKernelImProjectionFromOutbound` → `completeTask` + 可选 handback @Planner
+IM 只可订阅 RunEvent 并投影进度或结果；不得用群 `@`、`#taskId` 回复或 Bot 消息完成 Task。
 
 ## AgentDispatcher Port（投影层）
 
@@ -68,20 +61,18 @@ Executor **只产出** `AgentExecutionEvent`（progress / result / error）；�
 
 | Kind | 注册位置 | IM 关联 |
 |------|----------|---------|
-| `local` | `bootstrap-executors.ts` | **SubagentSystem** / ZhinAgent turn |
-| `im_projection` | `bootstrap-executors.ts` | 群 @ 委派 + handback |
-| `scene_mention` | `bootstrap-executors.ts` | internal room peer |
+| `local` | `bootstrap-executors.ts` | **SubagentSystem** + configured Agent binding |
 | `remote_mesh` | `remote-task-executor.ts` | A2A 远程 |
 
 ## 与 8 理想模块的关系
 
 - **SubagentSystem** / **ZhinAgent**：`local` executor 执行面；spawn_task 经 Kernel 任务 + SubagentSystem.spawn；**不**拥有 Run/Task 持久化  
 - **EventSystem**：Agent turn 域事件；**不**替代 Kernel `RunEvent`  
-- **IM 组合层**：`collaboration/` 仅 IM 策略编排；peer 委派 / spawn / handback 委托 Kernel 写终态
+- **Delivery Projection**：只读 RunEvent 后向 IM / Console 展示，不参与 Task 执行或终态写入
 
 ## 迁移检查清单
 
-- [x] 新 IM 路径是否通过 Kernel 创建/完成任务？（route / handback / spawn / outbound-stage）  
+- [x] Agent 委派是否通过 Kernel 创建/完成任务？
 - [x] 是否避免在 pipeline 内直接 `repository.updateTaskStatus`？（`check:orchestration-ssot` 扫描）  
 - [x] Dispatcher `recordResult` 是否仅用于非 Kernel 编排路径？  
 - [x] 出站是否仍走 `Message.$reply` / `Adapter.sendMessage`（ADR 0004）？

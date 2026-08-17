@@ -30,7 +30,7 @@ export type OrchestrationTaskStatus =
   | 'failed'
   | 'cancelled';
 
-export type OrchestrationExecutorKind = 'local' | 'internal_room' | 'im_projection' | 'remote_mesh';
+export type OrchestrationExecutorKind = 'local' | 'remote_mesh';
 
 export type OrchestrationSceneKind = 'private' | 'group' | 'channel';
 
@@ -44,7 +44,7 @@ export interface OrchestrationSceneRef {
 }
 
 export type OrchestrationRunSource =
-  | { kind: 'im_scene'; scene: OrchestrationSceneRef; collaborationSceneId?: string }
+  | { kind: 'im_scene'; scene: OrchestrationSceneRef }
   | { kind: 'manual'; label?: string };
 
 export type OrchestrationRunEventType =

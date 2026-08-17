@@ -1,13 +1,13 @@
 import type { Message } from '@zhin.js/core';
 import { getLogger } from '@zhin.js/logger';
-import { resolveAgentTurnSessionKey } from '../collaboration/resolve-agent-session-key.js';
+import { resolveAgentTurnSessionKey } from './session-key.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { buildTurnUserMessages } from '../context/turn-user-message.js';
 import { logPhase } from '../internal/phase-trace.js';
 import type { SessionStrategy, SessionSystemConfig } from './contracts.js';
 import { type SessionIODeps, beginTurnSession, resolveSessionIsNewBeforeCreate, touchSession, archiveSessionByKey } from './session-io.js';
 import { consumePassiveGroupContextForTurn } from './passive-group-session.js';
-import { CollaborationSessionStrategy } from './strategies.js';
+import { GroupSessionStrategy } from './strategies.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import {
   beginIngressTurnSession,
@@ -46,7 +46,7 @@ export class SessionSystem {
   private persistenceDone = false;
 
   constructor(private readonly _config: SessionSystemConfig = {}) {
-    this.registerStrategy('collaboration', new CollaborationSessionStrategy());
+    this.registerStrategy('group', new GroupSessionStrategy());
     this.persistenceReady = new Promise<void>((resolve) => {
       this.resolvePersistenceReady = resolve;
     });
@@ -85,7 +85,7 @@ export class SessionSystem {
 
   resolveSessionKey(
     message: Message,
-    strategyName: string = 'collaboration',
+    strategyName: string = 'group',
   ): string {
     const strategy = this.strategies.get(strategyName);
     if (strategy) return strategy.resolveSessionKey(message);

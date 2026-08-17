@@ -101,7 +101,7 @@ turn 会跨代执行。
 
 ## 模块化架构（理想蓝图 8 模块）
 
-迁移完成后，`src/` 按职责拆分为 8 个理想模块 + Orchestration + IM 组合层（单包，可选 subpath export）：
+`src/` 按职责拆分为 8 个理想模块 + Orchestration（单包，可选 subpath export）：
 
 ```
 packages/im/agent/src/
@@ -117,25 +117,13 @@ packages/im/agent/src/
   turn/          Turn pipeline、inbound 队列、auto-continue、metrics
   config/        ZhinAgent 配置 SSOT、model harness
   orchestrator/  Orchestration Kernel（ADR 0027 SSOT）
-  collaboration/ IM 入站/出站（peer 委派 / spawn / handback / 出站投影）
-    collaboration-dispatch.ts     dispatchPeerTask → Kernel dispatchTask
-    inbound-spawn-task.ts         spawn_task → Kernel dispatchTask + runTask
-    inbound-peer-handback.ts      peer handback → Kernel completeTask
-    collaboration-kernel-bridge.ts 出站完成 → Kernel 投影
-    inbound-turn-endpoint.ts      @ ID / aiAccess
+  collaboration/ 协作 Scene 管理数据（不参与 Agent 间通信）
   zhin-agent/    ZhinAgent 门面类（单文件 index.ts）
   init/          create-zhin-agent、composeZhinAgentRuntime、configure/dispose 生命周期
 ```
 
-**`collaboration/` 入站协作子模块**（legacy `inbound-turn-pipeline` 组合层已删除）
-
-| 文件 | 职责 |
-|------|------|
-| `collaboration-dispatch.ts` | `dispatchPeerTask` → Kernel 委派 |
-| `inbound-spawn-task.ts` | spawn_task → Kernel `dispatchTask` + `runTask` |
-| `inbound-peer-handback.ts` | peer handback → Kernel `completeTask` |
-| `collaboration-kernel-bridge.ts` | 出站完成投影 → Kernel `completeTask` |
-| `inbound-turn-endpoint.ts` | @ ID / aiAccess 解析 |
+Agent 间通信只经过 OrchestrationKernel：`local` executor 选择配置好的 Agent
+binding，`remote_mesh` 通过 A2A 调用真正的远程 Agent。IM 仅承载用户输入和结果投递。
 
 **Agent Core**：`AgentCore.runText()` / `runVision()` 为 `AsyncGenerator<TurnEvent>` SSOT；`runTextTurn` 为 collector。组合层经 `composeZhinAgentRuntime` 注入 8 模块 + `createAgentCoreDepsForCompose`。
 
@@ -482,7 +470,7 @@ src/
 │   └── index.ts
 │
 ├── internal/                        # host 契约、asPrivate、turn-context、phase/prompt trace
-├── collaboration/                   # 多 Endpoint 入站/出站
+├── collaboration/                   # Scene 管理数据（不参与 Turn 或 Agent 通信）
 ├── discovery/                       # 文件化资源发现（tools / skills / agents）
 ├── security/                        # exec-policy、file-policy
 ├── builtin/                         # IM 内置工具

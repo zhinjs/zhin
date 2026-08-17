@@ -17,7 +17,7 @@ pnpm check:l4
 
 ### A. 终态权威（Kernel-only）
 
-- [ ] `local` / `scene_mention` / `remote_mesh` 成功、失败、取消均落在 Kernel `completed` / `failed` / `cancelled`，无永久 `waiting_result`
+- [ ] `local` / `remote_mesh` 成功、失败、取消均落在 Kernel `completed` / `failed` / `cancelled`
 - [x] `pnpm check:orchestration-ssot` 通过
 
 ### B. IM 终态反馈（观众 #1）
@@ -26,7 +26,6 @@ pnpm check:l4
 - [ ] **空 summary**：子 Agent 返回空文本时，IM 应收到固定 fallback：`任务已完成，但没有可展示的文本结果。`
 - [ ] **失败**：子 Agent 抛错时，IM 应收到 `trigger.errorTemplate` 错误回复（非仅日志）
 - [ ] **remote_mesh**：`executor: remote:local` 任务委托后轮询至 `completed` 或失败终态（见下文 §3）
-- [ ] **（可选）群 scene_mention**：ICQQ 多 Bot 群协作时，被 @ 方公开实质回复后 Kernel `completeTask`（见 [五角色高级配方](/advanced/five-agent-recipe)）
 
 ### C. API / Console 投影（v1 = API；v1.1 = UI）
 

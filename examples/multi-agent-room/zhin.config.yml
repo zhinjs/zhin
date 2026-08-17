@@ -1,27 +1,14 @@
 log_level: 1
 
-# 协作 Scene SSOT 落库（collaboration_scenes + collaboration_scene_members）
-database:
-  dialect: sqlite
-  filename: ./data/bot.db
-  mode: wal
-
-collaboration:
-  enabled: true
-  defaultGoal: 演示多 Bot 协作
-
 plugin: {}
 
-# 双 Sandbox Endpoint：/collab init 后在群内 bind 成员
+# 用户只面对一个 Endpoint；Agent 间委派不经过 IM。
 plugins:
   sandbox:
     endpoints:
       - context: sandbox
-        id: planner-bot
+        id: assistant-bot
         owner: planner-user
-      - context: sandbox
-        id: researcher-bot
-        owner: researcher-user
 
 http:
   token: ${HTTP_TOKEN:-multi-agent-room-dev-token}
@@ -51,4 +38,3 @@ ai:
       - "ai:"
     respondToAt: true
     respondToPrivate: true
-    peerMode: mention-only

@@ -4,7 +4,7 @@ import type { UserMessage } from '@zhin.js/ai';
 import type { Message } from '../orchestrator/types.js';
 import type { SubagentCompletePayload } from '../subagent/index.js';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
-import { resolveAgentTurnSessionKey } from '../collaboration/resolve-agent-session-key.js';
+import { resolveAgentTurnSessionKey } from '../session/session-key.js';
 import { deliverDeferredAutoContinueReply } from './deferred-delivery.js';
 import { buildDeferredAutoContinueUserMessage, shouldDeferredAutoContinue } from './deferred-auto-continue.js';
 import {

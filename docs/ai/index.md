@@ -137,8 +137,6 @@ ai:
     trusted: []              # trigger 级 trusted（弱于 master）
 ```
 
-`peerMode`（`mention-only` / `off`）控制协作单元内 peer Bot 消息是否触发，默认 `mention-only`。
-
 ## 访问门控（ai.access）
 
 控制 LLM 回复路径对哪些会话开放（平台 AIGC 合规等场景）：

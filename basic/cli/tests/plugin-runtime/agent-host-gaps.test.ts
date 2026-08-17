@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Message } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
-import { resolveIMSessionIdFromMessage, type AITriggerConfig } from '@zhin.js/core';
+import type { AITriggerConfig } from '@zhin.js/core';
 import { InteractionRouter, type ImTranscriptWriteInput } from '@zhin.js/agent';
 import {
-  bridgeRuntimeMessage,
   createRuntimeTurnAccess,
   createRuntimeTurnRequest,
   createRuntimeQuestionPort,
@@ -482,91 +481,9 @@ describe('缺口 3：masters / trusted 角色解析', () => {
     expect(roles).toEqual({ isMaster: true, isTrusted: false });
   });
 
-  it('bridgeRuntimeMessage 将角色快照写入 $sender.isMaster/isTrusted', () => {
-    const message = groupMessage('hi');
-    const comm = bridgeRuntimeMessage(message, 'user-1', { isMaster: true, isTrusted: false });
-    expect(comm.$sender.isMaster).toBe(true);
-    expect(comm.$sender.isTrusted).toBe(false);
-    expect((comm as { extra?: Record<string, unknown> }).extra?.endpointMaster).toBe('user-1');
-  });
-});
-
-describe('稳定 senderId：sender.id 是一等字段（SSOT）', () => {
-  it('sender.id 直接作为 $sender.id，name 保留供 prompt 展示', () => {
-    const message = makeMessage({
-      content: '你好',
-      sender: { id: 'OPENID_A', name: 'Cc' },
-      target: 'private:OPENID_A',
-      metadata: { endpoint: 'zhin' },
-    });
-    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    expect(comm.$sender.id).toBe('OPENID_A');
-    expect(comm.$sender.name).toBe('Cc');
-    expect(resolveIMSessionIdFromMessage(comm)).toBe('icqq:zhin:private:OPENID_A');
-  });
-
-  it('昵称变化不影响私聊 session key（sender.id 稳定）', () => {
-    const before = bridgeRuntimeMessage(makeMessage({
-      content: 'hi', sender: { id: 'OPENID_A', name: 'Cc' }, target: 'private:OPENID_A',
-      metadata: { endpoint: 'zhin' },
-    }), undefined, { isMaster: false, isTrusted: false });
-    const after = bridgeRuntimeMessage(makeMessage({
-      content: 'hi', sender: { id: 'OPENID_A', name: 'Cc(新昵称)' }, target: 'private:OPENID_A',
-      metadata: { endpoint: 'zhin' },
-    }), undefined, { isMaster: false, isTrusted: false });
-    expect(resolveIMSessionIdFromMessage(after)).toBe(resolveIMSessionIdFromMessage(before));
-  });
-
-  it('sender.id 直接使用（OneBot/ICQQ sender 本身即 ID）', () => {
-    const message = privateMessage('你好');
-    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    expect(comm.$sender.id).toBe('user-1');
-    expect(resolveIMSessionIdFromMessage(comm)).toBe('icqq:10001:private:user-1');
-  });
-
-  it('sender.id 缺失时 fallback metadata.userId', () => {
-    const message = makeMessage({
-      content: '你好',
-      target: 'private:user-1',
-      sender: null,
-      metadata: { endpoint: '10001', userId: 'stable-id' },
-    });
-    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    expect(comm.$sender.id).toBe('stable-id');
-  });
-
-  it.each([
-    ['userId', 'user-id'],
-    ['user_id', 'user-id'],
-    ['senderId', 'user-id'],
-  ] as const)('sender.id 缺失时 fallback metadata.%s', (field, expectedId) => {
-    const message = makeMessage({
-      content: '你好',
-      sender: null,
-      target: 'private:user-id',
-      metadata: { endpoint: '10001', [field]: expectedId },
-    });
-    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    expect(comm.$sender.id).toBe(expectedId);
-  });
 });
 
 describe('conversation.kind 场景映射', () => {
-  it.each([
-    ['private', 'private'],
-    ['group', 'group'],
-    ['channel', 'channel'],
-  ] as const)('conversation.kind=%s → synthetic channel type=%s', (kind, expectedType) => {
-    const message = makeMessage({
-      content: '消息',
-      sender: { id: 'telegram-user-1' },
-      target: `${kind}:telegram-chat-1`,
-      metadata: { endpoint: 'telegram-bot' },
-    });
-    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    expect(comm.$channel.type).toBe(expectedType);
-  });
-
   it('group 消息进入 Passive Group Context', async () => {
     const agent = makeAgentStub();
     const message = makeMessage({
@@ -582,54 +499,6 @@ describe('conversation.kind 场景映射', () => {
       senderName: 'Alice',
       text: 'Telegram 群聊消息',
     })]);
-  });
-});
-
-describe('入站段契约：bridgeRuntimeMessage 透传 segments 与媒体引用', () => {
-  const extraOf = (comm: unknown) =>
-    (comm as { extra?: Record<string, unknown> }).extra ?? {};
-
-  it('image/audio/video/file 段的 MediaRef 写入 extra.media，segments 原样挂载', () => {
-    const segments = [
-      { type: 'text', data: { text: '看这个' } },
-      { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example/a.jpg' } } },
-      { type: 'audio', data: { url: 'https://cdn.example/a.mp3' } },
-      { type: 'file', data: { file: '/tmp/a.zip' } },
-    ] as const;
-    const message = makeMessage({
-      content: '看这个[image][audio][file]',
-      segments,
-    });
-    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    const extra = extraOf(comm);
-    expect(extra.segments).toEqual(segments);
-    expect(extra.media).toEqual([
-      { type: 'image', media: { kind: 'url', value: 'https://cdn.example/a.jpg' } },
-      { type: 'audio', media: { kind: 'url', value: 'https://cdn.example/a.mp3' } },
-      { type: 'file', media: { kind: 'path', value: '/tmp/a.zip' } },
-    ]);
-  });
-
-  it('纯文本段消息不写 media / segments 键（零侵入旧路径）', () => {
-    const message = groupMessage('在吗');
-    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    const extra = extraOf(comm);
-    expect('media' in extra).toBe(false);
-    expect('segments' in extra).toBe(false);
-    // metadata 原有字段不受影响
-    expect(extra.channelType).toBe('group');
-  });
-
-  it('仅有非媒体段的 segments 挂 segments 但不写 media', () => {
-    const segments = [
-      { type: 'text', data: { text: 'hi' } },
-      { type: 'mention', data: { target: '10001', name: 'bot' } },
-    ] as const;
-    const message = makeMessage({ content: 'hi @bot', segments });
-    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    const extra = extraOf(comm);
-    expect(extra.segments).toEqual(segments);
-    expect('media' in extra).toBe(false);
   });
 });
 
@@ -688,13 +557,7 @@ describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () 
     expect(resolver.resolveOwner('qq', '知音')).toBe('master-b');
   });
 
-  it('endpoints[].master → bridge isMaster → edit_file / 文件策略认 master', async () => {
-    const { checkFileToolAccess } = await import(
-      '../../../../packages/im/agent/src/security/dangerous-tool-policy.js'
-    );
-    const { runToolPolicies } = await import(
-      '../../../../packages/im/agent/src/security/policy-facade.js'
-    );
+  it('endpoints[].master → canonical principal role', async () => {
     const masterId = '477561AD3A89AFCDABB6AFCB71FF54DF';
     const resolver = await createEndpointRoleResolver({
       plugins: {
@@ -716,23 +579,7 @@ describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () 
     });
     const roles = resolveRuntimeSenderRoles(message, endpointMaster, [], undefined);
     expect(roles).toEqual({ isMaster: true, isTrusted: false });
-
-    const comm = bridgeRuntimeMessage(message, endpointMaster, roles);
-    expect(comm.$sender.isMaster).toBe(true);
-    expect(comm.$sender.id).toBe(masterId);
-
-    const access = checkFileToolAccess('edit_file', comm);
-    expect(access).toMatchObject({ allowed: true, role: 'master' });
-
-    const result = runToolPolicies({
-      toolName: 'edit_file',
-      filePath: '/tmp/zhin-master-edit-ok.txt',
-      rawFilePath: '/tmp/zhin-master-edit-ok.txt',
-      commMessage: comm,
-    });
-    expect(result.allowed).toBe(true);
-    expect(result.needsOwnerApproval).toBeFalsy();
-    expect(result.decisions.find((d) => d.policy === 'role-gate')?.decision.role).toBe('master');
+    expect(createRuntimeTurnAccess(message, roles).principal.roles).toContain('master');
   });
 
   it('无 plugins 配置时返回空解析', async () => {

@@ -18,6 +18,39 @@ import {
   type RemoteAgentRegistry,
 } from '../../src/orchestrator/remote-agent-registry.js';
 import { DisposeStack } from '@zhin.js/plugin-runtime';
+import {
+  normalizeExecutorKind,
+  normalizeRunSource,
+} from '../../src/orchestrator/orchestration-mappers.js';
+
+describe('Orchestration persistence contract', () => {
+  it('rejects removed executor kinds instead of silently changing execution domains', () => {
+    expect(() => normalizeExecutorKind('internal_room')).toThrow(TypeError);
+    expect(() => normalizeExecutorKind('im_projection')).toThrow(TypeError);
+  });
+
+  it('accepts only canonical run sources', () => {
+    expect(normalizeRunSource({
+      kind: 'im_scene',
+      scene: {
+        platform: 'sandbox',
+        endpointKey: 'assistant',
+        sceneId: 'room',
+        kind: 'group',
+      },
+    })).toEqual({
+      kind: 'im_scene',
+      scene: {
+        platform: 'sandbox',
+        endpointKey: 'assistant',
+        sceneId: 'room',
+        kind: 'group',
+      },
+    });
+    expect(normalizeRunSource({ kind: 'im_cell', cellId: 'legacy' })).toBeUndefined();
+    expect(normalizeRunSource({ kind: 'im_session', endpointKey: 'legacy' })).toBeUndefined();
+  });
+});
 
 describe('Executor contract — local', () => {
   it('success: result event → completed + result_summary', async () => {
@@ -74,83 +107,6 @@ describe('Executor contract — local', () => {
     const cancelled = await kernel.cancelTask(task.id, 'user cancelled');
     expect(cancelled.status).toBe('cancelled');
     expect(cancelled.error).toContain('user cancelled');
-  });
-});
-
-describe('Executor contract — im_projection', () => {
-  it('fail: error event → failed', async () => {
-    const kernel = provideTestOrchestrationService(new MemoryOrchestrationRepository());
-    const run = await kernel.startRun({ sessionKey: 'mention-fail' });
-    const dispatched = await kernel.dispatchTask({
-      runId: run.run.id,
-      name: '@peer',
-      executorKind: 'im_projection',
-      assignedTo: 'peer-bot',
-      autoStart: false,
-    });
-
-    const executor: AgentExecutor = {
-      kind: 'im_projection',
-      async *execute() {
-        yield { type: 'error', error: 'mention send failed' };
-      },
-    };
-
-    const task = await kernel.runTask(dispatched.task.id, undefined, executor);
-    expect(task.status).toBe('failed');
-    expect(task.error).toContain('mention send failed');
-  });
-
-  it('handoff: no result event → waiting_result (completed via outbound bridge)', async () => {
-    const kernel = provideTestOrchestrationService(new MemoryOrchestrationRepository());
-    const run = await kernel.startRun({ sessionKey: 'mention-wait' });
-    const dispatched = await kernel.dispatchTask({
-      runId: run.run.id,
-      name: '@peer',
-      executorKind: 'im_projection',
-      assignedTo: 'peer-bot',
-      autoStart: false,
-    });
-
-    const executor: AgentExecutor = {
-      kind: 'im_projection',
-      async *execute() {
-        yield { type: 'progress', text: 'waiting_result from peer-bot' };
-      },
-    };
-
-    const task = await kernel.runTask(dispatched.task.id, undefined, executor);
-    expect(task.status).toBe('waiting_result');
-
-    await kernel.completeTask(task.id, 'peer replied in group');
-    const completed = await kernel.repository.getTask(task.id);
-    expect(completed?.status).toBe('completed');
-    expect(completed?.result_summary).toBe('peer replied in group');
-  });
-});
-
-describe('Executor contract — internal_room', () => {
-  it('success: result event → completed + result_summary', async () => {
-    const kernel = provideTestOrchestrationService(new MemoryOrchestrationRepository());
-    const run = await kernel.startRun({ sessionKey: 'internal-room-ok' });
-    const dispatched = await kernel.dispatchTask({
-      runId: run.run.id,
-      name: '@peer',
-      executorKind: 'internal_room',
-      assignedTo: 'peer-bot',
-      autoStart: false,
-    });
-
-    const executor: AgentExecutor = {
-      kind: 'internal_room',
-      async *execute() {
-        yield { type: 'result', result: 'peer done internally' };
-      },
-    };
-
-    const task = await kernel.runTask(dispatched.task.id, undefined, executor);
-    expect(task.status).toBe('completed');
-    expect(task.resultSummary).toBe('peer done internally');
   });
 });
 

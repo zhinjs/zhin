@@ -5,7 +5,7 @@ import {
   EMPTY_TOKEN_USAGE,
   type AssistantMessage,
 } from '@zhin.js/ai';
-import { resolveAgentTurnSessionKey } from '../collaboration/resolve-agent-session-key.js';
+import { resolveAgentTurnSessionKey } from '../session/session-key.js';
 import type { SubagentCompletePayload } from '../subagent/index.js';
 import { packageSubagentResult } from '../subagent-artifact.js';
 import type { Message } from '../orchestrator/types.js';

@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
-  createSyntheticMessage,
   collectSegmentMedia,
   toCanonicalSegments,
   type AITriggerConfig,
@@ -62,9 +61,6 @@ import {
   createSessionTreeRuntimeFromAgent,
   asPrivate,
   wireCollaborationStorage,
-  applyRuntimeCollaborationInbound,
-  findCellForInbound,
-  getCollaborationSceneService,
   handleRuntimeOwnerApproveCommand,
   handleRuntimeManagementCommand,
   publishOutboundElements,
@@ -75,7 +71,6 @@ import {
   type OrchestrationRuntimeHandle,
   type SessionTreeRuntimeHandle,
   type ImTranscriptWriteInput,
-  type PeerTriggerMode,
   type ApprovalPort,
   type TurnRequestPorts,
   type TurnRequest,
@@ -84,7 +79,6 @@ import {
   FileJournalStore,
   InteractionRouter,
 } from '@zhin.js/agent';
-import { resolveAgentTurnSessionKeyFromAddress } from '@zhin.js/agent/session';
 import {
   agentHostToken,
   CapabilityIngress,
@@ -606,28 +600,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           () => capabilityActive,
         );
         const routed = routeSpecialistAgent(inbound.text, capabilities);
-        if (hasRuntimeCollaborationCell(turnAccess)) {
-          const collaborationMessage = bridgeRuntimeMessageForLegacyEdge(
-            message,
-            ownerId,
-            senderRoles,
-            effectiveAdapter,
-            effectiveEndpoint,
-          );
-          const collab = await applyRuntimeCollaborationInbound({
-            message: collaborationMessage,
-            content: routed.userText,
-            peerMode: resolvePeerMode(service.getTriggerConfig()),
-            discoveredAgentNames: new Set(capabilities.agents.map((agent) => agent.name)),
-            replyAi: async (payload) => {
-              await replyAndRecord(typeof payload === 'string' ? payload : String(payload));
-            },
-            logger,
-          });
-          if (collab.action === 'skip') return true;
-          if (collab.action === 'done') return true;
-        }
-
         // thinkingMessage：进入 AI 处理前先回占位（对齐 legacy inbound-turn-pipeline）。
         // 占位消息不 await 回包——平台 ack 慢（实测 icqq 守护进程 10s+）不应拖住 turn 启动；
         // 失败仅记日志（正式回复仍走 replyAndRecord 的完整确认）。
@@ -924,12 +896,6 @@ async function wireRuntimeHome(
   };
 }
 
-function resolvePeerMode(trigger?: AITriggerConfig): PeerTriggerMode {
-  const mode = trigger?.peerMode;
-  if (mode === 'off' || mode === 'mention-only') return mode;
-  return 'mention-only';
-}
-
 function createRuntimeZhinAgent(
   service: AIService,
   im: ImRuntime,
@@ -1090,72 +1056,6 @@ export function resolveRuntimeSenderRoles(
   const isTrusted = !isMaster && senderId != null
     && (triggerTrusted.includes(senderId) || endpointTrusted.map(String).includes(senderId));
   return { isMaster, isTrusted };
-}
-
-export function bridgeRuntimeMessage(
-  message: Message,
-  endpointMaster: string | undefined,
-  roles: RuntimeSenderRoles,
-) {
-  const localName = capabilityLocalName(String(message.conversation.endpoint.id));
-  const channelType = resolveChannelType(message);
-  const channelId = resolveChannelId(message);
-  const endpointKey = message.endpointId
-    || String(message.metadata?.endpoint ?? message.metadata?.endpointKey ?? localName);
-  const senderId = resolveStableSenderId(message);
-  const quoteId = message.replyTo?.id ?? (typeof message.metadata?.quote_id === 'string' ? message.metadata.quote_id : undefined);
-  // 入站结构化段：纯文本视图（matched.content）会丢弃媒体，这里把 canonical
-  // segments 与提取出的媒体引用（image/audio/video/file 的 MediaRef）挂到
-  // synthetic message 的 extra，AI turn 与工具经 resolveContextKey 可读。
-  // Message.extra keeps the original adapter segments for extension code, while
-  // AI media extraction reads the canonical form from the single ingress mapper.
-  const segmentMedia = collectSegmentMedia(
-    message.segments ? toCanonicalSegments(message.segments) : undefined,
-  );
-  return createSyntheticMessage({
-    adapter: localName,
-    endpoint: endpointKey,
-    id: message.id,
-    ...(typeof quoteId === 'string' && quoteId ? { quote_id: quoteId } : {}),
-    sender: {
-      id: senderId,
-      name: message.sender?.name,
-      role: message.sender?.roles?.[0],
-      isMaster: roles.isMaster,
-      isTrusted: roles.isTrusted,
-    },
-    channel: {
-      type: channelType,
-      id: channelId,
-    },
-    reply: async (content) => {
-      // canonical Segment 是一等 SendContent：媒体段原样透传，不再压平为文本
-      await message.$reply(content as SendContent);
-      return message.id ?? 'ok';
-    },
-    extra: {
-      ...message.metadata,
-      ...(message.segments?.length ? { segments: message.segments } : {}),
-      ...(segmentMedia.length > 0 ? { media: segmentMedia } : {}),
-      ...(endpointMaster ? { endpointMaster } : {}),
-    },
-  });
-}
-
-/** Classic collaboration orchestration adapter, isolated to configured Cell traffic. */
-function bridgeRuntimeMessageForLegacyEdge(
-  message: Message,
-  endpointMaster: string | undefined,
-  roles: RuntimeSenderRoles,
-  effectiveAdapter: string,
-  effectiveEndpoint: string,
-) {
-  const projected = bridgeRuntimeMessage(message, endpointMaster, roles);
-  if (effectiveAdapter && effectiveEndpoint) {
-    (projected as { $adapter?: string }).$adapter = effectiveAdapter;
-    (projected as { $endpoint?: string }).$endpoint = effectiveEndpoint;
-  }
-  return projected;
 }
 
 /**
@@ -1328,17 +1228,6 @@ function runtimeImSessionKey(access: TurnAccessContext): string {
   return `${origin.platform}:${origin.endpoint}:${origin.scope}:${origin.sceneId}`;
 }
 
-function hasRuntimeCollaborationCell(access: TurnAccessContext): boolean {
-  const origin = access.origin;
-  if (origin.kind !== 'im' || (origin.scope !== 'group' && origin.scope !== 'channel')) return false;
-  return Boolean(findCellForInbound(
-    getCollaborationSceneService().listScenes(),
-    origin.platform,
-    origin.sceneId,
-    origin.endpoint,
-  ));
-}
-
 function resolveOwnerForRuntimeMessage(
   message: Message,
   resolve?: InstallAgentHostOptions['resolveEndpointOwner'],
@@ -1435,21 +1324,8 @@ export async function recordPassiveGroupContext(
   const endpointKey = origin.endpoint;
   if (senderId !== '' && endpointKey !== '' && senderId === endpointKey) return;
   try {
-    const sceneService = getCollaborationSceneService();
-    let cell = findCellForInbound(
-      sceneService.listScenes(),
-      origin.platform,
-      origin.sceneId,
-      endpointKey,
-    );
-    if (cell) {
-      cell = (await sceneService.getSceneFresh(cell.id)) ?? cell;
-    }
     await agent.recordPassiveGroupObservation({
-      sessionKey: resolveAgentTurnSessionKeyFromAddress({
-        transport: runtimeImSessionKey(access),
-        endpointKey,
-      }, cell),
+      sessionKey: runtimeImSessionKey(access),
       senderId,
       senderName: access.principal.displayName ?? senderId,
       text: rawText,

@@ -13,7 +13,6 @@ export interface TurnContextEnvelopeInput {
   deferredStats?: string;
   activeSkillsContext?: string;
   quoteSystemHint?: string;
-  collaborationHint?: string;
   modelLine?: string;
   sdk?: string;
   agentsContext?: string;
@@ -69,7 +68,6 @@ export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): strin
   if (input.toneHint?.trim()) lines.push(`[Tone hint] ${input.toneHint.trim()}`);
   if (input.activeSkillsContext?.trim()) lines.push(input.activeSkillsContext.trim());
   if (input.quoteSystemHint?.trim()) lines.push(input.quoteSystemHint.trim());
-  if (input.collaborationHint?.trim()) lines.push(input.collaborationHint.trim());
   if (input.agentsContext?.trim()) lines.push(input.agentsContext.trim());
 
   return lines.length === 0

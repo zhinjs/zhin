@@ -111,7 +111,7 @@ Run 与 Task 持久化状态迁移的唯一权威；Executor 只产出 execution
 _避免使用_：orchestrator service、mission runner、dispatcher SSOT
 
 **Run**:
-用户可见的一单元工作，常源于 IM session 或协作场景（Cell）。
+用户可见的一单元工作，常源于 IM session、HTTP、A2A 或 Schedule turn。
 _避免使用_：mission、job、pipeline run（非 Kernel 语境时）
 
 **Task**:
@@ -119,7 +119,7 @@ Run 内有生命周期的工作项，可委派给不同 Executor。
 _避免使用_：subagent id、spawn id、job item
 
 **Executor**:
-执行 Task 的运行时策略（local / scene_mention / remote_mesh），向 Kernel 上报 progress/result/error event。
+执行 Task 的运行时策略（local / remote_mesh），向 Kernel 上报 progress/result/error event。
 _避免使用_：worker、handler、直接改 task status
 
 **RunEvent**:
@@ -240,7 +240,7 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 | Subagent System | `src/subagent/` | agent | `SubagentSystem` spawn/cancel；`ResultSink` 对接 outbound |
 | Context System | `src/context/` | agent | 只读 canonical Turn 的 prompt-assembly / turn-user-message builder 链；IM `Message` 投影仅存在于外层 ingress adapter |
 | Orchestration（图内） | `src/orchestrator/` | agent | Kernel SSOT（ADR 0027）；不并入 Subagent |
-| IM 组合 | `src/init/`、`collaboration/` | agent | 协作入站：`collaboration-dispatch` / `inbound-spawn-task` / `inbound-peer-handback` / `collaboration-kernel-bridge` / `inbound-turn-endpoint` |
+| IM 装配 | `basic/cli` Plugin Runtime | composition root | canonical Turn ingress / reply Delivery；不承担 Agent 间通信 |
 
 ### 现状 → 理想模块映射
 
@@ -248,7 +248,7 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 |----------|----------|----------|
 | Agent Core | `src/core/` | `@zhin.js/agent/core` |
 | Tool System | `src/tool/` | `@zhin.js/agent/tool` |
-| Session System | `src/session/`、`collaboration/resolve-agent-session-key.ts` | `@zhin.js/agent/session` |
+| Session System | `src/session/` | `@zhin.js/agent/session` |
 | Event System | `src/event/`（含 `event-emitter.ts`、`session-events.ts`） | `@zhin.js/agent/event` |
 | Skill System | `src/skill/`、`orchestrator/skill-registry.ts` | `@zhin.js/agent/skill` |
 | Memory System | `src/memory/`、`ContextRepository`（ai） | `@zhin.js/agent/memory` |
@@ -258,7 +258,7 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 | Turn | `src/turn/`（`turn-pipeline`、`turn-complete`） | `@zhin.js/agent/turn` |
 | Config | `src/config/` | `@zhin.js/agent/config` |
 | Orchestration | `src/orchestrator/` | 包根 export + [PORTS.md](src/orchestrator/PORTS.md) |
-| IM 组合 | `src/init/`、`collaboration/`、`zhin-agent/`（门面） | 包根 export |
+| IM 组合 | `src/init/`、`zhin-agent/`（门面） | 包根 export；IM ingress / delivery 在 `basic/cli` |
 | Host 契约（包内） | `src/internal/agent-host.ts`、`as-private.ts` | 不对外 export |
 
 各模块 `contracts.ts` 承载蓝图接口并与实现对齐（注明已实现 / 未实现项）；`index.ts` re-export 公开 API。ideal 模块仅依赖 `internal/agent-host` 类型与 `asPrivate()`，不 import `zhin-agent/` 实现。

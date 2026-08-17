@@ -48,54 +48,14 @@ function parseSceneRef(raw: unknown): OrchestrationSceneRef | undefined {
   };
 }
 
-/** 读取 DB JSON 时归一化 legacy im_cell / im_session → im_scene */
+/** Parse the canonical persisted run source. Unknown or obsolete shapes fail closed. */
 export function normalizeRunSource(raw: unknown): OrchestrationRunSource | undefined {
   if (!raw || typeof raw !== 'object' || !('kind' in raw)) return undefined;
   const o = raw as Record<string, unknown>;
   if (o.kind === 'im_scene') {
     const scene = parseSceneRef(o.scene);
     if (!scene) return undefined;
-    return {
-      kind: 'im_scene',
-      scene,
-      ...(() => {
-        const id = typeof o.collaborationSceneId === 'string' ? o.collaborationSceneId
-          : typeof o.cellId === 'string' ? o.cellId : '';
-        return id ? { collaborationSceneId: id } : {};
-      })(),
-    };
-  }
-  if (o.kind === 'im_cell') {
-    const adapter = typeof o.adapter === 'string' ? o.adapter : '';
-    const sceneId = typeof o.sceneId === 'string' ? o.sceneId : '';
-    const collaborationSceneId = typeof o.collaborationSceneId === 'string' ? o.collaborationSceneId
-      : typeof o.cellId === 'string' ? o.cellId : '';
-    if (!adapter || !sceneId || !collaborationSceneId) return undefined;
-    return {
-      kind: 'im_scene',
-      collaborationSceneId,
-      scene: {
-        platform: adapter,
-        endpointKey: '',
-        sceneId,
-        kind: 'group',
-      },
-    };
-  }
-  if (o.kind === 'im_session') {
-    const adapter = typeof o.adapter === 'string' ? o.adapter : '';
-    const endpointKey = typeof o.endpointKey === 'string' ? o.endpointKey : '';
-    if (!adapter || !endpointKey) return undefined;
-    const sceneId = typeof o.sceneId === 'string' ? o.sceneId : endpointKey;
-    return {
-      kind: 'im_scene',
-      scene: {
-        platform: adapter,
-        endpointKey,
-        sceneId,
-        kind: 'private',
-      },
-    };
+    return { kind: 'im_scene', scene };
   }
   if (o.kind === 'manual') {
     return {
@@ -107,11 +67,8 @@ export function normalizeRunSource(raw: unknown): OrchestrationRunSource | undef
 }
 
 export function normalizeExecutorKind(kind: string): OrchestrationExecutorKind {
-  if (kind === 'group_mention' || kind === 'scene_mention') return 'im_projection';
-  if (kind === 'internal_room' || kind === 'im_projection' || kind === 'local' || kind === 'remote_mesh') {
-    return kind;
-  }
-  return 'local';
+  if (kind === 'local' || kind === 'remote_mesh') return kind;
+  throw new TypeError(`Unsupported orchestration executor kind: ${kind}`);
 }
 
 export function mapRunRecord(record: OrchestrationRunRecord): OrchestrationRun {

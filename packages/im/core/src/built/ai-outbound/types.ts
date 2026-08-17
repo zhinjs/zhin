@@ -61,7 +61,7 @@ export interface AiOutboundParseContext {
 export interface StructuredOutboundDetectInput {
   /** 协作 Cell 活跃且可能 @ peer */
   collaborationCell?: boolean;
-  /** 工具链要求结构化出站（如 group_delegate message JSON） */
+  /** 工具链要求结构化出站。 */
   toolRequiresStructured?: boolean;
   /** 用户入站含 handoff / @ 意图 */
   inboundHandoffIntent?: boolean;

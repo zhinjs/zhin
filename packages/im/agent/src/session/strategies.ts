@@ -1,8 +1,8 @@
 import { resolveIMSessionIdFromMessage, type Message } from '@zhin.js/core';
-import { resolveAgentTurnSessionKey } from '../collaboration/resolve-agent-session-key.js';
+import { resolveAgentTurnSessionKey } from './session-key.js';
 import type { SessionStrategy } from './contracts.js';
 
-export class CollaborationSessionStrategy implements SessionStrategy {
+export class GroupSessionStrategy implements SessionStrategy {
   resolveSessionKey(message: Message): string {
     return resolveAgentTurnSessionKey(message);
   }

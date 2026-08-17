@@ -9,24 +9,15 @@ import { describe, it, expect } from 'vitest';
 const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const configText = fs.readFileSync(path.join(botRoot, 'zhin.config.yml'), 'utf8');
 
-describe('multi-agent-room 协作契约', () => {
-  it('启用 collaboration 且使用数据库', () => {
-    expect(configText).toMatch(/collaboration:/);
-    expect(configText).toMatch(/enabled:\s*true/);
-    expect(configText).toMatch(/database:/);
-    expect(configText).toMatch(/dialect:\s*sqlite/);
+describe('multi-agent-room 编排契约', () => {
+  it('不启用 Collaboration Cell 或数据库', () => {
+    expect(configText).not.toMatch(/^collaboration:/m);
+    expect(configText).not.toMatch(/^database:/m);
   });
 
-  it('不预置 seed/roster，由 /collab init 在群内注册', () => {
-    expect(configText).not.toMatch(/seedCells:/);
-    expect(configText).not.toMatch(/^\s*roster:/m);
-    expect(configText).not.toMatch(/^\s*cells:/m);
-  });
-
-  it('双 Endpoint + peer 入站策略', () => {
-    expect(configText).toMatch(/peerMode:\s*mention-only/);
+  it('只暴露一个 Sandbox Endpoint', () => {
     const endpointMatches = configText.match(/id:\s*\w+-bot/g) ?? [];
-    expect(endpointMatches.length).toBeGreaterThanOrEqual(2);
+    expect(endpointMatches).toHaveLength(1);
   });
 
   it('uses the Plugin Runtime topology manifest', () => {
@@ -38,11 +29,10 @@ describe('multi-agent-room 协作契约', () => {
     ]);
   });
 
-  it('README 说明 REST 与数据库 SSOT', () => {
+  it('README 说明 local Agent binding 委派', () => {
     const readme = fs.readFileSync(path.join(botRoot, 'README.md'), 'utf8');
-    expect(readme).toContain('collaboration/scenes');
-    expect(readme).toContain('collaboration_scenes');
-    expect(readme).toContain('数据库');
-    expect(readme).toContain('/collab init');
+    expect(readme).toContain('executor="local"');
+    expect(readme).toContain('assigned_to="researcher"');
+    expect(readme).not.toContain('internal_room');
   });
 });

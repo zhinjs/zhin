@@ -15,7 +15,7 @@ export type { IngressTurnSessionPrep, TurnSessionPrep } from './session-system.j
 
 export { SessionSystem, createSessionSystem } from './session-system.js';
 export {
-  CollaborationSessionStrategy,
+  GroupSessionStrategy,
   SimpleSessionStrategy,
 } from './strategies.js';
 
@@ -36,11 +36,7 @@ export {
 
 export {
   resolveAgentTurnSessionKey,
-  resolveAgentTurnSessionKeyFromAddress,
-  resolveAgentSessionKeyForTurn,
-  resolveArtifactRunId,
-  type AgentTurnSessionAddress,
-} from '../collaboration/resolve-agent-session-key.js';
+} from './session-key.js';
 
 export {
   recordPassiveGroupObservation,

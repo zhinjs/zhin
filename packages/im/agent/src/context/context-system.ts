@@ -16,7 +16,6 @@ import { resolveModelCandidates } from './model-resolver.js';
 export type { TurnEnvelopeParts } from './envelope-parts.js';
 export {
   ProfileContextBuilder,
-  CollaborationContextBuilder,
   ToneInjector,
   createDefaultContextBuilders,
 } from './default-builders.js';
@@ -77,7 +76,7 @@ export class ContextSystem {
   }
 
   /**
-   * Builder/injector pipeline：内置 profile/collaboration/tone 写入 envelope；
+   * Builder/injector pipeline：内置 profile/tone 写入 envelope；
    * 注册的 builder 可追加 AgentMessage[]。
    */
   async build(context: BuildContext): Promise<AgentMessage[]> {
@@ -119,7 +118,6 @@ export class ContextSystem {
       deferredStats,
       activeSkillsContext: (input.activeSkillsContext ?? host.getTurnActiveSkills()) || undefined,
       quoteSystemHint: input.quoteSystemHint,
-      collaborationHint: envelopeParts.collaborationHint,
       modelLine: `${providerAlias}/${modelId}`,
       sdk: llmModel.sdk,
       agentsContext: agentsContext ?? undefined,

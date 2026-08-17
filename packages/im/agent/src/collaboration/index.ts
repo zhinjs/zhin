@@ -1,8 +1,6 @@
 export * from './types.js';
 export * from './scene-context.js';
 export * from './collaboration-config.js';
-export * from './peer-policy.js';
-export * from './turn-plan-resolver.js';
 export * from './scene-service.js';
 export * from './endpoint-identity.js';
 export { wireCollaborationStorage } from './wire-collaboration-storage.js';
@@ -42,11 +40,3 @@ export {
   DatabaseCollaborationArtifactRepository,
 } from './collaboration-artifact-repository.js';
 export { resolveEndpointConfig, resolveEndpointAtIds, resolveEndpointAiAccess } from './inbound-turn-endpoint.js';
-export { resolvePlannerEndpointKey } from './collaboration-delegation.js';
-export {
-  applyRuntimeCollaborationInbound,
-} from './runtime-inbound-gate.js';
-export type {
-  RuntimeCollaborationInboundInput,
-  RuntimeCollaborationInboundResult,
-} from './runtime-inbound-gate.js';

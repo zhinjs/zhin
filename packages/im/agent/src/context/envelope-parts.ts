@@ -5,7 +5,6 @@ export interface TurnEnvelopeParts {
   deferredStats?: string;
   activeSkillsContext?: string;
   quoteSystemHint?: string;
-  collaborationHint?: string;
   modelLine?: string;
   sdk?: string;
   agentsContext?: string;

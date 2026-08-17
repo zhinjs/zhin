@@ -1,5 +1,4 @@
 import { type AgentMessage, detectTone } from '@zhin.js/ai';
-import { resolveCollaborationTurnHintFromOrigin } from '../collaboration/collaboration-context.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { BuildContext, ContextBuilder, ContextInjector, InjectContext } from './contracts.js';
 export class ProfileContextBuilder implements ContextBuilder {
@@ -13,19 +12,6 @@ export class ProfileContextBuilder implements ContextBuilder {
     const summary = await this.host.userProfiles.buildProfileSummary(userId);
     if (summary?.trim()) {
       context.envelope.profileSummary = summary;
-    }
-    return [];
-  }
-}
-
-export class CollaborationContextBuilder implements ContextBuilder {
-  name = 'collaboration';
-
-  async build(context: BuildContext): Promise<AgentMessage[]> {
-    if (!context.envelope) return [];
-    const hint = resolveCollaborationTurnHintFromOrigin(context.turn.origin);
-    if (hint) {
-      context.envelope.collaborationHint = hint;
     }
     return [];
   }
@@ -53,7 +39,6 @@ export function createDefaultContextBuilders(host: ZhinAgentPrivate): {
   return {
     builders: [
       new ProfileContextBuilder(host),
-      new CollaborationContextBuilder(),
     ],
     injectors: [new ToneInjector(host)],
   };

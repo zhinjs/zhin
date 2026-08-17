@@ -6,7 +6,7 @@ import {
   type AgentTool,
   type OrchestrationRunSource,
 } from '@zhin.js/ai';
-import { orchestrationSourceFromMessage } from '../collaboration/collaboration-kernel-bridge.js';
+import { orchestrationSourceFromMessage } from '../orchestrator/orchestration-source.js';
 import type { SubagentSystem, SubagentOrigin } from '../subagent/index.js';
 import type { SubagentContextMode } from '../subagent-preset.js';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';

@@ -3,10 +3,6 @@
  * @see docs/adr/0023-group-cell-multi-endpoint-agents.md
  */
 
-export type DelegationMode = 'local_process' | 'spawn_task' | 'mesh_remote';
-
-export type PeerTriggerMode = 'mention-only' | 'off';
-
 /** Five-Agent 企业管理矩阵角色（ADR 0024）。 */
 export type PipelineRole = 'planner' | 'researcher' | 'evaluator' | 'executor' | 'reviewer';
 
@@ -150,32 +146,4 @@ export interface CollaborationScene {
   members: CollaborationSceneMemberRuntime[];
   pipelineState?: PipelineState;
   version?: number;
-}
-
-export interface TurnPlanDelegation {
-  mode: DelegationMode;
-  /** Cross-endpoint peer in the same CollaborationScene (default delivery: internal_room). */
-  delegateToPeer?: string;
-  /** @deprecated use delegateToPeer */
-  targetEndpointKey?: string;
-  targetAgentId?: string;
-}
-
-export interface TurnPlan {
-  inboundEndpointKey: string;
-  handlerProfile: string;
-  outboundEndpointKey: string;
-  collaborationSceneId?: string;
-  sessionKeys: {
-    transport: string;
-    collaborationScene?: string;
-  };
-  delegation?: TurnPlanDelegation;
-}
-
-export interface PeerTriggerResult {
-  isPeer: boolean;
-  peerEndpointKey?: string;
-  shouldTrigger: boolean;
-  reason?: string;
 }

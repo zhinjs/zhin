@@ -590,7 +590,6 @@ export {
   SKILL_DISCLOSURE_STEPS,
   SKILL_DISCLOSURE_PROMPT_HINT,
 } from './skill/progressive-disclosure.js';
-export { resolveOutboundBatches, stripFakeAtTokens } from './collaboration/outbound-resolver.js';
 // ── Typing Indicator ──
 export {
   TypingIndicatorManager,
@@ -678,9 +677,6 @@ export {
   COLLABORATION_SCENE_MODEL,
   COLLABORATION_SCENE_MEMBER_MODEL,
   COLLABORATION_SCENE_ARTIFACT_MODEL,
-  buildTurnPlan,
-  evaluatePeerTrigger,
-  applyRuntimeCollaborationInbound,
   findCellForInbound,
   resolveCollaborationSceneContextKey,
   resolveCollaborationSceneContextKeyFromMessage,
@@ -689,11 +685,6 @@ export type {
   CollaborationScene,
   CollaborationSceneMemberRuntime,
   CollaborationConfig,
-  TurnPlan,
-  DelegationMode,
-  PeerTriggerMode,
-  RuntimeCollaborationInboundInput,
-  RuntimeCollaborationInboundResult,
 } from './collaboration/index.js';
 export {
   resolveMemberBySender,

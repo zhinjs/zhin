@@ -69,11 +69,6 @@ export interface AITriggerConfig {
   /** 是否在 AI 入参前拉取 $quote_id 对应消息正文（默认 true） */
   resolveQuotedMessages?: boolean;
 
-  /**
-   * 协作单元内 peer Bot 入站策略（ADR 0023）。
-   * mention-only：仅被 @ 时触发；off：与普通人消息相同规则。
-   */
-  peerMode?: 'mention-only' | 'off';
 }
 
 /**
@@ -113,7 +108,6 @@ export const DEFAULT_AI_TRIGGER_CONFIG: Required<AITriggerConfig> = {
   masters: [],
   trusted: [],
   resolveQuotedMessages: true,
-  peerMode: 'mention-only',
 };
 
 // ============================================================================

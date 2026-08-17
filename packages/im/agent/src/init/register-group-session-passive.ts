@@ -3,10 +3,8 @@
  * AI 回复仍仅由 shouldTriggerAI（群/频道下主要为 @）触发。
  */
 import { getPlugin, isActionMessage, mergeAITriggerConfig, resolveSenderRoles, extractTextContent, type Message } from '@zhin.js/core';
-import { findCellForInbound } from '../collaboration/collaboration-config.js';
-import { getCollaborationSceneService } from '../collaboration/scene-service.js';
 import { recordPassiveGroupObservation } from '../session/passive-group-session.js';
-import { resolveAgentTurnSessionKey } from '../collaboration/resolve-agent-session-key.js';
+import { resolveAgentTurnSessionKey } from '../session/session-key.js';
 import { asPrivate } from '../internal/as-private.js';
 import type { AIServiceRefs } from './shared-refs.js';
 function isBotSelfMessage(message: Message): boolean {
@@ -44,25 +42,9 @@ export function registerGroupSessionPassive(refs: AIServiceRefs): void {
       const rawText = extractTextContent(message).trim();
       if (!rawText) return;
 
-      const endpointKey = String(message.$endpoint ?? '');
-      const channelScope = message.$channel?.type;
-      const sceneId = message.$channel?.id ?? '';
-      let cell =
-        (channelScope === 'group' || channelScope === 'channel') && sceneId !== ''
-          ? findCellForInbound(
-            getCollaborationSceneService().listScenes(),
-            String(message.$adapter),
-            String(sceneId),
-            endpointKey,
-          )
-          : undefined;
-      if (cell) {
-        cell = (await getCollaborationSceneService().getSceneFresh(cell.id)) ?? cell;
-      }
-
       const agent = asPrivate(refs.zhinAgent);
       await recordPassiveGroupObservation(agent, {
-        sessionKey: resolveAgentTurnSessionKey(message, cell),
+        sessionKey: resolveAgentTurnSessionKey(message),
         senderId: String(message.$sender?.id ?? 'unknown'),
         senderName: String(message.$sender?.name ?? message.$sender?.id ?? 'unknown'),
         text: rawText,
