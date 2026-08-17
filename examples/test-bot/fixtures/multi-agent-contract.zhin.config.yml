@@ -1,5 +1,4 @@
-# CI 契约夹具（无密钥）；与 test-bot 协作/多 Agent 配置形状对齐。
-# 维护者本地完整配置见 zhin.config.yml（gitignore，勿提交凭据）。
+# CI contract fixture without credentials. It validates Agent bindings and Kernel task tools.
 
 ai:
   trigger:

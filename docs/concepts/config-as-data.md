@@ -29,7 +29,7 @@ plugins:
 
 - `plugin` — Root Plugin 自己的 schema；
 - `plugins.<instanceKey>` — 每个子插件的 schema，嵌套子插件递归挂在父 schema 的 properties 里；
-- Host 级键 `http` / `database` / `ai` / `mcp` / `a2a` / `speech` / `htmlRenderer` / `assistant` / `collaboration` / `log_level` — 由 CLI 的 Root 安装器消费，**不会**进入任何插件的配置视图；
+- Host 级键 `http` / `database` / `ai` / `mcp` / `a2a` / `speech` / `htmlRenderer` / `assistant` / `log_level` — 由 CLI 的 Root 安装器消费，**不会**进入任何插件的配置视图；
 - 顶层结构 `additionalProperties: false`：写错键名（比如 `plugin` 打成 `plugn`）会直接报错，而不是被静默忽略。
 
 ## schema.json：声明式契约

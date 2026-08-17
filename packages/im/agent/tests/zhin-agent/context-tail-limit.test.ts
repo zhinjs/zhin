@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  COLLABORATION_CONTEXT_TAIL_MESSAGE_LIMIT,
   resolveContextTailMessageLimit,
   DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT,
 } from '../../src/context/context-tail-limit.js';
@@ -16,9 +15,5 @@ describe('resolveContextTailMessageLimit', () => {
 
   it('respects slidingWindowSize when larger than default floor', () => {
     expect(resolveContextTailMessageLimit({ slidingWindowSize: 100 })).toBe(100);
-  });
-
-  it('collaboration default tail is modest for multi-bot groups', () => {
-    expect(COLLABORATION_CONTEXT_TAIL_MESSAGE_LIMIT).toBeLessThanOrEqual(40);
   });
 });

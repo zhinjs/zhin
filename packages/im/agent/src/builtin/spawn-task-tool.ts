@@ -25,7 +25,7 @@ export interface SpawnTaskToolOptions {
 
 function buildSpawnTaskDescription(allowedAgents?: string[]): string {
   const lines = [
-    'Delegate complex or long-running work to a sub-agent. By default creates a kernel task, runs asynchronously, and returns #taskId; set wait=true to block until completion.',
+    'Delegate complex or long-running work to a sub-agent. By default creates a Kernel task, runs asynchronously, and returns its task ID; set wait=true to block until completion.',
     'You may issue multiple spawn_task calls in one assistant turn when subtasks are independent (prefer parallel spawn for independent work).',
     'Use draw for text-to-image and vision for image understanding. Image results log preview as {image}; when wait=true, do not tell the user to wait.',
   ];

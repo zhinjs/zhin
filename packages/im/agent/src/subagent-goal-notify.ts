@@ -57,21 +57,6 @@ export function formatSubagentProcessingMessage(notice: SubagentProcessingNotice
   return `任务【${taskId}】:${channel} => ${label}`;
 }
 
-/**
- * 多 Bot 同群协作时，编排/子任务进度提示若发到群里会被 peer Bot 收进引用链。
- * 此类场景仅打日志，最终结论仍由主 Agent 正常 reply。
- */
-export function shouldSuppressSubagentGoalNotifyToIm(
-  message: Message,
-  cell?: { members: { endpointKey: string }[] },
-): boolean {
-  const scope = message.$channel?.type;
-  if (scope !== 'group' && scope !== 'channel') return false;
-  if (!cell?.members?.length) return false;
-  const endpoints = new Set(cell.members.map((m) => m.endpointKey));
-  return endpoints.size >= 2;
-}
-
 export function getSubagentGoalNotifier(commMessage?: Message): SubagentGoalNotifier | undefined {
   const extra = commMessage ? (commMessage as AgentTurnMessage).extra : undefined;
   const fn = extra?.[SUBAGENT_GOAL_NOTIFY_EXTRA_KEY];

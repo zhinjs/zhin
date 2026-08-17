@@ -15,7 +15,6 @@ import type { OutputElement } from '@zhin.js/ai';
 export type ProactiveSendSource =
   | 'scheduled'
   | 'notification'
-  | 'collaboration'
   | 'ask_user'
   | 'subagent'
   | 'host';

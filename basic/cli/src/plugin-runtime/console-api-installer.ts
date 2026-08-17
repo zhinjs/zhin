@@ -1148,7 +1148,6 @@ export const HOST_CONFIG_KEYS = Object.freeze([
   'speech',
   'htmlRenderer',
   'assistant',
-  'collaboration',
   'log_level',
   'plugin',
 ] as const);

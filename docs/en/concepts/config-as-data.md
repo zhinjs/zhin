@@ -29,7 +29,7 @@ The effective schema is composed by `ConfigComposer` (`packages/im/runtime/src/c
 
 - `plugin` -- the Root Plugin's own schema;
 - `plugins.<instanceKey>` -- each child plugin's schema, with nested child plugins recursively attached under the parent schema's properties;
-- Host-level keys `http` / `database` / `ai` / `mcp` / `a2a` / `speech` / `htmlRenderer` / `assistant` / `collaboration` / `log_level` -- consumed by the CLI's Root installer and **not** included in any plugin's configuration view;
+- Host-level keys `http` / `database` / `ai` / `mcp` / `a2a` / `speech` / `htmlRenderer` / `assistant` / `log_level` -- consumed by the CLI's Root installer and **not** included in any plugin's configuration view;
 - Top-level structure uses `additionalProperties: false`: misspelling a key name (e.g., typing `plugn` instead of `plugin`) will produce an immediate error rather than being silently ignored.
 
 ## schema.json: Declarative Contract

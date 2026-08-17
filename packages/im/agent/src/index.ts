@@ -663,39 +663,17 @@ export type {
   PreToolUseHook, PostToolUseHook, ToolHook,
 } from './orchestrator/index.js';
 
-// ── Collaboration (GroupCell multi-endpoint) ──
-export {
-  getCollaborationSceneService,
-  initCollaborationSceneService,
-  resetCollaborationSceneService,
-  wireCollaborationStorage,
-  getCollaborationSceneRepository,
-  MemoryCollaborationSceneRepository,
-  getCollaborationArtifactRepository,
-  setCollaborationArtifactRepository,
-  createCollaborationArtifactRepository,
-  COLLABORATION_SCENE_MODEL,
-  COLLABORATION_SCENE_MEMBER_MODEL,
-  COLLABORATION_SCENE_ARTIFACT_MODEL,
-  findCellForInbound,
-  resolveCollaborationSceneContextKey,
-  resolveCollaborationSceneContextKeyFromMessage,
-} from './collaboration/index.js';
-export type {
-  CollaborationScene,
-  CollaborationSceneMemberRuntime,
-  CollaborationConfig,
-} from './collaboration/index.js';
-export {
-  resolveMemberBySender,
-  resolveEndpointKeysForMember,
-  isInboundFromPeerBot,
-} from './collaboration/endpoint-identity.js';
-
 export {
   FIVE_AGENT_WORKFLOW_STRATEGY_NAME,
   createFiveAgentWorkflowStrategy,
+  FIVE_AGENT_ROLES,
+  isFiveAgentRole,
+  asFiveAgentRole,
+  filterToolNamesForRole,
+  filterToolsForRole,
+  isToolAllowedForRole,
 } from './builtin/five-agent/index.js';
+export type { FiveAgentRole } from './builtin/five-agent/index.js';
 
 export {
   defineAgent,

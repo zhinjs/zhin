@@ -18,7 +18,6 @@ if (!process.env.L4_SKIP_PLATFORM) {
 const l4TestFiles = [
   'packages/im/agent/tests/orchestration-dispatcher.test.ts',
   'packages/im/agent/tests/orchestrator/executor-contract.test.ts',
-  'packages/im/agent/tests/collaboration/collaboration-kernel-bridge.test.ts',
   'packages/im/agent/tests/remote-loopback.test.ts',
   'packages/im/agent/tests/memory-entry.test.ts',
   'packages/host/mcp/tests/mesh-auth.test.ts',

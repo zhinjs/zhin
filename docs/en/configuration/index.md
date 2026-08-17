@@ -26,7 +26,7 @@ flowchart LR
     D --> G[plugins.&lt;instanceKey&gt;<br/>-> each child plugin's ConfigView]
 ```
 
-Two things worth remembering beyond the mermaid diagram: the configuration file undergoes JSON Schema validation, and **only the keys listed below are allowed at the top level**. Misspelled key names will produce `Invalid Plugin config in zhin.config.yml` at startup. Keys other than `plugin` / `plugins` (`http`, `database`, `ai`, `mcp`, `a2a`, `speech`, `htmlRenderer`, `assistant`, `collaboration`, `log_level`) are consumed by the CLI's Host assembly layer and are not passed down to plugins.
+Two things worth remembering beyond the mermaid diagram: the configuration file undergoes JSON Schema validation, and **only the keys listed below are allowed at the top level**. Misspelled key names will produce `Invalid Plugin config in zhin.config.yml` at startup. Keys other than `plugin` / `plugins` (`http`, `database`, `ai`, `mcp`, `a2a`, `speech`, `htmlRenderer`, `assistant`, `log_level`) are consumed by the CLI's Host assembly layer and are not passed down to plugins.
 
 ## Environment Variable Expansion
 
@@ -51,7 +51,6 @@ When a variable is not set and no default value is specified, it expands to an e
 | `ai` | object | AI stack (requires `@zhin.js/agent` etc., see below) |
 | `mcp` | object | MCP Host (exposes bot tools as an MCP Server) |
 | `a2a` | object | A2A Host (Agent Card / remote Agent interop) |
-| `collaboration` | object | Multi-Agent collaboration |
 | `htmlRenderer` | object | HTML rendering (e.g., `width`) |
 | `plugin` | object | Root Plugin (the application itself) configuration |
 | `plugins` | object | Child plugin configuration, keyed by instanceKey |
@@ -127,7 +126,7 @@ Both sections are mounted on the HTTP Host and enabled as needed; when not confi
 
 ## ai
 
-The `ai` section is consumed by the Agent Host. Whenever `ai` / `assistant` / `collaboration` is configured in any section, the startup graph loads the Agent stack; providers missing credentials are soft-pruned and do not block startup.
+The `ai` section is consumed by the Agent Host. Whenever `ai` / `assistant` is configured in any section, the startup graph loads the Agent stack; providers missing credentials are soft-pruned and do not block startup.
 
 ### providers: Named Model Providers
 
@@ -176,13 +175,13 @@ ai:
     researcher:
       provider: openrouter
       model: openrouter/free
-      nickname: 'Researcher'         # IM display nickname
+      nickname: 'Researcher'         # Agent self-reference and UI display name
 ```
 
 | Field | Description |
 | --- | --- |
 | `provider` / `model` | Required, the bound provider alias and model |
-| `nickname` | LLM self-reference + IM collaboration display name |
+| `nickname` | Agent self-reference and UI display name |
 | `mcpServers` | List of MCP Server names visible to this Agent |
 | `priority` / `match` | Inbound routing: `match` can match by `adapter` / `endpoint` / `scene` / `sceneId` / `hasMedia` / `contentContains`, single or array |
 | `permission.task` | `spawn_task` visible child Agent types (glob -> `allow` / `deny`) |

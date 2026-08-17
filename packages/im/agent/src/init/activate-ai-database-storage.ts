@@ -13,7 +13,6 @@ import {
   type OrchestrationService,
 } from '../orchestrator/orchestration-service.js';
 import type { AIServiceRefs } from './shared-refs.js';
-import { wireCollaborationStorage } from '../collaboration/wire-collaboration-storage.js';
 import {
   upgradeAgentSessionTreeData,
   type AgentDbQueryable,
@@ -23,7 +22,6 @@ export async function activateAiDatabaseStorage(
   db: any,
   refs: AIServiceRefs,
   config: AIConfig,
-  collaborationRaw?: unknown,
   orchestrationService?: OrchestrationService,
 ): Promise<void> {
   if (!refs.zhinAgent) return;
@@ -91,6 +89,4 @@ export async function activateAiDatabaseStorage(
   } else {
     setMemoryEntryRepository(null);
   }
-
-  await wireCollaborationStorage(db, collaborationRaw);
 }

@@ -48,6 +48,5 @@ export { resolveModel, resolveModelCandidates } from './model-resolver.js';
 
 export {
   DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT,
-  COLLABORATION_CONTEXT_TAIL_MESSAGE_LIMIT,
   resolveContextTailMessageLimit,
 } from './context-tail-limit.js';

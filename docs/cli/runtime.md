@@ -53,7 +53,7 @@ flowchart TD
     C --> D
     D --> E[读取 zhin.config.yml<br/>并校验 schema]
     E --> F[装配 Host<br/>HTTP / database / schedule<br/>speech / console]
-    F --> G{配置了 ai / assistant /<br/>collaboration?}
+    F --> G{配置了 ai / assistant?}
     G -- 是 --> H[装配 Agent Host<br/>+ MCP / A2A protocol hosts]
     G -- 否 --> I[仅 IM 核心]
     H --> J[首代 generation commit<br/>适配器上线]
@@ -63,7 +63,7 @@ flowchart TD
     K -- 否 --> M[进入 watch / 常驻]
 ```
 
-注意 Agent 栈是**按需加载**的：只有配置了 `ai` / `assistant` / `collaboration` 任一段，才会解析 `@zhin.js/agent`；纯 IM 项目不会载入 AI 依赖。启动成功后的输出也因环境而异——TTY 下是一行摘要（插件数、HTTP 地址、在线/离线适配器），非 TTY 或 `--once` 则输出结构化 JSON（`{ started: true, ... }`），便于脚本消费。配置校验失败会报 `Invalid Plugin config in zhin.config.yml` 并列出全部问题。
+注意 Agent 栈是**按需加载**的：只有配置了 `ai` / `assistant` 任一段，才会解析 `@zhin.js/agent`；纯 IM 项目不会载入 AI 依赖。启动成功后的输出也因环境而异——TTY 下是一行摘要（插件数、HTTP 地址、在线/离线适配器），非 TTY 或 `--once` 则输出结构化 JSON（`{ started: true, ... }`），便于脚本消费。配置校验失败会报 `Invalid Plugin config in zhin.config.yml` 并列出全部问题。
 
 ## HMR 语义
 

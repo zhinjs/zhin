@@ -15,7 +15,7 @@ export function registerDbModels(): void {
   if (typeof defineModel === 'function') {
     const count = defineAiDatabaseModels(defineModel);
     logger.debug(
-      `AI database models registered (${count} tables, + orchestration events + collaboration scenes/members/artifacts/aliases/init/channels)`,
+      `AI database models registered (${count} tables, including orchestration events)`,
     );
   } else {
     logger.debug('defineModel not available, AI will use in-memory storage');

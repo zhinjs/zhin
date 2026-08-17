@@ -1,6 +1,6 @@
 /**
  * Passive group context is keyed by the canonical Agent session identity.
- * IM and collaboration adapters resolve that identity before entering here.
+ * IM adapters resolve that identity before entering here.
  */
 import { buildAgentSessionCreateInput } from './session-io.js';
 import {

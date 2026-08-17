@@ -71,7 +71,7 @@
 | `speech` | `stable` | speech Host 装配 | 语音配置 |
 | `log_level` | `stable` | `@zhin.js/cli` | 日志级别（`ZHIN_LOG_LEVEL` 可覆盖） |
 
-> 其余 Host 级键（`mcp` / `a2a` / `htmlRenderer` / `assistant` / `collaboration`）同属 stable 顶层键，完整表见 [配置概览](../configuration/index.md)。
+> 其余 Host 级键（`mcp` / `a2a` / `htmlRenderer` / `assistant`）同属 stable 顶层键，完整表见 [配置概览](../configuration/index.md)。
 
 ### CLI 命令
 

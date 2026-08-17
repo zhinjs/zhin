@@ -9,11 +9,11 @@ export { AgentBindingRegistry } from './agent-binding-registry.js';
 export { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 export type { AgentBindingConfig, ResolvedAgentBinding } from './types.js';
 export {
-  resolvePipelineRoleBinding,
+  resolveFiveAgentRoleBinding,
   resolvePlannerNickname,
-  PIPELINE_ROLE_LABELS,
-  type RoleBindingSources,
-} from './resolve-pipeline-binding.js';
+  FIVE_AGENT_ROLE_LABELS,
+  type FiveAgentBindingSources,
+} from './resolve-five-agent-binding.js';
 
 export type {
   ZhinAgentConfig,

@@ -60,7 +60,6 @@ import {
   provideSessionTreeRuntime,
   createSessionTreeRuntimeFromAgent,
   asPrivate,
-  wireCollaborationStorage,
   handleRuntimeOwnerApproveCommand,
   handleRuntimeManagementCommand,
   publishOutboundElements,
@@ -168,14 +167,6 @@ export async function resolveAssistantConfigDocument(
   return expandEnvironmentValue(assistant, (key) => process.env[key]) as AssistantConfig;
 }
 
-export async function resolveCollaborationConfigDocument(
-  config: RuntimeConfigDocument | ConfigDocumentPort,
-): Promise<unknown | undefined> {
-  const document = await readConfigDocument(config);
-  if (!document || typeof document !== 'object') return undefined;
-  return (document as Record<string, unknown>).collaboration;
-}
-
 export interface InstallAgentHostOptions {
   /** Process-owned execution authority attached to exactly one Root. */
   readonly runtime: AgentRuntime;
@@ -185,8 +176,6 @@ export interface InstallAgentHostOptions {
   readonly ai?: AIConfig;
   /** @deprecated Prefer the generation-owned Primary Config. Test overrides only. */
   readonly assistant?: AssistantConfig;
-  /** @deprecated Prefer the generation-owned Primary Config. Test overrides only. */
-  readonly collaboration?: unknown;
   readonly im: ImRuntime;
   readonly projectRoot: string;
   /**
@@ -216,7 +205,6 @@ export interface InstallAgentHostOptions {
  * - Optional inbound STT / `@agent` specialist prompt injection
  * - `registerAIHook` / `aiHookRuntimeBus`, ScheduleJobEngine + `schedule_*`
  * - Assistant profile sync + Event Ingress registry (HTTP via Console API)
- * - Collaboration storage + Runtime peer/at/handback/dispatch gate
  * - Subagent/main-turn `bash` (sandbox + safety) + Owner `/approve` 命令面
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
@@ -225,8 +213,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     const aiConfig = configuredAi;
     const assistantConfig = options.assistant
       ?? primaryConfig.get<AssistantConfig>('assistant');
-    const collaborationConfig = options.collaboration
-      ?? primaryConfig.get('collaboration');
     if (!aiConfig || typeof aiConfig !== 'object') return;
     const mcpEntries = parseMcpServers(aiConfig.mcpServers);
 
@@ -252,7 +238,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     let scheduleTools: ReturnType<typeof createScheduleTools> = [];
     let homeTools: BootstrapAssistantHomeResult['tools'] = [];
     let assistantEnabled = false;
-    let collaborationReady = false;
     let orchService: OrchestrationService;
     let orchestrationRuntime: OrchestrationRuntimeHandle;
     let sessionTreeRuntime: SessionTreeRuntimeHandle;
@@ -332,23 +317,18 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                   mode: 'memory',
                   reason: 'database_not_started',
                 }));
-                await wireCollaborationStorage(undefined, collaborationConfig);
-                collaborationReady = true;
                 return;
               }
               await activateAiDatabaseStorage(
                 raw,
                 { aiService: service, zhinAgent },
                 aiConfig,
-                collaborationConfig,
                 orchService,
               );
-              collaborationReady = true;
               logger.info(formatCompact({
                 op: 'agent_host_persistence',
                 mode: 'database',
                 tables: tableCount,
-                collaboration: 'on',
               }));
             } catch (error) {
               logger.warn(formatCompact({
@@ -357,12 +337,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 reason: 'activate_failed',
                 error: error instanceof Error ? error.message : String(error),
               }));
-              try {
-                await wireCollaborationStorage(undefined, collaborationConfig);
-                collaborationReady = true;
-              } catch {
-                /* ignore */
-              }
             } finally {
               zhinAgent.markMemoryPersistenceReady();
             }
@@ -376,15 +350,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           error: error instanceof Error ? error.message : String(error),
         }));
         zhinAgent.markMemoryPersistenceReady();
-        void wireCollaborationStorage(undefined, collaborationConfig).then(() => {
-          collaborationReady = true;
-        });
       }
     } else {
       zhinAgent.markMemoryPersistenceReady();
-      void wireCollaborationStorage(undefined, collaborationConfig).then(() => {
-        collaborationReady = true;
-      });
     }
 
     const bashTool = createBashTool();
@@ -694,7 +662,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       scheduleTools.length > 0 ? 'schedule' : '',
       homeTools.length > 0 ? 'home' : '',
       assistantEnabled ? 'assistant' : '',
-      collaborationReady || persistencePendingActivate ? 'collaboration' : '',
       'bash',
       options.resolveEndpointOwner ? 'approve' : '',
     ].filter(Boolean).join(',');

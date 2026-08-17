@@ -42,7 +42,6 @@ import {
 } from '../assistant/index.js';
 import type { AIServiceRefs } from './shared-refs.js';
 import { activateAiDatabaseStorage } from './activate-ai-database-storage.js';
-import { wireCollaborationStorage } from '../collaboration/wire-collaboration-storage.js';
 import {
   createSessionTreeRuntimeFromAgent,
   provideSessionTreeRuntime,
@@ -101,8 +100,8 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     const provider = ai.getProvider(zhinBinding.providerAlias);
     const configService = root.inject('config');
     const appConfig = (configService?.primaryFile
-      ? configService.getRaw<{ ai?: AIConfig; assistant?: AssistantConfig; collaboration?: unknown }>(configService.primaryFile)
-      : configService?.getPrimary<{ ai?: AIConfig; assistant?: AssistantConfig; collaboration?: unknown }>())
+      ? configService.getRaw<{ ai?: AIConfig; assistant?: AssistantConfig }>(configService.primaryFile)
+      : configService?.getPrimary<{ ai?: AIConfig; assistant?: AssistantConfig }>())
       ?? {};
     const agentConfig = ai.getAgentConfig();
     const semanticMemory = appConfig.ai?.memory?.semantic?.enabled === true;
@@ -163,9 +162,8 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         provideMemoryEntryRepository({ lifecycle: generationLifecycle }, new InMemoryMemoryEntryRepository());
       }
       agent.markMemoryPersistenceReady();
-      void wireCollaborationStorage(undefined, appConfig.collaboration);
     } else if (db) {
-      void activateAiDatabaseStorage(db, refs, appConfig.ai || {}, appConfig.collaboration)
+      void activateAiDatabaseStorage(db, refs, appConfig.ai || {})
         .catch((e) => logger.error('AI Session: database setup failed:', e))
         .finally(() => agent.markMemoryPersistenceReady());
     } else {

@@ -76,7 +76,7 @@ ai:
       provider: openrouter
       model: openrouter/free
       mcpServers: [icqq]        # 该 agent 挂载的 MCP server（按 name 引用）
-      nickname: 小智            # LLM 自称 + IM 协作展示名
+      nickname: 小智            # LLM 自称与界面展示名
     planner:
       provider: openrouter
       model: openrouter/free
@@ -90,7 +90,7 @@ ai:
 |------|------|
 | `provider` / `model` | 引用 `ai.providers` 的别名与模型 id（必填） |
 | `mcpServers` | 引用 `ai.mcpServers` 中的 `name` 列表 |
-| `nickname` | 协作场景展示昵称 |
+| `nickname` | Agent 自称与界面展示昵称 |
 | `match` | 路由规则：`adapter` / `endpoint` / `scene` / `sceneId` / `hasMedia` / `contentContains` |
 | `permission.task` | glob → `allow` / `deny`，约束 `spawn_task` 可派的子 agent |
 

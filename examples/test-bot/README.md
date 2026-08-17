@@ -16,7 +16,7 @@
 
 ## Host 能力
 
-- **Agent Host**：`ai: …` → **`ZhinAgent.process`**（入站队列 + IM session；CapabilityIngress tools + `ai.mcpServers` + speech tools + SOUL/AGENTS/TOOLS）。`ai: clear` 归档会话。含 **`SubagentSystem` + `spawn_task`**（可并行子代理）与 deferred meta（`discover` / `load_tool` / `load_skill`）。另含：`schedule_*`、assistant profile/events、collaboration Runtime 门闸、`bash` + Owner `/approve`（需 `plugins.*.master` / sandbox `owner`）。
+- **Agent Host**：`ai: …` → **`ZhinAgent.process`**（入站队列 + IM session；CapabilityIngress tools + `ai.mcpServers` + speech tools + SOUL/AGENTS/TOOLS）。`ai: clear` 归档会话。含 **`SubagentSystem` + `spawn_task`**（可并行子代理）与 deferred meta（`discover` / `load_tool` / `load_skill`）。另含：`schedule_*`、assistant profile/events、`bash` + Owner `/approve`（需 `plugins.*.master` / sandbox `owner`）。
 - **Speech Host**：顶层 `speech:` → `voice_stt` / `voice_tts`（TTS 需 edge-tts；STT 需本机 Ollama whisper）；入站可 STT 后再进 ZhinAgent。
 - **项目 tools**：`tools/*.ts` 用 `defineAgentTool` + zod；与命令共享 `lib/`。
 

@@ -26,43 +26,6 @@ describe('applyAiConfigFixes', () => {
     expect(normalized.agents.vision?.priority).toBe(10);
   });
 
-  it('应迁移 ai.pipeline 并删除顶层 pipeline', () => {
-    const { ai, fixes } = applyAiConfigFixes({
-      providers: { p: { sdk: 'openai', apiKey: 'k' } },
-      agents: {
-        zhin: { provider: 'p', model: 'base' },
-        evaluator: { provider: 'p', model: 'glm', nickname: '分析师' },
-      },
-      pipeline: { evaluator: { provider: 'p', model: 'glm', nickname: '分析师' } },
-    });
-
-    expect(fixes).toContain('merged ai.pipeline into ai.agents and removed ai.pipeline');
-    expect(ai?.pipeline).toBeUndefined();
-    const normalized = normalizeAiRoutingConfig(ai as never);
-    expect(normalized.agents.evaluator?.model).toBe('glm');
-    expect(validateAiRoutingConfig(normalized)).toEqual([]);
-  });
-
-  it('pipeline 迁移在仅有 defaultProvider 时仍应合成 zhin 并保留角色映射', () => {
-    const { ai, fixes } = applyAiConfigFixes({
-      defaultProvider: 'p',
-      agent: { chatModel: 'base-model' },
-      providers: { p: { sdk: 'openai', apiKey: 'k' } },
-      pipeline: {
-        planner: { provider: 'p', model: 'planner-model' },
-        researcher: { provider: 'p', model: 'researcher-model' },
-      },
-    });
-
-    expect(fixes).toContain('migrated ai.defaultProvider into ai.agents.zhin');
-    expect(fixes).toContain('merged ai.pipeline into ai.agents and removed ai.pipeline');
-    const normalized = normalizeAiRoutingConfig(ai as never);
-    expect(normalized.agents.zhin?.provider).toBe('p');
-    expect(normalized.agents.zhin?.model).toBe('base-model');
-    expect(normalized.agents.planner?.model).toBe('planner-model');
-    expect(normalized.agents.researcher?.model).toBe('researcher-model');
-    expect(validateAiRoutingConfig(normalized)).toEqual([]);
-  });
 });
 
 describe('normalizeAiRoutingConfig breaking rejects', () => {

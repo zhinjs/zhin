@@ -1,37 +1,15 @@
 /**
  * Five-Agent 契约测试（ADR 0024，legacy pipeline tools removed ADR 0026/0027）：
  * - 角色 ACL（subagent spawn_task 路径）
- * - 模式探测：5 角色 → full；不齐 → compact
  * - 内置 opt-in prompt：nickname 渲染
  */
 import { describe, it, expect } from 'vitest';
 import {
   isToolAllowedForRole,
   filterToolNamesForRole,
-} from '../../src/aop/pipeline/role-capability-policy.js';
-import { detectPipelineProfile, cellHasFiveRoles } from '../../src/aop/pipeline/pipeline-mode.js';
+} from '../../src/builtin/five-agent/role-capability-policy.js';
 import { FiveAgentPromptRegistry } from '../../src/builtin/five-agent/index.js';
-import { resolvePipelineRoleBinding } from '../../src/config/resolve-pipeline-binding.js';
-import type { CollaborationScene } from '../../src/collaboration/types.js';
-
-const fullCell: CollaborationScene = {
-  id: 'c', adapter: 'sandbox', sceneId: 'g',
-  members: [
-    { endpointKey: 'p', primary: 'planner', pipelineRole: 'planner' },
-    { endpointKey: 'r', primary: 'researcher', pipelineRole: 'researcher' },
-    { endpointKey: 'e', primary: 'evaluator', pipelineRole: 'evaluator' },
-    { endpointKey: 'x', primary: 'executor', pipelineRole: 'executor' },
-    { endpointKey: 'v', primary: 'reviewer', pipelineRole: 'reviewer' },
-  ],
-};
-
-const compactCell: CollaborationScene = {
-  id: 'c2', adapter: 'sandbox', sceneId: 'g2',
-  members: [
-    { endpointKey: 'p', primary: 'planner', pipelineRole: 'planner' },
-    { endpointKey: 'x', primary: 'executor', pipelineRole: 'executor' },
-  ],
-};
+import { resolveFiveAgentRoleBinding } from '../../src/config/resolve-five-agent-binding.js';
 
 describe('role ACL', () => {
   it('evaluator has no external write or web tools', () => {
@@ -60,17 +38,6 @@ describe('role ACL', () => {
   });
 });
 
-describe('mode detection', () => {
-  it('full when 5 roles present', () => {
-    expect(cellHasFiveRoles(fullCell)).toBe(true);
-    expect(detectPipelineProfile(fullCell)).toBe('full');
-  });
-  it('compact otherwise', () => {
-    expect(cellHasFiveRoles(compactCell)).toBe(false);
-    expect(detectPipelineProfile(compactCell)).toBe('compact');
-  });
-});
-
 describe('builtin prompts (opt-in WorkflowStrategy)', () => {
   it('renders nickname into planner prompt', () => {
     const p = FiveAgentPromptRegistry.render({ role: 'planner', nickname: '总监' });
@@ -86,13 +53,13 @@ describe('builtin prompts (opt-in WorkflowStrategy)', () => {
 describe('pipeline role binding', () => {
   const agents = { zhin: { provider: 'agnes', model: 'flash', nickname: '总监' } };
   it('inherits zhin provider/model when role agent omits', () => {
-    const b = resolvePipelineRoleBinding('executor', { agents });
+    const b = resolveFiveAgentRoleBinding('executor', { agents });
     expect(b.providerAlias).toBe('agnes');
     expect(b.model).toBe('flash');
     expect(b.nickname).toBe('Executor');
   });
   it('uses ai.agents.<role> override', () => {
-    const b = resolvePipelineRoleBinding('evaluator', {
+    const b = resolveFiveAgentRoleBinding('evaluator', {
       agents: {
         ...agents,
         evaluator: { provider: 'bigmodel', model: 'glm', nickname: '分析师' },
@@ -103,7 +70,7 @@ describe('pipeline role binding', () => {
     expect(b.nickname).toBe('分析师');
   });
   it('planner inherits zhin nickname', () => {
-    const b = resolvePipelineRoleBinding('planner', { agents });
+    const b = resolveFiveAgentRoleBinding('planner', { agents });
     expect(b.nickname).toBe('总监');
   });
 });

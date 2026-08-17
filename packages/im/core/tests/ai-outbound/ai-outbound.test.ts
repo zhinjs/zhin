@@ -109,9 +109,6 @@ describe('detectInboundHandoffIntent', () => {
 });
 
 describe('isStructuredOutboundRequired', () => {
-  it('true when collaboration cell', () => {
-    expect(isStructuredOutboundRequired({ collaborationCell: true })).toBe(true);
-  });
 });
 
 describe('buildAiOutboundPromptHint', () => {

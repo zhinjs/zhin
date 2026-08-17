@@ -26,7 +26,7 @@ flowchart LR
     D --> G[plugins.&lt;instanceKey&gt;<br/>→ 各子插件 ConfigView]
 ```
 
-两份内容离开 mermaid 也值得记住：配置文件过 JSON Schema 校验，**顶层只允许下文列出的键**，键名写错会在启动时报 `Invalid Plugin config in zhin.config.yml`；`plugin` / `plugins` 之外的键（`http`、`database`、`ai`、`mcp`、`a2a`、`speech`、`htmlRenderer`、`assistant`、`collaboration`、`log_level`）由 CLI 的 Host 装配层消费，不会下发给插件。
+两份内容离开 mermaid 也值得记住：配置文件过 JSON Schema 校验，**顶层只允许下文列出的键**，键名写错会在启动时报 `Invalid Plugin config in zhin.config.yml`；`plugin` / `plugins` 之外的键（`http`、`database`、`ai`、`mcp`、`a2a`、`speech`、`htmlRenderer`、`assistant`、`log_level`）由 CLI 的 Host 装配层消费，不会下发给插件。
 
 ## 环境变量展开
 
@@ -51,7 +51,6 @@ http:
 | `ai` | object | AI 栈（需安装 `@zhin.js/agent` 等，见下文） |
 | `mcp` | object | MCP Host（把 bot 工具暴露为 MCP Server） |
 | `a2a` | object | A2A Host（Agent Card / 远程 Agent 互调） |
-| `collaboration` | object | 多 Agent 协作 |
 | `htmlRenderer` | object | HTML 渲染（如 `width`） |
 | `plugin` | object | Root Plugin（应用自身）的配置 |
 | `plugins` | object | 子插件配置，键为 instanceKey |
@@ -127,7 +126,7 @@ a2a:
 
 ## ai
 
-`ai` 段由 Agent Host 消费。只要配置了 `ai` / `assistant` / `collaboration` 任一段，启动图就会加载 Agent 栈；缺凭据的 provider 会被 soft-prune，不阻断启动。
+`ai` 段由 Agent Host 消费。只要配置了 `ai` / `assistant` 任一段，启动图就会加载 Agent 栈；缺凭据的 provider 会被 soft-prune，不阻断启动。
 
 ### providers：命名模型服务商
 
@@ -176,13 +175,13 @@ ai:
     researcher:
       provider: openrouter
       model: openrouter/free
-      nickname: '搜搜'               # IM 展示昵称
+      nickname: '搜搜'               # Agent 自称与界面展示名
 ```
 
 | 字段 | 说明 |
 | --- | --- |
 | `provider` / `model` | 必填，绑定的 provider 别名与模型 |
-| `nickname` | LLM 自称 + IM 协作展示名 |
+| `nickname` | Agent 自称与界面展示名 |
 | `mcpServers` | 该 Agent 可见的 MCP Server 名列表 |
 | `priority` / `match` | 入站路由：`match` 可按 `adapter` / `endpoint` / `scene` / `sceneId` / `hasMedia` / `contentContains` 匹配，单条或数组 |
 | `permission.task` | `spawn_task` 可见子 Agent 类型（glob → `allow` / `deny`） |

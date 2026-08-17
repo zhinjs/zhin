@@ -36,7 +36,7 @@ export function unwrapAiOutboundJsonCandidate(raw: string): string {
   return trimTrailingMarkdownFence(trimmed);
 }
 
-/** 从「正文 + 嵌入 JSON」混合文本中提取 AI outbound JSON（协作群常见误输出）。 */
+/** Extract an embedded AI outbound JSON object from mixed prose. */
 export function extractEmbeddedAiOutboundJson(
   plain: string,
 ): { prose: string; jsonRaw: string } | null {

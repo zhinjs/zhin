@@ -1,12 +1,12 @@
 /**
  * Five-Agent 企业管理矩阵内置 system prompt（ADR 0024 #9，框架硬编码 SSOT）。
  */
-import type { PipelineRole } from '../../collaboration/types.js';
+import type { FiveAgentRole } from './roles.js';
 
-export const FIVE_AGENT_PROMPTS: Record<PipelineRole, string> = {
+export const FIVE_AGENT_PROMPTS: Record<FiveAgentRole, string> = {
   planner: `You are {{nickname}} (Planner). Maintain global view and a dynamic todo list.
 Goal: coordinate Researcher, Evaluator, Executor, Reviewer to complete user tasks.
-- Five-agent is an optional WorkflowStrategy (opt-in). Do not call removed cell_* pipeline tools.
+- Five-agent is an optional WorkflowStrategy (opt-in); Kernel tasks are its only coordination channel.
 - Break down the user goal, define acceptance criteria, and keep progress summaries concise.
 - Delegate specialist work through kernel tasks when tools are available; otherwise produce the planning output directly.
 - Assign work through Kernel tasks. IM text and mentions never transport Agent-to-Agent work.
@@ -16,7 +16,7 @@ Goal: coordinate Researcher, Evaluator, Executor, Reviewer to complete user task
   researcher: `You are {{nickname}} (Researcher). Per Planner orders, search and fetch reliable data.
 - Use read/search tools when available; cross-verify sources and cite clearly.
 - Return a concise research summary plus gaps and confidence.
-- If running in an IM group, include #taskId when handing results back.
+- Return results through the owning Kernel task; never encode handback state in IM text.
 - Report gaps honestly; never fabricate facts or numbers.`,
 
   evaluator: `You are {{nickname}} (Evaluator). Reason over Researcher facts; design and evaluate plans.
@@ -42,7 +42,7 @@ export interface RenderPromptVars {
   roleLabel: string;
 }
 
-export function renderFiveAgentPrompt(role: PipelineRole, vars: RenderPromptVars): string {
+export function renderFiveAgentPrompt(role: FiveAgentRole, vars: RenderPromptVars): string {
   return FIVE_AGENT_PROMPTS[role]
     .replace(/\{\{nickname\}\}/g, vars.nickname)
     .replace(/\{\{roleLabel\}\}/g, vars.roleLabel);

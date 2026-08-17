@@ -6,7 +6,6 @@ import {
   resolveSpawnExecutionKind,
   resolveSubagentDisplayLabel,
   SUBAGENT_GOAL_NOTIFY_EXTRA_KEY,
-  shouldSuppressSubagentGoalNotifyToIm,
 } from '../src/subagent-goal-notify.js';
 import type { Message } from '@zhin.js/core';
 
@@ -73,21 +72,4 @@ describe('subagent-goal-notify', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('shouldSuppressSubagentGoalNotifyToIm 多 Bot 同群协作时抑制 IM', () => {
-    const cell = {
-      members: [
-        { endpointKey: '8596238' },
-        { endpointKey: '210723495' },
-      ],
-    };
-    const groupMsg = {
-      $channel: { type: 'group', id: '373460458' },
-    } as Message;
-    const privateMsg = {
-      $channel: { type: 'private', id: 'u1' },
-    } as Message;
-    expect(shouldSuppressSubagentGoalNotifyToIm(groupMsg, cell)).toBe(true);
-    expect(shouldSuppressSubagentGoalNotifyToIm(privateMsg, cell)).toBe(false);
-    expect(shouldSuppressSubagentGoalNotifyToIm(groupMsg, { members: [{ endpointKey: 'a' }] })).toBe(false);
-  });
 });

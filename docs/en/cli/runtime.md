@@ -53,7 +53,7 @@ flowchart TD
     C --> D
     D --> E[Read zhin.config.yml<br/>and validate schema]
     E --> F[Assemble Hosts<br/>HTTP / database / schedule<br/>speech / console]
-    F --> G{ai / assistant /<br/>collaboration configured?}
+    F --> G{ai / assistant configured?}
     G -- Yes --> H[Assemble Agent Host<br/>+ MCP / A2A protocol hosts]
     G -- No --> I[IM core only]
     H --> J[First generation commit<br/>adapters go online]
@@ -63,7 +63,7 @@ flowchart TD
     K -- No --> M[Enter watch / stay resident]
 ```
 
-Note that the Agent stack is **loaded on demand**: only when `ai` / `assistant` / `collaboration` is configured in any section will `@zhin.js/agent` be resolved; a pure IM project will not load AI dependencies. The output after successful startup also varies by environment -- in a TTY, it's a one-line summary (plugin count, HTTP address, online/offline adapters); in non-TTY or with `--once`, it outputs structured JSON (`{ started: true, ... }`), convenient for script consumption. Configuration validation failure reports `Invalid Plugin config in zhin.config.yml` and lists all issues.
+Note that the Agent stack is **loaded on demand**: only when `ai` / `assistant` is configured in any section will `@zhin.js/agent` be resolved; a pure IM project will not load AI dependencies. The output after successful startup also varies by environment -- in a TTY, it's a one-line summary (plugin count, HTTP address, online/offline adapters); in non-TTY or with `--once`, it outputs structured JSON (`{ started: true, ... }`), convenient for script consumption. Configuration validation failure reports `Invalid Plugin config in zhin.config.yml` and lists all issues.
 
 ## HMR Semantics
 

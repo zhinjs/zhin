@@ -117,7 +117,6 @@ packages/im/agent/src/
   turn/          Turn pipeline、inbound 队列、auto-continue、metrics
   config/        ZhinAgent 配置 SSOT、model harness
   orchestrator/  Orchestration Kernel（ADR 0027 SSOT）
-  collaboration/ 协作 Scene 管理数据（不参与 Agent 间通信）
   zhin-agent/    ZhinAgent 门面类（单文件 index.ts）
   init/          create-zhin-agent、composeZhinAgentRuntime、configure/dispose 生命周期
 ```
@@ -470,7 +469,6 @@ src/
 │   └── index.ts
 │
 ├── internal/                        # host 契约、asPrivate、turn-context、phase/prompt trace
-├── collaboration/                   # Scene 管理数据（不参与 Turn 或 Agent 通信）
 ├── discovery/                       # 文件化资源发现（tools / skills / agents）
 ├── security/                        # exec-policy、file-policy
 ├── builtin/                         # IM 内置工具

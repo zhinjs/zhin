@@ -50,7 +50,7 @@ export class ConfigComposer {
       ] as const),
     );
     // Host-level keys (`http`, `database`, `ai`, `mcp`, `a2a`, `speech`,
-    // `htmlRenderer`, `assistant`, `collaboration`, `log_level`) are consumed by CLI Root installers /
+    // `htmlRenderer`, `assistant`, `log_level`) are consumed by CLI Root installers /
     // start-command, not Plugin ConfigViews.
     const effectiveSchema: JsonSchema = Object.freeze({
       type: 'object',
@@ -94,10 +94,6 @@ export class ConfigComposer {
           additionalProperties: true,
         }),
         assistant: Object.freeze({
-          type: 'object',
-          additionalProperties: true,
-        }),
-        collaboration: Object.freeze({
           type: 'object',
           additionalProperties: true,
         }),

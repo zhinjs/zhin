@@ -46,7 +46,7 @@ export function buildAiOutboundPromptHint(input: {
   return lines.join('\n');
 }
 
-/** 检测入站是否含 handoff / @ 意图（协作群 structured_only 信号）。 */
+/** Detect whether inbound text explicitly requests a structured handoff. */
 export function detectInboundHandoffIntent(content: string): boolean {
   const t = content.trim();
   if (!t) return false;

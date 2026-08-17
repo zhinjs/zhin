@@ -71,7 +71,7 @@ Three tiers:
 | `speech` | `stable` | speech Host assembly | Speech configuration |
 | `log_level` | `stable` | `@zhin.js/cli` | Log level (`ZHIN_LOG_LEVEL` can override) |
 
-> Other Host-level keys (`mcp` / `a2a` / `htmlRenderer` / `assistant` / `collaboration`) are also stable top-level keys; see [Configuration Overview](../configuration/index.md) for the complete table.
+> Other Host-level keys (`mcp` / `a2a` / `htmlRenderer` / `assistant`) are also stable top-level keys; see [Configuration Overview](../configuration/index.md) for the complete table.
 
 ### CLI Commands
 

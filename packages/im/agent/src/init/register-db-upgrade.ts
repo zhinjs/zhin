@@ -6,7 +6,6 @@ import { getPlugin } from '@zhin.js/core';
 import type { AIConfig } from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
 import { activateAiDatabaseStorage } from './activate-ai-database-storage.js';
-import { wireCollaborationStorage } from '../collaboration/wire-collaboration-storage.js';
 import {
   upgradeAgentSessionTreeData,
   type AgentDbQueryable,
@@ -53,10 +52,9 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
 
   useContext('ai', (ai) => {
     const configService = root.inject('config');
-    const appConfig = configService?.getPrimary<{ ai?: AIConfig; collaboration?: unknown }>() || {};
+    const appConfig = configService?.getPrimary<{ ai?: AIConfig }>() || {};
     if (appConfig.ai?.sessions?.useDatabase === false) {
       refs.zhinAgent?.markMemoryPersistenceReady();
-      void wireCollaborationStorage(undefined, appConfig.collaboration);
       return;
     }
     const db = root.inject('database' as const) as
@@ -67,7 +65,7 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
         .then(async (result) => {
           logSessionTreeUpgrade(logger, result);
         })
-        .then(() => activateAiDatabaseStorage(db, refs, appConfig.ai || {}, appConfig.collaboration))
+        .then(() => activateAiDatabaseStorage(db, refs, appConfig.ai || {}))
         .catch((e) => logger.error('AI Session: database setup failed:', e))
         .finally(() => {
           refs.zhinAgent?.markMemoryPersistenceReady();
@@ -80,13 +78,13 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
       if (!refs.aiService) return;
       const configService = root.inject('config');
       const appConfig =
-        configService?.getPrimary<{ ai?: AIConfig; collaboration?: unknown }>() || {};
+        configService?.getPrimary<{ ai?: AIConfig }>() || {};
       const config = appConfig.ai || {};
       if (config.sessions?.useDatabase === false) return;
 
       const result = await upgradeAgentSessionTreeData(db as AgentDbQueryable);
       logSessionTreeUpgrade(logger, result);
-      await activateAiDatabaseStorage(db, refs, config, appConfig.collaboration);
+      await activateAiDatabaseStorage(db, refs, config);
       logger.debug('AI database storage activated (agent_sessions, agent_messages, im_transcripts)');
     } catch (e) {
       logger.error('AI Session: database setup failed:', e);

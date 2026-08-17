@@ -76,7 +76,7 @@ ai:
       provider: openrouter
       model: openrouter/free
       mcpServers: [icqq]        # MCP servers mounted on this agent (referenced by name)
-      nickname: Zhi             # LLM self-reference + IM collaboration display name
+      nickname: Zhi             # LLM self-reference and UI display name
     planner:
       provider: openrouter
       model: openrouter/free
@@ -90,7 +90,7 @@ ai:
 |-------|-------------|
 | `provider` / `model` | Reference to the `ai.providers` alias and model id (required) |
 | `mcpServers` | List of `name` references from `ai.mcpServers` |
-| `nickname` | Display nickname for collaboration scenarios |
+| `nickname` | Agent self-reference and UI display name |
 | `match` | Routing rules: `adapter` / `endpoint` / `scene` / `sceneId` / `hasMedia` / `contentContains` |
 | `permission.task` | glob -> `allow` / `deny`, constraining which sub-agents `spawn_task` can dispatch |
 

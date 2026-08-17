@@ -89,7 +89,6 @@ describe('hierarchical Plugin config', () => {
       speech: { stt: { provider: 'ollama' } },
       htmlRenderer: { width: 540 },
       assistant: { enabled: true },
-      collaboration: { enabled: true },
       log_level: 'debug',
     });
 
@@ -101,7 +100,6 @@ describe('hierarchical Plugin config', () => {
     expect(config.document.speech).toEqual({ stt: { provider: 'ollama' } });
     expect(config.document.htmlRenderer).toEqual({ width: 540 });
     expect(config.document.assistant).toEqual({ enabled: true });
-    expect(config.document.collaboration).toEqual({ enabled: true });
     expect(config.document.log_level).toBe('debug');
     expect(config.views.get(graph.root.id)).toEqual({ endpoint: 'local' });
     expect(config.views.get(graph.root.children[0]!.id)).toEqual({ retries: 3 });
@@ -120,6 +118,16 @@ describe('hierarchical Plugin config', () => {
 
     await expect(new ConfigComposer().compose(graph, {
       plugin: { port: 'bad' },
+    })).rejects.toBeInstanceOf(ConfigValidationError);
+  });
+
+  it('rejects the removed collaboration Host configuration', async () => {
+    const root = await configProject({ rootSchema: {}, childSchema: {} });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+
+    await expect(new ConfigComposer().compose(graph, {
+      collaboration: { enabled: true },
     })).rejects.toBeInstanceOf(ConfigValidationError);
   });
 

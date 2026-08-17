@@ -339,7 +339,7 @@ async function loadConfiguredAgentHost(
 
 export function hasAgentConfiguration(document: RuntimeConfigDocument): boolean {
   const value = document as Record<string, unknown>;
-  return ['ai', 'assistant', 'collaboration'].some((key) => {
+  return ['ai', 'assistant'].some((key) => {
     const section = value[key];
     if (section == null || typeof section !== 'object' || Array.isArray(section)) return false;
     return (section as { enabled?: unknown }).enabled !== false;

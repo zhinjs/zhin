@@ -10,8 +10,7 @@ const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const configText = fs.readFileSync(path.join(botRoot, 'zhin.config.yml'), 'utf8');
 
 describe('multi-agent-room 编排契约', () => {
-  it('不启用 Collaboration Cell 或数据库', () => {
-    expect(configText).not.toMatch(/^collaboration:/m);
+  it('不启用数据库', () => {
     expect(configText).not.toMatch(/^database:/m);
   });
 

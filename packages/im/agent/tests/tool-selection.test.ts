@@ -24,12 +24,6 @@ import { createPermissionHost, createSceneRolePlatformChecker } from '@zhin.js/p
 import { mockCommMessage } from './helpers/mock-comm-message.js';
 import type { Tool } from '../src/orchestrator/types.js';
 import type { ZhinAgentConfig } from '../src/config/index.js';
-import {
-  getCollaborationSceneService,
-  resetCollaborationSceneService,
-} from '../src/collaboration/scene-service.js';
-import { MemoryCollaborationSceneRepository } from '../src/collaboration/collaboration-scene-repository.js';
-import { setSceneIdentityService } from '../src/collaboration/scene-identity-service.js';
 
 function makeConfig(overrides: Partial<ZhinAgentConfig> = {}): Required<ZhinAgentConfig> {
   return {
@@ -180,13 +174,6 @@ describe('normalizeTool', () => {
 });
 
 describe('ToolSelection', () => {
-  beforeEach(async () => {
-    resetCollaborationSceneService();
-    setSceneIdentityService(null);
-    getCollaborationSceneService().setRepository(new MemoryCollaborationSceneRepository());
-    await getCollaborationSceneService().reloadFromRepository();
-  });
-
   it('owns relevance cache for agent-side filtering', () => {
     const selection = new ToolSelection();
     const tools: AgentTool[] = [
@@ -334,35 +321,6 @@ describe('ToolSelection', () => {
     expect(tools.some(t => t.name === 'ask_user')).toBe(true);
   });
 
-  it('does not pin legacy collaboration delegation tools after TF-IDF filter in multi-bot groups', async () => {
-    const repo = new MemoryCollaborationSceneRepository();
-    await repo.upsert({
-      id: 'cell-1',
-      adapter: 'icqq',
-      sceneId: '373460458',
-      members: [
-        { endpointKey: '8596238', primary: 'planner', pipelineRole: 'planner' },
-        { endpointKey: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
-      ],
-    });
-    getCollaborationSceneService().setRepository(repo);
-    await getCollaborationSceneService().reloadFromRepository();
-    const selection = new ToolSelection();
-    const context = mockCommMessage({ adapter: 'icqq', sceneId: '373460458', scope: 'group' });
-    const filler = Array.from({ length: 14 }, (_, i) =>
-      makeTool({ name: `filler_${i}`, description: `misc tool ${i}`, keywords: ['zhin', 'framework'] }),
-    );
-    const externalTools = [
-      ...filler,
-      makeTool({ name: 'group_delegate', description: 'Legacy delegate to peer bot', keywords: ['delegate'] }),
-    ];
-    const tools = await selection.collectRelevantTools('重新启动调研 zhin框架', context, externalTools, {
-      config: makeConfig({ maxTools: 12 }),
-      skillRegistry: null,
-      externalRegistered: new Map(),
-    });
-    expect(tools.map((t) => t.name)).not.toContain('group_delegate');
-  });
 });
 
 describe('restricted tool views and pre-exec plans', () => {

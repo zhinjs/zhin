@@ -9,7 +9,7 @@ Run/Task/事件事实，最终结果仍由原会话投递。
 - IM 只负责用户输入和结果投递，不承担 Agent 间通信。
 - `orchestration_add_task(executor="local", assigned_to="researcher")` 直接选择配置好的 Agent binding。
 - `remote_mesh` 只用于真正的 A2A 远程 Agent。
-- 不需要协作 Scene、多个 Bot 账号、群内互相 `@` 或 `#taskId` handback。
+- 不需要多个 Bot 账号，也不通过群内 `@` 或文本 task ID 传递 Agent 工作。
 
 ## 快速开始
 
