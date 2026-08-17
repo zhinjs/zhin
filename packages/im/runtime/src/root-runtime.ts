@@ -11,9 +11,11 @@ import {
   type ControlErrorHandler,
   type Dispose,
   type FeatureId,
+  type GenerationCommitListener,
   type PluginId,
   type PreparedGeneration,
   type RuntimeSnapshot,
+  type SnapshotReader,
   type SnapshotState,
 } from '@zhin.js/plugin-runtime';
 import {
@@ -122,7 +124,6 @@ interface InspectedProject {
 }
 
 export class RootRuntime {
-  readonly controller: RootController;
   readonly #projectRoot: string;
   readonly #modules: ModuleRuntime;
   readonly #environment: RuntimeEnvironment;
@@ -136,6 +137,8 @@ export class RootRuntime {
   #ownership = SourceOwnershipIndex.empty();
   #model?: RuntimeGenerationModel;
   #configPatchTail: Promise<unknown> = Promise.resolve();
+  #stopResult?: Promise<void>;
+  readonly #controller: RootController;
 
   constructor(options: RootRuntimeOptions) {
     this.#projectRoot = resolve(options.projectRoot);
@@ -147,11 +150,19 @@ export class RootRuntime {
     else this.#configDocument = structuredClone(options.config ?? {});
     this.#installResources = options.installResources;
     this.#isolation = options.isolation;
-    this.controller = new RootController(emptyState(), options.onControlError);
+    this.#controller = new RootController(emptyState(), options.onControlError);
   }
 
   get snapshot(): RuntimeSnapshot {
-    return this.controller.snapshots.current;
+    return this.#controller.snapshot;
+  }
+
+  get snapshots(): SnapshotReader {
+    return this.#controller.snapshots;
+  }
+
+  onGenerationCommit(listener: GenerationCommitListener): () => void {
+    return this.#controller.onGenerationCommit(listener);
   }
 
   get sourceOwnership(): SourceOwnershipIndex {
@@ -165,7 +176,7 @@ export class RootRuntime {
       this.#configDocument = structuredClone(snapshot.document);
     }
     let prepared: PreparedRuntimeGeneration | undefined;
-    const snapshot = await this.controller.start(async (current) => {
+    const snapshot = await this.#controller.start(async (current) => {
       prepared = await this.#prepare(current);
       return prepared.generation;
     });
@@ -175,7 +186,7 @@ export class RootRuntime {
 
   async reload(target: PluginId | string = rootPluginId()): Promise<RuntimeSnapshot> {
     let prepared: PreparedRuntimeGeneration | undefined;
-    const snapshot = await this.controller.reload(target, async (current) => {
+    const snapshot = await this.#controller.reload(target, async (current) => {
       prepared = await this.#prepare(current);
       return prepared.generation;
     });
@@ -211,12 +222,17 @@ export class RootRuntime {
     return new RootProcessRestartExecutor(this, adapter);
   }
 
-  async stop(): Promise<void> {
-    try {
-      await this.controller.stop();
-    } finally {
-      await this.#modules.close();
-    }
+  stop(): Promise<void> {
+    if (this.#stopResult) return this.#stopResult;
+    const result = (async () => {
+      try {
+        await this.#controller.stop();
+      } finally {
+        await this.#modules.close();
+      }
+    })();
+    this.#stopResult = result;
+    return result;
   }
 
   async #reloadPlan(
@@ -224,7 +240,7 @@ export class RootRuntime {
   ): Promise<RuntimeSnapshot | ProcessInvalidationPlan> {
     let prepared: PreparedRuntimeGeneration | undefined;
     let restart: ProcessInvalidationPlan | undefined;
-    const snapshot = await this.controller.reload(
+    const snapshot = await this.#controller.reload(
       plan.subtrees[0] ?? plan.slots[0] ?? rootPluginId(),
       async (current) => {
         const resolved = await this.#resolveCapabilityDelta(current, plan);
@@ -373,7 +389,7 @@ export class RootRuntime {
     let prepared: PreparedRuntimeGeneration | undefined;
     let documentTransaction: PreparedConfigDocument | undefined;
     let committedDocument: ConfigDocumentSnapshot | undefined;
-    const snapshot = await this.controller.reload(rootPluginId(), async (current) => {
+    const snapshot = await this.#controller.reload(rootPluginId(), async (current) => {
       const resolver = await NodePackageResolver.create(this.#projectRoot);
       const graph = await new ProjectGraphService(resolver).inspect(this.#projectRoot);
       const planned = await new ConfigPatchPlanner().plan(graph, currentDocument, patches);

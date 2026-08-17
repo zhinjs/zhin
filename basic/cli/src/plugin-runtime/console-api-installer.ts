@@ -37,7 +37,7 @@ import {
   type DatabaseHost,
   type PluginNodeSnapshot,
   type RuntimeSnapshot,
-  type SnapshotStore,
+  type SnapshotReader,
   type TokenId,
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller, RuntimeConfigDocument } from '@zhin.js/runtime';
@@ -133,11 +133,11 @@ function createAgentRuntimeResolver(
 
 function createAgentRuntimeLeaseResolver(
   projectRoot: string,
-  snapshots?: SnapshotStore,
+  snapshots?: SnapshotReader,
 ): (() => { value: ConsoleAgentRuntime; release(): void } | null) | undefined {
   if (!snapshots) return undefined;
   return () => {
-    let lease: ReturnType<SnapshotStore['acquire']>;
+    let lease: ReturnType<SnapshotReader['acquire']>;
     try {
       lease = snapshots.acquire();
     } catch {
@@ -202,7 +202,7 @@ function resolveAgentConsole(getSnapshot?: () => RuntimeSnapshot | undefined): A
   return resolveGenerationAgentConsole(getSnapshot?.(), agentModule?.agentHostToken);
 }
 
-function acquireGenerationAgentConsole(snapshots?: SnapshotStore): {
+function acquireGenerationAgentConsole(snapshots?: SnapshotReader): {
   readonly value: AgentConsolePort | null;
   release(): void;
 } | null {
@@ -219,7 +219,7 @@ function acquireGenerationAgentConsole(snapshots?: SnapshotStore): {
 }
 
 async function withGenerationAgentConsole(
-  snapshots: SnapshotStore | undefined,
+  snapshots: SnapshotReader | undefined,
   operation: (value: AgentConsolePort) => Promise<void>,
 ): Promise<boolean> {
   const lease = acquireGenerationAgentConsole(snapshots);
@@ -342,7 +342,7 @@ export function installConsoleApi(options: {
   /** Snapshot accessor backing `/api/stats` and `/api/plugins*`. */
   readonly snapshot?: () => RuntimeSnapshot | undefined;
   /** Snapshot lease authority for Agent-backed async operations. */
-  readonly snapshots?: SnapshotStore;
+  readonly snapshots?: SnapshotReader;
   /** ScheduleHost — wires `schedule:list`/`cron:list` extended RPC. */
   readonly scheduleHost?: unknown;
   /** Full-scope `system:restart` — typically `process.exit(51)` for CLI daemon. */
@@ -386,7 +386,7 @@ export function registerConsoleApiRoutes(
   scheduleHost?: unknown,
   eventHub?: ConsoleEventHub,
   primaryConfigDocument?: RuntimeConfigDocument,
-  snapshots?: SnapshotStore,
+  snapshots?: SnapshotReader,
 ): void {
   const base = normalizeBase(apiBase);
   const hub = eventHub ?? createConsoleEventHub();

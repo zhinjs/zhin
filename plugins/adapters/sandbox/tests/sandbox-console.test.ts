@@ -77,7 +77,7 @@ describe('sandbox console page', () => {
       environment: { name: 'test', mode: 'test', platform: 'node' },
     });
     const consoleRuntime = new ConsoleRuntime();
-    consoleRuntime.attach(runtime.controller.snapshots);
+    consoleRuntime.attach(runtime.snapshots);
     await runtime.start();
 
     const pages = await consoleRuntime.runView(

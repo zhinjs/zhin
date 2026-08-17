@@ -1,8 +1,11 @@
 import type { PluginId } from './identity.js';
+import { GenerationCompensationError } from './handoff.js';
 import {
   SnapshotStore,
   type PreparedGeneration,
   type RuntimeSnapshot,
+  type SnapshotLease,
+  type SnapshotReader,
   type SnapshotState,
 } from './snapshot.js';
 
@@ -20,17 +23,36 @@ export interface GenerationCommitEvent {
 }
 export type GenerationCommitListener = (event: GenerationCommitEvent) => void;
 
+export class RootIntegrityError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'RootIntegrityError';
+  }
+}
+
 export class RootController {
-  readonly snapshots: SnapshotStore;
+  readonly snapshots: SnapshotReader;
+  readonly #snapshotStore: SnapshotStore;
   #state: RootState = 'idle';
   #tail: Promise<unknown> = Promise.resolve();
+  #stopResult?: Promise<void>;
   readonly #generationCommitListeners = new Set<GenerationCommitListener>();
 
   constructor(
     initial: SnapshotState,
     private readonly onControlError: ControlErrorHandler = () => undefined,
   ) {
-    this.snapshots = new SnapshotStore(initial);
+    this.#snapshotStore = new SnapshotStore(initial, (error) => this.#failIntegrity(error));
+    const store = this.#snapshotStore;
+    this.snapshots = Object.freeze({
+      acquire: () => {
+        if (this.#state !== 'running') {
+          throw new RootIntegrityError(`Root is not accepting generation operations (${this.#state})`);
+        }
+        return store.acquire();
+      },
+      owns: (lease: SnapshotLease) => store.owns(lease),
+    });
   }
 
   get state(): RootState {
@@ -38,7 +60,11 @@ export class RootController {
   }
 
   get generation(): number {
-    return this.snapshots.current.generation;
+    return this.#snapshotStore.current.generation;
+  }
+
+  get snapshot(): RuntimeSnapshot {
+    return this.#snapshotStore.current;
   }
 
   /** Observe successful generation commits, including the initial start. */
@@ -57,11 +83,12 @@ export class RootController {
       let prepared: PreparedGeneration | undefined;
       let activated = false;
       try {
-        prepared = await prepare(this.snapshots.current);
+        prepared = await prepare(this.#snapshotStore.current);
         if (prepared.handoff) {
           activated = true;
           await prepared.handoff.activateNext();
         }
+        this.#assertPublishable('idle');
         this.#state = 'running';
         const snapshot = this.#commitGeneration(0, prepared);
         prepared = undefined;
@@ -91,6 +118,7 @@ export class RootController {
           activated = true;
           await prepared.handoff.activateNext();
         }
+        this.#assertPublishable('running');
         const snapshot = this.#commitGeneration(previous.value.generation, prepared);
         prepared = undefined;
         return snapshot;
@@ -110,15 +138,21 @@ export class RootController {
   }
 
   stop(): Promise<void> {
-    return this.#enqueue(async () => {
+    if (this.#stopResult) return this.#stopResult;
+    const result = this.#enqueue(async () => {
       if (this.#state === 'stopped') return;
       if (this.#state !== 'running' && this.#state !== 'failed') {
         throw new Error(`Cannot stop RootController from ${this.#state}`);
       }
       this.#state = 'stopping';
-      await this.snapshots.close();
-      this.#state = 'stopped';
+      try {
+        await this.#snapshotStore.close();
+      } finally {
+        this.#state = 'stopped';
+      }
     });
+    this.#stopResult = result;
+    return result;
   }
 
   #enqueue<T>(operation: () => Promise<T>): Promise<T> {
@@ -131,8 +165,8 @@ export class RootController {
     expectedGeneration: number,
     prepared: PreparedGeneration,
   ): RuntimeSnapshot {
-    const previous = this.snapshots.current;
-    const snapshot = this.snapshots.commit(expectedGeneration, prepared);
+    const previous = this.#snapshotStore.current;
+    const snapshot = this.#snapshotStore.commit(expectedGeneration, prepared);
     this.#openNext(prepared.handoff);
     const event = Object.freeze({ previous, current: snapshot });
     const listeners = [...this.#generationCommitListeners];
@@ -191,9 +225,31 @@ export class RootController {
         errors.push(error);
       }
     }
-    if (errors.length > 1) {
-      throw new AggregateError(errors, 'Generation transaction and rollback both failed');
+    if (errors.length > 1 || transactionError instanceof GenerationCompensationError) {
+      const aggregate = new AggregateError(
+        errors,
+        'Generation transaction and rollback both failed',
+      );
+      this.#failIntegrity(aggregate);
+      throw new RootIntegrityError(
+        'Root integrity failed while rolling back a generation transaction',
+        { cause: aggregate },
+      );
     }
     throw transactionError;
+  }
+
+  #failIntegrity(error: unknown): void {
+    if (this.#state === 'stopped' || this.#state === 'stopping') return;
+    this.#state = 'failed';
+    this.#reportControlError(error);
+  }
+
+  #assertPublishable(expected: 'idle' | 'running'): void {
+    if (this.#state !== expected) {
+      throw new RootIntegrityError(
+        `Root cannot publish a generation after admission entered ${this.#state}`,
+      );
+    }
   }
 }

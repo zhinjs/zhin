@@ -16,7 +16,7 @@ describe('Generation handoff', () => {
     const handoff = stack.seal()!;
     const root = new RootController(emptyState());
 
-    await handoff.quiescePrevious(root.snapshots.current);
+    await handoff.quiescePrevious(root.snapshot);
     await handoff.activateNext();
     handoff.openNext();
     await handoff.deactivateNext();
@@ -73,7 +73,7 @@ describe('Generation handoff', () => {
     const handoff = stack.seal()!;
     const root = new RootController(emptyState());
 
-    await expect(handoff.quiescePrevious(root.snapshots.current)).rejects.toThrow('parent failed');
+    await expect(handoff.quiescePrevious(root.snapshot)).rejects.toThrow('parent failed');
 
     expect(events).toEqual([
       'child:quiesce:0',

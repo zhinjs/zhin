@@ -7,7 +7,7 @@ import {
   type PluginId,
   type RuntimeSnapshot,
   type SnapshotLease,
-  type SnapshotStore,
+  type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
 import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { MessageBus, messageBusToken } from './message-bus.js';
@@ -118,7 +118,7 @@ export class ImRuntime implements MessageGateway {
   readonly #renderer: OutboundRenderer;
   readonly #messageListeners = new Set<(event: RuntimeMessageEvent) => void>();
   readonly #interactiveHandlers: RegisteredRuntimeInteractiveHandler[] = [];
-  #snapshots?: SnapshotStore;
+  #snapshots?: SnapshotReader;
   readonly #inboundClaim?: ImRuntimeOptions['inboundClaim'];
   readonly #enrichSender?: ImRuntimeOptions['enrichSender'];
 
@@ -133,7 +133,7 @@ export class ImRuntime implements MessageGateway {
     this.#enrichSender = options.enrichSender;
   }
 
-  attach(snapshots: SnapshotStore): void {
+  attach(snapshots: SnapshotReader): void {
     if (this.#snapshots && this.#snapshots !== snapshots) {
       throw new Error('ImRuntime is already attached to another Root');
     }

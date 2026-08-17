@@ -21,6 +21,14 @@ export interface GenerationHandoffRegistry {
   add(participant: GenerationHandoffParticipant): GenerationHandoffParticipant;
 }
 
+/** A transaction failed and its internal compensation also failed. */
+export class GenerationCompensationError extends AggregateError {
+  constructor(errors: readonly unknown[], message: string, options?: ErrorOptions) {
+    super(errors, message, options);
+    this.name = 'GenerationCompensationError';
+  }
+}
+
 /** Composes owner-ordered Resource handoffs and compensates partial progress. */
 export class GenerationHandoffStack implements GenerationHandoffRegistry, GenerationHandoff {
   readonly #participants: GenerationHandoffParticipant[] = [];
@@ -110,7 +118,11 @@ async function compensate(
   try {
     await rollback();
   } catch (rollbackError) {
-    throw new AggregateError([primary, rollbackError], message, { cause: rollbackError });
+    throw new GenerationCompensationError(
+      [primary, rollbackError],
+      message,
+      { cause: rollbackError },
+    );
   }
   throw primary;
 }

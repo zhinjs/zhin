@@ -1,4 +1,4 @@
-import { createToken, type PluginId, type SnapshotLease, type SnapshotStore } from '@zhin.js/plugin-runtime';
+import { createToken, type PluginId, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { JournalStore } from '@zhin.js/ai/journal-store';
 import { PersistentTurnJournal } from '../journal/persistent-turn-journal.js';
 import { executeAgentTurn, type TurnEventObserver } from '../turn/execute-agent-turn.js';
@@ -18,16 +18,16 @@ import type { ResolvedAgentBinding } from '../config/types.js';
 import { runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 
 abstract class SnapshotAttachedRuntime {
-  protected snapshots?: SnapshotStore;
+  protected snapshots?: SnapshotReader;
 
-  attach(snapshots: SnapshotStore): void {
+  attach(snapshots: SnapshotReader): void {
     if (this.snapshots && this.snapshots !== snapshots) {
       throw new Error(`${this.constructor.name} is already attached to another Root`);
     }
     this.snapshots = snapshots;
   }
 
-  protected requireSnapshots(): SnapshotStore {
+  protected requireSnapshots(): SnapshotReader {
     if (!this.snapshots) throw new Error(`${this.constructor.name} is not attached to a Root`);
     return this.snapshots;
   }

@@ -74,7 +74,7 @@ describe('Plugin subtree HMR', () => {
       },
     });
     const first = await runtime.start();
-    const oldLease = runtime.controller.snapshots.acquire();
+    const oldLease = runtime.snapshots.acquire();
     await expect(commandIndex(first).execute('child.status')).resolves.toBe('v1');
     await expect(commandIndex(first).execute('child.inline')).resolves.toBe('inline:v1');
     expect(handoffs).toEqual([

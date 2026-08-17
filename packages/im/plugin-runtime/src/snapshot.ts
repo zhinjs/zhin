@@ -81,13 +81,22 @@ export class SnapshotLease {
   }
 }
 
-export class SnapshotStore {
+/** Read-only operation seam exposed by a Root lifecycle. */
+export interface SnapshotReader {
+  acquire(): SnapshotLease;
+  owns(lease: SnapshotLease): boolean;
+}
+
+export class SnapshotStore implements SnapshotReader {
   #current: SnapshotRecord;
   readonly #retired = new Set<SnapshotRecord>();
   readonly #leases = new WeakSet<SnapshotLease>();
   #closed = false;
 
-  constructor(initial: SnapshotState) {
+  constructor(
+    initial: SnapshotState,
+    private readonly onDisposalError: (error: unknown) => void = () => undefined,
+  ) {
     this.#current = {
       snapshot: createSnapshotView(0, initial),
       dispose: () => undefined,
@@ -165,7 +174,10 @@ export class SnapshotStore {
       record.disposing = Promise.resolve().then(record.dispose);
       void record.disposing.then(
         () => record.drain?.resolve(),
-        (error) => record.drain?.reject(error),
+        (error) => {
+          record.drain?.reject(error);
+          this.onDisposalError(error);
+        },
       );
     }
   }

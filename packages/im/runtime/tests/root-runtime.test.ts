@@ -55,7 +55,9 @@ describe('RootRuntime tracer bullet', () => {
       },
     });
     const first = await runtime.start();
-    const oldLease = runtime.controller.snapshots.acquire();
+    expect('controller' in runtime).toBe(false);
+    expect('commit' in runtime.snapshots).toBe(false);
+    const oldLease = runtime.snapshots.acquire();
 
     await expect(commandIndex(first).execute('gh issue list')).resolves.toBe('hello test v1');
     expect(setupCalls).toBe(1);
@@ -109,9 +111,37 @@ describe('RootRuntime tracer bullet', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(resourceDisposals).toBe(0);
-    await runtime.stop();
+    const stopping = runtime.stop();
+    expect(runtime.stop()).toBe(stopping);
+    await stopping;
     expect(resourceDisposals).toBe(1);
     expect(modules.closed).toBe(true);
+    expect(modules.closeCalls).toBe(1);
+  });
+
+  it('replays the same failed stop outcome without closing modules twice', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    modules.set(join(project, 'plugin.ts'), {
+      default: definePlugin({ name: 'root' }),
+    });
+    modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
+    modules.set(join(project, 'commands/gh/issue/list.ts'), {
+      default: defineCommand({ execute: () => 'ok' }),
+    });
+    modules.closeError = new Error('module close failed');
+    const runtime = new RootRuntime({
+      projectRoot: project,
+      modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+    });
+    await runtime.start();
+
+    const first = runtime.stop();
+    expect(runtime.stop()).toBe(first);
+    await expect(first).rejects.toThrow('module close failed');
+    await expect(runtime.stop()).rejects.toThrow('module close failed');
+    expect(modules.closeCalls).toBe(1);
   });
 });
 
@@ -126,6 +156,8 @@ class FakeModuleRuntime implements ModuleRuntime {
   readonly #loads = new Map<string, number>();
   readonly invalidated: string[] = [];
   closed = false;
+  closeCalls = 0;
+  closeError?: Error;
 
   set(source: string, value: unknown): void {
     this.#modules.set(source, value);
@@ -150,7 +182,9 @@ class FakeModuleRuntime implements ModuleRuntime {
   }
 
   async close(): Promise<void> {
+    this.closeCalls += 1;
     this.closed = true;
+    if (this.closeError) throw this.closeError;
   }
 }
 

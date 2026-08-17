@@ -1,13 +1,13 @@
-import { createToken, type SnapshotStore } from '@zhin.js/plugin-runtime';
+import { createToken, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { AccessSnapshot } from '@zhin.js/console-contract';
 import { ConsoleCatalog } from './console-catalog.js';
 
 export const consoleRuntimeToken = createToken<ConsoleRuntime>('zhin.console.runtime');
 
 export class ConsoleRuntime {
-  #snapshots?: SnapshotStore;
+  #snapshots?: SnapshotReader;
 
-  attach(snapshots: SnapshotStore): void {
+  attach(snapshots: SnapshotReader): void {
     if (this.#snapshots && this.#snapshots !== snapshots) {
       throw new Error('ConsoleRuntime is already attached to another Root');
     }

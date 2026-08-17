@@ -166,7 +166,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
       await installProtocolHosts({
         config,
         http: httpConfig,
-        snapshots: host.runtime.controller.snapshots,
+        snapshots: host.runtime.snapshots,
         production: parsed.mode === 'production',
         projectRoot: options.root,
       })(context);
@@ -183,8 +183,8 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
         databaseHost,
         scheduleHost,
         eventHub: consoleEventHub,
-        snapshot: () => host.runtime.controller.snapshots.current,
-        snapshots: host.runtime.controller.snapshots,
+        snapshot: () => host.runtime.snapshot,
+        snapshots: host.runtime.snapshots,
         onRestart: () => {
           // Exit 51: CLI daemon (`zhin runtime start`) auto-restarts the process.
           process.exit(51);
@@ -215,9 +215,9 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   });
   // Bind before start so Adapter definitions can resolve messageGatewayToken
   // while the first generation is still being prepared.
-  im.attach(host.runtime.controller.snapshots);
-  agentHost?.attach(host.runtime.controller.snapshots);
-  consoleHost.console.attach(host.runtime.controller.snapshots);
+  im.attach(host.runtime.snapshots);
+  agentHost?.attach(host.runtime.snapshots);
+  consoleHost.console.attach(host.runtime.snapshots);
   control.stop = async () => {
     // Stop interaction admission first. Pending questions hold Agent turns and
     // therefore generation leases; cancelling them is required before drain.
@@ -302,7 +302,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
 }
 
 interface ConfiguredAgentHost {
-  attach(snapshots: import('@zhin.js/plugin-runtime').SnapshotStore): void;
+  attach(snapshots: import('@zhin.js/plugin-runtime').SnapshotReader): void;
   readonly claimInbound: (message: Message) => Promise<boolean>;
   close(): void;
   install(options: {

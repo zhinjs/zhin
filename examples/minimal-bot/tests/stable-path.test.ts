@@ -76,7 +76,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       config: { plugin: { terminal: { interactive: false } } },
       installResources: ({ resources }) => im.install(resources),
     });
-    im.attach(runtime.controller.snapshots);
+    im.attach(runtime.snapshots);
 
     try {
       const snapshot = await runtime.start();

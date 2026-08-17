@@ -1,4 +1,4 @@
-import { rootPluginId, type SnapshotStore } from '@zhin.js/plugin-runtime';
+import { rootPluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { join } from 'node:path';
 import type { HttpHostOptions } from '@zhin.js/host-http';
 import type { RuntimeMcpConfig } from '@zhin.js/mcp/runtime';
@@ -20,7 +20,7 @@ interface ProtocolConfig {
 export interface InstallProtocolHostsOptions {
   readonly config: RuntimeConfigDocument | ConfigDocumentPort;
   readonly http: HttpHostOptions;
-  readonly snapshots: SnapshotStore;
+  readonly snapshots: SnapshotReader;
   readonly production: boolean;
   readonly projectRoot: string;
 }

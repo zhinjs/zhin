@@ -92,7 +92,7 @@ describe('Manifest topology transaction', () => {
     await expect(commandIndex(runtime.snapshot).execute('b.status')).resolves.toBe('root/b');
     expect(modules.loadCount(source('packages/command/index.ts'))).toBe(1);
 
-    const beforeMove = runtime.controller.snapshots.acquire();
+    const beforeMove = runtime.snapshots.acquire();
     await writePluginManifest(project, 'a', {
       plugins: [{ package: '@test/c', instanceKey: 'c' }],
     });

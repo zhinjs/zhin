@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DisposeStack,
+  GenerationHandoffStack,
   RootController,
   Scope,
   SharedLifetime,
@@ -142,6 +143,15 @@ describe('Plugin Runtime kernel', () => {
     await root.stop();
   });
 
+  it('exposes leases without exposing generation write authority', () => {
+    const root = new RootController(emptyState());
+
+    expect(root.snapshot.generation).toBe(0);
+    expect('current' in root.snapshots).toBe(false);
+    expect('commit' in root.snapshots).toBe(false);
+    expect('close' in root.snapshots).toBe(false);
+  });
+
   it('observes every committed generation but skips no-op transactions', async () => {
     const root = new RootController(emptyState());
     const commits: Array<[number, number]> = [];
@@ -201,6 +211,109 @@ describe('Plugin Runtime kernel', () => {
     expect('set' in snapshot.tree).toBe(false);
     expect('clear' in snapshot.capabilities).toBe(false);
     await root.stop();
+  });
+
+  it('closes Root admission when generation rollback cannot restore integrity', async () => {
+    const root = new RootController(emptyState());
+    await root.start(() => ({ snapshot: emptyState(), dispose: () => undefined }));
+
+    await expect(root.transact(() => ({
+      snapshot: emptyState(),
+      dispose: () => undefined,
+      handoff: {
+        quiescePrevious() {},
+        activateNext() { throw new Error('activation failed'); },
+        deactivateNext() { throw new Error('cleanup failed'); },
+        resumePrevious() {},
+        openNext() {},
+      },
+    }))).rejects.toThrow('Root integrity failed');
+
+    expect(root.state).toBe('failed');
+    expect(() => root.snapshots.acquire()).toThrow('not accepting');
+    await expect(root.transact(() => undefined)).rejects.toThrow('Cannot transact');
+    await root.stop();
+  });
+
+  it('recognizes compensation failure reported inside the production handoff stack', async () => {
+    const root = new RootController(emptyState());
+    await root.start(() => ({ snapshot: emptyState(), dispose: () => undefined }));
+    const handoff = new GenerationHandoffStack();
+    handoff.add({
+      quiescePrevious() { throw new Error('quiesce failed'); },
+    });
+    handoff.add({
+      quiescePrevious() {},
+      resumePrevious() { throw new Error('resume failed'); },
+    });
+
+    await expect(root.transact(() => ({
+      snapshot: emptyState(),
+      dispose: () => undefined,
+      handoff: handoff.seal(),
+    }))).rejects.toThrow('Root integrity failed');
+
+    expect(root.state).toBe('failed');
+    await root.stop();
+  });
+
+  it('cannot publish a candidate after asynchronous disposal closes Root admission', async () => {
+    const root = new RootController(emptyState());
+    await root.start(() => ({
+      snapshot: emptyState(),
+      dispose: () => { throw new Error('retired dispose failed'); },
+    }));
+    const retiredLease = root.snapshots.acquire();
+    await root.transact(() => ({ snapshot: emptyState(), dispose: () => undefined }));
+
+    let enterPrepare!: () => void;
+    const preparing = new Promise<void>((resolve) => { enterPrepare = resolve; });
+    let finishPrepare!: () => void;
+    const prepareGate = new Promise<void>((resolve) => { finishPrepare = resolve; });
+    let candidateDisposed = false;
+    const transaction = root.transact(async () => {
+      enterPrepare();
+      await prepareGate;
+      return {
+        snapshot: emptyState(),
+        dispose: () => { candidateDisposed = true; },
+      };
+    });
+    await preparing;
+
+    retiredLease.release();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(root.state).toBe('failed');
+
+    finishPrepare();
+    await expect(transaction).rejects.toThrow('cannot publish');
+    expect(root.generation).toBe(2);
+    expect(candidateDisposed).toBe(true);
+    await expect(root.stop()).rejects.toThrow('retired dispose failed');
+  });
+
+  it('closes Root admission when a retired generation fails to dispose', async () => {
+    const root = new RootController(emptyState());
+    await root.start(() => ({
+      snapshot: emptyState(),
+      dispose: () => { throw new Error('retired dispose failed'); },
+    }));
+    const lease = root.snapshots.acquire();
+    await root.transact(() => ({ snapshot: emptyState(), dispose: () => undefined }));
+
+    lease.release();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(root.state).toBe('failed');
+    expect(() => root.snapshots.acquire()).toThrow('not accepting');
+    const firstStop = root.stop();
+    const secondStop = root.stop();
+    expect(secondStop).toBe(firstStop);
+    await expect(firstStop).rejects.toThrow('retired dispose failed');
+    await expect(root.stop()).rejects.toThrow('retired dispose failed');
+    expect(root.state).toBe('stopped');
   });
 
   it('does not finish stop until the active generation drains', async () => {

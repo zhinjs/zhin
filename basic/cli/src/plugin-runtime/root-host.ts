@@ -79,7 +79,7 @@ export class RootHost {
         void Promise.resolve(this.#onError(error)).catch(() => undefined);
       },
     });
-    this.#stopGenerationObservation = this.runtime.controller.onGenerationCommit(
+    this.#stopGenerationObservation = this.runtime.onGenerationCommit(
       ({ current }) => options.onGenerationCommit?.(current.generation),
     );
   }
