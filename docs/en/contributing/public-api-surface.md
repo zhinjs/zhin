@@ -50,13 +50,13 @@ Three tiers:
 | `messageGatewayToken` | `stable` | `@zhin.js/core` (`zhin.js/core/runtime`) | Inbound message delivery gateway (used by adapters) |
 | `httpHostToken` | `stable` | `@zhin.js/host-http` | HTTP/WS Host capability (used by Console, Webhooks) |
 
-### Legacy Hooks (Kept for Compatibility)
+### Removed Legacy Hooks
 
 | API | Stability | Source Package | One-liner |
 |-----|-----------|----------------|-----------|
 | `usePlugin()` and associated hooks (`provide` / `addCommand` / `useContext`, etc.) | `deprecated` (see table below) | `zhin.js` (`@zhin.js/core`) | Legacy plugin system entry, still compatible; new code uses convention-based approach |
 | `MessageCommand` / `CommandFeature` | `deprecated` | `zhin.js` (`@zhin.js/core`) | Classic commands; new code uses `defineCommand` + `commands/` |
-| `bootstrapNode` / `zhin.js/node` | `deprecated` | `zhin.js/node` | Classic Host startup; **not wired to CLI**; new code uses `zhin runtime start` |
+| `bootstrapNode` / `zhin.js/node` | `removed` | none (subpath deleted) | The only startup entry is `zhin runtime start` |
 
 ### `zhin.config.yml` Top-Level Keys
 
@@ -102,7 +102,7 @@ Three tiers:
 |------|-----------|--------|-----------|
 | Legacy `usePlugin()` plugin system | `deprecated` | Kept for compatibility, runtime still supports it | New code uses convention-based approach (`plugin.ts` + convention directories); deletion countdown begins after dual-track migration is complete |
 | `MessageCommand` / classic `CommandFeature` | `deprecated` | Still used by Agent init / game-kit hub | Will be removed after migration to `defineCommand` + Runtime `CommandIndex` |
-| `bootstrapNode` / `zhin.js/node` | `deprecated` | Kept for compatibility, not wired to CLI | Use `zhin runtime start` instead; will be removed after at least one minor version |
+| `bootstrapNode` / `zhin.js/node` | `removed` | No longer exported | Use `zhin runtime start` |
 | "Host plugin" narrative | `deprecated` | Documentation has been consolidated | Host capabilities are now token-based (see Host Token table above), no longer a plugin concept |
 | `examples/test-bot` as a user path | `deprecated` | Maintainer kitchen sink | User paths are minimal-bot (Stable) -> full-bot (L4); do not use test-bot config as a template |
 | `plugin.yml` plugin manifest | `deprecated` | Legacy `Plugin` and `zhin build` still read it (`packages/im/core/src/plugin.ts`, `basic/cli/src/libs/plugin-package-build.ts`) | Part of the legacy system, will be retired along with it; convention-based plugins use `package.json` as the source of truth |

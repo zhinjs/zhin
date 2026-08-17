@@ -254,9 +254,6 @@
       "zhin.js/jsx-runtime": [
         "./packages/im/zhin/src/jsx-runtime.ts"
       ],
-      "zhin.js/node": [
-        "./packages/im/zhin/src/node.ts"
-      ],
       "zhin.js/plugin-runtime": [
         "./packages/im/zhin/src/define-plugin.ts"
       ],

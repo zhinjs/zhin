@@ -20,7 +20,7 @@ tags:
 
 引导创建一个符合 **Plugin Runtime** 的新插件。唯一启动路径是 `zhin runtime start`；插件即 package，`plugin.ts` 必须 default-export `definePlugin()`。
 
-**禁止**再脚手架 `usePlugin()` / `MessageCommand` / `src/index.ts` 命令式注册——那套只在已废弃的 `zhin.js/node`（`bootstrapNode`）下有效，未接任何 CLI。
+**禁止**再脚手架 `usePlugin()` / `MessageCommand` / `src/index.ts` 命令式注册——`zhin.js/node` 与 `bootstrapNode` 已删除，唯一入口是 Plugin Runtime。
 
 ## 适用场景
 

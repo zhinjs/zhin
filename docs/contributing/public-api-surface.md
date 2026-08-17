@@ -56,7 +56,7 @@
 |-----|--------|--------|--------|
 | `usePlugin()` 及配套 Hooks（`provide` / `addCommand` / `useContext` 等） | `removed`（见下表） | `zhin.js`（`@zhin.js/core`） | 已移除，调用 throw；唯一入口为 `definePlugin` + `zhin runtime start` |
 | `MessageCommand` / `CommandFeature` | `deprecated` | `zhin.js`（`@zhin.js/core`） | 经典命令；新代码用 `defineCommand` + `commands/` |
-| `bootstrapNode` / `zhin.js/node` | `removed` | `zhin.js/node` | 已移除，调用 throw；唯一启动入口为 `zhin runtime start` |
+| `bootstrapNode` / `zhin.js/node` | `removed` | 无（子路径已删除） | 唯一启动入口为 `zhin runtime start` |
 
 ### `zhin.config.yml` 顶层键
 
@@ -102,7 +102,7 @@
 |----|--------|------|--------|
 | legacy `usePlugin()` / `getPlugin()` 插件体系 | `removed` | 调用 throw（throwing stub） | 唯一入口：`definePlugin` + `zhin runtime start` |
 | `MessageCommand` / classic `CommandFeature` | `deprecated` | Agent init / game-kit hub 仍用 | 迁到 `defineCommand` + Runtime `CommandIndex` 后删除 |
-| `bootstrapNode` / `zhin.js/node` | `removed` | 调用 throw（throwing stub） | 唯一启动入口：`zhin runtime start` |
+| `bootstrapNode` / `zhin.js/node` | `removed` | 不再导出 | 唯一启动入口：`zhin runtime start` |
 | 「`host` 插件」叙事 | `deprecated` | 文档已收口 | Host 能力改为 token 化（见上表 Host Token），不再是插件概念 |
 | `examples/test-bot` 作为用户路径 | `deprecated` | 维护者厨房水槽 | 用户路径为 minimal-bot（Stable）→ full-bot（L4），勿把 test-bot 配置当模板 |
 | `plugin.yml` 插件清单 | `deprecated` | legacy `Plugin` 与 `zhin build` 仍在读取（`packages/im/core/src/plugin.ts`、`basic/cli/src/libs/plugin-package-build.ts`） | 属 legacy 体系的一部分，随 legacy 一起退役；约定式插件以 `package.json` 为准 |

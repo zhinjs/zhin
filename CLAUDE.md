@@ -118,7 +118,7 @@ DI is **Scope + Token** based (`context.resources`), generation-scoped rather th
 
 ### Removed legacy APIs (`usePlugin()` / `getPlugin()` / `bootstrapNode`)
 
-`usePlugin()`, `getPlugin()`, and `bootstrapNode` (`zhin.js/node`) have been **removed** — they are throwing stubs that direct callers to migrate. The **sole entry path** is `definePlugin()` + `zhin runtime start` (Plugin Runtime). Do not author or call legacy plugin APIs.
+`zhin.js/node` and `bootstrapNode` have been **deleted and are no longer exported**. The **sole entry path** is `definePlugin()` + `zhin runtime start` (Plugin Runtime). Do not author or call legacy plugin APIs.
 
 ### Build output
 
@@ -226,7 +226,7 @@ These rules are non-negotiable — violating them will break the project:
 1. **Never bypass the send chain** — All outbound messages must flow through `Message.$reply` or `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → platform Endpoint.
 2. **Respect the dependency direction** — `basic → kernel → ai → core → agent → zhin`. Lower layers must never import from higher layers. Exception: `basic/cli` is the Plugin Runtime composition root (`zhin runtime start` assembles IM/Agent/Console hosts) and may import `packages/im` layers; this exception is scoped to `basic/cli` only.
 3. **`plugin.ts` must default-export `definePlugin()`** — The Plugin Runtime loader requires it; capabilities belong in convention directories (`commands/`, `middlewares/`, `tools/`, …), not in imperative top-level registration.
-4. **Legacy `usePlugin()` / `getPlugin()` / `bootstrapNode` are removed** — These APIs throw at runtime. Use `definePlugin()` + `zhin runtime start` only. Harness checks (`check:use-plugin-top-level` / `check:get-plugin-runtime`) guard against lingering call sites in the codebase.
+4. **Legacy startup is removed** — `zhin.js/node` / `bootstrapNode` no longer exist; use `definePlugin()` + `zhin runtime start` only. Harness checks (`check:use-plugin-top-level` / `check:get-plugin-runtime`) guard against lingering classic Plugin call sites.
 5. **Use `.js` extensions in imports** — TypeScript local imports require `.js` suffix (`import { x } from './y.js'`).
 6. **Build order matters** — When building incrementally, follow: logger/schema/database → kernel → ai → core → agent → zhin.
 7. **No git submodules** — This is a pnpm workspace monorepo; all packages live under `basic/`, `packages/`, `plugins/`, or `examples/`.

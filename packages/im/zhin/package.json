@@ -31,11 +31,6 @@
       "development": "./src/jsx-runtime.ts",
       "import": "./lib/jsx-runtime.js"
     },
-    "./node": {
-      "types": "./lib/node.d.ts",
-      "development": "./src/node.ts",
-      "import": "./lib/node.js"
-    },
     "./qrcode": {
       "types": "./lib/qrcode.d.ts",
       "development": "./src/qrcode.ts",

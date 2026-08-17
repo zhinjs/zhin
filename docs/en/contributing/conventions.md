@@ -29,14 +29,9 @@ The only startup path is `zhin runtime start`. For new plugins:
 
 See [Writing Your First Plugin](../getting-started/first-plugin.md), [definePlugin](../authoring/define-plugin.md).
 
-## Legacy: `usePlugin()` / `getPlugin()` (Residual Code Only)
+## Removed: `zhin.js/node`
 
-The classic path is only functional under `zhin.js/node` (`bootstrapNode`) and is **not wired to the CLI**. When maintaining legacy modules that still call these two APIs:
-
-- `usePlugin()` must only be called at **module top level** (gate: `pnpm check:use-plugin-top-level`)
-- `getPlugin()` is only allowed during initialization/assembly; it is forbidden inside middleware, command actions, tool execute, Cron, and event callbacks (gate: `pnpm check:get-plugin-runtime`); use closures captured at registration time for runtime access
-
-New features should migrate to Runtime rather than continuing to extend the classic API. Migration guide: `.github/skills/migrate-zhin-plugin-runtime`.
+`zhin.js/node` and `bootstrapNode` have been deleted and are no longer exported. The only startup entry is `definePlugin()` + `zhin runtime start`. New features must use Plugin Runtime. Migration guide: `.github/skills/migrate-zhin-plugin-runtime`.
 
 ## Module-Level State: createGenerationStore
 
