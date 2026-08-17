@@ -109,6 +109,18 @@ describe('detectInboundHandoffIntent', () => {
 });
 
 describe('isStructuredOutboundRequired', () => {
+  it('requires structured output only when one declared capability needs it', () => {
+    expect(isStructuredOutboundRequired({
+      toolRequiresStructured: false,
+      inboundHandoffIntent: false,
+      adapterHasExtensions: false,
+    })).toBe(false);
+    expect(isStructuredOutboundRequired({
+      toolRequiresStructured: true,
+      inboundHandoffIntent: false,
+      adapterHasExtensions: false,
+    })).toBe(true);
+  });
 });
 
 describe('buildAiOutboundPromptHint', () => {
