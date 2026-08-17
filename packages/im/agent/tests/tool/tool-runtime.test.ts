@@ -38,6 +38,15 @@ describe('ToolRuntime', () => {
     expect(result.denied).toBeUndefined();
   });
 
+  it('does not fabricate IM authority for standalone execution', async () => {
+    const rt = createToolRuntime(makeCtx({ commMessage: undefined }));
+    const tool = makeTool({
+      execute: async (_args, message) => message === undefined ? 'originless' : 'fabricated',
+    });
+    const result = await rt.execute(tool, {}, { toolCallId: 'tc-originless' });
+    expect(result.output).toBe('originless');
+  });
+
   it('rejects when generation is invalid', async () => {
     const rt = createToolRuntime(makeCtx({
       isGenerationValid: (g) => g !== 1,

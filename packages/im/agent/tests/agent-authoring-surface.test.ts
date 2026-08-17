@@ -11,7 +11,6 @@ import { z } from 'zod';
 import { parseConfigWithZodSchema } from '../src/authoring/zod-schema.js';
 import { bridgeAuthoringConnection } from '../src/authoring/bridge.js';
 import { defineConnection } from '../src/authoring/define-connection.js';
-import { resetAuthoringRegistrationForTests } from '../src/discovery/register-agent-surface.js';
 import {
   collectPluginAgentRoots,
   resolveAuthoringImportPath,
@@ -97,12 +96,6 @@ describe('discoverWorkspaceAgents fractal', () => {
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }
-  });
-});
-
-describe('resetAuthoringRegistrationForTests', () => {
-  it('clears registration sets', () => {
-    expect(() => resetAuthoringRegistrationForTests()).not.toThrow();
   });
 });
 

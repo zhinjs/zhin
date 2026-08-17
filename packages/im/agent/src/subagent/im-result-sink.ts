@@ -45,7 +45,6 @@ export class ImResultSink implements ResultSink {
       send: (opts: SendOptions) => this.deps.proactiveOutbound.send({
         scene,
         source: 'subagent',
-        originMessage: origin.message,
         quoteMessageId: opts.quoteId,
       }, opts.content),
     });

@@ -3,7 +3,7 @@
  * 统一管理多个模型提供商，提供会话和 Agent 能力
  */
 
-import { type AITriggerConfig, type AIAccessConfig, createSyntheticMessage, type Tool } from '@zhin.js/core';
+import { type AITriggerConfig, type AIAccessConfig, type Tool } from '@zhin.js/core';
 import { type AIProvider, type AIConfig, type AgentTool, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, registerLlmApiFromProviders } from '@zhin.js/ai';
 import type { AgentRunInput } from './media/media-types.js';
 import { DEFAULT_CONFIG } from './config/index.js';
@@ -230,12 +230,6 @@ export class AIService {
         tools,
         userInput,
         maxIterations,
-        commMessage: createSyntheticMessage({
-          adapter: 'service',
-          endpoint: 'default',
-          sender: { id: 'system', isMaster: true },
-          channel: { type: 'private', id: 'system' },
-        }),
       }).then(toServiceAgentResult),
       dispose: () => undefined,
     };

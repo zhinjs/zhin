@@ -12,7 +12,7 @@ import {
   upgradeOrchestrationRepository,
   type OrchestrationService,
 } from '../orchestrator/orchestration-service.js';
-import type { AIServiceRefs } from './shared-refs.js';
+import type { AIServiceRefs } from '../internal/ai-service-refs.js';
 import {
   upgradeAgentSessionTreeData,
   type AgentDbQueryable,

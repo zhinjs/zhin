@@ -342,25 +342,9 @@ export {
   createSessionTreeRuntimeFromAgent,
 } from './session-tree-runtime-registry.js';
 export type { SessionTreeRuntimeHandle } from './session-tree-runtime-registry.js';
-/** Runtime Host（basic/cli）装配 session tree runtime 时的门面收窄（同 legacy create-zhin-agent）。 */
+/** Runtime Host（basic/cli）装配 session tree runtime 时的窄门面。 */
 export { asPrivate } from './internal/as-private.js';
 
-export {
-  createAgentSessionHostPort,
-} from './session/agent-session-host-port.js';
-export type { AgentSessionHostPort, CreateAgentSessionHostPortOptions } from './session/agent-session-host-port.js';
-export { HttpAgentSessionStore } from './session/http-agent-session-store.js';
-export type {
-  HttpAgentSessionRecord,
-  HttpAgentSessionStatus,
-} from './session/http-agent-session-store.js';
-export { FileHttpSessionPersistence } from './session/http-session-persistence.js';
-export type {
-  HttpSessionPersistence,
-  PersistedHttpSessionSnapshot,
-} from './session/http-session-persistence.js';
-export { HttpStepProjector } from './session/http-step-projector.js';
-export { HttpApprovalWaiter } from './session/http-approval-waiter.js';
 export type { ApprovalPort, ApprovalRequestInput } from './session/approval-port.js';
 export { beginIngressTurnSession } from './session/turn-ingress-session.js';
 
@@ -521,7 +505,6 @@ export type {
   AIEventTarget,
 } from './ai-event-subscriber.js';
 
-export { initAgentModule } from './init.js';
 export { registerEndpointKeyColumnMigrationHook } from './init/upgrade-endpoint-id-schema.js';
 
 // ── Activity Feedback（替代 endpoint typingIndicator）──
@@ -564,7 +547,6 @@ export type {
   ActivityFeedbackGatePhase,
 } from './activity-feedback/index.js';
 
-export { createProactiveOutboundService } from './outbound/send-proactive.js';
 export type {
   ProactiveSendContext,
   ProactiveSendSource,
@@ -738,11 +720,6 @@ export type {
   DynamicResolveContext,
   DynamicResolveResult,
 } from './dynamic/dynamic-registry.js';
-export {
-  registerPluginAgentSurfaces,
-  runPluginEvals,
-  resetAuthoringRegistrationForTests,
-} from './discovery/register-agent-surface.js';
 export {
   AgentFeature,
   MCPFeature,

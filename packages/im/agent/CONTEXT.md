@@ -233,7 +233,7 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 |----------|----------|----------|------------|
 | Agent Core | `src/core/` | agent | **委托** `@zhin.js/ai` `agentLoop`；禁止自有 LLM 迭代（ADR 0009） |
 | Tool System | `src/tool/` | agent | 包装 orchestrator + builtin + MCP 生命周期 |
-| Session System | `src/session/` | agent | origin-neutral session store + HTTP `AgentSessionHostPort` + explicit `ApprovalPort` |
+| Session System | `src/session/` | agent | origin-neutral session store + explicit transport-provided `ApprovalPort` |
 | Event System | `src/event/` | agent | Agent turn 域事件 + **AgentStreamBus**（per-orchestrator egress）；不替代 Kernel RunEvent 或 plugin `before.*` |
 | Skill System | `src/skill/` | agent | 包装 `SkillRegistry` + discovery |
 | Memory System | `src/memory/` | agent → port → ai | `MemoryStore` 适配 `ContextRepository`；压缩委托 ai compaction |

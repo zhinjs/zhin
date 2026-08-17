@@ -5,7 +5,6 @@ import type { AgentStreamEvent } from '@zhin.js/ai/agent-stream';
 
 export interface AgentStreamPublishContext {
   sessionId?: string;
-  httpSessionId?: string;
   turnId?: string;
   agentId?: string;
 }

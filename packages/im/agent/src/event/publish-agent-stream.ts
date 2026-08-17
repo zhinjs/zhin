@@ -23,8 +23,8 @@ export function publishTurnStreamEvents(
   ctx: TurnToStreamContext & AgentStreamPublishContext,
   journal: AgentRunJournal,
 ): void {
-  const { sessionId, turnId, httpSessionId, agentId } = ctx;
+  const { sessionId, turnId, agentId } = ctx;
   for (const streamEvent of mapTurnEventToAgentStreamEvents(turnEvent, { sessionId, turnId, journal })) {
-    publishAgentStream(host, streamEvent, { sessionId, turnId, httpSessionId, agentId });
+    publishAgentStream(host, streamEvent, { sessionId, turnId, agentId });
   }
 }

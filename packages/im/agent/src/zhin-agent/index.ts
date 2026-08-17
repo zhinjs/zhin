@@ -93,7 +93,6 @@ import { emitSessionCompactEvent, emitSessionNewEvent, type SessionCompactInfo }
 import { applyZhinAgentConfigure, wireZhinAgentLlmApiLayer } from '../init/configure-zhin-agent.js';
 import { disposeZhinAgentResources } from '../init/dispose-zhin-agent.js';
 import type { PhaseTraceConfig } from '../internal/phase-trace.js';
-import type { HttpApprovalAdapter } from '../session/http-approval-adapter.js';
 import type { ApprovalPort } from '../session/approval-port.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import type {
@@ -172,8 +171,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   readonly deferred = new DeferredTurnState();
   readonly promptController: PromptController;
   readonly promptAssemblyRegistry = new PromptAssemblyRegistry();
-  /** HTTP approval adapter — AgentSessionHostPort 装配时写入（ADR 0041）。 */
-  httpApprovalAdapter?: HttpApprovalAdapter;
   /** 无交互审批面传输的 host 级回退。 */
   approvalPort?: ApprovalPort;
   /** Per-turn instructions from defineDynamic resolvers (ADR 0039 P2)。 */

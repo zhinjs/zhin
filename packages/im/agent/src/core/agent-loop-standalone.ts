@@ -79,7 +79,8 @@ export interface AgentLoopStandaloneInput {
   tools: AgentTool[];
   userInput: AgentRunInput;
   maxIterations: number;
-  commMessage: Message;
+  /** Optional authenticated IM context. Its absence must remain fail-closed. */
+  commMessage?: Message;
   transformToolResult?: ToolResultTransform;
   callbacks?: AgentLoopStandaloneCallbacks;
   signal?: AbortSignal;

@@ -118,7 +118,7 @@ packages/im/agent/src/
   config/        ZhinAgent 配置 SSOT、model harness
   orchestrator/  Orchestration Kernel（ADR 0027 SSOT）
   zhin-agent/    ZhinAgent 门面类（单文件 index.ts）
-  init/          create-zhin-agent、composeZhinAgentRuntime、configure/dispose 生命周期
+  init/          Plugin Runtime 组合、数据库激活与 ZhinAgent dispose 生命周期
 ```
 
 Agent 间通信只经过 OrchestrationKernel：`local` executor 选择配置好的 Agent
@@ -168,7 +168,7 @@ useContext('ai', async (ai) => {
 })
 ```
 
-Agent 模块由 Plugin Runtime (`basic/cli`) 自动装配，插件无需手动 init。`initAgentModule()` 和 `bootstrapNode` 已删除。
+Agent 模块由 Plugin Runtime (`basic/cli`) 自动装配，插件没有手动初始化入口。
 
 ### 非 Zhin 宿主 / 单独集成
 
@@ -189,7 +189,7 @@ useContext('ai', async (ai) => {
 
 | 类别 | 导出 |
 |------|------|
-| 初始化 | ~~`initAgentModule`~~（已删除；由 Plugin Runtime 装配） |
+| 初始化 | Plugin Runtime composition root 自动装配 |
 | Agent | `ServiceAgent`、`CreateServiceAgentOptions`（`AIService.createAgent`）；legacy `Agent` / `createAgent` re-export 自 `@zhin.js/ai` |
 | Model harness | `MODEL_HARNESS_DEFAULTS`, `resolveModelHarness`, `mergeModelHarnessValues` |
 | 服务与会话 | `AIService`；会话/context 类型见 `@zhin.js/ai`（`ContextRepository`、`AgentSessionStore`、`ImTranscriptStore`） |
@@ -460,8 +460,7 @@ src/
 │
 ├── mcp-client/                      # MCP 客户端
 │
-├── init.ts                          # legacy initAgentModule（已删除，throwing stub）
-├── init/                            # create-zhin-agent、compose/configure/dispose 生命周期
+├── init/                            # Plugin Runtime 组合、数据库激活与 dispose 生命周期
 │
 ├── service.ts                       # AIService
 │
@@ -487,7 +486,7 @@ src/
 └── user-profile.ts
 ```
 
-`init/` 目录含 `register-orchestrator.ts`（`provide('agent')`）、`register-ai-service.ts`、`register-builtin-tools.ts` 等，见 `src/init.ts`。
+`init/` 只保留由 Plugin Runtime composition root 直接调用的装配与数据库生命周期模块；旧 Plugin 注册器已删除。
 
 ### 构建
 

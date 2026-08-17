@@ -1,7 +1,6 @@
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { AgentStreamEventType, type AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { publishAgentStream } from '../event/publish-agent-stream.js';
-import { readHttpSessionId } from '../session/resolve-approval-port.js';
 import { parseOutput, type MediaContentBlock } from '@zhin.js/ai';
 import { TurnSupersededError } from './prompt-controller.js';
 import {
@@ -101,12 +100,11 @@ export async function processTextTurn(
         });
     const { sessionKey, userId, sessionId, isNewSession, turnUser } = prep;
 
-    const httpSessionId = readHttpSessionId(commMessage);
-    if (isNewSession && !httpSessionId) {
+    if (isNewSession) {
       publishAgentStream(host, {
         type: AgentStreamEventType.SESSION_STARTED,
         data: { sessionId },
-      }, { sessionId, httpSessionId });
+      }, { sessionId });
     }
 
     await host.emitter.dispatch('ai.processing.start', host.emitter.createPayload(sessionId, commMessage, 'text', {
@@ -161,7 +159,7 @@ export async function processTextTurn(
     publishAgentStream(host, {
       type: AgentStreamEventType.MESSAGE_RECEIVED,
       data: { message: content },
-    }, { sessionId, httpSessionId: readHttpSessionId(commMessage) });
+    }, { sessionId });
 
     const filterMs = (now() - tFilter).toFixed(0);
     logPhase(host.phaseConfig, 'tools.collected', sessionId, { count: resolvedTools.length });

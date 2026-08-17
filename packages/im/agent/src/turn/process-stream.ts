@@ -4,7 +4,6 @@ import { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import type { Message, Tool } from '../orchestrator/types.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import { publishTurnStreamEvents } from '../event/publish-agent-stream.js';
-import { readHttpSessionId } from '../session/resolve-approval-port.js';
 import type { InboundTurnQueue } from '../turn/inbound-turn-queue.js';
 import type { ResolvedInboundQueueConfig } from '../turn/inbound-queue-config.js';
 import { runWithInboundQueue } from '../turn/inbound-queue-runtime.js';
@@ -31,7 +30,6 @@ export async function* processTextTurnStream(
   const streamCtx = () => ({
     sessionId,
     turnId,
-    httpSessionId: readHttpSessionId(commMessage),
   });
   const journal = new AgentRunJournal({ sessionId, turnId });
 

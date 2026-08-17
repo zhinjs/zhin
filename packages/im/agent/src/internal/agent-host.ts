@@ -14,7 +14,6 @@ import type { AgentCore } from '../core/agent-core.js';
 import type { ToolSystem } from '../tool/tool-system.js';
 import type { ContextSystem } from '../context/context-system.js';
 import type { SessionSystem } from '../session/session-system.js';
-import type { HttpApprovalAdapter } from '../session/http-approval-adapter.js';
 import type { ApprovalPort } from '../session/approval-port.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { RegisteredAgentTool } from '../tool/contracts.js';
@@ -101,8 +100,6 @@ export interface ZhinAgentPrivate
   orchestrator: AgentOrchestrator | null;
   agentCore: AgentCore | null;
   toolSystem: ToolSystem | null;
-  /** HTTP approval adapter — set when AgentSessionHostPort is wired (ADR 0041). */
-  httpApprovalAdapter?: HttpApprovalAdapter;
   /** Optional host-level fallback, for transports without an interactive approval surface. */
   approvalPort?: ApprovalPort;
   readonly externalTools: Map<string, RegisteredAgentTool>;

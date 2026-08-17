@@ -32,7 +32,7 @@ export interface ToolRuntimeTurnContext {
   readonly generation: number;
   readonly signal: AbortSignal;
   readonly sessionId: string;
-  readonly commMessage: Message;
+  readonly commMessage?: Message;
   readonly journal?: ToolRuntimeJournalPort;
   readonly config?: Required<ZhinAgentConfig>;
   readonly hostPlugin?: Plugin;
