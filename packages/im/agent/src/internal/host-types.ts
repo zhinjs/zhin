@@ -3,7 +3,6 @@
  */
 import type { Usage } from '@zhin.js/ai';
 import type { Message, Plugin } from '@zhin.js/core';
-import type { ScheduleJobCreator, ScheduleJobExecutionPlan } from '../assistant/types.js';
 import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
 
 export type { ZhinAgentConfig, CompactionConfig } from '../config/zhin-agent-config.js';
@@ -39,37 +38,6 @@ export interface HostTurnMetrics {
   thinking?: string;
   /** 最终回复预览（日志表格） */
   output?: string;
-}
-
-export interface HostScheduleTurnContext {
-  executionPlan?: ScheduleJobExecutionPlan;
-  jobId?: string;
-  preview?: boolean;
-  activityFeedback?: boolean;
-  createdBy?: ScheduleJobCreator;
-  security: HostScheduleSecurityContext;
-  toolResolution?: HostScheduleToolResolution;
-  securityDenials: HostScheduleSecurityDenial[];
-}
-
-export interface HostScheduleSecurityContext {
-  execPreset: 'readonly' | 'network';
-  rejectOwnerApproval: true;
-  allowedDomains: string[];
-}
-
-export interface HostScheduleSecurityDenial {
-  tool: string;
-  policy: string;
-  reason: string;
-}
-
-export interface HostScheduleToolResolution {
-  tools: string[];
-  skills: string[];
-  resolvedBy: 'execution-plan' | 'affinity';
-  missingTools: string[];
-  missingSkills: string[];
 }
 
 export interface HostEventEmitter {

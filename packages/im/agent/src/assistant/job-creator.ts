@@ -1,8 +1,4 @@
-import {
-  hasSenderRole,
-  isFrameworkSenderRole,
-  type SenderRole,
-} from '@zhin.js/core';
+import { isFrameworkSenderRole, type SenderRole } from '@zhin.js/core';
 import type { ToolInvocationContext } from '@zhin.js/tool';
 import type { ScheduleJobCreator } from './types.js';
 
@@ -31,22 +27,5 @@ export function parseScheduleJobCreator(raw: unknown): ScheduleJobCreator | unde
     userId,
     roles: (roles.length > 0 ? roles : ['user']) as SenderRole[],
     name: record.name != null ? String(record.name) : undefined,
-  };
-}
-
-/** 将持久化的创建者转为合成 Message 的 sender 快照（供 harness 角色判定） */
-export function senderFromScheduleCreator(creator: ScheduleJobCreator): {
-  id: string;
-  name: string;
-  isMaster: boolean;
-  isTrusted: boolean;
-} {
-  const isMaster = hasSenderRole(creator.roles, 'master');
-  const isTrusted = !isMaster && hasSenderRole(creator.roles, 'trusted');
-  return {
-    id: creator.userId,
-    name: creator.name?.trim() || creator.userId,
-    isMaster,
-    isTrusted,
   };
 }

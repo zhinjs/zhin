@@ -90,7 +90,7 @@ export function createDeferredCapabilityPlan(
   });
 }
 
-function capabilityAsAgentTool(tool: ToolCapability): AgentTool {
+export function capabilityAsAgentTool(tool: ToolCapability): AgentTool {
   const parameters = toolInputSchemaToParameters(tool.inputSchema);
   return Object.freeze({
     name: tool.name,

@@ -3,8 +3,8 @@ import { createTaskExecutor } from '../../src/task-executor.js';
 import type { ScheduleJob } from '../../src/assistant/types.js';
 
 describe('schedule turn e2e (TaskExecutor → ScheduleExecutionDomain)', () => {
-  it('passes the complete job and a demoted synthetic message to the domain', async () => {
-    const execute = vi.fn(async (job: ScheduleJob, message: any) => ({
+  it('passes the complete job without fabricating an IM Message', async () => {
+    const execute = vi.fn(async (job: ScheduleJob) => ({
       success: true, output: 'report', durationMs: 1, toolsUsed: [], tokenUsage: { input: 1, output: 1 },
       audit: {
         jobId: job.id, executionId: 'e1', timestamp: 1, createdBy: job.createdBy,
@@ -14,7 +14,6 @@ describe('schedule turn e2e (TaskExecutor → ScheduleExecutionDomain)', () => {
       },
     }));
     const executor = createTaskExecutor({
-      agent: { getEventEmitter: () => ({ emit: vi.fn(), createPayload: vi.fn() }) } as any,
       domain: { execute }, resolveAdapter: () => undefined,
     });
     const job: ScheduleJob = {
@@ -25,8 +24,6 @@ describe('schedule turn e2e (TaskExecutor → ScheduleExecutionDomain)', () => {
 
     await executor.execute(job);
 
-    expect(execute).toHaveBeenCalledWith(job, expect.objectContaining({
-      $sender: expect.objectContaining({ id: 'owner', isMaster: false, isTrusted: true }),
-    }), { preview: false });
+    expect(execute).toHaveBeenCalledWith(job, { preview: false });
   });
 });

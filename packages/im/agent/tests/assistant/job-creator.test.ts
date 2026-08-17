@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   scheduleJobCreatorFromPrincipal,
   parseScheduleJobCreator,
-  senderFromScheduleCreator,
 } from '../../src/assistant/job-creator.js';
 import { createTaskExecutor } from '../../src/task-executor.js';
 
@@ -33,29 +32,11 @@ describe('schedule job creator', () => {
     });
   });
 
-  it('senderFromScheduleCreator maps roles to harness sender flags', () => {
-    expect(senderFromScheduleCreator({ userId: 'm1', roles: ['master'] })).toMatchObject({
-      id: 'm1',
-      isMaster: true,
-      isTrusted: false,
-    });
-    expect(senderFromScheduleCreator({ userId: 't1', roles: ['trusted'] })).toMatchObject({
-      id: 't1',
-      isMaster: false,
-      isTrusted: true,
-    });
-    expect(senderFromScheduleCreator({ userId: 'u1', roles: ['user'] })).toMatchObject({
-      id: 'u1',
-      isMaster: false,
-      isTrusted: false,
-    });
-  });
 });
 
 describe('task executor schedule creator', () => {
   it('preview uses canonical creator context and captures the domain tool resolution', async () => {
     const executor = createTaskExecutor({
-      agent: { getEventEmitter: () => ({ emit: vi.fn(), createPayload: vi.fn() }) } as any,
       domain: { execute: vi.fn(async (job) => ({
         success: true,
         output: 'preview output',
@@ -83,7 +64,7 @@ describe('task executor schedule creator', () => {
     expect(result.responseText).toBe('preview output');
     expect(result.executionPlan).toMatchObject({
       prompt: 'daily weather',
-      tools: ['web_search'],
+      tools: ['web_search', 'unused_tool'],
       skills: ['weather'],
       previewSample: 'preview output',
       confirmed: false,

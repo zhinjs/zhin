@@ -710,6 +710,27 @@ export function checkExecPolicyWithOptions(
   return checkExecPolicy(shadowConfig, command);
 }
 
+/** Context-free command preset check for unattended canonical Turn execution. */
+export function checkUnattendedExecPreset(
+  command: string,
+  preset: 'readonly' | 'network',
+): ExecPolicyResult {
+  const cmd = command.trim();
+  if (!cmd) return { allowed: false, reason: '命令为空' };
+  const unsafeReason = findUnsafeShellSyntax(cmd);
+  if (unsafeReason) return { allowed: false, reason: unsafeReason };
+  const allowlist = EXEC_PRESETS[preset] ?? [];
+  for (const sub of splitCompoundCommand(cmd)) {
+    for (const segment of splitPipeSegments(sub)) {
+      const name = extractCommandName(segment);
+      if (!name) continue;
+      const result = checkSingleCommand(name, segment, allowlist, 'allowlist', 'deny', 'other');
+      if (!result.allowed) return { allowed: false, reason: result.reason };
+    }
+  }
+  return { allowed: true };
+}
+
 /**
  * Wrap `bash` tools with exec policy enforcement.
  * 当 execApprovalMode=ask 且命令需审批时，返回提示信息而非抛错。

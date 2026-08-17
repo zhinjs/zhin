@@ -1,8 +1,4 @@
 import type { ScheduleJobCreator } from '../assistant/types.js';
-import { readSkillInstructions } from '../builtin/load-skill-tool.js';
-import { buildSkillLoadOptsForAgent } from '../skill/skill-load-opts.js';
-import type { ZhinAgentPrivate } from '../internal/agent-host.js';
-import type { HostScheduleSecurityContext } from '../internal/host-types.js';
 
 export interface SchedulePromptAssemblerInput {
   jobId: string;
@@ -14,7 +10,7 @@ export interface SchedulePromptAssemblerInput {
   memoryContext?: string;
   skillContext?: string;
   bootstrapContext?: string;
-  security?: Readonly<Pick<HostScheduleSecurityContext, 'execPreset'>>;
+  security?: Readonly<{ execPreset: 'readonly' | 'network' }>;
 }
 
 export interface SchedulePromptAssembly {
@@ -82,19 +78,4 @@ export function assembleSchedulePrompt(input: SchedulePromptAssemblerInput): Sch
     ].filter((value): value is string => Boolean(value)).join('\n\n'),
     userPrompt: input.prompt.trim(),
   };
-}
-
-export async function loadScheduleSkillContext(
-  host: ZhinAgentPrivate,
-  skillNames: string[],
-): Promise<string> {
-  if (!host.skillRegistry || skillNames.length === 0) return '';
-  const options = buildSkillLoadOptsForAgent(host);
-  const instructions: string[] = [];
-  for (const name of skillNames) {
-    if (!host.skillRegistry.getByName(name)) continue;
-    const content = await readSkillInstructions(name, options);
-    if (!content.startsWith(`Skill '${name}' not found`)) instructions.push(content);
-  }
-  return instructions.join('\n\n');
 }

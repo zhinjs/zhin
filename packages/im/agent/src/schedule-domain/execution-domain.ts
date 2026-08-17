@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { OutputElement } from '@zhin.js/ai';
-import type { Message } from '@zhin.js/core';
 import type { TurnEvent } from '../event/turn-event.js';
-import type { ScheduleJob } from '../assistant/types.js';
+import type { ScheduleJob, ScheduleJobCreator, ScheduleJobExecutionPlan } from '../assistant/types.js';
 import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
 import { DEFAULT_CONFIG } from '../config/zhin-agent-defaults.js';
 import { BudgetGuard, type ScheduleExecutionBudget } from './budget-guard.js';
@@ -13,7 +12,8 @@ import {
   type ScheduleAuditRecord,
 } from './audit-logger.js';
 import { validateScheduleOutput } from './output-validator.js';
-import { createScheduleSecurityContext } from './security-harness.js';
+import { createScheduleSecurityContext, type ScheduleSecurityDenial } from './security-harness.js';
+import type { TurnOutcome } from '../turn/turn-ingress.js';
 
 export interface ScheduleExecutionResult {
   success: boolean;
@@ -30,24 +30,29 @@ export interface ScheduleExecutionOptions {
 }
 
 export interface ScheduleExecutionDomain {
-  execute(job: ScheduleJob, message: Message, options?: ScheduleExecutionOptions): Promise<ScheduleExecutionResult>;
+  execute(job: ScheduleJob, options?: ScheduleExecutionOptions): Promise<ScheduleExecutionResult>;
 }
 
-export interface ScheduleAgentPort {
-  config: Required<ZhinAgentConfig>;
-  processTurn(request: {
-    content: string;
-    message: Message;
-    signal?: AbortSignal;
-    activityFeedbackEligible?: boolean;
-    scheduleContext?: import('../internal/host-types.js').HostScheduleTurnContext;
-    onChunk?: (chunk: string, full: string) => void;
-    onTurnEvent?: (event: TurnEvent) => void;
-  }): Promise<OutputElement[]>;
+export interface ScheduleTurnExecutionRequest {
+  readonly executionId: string;
+  readonly jobId: string;
+  readonly prompt: string;
+  readonly agent?: string;
+  readonly preview: boolean;
+  readonly createdBy?: ScheduleJobCreator;
+  readonly executionPlan?: ScheduleJobExecutionPlan;
+  readonly security: ReturnType<typeof createScheduleSecurityContext>;
+  readonly signal: AbortSignal;
+  readonly onTurnEvent: (event: TurnEvent) => void;
+}
+
+export interface ScheduleTurnPort {
+  execute(request: ScheduleTurnExecutionRequest): Promise<TurnOutcome>;
 }
 
 export interface ScheduleExecutionDomainDeps {
-  agent: ScheduleAgentPort;
+  turn: ScheduleTurnPort;
+  config: Required<ZhinAgentConfig>;
   auditLogger?: ScheduleAuditLogger;
   now?: () => number;
 }
@@ -86,38 +91,49 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
 
   async execute(
     job: ScheduleJob,
-    message: Message,
     options: ScheduleExecutionOptions = {},
   ): Promise<ScheduleExecutionResult> {
     const startedAt = this.now();
     const executionId = randomUUID();
     const prompt = job.executionPlan?.prompt?.trim() || job.action.prompt.trim();
-    const scheduleContext: import('../internal/host-types.js').HostScheduleTurnContext = {
-      jobId: job.id,
-      preview: options.preview || undefined,
-      executionPlan: job.executionPlan,
-      createdBy: job.createdBy,
-      activityFeedback: job.activityFeedback,
-      security: createScheduleSecurityContext(
-        this.deps.agent.config.schedule?.security?.execPreset ?? 'readonly',
-        this.deps.agent.config.schedule?.security?.allowedDomains ?? [],
-      ),
-      securityDenials: [],
+    const security = createScheduleSecurityContext(
+      this.deps.config.schedule?.security?.execPreset ?? 'readonly',
+      this.deps.config.schedule?.security?.allowedDomains ?? [],
+    );
+    const securityDenials: ScheduleSecurityDenial[] = [];
+    let resolution: ScheduleToolResolution = {
+      tools: [], skills: [], resolvedBy: 'affinity', missingTools: [], missingSkills: [],
     };
-    const guard = new BudgetGuard(resolveBudget(this.deps.agent.config, job));
+    const guard = new BudgetGuard(resolveBudget(this.deps.config, job));
     let streamed = '';
     let usageSeen = false;
     let cumulativeUsage = { input: 0, output: 0 };
 
-    const guarded = await guard.run(async budget => this.deps.agent.processTurn({
-        content: prompt,
-        message,
+    const guarded = await guard.run(async budget => this.deps.turn.execute({
+        executionId,
+        jobId: job.id,
+        prompt,
+        agent: job.action.kind === 'agent' ? job.action.agent : undefined,
+        preview: options.preview === true,
+        createdBy: job.createdBy,
+        executionPlan: job.executionPlan,
+        security,
         signal: budget.signal,
-        scheduleContext,
-        activityFeedbackEligible: false,
-        onChunk: (_chunk, full) => { streamed = full; },
         onTurnEvent: (event: TurnEvent) => {
+          if (event.type === 'chunk') streamed = event.accumulated;
+          if (event.type === 'capability_resolution') {
+            resolution = {
+              tools: [...event.tools],
+              skills: [...event.skills],
+              resolvedBy: event.resolvedBy === 'session' ? 'affinity' : event.resolvedBy,
+              missingTools: [...event.missingTools],
+              missingSkills: [...event.missingSkills],
+            };
+          }
           if (event.type === 'tool_call') budget.onToolCall(event.toolName);
+          if (event.type === 'tool_denied') {
+            securityDenials.push({ tool: event.toolName, policy: event.policy, reason: event.reason });
+          }
           if (event.type === 'usage') {
             usageSeen = true;
             cumulativeUsage = {
@@ -130,18 +146,23 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
           }
         },
     }));
-    const raw = guarded.value ? textFromElements(guarded.value) : streamed;
+    const outcome = guarded.value;
+    const completedOutput = outcome?.status === 'completed' ? outcome.output : [];
+    const raw = completedOutput.length > 0 ? textFromElements([...completedOutput]) : streamed;
     const validation = validateScheduleOutput(raw);
     const suffix = guarded.terminatedBy ? `\n\n[任务因${terminationLabel(guarded.terminatedBy)}被终止]` : '';
     const output = validation.valid ? `${validation.cleaned}${suffix}` : '';
     const durationMs = this.now() - startedAt;
-    const resolution = scheduleContext.toolResolution ?? {
-      tools: [], skills: [], resolvedBy: 'affinity' as const, missingTools: [], missingSkills: [],
-    };
     const acceptedPartial = Boolean(guarded.terminatedBy && validation.valid);
+    const outcomeError = outcome && outcome.status !== 'completed'
+      ? outcome.status === 'failed' ? outcome.error.message
+        : outcome.status === 'cancelled' ? outcome.reason
+          : `budget exceeded: ${outcome.budget}`
+      : undefined;
     const error = acceptedPartial
       ? undefined
-      : guarded.error?.message ?? (validation.valid ? undefined : 'schedule output is empty after validation');
+      : guarded.error?.message ?? outcomeError
+        ?? (validation.valid ? undefined : 'schedule output is empty after validation');
     const audit = createScheduleAuditRecord({
       jobId: job.id,
       executionId,
@@ -157,8 +178,8 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
       tokenUsage: guarded.tokenUsage,
       durationMs,
       budgetTerminated: guarded.terminatedBy,
-      securityDenials: scheduleContext.securityDenials,
-      success: acceptedPartial || (!guarded.error && validation.valid),
+      securityDenials,
+      success: Boolean(acceptedPartial || (!guarded.error && outcome?.status === 'completed' && validation.valid)),
       outputLength: output.length,
       outputStripped: validation.stripped,
       error,
@@ -174,4 +195,12 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
       audit,
     };
   }
+}
+
+interface ScheduleToolResolution {
+  tools: string[];
+  skills: string[];
+  resolvedBy: 'execution-plan' | 'affinity';
+  missingTools: string[];
+  missingSkills: string[];
 }

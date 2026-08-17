@@ -2,7 +2,7 @@ import { mkdir, appendFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { ScheduleJobCreator } from '../assistant/types.js';
 import type { ScheduleBudgetTermination } from './budget-guard.js';
-import type { HostScheduleSecurityDenial } from '../internal/host-types.js';
+import type { ScheduleSecurityDenial } from './security-harness.js';
 
 export interface ScheduleAuditRecord {
   jobId: string;
@@ -20,7 +20,7 @@ export interface ScheduleAuditRecord {
   tokenUsage: { input: number; output: number };
   durationMs: number;
   budgetTerminated?: ScheduleBudgetTermination;
-  securityDenials: HostScheduleSecurityDenial[];
+  securityDenials: ScheduleSecurityDenial[];
   success: boolean;
   outputLength: number;
   outputStripped: string[];

@@ -132,4 +132,105 @@ describe('FullAgentTurnEngine', () => {
     expect((coreInput?.resolvedTools as Array<{ name: string }>).map((tool) => tool.name))
       .toEqual(['discover', 'load_tool', 'load_skill']);
   });
+
+  it('runs schedule ingress statelessly with a direct frozen capability plan', async () => {
+    const turn = createTurnIngress({
+      identity: { rootId: 'root', generation: 8, traceId: 'exec', turnId: 'exec' },
+      origin: { kind: 'schedule', jobId: 'daily' },
+      principal: { subjectId: 'owner', roles: ['trusted'] },
+      input: { text: 'publish weather' },
+      session: { key: 'schedule:daily' },
+      policy: {
+        permissions: [], unattended: true,
+        network: { enabled: true, httpsOnly: true, allowedDomains: ['weather.example'] },
+        shell: { preset: 'readonly' },
+        filesystem: { workspaceRoot: '/workspace' },
+      },
+      execution: {
+        kind: 'schedule',
+        executionPlan: { prompt: 'publish weather', tools: ['weather'], skills: ['report'] },
+        createdBy: { userId: 'owner', roles: ['master'] },
+        security: { execPreset: 'readonly', allowedDomains: ['weather.example'] },
+      },
+      capabilities: { tools: ['weather'], skills: ['report'] },
+      signal: new AbortController().signal,
+      ports: { journal: { append: async () => undefined } },
+    });
+    const weather = {
+      owner: rootPluginId(), name: 'weather', qualifiedName: 'weather',
+      description: 'weather', approval: 'never' as const, source: 'test',
+      execute: vi.fn(async () => 'sunny'),
+    };
+    const report = {
+      $feature: 'zhin.skill/1' as const,
+      owner: rootPluginId(), name: 'report', qualifiedName: 'report', source: 'test',
+      description: 'report', instructions: 'Write a concise report.',
+    };
+    let coreInput: Record<string, unknown> | undefined;
+    const core = {
+      runText(input: Record<string, unknown>) {
+        coreInput = input;
+        return (async function* () {
+          yield {
+            type: 'turn_end' as const,
+            output: [{ type: 'text' as const, content: 'sunny' }],
+            usage: { promptTokens: 2, completionTokens: 1, totalTokens: 3 },
+          };
+          return {
+            reply: 'sunny', usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3 },
+            path: 'agent' as const, iterations: 1, model: 'model', toolCalls: [],
+          };
+        })();
+      },
+    };
+    const sessionSystem = {
+      prepareIngressTurn: vi.fn(async () => { throw new Error('schedule must not open a conversation session'); }),
+      touchAfterTurn: vi.fn(async () => { throw new Error('schedule must not touch a conversation session'); }),
+    };
+    const contextSystem = {
+      buildTextTurnContext: vi.fn(async () => ({
+        userMessages: [createUserMessage('publish weather')], personaEnhanced: 'persona',
+        modelCandidates: ['model'], modelId: 'model', providerAlias: 'provider', turnEnvelope: null,
+      })),
+    };
+    const host = {
+      config: { deferredTools: {} },
+      rateLimiter: { check: () => { throw new Error('schedule must not use interactive rate limits'); } },
+      contextRepository: { getDeferredToolSnapshot: async () => { throw new Error('schedule must not load deferred state'); } },
+      promptController: new PromptController('one-at-a-time', 'one-at-a-time'),
+      activeBinding: { providerAlias: 'provider', model: 'model', nickname: 'bot' },
+      finalizeActiveTurn: vi.fn(async () => undefined),
+    };
+    const context: AgentTurnExecutionContext = {
+      turn,
+      capabilities: {
+        generation: 8, owner: rootPluginId(), tools: [weather], skills: [report], agents: [], mcp: [],
+      },
+      toolCapabilities: [weather],
+      tools: new TurnToolRuntime(turn, [weather]),
+      selection: selection(),
+    };
+    const engine = createFullAgentTurnEngine({
+      host: host as never, core: core as never,
+      sessionSystem: sessionSystem as never, contextSystem: contextSystem as never,
+    });
+    const events: import('../../src/event/turn-event.js').TurnEvent[] = [];
+    const stream = engine.run(context);
+    while (true) {
+      const step = await stream.next();
+      if (step.done) break;
+      events.push(step.value);
+    }
+
+    expect(events[0]).toMatchObject({
+      type: 'capability_resolution', mode: 'direct', resolvedBy: 'execution-plan',
+      tools: ['weather'], skills: ['report'], missingTools: [], missingSkills: [],
+    });
+    expect(coreInput).toMatchObject({
+      toolLoading: 'direct', conversationPersistence: 'none',
+      promptProfile: { kind: 'schedule', jobId: 'daily' },
+    });
+    expect(sessionSystem.prepareIngressTurn).not.toHaveBeenCalled();
+    expect(sessionSystem.touchAfterTurn).not.toHaveBeenCalled();
+  });
 });

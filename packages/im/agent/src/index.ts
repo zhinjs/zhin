@@ -35,7 +35,7 @@ export type {
 } from './config/agent-interfaces.js';
 export type {
   TurnEvent, TurnUsage,
-  TurnStartEvent, ChunkEvent,
+  TurnStartEvent, ChunkEvent, CapabilityResolutionEvent,
   ToolCallEvent as TurnToolCallEvent,
   ToolResultEvent,
   ThinkingEvent, TurnEndEvent, TurnErrorEvent,
@@ -67,6 +67,7 @@ export type {
   TurnOrigin,
   TurnOutcome,
   TurnPolicyContext,
+  TurnExecutionProfile,
   TurnPorts,
   TurnPrincipal,
   TurnRequest,
@@ -560,7 +561,14 @@ export type {
   TaskExecutionOptions,
   TaskExecutionResult,
   TaskExecutorDeps,
+  ScheduleActivityEvent,
+  ScheduleActivityPort,
 } from './task-executor.js';
+export type {
+  ScheduleTurnExecutionRequest,
+  ScheduleTurnPort,
+} from './schedule-domain/execution-domain.js';
+export { demoteScheduleCreator } from './schedule-domain/security-harness.js';
 export {
   requestConnectionAuthorization,
   completeConnectionAuthorization,

@@ -1,5 +1,4 @@
 import type { ScheduleJobCreator } from '../assistant/types.js';
-import type { HostScheduleSecurityContext } from '../internal/host-types.js';
 
 export type AgentPromptProfile =
   | Readonly<{ kind: 'interactive' }>
@@ -9,7 +8,7 @@ export type AgentPromptProfile =
       prompt: string;
       createdBy?: ScheduleJobCreator;
       security: Readonly<{
-        execPreset: HostScheduleSecurityContext['execPreset'];
+        execPreset: 'readonly' | 'network';
         rejectOwnerApproval: true;
         allowedDomains: readonly string[];
       }>;

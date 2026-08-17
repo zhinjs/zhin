@@ -79,4 +79,33 @@ describe('TurnIngress', () => {
       policy: { permissions: [], unattended: true },
     }))).toThrow('Unattended TurnIngress cannot expose interactive ports');
   });
+
+  it('requires one matching fail-closed authority for schedule execution', () => {
+    const schedule = {
+      origin: { kind: 'schedule' as const, jobId: 'daily' },
+      session: { key: 'schedule:daily' },
+      policy: {
+        permissions: [], unattended: true,
+        network: { enabled: true, httpsOnly: true, allowedDomains: ['api.example'] },
+        shell: { preset: 'readonly' as const },
+      },
+      execution: {
+        kind: 'schedule' as const,
+        security: { execPreset: 'readonly' as const, allowedDomains: ['api.example'] },
+      },
+      ports: { journal: { append: () => undefined } },
+    };
+    expect(createTurnIngress(input(schedule))).toMatchObject({
+      origin: { kind: 'schedule', jobId: 'daily' },
+      execution: { kind: 'schedule' },
+    });
+    expect(() => createTurnIngress(input({
+      ...schedule,
+      policy: { ...schedule.policy, shell: { preset: 'network' } },
+    }))).toThrow('Schedule Shell authority must match');
+    expect(() => createTurnIngress(input({
+      ...schedule,
+      execution: { kind: 'interactive' },
+    }))).toThrow('Schedule origin requires a schedule execution profile');
+  });
 });

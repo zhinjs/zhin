@@ -27,15 +27,11 @@ import type {
   Tool,
 } from '../internal/agent-host.js';
 import type { Message } from '@zhin.js/core';
-import { randomUUID } from 'node:crypto';
-import { buildTurnUserMessages } from '../context/turn-user-message.js';
 import {
   resolveQuoteSystemHint,
   turnMediaFromMessage,
   turnContextViewFromMessage,
 } from '../context/im-turn-context-adapter.js';
-import { schedulePromptProfile, scheduleTurnContextView } from '../schedule-domain/turn-context.js';
-import type { HostScheduleTurnContext } from '../internal/host-types.js';
 import { createClassicToolExecutionAuthority } from '../tool/classic-tool-execution-authority.js';
 
 function requireSessionSystem(host: ZhinAgentPrivate): SessionSystem {
@@ -65,15 +61,11 @@ export interface ProcessTextTurnOptions {
   journal?: AgentRunJournal;
   /** Per-turn cancellation from an ingress owner such as the IM trigger host. */
   signal?: AbortSignal;
-  /** Stateless execution: no conversation session/history and eager tools only. */
-  isolated?: boolean;
   /**
    * Snapshot generation for ToolRuntime validation.
    * Plugin Runtime hosts pass AgentCapabilities.generation.
    */
   generation?: number;
-  /** Explicit unattended Schedule authority; never discovered from ambient state. */
-  scheduleContext?: HostScheduleTurnContext;
 }
 
 export async function processTextTurn(
@@ -86,18 +78,9 @@ export async function processTextTurn(
 ): Promise<OutputElement[]> {
     const t0 = now();
     const sessionSystem = requireSessionSystem(host);
-    const prep = extras?.isolated
-      ? {
-          sessionKey: `isolated:${randomUUID()}`,
-          sessionId: `isolated:${randomUUID()}`,
-          userId: commMessage.$sender.id || 'unknown',
-          isNewSession: false,
-          passiveBlock: null,
-          turnUser: buildTurnUserMessages(commMessage, content, null),
-        }
-      : await sessionSystem.prepareTextTurn(host, commMessage, content, {
-          deferredAutoContinue: extras?.deferredAutoContinue,
-        });
+    const prep = await sessionSystem.prepareTextTurn(host, commMessage, content, {
+      deferredAutoContinue: extras?.deferredAutoContinue,
+    });
     const { sessionKey, userId, sessionId, isNewSession, turnUser } = prep;
 
     if (isNewSession) {
@@ -115,7 +98,7 @@ export async function processTextTurn(
       provider: host.getTurnProvider().name,
     });
 
-    if (!extras?.deferredAutoContinue && !extras?.isolated) {
+    if (!extras?.deferredAutoContinue) {
       const rateCheck = host.rateLimiter.check(userId);
       if (!rateCheck.allowed) {
         logPhase(host.phaseConfig, 'turn.rate_limited', sessionId, { userId });
@@ -147,7 +130,6 @@ export async function processTextTurn(
       sessionId,
       userId,
       mcpServerNames,
-      scheduleContext: extras?.scheduleContext,
     });
     const {
       contextForTools,
@@ -167,17 +149,14 @@ export async function processTextTurn(
     logger.debug(formatCompact({ op: 'tools_resolved', count: resolvedTools.length }));
 
     const inboundMedia = await resolveTurnMediaInjection(turnMediaFromMessage(commMessage));
-    const scheduleContext = extras?.scheduleContext;
-    const turnContext = scheduleContext
-      ? scheduleTurnContextView(scheduleContext)
-      : turnContextViewFromMessage(commMessage);
+    const turnContext = turnContextViewFromMessage(commMessage);
     const turnCtx = await requireContextSystem(host).buildTextTurnContext({
       host,
       turn: turnContext,
       content,
       turnUser,
       deferredStats,
-      quoteSystemHint: scheduleContext ? undefined : resolveQuoteSystemHint(commMessage),
+      quoteSystemHint: resolveQuoteSystemHint(commMessage),
       prebuiltMessages: extras?.prebuiltMessages,
       mode: inboundMedia.blocks.length > 0 ? 'vision' : undefined,
     });
@@ -217,9 +196,7 @@ export async function processTextTurn(
           sessionId,
           userMessageExtra: turnUser.userMessageExtra,
           rawContent: turnUser.rawContent,
-          promptProfile: scheduleContext
-            ? schedulePromptProfile(scheduleContext, content)
-            : { kind: 'interactive' },
+          promptProfile: { kind: 'interactive' },
           turnContext,
           allTools,
           resolvedTools,
@@ -235,7 +212,7 @@ export async function processTextTurn(
           deferredController: toolsPrep.resolved.controller,
           toolCatalog: toolsPrep.catalog,
           toolLoading: toolsPrep.resolved.deferred ? 'deferred' : 'direct',
-          conversationPersistence: extras?.isolated ? 'none' : 'session',
+          conversationPersistence: 'session',
           onTurnEvent: extras?.onTurnEvent,
           journal: extras?.journal,
           generation: extras?.generation,
@@ -263,7 +240,7 @@ export async function processTextTurn(
       reply,
       filterMs,
       startedAt: t0,
-      persistSession: !extras?.isolated,
+      persistSession: true,
     });
 
     return buildTextTurnOutbound(reply, loopResult);

@@ -145,7 +145,7 @@ _避免使用_：`ZhinTool`/`Message` 第二参数、跨 generation manager look
 _避免使用_：optimizePrompt、extra 上的 executionPlan
 
 **Schedule Turn**:
-由 Schedule Execution Domain 直接构造的 **Turn Ingress**（`preview` 预演或 `scheduled` 到点执行）；没有 synthetic IM 载体，也不继承会话回复能力。Schedule authority 作为显式参数贯穿 Context、Prompt 与 Tool pipeline，不写入 ALS；正式执行的 Delivery Intent 在新 operation 中通过 `DeliveryPort` 投递并独立记录终态。
+`TaskExecutor` 只依赖 `ScheduleTurnPort`；composition root 将任务映射为带 `schedule` execution profile 的 **TurnRequest**，由 generation-owned `AgentRuntime` 获取固定快照并交给唯一 `FullAgentTurnEngine`。该 profile 使用 stateless context、direct capability plan、统一 `TurnToolRuntime`/Journal；没有 synthetic IM 载体，也不继承会话历史或回复能力。输出经 Schedule audit/validation 后再由 `NotificationRouter` 作为独立 delivery operation 投递。
 _避免使用_：synthetic Message、ambient scheduleContext、scheduleContext 兼容分支、mutate Message.extra
 
 **Passive Group Context**:
@@ -268,7 +268,7 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 | 总线 | 职责 |
 |------|------|
 | **EventSystem**（蓝图，`src/event/`） | Agent turn：`turn_start`、`tool_call`、`chunk`、`turn_end` |
-| **ZhinAgentEventEmitter** | 现有订阅方、`scheduleContext` 投影；迁移期作 EventSystem 后端 |
+| **ZhinAgentEventEmitter** | 现有 IM 活动反馈订阅方；composition-root adapter 只投影已解析的 Schedule activity address |
 | **OrchestrationKernel RunEvent** | Run/Task 持久化事件流；**不合并** |
 | **Runtime Event Journal** | ingress / delivery / failure 的事实源；IM/Console/日志只做投影 |
 

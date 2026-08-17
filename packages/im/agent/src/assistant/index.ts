@@ -103,7 +103,6 @@ export { jobPrompt } from './job-utils.js';
 export {
   scheduleJobCreatorFromPrincipal,
   parseScheduleJobCreator,
-  senderFromScheduleCreator,
 } from './job-creator.js';
 
 export {

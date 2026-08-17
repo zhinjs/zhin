@@ -25,7 +25,6 @@ import type {
   HostPhaseTraceConfig,
   HostPromptController,
   HostPromptTraceConfig,
-  HostScheduleTurnContext,
   HostTurnMetrics,
   HostTurnTracker,
   OnChunkCallback,

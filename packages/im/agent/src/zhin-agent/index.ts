@@ -62,7 +62,6 @@ import {
 import { asPrivate } from '../internal/as-private.js';
 import { PromptController } from '../turn/prompt-controller.js';
 import { getActiveTurnTracker } from '../internal/turn-context.js';
-import type { HostScheduleTurnContext as ScheduleTurnContext } from '../internal/host-types.js';
 import { computeDeferredDelta } from '../turn/turn-deferred-delta.js';
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
@@ -135,8 +134,6 @@ export interface AgentTurnRequest {
   readonly activityFeedbackEligible?: boolean;
   /** Per-message routing state. Never call configure() for these values. */
   readonly configuration?: AgentTurnConfiguration;
-  /** Unattended execution state owned by ScheduleExecutionDomain. */
-  readonly scheduleContext?: ScheduleTurnContext;
   /** Structured turn telemetry for execution domains. */
   readonly onTurnEvent?: (event: TurnEvent) => void;
   /**
@@ -524,20 +521,16 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       {
         signal: request.signal,
         onTurnEvent: request.onTurnEvent,
-        isolated: request.scheduleContext !== undefined,
         generation: request.generation,
-        scheduleContext: request.scheduleContext,
       },
     );
     return runWithAgentTurnConfiguration(request.configuration ?? {}, () =>
       this.runInTurnContext(randomUUID(), () =>
-        request.scheduleContext
-          ? executeTurn(request.content)
-          : runWithInboundQueue(request.message, this.inboundQueueConfig, this.inboundTurnQueue, {
-              content: request.content,
-              signal: request.signal,
-              run: executeTurn,
-            }),
+        runWithInboundQueue(request.message, this.inboundQueueConfig, this.inboundTurnQueue, {
+          content: request.content,
+          signal: request.signal,
+          run: executeTurn,
+        }),
         request.activityFeedbackEligible === undefined
           ? undefined
           : {

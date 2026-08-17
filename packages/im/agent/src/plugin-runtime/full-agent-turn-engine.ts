@@ -1,4 +1,4 @@
-import type { AgentMessage, Usage } from '@zhin.js/ai';
+import { createUserMessage, type AgentMessage, type Usage } from '@zhin.js/ai';
 import type { AgentDescriptor } from '@zhin.js/agent-feature';
 import type { SkillDescriptor } from '@zhin.js/skill';
 import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/inbound-media.js';
@@ -16,6 +16,7 @@ import type {
   AgentTurnExecutionContext,
 } from './agent-runtime.js';
 import type { TurnTerminalProjection } from '../turn/execute-agent-turn.js';
+import { createScheduleCapabilityPlan } from './schedule-capability-plan.js';
 
 export interface FullAgentTurnEngineOptions {
   readonly host: ZhinAgentPrivate;
@@ -38,6 +39,9 @@ async function* runFullAgentTurn(
   context: AgentTurnExecutionContext,
 ): AsyncGenerator<TurnEvent, TurnTerminalProjection> {
   const { host, sessionSystem, contextSystem } = options;
+  if (context.turn.execution.kind === 'schedule') {
+    return yield* runScheduleTurn(options, context);
+  }
   const prep = await sessionSystem.prepareIngressTurn(host, context.turn);
   const rate = host.rateLimiter.check(prep.userId);
   if (!rate.allowed) {
@@ -144,6 +148,108 @@ async function* runFullAgentTurn(
           throw new Error(`Synchronous reply projection failed: ${delivery.code}`);
         }
       }
+    },
+  };
+}
+
+async function* runScheduleTurn(
+  options: FullAgentTurnEngineOptions,
+  context: AgentTurnExecutionContext,
+): AsyncGenerator<TurnEvent, TurnTerminalProjection> {
+  const { host, contextSystem } = options;
+  const origin = context.turn.origin;
+  const profile = context.turn.execution;
+  if (origin.kind !== 'schedule' || profile.kind !== 'schedule') {
+    throw new TypeError('Schedule execution profile requires a schedule origin');
+  }
+  const rawContent = context.turn.input.text.trim();
+  const plan = createScheduleCapabilityPlan({
+    prompt: rawContent,
+    executionPlan: profile.executionPlan,
+    tools: context.toolCapabilities,
+    skills: context.capabilities.skills,
+  });
+  yield {
+    type: 'capability_resolution',
+    mode: 'direct',
+    resolvedBy: plan.resolvedBy,
+    tools: plan.resolvedTools.map((tool) => tool.name),
+    skills: plan.skills.map((skill) => skill.qualifiedName),
+    missingTools: [...plan.missingTools],
+    missingSkills: [...plan.missingSkills],
+  };
+
+  const activeSkillsContext = plan.skills.map((skill) => skill.instructions).join('\n\n');
+  const prompt = await contextSystem.buildTextTurnContext({
+    host,
+    turn: context.turn,
+    content: rawContent,
+    turnUser: {
+      rawContent,
+      promptMessages: [createUserMessage(rawContent)],
+    },
+    activeSkillsContext,
+  });
+  const toolRuntime = new TurnToolRuntime(context.turn, plan.capabilities);
+  const promptRuntime = Object.freeze({
+    bootstrapContext: options.bootstrapContext,
+    activeSkillsContext,
+    agentNickname: host.activeBinding?.nickname,
+    modelId: host.activeBinding?.model,
+    providerAlias: host.activeBinding?.providerAlias,
+  });
+  const stream = host.promptController.scheduleStream({
+    sessionKey: context.turn.session.key,
+    sessionId: context.turn.session.key,
+    userMessages: prompt.userMessages,
+    signal: context.turn.signal,
+    execute: (initialMessages, hooks, signal) => options.core.runText({
+      host,
+      sessionId: context.turn.session.key,
+      rawContent,
+      promptProfile: {
+        kind: 'schedule',
+        jobId: origin.jobId,
+        prompt: rawContent,
+        createdBy: profile.createdBy,
+        security: {
+          execPreset: profile.security.execPreset,
+          rejectOwnerApproval: true,
+          allowedDomains: profile.security.allowedDomains,
+        },
+      },
+      turnContext: context.turn,
+      allTools: [...plan.allTools],
+      resolvedTools: [...plan.resolvedTools],
+      toolExecution: turnToolExecutionAuthority(toolRuntime),
+      toolEventSource: 'authority',
+      loopHooks: options.loopHooks,
+      promptRuntime,
+      personaEnhanced: prompt.personaEnhanced,
+      modelId: prompt.modelId,
+      modelCandidates: prompt.modelCandidates,
+      initialMessages,
+      promptHooks: hooks,
+      signal,
+      toolCatalog: [],
+      toolLoading: 'direct',
+      conversationPersistence: 'none',
+      generation: context.turn.identity.generation,
+    }),
+  });
+  const completion = yield* bufferTerminal(stream);
+  yield completion.terminal;
+  return {
+    project: async () => {
+      await host.finalizeActiveTurn({
+        usage: completion.result.usage,
+        path: completion.result.path,
+        iterations: completion.result.iterations,
+        model: completion.result.model,
+        userInput: rawContent,
+        output: completion.result.reply,
+        thinking: completion.result.thinking,
+      });
     },
   };
 }

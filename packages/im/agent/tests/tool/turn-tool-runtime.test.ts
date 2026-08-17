@@ -227,6 +227,18 @@ describe('TurnToolRuntime', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it('enforces the unattended Shell preset before executing Bash', async () => {
+    const execute = vi.fn(async () => 'ran');
+    const { turn } = fixture({ shell: { preset: 'readonly' } });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'bash')]);
+
+    await expect(runtime.execute('bash', { command: 'git status' }, 'call-shell-preset'))
+      .resolves.toMatchObject({ status: 'denied', policy: 'exec-policy' });
+    await expect(runtime.execute('bash', { command: 'pwd' }, 'call-shell-readonly'))
+      .resolves.toMatchObject({ status: 'completed', output: 'ran' });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
   it('passes the turn signal and waits for real settlement before cancelling', async () => {
     const controller = new AbortController();
     let release!: () => void;
@@ -302,6 +314,7 @@ function fixture(options: {
   signal?: AbortSignal;
   approval?: import('../../src/session/approval-port.js').ApprovalPort;
   network?: TurnPolicyContext['network'];
+  shell?: TurnPolicyContext['shell'];
   journalError?: Error;
   roles?: readonly string[];
   workspaceRoot?: string;
@@ -317,6 +330,7 @@ function fixture(options: {
       permissions: ['user'],
       unattended: false,
       ...(options.network ? { network: options.network } : {}),
+      ...(options.shell ? { shell: options.shell } : {}),
       ...(options.workspaceRoot ? { filesystem: { workspaceRoot: options.workspaceRoot } } : {}),
     },
     capabilities: { tools: ['danger'], skills: [] },

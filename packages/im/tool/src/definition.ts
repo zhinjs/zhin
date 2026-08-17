@@ -13,6 +13,7 @@ export interface ToolInvocationPolicy {
     readonly httpsOnly?: boolean;
     readonly allowedDomains?: readonly string[];
   }>;
+  readonly shell?: Readonly<{ preset: 'readonly' | 'network' }>;
   readonly filesystem?: Readonly<{
     readonly workspaceRoot: string;
   }>;

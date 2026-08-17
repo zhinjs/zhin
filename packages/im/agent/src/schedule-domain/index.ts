@@ -4,4 +4,3 @@ export * from './execution-domain.js';
 export * from './output-validator.js';
 export * from './prompt-assembler.js';
 export * from './security-harness.js';
-export * from './tool-resolver.js';

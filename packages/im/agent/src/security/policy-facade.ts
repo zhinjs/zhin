@@ -47,7 +47,7 @@ import {
   type DangerousToolDecision,
   type FileToolName,
 } from './dangerous-tool-policy.js';
-import { checkExecPolicyWithOptions } from './exec-policy.js';
+import { checkExecPolicyWithOptions, checkUnattendedExecPreset } from './exec-policy.js';
 import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approve-always-store.js';
 import {
   checkUrlNetworkAccess,
@@ -153,6 +153,16 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
   if (input.tool.name === 'bash') {
     const command = stringArgument(input.input, 'command');
     if (command) {
+      if (input.turn.policy.shell) {
+        const exec = checkUnattendedExecPreset(command, input.turn.policy.shell.preset);
+        if (!exec.allowed) {
+          return Object.freeze({
+            status: 'denied',
+            policy: 'exec-policy',
+            reason: exec.reason ?? `command denied by ${input.turn.policy.shell.preset} preset`,
+          });
+        }
+      }
       const safety = checkBashCommandSafety(command);
       if (!safety.safe) {
         return Object.freeze({

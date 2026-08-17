@@ -1,9 +1,8 @@
 /** Delivery boundary for the independent schedule execution domain. */
-import { type Message, createSyntheticMessage, resolveIMSessionIdFromMessage, getLogger } from '@zhin.js/core';
-import type { ZhinAgent } from './zhin-agent/index.js';
+import { getLogger } from '@zhin.js/logger';
 import { createNotificationRouter, type NotificationRouter } from './assistant/notification-router.js';
 import type { ScheduleJob, ScheduleJobExecutionPlan } from './assistant/types.js';
-import { scheduleJobCreatorFromPrincipal, senderFromScheduleCreator } from './assistant/job-creator.js';
+import { scheduleJobCreatorFromPrincipal } from './assistant/job-creator.js';
 import type { ScheduleInvocationContext } from './assistant/schedule-job-service.js';
 import { deliverScheduleToAdapter } from './assistant/deliver-schedule-to-adapter.js';
 import { KeyedMutex } from './utils/keyed-mutex.js';
@@ -11,9 +10,11 @@ import {
   ScheduleExecutionDomainImpl,
   type ScheduleExecutionDomain,
   type ScheduleExecutionResult,
+  type ScheduleTurnPort,
 } from './schedule-domain/execution-domain.js';
-import { demoteScheduleCreator } from './schedule-domain/security-harness.js';
 import { JsonlScheduleAuditLogger } from './schedule-domain/audit-logger.js';
+import type { ZhinAgentConfig } from './config/zhin-agent-config.js';
+import { DEFAULT_CONFIG } from './config/zhin-agent-defaults.js';
 
 const logger = getLogger('task-executor');
 const sceneLocks = new KeyedMutex();
@@ -24,9 +25,11 @@ export interface TaskExecutionResult extends ScheduleExecutionResult {
 }
 
 export interface TaskExecutorDeps {
-  agent: ZhinAgent;
+  turn?: ScheduleTurnPort;
+  config?: Required<ZhinAgentConfig>;
   resolveAdapter: (platform: string) => { sendMessage: (opts: import('@zhin.js/core').SendOptions) => Promise<string> } | undefined;
   router?: NotificationRouter;
+  activity?: ScheduleActivityPort;
   defaultNotify?: import('./assistant/types.js').JobNotify;
   domain?: ScheduleExecutionDomain;
   dataDir?: string;
@@ -36,76 +39,50 @@ export interface TaskExecutionOptions {
   previewSource?: ScheduleInvocationContext;
 }
 
-function buildExecutionMessage(job: ScheduleJob, notify: import('./assistant/types.js').JobNotify): Message {
-  const im = notify.channel === 'im' ? notify : undefined;
-  const scene = im?.target.scene;
-  const sceneId = scene?.sceneId || 'cron';
-  const scope = scene?.kind || 'private';
-  const creator = job.createdBy ? demoteScheduleCreator(job.createdBy) : undefined;
-  const sender = creator
-    ? senderFromScheduleCreator(creator)
-    : { id: 'schedule', name: 'schedule', isMaster: false, isTrusted: false };
-  return createSyntheticMessage({
-    adapter: scene?.platform || 'cron',
-    endpoint: scene?.endpointKey || 'default',
-    sender,
-    channel: { type: scope, id: sceneId },
-  });
+export interface ScheduleActivityEvent {
+  readonly phase: 'start' | 'finish' | 'error';
+  readonly job: ScheduleJob;
+  readonly previewSource?: ScheduleInvocationContext;
+  readonly notify: import('./assistant/types.js').JobNotify;
 }
 
-function buildPreviewMessage(job: ScheduleJob, source: ScheduleInvocationContext): Message {
-  const creator = demoteScheduleCreator(
-    job.createdBy ?? scheduleJobCreatorFromPrincipal(source.principal),
-  );
-  const im = source.origin.kind === 'im' ? source.origin : undefined;
-  return createSyntheticMessage({
-    adapter: im?.platform ?? source.origin.kind,
-    endpoint: im?.endpoint ?? 'preview',
-    sender: senderFromScheduleCreator(creator),
-    channel: { type: im?.scope ?? 'private', id: im?.sceneId ?? creator.userId },
-    id: im?.messageId,
-  });
+export interface ScheduleActivityPort {
+  publish(event: ScheduleActivityEvent): void | Promise<void>;
 }
 
 export function createTaskExecutor(deps: TaskExecutorDeps) {
   const router = deps.router ?? createNotificationRouter({ resolveAdapter: deps.resolveAdapter });
   const domain = deps.domain ?? new ScheduleExecutionDomainImpl({
-    agent: deps.agent,
+    turn: deps.turn ?? missingScheduleTurnPort(),
+    config: deps.config ?? DEFAULT_CONFIG,
     auditLogger: new JsonlScheduleAuditLogger(deps.dataDir),
   });
 
   async function execute(job: ScheduleJob, options: TaskExecutionOptions = {}): Promise<TaskExecutionResult> {
     const previewSource = options.previewSource;
     const effectiveNotify = router.resolveEffectiveNotify(job.notify, deps.defaultNotify);
-    const commMessage = previewSource
-      ? buildPreviewMessage(job, previewSource)
-      : buildExecutionMessage(job, effectiveNotify);
-    const emitter = deps.agent.getEventEmitter();
-    const event = (name: 'schedule.start' | 'schedule.finish' | 'schedule.error') => {
+    const event = async (phase: ScheduleActivityEvent['phase']) => {
       if (!job.activityFeedback) return;
-      const sessionId = resolveIMSessionIdFromMessage(commMessage);
-      emitter.emit(name, emitter.createPayload(sessionId, commMessage, 'text', {
-        hookContext: {
-          scheduleJobId: job.id,
-          ...(job.createdBy ? { scheduleCreatedBy: job.createdBy } : {}),
-          ...(previewSource ? { schedulePreview: true } : {}),
-          scheduleActivityFeedback: true,
-          ...(job.executionPlan ? { scheduleExecutionPlan: job.executionPlan } : {}),
-        },
-      }));
+      await deps.activity?.publish({ phase, job, previewSource, notify: effectiveNotify });
     };
     const lockKey = previewSource
       ? `preview:${previewSource.sessionKey}`
-      : (commMessage.$channel?.id ?? 'cron');
+      : scheduleLockKey(job, effectiveNotify);
 
-    event('schedule.start');
-    const result = await sceneLocks.run(lockKey, () => domain.execute(job, commMessage, {
-      preview: Boolean(previewSource),
-    }));
+    await event('start');
+    let result: ScheduleExecutionResult;
+    try {
+      result = await sceneLocks.run(lockKey, () => domain.execute(job, {
+        preview: Boolean(previewSource),
+      }));
+    } catch (error) {
+      await event('error');
+      throw error;
+    }
     const executionPlan = previewSource
       ? {
           prompt: job.action.prompt,
-          tools: result.toolsUsed.length ? result.toolsUsed : undefined,
+          tools: result.audit.toolsResolved.length ? result.audit.toolsResolved : undefined,
           skills: result.audit.skillsResolved?.length ? result.audit.skillsResolved : undefined,
           previewSample: result.output || undefined,
           previewedAt: Date.now(),
@@ -114,20 +91,25 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       : job.executionPlan;
 
     if (!result.success) {
-      event('schedule.error');
+      await event('error');
       logger.error(`[TaskExecutor] 执行失败: ${result.error ?? 'unknown error'}`);
     } else if (previewSource) {
-      event('schedule.finish');
+      await event('finish');
     } else {
       if (result.output) {
-        await deliverScheduleToAdapter({
-          notify: effectiveNotify,
-          content: result.output,
-          router,
-          source: 'scheduled',
-        });
+        try {
+          await deliverScheduleToAdapter({
+            notify: effectiveNotify,
+            content: result.output,
+            router,
+            source: 'scheduled',
+          });
+        } catch (error) {
+          await event('error');
+          throw error;
+        }
       }
-      event('schedule.finish');
+      await event('finish');
     }
 
     return { ...result, responseText: result.output, executionPlan };
@@ -156,6 +138,20 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
   }
 
   return { execute, preview, resolveAdapter: deps.resolveAdapter };
+}
+
+function missingScheduleTurnPort(): ScheduleTurnPort {
+  return Object.freeze({
+    execute: async () => {
+      throw new Error('TaskExecutor requires a ScheduleTurnPort when no execution domain is supplied');
+    },
+  });
+}
+
+function scheduleLockKey(job: ScheduleJob, notify: import('./assistant/types.js').JobNotify): string {
+  if (notify.channel !== 'im') return `schedule:${job.id}`;
+  const scene = notify.target.scene;
+  return `im:${scene.platform}:${scene.endpointKey}:${scene.kind}:${scene.sceneId}`;
 }
 
 export async function drainTaskExecutorLocks(timeoutMs: number): Promise<void> {

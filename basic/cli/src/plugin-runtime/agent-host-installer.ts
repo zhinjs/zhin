@@ -77,6 +77,9 @@ import {
   type TurnAccessContext,
   FileJournalStore,
   InteractionRouter,
+  demoteScheduleCreator,
+  type ScheduleActivityEvent,
+  type ScheduleTurnExecutionRequest,
 } from '@zhin.js/agent';
 import {
   agentHostToken,
@@ -267,6 +270,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       provideSessionTreeRuntime({ lifecycle }, sessionTreeRuntime);
       schedule = wireRuntimeSchedule(
         zhinAgent,
+        service,
+        options.runtime,
         options.im,
         options.projectRoot,
         assistantConfig,
@@ -687,6 +692,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
  */
 function wireRuntimeSchedule(
   agent: ZhinAgent,
+  service: AIService,
+  runtime: AgentRuntime,
   im: ImRuntime,
   projectRoot: string,
   assistantRaw: AssistantConfig | undefined,
@@ -741,7 +748,9 @@ function wireRuntimeSchedule(
     },
   });
   const executor = createTaskExecutor({
-    agent,
+    turn: createRuntimeScheduleTurnPort(runtime, service, projectRoot),
+    config: asPrivate(agent).config,
+    activity: createScheduleActivityPort(agent),
     dataDir,
     resolveAdapter: () => undefined,
     router: notificationRouter,
@@ -829,6 +838,106 @@ function wireRuntimeSchedule(
     dispose: () => {
       jobEngine.unload();
       jobWorker.stop();
+    },
+  };
+}
+
+function createRuntimeScheduleTurnPort(
+  runtime: AgentRuntime,
+  service: AIService,
+  projectRoot: string,
+) {
+  return Object.freeze({
+    execute: async (input: ScheduleTurnExecutionRequest): Promise<TurnOutcome> => {
+      const binding = input.agent
+        ? service.getBindingRegistry().getBinding(input.agent)
+        : service.getBindingRegistry().requireZhinBinding();
+      if (!binding) throw new Error(`Schedule Agent binding not found: ${input.agent}`);
+      const creator = input.createdBy ? demoteScheduleCreator(input.createdBy) : undefined;
+      const request: TurnRequest = {
+        identity: { traceId: input.executionId, turnId: input.executionId },
+        origin: { kind: 'schedule', jobId: input.jobId },
+        principal: {
+          subjectId: creator?.userId ?? 'schedule',
+          ...(creator?.name ? { displayName: creator.name } : {}),
+          roles: [...(creator?.roles ?? [])],
+        },
+        input: { text: input.prompt },
+        session: { key: `schedule:${input.jobId}` },
+        policy: {
+          permissions: [],
+          unattended: true,
+          network: {
+            enabled: true,
+            httpsOnly: true,
+            allowedDomains: [...input.security.allowedDomains],
+          },
+          shell: { preset: input.security.execPreset },
+          filesystem: { workspaceRoot: projectRoot },
+        },
+        execution: {
+          kind: 'schedule',
+          executionPlan: input.executionPlan,
+          createdBy: input.createdBy,
+          security: {
+            execPreset: input.security.execPreset,
+            allowedDomains: [...input.security.allowedDomains],
+          },
+        },
+        signal: input.signal,
+        ports: {},
+      };
+      return runtime.execute(rootPluginId(), request, {
+        binding,
+        mcpServers: binding.mcpServers,
+        ...(binding.name === 'zhin' ? {} : { agent: binding.name }),
+      }, input.onTurnEvent);
+    },
+  });
+}
+
+function createScheduleActivityPort(agent: ZhinAgent) {
+  return Object.freeze({
+    publish: (event: ScheduleActivityEvent) => {
+      const payload = scheduleActivityPayload(event);
+      if (!payload) return;
+      agent.getEventEmitter().emit(`schedule.${event.phase}`, payload);
+    },
+  });
+}
+
+function scheduleActivityPayload(event: ScheduleActivityEvent) {
+  const previewIm = event.previewSource?.origin.kind === 'im' ? event.previewSource.origin : undefined;
+  const notifyIm = event.notify.channel === 'im' ? event.notify.target.scene : undefined;
+  const address = previewIm
+    ? {
+        platform: previewIm.platform,
+        endpointKey: previewIm.endpoint,
+        sceneId: previewIm.sceneId,
+        scope: previewIm.scope,
+        messageId: previewIm.messageId,
+      }
+    : notifyIm
+      ? {
+          platform: notifyIm.platform,
+          endpointKey: notifyIm.endpointKey,
+          sceneId: notifyIm.sceneId,
+          scope: notifyIm.kind,
+        }
+      : undefined;
+  if (!address) return undefined;
+  return {
+    sessionId: event.previewSource?.sessionKey ?? `schedule:${event.job.id}`,
+    source: 'zhin-agent' as const,
+    mode: 'text' as const,
+    userId: event.job.createdBy?.userId ?? 'schedule',
+    ...address,
+    hookContext: {
+      scheduleJobId: event.job.id,
+      ...(event.job.createdBy ? { scheduleCreatedBy: event.job.createdBy } : {}),
+      ...(event.previewSource ? { schedulePreview: true } : {}),
+      scheduleActivityFeedback: true,
+      ...(event.job.executionPlan ? { scheduleExecutionPlan: event.job.executionPlan } : {}),
     },
   };
 }

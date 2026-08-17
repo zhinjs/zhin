@@ -14,6 +14,7 @@ export interface TurnUsage {
 export type TurnEvent =
   | TurnStartEvent
   | ChunkEvent
+  | CapabilityResolutionEvent
   | ToolCallEvent
   | ToolResultEvent
   | ToolDeniedEvent
@@ -41,6 +42,17 @@ export interface ChunkEvent {
   type: 'chunk';
   text: string;
   accumulated: string;
+}
+
+/** Immutable capability plan selected before model execution. */
+export interface CapabilityResolutionEvent {
+  type: 'capability_resolution';
+  mode: 'deferred' | 'direct';
+  resolvedBy: 'execution-plan' | 'affinity' | 'session';
+  tools: string[];
+  skills: string[];
+  missingTools: string[];
+  missingSkills: string[];
 }
 
 export interface ToolCallEvent {

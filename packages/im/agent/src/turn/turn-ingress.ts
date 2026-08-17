@@ -2,6 +2,7 @@ import type { OutputElement, Usage } from '@zhin.js/ai';
 import type { ApprovalPort } from '../session/approval-port.js';
 import type { PermissionSubject } from '@zhin.js/permission';
 import type { ToolInvocationOrigin, ToolQuestionPort } from '@zhin.js/tool';
+import type { ScheduleJobCreator, ScheduleJobExecutionPlan } from '../assistant/types.js';
 
 export type TurnScope = 'private' | 'group' | 'channel';
 
@@ -50,11 +51,25 @@ export interface TurnPolicyContext {
     readonly httpsOnly?: boolean;
     readonly allowedDomains?: readonly string[];
   }>;
+  /** Explicit shell command authority; absence disables canonical Shell execution. */
+  readonly shell?: Readonly<{ preset: 'readonly' | 'network' }>;
   /** Explicit filesystem authority; absence denies every file capability. */
   readonly filesystem?: Readonly<{
     readonly workspaceRoot: string;
   }>;
 }
+
+export type TurnExecutionProfile =
+  | Readonly<{ kind: 'interactive' }>
+  | Readonly<{
+      kind: 'schedule';
+      executionPlan?: Readonly<ScheduleJobExecutionPlan>;
+      createdBy?: Readonly<ScheduleJobCreator>;
+      security: Readonly<{
+        execPreset: 'readonly' | 'network';
+        allowedDomains: readonly string[];
+      }>;
+    }>;
 
 export interface FrozenCapabilityCatalog {
   readonly tools: readonly string[];
@@ -110,12 +125,15 @@ export interface TurnIngress {
   readonly input: Readonly<TurnInput>;
   readonly session: Readonly<TurnSessionAddress>;
   readonly policy: Readonly<TurnPolicyContext>;
+  readonly execution: TurnExecutionProfile;
   readonly capabilities: Readonly<FrozenCapabilityCatalog>;
   readonly signal: AbortSignal;
   readonly ports: Readonly<TurnPorts>;
 }
 
-export type TurnIngressInput = TurnIngress;
+export type TurnIngressInput = Omit<TurnIngress, 'execution'> & {
+  readonly execution?: TurnExecutionProfile;
+};
 
 export interface TurnRequest {
   readonly identity: Readonly<{
@@ -127,6 +145,7 @@ export interface TurnRequest {
   readonly input: Readonly<TurnInput>;
   readonly session: Readonly<TurnSessionAddress>;
   readonly policy: Readonly<TurnPolicyContext>;
+  readonly execution?: TurnExecutionProfile;
   readonly signal: AbortSignal;
   readonly ports: Readonly<TurnRequestPorts>;
 }
@@ -158,6 +177,8 @@ export function createTurnIngress(input: TurnIngressInput): TurnIngress {
     throw new TypeError('TurnIngress signal must be an AbortSignal');
   }
 
+  const execution: TurnExecutionProfile = input.execution ?? Object.freeze({ kind: 'interactive' });
+  validateExecutionAuthority(input, execution);
   return Object.freeze({
     identity: freezeData(input.identity),
     origin: freezeData(input.origin),
@@ -165,10 +186,41 @@ export function createTurnIngress(input: TurnIngressInput): TurnIngress {
     input: freezeData(input.input),
     session: freezeData(input.session),
     policy: freezeData(input.policy),
+    execution: freezeData(execution),
     capabilities: freezeData(input.capabilities),
     signal: input.signal,
     ports: Object.freeze({ ...input.ports }),
   });
+}
+
+function validateExecutionAuthority(
+  input: TurnIngressInput,
+  execution: TurnExecutionProfile,
+): void {
+  if (execution.kind !== 'schedule') {
+    if (input.origin.kind === 'schedule') {
+      throw new TypeError('Schedule origin requires a schedule execution profile');
+    }
+    return;
+  }
+  if (input.origin.kind !== 'schedule') {
+    throw new TypeError('Schedule execution profile requires a schedule origin');
+  }
+  if (!input.policy.unattended) {
+    throw new TypeError('Schedule execution profile must be unattended');
+  }
+  if (!input.policy.network?.enabled || input.policy.network.httpsOnly !== true) {
+    throw new TypeError('Schedule execution requires explicit HTTPS network authority');
+  }
+  if (input.policy.shell?.preset !== execution.security.execPreset) {
+    throw new TypeError('Schedule Shell authority must match its execution profile');
+  }
+  const policyDomains = [...(input.policy.network.allowedDomains ?? [])].sort();
+  const profileDomains = [...execution.security.allowedDomains].sort();
+  if (policyDomains.length !== profileDomains.length
+    || policyDomains.some((domain, index) => domain !== profileDomains[index])) {
+    throw new TypeError('Schedule network authority must match its execution profile');
+  }
 }
 
 export function turnPermissionSubject(turn: TurnAccessContext): PermissionSubject {

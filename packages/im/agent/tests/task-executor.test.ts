@@ -38,7 +38,6 @@ describe('task executor outbound seam', () => {
     const sendMessage = vi.fn(async () => 'msg1');
     const execute = vi.fn(async () => domainResult());
     const executor = createTaskExecutor({
-      agent: { getEventEmitter: () => ({ emit: vi.fn(), createPayload: vi.fn() }) } as any,
       domain: { execute },
       resolveAdapter: () => ({ sendMessage }),
     });
@@ -56,33 +55,23 @@ describe('task executor outbound seam', () => {
   });
 
   it('publishes Schedule feedback identity explicitly instead of relying on turn ALS', async () => {
-    const emit = vi.fn();
-    const createPayload = vi.fn((_session, _message, _mode, extra) => extra);
+    const publish = vi.fn();
     const scheduled = {
       ...job({ channel: 'silent' }),
       activityFeedback: true,
       createdBy: { userId: 'owner', roles: ['trusted'] as const },
     };
     const executor = createTaskExecutor({
-      agent: { getEventEmitter: () => ({ emit, createPayload }) } as any,
+      activity: { publish },
       domain: { execute: vi.fn(async () => domainResult()) },
       resolveAdapter: () => undefined,
     });
 
     await executor.execute(scheduled);
 
-    expect(createPayload).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.anything(),
-      'text',
-      expect.objectContaining({
-        hookContext: expect.objectContaining({
-          scheduleJobId: 'sched-1',
-          scheduleCreatedBy: scheduled.createdBy,
-          scheduleActivityFeedback: true,
-        }),
-      }),
-    );
-    expect(emit).toHaveBeenCalledTimes(2);
+    expect(publish).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      phase: 'start', job: scheduled, notify: { channel: 'silent' },
+    }));
+    expect(publish).toHaveBeenNthCalledWith(2, expect.objectContaining({ phase: 'finish' }));
   });
 });
