@@ -6,9 +6,7 @@ import {
 import { AGENT_CARD_PATH, type AgentCard } from '@a2a-js/sdk';
 import type { HttpRouteHost } from '@zhin.js/host-http-contract';
 import type { AgentHostPort } from '@zhin.js/agent/runtime';
-import type { ZhinAgent } from '@zhin.js/agent';
-import type { AgentBindingRegistry } from '@zhin.js/agent/config';
-import { buildAgentCardForBinding, listExposableAgentNames } from './card-builder.js';
+import { buildAgentCardForBinding } from './card-builder.js';
 import { ZhinA2AExecutor } from './agent-executor.js';
 import { handleAgentCard, handleJsonRpc, handleRest } from './http-handlers.js';
 import { verifyA2aBearer } from './auth.js';
@@ -43,20 +41,14 @@ export function installRuntimeA2a(options: InstallRuntimeA2aOptions): () => void
   if (options.production === true && !token) {
     throw new Error('A2A requires a2a.token or http.token in production');
   }
-  const service = options.agentHost.service as {
-    getBindingRegistry(): AgentBindingRegistry;
-  };
-  const agent = options.agentHost.agent as ZhinAgent;
-  const registry = service.getBindingRegistry();
   const stacks = new Map<string, AgentStack>();
 
-  for (const agentName of listExposableAgentNames(registry)) {
-    const card = buildAgentCardForBinding(agentName, registry, publicBaseUrl, basePath);
-    if (!card) continue;
+  for (const binding of options.agentHost.protocol.listBindings()) {
+    const agentName = binding.name;
+    const card = buildAgentCardForBinding(binding, publicBaseUrl, basePath);
     const executor = new ZhinA2AExecutor({
       agentName,
-      getAgent: () => agent,
-      resolveBinding: () => registry.getBinding(agentName),
+      protocol: options.agentHost.protocol,
     });
     stacks.set(agentName, {
       card,

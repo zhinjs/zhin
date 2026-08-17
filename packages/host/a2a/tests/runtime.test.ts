@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createHttpHost } from '@zhin.js/host-http';
-import { AgentBindingRegistry } from '@zhin.js/agent/config';
 import type { AgentHostPort } from '@zhin.js/agent/runtime';
 import { installRuntimeA2a } from '../src/runtime.js';
 
@@ -20,15 +19,9 @@ describe('Runtime A2A Host', () => {
   it('rejects an unauthenticated production endpoint', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const registry = new AgentBindingRegistry({
-      zhin: { provider: 'ollama', model: 'qwen3:8b' },
-    });
     expect(() => installRuntimeA2a({
       http,
-      agentHost: {
-        service: { getBindingRegistry: () => registry },
-        agent: {},
-      } as unknown as AgentHostPort,
+      agentHost: testAgentHost(),
       config: { path: '/mesh' },
       fallbackPublicUrl: 'https://bot.example.test',
       production: true,
@@ -38,13 +31,7 @@ describe('Runtime A2A Host', () => {
   it('serves authenticated Agent Cards from the active binding registry', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const registry = new AgentBindingRegistry({
-      zhin: { provider: 'ollama', model: 'qwen3:8b' },
-    });
-    const agentHost = {
-      service: { getBindingRegistry: () => registry },
-      agent: {},
-    } as unknown as AgentHostPort;
+    const agentHost = testAgentHost();
     installRuntimeA2a({
       http,
       agentHost,
@@ -67,15 +54,9 @@ describe('Runtime A2A Host', () => {
   it('uses the Host JSON parser limit and maps REST failures to HTTP semantics', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const registry = new AgentBindingRegistry({
-      zhin: { provider: 'ollama', model: 'qwen3:8b' },
-    });
     installRuntimeA2a({
       http,
-      agentHost: {
-        service: { getBindingRegistry: () => registry },
-        agent: {},
-      } as unknown as AgentHostPort,
+      agentHost: testAgentHost(),
       config: { path: '/mesh', token: 'mesh-token' },
       fallbackPublicUrl: 'https://bot.example.test',
     });
@@ -119,3 +100,23 @@ describe('Runtime A2A Host', () => {
     expect(missing.status).toBe(404);
   });
 });
+
+function testAgentHost(): AgentHostPort {
+  return {
+    protocol: {
+      listBindings: () => [{
+        name: 'zhin',
+        providerAlias: 'ollama',
+        model: 'qwen3:8b',
+        mcpServers: [],
+      }],
+      execute: async () => ({
+        status: 'completed',
+        output: [{ type: 'text', content: 'ok' }],
+        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+      }),
+    },
+    introspection: { listTools: () => [], listMcpServers: () => [] },
+    console: { sessionTree: {} as never, orchestration: {} as never, assistant: null },
+  };
+}

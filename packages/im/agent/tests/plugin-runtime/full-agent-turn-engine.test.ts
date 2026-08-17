@@ -5,6 +5,18 @@ import { PromptController } from '../../src/turn/prompt-controller.js';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { createFullAgentTurnEngine } from '../../src/plugin-runtime/full-agent-turn-engine.js';
+
+function selection() {
+  return {
+    binding: {
+      name: 'zhin',
+      providerAlias: 'provider',
+      model: 'model',
+      mcpServers: [],
+    },
+    mcpServers: [],
+  };
+}
 import type { AgentTurnExecutionContext } from '../../src/plugin-runtime/agent-runtime.js';
 
 describe('FullAgentTurnEngine', () => {
@@ -90,7 +102,7 @@ describe('FullAgentTurnEngine', () => {
       },
       toolCapabilities: [],
       tools: new TurnToolRuntime(turn, []),
-      selection: { mcpServers: [] },
+      selection: selection(),
     };
     const engine = createFullAgentTurnEngine({
       host: host as never,

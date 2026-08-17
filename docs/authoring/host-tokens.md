@@ -28,7 +28,7 @@ Plugin Runtime 里，插件通过 `context.use(token)`（setup 期）或命令/�
 
 | Token | 注入后得到 | 关键方法 |
 | --- | --- | --- |
-| `agentHostToken`（`@zhin.js/agent`，`agent-host-port`） | Agent Host 端口 | 访问 ZhinAgent / AI 服务（装了 `@zhin.js/agent` 时可用） |
+| `agentHostToken`（`@zhin.js/agent/runtime`） | Agent Host 端口 | 列举 Agent binding、提交 canonical `TurnRequest`，以及读取 Console/诊断投影；不暴露 ZhinAgent / AIService 实例 |
 
 ## 渲染与 HTTP
 

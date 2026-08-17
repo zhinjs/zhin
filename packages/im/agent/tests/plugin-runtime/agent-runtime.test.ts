@@ -42,6 +42,7 @@ import {
   type ExternalToolCapability,
 } from '../../src/plugin-runtime/index.js';
 import { turnToolExecutionAuthority } from '../../src/tool/turn-tool-runtime.js';
+import { getAgentTurnConfiguration } from '../../src/turn/agent-turn-context.js';
 
 describe('Agent CapabilityIngress', () => {
   it('serializes turns for the same session across generation runtimes', async () => {
@@ -199,7 +200,7 @@ describe('Agent CapabilityIngress', () => {
       policy: { permissions: ['user'], unattended: false },
       signal: new AbortController().signal,
       ports: {},
-    }, { mcpServers: ['memory'] });
+    }, selection(['memory']));
 
     expect(outcome).toMatchObject({ status: 'completed' });
     expect(seen).toHaveLength(1);
@@ -217,7 +218,7 @@ describe('Agent CapabilityIngress', () => {
     const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() });
     runtime.attach(store);
 
-    await expect(runtime.execute(fixture.child, externalRequest('no-engine'), { mcpServers: [] }))
+    await expect(runtime.execute(fixture.child, externalRequest('no-engine'), selection()))
       .rejects.toThrow('Agent Turn Engine');
     await fixture.mcp.stop();
     await store.close();
@@ -232,7 +233,7 @@ describe('Agent CapabilityIngress', () => {
     lease.release();
 
     await expect(runtime.executeLeased(
-      lease, fixture.child, externalRequest('released'), { mcpServers: [] },
+      lease, fixture.child, externalRequest('released'), selection(),
     ))
       .rejects.toThrow('active generation lease');
     await fixture.mcp.stop();
@@ -247,7 +248,7 @@ describe('Agent CapabilityIngress', () => {
     runtime.attach(attached);
     const foreignLease = other.acquire();
     await expect(runtime.executeLeased(
-      foreignLease, fixture.child, externalRequest('foreign'), { mcpServers: [] },
+      foreignLease, fixture.child, externalRequest('foreign'), selection(),
     ))
       .rejects.toThrow('another Root');
     foreignLease.release();
@@ -265,7 +266,7 @@ describe('Agent CapabilityIngress', () => {
     }));
     const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() });
     runtime.attach(store);
-    await runtime.execute(fixture.child, externalRequest('mcp-filter'), { mcpServers: [] });
+    await runtime.execute(fixture.child, externalRequest('mcp-filter'), selection());
     expect(names).toEqual(['child__lookup']);
     await fixture.mcp.stop();
     await store.close();
@@ -295,14 +296,45 @@ describe('Agent CapabilityIngress', () => {
     firstRuntime.attach(store);
     nextRuntime.attach(store);
 
-    const first = firstRuntime.execute(fixture.child, externalRequest('first'), { mcpServers: [] });
+    const first = firstRuntime.execute(fixture.child, externalRequest('first'), selection());
     await started;
-    const next = nextRuntime.execute(fixture.child, externalRequest('next'), { mcpServers: [] });
+    const next = nextRuntime.execute(fixture.child, externalRequest('next'), selection());
     await Promise.resolve();
     expect(order).toEqual(['old:start']);
     release();
     await Promise.all([first, next]);
     expect(order).toEqual(['old:start', 'old:end', 'next']);
+    await fixture.mcp.stop();
+    await store.close();
+  });
+
+  it('isolates provider bindings across concurrent canonical turns', async () => {
+    const fixture = await createFixture();
+    const observed = new Map<string, string[]>();
+    const store = new SnapshotStore(stateWithEngine(fixture.snapshot, async function* ({ turn }) {
+      const values = observed.get(turn.identity.turnId) ?? [];
+      values.push(getAgentTurnConfiguration()?.activeBinding?.name ?? 'missing');
+      observed.set(turn.identity.turnId, values);
+      await Promise.resolve();
+      values.push(getAgentTurnConfiguration()?.activeBinding?.name ?? 'missing');
+      yield terminalEvent();
+    }));
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() });
+    runtime.attach(store);
+
+    await Promise.all([
+      runtime.execute(fixture.child, {
+        ...externalRequest('alpha'),
+        session: { key: 'session:alpha' },
+      }, selection([], 'alpha')),
+      runtime.execute(fixture.child, {
+        ...externalRequest('beta'),
+        session: { key: 'session:beta' },
+      }, selection([], 'beta')),
+    ]);
+
+    expect(observed.get('turn-alpha')).toEqual(['alpha', 'alpha']);
+    expect(observed.get('turn-beta')).toEqual(['beta', 'beta']);
     await fixture.mcp.stop();
     await store.close();
   });
@@ -453,6 +485,18 @@ function externalRequest(id: string) {
     policy: { permissions: ['authenticated'], unattended: true },
     signal: new AbortController().signal,
     ports: {},
+  };
+}
+
+function selection(mcpServers: readonly string[] = [], name = 'zhin') {
+  return {
+    binding: {
+      name,
+      providerAlias: 'provider',
+      model: 'model',
+      mcpServers: [...mcpServers],
+    },
+    mcpServers,
   };
 }
 

@@ -18,7 +18,7 @@ import {
   type RootResourceInstaller,
   type RuntimeConfigDocument,
 } from '@zhin.js/runtime';
-import { databaseRootHostToken, type DisposeStack, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { databaseRootHostToken, rootPluginId, type DisposeStack, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   AIService,
   ZhinAgent,
@@ -456,8 +456,23 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     // The Scope is sealed after all Root installers finish, so publication must
     // happen here rather than through a mutable process-global registry.
     resources.provide(agentHostToken, Object.freeze({
-      service,
-      agent: zhinAgent,
+      protocol: Object.freeze({
+        listBindings: () => Object.freeze(
+          service.getBindingRegistry().listAgentNames()
+            .map((name) => service.getBindingRegistry().getBinding(name))
+            .filter((entry): entry is NonNullable<typeof entry> => entry != null)
+            .map((entry) => Object.freeze({ ...entry, mcpServers: [...entry.mcpServers] })),
+        ),
+        execute: (bindingName: string, request: TurnRequest) => {
+          const selected = service.getBindingRegistry().getBinding(bindingName);
+          if (!selected) throw new Error(`Agent binding not found: ${bindingName}`);
+          return options.runtime.execute(rootPluginId(), request, {
+            binding: selected,
+            mcpServers: selected.mcpServers,
+            ...(selected.name === 'zhin' ? {} : { agent: selected.name }),
+          });
+        },
+      }),
       introspection: Object.freeze({
         listTools: () => orchestrator.tools.getAll().map((tool) => Object.freeze({
           name: tool.name,
@@ -642,7 +657,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               lease,
               requester,
               request,
-              { mcpServers: binding.mcpServers, agent: routed.agent?.qualifiedName ?? routed.agent?.name },
+              {
+                binding,
+                mcpServers: binding.mcpServers,
+                agent: routed.agent?.qualifiedName ?? routed.agent?.name,
+              },
             );
           },
           resolveTriggerTimeoutMs(trigger),

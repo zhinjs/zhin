@@ -3,7 +3,7 @@
  */
 import { A2A_PROTOCOL_VERSION, type AgentCard, type AgentSkill } from '@a2a-js/sdk';
 
-import type { AgentBindingRegistry } from '@zhin.js/agent/config';
+import type { ResolvedAgentBinding } from '@zhin.js/agent/config';
 import { a2aAgentCardUrl, a2aJsonRpcUrl, a2aRestUrl } from './config.js';
 
 function makeSkill(partial: Pick<AgentSkill, 'id' | 'name' | 'description'> & { tags?: string[] }): AgentSkill {
@@ -27,14 +27,11 @@ const DEFAULT_SKILLS: AgentSkill[] = [
 ];
 
 export function buildAgentCardForBinding(
-  agentName: string,
-  registry: AgentBindingRegistry,
+  binding: ResolvedAgentBinding,
   publicBaseUrl: string,
   basePath = '/a2a',
-): AgentCard | null {
-  const binding = registry.getBinding(agentName);
-  if (!binding) return null;
-
+): AgentCard {
+  const agentName = binding.name;
   const nickname = binding.nickname ?? agentName;
   const normalizedBasePath = basePath === '/a2a' ? undefined : basePath;
   const jsonRpcUrl = normalizedBasePath
@@ -102,8 +99,4 @@ export function buildAgentCardForBinding(
       ? `${publicBaseUrl}${normalizedBasePath}/${encodeURIComponent(agentName)}/.well-known/agent-card.json`
       : a2aAgentCardUrl(publicBaseUrl, agentName),
   };
-}
-
-export function listExposableAgentNames(registry: AgentBindingRegistry): string[] {
-  return registry.listAgentNames();
 }

@@ -28,7 +28,7 @@ In the Plugin Runtime, plugins consume Host capabilities by token: `context.use(
 
 | Token | Yields | Key methods |
 | --- | --- | --- |
-| `agentHostToken` (`@zhin.js/agent`, `agent-host-port`) | Agent Host port | Access ZhinAgent / AI service (available when `@zhin.js/agent` is installed) |
+| `agentHostToken` (`@zhin.js/agent/runtime`) | Agent Host port | Enumerate Agent bindings, submit canonical `TurnRequest`s, and read Console/diagnostic projections; concrete ZhinAgent / AIService instances are not exposed |
 
 ## Rendering & HTTP
 

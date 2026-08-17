@@ -14,6 +14,8 @@ import {
 } from './capability-ingress.js';
 import { TurnToolRuntime, type TurnToolOutcome } from '../tool/turn-tool-runtime.js';
 import type { ToolDescriptor } from '@zhin.js/tool';
+import type { ResolvedAgentBinding } from '../config/types.js';
+import { runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 
 abstract class SnapshotAttachedRuntime {
   protected snapshots?: SnapshotStore;
@@ -168,6 +170,8 @@ export interface AgentRuntimeOptions {
 }
 
 export interface AgentCapabilitySelection {
+  /** Immutable model/provider binding selected for this turn. */
+  readonly binding: ResolvedAgentBinding;
   /** Binding-local MCP names. Empty means no MCP capability is exposed. */
   readonly mcpServers: readonly string[];
   /** Optional owner-visible specialist selected by the ingress router. */
@@ -235,13 +239,16 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       });
       const tools = new TurnToolRuntime(turn, capabilities.tools);
       const engine = resolveTurnEngine(lease.value);
-      return await executeAgentTurn(turn, () => engine.run({
-        turn,
-        capabilities: catalog,
-        tools,
-        toolCapabilities: capabilities.tools,
-        selection,
-      }), observe);
+      return await runWithAgentTurnConfiguration(
+        { activeBinding: selection.binding },
+        () => executeAgentTurn(turn, () => engine.run({
+          turn,
+          capabilities: catalog,
+          tools,
+          toolCapabilities: capabilities.tools,
+          selection,
+        }), observe),
+      );
     } finally {
       active = false;
     }
