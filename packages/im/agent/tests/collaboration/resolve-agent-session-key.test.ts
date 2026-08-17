@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   resolveAgentSessionKeyForTurn,
   resolveAgentTurnSessionKey,
+  resolveAgentTurnSessionKeyFromAddress,
   resolveArtifactRunId,
 } from '../../src/collaboration/resolve-agent-session-key.js';
 import { attachCollaborationTurnSnapshot } from '../../src/collaboration/collaboration-turn-snapshot.js';
@@ -73,6 +74,23 @@ describe('resolveAgentTurnSessionKey', () => {
     const drainKey = resolveAgentTurnSessionKey(atMsg);
     expect(recordKey).toBe(drainKey);
     expect(recordKey).toMatch(/^pipeline:bbbbbbbb:/);
+  });
+
+  it('derives the same pipeline session from a canonical turn address', () => {
+    const key = resolveAgentTurnSessionKeyFromAddress({
+      transport: 'icqq:210723495:group:373460458',
+      endpointKey: '210723495',
+    }, cellWithDelegation);
+
+    expect(key).toBe(resolveAgentTurnSessionKey(msg(), cellWithDelegation));
+    expect(key).toMatch(/^pipeline:bbbbbbbb:/);
+  });
+
+  it('uses the canonical transport key when no collaboration cell exists', () => {
+    expect(resolveAgentTurnSessionKeyFromAddress({
+      transport: 'telegram:bot:private:user-1',
+      endpointKey: 'bot',
+    })).toBe('telegram:bot:private:user-1');
   });
 });
 

@@ -12,7 +12,6 @@ import {
   addBashApproveRule,
   addOwnerApproveAlways,
   hasOwnerApproveAlways,
-  listOwnerApproveAlways,
   matchesBashOwnerExecBypass,
   removeOwnerApproveAlways,
 } from '../../src/security/owner-approve-always-store.js';
@@ -52,7 +51,6 @@ describe('owner-approve-always-store', () => {
     expect(hasOwnerApproveAlways(plugin, ctx, 'bash')).toBe(false);
     expect(addOwnerApproveAlways(plugin, ctx, 'bash').ok).toBe(true);
     expect(hasOwnerApproveAlways(plugin, ctx, 'bash')).toBe(true);
-    expect(listOwnerApproveAlways(plugin, ctx).some((x) => x === 'bash')).toBe(true);
     expect(removeOwnerApproveAlways(plugin, ctx, 'bash').ok).toBe(true);
     expect(hasOwnerApproveAlways(plugin, ctx, 'bash')).toBe(false);
   });

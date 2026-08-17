@@ -36,8 +36,10 @@ export {
 
 export {
   resolveAgentTurnSessionKey,
+  resolveAgentTurnSessionKeyFromAddress,
   resolveAgentSessionKeyForTurn,
   resolveArtifactRunId,
+  type AgentTurnSessionAddress,
 } from '../collaboration/resolve-agent-session-key.js';
 
 export {
@@ -58,8 +60,8 @@ export {
 export type { PassiveGroupLine } from './passive-group-buffer.js';
 
 export {
-  listSessionTreeForCommMessage,
-  jumpSessionTreeForCommMessage,
+  listSessionTree,
+  jumpSessionTree,
 } from './session-tree-commands.js';
 
 export {

@@ -23,6 +23,6 @@ export class ContextRepositoryMemoryStore implements MemoryStore {
   }
 
   async compact(_sessionId: string): Promise<void> {
-    // Port：手动/自动压缩经 MemorySystem.compactSessionForCommMessage → manualCompactSession。
+    // Port：手动/自动压缩经 MemorySystem.compactSession → manualCompactSession。
   }
 }

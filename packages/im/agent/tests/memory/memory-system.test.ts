@@ -10,8 +10,8 @@ describe('MemorySystem', () => {
     expect(getCompactionStateCount()).toBe(0);
   });
 
-  it('defaultMemorySystem exposes compactSessionForCommMessage', () => {
-    expect(typeof defaultMemorySystem.compactSessionForCommMessage).toBe('function');
+  it('defaultMemorySystem exposes canonical session-key compaction', () => {
+    expect(typeof defaultMemorySystem.compactSession).toBe('function');
   });
 
   it('createMemorySystemForHost uses AiCompactionStrategy', () => {

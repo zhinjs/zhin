@@ -18,6 +18,29 @@ function resolveBindRunFromCell(cell: CollaborationScene, endpointKey: string): 
   return delegation?.runId ?? runId;
 }
 
+export interface AgentTurnSessionAddress {
+  readonly transport: string;
+  readonly endpointKey: string;
+  readonly runId?: string;
+  readonly delegationRunId?: string;
+}
+
+/** Origin-neutral session key resolver used by IM ingress adapters. */
+export function resolveAgentTurnSessionKeyFromAddress(
+  address: AgentTurnSessionAddress,
+  cell?: CollaborationScene,
+): string {
+  if (address.runId) {
+    return pipelinePrefixedSessionKey(
+      address.transport,
+      address.delegationRunId ?? address.runId,
+    );
+  }
+  if (!cell) return address.transport;
+  const bindRun = resolveBindRunFromCell(cell, address.endpointKey);
+  return bindRun ? pipelinePrefixedSessionKey(address.transport, bindRun) : address.transport;
+}
+
 /**
  * Agent turn 级 session key SSOT（IM transport + 可选 pipeline run 隔离）。
  * passive write / @ drain / auto-continue depth / persist 须共用此函数。
@@ -28,15 +51,13 @@ export function resolveAgentTurnSessionKey(
 ): string {
   const transport = resolveIMSessionIdFromMessage(message);
   const snap = readCollaborationTurnSnapshot(message);
-  if (snap?.runId) {
-    const bindRun = snap.delegationRunId ?? snap.runId;
-    return pipelinePrefixedSessionKey(transport, bindRun);
-  }
   const resolvedCell = cell ?? resolveCollaborationSceneForMessage(message);
-  if (!resolvedCell) return transport;
-  const bindRun = resolveBindRunFromCell(resolvedCell, String(message.$endpoint ?? ''));
-  if (!bindRun) return transport;
-  return pipelinePrefixedSessionKey(transport, bindRun);
+  return resolveAgentTurnSessionKeyFromAddress({
+    transport,
+    endpointKey: String(message.$endpoint ?? ''),
+    ...(snap?.runId ? { runId: snap.runId } : {}),
+    ...(snap?.delegationRunId ? { delegationRunId: snap.delegationRunId } : {}),
+  }, resolvedCell);
 }
 
 /** transport session + 可选 pipeline run 前缀（同 endpoint 不同 run 独立 agent_messages）。 */

@@ -8,7 +8,7 @@ describe('handleRuntimeManagementCommand', () => {
     const reply = await handleRuntimeManagementCommand({
       service: {} as never,
       zhinAgent: {} as never,
-      commMessage: {} as never,
+      sessionKey: 'test:session',
       content: 'hello',
       senderRoles,
     });
@@ -19,7 +19,7 @@ describe('handleRuntimeManagementCommand', () => {
     const reply = await handleRuntimeManagementCommand({
       service: { listModels: vi.fn() } as never,
       zhinAgent: {} as never,
-      commMessage: {} as never,
+      sessionKey: 'test:session',
       content: '/models',
       senderRoles: { isMaster: false, isTrusted: false },
     });
@@ -33,7 +33,7 @@ describe('handleRuntimeManagementCommand', () => {
     const reply = await handleRuntimeManagementCommand({
       service: { listModels } as never,
       zhinAgent: {} as never,
-      commMessage: {} as never,
+      sessionKey: 'test:session',
       content: '/models',
       senderRoles,
     });
@@ -48,7 +48,7 @@ describe('handleRuntimeManagementCommand', () => {
     const reply = await handleRuntimeManagementCommand({
       service: { healthCheck } as never,
       zhinAgent: {} as never,
-      commMessage: {} as never,
+      sessionKey: 'test:session',
       content: 'ai.health',
       senderRoles: { isMaster: false, isTrusted: true },
     });

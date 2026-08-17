@@ -1,5 +1,4 @@
 import { getLlmTransportModel, type ContextRepository } from '@zhin.js/ai';
-import { resolveIMSessionIdFromMessage, type Message } from '@zhin.js/core';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { beginTurnSession, type SessionIODeps } from '../session/session-io.js';
 import type { MemoryStore, MemorySystemConfig } from './contracts.js';
@@ -47,12 +46,11 @@ export class MemorySystem {
     }
   }
 
-  async compactSessionForCommMessage(
+  async compactSession(
     host: ZhinAgentPrivate,
-    commMessage: Message,
+    sessionKey: string,
     deps: SessionIODeps,
   ): Promise<{ ok: boolean; message: string }> {
-    const sessionKey = resolveIMSessionIdFromMessage(commMessage);
     const { sessionId } = await beginTurnSession(deps, sessionKey);
     const provider = host.getTurnProvider();
     const modelId = host.config.chatModel || provider.models[0] || '';

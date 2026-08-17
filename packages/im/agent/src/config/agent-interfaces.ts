@@ -45,8 +45,8 @@ export interface IAgentTurnProcessor {
  * 会话管理 —— 压缩、归档、持久化
  */
 export interface IAgentSessionManager {
-  compactSessionForCommMessage(commMessage: Message): Promise<{ ok: boolean; message: string }>;
-  archiveSessionForCommMessage(commMessage: Message): Promise<boolean>;
+  compactSession(sessionKey: string): Promise<{ ok: boolean; message: string }>;
+  archiveSession(sessionKey: string): Promise<boolean>;
   getLastTurnMetrics(): ZhinAgentTurnMetrics | null;
   upgradeProfilesToDatabase(model: any): void;
 }

@@ -481,8 +481,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return runPromptTurn(asPrivate(this), input, commMessage, (id, fn) => this.runInTurnContext(id, fn), options);
   }
 
-  async archiveSessionForCommMessage(commMessage: Message): Promise<boolean> {
-    const sessionKey = resolveIMSessionIdFromMessage(commMessage);
+  async archiveSession(sessionKey: string): Promise<boolean> {
     return archiveSessionByKey(
       {
         agentSessionStore: this.agentSessionStore,
@@ -492,12 +491,12 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     );
   }
 
-  async compactSessionForCommMessage(commMessage: Message): Promise<{ ok: boolean; message: string }> {
+  async compactSession(sessionKey: string): Promise<{ ok: boolean; message: string }> {
     const priv = asPrivate(this);
     const memorySystem = this.memorySystem ?? createMemorySystemForHost(priv);
-    return memorySystem.compactSessionForCommMessage(
+    return memorySystem.compactSession(
       priv,
-      commMessage,
+      sessionKey,
       this.requireSessionSystem().sessionDeps(priv),
     );
   }

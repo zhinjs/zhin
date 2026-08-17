@@ -5,6 +5,7 @@ import { resolveIMSessionIdFromMessage, type AITriggerConfig } from '@zhin.js/co
 import { InteractionRouter, type ImTranscriptWriteInput } from '@zhin.js/agent';
 import {
   bridgeRuntimeMessage,
+  createRuntimeTurnAccess,
   createRuntimeTurnRequest,
   createRuntimeQuestionPort,
   consumeRuntimeInteraction,
@@ -210,6 +211,10 @@ function privateMessage(content: string, metadata?: Record<string, unknown>): Me
   });
 }
 
+function runtimeAccess(message: Message) {
+  return createRuntimeTurnAccess(message, { isMaster: false, isTrusted: false });
+}
+
 function makeAgentStub() {
   const transcripts: ImTranscriptWriteInput[] = [];
   const passive: Array<{
@@ -234,8 +239,7 @@ describe('缺口 1：im_transcripts 流水写入（recordRuntimeTranscript）', 
   it('入站：scene 字段与 chat_history 查询 SSOT 对齐（group）', () => {
     const agent = makeAgentStub();
     const message = groupMessage('在吗');
-    const commMessage = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    recordRuntimeTranscript(agent, commMessage, {
+    recordRuntimeTranscript(agent, runtimeAccess(message), {
       direction: 'inbound',
       body: message.content,
       messageId: message.id,
@@ -261,8 +265,7 @@ describe('缺口 1：im_transcripts 流水写入（recordRuntimeTranscript）', 
   it('入站：私聊 scene_id 取 senderId（与 resolveSceneFieldsFromMessage 一致）', () => {
     const agent = makeAgentStub();
     const message = privateMessage('你好');
-    const commMessage = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    recordRuntimeTranscript(agent, commMessage, {
+    recordRuntimeTranscript(agent, runtimeAccess(message), {
       direction: 'inbound',
       body: message.content,
       senderId: 'user-1',
@@ -278,8 +281,7 @@ describe('缺口 1：im_transcripts 流水写入（recordRuntimeTranscript）', 
   it('出站：assistant 角色，sender_id 回退为 endpointKey', () => {
     const agent = makeAgentStub();
     const message = groupMessage('在吗');
-    const commMessage = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    recordRuntimeTranscript(agent, commMessage, {
+    recordRuntimeTranscript(agent, runtimeAccess(message), {
       direction: 'outbound',
       body: 'AI 回复',
       senderRole: 'assistant',
@@ -298,8 +300,7 @@ describe('缺口 1：im_transcripts 流水写入（recordRuntimeTranscript）', 
   it('空 body 不落库', () => {
     const agent = makeAgentStub();
     const message = groupMessage('x');
-    const commMessage = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    recordRuntimeTranscript(agent, commMessage, { direction: 'inbound', body: '   ' });
+    recordRuntimeTranscript(agent, runtimeAccess(message), { direction: 'inbound', body: '   ' });
     expect(agent.transcripts).toHaveLength(0);
   });
 
@@ -310,8 +311,7 @@ describe('缺口 1：im_transcripts 流水写入（recordRuntimeTranscript）', 
       },
     };
     const message = groupMessage('在吗');
-    const commMessage = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    expect(() => recordRuntimeTranscript(failing, commMessage, {
+    expect(() => recordRuntimeTranscript(failing, runtimeAccess(message), {
       direction: 'inbound',
       body: '在吗',
       senderId: 'user-1',
@@ -323,8 +323,7 @@ describe('缺口 2：群聊旁听（recordPassiveGroupContext）', () => {
   it('群聊未触发消息写入 Passive Group Context', async () => {
     const agent = makeAgentStub();
     const message = groupMessage('大家今晚吃什么');
-    const commMessage = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    await recordPassiveGroupContext(agent, message, commMessage);
+    await recordPassiveGroupContext(agent, runtimeAccess(message), message.content);
     expect(agent.passive).toEqual([expect.objectContaining({
       sessionKey: expect.stringContaining('group:100'),
       senderId: 'user-1',
@@ -339,8 +338,7 @@ describe('缺口 2：群聊旁听（recordPassiveGroupContext）', () => {
       target: 'channel:ch-1',
       metadata: { channelType: 'channel', endpoint: '10001' },
     });
-    const commMessage = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    await recordPassiveGroupContext(agent, message, commMessage);
+    await recordPassiveGroupContext(agent, runtimeAccess(message), message.content);
     expect(agent.passive).toEqual([expect.objectContaining({
       sessionKey: expect.stringContaining('channel:ch-1'),
       text: '频道消息',
@@ -350,24 +348,21 @@ describe('缺口 2：群聊旁听（recordPassiveGroupContext）', () => {
   it('私聊不旁听（sandbox/私聊无噪音）', async () => {
     const agent = makeAgentStub();
     const message = privateMessage('私聊消息');
-    const commMessage = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    await recordPassiveGroupContext(agent, message, commMessage);
+    await recordPassiveGroupContext(agent, runtimeAccess(message), message.content);
     expect(agent.passive).toHaveLength(0);
   });
 
   it('机器人自身消息不旁听', async () => {
     const agent = makeAgentStub();
     const message = groupMessage('机器人自己说的', undefined, '10001');
-    const commMessage = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    await recordPassiveGroupContext(agent, message, commMessage);
+    await recordPassiveGroupContext(agent, runtimeAccess(message), message.content);
     expect(agent.passive).toHaveLength(0);
   });
 
   it('空白内容不旁听', async () => {
     const agent = makeAgentStub();
     const message = groupMessage('   ');
-    const commMessage = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    await recordPassiveGroupContext(agent, message, commMessage);
+    await recordPassiveGroupContext(agent, runtimeAccess(message), message.content);
     expect(agent.passive).toHaveLength(0);
   });
 });
@@ -580,8 +575,7 @@ describe('conversation.kind 场景映射', () => {
       target: 'group:-100123',
       metadata: { endpoint: 'telegram-bot' },
     });
-    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
-    await recordPassiveGroupContext(agent, message, comm);
+    await recordPassiveGroupContext(agent, runtimeAccess(message), message.content);
     expect(agent.passive).toEqual([expect.objectContaining({
       sessionKey: expect.stringContaining('group:-100123'),
       senderId: 'telegram-user-1',

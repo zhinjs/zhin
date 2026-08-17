@@ -4,12 +4,11 @@
  * 对齐 migrate-zhin-plugin-runtime：命令逻辑与 CommandFeature 解耦，
  * 由 Agent Host unmatched 前拦截；legacy `initAgentModule` 不再挂 MessageCommand。
  */
-import type { Message } from '@zhin.js/core';
 import type { AIService } from '../service.js';
 import { asPrivate } from '../internal/as-private.js';
 import {
-  jumpSessionTreeForCommMessage,
-  listSessionTreeForCommMessage,
+  jumpSessionTree,
+  listSessionTree,
 } from '../session/session-tree-commands.js';
 import type { ZhinAgent } from '../zhin-agent/index.js';
 
@@ -21,7 +20,7 @@ export type RuntimeManagementSenderRoles = {
 export type RuntimeManagementDeps = {
   readonly service: AIService;
   readonly zhinAgent: ZhinAgent;
-  readonly commMessage: Message;
+  readonly sessionKey: string;
   readonly content: string;
   readonly senderRoles: RuntimeManagementSenderRoles;
 };
@@ -60,7 +59,7 @@ export async function handleRuntimeManagementCommand(
 
   if (/^\/tree\s*$/iu.test(text)) {
     if (!isOperator) return denyOperator();
-    return listSessionTreeForCommMessage(agent, deps.commMessage);
+    return listSessionTree(agent, deps.sessionKey);
   }
 
   const treeJump = text.match(/^\/tree\s+(\d+)\s*$/iu);
@@ -68,7 +67,7 @@ export async function handleRuntimeManagementCommand(
     if (!isOperator) return denyOperator();
     const n = parseLeadingInt(treeJump[1] ?? '');
     if (n == null) return 'ℹ️ 用法：/tree 2';
-    return jumpSessionTreeForCommMessage(agent, deps.commMessage, n);
+    return jumpSessionTree(agent, deps.sessionKey, n);
   }
 
   const fork = text.match(/^\/fork\s+(\d+)\s*$/iu);
@@ -76,18 +75,18 @@ export async function handleRuntimeManagementCommand(
     if (!isOperator) return denyOperator();
     const n = parseLeadingInt(fork[1] ?? '');
     if (n == null) return 'ℹ️ 用法：/fork 2';
-    return jumpSessionTreeForCommMessage(agent, deps.commMessage, n);
+    return jumpSessionTree(agent, deps.sessionKey, n);
   }
 
   if (/^\/compact\s*$/iu.test(text)) {
     if (!isOperator) return denyOperator();
-    const result = await deps.zhinAgent.compactSessionForCommMessage(deps.commMessage);
+    const result = await deps.zhinAgent.compactSession(deps.sessionKey);
     return result.ok ? `✅ ${result.message}` : `ℹ️ ${result.message}`;
   }
 
   if (/^\/reset\s*$/iu.test(text)) {
     if (!isOperator) return denyOperator();
-    const ok = await deps.zhinAgent.archiveSessionForCommMessage(deps.commMessage);
+    const ok = await deps.zhinAgent.archiveSession(deps.sessionKey);
     return ok ? '✅ 已归档当前会话，下次 @ 将使用新上下文' : 'ℹ️ 无活跃会话可归档';
   }
 

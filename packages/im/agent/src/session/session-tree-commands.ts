@@ -1,4 +1,3 @@
-import { resolveIMSessionIdFromMessage, type Message } from '@zhin.js/core';
 import type { SessionBranchPoint } from '@zhin.js/ai';
 import { beginTurnSession, type SessionIODeps } from '../session/session-io.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
@@ -9,11 +8,10 @@ function formatBranchList(points: SessionBranchPoint[]): string {
     .join('\n');
 }
 
-export async function listSessionTreeForCommMessage(
+export async function listSessionTree(
   host: ZhinAgentPrivate,
-  commMessage: Message,
+  sessionKey: string,
 ): Promise<string> {
-  const sessionKey = resolveIMSessionIdFromMessage(commMessage);
   const deps: SessionIODeps = {
     agentSessionStore: host.agentSessionStore,
     contextRepository: host.contextRepository,
@@ -23,12 +21,11 @@ export async function listSessionTreeForCommMessage(
   return `🌳 会话分支点（/tree N 跳转，/fork N 从该点继续）：\n${formatBranchList(points)}`;
 }
 
-export async function jumpSessionTreeForCommMessage(
+export async function jumpSessionTree(
   host: ZhinAgentPrivate,
-  commMessage: Message,
+  sessionKey: string,
   index: number,
 ): Promise<string> {
-  const sessionKey = resolveIMSessionIdFromMessage(commMessage);
   const deps: SessionIODeps = {
     agentSessionStore: host.agentSessionStore,
     contextRepository: host.contextRepository,

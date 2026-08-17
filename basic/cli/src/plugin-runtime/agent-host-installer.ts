@@ -5,7 +5,6 @@ import { randomUUID } from 'node:crypto';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   createSyntheticMessage,
-  resolveSceneFieldsFromMessage,
   collectSegmentMedia,
   toCanonicalSegments,
   type AITriggerConfig,
@@ -85,7 +84,7 @@ import {
   FileJournalStore,
   InteractionRouter,
 } from '@zhin.js/agent';
-import { resolveAgentTurnSessionKey } from '@zhin.js/agent/session';
+import { resolveAgentTurnSessionKeyFromAddress } from '@zhin.js/agent/session';
 import {
   agentHostToken,
   CapabilityIngress,
@@ -520,21 +519,15 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       const ownerId = resolveOwnerForRuntimeMessage(message, options.resolveEndpointOwner);
       const endpointTrusted = resolveTrustedForRuntimeMessage(message, options.resolveEndpointTrusted);
       const senderRoles = resolveRuntimeSenderRoles(message, ownerId, endpointTrusted, trigger);
-      const commMessage = bridgeRuntimeMessage(message, ownerId, senderRoles);
+      const turnAccess = createRuntimeTurnAccess(message, senderRoles);
+      const sessionKey = runtimeImSessionKey(turnAccess);
 
-      // Boundary-only management/transcript projection still needs the legacy
-      // command adapter; the Agent turn below consumes only TurnRequest.
       // Runtime message.adapter is a CapabilityId (\0-separated); strip it and
       // use Endpoint liveName so the OutboundHost resolve() succeeds.
       const effectiveAdapter = capabilityLocalName(String(message.conversation.endpoint.id));
       const effectiveEndpoint = adapterLiveEndpointId(message);
-      if (effectiveAdapter && effectiveEndpoint) {
-        (commMessage as { $adapter?: string }).$adapter = effectiveAdapter;
-        (commMessage as { $endpoint?: string }).$endpoint = effectiveEndpoint;
-      }
-
       // 入站流水 → im_transcripts（等待 projection settle，不能逃出 generation lease）。
-      await recordRuntimeTranscript(zhinAgent, commMessage, {
+      await recordRuntimeTranscript(zhinAgent, turnAccess, {
         direction: 'inbound',
         body: message.content,
         messageId: message.id,
@@ -546,7 +539,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       /** 回复并记录出站流水（assistant 角色，对齐 legacy message.send 收集）。 */
       const replyAndRecord = async (content: SendContent, transcriptBody = sendContentToText(content)) => {
         await message.$reply(content);
-        await recordRuntimeTranscript(zhinAgent, commMessage, {
+        await recordRuntimeTranscript(zhinAgent, turnAccess, {
           direction: 'outbound',
           body: transcriptBody,
           senderRole: 'assistant',
@@ -557,7 +550,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       const managementReply = await handleRuntimeManagementCommand({
         service,
         zhinAgent,
-        commMessage,
+        sessionKey,
         content: message.content,
         senderRoles,
       });
@@ -567,7 +560,18 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         return true;
       }
 
-      const approveReply = handleRuntimeOwnerApproveCommand(commMessage, message.content);
+      const approveReply = /^\/approve(?:\s|$)/iu.test(message.content.trim())
+        ? handleRuntimeOwnerApproveCommand(
+            {
+              platform: turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '',
+              endpoint: turnAccess.origin.kind === 'im' ? turnAccess.origin.endpoint : '',
+              ownerId,
+              subjectId: turnAccess.principal.subjectId,
+              scope: turnAccess.origin.kind === 'im' ? turnAccess.origin.scope : 'private',
+            },
+            message.content,
+          )
+        : null;
       if (approveReply != null) {
         await replyAndRecord(approveReply);
         logger.info(formatCompact({ op: 'agent_host_approve', handled: true }));
@@ -576,12 +580,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 
       if (!matched) {
         // 群/频道旁听：未触发 AI 的共享会话消息写入会话背景（Passive Group Context）。
-        await recordPassiveGroupContext(zhinAgent, message, commMessage);
+        await recordPassiveGroupContext(zhinAgent, turnAccess, message.content);
         return false;
       }
 
       if (isClearCommand(matched.content)) {
-        await zhinAgent.archiveSessionForCommMessage(commMessage);
+        await zhinAgent.archiveSession(sessionKey);
         await replyAndRecord('已清空本会话的 AI 多轮上下文。');
         return true;
       }
@@ -602,18 +606,27 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           () => capabilityActive,
         );
         const routed = routeSpecialistAgent(inbound.text, capabilities);
-        const collab = await applyRuntimeCollaborationInbound({
-          message: commMessage,
-          content: routed.userText,
-          peerMode: resolvePeerMode(service.getTriggerConfig()),
-          discoveredAgentNames: new Set(capabilities.agents.map((agent) => agent.name)),
-          replyAi: async (payload) => {
-            await replyAndRecord(typeof payload === 'string' ? payload : String(payload));
-          },
-          logger,
-        });
-        if (collab.action === 'skip') return true;
-        if (collab.action === 'done') return true;
+        if (hasRuntimeCollaborationCell(turnAccess)) {
+          const collaborationMessage = bridgeRuntimeMessageForLegacyEdge(
+            message,
+            ownerId,
+            senderRoles,
+            effectiveAdapter,
+            effectiveEndpoint,
+          );
+          const collab = await applyRuntimeCollaborationInbound({
+            message: collaborationMessage,
+            content: routed.userText,
+            peerMode: resolvePeerMode(service.getTriggerConfig()),
+            discoveredAgentNames: new Set(capabilities.agents.map((agent) => agent.name)),
+            replyAi: async (payload) => {
+              await replyAndRecord(typeof payload === 'string' ? payload : String(payload));
+            },
+            logger,
+          });
+          if (collab.action === 'skip') return true;
+          if (collab.action === 'done') return true;
+        }
 
         // thinkingMessage：进入 AI 处理前先回占位（对齐 legacy inbound-turn-pipeline）。
         // 占位消息不 await 回包——平台 ack 慢（实测 icqq 守护进程 10s+）不应拖住 turn 启动；
@@ -625,7 +638,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               error: error instanceof Error ? error.message : String(error),
             }));
           });
-          await recordRuntimeTranscript(zhinAgent, commMessage, {
+          await recordRuntimeTranscript(zhinAgent, turnAccess, {
             direction: 'outbound',
             body: sendContentToText(trigger.thinkingMessage as SendContent),
             senderRole: 'assistant',
@@ -1129,6 +1142,22 @@ export function bridgeRuntimeMessage(
   });
 }
 
+/** Classic collaboration orchestration adapter, isolated to configured Cell traffic. */
+function bridgeRuntimeMessageForLegacyEdge(
+  message: Message,
+  endpointMaster: string | undefined,
+  roles: RuntimeSenderRoles,
+  effectiveAdapter: string,
+  effectiveEndpoint: string,
+) {
+  const projected = bridgeRuntimeMessage(message, endpointMaster, roles);
+  if (effectiveAdapter && effectiveEndpoint) {
+    (projected as { $adapter?: string }).$adapter = effectiveAdapter;
+    (projected as { $endpoint?: string }).$endpoint = effectiveEndpoint;
+  }
+  return projected;
+}
+
 /**
  * Canonical IM → Agent TurnRequest mapper. Runtime Message remains owned by IM.
  */
@@ -1178,7 +1207,7 @@ export function createRuntimeTurnRequest(
       metadata: Object.freeze({ ...message.metadata }),
     }),
     session: Object.freeze({
-      key: `${origin.platform}:${origin.endpoint}:${origin.scope}:${origin.sceneId}`,
+      key: runtimeImSessionKey(access),
     }),
     policy: Object.freeze({
       ...access.policy,
@@ -1260,7 +1289,7 @@ function interactiveNetworkPolicy(
     : undefined;
 }
 
-function createRuntimeTurnAccess(
+export function createRuntimeTurnAccess(
   message: Message,
   roles: RuntimeSenderRoles,
 ): TurnAccessContext {
@@ -1291,6 +1320,23 @@ function createRuntimeTurnAccess(
       unattended: false,
     }),
   });
+}
+
+function runtimeImSessionKey(access: TurnAccessContext): string {
+  const origin = access.origin;
+  if (origin.kind !== 'im') throw new TypeError('Runtime IM access requires an IM origin');
+  return `${origin.platform}:${origin.endpoint}:${origin.scope}:${origin.sceneId}`;
+}
+
+function hasRuntimeCollaborationCell(access: TurnAccessContext): boolean {
+  const origin = access.origin;
+  if (origin.kind !== 'im' || (origin.scope !== 'group' && origin.scope !== 'channel')) return false;
+  return Boolean(findCellForInbound(
+    getCollaborationSceneService().listScenes(),
+    origin.platform,
+    origin.sceneId,
+    origin.endpoint,
+  ));
 }
 
 function resolveOwnerForRuntimeMessage(
@@ -1333,25 +1379,29 @@ interface RuntimeTranscriptDraft {
 
 /**
  * im_transcripts 落库（缺口 1，对齐 legacy register-chat-message-store）。
- * scene 字段经 resolveSceneFieldsFromMessage 计算，与 chat_history 工具查询
- * （buildImTranscriptQuery）保持同一 SSOT；调用方等待 projection settle。
+ * 地址直接来自 canonical TurnAccess，与会话和权限使用同一事实源。
  */
 export function recordRuntimeTranscript(
   agent: Pick<ZhinAgent, 'recordImTranscript'>,
-  commMessage: ReturnType<typeof createSyntheticMessage>,
+  access: TurnAccessContext,
   draft: RuntimeTranscriptDraft,
 ): Promise<void> {
   const body = draft.body ?? '';
   if (!body.trim()) return Promise.resolve();
-  const scene = resolveSceneFieldsFromMessage(commMessage);
+  const origin = access.origin;
+  if (origin.kind !== 'im') {
+    return Promise.reject(new TypeError('IM transcript requires an IM Turn origin'));
+  }
   const input: ImTranscriptWriteInput = {
     message_id: draft.messageId ?? '',
-    platform: scene.platform,
-    endpoint_id: scene.endpointKey,
-    scene_id: scene.sceneId,
-    scene_type: scene.sceneType,
-    sender_id: draft.senderId ?? scene.endpointKey,
-    sender_name: draft.senderName ?? scene.endpointKey,
+    platform: origin.platform,
+    endpoint_id: origin.endpoint,
+    scene_id: origin.sceneId,
+    scene_type: origin.scope,
+    sender_id: draft.senderId ?? (draft.direction === 'outbound' ? origin.endpoint : access.principal.subjectId),
+    sender_name: draft.senderName ?? (draft.direction === 'outbound'
+      ? origin.endpoint
+      : access.principal.displayName ?? access.principal.subjectId),
     sender_role: draft.senderRole ?? 'user',
     direction: draft.direction,
     body,
@@ -1373,32 +1423,35 @@ export function recordRuntimeTranscript(
  */
 export async function recordPassiveGroupContext(
   agent: Pick<ZhinAgent, 'recordPassiveGroupObservation'>,
-  message: Message,
-  commMessage: ReturnType<typeof createSyntheticMessage>,
+  access: TurnAccessContext,
+  content: string,
 ): Promise<void> {
-  const channelType = resolveChannelType(message);
-  if (channelType !== 'group' && channelType !== 'channel') return;
-  const rawText = message.content.trim();
+  const origin = access.origin;
+  if (origin.kind !== 'im' || (origin.scope !== 'group' && origin.scope !== 'channel')) return;
+  const rawText = content.trim();
   if (!rawText) return;
   // 机器人自身消息不旁听（对齐 legacy isBotSelfMessage）。
-  const senderId = resolveStableSenderId(message);
-  const endpointKey = String(commMessage.$endpoint ?? '');
+  const senderId = access.principal.subjectId;
+  const endpointKey = origin.endpoint;
   if (senderId !== '' && endpointKey !== '' && senderId === endpointKey) return;
   try {
     const sceneService = getCollaborationSceneService();
     let cell = findCellForInbound(
       sceneService.listScenes(),
-      String(commMessage.$adapter),
-      String(commMessage.$channel?.id ?? ''),
+      origin.platform,
+      origin.sceneId,
       endpointKey,
     );
     if (cell) {
       cell = (await sceneService.getSceneFresh(cell.id)) ?? cell;
     }
     await agent.recordPassiveGroupObservation({
-      sessionKey: resolveAgentTurnSessionKey(commMessage, cell),
-      senderId: resolveStableSenderId(message),
-      senderName: message.sender?.name ?? resolveStableSenderId(message),
+      sessionKey: resolveAgentTurnSessionKeyFromAddress({
+        transport: runtimeImSessionKey(access),
+        endpointKey,
+      }, cell),
+      senderId,
+      senderName: access.principal.displayName ?? senderId,
       text: rawText,
     });
   } catch (error) {

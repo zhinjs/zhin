@@ -74,6 +74,28 @@ function normalizeBotKey(adapter: string, endpointKey: string, ownerId: string):
   return `${adapter}|${endpointKey}|${ownerId}`;
 }
 
+interface OwnerApprovalAddress {
+  readonly platform: string;
+  readonly endpoint: string;
+  readonly ownerId: string;
+}
+
+function approvalAddressKey(address: OwnerApprovalAddress): string {
+  return normalizeBotKey(address.platform, address.endpoint, address.ownerId);
+}
+
+function approvalAddressFromMessage(
+  plugin: Plugin | null | undefined,
+  message: Message,
+): OwnerApprovalAddress | undefined {
+  const platform = String(message.$adapter ?? '').trim();
+  const endpoint = String(message.$endpoint ?? '').trim();
+  const ownerId = getEndpointMaster(plugin, message)?.trim();
+  return platform && endpoint && ownerId
+    ? Object.freeze({ platform, endpoint, ownerId })
+    : undefined;
+}
+
 function migrateV1ToV2(data: StoreV1): StoreV2 {
   const out = emptyV2();
   for (const e of data.entries || []) {
@@ -199,26 +221,74 @@ export function resolveToolRequesterRole(
   return 'other';
 }
 
-function getEntry(plugin: Plugin | null | undefined, commMessage: Message): BashApprovalBotEntry | undefined {
-  if (!commMessage.$adapter || !commMessage.$endpoint) return undefined;
-  const ownerId = getEndpointMaster(plugin, commMessage);
-  if (ownerId == null) return undefined;
-  const key = normalizeBotKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId);
-  const data = readStore();
-  return data.endpoints[key];
+function getEntryAt(address: OwnerApprovalAddress): BashApprovalBotEntry | undefined {
+  return readStore().endpoints[approvalAddressKey(address)];
 }
 
-function ensureEntry(plugin: Plugin | null | undefined, commMessage: Message): BashApprovalBotEntry {
-  if (!commMessage.$adapter || !commMessage.$endpoint) return { bashRules: [] };
-  const ownerId = getEndpointMaster(plugin, commMessage);
-  if (ownerId == null) return { bashRules: [] };
-  const key = normalizeBotKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId);
+function setBashAlwaysAt(address: OwnerApprovalAddress, value: boolean): void {
+  const key = approvalAddressKey(address);
   const data = readStore();
-  if (!data.endpoints[key]) {
-    data.endpoints[key] = { bashRules: [] };
-    writeStore(data);
+  const previous = data.endpoints[key] ?? { bashRules: [] };
+  data.endpoints[key] = {
+    ...(value ? { bashAlways: true } : {}),
+    bashRules: [...(previous.bashRules ?? [])],
+  };
+  writeStore(data);
+}
+
+function addBashApproveRuleAt(
+  address: OwnerApprovalAddress,
+  pattern: string,
+): { ok: true; id: string } | { ok: false; error: string } {
+  const trimmed = pattern.trim();
+  if (!trimmed) return { ok: false, error: '正则不能为空。' };
+  try {
+    new RegExp(trimmed);
+  } catch (error) {
+    return { ok: false, error: `无效正则: ${error instanceof Error ? error.message : String(error)}` };
   }
-  return data.endpoints[key]!;
+  const key = approvalAddressKey(address);
+  const data = readStore();
+  const previous = data.endpoints[key] ?? { bashRules: [] };
+  const id = crypto.randomUUID();
+  data.endpoints[key] = {
+    ...(previous.bashAlways ? { bashAlways: true } : {}),
+    bashRules: [...previous.bashRules, { id, pattern: trimmed, createdAt: Date.now() }],
+  };
+  writeStore(data);
+  return { ok: true, id };
+}
+
+function removeBashApproveRuleAt(
+  address: OwnerApprovalAddress,
+  ruleId: string,
+): { ok: true } | { ok: false; error: string } {
+  const id = ruleId.trim();
+  if (!id) return { ok: false, error: '请提供规则 id。' };
+  const key = approvalAddressKey(address);
+  const data = readStore();
+  const entry = data.endpoints[key];
+  if (!entry?.bashRules.length) return { ok: false, error: '当前无自定义规则。' };
+  const next = entry.bashRules.filter((rule) => rule.id !== id && !rule.id.startsWith(id));
+  if (next.length === entry.bashRules.length) {
+    return { ok: false, error: `未找到 id 前缀或全名为「${id}」的规则。` };
+  }
+  data.endpoints[key] = { ...entry, bashRules: next };
+  writeStore(data);
+  return { ok: true };
+}
+
+function formatBashApproveListAt(address: OwnerApprovalAddress): string {
+  const entry = getEntryAt(address);
+  const rules = entry?.bashRules ?? [];
+  if (!entry || (!entry.bashAlways && rules.length === 0)) {
+    return 'bash 永久放行: 否\n自定义正则放行: 无';
+  }
+  return [
+    `bash 永久放行: ${entry.bashAlways ? '是' : '否'}`,
+    `自定义正则放行 (${rules.length}):`,
+    ...rules.map((rule) => `  • [${rule.id.slice(0, 8)}] ${rule.pattern}`),
+  ].join('\n');
 }
 
 export function getOwnerCommMessageOrUndefined(
@@ -238,24 +308,13 @@ export function hasOwnerApproveAlways(
   toolName: string,
 ): boolean {
   if (toolName !== OWNER_APPROVE_ALWAYS_TOOL) return false;
-  if (!commMessage.$adapter || !commMessage.$endpoint) return false;
-  const ent = getEntry(plugin, commMessage);
-  return !!ent?.bashAlways;
+  const address = approvalAddressFromMessage(plugin, commMessage);
+  return address ? !!getEntryAt(address)?.bashAlways : false;
 }
 
 export function setBashAlways(plugin: Plugin | null | undefined, commMessage: Message, value: boolean): void {
-  if (!commMessage.$adapter || !commMessage.$endpoint) return;
-  const ownerId = getEndpointMaster(plugin, commMessage);
-  if (ownerId == null) return;
-  const key = normalizeBotKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId);
-  const data = readStore();
-  const prev = data.endpoints[key] ?? { bashRules: [] };
-  const ent: BashApprovalBotEntry = { bashRules: prev.bashRules ?? [] };
-  if (prev.bashAlways !== undefined) ent.bashAlways = prev.bashAlways;
-  if (value) ent.bashAlways = true;
-  else delete ent.bashAlways;
-  data.endpoints[key] = ent;
-  writeStore(data);
+  const address = approvalAddressFromMessage(plugin, commMessage);
+  if (address) setBashAlwaysAt(address, value);
 }
 
 export function addOwnerApproveAlways(
@@ -263,16 +322,12 @@ export function addOwnerApproveAlways(
   commMessage: Message,
   toolName: string,
 ): { ok: true } | { ok: false; error: string } {
-  if (!commMessage.$adapter || !commMessage.$endpoint) {
-    return { ok: false, error: '缺少 platform / endpointKey' };
-  }
   if (toolName.trim().toLowerCase() !== OWNER_APPROVE_ALWAYS_TOOL) {
     return { ok: false, error: '永久放行仅支持 bash（shell 安全确认）。' };
   }
-  if (getEndpointMaster(plugin, commMessage) == null) {
-    return { ok: false, error: '当前 Endpoint 未配置 owner' };
-  }
-  setBashAlways(plugin, commMessage, true);
+  const address = approvalAddressFromMessage(plugin, commMessage);
+  if (!address) return { ok: false, error: '缺少 platform/endpointKey 或未配置 owner。' };
+  setBashAlwaysAt(address, true);
   return { ok: true };
 }
 
@@ -281,20 +336,15 @@ export function removeOwnerApproveAlways(
   commMessage: Message,
   toolName: string,
 ): { ok: true } | { ok: false; error: string } {
-  if (!commMessage.$adapter || !commMessage.$endpoint) {
-    return { ok: false, error: '缺少 platform / endpointKey' };
-  }
   if (toolName.trim().toLowerCase() !== OWNER_APPROVE_ALWAYS_TOOL) {
     return { ok: false, error: '仅可撤销 bash 的永久放行。' };
   }
-  if (getEndpointMaster(plugin, commMessage) == null) {
-    return { ok: false, error: '当前 Endpoint 未配置 owner' };
-  }
-  const ent = getEntry(plugin, commMessage);
-  if (!ent?.bashAlways) {
+  const address = approvalAddressFromMessage(plugin, commMessage);
+  if (!address) return { ok: false, error: '缺少 platform/endpointKey 或未配置 owner。' };
+  if (!getEntryAt(address)?.bashAlways) {
     return { ok: false, error: '当前未对 bash 设置永久放行。' };
   }
-  setBashAlways(plugin, commMessage, false);
+  setBashAlwaysAt(address, false);
   return { ok: true };
 }
 
@@ -303,29 +353,11 @@ export function addBashApproveRule(
   commMessage: Message,
   pattern: string,
 ): { ok: true; id: string } | { ok: false; error: string } {
-  const trimmed = pattern.trim();
-  if (!trimmed) {
-    return { ok: false, error: '正则不能为空。' };
-  }
-  try {
-     
-    new RegExp(trimmed);
-  } catch (e) {
-    return { ok: false, error: `无效正则: ${e instanceof Error ? e.message : String(e)}` };
-  }
-  if (!commMessage.$adapter || !commMessage.$endpoint || getEndpointMaster(plugin, commMessage) == null) {
+  const address = approvalAddressFromMessage(plugin, commMessage);
+  if (!address) {
     return { ok: false, error: '缺少 platform/endpointKey 或未配置 owner。' };
   }
-  const ownerId = getEndpointMaster(plugin, commMessage)!;
-  const key = normalizeBotKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId);
-  const data = readStore();
-  const ent: BashApprovalBotEntry = { ...(data.endpoints[key] ?? { bashRules: [] }), bashRules: [...(data.endpoints[key]?.bashRules ?? [])] };
-  if (data.endpoints[key]?.bashAlways) ent.bashAlways = true;
-  const id = crypto.randomUUID();
-  ent.bashRules.push({ id, pattern: trimmed, createdAt: Date.now() });
-  data.endpoints[key] = ent;
-  writeStore(data);
-  return { ok: true, id };
+  return addBashApproveRuleAt(address, pattern);
 }
 
 export function removeBashApproveRule(
@@ -333,24 +365,11 @@ export function removeBashApproveRule(
   commMessage: Message,
   ruleId: string,
 ): { ok: true } | { ok: false; error: string } {
-  const id = ruleId.trim();
-  if (!id) return { ok: false, error: '请提供规则 id。' };
-  if (!commMessage.$adapter || !commMessage.$endpoint || getEndpointMaster(plugin, commMessage) == null) {
+  const address = approvalAddressFromMessage(plugin, commMessage);
+  if (!address) {
     return { ok: false, error: '缺少 platform/endpointKey 或未配置 owner。' };
   }
-  const ownerId = getEndpointMaster(plugin, commMessage)!;
-  const key = normalizeBotKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId);
-  const data = readStore();
-  const ent = data.endpoints[key];
-  if (!ent?.bashRules?.length) return { ok: false, error: '当前无自定义规则。' };
-  const next = ent.bashRules.filter((r) => r.id !== id && !r.id.startsWith(id));
-  if (next.length === ent.bashRules.length) {
-    return { ok: false, error: `未找到 id 前缀或全名为「${id}」的规则。` };
-  }
-  ent.bashRules = next;
-  data.endpoints[key] = ent;
-  writeStore(data);
-  return { ok: true };
+  return removeBashApproveRuleAt(address, ruleId);
 }
 
 /** exec 策略：bashAlways 或任一 bashRules 匹配 commandLine */
@@ -359,8 +378,9 @@ export function matchesBashOwnerExecBypass(
   commMessage: Message,
   commandLine: string,
 ): boolean {
-  if (!commMessage.$adapter || !commMessage.$endpoint) return false;
-  const ent = getEntry(plugin, commMessage);
+  const address = approvalAddressFromMessage(plugin, commMessage);
+  if (!address) return false;
+  const ent = getEntryAt(address);
   if (!ent) return false;
   if (ent.bashAlways) return true;
   const line = commandLine.trim();
@@ -377,29 +397,8 @@ export function matchesBashOwnerExecBypass(
 }
 
 export function formatBashApproveList(plugin: Plugin | null | undefined, commMessage: Message): string {
-  const ent = getEntry(plugin, commMessage);
-  const always = ent?.bashAlways ? '是' : '否';
-  const rules = ent?.bashRules ?? [];
-  if (!ent || (!ent.bashAlways && rules.length === 0)) {
-    return 'bash 永久放行: 否\n自定义正则放行: 无';
-  }
-  const lines = [`bash 永久放行: ${always}`, `自定义正则放行 (${rules.length}):`];
-  for (const r of rules) {
-    const short = r.id.slice(0, 8);
-    lines.push(`  • [${short}] ${r.pattern}`);
-  }
-  return lines.join('\n');
-}
-
-/** 兼容旧单测：返回 bash 与 rule 摘要行 */
-export function listOwnerApproveAlways(plugin: Plugin | null | undefined, commMessage: Message): string[] {
-  const ent = getEntry(plugin, commMessage);
-  const out: string[] = [];
-  if (ent?.bashAlways) out.push(OWNER_APPROVE_ALWAYS_TOOL);
-  for (const r of ent?.bashRules ?? []) {
-    out.push(`rule:${r.id.slice(0, 8)}:${r.pattern}`);
-  }
-  return out;
+  const address = approvalAddressFromMessage(plugin, commMessage);
+  return address ? formatBashApproveListAt(address) : 'bash 永久放行: 否\n自定义正则放行: 无';
 }
 
 export function isIcqqSensitiveSubcommand(fullSubCommand: string): boolean {
@@ -411,8 +410,29 @@ export function isIcqqSensitiveSubcommand(fullSubCommand: string): boolean {
 type Pending = { toolName: string; expiresAt: number };
 const pendingOrchestration = new Map<string, Pending>();
 
-function pendingKey(adapter: string, endpointKey: string, ownerId: string): string {
-  return `${adapter}|${endpointKey}|${ownerId}`;
+function setPendingAt(address: OwnerApprovalAddress): void {
+  pendingOrchestration.set(approvalAddressKey(address), {
+    toolName: OWNER_APPROVE_ALWAYS_TOOL,
+    expiresAt: Date.now() + 15 * 60 * 1000,
+  });
+}
+
+function clearPendingAt(address: OwnerApprovalAddress): void {
+  pendingOrchestration.delete(approvalAddressKey(address));
+}
+
+function getPendingAt(address: OwnerApprovalAddress): string | undefined {
+  const key = approvalAddressKey(address);
+  const pending = pendingOrchestration.get(key);
+  if (!pending || pending.toolName !== OWNER_APPROVE_ALWAYS_TOOL) {
+    if (pending) pendingOrchestration.delete(key);
+    return undefined;
+  }
+  if (Date.now() > pending.expiresAt) {
+    pendingOrchestration.delete(key);
+    return undefined;
+  }
+  return pending.toolName;
 }
 
 export function getPendingOrchestrationCount(): number {
@@ -437,43 +457,24 @@ export function setPendingOrchestrationTool(
   toolName: string,
 ): void {
   if (toolName !== OWNER_APPROVE_ALWAYS_TOOL) return;
-  if (!commMessage.$adapter || !commMessage.$endpoint) return;
-  const ownerId = getEndpointMaster(plugin, commMessage);
-  if (ownerId == null) return;
-  pendingOrchestration.set(pendingKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId), {
-    toolName: OWNER_APPROVE_ALWAYS_TOOL,
-    expiresAt: Date.now() + 15 * 60 * 1000,
-  });
+  const address = approvalAddressFromMessage(plugin, commMessage);
+  if (address) setPendingAt(address);
 }
 
 export function clearPendingOrchestrationTool(
   plugin: Plugin | null | undefined,
   commMessage: Message,
 ): void {
-  if (!commMessage.$adapter || !commMessage.$endpoint) return;
-  const ownerId = getEndpointMaster(plugin, commMessage);
-  if (ownerId == null) return;
-  pendingOrchestration.delete(pendingKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId));
+  const address = approvalAddressFromMessage(plugin, commMessage);
+  if (address) clearPendingAt(address);
 }
 
 export function getPendingOrchestrationTool(
   plugin: Plugin | null | undefined,
   commMessage: Message,
 ): string | undefined {
-  if (!commMessage.$adapter || !commMessage.$endpoint) return undefined;
-  const ownerId = getEndpointMaster(plugin, commMessage);
-  if (ownerId == null) return undefined;
-  const key = pendingKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId);
-  const p = pendingOrchestration.get(key);
-  if (!p || p.toolName !== OWNER_APPROVE_ALWAYS_TOOL) {
-    if (p) pendingOrchestration.delete(key);
-    return undefined;
-  }
-  if (Date.now() > p.expiresAt) {
-    pendingOrchestration.delete(key);
-    return undefined;
-  }
-  return OWNER_APPROVE_ALWAYS_TOOL;
+  const address = approvalAddressFromMessage(plugin, commMessage);
+  return address ? getPendingAt(address) : undefined;
 }
 
 function usageLines(): string {
@@ -514,60 +515,88 @@ function matchApproveRuleArgument(text: string): string | null {
   return null;
 }
 
+export interface OwnerApprovalCommandContext {
+  readonly platform: string;
+  readonly endpoint: string;
+  readonly ownerId?: string;
+  readonly subjectId: string;
+  readonly scope: 'private' | 'group' | 'channel';
+}
+
+function ownerCommandAddress(context: OwnerApprovalCommandContext): OwnerApprovalAddress | undefined {
+  if (!context.platform || !context.endpoint || !context.ownerId) return undefined;
+  return Object.freeze({
+    platform: context.platform,
+    endpoint: context.endpoint,
+    ownerId: context.ownerId,
+  });
+}
+
 /**
  * Plugin Runtime Owner `/approve` 命令面（无 host Plugin / CommandFeature）。
  * @returns reply text when handled; null when not an approve command.
  */
 export function handleRuntimeOwnerApproveCommand(
-  message: Message,
+  context: OwnerApprovalCommandContext,
   rawText: string,
 ): string | null {
   const text = rawText.trim();
   if (!/^\/approve(?:\s|$)/iu.test(text)) return null;
 
-  const ctx = getOwnerCommMessageOrUndefined(null, message);
-  if (!ctx) {
+  if (context.scope !== 'private' || !context.ownerId || context.subjectId !== context.ownerId) {
     return '⚠️ 仅 Endpoint Owner 可在私聊中使用此指令。需在插件配置中设置 master/owner。';
   }
 
   if (/^\/approve\s+always\s+bash\s*$/iu.test(text)) {
-    const r = addOwnerApproveAlways(null, ctx, OWNER_APPROVE_ALWAYS_TOOL);
-    if (!r.ok) return `⚠️ ${r.error}\n${usageLines()}`;
+    const address = ownerCommandAddress(context);
+    if (!address) {
+      return `⚠️ 当前 Endpoint 未配置 owner\n${usageLines()}`;
+    }
+    setBashAlwaysAt(address, true);
     return '✅ 已对 bash 永久放行 Owner 硬确认（本 Bot）。后续 bash 需确认时将不再弹窗；若当前仍有一条待回复的 bash 确认，本轮仍需输入 yes。';
   }
 
   if (/^\/approve\s+always\s*$/iu.test(text)) {
-    const pending = getPendingOrchestrationTool(null, ctx);
+    const address = ownerCommandAddress(context);
+    const pending = address ? getPendingAt(address) : undefined;
     if (!pending) {
       return `⚠️ 无近期 bash 待确认上下文，请使用：/approve always bash。\n${usageLines()}`;
     }
-    const r = addOwnerApproveAlways(null, ctx, pending);
-    if (!r.ok) return `⚠️ ${r.error}`;
-    clearPendingOrchestrationTool(null, ctx);
+    setBashAlwaysAt(address!, true);
+    clearPendingAt(address!);
     return '✅ 已对 bash 永久放行 Owner 硬确认（本 Bot）。';
   }
 
   const revokeRule = text.match(/^\/approve\s+revoke\s+rule\s+(\S+)\s*$/iu);
   if (revokeRule) {
-    const r = removeBashApproveRule(null, ctx, revokeRule[1]!);
+    const address = ownerCommandAddress(context);
+    const r = address
+      ? removeBashApproveRuleAt(address, revokeRule[1]!)
+      : { ok: false as const, error: '缺少 platform/endpointKey 或未配置 owner。' };
     if (!r.ok) return `⚠️ ${r.error}`;
     return '✅ 已删除该放行规则。';
   }
 
   const ruleArgument = matchApproveRuleArgument(text);
   if (ruleArgument !== null) {
-    const r = addBashApproveRule(null, ctx, ruleArgument.trim());
+    const address = ownerCommandAddress(context);
+    const r = address
+      ? addBashApproveRuleAt(address, ruleArgument.trim())
+      : { ok: false as const, error: '缺少 platform/endpointKey 或未配置 owner。' };
     if (!r.ok) return `⚠️ ${r.error}`;
     return `✅ 已添加规则 id=${r.id.slice(0, 8)}… ，匹配子命令时将不再要求 Owner 确认（仍受危险命令黑名单等约束）。`;
   }
 
   if (/^\/approve\s+list\s*$/iu.test(text)) {
-    return formatBashApproveList(null, ctx);
+    const address = ownerCommandAddress(context);
+    return address ? formatBashApproveListAt(address) : 'bash 永久放行: 否\n自定义正则放行: 无';
   }
 
   if (/^\/approve\s+revoke\s*$/iu.test(text)) {
-    const r = removeOwnerApproveAlways(null, ctx, OWNER_APPROVE_ALWAYS_TOOL);
-    if (!r.ok) return `⚠️ ${r.error}`;
+    const address = ownerCommandAddress(context);
+    const entry = address ? getEntryAt(address) : undefined;
+    if (!entry?.bashAlways) return '⚠️ 当前未对 bash 设置永久放行。';
+    setBashAlwaysAt(address!, false);
     return '✅ 已撤销 bash 永久放行（正则规则仍保留，可用 /approve list 查看）。';
   }
 

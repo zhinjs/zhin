@@ -6,6 +6,7 @@ import * as os from 'node:os';
 import {
   handleRuntimeOwnerApproveCommand,
   hasOwnerApproveAlways,
+  matchesBashOwnerExecBypass,
   OWNER_APPROVE_ALWAYS_TOOL,
 } from '../../src/security/owner-approve-always-store.js';
 import { getDataDir } from '../../src/discovery/utils.js';
@@ -36,24 +37,27 @@ describe('handleRuntimeOwnerApproveCommand', () => {
     });
   }
 
+  function ownerContext(subjectId = '1659488338') {
+    return {
+      platform: 'icqq',
+      endpoint: '8596238',
+      ownerId: '1659488338',
+      subjectId,
+      scope: 'private' as const,
+    };
+  }
+
   it('returns null for non-approve text', () => {
-    expect(handleRuntimeOwnerApproveCommand(ownerMessage(), 'hello')).toBeNull();
+    expect(handleRuntimeOwnerApproveCommand(ownerContext(), 'hello')).toBeNull();
   });
 
   it('rejects non-owner private chat', () => {
-    const msg = createSyntheticMessage({
-      adapter: 'icqq',
-      endpoint: '8596238',
-      sender: { id: 'other', name: 'x' },
-      channel: { type: 'private', id: 'other' },
-      extra: { endpointMaster: '1659488338' },
-    });
-    expect(handleRuntimeOwnerApproveCommand(msg, '/approve always bash')).toMatch(/仅 Endpoint Owner/);
+    expect(handleRuntimeOwnerApproveCommand(ownerContext('other'), '/approve always bash')).toMatch(/仅 Endpoint Owner/);
   });
 
   it('sets bash always and persists', () => {
     const msg = ownerMessage();
-    const reply = handleRuntimeOwnerApproveCommand(msg, '/approve always bash');
+    const reply = handleRuntimeOwnerApproveCommand(ownerContext(), '/approve always bash');
     expect(reply).toMatch(/永久放行/);
     expect(hasOwnerApproveAlways(null, msg, OWNER_APPROVE_ALWAYS_TOOL)).toBe(true);
     expect(fs.existsSync(path.join(getDataDir(), 'owner-approve-always.json'))).toBe(true);
@@ -61,28 +65,28 @@ describe('handleRuntimeOwnerApproveCommand', () => {
 
   it('lists and revokes', () => {
     const msg = ownerMessage();
-    handleRuntimeOwnerApproveCommand(msg, '/approve always bash');
-    expect(handleRuntimeOwnerApproveCommand(msg, '/approve list')).toMatch(/bash 永久放行: 是/);
-    expect(handleRuntimeOwnerApproveCommand(msg, '/approve revoke')).toMatch(/已撤销/);
+    handleRuntimeOwnerApproveCommand(ownerContext(), '/approve always bash');
+    expect(handleRuntimeOwnerApproveCommand(ownerContext(), '/approve list')).toMatch(/bash 永久放行: 是/);
+    expect(handleRuntimeOwnerApproveCommand(ownerContext(), '/approve revoke')).toMatch(/已撤销/);
     expect(hasOwnerApproveAlways(null, msg, OWNER_APPROVE_ALWAYS_TOOL)).toBe(false);
   });
 
   it('adds an approve rule via /approve rule <pattern>', () => {
     const msg = ownerMessage();
-    expect(handleRuntimeOwnerApproveCommand(msg, '/approve rule ^ls')).toMatch(/已添加规则/);
-    expect(handleRuntimeOwnerApproveCommand(msg, '/approve  rule   ^git status')).toMatch(/已添加规则/);
+    expect(handleRuntimeOwnerApproveCommand(ownerContext(), '/approve rule ^ls')).toMatch(/已添加规则/);
+    expect(handleRuntimeOwnerApproveCommand(ownerContext(), '/approve  rule   ^git status')).toMatch(/已添加规则/);
+    expect(matchesBashOwnerExecBypass(null, msg, 'ls -la')).toBe(true);
+    expect(matchesBashOwnerExecBypass(null, msg, 'git status --short')).toBe(true);
   });
 
-  it('rejects /approve rule without argument (legacy semantics)', () => {
-    const msg = ownerMessage();
-    expect(handleRuntimeOwnerApproveCommand(msg, '/approve rule')).toMatch(/无法解析指令/);
-    expect(handleRuntimeOwnerApproveCommand(msg, '/approve rule ')).toMatch(/无法解析指令/);
+  it('rejects /approve rule without an argument', () => {
+    expect(handleRuntimeOwnerApproveCommand(ownerContext(), '/approve rule')).toMatch(/无法解析指令/);
+    expect(handleRuntimeOwnerApproveCommand(ownerContext(), '/approve rule ')).toMatch(/无法解析指令/);
   });
 
   it('parses /approve rule with 100k whitespace in linear time (no ReDoS)', () => {
-    const msg = ownerMessage();
     const start = performance.now();
-    const reply = handleRuntimeOwnerApproveCommand(msg, `/approve rule ${' '.repeat(100_000)}x`);
+    const reply = handleRuntimeOwnerApproveCommand(ownerContext(), `/approve rule ${' '.repeat(100_000)}x`);
     expect(performance.now() - start).toBeLessThan(100);
     expect(reply).toMatch(/已添加规则/);
   });
