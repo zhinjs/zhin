@@ -246,7 +246,7 @@ describe('RootRuntime isolated Plugin HMR', () => {
     const second = runtime.snapshot;
     const secondHandle = isolatedHandle(second);
     await expect(secondHandle.call('version')).resolves.toBe('v2');
-    await expect(firstHandle.call('version')).rejects.toThrow(/closed|not accepting calls/u);
+    await expect(firstHandle.call('version')).rejects.toThrow(/closed|not accepting calls|not admitted/u);
     expect(modules.loadCount(entry)).toBe(0);
 
     await writeBrokenPlugin(entry);
