@@ -1,5 +1,18 @@
 # @zhin.js/mcp
 
+## 6.0.8
+
+### Patch Changes
+
+- Updated dependencies [63253bb]
+- Updated dependencies [7427818]
+- Updated dependencies [8e973dc]
+- Updated dependencies [953cfe1]
+- Updated dependencies [0e73866]
+  - @zhin.js/core@1.5.8
+  - @zhin.js/tool@1.0.9
+  - zhin.js@6.0.8
+
 ## 6.0.7
 
 ### Patch Changes

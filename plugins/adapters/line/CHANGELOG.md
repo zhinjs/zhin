@@ -1,5 +1,25 @@
 # @zhin.js/adapter-line
 
+## 4.0.9
+
+### Patch Changes
+
+- Updated dependencies [63253bb]
+- Updated dependencies [6fb24dd]
+- Updated dependencies [d162216]
+- Updated dependencies [7427818]
+- Updated dependencies [90da255]
+- Updated dependencies [8e973dc]
+- Updated dependencies [953cfe1]
+- Updated dependencies [0e73866]
+  - @zhin.js/plugin-runtime@1.1.6
+  - @zhin.js/core@1.5.8
+  - @zhin.js/adapter@1.1.8
+  - @zhin.js/host-http@1.0.9
+  - @zhin.js/agent@1.1.9
+  - zhin.js@6.0.8
+  - @zhin.js/command@1.0.12
+
 ## 4.0.8
 
 ### Patch Changes

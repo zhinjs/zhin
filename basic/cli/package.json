@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/cli",
-  "version": "3.0.7",
+  "version": "3.0.8",
   "description": "Command-line interface for Zhin.js bot framework",
   "type": "module",
   "main": "./lib/index.js",
@@ -74,8 +74,8 @@
     }
   },
   "peerDependencies": {
-    "@zhin.js/agent": "^1.1.8",
-    "@zhin.js/speech": "^3.0.7",
+    "@zhin.js/agent": "^1.1.9",
+    "@zhin.js/speech": "^3.0.8",
     "typescript": ">=5.8.0 <7.0.0"
   },
   "repository": {
