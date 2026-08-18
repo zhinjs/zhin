@@ -1,5 +1,32 @@
 # @zhin.js/a2a
 
+## 3.0.9
+
+### Patch Changes
+
+- 6fb24dd: Replace the concrete `AIService` and `ZhinAgent` escape hatches on `AgentHostPort`
+  with a canonical protocol port that lists immutable Agent bindings and executes
+  `TurnRequest`s. `AgentRuntime` selections now require the immutable binding for
+  the turn so provider/model state remains isolated across concurrent requests.
+
+  Route A2A tasks through the canonical Agent runtime without synthetic IM
+  messages or shared `agent.configure()` mutation. A2A callers now enter as a
+  fail-closed `user` principal, cancellation propagates through the turn
+  `AbortSignal`, and task completion continues to project through the A2A event
+  bus.
+
+- Updated dependencies [63253bb]
+- Updated dependencies [6fb24dd]
+- Updated dependencies [d162216]
+- Updated dependencies [7427818]
+- Updated dependencies [90da255]
+- Updated dependencies [8e973dc]
+- Updated dependencies [953cfe1]
+- Updated dependencies [0e73866]
+  - @zhin.js/core@1.5.8
+  - @zhin.js/agent@1.1.9
+  - zhin.js@6.0.8
+
 ## 3.0.8
 
 ### Patch Changes

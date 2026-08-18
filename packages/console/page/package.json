@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/page",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Convention-based Page capability Feature for Zhin.js plugins",
   "type": "module",
   "main": "./lib/index.js",

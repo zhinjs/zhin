@@ -1,5 +1,12 @@
 # minimal-bot
 
+## 0.0.28
+
+### Patch Changes
+
+- Updated dependencies [8e973dc]
+  - zhin.js@6.0.8
+
 ## 0.0.27
 
 ### Patch Changes

@@ -1,5 +1,29 @@
 # zhin.js
 
+## 6.0.8
+
+### Patch Changes
+
+- 8e973dc: Delete the classic Node bootstrap and its entire unreachable setup graph. `zhin.js/node`, `bootstrapNode`, classic endpoint/config/service assembly, legacy signal handling, and the duplicate database log transport are no longer published or compiled.
+
+  BREAKING CHANGE: applications must start through `zhin runtime start`; there is no compatibility stub or classic Host bootstrap subpath.
+
+- Updated dependencies [63253bb]
+- Updated dependencies [6fb24dd]
+- Updated dependencies [d162216]
+- Updated dependencies [7427818]
+- Updated dependencies [90da255]
+- Updated dependencies [953cfe1]
+- Updated dependencies [0e73866]
+  - @zhin.js/plugin-runtime@1.1.6
+  - @zhin.js/runtime@1.0.10
+  - @zhin.js/core@1.5.8
+  - @zhin.js/agent@1.1.9
+  - @zhin.js/ai@1.5.3
+  - @zhin.js/permission@1.0.2
+  - @zhin.js/html-renderer@3.0.8
+  - @zhin.js/speech@3.0.8
+
 ## 6.0.7
 
 ### Patch Changes

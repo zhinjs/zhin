@@ -1,5 +1,115 @@
 # @zhin.js/agent
 
+## 1.1.9
+
+### Patch Changes
+
+- 63253bb: Restrict Root consumers to the read-only `SnapshotReader` lease interface and
+  remove public `RootRuntime.controller` access. Generation commit, transaction,
+  close, and stop authority now remain inside the Root lifecycle.
+
+  Close Root admission when rollback cleanup or retired-generation disposal can
+  no longer prove lifecycle integrity. Existing leases may drain, but new
+  operations and generation transactions fail closed until the Process Host
+  stops the Root.
+
+  Bind externally driven capability resources to lifecycle-owned generation admission gates.
+  Adapter candidates can establish Endpoint connections during readiness while their IM ingress
+  remains invisible; snapshot commit atomically retires the old ingress and publishes the new one,
+  without closing the old Endpoint before the transaction succeeds.
+  Admitted HTTP, WebSocket, IM, isolated-RPC, Endpoint control, and Endpoint management operations
+  now retain their exact generation until settlement instead of escaping with a live object.
+
+  Remove inert unconfigured Endpoints and deferred soft-start. Configured Endpoint creation,
+  connection readiness, and local admission are required generation prerequisites; any failure
+  disposes the complete candidate set and leaves the previous generation serving traffic.
+
+  Move the HTTP listener to Process Host ownership. Generation scopes now receive only an
+  `HttpHost` routing port (without `listen`/`close` authority), and HTTP/WS registrations are tagged
+  with generation admission so candidate routes cannot shadow committed routes before publish.
+
+  Remove the fallible post-commit `openNext` phase and all pre-commit old-generation
+  quiesce/resume hooks. Handoff now performs candidate readiness and reversible candidate cleanup
+  only; the previous generation remains untouched until the single synchronous snapshot/admission
+  publish point, then drains through its existing leases.
+  Candidate setup, Feature projection, Endpoint readiness, MCP connection, isolation activation,
+  database activation, and config commit now receive the Root transaction `AbortSignal`; Root Stop
+  fails closed and awaits candidate cancellation cleanup.
+
+- 6fb24dd: Replace the concrete `AIService` and `ZhinAgent` escape hatches on `AgentHostPort`
+  with a canonical protocol port that lists immutable Agent bindings and executes
+  `TurnRequest`s. `AgentRuntime` selections now require the immutable binding for
+  the turn so provider/model state remains isolated across concurrent requests.
+
+  Route A2A tasks through the canonical Agent runtime without synthetic IM
+  messages or shared `agent.configure()` mutation. A2A callers now enter as a
+  fail-closed `user` principal, cancellation propagates through the turn
+  `AbortSignal`, and task completion continues to project through the A2A event
+  bus.
+
+- d162216: Replace Message-shaped session management with canonical session-key interfaces.
+  `ZhinAgent.archiveSession`, `ZhinAgent.compactSession`, and the session-tree
+  helpers now accept a stable session key instead of a synthetic IM Message.
+
+  Route Plugin Runtime transcript recording, passive group context, management
+  commands, and Owner approval through immutable Turn access/address data. Owner
+  approval persistence now has one origin-neutral implementation shared by the
+  canonical command path and the remaining classic policy adapter. Ordinary IM
+  turns no longer construct a synthetic Message; that projection is isolated to
+  configured collaboration Cell orchestration.
+
+- 7427818: Route scheduled and preview Agent work through the generation-owned canonical Turn ingress and the single full Agent core. Remove the synthetic IM Message schedule path, legacy schedule-context execution branch, and duplicated schedule tool-security wrapper.
+
+  Add a typed direct capability-resolution event and explicit canonical Shell preset authority. Schedule execution is stateless, fail-closed, journaled, budgeted, audited, and uses the same capability policy/runtime as other canonical turns.
+
+- 90da255: Remove the unreachable classic Plugin bootstrap, process-global authoring registration, and the parallel HTTP Agent session runtime. Agent setup is now owned exclusively by the Plugin Runtime composition root, authoring capabilities are published only through generation projections, and transport approval must be supplied explicitly through `ApprovalPort`.
+
+  Also remove the classic proactive-dispatch factory and stop `AIService` standalone agents from fabricating an authenticated IM message. Standalone execution without an authenticated IM origin now carries no message authority and therefore remains fail-closed under tool policy.
+
+  BREAKING CHANGE: `initAgentModule`, `createAgentSessionHostPort`, `HttpAgentSessionStore`, `FileHttpSessionPersistence`, `HttpStepProjector`, `HttpApprovalWaiter`, `createProactiveOutboundService`, `registerPluginAgentSurfaces`, and related HTTP-session types are removed. Protocol hosts must execute canonical `TurnRequest` values through the generation-owned `AgentHostPort`; proactive delivery must be implemented by the generation-owned IM runtime.
+
+- 953cfe1: Remove the obsolete Collaboration Scene/Cell domain after Agent coordination
+  moved to the Orchestration Kernel. This deletes `/collab`, the initialization
+  wizard, Scene identity and membership repositories, archived Cell pipeline
+  state, seven Collaboration database tables, and their public exports.
+
+  The top-level `collaboration` configuration key is no longer accepted and now
+  fails schema validation. Agent startup is selected only by `ai` or `assistant`.
+
+  Keep the optional Five-Agent workflow as an independent Agent module with
+  `FiveAgentRole`, role binding, and role capability policy interfaces. It no
+  longer depends on IM scenes, Bot membership, or text handback conventions.
+
+  Remove `StructuredOutboundDetectInput.collaborationCell`; structured outbound
+  selection is based only on tool, handoff, and Adapter capability requirements.
+
+- 0e73866: Remove the classic Message-based Collaboration Cell execution seam. IM now
+  serves only as canonical turn ingress and reply delivery; Agent-to-Agent work is
+  executed by the Orchestration Kernel through `local` Agent bindings or
+  `remote_mesh` A2A agents.
+
+  Remove peer mention routing, synthetic Message bridging, Cell prompt injection,
+  IM projection executors, `internal_room`, and the dead Collaboration outbound
+  parser APIs. Orchestration executor and persisted source parsing now fail closed
+  for removed legacy shapes instead of silently changing execution domains.
+
+  `AITriggerConfig.peerMode` and the public `internal_room` / `im_projection`
+  executor variants are removed. Local task `assignedTo` values now name an Agent
+  binding; remote tasks name an A2A Agent.
+
+- Updated dependencies [63253bb]
+- Updated dependencies [7427818]
+- Updated dependencies [953cfe1]
+- Updated dependencies [0e73866]
+  - @zhin.js/plugin-runtime@1.1.6
+  - @zhin.js/core@1.5.8
+  - @zhin.js/mcp-feature@1.0.9
+  - @zhin.js/tool@1.0.9
+  - @zhin.js/ai@1.5.3
+  - @zhin.js/agent-feature@1.0.9
+  - @zhin.js/permission@1.0.2
+  - @zhin.js/skill@1.0.9
+
 ## 1.1.8
 
 ### Patch Changes

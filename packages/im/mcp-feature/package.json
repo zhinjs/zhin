@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/mcp-feature",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Convention-based MCP client Feature for Zhin Plugin Runtime",
   "type": "module",
   "main": "./lib/index.js",
