@@ -1,6 +1,6 @@
 import type { Adapters, Adapter } from './adapter.js';
 import type { EndpointCapability, EndpointCapabilitiesConfig, FullEndpoint } from './endpoint-capabilities.js';
-import type { EndpointWithManagement } from '@zhin.js/adapter';
+import type { EndpointWithControl, EndpointWithManagement } from '@zhin.js/adapter';
 
 export type {
   EndpointChannel,
@@ -17,7 +17,7 @@ export {
   resolveEndpointManagement,
 } from '@zhin.js/adapter';
 export type { EndpointControl, EndpointWithControl } from '@zhin.js/adapter';
-export { resolveEndpointControl } from '@zhin.js/adapter';
+export { endpointControlOf } from '@zhin.js/adapter';
 
 export type {
   EndpointCapability,
@@ -48,7 +48,7 @@ export {
 export type Endpoint<Config extends object = object, Event extends object = object> = FullEndpoint<
   Config,
   Event
-> & EndpointWithManagement;
+> & EndpointWithManagement & EndpointWithControl;
 
 export namespace Endpoint {
   export type Config<K extends keyof Adapters = keyof Adapters> = Adapter.EndpointConfig<

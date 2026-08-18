@@ -457,6 +457,12 @@ export class HarnessTestEndpoint implements Endpoint<{ id: string }, { id: strin
     return Message.from(event, base);
   }
 
+  get control() {
+    return {
+      recall: async (message: { id: string }) => this.$recallMessage(message.id),
+    };
+  }
+
   async $connect() { this.$connected = true; }
   async $disconnect() { this.$connected = false; }
   async $sendMessage(_options: SendOptions) { return `sent-${Date.now()}`; }

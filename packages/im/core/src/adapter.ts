@@ -5,7 +5,7 @@ import {
   hasInbound,
   type EndpointCapability,
 } from "./endpoint-capabilities.js";
-import { resolveEndpointControl } from "@zhin.js/adapter";
+import { endpointControlOf } from "@zhin.js/adapter";
 import { connectEndpointInstance, disconnectEndpointInstance } from "./built/connect-endpoint-instance.js";
 import type { EndpointManager } from "./built/endpoint-manager.js";
 import { Plugin } from "./plugin.js";
@@ -296,19 +296,25 @@ export abstract class Adapter<
 
   /**
    * `call.recallMessage` 事件链（prompt.ts 超时撤回等）的统一出口：
-   * 经 canonical `EndpointControl` 端口撤回，classic 端点的 `$` 方法由
-   * `resolveEndpointControl` 迁移桥适配。
+   * 经 canonical `EndpointControl` 端口撤回。
    */
   private async recallEndpointMessage(endpointKey: string, messageId: string): Promise<void> {
     const endpoint = this.endpoints.get(endpointKey);
     if (!endpoint) throw new Error(`Endpoint ${endpointKey} not found`);
     assertOutbound(endpoint);
-    const control = resolveEndpointControl(endpoint);
+    const control = endpointControlOf(endpoint);
     if (!control?.recall) {
       throw new Error(`Endpoint ${endpointKey} does not support recall`);
     }
     this.logger.debug(formatCompact({ op: 'recall_message', msgId: messageId, endpoint: endpointKey }));
-    await control.recall(messageId);
+    await control.recall({
+      conversation: {
+        endpoint: { id: endpointKey, adapter: String(this.name) },
+        kind: 'private',
+        id: endpointKey,
+      },
+      id: messageId,
+    });
   }
 
   /**
@@ -322,7 +328,7 @@ export abstract class Adapter<
     if (!endpoint) throw new Error(`Endpoint ${options.endpoint} not found`);
     assertOutbound(endpoint);
 
-    const control = resolveEndpointControl(endpoint);
+    const control = endpointControlOf(endpoint);
 
     if (control?.edit) {
       const rendered = await this.renderSendMessage({
@@ -332,7 +338,14 @@ export abstract class Adapter<
         type: options.type,
         content: options.content,
       });
-      await control.edit(options.messageId, rendered.content);
+      await control.edit({
+        conversation: {
+          endpoint: { id: options.endpoint, adapter: String(this.name) },
+          kind: options.type === 'group' ? 'group' : 'private',
+          id: options.id,
+        },
+        id: options.messageId,
+      }, rendered.content);
       this.logger.debug(formatCompact({
         edit: `${options.type}(${options.id})`,
         endpoint: options.endpoint,

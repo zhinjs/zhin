@@ -142,23 +142,19 @@ context.addTool('showcase_greet', defineAgentTool<{ name?: string }>({
 
 ## Generation Handoff
 
-Hot reload is a "generation" transaction: after the new generation finishes assembly, the old generation quiesces, the new generation activates, and on failure it rolls back. `context.handoff.add(participant)` registers a participant with the following hooks:
+Hot reload is a generation transaction: after the candidate completes every fallible readiness step, the snapshot and admission gates publish atomically. The old generation keeps serving until that publish point. `context.handoff.add(participant)` registers a candidate resource participant:
 
 | Hook | Timing |
 | --- | --- |
-| `quiescePrevious(previous)` | Old generation quiesces (e.g., stop accepting new events) |
-| `activateNext()` | New generation activates (e.g., start endpoints, first action after starting cron) |
+| `activateNext(signal)` | Establish the candidate resource and prove readiness; must support cancellation |
 | `deactivateNext()` | Roll back new generation on activation failure |
-| `resumePrevious()` | Restore old generation after rollback |
-| `openNext()` | Open admission after transaction commits (e.g., start receiving messages) |
 
-capabilities-bot uses this to solve startup timing races -- pushing an online message only after the endpoint is ready:
+For example, require a custom resource connection before the generation may publish:
 
 ```ts
 context.handoff.add({
-  activateNext: async () => {
-    await outbound.send({ ...target, content: `${config.greeting}，capabilities-bot 已上线` });
-  },
+  activateNext: (signal) => client.connect({ signal }),
+  deactivateNext: () => client.close(),
 });
 ```
 

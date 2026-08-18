@@ -6,7 +6,7 @@
 
 import { getLogger } from '@zhin.js/logger';
 import type { Adapter, Endpoint } from '@zhin.js/core';
-import type { LegacyEndpointControlSurface } from '@zhin.js/im-contract';
+import type { MessageRef } from '@zhin.js/im-contract';
 
 const logger = getLogger('TypingIndicator');
 
@@ -75,7 +75,7 @@ export function createTypingIndicatorManagerForZhinAgent(
 /**
  * ICQQ Endpoint 接口扩展（legacy `$` 控制面见 im-contract 的 SSOT 声明）
  */
-type ICQQBot = Endpoint & LegacyEndpointControlSurface;
+type ICQQBot = Endpoint;
 
 /**
  * 创建 ICQQ 适配器
@@ -84,14 +84,17 @@ type ICQQBot = Endpoint & LegacyEndpointControlSurface;
  * 这里提供的是示例实现框架
  */
 export function createICQQAdapterFromBot(endpoint: ICQQBot, outbound?: OutboundAdapter): ReactionTypingIndicatorAdapter {
+  const messages = new Map<string, MessageRef>();
   const addReaction = async (
     messageId: string,
     emoji: string,
-    _options: TypingIndicatorOptions,
+    options: TypingIndicatorOptions,
   ): Promise<string | null> => {
     try {
-      if (endpoint.$addReaction) {
-        return await endpoint.$addReaction(messageId, emoji);
+      const message = messageRef(endpoint, 'icqq', options, messageId);
+      messages.set(messageId, message);
+      if (endpoint.control?.addReaction) {
+        return await endpoint.control.addReaction(message, emoji);
       }
       return null;
     } catch (error) {
@@ -102,8 +105,9 @@ export function createICQQAdapterFromBot(endpoint: ICQQBot, outbound?: OutboundA
 
   const removeReaction = async (messageId: string, reactionId: string): Promise<void> => {
     try {
-      if (endpoint.$removeReaction) {
-        await endpoint.$removeReaction(messageId, reactionId);
+      const message = messages.get(messageId);
+      if (message && endpoint.control?.removeReaction) {
+        await endpoint.control.removeReaction(message, reactionId);
       }
     } catch (error) {
       logger.error('[ICQQ] Failed to remove reaction:', error);
@@ -127,10 +131,14 @@ export function createICQQAdapterFromBot(endpoint: ICQQBot, outbound?: OutboundA
         content: [{ type: 'text', data: { text: content } }],
       };
       if (outbound) {
-        return await outbound.sendMessage(sendOptions);
+        const messageId = await outbound.sendMessage(sendOptions);
+        if (messageId) messages.set(messageId, messageRef(endpoint, 'icqq', options, messageId));
+        return messageId;
       }
       const typedBot = endpoint as BotWithEditing & { $sendMessage?(options: any): Promise<string | null> };
-      return await typedBot.$sendMessage?.(sendOptions) ?? null;
+      const messageId = await typedBot.$sendMessage?.(sendOptions) ?? null;
+      if (messageId) messages.set(messageId, messageRef(endpoint, 'icqq', options, messageId));
+      return messageId;
     } catch (error) {
       logger.error('[ICQQ] Failed to send message:', error);
       return null;
@@ -139,7 +147,8 @@ export function createICQQAdapterFromBot(endpoint: ICQQBot, outbound?: OutboundA
 
   const deleteMessage = async (messageId: string): Promise<void> => {
     try {
-      await endpoint.$recallMessage?.(messageId);
+      const message = messages.get(messageId);
+      if (message) await endpoint.control?.recall?.(message);
     } catch (error) {
       logger.error('[ICQQ] Failed to delete message:', error);
     }
@@ -157,7 +166,8 @@ export function createICQQAdapterFromBot(endpoint: ICQQBot, outbound?: OutboundA
 /**
  * 创建通用适配器
  */
-export function createGenericAdapterFromBot(endpoint: Endpoint & LegacyEndpointControlSurface, platform: string, outbound?: OutboundAdapter): GenericTypingIndicatorAdapter {
+export function createGenericAdapterFromBot(endpoint: Endpoint, platform: string, outbound?: OutboundAdapter): GenericTypingIndicatorAdapter {
+  const messages = new Map<string, MessageRef>();
   const sendMessage = async (
     options: TypingIndicatorOptions,
     content: string,
@@ -175,10 +185,14 @@ export function createGenericAdapterFromBot(endpoint: Endpoint & LegacyEndpointC
         content: [{ type: 'text', data: { text: content } }],
       };
       if (outbound) {
-        return await outbound.sendMessage(sendOptions);
+        const messageId = await outbound.sendMessage(sendOptions);
+        if (messageId) messages.set(messageId, messageRef(endpoint, platform, options, messageId));
+        return messageId;
       }
       const typedBot = endpoint as BotWithEditing & { $sendMessage?(options: any): Promise<string | null> };
-      return await typedBot.$sendMessage?.(sendOptions) ?? null;
+      const messageId = await typedBot.$sendMessage?.(sendOptions) ?? null;
+      if (messageId) messages.set(messageId, messageRef(endpoint, platform, options, messageId));
+      return messageId;
     } catch (error) {
       logger.error(`[${platform}] Failed to send message:`, error);
       return null;
@@ -187,13 +201,35 @@ export function createGenericAdapterFromBot(endpoint: Endpoint & LegacyEndpointC
 
   const deleteMessage = async (messageId: string): Promise<void> => {
     try {
-      await endpoint.$recallMessage?.(messageId);
+      const message = messages.get(messageId);
+      if (message) await endpoint.control?.recall?.(message);
     } catch (error) {
       logger.error(`[${platform}] Failed to delete message:`, error);
     }
   };
 
   return new GenericTypingIndicatorAdapter(platform, sendMessage, deleteMessage);
+}
+
+function messageRef(
+  endpoint: Endpoint,
+  platform: string,
+  options: TypingIndicatorOptions,
+  id: string,
+): MessageRef {
+  const group = options.sceneType === 'group' || options.sceneType === 'channel';
+  const conversationId = group
+    ? (options.groupId ?? options.sessionId)
+    : (options.userId ?? options.sessionId);
+  if (!conversationId) throw new TypeError('Typing indicator requires a conversation identity');
+  return {
+    conversation: {
+      endpoint: { id: endpoint.$id, adapter: platform },
+      kind: options.sceneType,
+      id: conversationId,
+    },
+    id,
+  };
 }
 
 // ── ZhinAgent 处理流程集成 ────────────────────────────────────────────

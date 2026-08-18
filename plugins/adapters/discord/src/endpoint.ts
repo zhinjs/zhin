@@ -13,10 +13,7 @@ import type {
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
-  formatLegacyConversationRef,
-  formatLegacyMessageRef,
-  nativeConversationId,
-  parseLegacyMessageReference,
+  type MessageRef,
 } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
@@ -75,18 +72,15 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
     getMembers: (guildId) => this.getMembers(guildId),
   });
   readonly control: EndpointControl = Object.freeze({
-    recall: (messageId: string) => this.recallMessage(messageId),
+    recall: (message: MessageRef) => this.recallMessage(message),
     addReaction: async (
-      messageId: string,
+      message: MessageRef,
       emoji: string,
       hint?: { readonly sceneType?: string; readonly channelId?: string },
     ) => {
-      const reference = parseLegacyMessageReference(messageId);
-      const channelId = hint?.channelId
-        ?? (reference ? nativeConversationId(reference.target) : undefined);
-      const nativeMessageId = reference?.messageId ?? messageId;
-      if (!channelId || !nativeMessageId) return null;
-      await this.addReaction(channelId, nativeMessageId, emoji);
+      const channelId = hint?.channelId ?? message.conversation.id;
+      if (!channelId || !message.id) return null;
+      await this.addReaction(channelId, message.id, emoji);
       return emoji;
     },
   });
@@ -150,27 +144,21 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const body = formatOutboundBody(payload);
-    // recall 链路仍是本端点编码的 legacy 引用，在边界内部从 conversation 派生
     const snowflake = await this.#sendBody(conversation.id, body);
-    const messageId = formatLegacyMessageRef({ conversation, id: snowflake });
     this.#logger.debug(formatCompact({
       op: 'discord_send',
       endpoint: this.#options.config.id,
-      target: formatLegacyConversationRef(conversation),
-      messageId,
+      target: conversation.id,
+      messageId: snowflake,
     }));
-    return messageId;
+    return snowflake;
   }
 
-  async recallMessage(messageId: string): Promise<void> {
-    if (!messageId) return;
-    const reference = parseLegacyMessageReference(messageId);
-    if (!reference) return;
-    const channelId = nativeConversationId(reference.target);
-    const snowflake = reference.messageId;
-    const channel = await this.#requireClient().channels.fetch(channelId);
+  async recallMessage(message: MessageRef): Promise<void> {
+    if (!message.id) return;
+    const channel = await this.#requireClient().channels.fetch(message.conversation.id);
     if (!channel?.isTextBased() || !channel.messages) return;
-    const msg = await channel.messages.fetch(snowflake);
+    const msg = await channel.messages.fetch(message.id);
     await msg.delete();
   }
 
@@ -431,7 +419,7 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
   #open = false;
   #started = false;
   readonly control: EndpointControl = Object.freeze({
-    recall: (messageId: string) => this.recallMessage(messageId),
+    recall: (message: MessageRef) => this.recallMessage(message),
   });
 
   constructor(options: DiscordInteractionsEndpointOptions) {
@@ -493,17 +481,12 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
     }
     const data = JSON.parse(text) as { id?: string };
     const snowflake = data.id ?? '';
-    // recall 链路仍是本端点编码的 legacy 引用，在边界内部从 conversation 派生
-    return snowflake ? formatLegacyMessageRef({ conversation, id: snowflake }) : '';
+    return snowflake;
   }
 
-  async recallMessage(messageId: string): Promise<void> {
-    if (!messageId) return;
-    const reference = parseLegacyMessageReference(messageId);
-    if (!reference) return;
-    const channelId = nativeConversationId(reference.target);
-    const snowflake = reference.messageId;
-    const response = await this.#fetch(`${DISCORD_API}/channels/${channelId}/messages/${snowflake}`, {
+  async recallMessage(message: MessageRef): Promise<void> {
+    if (!message.id) return;
+    const response = await this.#fetch(`${DISCORD_API}/channels/${message.conversation.id}/messages/${message.id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bot ${this.#options.config.token}` },
       signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),

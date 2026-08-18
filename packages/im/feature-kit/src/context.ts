@@ -1,11 +1,14 @@
-import type {
-  PluginId,
-  PluginNodeSnapshot,
-  RuntimeSnapshot,
-  Token,
+import {
+  bindGenerationAdmission,
+  type GenerationAdmissionGate,
+  type PluginId,
+  type PluginNodeSnapshot,
+  type RuntimeSnapshot,
+  type Token,
 } from '@zhin.js/plugin-runtime';
 
 export interface CapabilityContext<TConfig = unknown> {
+  readonly signal: AbortSignal;
   readonly owner: PluginNodeSnapshot;
   readonly generation: number;
   readonly config: Readonly<TConfig>;
@@ -15,11 +18,14 @@ export interface CapabilityContext<TConfig = unknown> {
 export function createCapabilityContext<TConfig = unknown>(
   snapshot: RuntimeSnapshot,
   ownerId: PluginId,
+  admission?: GenerationAdmissionGate,
+  signal: AbortSignal = new AbortController().signal,
 ): CapabilityContext<TConfig> {
   const owner = snapshot.tree.get(ownerId);
   const resources = snapshot.resources.get(ownerId);
   if (!owner || !resources) throw new Error(`Broken Capability owner: ${ownerId}`);
   return Object.freeze({
+    signal,
     owner,
     generation: snapshot.generation,
     config: snapshot.config.get(ownerId) as Readonly<TConfig>,
@@ -27,7 +33,8 @@ export function createCapabilityContext<TConfig = unknown>(
       if (!resources.has(token.id)) {
         throw new Error(`Missing resource ${token.id} for Capability owner ${ownerId}`);
       }
-      return resources.get(token.id) as T;
+      const value = resources.get(token.id) as T;
+      return admission ? bindGenerationAdmission(value, admission) : value;
     },
   });
 }

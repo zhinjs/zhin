@@ -3,11 +3,9 @@
  */
 
 import type { Endpoint, SendContent } from '@zhin.js/core';
-import type { LegacyEndpointControlSurface } from '@zhin.js/im-contract';
 import type { TypingIndicatorOptions } from './index.js';
 
 export type BotWithEditing = Endpoint
-  & LegacyEndpointControlSurface
   & { $updateMessage?(messageId: string, content: string): Promise<void> };
 
 /** QQ 群聊禁止无引用的主动消息（40034105），需 reply 触发消息 */

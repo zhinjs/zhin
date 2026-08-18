@@ -1,4 +1,9 @@
 import type { CapabilitySlot } from './capability.js';
+import {
+  collectGenerationAdmissions,
+  replaceGenerationAdmissions,
+  type GenerationAdmissionGate,
+} from './admission.js';
 import type { Dispose } from './dispose.js';
 import type { GenerationHandoff } from './handoff.js';
 import type {
@@ -40,6 +45,7 @@ export interface PreparedGeneration {
 interface SnapshotRecord {
   readonly snapshot: RuntimeSnapshot;
   readonly dispose: Dispose;
+  readonly admissions: ReadonlySet<GenerationAdmissionGate>;
   leases: number;
   retired: boolean;
   disposing?: Promise<void>;
@@ -97,12 +103,17 @@ export class SnapshotStore implements SnapshotReader {
     initial: SnapshotState,
     private readonly onDisposalError: (error: unknown) => void = () => undefined,
   ) {
-    this.#current = {
-      snapshot: createSnapshotView(0, initial),
+    const snapshot = createSnapshotView(0, initial);
+    const admissions = collectSnapshotAdmissions(snapshot);
+    const record: SnapshotRecord = {
+      snapshot,
       dispose: () => undefined,
+      admissions,
       leases: 0,
       retired: false,
     };
+    replaceGenerationAdmissions(new Set(), admissions, this, () => this.#retain(record));
+    this.#current = record;
   }
 
   get current(): RuntimeSnapshot {
@@ -112,11 +123,11 @@ export class SnapshotStore implements SnapshotReader {
   acquire(): SnapshotLease {
     if (this.#closed) throw new Error('SnapshotStore is closed');
     const record = this.#current;
-    record.leases += 1;
-    const lease = new SnapshotLease(record.snapshot, () => {
-      record.leases -= 1;
-      this.#disposeIfReady(record);
-    }, snapshotLeaseAuthority);
+    const lease = new SnapshotLease(
+      record.snapshot,
+      this.#retain(record),
+      snapshotLeaseAuthority,
+    );
     this.#leases.add(lease);
     return lease;
   }
@@ -142,14 +153,24 @@ export class SnapshotStore implements SnapshotReader {
     }
 
     const previous = this.#current;
-    // Commit only swaps the active pointer. The previous record may still be
-    // serving in-flight work, so disposal is deferred to its final lease.
-    this.#current = {
-      snapshot: createSnapshotView(expectedGeneration + 1, prepared.snapshot),
+    const snapshot = createSnapshotView(expectedGeneration + 1, prepared.snapshot);
+    const admissions = collectSnapshotAdmissions(snapshot);
+    const next: SnapshotRecord = {
+      snapshot,
       dispose: prepared.dispose,
+      admissions,
       leases: 0,
       retired: false,
     };
+    replaceGenerationAdmissions(
+      previous.admissions,
+      admissions,
+      this,
+      () => this.#retain(next),
+    );
+    // Commit only swaps the active pointer. The previous record may still be
+    // serving in-flight work, so disposal is deferred to its final lease.
+    this.#current = next;
     previous.retired = true;
     this.#retired.add(previous);
     this.#disposeIfReady(previous);
@@ -159,6 +180,7 @@ export class SnapshotStore implements SnapshotReader {
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
+    replaceGenerationAdmissions(this.#current.admissions, new Set(), this);
     this.#current.retired = true;
     this.#retired.add(this.#current);
     this.#disposeIfReady(this.#current);
@@ -182,6 +204,18 @@ export class SnapshotStore implements SnapshotReader {
     }
   }
 
+  #retain(record: SnapshotRecord): () => void {
+    record.leases += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      record.leases -= 1;
+      if (record.leases < 0) throw new Error('Snapshot lease underflow');
+      this.#disposeIfReady(record);
+    };
+  }
+
   #waitForDisposal(record: SnapshotRecord): Promise<void> {
     if (record.disposing) return record.disposing;
     if (!record.drain) {
@@ -195,6 +229,13 @@ export class SnapshotStore implements SnapshotReader {
     }
     return record.drain.promise;
   }
+}
+
+function collectSnapshotAdmissions(snapshot: RuntimeSnapshot): ReadonlySet<GenerationAdmissionGate> {
+  return collectGenerationAdmissions([
+    ...snapshot.projections.values(),
+    ...[...snapshot.resources.values()].flatMap((resources) => [...resources.values()]),
+  ]);
 }
 
 export function createSnapshotView(

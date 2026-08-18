@@ -19,8 +19,24 @@ export function projectHostMcp(entry: McpServerEntry): HostMcpProjection {
       create: () => {
         const connection = new McpClientConnection(entry);
         return {
-          start: async () => {
-            const state = await connection.connect();
+          start: async (signal) => {
+            signal.throwIfAborted();
+            const connecting = connection.connect();
+            let onAbort!: () => void;
+            const abort = new Promise<never>((_resolve, reject) => {
+              onAbort = () => {
+                void connection.disconnect().finally(() => reject(
+                  signal.reason ?? new Error(`Configured MCP server "${entry.name}" start aborted`),
+                ));
+              };
+              signal.addEventListener('abort', onAbort, { once: true });
+            });
+            let state;
+            try {
+              state = await Promise.race([connecting, abort]);
+            } finally {
+              signal.removeEventListener('abort', onAbort);
+            }
             if (!state.connected) {
               throw new Error(state.error || `Configured MCP server "${entry.name}" did not become ready`);
             }

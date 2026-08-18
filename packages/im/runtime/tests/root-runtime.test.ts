@@ -143,6 +143,40 @@ describe('RootRuntime tracer bullet', () => {
     await expect(runtime.stop()).rejects.toThrow('module close failed');
     expect(modules.closeCalls).toBe(1);
   });
+
+  it('aborts candidate Plugin setup before waiting for Root Stop', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    let entered!: () => void;
+    const setupEntered = new Promise<void>((resolve) => { entered = resolve; });
+    modules.set(join(project, 'plugin.ts'), {
+      default: definePlugin({
+        name: 'root',
+        setup({ signal }) {
+          entered();
+          return new Promise<void>((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+          });
+        },
+      }),
+    });
+    modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
+    modules.set(join(project, 'commands/gh/issue/list.ts'), {
+      default: defineCommand({ execute: () => 'ok' }),
+    });
+    const runtime = new RootRuntime({
+      projectRoot: project,
+      modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+    });
+
+    const starting = runtime.start();
+    await setupEntered;
+    const stopping = runtime.stop();
+    await expect(starting).rejects.toThrow('stopping');
+    await expect(stopping).resolves.toBeUndefined();
+    expect(modules.closed).toBe(true);
+  });
 });
 
 function commandIndex(snapshot: RuntimeSnapshot): CommandIndex {

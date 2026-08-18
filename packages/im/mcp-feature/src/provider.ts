@@ -19,14 +19,14 @@ const mcpFeature = defineFeatureProvider({
   },
   runtime: {
     async project(slots, context) {
-      const index = await McpIndex.create(slots, context.snapshot);
+      const index = await McpIndex.create(slots, context.snapshot, context.signal);
       return {
         value: index,
         dispose: () => index.stop(),
         handoff: {
           // Candidate connections become ready before publication. The old
           // index stays usable until its snapshot's final lease drains.
-          activateNext: () => index.start(),
+          activateNext: (signal) => index.start(signal),
           deactivateNext: () => index.stop(),
         },
       };

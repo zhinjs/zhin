@@ -1239,6 +1239,125 @@ function snapshotFor(
   };
 }
 
+describe('内置菜单命令', () => {
+  function menuSnapshot() {
+    const root = rootPluginId();
+    const qq = childPluginId(root, 'qq');
+    const qqGroup = childPluginId(qq, 'group');
+    const slots = [
+      slotFor(root, 'echo'),
+      createCapabilitySlot({
+        owner: root,
+        feature: commandFeatureId,
+        localName: 'ping',
+        source: '/commands/ping.ts',
+        definition: defineCommand({ description: '测试连通性', execute: () => 'pong' }),
+      }),
+      createCapabilitySlot({
+        owner: qq,
+        feature: commandFeatureId,
+        localName: 'status',
+        source: '/commands/status.ts',
+        definition: defineCommand({ description: 'QQ 状态', execute: () => 'ok' }),
+      }),
+    ];
+    const snapshot: RuntimeSnapshot = {
+      generation: 1,
+      root,
+      tree: new Map([
+        [root, {
+          id: root, instanceKey: 'root',
+          packageName: '@test/root', packageRoot: '/project',
+          children: [qq],
+        }],
+        [qq, {
+          id: qq, instanceKey: 'qq',
+          packageName: '@test/qq', packageRoot: '/project/plugins/qq',
+          parent: root, children: [qqGroup],
+          metadata: { displayName: 'QQ 适配器' },
+        }],
+        [qqGroup, {
+          id: qqGroup, instanceKey: 'group',
+          packageName: '@test/qq-group', packageRoot: '/project/plugins/qq-group',
+          parent: qq, children: [],
+        }],
+      ]),
+      config: new Map([[root, {}], [qq, {}], [qqGroup, {}]]),
+      resources: new Map([[root, new Map()], [qq, new Map()], [qqGroup, new Map()]]),
+      capabilities: new Map(slots.map((s) => [s.id, s])),
+      projections: new Map(),
+    };
+    return { root, qq, qqGroup, slots, snapshot };
+  }
+
+  it('默认关键词「菜单」展示 root 的指令和子插件', async () => {
+    const { slots, snapshot } = menuSnapshot();
+    const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });
+    const result = await index.dispatch('菜单');
+    expect(result.matched).toBe(true);
+    expect(result.command).toBe('菜单');
+    const text = result.value as string;
+    expect(text).toContain('echo');
+    expect(text).toContain('ping');
+    expect(text).toContain('测试连通性');
+    expect(text).toContain('qq');
+    expect(text).toContain('QQ 适配器');
+    expect(text).not.toContain('qq.status');
+  });
+
+  it('「菜单 qq」展示 qq 插件的指令和子插件', async () => {
+    const { slots, snapshot } = menuSnapshot();
+    const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });
+    const result = await index.dispatch('菜单 qq');
+    expect(result.matched).toBe(true);
+    const text = result.value as string;
+    expect(text).toContain('qq.status');
+    expect(text).toContain('QQ 状态');
+    expect(text).toContain('qq.group');
+    expect(text).toContain('提示');
+  });
+
+  it('「菜单 qq.group」展示空子插件提示', async () => {
+    const { slots, snapshot } = menuSnapshot();
+    const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });
+    const result = await index.dispatch('菜单 qq.group');
+    expect(result.matched).toBe(true);
+    const text = result.value as string;
+    expect(text).toContain('暂无指令和子插件');
+  });
+
+  it('不存在的插件 key 返回未找到', async () => {
+    const { slots, snapshot } = menuSnapshot();
+    const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });
+    const result = await index.dispatch('菜单 nope');
+    expect(result.matched).toBe(true);
+    expect(result.value).toContain('未找到插件');
+  });
+
+  it('自定义关键词生效', async () => {
+    const { slots, snapshot } = menuSnapshot();
+    const index = new CommandIndex(slots, snapshot, { keyword: 'help' });
+    const result = await index.dispatch('help');
+    expect(result.matched).toBe(true);
+    expect(result.value).toContain('echo');
+  });
+
+  it('未配置 menu 时不拦截', async () => {
+    const { slots, snapshot } = menuSnapshot();
+    const index = new CommandIndex(slots, snapshot);
+    const result = await index.dispatch('菜单');
+    expect(result.matched).toBe(false);
+  });
+
+  it('菜单关键词不影响普通命令匹配', async () => {
+    const { slots, snapshot } = menuSnapshot();
+    const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });
+    const result = await index.dispatch('echo');
+    expect(result.matched).toBe(true);
+    expect(result.command).toBe('echo');
+  });
+});
+
 class MemoryDiscoveryHost implements DiscoveryHost {
   constructor(
     private readonly directories: Readonly<Record<string, readonly DirectoryEntry[]>>,

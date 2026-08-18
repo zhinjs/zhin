@@ -590,8 +590,12 @@ export function registerConsoleApiRoutes(
         extended: {
           projectRoot,
           scheduleHost,
-          resolveEndpointManagement: im
-            ? (adapter, endpointKey) => im.getEndpointManagement(adapter, endpointKey)
+          withEndpointManagement: im
+            ? (adapter, endpointKey, run) => im.withEndpointManagement(
+                adapter,
+                endpointKey,
+                run,
+              )
             : undefined,
           databaseHost: databaseHost
             ? { models: databaseHost.models }

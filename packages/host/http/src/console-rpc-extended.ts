@@ -11,8 +11,8 @@
  * - inbox：`ctx.databaseHost.models`（unified_inbox_message/request/notice 三张表，
  *   表不存在或查询失败 → 空数组 + inboxEnabled:false；requestConsumed/noticeConsumed
  *   按行 id update consumed=1，表/model 缺失时报"未接线"）。
- * - 社交/群管：`ctx.resolveEndpoint` 拿 live endpoint 实例，只消费其
- *   `management` 语义端口；平台 SDK 兼容与字段归一化由 Adapter 负责。
+ * - 社交/群管：`ctx.withEndpointManagement` 在固定 generation lease 内
+ *   消费 `management` 语义端口；平台 SDK 字段归一化由 Adapter 负责。
  */
 
 /** 新 Runtime 统一收件箱表名（SSOT：@zhin.js/plugin-runtime inbox.js）。 */
@@ -31,13 +31,12 @@ export interface ConsoleRpcExtendedCtx {
   projectRoot: string;
   /** Plugin Runtime ScheduleHost（basic/cli schedule-host-installer 提供）。 */
   scheduleHost?: unknown;
-  /** 经 ImRuntime / AdapterEndpointIndex 解析管理语义端口。 */
-  resolveEndpointManagement?: (
+  /** 在固定 generation lease 内执行一次 Endpoint 管理操作。 */
+  withEndpointManagement?: <T>(
     adapter: string,
     endpointKey: string,
-  ) => EndpointManagementPort | null | undefined;
-  /** @deprecated Use `resolveEndpointManagement`; accepted for one compatibility cycle. */
-  resolveEndpoint?: (adapter: string, endpointKey: string) => unknown;
+    run: (management: EndpointManagementPort) => T | Promise<T>,
+  ) => Promise<T | null>;
   /** Plugin Runtime DatabaseHost 的 models 视图。 */
   databaseHost?: { models: { get(name: string): unknown } };
   /** Agent Host 持久化调度引擎（@zhin.js/agent getAssistantRuntime().engine），未 init 时返回 null。 */
@@ -530,26 +529,21 @@ async function actOnRequest(
   if (!adapter || !endpointKey || !requestId) {
     return { error: '$adapter, $endpoint, $id required' };
   }
-  const resolved = resolveLiveEndpoint(ctx, adapter, endpointKey);
-  if ('error' in resolved) return resolved;
-  const management = resolved.management;
-  const approve = type === 'request.approve';
-  const method = approve ? management.approveRequest : management.rejectRequest;
-  if (!method) {
-    return {
-      error: `请求审批未接线：当前平台（${adapter}）endpoint 不支持 ${approve ? 'approveRequest' : 'rejectRequest'}，` +
-        '且新 Runtime 尚未挂载 pending request 注册表',
-    };
-  }
-  try {
+  return withLiveEndpoint(ctx, adapter, endpointKey, async (management) => {
+    const approve = type === 'request.approve';
+    const method = approve ? management.approveRequest : management.rejectRequest;
+    if (!method) {
+      return {
+        error: `请求审批未接线：当前平台（${adapter}）endpoint 不支持 ${approve ? 'approveRequest' : 'rejectRequest'}，` +
+          '且新 Runtime 尚未挂载 pending request 注册表',
+      };
+    }
     const extra = approve
       ? strField(d, '$remark', 'remark')
       : strField(d, '$reason', 'reason');
     await method.call(management, requestId, extra || undefined);
     return { data: { success: true } };
-  } catch (error) {
-    return { error: errorMessage(error) };
-  }
+  });
 }
 
 // ---------------------------------------------------------------- 社交读取
@@ -558,54 +552,45 @@ async function listFriends(
   d: Record<string, unknown>,
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult> {
-  const resolved = requireEndpoint(d, ctx);
-  if ('error' in resolved) return resolved;
-  const { management, adapter } = resolved;
-  try {
+  const endpoint = requireEndpointAddress(d);
+  if ('error' in endpoint) return endpoint;
+  return withLiveEndpoint(ctx, endpoint.adapter, endpoint.endpointKey, async (management) => {
     if (management.listFriends) {
       const friends = [...await management.listFriends()];
       return { data: { friends, count: friends.length } };
     }
-    return { error: `当前适配器（${adapter}）不支持好友列表` };
-  } catch (error) {
-    return { error: errorMessage(error) };
-  }
+    return { error: `当前适配器（${endpoint.adapter}）不支持好友列表` };
+  });
 }
 
 async function listGroups(
   d: Record<string, unknown>,
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult> {
-  const resolved = requireEndpoint(d, ctx);
-  if ('error' in resolved) return resolved;
-  const { management, adapter } = resolved;
-  try {
+  const endpoint = requireEndpointAddress(d);
+  if ('error' in endpoint) return endpoint;
+  return withLiveEndpoint(ctx, endpoint.adapter, endpoint.endpointKey, async (management) => {
     if (management.listGroups) {
       const groups = [...await management.listGroups()];
       return { data: { groups, count: groups.length } };
     }
-    return { error: `当前适配器（${adapter}）不支持群列表` };
-  } catch (error) {
-    return { error: errorMessage(error) };
-  }
+    return { error: `当前适配器（${endpoint.adapter}）不支持群列表` };
+  });
 }
 
 async function listChannels(
   d: Record<string, unknown>,
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult> {
-  const resolved = requireEndpoint(d, ctx);
-  if ('error' in resolved) return resolved;
-  const { management, adapter } = resolved;
-  try {
+  const endpoint = requireEndpointAddress(d);
+  if ('error' in endpoint) return endpoint;
+  return withLiveEndpoint(ctx, endpoint.adapter, endpoint.endpointKey, async (management) => {
     if (management.listChannels) {
       const channels = [...await management.listChannels()];
       return { data: { channels, count: channels.length } };
     }
-    return { error: `当前适配器（${adapter}）不支持频道列表` };
-  } catch (error) {
-    return { error: errorMessage(error) };
-  }
+    return { error: `当前适配器（${endpoint.adapter}）不支持频道列表` };
+  });
 }
 
 async function listGroupMembers(
@@ -618,19 +603,14 @@ async function listGroupMembers(
   if (!adapter || !endpointKey || !groupId) {
     return { error: '$adapter, $endpoint, $group_id required' };
   }
-  const resolved = resolveLiveEndpoint(ctx, adapter, endpointKey);
-  if ('error' in resolved) return resolved;
-  const { management } = resolved;
-  try {
+  return withLiveEndpoint(ctx, adapter, endpointKey, async (management) => {
     const method = management.listGroupMembers;
     if (!method) {
       return { error: `当前适配器（${adapter}）不支持群成员列表` };
     }
     const members = [...await method(groupId)];
     return { data: { members, count: members.length } };
-  } catch (error) {
-    return { error: errorMessage(error) };
-  }
+  });
 }
 
 // ---------------------------------------------------------------- 群管/好友写操作
@@ -658,14 +638,11 @@ async function groupWriteOp(
   if (spec.requireUser && !userId) {
     return { error: '$user_id required' };
   }
-  const resolved = resolveLiveEndpoint(ctx, adapter, endpointKey);
-  if ('error' in resolved) return resolved;
-  const { management } = resolved;
-  const method = management[spec.method];
-  if (!method) {
-    return { error: `当前适配器（${adapter}）不支持${spec.unsupported}` };
-  }
-  try {
+  return withLiveEndpoint(ctx, adapter, endpointKey, async (management) => {
+    const method = management[spec.method];
+    if (!method) {
+      return { error: `当前适配器（${adapter}）不支持${spec.unsupported}` };
+    }
     const durationRaw = d.$duration ?? d.duration;
     const enableRaw = d.$enable ?? d.enable;
     const args = spec.buildArgs(groupId, userId, {
@@ -676,9 +653,7 @@ async function groupWriteOp(
     });
     await (method as (...args: unknown[]) => Promise<void>).call(management, ...args);
     return { data: { success: true } };
-  } catch (error) {
-    return { error: errorMessage(error) };
-  }
+  });
 }
 
 async function deleteFriend(
@@ -691,19 +666,14 @@ async function deleteFriend(
   if (!adapter || !endpointKey || !userId) {
     return { error: '$adapter, $endpoint, $user_id required' };
   }
-  const resolved = resolveLiveEndpoint(ctx, adapter, endpointKey);
-  if ('error' in resolved) return resolved;
-  const { management } = resolved;
-  const method = management.deleteFriend;
-  if (!method) {
-    return { error: '当前适配器暂不支持删除好友' };
-  }
-  try {
+  return withLiveEndpoint(ctx, adapter, endpointKey, async (management) => {
+    const method = management.deleteFriend;
+    if (!method) {
+      return { error: '当前适配器暂不支持删除好友' };
+    }
     await method(userId);
     return { data: { success: true } };
-  } catch (error) {
-    return { error: errorMessage(error) };
-  }
+  });
 }
 
 // ---------------------------------------------------------------- helpers
@@ -746,47 +716,30 @@ function numArrayField(d: Record<string, unknown>, ...keys: string[]): number[] 
   return [];
 }
 
-type ResolveOk = {
-  management: EndpointManagementPort;
-  adapter: string;
-  endpointKey: string;
-};
-
-function resolveLiveEndpoint(
+async function withLiveEndpoint(
   ctx: ConsoleRpcExtendedCtx,
   adapter: string,
   endpointKey: string,
-): ResolveOk | { error: string } {
-  if (ctx.resolveEndpointManagement) {
-    const management = ctx.resolveEndpointManagement(adapter, endpointKey);
-    if (!management) return { error: 'endpoint not found' };
-    return { management, adapter, endpointKey };
-  }
-  if (!ctx.resolveEndpoint) {
+  run: (management: EndpointManagementPort) => ExtendedRpcResult | Promise<ExtendedRpcResult>,
+): Promise<ExtendedRpcResult> {
+  if (!ctx.withEndpointManagement) {
     return { error: 'Endpoint registry is not configured' };
   }
-  const endpoint = ctx.resolveEndpoint(adapter, endpointKey);
-  if (!endpoint || typeof endpoint !== 'object') {
-    return { error: 'endpoint not found' };
+  try {
+    return await ctx.withEndpointManagement(adapter, endpointKey, run)
+      ?? { error: 'endpoint not found' };
+  } catch (error) {
+    return { error: errorMessage(error) };
   }
-  const management = (endpoint as { management?: unknown }).management;
-  return {
-    management: management && typeof management === 'object'
-      ? management as EndpointManagementPort
-      : {},
-    adapter,
-    endpointKey,
-  };
 }
 
-function requireEndpoint(
+function requireEndpointAddress(
   d: Record<string, unknown>,
-  ctx: ConsoleRpcExtendedCtx,
-): ResolveOk | { error: string } {
+): { adapter: string; endpointKey: string } | { error: string } {
   const adapter = strField(d, '$adapter', 'adapter');
   const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
   if (!adapter || !endpointKey) return { error: '$adapter and $endpoint required' };
-  return resolveLiveEndpoint(ctx, adapter, endpointKey);
+  return { adapter, endpointKey };
 }
 
 function normalizeParent(raw: unknown): { type: 'group' | 'guild'; id: string; name?: string } | undefined {

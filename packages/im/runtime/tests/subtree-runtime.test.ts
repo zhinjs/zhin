@@ -81,9 +81,6 @@ describe('Plugin subtree HMR', () => {
       'root:activate',
       'child-v1:activate',
       'sibling:activate',
-      'root:open',
-      'child-v1:open',
-      'sibling:open',
     ]);
 
     modules.set(childSource, childPlugin('v2'));
@@ -103,10 +100,8 @@ describe('Plugin subtree HMR', () => {
     expect(modules.loadCount(rootSource)).toBe(1);
     expect(modules.loadCount(siblingSource)).toBe(1);
     expect(disposed).toEqual([]);
-    expect(handoffs.slice(6)).toEqual([
-      'child-v2:quiesce:1',
+    expect(handoffs.slice(3)).toEqual([
       'child-v2:activate',
-      'child-v2:open',
     ]);
 
     modules.set(childSource, {
@@ -156,13 +151,8 @@ describe('Plugin subtree HMR', () => {
 
     function recordHandoff(name: string) {
       return {
-        quiescePrevious(previous: RuntimeSnapshot) {
-          handoffs.push(`${name}:quiesce:${previous.generation}`);
-        },
         activateNext() { handoffs.push(`${name}:activate`); },
         deactivateNext() { handoffs.push(`${name}:deactivate`); },
-        resumePrevious() { handoffs.push(`${name}:resume`); },
-        openNext() { handoffs.push(`${name}:open`); },
       };
     }
   });

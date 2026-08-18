@@ -20,7 +20,7 @@ interface RuntimeSnapshot {
 
 Snapshots are deeply frozen (Maps are read-only views as well), so plugin code always sees the world state of a specific determined generation.
 
-## Five-Phase Atomic Handoff
+## One Atomic Publish Point
 
 `RootController` serializes all control operations (promise queue), executing the same pipeline for each transaction:
 
@@ -34,16 +34,12 @@ sequenceDiagram
     C->>P: prepare(current)
     Note over P: Scan plugin graph, compose config, create scope,<br/>project Features... all lazy, invisible externally
     P-->>C: PreparedGeneration (with handoff + dispose)
-    C->>H: quiescePrevious (old generation)
-    Note over H: Quiesce old generation resources in reverse order<br/>(e.g., adapter close(), stop receiving new events,<br/>preserve in-flight work)
-    C->>H: activateNext()
-    Note over H: Activate new generation resources in forward order<br/>(e.g., adapter start(), allocate connections<br/>but don't allow inbound yet)
-    C->>S: commit (switch pointer to new generation, generation+1)
-    C->>H: openNext()
-    Note over H: New generation goes live<br/>(e.g., adapter open())
-    alt Any step fails
+    C->>H: activateNext(signal)
+    Note over H: Complete every fallible readiness step<br/>in forward order; candidate admission stays closed
+    C->>S: commit (switch snapshot and all admission gates, generation+1)
+    Note over S: commit is the final synchronous, infallible publish point;<br/>old resources drain with their last lease
+    alt Prepare or readiness fails
         C->>H: deactivateNext() (if already activated)
-        C->>H: resumePrevious() (if already quiesced,<br/>e.g., old generation re-open())
         C->>P: prepared.dispose() (destroy shadow)
         Note over C: Old generation continues running,<br/>transaction is fully cancelled
     end
@@ -54,35 +50,39 @@ The corresponding code skeleton (`RootController.transact`):
 ```ts
 const previous = this.snapshots.acquire();
 try {
-  prepared = await prepare(previous.value);
+  prepared = await prepare(previous.value, signal);
   if (!prepared) return previous.value;      // No changes, return directly
   if (prepared.handoff) {
-    await prepared.handoff.quiescePrevious(previous.value);
-    await prepared.handoff.activateNext();
+    await prepared.handoff.activateNext(signal);
   }
   return this.#commitGeneration(previous.value.generation, prepared);
 } catch (error) {
-  return this.#rollback(prepared, { quiesced, activated }, error);
+  return this.#rollback(prepared, { activated }, error);
 } finally {
   previous.release();
 }
 ```
 
-`GenerationHandoffStack` combines handoff actions from multiple resources: quiesce runs in reverse order, activate runs in forward order; if a step fails mid-way, automatic compensation kicks in (quiesced resources are resumed, activated resources are deactivated). If compensation also fails, the errors are aggregated into an `AggregateError` and thrown.
+`GenerationHandoffStack` composes candidate readiness only: `activateNext` runs in forward order and a failure deactivates every successfully activated participant in reverse order. The previous generation is never touched during the transaction. If compensation also fails, Root fails closed and accepts no new operations.
 
-### Adapters Are the Most Intuitive Example
+### Adapter Admission Switches Atomically with the Snapshot
 
-The projection in `@zhin.js/adapter` maps the entire Endpoint lifecycle to these five phases:
+`@zhin.js/adapter` does not close the old Endpoint before commit. The candidate
+`AdapterIndex` completes `start()` and `open()` during `activateNext`, but its
+`CapabilityContext` injects a `MessageGateway` bound to the candidate generation's
+`GenerationAdmissionGate`; every inbound event fails closed before commit. When
+`SnapshotStore` publishes the new snapshot it synchronously closes removed gates and opens
+new gates. A projection retained by both generations is never closed briefly.
 
-| Handoff Phase | Action | Endpoint Method |
-|---------------|--------|-----------------|
-| quiescePrevious | Old generation stops receiving new messages | `close()` |
-| activateNext | New generation establishes connections (no inbound yet) | `start()` |
-| After commit, openNext | New generation allows inbound traffic | `open()` |
-| On failure, deactivateNext | New generation releases resources | `stop()` |
-| On failure, resumePrevious | Old generation resumes inbound traffic | `open()` |
-
-Endpoint contract (`EndpointInstance`): `start` allocates transport resources but must not receive events; `open` allows traffic after the new generation is committed; `close` stops new events but preserves in-flight work; `stop` releases resources and must be idempotent.
+The old generation therefore remains available throughout preparation. Failed activation only
+stops the candidate. After commit, the old Endpoint may drain with old snapshot leases; late
+events are rejected by its retired gate, and its disposer eventually runs `close()` / `stop()`.
+Adapters have no dedicated `quiescePrevious`, `resumePrevious`, or post-commit `openNext` phase.
+Every configured Endpoint is a required prerequisite: create, start, or open failure rejects the
+candidate generation. No inert/unconfigured record or background late-open is published.
+The shared HTTP listener belongs to the Process Host. Candidate generations receive only an
+`HttpHost` routing port; gated HTTP/WS registrations cannot shadow an old route before commit, and
+generation code has no listener `listen`/`close` authority.
 
 ## Snapshot Leases: In-Flight Messages Are Not Interrupted
 

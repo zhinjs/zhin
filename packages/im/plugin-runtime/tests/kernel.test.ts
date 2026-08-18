@@ -221,11 +221,8 @@ describe('Plugin Runtime kernel', () => {
       snapshot: emptyState(),
       dispose: () => undefined,
       handoff: {
-        quiescePrevious() {},
         activateNext() { throw new Error('activation failed'); },
         deactivateNext() { throw new Error('cleanup failed'); },
-        resumePrevious() {},
-        openNext() {},
       },
     }))).rejects.toThrow('Root integrity failed');
 
@@ -240,11 +237,11 @@ describe('Plugin Runtime kernel', () => {
     await root.start(() => ({ snapshot: emptyState(), dispose: () => undefined }));
     const handoff = new GenerationHandoffStack();
     handoff.add({
-      quiescePrevious() { throw new Error('quiesce failed'); },
+      activateNext() {},
+      deactivateNext() { throw new Error('cleanup failed'); },
     });
     handoff.add({
-      quiescePrevious() {},
-      resumePrevious() { throw new Error('resume failed'); },
+      activateNext() { throw new Error('activation failed'); },
     });
 
     await expect(root.transact(() => ({

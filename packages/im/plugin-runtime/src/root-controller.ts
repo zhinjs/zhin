@@ -12,9 +12,11 @@ import {
 export type RootState = 'idle' | 'running' | 'stopping' | 'stopped' | 'failed';
 export type PrepareGeneration = (
   current: RuntimeSnapshot,
+  signal: AbortSignal,
 ) => PreparedGeneration | Promise<PreparedGeneration>;
 export type PrepareTransaction = (
   current: RuntimeSnapshot,
+  signal: AbortSignal,
 ) => PreparedGeneration | undefined | Promise<PreparedGeneration | undefined>;
 export type ControlErrorHandler = (error: unknown) => void;
 export interface GenerationCommitEvent {
@@ -36,6 +38,8 @@ export class RootController {
   #state: RootState = 'idle';
   #tail: Promise<unknown> = Promise.resolve();
   #stopResult?: Promise<void>;
+  #stopRequested = false;
+  #activeTransaction?: AbortController;
   readonly #generationCommitListeners = new Set<GenerationCommitListener>();
 
   constructor(
@@ -46,7 +50,7 @@ export class RootController {
     const store = this.#snapshotStore;
     this.snapshots = Object.freeze({
       acquire: () => {
-        if (this.#state !== 'running') {
+        if (this.#state !== 'running' || this.#stopRequested) {
           throw new RootIntegrityError(`Root is not accepting generation operations (${this.#state})`);
         }
         return store.acquire();
@@ -82,11 +86,13 @@ export class RootController {
       }
       let prepared: PreparedGeneration | undefined;
       let activated = false;
+      const transaction = new AbortController();
+      this.#activeTransaction = transaction;
       try {
-        prepared = await prepare(this.#snapshotStore.current);
+        prepared = await prepare(this.#snapshotStore.current, transaction.signal);
         if (prepared.handoff) {
           activated = true;
-          await prepared.handoff.activateNext();
+          await prepared.handoff.activateNext(transaction.signal);
         }
         this.#assertPublishable('idle');
         this.#state = 'running';
@@ -96,6 +102,8 @@ export class RootController {
       } catch (error) {
         this.#state = 'failed';
         return this.#rollback(prepared, { activated }, error);
+      } finally {
+        if (this.#activeTransaction === transaction) this.#activeTransaction = undefined;
       }
     });
   }
@@ -107,24 +115,24 @@ export class RootController {
       }
       const previous = this.snapshots.acquire();
       let prepared: PreparedGeneration | undefined;
-      let quiesced = false;
       let activated = false;
+      const transaction = new AbortController();
+      this.#activeTransaction = transaction;
       try {
-        prepared = await prepare(previous.value);
+        prepared = await prepare(previous.value, transaction.signal);
         if (!prepared) return previous.value;
         if (prepared.handoff) {
-          quiesced = true;
-          await prepared.handoff.quiescePrevious(previous.value);
           activated = true;
-          await prepared.handoff.activateNext();
+          await prepared.handoff.activateNext(transaction.signal);
         }
         this.#assertPublishable('running');
         const snapshot = this.#commitGeneration(previous.value.generation, prepared);
         prepared = undefined;
         return snapshot;
       } catch (error) {
-        return this.#rollback(prepared, { quiesced, activated }, error);
+        return this.#rollback(prepared, { activated }, error);
       } finally {
+        if (this.#activeTransaction === transaction) this.#activeTransaction = undefined;
         previous.release();
       }
     });
@@ -139,6 +147,8 @@ export class RootController {
 
   stop(): Promise<void> {
     if (this.#stopResult) return this.#stopResult;
+    this.#stopRequested = true;
+    this.#activeTransaction?.abort(new Error('Root lifecycle is stopping'));
     const result = this.#enqueue(async () => {
       if (this.#state === 'stopped') return;
       if (this.#state !== 'running' && this.#state !== 'failed') {
@@ -167,7 +177,6 @@ export class RootController {
   ): RuntimeSnapshot {
     const previous = this.#snapshotStore.current;
     const snapshot = this.#snapshotStore.commit(expectedGeneration, prepared);
-    this.#openNext(prepared.handoff);
     const event = Object.freeze({ previous, current: snapshot });
     const listeners = [...this.#generationCommitListeners];
     queueMicrotask(() => {
@@ -182,14 +191,6 @@ export class RootController {
     return snapshot;
   }
 
-  #openNext(handoff: PreparedGeneration['handoff']): void {
-    try {
-      handoff?.openNext();
-    } catch (error) {
-      this.#reportControlError(error);
-    }
-  }
-
   #reportControlError(error: unknown): void {
     try {
       this.onControlError(error);
@@ -200,20 +201,13 @@ export class RootController {
 
   async #rollback(
     prepared: PreparedGeneration | undefined,
-    state: { readonly quiesced?: boolean; readonly activated?: boolean },
+    state: { readonly activated?: boolean },
     transactionError: unknown,
   ): Promise<never> {
     const errors = [transactionError];
     if (prepared && state.activated) {
       try {
         await prepared.handoff?.deactivateNext();
-      } catch (error) {
-        errors.push(error);
-      }
-    }
-    if (prepared && state.quiesced) {
-      try {
-        await prepared.handoff?.resumePrevious();
       } catch (error) {
         errors.push(error);
       }
@@ -246,9 +240,11 @@ export class RootController {
   }
 
   #assertPublishable(expected: 'idle' | 'running'): void {
-    if (this.#state !== expected) {
+    if (this.#state !== expected || this.#stopRequested) {
       throw new RootIntegrityError(
-        `Root cannot publish a generation after admission entered ${this.#state}`,
+        `Root cannot publish a generation after admission entered ${
+          this.#stopRequested ? 'stopping' : this.#state
+        }`,
       );
     }
   }

@@ -3135,9 +3135,18 @@ importers:
       '@zhin.js/adapter-icqq':
         specifier: workspace:*
         version: link:../../adapters/icqq
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../../packages/im/command
       '@zhin.js/component':
         specifier: workspace:*
         version: link:../../../packages/im/component
+      '@zhin.js/core':
+        specifier: workspace:*
+        version: link:../../../packages/im/core
+      '@zhin.js/middleware':
+        specifier: workspace:*
+        version: link:../../../packages/im/middleware
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../../packages/im/plugin-runtime

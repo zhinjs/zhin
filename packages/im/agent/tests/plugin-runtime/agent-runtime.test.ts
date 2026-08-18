@@ -435,8 +435,8 @@ async function createFixture(access: {
   const journal = memoryJournalStore();
   const base = baseState(slots, journal);
   const view = createSnapshotView(1, base);
-  const mcp = await McpIndex.create([mcpSlot], view);
-  await mcp.start();
+  const mcp = await McpIndex.create([mcpSlot], view, new AbortController().signal);
+  await mcp.start(new AbortController().signal);
   const snapshot = createSnapshotView(1, {
     ...base,
     projections: new Map([

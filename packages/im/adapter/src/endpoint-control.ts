@@ -1,12 +1,4 @@
-import {
-  formatLegacyConversationRef,
-  formatLegacyMessageRef,
-  type ConversationTarget,
-  type LegacyEndpointControlSurface,
-  type MessageTarget,
-} from '@zhin.js/im-contract';
-
-export type { LegacyEndpointControlSurface } from '@zhin.js/im-contract';
+import type { ConversationRef, MessageRef } from '@zhin.js/im-contract';
 
 /**
  * Transport-neutral control plane for a live endpoint.
@@ -16,82 +8,26 @@ export type { LegacyEndpointControlSurface } from '@zhin.js/im-contract';
  * to know a protocol's method names or identifier layout.
  */
 export interface EndpointControl {
-  recall?(message: MessageTarget): Promise<void>;
-  edit?(message: MessageTarget, content: unknown): Promise<string | null>;
+  recall?(message: MessageRef): Promise<void>;
+  edit?(message: MessageRef, content: unknown): Promise<string | null>;
   addReaction?(
-    message: MessageTarget,
+    message: MessageRef,
     emoji: string,
     hint?: { readonly sceneType?: string; readonly channelId?: string },
   ): Promise<string | null>;
-  removeReaction?(message: MessageTarget, reactionId: string): Promise<void>;
-  typing?(conversation: ConversationTarget, active?: boolean): Promise<void>;
+  removeReaction?(message: MessageRef, reactionId: string): Promise<void>;
+  typing?(conversation: ConversationRef, active?: boolean): Promise<void>;
 }
 
 export interface EndpointWithControl {
   readonly control?: EndpointControl;
 }
 
-/**
- * Resolves the public control port. The legacy branch is deliberately kept in
- * Adapter only: it is a migration bridge for existing classic protocol
- * endpoints (`LegacyEndpointControlSurface` lives in `@zhin.js/im-contract`),
- * not an IM Core extension point. New adapters must expose `control` directly.
- * 下线条件：classic Plugin 轨下线后，legacy 分支与 LegacyEndpointControlSurface
- * 一并删除。
- */
-export function resolveEndpointControl(endpoint: unknown): EndpointControl | undefined {
+/** Reads the canonical control port without probing protocol-specific methods. */
+export function endpointControlOf(endpoint: unknown): EndpointControl | undefined {
   if (!endpoint || typeof endpoint !== 'object') return undefined;
   const explicit = (endpoint as EndpointWithControl).control;
-  if (explicit && typeof explicit === 'object') return explicit;
-
-  const legacy = endpoint as LegacyEndpointControlSurface;
-  const recall = legacy.recallMessage ?? legacy.$recallMessage;
-  const edit = legacy.editMessage ?? legacy.$editMessage;
-  const addReaction = legacy.addReaction ?? legacy.$addReaction;
-  const removeReaction = legacy.removeReaction ?? legacy.$removeReaction;
-  const typing = legacy.typing ?? legacy.$typing;
-  if (!recall && !edit && !addReaction && !removeReaction && !typing) return undefined;
-
-  return Object.freeze({
-    ...(recall
-      ? { recall: (message: MessageTarget) => recall.call(endpoint, legacyMessageId(message)) }
-      : {}),
-    ...(edit
-      ? {
-        edit: (message: MessageTarget, content: unknown) =>
-          edit.call(endpoint, legacyMessageId(message), content),
-      }
-      : {}),
-    ...(addReaction
-      ? {
-        addReaction: (
-          message: MessageTarget,
-          emoji: string,
-          hint?: { readonly sceneType?: string; readonly channelId?: string },
-        ) => addReaction.call(endpoint, legacyMessageId(message), emoji, hint),
-      }
-      : {}),
-    ...(removeReaction
-      ? {
-        removeReaction: (message: MessageTarget, reactionId: string) =>
-          removeReaction.call(endpoint, legacyMessageId(message), reactionId),
-      }
-      : {}),
-    ...(typing
-      ? {
-        typing: (conversation: ConversationTarget, active?: boolean) =>
-          typing.call(endpoint, legacyConversationTarget(conversation), active),
-      }
-      : {}),
-  });
-}
-
-function legacyMessageId(message: MessageTarget): string {
-  return typeof message === 'string' ? message : formatLegacyMessageRef(message);
-}
-
-function legacyConversationTarget(conversation: ConversationTarget): string {
-  return typeof conversation === 'string' ? conversation : formatLegacyConversationRef(conversation);
+  return explicit && typeof explicit === 'object' ? explicit : undefined;
 }
 
 /** Checks only an Endpoint's explicit `control` port, never the legacy bridge. */

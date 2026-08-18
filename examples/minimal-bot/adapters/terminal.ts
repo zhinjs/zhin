@@ -68,7 +68,7 @@ export class TerminalEndpoint implements EndpointInstance {
 
   open(): void {
     if (this.#stopped) throw new Error('Terminal Endpoint cannot reopen after stop');
-    // A failed generation can resume this Endpoint after close() quiesced its readline.
+    // Candidate rollback stops only this candidate; the committed Endpoint is untouched.
     this.start();
     this.#open = true;
     this.#schedulePrompt();

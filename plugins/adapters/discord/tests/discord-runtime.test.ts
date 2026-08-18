@@ -505,7 +505,7 @@ describe('discord plugin runtime adapter', () => {
       },
       payload: 'pong',
     });
-    expect(messageId).toBe('channel:chan-1:sent-1');
+    expect(messageId).toBe('sent-1');
     expect(mock.sent[0]).toMatchObject({
       channelId: 'chan-1',
     });
@@ -528,7 +528,7 @@ describe('discord plugin runtime adapter', () => {
         id: 'chan-1',
       },
       payload: 'pong',
-    })).resolves.toBe('group:chan-1:sent-1');
+    })).resolves.toBe('sent-1');
     expect(mock.sent[0]).toMatchObject({ channelId: 'chan-1' });
     await endpoint.stop();
   });

@@ -4,7 +4,11 @@ import {
   capabilityId,
   childPluginId,
   createCapabilitySlot,
+  createGenerationAdmissionGate,
   createSnapshotView,
+  featureId,
+  generationAdmissionBinder,
+  generationAdmissionSource,
   rootPluginId,
   type CapabilitySlot,
   type SnapshotState,
@@ -14,6 +18,7 @@ import {
   adapterFeatureId,
   defineAdapter,
   type EndpointControl,
+  type EndpointManagement,
 } from '@zhin.js/adapter';
 import {
   CommandIndex,
@@ -44,6 +49,47 @@ import {
 import { resetKeyboardFallbackStoreForTests } from '../../src/built/interactive-segments/index.js';
 
 describe('IM Runtime', () => {
+  it('fails every generation-bound MessageGateway operation closed outside admission', async () => {
+    const gate = createGenerationAdmissionGate();
+    const im = new ImRuntime();
+    const gateway = im[generationAdmissionBinder](gate);
+    const request = {
+      conversation: {
+        endpoint: { id: 'missing', adapter: 'missing' },
+        kind: 'private' as const,
+        id: 'room',
+      },
+      requester: rootPluginId(),
+      content: 'hello',
+    };
+
+    await expect(gateway.send(request)).resolves.toMatchObject({
+      status: 'failed',
+      failure: { code: 'generation_not_admitted' },
+    });
+
+    const state = baseState([]);
+    const store = new SnapshotStore({
+      ...state,
+      projections: new Map([[
+        featureId('test.ingress'),
+        { [generationAdmissionSource]: [gate] },
+      ]]),
+    });
+    im.attach(store);
+    await expect(gateway.send(request)).resolves.toMatchObject({
+      status: 'failed',
+      failure: { code: 'endpoint_send_failed' },
+    });
+
+    store.commit(0, { snapshot: state, dispose: () => undefined });
+    await expect(gateway.send(request)).resolves.toMatchObject({
+      status: 'failed',
+      failure: { code: 'generation_not_admitted' },
+    });
+    await store.close();
+  });
+
   it('lets a root inbound claim consume pending interaction replies before middleware and commands', async () => {
     const events: string[] = [];
     const fixture = await createFixture(events, [], undefined, undefined, undefined, {
@@ -418,19 +464,19 @@ describe('IM Runtime', () => {
   it('accepts MessageRef and ConversationRef at Core control methods', async () => {
     const calls: string[] = [];
     const control: EndpointControl = {
-      recall: async (message) => { calls.push(`recall:${String(message)}`); },
+      recall: async (message) => {
+        calls.push(`recall:${message.conversation.kind}:${message.conversation.id}:${message.id}`);
+      },
       edit: async (message, content) => {
-        calls.push(`edit:${String(message)}:${String(content)}`);
+        calls.push(`edit:${message.conversation.kind}:${message.conversation.id}:${message.id}:${String(content)}`);
         return 'edited';
       },
       addReaction: async (message, emoji) => {
-        calls.push(`reaction:${String(message)}:${emoji}`);
+        calls.push(`reaction:${message.conversation.kind}:${message.conversation.id}:${message.id}:${emoji}`);
         return emoji;
       },
       typing: async (conversation, active) => {
-        const target = typeof conversation === 'string'
-          ? conversation
-          : `${conversation.kind}:${conversation.id}`;
+        const target = `${conversation.kind}:${conversation.id}`;
         calls.push(`typing:${target}:${String(active)}`);
       },
     };
@@ -459,6 +505,93 @@ describe('IM Runtime', () => {
       'reaction:group:room-1:message-1:👍',
       'typing:group:room-1:true',
     ]);
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it('holds the endpoint generation lease until an async control operation settles', async () => {
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const control: EndpointControl = {
+      async recall() { await pending; },
+    };
+    const fixture = await createFixture(
+      [],
+      [],
+      undefined,
+      undefined,
+      undefined,
+      { endpointControl: control },
+    );
+    let disposed = false;
+    fixture.store.commit(0, {
+      snapshot: snapshotState(fixture.store.current),
+      dispose: () => { disposed = true; },
+    });
+
+    const recalling = fixture.im.recallEndpointMessage({
+      adapter: 'memory',
+      endpointKey: 'memory',
+      message: {
+        conversation: {
+          endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+          kind: 'private',
+          id: 'room-1',
+        },
+        id: 'message-1',
+      },
+    });
+    await Promise.resolve();
+    const current = fixture.store.current;
+    fixture.store.commit(1, {
+      snapshot: {
+        ...snapshotState(current),
+        projections: new Map(),
+      },
+      dispose: () => undefined,
+    });
+
+    expect(disposed).toBe(false);
+    release();
+    await recalling;
+    await vi.waitFor(() => expect(disposed).toBe(true));
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it('holds the endpoint generation lease through management operations', async () => {
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const fixture = await createFixture([], [], undefined, undefined, undefined, {
+      endpointManagement: {
+        async listFriends() {
+          await pending;
+          return [];
+        },
+      },
+    });
+    let disposed = false;
+    fixture.store.commit(0, {
+      snapshot: snapshotState(fixture.store.current),
+      dispose: () => { disposed = true; },
+    });
+
+    const listing = fixture.im.withEndpointManagement(
+      'memory',
+      'memory',
+      (management) => management.listFriends?.(),
+    );
+    await Promise.resolve();
+    const current = fixture.store.current;
+    fixture.store.commit(1, {
+      snapshot: { ...snapshotState(current), projections: new Map() },
+      dispose: () => undefined,
+    });
+    expect(disposed).toBe(false);
+
+    release();
+    await expect(listing).resolves.toEqual([]);
+    await vi.waitFor(() => expect(disposed).toBe(true));
     await fixture.adapters.stop();
     await fixture.store.close();
   });
@@ -502,7 +635,7 @@ describe('IM Runtime', () => {
       projections: new Map(),
     };
     const view = createSnapshotView(0, state);
-    const adapters = await AdapterIndex.create([adapter], view);
+    const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
     const store = new SnapshotStore({
       ...state,
       projections: new Map([[adapterFeatureId, adapters]]),
@@ -539,12 +672,16 @@ describe('IM Runtime', () => {
       name: '111111',
       adapter: 'icqq',
     }));
-    expect(im.getEndpointManagement('icqq', '111111')).toEqual(expect.objectContaining({
-      listFriends: expect.any(Function),
-      listGroups: expect.any(Function),
-      kickGroupMember: expect.any(Function),
-    }));
-    expect(im.getEndpointManagement('missing', 'missing')).toBeNull();
+    await expect(im.withEndpointManagement('icqq', '111111', (management) => {
+      expect(management).toEqual(expect.objectContaining({
+        listFriends: expect.any(Function),
+        listGroups: expect.any(Function),
+        kickGroupMember: expect.any(Function),
+      }));
+      return true;
+    })).resolves.toBe(true);
+    await expect(im.withEndpointManagement('missing', 'missing', () => true))
+      .resolves.toBeNull();
 
     await adapters.stop();
     await store.close();
@@ -938,6 +1075,67 @@ describe('IM Runtime', () => {
     await fixture.store.close();
   });
 
+  it('does not let a candidate interactive handler shadow the committed generation', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, {
+      middleware: false,
+    });
+    const calls: string[] = [];
+    const previousGate = createGenerationAdmissionGate();
+    const previous = fixture.im[generationAdmissionBinder](previousGate);
+    previous.registerInteractiveHandler('hub:', () => {
+      calls.push('previous');
+      return true;
+    });
+    const nextGate = createGenerationAdmissionGate();
+    const candidate = fixture.im[generationAdmissionBinder](nextGate);
+    candidate.registerInteractiveHandler('hub:next:', () => {
+      calls.push('next');
+      return true;
+    });
+    const input = {
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room',
+      },
+      content: 'hub:next:go',
+      sender: { id: 'alice' },
+    };
+
+    let current = fixture.store.current;
+    fixture.store.commit(current.generation, {
+      snapshot: {
+        ...snapshotState(current),
+        projections: new Map([
+          ...current.projections,
+          [featureId('test.interactive-admission'), {
+            [generationAdmissionSource]: [previousGate],
+          }],
+        ]),
+      },
+      dispose: () => undefined,
+    });
+    await expect(previous.receive(input)).resolves.toMatchObject({ matched: true });
+    expect(calls).toEqual(['previous']);
+
+    current = fixture.store.current;
+    fixture.store.commit(current.generation, {
+      snapshot: {
+        ...snapshotState(current),
+        projections: new Map([
+          ...current.projections,
+          [featureId('test.interactive-admission'), { [generationAdmissionSource]: [nextGate] }],
+        ]),
+      },
+      dispose: () => undefined,
+    });
+    await expect(candidate.receive(input)).resolves.toMatchObject({ matched: true });
+    expect(calls).toEqual(['previous', 'next']);
+
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
   it("interactive 中央执行：声明 'native' 的端点透传 keyboard", async () => {
     const sent: unknown[] = [];
     const fixture = await createFixture([], sent, undefined, undefined, undefined, {
@@ -1020,6 +1218,7 @@ async function createFixture(
     adapterCapabilities?: readonly ('inbound' | 'outbound')[];
     endpointSend?: (request: unknown) => unknown;
     endpointControl?: EndpointControl;
+    endpointManagement?: EndpointManagement;
     outboundMiddleware?: (input: OutboundEnvelope, next: () => Promise<void>) => Promise<void> | void;
     inboundClaim?: (message: Message) => boolean | Promise<boolean>;
   },
@@ -1035,6 +1234,7 @@ async function createFixture(
       ...(options?.adapterSegments ? { segments: options.adapterSegments } : {}),
       create: () => ({
         ...(options?.endpointControl ? { control: options.endpointControl } : {}),
+        ...(options?.endpointManagement ? { management: options.endpointManagement } : {}),
         start() { events.push('endpoint:start'); },
         open() { events.push('endpoint:open'); },
         close() { events.push('endpoint:close'); },
@@ -1117,7 +1317,7 @@ async function createFixture(
   ];
   const base = baseState(slots);
   const view = createSnapshotView(0, base);
-  const adapters = await AdapterIndex.create([adapter], view);
+  const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
   const projections = new Map([
     [adapterFeatureId, adapters],
     [commandFeatureId, new CommandIndex([command], view)],
@@ -1362,5 +1562,286 @@ describe('Message.$replyToChannel', () => {
       parent: { kind: 'channel', id: 'guild-1' },
       threadId: 'thread-42',
     });
+  });
+});
+
+describe('CommandPrompt via ImRuntime', () => {
+  async function createPromptFixture() {
+    const sent: unknown[] = [];
+    const events: string[] = [];
+    let promptResult: unknown;
+    let promptError: unknown;
+    const commandExecuted = vi.fn();
+    const root = rootPluginId();
+    const adapter = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'memory',
+      source: '/adapters/memory.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound', 'outbound'],
+        create: () => ({
+          start() {},
+          open() {},
+          close() {},
+          stop() {},
+          send(request) {
+            sent.push(request);
+            return { id: `sent-${sent.length}` };
+          },
+        }),
+      }),
+    });
+    const command = createCapabilitySlot({
+      owner: root,
+      feature: commandFeatureId,
+      localName: 'ask',
+      source: '/commands/ask.ts',
+      definition: defineCommand<{}, SendContent, Message>({
+        async execute(context) {
+          commandExecuted();
+          try {
+            promptResult = await context.prompt!.text('请输入你的名字');
+          } catch (e) {
+            promptError = e;
+            throw e;
+          }
+          return `你好 ${promptResult}`;
+        },
+      }),
+    });
+    const slots = [adapter, command];
+    const base = baseState(slots);
+    const view = createSnapshotView(0, base);
+    const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
+    const projections = new Map([
+      [adapterFeatureId, adapters],
+      [commandFeatureId, new CommandIndex([command], view)],
+    ]);
+    const store = new SnapshotStore({ ...base, projections });
+    const im = new ImRuntime();
+    im.attach(store);
+    await adapters.start();
+    adapters.open();
+    return { im, sent, events, commandExecuted, getResult: () => promptResult, getError: () => promptError };
+  }
+
+  function incomingMessage(content: string, sender = 'user-1') {
+    const root = rootPluginId();
+    return {
+      conversation: {
+        endpoint: { id: String(capabilityId(root, adapterFeatureId, 'memory')), adapter: String(root) },
+        kind: 'group' as const,
+        id: 'room-1',
+      },
+      content,
+      sender: { id: sender },
+    };
+  }
+
+  it('prompt.text 应发送提示并等待用户输入后返回', async () => {
+    const { im, sent } = await createPromptFixture();
+
+    const commandPromise = im.receive(incomingMessage('/ask'));
+
+    await vi.waitFor(() => {
+      expect(sent.length).toBeGreaterThanOrEqual(1);
+    });
+    expect(sent[0]).toEqual(expect.objectContaining({ payload: '请输入你的名字' }));
+
+    const answerResult = await im.receive(incomingMessage('张三'));
+    expect(answerResult.matched).toBe(true);
+    expect(answerResult.command).toBe('prompt');
+
+    const result = await commandPromise;
+    expect(result.matched).toBe(true);
+    expect(result.command).toBe('ask');
+  });
+
+  it('prompt 应仅匹配同一用户同一频道的消息', async () => {
+    const { im, sent } = await createPromptFixture();
+
+    im.receive(incomingMessage('/ask'));
+
+    await vi.waitFor(() => {
+      expect(sent.length).toBeGreaterThanOrEqual(1);
+    });
+
+    const otherUserResult = await im.receive(incomingMessage('李四', 'user-2'));
+    expect(otherUserResult.matched).toBe(false);
+  });
+
+  it('prompt 超时时 reject 并回复超时消息', async () => {
+    const root = rootPluginId();
+    const sent: unknown[] = [];
+    let promptError: unknown;
+    const adapter = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'memory',
+      source: '/adapters/memory.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound', 'outbound'],
+        create: () => ({
+          start() {},
+          open() {},
+          close() {},
+          stop() {},
+          send(request) {
+            sent.push(request);
+            return { id: `sent-${sent.length}` };
+          },
+        }),
+      }),
+    });
+    const command = createCapabilitySlot({
+      owner: root,
+      feature: commandFeatureId,
+      localName: 'ask',
+      source: '/commands/ask.ts',
+      definition: defineCommand<{}, SendContent, Message>({
+        async execute(context) {
+          try {
+            await context.prompt!.text('请输入', { timeout: 50, timeoutText: '等太久了' });
+          } catch (e) {
+            promptError = e;
+          }
+          return '完成';
+        },
+      }),
+    });
+    const slots = [adapter, command];
+    const base = baseState(slots);
+    const view = createSnapshotView(0, base);
+    const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
+    const projections = new Map([
+      [adapterFeatureId, adapters],
+      [commandFeatureId, new CommandIndex([command], view)],
+    ]);
+    const store = new SnapshotStore({ ...base, projections });
+    const im = new ImRuntime();
+    im.attach(store);
+    await adapters.start();
+    adapters.open();
+
+    await im.receive(incomingMessage('/ask'));
+
+    expect(promptError).toBeInstanceOf(Error);
+    expect((promptError as Error).message).toBe('等太久了');
+    expect(sent.some((s: any) => s.payload === '等太久了')).toBe(true);
+  });
+
+  it('prompt.number 应解析数字', async () => {
+    const root = rootPluginId();
+    const sent: unknown[] = [];
+    let promptResult: unknown;
+    const adapter = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'memory',
+      source: '/adapters/memory.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound', 'outbound'],
+        create: () => ({
+          start() {},
+          open() {},
+          close() {},
+          stop() {},
+          send(request) {
+            sent.push(request);
+            return { id: `sent-${sent.length}` };
+          },
+        }),
+      }),
+    });
+    const command = createCapabilitySlot({
+      owner: root,
+      feature: commandFeatureId,
+      localName: 'age',
+      source: '/commands/age.ts',
+      definition: defineCommand<{}, SendContent, Message>({
+        async execute(context) {
+          promptResult = await context.prompt!.number('你几岁');
+          return `${promptResult}`;
+        },
+      }),
+    });
+    const slots = [adapter, command];
+    const base = baseState(slots);
+    const view = createSnapshotView(0, base);
+    const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
+    const projections = new Map([
+      [adapterFeatureId, adapters],
+      [commandFeatureId, new CommandIndex([command], view)],
+    ]);
+    const store = new SnapshotStore({ ...base, projections });
+    const im = new ImRuntime();
+    im.attach(store);
+    await adapters.start();
+    adapters.open();
+
+    const commandPromise = im.receive(incomingMessage('/age'));
+    await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(1); });
+
+    await im.receive(incomingMessage('25'));
+    await commandPromise;
+    expect(promptResult).toBe(25);
+  });
+
+  it('prompt.confirm 应判定确认条件', async () => {
+    const root = rootPluginId();
+    const sent: unknown[] = [];
+    let promptResult: unknown;
+    const adapter = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'memory',
+      source: '/adapters/memory.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound', 'outbound'],
+        create: () => ({
+          start() {},
+          open() {},
+          close() {},
+          stop() {},
+          send(request) {
+            sent.push(request);
+            return { id: `sent-${sent.length}` };
+          },
+        }),
+      }),
+    });
+    const command = createCapabilitySlot({
+      owner: root,
+      feature: commandFeatureId,
+      localName: 'confirm',
+      source: '/commands/confirm.ts',
+      definition: defineCommand<{}, SendContent, Message>({
+        async execute(context) {
+          promptResult = await context.prompt!.confirm('确认删除？');
+          return promptResult ? '已删除' : '已取消';
+        },
+      }),
+    });
+    const slots = [adapter, command];
+    const base = baseState(slots);
+    const view = createSnapshotView(0, base);
+    const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
+    const projections = new Map([
+      [adapterFeatureId, adapters],
+      [commandFeatureId, new CommandIndex([command], view)],
+    ]);
+    const store = new SnapshotStore({ ...base, projections });
+    const im = new ImRuntime();
+    im.attach(store);
+    await adapters.start();
+    adapters.open();
+
+    const commandPromise = im.receive(incomingMessage('/confirm'));
+    await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(1); });
+
+    await im.receive(incomingMessage('yes'));
+    await commandPromise;
+    expect(promptResult).toBe(true);
   });
 });

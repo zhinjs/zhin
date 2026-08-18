@@ -1,147 +1,180 @@
-// plugins/utils/music/src/sources/qq.ts
-import type { MusicSearchService, MusicDetail,MusicInfo, MusicQQ } from '../types.js'
+import * as crypto from 'node:crypto';
+import type { MusicSearchService, MusicDetail, MusicInfo } from '../types.js';
+import { getCredential } from '../credential-store.js';
 
-/** QQ 音乐搜索服务 */
+const md5 = (text: string) => crypto.createHash('md5').update(text).digest('hex');
+
+const MUSICU_API = 'https://u.y.qq.com/cgi-bin/musicu.fcg';
+
+function getHeaders(cookie?: string | null) {
+  return {
+    Referer: 'https://y.qq.com',
+    Cookie: cookie ?? '',
+    'Content-Type': 'application/json; charset=UTF-8',
+  };
+}
+
 export class QQMusicService implements MusicSearchService {
   async search(keyword: string, limit = 10): Promise<MusicInfo[]> {
     try {
-      const url = new URL('https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg')
-      url.searchParams.set('key', keyword)
-      url.searchParams.set('format', 'json')
-      
-      const response = await fetch(url, { method: 'GET' })
-      const data = await response.json() as { data: { song: { itemlist: MusicQQ[] } } }
-      
-      const items = data.data?.song?.itemlist || []
-      return items.slice(0, limit).map(music => ({
-        id: music.id,
-        source: 'qq' as const,
-        title: music.name,
-        url: `https://y.qq.com/n/yqq/song/${music.mid}.html`
-      }))
-    } catch (error) {
-      console.error('QQ Music search failed:', error)
-      return []
-    }
-  }
+      const cookie = await getCredential('qq', 'cookie');
+      const response = await fetch(MUSICU_API, {
+        method: 'POST',
+        headers: getHeaders(cookie),
+        body: JSON.stringify({
+          comm: { uin: '0', authst: '', ct: 29 },
+          search: {
+            method: 'DoSearchForQQMusicMobile',
+            module: 'music.search.SearchCgiService',
+            param: {
+              query: keyword,
+              grp: 1,
+              num_per_page: limit,
+              page_num: 1,
+              search_type: 0,
+              searchid: String(Date.now()),
+            },
+          },
+        }),
+      });
 
-  async getCover(id: string): Promise<string | null> {
-    try {
-      const url = new URL('https://u.y.qq.com/cgi-bin/musicu.fcg')
-      url.searchParams.set('format', 'json')
-      url.searchParams.set('inCharset', 'utf8')
-      url.searchParams.set('outCharset', 'utf-8')
-      url.searchParams.set('notice', '0')
-      url.searchParams.set('platform', 'yqq.json')
-      url.searchParams.set('needNewCode', '0')
-      url.searchParams.set('data', JSON.stringify({
-        comm: { ct: 24, cv: 0 },
-        songinfo: {
-          method: 'get_song_detail_yqq',
-          param: { song_type: 0, song_mid: '', song_id: parseInt(id) },
-          module: 'music.pf_song_detail_svr'
-        }
-      }))
+      const data = (await response.json()) as { code?: number; search?: { data?: { body?: { song?: { list?: any[] }; item_song?: any[] } } } };
+      if (data.code !== undefined && +data.code !== 0) return [];
 
-      const response = await fetch(url, { method: 'GET' })
-      const result = await response.json()
-      
-      const albumMid = result?.songinfo?.data?.track_info?.album?.mid
-      if (!albumMid) return null
-      
-      return `https://y.gtimg.cn/music/photo_new/T002R300x300M000${albumMid}.jpg`
+      const body = data.search?.data?.body ?? {};
+      const list = (body.song?.list ?? body.item_song ?? []) as any[];
+
+      return list.slice(0, limit).map((e) => {
+        const mid = e?.mid ?? '';
+        const albumMid = e?.album?.pmid ?? e?.album?.mid ?? '';
+        const singerMid = e?.singer?.[0]?.pmid ?? e?.singer?.[0]?.mid ?? '';
+        const cover = albumMid
+          ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${albumMid}.jpg`
+          : singerMid
+            ? `https://y.qq.com/music/photo_new/T001R300x300M000${singerMid}.jpg`
+            : '';
+
+        return {
+          id: String(e.id),
+          source: 'qq' as const,
+          title: e.name,
+          artist: (e.singer ?? []).map((s: any) => s.name).join('/'),
+          album: e.album?.name,
+          url: `https://y.qq.com/n/ryqq/songDetail/${mid}`,
+          image: cover,
+          duration: e.interval,
+          _mid: mid,
+          _mediaMid: e.file?.media_mid,
+        };
+      });
     } catch (error) {
-      console.error('QQ Music get cover failed:', error)
-      return null
+      console.error('QQ Music search failed:', error);
+      return [];
     }
   }
 
   async getDetail(id: string): Promise<MusicDetail> {
-    const url = new URL('https://u.y.qq.com/cgi-bin/musicu.fcg')
-      url.searchParams.set('format', 'json')
-      url.searchParams.set('data', JSON.stringify({
-        comm: { ct: 24, cv: 0 },
-        songinfo: {
-          method: 'get_song_detail_yqq',
-          param: { song_type: 0, song_mid: '', song_id: parseInt(id) },
-          module: 'music.pf_song_detail_svr'
+    const url = new URL(MUSICU_API);
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('data', JSON.stringify({
+      comm: { ct: 24, cv: 0 },
+      songinfo: {
+        method: 'get_song_detail_yqq',
+        param: { song_type: 0, song_mid: '', song_id: parseInt(id) },
+        module: 'music.pf_song_detail_svr',
+      },
+    }));
+
+    const response = await fetch(url, { method: 'GET' });
+    const result = await response.json() as any;
+
+    const trackInfo = result?.songinfo?.data?.track_info;
+    if (!trackInfo) throw new Error('Music not found');
+
+    const albumMid = trackInfo.album?.mid;
+    const image = albumMid
+      ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${albumMid}.jpg`
+      : '';
+
+    return {
+      id,
+      source: 'qq',
+      title: trackInfo.name,
+      url: `https://y.qq.com/n/ryqq/songDetail/${trackInfo.mid}`,
+      audio: await this.getAudioUrl(id, trackInfo.mid, trackInfo.file?.media_mid),
+      image,
+      duration: trackInfo.interval,
+    };
+  }
+
+  async getAudioUrl(id: string, mid?: string, mediaMid?: string): Promise<string> {
+    const cookie = await getCredential('qq', 'cookie');
+    if (cookie) {
+      try {
+        const uin = /uin=o?(\d+)/.exec(cookie)?.[1] ?? '0';
+        const songMid = mid ?? id;
+        const response = await fetch(MUSICU_API, {
+          method: 'POST',
+          headers: getHeaders(cookie),
+          body: JSON.stringify({
+            comm: {
+              ct: 19,
+              cv: '1891',
+              uin: '0',
+              guid: md5(`${uin}music`),
+              tmeAppID: 'qqmusic',
+              tmeLoginType: 2,
+            },
+            vkey: {
+              module: 'vkey.GetVkeyServer',
+              method: 'CgiGetVkey',
+              param: {
+                guid: md5(String(Date.now())),
+                songmid: [songMid],
+                songtype: [0],
+                uin: '0',
+                ctx: 1,
+                filename: [`C400${id}${mediaMid ?? songMid}.m4a`],
+              },
+            },
+          }),
+        });
+
+        const result = await response.json() as any;
+        if (result.vkey && +result.vkey.code === 0) {
+          const purl = result.vkey.data?.midurlinfo?.[0]?.purl;
+          if (purl) return `https://ws.stream.qqmusic.qq.com/${purl}`;
         }
-      }))
-
-      const response = await fetch(url, { method: 'GET' })
-      const result = await response.json()
-      
-      const trackInfo = result?.songinfo?.data?.track_info
-      if (!trackInfo) throw new Error('Music not found')
-
-      const albumMid = trackInfo.album?.mid
-      const image = albumMid 
-        ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${albumMid}.jpg`
-        : undefined
-
-      return {
-        id,
-        source: 'qq',
-        title: trackInfo.name,
-        url: `https://y.qq.com/n/yqq/song/${trackInfo.mid}.html`,
-        audio: await this.getAudioUrl(id),
-        image: image || '',
-        duration: trackInfo.interval,
+      } catch {
+        // fall through to public fallback
       }
+    }
+
+    // 无 cookie 的公开 fallback：md5 签名直链
+    const songMid = mid ?? id;
+    const code = md5(`${songMid}q;z(&l~sdf2!nK`).substring(0, 5).toUpperCase();
+    return `https://c6.y.qq.com/rsc/fcgi-bin/fcg_pyq_play.fcg?songmid=${songMid}&code=${code}`;
   }
 
-  /**
-   * 获取音频直链（需要第三方 API）
-   * @param id 音乐 ID
-   * @param metingAPI Meting API 地址（可选）
-   * @returns 音频直链 URL
-   */
-  async getAudioUrl(id: string, metingAPI?: string): Promise<string> {
-    // QQ 音乐需要使用第三方 API
-      const apiUrl = metingAPI || 'https://api.injahow.cn/meting/'
-      const url = `${apiUrl}?type=url&id=${id}&source=qq`
-      
-      const response = await fetch(url, { method: 'GET' })
-      const data = await response.json() as { url?: string, data?: { url?: string } }
-      if (!data.url && !data.data?.url) {
-        throw new Error('Audio URL not found')
-      }
-      const audioUrl = data.url ?? data.data?.url
-      if (!audioUrl) throw new Error('Audio URL not found')
-      return audioUrl
-  }
-
-  /**
-   * 获取歌词
-   * @param id 音乐 ID
-   * @returns 歌词文本
-   */
   async getLyric(id: string): Promise<string | null> {
     try {
-      const url = new URL('https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg')
-      url.searchParams.set('songmid', id)
-      url.searchParams.set('g_tk', '5381')
-      url.searchParams.set('format', 'json')
-      url.searchParams.set('inCharset', 'utf8')
-      url.searchParams.set('outCharset', 'utf-8')
-      url.searchParams.set('nobase64', '1')
+      const url = new URL('https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg');
+      url.searchParams.set('songmid', id);
+      url.searchParams.set('g_tk', '5381');
+      url.searchParams.set('format', 'json');
+      url.searchParams.set('inCharset', 'utf8');
+      url.searchParams.set('outCharset', 'utf-8');
+      url.searchParams.set('nobase64', '1');
 
-      const response = await fetch(url, { 
+      const response = await fetch(url, {
         method: 'GET',
-        headers: {
-          'Referer': 'https://y.qq.com'
-        }
-      })
-      const data = await response.json() as { lyric?: string }
-      
-      if (!data.lyric) return null
-      
-      // 请求已带 nobase64=1，返回的是明文歌词，直接返回；
-      // 再按 base64 解码会得到乱码（Buffer.from(x,'base64') 对明文也不会抛错）
-      return data.lyric
+        headers: { Referer: 'https://y.qq.com' },
+      });
+      const data = (await response.json()) as { lyric?: string };
+      return data.lyric ?? null;
     } catch (error) {
-      console.error('QQ Music get lyric failed:', error)
-      return null
+      console.error('QQ Music get lyric failed:', error);
+      return null;
     }
   }
 }

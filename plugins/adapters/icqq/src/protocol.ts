@@ -454,6 +454,8 @@ export function formatOutboundBody(payload: unknown): string {
         const arg = resolveCqMediaArg('video', item.data);
         return arg ? `[video:${arg}]` : '';
       }
+      case 'share':
+        return formatMusicShareJson(item.data);
       default:
         return String(item.data?.text ?? '');
     }
@@ -470,4 +472,50 @@ function isWireSegment(value: unknown): value is IcqqWireSegment {
   return typeof value === 'object'
     && value !== null
     && typeof (value as { type?: unknown }).type === 'string';
+}
+
+function formatMusicShareJson(data: Record<string, unknown> | undefined): string {
+  if (!data) return '';
+  const config = data.config as {
+    appid?: number;
+    package?: string;
+    icon?: string;
+    sign?: string;
+  } | undefined;
+  const title = String(data.title ?? '');
+  const desc = String(data.artist ?? '');
+  const jumpUrl = String(data.url ?? '');
+  const musicUrl = String(data.audio ?? '');
+  const preview = String(data.image ?? '');
+  const tag = config?.appid === 100497308 ? 'QQ音乐'
+    : config?.appid === 100495085 ? '网易云音乐'
+    : config?.appid === 100243533 ? '酷我音乐'
+    : config?.appid === 205141 ? '酷狗音乐'
+    : '音乐';
+  const json = {
+    app: 'com.tencent.structmsg',
+    view: 'music',
+    ver: '0.0.0.1',
+    desc: 'music',
+    prompt: `[分享]${title}`,
+    meta: {
+      music: {
+        action: '',
+        android_pkg_name: config?.package ?? '',
+        app_type: 1,
+        appid: config?.appid ?? 0,
+        ctime: 0,
+        desc,
+        jumpUrl,
+        musicUrl,
+        preview,
+        sourceMsgId: '0',
+        source_icon: config?.icon ?? '',
+        source_url: '',
+        tag,
+        title,
+      },
+    },
+  };
+  return `[json:${JSON.stringify(json)}]`;
 }

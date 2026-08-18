@@ -1,4 +1,4 @@
-import { featureId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { featureId } from '@zhin.js/plugin-runtime';
 import { defineFeatureProvider, typeScriptModules } from '@zhin.js/feature-kit';
 import { AdapterIndex } from './adapter-index.js';
 import { parseAdapterDefinition } from './definition.js';
@@ -18,31 +18,18 @@ const adapterFeature = defineFeatureProvider({
   },
   runtime: {
     async project(slots, context) {
-      const index = await AdapterIndex.create(slots, context.snapshot);
-      let previousIndex: AdapterIndex | undefined;
+      const index = await AdapterIndex.create(slots, context.snapshot, context.signal);
       return {
         value: index,
         dispose: () => index.stop(),
         handoff: {
-          quiescePrevious(previous) {
-            previousIndex = previousAdapterIndex(previous);
-            return previousIndex?.close();
-          },
-          activateNext: () => index.start(),
+          activateNext: (signal) => index.activate(signal),
           deactivateNext: () => index.stop(),
-          resumePrevious() {
-            previousIndex?.open();
-          },
-          openNext: () => index.open(),
         },
       };
     },
   },
 });
-
-function previousAdapterIndex(snapshot: RuntimeSnapshot): AdapterIndex | undefined {
-  return snapshot.projections.get(adapterFeatureId) as AdapterIndex | undefined;
-}
 
 export { adapterFeature };
 export default adapterFeature;

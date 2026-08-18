@@ -144,23 +144,19 @@ context.addTool('showcase_greet', defineAgentTool<{ name?: string }>({
 
 ## 代际交接（handoff）
 
-热重载是一次「代」事务：新一代装配完成后，旧代静默、新代激活、失败则回滚。`context.handoff.add(participant)` 注册参与者，可实现的钩子：
+热重载是一次「代」事务：候选代完成所有可失败的 readiness 后，快照与准入 gate 一次原子发布；旧代在发布前始终继续服务。`context.handoff.add(participant)` 注册候选资源参与者：
 
 | 钩子 | 时机 |
 | --- | --- |
-| `quiescePrevious(previous)` | 旧代静默（如暂停接收新事件） |
-| `activateNext()` | 新代激活（如启动 endpoint、启动 cron 后的首个动作） |
+| `activateNext(signal)` | 候选资源建立连接并证明 ready；必须支持取消 |
 | `deactivateNext()` | 激活失败时回滚新代 |
-| `resumePrevious()` | 回滚后恢复旧代 |
-| `openNext()` | 事务提交后开放准入（如开始收消息） |
 
-capabilities-bot 用它解决启动时序竞争——endpoint 就绪后再推上线消息：
+例如，自定义资源必须连接成功才能允许新一代发布：
 
 ```ts
 context.handoff.add({
-  activateNext: async () => {
-    await outbound.send({ ...target, content: `${config.greeting}，capabilities-bot 已上线` });
-  },
+  activateNext: (signal) => client.connect({ signal }),
+  deactivateNext: () => client.close(),
 });
 ```
 

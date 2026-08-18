@@ -1,13 +1,17 @@
-import { Logger, formatCompact } from '@zhin.js/logger';
-import { createHttpHost, httpHostToken, type HttpHostOptions, type ScopedTokenConfig } from '@zhin.js/host-http';
+import {
+  httpHostToken,
+  type HttpHost,
+  type HttpHostOptions,
+  type ProcessHttpHost,
+  type ScopedTokenConfig,
+} from '@zhin.js/host-http';
+import { bindGenerationAdmission } from '@zhin.js/plugin-runtime';
 import {
   expandEnvironmentValue,
   type ConfigDocumentPort,
   type RootResourceInstaller,
   type RuntimeConfigDocument,
 } from '@zhin.js/runtime';
-
-const logger = new Logger(null, 'http');
 
 export async function resolveHttpConfig(
   config: RuntimeConfigDocument | ConfigDocumentPort,
@@ -31,47 +35,11 @@ export async function resolveHttpConfig(
   });
 }
 
-export function installHttpHost(options: HttpHostOptions): RootResourceInstaller {
-  return ({ resources, lifecycle, handoff }) => {
-    const host = createHttpHost(options);
-    resources.provide(httpHostToken, host);
-    lifecycle.add(() => host.close());
-    handoff.add({
-      // 新代际 listen 之前先释放旧代际的端口，否则旧 server 要等 commit 后的
-      // 异步 dispose 才关闭，listen 必中 EADDRINUSE（Console 静默消失）。
-      quiescePrevious: async (previous) => {
-        const previousHost = previous.resources
-          .get(previous.root)
-          ?.get(httpHostToken.id) as { close(): Promise<void> } | undefined;
-        await previousHost?.close();
-      },
-      activateNext: async () => {
-        try {
-          await host.listen();
-        } catch (error) {
-          // Kitchen-sink / dual-dev often already has Console on 8086.
-          // Soft-fail so Adapter + Agent Host generation can still commit.
-          if (isAddressInUse(error)) {
-            logger.warn(formatCompact({
-              op: 'http_listen_skip',
-              reason: 'eaddrinuse',
-              host: options.host ?? '127.0.0.1',
-              port: options.port ?? 8086,
-              hint: 'Console/API unavailable; IM + Agent Host still running',
-            }));
-            return;
-          }
-          throw error;
-        }
-      },
-    });
+export function installHttpHost(host: ProcessHttpHost): RootResourceInstaller {
+  return ({ resources, admission }) => {
+    const port: HttpHost = host;
+    resources.provide(httpHostToken, bindGenerationAdmission(port, admission));
   };
-}
-
-function isAddressInUse(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const code = (error as NodeJS.ErrnoException).code;
-  return code === 'EADDRINUSE';
 }
 
 function parseScopedTokens(value: unknown): readonly ScopedTokenConfig[] | undefined {

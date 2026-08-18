@@ -183,7 +183,13 @@ const commandFeature = defineFeatureProvider({
   },
   runtime: {
     project(slots, context) {
-      return { value: new CommandIndex(slots, context.snapshot) };
+      const rootConfig = context.snapshot.config.get(context.snapshot.root) as
+        | Record<string, unknown> | undefined;
+      const rawKeyword = rootConfig?.menuKeyword;
+      const menu = rawKeyword === false || rawKeyword === ''
+        ? undefined
+        : { keyword: typeof rawKeyword === 'string' ? rawKeyword : '菜单' };
+      return { value: new CommandIndex(slots, context.snapshot, menu) };
     },
   },
 });

@@ -6,10 +6,8 @@ import type { EndpointControl, EndpointInstance, EndpointSendRequest } from '@zh
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
-  formatLegacyMessageRef,
-  nativeConversationId,
-  parseLegacyMessageReference,
   type ConversationRef,
+  type MessageRef,
 } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
@@ -100,7 +98,7 @@ export class TelegramEndpoint implements EndpointInstance {
   #botUsername?: string;
   readonly #chatMemberCache = new Map<string, ChatMemberPermit>();
   readonly control: EndpointControl = Object.freeze({
-    recall: (messageId: string) => this.recallMessage(messageId),
+    recall: (message: MessageRef) => this.recallMessage(message),
   });
 
   constructor(options: TelegramEndpointOptions) {
@@ -220,17 +218,15 @@ export class TelegramEndpoint implements EndpointInstance {
         : await this.callApi<{ message_id?: number }>(action.method, action.params);
       if (result.message_id != null) lastId = String(result.message_id);
     }
-    if (!lastId) return `telegram-${Date.now()}`;
-    return formatLegacyMessageRef({ conversation, id: lastId });
+    return lastId || `telegram-${Date.now()}`;
   }
 
-  async recallMessage(messageId: string): Promise<void> {
-    if (!messageId || messageId.startsWith('telegram-')) return;
-    const reference = parseLegacyMessageReference(messageId);
-    if (!reference) return;
-    const chatId = nativeConversationId(reference.target);
-    const msgId = reference.messageId;
-    await this.callApi('deleteMessage', { chat_id: chatId, message_id: Number(msgId) });
+  async recallMessage(message: MessageRef): Promise<void> {
+    if (!message.id || message.id.startsWith('telegram-')) return;
+    await this.callApi('deleteMessage', {
+      chat_id: message.conversation.id,
+      message_id: Number(message.id),
+    });
   }
 
   /**

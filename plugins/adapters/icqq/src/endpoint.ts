@@ -8,6 +8,7 @@ import type {
   EndpointSendRequest,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageRef } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { registerIcqqAgentEndpoint } from './icqq-agent-deps.js';
@@ -113,10 +114,10 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     deleteFriend: (userId) => this.deleteFriend(userId),
   });
   readonly control: EndpointControl = Object.freeze({
-    recall: (messageId: string) => this.recallMessage(messageId),
-    addReaction: (messageId: string, emoji: string) => this.addReaction(messageId, emoji),
-    removeReaction: (messageId: string, reactionId: string) =>
-      this.removeReaction(messageId, reactionId),
+    recall: (message: MessageRef) => this.recallMessage(message.id),
+    addReaction: (message: MessageRef, emoji: string) => this.addReaction(message.id, emoji),
+    removeReaction: (message: MessageRef, reactionId: string) =>
+      this.removeReaction(message.id, reactionId),
   });
   #open = false;
   #started = false;

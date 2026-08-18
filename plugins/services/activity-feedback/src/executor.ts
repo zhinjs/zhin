@@ -60,48 +60,40 @@ export function createOutboundEndpointAccess(
       const removeReaction = outbound.removeReaction;
       const endpoint = {
         $id: endpointKey,
-        // Prefer real OutboundHost.recall when available (icqq RECALL_MSG).
-        $recallMessage: async (messageId: string) => {
-          if (outbound.recall) {
-            try {
-              await outbound.recall({ adapter: platform, endpointKey, messageId });
-              return;
-            } catch (error) {
-              logger?.debug(
-                `[ActivityFeedback] outbound recall failed (${key}):`,
-                error instanceof Error ? error.message : String(error),
-              );
-              return;
-            }
-          }
-          logger?.debug(
-            `[ActivityFeedback] recall not supported via OutboundHost (${key}, messageId=${messageId})`,
-          );
-        },
-        $addReaction: addReaction
-          ? async (
-            messageId: string,
-            emoji: string,
-            hint?: { sceneType?: 'private' | 'group' | 'channel'; channelId?: string },
-          ) => addReaction({
-            adapter: platform,
-            endpointKey,
-            messageId,
-            emoji,
-            sceneType: hint?.sceneType,
-            channelId: hint?.channelId,
-          })
-          : undefined,
-        $removeReaction: removeReaction
-          ? async (messageId: string, reactionId: string) => {
-            await removeReaction({
+        control: {
+          ...(outbound.recall ? {
+            recall: async (message: Parameters<NonNullable<typeof outbound.recall>>[0]['message']) => {
+              try {
+                await outbound.recall!({ adapter: platform, endpointKey, message });
+              } catch (error) {
+                logger?.debug(
+                  `[ActivityFeedback] outbound recall failed (${key}):`,
+                  error instanceof Error ? error.message : String(error),
+                );
+              }
+            },
+          } : {}),
+          ...(addReaction ? {
+            addReaction: async (
+              message: Parameters<typeof addReaction>[0]['message'],
+              emoji: string,
+              hint?: { sceneType?: 'private' | 'group' | 'channel'; channelId?: string },
+            ) => addReaction({
               adapter: platform,
               endpointKey,
-              messageId,
-              reactionId,
-            });
-          }
-          : undefined,
+              message,
+              emoji,
+              sceneType: hint?.sceneType,
+              channelId: hint?.channelId,
+            }),
+          } : {}),
+          ...(removeReaction ? {
+            removeReaction: async (
+              message: Parameters<typeof removeReaction>[0]['message'],
+              reactionId: string,
+            ) => removeReaction({ adapter: platform, endpointKey, message, reactionId }),
+          } : {}),
+        },
       } as EndpointWithActivityFeedback;
       const adapter = {
         sendMessage: async (options: {

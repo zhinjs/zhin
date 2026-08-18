@@ -1,8 +1,10 @@
 import {
   Scope,
   createToken,
+  generationAdmissionBinder,
   htmlRendererToken,
   type CapabilityId,
+  type GenerationAdmissionGate,
   type HtmlRendererHost,
   type PluginId,
   type RuntimeSnapshot,
@@ -15,14 +17,14 @@ import {
   AdapterIndex,
   adapterFeatureId,
   isAdapterIndex,
-  resolveEndpointControl,
+  endpointControlOf,
   resolveEndpointManagement,
   type EndpointControl,
   type EndpointManagement,
   type EndpointManagementCapability,
+  type AdapterEndpointPhase,
 } from '@zhin.js/adapter';
 import {
-  formatLegacyMessageRef,
   isDeliveryReceipt,
   type ConversationRef,
   type DeliveryReceipt,
@@ -42,6 +44,7 @@ import {
   type SendContent,
   type SendRequest,
 } from './contracts.js';
+import type { CommandPrompt } from '@zhin.js/command';
 import { defaultCommandPrefixResolver, MessageDispatcher } from './message-dispatcher.js';
 import { OutboundRenderer } from './outbound-renderer.js';
 import {
@@ -113,11 +116,20 @@ export interface ImRuntimeOptions {
   ) => MessageSenderRef | undefined;
 }
 
+interface PromptClaim {
+  readonly resolve: (raw: string) => void;
+  readonly reject: (error: Error) => void;
+  readonly timer: ReturnType<typeof setTimeout>;
+}
+
 export class ImRuntime implements MessageGateway {
   readonly #dispatcher: MessageDispatcher;
   readonly #renderer: OutboundRenderer;
   readonly #messageListeners = new Set<(event: RuntimeMessageEvent) => void>();
-  readonly #interactiveHandlers: RegisteredRuntimeInteractiveHandler[] = [];
+  readonly #interactiveHandlers: Array<RegisteredRuntimeInteractiveHandler & {
+    readonly admission?: GenerationAdmissionGate;
+  }> = [];
+  readonly #promptClaims = new Map<string, PromptClaim>();
   #snapshots?: SnapshotReader;
   readonly #inboundClaim?: ImRuntimeOptions['inboundClaim'];
   readonly #enrichSender?: ImRuntimeOptions['enrichSender'];
@@ -149,17 +161,160 @@ export class ImRuntime implements MessageGateway {
     resources.provide(messageBusToken, this.messageBus);
   }
 
+  [generationAdmissionBinder](gate: GenerationAdmissionGate): MessageGateway {
+    const gateway: MessageGateway = {
+      receive: async (input: IncomingMessage) => gate.enter(() => this.#receive(input, gate))
+        ?? Object.freeze({ matched: false }),
+      send: async (request: SendRequest) => gate.enter(() => this.send(request))
+        ?? failedReceipt('generation_not_admitted'),
+      registerInteractiveHandler: (prefix, handler) =>
+        this.#registerInteractiveHandler(prefix, handler, gate),
+    };
+    return Object.freeze(gateway);
+  }
+
   /**
    * 注册 interactive action 回跳 handler（prefix 最长匹配；返回注销函数）。
    * 在 Command dispatch 之前路由：action 段 / 数字回跳 / 指令预填 payload。
    */
   registerInteractiveHandler(prefix: string, handler: RuntimeInteractiveHandler): () => void {
-    const entry: RegisteredRuntimeInteractiveHandler = Object.freeze({ prefix, handler });
+    return this.#registerInteractiveHandler(prefix, handler);
+  }
+
+  #registerInteractiveHandler(
+    prefix: string,
+    handler: RuntimeInteractiveHandler,
+    admission?: GenerationAdmissionGate,
+  ): () => void {
+    const entry = Object.freeze({ prefix, handler, admission });
     this.#interactiveHandlers.push(entry);
     return () => {
       const index = this.#interactiveHandlers.indexOf(entry);
       if (index >= 0) this.#interactiveHandlers.splice(index, 1);
     };
+  }
+
+  // ==========================================================================
+  // Prompt claim — 命令对话式交互
+  // ==========================================================================
+
+  #promptConversationKey(message: Message): string {
+    const conv = message.conversation;
+    return `${conv.endpoint.adapter}:${conv.endpoint.id}:${conv.kind}:${conv.id}:${message.sender?.id ?? ''}`;
+  }
+
+  #resolvePromptClaim(message: Message): boolean {
+    const key = this.#promptConversationKey(message);
+    const claim = this.#promptClaims.get(key);
+    if (!claim) return false;
+    this.#promptClaims.delete(key);
+    clearTimeout(claim.timer);
+    claim.resolve(message.content);
+    return true;
+  }
+
+  #claimNextMessage(message: Message, timeout: number, timeoutText: string): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      const key = this.#promptConversationKey(message);
+      const existing = this.#promptClaims.get(key);
+      if (existing) {
+        clearTimeout(existing.timer);
+        existing.reject(new Error('Prompt superseded'));
+      }
+      const timer = setTimeout(() => {
+        this.#promptClaims.delete(key);
+        reject(new Error(timeoutText));
+      }, timeout);
+      this.#promptClaims.set(key, { resolve, reject, timer });
+    });
+  }
+
+  #buildCommandPrompt(message: Message): CommandPrompt {
+    const DEFAULT_TIMEOUT = 3 * 60 * 1000;
+    const DEFAULT_TIMEOUT_TEXT = '输入超时';
+    const claim = (timeout: number, timeoutText: string) =>
+      this.#claimNextMessage(message, timeout, timeoutText);
+    const reply = (content: string) => message.$reply(content);
+
+    return {
+      async text(tips, options) {
+        await reply(tips);
+        try {
+          return await claim(options?.timeout ?? DEFAULT_TIMEOUT, options?.timeoutText ?? DEFAULT_TIMEOUT_TEXT);
+        } catch (e) {
+          if (options?.default !== undefined) return options.default;
+          await reply((e as Error).message);
+          throw e;
+        }
+      },
+      async number(tips, options) {
+        await reply(tips);
+        try {
+          const raw = await claim(options?.timeout ?? DEFAULT_TIMEOUT, options?.timeoutText ?? DEFAULT_TIMEOUT_TEXT);
+          return +raw;
+        } catch (e) {
+          if (options?.default !== undefined) return options.default;
+          await reply((e as Error).message);
+          throw e;
+        }
+      },
+      async confirm(tips, options) {
+        const condition = options?.condition ?? 'yes';
+        await reply(`${tips}\n输入"${condition}"以确认`);
+        try {
+          const raw = await claim(options?.timeout ?? DEFAULT_TIMEOUT, options?.timeoutText ?? DEFAULT_TIMEOUT_TEXT);
+          return raw === condition;
+        } catch (e) {
+          if (options?.default !== undefined) return options.default;
+          await reply((e as Error).message);
+          throw e;
+        }
+      },
+      async list(tips, options) {
+        const separator = options?.separator ?? ',';
+        await reply(`${tips}\n值之间使用"${separator}"分隔`);
+        try {
+          const raw = await claim(options?.timeout ?? DEFAULT_TIMEOUT, options?.timeoutText ?? DEFAULT_TIMEOUT_TEXT);
+          const type = options?.type ?? 'text';
+          return raw.split(separator).map((v) => {
+            if (type === 'number') return +v;
+            if (type === 'boolean') return v === 'true';
+            return v;
+          });
+        } catch (e) {
+          if (options?.default !== undefined) return options.default;
+          await reply((e as Error).message);
+          throw e;
+        }
+      },
+      async pick(tips, options) {
+        const items = options.options.map((o, i) => `${i + 1}.${o.label}`);
+        const separator = options.separator ?? ',';
+        if (options.multiple) items.push(`多选请用"${separator}"分隔`);
+        await reply(`${tips}\n${items.join('\n')}`);
+        try {
+          const raw = await claim(options.timeout ?? DEFAULT_TIMEOUT, options.timeoutText ?? DEFAULT_TIMEOUT_TEXT);
+          if (!options.multiple) {
+            return options.options.find((_, i) => i + 1 === +raw)?.value as never;
+          }
+          const indices = raw.split(separator).map(Number);
+          return options.options
+            .filter((_, i) => indices.includes(i + 1))
+            .map((o) => o.value) as never;
+        } catch (e) {
+          if (options.default !== undefined) return options.default as never;
+          await reply((e as Error).message);
+          throw e;
+        }
+      },
+    };
+  }
+
+  #createPromptForSource(source: unknown): CommandPrompt | undefined {
+    if (!source || typeof source !== 'object') return undefined;
+    const msg = source as Message;
+    if (typeof msg.$reply !== 'function' || !msg.conversation) return undefined;
+    return this.#buildCommandPrompt(msg);
   }
 
   /**
@@ -182,6 +337,13 @@ export class ImRuntime implements MessageGateway {
   }
 
   async receive(input: IncomingMessage): Promise<MessageDispatchResult> {
+    return this.#receive(input);
+  }
+
+  async #receive(
+    input: IncomingMessage,
+    admission?: GenerationAdmissionGate,
+  ): Promise<MessageDispatchResult> {
     const lease = this.#acquire();
     let active = true;
     try {
@@ -233,13 +395,16 @@ export class ImRuntime implements MessageGateway {
       const claimed = await this.#inboundClaim?.(message) === true;
       if (claimed) {
         result = Object.freeze({ matched: true, command: 'interaction', owner: requester });
+      } else if (this.#resolvePromptClaim(message)) {
+        result = Object.freeze({ matched: true, command: 'prompt', owner: requester });
       } else {
+        const promptFactory = (source: unknown) => this.#createPromptForSource(source);
         await runMiddleware(
           lease.value,
           message,
           async () => {
-            result = await this.#dispatchInteractive(message, requester)
-              ?? await this.#dispatcher.dispatch(message, lease.value);
+            result = await this.#dispatchInteractive(message, requester, admission)
+              ?? await this.#dispatcher.dispatch(message, lease.value, promptFactory);
             const ingressRoute = resolveIngressRoute(lease.value);
             if (!result.matched && ingressRoute) {
               logger.debug(formatCompact({ op: 'unmatched', conv: formatConversationLog(conversation) }));
@@ -290,7 +455,7 @@ export class ImRuntime implements MessageGateway {
     readonly owner: string;
     readonly connected: boolean;
     readonly status: 'online' | 'offline';
-    readonly phase: 'pending' | 'starting' | 'online' | 'failed' | 'unconfigured';
+    readonly phase: AdapterEndpointPhase;
     readonly managementCapabilities: readonly EndpointManagementCapability[];
   }[] {
     try {
@@ -351,7 +516,7 @@ export class ImRuntime implements MessageGateway {
     readonly adapter: string;
     readonly connected: boolean;
     readonly status: 'online' | 'offline';
-    readonly phase: 'pending' | 'starting' | 'online' | 'failed' | 'unconfigured';
+    readonly phase: AdapterEndpointPhase;
     readonly managementCapabilities: readonly EndpointManagementCapability[];
   } | null {
     try {
@@ -412,50 +577,50 @@ export class ImRuntime implements MessageGateway {
   async addEndpointReaction(input: {
     readonly adapter: string;
     readonly endpointKey: string;
-    readonly message?: MessageRef;
-    readonly messageId?: string;
+    readonly message: MessageRef;
     readonly emoji: string;
     readonly sceneType?: string;
     readonly channelId?: string;
   }): Promise<string | null> {
-    const control = this.#liveEndpointControl(input.adapter, input.endpointKey);
-    return control?.addReaction?.(legacyMessageTarget(input.message, input.messageId), input.emoji, {
-      sceneType: input.sceneType,
-      channelId: input.channelId,
-    }) ?? null;
+    return this.#withEndpointControl(input.adapter, input.endpointKey, (control) =>
+      control.addReaction?.(input.message, input.emoji, {
+        sceneType: input.sceneType,
+        channelId: input.channelId,
+      }) ?? null, null);
   }
 
   async removeEndpointReaction(input: {
     readonly adapter: string;
     readonly endpointKey: string;
-    readonly message?: MessageRef;
-    readonly messageId?: string;
+    readonly message: MessageRef;
     readonly reactionId: string;
   }): Promise<void> {
-    await this.#liveEndpointControl(input.adapter, input.endpointKey)
-      ?.removeReaction?.(legacyMessageTarget(input.message, input.messageId), input.reactionId);
+    await this.#withEndpointControl(input.adapter, input.endpointKey, (control) =>
+      control.removeReaction?.(
+        input.message,
+        input.reactionId,
+      ), undefined);
   }
 
   /** Activity-feedback autoRemove: recall a previously sent status message. */
   async recallEndpointMessage(input: {
     readonly adapter: string;
     readonly endpointKey: string;
-    readonly message?: MessageRef;
-    readonly messageId?: string;
+    readonly message: MessageRef;
   }): Promise<void> {
-    await this.#liveEndpointControl(input.adapter, input.endpointKey)
-      ?.recall?.(legacyMessageTarget(input.message, input.messageId));
+    await this.#withEndpointControl(input.adapter, input.endpointKey, (control) =>
+      control.recall?.(input.message), undefined);
   }
 
   async editEndpointMessage(input: {
     readonly adapter: string;
     readonly endpointKey: string;
-    readonly message?: MessageRef;
-    readonly messageId?: string;
+    readonly message: MessageRef;
     readonly content: unknown;
   }): Promise<string | null> {
-    return this.#liveEndpointControl(input.adapter, input.endpointKey)
-      ?.edit?.(legacyMessageTarget(input.message, input.messageId), input.content) ?? null;
+    return this.#withEndpointControl(input.adapter, input.endpointKey, (control) =>
+      control.edit?.(input.message, input.content) ?? null,
+    null);
   }
 
   async setEndpointTyping(input: {
@@ -464,38 +629,50 @@ export class ImRuntime implements MessageGateway {
     readonly conversation: ConversationRef;
     readonly active?: boolean;
   }): Promise<void> {
-    await this.#liveEndpointControl(input.adapter, input.endpointKey)
-      ?.typing?.(input.conversation, input.active);
+    await this.#withEndpointControl(input.adapter, input.endpointKey, (control) =>
+      control.typing?.(input.conversation, input.active), undefined);
   }
 
-  #liveEndpoint(adapter: string, endpointKey: string): unknown | null {
+  async #withEndpointControl<T>(
+    adapter: string,
+    endpointKey: string,
+    run: (control: EndpointControl) => T | Promise<T>,
+    fallback: T,
+  ): Promise<T> {
+    let lease: SnapshotLease;
     try {
-      const lease = this.#acquire();
-      try {
-        const endpoint = requireAdapters(lease.value).instance(adapter, endpointKey);
-        return endpoint ?? null;
-      } finally {
-        lease.release();
-      }
+      lease = this.#acquire();
     } catch {
-      return null;
+      return fallback;
+    }
+    try {
+      const endpoint = requireAdapters(lease.value).instance(adapter, endpointKey);
+      const control = endpointControlOf(endpoint);
+      return control ? await run(control) : fallback;
+    } finally {
+      lease.release();
     }
   }
 
-  #liveEndpointControl(adapter: string, endpointKey: string): EndpointControl | null {
-    const endpoint = this.#liveEndpoint(adapter, endpointKey);
-    return resolveEndpointControl(endpoint) ?? null;
-  }
-
-  /**
-   * Narrow Host seam for Console social/group management. An empty object means
-   * the Endpoint exists but implements no management operations; null means it
-   * cannot be resolved.
-   */
-  getEndpointManagement(adapter: string, endpointKey: string): EndpointManagement | null {
-    const endpoint = this.#liveEndpoint(adapter, endpointKey);
-    if (!endpoint) return null;
-    return resolveEndpointManagement(endpoint) ?? Object.freeze({});
+  /** Run one management operation while the Endpoint generation stays leased. */
+  async withEndpointManagement<T>(
+    adapter: string,
+    endpointKey: string,
+    run: (management: EndpointManagement) => T | Promise<T>,
+  ): Promise<T | null> {
+    let lease: SnapshotLease;
+    try {
+      lease = this.#acquire();
+    } catch {
+      return null;
+    }
+    try {
+      const endpoint = requireAdapters(lease.value).instance(adapter, endpointKey);
+      if (!endpoint) return null;
+      return await run(resolveEndpointManagement(endpoint) ?? Object.freeze({}));
+    } finally {
+      lease.release();
+    }
   }
 
   async #sendWithSnapshot(
@@ -581,11 +758,15 @@ export class ImRuntime implements MessageGateway {
   async #dispatchInteractive(
     message: Message,
     requester: PluginId,
+    admission?: GenerationAdmissionGate,
   ): Promise<MessageDispatchResult | undefined> {
     if (this.#interactiveHandlers.length === 0) return undefined;
     const payload = resolveRuntimeInteractivePayload(message);
     if (!payload) return undefined;
-    const handler = findRuntimeInteractiveHandler(this.#interactiveHandlers, payload);
+    const handler = findRuntimeInteractiveHandler(
+      this.#interactiveHandlers.filter((entry) => !entry.admission || entry.admission === admission),
+      payload,
+    );
     if (!handler) return undefined;
     const handled = await handler(message);
     return handled
@@ -626,12 +807,6 @@ function resolveHtmlRenderer(snapshot: RuntimeSnapshot): HtmlRendererHost | unde
 function isDirectHtmlConsumer(snapshot: RuntimeSnapshot, adapter: CapabilityId): boolean {
   const owner = snapshot.capabilities.get(adapter)?.owner;
   return adapterTypeName(snapshot.tree.get(owner as PluginId)?.packageName) === 'sandbox';
-}
-
-function legacyMessageTarget(message?: MessageRef, messageId?: string): string {
-  if (message) return formatLegacyMessageRef(message);
-  if (messageId) return messageId;
-  throw new TypeError('message or messageId is required');
 }
 
 async function prepareOutboundPayload(

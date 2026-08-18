@@ -145,7 +145,8 @@
     "export * from './shared-lifetime.js';",
     "export * from './snapshot.js';",
     "export * from './system-log.js';",
-    "export * from './token.js';"
+    "export * from './token.js';",
+    "export{GenerationAdmissionGate,bindGenerationAdmission,createGenerationAdmissionGate,generationAdmissionBinder,generationAdmissionSource,type GenerationAdmissionBindable,type GenerationAdmissionSource,}from './admission.js';"
   ],
   "runtime": [
     "export * from './compatibility.js';",

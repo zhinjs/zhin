@@ -25,11 +25,8 @@ describe('Feature projection handoff', () => {
             value: current,
             dispose: () => { events.push(`dispose:${current}`); },
             handoff: {
-              quiescePrevious(previous) { events.push(`quiesce:${previous.generation}`); },
               activateNext() { events.push(`activate:${current}`); },
               deactivateNext() { events.push(`deactivate:${current}`); },
-              resumePrevious() { events.push(`resume:${current - 1}`); },
-              openNext() { events.push(`open:${current}`); },
             },
           };
         },
@@ -42,10 +39,7 @@ describe('Feature projection handoff', () => {
 
     expect(events).toEqual([
       'activate:1',
-      'open:1',
-      'quiesce:1',
       'activate:2',
-      'open:2',
     ]);
     oldLease.release();
     await Promise.resolve();
@@ -68,13 +62,10 @@ describe('Feature projection handoff', () => {
             value: current,
             dispose: () => { events.push(`dispose:${current}`); },
             handoff: {
-              quiescePrevious() { events.push(`quiesce:${current - 1}`); },
               activateNext() {
                 events.push(`activate:${current}`);
                 if (current === 2) throw new Error('bind failed');
               },
-              resumePrevious() { events.push(`resume:${current - 1}`); },
-              openNext() { events.push(`open:${current}`); },
             },
           };
         },
@@ -91,10 +82,7 @@ describe('Feature projection handoff', () => {
     expect(controller.generation).toBe(1);
     expect(events).toEqual([
       'activate:1',
-      'open:1',
-      'quiesce:1',
       'activate:2',
-      'resume:1',
       'dispose:2',
     ]);
     await controller.stop();
@@ -106,7 +94,11 @@ async function prepare(
   generation: number,
 ): Promise<PreparedGeneration> {
   const { projections: _projections, ...base } = emptyState();
-  const projected = await new FeatureProjector([provider]).project(generation, base);
+  const projected = await new FeatureProjector([provider]).project(
+    generation,
+    base,
+    new AbortController().signal,
+  );
   const disposers = new DisposeStack();
   for (const dispose of projected.disposers.values()) disposers.add(dispose);
   return {

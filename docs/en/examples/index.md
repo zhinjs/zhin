@@ -81,7 +81,7 @@ After startup:
 
 - Console at `http://127.0.0.1:18099` (token `capabilities-dev-token`); the plugins page shows the `Capabilities Bot` card
 - `whoami` / `stats` commands are registered (the latter demonstrates database counting)
-- Heartbeat scheduled task logs a line every 5 minutes; when `pushOnBoot: true`, it sends a boot-up message to the Sandbox private chat
+- Heartbeat scheduled task logs a line every 5 minutes
 
 See that directory's `README.md` for a side-by-side breakdown of capabilities and code.
 

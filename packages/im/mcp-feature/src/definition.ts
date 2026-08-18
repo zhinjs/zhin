@@ -9,7 +9,7 @@ export interface McpToolDescriptor {
 }
 
 export interface McpClientInstance {
-  start?(): void | Promise<void>;
+  start?(signal: AbortSignal): void | Promise<void>;
   stop?(): void | Promise<void>;
   listTools(): readonly McpToolDescriptor[] | Promise<readonly McpToolDescriptor[]>;
   callTool(name: string, input: unknown): unknown | Promise<unknown>;

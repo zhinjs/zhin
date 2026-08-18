@@ -4,6 +4,7 @@ export {
   REMOTE_CONSOLE_ORIGIN,
   type HttpHandler,
   type HttpHost,
+  type ProcessHttpHost,
   type HttpHostAddress,
   type HttpHostOptions,
   type HttpRouteRegistration,

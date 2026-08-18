@@ -1,7 +1,7 @@
 ---
-'@zhin.js/agent': major
-'@zhin.js/ai': major
-'@zhin.js/core': major
+'@zhin.js/agent': patch
+'@zhin.js/ai': patch
+'@zhin.js/core': patch
 '@zhin.js/cli': patch
 ---
 

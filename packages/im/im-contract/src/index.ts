@@ -37,11 +37,6 @@ export interface MessageRef {
   readonly id: string;
 }
 
-/** A bridge input that accepts either a structured reference or legacy string. */
-export type ConversationTarget = ConversationRef | string;
-/** A bridge input that accepts either a structured reference or legacy string. */
-export type MessageTarget = MessageRef | string;
-
 export type EndpointOperation = 'send' | 'recall' | 'edit' | 'reaction' | 'typing';
 
 /**
@@ -181,35 +176,4 @@ export function supportsEndpointOperation(
 ): boolean {
   if (operation === 'send') return capabilities.outbound;
   return capabilities.operations?.[operation] === true;
-}
-
-/**
- * classic 端点上的遗留控制面方法集（`$` 前缀 / 无前缀协议方法）。
- *
- * 该面只服务存量 classic 端点：`@zhin.js/adapter` 的 `resolveEndpointControl`
- * 把它适配为 canonical `EndpointControl` 端口，调用方一律走 canonical 端口。
- * 新端点必须直接实现 `control`，不得再新增这些方法。
- *
- * 下线条件：classic Plugin 轨（`@zhin.js/core` 的 `Adapter`/`Endpoint`）随
- * Plugin Runtime 全量切换下线后，本接口与迁移桥一并删除。
- */
-export interface LegacyEndpointControlSurface {
-  recallMessage?(messageId: string): Promise<void>;
-  $recallMessage?(messageId: string): Promise<void>;
-  editMessage?(messageId: string, content: unknown): Promise<string | null>;
-  $editMessage?(messageId: string, content: unknown): Promise<string | null>;
-  addReaction?(
-    messageId: string,
-    emoji: string,
-    hint?: { readonly sceneType?: string; readonly channelId?: string },
-  ): Promise<string | null>;
-  $addReaction?(
-    messageId: string,
-    emoji: string,
-    hint?: { readonly sceneType?: string; readonly channelId?: string },
-  ): Promise<string | null>;
-  removeReaction?(messageId: string, reactionId: string): Promise<void>;
-  $removeReaction?(messageId: string, reactionId: string): Promise<void>;
-  typing?(target: string, active?: boolean): Promise<void>;
-  $typing?(target: string, active?: boolean): Promise<void>;
 }

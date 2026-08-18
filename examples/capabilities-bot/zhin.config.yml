@@ -15,14 +15,6 @@ database:
 plugin:
   greeting: 你好呀
   heartbeatCron: "0 */5 * * * *"
-  pushOnBoot: true
-  pushTarget:
-    adapter: sandbox
-    endpointKey: sandbox-bot
-    conversation:
-      kind: private
-      id: sandbox-user
-
 plugins:
   sandbox:
     endpoints:

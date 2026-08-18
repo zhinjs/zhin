@@ -56,7 +56,9 @@ export class SubtreeGenerationPreparer {
   async prepare(
     current: RuntimeSnapshot,
     roots: readonly PluginId[],
+    signal: AbortSignal,
   ): Promise<PreparedRuntimeGeneration> {
+    signal.throwIfAborted();
     const nodes = indexGraph(this.graph);
     assertCompatibleTopology(indexGraph(this.model.graph), nodes, roots);
     const plugins = new PluginScopeAssembler(
@@ -82,7 +84,7 @@ export class SubtreeGenerationPreparer {
       for (const root of roots) {
         const node = nodes.get(root);
         if (!node) throw new SubtreeTopologyChangedError(`Missing subtree root: ${root}`);
-        await plugins.setupTree(node);
+        await plugins.setupTree(node, signal);
       }
 
       const capabilities = new Map(current.capabilities);
@@ -101,6 +103,7 @@ export class SubtreeGenerationPreparer {
           .filter((root) => roots.some((owner) => isWithin(root.owner, owner)));
         if (affectedRoots.length === 0) continue;
         const slots = await discovery.discover(provider, affectedRoots);
+        signal.throwIfAborted();
         for (const slot of slots) addCapabilitySlot(capabilities, slot);
       }
 
@@ -113,6 +116,7 @@ export class SubtreeGenerationPreparer {
           resources: plugins.resources,
           capabilities,
         },
+        signal,
       );
       for (const [feature, dispose] of projected.disposers) {
         projectionDisposers.set(feature, dispose);

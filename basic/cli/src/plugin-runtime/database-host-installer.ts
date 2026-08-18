@@ -351,8 +351,10 @@ export function installDatabaseHost(host: DatabaseHost): RootResourceInstaller {
     // Host 是进程级共享资源：不能随世代 dispose / 回滚 stop（旧世代仍在用）。
     // start 幂等，stop 由进程退出路径（start-command control.stop）统一触发。
     handoff.add({
-      activateNext: async () => {
+      activateNext: async (signal) => {
+        signal.throwIfAborted();
         await host.start();
+        signal.throwIfAborted();
       },
     });
   };

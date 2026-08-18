@@ -5,9 +5,14 @@ import {
   type ServerResponse,
 } from 'node:http';
 import type { Socket } from 'node:net';
-import { WebSocketServer, type WebSocket } from 'ws';
+import { WebSocket, WebSocketServer } from 'ws';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { createToken } from '@zhin.js/plugin-runtime';
+import {
+  createToken,
+  generationAdmissionBinder,
+  type GenerationAdmissionBindable,
+  type GenerationAdmissionGate,
+} from '@zhin.js/plugin-runtime';
 import {
   TokenRegistry,
   extractBearerToken,
@@ -74,7 +79,7 @@ export interface HttpRouteRegistration {
   (): void;
 }
 
-export interface HttpHost {
+export interface HttpHost extends GenerationAdmissionBindable<HttpHost> {
   ws(path: string): WsHandle;
   route(
     method: string,
@@ -83,10 +88,13 @@ export interface HttpHost {
     meta?: RouteMeta,
   ): HttpRouteRegistration;
   listRoutes(): readonly ListedRoute[];
-  listen(): Promise<HttpHostAddress>;
-  close(): Promise<void>;
   get address(): HttpHostAddress | undefined;
   get tokenRegistry(): TokenRegistry;
+}
+
+export interface ProcessHttpHost extends HttpHost {
+  listen(): Promise<HttpHostAddress>;
+  close(): Promise<void>;
 }
 
 interface HttpRoute {
@@ -96,11 +104,17 @@ interface HttpRoute {
   readonly prefix: boolean;
   readonly handler: HttpHandler;
   readonly meta?: RouteMeta;
+  readonly admission?: GenerationAdmissionGate;
+}
+
+interface WsRoute {
+  readonly listener: (connection: WsConnection) => void;
+  readonly admission?: GenerationAdmissionGate;
 }
 
 export const httpHostToken = createToken<HttpHost>('zhin.host.http');
 
-export function createHttpHost(options: HttpHostOptions = {}): HttpHost {
+export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
   const host = options.host ?? '127.0.0.1';
   const port = options.port ?? 8086;
   const apiBase = normalizePath(options.apiBase ?? '/api');
@@ -114,10 +128,11 @@ export function createHttpHost(options: HttpHostOptions = {}): HttpHost {
     primaryToken: options.token,
     scopedTokens: options.tokens,
   } satisfies TokenRegistryConfig);
-  const wsRoutes = new Map<string, Set<(connection: WsConnection) => void>>();
+  const wsRoutes = new Map<string, Set<WsRoute>>();
   const httpRoutes: HttpRoute[] = [];
   let address: HttpHostAddress | undefined;
   let closed = false;
+  let closeResult: Promise<void> | undefined;
 
   const server: Server = createServer((request, response) => {
     void dispatchHttp(request, response);
@@ -176,7 +191,12 @@ export function createHttpHost(options: HttpHostOptions = {}): HttpHost {
     }
     const pathname = upgradePath(request.url);
     const listeners = wsRoutes.get(pathname);
-    if (!listeners || listeners.size === 0) {
+    const admitted = listeners ? [...listeners].flatMap((entry) => {
+      const release = entry.admission?.acquire();
+      if (entry.admission && !release) return [];
+      return [{ entry, release }];
+    }) : [];
+    if (admitted.length === 0) {
       logger.debug(formatCompact({ op: 'ws_upgrade_unmatched', path: pathname }));
       socket.destroy();
       return;
@@ -185,18 +205,39 @@ export function createHttpHost(options: HttpHostOptions = {}): HttpHost {
     if (!auth.ok) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
+      for (const item of admitted) item.release?.();
       return;
     }
     try {
       wss.handleUpgrade(request, socket, head, (ws) => {
+        let settled = false;
+        const retireSubscriptions: Array<() => void> = [];
+        const releaseAdmissions = () => {
+          if (settled) return;
+          settled = true;
+          for (const dispose of retireSubscriptions) dispose();
+          for (const item of admitted) item.release?.();
+        };
+        ws.once('close', releaseAdmissions);
+        ws.once('error', releaseAdmissions);
+        for (const item of admitted) {
+          if (item.entry.admission) {
+            retireSubscriptions.push(item.entry.admission.onDeactivate(() => {
+              if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+              ws.close(1012, 'Generation retired');
+              }
+            }));
+          }
+        }
         const connection = Object.freeze({
           socket: ws,
           request,
           authScope: auth.scope,
         });
-        for (const listener of listeners) listener(connection);
+        for (const item of admitted) item.entry.listener(connection);
       });
     } catch (err) {
+      for (const item of admitted) item.release?.();
       logger.warn(formatCompact({
         op: 'ws_upgrade_failed',
         path: pathname,
@@ -275,7 +316,28 @@ export function createHttpHost(options: HttpHostOptions = {}): HttpHost {
       if (corsOk && origin) applyCors(response, origin, corsOrigins);
       response.setHeader('X-Content-Type-Options', 'nosniff');
       response.setHeader('X-Frame-Options', 'SAMEORIGIN');
+      const release = route.admission?.acquire();
+      if (route.admission && !release) {
+        response.writeHead(503);
+        response.end();
+        return;
+      }
+      if (!release) {
+        await route.handler(request, response, url, auth.scope);
+        return;
+      }
+      let released = false;
+      const releaseResponse = () => {
+        if (released) return;
+        released = true;
+        response.off('finish', releaseResponse);
+        response.off('close', releaseResponse);
+        release();
+      };
+      response.once('finish', releaseResponse);
+      response.once('close', releaseResponse);
       await route.handler(request, response, url, auth.scope);
+      if (response.writableFinished || response.destroyed) releaseResponse();
     } catch (err) {
       // 统一把请求体错误（400/413）映射回对应状态码，
       // 避免个别端点未捕获时退化成 500 空响应。
@@ -322,62 +384,96 @@ export function createHttpHost(options: HttpHostOptions = {}): HttpHost {
   }
 
   function listListedRoutes(): readonly ListedRoute[] {
-    return Object.freeze(httpRoutes.map((route) => Object.freeze({
-      method: route.method,
-      pattern: route.pattern,
-      meta: route.meta,
-    })));
+    return Object.freeze(httpRoutes
+      .filter((route) => !route.admission || route.admission.active)
+      .map((route) => Object.freeze({
+        method: route.method,
+        pattern: route.pattern,
+        meta: route.meta,
+      })));
   }
 
-  return {
-    ws(pathname: string): WsHandle {
-      const normalized = normalizePath(pathname);
-      let listeners = wsRoutes.get(normalized);
-      if (!listeners) {
-        listeners = new Set();
-        wsRoutes.set(normalized, listeners);
-      }
-      const owned = new Set<(connection: WsConnection) => void>();
-      return {
-        onConnection(listener) {
-          listeners!.add(listener);
-          owned.add(listener);
-          return () => {
-            listeners!.delete(listener);
-            owned.delete(listener);
-          };
-        },
-        close() {
-          for (const listener of owned) listeners!.delete(listener);
-          owned.clear();
-        },
-      };
-    },
+  function registerWs(
+    pathname: string,
+    admission?: GenerationAdmissionGate,
+  ): WsHandle {
+    const normalized = normalizePath(pathname);
+    let listeners = wsRoutes.get(normalized);
+    if (!listeners) {
+      listeners = new Set();
+      wsRoutes.set(normalized, listeners);
+    }
+    const owned = new Set<WsRoute>();
+    return {
+      onConnection(listener) {
+        const entry = Object.freeze({ listener, admission });
+        listeners!.add(entry);
+        owned.add(entry);
+        return () => {
+          listeners!.delete(entry);
+          owned.delete(entry);
+        };
+      },
+      close() {
+        for (const entry of owned) listeners!.delete(entry);
+        owned.clear();
+      },
+    };
+  }
 
-    route(
-      method: string,
-      path: string,
-      handler: HttpHandler,
-      meta?: RouteMeta,
-    ): HttpRouteRegistration {
-      const normalizedMethod = method.toUpperCase();
-      const prefix = path.endsWith('/*');
-      const normalizedPath = normalizePath(prefix ? path.slice(0, -2) : path);
-      const pattern = prefix ? `${normalizedPath}/*` : normalizedPath;
-      const entry: HttpRoute = Object.freeze({
-        method: normalizedMethod,
-        path: normalizedPath,
-        pattern,
-        prefix,
+  function registerRoute(
+    method: string,
+    path: string,
+    handler: HttpHandler,
+    meta?: RouteMeta,
+    admission?: GenerationAdmissionGate,
+  ): HttpRouteRegistration {
+    const normalizedMethod = method.toUpperCase();
+    const prefix = path.endsWith('/*');
+    const normalizedPath = normalizePath(prefix ? path.slice(0, -2) : path);
+    const pattern = prefix ? `${normalizedPath}/*` : normalizedPath;
+    const entry: HttpRoute = Object.freeze({
+      method: normalizedMethod,
+      path: normalizedPath,
+      pattern,
+      prefix,
+      handler,
+      meta,
+      admission,
+    });
+    httpRoutes.push(entry);
+    return () => {
+      const index = httpRoutes.indexOf(entry);
+      if (index >= 0) httpRoutes.splice(index, 1);
+    };
+  }
+
+  function createBoundHost(
+    admission: GenerationAdmissionGate,
+  ): HttpHost {
+    const bound: HttpHost = {
+      [generationAdmissionBinder]: (next) => createBoundHost(next),
+      ws: (path) => registerWs(path, admission),
+      route: (method, path, handler, meta) => registerRoute(
+        method,
+        path,
         handler,
         meta,
-      });
-      httpRoutes.push(entry);
-      return () => {
-        const index = httpRoutes.indexOf(entry);
-        if (index >= 0) httpRoutes.splice(index, 1);
-      };
-    },
+        admission,
+      ),
+      listRoutes: () => listListedRoutes(),
+      get address() { return runtime.address; },
+      get tokenRegistry() { return tokenRegistry; },
+    };
+    return Object.freeze(bound);
+  }
+
+  const runtime: ProcessHttpHost = {
+    [generationAdmissionBinder]: (admission) => createBoundHost(admission),
+
+    ws: (pathname) => registerWs(pathname),
+
+    route: (method, path, handler, meta) => registerRoute(method, path, handler, meta),
 
     listRoutes(): readonly ListedRoute[] {
       return listListedRoutes();
@@ -418,16 +514,17 @@ export function createHttpHost(options: HttpHostOptions = {}): HttpHost {
     },
 
     close(): Promise<void> {
-      if (closed) return Promise.resolve();
+      if (closeResult) return closeResult;
       closed = true;
       wsRoutes.clear();
       httpRoutes.length = 0;
       // Rollback paths dispose a host whose generation never reached listen().
       if (!server.listening) {
         address = undefined;
-        return Promise.resolve();
+        closeResult = Promise.resolve();
+        return closeResult;
       }
-      return new Promise((resolve, reject) => {
+      closeResult = new Promise((resolve, reject) => {
         // Long-lived connections (SSE, keep-alive, WS) never end on their own:
         // destroy tracked sockets and terminate WS clients before close(),
         // otherwise the close callbacks would never fire.
@@ -450,8 +547,10 @@ export function createHttpHost(options: HttpHostOptions = {}): HttpHost {
           });
         });
       });
+      return closeResult;
     },
   };
+  return runtime;
 }
 
 function requiresHttpAuth(
@@ -507,6 +606,7 @@ function matchHttpRoute(routes: readonly HttpRoute[], method: string, pathname: 
   let best: HttpRoute | undefined;
   let bestLength = -1;
   for (const route of routes) {
+    if (route.admission && !route.admission.active) continue;
     if (route.method !== method && route.method !== 'ALL') continue;
     if (route.prefix) {
       const matches = route.path === '/'

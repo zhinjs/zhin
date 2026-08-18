@@ -2,6 +2,15 @@
 export * from './capability.js';
 export * from './dispose.js';
 export * from './identity.js';
+export {
+  GenerationAdmissionGate,
+  bindGenerationAdmission,
+  createGenerationAdmissionGate,
+  generationAdmissionBinder,
+  generationAdmissionSource,
+  type GenerationAdmissionBindable,
+  type GenerationAdmissionSource,
+} from './admission.js';
 export * from './generation-store.js';
 export * from './handoff.js';
 /** @public 用户侧创作面：`definePlugin`（`plugin.ts` 约定入口，承诺 semver）。 */

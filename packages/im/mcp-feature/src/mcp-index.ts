@@ -48,14 +48,17 @@ export class McpIndex {
   static async create(
     slots: readonly Readonly<CapabilitySlot<McpDefinition>>[],
     snapshot: RuntimeSnapshot,
+    signal: AbortSignal,
   ): Promise<McpIndex> {
     const index = new OwnerCapabilityIndex(slots, snapshot);
     const records: McpRecord[] = [];
     try {
       for (const entry of index.entries()) {
+        signal.throwIfAborted();
         const client = await entry.slot.definition.create(
-          createCapabilityContext(snapshot, entry.owner),
+          createCapabilityContext(snapshot, entry.owner, undefined, signal),
         );
+        signal.throwIfAborted();
         assertMcpClient(client, entry.source);
         records.push({ entry, client, started: false, stopped: false });
       }
@@ -74,13 +77,15 @@ export class McpIndex {
     return this.#index.visible(requester).map(toDescriptor);
   }
 
-  async start(): Promise<void> {
+  async start(signal: AbortSignal): Promise<void> {
     const started: McpRecord[] = [];
     try {
       for (const record of this.#order) {
         if (record.started) continue;
+        signal.throwIfAborted();
         started.push(record);
-        await record.client.start?.();
+        await record.client.start?.(signal);
+        signal.throwIfAborted();
         record.started = true;
         record.stopped = false;
       }
@@ -139,7 +144,7 @@ async function stopRecords(records: readonly McpRecord[], primary?: unknown): Pr
     if (record.stopped) continue;
     stack.add(async () => {
       // 先 await stop 成功再标记 stopped：stop 失败时保持未标记，
-      // 下次 stop()（或代际 resume 后的再次 quiesce）可重试，不会永久泄漏。
+      // 下次 stop() 可重试，不会因一次失败永久泄漏。
       await record.client.stop?.();
       record.started = false;
       record.stopped = true;

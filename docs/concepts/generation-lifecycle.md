@@ -20,7 +20,7 @@ interface RuntimeSnapshot {
 
 快照深冻结（Map 也是只读视图），插件代码拿到的永远是某个确定代的世界状态。
 
-## 五段原子交接
+## 单一原子发布点
 
 `RootController` 把所有控制操作串行化（promise 队列），每次事务执行同一条流水线：
 
@@ -34,16 +34,12 @@ sequenceDiagram
     C->>P: prepare(current)
     Note over P: 扫描插件图、组合配置、创建 scope、<br/>投影 Feature……全部惰性，对外不可见
     P-->>C: PreparedGeneration（含 handoff + dispose）
-    C->>H: quiescePrevious(旧代)
-    Note over H: 逆序静默旧代资源（如 adapter close()，<br/>停止接收新事件，保留在途工作）
-    C->>H: activateNext()
-    Note over H: 正序激活新代资源（如 adapter start()，<br/>分配连接但还不放行入站）
-    C->>S: commit（指针换到新一代，generation+1）
-    C->>H: openNext()
-    Note over H: 新代正式放行（如 adapter open()）
-    alt 任一步失败
+    C->>H: activateNext(signal)
+    Note over H: 正序完成所有可失败 readiness；<br/>候选准入 gate 仍关闭
+    C->>S: commit（切换快照与全部准入 gate，generation+1）
+    Note over S: commit 是同步、不可失败的最后发布点；<br/>旧代随最后一个 lease 释放后销毁
+    alt prepare/readiness 失败
         C->>H: deactivateNext()（若已激活）
-        C->>H: resumePrevious()（若已静默，如旧代重新 open()）
         C->>P: prepared.dispose()（销毁影子）
         Note over C: 旧代原样运行，事务整体作废
     end
@@ -54,35 +50,35 @@ sequenceDiagram
 ```ts
 const previous = this.snapshots.acquire();
 try {
-  prepared = await prepare(previous.value);
+  prepared = await prepare(previous.value, signal);
   if (!prepared) return previous.value;      // 无变化，直接返回
   if (prepared.handoff) {
-    await prepared.handoff.quiescePrevious(previous.value);
-    await prepared.handoff.activateNext();
+    await prepared.handoff.activateNext(signal);
   }
   return this.#commitGeneration(previous.value.generation, prepared);
 } catch (error) {
-  return this.#rollback(prepared, { quiesced, activated }, error);
+  return this.#rollback(prepared, { activated }, error);
 } finally {
   previous.release();
 }
 ```
 
-`GenerationHandoffStack` 组合多个资源的交接动作：quiesce 按逆序、activate 按正序执行；中途失败时自动补偿（已静默的恢复、已激活的停用），补偿也失败则聚合为 `AggregateError` 抛出。
+`GenerationHandoffStack` 只组合候选资源的 readiness：`activateNext` 按正序执行，失败时对已经成功激活的参与者逆序执行 `deactivateNext`。旧代在整个事务中不被触碰；补偿也失败时 Root fail-closed，不再接纳新操作。
 
-### 适配器是最直观的例子
+### Adapter 的准入由快照原子切换
 
-`@zhin.js/adapter` 的投影把整条 Endpoint 生命周期映射到这五段上：
+`@zhin.js/adapter` 不会提前关闭旧 Endpoint。候选 `AdapterIndex` 在
+`activateNext` 中完成 `start()` 与 `open()`，但 `CapabilityContext` 注入的是绑定到候选代
+`GenerationAdmissionGate` 的 `MessageGateway`；commit 前所有入站都 fail-closed。`SnapshotStore`
+提交新快照时同步关闭被移除的 gate、开放新 gate，保留在两代里的同一投影不会被短暂关闭。
 
-| 交接阶段 | 动作 | Endpoint 方法 |
-|----------|------|---------------|
-| quiescePrevious | 旧代停止接收新消息 | `close()` |
-| activateNext | 新代建立连接（不放行） | `start()` |
-| commit 之后 openNext | 新代放行入站 | `open()` |
-| 失败 deactivateNext | 新代释放资源 | `stop()` |
-| 失败 resumePrevious | 旧代恢复放行 | `open()` |
-
-Endpoint 契约（`EndpointInstance`）：`start` 分配传输资源但不得接收事件；`open` 在新代 commit 后放行；`close` 停止新事件但保留在途工作；`stop` 释放资源且必须幂等。
+因此旧代在 commit 前始终可用，候选激活失败只需 `stop()` 候选；commit 后旧 Endpoint
+仍可随旧 lease drain，迟到事件会被旧 gate 拒绝，最终由旧代 disposer 执行
+`close()` / `stop()`。不存在 Adapter 专用的 `quiescePrevious`、`resumePrevious` 或
+post-commit `openNext` 阶段。已配置 Endpoint 全部是 required prerequisite：create、start、
+open 任一失败都拒绝候选代，不会发布 inert/unconfigured record，也不会后台 late-open。
+共享 HTTP listener 归 Process Host；候选 generation 只能向 `HttpHost` routing port 注册带
+gate 的 HTTP/WS route，不能 listen/close，也不会在 commit 前遮住旧代同路径 route。
 
 ## 快照租约：在途消息不被打断
 

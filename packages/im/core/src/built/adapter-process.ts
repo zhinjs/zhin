@@ -63,6 +63,11 @@ export class ProcessEndpoint implements Endpoint<{ owner?: string },{content:str
         }
         return Message.from(event, base);
     }
+    get control() {
+        return {
+            recall: async (message: { id: string }) => this.$recallMessage(message.id),
+        };
+    }
     async $recallMessage(id: string) {
     }
     async $sendMessage(options: SendOptions) {

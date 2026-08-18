@@ -193,6 +193,49 @@ export interface CommandSession {
   readonly sender?: CommandSender;
 }
 
+export interface CommandPromptOptions {
+  readonly timeout?: number;
+  readonly timeoutText?: string;
+}
+
+export interface CommandPromptListOptions extends CommandPromptOptions {
+  readonly type?: 'text' | 'number' | 'boolean';
+  readonly separator?: string;
+  readonly default?: readonly (string | number | boolean)[];
+}
+
+export interface CommandPromptPickOptions<V = unknown> extends CommandPromptOptions {
+  readonly options: readonly { readonly label: string; readonly value: V }[];
+  readonly multiple?: boolean;
+  readonly separator?: string;
+  readonly default?: V | readonly V[];
+}
+
+/**
+ * 命令内对话式交互输入。
+ *
+ * IM 派发时自动注入（`context.prompt`）；Host / CLI 无消息来源时为 `undefined`。
+ *
+ * ```ts
+ * defineCommand({
+ *   execute: async (context) => {
+ *     const name = await context.prompt!.text('请输入你的名字');
+ *     const age = await context.prompt!.number('请输入你的年龄');
+ *     return `你好 ${name}，你 ${age} 岁了`;
+ *   },
+ * });
+ * ```
+ */
+export interface CommandPrompt {
+  text(tips: string, options?: CommandPromptOptions & { readonly default?: string }): Promise<string>;
+  number(tips: string, options?: CommandPromptOptions & { readonly default?: number }): Promise<number>;
+  confirm(tips: string, options?: CommandPromptOptions & { readonly condition?: string; readonly default?: boolean }): Promise<boolean>;
+  list(tips: string, options?: CommandPromptListOptions): Promise<readonly (string | number | boolean)[]>;
+  pick<V = unknown>(tips: string, options: CommandPromptPickOptions<V>): Promise<V | readonly V[]>;
+}
+
+export type CommandPromptFactory = (source: unknown) => CommandPrompt | undefined;
+
 export interface CommandContext<
   TConfig = unknown,
   TInput extends CommandMessage = CommandMessage,
@@ -206,6 +249,10 @@ export interface CommandContext<
    * Host / `CommandIndex.execute` 等无消息路径可能为 `undefined`。
    */
   readonly input?: TInput;
+  /**
+   * 对话式交互输入。IM 派发时自动注入；无消息来源时为 `undefined`。
+   */
+  readonly prompt?: CommandPrompt;
 }
 
 export interface CommandDefinition<
@@ -371,6 +418,7 @@ export function createCommandContext(
   params: Readonly<Record<string, CommandParameterValue>> = Object.freeze({}),
   input: unknown = undefined,
   segments: readonly Readonly<CommandSegment>[] = Object.freeze([]),
+  prompt?: CommandPrompt,
 ): CommandContext {
   const context = createCapabilityContext(snapshot, ownerId);
   const session = resolveCommandSession(input);
@@ -381,6 +429,7 @@ export function createCommandContext(
     params: Object.freeze({ ...params }),
     segments: freezeSegments(segments),
     ...(input !== undefined ? { input: input as CommandMessage } : {}),
+    ...(prompt !== undefined ? { prompt } : {}),
   });
 }
 

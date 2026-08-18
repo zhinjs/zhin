@@ -30,7 +30,7 @@ export interface OutboundSendInput {
 export interface OutboundReactionInput {
   readonly adapter: string;
   readonly endpointKey: string;
-  readonly messageId: string;
+  readonly message: OutboundMessage;
   readonly emoji: string;
   readonly sceneType?: string;
   readonly channelId?: string;
@@ -39,14 +39,23 @@ export interface OutboundReactionInput {
 export interface OutboundRemoveReactionInput {
   readonly adapter: string;
   readonly endpointKey: string;
-  readonly messageId: string;
+  readonly message: OutboundMessage;
   readonly reactionId: string;
 }
 
 export interface OutboundRecallInput {
   readonly adapter: string;
   readonly endpointKey: string;
-  readonly messageId: string;
+  readonly message: OutboundMessage;
+}
+
+
+/** Structured message identity; structurally compatible with IM MessageRef. */
+export interface OutboundMessage {
+  readonly conversation: OutboundConversation & Readonly<{
+    readonly endpoint: Readonly<{ readonly id: string; readonly adapter: string }>;
+  }>;
+  readonly id: string;
 }
 
 export interface OutboundHost {

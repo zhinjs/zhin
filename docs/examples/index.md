@@ -84,7 +84,7 @@ pnpm dev            # zhin runtime start
 
 - Console 在 `http://127.0.0.1:18099`（token `capabilities-dev-token`），plugins 页可见 `Capabilities Bot` 卡片
 - 已注册 `whoami` / `stats` 命令（后者演示数据库计数）
-- 心跳定时任务每 5 分钟打一行日志；`pushOnBoot: true` 时向 Sandbox 私聊推一条上线消息
+- 心跳定时任务每 5 分钟打一行日志
 
 能力与代码的逐项对照见该目录 `README.md`。
 

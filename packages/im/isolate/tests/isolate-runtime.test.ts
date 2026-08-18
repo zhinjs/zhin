@@ -7,7 +7,9 @@ import {
   childPluginId,
   definePlugin,
   rootPluginId,
+  SnapshotStore,
   type RuntimeSnapshot,
+  type SnapshotState,
 } from '@zhin.js/plugin-runtime';
 import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
 import {
@@ -44,19 +46,20 @@ describe('NodeIsolatedPluginRuntime', () => {
         entry,
         config: { value: 2 },
         environment: { name: 'test', mode: 'test', platform: 'node' },
-      });
+      }, new AbortController().signal);
       const handle = prepared.resources?.[0]?.value as IsolatedPluginHandle;
       const events: unknown[] = [];
       handle.onEvent((event) => events.push(event));
 
-      await prepared.handoff?.activateNext?.();
-      prepared.handoff?.openNext?.();
+      await prepared.handoff?.activateNext?.(new AbortController().signal);
+      const admission = admitIsolatedHandle(owner, handle);
       await expect(handle.call('sum', 3)).resolves.toBe(5);
       await expect(handle.call('host', 'ok')).resolves.toBe('root/direct:ok');
       await expect(handle.call('announce', { ready: true })).resolves.toBe(true);
       expect(events).toEqual([{ name: 'ready', payload: { ready: true } }]);
       await expect(handle.call('sum', () => undefined)).rejects.toThrow('structured-cloneable');
 
+      await admission.close();
       await prepared.dispose();
       expect(handle.status).toBe('closed');
     },
@@ -75,14 +78,15 @@ describe('NodeIsolatedPluginRuntime', () => {
       entry,
       config: {},
       environment: { name: 'test', mode: 'test', platform: 'node' },
-    });
+    }, new AbortController().signal);
     const handle = prepared.resources?.[0]?.value as IsolatedPluginHandle;
-    await prepared.handoff?.activateNext?.();
-    prepared.handoff?.openNext?.();
+    await prepared.handoff?.activateNext?.(new AbortController().signal);
+    const admission = admitIsolatedHandle(childPluginId(rootPluginId(), 'crash'), handle);
 
     await expect(handle.call('crash')).rejects.toThrow('exited');
     expect(handle.status).toBe('failed');
     expect(onCrash).toHaveBeenCalledOnce();
+    await admission.close();
     await prepared.dispose();
   });
 
@@ -101,7 +105,7 @@ export default { name: 'host-bound', requires: [{ id: 'acme.database' }] };
       entry: hostBound,
       config: {},
       environment: { name: 'test', mode: 'test', platform: 'node' },
-    })).rejects.toThrow('Host resource cannot cross isolation boundary');
+    }, new AbortController().signal)).rejects.toThrow('Host resource cannot cross isolation boundary');
 
     const entry = join(root, 'timeout.mjs');
     await writePlugin(entry, 'timeout');
@@ -112,12 +116,95 @@ export default { name: 'host-bound', requires: [{ id: 'acme.database' }] };
       entry,
       config: {},
       environment: { name: 'test', mode: 'test', platform: 'node' },
-    });
+    }, new AbortController().signal);
     const handle = prepared.resources?.[0]?.value as IsolatedPluginHandle;
-    await prepared.handoff?.activateNext?.();
-    prepared.handoff?.openNext?.();
+    await prepared.handoff?.activateNext?.(new AbortController().signal);
+    const admission = admitIsolatedHandle(owner, handle);
     await expect(handle.call('slow', 1_000)).rejects.toThrow('timed out');
     expect(handle.status).toBe('failed');
+    await admission.close();
+    await prepared.dispose();
+  });
+
+  it('rejects candidate Host RPC before generation admission', async () => {
+    const root = await temporaryDirectory();
+    const entry = join(root, 'candidate-host-call.mjs');
+    await writeFile(entry, `
+const channelToken = { id: 'zhin.isolate.channel' };
+export default {
+  name: 'candidate-host-call',
+  requires: [channelToken],
+  async setup({ resources }) {
+    await resources.use(channelToken).call('mutate', { candidate: true });
+  }
+};
+`);
+    const mutate = vi.fn();
+    const runtime = new NodeIsolatedPluginRuntime({
+      hostMethods: { mutate },
+    });
+    const prepared = await runtime.prepare({
+      owner: childPluginId(rootPluginId(), 'candidate-host-call'),
+      parent: rootPluginId(),
+      packageName: '@test/candidate-host-call',
+      entry,
+      config: {},
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+    }, new AbortController().signal);
+
+    await expect(prepared.handoff?.activateNext?.(new AbortController().signal))
+      .rejects.toThrow('not admitted');
+    expect(mutate).not.toHaveBeenCalled();
+    await prepared.dispose();
+  });
+
+  it('holds the retired generation until an admitted Host RPC settles', async () => {
+    const root = await temporaryDirectory();
+    const entry = join(root, 'host-operation.mjs');
+    await writePlugin(entry, 'host-operation');
+    let releaseHost!: () => void;
+    const hostGate = new Promise<void>((resolve) => { releaseHost = resolve; });
+    let hostEntered!: () => void;
+    const entered = new Promise<void>((resolve) => { hostEntered = resolve; });
+    const owner = childPluginId(rootPluginId(), 'host-operation');
+    const runtime = new NodeIsolatedPluginRuntime({
+      hostMethods: {
+        async decorate(input, context) {
+          hostEntered();
+          await hostGate;
+          return `${context.owner}:${String(input)}`;
+        },
+      },
+    });
+    const prepared = await runtime.prepare({
+      owner,
+      parent: rootPluginId(),
+      packageName: '@test/host-operation',
+      entry,
+      config: {},
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+    }, new AbortController().signal);
+    const handle = prepared.resources?.[0]?.value as IsolatedPluginHandle;
+    await prepared.handoff?.activateNext?.(new AbortController().signal);
+    const admission = admitIsolatedHandle(owner, handle);
+    let disposed = false;
+    admission.commit(0, {
+      snapshot: admission.current,
+      dispose: () => { disposed = true; },
+    });
+
+    const operation = handle.call('host', 'ok');
+    await entered;
+    admission.commit(1, {
+      snapshot: emptySnapshotState(),
+      dispose: () => undefined,
+    });
+    expect(disposed).toBe(false);
+
+    releaseHost();
+    await expect(operation).resolves.toBe('root/host-operation:ok');
+    await vi.waitFor(() => expect(disposed).toBe(true));
+    await admission.close();
     await prepared.dispose();
   });
 });
@@ -141,6 +228,7 @@ describe('RootRuntime isolated Plugin HMR', () => {
     await expect(firstHandle.call('version')).resolves.toBe('v1');
     expect(modules.loadCount(entry)).toBe(0);
 
+    const oldLease = runtime.snapshots.acquire();
     const slow = Promise.all(Array.from(
       { length: 16 },
       (_, index) => firstHandle.call('slow', 50 + index * 2),
@@ -151,14 +239,14 @@ describe('RootRuntime isolated Plugin HMR', () => {
       onRestartRequired() {},
       onError() {},
     });
-    const started = Date.now();
     await hmr.enqueue(entry);
-    expect(Date.now() - started).toBeGreaterThanOrEqual(50);
     await expect(slow).resolves.toEqual(Array.from({ length: 16 }, () => 'v1'));
+    oldLease.release();
+    await delay(0);
     const second = runtime.snapshot;
     const secondHandle = isolatedHandle(second);
     await expect(secondHandle.call('version')).resolves.toBe('v2');
-    await expect(firstHandle.call('version')).rejects.toThrow('not accepting calls');
+    await expect(firstHandle.call('version')).rejects.toThrow(/closed|not accepting calls/u);
     expect(modules.loadCount(entry)).toBe(0);
 
     await writeBrokenPlugin(entry);
@@ -176,6 +264,30 @@ function isolatedHandle(snapshot: RuntimeSnapshot): IsolatedPluginHandle {
   const handle = snapshot.resources.get(owner)?.get(isolatedPluginToken.id);
   if (!handle) throw new Error('Missing isolated Plugin handle');
   return handle as IsolatedPluginHandle;
+}
+
+function admitIsolatedHandle(owner: ReturnType<typeof childPluginId>, handle: IsolatedPluginHandle) {
+  const root = rootPluginId();
+  const state: SnapshotState = {
+    root,
+    tree: new Map(),
+    config: new Map(),
+    resources: new Map([[owner, new Map([[isolatedPluginToken.id, handle]])]]),
+    capabilities: new Map(),
+    projections: new Map(),
+  };
+  return new SnapshotStore(state);
+}
+
+function emptySnapshotState(): SnapshotState {
+  return {
+    root: rootPluginId(),
+    tree: new Map(),
+    config: new Map(),
+    resources: new Map(),
+    capabilities: new Map(),
+    projections: new Map(),
+  };
 }
 
 class FakeModuleRuntime implements ModuleRuntime {

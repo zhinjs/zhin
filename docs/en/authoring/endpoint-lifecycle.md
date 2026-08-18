@@ -186,8 +186,8 @@ The lifecycle hooks of the Endpoint instance itself are driven by the Adapter In
 
 | Hook | Timing |
 | --- | --- |
-| `start()` | Allocate transport resources, but **must not** start admitting inbound events |
-| `open()` | Open admission after the candidate generation commits |
+| `start()` | Allocate transport resources while the candidate activates |
+| `open()` | Open the Endpoint-local event flow during candidate activation; the central generation gate still rejects inbound traffic before commit |
 | `close()` | Stop admitting new events, preserve in-flight work |
 | `stop()` | Release transport resources, call must be idempotent |
 | `send(request)` | Outbound send |

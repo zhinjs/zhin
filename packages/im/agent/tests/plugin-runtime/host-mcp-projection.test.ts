@@ -15,6 +15,6 @@ describe('configured MCP generation projection', () => {
       name: 'required', transport: 'streamable-http', url: 'https://mcp.example.test',
     });
     const client = await projection.definition.create({} as never);
-    await expect(client.start?.()).rejects.toThrow('not ready');
+    await expect(client.start?.(new AbortController().signal)).rejects.toThrow('not ready');
   });
 });

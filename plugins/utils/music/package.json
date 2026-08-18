@@ -16,6 +16,8 @@
   "files": [
     "plugin.js",
     "schema.json",
+    "commands",
+    "middlewares",
     "components",
     "tools",
     "src",
@@ -49,7 +51,10 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@zhin.js/command": "workspace:*",
     "@zhin.js/component": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/middleware": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/tool": "workspace:*"
   },

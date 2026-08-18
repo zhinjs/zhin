@@ -186,8 +186,8 @@ Endpoint 实例自身的生命周期钩子由 Adapter Index 驱动，与代际�
 
 | 钩子 | 时机 |
 | --- | --- |
-| `start()` | 分配传输资源，但**不得**开始准入入站事件 |
-| `open()` | 候选代提交后开放准入 |
+| `start()` | 候选激活时分配传输资源 |
+| `open()` | 候选激活时开放 Endpoint 本地事件流；commit 前中央 generation gate 仍拒绝入站 |
 | `close()` | 停止准入新事件，保留在途工作 |
 | `stop()` | 释放传输资源，调用必须幂等 |
 | `send(request)` | 出站发送 |

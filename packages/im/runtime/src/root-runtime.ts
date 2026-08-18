@@ -176,8 +176,8 @@ export class RootRuntime {
       this.#configDocument = structuredClone(snapshot.document);
     }
     let prepared: PreparedRuntimeGeneration | undefined;
-    const snapshot = await this.#controller.start(async (current) => {
-      prepared = await this.#prepare(current);
+    const snapshot = await this.#controller.start(async (current, signal) => {
+      prepared = await this.#prepare(current, signal);
       return prepared.generation;
     });
     this.#accept(requirePrepared(prepared));
@@ -186,8 +186,8 @@ export class RootRuntime {
 
   async reload(target: PluginId | string = rootPluginId()): Promise<RuntimeSnapshot> {
     let prepared: PreparedRuntimeGeneration | undefined;
-    const snapshot = await this.#controller.reload(target, async (current) => {
-      prepared = await this.#prepare(current);
+    const snapshot = await this.#controller.reload(target, async (current, signal) => {
+      prepared = await this.#prepare(current, signal);
       return prepared.generation;
     });
     this.#accept(requirePrepared(prepared));
@@ -242,7 +242,7 @@ export class RootRuntime {
     let restart: ProcessInvalidationPlan | undefined;
     const snapshot = await this.#controller.reload(
       plan.subtrees[0] ?? plan.slots[0] ?? rootPluginId(),
-      async (current) => {
+      async (current, signal) => {
         const resolved = await this.#resolveCapabilityDelta(current, plan);
         const effective = resolved.plan;
         if (this.#model && effective.manifestSources.length > 0) {
@@ -254,7 +254,7 @@ export class RootRuntime {
           );
           if (restart) return undefined;
           prepared = effective.subtrees.includes(rootPluginId())
-            ? await this.#prepareInspected(current, inspected)
+            ? await this.#prepareInspected(current, inspected, signal)
             : await new TopologyGenerationPreparer(
               this.#modules,
               this.#model,
@@ -265,15 +265,15 @@ export class RootRuntime {
               this.#installResources,
               this.#environmentLayers,
               this.#isolation,
-            ).prepare(current, { ...effective, capabilities: resolved.capabilities });
+            ).prepare(current, signal, { ...effective, capabilities: resolved.capabilities });
         } else if (effective.subtrees.length === 0 && resolved.capabilities.size > 0 && this.#model) {
           prepared = await new SlotGenerationPreparer(this.#modules, this.#model)
-            .prepare(current, resolved.capabilities);
+            .prepare(current, resolved.capabilities, signal);
         } else if (this.#model && this.#canPrepareSubtrees(effective)) {
           const inspected = await this.#inspectProject();
-          prepared = await this.#prepareSubtrees(current, inspected, effective.subtrees);
+          prepared = await this.#prepareSubtrees(current, inspected, effective.subtrees, signal);
         } else {
-          prepared = await this.#prepare(current);
+          prepared = await this.#prepare(current, signal);
         }
         return prepared?.generation;
       },
@@ -328,8 +328,14 @@ export class RootRuntime {
     });
   }
 
-  async #prepare(current: RuntimeSnapshot): Promise<PreparedRuntimeGeneration> {
-    return this.#prepareInspected(current, await this.#inspectProject());
+  async #prepare(
+    current: RuntimeSnapshot,
+    signal: AbortSignal,
+  ): Promise<PreparedRuntimeGeneration> {
+    signal.throwIfAborted();
+    const inspected = await this.#inspectProject();
+    signal.throwIfAborted();
+    return this.#prepareInspected(current, inspected, signal);
   }
 
   async #inspectProject(): Promise<InspectedProject> {
@@ -389,7 +395,8 @@ export class RootRuntime {
     let prepared: PreparedRuntimeGeneration | undefined;
     let documentTransaction: PreparedConfigDocument | undefined;
     let committedDocument: ConfigDocumentSnapshot | undefined;
-    const snapshot = await this.#controller.reload(rootPluginId(), async (current) => {
+    const snapshot = await this.#controller.reload(rootPluginId(), async (current, signal) => {
+      signal.throwIfAborted();
       const resolver = await NodePackageResolver.create(this.#projectRoot);
       const graph = await new ProjectGraphService(resolver).inspect(this.#projectRoot);
       const planned = await new ConfigPatchPlanner().plan(graph, currentDocument, patches);
@@ -422,9 +429,9 @@ export class RootRuntime {
         // when present so a committed patch cannot leave Host services on the
         // previous generation's document.
         if (!this.#installResources && this.#model && !planned.roots.includes(rootPluginId())) {
-          prepared = await this.#prepareSubtrees(current, inspected, planned.roots);
+          prepared = await this.#prepareSubtrees(current, inspected, planned.roots, signal);
         } else {
-          prepared = await this.#prepareInspected(current, inspected);
+          prepared = await this.#prepareInspected(current, inspected, signal);
         }
         return documentTransaction
           ? withConfigDocumentHandoff(
@@ -451,6 +458,7 @@ export class RootRuntime {
   #prepareInspected(
     current: RuntimeSnapshot,
     inspected: InspectedProject,
+    signal: AbortSignal,
   ): Promise<PreparedRuntimeGeneration> {
     const assembler = new GenerationAssembler(
       inspected.graph,
@@ -463,15 +471,16 @@ export class RootRuntime {
       this.#environmentLayers,
       this.#isolation,
     );
-    return assembler.prepare();
+    return assembler.prepare(signal);
   }
 
   async #prepareSubtrees(
     current: RuntimeSnapshot,
     inspected: InspectedProject,
     roots: readonly PluginId[],
+    signal: AbortSignal,
   ): Promise<PreparedRuntimeGeneration> {
-    if (!this.#model) return this.#prepareInspected(current, inspected);
+    if (!this.#model) return this.#prepareInspected(current, inspected, signal);
     try {
       return await new SubtreeGenerationPreparer(
         this.#modules,
@@ -483,10 +492,10 @@ export class RootRuntime {
         this.#installResources,
         this.#environmentLayers,
         this.#isolation,
-      ).prepare(current, roots);
+      ).prepare(current, roots, signal);
     } catch (error) {
       if (!(error instanceof SubtreeTopologyChangedError)) throw error;
-      return this.#prepareInspected(current, inspected);
+      return this.#prepareInspected(current, inspected, signal);
     }
   }
 }
@@ -512,8 +521,10 @@ function withConfigDocumentHandoff(
   // File commit follows Resource activation, so reverse compensation restores
   // the document before it deactivates the shadow generation.
   handoffs.add({
-    async activateNext() {
+    async activateNext(signal) {
+      signal.throwIfAborted();
       committed(await document.commit());
+      signal.throwIfAborted();
     },
     deactivateNext: () => document.rollback(),
   });
@@ -586,16 +597,17 @@ class GenerationAssembler {
     );
   }
 
-  async prepare(): Promise<PreparedRuntimeGeneration> {
+  async prepare(signal: AbortSignal): Promise<PreparedRuntimeGeneration> {
+    signal.throwIfAborted();
     try {
       // Prepare is deliberately ordered: providers define discovery, setup
       // creates owner scopes, then definitions can be projected against both.
-      await this.#loadProviders(this.graph.root);
+      await this.#loadProviders(this.graph.root, signal);
       this.#plugins.installSetupFeatureAliases(featureSetupAliases(this.#catalog.values()));
-      await this.#plugins.setupTree(this.graph.root);
-      await this.#discover();
+      await this.#plugins.setupTree(this.graph.root, signal);
+      await this.#discover(signal);
       const projected = await new FeatureProjector(this.#catalog.values())
-        .project(this.generation, this.#projectionState());
+        .project(this.generation, this.#projectionState(), signal);
       for (const [feature, dispose] of projected.disposers) {
         this.#projectionDisposers.set(feature, dispose);
       }
@@ -646,12 +658,14 @@ class GenerationAssembler {
     }
   }
 
-  async #loadProviders(node: PluginGraphNode): Promise<void> {
+  async #loadProviders(node: PluginGraphNode, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted();
     for (const requirement of node.features) {
       const manifest = requirement.package.packageJson.zhin as ZhinFeatureManifest;
       const module = await this.modules.load<ModuleNamespace>(
         resolve(requirement.package.root, manifest.entry),
       );
+      signal.throwIfAborted();
       const provider = module.default as FeatureProvider | undefined;
       if (!provider || provider.protocol !== 1) {
         throw new TypeError(
@@ -671,10 +685,10 @@ class GenerationAssembler {
       roots.push({ owner: node.id, packageRoot: node.package.root });
       this.#rootsByFeature.set(provider.id, roots);
     }
-    for (const child of node.children) await this.#loadProviders(child);
+    for (const child of node.children) await this.#loadProviders(child, signal);
   }
 
-  async #discover(): Promise<void> {
+  async #discover(signal: AbortSignal): Promise<void> {
     mergeSetupCapabilities(
       this.#capabilities,
       this.#plugins.setupCapabilities(),
@@ -683,8 +697,10 @@ class GenerationAssembler {
     );
     const discovery = new FeatureDiscovery(this.#host);
     for (const provider of this.#catalog.values()) {
+      signal.throwIfAborted();
       const roots = this.#rootsByFeature.get(provider.id) ?? [];
       const slots = await discovery.discover(provider, roots);
+      signal.throwIfAborted();
       for (const slot of slots) addCapabilitySlot(this.#capabilities, slot);
     }
   }

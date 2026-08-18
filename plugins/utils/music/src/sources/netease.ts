@@ -1,5 +1,6 @@
 // plugins/utils/music/src/sources/netease.ts
-import type { MusicSearchService, MusicDetail,MusicInfo, Music163 } from '../types.js'
+import type { MusicSearchService, MusicDetail, MusicInfo, Music163 } from '../types.js';
+import { getCredential } from '../credential-store.js';
 
 /** 网易云音乐搜索服务 */
 export class NeteaseMusicService implements MusicSearchService {
@@ -70,16 +71,32 @@ export class NeteaseMusicService implements MusicSearchService {
    * @param metingAPI Meting API 地址（可选）
    * @returns 音频直链 URL
    */
-  async getAudioUrl(id: string, metingAPI?: string): Promise<string> {
-    // 默认使用 Meting API
-      const apiUrl = metingAPI || 'https://api.injahow.cn/meting/'
-      const url = `${apiUrl}?type=url&id=${id}`
-      
-      const response = await fetch(url, { method: 'GET' })
-      const data = await response.json() as { url?: string, data?: { url?: string } }
-      if (!data.url && !data.data?.url) throw new Error('Audio URL not found')
-      const audioUrl = data.url ?? data.data?.url
-      if (!audioUrl) throw new Error('Audio URL not found')
-      return audioUrl
+  async getAudioUrl(id: string): Promise<string> {
+    const cookie = await getCredential('netease', 'cookie');
+    if (cookie) {
+      try {
+        const response = await fetch(
+          `https://music.163.com/api/song/enhance/player/url?ids=[${id}]&br=320000`,
+          {
+            method: 'GET',
+            headers: { Cookie: cookie },
+          },
+        );
+        const result = await response.json() as {
+          data?: Array<{ url?: string | null }>;
+        };
+        const audioUrl = result.data?.[0]?.url;
+        if (audioUrl) return audioUrl;
+      } catch {
+        // cookie-based fetch failed, fall through to public API
+      }
+    }
+    const apiUrl = 'https://api.injahow.cn/meting/';
+    const url = `${apiUrl}?type=url&id=${id}`;
+    const response = await fetch(url, { method: 'GET' });
+    const data = await response.json() as { url?: string; data?: { url?: string } };
+    const audioUrl = data.url ?? data.data?.url;
+    if (!audioUrl) throw new Error('Audio URL not found');
+    return audioUrl;
   }
 }

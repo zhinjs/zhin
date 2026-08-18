@@ -1,6 +1,16 @@
-import { describe, expect, it, afterEach } from 'vitest';
+import { describe, expect, it, afterEach, vi } from 'vitest';
 import WebSocket from 'ws';
-import { createHttpHost } from '../src/http-host.js';
+import {
+  SnapshotStore,
+  bindGenerationAdmission,
+  createGenerationAdmissionGate,
+  featureId,
+  generationAdmissionSource,
+  rootPluginId,
+  type GenerationAdmissionGate,
+  type SnapshotState,
+} from '@zhin.js/plugin-runtime';
+import { createHttpHost, type HttpHost } from '../src/http-host.js';
 
 const hosts: Array<ReturnType<typeof createHttpHost>> = [];
 
@@ -9,6 +19,114 @@ afterEach(async () => {
 });
 
 describe('HttpHost', () => {
+  it('keeps candidate HTTP and WS routes invisible until atomic generation admission', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(host);
+    const previous = createGenerationAdmissionGate();
+    const next = createGenerationAdmissionGate();
+    const previousHost = bindGenerationAdmission<HttpHost>(host, previous);
+    const nextHost = bindGenerationAdmission<HttpHost>(host, next);
+    const wsSeen: string[] = [];
+    previousHost.route('GET', '/generation', (_request, response) => response.end('previous'));
+    previousHost.ws('/generation').onConnection(({ socket }) => {
+      wsSeen.push('previous');
+      socket.close();
+    });
+    const store = new SnapshotStore(admissionState(previous));
+    const { port } = await host.listen();
+
+    nextHost.route('GET', '/generation', (_request, response) => response.end('next'));
+    nextHost.ws('/generation').onConnection(({ socket }) => {
+      wsSeen.push('next');
+      socket.close();
+    });
+    expect(await (await fetch(`http://127.0.0.1:${port}/generation`)).text()).toBe('previous');
+    await connectWebSocket(port, '/generation');
+    expect(wsSeen).toEqual(['previous']);
+
+    store.commit(0, { snapshot: admissionState(next), dispose: () => undefined });
+    expect(await (await fetch(`http://127.0.0.1:${port}/generation`)).text()).toBe('next');
+    await connectWebSocket(port, '/generation');
+    expect(wsSeen).toEqual(['previous', 'next']);
+    await store.close();
+  });
+
+  it('pins HTTP responses and retires WebSockets when their generation is replaced', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(host);
+    const previous = createGenerationAdmissionGate();
+    const next = createGenerationAdmissionGate();
+    const previousHost = bindGenerationAdmission<HttpHost>(host, previous);
+    let releaseHttp!: () => void;
+    const httpGate = new Promise<void>((resolve) => { releaseHttp = resolve; });
+    let enteredHttp!: () => void;
+    const httpEntered = new Promise<void>((resolve) => { enteredHttp = resolve; });
+    previousHost.route('GET', '/slow', async (_request, response) => {
+      enteredHttp();
+      await httpGate;
+      response.end('done');
+    });
+    previousHost.ws('/slow').onConnection(() => undefined);
+    const store = new SnapshotStore(admissionState(previous));
+    let disposed = false;
+    store.commit(0, {
+      snapshot: admissionState(previous),
+      dispose: () => { disposed = true; },
+    });
+    const { port } = await host.listen();
+
+    const http = fetch(`http://127.0.0.1:${port}/slow`);
+    await httpEntered;
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/slow`);
+    await new Promise<void>((resolve, reject) => {
+      ws.once('open', () => resolve());
+      ws.once('error', reject);
+    });
+    store.commit(1, { snapshot: admissionState(next), dispose: () => undefined });
+    expect(disposed).toBe(false);
+
+    await new Promise<void>((resolve) => ws.once('close', () => resolve()));
+    expect(disposed).toBe(false);
+
+    releaseHttp();
+    expect(await (await http).text()).toBe('done');
+    await vi.waitFor(() => expect(disposed).toBe(true));
+    await store.close();
+  });
+
+  it('keeps a generation leased until a streaming response closes', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(host);
+    const previous = createGenerationAdmissionGate();
+    const next = createGenerationAdmissionGate();
+    const previousHost = bindGenerationAdmission<HttpHost>(host, previous);
+    let response!: import('node:http').ServerResponse;
+    let started!: () => void;
+    const streamStarted = new Promise<void>((resolve) => { started = resolve; });
+    previousHost.route('GET', '/stream', (_request, current) => {
+      response = current;
+      current.writeHead(200, { 'content-type': 'text/event-stream' });
+      current.write('data: ready\n\n');
+      started();
+    });
+    const store = new SnapshotStore(admissionState(previous));
+    let disposed = false;
+    store.commit(0, {
+      snapshot: admissionState(previous),
+      dispose: () => { disposed = true; },
+    });
+    const { port } = await host.listen();
+    const request = fetch(`http://127.0.0.1:${port}/stream`);
+    await streamStarted;
+
+    store.commit(1, { snapshot: admissionState(next), dispose: () => undefined });
+    expect(disposed).toBe(false);
+    response.end();
+    await request;
+    await vi.waitFor(() => expect(disposed).toBe(true));
+    await store.close();
+  });
+
   it('listens and routes websocket upgrades by path', async () => {
     const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(host);
@@ -204,7 +322,10 @@ describe('HttpHost', () => {
     await new Promise((resolve) => { setTimeout(resolve, 50); });
 
     const startedAt = Date.now();
-    await host.close();
+    const closing = host.close();
+    expect(host.close()).toBe(closing);
+    await closing;
+    expect(host.close()).toBe(closing);
     expect(Date.now() - startedAt).toBeLessThan(1_000);
 
     ws.once('close', () => undefined);
@@ -324,3 +445,25 @@ describe('HttpHost', () => {
     expect(denied.status).toBe(401);
   });
 });
+
+function admissionState(gate: GenerationAdmissionGate): SnapshotState {
+  return {
+    root: rootPluginId(),
+    tree: new Map(),
+    config: new Map(),
+    resources: new Map(),
+    capabilities: new Map(),
+    projections: new Map([[
+      featureId('test.http-admission'),
+      { [generationAdmissionSource]: [gate] },
+    ]]),
+  };
+}
+
+async function connectWebSocket(port: number, path: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const socket = new WebSocket(`ws://127.0.0.1:${port}${path}`);
+    socket.once('close', () => resolve());
+    socket.once('error', reject);
+  });
+}

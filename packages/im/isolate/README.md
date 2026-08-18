@@ -2,8 +2,6 @@
 
 下一代 Zhin Runtime 的可选 Node 隔离适配器。它为每个 `runtime: isolated` Plugin generation 创建独立 Worker 或 child process，并只通过 structured-clone RPC 与 Host 通信。
 
-> 当前包属于 `feature/next` 绿地实现，版本仍为 `0.0.0` 且未作为稳定 API 发布。
-
 ## 为什么独立成包
 
 `@zhin.js/runtime` 只定义 `IsolatedPluginRuntimePort`，不强制默认 IM 安装携带隔离实现。需要故障或并发隔离的 Root 显式安装本包；trusted Plugin 的启动路径和生产闭包不变。
@@ -71,13 +69,12 @@ Host 从对应 owner 的 Resource snapshot 取得 `isolatedPluginToken`，再调
 
 ## 代际切换
 
-适配器参与 Runtime generation handoff：
+隔离进程参与 Runtime generation readiness：
 
 1. `prepare` 创建候选 isolate、import entry 并校验 definition，但不执行 setup。
-2. `quiescePrevious` 停止旧 handle 接收新调用，并等待所有已接收 RPC 完成。
-3. `activateNext` 在候选 isolate 内执行 setup；失败会清理候选并恢复旧 handle。
-4. Runtime 原子提交 snapshot 后，`openNext` 才开放新 handle。
-5. 旧 generation 的最后一个 lease 释放后，Scope disposer 终止旧 isolate。
+2. `activateNext(signal)` 在候选 isolate 内执行 setup；失败会清理候选，旧代从未被触碰。
+3. Runtime 原子提交 snapshot 后，新请求才能从新 snapshot 取得 handle。
+4. 旧 generation 的在途请求继续持有旧 lease；最后一个 lease 释放后，Scope disposer 终止旧 isolate。
 
 RPC 超时会把整个实例标记为 failed 并终止 transport，因为远端工作可能仍在运行，不能把超时伪装成安全 drain。Worker/进程意外退出会拒绝全部 pending RPC，并通过 `onCrash` 上报；当前 generation 内不静默重启。
 

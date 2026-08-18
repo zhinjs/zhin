@@ -2,6 +2,7 @@ import {
   commandFeatureId,
   isCommandIndex,
   type CommandMatchInput,
+  type CommandPromptFactory,
   type CommandSegment,
 } from '@zhin.js/command';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
@@ -44,7 +45,11 @@ export const defaultCommandPrefixResolver: CommandPrefixResolver = (message, sna
 export class MessageDispatcher {
   constructor(private readonly resolvePrefix: CommandPrefixResolver = defaultCommandPrefixResolver) {}
 
-  async dispatch(message: Message, snapshot: RuntimeSnapshot): Promise<MessageDispatchResult> {
+  async dispatch(
+    message: Message,
+    snapshot: RuntimeSnapshot,
+    promptFactory?: CommandPromptFactory,
+  ): Promise<MessageDispatchResult> {
     const prefix = this.resolvePrefix(message, snapshot);
     let input = message.content.trim();
     if (prefix && !input.startsWith(prefix)) {
@@ -58,7 +63,7 @@ export class MessageDispatcher {
       ? stripCommandPrefix(message.segments, prefix)
       : undefined;
     const matchInput = structuredInput ?? input;
-    const result = await commands.dispatch(matchInput, message);
+    const result = await commands.dispatch(matchInput, message, promptFactory);
     if (result.matched && result.value !== undefined) {
       if (!result.owner) throw new Error('Matched Command is missing its owner');
       logger.debug(formatCompact({

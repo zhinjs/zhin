@@ -67,6 +67,7 @@ export interface FeatureAuthoring<TDefinition> {
 
 export interface ProjectionContext {
   readonly snapshot: RuntimeSnapshot;
+  readonly signal: AbortSignal;
 }
 
 export interface FeatureProjection<T> {

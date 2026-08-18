@@ -22,6 +22,7 @@ export interface PluginInstanceView {
 }
 
 export interface PluginSetupContext<TConfig = unknown> {
+  readonly signal: AbortSignal;
   readonly plugin: PluginInstanceView;
   readonly config: ConfigView<TConfig>;
   readonly resources: Scope;

@@ -77,10 +77,18 @@ export default defineMiddleware<Message, ModerationConfig>({
           try {
             const host = context.use(outboundHostToken);
             if (!host.recall) return false;
+            const conv = message.conversation;
             await host.recall({
-              adapter: message.conversation.endpoint.adapter,
-              endpointKey: message.conversation.endpoint.id,
-              messageId,
+              adapter: conv.endpoint.adapter,
+              endpointKey: conv.endpoint.id,
+              message: {
+                conversation: {
+                  kind: conv.kind,
+                  id: conv.id,
+                  endpoint: conv.endpoint,
+                },
+                id: messageId,
+              },
             });
             return true;
           } catch {

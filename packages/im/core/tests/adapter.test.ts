@@ -70,6 +70,12 @@ class MockEndpoint implements Endpoint< any> {
   async $recallMessage(id: string): Promise<void> {
     // Mock 撤回消息
   }
+
+  get control() {
+    return {
+      recall: async (message: { id: string }) => this.$recallMessage(message.id),
+    };
+  }
 }
 
 // Mock Adapter 类用于测试
@@ -678,7 +684,13 @@ describe('Adapter Core Functionality', () => {
 
       const bot = adapter.endpoints.get('bot1')!
       const editSpy = vi.fn()
-      ;(bot as any).$editMessage = editSpy
+      Object.defineProperty(bot, 'control', {
+        get: () => ({
+          recall: async () => {},
+          edit: editSpy,
+        }),
+        configurable: true,
+      })
 
       await adapter.editMessage({
         messageId: 'msg-123',
@@ -723,7 +735,13 @@ describe('Adapter Core Functionality', () => {
       await adapter.start()
 
       const bot = adapter.endpoints.get('bot1')!
-      ;(bot as any).$editMessage = vi.fn()
+      Object.defineProperty(bot, 'control', {
+        get: () => ({
+          recall: async () => {},
+          edit: vi.fn(),
+        }),
+        configurable: true,
+      })
 
       const result = await adapter.editMessage({
         messageId: 'original-msg-id',

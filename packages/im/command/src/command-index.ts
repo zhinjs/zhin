@@ -17,6 +17,7 @@ import {
   type CommandParameterValue,
   type CommandSegment,
   type CommandDynamicValue,
+  type CommandPromptFactory,
   resolveDynamicParams,
 } from './definition.js';
 import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
@@ -83,16 +84,23 @@ const segmentFields = {
   rps: 'result',
 };
 
+export interface CommandMenuConfig {
+  readonly keyword: string;
+}
+
 export class CommandIndex {
   readonly $projection = 'zhin.command-index/1' as const;
   readonly #commands: readonly CommandRecord[];
   readonly #routes: readonly CommandRoute[];
   readonly #shortcuts: ReadonlyMap<string, ShortcutEntry>;
+  readonly #menu?: CommandMenuConfig;
 
   constructor(
     slots: readonly Readonly<CapabilitySlot<CommandDefinition>>[],
     private readonly snapshot: RuntimeSnapshot,
+    menu?: CommandMenuConfig,
   ) {
+    this.#menu = menu;
     const commands: CommandRecord[] = [];
     const routes: CommandRoute[] = [];
     const occupancy = new Map<string, string>();
@@ -213,7 +221,20 @@ export class CommandIndex {
   async dispatch(
     input: CommandMatchInput,
     source: unknown = undefined,
+    promptFactory?: CommandPromptFactory,
   ): Promise<CommandDispatchResult> {
+    if (this.#menu) {
+      const menuValue = this.#dispatchMenu(input);
+      if (menuValue !== undefined) {
+        return Object.freeze({
+          matched: true,
+          command: this.#menu.keyword,
+          owner: this.snapshot.root,
+          value: menuValue,
+        });
+      }
+    }
+    const prompt = promptFactory?.(source);
     const shortcut = this.#matchShortcut(input);
     if (shortcut) {
       if (!(await this.#permitAllows(shortcut.record, source))) {
@@ -227,6 +248,7 @@ export class CommandIndex {
           resolveDynamicParams(shortcut.params, source),
           source,
           Object.freeze([]),
+          prompt,
         ),
       );
       return Object.freeze({
@@ -251,6 +273,7 @@ export class CommandIndex {
         resolveDynamicParams(match.params, source),
         source,
         match.remaining,
+        prompt,
       ),
     );
     return Object.freeze({
@@ -340,6 +363,72 @@ export class CommandIndex {
       if (value === undefined || matchesParameter(parameter.type, value)) continue;
       throw new CommandParameterValueError(parameter.name, parameter.type, value);
     }
+  }
+
+  // ==========================================================================
+  // 内置菜单命令
+  // ==========================================================================
+
+  #dispatchMenu(input: CommandMatchInput): string | undefined {
+    const text = typeof input === 'string' ? input.trim() : exactMessageText(input);
+    if (text === undefined) return undefined;
+    const keyword = this.#menu!.keyword;
+    if (text === keyword) return this.#buildMenu();
+    if (text.startsWith(keyword + ' ')) {
+      const key = text.slice(keyword.length + 1).trim();
+      if (key) return this.#buildMenu(key);
+      return this.#buildMenu();
+    }
+    return undefined;
+  }
+
+  #buildMenu(pluginKey?: string): string {
+    const root = this.snapshot.root;
+    const targetId = pluginKey
+      ? `${root}/${pluginKey.split('.').join('/')}` as PluginId
+      : root;
+
+    const node = this.snapshot.tree.get(targetId);
+    if (!node) return `未找到插件: ${pluginKey}`;
+
+    const directCommands = this.#commands.filter((cmd) => cmd.slot.owner === targetId);
+    const children = node.children
+      .map((childId) => this.snapshot.tree.get(childId))
+      .filter((child): child is NonNullable<typeof child> => !!child);
+
+    const keyword = this.#menu!.keyword;
+    const displayKey = pluginKey ?? node.instanceKey;
+    const lines: string[] = [`=== ${displayKey} 指令菜单 ===`];
+
+    if (directCommands.length > 0) {
+      lines.push('');
+      for (const cmd of directCommands) {
+        const desc = cmd.description ? `  - ${cmd.description}` : '';
+        lines.push(`  ${cmd.name}${desc}`);
+      }
+    }
+
+    if (children.length > 0) {
+      lines.push('');
+      lines.push('子插件：');
+      for (const child of children) {
+        const childKey = pluginKey ? `${pluginKey}.${child.instanceKey}` : child.instanceKey;
+        const label = child.metadata?.displayName ?? child.instanceKey;
+        lines.push(`  ${childKey}  (${label})`);
+      }
+    }
+
+    if (directCommands.length === 0 && children.length === 0) {
+      lines.push('');
+      lines.push('（暂无指令和子插件）');
+    }
+
+    if (children.length > 0) {
+      lines.push('');
+      lines.push(`提示：使用「${keyword} <插件名>」查看子插件的指令`);
+    }
+
+    return lines.join('\n');
   }
 }
 

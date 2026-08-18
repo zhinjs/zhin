@@ -313,7 +313,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         });
         persistencePendingActivate = true;
         handoff.add({
-          activateNext: async () => {
+          activateNext: async (signal) => {
+            signal.throwIfAborted();
             try {
               const raw = database.getRawDatabase();
               if (!raw) {
@@ -330,6 +331,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 aiConfig,
                 orchService,
               );
+              signal.throwIfAborted();
               logger.info(formatCompact({
                 op: 'agent_host_persistence',
                 mode: 'database',

@@ -28,7 +28,9 @@ export class SlotGenerationPreparer {
   async prepare(
     current: RuntimeSnapshot,
     selected: readonly CapabilityId[] | CapabilityDelta,
+    signal: AbortSignal,
   ): Promise<PreparedRuntimeGeneration> {
+    signal.throwIfAborted();
     const selectedByFeature: CapabilityDelta = Array.isArray(selected)
       ? capabilityDeltaFromSlots(current, selected as readonly CapabilityId[])
       : selected as CapabilityDelta;
@@ -43,6 +45,7 @@ export class SlotGenerationPreparer {
         this.model.rootsByFeature.get(feature) ?? [],
         { capabilities: ids },
       );
+      signal.throwIfAborted();
       for (const slot of replacements) capabilities.set(slot.id, slot);
     }
 
@@ -62,6 +65,7 @@ export class SlotGenerationPreparer {
         resources: current.resources,
         capabilities,
       },
+      signal,
       current.projections,
     );
     try {

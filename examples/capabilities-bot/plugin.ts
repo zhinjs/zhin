@@ -7,7 +7,6 @@
 import {
   databaseHostToken,
   definePlugin,
-  outboundHostToken,
   scheduleHostToken,
 } from '@zhin.js/plugin-runtime';
 import { defineAgentTool } from '@zhin.js/tool';
@@ -15,16 +14,6 @@ import { defineAgentTool } from '@zhin.js/tool';
 interface ShowcaseConfig {
   greeting: string;
   heartbeatCron: string;
-  pushOnBoot?: boolean;
-  pushTarget?: {
-    adapter: string;
-    endpointKey: string;
-    conversation: {
-      kind: 'private' | 'group' | 'channel';
-      id: string;
-      parent?: { kind: 'group' | 'channel'; id: string };
-    };
-  };
 }
 
 export default definePlugin<ShowcaseConfig>({
@@ -77,25 +66,7 @@ export default definePlugin<ShowcaseConfig>({
     }));
     log('agent-tools: showcase_greet projected');
 
-    // ⑥ 主动出站（outboundHostToken）：启动后向配置目标推送上线消息
-    if (config.pushOnBoot && config.pushTarget && context.resources.has(outboundHostToken)) {
-      const outbound = context.resources.use(outboundHostToken);
-      const target = config.pushTarget;
-      // ⑦ 代际交接（handoff）：endpoint 就绪后再发，避免启动时序竞争
-      context.handoff.add({
-        activateNext: async () => {
-          await outbound.send({
-            adapter: target.adapter,
-            endpointKey: target.endpointKey,
-            conversation: target.conversation,
-            content: `${config.greeting}，capabilities-bot 已上线`,
-          });
-          log('outbound: boot message pushed');
-        },
-      });
-    }
-
-    // ⑧ 卸载清理：setup 返回的 Dispose 会在 generation 结束时执行
+    // ⑥ 卸载清理：setup 返回的 Dispose 会在 generation 结束时执行
     return () => log('disposed');
   },
 });

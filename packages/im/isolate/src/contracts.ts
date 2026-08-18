@@ -3,7 +3,6 @@ import { createToken, type Dispose, type PluginId } from '@zhin.js/plugin-runtim
 export type IsolatedPluginStatus =
   | 'prepared'
   | 'active'
-  | 'quiesced'
   | 'failed'
   | 'closed';
 

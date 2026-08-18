@@ -4,6 +4,8 @@ import {
   GenerationHandoffStack,
   Scope,
   capabilityId,
+  createGenerationAdmissionGate,
+  createToken,
   createPluginDatabaseHost,
   createPluginScheduleHost,
   databaseHostToken,
@@ -19,6 +21,7 @@ import {
   type Dispose,
   type FeatureId,
   type GenerationHandoff,
+  type GenerationAdmissionGate,
   type GenerationHandoffRegistry,
   type PluginDefinition,
   type PluginId,
@@ -48,9 +51,12 @@ import type { RuntimeConfigDocument } from './config-composer.js';
 export type PluginConfigResolver = (node: PluginGraphNode) => unknown;
 
 export interface RootResourceContext {
+  readonly signal: AbortSignal;
   readonly resources: Scope;
   readonly lifecycle: DisposeStack;
   readonly handoff: GenerationHandoffRegistry;
+  /** Candidate-wide gate atomically switched by SnapshotStore at commit. */
+  readonly admission: GenerationAdmissionGate;
   readonly config: PrimaryConfig;
   /**
    * Adds a root-owned capability to this shadow generation. The definition is
@@ -84,6 +90,7 @@ export class PluginScopeAssembler {
   readonly #setupCapabilities = new Map<CapabilityId, SetupCapabilityRegistration>();
   readonly #created: PluginId[] = [];
   readonly #handoffs = new GenerationHandoffStack();
+  readonly #admission = createGenerationAdmissionGate();
   readonly #envStores: EnvStoreFactory;
   #setupFeatureAliases: ReadonlyMap<string, FeatureId> = new Map();
 
@@ -120,7 +127,8 @@ export class PluginScopeAssembler {
     this.#setupFeatureAliases = new Map(aliases);
   }
 
-  async setupTree(node: PluginGraphNode): Promise<void> {
+  async setupTree(node: PluginGraphNode, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted();
     const manifest = node.package.packageJson.zhin as ZhinPluginManifest;
     const parentScope = node.parent ? this.scopes.get(node.parent) : undefined;
     if (node.parent && !parentScope) throw new Error(`Missing parent scope for ${node.id}`);
@@ -138,12 +146,15 @@ export class PluginScopeAssembler {
 
     if (!node.parent) {
       scope.provide(runtimeEnvironmentToken, this.environment);
+      scope.provide(rootGenerationAdmissionToken, this.#admission);
       const config = createPrimaryConfig(this.primaryConfigDocument, environment);
       scope.provide(primaryConfigToken, config);
       await this.installResources?.({
+        signal,
         resources: scope,
         lifecycle: scope.disposers,
         handoff: this.#handoffs,
+        admission: this.#admission,
         config,
         addFeature: register,
       });
@@ -175,7 +186,8 @@ export class PluginScopeAssembler {
         entry: resolve(node.package.root, manifest.entry),
         config,
         environment: this.environment,
-      });
+      }, signal);
+      signal.throwIfAborted();
       // Ownership transfers to the shadow Scope immediately. Every later
       // validation or binding failure is then covered by normal rollback.
       scope.disposers.add(prepared.dispose);
@@ -191,6 +203,7 @@ export class PluginScopeAssembler {
       const module = await this.modules.load<ModuleNamespace>(
         resolve(node.package.root, manifest.entry),
       );
+      signal.throwIfAborted();
       const definition = module.default as PluginDefinition | undefined;
       if (!definition || typeof definition.name !== 'string') {
         throw new TypeError(`${node.package.name} does not default-export a Plugin definition`);
@@ -201,6 +214,7 @@ export class PluginScopeAssembler {
         }
       }
       const setupContext: Record<string, unknown> = {
+        signal,
         plugin,
         config: view,
         resources: scope,
@@ -215,6 +229,7 @@ export class PluginScopeAssembler {
       const returned = await definition.setup?.(
         Object.freeze(setupContext) as unknown as PluginSetupContext,
       );
+      signal.throwIfAborted();
       if (returned) scope.disposers.add(returned);
       metadata = definition.metadata;
     }
@@ -232,7 +247,7 @@ export class PluginScopeAssembler {
     this.config.set(node.id, config);
     this.resources.set(node.id, scope.snapshot());
 
-    for (const child of node.children) await this.setupTree(child);
+    for (const child of node.children) await this.setupTree(child, signal);
   }
 
   #registerSetupCapability<TDefinition>(
@@ -317,6 +332,10 @@ export class PluginScopeAssembler {
     }
   }
 }
+
+const rootGenerationAdmissionToken = createToken<GenerationAdmissionGate>(
+  'zhin.runtime.root-generation-admission',
+);
 
 interface ModuleNamespace {
   readonly default?: unknown;

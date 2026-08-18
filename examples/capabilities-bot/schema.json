@@ -12,28 +12,6 @@
       "type": "string",
       "default": "0 */5 * * * *",
       "description": "心跳定时任务（6 段 cron）；空串关闭"
-    },
-    "pushOnBoot": {
-      "type": "boolean",
-      "default": false,
-      "description": "启动后向 pushTarget 主动推送一条上线消息（演示 outboundHostToken）"
-    },
-    "pushTarget": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "adapter": { "type": "string", "default": "sandbox" },
-        "endpointKey": { "type": "string", "default": "sandbox-bot" },
-        "conversation": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "kind": { "type": "string", "enum": ["private", "group", "channel"], "default": "private" },
-            "id": { "type": "string", "default": "sandbox-user" }
-          },
-          "required": ["kind", "id"]
-        }
-      }
     }
   }
 }

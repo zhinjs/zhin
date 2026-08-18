@@ -47,7 +47,7 @@ old lease = 0:     previous.stop()
 rollback:          candidate.stop()
 ```
 
-MCP 没有入站 admission，因此候选连接不 quiesce 旧 client。旧 turn 可继续通过旧 projection 完成在途调用；新 turn 只看到已启动并已提交的新 client。要求排他连接时，应把连接资源提升到 Plugin Resource handoff。
+MCP 候选连接不会触碰旧 client。旧 turn 继续通过旧 projection 与 snapshot lease 完成在途调用；新 turn 只看到已启动并已提交的新 client。要求排他连接时，连接必须由 Process Host 持有，并让 generation 只原子切换逻辑路由，不能在 shadow prepare 中抢占旧连接。
 
 `McpIndex` 对连接使用 owner inheritance。动态工具名由 client 返回；orchestrator 可投影为 `{connection}__{tool}`，但该模型命名不改变 Capability identity。
 

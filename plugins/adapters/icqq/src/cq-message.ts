@@ -83,6 +83,9 @@ function pushCqSegment(segments: MessageSegment[], type: string, arg: string): v
     case "reply":
       segments.push({ type: "reply", data: { message_id: arg } });
       break;
+    case "json":
+      segments.push({ type: "json", data: { text: arg } });
+      break;
     default:
       segments.push({ type, data: { text: `[${type}:${arg}]` } });
       break;
@@ -167,6 +170,8 @@ export function toCqString(content: SendContent): string {
         }
         case "reply":
           return `[reply:${data.message_id ?? data.id}]`;
+        case "json":
+          return `[json:${data.text ?? ''}]`;
         default:
           return segment.toString(seg);
       }

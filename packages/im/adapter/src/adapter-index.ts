@@ -1,12 +1,15 @@
 import {
   DisposeStack,
+  GenerationCompensationError,
+  createGenerationAdmissionGate,
+  generationAdmissionSource,
   type CapabilityId,
   type CapabilitySlot,
+  type GenerationAdmissionGate,
   type PluginId,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import { createCapabilityContext } from '@zhin.js/feature-kit';
-import { formatCompact, getLogger } from '@zhin.js/logger';
 import type {
   AdapterCapability,
   AdapterDefinition,
@@ -19,8 +22,6 @@ import {
   type EndpointManagementCapability,
 } from './endpoint-management.js';
 import { assertDeclaredEndpointOperations } from './endpoint-control.js';
-
-const logger = getLogger('Adapter');
 
 export interface AdapterDescriptor {
   readonly id: CapabilityId;
@@ -39,57 +40,46 @@ export interface AdapterEndpointSummary extends AdapterDescriptor {
 }
 
 export type AdapterEndpointPhase =
-  'pending' | 'starting' | 'online' | 'failed' | 'unconfigured';
+  'pending' | 'starting' | 'online';
 
 interface AdapterRecord extends AdapterDescriptor {
   readonly endpoint: EndpointInstance;
   readonly segments?: AdapterSegmentPolicy;
-  readonly unconfigured: boolean;
   started: boolean;
   open: boolean;
   stopped: boolean;
-  /** Start rejected or was given up on — distinguishes 'failed' from 'unconfigured'. */
-  failed: boolean;
-  /** start() was invoked at least once (may still be in flight). */
+  stopping?: Promise<void>;
   startAttempted: boolean;
 }
 
 export class AdapterIndex {
   readonly $projection = 'zhin.adapter-index/1' as const;
   readonly #records = new Map<CapabilityId, AdapterRecord>();
+  readonly [generationAdmissionSource]: readonly GenerationAdmissionGate[];
   readonly #order: readonly AdapterRecord[];
-  /** True after `open()` until `close()` / `stop()` — late starts may open themselves. */
-  #admissionOpen = false;
-  readonly #startTimeoutMs: number;
-  /** Final give-up budget for deferred starts (never-settling start promises). */
-  readonly #deferredGiveUpMs: number;
 
   private constructor(
     records: readonly AdapterRecord[],
-    startTimeoutMs: number,
-    deferredGiveUpMs: number,
+    admission: GenerationAdmissionGate,
   ) {
     this.#order = Object.freeze([...records]);
-    this.#startTimeoutMs = startTimeoutMs;
-    this.#deferredGiveUpMs = deferredGiveUpMs;
+    this[generationAdmissionSource] = Object.freeze([admission]);
     for (const record of records) this.#records.set(record.id, record);
   }
 
   static async create(
     slots: readonly Readonly<CapabilitySlot<AdapterDefinition>>[],
     snapshot: RuntimeSnapshot,
-    options: {
-      readonly startTimeoutMs?: number;
-      readonly deferredGiveUpMs?: number;
-    } = {},
+    signal: AbortSignal,
   ): Promise<AdapterIndex> {
     const records: AdapterRecord[] = [];
-    const unconfigured: string[] = [];
+    const admission = createGenerationAdmissionGate();
     try {
       for (const slot of [...slots].sort((left, right) => left.id.localeCompare(right.id))) {
+        signal.throwIfAborted();
         for (const expansion of expandEndpointConfigs(slot, snapshot)) {
-          const endpoint = await createEndpointSoft(slot, snapshot, expansion);
-          if (endpoint.unconfigured) unconfigured.push(expansion.endpointId);
+          const endpoint = await createEndpoint(slot, snapshot, admission, signal, expansion);
+          signal.throwIfAborted();
           records.push({
             id: expansion.id,
             owner: slot.owner,
@@ -98,30 +88,16 @@ export class AdapterIndex {
             name: expansion.endpointId,
             source: slot.source,
             capabilities: slot.definition.capabilities,
-            endpoint: endpoint.instance,
+            endpoint,
             ...(slot.definition.segments ? { segments: slot.definition.segments } : {}),
-            unconfigured: endpoint.unconfigured,
             started: false,
             open: false,
-            failed: false,
             startAttempted: false,
-            // Unconfigured stubs skip start/open so kitchen-sink Roots stay quiet.
-            stopped: endpoint.unconfigured,
+            stopped: false,
           });
         }
       }
-      if (unconfigured.length > 0) {
-        logger.info(formatCompact({
-          op: 'adapters_unconfigured',
-          count: unconfigured.length,
-          names: unconfigured.join(','),
-        }));
-      }
-      return new AdapterIndex(
-        records,
-        options.startTimeoutMs ?? 3_000,
-        options.deferredGiveUpMs ?? 60_000,
-      );
+      return new AdapterIndex(records, admission);
     } catch (error) {
       await stopRecords(records, error);
       throw error;
@@ -129,8 +105,8 @@ export class AdapterIndex {
   }
 
   list(): readonly AdapterDescriptor[] {
-    return this.#order.map(({ endpoint: _endpoint, unconfigured: _unconfigured,
-      started: _started, open: _open, stopped: _stopped, failed: _failed,
+    return this.#order.map(({ endpoint: _endpoint,
+      started: _started, open: _open, stopped: _stopped, stopping: _stopping,
       startAttempted: _startAttempted, segments: _segments,
       ...descriptor }) => Object.freeze(descriptor));
   }
@@ -188,103 +164,59 @@ export class AdapterIndex {
     return this.#records.get(id)?.segments;
   }
 
-  async start(): Promise<void> {
-    // Soft-start in parallel with a short wait so kitchen-sink Roots do not
-    // stall generation. Configured platforms that need longer (QQ auth, Slack
-    // socket, GitHub verify) stay in-flight instead of being stop()'d mid-connect.
-    const startTimeoutMs = this.#startTimeoutMs;
-    await Promise.all(this.#order.map(async (record) => {
-      if (record.started || record.stopped) return;
-      record.startAttempted = true;
-      const startPromise = (async () => record.endpoint.start?.())();
-      try {
-        await withTimeout(
-          startPromise,
-          startTimeoutMs,
-          `Adapter start timed out after ${startTimeoutMs}ms`,
-        );
-        if (record.stopped) return;
-        record.started = true;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (message.includes('timed out after')) {
-          logger.info(formatCompact({
-            op: 'adapter_start_deferred',
-            id: record.id,
-            name: record.name,
-            waitMs: startTimeoutMs,
-          }));
-          // Final backstop: a deferred start promise that never settles must
-          // not keep the Endpoint in limbo forever.
-          const giveUp = setTimeout(() => {
-            if (record.stopped || record.started) return;
-            record.stopped = true;
-            record.failed = true;
-            // Swallow a late rejection so it does not become unhandled.
-            void startPromise.catch(() => undefined);
-            logger.warn(formatCompact({
-              op: 'adapter_start_give_up',
-              id: record.id,
-              name: record.name,
-              waitMs: this.#deferredGiveUpMs,
-            }));
-          }, this.#deferredGiveUpMs);
-          giveUp.unref?.();
-          void startPromise.then(
-            () => {
-              clearTimeout(giveUp);
-              if (record.stopped || record.started) return;
-              record.started = true;
-              if (this.#admissionOpen && !record.open) {
-                try {
-                  record.endpoint.open?.();
-                  record.open = true;
-                } catch (openError) {
-                  logger.warn(formatCompact({
-                    op: 'adapter_open_after_deferred_fail',
-                    id: record.id,
-                    name: record.name,
-                    error: openError instanceof Error ? openError.message : String(openError),
-                  }));
-                }
-              }
-            },
-            (startError) => {
-              clearTimeout(giveUp);
-              if (record.stopped) return;
-              record.stopped = true;
-              record.failed = true;
-              logger.warn(formatCompact({
-                op: 'adapter_start_soft_fail',
-                id: record.id,
-                name: record.name,
-                error: startError instanceof Error ? startError.message : String(startError),
-                stack: startError instanceof Error ? startError.stack : undefined,
-              }));
-            },
-          );
-          return;
+  async start(signal: AbortSignal = new AbortController().signal): Promise<void> {
+    try {
+      // Sequential readiness gives the candidate one owned in-flight start at a
+      // time. A sibling failure can therefore never leave an un-awaited start
+      // promise mutating resources after rollback has returned.
+      for (const record of this.#order) {
+        if (record.started || record.stopped) continue;
+        record.startAttempted = true;
+        signal.throwIfAborted();
+        let stopOnAbort!: () => void;
+        const aborted = new Promise<never>((_resolve, reject) => {
+          stopOnAbort = () => {
+            void stopRecord(record).then(
+              () => reject(signal.reason ?? new Error('Adapter Endpoint start aborted')),
+              (cleanupError) => reject(new GenerationCompensationError(
+                [signal.reason, cleanupError],
+                'Adapter Endpoint cancellation cleanup failed',
+                { cause: cleanupError },
+              )),
+            );
+          };
+        });
+        signal.addEventListener('abort', stopOnAbort, { once: true });
+        try {
+          await Promise.race([
+            Promise.resolve(record.endpoint.start?.(signal)),
+            aborted,
+          ]);
+        } finally {
+          signal.removeEventListener('abort', stopOnAbort);
         }
-        record.stopped = true;
-        record.failed = true;
-        void startPromise.catch(() => undefined);
-        // Startup connect failures are logged once here (with stack); Endpoint
-        // implementations must NOT re-log them at error level.
-        logger.warn(formatCompact({
-          op: 'adapter_start_soft_fail',
-          id: record.id,
-          name: record.name,
-          error: message,
-          stack: error instanceof Error ? error.stack : undefined,
-        }));
-        // No endpoint.stop() here: adapter Endpoints self-stop in their start()
-        // catch by convention (verified across icqq/qq/slack/… endpoints).
+        signal.throwIfAborted();
+        if (record.stopped) throw new Error(`Adapter Endpoint stopped during start: ${record.id}`);
+        record.started = true;
       }
-    }));
+    } catch (error) {
+      await stopRecords(this.#order, error);
+      throw error;
+    }
+  }
+
+  /** Required readiness boundary: no generation can publish a partial Endpoint set. */
+  async activate(signal: AbortSignal): Promise<void> {
+    try {
+      await this.start(signal);
+      this.open();
+    } catch (error) {
+      await stopRecords(this.#order, error);
+      throw error;
+    }
   }
 
   open(): void {
-    this.#admissionOpen = true;
     const errors: unknown[] = [];
     for (const record of this.#order) {
       if (!record.started || record.open || record.stopped) continue;
@@ -299,7 +231,6 @@ export class AdapterIndex {
   }
 
   async close(): Promise<void> {
-    this.#admissionOpen = false;
     const stack = new DisposeStack();
     for (const record of this.#order) {
       if (!record.open || record.stopped) continue;
@@ -370,10 +301,8 @@ function endpointLiveName(endpoint: EndpointInstance): string | undefined {
 }
 
 function endpointPhase(record: AdapterRecord): AdapterEndpointPhase {
-  if (record.unconfigured) return 'unconfigured';
-  if (record.failed) return 'failed';
   if (record.open && !record.stopped) return 'online';
-  if (record.startAttempted) return 'starting';
+  if (record.startAttempted && !record.started) return 'starting';
   return 'pending';
 }
 
@@ -381,17 +310,6 @@ function assertEndpoint(value: unknown, id: CapabilityId): asserts value is Endp
   if (!value || typeof value !== 'object') {
     throw new TypeError(`Adapter ${id} create() must return an Endpoint instance`);
   }
-}
-
-/**
- * Adapter `resolveXxxConfig` helpers report missing config/credentials as
- * TypeError("… requires …") by convention; only those are expected failures.
- */
-function isUnconfiguredError(error: unknown): boolean {
-  return (
-    error instanceof TypeError
-    && /requires|not configured|missing|未配置|缺少/i.test(error.message)
-  );
 }
 
 /** 单个实例配置展开的 endpoint 描述（多账号适配器经 `endpoints` 数组声明）。 */
@@ -414,137 +332,64 @@ function expandEndpointConfigs(
     | { endpoints?: unknown }
     | undefined;
   const raw = config?.endpoints;
-  const entries = Array.isArray(raw)
-    ? raw.filter((entry): entry is Record<string, unknown> & { id: string } =>
-      !!entry && typeof entry === 'object'
-      && typeof (entry as { id?: unknown }).id === 'string'
-      && (entry as { id: string }).id.length > 0)
-    : [];
+  if (raw !== undefined && !Array.isArray(raw)) {
+    throw new TypeError(`Adapter ${slot.id} endpoints must be an array`);
+  }
+  const entries = (raw ?? []) as readonly unknown[];
   if (entries.length === 0) {
-    if (Array.isArray(raw) && raw.length > 0) {
-      logger.warn(formatCompact({
-        op: 'adapter_endpoints_entries_dropped',
-        id: slot.id,
-        reason: 'every endpoints entry is missing a non-empty string id',
-      }));
-    }
     return Object.freeze([{ id: slot.id, endpointId: slot.localName }]);
   }
-  // `~` 是 record id 的分隔符、\0 是 CapabilityId 的分隔符，混入会破坏解析
-  const valid = entries.filter((entry) => {
-    if (/[~\0]/u.test(entry.id)) {
-      logger.warn(formatCompact({
-        op: 'adapter_endpoint_id_invalid',
-        id: slot.id,
-        endpointId: entry.id,
-      }));
-      return false;
+  const normalized = entries.map((entry, index) => {
+    if (!entry || typeof entry !== 'object'
+      || typeof (entry as { id?: unknown }).id !== 'string'
+      || (entry as { id: string }).id.length === 0) {
+      throw new TypeError(`Adapter ${slot.id} endpoints[${index}].id must be a non-empty string`);
     }
-    return true;
+    return entry as Record<string, unknown> & { id: string };
   });
-  // 重 id 会让 #records 覆盖与 #order/resolve 三者不一致；保留首个并告警
+  // `~` 是 record id 的分隔符、\0 是 CapabilityId 的分隔符，混入会破坏解析。
+  for (const entry of normalized) {
+    if (/[~\0]/u.test(entry.id)) {
+      throw new TypeError(`Adapter ${slot.id} endpoint id contains a reserved delimiter: ${entry.id}`);
+    }
+  }
   const seen = new Set<string>();
-  const deduped = valid.filter((entry) => {
+  for (const entry of normalized) {
     if (seen.has(entry.id)) {
-      logger.warn(formatCompact({
-        op: 'adapter_endpoint_id_duplicate',
-        id: slot.id,
-        endpointId: entry.id,
-      }));
-      return false;
+      throw new TypeError(`Adapter ${slot.id} endpoint id is duplicated: ${entry.id}`);
     }
     seen.add(entry.id);
-    return true;
-  });
-  if (deduped.length === 0) {
-    return Object.freeze([{ id: slot.id, endpointId: slot.localName }]);
   }
   const { endpoints: _drop, ...base } = (config ?? {}) as Record<string, unknown>;
-  return Object.freeze(deduped.map((entry) => Object.freeze({
+  return Object.freeze(normalized.map((entry) => Object.freeze({
     id: `${slot.id}~${entry.id}` as CapabilityId,
     endpointId: entry.id,
     config: Object.freeze({ ...base, ...entry, id: entry.id }),
   })));
 }
 
-async function createEndpointSoft(
+async function createEndpoint(
   slot: Readonly<CapabilitySlot<AdapterDefinition>>,
   snapshot: RuntimeSnapshot,
+  admission: GenerationAdmissionGate,
+  signal: AbortSignal,
   expansion?: EndpointExpansion,
-): Promise<{ readonly instance: EndpointInstance; readonly unconfigured: boolean }> {
-  let endpoint: unknown;
-  try {
-    endpoint = await slot.definition.create(
-      Object.freeze({
-        ...createCapabilityContext(snapshot, slot.owner),
-        ...(expansion?.config ? { config: expansion.config } : {}),
-        id: expansion?.id ?? slot.id,
-        name: slot.localName,
-      }),
-    );
-  } catch (error) {
-    // Missing config / credentials: degrade to an inert stub so the rest of
-    // the generation still boots. Anything else (network failures, bugs in
-    // create()) is unexpected — keep the stub but surface a warning instead
-    // of silently swallowing it at debug level.
-    const message = error instanceof Error ? error.message : String(error);
-    const log = isUnconfiguredError(error) ? logger.debug.bind(logger) : logger.warn.bind(logger);
-    log(formatCompact({
-      op: 'adapter_create_soft_fail',
+): Promise<EndpointInstance> {
+  const endpoint = await slot.definition.create(
+    Object.freeze({
+      ...createCapabilityContext(snapshot, slot.owner, admission, signal),
+      ...(expansion?.config ? { config: expansion.config } : {}),
       id: expansion?.id ?? slot.id,
-      name: expansion?.endpointId ?? slot.localName,
-      error: message,
-    }));
-    return {
-      instance: createUnconfiguredEndpoint(message),
-      unconfigured: true,
-    };
-  }
-  // Programming errors (create() did not return an Endpoint) must surface:
-  // they propagate to AdapterIndex.create's catch, which disposes the records
-  // created so far instead of hiding the bug behind an unconfigured stub.
+      name: slot.localName,
+    }),
+  );
   assertEndpoint(endpoint, expansion?.id ?? slot.id);
   assertDeclaredEndpointOperations(
     endpoint,
     slot.definition.operations,
     String(expansion?.id ?? slot.id),
   );
-  return { instance: endpoint, unconfigured: false };
-}
-
-function createUnconfiguredEndpoint(reason: string): EndpointInstance {
-  return Object.freeze({
-    start() {
-      throw new Error(`Adapter unconfigured: ${reason}`);
-    },
-    open() {},
-    close() {},
-    stop() {},
-    send() {
-      throw new Error(`Adapter unconfigured: ${reason}`);
-    },
-  });
-}
-
-function withTimeout<T>(
-  promise: Promise<T> | T | undefined,
-  ms: number,
-  message: string,
-): Promise<T | undefined> {
-  if (promise === undefined) return Promise.resolve(undefined);
-  return new Promise<T | undefined>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(message)), ms);
-    Promise.resolve(promise).then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
+  return endpoint;
 }
 
 async function stopRecords(
@@ -554,17 +399,13 @@ async function stopRecords(
   const stack = new DisposeStack();
   for (const record of records) {
     if (record.stopped) continue;
-    stack.add(async () => {
-      record.stopped = true;
-      record.open = false;
-      await record.endpoint.stop?.();
-    });
+    stack.add(() => stopRecord(record));
   }
   try {
     await stack.dispose();
   } catch (stopError) {
     if (primaryError !== undefined) {
-      throw new AggregateError(
+      throw new GenerationCompensationError(
         [primaryError, stopError],
         'Adapter prepare and Endpoint cleanup both failed',
         { cause: stopError },
@@ -572,4 +413,18 @@ async function stopRecords(
     }
     throw stopError;
   }
+}
+
+function stopRecord(record: AdapterRecord): Promise<void> {
+  if (record.stopped) return Promise.resolve();
+  if (record.stopping) return record.stopping;
+  const stopping = Promise.resolve(record.endpoint.stop?.()).then(() => {
+    record.stopped = true;
+    record.open = false;
+  });
+  record.stopping = stopping;
+  void stopping.catch(() => undefined).finally(() => {
+    if (!record.stopped && record.stopping === stopping) record.stopping = undefined;
+  });
+  return stopping;
 }

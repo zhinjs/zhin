@@ -1,7 +1,5 @@
-// plugins/utils/music/src/config.ts
-import type { MusicSourceConfig,MusicSource } from './types.js'
+import type { MusicSourceConfig, MusicSource } from './types.js';
 
-/** 音乐源配置映射 */
 export const sourceConfigMap: Record<MusicSource, MusicSourceConfig> = {
   qq: {
     appid: 100497308,
@@ -17,38 +15,64 @@ export const sourceConfigMap: Record<MusicSource, MusicSourceConfig> = {
     sign: 'da6b069da1e2982db3e386233f68d76d',
     version: '9.1.92',
   },
+  kuwo: {
+    appid: 100243533,
+    package: 'cn.kuwo.player',
+    icon: 'https://p.qpic.cn/qqconnect/0/app_100243533_1636498875/100?max-age=2592000&t=0',
+    sign: 'bf9ff4ffb4c558a34ee3fd52c223ebf5',
+    version: '10.1.3.5',
+  },
+  kugou: {
+    appid: 205141,
+    package: 'com.kugou.android',
+    icon: 'https://open.gtimg.cn/open/app_icon/00/20/51/41/205141_100_m.png',
+    sign: '5a84ee451a90ca88a1ea0ad2bef9e69c',
+    version: '12.2.8',
+  },
+};
+
+export const SOURCE_ALIASES: Record<string, MusicSource> = {
+  'qq': 'qq',
+  'QQ': 'qq',
+  'QQ音乐': 'qq',
+  'qq音乐': 'qq',
+  '网易': 'netease',
+  '网易云': 'netease',
+  '163': 'netease',
+  '酷我': 'kuwo',
+  '酷狗': 'kugou',
+};
+
+export const SOURCE_DISPLAY_NAME: Record<MusicSource, string> = {
+  qq: 'QQ音乐',
+  netease: '网易云',
+  kuwo: '酷我',
+  kugou: '酷狗',
+};
+
+export function resolveSourceAlias(input: string): MusicSource | undefined {
+  return SOURCE_ALIASES[input.trim()];
 }
 
-/** 格式化时长 */
 export function formatDuration(seconds?: number): string {
-  if (!seconds) return '未知'
-  
-  const minutes = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${minutes}:${secs.toString().padStart(2, '0')}`
+  if (!seconds) return '未知';
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${minutes}:${secs.toString().padStart(2, '0')}`;
 }
 
-/** 格式化音乐信息 */
 export function formatMusicInfo(music: {
-  title: string
-  artist?: string
-  album?: string
-  duration?: number
-  source: string
+  title: string;
+  artist?: string;
+  album?: string;
+  duration?: number;
+  source: string;
 }): string {
-  const parts = [music.title]
-  
-  if (music.artist) {
-    parts.push(music.artist)
-  }
-  
-  if (music.album) {
-    parts.push(music.album)
-  }
-  
-  const info = parts.join(' - ')
-  const duration = formatDuration(music.duration)
-  const source = music.source.toUpperCase()
-  
-  return `${info} [${duration}] [${source}]`
+  const parts = [music.title];
+  if (music.artist) parts.push(music.artist);
+  if (music.album) parts.push(music.album);
+  const info = parts.join(' - ');
+  const duration = formatDuration(music.duration);
+  const source = music.source.toUpperCase();
+  return `${info} [${duration}] [${source}]`;
 }

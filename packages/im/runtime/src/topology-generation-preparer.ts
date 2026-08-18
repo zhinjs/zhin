@@ -84,8 +84,10 @@ export class TopologyGenerationPreparer {
 
   async prepare(
     current: RuntimeSnapshot,
+    signal: AbortSignal,
     delta: TopologyRuntimeDelta = { slots: [], subtrees: [] },
   ): Promise<PreparedRuntimeGeneration | undefined> {
+    signal.throwIfAborted();
     const planned = new TopologyTransactionPlanner().plan(this.model.graph, this.graph);
     const nextNodes = graphNodes(this.graph);
     const configReplacements = changedConfigRoots(current, nextNodes, this.configResolver);
@@ -132,7 +134,7 @@ export class TopologyGenerationPreparer {
       for (const root of setupRoots) {
         const node = nextNodes.get(root);
         if (!node) throw new Error(`Missing topology setup root: ${root}`);
-        await plugins.setupTree(node);
+        await plugins.setupTree(node, signal);
       }
       // Retained parents still need a new immutable children view after add,
       // remove, move, or reorder operations.
@@ -160,6 +162,7 @@ export class TopologyGenerationPreparer {
           resources: plugins.resources,
           capabilities,
         },
+        signal,
       );
       for (const [feature, dispose] of projected.disposers) {
         projectionDisposers.set(feature, dispose);

@@ -63,9 +63,9 @@ describe('MCP Feature', () => {
         }),
       }),
     });
-    const index = await McpIndex.create([slot], snapshot([slot]));
+    const index = await createMcpIndex([slot], snapshot([slot]));
     await expect(index.listTools(root, 'memory')).rejects.toThrow('not active');
-    await index.start();
+    await index.start(new AbortController().signal);
     await expect(index.listTools(root, 'memory')).resolves.toEqual([{ name: 'search' }]);
     await expect(index.callTool(root, 'memory', 'search', { q: 'x' }))
       .resolves.toEqual({ q: 'x' });
@@ -97,9 +97,9 @@ describe('MCP Feature', () => {
     });
     const first = slot('a-first', false);
     const broken = slot('z-broken', true);
-    const index = await McpIndex.create([broken, first], snapshot([first, broken]));
+    const index = await createMcpIndex([broken, first], snapshot([first, broken]));
 
-    await expect(index.start()).rejects.toThrow('connect failed');
+    await expect(index.start(new AbortController().signal)).rejects.toThrow('connect failed');
     expect(events).toEqual([
       'a-first:start',
       'z-broken:start',
@@ -129,8 +129,8 @@ describe('MCP Feature', () => {
         }),
       }),
     });
-    const index = await McpIndex.create([slot], snapshot([slot]));
-    await index.start();
+    const index = await createMcpIndex([slot], snapshot([slot]));
+    await index.start(new AbortController().signal);
 
     await expect(index.stop()).rejects.toThrow('One or more disposers failed');
     // stop 失败不标记 stopped：连接仍视为活跃，且下次 stop 会重试。
@@ -161,13 +161,19 @@ describe('MCP Feature', () => {
     });
     const oldSlot = slot('old');
     const oldSnapshot = snapshot([oldSlot]);
-    const oldProjection = await mcpFeature.runtime.project([oldSlot], { snapshot: oldSnapshot });
+    const oldProjection = await mcpFeature.runtime.project([oldSlot], {
+      snapshot: oldSnapshot,
+      signal: new AbortController().signal,
+    });
     oldSnapshot.projections.set(mcpFeatureId, oldProjection.value);
-    await oldProjection.handoff?.activateNext?.();
+    await oldProjection.handoff?.activateNext?.(new AbortController().signal);
 
     const newSlot = slot('new');
-    const newProjection = await mcpFeature.runtime.project([newSlot], { snapshot: snapshot([newSlot]) });
-    await newProjection.handoff?.activateNext?.();
+    const newProjection = await mcpFeature.runtime.project([newSlot], {
+      snapshot: snapshot([newSlot]),
+      signal: new AbortController().signal,
+    });
+    await newProjection.handoff?.activateNext?.(new AbortController().signal);
 
     expect(events).toEqual(['old:start', 'new:start']);
     await expect((oldProjection.value as McpIndex).listTools(root, 'server')).resolves.toEqual([]);
@@ -199,14 +205,21 @@ describe('MCP Feature', () => {
     });
     const oldSlot = slot('old');
     const oldSnapshot = snapshot([oldSlot]);
-    const oldProjection = await mcpFeature.runtime.project([oldSlot], { snapshot: oldSnapshot });
+    const oldProjection = await mcpFeature.runtime.project([oldSlot], {
+      snapshot: oldSnapshot,
+      signal: new AbortController().signal,
+    });
     oldSnapshot.projections.set(mcpFeatureId, oldProjection.value);
-    await oldProjection.handoff?.activateNext?.();
+    await oldProjection.handoff?.activateNext?.(new AbortController().signal);
 
     failStart = true;
     const newSlot = slot('new');
-    const newProjection = await mcpFeature.runtime.project([newSlot], { snapshot: snapshot([newSlot]) });
-    await expect(newProjection.handoff?.activateNext?.()).rejects.toThrow('bind failed');
+    const newProjection = await mcpFeature.runtime.project([newSlot], {
+      snapshot: snapshot([newSlot]),
+      signal: new AbortController().signal,
+    });
+    await expect(newProjection.handoff?.activateNext?.(new AbortController().signal))
+      .rejects.toThrow('bind failed');
     await newProjection.dispose?.();
 
     expect(events).toEqual(['old:start', 'new:start', 'new:stop']);
@@ -214,6 +227,13 @@ describe('MCP Feature', () => {
     await oldProjection.dispose?.();
   });
 });
+
+function createMcpIndex(
+  slots: Parameters<typeof McpIndex.create>[0],
+  value: Parameters<typeof McpIndex.create>[1],
+) {
+  return McpIndex.create(slots, value, new AbortController().signal);
+}
 
 function snapshot(slots: readonly ReturnType<typeof createCapabilitySlot>[]): RuntimeSnapshot {
   const root = rootPluginId();

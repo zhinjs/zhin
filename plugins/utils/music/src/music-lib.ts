@@ -1,5 +1,6 @@
 import { musicServices } from './sources/index.js';
-import type { MusicInfo, MusicSource } from './types.js';
+import { sourceConfigMap, SOURCE_DISPLAY_NAME, formatDuration } from './config.js';
+import type { MusicInfo, MusicDetail, MusicSource } from './types.js';
 
 export async function searchMusic(
   keyword: string,
@@ -8,24 +9,19 @@ export async function searchMusic(
 ): Promise<{
   success: true;
   keyword: string;
-  results: Array<{ id: string; title: string; source: string; url: string }>;
+  source: MusicSource;
+  results: MusicInfo[];
   total: number;
 }> {
-  const searchSources: MusicSource[] = source ? [source] : ['qq', 'netease'];
-  const searchResults = await Promise.all(
-    searchSources.map((s) => musicServices[s].search(keyword, limit)),
-  );
-  const allMusic = searchResults.flat().filter(Boolean) as MusicInfo[];
+  const s: MusicSource = source ?? 'qq';
+  const service = musicServices[s];
+  const results = await service.search(keyword, limit);
   return {
     success: true,
     keyword,
-    results: allMusic.map((m) => ({
-      id: m.id,
-      title: m.title,
-      source: m.source,
-      url: m.url,
-    })),
-    total: allMusic.length,
+    source: s,
+    results,
+    total: results.length,
   };
 }
 
@@ -36,22 +32,39 @@ export async function shareMusicDetail(id: string, source: MusicSource) {
   }
   try {
     const detail = await service.getDetail(id);
-    return {
-      success: true as const,
-      music: {
-        id: detail.id,
-        title: detail.title,
-        source: detail.source,
-        url: detail.url,
-        image: detail.image,
-        audio: detail.audio,
-        duration: detail.duration,
-      },
-    };
+    return { success: true as const, music: detail };
   } catch (error) {
     return {
       success: false as const,
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+export function formatSearchResults(results: readonly MusicInfo[], source: MusicSource): string {
+  const sourceName = SOURCE_DISPLAY_NAME[source] ?? source;
+  if (results.length === 0) return `[${sourceName}] 未找到相关歌曲`;
+  const lines = results.map((m, i) => {
+    const parts = [m.title];
+    if (m.artist) parts.push(m.artist);
+    const duration = m.duration ? ` [${formatDuration(m.duration)}]` : '';
+    return `${i + 1}. ${parts.join(' - ')}${duration}`;
+  });
+  return `[${sourceName}] 搜索结果：\n${lines.join('\n')}\n\n回复序号播放，回复"取消"取消选择`;
+}
+
+export function buildMusicShareSegment(detail: MusicDetail) {
+  const config = sourceConfigMap[detail.source];
+  return {
+    type: 'share' as const,
+    data: {
+      title: detail.title,
+      url: detail.url,
+      image: detail.image,
+      audio: detail.audio,
+      duration: detail.duration,
+      artist: detail.artist,
+      config,
+    },
+  };
 }

@@ -24,6 +24,7 @@ export class FeatureProjector {
   async project(
     generation: number,
     base: ProjectionState,
+    signal: AbortSignal,
     retained: ReadonlyMap<FeatureId, unknown> = new Map(),
   ): Promise<ProjectedFeatures> {
     // Slot HMR seeds this map with the committed projections. Only providers
@@ -36,12 +37,15 @@ export class FeatureProjector {
 
     try {
       for (const provider of this.providers) {
+        signal.throwIfAborted();
         const slots = [...base.capabilities.values()].filter(
           (slot) => slot.feature === provider.id,
         );
         const projection = await provider.runtime.project(slots, {
           snapshot: createSnapshotView(generation, state),
+          signal,
         });
+        signal.throwIfAborted();
         projections.set(provider.id, projection.value);
         if (projection.dispose) disposers.set(provider.id, projection.dispose);
         if (projection.handoff) handoffs.add(projection.handoff);

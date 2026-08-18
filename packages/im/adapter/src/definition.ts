@@ -32,9 +32,9 @@ export interface EndpointInstance<TResult = unknown> {
   readonly management?: EndpointManagement;
   /** Optional platform-neutral control surface for existing messages. */
   readonly control?: EndpointControl;
-  /** Allocates transport resources but must not admit inbound events yet. */
-  start?(): void | Promise<void>;
-  /** Opens admission after the candidate generation has committed. */
+  /** Required readiness; must observe abort and settle before rollback returns. */
+  start?(signal: AbortSignal): void | Promise<void>;
+  /** Opens Endpoint-local flow behind the candidate generation admission gate. */
   open?(): void;
   /** Stops new inbound events while preserving in-flight work. */
   close?(): void | Promise<void>;

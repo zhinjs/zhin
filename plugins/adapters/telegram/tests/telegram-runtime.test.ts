@@ -443,7 +443,7 @@ describe('telegram plugin runtime adapter', () => {
     await endpoint.start();
     endpoint.open();
     const messageId = await endpoint.send({ conversation: testConversation('private', '1001'), payload: 'pong' });
-    expect(messageId).toBe('private:1001:77');
+    expect(messageId).toBe('77');
     expect(fetch.calls.some((c) => (
       c.method === 'sendMessage'
       && c.body.chat_id === 1001
@@ -466,7 +466,7 @@ describe('telegram plugin runtime adapter', () => {
     await endpoint.start();
     endpoint.open();
     await expect(endpoint.send({ conversation: testConversation('group', '-1001'), payload: 'pong' }))
-      .resolves.toBe('group:-1001:78');
+      .resolves.toBe('78');
     expect(fetch.calls.some((call) => (
       call.method === 'sendMessage' && call.body.chat_id === -1001
     ))).toBe(true);
@@ -503,7 +503,7 @@ describe('telegram plugin runtime adapter', () => {
         },
       ],
     });
-    expect(messageId).toBe('private:1001:88');
+    expect(messageId).toBe('88');
     const formCall = fetch.forms.find((f) => f.method === 'sendPhoto');
     expect(formCall).toBeDefined();
     expect(formCall!.form.get('chat_id')).toBe('1001');
@@ -536,7 +536,7 @@ describe('telegram plugin runtime adapter', () => {
         conversation: testConversation('private', '1001'),
         payload: [{ type: 'image', data: { media: { kind: 'path', value: filePath } } }],
       });
-      expect(messageId).toBe('private:1001:89');
+      expect(messageId).toBe('89');
       const formCall = fetch.forms.find((f) => f.method === 'sendPhoto');
       expect(formCall).toBeDefined();
       const file = formCall!.form.get('photo') as File;

@@ -72,12 +72,12 @@ describe('createOutboundEndpointAccess', () => {
     await executor.stop(ctx, 'active');
     expect(manager.getActiveIndicator('active', ctx.options)).toBeUndefined();
 
-    // OutboundHost 未提供 recall 时，$recallMessage 仍是安全 no-op
-    await expect(endpoint.$recallMessage?.('any-id')).resolves.toBeUndefined();
+    // OutboundHost 未提供 recall 时，control.recall 不存在
+    expect(endpoint.control?.recall).toBeUndefined();
   });
 
-  it('wires $recallMessage to OutboundHost.recall when available', async () => {
-    const recalled: Array<{ adapter: string; endpointKey: string; messageId: string }> = [];
+  it('wires control.recall to OutboundHost.recall when available', async () => {
+    const recalled: Array<{ adapter: string; endpointKey: string; message: unknown }> = [];
     const access = createOutboundEndpointAccess({
       send: vi.fn(async () => 'mid-1'),
       recall: vi.fn(async (input) => {
@@ -85,7 +85,15 @@ describe('createOutboundEndpointAccess', () => {
       }),
     });
     const endpoint = access.resolve('sandbox', 'bot1')!.endpoint;
-    await endpoint.$recallMessage?.('mid-1');
-    expect(recalled).toEqual([{ adapter: 'sandbox', endpointKey: 'bot1', messageId: 'mid-1' }]);
+    const message = {
+      conversation: {
+        endpoint: { id: 'bot1', adapter: 'sandbox' },
+        kind: 'private' as const,
+        id: 'u1',
+      },
+      id: 'mid-1',
+    };
+    await endpoint.control?.recall?.(message);
+    expect(recalled).toEqual([{ adapter: 'sandbox', endpointKey: 'bot1', message }]);
   });
 });

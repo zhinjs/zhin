@@ -7,6 +7,11 @@ Console can register path-scoped WebSocket / HTTP routes without importing Koa o
 Root installs the host via `installResources` (see `basic/cli/src/plugin-runtime/http-host-installer.ts`
 and `console-host-installer.ts`).
 
+The composition root owns the process listener through `ProcessHttpHost`. Generation scopes receive
+only the `HttpHost` routing port: they may register HTTP/WS routes but cannot listen or close the
+shared server. Registrations are bound to generation admission, so candidate routes stay invisible
+until snapshot commit and retired routes stop matching immediately while their leases drain.
+
 ## Capabilities (this slice)
 
 - Path-scoped WebSocket upgrades (`ws(path)`)

@@ -1,8 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
+  SnapshotStore,
+  RootController,
+  GenerationHandoffStack,
   createCapabilitySlot,
+  createToken,
+  generationAdmissionBinder,
   childPluginId,
   rootPluginId,
+  type GenerationAdmissionGate,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import {
@@ -17,7 +23,7 @@ import adapterFeature, {
   endpointCapabilitiesOf,
   isAdapterIndex,
   parseAdapterDefinition,
-  resolveEndpointControl,
+  endpointControlOf,
   resolveEndpointManagement,
   type AdapterSegmentPolicy,
 } from '../src/index.js';
@@ -52,35 +58,14 @@ describe('Adapter Feature', () => {
     expect(resolveEndpointManagement({ friends: new Map() })).toBeUndefined();
   });
 
-  it('resolves message control through the semantic port before the legacy bridge', async () => {
+  it('resolves message control only through the semantic port', async () => {
     const explicitRecall = async () => undefined;
-    const legacyRecall = async () => { throw new Error('legacy should not run'); };
-    const control = resolveEndpointControl({
+    const control = endpointControlOf({
       control: { recall: explicitRecall },
-      recallMessage: legacyRecall,
     });
 
     expect(control?.recall).toBe(explicitRecall);
-    await expect(control?.recall?.('m1')).resolves.toBeUndefined();
-    await expect(resolveEndpointControl({
-      recallMessage: async (messageId: string) => { expect(messageId).toBe('m2'); },
-    })?.recall?.('m2')).resolves.toBeUndefined();
-
-    let legacyMessage = '';
-    let legacyTarget = '';
-    const bridge = resolveEndpointControl({
-      recallMessage: async (messageId: string) => { legacyMessage = messageId; },
-      typing: async (target: string) => { legacyTarget = target; },
-    });
-    const conversation = {
-      endpoint: { id: 'memory~main', adapter: 'memory' },
-      kind: 'group' as const,
-      id: 'room-1',
-    };
-    await bridge?.recall?.({ conversation, id: 'message-1' });
-    await bridge?.typing?.(conversation, true);
-    expect(legacyMessage).toBe('group:room-1:message-1');
-    expect(legacyTarget).toBe('group:room-1');
+    expect(endpointControlOf({ recallMessage: async () => undefined })).toBeUndefined();
   });
 
   it('requires declared operations to exist on an explicit control port', async () => {
@@ -96,7 +81,7 @@ describe('Adapter Feature', () => {
         create: () => ({ control: { recall: async () => undefined } }),
       }),
     });
-    await expect(AdapterIndex.create([invalid], snapshot([invalid])))
+    await expect(createAdapterIndex([invalid], snapshot([invalid])))
       .rejects.toThrow('declares edit but control.edit is missing');
 
     const valid = createCapabilitySlot({
@@ -117,7 +102,7 @@ describe('Adapter Feature', () => {
         }),
       }),
     });
-    const index = await AdapterIndex.create([valid], snapshot([valid]));
+    const index = await createAdapterIndex([valid], snapshot([valid]));
     await index.stop();
   });
 
@@ -134,7 +119,7 @@ describe('Adapter Feature', () => {
         create: () => ({ send: async (request) => { received = request; } }),
       }),
     });
-    const index = await AdapterIndex.create([slot], snapshot([slot]));
+    const index = await createAdapterIndex([slot], snapshot([slot]));
     await index.start();
     index.open();
     const conversation = {
@@ -199,7 +184,7 @@ describe('Adapter Feature', () => {
       }),
     });
     const value = snapshot([slot]);
-    const index = await AdapterIndex.create([slot], value);
+    const index = await createAdapterIndex([slot], value);
     expect(isAdapterIndex(index)).toBe(true);
     expect(isAdapterIndex({ $projection: 'zhin.adapter-index/1' })).toBe(true);
 
@@ -223,7 +208,7 @@ describe('Adapter Feature', () => {
     ]);
   });
 
-  it('soft-fails Endpoint create and keeps other Endpoints', async () => {
+  it('fails Endpoint creation closed and disposes already-created candidates', async () => {
     const events: string[] = [];
     const root = rootPluginId();
     const good = createCapabilitySlot({
@@ -250,14 +235,12 @@ describe('Adapter Feature', () => {
       }),
     });
 
-    const index = await AdapterIndex.create([broken, good], snapshot([good, broken]));
-    await index.start();
-    expect(events).toEqual(['start-good']);
-    await index.stop();
-    expect(events).toEqual(['start-good', 'stop-good']);
+    await expect(createAdapterIndex([broken, good], snapshot([good, broken])))
+      .rejects.toThrow('create failed');
+    expect(events).toEqual(['stop-good']);
   });
 
-  it('defers slow Endpoint start instead of stop()-ing mid-connect', async () => {
+  it('waits for every required Endpoint to become ready before activation completes', async () => {
     const events: string[] = [];
     let resolveStart!: () => void;
     const started = new Promise<void>((resolve) => { resolveStart = resolve; });
@@ -280,53 +263,148 @@ describe('Adapter Feature', () => {
         }),
       }),
     });
-    const index = await AdapterIndex.create([slot], snapshot([slot]), { startTimeoutMs: 20 });
-    await index.start();
-    expect(events).toEqual(['start-begin']);
-    index.open();
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    const activation = index.activate(new AbortController().signal);
+    await Promise.resolve();
     expect(events).toEqual(['start-begin']);
     resolveStart();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await activation;
     expect(events).toEqual(['start-begin', 'start-done', 'open']);
     await index.stop();
     expect(events.at(-1)).toBe('stop');
   });
 
-  it('gives up on a never-settling deferred start and reports the failed phase', async () => {
+  it('rolls back the complete candidate set when one Endpoint start fails', async () => {
+    const events: string[] = [];
     const root = rootPluginId();
-    const slot = createCapabilitySlot({
+    const healthy = createCapabilitySlot({
       owner: root,
       feature: adapterFeatureId,
-      localName: 'wedged',
-      source: '/adapters/wedged.ts',
+      localName: 'a-healthy',
+      source: '/adapters/a-healthy.ts',
       definition: defineAdapter({
         capabilities: ['inbound'],
         create: () => ({
-          // Never settles — the deferred give-up budget must close it out.
-          start: () => new Promise<void>(() => undefined),
-          stop: () => undefined,
+          start: () => { events.push('healthy:start'); },
+          stop: () => { events.push('healthy:stop'); },
         }),
       }),
     });
-    const index = await AdapterIndex.create([slot], snapshot([slot]), {
-      startTimeoutMs: 20,
-      deferredGiveUpMs: 60,
+    const broken = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'z-broken',
+      source: '/adapters/z-broken.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound'],
+        create: () => ({
+          start() {
+            events.push('broken:start');
+            throw new Error('connect failed');
+          },
+          stop: () => { events.push('broken:stop'); },
+        }),
+      }),
     });
-    expect(index.describe()[0]).toMatchObject({ phase: 'pending', connected: false });
+    const index = await createAdapterIndex([broken, healthy], snapshot([healthy, broken]));
 
-    await index.start();
-    expect(index.describe()[0]).toMatchObject({ phase: 'starting', connected: false });
-
-    await new Promise((resolve) => { setTimeout(resolve, 150); });
-    expect(index.describe()[0]).toMatchObject({
-      phase: 'failed',
-      connected: false,
-      status: 'offline',
-    });
-    await index.stop();
+    await expect(index.activate(new AbortController().signal)).rejects.toThrow('connect failed');
+    expect(events).toEqual([
+      'healthy:start',
+      'broken:start',
+      'broken:stop',
+      'healthy:stop',
+    ]);
   });
 
-  it('reports the unconfigured phase for soft-failed Endpoint create', async () => {
+  it('fails Root integrity when candidate Endpoint cleanup cannot be proven', async () => {
+    const rootId = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: rootId,
+      feature: adapterFeatureId,
+      localName: 'broken-cleanup',
+      source: '/adapters/broken-cleanup.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound'],
+        create: () => ({
+          start: () => { throw new Error('connect failed'); },
+          stop: () => { throw new Error('cleanup failed'); },
+        }),
+      }),
+    });
+    const initial = snapshot([]);
+    const candidateSnapshot = snapshot([slot]);
+    const projection = await adapterFeature.runtime.project([slot], {
+      snapshot: candidateSnapshot,
+      signal: new AbortController().signal,
+    });
+    const handoff = new GenerationHandoffStack();
+    if (projection.handoff) handoff.add(projection.handoff);
+    const root = new RootController(snapshotState(initial));
+    await root.start(() => ({ snapshot: snapshotState(initial), dispose: () => undefined }));
+
+    await expect(root.transact(() => ({
+      snapshot: {
+        ...snapshotState(candidateSnapshot),
+        projections: new Map([[adapterFeatureId, projection.value]]),
+      },
+      handoff: handoff.seal(),
+      dispose: projection.dispose ?? (() => undefined),
+    }))).rejects.toThrow('Root integrity failed');
+    expect(root.state).toBe('failed');
+    await expect(root.stop()).resolves.toBeUndefined();
+  });
+
+  it('lets Root Stop abort and settle required Endpoint readiness', async () => {
+    const rootId = rootPluginId();
+    const events: string[] = [];
+    const slot = createCapabilitySlot({
+      owner: rootId,
+      feature: adapterFeatureId,
+      localName: 'waiting',
+      source: '/adapters/waiting.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound'],
+        create: () => ({
+          start(signal) {
+            events.push('start');
+            return new Promise<void>((_resolve, reject) => {
+              signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+            });
+          },
+          stop: () => { events.push('stop'); },
+        }),
+      }),
+    });
+    const initial = snapshot([]);
+    const candidateSnapshot = snapshot([slot]);
+    const projection = await adapterFeature.runtime.project([slot], {
+      snapshot: candidateSnapshot,
+      signal: new AbortController().signal,
+    });
+    const handoff = new GenerationHandoffStack();
+    if (projection.handoff) handoff.add(projection.handoff);
+    const root = new RootController(snapshotState(initial));
+    await root.start(() => ({ snapshot: snapshotState(initial), dispose: () => undefined }));
+
+    const transaction = root.transact(() => ({
+      snapshot: {
+        ...snapshotState(candidateSnapshot),
+        projections: new Map([[adapterFeatureId, projection.value]]),
+      },
+      handoff: handoff.seal(),
+      dispose: projection.dispose ?? (() => undefined),
+    }));
+    await vi.waitFor(() => expect(events).toContain('start'));
+    const stopping = root.stop();
+
+    await expect(transaction).rejects.toThrow('stopping');
+    await expect(stopping).resolves.toBeUndefined();
+    expect(events).toEqual(['start', 'stop']);
+    expect(root.state).toBe('stopped');
+  });
+
+  it('rejects missing Endpoint configuration instead of publishing an inert stub', async () => {
     const root = rootPluginId();
     const slot = createCapabilitySlot({
       owner: root,
@@ -338,13 +416,11 @@ describe('Adapter Feature', () => {
         create: () => { throw new TypeError('icqq requires uin'); },
       }),
     });
-    const index = await AdapterIndex.create([slot], snapshot([slot]));
-    await index.start();
-    expect(index.describe()[0]).toMatchObject({ phase: 'unconfigured', status: 'offline' });
-    await index.stop();
+    await expect(createAdapterIndex([slot], snapshot([slot])))
+      .rejects.toThrow('icqq requires uin');
   });
 
-  it('hands admission from the previous projection to the candidate and can resume it', async () => {
+  it('opens a candidate behind generation admission without quiescing the previous index', async () => {
     const events: string[] = [];
     const root = rootPluginId();
     const endpointSlot = (version: string) => createCapabilitySlot({
@@ -365,35 +441,81 @@ describe('Adapter Feature', () => {
     const oldSlot = endpointSlot('old');
     const oldProjection = await adapterFeature.runtime.project([oldSlot], {
       snapshot: snapshot([oldSlot]),
+      signal: new AbortController().signal,
     });
-    await oldProjection.handoff?.activateNext?.();
-    oldProjection.handoff?.openNext?.();
+    await oldProjection.handoff?.activateNext?.(new AbortController().signal);
     const candidateSlot = endpointSlot('next');
     const candidate = await adapterFeature.runtime.project([candidateSlot], {
       snapshot: snapshot([candidateSlot]),
+      signal: new AbortController().signal,
     });
-    const previous = {
-      ...snapshot([oldSlot]),
-      projections: new Map([[adapterFeatureId, oldProjection.value]]),
-    };
 
-    await candidate.handoff?.quiescePrevious?.(previous);
-    await candidate.handoff?.activateNext?.();
+    await candidate.handoff?.activateNext?.(new AbortController().signal);
     await candidate.handoff?.deactivateNext?.();
-    await candidate.handoff?.resumePrevious?.();
     await candidate.dispose?.();
     await oldProjection.dispose?.();
 
     expect(events).toEqual([
       'old:start',
       'old:open',
-      'old:close',
       'next:start',
+      'next:open',
+      'next:close',
       'next:stop',
-      'old:open',
       'old:close',
       'old:stop',
     ]);
+  });
+
+  it('binds endpoint ingress to the AdapterIndex generation admission', async () => {
+    const root = rootPluginId();
+    const accepted: string[] = [];
+    const ingressToken = createToken<{ receive(value: string): boolean }>('test.ingress');
+    const ingress = {
+      receive(value: string): boolean {
+        accepted.push(`unbound:${value}`);
+        return true;
+      },
+      [generationAdmissionBinder](gate: GenerationAdmissionGate) {
+        return Object.freeze({
+          receive: (value: string) => gate.enter(() => {
+            accepted.push(value);
+            return true;
+          }) ?? false,
+        });
+      },
+    };
+    let receive!: (value: string) => boolean;
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'memory',
+      source: '/adapters/memory.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound'],
+        create(context) {
+          receive = context.use(ingressToken).receive;
+          return {};
+        },
+      }),
+    });
+    const candidateSnapshot = snapshot([slot], undefined, new Map([[ingressToken.id, ingress]]));
+    const index = await createAdapterIndex([slot], candidateSnapshot);
+
+    expect(receive('candidate')).toBe(false);
+    const store = new SnapshotStore({
+      ...snapshotState(candidateSnapshot),
+      projections: new Map([[adapterFeatureId, index]]),
+    });
+    expect(receive('committed')).toBe(true);
+
+    store.commit(0, {
+      snapshot: { ...snapshotState(candidateSnapshot), projections: new Map() },
+      dispose: () => index.stop(),
+    });
+    expect(receive('retired')).toBe(false);
+    expect(accepted).toEqual(['committed']);
+    await store.close();
   });
 
   it('describes endpoint status and resolves Console adapter/endpoint pairs', async () => {
@@ -410,7 +532,7 @@ describe('Adapter Feature', () => {
         }),
       }),
     });
-    const index = await AdapterIndex.create([slot], snapshot([slot]));
+    const index = await createAdapterIndex([slot], snapshot([slot]));
     expect(index.describe()).toEqual([expect.objectContaining({
       name: 'sandbox',
       connected: false,
@@ -451,7 +573,7 @@ describe('Adapter Feature', () => {
         }),
       }),
     });
-    const index = await AdapterIndex.create([slotA, slotB], snapshot([slotA, slotB]));
+    const index = await createAdapterIndex([slotA, slotB], snapshot([slotA, slotB]));
     expect(index.resolve('icqq', '111111')).toBe(slotA.id);
     expect(index.resolve('icqq', '222222')).toBe(slotB.id);
     expect(index.resolve('icqq', '999999')).toBeUndefined();
@@ -474,7 +596,7 @@ describe('Adapter Feature', () => {
         },
       }),
     });
-    const index = await AdapterIndex.create([slot], snapshot([slot], new Map([[root, {
+    const index = await createAdapterIndex([slot], snapshot([slot], new Map([[root, {
       master: '1659488338',
       endpoints: [
         { id: '111111' },
@@ -491,6 +613,24 @@ describe('Adapter Feature', () => {
     expect(seen[0].config).not.toHaveProperty('endpoints');
     expect(seen[0].id).toContain('~111111');
     expect(seen[1].id).toContain('~222222');
+  });
+
+  it('rejects malformed or duplicate endpoint identities', async () => {
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'memory',
+      source: '/adapters/memory.ts',
+      definition: defineAdapter({ capabilities: ['inbound'], create: () => ({}) }),
+    });
+
+    await expect(createAdapterIndex([slot], snapshot([slot], new Map([[root, {
+      endpoints: [{ id: 'same' }, { id: 'same' }],
+    }]])))).rejects.toThrow('duplicated');
+    await expect(createAdapterIndex([slot], snapshot([slot], new Map([[root, {
+      endpoints: [{ name: 'missing-id' }],
+    }]])))).rejects.toThrow('non-empty string');
   });
 
   it('resolves expanded endpoints by slot~entry localName ($adapter from messages)', async () => {
@@ -510,7 +650,7 @@ describe('Adapter Feature', () => {
         }),
       }),
     });
-    const index = await AdapterIndex.create([slot], snapshot([slot], new Map([[root, {
+    const index = await createAdapterIndex([slot], snapshot([slot], new Map([[root, {
       endpoints: [{ id: '8596238' }, { id: '1234567' }],
     }]])));
 
@@ -573,9 +713,17 @@ describe('defineAdapter segments policy', () => {
   });
 });
 
+function createAdapterIndex(
+  slots: Parameters<typeof AdapterIndex.create>[0],
+  value: Parameters<typeof AdapterIndex.create>[1],
+) {
+  return AdapterIndex.create(slots, value, new AbortController().signal);
+}
+
 function snapshot(
   slots: readonly ReturnType<typeof createCapabilitySlot>[],
   configs?: ReadonlyMap<ReturnType<typeof rootPluginId>, Record<string, unknown>>,
+  rootResources: ReadonlyMap<string, unknown> = new Map(),
 ): RuntimeSnapshot {
   const root = rootPluginId();
   const tree = new Map<string, {
@@ -608,10 +756,15 @@ function snapshot(
     root,
     tree: tree as RuntimeSnapshot['tree'],
     config: new Map([[root, configs?.get(root) ?? {}], ...slots.map((slot) => [slot.owner, configs?.get(slot.owner as ReturnType<typeof rootPluginId>) ?? {}] as const)]),
-    resources: new Map([[root, new Map()], ...slots.map((slot) => [slot.owner, new Map()] as const)]),
+    resources: new Map([[root, rootResources], ...slots.filter((slot) => slot.owner !== root).map((slot) => [slot.owner, new Map()] as const)]),
     capabilities: new Map(slots.map((slot) => [slot.id, slot])),
     projections: new Map(),
   };
+}
+
+function snapshotState(snapshot: RuntimeSnapshot): Omit<RuntimeSnapshot, 'generation'> {
+  const { generation: _generation, ...state } = snapshot;
+  return state;
 }
 
 class MemoryDiscoveryHost implements DiscoveryHost {

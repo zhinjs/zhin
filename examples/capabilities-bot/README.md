@@ -13,7 +13,7 @@ pnpm dev        # zhin runtime start
 
 - Console: `http://127.0.0.1:18099`（token `capabilities-dev-token`），plugins 页可见 `Capabilities Bot` 卡片（metadata 生效）
 - `stats` / `whoami` 命令已注册（introspection → commands）
-- 心跳每 5 分钟打一行日志；`pushOnBoot: true` 时向 sandbox 私聊推上线消息
+- 心跳每 5 分钟打一行日志
 
 ## 能力 → 代码对照
 

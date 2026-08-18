@@ -6,12 +6,16 @@ export default defineAgentTool<{
   id: string;
   source: MusicSource;
 }>({
-  description: '分享指定的音乐',
+  description: '分享指定的音乐（支持QQ/网易云/酷我/酷狗）',
   inputSchema: {
     type: 'object',
     properties: {
       id: { type: 'string', description: '音乐 ID' },
-      source: { type: 'string', enum: ['qq', 'netease'] },
+      source: {
+        type: 'string',
+        enum: ['qq', 'netease', 'kuwo', 'kugou'],
+        description: '音乐源',
+      },
     },
     required: ['id', 'source'],
   },

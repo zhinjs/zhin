@@ -4,7 +4,7 @@
 
 import { getLogger } from '@zhin.js/logger';
 import type { Adapter, Endpoint, SendOptions } from '@zhin.js/core';
-import type { LegacyEndpointControlSurface } from '@zhin.js/im-contract';
+import type { MessageRef } from '@zhin.js/im-contract';
 import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 import {
   ReactionTypingIndicatorAdapter,
@@ -48,6 +48,7 @@ function resolveSendTarget(options: TypingIndicatorOptions): { type: 'private' |
 function createOutboundSendMessage(
   endpoint: Endpoint,
   platform: string,
+  messages: Map<string, MessageRef>,
   outbound?: OutboundAdapter,
 ): (options: TypingIndicatorOptions, content: string) => Promise<string | null> {
   return async (options, content) => {
@@ -62,7 +63,11 @@ function createOutboundSendMessage(
         endpoint: endpoint.$id,
         content: segments,
       };
-      if (outbound) return await outbound.sendMessage(sendOptions);
+      if (outbound) {
+        const messageId = await outbound.sendMessage(sendOptions);
+        if (messageId) messages.set(messageId, toMessageRef(endpoint, platform, options, messageId));
+        return messageId;
+      }
       logger.error(`[${platform}] Activity feedback requires Adapter.sendMessage; endpoint ${endpoint.$id} has no outbound adapter`);
       return null;
     } catch (error) {
@@ -100,7 +105,7 @@ export interface PlatformActivityFeedbackManager {
 
 export type BotActivityFeedbackManager = ActivityFeedbackManager | PlatformActivityFeedbackManager;
 
-export interface EndpointWithActivityFeedback extends Endpoint, LegacyEndpointControlSurface {
+export interface EndpointWithActivityFeedback extends Endpoint {
   $activityFeedback?: BotActivityFeedbackManager;
 }
 
@@ -111,13 +116,16 @@ function registerPlatformAdapters(
   features: PlatformFeatures,
   outbound?: OutboundAdapter,
 ): void {
-  const sendMessage = createOutboundSendMessage(endpoint, platform, outbound);
-  if (features.supportsReaction && endpoint.$addReaction && endpoint.$removeReaction) {
+  const messages = new Map<string, MessageRef>();
+  const sendMessage = createOutboundSendMessage(endpoint, platform, messages, outbound);
+  if (features.supportsReaction && endpoint.control?.addReaction && endpoint.control.removeReaction) {
     manager.registerAdapter(new ReactionTypingIndicatorAdapter(
       platform,
       async (messageId, emoji, options) => {
         try {
-          return await endpoint.$addReaction!(messageId, emoji, {
+          const message = toMessageRef(endpoint, platform, options, messageId);
+          messages.set(messageId, message);
+          return await endpoint.control!.addReaction!(message, emoji, {
             sceneType: options.sceneType,
             channelId: options.groupId,
           });
@@ -128,16 +136,21 @@ function registerPlatformAdapters(
       },
       async (messageId, reactionId) => {
         try {
-          await endpoint.$removeReaction!(messageId, reactionId);
+          const message = messages.get(messageId);
+          if (message) await endpoint.control!.removeReaction!(message, reactionId);
         } catch (error) {
           logger.error(`[${platform}] Failed to remove reaction:`, error);
         }
       },
       sendMessage,
-      async (messageId) => { await endpoint.$recallMessage?.(messageId); },
+      async (messageId) => {
+        const message = messages.get(messageId);
+        if (message) await endpoint.control?.recall?.(message);
+      },
       async (messageId, content) => {
         const editBot = endpoint as BotWithEditing;
-        if (typeof editBot.$editMessage === 'function') await editBot.$editMessage(messageId, content);
+        const message = messages.get(messageId);
+        if (message && endpoint.control?.edit) await endpoint.control.edit(message, content);
         else if (typeof editBot.$updateMessage === 'function') await editBot.$updateMessage(messageId, content);
       },
     ));
@@ -146,13 +159,34 @@ function registerPlatformAdapters(
   manager.registerAdapter(new GenericTypingIndicatorAdapter(
     platform,
     sendMessage,
-    async (messageId) => { await endpoint.$recallMessage?.(messageId); },
+    async (messageId) => {
+      const message = messages.get(messageId);
+      if (message) await endpoint.control?.recall?.(message);
+    },
     async (messageId, content) => {
       const editBot = endpoint as BotWithEditing;
-      if (typeof editBot.$editMessage === 'function') await editBot.$editMessage(messageId, content);
+      const message = messages.get(messageId);
+      if (message && endpoint.control?.edit) await endpoint.control.edit(message, content);
       else if (typeof editBot.$updateMessage === 'function') await editBot.$updateMessage(messageId, content);
     },
   ));
+}
+
+function toMessageRef(
+  endpoint: Endpoint,
+  platform: string,
+  options: TypingIndicatorOptions,
+  id: string,
+): MessageRef {
+  const target = resolveSendTarget(options);
+  return {
+    conversation: {
+      endpoint: { id: endpoint.$id, adapter: platform },
+      kind: options.sceneType,
+      id: target.id,
+    },
+    id,
+  };
 }
 
 export class AdapterActivityFeedbackManager {

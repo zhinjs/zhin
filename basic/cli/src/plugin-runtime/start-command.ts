@@ -7,7 +7,7 @@ import { parse as parseDotenv } from 'dotenv';
 import open from 'open';
 import { YamlConfigDocument } from '@zhin.js/config-yaml';
 import { ImRuntime, type Message } from '@zhin.js/core/runtime';
-import { createConsoleEventHub } from '@zhin.js/host-http';
+import { createConsoleEventHub, createHttpHost } from '@zhin.js/host-http';
 import { defineInboxTables } from '@zhin.js/plugin-runtime';
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
 import {
@@ -98,6 +98,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   await applyRuntimeLogLevel(config);
   const envOverlay = environmentVariables.environments?.[parsed.environment];
   const httpConfig = await resolveHttpConfig(config, envOverlay);
+  const httpHost = createHttpHost(httpConfig);
   const databaseConfig = await resolveDatabaseConfig(options.root, config);
   // Agent is an optional install tier. Do not resolve its module from the
   // IM-only startup graph unless the project actually configures Agent state.
@@ -142,7 +143,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     environmentVariables,
     installResources: async (context) => {
       im.install(context.resources);
-      installHttpHost(httpConfig)(context);
+      installHttpHost(httpHost)(context);
       installDatabaseHost(databaseHost)(context);
       installOutboundHost(im)(context);
       installScheduleHost(scheduleHost)(context);
@@ -223,17 +224,22 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     // therefore generation leases; cancelling them is required before drain.
     agentHost?.close();
     try {
-      await host.stop();
+      // Process ingress owns WebSocket operation leases. Close it before Root
+      // drain so long-lived connections release those leases instead of
+      // deadlocking SnapshotStore.close().
+      await httpHost.close();
     } finally {
-      // Process-owned Hosts survive generation retirement and close exactly
-      // once with the RootHost.
       try {
-        scheduleHost.stop();
+        await host.stop();
       } finally {
         try {
-          await databaseHost.stop();
+          scheduleHost.stop();
         } finally {
-          complete();
+          try {
+            await databaseHost.stop();
+          } finally {
+            complete();
+          }
         }
       }
     }
@@ -241,8 +247,10 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
 
   let snapshot: Awaited<ReturnType<typeof host.start>>;
   try {
+    await httpHost.listen();
     snapshot = await host.start();
   } catch (error) {
+    await httpHost.close().catch(() => undefined);
     // Annotate schema validation failures with the source config file name.
     if (configFile && error instanceof ConfigValidationError) {
       throw new ConfigValidationError(error.issues, configFile);

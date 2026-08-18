@@ -172,13 +172,13 @@ describe('DatabaseHost', () => {
     // 世代 1：定义表并激活
     host.define('smoke', { name: { type: 'text' } });
     const gen1 = runGeneration();
-    await gen1.handoff.activateNext();
+    await gen1.handoff.activateNext(new AbortController().signal);
     expect(host.started).toBe(true);
 
     // 世代 2（reload）：同名表幂等 define，激活
     host.define('smoke', { name: { type: 'text' } });
     const gen2 = runGeneration();
-    await gen2.handoff.activateNext();
+    await gen2.handoff.activateNext(new AbortController().signal);
 
     // 旧世代 dispose + 新世代回滚都不能停掉共享 Host
     await gen1.scope.disposers.dispose();

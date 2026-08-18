@@ -35,5 +35,8 @@ export interface PreparedIsolatedPlugin {
 
 /** Adapter seam for child Plugin lifecycle that must not execute in the Host realm. */
 export interface IsolatedPluginRuntimePort {
-  prepare(request: IsolatedPluginPrepareRequest): Promise<PreparedIsolatedPlugin>;
+  prepare(
+    request: IsolatedPluginPrepareRequest,
+    signal: AbortSignal,
+  ): Promise<PreparedIsolatedPlugin>;
 }

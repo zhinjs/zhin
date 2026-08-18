@@ -8,20 +8,20 @@ interface ShareMusicProps {
   readonly musicId: string;
 }
 
-/**
- * Async music share card. Adapters that understand `share` segments render the
- * rich card; others may fall back to text.
- */
 export default defineComponent<ShareMusicProps>({
   async render({ platform, musicId }) {
     const service = musicServices[platform];
     if (!service) return 'unsupported music source';
     const detail = await service.getDetail(musicId);
-    const { id: _id, source: _source, ...rest } = detail;
     return {
       type: 'share',
       data: {
-        ...rest,
+        title: detail.title,
+        url: detail.url,
+        image: detail.image,
+        audio: detail.audio,
+        duration: detail.duration,
+        artist: detail.artist,
         config: sourceConfigMap[platform],
       },
     };

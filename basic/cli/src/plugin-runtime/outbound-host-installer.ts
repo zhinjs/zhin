@@ -39,7 +39,7 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
       return im.addEndpointReaction({
         adapter: input.adapter,
         endpointKey: input.endpointKey,
-        messageId: input.messageId,
+        message: input.message,
         emoji: input.emoji,
         sceneType: input.sceneType,
         channelId: input.channelId,
@@ -49,7 +49,7 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
       await im.removeEndpointReaction({
         adapter: input.adapter,
         endpointKey: input.endpointKey,
-        messageId: input.messageId,
+        message: input.message,
         reactionId: input.reactionId,
       });
     },
@@ -57,7 +57,7 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
       await im.recallEndpointMessage({
         adapter: input.adapter,
         endpointKey: input.endpointKey,
-        messageId: input.messageId,
+        message: input.message,
       });
     },
   };
