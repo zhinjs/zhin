@@ -602,6 +602,9 @@ importers:
       '@ai-sdk/openai-compatible':
         specifier: ^3.0.18
         version: 3.0.18(zod@4.4.3)
+      '@icqqjs/qqsign':
+        specifier: ^0.1.1
+        version: 0.1.1(@icqqjs/icqq@1.12.2)
       '@puniyu/system-info':
         specifier: 1.5.7
         version: 1.5.7
@@ -1945,7 +1948,7 @@ importers:
     dependencies:
       '@icqqjs/icqq':
         specifier: ^1.12.2
-        version: 1.12.2
+        version: 1.12.2(@icqqjs/qqsign@0.1.1)
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
@@ -4064,6 +4067,12 @@ packages:
     peerDependenciesMeta:
       '@icqqjs/qqsign':
         optional: true
+
+  '@icqqjs/qqsign@0.1.1':
+    resolution: {integrity: sha512-t5xygciaWI6MBX65lwvlpJd+lIR9m1OQiPGj26r6YTY9xJRnjEuZPtPZkedZTH2C0mpdNtLl5uAAywkcG67RZA==, tarball: https://npm.pkg.github.com/download/@icqqjs/qqsign/0.1.1/2feef492816e0620c2053ace870b09229df46ea8}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@icqqjs/icqq': '*'
 
   '@inquirer/ansi@2.0.7':
     resolution: {integrity: sha512-3eTuUO1vH2cZm2ZKHeQxnOqlTi9EfZDGgIe3BL3I4u+rJHocr9Fz86M4fjYABPvFnQG/gGK551HqDiIcETwU6Q==}
@@ -9893,7 +9902,7 @@ snapshots:
       '@iconify/types': 2.0.0
       import-meta-resolve: 4.2.0
 
-  '@icqqjs/icqq@1.12.2':
+  '@icqqjs/icqq@1.12.2(@icqqjs/qqsign@0.1.1)':
     dependencies:
       axios: 1.12.0
       log4js: 6.9.1
@@ -9904,11 +9913,17 @@ snapshots:
       silk-wasm: 3.7.1
       triptrap: 0.0.17
       ws: 8.18.0
+    optionalDependencies:
+      '@icqqjs/qqsign': 0.1.1(@icqqjs/icqq@1.12.2)
     transitivePeerDependencies:
       - bufferutil
       - debug
       - supports-color
       - utf-8-validate
+
+  '@icqqjs/qqsign@0.1.1(@icqqjs/icqq@1.12.2)':
+    dependencies:
+      '@icqqjs/icqq': 1.12.2(@icqqjs/qqsign@0.1.1)
 
   '@inquirer/ansi@2.0.7': {}
 

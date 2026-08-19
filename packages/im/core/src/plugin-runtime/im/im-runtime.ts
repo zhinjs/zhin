@@ -800,7 +800,21 @@ export class ImRuntime implements MessageGateway {
       return receipt ?? failedReceipt('outbound_middleware_failed');
     }
 
-    if (!terminalEntered) return suppressedReceipt();
+    if (!terminalEntered) {
+      logger.debug(formatCompact({
+        op: 'replychain_runtime_send',
+        status: 'suppressed',
+        reason: 'middleware_stopped_before_terminal',
+        conv: formatConversationLog(request.conversation),
+      }));
+      return suppressedReceipt();
+    }
+    logger.debug(formatCompact({
+      op: 'replychain_runtime_send',
+      status: receipt?.status ?? 'missing',
+      code: receipt?.failure?.code,
+      conv: formatConversationLog(request.conversation),
+    }));
     return receipt ?? failedReceipt('outbound_delivery_incomplete');
   }
 

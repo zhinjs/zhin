@@ -17,6 +17,7 @@ import {
   createDeterministicApprovalPort,
   runtimeApprovalPolicy,
   withTriggerTimeout,
+  deliveryOutcomeFromReceipt,
 } from '../../src/plugin-runtime/agent-host-installer.js';
 import { createEndpointRoleResolver } from '../../src/plugin-runtime/start-command.js';
 
@@ -35,6 +36,27 @@ describe('Plugin Runtime Tool policy bridge', () => {
     };
     await expect(createDeterministicApprovalPort().requestApproval(input)).resolves.toBe(false);
     await expect(createDeterministicApprovalPort('approve').requestApproval(input)).resolves.toBe(true);
+  });
+});
+
+describe('runtime reply delivery outcome bridge', () => {
+  it('preserves non-sent receipts instead of coercing them to sent', () => {
+    expect(deliveryOutcomeFromReceipt({ status: 'suppressed' })).toEqual({ status: 'suppressed' });
+    expect(deliveryOutcomeFromReceipt({
+      status: 'rejected',
+      failure: { code: 'outbound_payload_rejected', message: 'bad payload' },
+    })).toEqual({ status: 'rejected', code: 'outbound_payload_rejected' });
+    expect(deliveryOutcomeFromReceipt({
+      status: 'failed',
+      failure: { code: 'endpoint_send_failed', message: 'transport closed', retryable: true },
+    })).toEqual({ status: 'failed', code: 'endpoint_send_failed', retryable: true });
+  });
+
+  it('maps successful receipts to sent with message id when available', () => {
+    expect(deliveryOutcomeFromReceipt({
+      status: 'sent',
+      legacyMessageId: 'legacy-1',
+    })).toEqual({ status: 'sent', messageId: 'legacy-1' });
   });
 });
 

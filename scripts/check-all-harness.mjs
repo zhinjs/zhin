@@ -21,7 +21,7 @@ const checks = [
   },
   {
     name: 'Lint',
-    command: 'pnpm lint',
+    command: 'pnpm lint:ci',
     description: 'ESLint（.ts/.tsx）',
   },
   {
@@ -228,6 +228,7 @@ for (const check of checks) {
     execSync(check.command, {
       cwd: repoRoot,
       stdio: 'pipe',
+      maxBuffer: 32 * 1024 * 1024,
     });
     results.push({ name: check.name, status: 'PASSED' });
     console.log('  ✓ PASSED\n');

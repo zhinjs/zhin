@@ -4,6 +4,7 @@ import {
   type Config as NativeIcqqClientConfig,
   type Sendable,
 } from '@icqqjs/icqq';
+import { inspect } from 'node:util';
 import type {
   EndpointControl,
   EndpointInstance,
@@ -245,19 +246,29 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     const message = formatOutboundBody(content);
     const parsed = icqqOutboundTarget(conversation);
     let result: { message_id?: unknown };
-    switch (parsed.kind) {
-      case 'private':
-        result = await this.sendPrivateMsg(parsed.userId, message as Sendable);
-        break;
-      case 'group':
-        result = await this.sendGroupMsg(parsed.groupId, message as Sendable);
-        break;
-      case 'temp':
-        result = await this.sendTempMsg(parsed.groupId, parsed.userId, message as Sendable);
-        break;
-      case 'channel':
-        result = await this.sendGuildMsg(parsed.guildId, parsed.channelId, message as Sendable) as unknown as { message_id?: unknown };
-        break;
+    try {
+      switch (parsed.kind) {
+        case 'private':
+          result = await this.sendPrivateMsg(parsed.userId, message as Sendable);
+          break;
+        case 'group':
+          result = await this.sendGroupMsg(parsed.groupId, message as Sendable);
+          break;
+        case 'temp':
+          result = await this.sendTempMsg(parsed.groupId, parsed.userId, message as Sendable);
+          break;
+        case 'channel':
+          result = await this.sendGuildMsg(parsed.guildId, parsed.channelId, message as Sendable) as unknown as { message_id?: unknown };
+          break;
+      }
+    } catch (error) {
+      this.#logger.warn(formatCompact({
+        op: 'icqq_send_failed',
+        target: `${conversation.kind}:${conversation.id}`,
+        error: describeUnknownError(error),
+        preview: truncatePreview(typeof message === 'string' ? message : String(message), 120),
+      }));
+      throw error;
     }
     const messageId = String(result?.message_id ?? `sent_${Date.now()}`);
     this.#logger.info(
@@ -567,6 +578,18 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   }
 }
 
+function describeUnknownError(error: unknown): string {
+  if (error instanceof Error) return error.stack ?? error.message;
+  if (error && typeof error === 'object') {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return inspect(error, { depth: 4, breakLength: 120 });
+    }
+  }
+  return String(error);
+}
+
 function resolveIcqqGroupReactionTarget(
   message: MessageRef,
 ): { groupId: number; seq: number } | null {
@@ -587,7 +610,7 @@ function resolveIcqqGroupReactionTarget(
 
 function resolveNativeClientConfig(config: ResolvedIcqqConfig): NativeIcqqClientConfig {
   return {
-    log_level: 'off',
+    log_level: 'info',
     platform: config.platform,
     ...(config.ver ? { ver: config.ver } : {}),
     ...(config.dataDir ? { data_dir: config.dataDir } : {}),

@@ -20,6 +20,7 @@ import type {
 import type { TurnTerminalProjection } from '../turn/execute-agent-turn.js';
 import { createScheduleCapabilityPlan } from './schedule-capability-plan.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
+import { buildTextTurnOutbound } from '../turn/turn-complete.js';
 
 export interface FullAgentTurnEngineOptions {
   readonly host: ZhinAgentPrivate;
@@ -168,6 +169,20 @@ async function* runInteractiveTurn(
   return {
     project: async () => {
       try {
+        if (completion.terminal.type === 'turn_end' && context.turn.ports.reply) {
+          const outbound = completion.terminal.output.length > 0
+            ? completion.terminal.output
+            : buildTextTurnOutbound(completion.result.reply, completion.result);
+          const delivery = await context.turn.ports.reply.send(outbound);
+          if (
+            delivery.status === 'failed'
+            || delivery.status === 'rejected'
+            || (delivery.status === 'suppressed' && outbound.length > 0)
+          ) {
+            const code = 'code' in delivery ? delivery.code : delivery.status;
+            throw new Error(`Synchronous reply projection failed: ${code}`);
+          }
+        }
         await completion.result.projectConversation?.();
         await sessionSystem.touchAfterTurn(host, prep.sessionId);
         await host.finalizeActiveTurn({
@@ -179,12 +194,6 @@ async function* runInteractiveTurn(
           output: completion.result.reply,
           thinking: completion.result.thinking,
         });
-        if (completion.terminal.type === 'turn_end' && context.turn.ports.reply) {
-          const delivery = await context.turn.ports.reply.send(completion.terminal.output);
-          if (delivery.status === 'failed' || delivery.status === 'rejected') {
-            throw new Error(`Synchronous reply projection failed: ${delivery.code}`);
-          }
-        }
       } finally {
         // Stop activity-feedback AFTER the reply is sent. Awaiting icqq
         // delReaction (packet timeout) before send would block the AI reply.

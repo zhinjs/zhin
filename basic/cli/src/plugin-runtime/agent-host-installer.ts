@@ -69,6 +69,7 @@ import {
   type TurnRequest,
   type TurnOutcome,
   type TurnAccessContext,
+  type DeliveryOutcome,
   FileJournalStore,
   InteractionRouter,
   demoteScheduleCreator,
@@ -507,13 +508,24 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       });
 
       /** 回复并记录出站流水（assistant 角色，对齐 legacy message.send 收集）。 */
-      const replyAndRecord = async (content: SendContent, transcriptBody = sendContentToText(content)) => {
-        await message.$reply(content);
+      const replyAndRecord = async (
+        content: SendContent,
+        transcriptBody = sendContentToText(content),
+      ): Promise<Awaited<ReturnType<Message['$reply']>>> => {
+        const receipt = await message.$reply(content);
+        logger.debug(formatCompact({
+          op: 'replychain_message_reply',
+          status: receipt.status,
+          code: receipt.failure?.code,
+          messageId: receipt.message?.id ?? receipt.legacyMessageId,
+        }));
+        if (receipt.status !== 'sent') return receipt;
         await recordRuntimeTranscript(zhinAgent, turnAccess, {
           direction: 'outbound',
           body: transcriptBody,
           senderRole: 'assistant',
         });
+        return receipt;
       };
 
       // 管理命令（原 MessageCommand /models /tree /reset…）— 在 AI trigger 前拦截
@@ -611,10 +623,27 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 question: createRuntimeQuestionPort(options.interactions, message),
                 reply: {
                   send: async (output) => {
+                    logger.debug(formatCompact({
+                      op: 'replychain_port_send',
+                      outputElements: output.length,
+                      outputPreview: flattenOutputElements(output).trim() || '(empty)',
+                    }));
                     const content = await publishOutboundElements([...output], effectiveAdapter || undefined);
+                    logger.debug(formatCompact({
+                      op: 'replychain_publish_outbound',
+                      segments: content.length,
+                    }));
                     if (content.length === 0) return { status: 'suppressed' as const };
-                    await replyAndRecord(content, flattenOutputElements(output).trim());
-                    return { status: 'sent' as const };
+                    const outcome = deliveryOutcomeFromReceipt(
+                      await replyAndRecord(content, flattenOutputElements(output).trim()),
+                    );
+                    logger.debug(formatCompact({
+                      op: 'replychain_delivery_outcome',
+                      status: outcome.status,
+                      code: 'code' in outcome ? outcome.code : undefined,
+                      messageId: 'messageId' in outcome ? outcome.messageId : undefined,
+                    }));
+                    return outcome;
                   },
                 },
               },
@@ -1295,6 +1324,38 @@ async function deliverInteraction(message: Message, text: string): Promise<void>
   const receipt = await message.$reply(text);
   if (receipt.status !== 'sent') {
     throw new Error(`Interaction delivery failed: ${receipt.status}${receipt.failure ? ` (${receipt.failure.code})` : ''}`);
+  }
+}
+
+export function deliveryOutcomeFromReceipt(
+  receipt: Awaited<ReturnType<Message['$reply']>>,
+): DeliveryOutcome {
+  switch (receipt.status) {
+    case 'sent':
+      return {
+        status: 'sent' as const,
+        ...(receipt.message?.id || receipt.legacyMessageId
+          ? { messageId: receipt.message?.id ?? receipt.legacyMessageId }
+          : {}),
+      };
+    case 'suppressed':
+      return { status: 'suppressed' as const };
+    case 'unsupported':
+      return {
+        status: 'unsupported' as const,
+        code: receipt.failure?.code ?? 'outbound_unsupported',
+      };
+    case 'rejected':
+      return {
+        status: 'rejected' as const,
+        code: receipt.failure?.code ?? 'outbound_payload_rejected',
+      };
+    case 'failed':
+      return {
+        status: 'failed' as const,
+        code: receipt.failure?.code ?? 'endpoint_send_failed',
+        retryable: receipt.failure?.retryable === true,
+      };
   }
 }
 

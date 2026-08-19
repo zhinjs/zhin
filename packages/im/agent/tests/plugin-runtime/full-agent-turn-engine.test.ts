@@ -135,7 +135,7 @@ describe('FullAgentTurnEngine', () => {
     }
 
     expect(events).toEqual(['chunk', 'turn_end']);
-    expect(order).toEqual(['terminal', 'touch', 'finalize', 'reply', 'finish']);
+    expect(order).toEqual(['terminal', 'reply', 'touch', 'finalize', 'finish']);
     expect(started).toHaveLength(1);
     expect(started[0]).toMatchObject({
       platform: 'sandbox',
@@ -253,6 +253,203 @@ describe('FullAgentTurnEngine', () => {
       endpointKey: '210723495',
       hookContext: { activityFeedbackEligible: true },
     });
+  });
+
+  it('sends the reply before persistence/finalize side effects', async () => {
+    const order: string[] = [];
+    const turn = createTurnIngress({
+      identity: { rootId: 'root', generation: 7, traceId: 'trace', turnId: 'turn' },
+      origin: { kind: 'im', platform: 'icqq', endpoint: '210723495', scope: 'group', sceneId: '1048877509', messageId: 'm-1' },
+      principal: { subjectId: 'user', roles: ['user'] },
+      input: { text: '你好呀' },
+      session: { key: 'im:icqq:210723495:group:1048877509' },
+      policy: { permissions: ['user'], unattended: false },
+      capabilities: { tools: [], skills: [] },
+      signal: new AbortController().signal,
+      ports: {
+        journal: { append: async () => undefined },
+        reply: { send: async () => { order.push('reply'); return { status: 'sent' as const }; } },
+      },
+    });
+    const core = {
+      runText() {
+        return (async function* () {
+          yield {
+            type: 'turn_end' as const,
+            output: [{ type: 'text' as const, content: '你好' }],
+            usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+          };
+          return {
+            reply: '你好',
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+            path: 'agent' as const,
+            iterations: 1,
+            model: 'model',
+            toolCalls: [],
+          };
+        })();
+      },
+    };
+    const host = {
+      config: { deferredTools: {} },
+      rateLimiter: { check: () => ({ allowed: true }) },
+      contextRepository: {
+        getDeferredToolSnapshot: async () => ({ loadedTools: {}, loadedSkills: [] }),
+        setDeferredToolSnapshot: async () => undefined,
+      },
+      promptController: new PromptController('one-at-a-time', 'one-at-a-time'),
+      activeBinding: { providerAlias: 'provider', model: 'model', nickname: 'bot' },
+      finalizeActiveTurn: vi.fn(async () => { order.push('finalize'); }),
+    };
+    const contextSystem = {
+      buildTextTurnContext: vi.fn(async () => ({
+        userMessages: [createUserMessage('你好呀')],
+        personaEnhanced: 'persona',
+        modelCandidates: ['model'],
+        modelId: 'model',
+        providerAlias: 'provider',
+        turnEnvelope: null,
+      })),
+    };
+    const sessionSystem = {
+      prepareIngressTurn: vi.fn(async () => ({
+        sessionKey: turn.session.key,
+        userId: 'user',
+        sessionId: 'session-id',
+        isNewSession: false,
+        passiveBlock: null,
+        turnUser: { rawContent: '你好呀', promptMessages: [createUserMessage('你好呀')] },
+      })),
+      touchAfterTurn: vi.fn(async () => { order.push('touch'); }),
+    };
+    const engine = createFullAgentTurnEngine({
+      host: host as never,
+      core: core as never,
+      sessionSystem: sessionSystem as never,
+      contextSystem: contextSystem as never,
+    });
+    const stream = engine.run({
+      turn,
+      capabilities: {
+        generation: 7,
+        owner: rootPluginId(),
+        tools: [],
+        skills: [],
+        agents: [],
+        mcp: [],
+      },
+      toolCapabilities: [],
+      tools: new TurnToolRuntime(turn, []),
+      selection: selection(),
+    });
+    while (true) {
+      const step = await stream.next();
+      if (step.done) {
+        await step.value?.project();
+        break;
+      }
+    }
+
+    expect(order).toEqual(['reply', 'touch', 'finalize']);
+  });
+
+  it('falls back to result.reply when terminal output is empty', async () => {
+    const send = vi.fn(async () => ({ status: 'sent' as const }));
+    const turn = createTurnIngress({
+      identity: { rootId: 'root', generation: 7, traceId: 'trace', turnId: 'turn' },
+      origin: { kind: 'im', platform: 'icqq', endpoint: '210723495', scope: 'private', sceneId: 'user', messageId: 'm-1' },
+      principal: { subjectId: 'user', roles: ['user'] },
+      input: { text: '你好呀' },
+      session: { key: 'im:icqq:210723495:private:user' },
+      policy: { permissions: ['user'], unattended: false },
+      capabilities: { tools: [], skills: [] },
+      signal: new AbortController().signal,
+      ports: {
+        journal: { append: async () => undefined },
+        reply: { send },
+      },
+    });
+    const core = {
+      runText() {
+        return (async function* () {
+          yield {
+            type: 'turn_end' as const,
+            output: [],
+            usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+          };
+          return {
+            reply: '你好',
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+            path: 'agent' as const,
+            iterations: 1,
+            model: 'model',
+            toolCalls: [],
+          };
+        })();
+      },
+    };
+    const host = {
+      config: { deferredTools: {} },
+      rateLimiter: { check: () => ({ allowed: true }) },
+      contextRepository: {
+        getDeferredToolSnapshot: async () => ({ loadedTools: {}, loadedSkills: [] }),
+        setDeferredToolSnapshot: async () => undefined,
+      },
+      promptController: new PromptController('one-at-a-time', 'one-at-a-time'),
+      activeBinding: { providerAlias: 'provider', model: 'model', nickname: 'bot' },
+      finalizeActiveTurn: vi.fn(async () => undefined),
+    };
+    const contextSystem = {
+      buildTextTurnContext: vi.fn(async () => ({
+        userMessages: [createUserMessage('你好呀')],
+        personaEnhanced: 'persona',
+        modelCandidates: ['model'],
+        modelId: 'model',
+        providerAlias: 'provider',
+        turnEnvelope: null,
+      })),
+    };
+    const sessionSystem = {
+      prepareIngressTurn: vi.fn(async () => ({
+        sessionKey: turn.session.key,
+        userId: 'user',
+        sessionId: 'session-id',
+        isNewSession: false,
+        passiveBlock: null,
+        turnUser: { rawContent: '你好呀', promptMessages: [createUserMessage('你好呀')] },
+      })),
+      touchAfterTurn: vi.fn(async () => undefined),
+    };
+    const engine = createFullAgentTurnEngine({
+      host: host as never,
+      core: core as never,
+      sessionSystem: sessionSystem as never,
+      contextSystem: contextSystem as never,
+    });
+    const stream = engine.run({
+      turn,
+      capabilities: {
+        generation: 7,
+        owner: rootPluginId(),
+        tools: [],
+        skills: [],
+        agents: [],
+        mcp: [],
+      },
+      toolCapabilities: [],
+      tools: new TurnToolRuntime(turn, []),
+      selection: selection(),
+    });
+    while (true) {
+      const step = await stream.next();
+      if (step.done) {
+        await step.value?.project();
+        break;
+      }
+    }
+
+    expect(send).toHaveBeenCalledOnce();
+    expect(send).toHaveBeenCalledWith([{ type: 'text', content: '你好', format: 'markdown' }]);
   });
 
   it('runs schedule ingress statelessly with a direct frozen capability plan', async () => {

@@ -8,6 +8,8 @@ export default tseslint.config(
       '**/dist/**',
       '**/lib/**',
       '**/node_modules/**',
+      '.claude/**',
+      '.cursor/**',
       '**/*.js',
       '**/*.mjs',
       '**/*.cjs',
