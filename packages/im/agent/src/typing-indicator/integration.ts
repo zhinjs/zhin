@@ -104,14 +104,11 @@ export function createICQQAdapterFromBot(endpoint: ICQQBot, outbound?: OutboundA
   };
 
   const removeReaction = async (messageId: string, reactionId: string): Promise<void> => {
-    try {
-      const message = messages.get(messageId);
-      if (message && endpoint.control?.removeReaction) {
-        await endpoint.control.removeReaction(message, reactionId);
-      }
-    } catch (error) {
-      logger.error('[ICQQ] Failed to remove reaction:', error);
-    }
+    const message = messages.get(messageId);
+    if (!message || !endpoint.control?.removeReaction) return;
+    void Promise.resolve(endpoint.control.removeReaction(message, reactionId)).catch((error) => {
+      logger.warn('[ICQQ] Failed to remove reaction:', error);
+    });
   };
 
   const sendMessage = async (

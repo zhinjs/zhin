@@ -1,12 +1,4 @@
-/**
- * icqq IPC request/notice 事件 → 统一收件箱行（unified_inbox_request / unified_inbox_notice）。
- *
- * daemon 经 IpcEvent 推送 icqq client.em 分发的全部事件（见 protocol.ts），
- * 好友/群请求（request.friend.add、request.group.add、request.group.invite）
- * 与通知（notice.friend.*、notice.group.*）随事件流实时到达，无需轮询；
- * endpoint 启动时补一次 GET_SYSTEM_MSG 拉取离线期间积存的待处理请求。
- */
-import type { IpcSystemMessage } from './types.js';
+import type { SystemMessage } from './types.js';
 
 /** 行级公共前缀：adapter 槽 localName + endpoint live 名（uin）。 */
 export interface IcqqInboxBase {
@@ -107,7 +99,7 @@ export function buildIcqqInboxNoticeRow(
  * friend 列表项 type 语义即好友请求；group 列表项 type 为 add/invite（记 sub_type）。
  */
 export function buildIcqqSystemRequestRow(
-  message: IpcSystemMessage,
+  message: SystemMessage,
   kind: 'friend' | 'group',
   base: IcqqInboxBase,
 ): Record<string, unknown> | null {

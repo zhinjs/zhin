@@ -63,7 +63,7 @@ export class MessageDispatcher {
       ? stripCommandPrefix(message.segments, prefix)
       : undefined;
     const matchInput = structuredInput ?? input;
-    const result = await commands.dispatch(matchInput, message, promptFactory);
+    const result = await commands.dispatch(matchInput, message, promptFactory, prefix);
     if (result.matched && result.value !== undefined) {
       if (!result.owner) throw new Error('Matched Command is missing its owner');
       logger.debug(formatCompact({

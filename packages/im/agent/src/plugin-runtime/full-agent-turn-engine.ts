@@ -1,6 +1,8 @@
 import { createUserMessage, type AgentMessage, type Usage } from '@zhin.js/ai';
 import type { AgentDescriptor } from '@zhin.js/agent-feature';
 import type { SkillDescriptor } from '@zhin.js/skill';
+import { activityFeedbackAiBus } from '../activity-feedback/ai-bus.js';
+import type { AIEventPayload } from '../ai-event-subscriber.js';
 import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/inbound-media.js';
 import { isTurnTerminalEvent, type TurnEndEvent, type TurnEvent, type TurnTerminalEvent } from '../event/turn-event.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
@@ -17,6 +19,7 @@ import type {
 } from './agent-runtime.js';
 import type { TurnTerminalProjection } from '../turn/execute-agent-turn.js';
 import { createScheduleCapabilityPlan } from './schedule-capability-plan.js';
+import type { TurnIngress } from '../turn/turn-ingress.js';
 
 export interface FullAgentTurnEngineOptions {
   readonly host: ZhinAgentPrivate;
@@ -38,11 +41,32 @@ async function* runFullAgentTurn(
   options: FullAgentTurnEngineOptions,
   context: AgentTurnExecutionContext,
 ): AsyncGenerator<TurnEvent, TurnTerminalProjection> {
-  const { host, sessionSystem, contextSystem } = options;
+  const { host, sessionSystem } = options;
   if (context.turn.execution.kind === 'schedule') {
     return yield* runScheduleTurn(options, context);
   }
   const prep = await sessionSystem.prepareIngressTurn(host, context.turn);
+  const payload = activityPayloadFromImTurn(context.turn, prep.sessionId);
+  if (payload) emitActivityEvent(host, 'ai.processing.start', payload);
+  try {
+    return yield* runInteractiveTurn(options, context, prep, payload);
+  } catch (error) {
+    emitActivityStop(host, payload, {
+      event: 'ai.processing.error',
+      extra: { error: error instanceof Error ? error.message : String(error) },
+      reason: 'processing_error',
+    });
+    throw error;
+  }
+}
+
+async function* runInteractiveTurn(
+  options: FullAgentTurnEngineOptions,
+  context: AgentTurnExecutionContext,
+  prep: Awaited<ReturnType<SessionSystem['prepareIngressTurn']>>,
+  payload: AIEventPayload | undefined,
+): AsyncGenerator<TurnEvent, TurnTerminalProjection> {
+  const { host, sessionSystem, contextSystem } = options;
   const rate = host.rateLimiter.check(prep.userId);
   if (!rate.allowed) {
     const text = rate.message || '请稍后再试';
@@ -50,8 +74,15 @@ async function* runFullAgentTurn(
     yield end;
     return {
       project: async () => {
-        await sessionSystem.touchAfterTurn(host, prep.sessionId);
-        if (context.turn.ports.reply) await context.turn.ports.reply.send(end.output);
+        try {
+          await sessionSystem.touchAfterTurn(host, prep.sessionId);
+          if (context.turn.ports.reply) await context.turn.ports.reply.send(end.output);
+        } finally {
+          emitActivityStop(host, payload, {
+            event: 'ai.processing.finish',
+            extra: { path: 'rate_limited', reply: text, reason: 'rate_limited' },
+          });
+        }
       },
     };
   }
@@ -127,25 +158,50 @@ async function* runFullAgentTurn(
     }),
   });
 
-  const completion = yield* bufferTerminal(stream);
+  let thinkingSent = false;
+  const completion = yield* bufferTerminal(stream, (event) => {
+    if (event.type !== 'thinking' || !event.text || !payload || thinkingSent) return;
+    thinkingSent = true;
+    emitActivityEvent(host, 'ai.thinking', { ...payload, thinking: event.text });
+  });
   yield completion.terminal;
   return {
     project: async () => {
-      await completion.result.projectConversation?.();
-      await sessionSystem.touchAfterTurn(host, prep.sessionId);
-      await host.finalizeActiveTurn({
-        usage: completion.result.usage,
-        path: completion.result.path,
-        iterations: completion.result.iterations,
-        model: completion.result.model,
-        userInput: prep.turnUser.rawContent,
-        output: completion.result.reply,
-        thinking: completion.result.thinking,
-      });
-      if (completion.terminal.type === 'turn_end' && context.turn.ports.reply) {
-        const delivery = await context.turn.ports.reply.send(completion.terminal.output);
-        if (delivery.status === 'failed' || delivery.status === 'rejected') {
-          throw new Error(`Synchronous reply projection failed: ${delivery.code}`);
+      try {
+        await completion.result.projectConversation?.();
+        await sessionSystem.touchAfterTurn(host, prep.sessionId);
+        await host.finalizeActiveTurn({
+          usage: completion.result.usage,
+          path: completion.result.path,
+          iterations: completion.result.iterations,
+          model: completion.result.model,
+          userInput: prep.turnUser.rawContent,
+          output: completion.result.reply,
+          thinking: completion.result.thinking,
+        });
+        if (completion.terminal.type === 'turn_end' && context.turn.ports.reply) {
+          const delivery = await context.turn.ports.reply.send(completion.terminal.output);
+          if (delivery.status === 'failed' || delivery.status === 'rejected') {
+            throw new Error(`Synchronous reply projection failed: ${delivery.code}`);
+          }
+        }
+      } finally {
+        // Stop activity-feedback AFTER the reply is sent. Awaiting icqq
+        // delReaction (packet timeout) before send would block the AI reply.
+        if (completion.terminal.type === 'error') {
+          emitActivityStop(host, payload, {
+            event: 'ai.processing.error',
+            extra: { error: completion.terminal.error.message },
+            reason: 'processing_error',
+          });
+        } else {
+          emitActivityStop(host, payload, {
+            event: 'ai.processing.finish',
+            extra: {
+              path: completion.result.path,
+              reply: completion.result.reply,
+            },
+          });
         }
       }
     },
@@ -256,6 +312,7 @@ async function* runScheduleTurn(
 
 async function* bufferTerminal(
   stream: AsyncGenerator<TurnEvent, AgentLoopTurnResult>,
+  onEvent?: (event: TurnEvent) => void,
 ): AsyncGenerator<TurnEvent, { terminal: TurnTerminalEvent; result: AgentLoopTurnResult }> {
   let buffered: TurnTerminalEvent | undefined;
   while (true) {
@@ -270,8 +327,65 @@ async function* bufferTerminal(
       continue;
     }
     if (buffered) throw new Error('Full AgentCore emitted an event after its terminal');
+    onEvent?.(step.value);
     yield step.value;
   }
+}
+
+function activityPayloadFromImTurn(
+  turn: TurnIngress,
+  sessionId: string,
+  extra: Partial<AIEventPayload> = {},
+): AIEventPayload | undefined {
+  const origin = turn.origin;
+  if (origin.kind !== 'im') return undefined;
+  const { hookContext: extraHook, ...rest } = extra;
+  return {
+    sessionId,
+    source: 'zhin-agent',
+    mode: 'text',
+    userId: turn.principal.subjectId,
+    platform: origin.platform,
+    endpointKey: origin.endpoint,
+    sceneId: origin.sceneId,
+    messageId: origin.messageId,
+    scope: origin.scope,
+    content: turn.input.text,
+    hookContext: {
+      activityFeedbackEligible: true,
+      ...(extraHook && typeof extraHook === 'object' ? extraHook : {}),
+    },
+    ...rest,
+  };
+}
+
+function emitActivityEvent(
+  host: ZhinAgentPrivate,
+  event: string,
+  payload: AIEventPayload,
+): void {
+  if (host.emitter) {
+    host.emitter.emit(event, payload);
+    return;
+  }
+  activityFeedbackAiBus.emit(event, payload);
+}
+
+function emitActivityStop(
+  host: ZhinAgentPrivate,
+  payload: AIEventPayload | undefined,
+  options: {
+    event: 'ai.processing.finish' | 'ai.processing.error';
+    extra?: Partial<AIEventPayload>;
+    reason?: string;
+  },
+): void {
+  if (!payload) return;
+  emitActivityEvent(host, options.event, { ...payload, ...options.extra });
+  emitActivityEvent(host, 'ai.typing.stop', {
+    ...payload,
+    reason: options.reason ?? 'processing_complete',
+  });
 }
 
 function buildCapabilityBootstrap(

@@ -6,21 +6,13 @@ import {
 } from "../src/outbound-media.js";
 
 describe("resolveIcqqOutboundMediaMode", () => {
-  it("配置 rpc 时默认 base64", () => {
-    expect(
-      resolveIcqqOutboundMediaMode({
-        rpc: { host: "1.2.3.4", port: 9, token: "t" },
-      }),
-    ).toBe("base64");
+  it("无配置时默认 file", () => {
+    expect(resolveIcqqOutboundMediaMode({})).toBe("file");
   });
 
   it("显式 outboundMedia 优先", () => {
-    expect(
-      resolveIcqqOutboundMediaMode({
-        rpc: { host: "1.2.3.4", port: 9, token: "t" },
-        outboundMedia: "file",
-      }),
-    ).toBe("file");
+    expect(resolveIcqqOutboundMediaMode({ outboundMedia: "base64" })).toBe("base64");
+    expect(resolveIcqqOutboundMediaMode({ outboundMedia: "file" })).toBe("file");
   });
 });
 
@@ -44,7 +36,6 @@ describe("materializeOutboundBase64", () => {
     const media = data.media as { kind: string; value: string };
     expect(media.kind).toBe("path");
     expect(media.value).toContain("zhin-icqq-outbound");
-    // MediaRef-only：不再回写 legacy file/url 字段
     expect(data.file).toBeUndefined();
     expect(data.url).toBeUndefined();
     expect(fs.existsSync(media.value)).toBe(true);

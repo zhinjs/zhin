@@ -1305,6 +1305,27 @@ describe('内置菜单命令', () => {
     expect(text).not.toContain('qq.status');
   });
 
+  it('菜单列表自动加上 commandPrefix', async () => {
+    const { slots, snapshot } = menuSnapshot();
+    const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });
+    const result = await index.dispatch('菜单', undefined, undefined, '#');
+    expect(result.matched).toBe(true);
+    const text = result.value as string;
+    expect(text).toContain('#echo');
+    expect(text).toContain('#ping');
+    expect(text).toContain('#菜单 <插件名>');
+    expect(text).not.toContain('\n  echo\n');
+  });
+
+  it('无 commandPrefix 时菜单保持原命令名', async () => {
+    const { slots, snapshot } = menuSnapshot();
+    const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });
+    const result = await index.dispatch('菜单');
+    const text = result.value as string;
+    expect(text).toContain('\n  echo\n');
+    expect(text).toContain('「菜单 <插件名>」');
+  });
+
   it('「菜单 qq」展示 qq 插件的指令和子插件', async () => {
     const { slots, snapshot } = menuSnapshot();
     const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });

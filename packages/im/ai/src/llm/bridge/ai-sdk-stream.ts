@@ -2,7 +2,7 @@
  * AI SDK streamText ↔ pi AssistantMessageEventStream bridge (ADR 0018).
  */
 
-import { generateText, Output, jsonSchema, streamText, type SystemModelMessage, type LanguageModel } from 'ai';
+import { generateText, Output, jsonSchema, streamText, type SystemModelMessage, type LanguageModel, type JSONValue } from 'ai';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 import { createAssistantMessageEventStream, getProviderConfig, type StreamFn, type StreamOptions } from '../api-registry.js';
@@ -128,6 +128,29 @@ function buildAssistantMessage(
   };
 }
 
+type ProviderOpts = Record<string, Record<string, JSONValue>>;
+
+function buildProviderOptions(
+  sdk: string | undefined,
+  cacheOpts: ProviderOpts | undefined,
+  hasDeferredTools: boolean,
+): ProviderOpts | undefined {
+  const opts: ProviderOpts = { ...(cacheOpts ?? {}) };
+
+  if (hasDeferredTools && sdk === 'anthropic') {
+    opts.anthropic = {
+      ...(cacheOpts?.anthropic ?? {}),
+      betas: ['advanced-tool-use-2025-11-20'],
+    };
+  }
+
+  if (sdk === 'minimax') {
+    opts.minimax = { thinking: { type: 'adaptive' } };
+  }
+
+  return Object.keys(opts).length > 0 ? opts : undefined;
+}
+
 export function createAiSdkStreamFn(): StreamFn {
   return (model, context, options) => {
     return createAssistantMessageEventStream(async (push) => {
@@ -155,16 +178,7 @@ export function createAiSdkStreamFn(): StreamFn {
       const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
       const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
       const cacheOpts = buildPromptCacheProviderOptions(cacheCtx);
-      const providerOptions =
-        hasDeferredTools && model.sdk === 'anthropic'
-          ? {
-              ...(cacheOpts ?? {}),
-              anthropic: {
-                ...(cacheOpts?.anthropic ?? {}),
-                betas: ['advanced-tool-use-2025-11-20'],
-              },
-            }
-          : cacheOpts;
+      const providerOptions = buildProviderOptions(model.sdk, cacheOpts, hasDeferredTools);
 
       llmContextLogger.debug(formatCompact({
         op: 'ai_sdk_request',
@@ -282,12 +296,7 @@ export async function generateTextViaAiSdk(
   const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
   const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
   const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
-  const providerOptions = {
-    ...buildPromptCacheProviderOptions(cacheCtx),
-    ...(hasDeferredTools && model.sdk === 'anthropic'
-      ? { anthropic: { betas: ['advanced-tool-use-2025-11-20'] } }
-      : {}),
-  };
+  const providerOptions = buildProviderOptions(model.sdk, buildPromptCacheProviderOptions(cacheCtx), hasDeferredTools);
 
   const result = await generateText({
     model: languageModel,

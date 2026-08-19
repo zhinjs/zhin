@@ -19,4 +19,31 @@ describe('OutboundHost', () => {
       content: 'hello',
     });
   });
+
+  it('swallows reaction failures so activity-feedback cannot block outbound send', async () => {
+    const host = createOutboundHost({
+      addEndpointReaction: vi.fn().mockRejectedValue(new Error('packet timeout')),
+      removeEndpointReaction: vi.fn().mockRejectedValue(new Error('packet timeout')),
+    } as unknown as ImRuntime);
+    const message = {
+      conversation: {
+        endpoint: { id: 'icqq', adapter: 'icqq' },
+        kind: 'group' as const,
+        id: '100',
+      },
+      id: '42',
+    };
+    await expect(host.addReaction?.({
+      adapter: 'icqq',
+      endpointKey: 'bot',
+      message,
+      emoji: '104',
+    })).resolves.toBeNull();
+    await expect(host.removeReaction?.({
+      adapter: 'icqq',
+      endpointKey: 'bot',
+      message,
+      reactionId: '104',
+    })).resolves.toBeUndefined();
+  });
 });

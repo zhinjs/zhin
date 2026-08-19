@@ -140,6 +140,10 @@
         "instanceKey": "sandbox"
       },
       {
+        "package": "@zhin.js/plugin-music",
+        "instanceKey": "music"
+      },
+      {
         "package": "@zhin.js/adapter-icqq",
         "instanceKey": "icqq"
       },

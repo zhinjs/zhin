@@ -128,8 +128,8 @@ export function parseCqMessage(raw: string): MessageSegment[] {
   return segments.length ? segments : [{ type: "text", data: { text: raw } }];
 }
 
-/** 构建 icqq IPC send_*_msg 的 message 字符串（非空） */
-export function buildIcqqIpcMessage(content: SendContent): string {
+/** 构建 icqq send_*_msg 的 message 字符串（非空） */
+export function buildIcqqMessage(content: SendContent): string {
   let message = toCqString(content).trim();
   if (!message) message = "\u200b";
   return message;

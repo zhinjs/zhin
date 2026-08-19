@@ -1,13 +1,12 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { MessageGateway } from '@zhin.js/core/runtime';
+
+vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
+
 import defineIcqqAdapter from '../adapters/icqq.js';
+import { IcqqEndpoint } from '../src/endpoint.js';
 import {
-  IcqqIpcEndpoint,
-  type IcqqIpcTransport,
-} from '../src/endpoint.js';
-import {
-  Actions,
   formatOutboundBody,
   icqqInboundConversation,
   icqqOutboundTarget,
@@ -22,43 +21,24 @@ const baseConfig = resolveIcqqConfig({
   autoReconnect: false,
 });
 
-function createMockIpc(): IcqqIpcTransport & {
-  sent: Array<{ action: string; params?: Record<string, unknown> }>;
-  emitEvent: (event: string, data: unknown) => void;
-} {
-  const handlers: Array<(event: { id: string; event: string; data: unknown }) => void> = [];
-  const sent: Array<{ action: string; params?: Record<string, unknown> }> = [];
-  return {
-    sent,
-    emitEvent(event, data) {
-      for (const handler of handlers) {
-        handler({ id: '*', event, data });
-      }
-    },
-    request: vi.fn(async (action: string, params?: Record<string, unknown>) => {
-      sent.push({ action, params });
-      if (action === Actions.LIST_FRIENDS) {
-        return { id: '1', ok: true, data: [{ user_id: 2, nickname: 'bob' }] };
-      }
-      if (action === Actions.LIST_GROUPS) {
-        return {
-          id: '1',
-          ok: true,
-          data: [{ group_id: 100, group_name: 'g', member_count: 1, max_member_count: 200 }],
-        };
-      }
-      if (action === Actions.SEND_GROUP_MSG || action === Actions.SEND_PRIVATE_MSG) {
-        return { id: '1', ok: true, data: { message_id: 'sent-1' } };
-      }
-      return { id: '1', ok: true, data: {} };
-    }),
-    subscribe: vi.fn((_action, _params, handler) => {
-      handlers.push(handler);
-      return { unsubscribe: vi.fn(async () => undefined) };
-    }),
-    setOnRemoteDisconnect: vi.fn(),
-    close: vi.fn(),
-  };
+function createEndpoint(overrides: {
+  receive?: ReturnType<typeof vi.fn>;
+  gateway?: MessageGateway;
+  friends?: Map<number, unknown>;
+  groups?: Map<number, unknown>;
+} = {}): IcqqEndpoint {
+  const receive = overrides.receive ?? vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+  const gateway = overrides.gateway ?? { receive, send: vi.fn(async () => 'sent') };
+  const endpoint = new IcqqEndpoint({
+    id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
+    gateway,
+    config: baseConfig,
+  });
+  const friends = overrides.friends ?? new Map([[2, { user_id: 2, nickname: 'bob', sex: 'unknown', age: 0 }]]);
+  const groups = overrides.groups ?? new Map([[100, { group_id: 100, group_name: 'g', member_count: 1, max_member_count: 200, owner_id: 1, admin_flag: false, last_join_time: 0, last_sent_time: 0, shutup_time_whole: 0, shutup_time_me: 0, create_time: 0, grade: 0, max_admin_count: 0, active_member_count: 0 }]]);
+  for (const [k, v] of friends) endpoint.fl.set(k, v as never);
+  for (const [k, v] of groups) endpoint.gl.set(k, v as never);
+  return endpoint;
 }
 
 afterEach(() => {
@@ -126,31 +106,21 @@ describe('icqq protocol helpers', () => {
       type: 'image',
       data: { media: { kind: 'base64', value: 'YQ==' } },
     })).toBe('[image:base64://YQ==]');
-    // 媒体段无 canonical MediaRef 时丢弃（warn + 空串）
     expect(formatOutboundBody({ type: 'image', data: {} })).toBe('​');
-    // 未知段类型不会退化为 '[object Object]'，而是按空文本段兜底
     expect(formatOutboundBody({ type: 'html', data: { html: '<b>x</b>' } }))
       .toBe('​');
-    // legacy { text } 简写保持原行为
     expect(formatOutboundBody({ text: 'legacy' })).toBe('legacy');
   });
 });
 
 describe('icqq plugin runtime adapter', () => {
-  it('admits IPC message events via MessageGateway when open', async () => {
-    const mock = createMockIpc();
+  it('admits message events via MessageGateway when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = new IcqqIpcEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
-      gateway,
-      config: baseConfig,
-      createIpc: async () => mock,
-    });
+    const endpoint = createEndpoint({ receive });
     await endpoint.start();
     endpoint.open();
 
-    mock.emitEvent('message.group.normal', {
+    (endpoint as any).emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -171,20 +141,70 @@ describe('icqq plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('passes quote metadata to gateway when event carries a source', async () => {
-    const mock = createMockIpc();
+  it('holds inbound until open() then flushes to the gateway', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = new IcqqIpcEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
-      gateway,
-      config: baseConfig,
-      createIpc: async () => mock,
+    const endpoint = createEndpoint({ receive });
+    await endpoint.start();
+
+    (endpoint as any).emit('message.group.normal', {
+      post_type: 'message',
+      message_type: 'group',
+      group_id: 100,
+      user_id: 2,
+      message_id: 'held-1',
+      raw_message: '赞我20次',
+      time: 1_700_000_000,
+      sender: { user_id: 2, nickname: 'bob', role: 'member' },
     });
+    expect(receive).not.toHaveBeenCalled();
+
+    endpoint.open();
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.objectContaining({ id: 'held-1' }),
+      content: '赞我20次',
+    }));
+    await endpoint.stop();
+  });
+
+  it('admits native GroupMessage whose toJSON(keys) throws if called without keys', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const endpoint = createEndpoint({ receive });
     await endpoint.start();
     endpoint.open();
 
-    mock.emitEvent('message.group.normal', {
+    (endpoint as any).emit('message.group.normal', {
+      post_type: 'message',
+      message_type: 'group',
+      group_id: 100,
+      user_id: 2,
+      message_id: 'm-native',
+      raw_message: '#菜单',
+      time: 1_700_000_000,
+      sender: { user_id: 2, nickname: 'bob', role: 'member' },
+      toJSON(keys?: string[]) {
+        if (!keys) throw new TypeError("Cannot read properties of undefined (reading 'includes')");
+        return Object.fromEntries(Object.entries(this).filter(([key, value]) => (
+          typeof value !== 'function' && !keys.includes(key)
+        )));
+      },
+    });
+
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      content: '#菜单',
+      message: expect.objectContaining({ id: 'm-native' }),
+    }));
+    await endpoint.stop();
+  });
+
+  it('passes quote metadata to gateway when event carries a source', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const endpoint = createEndpoint({ receive });
+    await endpoint.start();
+    endpoint.open();
+
+    (endpoint as any).emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -216,19 +236,12 @@ describe('icqq plugin runtime adapter', () => {
   });
 
   it('omits quote metadata when event has no quote source', async () => {
-    const mock = createMockIpc();
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = new IcqqIpcEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
-      gateway,
-      config: baseConfig,
-      createIpc: async () => mock,
-    });
+    const endpoint = createEndpoint({ receive });
     await endpoint.start();
     endpoint.open();
 
-    mock.emitEvent('message.group.normal', {
+    (endpoint as any).emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -249,19 +262,12 @@ describe('icqq plugin runtime adapter', () => {
   });
 
   it('marks mentioned when group message @s the bot uin', async () => {
-    const mock = createMockIpc();
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = new IcqqIpcEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
-      gateway,
-      config: baseConfig, // name = '10001'（本机 uin）
-      createIpc: async () => mock,
-    });
+    const endpoint = createEndpoint({ receive });
     await endpoint.start();
     endpoint.open();
 
-    mock.emitEvent('message.group.normal', {
+    (endpoint as any).emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -282,19 +288,12 @@ describe('icqq plugin runtime adapter', () => {
   });
 
   it('does not mark mentioned when @ targets someone else', async () => {
-    const mock = createMockIpc();
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = new IcqqIpcEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
-      gateway,
-      config: baseConfig,
-      createIpc: async () => mock,
-    });
+    const endpoint = createEndpoint({ receive });
     await endpoint.start();
     endpoint.open();
 
-    mock.emitEvent('message.group.normal', {
+    (endpoint as any).emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -306,20 +305,13 @@ describe('icqq plugin runtime adapter', () => {
     });
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
-    const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
     expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
     await endpoint.stop();
   });
 
   it('does not admit while closed', async () => {
-    const mock = createMockIpc();
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = new IcqqIpcEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createIpc: async () => mock,
-    });
+    const endpoint = createEndpoint({ receive });
     await endpoint.start();
     endpoint.admit({
       id: '1',
@@ -336,14 +328,8 @@ describe('icqq plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('send posts group message via IPC', async () => {
-    const mock = createMockIpc();
-    const endpoint = new IcqqIpcEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createIpc: async () => mock,
-    });
+  it('send posts group message via Client.sendGroupMsg', async () => {
+    const endpoint = createEndpoint();
     await endpoint.start();
     endpoint.open();
     const id = await endpoint.send({
@@ -355,18 +341,12 @@ describe('icqq plugin runtime adapter', () => {
       payload: 'pong',
     });
     expect(id).toBe('sent-1');
-    expect(mock.sent.some((s) => s.action === Actions.SEND_GROUP_MSG)).toBe(true);
+    expect(endpoint.sendGroupMsg).toHaveBeenCalledWith(100, 'pong');
     await endpoint.stop();
   });
 
-  it('send posts temp message via IPC (群容器内的 private 会话)', async () => {
-    const mock = createMockIpc();
-    const endpoint = new IcqqIpcEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createIpc: async () => mock,
-    });
+  it('send posts temp message (群容器内的 private 会话)', async () => {
+    const endpoint = createEndpoint();
     await endpoint.start();
     endpoint.open();
     await endpoint.send({
@@ -378,20 +358,12 @@ describe('icqq plugin runtime adapter', () => {
       },
       payload: 'hi',
     });
-    const call = mock.sent.find((s) => s.action === Actions.SEND_TEMP_MSG);
-    expect(call).toBeDefined();
-    expect(call?.params).toEqual({ group_id: 100, user_id: 2, message: 'hi' });
+    expect(endpoint.sendTempMsg).toHaveBeenCalledWith(100, 2, 'hi');
     await endpoint.stop();
   });
 
-  it('send posts guild channel message via IPC (guild 容器内的 channel 会话)', async () => {
-    const mock = createMockIpc();
-    const endpoint = new IcqqIpcEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createIpc: async () => mock,
-    });
+  it('send posts guild channel message (guild 容器内的 channel 会话)', async () => {
+    const endpoint = createEndpoint();
     await endpoint.start();
     endpoint.open();
     await endpoint.send({
@@ -403,20 +375,12 @@ describe('icqq plugin runtime adapter', () => {
       },
       payload: 'hi',
     });
-    const call = mock.sent.find((s) => s.action === Actions.GUILD_SEND_MSG);
-    expect(call).toBeDefined();
-    expect(call?.params).toEqual({ guild_id: 'g1', channel_id: 'c1', message: 'hi' });
+    expect(endpoint.sendGuildMsg).toHaveBeenCalledWith('g1', 'c1', 'hi');
     await endpoint.stop();
   });
 
   it('send throws a clear error after stop', async () => {
-    const mock = createMockIpc();
-    const endpoint = new IcqqIpcEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createIpc: async () => mock,
-    });
+    const endpoint = createEndpoint();
     await endpoint.start();
     await endpoint.stop();
     await expect(endpoint.send({
@@ -427,27 +391,77 @@ describe('icqq plugin runtime adapter', () => {
       },
       payload: 'x',
     })).rejects.toThrow(/未连接/);
-    await expect(endpoint.request(Actions.PING)).rejects.toThrow(/未连接/);
   });
 
-  it('registers agent endpoint with friends/groups cache', async () => {
-    const mock = createMockIpc();
-    const endpoint = new IcqqIpcEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createIpc: async () => mock,
-    });
+  it('registers agent endpoint with fl/gl cache', async () => {
+    const endpoint = createEndpoint();
     await endpoint.start();
     const registered = getIcqqAgentDeps().getEndpoint('10001');
-    expect(registered.friends.size).toBe(1);
-    expect(registered.groups.size).toBe(1);
-    expect(registered.ipc).toBe(mock);
+    expect(registered.fl.size).toBe(1);
+    expect(registered.gl.size).toBe(1);
     await endpoint.stop();
   });
 
   it('defineAdapter exports frozen definition', () => {
     expect(defineIcqqAdapter.$feature).toBe('zhin.adapter/1');
     expect(defineIcqqAdapter.capabilities).toEqual(['inbound', 'outbound']);
+  });
+
+  it('adds and removes group reactions via Group.setReaction', async () => {
+    const endpoint = createEndpoint();
+    const message = {
+      conversation: {
+        endpoint: { id: 'icqq', adapter: 'icqq' },
+        kind: 'group' as const,
+        id: '100',
+      },
+      id: '42',
+    };
+    await expect(endpoint.control.addReaction!(message, '104')).resolves.toBe('104');
+    expect(vi.mocked(endpoint.pickGroup)).toHaveBeenCalledWith(100);
+    const group = vi.mocked(endpoint.pickGroup).mock.results[0]!.value;
+    expect(group.setReaction).toHaveBeenCalledWith(42, '104');
+    await endpoint.control.removeReaction!(message, '104');
+    expect(group.delReaction).toHaveBeenCalledWith(42, '104');
+  });
+
+  it('does not wait for reaction protocol ACK (packet timeout must not stall send)', async () => {
+    const endpoint = createEndpoint();
+    const hung = new Promise<never>(() => undefined);
+    vi.mocked(endpoint.pickGroup).mockReturnValue({
+      setReaction: vi.fn(() => hung),
+      delReaction: vi.fn(() => hung),
+    });
+    const message = {
+      conversation: {
+        endpoint: { id: 'icqq', adapter: 'icqq' },
+        kind: 'group' as const,
+        id: '100',
+      },
+      id: '42',
+    };
+    await expect(endpoint.control.addReaction!(message, '104')).resolves.toBe('104');
+    await expect(endpoint.control.removeReaction!(message, '104')).resolves.toBeUndefined();
+  });
+
+  it('skips reactions in private chats and for outbound placeholders', async () => {
+    const endpoint = createEndpoint();
+    await expect(endpoint.control.addReaction!({
+      conversation: {
+        endpoint: { id: 'icqq', adapter: 'icqq' },
+        kind: 'private',
+        id: '2',
+      },
+      id: '42',
+    }, '104')).resolves.toBeNull();
+    await expect(endpoint.control.addReaction!({
+      conversation: {
+        endpoint: { id: 'icqq', adapter: 'icqq' },
+        kind: 'group',
+        id: '100',
+      },
+      id: 'outbound:1',
+    }, '104')).resolves.toBeNull();
+    expect(endpoint.pickGroup).not.toHaveBeenCalled();
   });
 });

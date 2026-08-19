@@ -219,8 +219,8 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       generation: 1,
       plugins: 1,
       capabilities: 4,
-      // adapter + command + component + middleware（platformFeatures 继承四件套）
-      projections: 4,
+      // adapter + command + component + middleware + handler（platformFeatures 继承）
+      projections: 5,
     });
     expect((await new MigrationReadiness().inspect(botRoot)).state).toBe('ready');
   });

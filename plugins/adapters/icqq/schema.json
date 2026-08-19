@@ -4,34 +4,75 @@
   "additionalProperties": false,
   "properties": {
     "master": {
-      "type": [
-        "string",
-        "number"
-      ],
+      "type": ["string", "number"],
       "description": "框架 master QQ uin（/approve、AI/工具权限）；endpoints[i].master 可逐项覆盖"
     },
     "trusted": {
       "type": "array",
-      "items": {
-        "type": [
-          "string",
-          "number"
-        ],
-        "description": "Trusted QQ uin"
-      },
+      "items": { "type": ["string", "number"] },
       "description": "框架 trusted QQ uin 列表（弱于 master）"
+    },
+    "password": {
+      "type": "string",
+      "description": "QQ 密码（可选，不填则扫码登录）"
+    },
+    "platform": {
+      "type": "number",
+      "enum": [1, 2, 3, 4, 5, 6, 7],
+      "default": 1,
+      "description": "登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom"
+    },
+    "ver": {
+      "type": "string",
+      "description": "协议版本号，仅在对应 platform 有多个版本时有效，不填则使用最新版本"
+    },
+    "signApiAddr": {
+      "type": "string",
+      "description": "签名服务器地址；未配置时若安装了 @icqqjs/qqsign 则自动使用本地签名"
+    },
+    "dataDir": {
+      "type": "string",
+      "description": "数据存储文件夹路径，默认为主模块下的 data 文件夹"
     },
     "autoReconnect": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "description": "断线后是否自动重连（默认 true）"
     },
     "outboundMedia": {
       "type": "string",
-      "enum": [
-        "file",
-        "base64"
-      ],
-      "description": "file=local path (same host as daemon); base64=CQ base64:// (default when rpc set)"
+      "enum": ["file", "base64"],
+      "default": "file",
+      "description": "出站媒体模式：file=落盘本地路径（默认）; base64=CQ base64:// 内联"
+    },
+    "ignoreSelf": {
+      "type": "boolean",
+      "default": true,
+      "description": "群聊和频道中是否过滤自己的消息（默认 true）"
+    },
+    "resend": {
+      "type": "boolean",
+      "default": false,
+      "description": "被风控时是否尝试用分片发送（默认 false）"
+    },
+    "cacheGroupMember": {
+      "type": "boolean",
+      "default": true,
+      "description": "是否缓存群员列表（默认 true）；群多时（500+）会多占约 100MB+ 内存"
+    },
+    "autoServer": {
+      "type": "boolean",
+      "default": true,
+      "description": "是否自动选择最优服务器（默认 true）"
+    },
+    "qqnt": {
+      "type": "boolean",
+      "default": true,
+      "description": "是否使用 QQNT 协议（默认 true）"
+    },
+    "ntLogin": {
+      "type": "boolean",
+      "description": "是否使用 NT 登录方式"
     },
     "endpoints": {
       "type": "array",
@@ -40,65 +81,82 @@
         "type": "object",
         "additionalProperties": true,
         "properties": {
+          "id": {
+            "type": "string",
+            "description": "QQ uin"
+          },
           "master": {
-            "type": [
-              "string",
-              "number"
-            ],
-            "description": "本 endpoint 的框架 master QQ uin；覆盖顶层 master"
+            "type": ["string", "number"],
+            "description": "本 endpoint 的 master QQ uin；覆盖顶层 master"
           },
           "trusted": {
             "type": "array",
-            "items": {
-              "type": [
-                "string",
-                "number"
-              ],
-              "description": "Trusted QQ uin"
-            },
+            "items": { "type": ["string", "number"] },
             "description": "本 endpoint 的 trusted 列表"
           },
-          "rpc": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "host": {
-                "type": "string",
-                "description": "RPC host"
-              },
-              "port": {
-                "type": "number",
-                "description": "RPC port"
-              },
-              "token": {
-                "type": "string",
-                "description": "RPC token"
-              }
-            },
-            "required": [
-              "host",
-              "port",
-              "token"
-            ]
-          },
-          "id": {
+          "password": {
             "type": "string",
-            "description": "QQ uin (must match icqq login account)"
+            "description": "本 endpoint 的 QQ 密码"
+          },
+          "platform": {
+            "type": "number",
+            "enum": [1, 2, 3, 4, 5, 6, 7],
+            "description": "登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom"
+          },
+          "ver": {
+            "type": "string",
+            "description": "协议版本号"
+          },
+          "signApiAddr": {
+            "type": "string",
+            "description": "签名服务器地址"
+          },
+          "dataDir": {
+            "type": "string",
+            "description": "数据存储文件夹路径"
+          },
+          "autoReconnect": {
+            "type": "boolean",
+            "description": "断线后是否自动重连"
+          },
+          "outboundMedia": {
+            "type": "string",
+            "enum": ["file", "base64"],
+            "description": "出站媒体模式"
+          },
+          "ignoreSelf": {
+            "type": "boolean",
+            "description": "是否过滤自己的消息"
+          },
+          "resend": {
+            "type": "boolean",
+            "description": "被风控时是否分片发送"
+          },
+          "cacheGroupMember": {
+            "type": "boolean",
+            "description": "是否缓存群员列表"
+          },
+          "autoServer": {
+            "type": "boolean",
+            "description": "是否自动选择最优服务器"
+          },
+          "qqnt": {
+            "type": "boolean",
+            "description": "是否使用 QQNT 协议"
+          },
+          "ntLogin": {
+            "type": "boolean",
+            "description": "是否使用 NT 登录方式"
           }
         },
-        "required": [
-          "id"
-        ]
+        "required": ["id"]
       }
     },
     "commandPrefix": {
       "type": "string",
       "default": "",
-      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
+      "description": "命令前缀（默认 '' 无前缀）。endpoints[i] 可逐项覆盖"
     }
   },
-  "required": [
-    "master",
-    "endpoints"
-  ]
+  "required": ["master", "endpoints"]
 }

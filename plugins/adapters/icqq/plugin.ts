@@ -1,5 +1,6 @@
 import { createEndpointRuntimeState } from '@zhin.js/adapter';
 import { definePlugin } from '@zhin.js/plugin-runtime';
+import { permissionHostToken, createSceneRolePlatformChecker } from '@zhin.js/permission';
 import { icqqRuntimeStateToken } from './src/icqq-runtime-state.js';
 
 // Module-level guard: multiple icqq instances (icqq, icqq-2, …) share this
@@ -14,9 +15,15 @@ export default definePlugin({
   setup(context) {
     // 运行中 endpoint 注册表（icqq.endpoint list 的"运行中"数据源）
     context.resources.provide(icqqRuntimeStateToken, createEndpointRuntimeState());
+    const disposePlatform = context.resources.has(permissionHostToken)
+      ? context.resources.use(permissionHostToken).registerPlatform(
+        'icqq',
+        createSceneRolePlatformChecker(),
+      )
+      : undefined;
     // Agent prompt contributor (orchestrator/deferred-worker ICQQ guidance).
     // `zhin.js/agent` is an optional peer — skip silently on IM-only installs.
-    if (promptContributorRegistered) return;
+    if (promptContributorRegistered) return disposePlatform;
     let cancelled = false;
     let unregister: (() => void) | undefined;
     void Promise.all([
@@ -31,6 +38,7 @@ export default definePlugin({
     return () => {
       cancelled = true;
       unregister?.();
+      disposePlatform?.();
     };
   },
 });

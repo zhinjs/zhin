@@ -1,21 +1,23 @@
 # @zhin.js/adapter-icqq
 
-ICQQ Plugin Runtime 适配器 — 通过 [@icqqjs/cli](https://github.com/icqqjs/cli) 守护进程 IPC 连接已登录 QQ 账号（无 `httpHostToken`）。
+ICQQ Plugin Runtime 适配器 — 进程内直接使用 [@icqqjs/icqq](https://github.com/icqqjs/icqq) `Client`（无独立守护进程、无 `httpHostToken`）。
 
 ## 功能特性
 
 - 群聊 / 私聊 / 群临时会话 / QQ 频道消息
-- 入站：`messageGatewayToken`（IPC 事件订阅），归一为 `gateway.receive({ conversation, message, content, ... })`
-- 出站：`send({ conversation, payload })` → `send_group_msg` / `send_private_msg` / …（conversation kind/id/parent 路由）
-- Agent 工具：`agent/tools/`（戳一戳、群管、好友列表等）保留
-- Console Endpoint 管理：`src/endpoint.ts` 显式实现 `EndpointManagement`（好友/群/群成员列表、请求审批、删好友、踢人、禁言、设管理），Console 使用 `endpoint.friends` / `endpoint.groups` / `endpoint.group_members` 等规范 RPC
+- 入站：`messageGatewayToken`，归一为 `gateway.receive({ conversation, message, content, ... })`
+- 出站：`send({ conversation, payload })` → `sendGroupMsg` / `sendPrivateMsg` / …（conversation kind/id/parent 路由）
+- 群聊 reaction：`control.addReaction` / `removeReaction`（协议 ACK 失败不阻塞后续发送）
+- Agent 工具：包根 `tools/`（`@zhin.js/tool` Feature；模型侧名为 `icqq__send_user_like` 等）
+- Console Endpoint 管理：`src/endpoint.ts` 显式实现 `EndpointManagement`（好友/群/群成员列表、请求审批、删好友、踢人、禁言、设管理）
 
 ## 安装
 
 ```bash
 pnpm add @zhin.js/adapter-icqq
-pnpm add -g @icqqjs/cli   # 或 npx icqq login
 ```
+
+签名：未配置 `signApiAddr` 时，若已安装 `@icqqjs/qqsign` 则自动走本地签名。
 
 ## 配置（Plugin Runtime）
 
@@ -25,28 +27,21 @@ plugins:
     master: "1659488338"        # 必填，顶层共享（/approve 与 master 角色）
     autoReconnect: true
     endpoints:
-      - name: "${ICQQ_ACCOUNT}"   # QQ 号，须与 icqq login 一致
-      # rpc 为 endpoint 级字段：
-      # - name: "${ICQQ_ACCOUNT_2}"
-      #   rpc:
-      #     host: 10.0.0.2
-      #     port: 9527
-      #     token: ${ICQQ_RPC_TOKEN}
+      - id: "${ICQQ_ACCOUNT}"   # QQ 号
+        # password: "${ICQQ_PASSWORD}"  # 可选；不填则扫码登录
 ```
 
-多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`name` 必填）：
+多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`id` 必填）：
 
 ```yaml
 plugins:
   icqq:
-    master: "1659488338"      # 顶层字段所有 endpoint 共享
+    master: "1659488338"
     endpoints:
-      - name: "${ICQQ_ACCOUNT}"
-      - name: "${ICQQ_ACCOUNT_2}"
-      - name: "${ICQQ_ACCOUNT_3}"   # 各账号须分别 icqq login
+      - id: "${ICQQ_ACCOUNT}"
+      - id: "${ICQQ_ACCOUNT_2}"
+      - id: "${ICQQ_ACCOUNT_3}"
 ```
-
-先执行 `icqq login`，再启动 Zhin。
 
 ## Send conversation
 
@@ -60,17 +55,17 @@ plugins:
 ## 架构
 
 - `plugin.ts` + `adapters/icqq.ts`（`defineAdapter`）
+- Endpoint：`src/endpoint.ts`（继承 icqq `Client`，`start()` 内 `login()`）
 - 协议常量 / 配置：`src/protocol.ts`
-- IPC 客户端：`src/ipc-client.ts`（无 host-http）
-- Console loginAssist / host-router 延期
-- 旧 `usePlugin` / `extends Adapter` / Endpoint 生产入口已删除
+- Agent 工具：`tools/*.ts`；权限说明见 `agent/PERMITS.md`
 
 ## Plugin Runtime 迁移说明
 
-- `autoReconnect` 已恢复实现：IPC/RPC 意外断开后按指数退避自动重连（`stop()` 为主动断开，不触发重连）。
-- `outboundMedia: file | base64` 已恢复实现：`file` 模式把 segment base64 落盘为临时文件后发 `[image:path]`；`base64` 模式（配置 `rpc` 时默认）发 `[image:base64://...]` 由守护进程解码。
-- **Console 社交/群管 RPC 已接线**：endpoint 在 Adapter 内把 ICQQ 的 `get_friend_list` / `get_group_list` / `get_group_member_list`、请求审批和群管操作归一化为冻结的 `EndpointManagement` 对象。Host 只消费该语义端口，不再探测方法别名或读取 `friends` / `groups` SDK 缓存。
-- **notice / request 入站事件已移除**：Plugin Runtime 的 `MessageGateway` 仅有 message 通道，没有 `notice.receive` / `request.receive` 事件机制，旧 `icqq-side-events.ts` / `get-msg.ts` / `login-ipc-contract.ts` / `agent-prompt.ts` 随之删除。需要好友/入群请求处理能力时请等待 runtime 提供事件通道后再恢复。
+- 不再经过 `@icqqjs/cli` IPC 守护进程；登录态与协议栈都在本进程。
+- `autoReconnect`：Client 断线后按配置自动重连（`stop()` 为主动断开，不触发重连）。
+- `outboundMedia: file | base64`：`file` 把 segment base64 落盘后发本地路径；`base64` 发 CQ `base64://` 内联。
+- **Console 社交/群管 RPC 已接线**：endpoint 把好友/群/群成员列表、请求审批和群管操作归一化为冻结的 `EndpointManagement`。Host 只消费该语义端口。
+- 好友/入群请求与通知写入 unified inbox（有 DatabaseHost 时），不再走已删除的 `notice.receive` / `request.receive` 事件。
 
 ## License
 

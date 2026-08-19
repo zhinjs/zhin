@@ -21,7 +21,7 @@ const watchedExtensions = new Set([
   '.cjs', '.js', '.json', '.md', '.mjs', '.ts', '.tsx', '.yaml', '.yml',
 ]);
 const capabilityRoots = new Set([
-  'adapters', 'agents', 'commands', 'components', 'mcp', 'middlewares', 'pages', 'skills', 'tools',
+  'adapters', 'agents', 'commands', 'components', 'handlers', 'mcp', 'middlewares', 'pages', 'skills', 'tools',
 ]);
 
 /**

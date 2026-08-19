@@ -6,6 +6,8 @@
 
 ## Permit 词汇表
 
+平台范围用工具的 `platforms: ['icqq']`，不要写非法的 `platform(icqq)`（缺 perm 时 PermissionHost 会直接拒绝，工具对模型不可见）。
+
 | `platform(icqq,…)` | 含义 |
 |--------------------|------|
 | `scene_owner` | 群主 |

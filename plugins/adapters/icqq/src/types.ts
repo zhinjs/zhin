@@ -1,9 +1,3 @@
-/**
- * ICQQ 适配器类型与配置
- *
- * 不再直接依赖 @icqqjs/icqq，通过 @icqqjs/cli 守护进程 IPC 通信。
- */
-
 export type GroupRole = "owner" | "admin" | "member";
 
 export interface IcqqSenderInfo {
@@ -17,47 +11,21 @@ export interface IcqqSenderInfo {
   title?: string;
 }
 
-/**
- * Endpoint 配置：支持本地 IPC 和远程 RPC 两种连接模式。
- *
- * - 本地模式（默认）：只需 name（QQ号），自动连接 ~/.icqq/<uin>/daemon.sock
- * - 远程模式：额外配置 rpc.host / rpc.port / rpc.token
- */
 export interface IcqqEndpointConfig {
   context: "icqq";
-  /** QQ 号码字符串 */
   name: `${number}`;
-  /** RPC 远程连接配置（不配置则使用本地 IPC） */
-  rpc?: {
-    /** 远程主机地址 */
-    host: string;
-    /** 远程端口 */
-    port: number;
-    /** 认证 token（用于 HMAC-SHA256 挑战-响应，不会明文传输） */
-    token: string;
-  };
-  /**
-   * IPC/RPC 与守护进程连接意外断开时是否自动重连（指数退避，上限约 30s）。
-   * 默认 true；设为 false 则断开后仅将 `$connected` 置为 false，需手动重连。
-   */
   autoReconnect?: boolean;
-  /**
-   * 出站图片/语音/视频：file=本机临时文件路径（需与 icqq 守护进程同机可读）；
-   * base64=经 CQ `base64://` 交给守护进程解码（Zhin 与 icqq 异进程/异机时用，配置 rpc 时默认 base64）。
-   */
   outboundMedia?: "file" | "base64";
 }
 
-/** IPC 返回的好友信息 */
-export interface IpcFriendInfo {
+export interface FriendInfo {
   user_id: number;
   nickname: string;
   remark?: string;
   class_id?: number;
 }
 
-/** IPC 返回的群信息 */
-export interface IpcGroupInfo {
+export interface GroupInfo {
   group_id: number;
   group_name: string;
   member_count: number;
@@ -65,8 +33,7 @@ export interface IpcGroupInfo {
   owner_id?: number;
 }
 
-/** IPC 返回的群成员信息 */
-export interface IpcMemberInfo {
+export interface MemberInfo {
   user_id: number;
   nickname: string;
   card: string;
@@ -77,11 +44,7 @@ export interface IpcMemberInfo {
   shutup_time?: number;
 }
 
-/**
- * GET_SYSTEM_MSG 归一后的待处理请求（@icqqjs/cli NormalizedSystemMessage）。
- * friendRequests 与 groupRequests 均为该形状，按 flag 处理。
- */
-export interface IpcSystemMessage {
+export interface SystemMessage {
   type: string;
   user_id?: number;
   nickname?: string;

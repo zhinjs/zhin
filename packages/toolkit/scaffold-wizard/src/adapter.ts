@@ -5,6 +5,7 @@ import {
   adapterDocsUrl,
   configureDiscordEndpoint,
   configureGitHubEndpoint,
+  configureIcqqBot,
   configureMilkyBot,
   configureNapcatBot,
   configureOneBot11Bot,
@@ -83,14 +84,11 @@ export const ADAPTERS: AdapterDefinition[] = [
     package: '@zhin.js/adapter-icqq',
     plugin: '@zhin.js/adapter-icqq',
     needsHttp: false,
-    description: '非官方 QQ 协议，需本地登录',
-    setupHint: '先安装 icqq CLI 并登录：pnpm dlx icqq login <QQ号>，登录态保存在 ~/.icqq/。',
+    description: '非官方 QQ 协议，直连 @icqqjs/icqq',
+    setupHint: '直连 @icqqjs/icqq 协议库，支持扫码或密码登录；建议配置签名服务以提高稳定性。',
     docUrl: adapterDocsUrl('icqq'),
-    fields: [
-      { key: 'id', message: 'QQ 号（与 icqq login 时一致）:', required: true, envKey: 'ICQQ_ACCOUNT' },
-      // schema 顶层 required: master（所有 endpoint 共享）
-      { key: 'master', message: '主人 QQ 号（master，/approve 等管理命令）:', required: true, scope: 'shared' },
-    ],
+    configure: configureIcqqBot,
+    fields: [],
   },
   {
     name: 'QQ 官方',

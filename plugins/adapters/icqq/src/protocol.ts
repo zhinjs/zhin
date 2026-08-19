@@ -1,61 +1,20 @@
-/**
- * IPC 协议类型定义与 Action 常量 (ported from @icqqjs/cli)
- *
- * CLI 与守护进程通过 Unix Domain Socket 通信，
- * 使用 JSON + 换行符（\n）分隔的文本协议。
- *
- * 通信流程（@icqqjs/cli `src/daemon/protocol.ts`）：
- * 1. CLI 连接 Socket → auth（token）
- * 2. 认证通过后发送 IpcRequest → 等待 IpcResponse
- * 3. 认证通过后自动接收 icqq 事件推送（IpcEvent），断开连接自动停止
- *
- * 登录相关：**推送**走 IpcEvent（`system.login.*`）。
- */
-
 import { pickCredential } from '@zhin.js/adapter';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import type { MessageSegment } from "zhin.js";
 import { resolveCqMediaArg } from "./cq-message.js";
 
-/** CLI → Daemon 请求 */
-export type IpcRequest = {
-  id: string;
-  action: string;
-  params: Record<string, unknown>;
-};
-
-/** Daemon → CLI 响应 */
-export type IpcResponse = {
+export type ActionResult = {
   id: string;
   ok: boolean;
   data?: unknown;
   error?: string;
 };
 
-/**
- * Daemon → CLI 事件推送（icqq client.em 分发的全部事件）
- *
- * 登录/重连时推送 `system.login.*`（如 `system.login.auth` 含 url + device），
- * 语义在 `event` 字段，不在 OneBot 式 `post_type` 里。
- */
-export type IpcEvent = {
-  /** 固定为 `"*"`，客户端应忽略，由本地 handler 按 `event` 过滤 */
-  id: string;
-  /** icqq 事件名，如 `system.login.auth`、`message.group.normal` */
-  event: string;
-  /** icqq 事件 toJSON 后的 plain object */
-  data: unknown;
-};
+export type { IcqqMessageEvent } from "./icqq-inbound.js";
 
-export type IpcMessage = IpcResponse | IpcEvent;
-
-export type { IcqqIpcMessageEvent } from "./icqq-inbound.js";
-
-/** 从 IPC 入站 payload 解析可用于引用/撤回的消息 ID */
 export { resolveIcqqInboundMessageId } from "./icqq-inbound.js";
 
-/** Guild 消息事件数据 */
-export interface IpcGuildMessageEventData {
+export interface GuildMessageEventData {
   type: "guild";
   guild_id: string;
   guild_name: string;
@@ -69,7 +28,7 @@ export interface IpcGuildMessageEventData {
 }
 
 /**
- * 所有 IPC 操作常量 (from @icqqjs/cli)
+ * 所有操作常量（@icqqjs/icqq）
  */
 export const Actions = {
   PING: "ping",
@@ -276,22 +235,34 @@ export interface IcqqAdapterConfig {
   readonly id?: string;
   readonly autoReconnect?: boolean;
   readonly outboundMedia?: 'file' | 'base64';
-  readonly rpc?: {
-    readonly host?: string;
-    readonly port?: number;
-    readonly token?: string;
-  };
+  readonly password?: string;
+  readonly platform?: number;
+  readonly ver?: string;
+  readonly dataDir?: string;
+  readonly signApiAddr?: string;
+  readonly ignoreSelf?: boolean;
+  readonly resend?: boolean;
+  readonly cacheGroupMember?: boolean;
+  readonly autoServer?: boolean;
+  readonly qqnt?: boolean;
+  readonly ntLogin?: boolean;
   /** Transitional: legacy root `endpoints[]` with `context: icqq`. */
   readonly endpoints?: ReadonlyArray<{
     readonly context?: string;
     readonly id?: string;
     readonly autoReconnect?: boolean;
     readonly outboundMedia?: 'file' | 'base64';
-    readonly rpc?: {
-      readonly host?: string;
-      readonly port?: number;
-      readonly token?: string;
-    };
+    readonly password?: string;
+    readonly platform?: number;
+    readonly ver?: string;
+    readonly dataDir?: string;
+    readonly signApiAddr?: string;
+    readonly ignoreSelf?: boolean;
+    readonly resend?: boolean;
+    readonly cacheGroupMember?: boolean;
+    readonly autoServer?: boolean;
+    readonly qqnt?: boolean;
+    readonly ntLogin?: boolean;
   }>;
 }
 
@@ -300,11 +271,17 @@ export interface ResolvedIcqqConfig {
   readonly id: string;
   readonly autoReconnect: boolean;
   readonly outboundMedia?: 'file' | 'base64';
-  readonly rpc?: {
-    readonly host: string;
-    readonly port: number;
-    readonly token: string;
-  };
+  readonly password?: string;
+  readonly platform?: number;
+  readonly ver?: string;
+  readonly dataDir?: string;
+  readonly signApiAddr?: string;
+  readonly ignoreSelf?: boolean;
+  readonly resend?: boolean;
+  readonly cacheGroupMember?: boolean;
+  readonly autoServer?: boolean;
+  readonly qqnt?: boolean;
+  readonly ntLogin?: boolean;
 }
 
 export interface IcqqWireSegment {
@@ -342,16 +319,33 @@ export function resolveIcqqConfig(config: IcqqAdapterConfig = {}): ResolvedIcqqC
   }
   const autoReconnect = config.autoReconnect ?? entry?.autoReconnect ?? true;
   const outboundMedia = config.outboundMedia ?? entry?.outboundMedia;
-  const rpcRaw = config.rpc ?? entry?.rpc;
-  const rpc = rpcRaw?.host && rpcRaw.port != null && rpcRaw.token
-    ? { host: rpcRaw.host, port: Number(rpcRaw.port), token: rpcRaw.token }
-    : undefined;
+  const password = entry?.password;
+  const platform = config.platform ?? entry?.platform ?? 2;
+  const ver = config.ver ?? entry?.ver ?? '9.1.70';
+  const dataDir = config.dataDir ?? entry?.dataDir ?? `data/icqq/${id}`;
+  const signApiAddr = config.signApiAddr ?? entry?.signApiAddr;
+  const ignoreSelf = config.ignoreSelf ?? entry?.ignoreSelf ?? true;
+  const resend = config.resend ?? entry?.resend;
+  const cacheGroupMember = config.cacheGroupMember ?? entry?.cacheGroupMember ?? true;
+  const autoServer = config.autoServer ?? entry?.autoServer ?? true;
+  const qqnt = config.qqnt ?? entry?.qqnt;
+  const ntLogin = config.ntLogin ?? entry?.ntLogin;
   return {
     context: 'icqq',
     id,
     autoReconnect,
     ...(outboundMedia ? { outboundMedia } : {}),
-    ...(rpc ? { rpc } : {}),
+    ...(password ? { password } : {}),
+    ...(platform != null ? { platform: Number(platform) } : {}),
+    ...(ver ? { ver } : {}),
+    ...(dataDir ? { dataDir } : {}),
+    ...(signApiAddr ? { signApiAddr } : {}),
+    ...(ignoreSelf != null ? { ignoreSelf } : {}),
+    ...(resend != null ? { resend } : {}),
+    ...(cacheGroupMember != null ? { cacheGroupMember } : {}),
+    ...(autoServer != null ? { autoServer } : {}),
+    ...(qqnt != null ? { qqnt } : {}),
+    ...(ntLogin != null ? { ntLogin } : {}),
   };
 }
 
@@ -386,7 +380,7 @@ export function icqqInboundConversation(endpointKey: string, input: {
 }
 
 /**
- * 出站：从 ConversationRef 派生 IPC action 路由。
+ * 出站：从 ConversationRef 派生 action 路由。
  * 群容器（parent kind 'group'）内的 private 会话即 ICQQ 群临时会话（temp）。
  */
 export function icqqOutboundTarget(conversation: ConversationRef): ParsedIcqqSendTarget {

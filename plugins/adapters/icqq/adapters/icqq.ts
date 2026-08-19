@@ -11,43 +11,34 @@ import {
   runtimeEventPublisherToken,
   type Token,
 } from '@zhin.js/plugin-runtime';
-import { IcqqIpcEndpoint, type IcqqInboxHooks } from '../src/endpoint.js';
+import { IcqqEndpoint, type IcqqInboxHooks } from '../src/endpoint.js';
 import { icqqRuntimeStateToken } from '../src/icqq-runtime-state.js';
 import {
   resolveIcqqConfig,
   type IcqqAdapterConfig,
 } from '../src/protocol.js';
 
-export { IcqqIpcEndpoint } from '../src/endpoint.js';
-export type {
-  CreateIcqqIpc,
-  IcqqEndpointOptions,
-  IcqqIpcTransport,
-} from '../src/endpoint.js';
+export { IcqqEndpoint } from '../src/endpoint.js';
+export type { IcqqEndpointOptions } from '../src/endpoint.js';
 
 const logger = getLogger('icqq');
 
 export default defineAdapter<IcqqAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['recall', 'reaction'],
-  // 统一消息元素通道（UNI-Channel）：端点可消费 base64（CQ base64:// 守护进程解码）
-  // / url（CQ 直发）/ path（同机守护进程读盘；file 模式出站物化产物）媒体；
-  // 卡片/按钮等富交互段无原生承载，降级纯文本。
   segments: {
     outboundMedia: ['base64', 'url', 'path'],
     interactive: 'text',
   },
   create(context) {
-    // Client-library / IPC daemon path — no httpHostToken.
-    // Console loginAssist + host-router routes deferred.
     const config = resolveIcqqConfig(context.config);
     // 注册到插件运行时状态（icqq.endpoint list 的"运行中"数据源）
     context.use(icqqRuntimeStateToken).endpoints.set(config.id, {
       id: config.id,
-      mode: config.rpc ? 'rpc' : 'ipc',
+      mode: 'direct',
     });
     const inbox = resolveInboxHooks(context);
-    return new IcqqIpcEndpoint({
+    return new IcqqEndpoint({
       id: context.id,
       gateway: context.use(messageGatewayToken),
       config,

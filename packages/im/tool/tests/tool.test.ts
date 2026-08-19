@@ -40,6 +40,23 @@ describe('Tool Feature', () => {
     expect(slots.map((slot) => slot.localName)).toEqual(['weather']);
   });
 
+  it('discovers snake_case tool files such as send_user_like.ts', async () => {
+    const definition = defineAgentTool({
+      description: '给用户点赞',
+      execute: () => 'ok',
+    });
+    const host = new MemoryHost({
+      '/project/tools': [
+        { name: 'send_user_like.ts', kind: 'file' },
+      ],
+    }, new Map([['/project/tools/send_user_like.ts', { default: definition }]]));
+    const slots = await new FeatureDiscovery(host).discover(toolFeature, [{
+      owner: rootPluginId(), packageRoot: '/project',
+    }]);
+
+    expect(slots.map((slot) => slot.localName)).toEqual(['send_user_like']);
+  });
+
   it('keeps immutable visibility, permit, and approval metadata in the Tool index', () => {
     const root = rootPluginId();
     const definition = defineAgentTool({

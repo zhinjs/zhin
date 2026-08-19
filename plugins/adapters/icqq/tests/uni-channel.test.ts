@@ -1,18 +1,13 @@
-/**
- * UNI-Channel（统一消息元素通道）icqq 接入测试：
- * 入站 CQ/元素 → canonical Segment[] 随 gateway.receive 上送（content 保留 CQ 原文）；
- * 出站 canonical Segment[] → CQ 串（mention/face/reply/image/record/video MediaRef 映射）。
- */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { MessageGateway } from '@zhin.js/core/runtime';
+
+vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
+
 import defineIcqqAdapter from '../adapters/icqq.js';
-import {
-  IcqqIpcEndpoint,
-  type IcqqIpcTransport,
-} from '../src/endpoint.js';
-import { Actions, resolveIcqqConfig } from '../src/protocol.js';
+import { IcqqEndpoint } from '../src/endpoint.js';
+import { resolveIcqqConfig } from '../src/protocol.js';
 import { setIcqqAgentDeps } from '../src/icqq-agent-deps.js';
 
 const adapterFeature = featureId('zhin.adapter');
@@ -22,59 +17,21 @@ const baseConfig = resolveIcqqConfig({
   autoReconnect: false,
 });
 
-/** base64 出站模式：canonical MediaRef base64 直接编码 base64://，不落盘。 */
 const base64MediaConfig = resolveIcqqConfig({
   id: '10001',
   autoReconnect: false,
   outboundMedia: 'base64',
 });
 
-function createMockIpc(): IcqqIpcTransport & {
-  sent: Array<{ action: string; params?: Record<string, unknown> }>;
-  emitEvent: (event: string, data: unknown) => void;
-} {
-  const handlers: Array<(event: { id: string; event: string; data: unknown }) => void> = [];
-  const sent: Array<{ action: string; params?: Record<string, unknown> }> = [];
-  return {
-    sent,
-    emitEvent(event, data) {
-      for (const handler of handlers) {
-        handler({ id: '*', event, data });
-      }
-    },
-    request: vi.fn(async (action: string, params?: Record<string, unknown>) => {
-      sent.push({ action, params });
-      if (action === Actions.LIST_FRIENDS) {
-        return { id: '1', ok: true, data: [] };
-      }
-      if (action === Actions.LIST_GROUPS) {
-        return { id: '1', ok: true, data: [] };
-      }
-      if (action === Actions.SEND_GROUP_MSG || action === Actions.SEND_PRIVATE_MSG) {
-        return { id: '1', ok: true, data: { message_id: 'sent-1' } };
-      }
-      return { id: '1', ok: true, data: {} };
-    }),
-    subscribe: vi.fn((_action, _params, handler) => {
-      handlers.push(handler);
-      return { unsubscribe: vi.fn(async () => undefined) };
-    }),
-    setOnRemoteDisconnect: vi.fn(),
-    close: vi.fn(),
-  };
-}
-
 function createEndpoint(
-  mock: IcqqIpcTransport,
   receive: ReturnType<typeof vi.fn>,
   config = baseConfig,
-): IcqqIpcEndpoint {
+): IcqqEndpoint {
   const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
-  return new IcqqIpcEndpoint({
+  return new IcqqEndpoint({
     id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
     gateway,
     config,
-    createIpc: async () => mock,
   });
 }
 
@@ -84,13 +41,12 @@ afterEach(() => {
 
 describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
   it('元素数组归一为 canonical 段，content 保留 CQ 原文', async () => {
-    const mock = createMockIpc();
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
-    const endpoint = createEndpoint(mock, receive);
+    const endpoint = createEndpoint(receive);
     await endpoint.start();
     endpoint.open();
 
-    mock.emitEvent('message.group.normal', {
+    (endpoint as any).emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -113,9 +69,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
       content: string;
       segments: Array<{ type: string; data: Record<string, unknown> }>;
     };
-    // content 纯文本视图 = CQ 原文
     expect(inbound.content).toBe('hi[at:3][face:14]');
-    // segments = canonical Segment[]（at→mention、image→MediaRef）
     expect(inbound.segments).toBeDefined();
     const [text, mention, face, image, record] = inbound.segments;
     expect(text).toEqual({ type: 'text', data: { text: 'hi' } });
@@ -133,13 +87,12 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
   });
 
   it('quote 元数据（oicq source）归一为 reply 段置于段首', async () => {
-    const mock = createMockIpc();
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
-    const endpoint = createEndpoint(mock, receive);
+    const endpoint = createEndpoint(receive);
     await endpoint.start();
     endpoint.open();
 
-    mock.emitEvent('message.group.normal', {
+    (endpoint as any).emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -160,7 +113,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     const inbound = receive.mock.calls[0]?.[0] as {
       segments: Array<{ type: string; data: Record<string, unknown> }>;
-      metadata: Record<string, unknown>;
+      replyTo?: { id: string };
     };
     expect(inbound.segments[0]).toEqual({
       type: 'reply',
@@ -171,13 +124,12 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
   });
 
   it('结构化段的 mention 可用于 @ 本机判定（raw_message 缺失时）', async () => {
-    const mock = createMockIpc();
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
-    const endpoint = createEndpoint(mock, receive);
+    const endpoint = createEndpoint(receive);
     await endpoint.start();
     endpoint.open();
 
-    mock.emitEvent('message.group.normal', {
+    (endpoint as any).emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -194,7 +146,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     const inbound = receive.mock.calls[0]?.[0] as {
       segments: Array<{ type: string; data: Record<string, unknown> }>;
-      metadata: Record<string, unknown>;
+      mentioned?: boolean;
     };
     expect(inbound.segments[0]).toEqual({ type: 'mention', data: { target: '10001' } });
     expect(inbound.mentioned).toBe(true);
@@ -204,8 +156,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
 
 describe('UNI-Channel 出站：canonical segments → CQ 串', () => {
   it('mention/face/reply/text 映射为 CQ 段', async () => {
-    const mock = createMockIpc();
-    const endpoint = createEndpoint(mock, vi.fn(), base64MediaConfig);
+    const endpoint = createEndpoint(vi.fn(), base64MediaConfig);
     await endpoint.start();
     endpoint.open();
 
@@ -223,17 +174,12 @@ describe('UNI-Channel 出站：canonical segments → CQ 串', () => {
       ],
     });
 
-    const call = mock.sent.find((s) => s.action === Actions.SEND_GROUP_MSG);
-    expect(call?.params).toEqual({
-      group_id: 100,
-      message: '[reply:m1][at:2]hi[face:14]',
-    });
+    expect(endpoint.sendGroupMsg).toHaveBeenCalledWith(100, '[reply:m1][at:2]hi[face:14]');
     await endpoint.stop();
   });
 
   it('image/record/video 的 canonical MediaRef（url/base64/path）映射为 CQ 媒体值', async () => {
-    const mock = createMockIpc();
-    const endpoint = createEndpoint(mock, vi.fn(), base64MediaConfig);
+    const endpoint = createEndpoint(vi.fn(), base64MediaConfig);
     await endpoint.start();
     endpoint.open();
 
@@ -251,19 +197,15 @@ describe('UNI-Channel 出站：canonical segments → CQ 串', () => {
       ],
     });
 
-    const call = mock.sent.find((s) => s.action === Actions.SEND_GROUP_MSG);
-    expect(call?.params).toEqual({
-      group_id: 100,
-      message:
-        '[image:https://x/a.jpg][image:base64://QUJD][record:base64://UkVD][video:/tmp/v.mp4]',
-    });
+    expect(endpoint.sendGroupMsg).toHaveBeenCalledWith(
+      100,
+      '[image:https://x/a.jpg][image:base64://QUJD][record:base64://UkVD][video:/tmp/v.mp4]',
+    );
     await endpoint.stop();
   });
 
   it('file 模式把 canonical base64 MediaRef 落盘为本地路径', async () => {
-    const mock = createMockIpc();
-    // baseConfig 无 rpc / outboundMedia → file 模式
-    const endpoint = createEndpoint(mock, vi.fn(), baseConfig);
+    const endpoint = createEndpoint(vi.fn(), baseConfig);
     await endpoint.start();
     endpoint.open();
 
@@ -278,10 +220,8 @@ describe('UNI-Channel 出站：canonical segments → CQ 串', () => {
       ],
     });
 
-    const call = mock.sent.find((s) => s.action === Actions.SEND_GROUP_MSG);
-    const message = String(call?.params?.message);
+    const message = String(vi.mocked(endpoint.sendGroupMsg).mock.calls[0]?.[1]);
     expect(message).toMatch(/^\[image:\/.*zhin-icqq-outbound.*\]$/u);
-    // 清理 file 模式落盘的临时文件
     fs.rmSync(message.slice('[image:'.length, -1), { force: true });
     await endpoint.stop();
   });

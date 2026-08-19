@@ -48,6 +48,11 @@ export function createDeferredCapabilityPlan(
   const baseCapabilities = options.capabilities.tools.filter(
     (tool) => !DEFERRED_META_TOOL_NAMES.has(tool.name),
   );
+  // Platform-scoped adapter tools already passed canAccess for this turn.
+  // Keep them in the model tool list so QQ/social actions are not hidden behind discover.
+  for (const tool of baseCapabilities) {
+    if (tool.platforms?.length) alwaysLoaded.add(tool.name);
+  }
   const baseTools = baseCapabilities.map(capabilityAsAgentTool);
   const baseCatalog = buildToolCatalog({ tools: baseTools, alwaysLoaded });
   let snapshot = structuredClone(options.sessionSnapshot);

@@ -135,12 +135,11 @@ function registerPlatformAdapters(
         }
       },
       async (messageId, reactionId) => {
-        try {
-          const message = messages.get(messageId);
-          if (message) await endpoint.control!.removeReaction!(message, reactionId);
-        } catch (error) {
-          logger.error(`[${platform}] Failed to remove reaction:`, error);
-        }
+        const message = messages.get(messageId);
+        if (!message) return;
+        void Promise.resolve(endpoint.control!.removeReaction!(message, reactionId)).catch((error) => {
+          logger.warn(`[${platform}] Failed to remove reaction:`, error);
+        });
       },
       sendMessage,
       async (messageId) => {

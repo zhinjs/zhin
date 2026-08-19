@@ -78,20 +78,39 @@ export function createOutboundEndpointAccess(
               message: Parameters<typeof addReaction>[0]['message'],
               emoji: string,
               hint?: { sceneType?: 'private' | 'group' | 'channel'; channelId?: string },
-            ) => addReaction({
-              adapter: platform,
-              endpointKey,
-              message,
-              emoji,
-              sceneType: hint?.sceneType,
-              channelId: hint?.channelId,
-            }),
+            ) => {
+              try {
+                return await addReaction({
+                  adapter: platform,
+                  endpointKey,
+                  message,
+                  emoji,
+                  sceneType: hint?.sceneType,
+                  channelId: hint?.channelId,
+                });
+              } catch (error) {
+                logger?.debug(
+                  `[ActivityFeedback] outbound addReaction failed (${key}):`,
+                  error instanceof Error ? error.message : String(error),
+                );
+                return null;
+              }
+            },
           } : {}),
           ...(removeReaction ? {
             removeReaction: async (
               message: Parameters<typeof removeReaction>[0]['message'],
               reactionId: string,
-            ) => removeReaction({ adapter: platform, endpointKey, message, reactionId }),
+            ) => {
+              void Promise.resolve(
+                removeReaction({ adapter: platform, endpointKey, message, reactionId }),
+              ).catch((error) => {
+                logger?.debug(
+                  `[ActivityFeedback] outbound removeReaction failed (${key}):`,
+                  error instanceof Error ? error.message : String(error),
+                );
+              });
+            },
           } : {}),
         },
       } as EndpointWithActivityFeedback;

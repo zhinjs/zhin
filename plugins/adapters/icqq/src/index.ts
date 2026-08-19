@@ -4,24 +4,18 @@ export {
   formatOutboundBody,
   icqqInboundConversation,
   icqqOutboundTarget,
-  resolveIcqqConfig,
+  type ActionResult,
   type IcqqAdapterConfig,
   type IcqqInboundMessage,
   type IcqqWireSegment,
-  type IpcEvent,
-  type IpcMessage,
-  type IpcRequest,
-  type IpcResponse,
   type ParsedIcqqSendTarget,
   type ResolvedIcqqConfig,
 } from './protocol.js';
 
 export {
-  IcqqIpcEndpoint,
-  type CreateIcqqIpc,
+  IcqqEndpoint,
   type IcqqEndpointOptions,
   type IcqqInboxHooks,
-  type IcqqIpcTransport,
 } from './endpoint.js';
 
 export * from './types.js';
@@ -34,7 +28,6 @@ export {
   type IcqqAgentEndpoint,
 } from './icqq-agent-deps.js';
 
-export { IpcClient } from './ipc-client.js';
 export {
   resolveIcqqInboundMessageId,
 } from './icqq-inbound.js';

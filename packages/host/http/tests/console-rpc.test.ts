@@ -158,6 +158,8 @@ describe('runtime console RPC', () => {
     const listed = await dispatchRuntimeConsoleRpc({ type: 'endpoint:list', requestId: 70 }, ctx);
     expect(pickRpcReply({ type: 'endpoint:list', requestId: 70 }, listed)?.error).toBeUndefined();
 
+    // endpoint.send_message is a write op; demo token must NOT be allowed
+    // to drive bots into sending messages on arbitrary channels.
     const sentReply = await dispatchRuntimeConsoleRpc(
       {
         type: 'endpoint:sendMessage',
@@ -167,7 +169,7 @@ describe('runtime console RPC', () => {
       ctx,
     );
     expect(pickRpcReply({ type: 'endpoint:sendMessage', requestId: 71 }, sentReply))
-      .toMatchObject({ requestId: 71, data: { messageId: 'msg-demo' } });
+      .toMatchObject({ requestId: 71, error: expect.stringContaining('forbidden') });
   });
 
   it('writes config via config:save-yaml and config:set on full scope', async () => {

@@ -98,6 +98,7 @@
     "check:install-size": "node scripts/check-install-size.mjs"
   },
   "devDependencies": {
+    "@ai-sdk/minimax": "^3.0.15",
     "@changesets/cli": "^2.31.1",
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.2",
@@ -140,5 +141,8 @@
       "vitest>vite": "^6.4.3",
       "@vitest/mocker>vite": "^6.4.3"
     }
+  },
+  "peerDependencies": {
+    "@ai-sdk/minimax": "^3.0.15"
   }
 }

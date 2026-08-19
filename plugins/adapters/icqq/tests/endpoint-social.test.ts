@@ -1,11 +1,11 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { MessageGateway } from '@zhin.js/core/runtime';
-import {
-  IcqqIpcEndpoint,
-  type IcqqIpcTransport,
-} from '../src/endpoint.js';
-import { Actions, resolveIcqqConfig, type IpcEvent } from '../src/protocol.js';
+
+vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
+
+import { IcqqEndpoint } from '../src/endpoint.js';
+import { resolveIcqqConfig } from '../src/protocol.js';
 import { setIcqqAgentDeps } from '../src/icqq-agent-deps.js';
 
 const adapterFeature = featureId('zhin.adapter');
@@ -15,55 +15,42 @@ const baseConfig = resolveIcqqConfig({
   autoReconnect: false,
 });
 
-interface MockHandlers {
-  onRequest?: (action: string, params?: Record<string, unknown>) =>
-    { id: string; ok: boolean; data?: unknown; error?: string };
-}
-
-function createMockIpc(handlers: MockHandlers = {}): IcqqIpcTransport & {
-  sent: Array<{ action: string; params?: Record<string, unknown> }>;
-  emit(event: IpcEvent): void;
-} {
-  const sent: Array<{ action: string; params?: Record<string, unknown> }> = [];
-  let eventHandler: ((event: IpcEvent) => void) | undefined;
-  return {
-    sent,
-    emit(event) {
-      eventHandler?.(event);
-    },
-    request: vi.fn(async (action: string, params?: Record<string, unknown>) => {
-      sent.push({ action, params });
-      if (handlers.onRequest) return handlers.onRequest(action, params);
-      if (action === Actions.LIST_FRIENDS) {
-        return { id: '1', ok: true, data: [{ user_id: 2, nickname: 'bob', remark: '小博' }] };
-      }
-      if (action === Actions.LIST_GROUPS) {
-        return {
-          id: '1',
-          ok: true,
-          data: [{ group_id: 100, group_name: 'g', member_count: 1, max_member_count: 200 }],
-        };
-      }
-      return { id: '1', ok: true, data: {} };
-    }),
-    subscribe: vi.fn((_action, _params, handler) => {
-      eventHandler = handler;
-      return { unsubscribe: vi.fn(async () => undefined) };
-    }),
-    setOnRemoteDisconnect: vi.fn(),
-    close: vi.fn(),
-  };
+interface EndpointSetup {
+  friends?: Map<number, unknown>;
+  groups?: Map<number, unknown>;
+  members?: Map<number, unknown>;
+  systemMsg?: unknown[];
+  onKick?: () => { ok: boolean; error?: string };
 }
 
 const gateway: MessageGateway = { receive: vi.fn(), send: vi.fn(async () => 'sent') };
 
-async function startEndpoint(mock: IcqqIpcTransport): Promise<IcqqIpcEndpoint> {
-  const endpoint = new IcqqIpcEndpoint({
+async function startEndpoint(options: EndpointSetup = {}): Promise<IcqqEndpoint> {
+  const endpoint = new IcqqEndpoint({
     id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
     gateway,
     config: baseConfig,
-    createIpc: async () => mock,
   });
+  const friends = options.friends ?? new Map([[2, { user_id: 2, nickname: 'bob', remark: '小博', sex: 'unknown', age: 0 }]]);
+  const groups = options.groups ?? new Map([[100, { group_id: 100, group_name: 'g', member_count: 1, max_member_count: 200 }]]);
+  for (const [k, v] of friends) endpoint.fl.set(k, v as never);
+  for (const [k, v] of groups) endpoint.gl.set(k, v as never);
+
+  if (options.members) {
+    vi.mocked(endpoint.getGroupMemberList).mockResolvedValue(options.members as never);
+  }
+  if (options.systemMsg) {
+    vi.mocked(endpoint.getSystemMsg).mockResolvedValue(options.systemMsg as never);
+  }
+  if (options.onKick) {
+    const onKick = options.onKick;
+    vi.mocked(endpoint.setGroupKick).mockImplementation(async () => {
+      const result = onKick();
+      if (!result.ok) throw new Error(result.error ?? 'unknown');
+      return true as never;
+    });
+  }
+
   await endpoint.start();
   return endpoint;
 }
@@ -72,67 +59,35 @@ afterEach(() => {
   setIcqqAgentDeps(null);
 });
 
-describe('icqq.endpoint 社交/群管（console RPC 面）', () => {
-  it('getFriendList 归一为 {user_id, nickname, remark}[]', async () => {
-    const mock = createMockIpc();
-    const endpoint = await startEndpoint(mock);
-    const friends = await endpoint.getFriendList();
+describe('icqq.endpoint management 接口', () => {
+  it('management.listFriends 归一为 {user_id, nickname, remark}[]', async () => {
+    const endpoint = await startEndpoint();
+    const friends = await endpoint.management.listFriends!();
     expect(friends).toEqual([{ user_id: 2, nickname: 'bob', remark: '小博' }]);
-    expect(mock.sent.some((s) => s.action === Actions.LIST_FRIENDS)).toBe(true);
     await endpoint.stop();
   });
 
-  it('getFriendList 缺 remark 时归一为空字符串', async () => {
-    const mock = createMockIpc({
-      onRequest(action) {
-        if (action === Actions.LIST_FRIENDS) {
-          return { id: '1', ok: true, data: [{ user_id: 3, nickname: 'alice' }] };
-        }
-        if (action === Actions.LIST_GROUPS) return { id: '1', ok: true, data: [] };
-        return { id: '1', ok: true, data: {} };
-      },
+  it('management.listFriends 缺 remark 时归一为空字符串', async () => {
+    const endpoint = await startEndpoint({
+      friends: new Map([[3, { user_id: 3, nickname: 'alice', sex: 'unknown', age: 0 }]]),
+      groups: new Map(),
     });
-    const endpoint = await startEndpoint(mock);
-    expect(await endpoint.getFriendList()).toEqual([{ user_id: 3, nickname: 'alice', remark: '' }]);
+    expect(await endpoint.management.listFriends!()).toEqual([{ user_id: 3, nickname: 'alice', remark: '' }]);
     await endpoint.stop();
   });
 
-  it('getGroupList 归一为 {group_id, name}[]', async () => {
-    const mock = createMockIpc();
-    const endpoint = await startEndpoint(mock);
-    const groups = await endpoint.getGroupList();
+  it('management.listGroups 归一为 {group_id, name}[]', async () => {
+    const endpoint = await startEndpoint();
+    const groups = await endpoint.management.listGroups!();
     expect(groups).toEqual([{ group_id: 100, name: 'g' }]);
     await endpoint.stop();
   });
 
-  it('publishes normalized social operations through management', async () => {
-    const endpoint = await startEndpoint(createMockIpc());
-    await expect(endpoint.management.listFriends?.()).resolves.toEqual([
-      { user_id: 2, nickname: 'bob', remark: '小博' },
-    ]);
-    await expect(endpoint.management.listGroups?.()).resolves.toEqual([
-      { group_id: 100, name: 'g' },
-    ]);
-    await endpoint.stop();
-  });
-
-  it('publishes the QQ guild channel catalog through management', async () => {
-    const endpoint = await startEndpoint(createMockIpc({
-      onRequest(action, params) {
-        if (action === Actions.LIST_FRIENDS || action === Actions.LIST_GROUPS) {
-          return { id: '1', ok: true, data: [] };
-        }
-        if (action === Actions.GUILD_LIST) {
-          return { id: '1', ok: true, data: [{ guild_id: 'g1', guild_name: 'Guild' }] };
-        }
-        if (action === Actions.GUILD_CHANNELS) {
-          expect(params).toEqual({ guild_id: 'g1' });
-          return { id: '1', ok: true, data: [{ channel_id: 'c1', channel_name: 'chat' }] };
-        }
-        return { id: '1', ok: true, data: {} };
-      },
-    }));
-    await expect(endpoint.management.listChannels?.()).resolves.toEqual([{
+  it('management.listChannels 走 QQ 频道 catalog', async () => {
+    const endpoint = await startEndpoint({ friends: new Map(), groups: new Map() });
+    vi.mocked(endpoint.getGuildList).mockReturnValue([{ guild_id: 'g1', guild_name: 'Guild' }] as never);
+    vi.mocked(endpoint.getChannelList).mockReturnValue([{ channel_id: 'c1', channel_name: 'chat' }] as never);
+    await expect(endpoint.management.listChannels!()).resolves.toEqual([{
       id: 'c1',
       name: 'chat',
       parent: { type: 'guild', id: 'g1', name: 'Guild' },
@@ -141,33 +96,20 @@ describe('icqq.endpoint 社交/群管（console RPC 面）', () => {
   });
 
   it('adds inbound QQ guild channels to the management catalog', async () => {
-    const mock = createMockIpc({
-      onRequest(action) {
-        if (action === Actions.LIST_FRIENDS || action === Actions.LIST_GROUPS) {
-          return { id: '1', ok: true, data: [] };
-        }
-        if (action === Actions.GUILD_LIST) return { id: '1', ok: true, data: [] };
-        return { id: '1', ok: true, data: {} };
-      },
+    const endpoint = await startEndpoint({ friends: new Map(), groups: new Map() });
+    (endpoint as any).emit('message.guild.normal', {
+      type: 'guild',
+      guild_id: 'g-live',
+      guild_name: 'Live Guild',
+      channel_id: 'c-live',
+      channel_name: 'live-chat',
+      nickname: 'Alice',
+      tiny_id: '42',
+      raw_message: 'hello',
+      time: 1_700_000_000,
+      seq: 7,
     });
-    const endpoint = await startEndpoint(mock);
-    mock.emit({
-      id: '*',
-      event: 'message.guild.normal',
-      data: {
-        type: 'guild',
-        guild_id: 'g-live',
-        guild_name: 'Live Guild',
-        channel_id: 'c-live',
-        channel_name: 'live-chat',
-        nickname: 'Alice',
-        tiny_id: '42',
-        raw_message: 'hello',
-        time: 1_700_000_000,
-        seq: 7,
-      },
-    });
-    await expect(endpoint.management.listChannels?.()).resolves.toEqual([{
+    await expect(endpoint.management.listChannels!()).resolves.toEqual([{
       id: 'c-live',
       name: 'live-chat',
       parent: { type: 'guild', id: 'g-live', name: 'Live Guild' },
@@ -175,232 +117,119 @@ describe('icqq.endpoint 社交/群管（console RPC 面）', () => {
     await endpoint.stop();
   });
 
-  it('getGroupMemberList 走 LIST_GROUP_MEMBERS 并透传 group_id；listMembers/getMemberList 为别名', async () => {
-    const member = {
-      user_id: 7, nickname: 'n7', card: 'c7', role: 'member', title: '',
-    };
-    const mock = createMockIpc({
-      onRequest(action, params) {
-        if (action === Actions.LIST_FRIENDS) return { id: '1', ok: true, data: [] };
-        if (action === Actions.LIST_GROUPS) return { id: '1', ok: true, data: [] };
-        if (action === Actions.LIST_GROUP_MEMBERS) {
-          expect(params).toEqual({ group_id: 100 });
-          return { id: '1', ok: true, data: [member] };
-        }
-        return { id: '1', ok: true, data: {} };
-      },
+  it('management.listGroupMembers 透传 group_id', async () => {
+    const member = { user_id: 7, nickname: 'n7', card: 'c7', role: 'member', title: '' };
+    const endpoint = await startEndpoint({
+      friends: new Map(), groups: new Map(),
+      members: new Map([[7, member]]),
     });
-    const endpoint = await startEndpoint(mock);
-    expect(await endpoint.getGroupMemberList('100')).toEqual([member]);
-    expect(await endpoint.listMembers(100)).toEqual([member]);
-    expect(await endpoint.getMemberList(100)).toEqual([member]);
-    const calls = mock.sent.filter((s) => s.action === Actions.LIST_GROUP_MEMBERS);
-    expect(calls).toHaveLength(3);
-    expect(calls.every((c) => (c.params as { group_id: number }).group_id === 100)).toBe(true);
+    expect(await endpoint.management.listGroupMembers!('100')).toEqual([member]);
+    expect(endpoint.getGroupMemberList).toHaveBeenCalledWith(100);
     await endpoint.stop();
   });
 
-  it('approveRequest 命中好友请求 → handle_friend_request（approve=true，remark 透传）', async () => {
-    const mock = createMockIpc({
-      onRequest(action) {
-        if (action === Actions.LIST_FRIENDS || action === Actions.LIST_GROUPS) {
-          return { id: '1', ok: true, data: [] };
-        }
-        if (action === Actions.GET_SYSTEM_MSG) {
-          return {
-            id: '1',
-            ok: true,
-            data: {
-              friendRequests: [{ type: 'friend', user_id: 42, flag: 'flag-f1', seq: 1 }],
-              groupRequests: [{ type: 'group', user_id: 43, group_id: 100, flag: 'flag-g1' }],
-            },
-          };
-        }
-        return { id: '1', ok: true, data: {} };
-      },
+  it('management.approveRequest 命中好友请求 → setFriendAddRequest', async () => {
+    const endpoint = await startEndpoint({
+      friends: new Map(), groups: new Map(),
+      systemMsg: [
+        { post_type: 'request', request_type: 'friend', user_id: 42, nickname: 'x', flag: 'flag-f1', seq: 1, time: 0 },
+        { post_type: 'request', request_type: 'group', sub_type: 'add', user_id: 43, group_id: 100, flag: 'flag-g1', seq: 2, time: 0 },
+      ],
     });
-    const endpoint = await startEndpoint(mock);
-    await endpoint.approveRequest('flag-f1', '备注A');
-    const call = mock.sent.find((s) => s.action === Actions.HANDLE_FRIEND_REQUEST);
-    expect(call?.params).toEqual({ flag: 'flag-f1', approve: true, remark: '备注A' });
-    expect(mock.sent.some((s) => s.action === Actions.HANDLE_GROUP_REQUEST)).toBe(false);
+    await endpoint.management.approveRequest!('flag-f1', '备注A');
+    expect(endpoint.setFriendAddRequest).toHaveBeenCalledWith('flag-f1', true, '备注A');
+    expect(endpoint.setGroupAddRequest).not.toHaveBeenCalled();
     await endpoint.stop();
   });
 
-  it('approveRequest 命中群请求 → handle_group_request（approve=true）', async () => {
-    const mock = createMockIpc({
-      onRequest(action) {
-        if (action === Actions.LIST_FRIENDS || action === Actions.LIST_GROUPS) {
-          return { id: '1', ok: true, data: [] };
-        }
-        if (action === Actions.GET_SYSTEM_MSG) {
-          return {
-            id: '1',
-            ok: true,
-            data: {
-              friendRequests: [],
-              groupRequests: [{ type: 'group', user_id: 43, group_id: 100, flag: 'flag-g1' }],
-            },
-          };
-        }
-        return { id: '1', ok: true, data: {} };
-      },
+  it('management.approveRequest 命中群请求 → setGroupAddRequest', async () => {
+    const endpoint = await startEndpoint({
+      friends: new Map(), groups: new Map(),
+      systemMsg: [
+        { post_type: 'request', request_type: 'group', sub_type: 'add', user_id: 43, group_id: 100, flag: 'flag-g1', seq: 2, time: 0 },
+      ],
     });
-    const endpoint = await startEndpoint(mock);
-    await endpoint.approveRequest('flag-g1');
-    const call = mock.sent.find((s) => s.action === Actions.HANDLE_GROUP_REQUEST);
-    expect(call?.params).toEqual({ flag: 'flag-g1', approve: true });
-    expect(mock.sent.some((s) => s.action === Actions.HANDLE_FRIEND_REQUEST)).toBe(false);
+    await endpoint.management.approveRequest!('flag-g1');
+    expect(endpoint.setGroupAddRequest).toHaveBeenCalledWith('flag-g1', true);
+    expect(endpoint.setFriendAddRequest).not.toHaveBeenCalled();
     await endpoint.stop();
   });
 
-  it('rejectRequest 命中群请求 → handle_group_request（approve=false，reason 透传）', async () => {
-    const mock = createMockIpc({
-      onRequest(action) {
-        if (action === Actions.LIST_FRIENDS || action === Actions.LIST_GROUPS) {
-          return { id: '1', ok: true, data: [] };
-        }
-        if (action === Actions.GET_SYSTEM_MSG) {
-          return {
-            id: '1',
-            ok: true,
-            data: {
-              friendRequests: [],
-              groupRequests: [{ type: 'group', user_id: 43, group_id: 100, flag: 'flag-g1' }],
-            },
-          };
-        }
-        return { id: '1', ok: true, data: {} };
-      },
+  it('management.rejectRequest 命中群请求 → setGroupAddRequest（approve=false，reason 透传）', async () => {
+    const endpoint = await startEndpoint({
+      friends: new Map(), groups: new Map(),
+      systemMsg: [
+        { post_type: 'request', request_type: 'group', sub_type: 'add', user_id: 43, group_id: 100, flag: 'flag-g1', seq: 2, time: 0 },
+      ],
     });
-    const endpoint = await startEndpoint(mock);
-    await endpoint.rejectRequest('flag-g1', '不欢迎');
-    const call = mock.sent.find((s) => s.action === Actions.HANDLE_GROUP_REQUEST);
-    expect(call?.params).toEqual({ flag: 'flag-g1', approve: false, reason: '不欢迎' });
+    await endpoint.management.rejectRequest!('flag-g1', '不欢迎');
+    expect(endpoint.setGroupAddRequest).toHaveBeenCalledWith('flag-g1', false, '不欢迎');
     await endpoint.stop();
   });
 
-  it('rejectRequest 命中好友请求 → handle_friend_request（approve=false）', async () => {
-    const mock = createMockIpc({
-      onRequest(action) {
-        if (action === Actions.LIST_FRIENDS || action === Actions.LIST_GROUPS) {
-          return { id: '1', ok: true, data: [] };
-        }
-        if (action === Actions.GET_SYSTEM_MSG) {
-          return {
-            id: '1',
-            ok: true,
-            data: {
-              friendRequests: [{ type: 'friend', user_id: 42, flag: 'flag-f1' }],
-              groupRequests: [],
-            },
-          };
-        }
-        return { id: '1', ok: true, data: {} };
-      },
+  it('management.rejectRequest 命中好友请求 → setFriendAddRequest（approve=false）', async () => {
+    const endpoint = await startEndpoint({
+      friends: new Map(), groups: new Map(),
+      systemMsg: [
+        { post_type: 'request', request_type: 'friend', user_id: 42, nickname: 'x', flag: 'flag-f1', seq: 1, time: 0 },
+      ],
     });
-    const endpoint = await startEndpoint(mock);
-    await endpoint.rejectRequest('flag-f1');
-    const call = mock.sent.find((s) => s.action === Actions.HANDLE_FRIEND_REQUEST);
-    expect(call?.params).toEqual({ flag: 'flag-f1', approve: false });
+    await endpoint.management.rejectRequest!('flag-f1');
+    expect(endpoint.setFriendAddRequest).toHaveBeenCalledWith('flag-f1', false);
     await endpoint.stop();
   });
 
-  it('approveRequest 找不到请求时抛出带上下文的错误', async () => {
-    const mock = createMockIpc({
-      onRequest(action) {
-        if (action === Actions.LIST_FRIENDS || action === Actions.LIST_GROUPS) {
-          return { id: '1', ok: true, data: [] };
-        }
-        if (action === Actions.GET_SYSTEM_MSG) {
-          return { id: '1', ok: true, data: { friendRequests: [], groupRequests: [] } };
-        }
-        return { id: '1', ok: true, data: {} };
-      },
+  it('management.approveRequest 找不到请求时抛出带上下文的错误', async () => {
+    const endpoint = await startEndpoint({
+      friends: new Map(), groups: new Map(),
+      systemMsg: [],
     });
-    const endpoint = await startEndpoint(mock);
-    await expect(endpoint.approveRequest('flag-x')).rejects.toThrow(/未找到待处理请求: flag-x/);
-    expect(mock.sent.some((s) => s.action === Actions.HANDLE_FRIEND_REQUEST)).toBe(false);
-    expect(mock.sent.some((s) => s.action === Actions.HANDLE_GROUP_REQUEST)).toBe(false);
+    await expect(endpoint.management.approveRequest!('flag-x')).rejects.toThrow(/未找到待处理请求: flag-x/);
+    expect(endpoint.setFriendAddRequest).not.toHaveBeenCalled();
+    expect(endpoint.setGroupAddRequest).not.toHaveBeenCalled();
     await endpoint.stop();
   });
 
-  it('removeMember/kickMember/setGroupKick → group_kick（gid/uid，字符串收敛为数字）', async () => {
-    const mock = createMockIpc();
-    const endpoint = await startEndpoint(mock);
-    await endpoint.removeMember('100', '7');
-    await endpoint.kickMember(100, 7);
-    await endpoint.setGroupKick(100, 7);
-    const calls = mock.sent.filter((s) => s.action === Actions.GROUP_KICK);
-    expect(calls).toHaveLength(3);
-    for (const call of calls) {
-      expect(call.params).toEqual({ group_id: 100, user_id: 7 });
-    }
+  it('management.kickGroupMember → setGroupKick（字符串收敛为数字）', async () => {
+    const endpoint = await startEndpoint();
+    await endpoint.management.kickGroupMember!('100', '7');
+    expect(endpoint.setGroupKick).toHaveBeenCalledWith(100, 7);
     await endpoint.stop();
   });
 
-  it('muteMember/banMember/setGroupMute → group_mute（默认 duration=600，可覆盖）', async () => {
-    const mock = createMockIpc();
-    const endpoint = await startEndpoint(mock);
-    await endpoint.muteMember('100', '7');
-    await endpoint.banMember(100, 7, 120);
-    await endpoint.setGroupMute(100, 7, 0);
-    const calls = mock.sent.filter((s) => s.action === Actions.GROUP_MUTE);
-    expect(calls.map((c) => c.params)).toEqual([
-      { group_id: 100, user_id: 7, duration: 600 },
-      { group_id: 100, user_id: 7, duration: 120 },
-      { group_id: 100, user_id: 7, duration: 0 },
-    ]);
+  it('management.muteGroupMember → setGroupBan', async () => {
+    const endpoint = await startEndpoint();
+    await endpoint.management.muteGroupMember!('100', '7', 120);
+    expect(endpoint.setGroupBan).toHaveBeenCalledWith(100, 7, 120);
     await endpoint.stop();
   });
 
-  it('setModerator/setAdmin/setGroupAdmin → set_group_admin（默认 enable=true，可传 false）', async () => {
-    const mock = createMockIpc();
-    const endpoint = await startEndpoint(mock);
-    await endpoint.setModerator('100', '7');
-    await endpoint.setAdmin(100, 7, false);
-    await endpoint.setGroupAdmin(100, 7, true);
-    const calls = mock.sent.filter((s) => s.action === Actions.SET_GROUP_ADMIN);
-    expect(calls.map((c) => c.params)).toEqual([
-      { group_id: 100, user_id: 7, enable: true },
-      { group_id: 100, user_id: 7, enable: false },
-      { group_id: 100, user_id: 7, enable: true },
-    ]);
+  it('management.setGroupAdmin → setGroupAdmin', async () => {
+    const endpoint = await startEndpoint();
+    await endpoint.management.setGroupAdmin!('100', '7', true);
+    expect(endpoint.setGroupAdmin).toHaveBeenCalledWith(100, 7, true);
     await endpoint.stop();
   });
 
-  it('deleteFriend/delete_friend → friend_delete', async () => {
-    const mock = createMockIpc();
-    const endpoint = await startEndpoint(mock);
-    await endpoint.deleteFriend('7');
-    await endpoint.delete_friend(8);
-    const calls = mock.sent.filter((s) => s.action === Actions.FRIEND_DELETE);
-    expect(calls.map((c) => c.params)).toEqual([{ user_id: 7 }, { user_id: 8 }]);
+  it('management.deleteFriend → deleteFriend', async () => {
+    const endpoint = await startEndpoint();
+    await endpoint.management.deleteFriend!('7');
+    expect(endpoint.deleteFriend).toHaveBeenCalledWith(7);
     await endpoint.stop();
   });
 
-  it('daemon 返回 ok=false 时向上抛带操作上下文的错误', async () => {
-    const mock = createMockIpc({
-      onRequest(action) {
-        if (action === Actions.LIST_FRIENDS || action === Actions.LIST_GROUPS) {
-          return { id: '1', ok: true, data: [] };
-        }
-        if (action === Actions.GROUP_KICK) {
-          return { id: '1', ok: false, error: 'permission denied' };
-        }
-        return { id: '1', ok: true, data: {} };
-      },
+  it('Client 抛出错误时向上传播', async () => {
+    const endpoint = await startEndpoint({
+      onKick: () => ({ ok: false, error: 'permission denied' }),
     });
-    const endpoint = await startEndpoint(mock);
-    await expect(endpoint.removeMember(100, 7)).rejects.toThrow(/踢出群成员失败: permission denied/);
+    await expect(endpoint.management.kickGroupMember!('100', '7')).rejects.toThrow(/permission denied/);
     await endpoint.stop();
   });
 
-  it('friends/groups Map 供 console 直接读取（#refreshLists 填充）', async () => {
-    const mock = createMockIpc();
-    const endpoint = await startEndpoint(mock);
-    expect(endpoint.friends.get(2)?.nickname).toBe('bob');
-    expect(endpoint.groups.get(100)?.group_name).toBe('g');
+  it('fl/gl Map 直接访问 Client 缓存', async () => {
+    const endpoint = await startEndpoint();
+    expect((endpoint.fl.get(2) as any)?.nickname).toBe('bob');
+    expect((endpoint.gl.get(100) as any)?.group_name).toBe('g');
     await endpoint.stop();
   });
 });

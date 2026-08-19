@@ -295,6 +295,62 @@ describe('IM Runtime', () => {
       .resolves.toMatchObject({ matched: false });
   });
 
+  it('菜单输出带上当前 endpoint 的 commandPrefix', async () => {
+    const root = rootPluginId();
+    const echo = createCapabilitySlot({
+      owner: root,
+      feature: commandFeatureId,
+      localName: 'echo',
+      source: '/commands/echo.ts',
+      definition: defineCommand({ description: '回声', execute: () => 'ok' }),
+    });
+    const state: SnapshotState = {
+      root,
+      tree: new Map([[root, {
+        id: root,
+        instanceKey: 'root',
+        packageName: '@test/root',
+        packageRoot: '/project',
+        children: [],
+      }]]),
+      config: new Map([[root, {
+        commandPrefix: '/',
+        endpoints: [{ id: 'bot-1', commandPrefix: '#' }],
+      }]]),
+      resources: new Map([[root, new Map()]]),
+      capabilities: new Map([[echo.id, echo]]),
+      projections: new Map(),
+    };
+    const base = createSnapshotView(1, state);
+    const snapshot = createSnapshotView(1, {
+      ...state,
+      projections: new Map([[commandFeatureId, new CommandIndex([echo], base, { keyword: '菜单' })]]),
+    });
+    const send = (content: string, endpoint: string) => new Message(
+      {
+        endpoint: {
+          id: String(capabilityId(root, adapterFeatureId, 'memory')),
+          adapter: String(root),
+        },
+        kind: 'private',
+        id: 'room',
+      },
+      content,
+      1,
+      async () => ({ status: 'sent' as const }),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      endpoint,
+    );
+
+    const hashed = await new MessageDispatcher().dispatch(send('#菜单', 'bot-1'), snapshot);
+    expect(hashed.matched).toBe(true);
+    expect(hashed.value).toContain('#echo');
+    expect(hashed.value).not.toContain('\n  echo\n');
+  });
+
   it('matches structured Command parameters after stripping commandPrefix', async () => {
     const root = rootPluginId();
     const media = Object.freeze({
@@ -1843,5 +1899,96 @@ describe('CommandPrompt via ImRuntime', () => {
     await im.receive(incomingMessage('yes'));
     await commandPromise;
     expect(promptResult).toBe(true);
+  });
+
+  it('prompt.confirm 在 signal abort 后应 fail closed 且不再占用后续消息', async () => {
+    const root = rootPluginId();
+    const sent: unknown[] = [];
+    let promptResult: unknown;
+    const adapter = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'memory',
+      source: '/adapters/memory.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound', 'outbound'],
+        create: () => ({
+          start() {},
+          open() {},
+          close() {},
+          stop() {},
+          send(request) {
+            sent.push(request);
+            return { id: `sent-${sent.length}` };
+          },
+        }),
+      }),
+    });
+    const command = createCapabilitySlot({
+      owner: root,
+      feature: commandFeatureId,
+      localName: 'abort-confirm',
+      source: '/commands/abort-confirm.ts',
+      definition: defineCommand<{}, SendContent, Message>({
+        async execute(context) {
+          const ac = new AbortController();
+          const pending = context.prompt!.confirm('确认删除？', { signal: ac.signal, default: false });
+          ac.abort();
+          promptResult = await pending;
+          return promptResult ? '已删除' : '已取消';
+        },
+      }),
+    });
+    const slots = [adapter, command];
+    const base = baseState(slots);
+    const view = createSnapshotView(0, base);
+    const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
+    const projections = new Map([
+      [adapterFeatureId, adapters],
+      [commandFeatureId, new CommandIndex([command], view)],
+    ]);
+    const store = new SnapshotStore({ ...base, projections });
+    const im = new ImRuntime();
+    im.attach(store);
+    await adapters.start();
+    adapters.open();
+
+    await expect(im.receive(incomingMessage('/abort-confirm'))).resolves.toMatchObject({
+      matched: true,
+    });
+    expect(promptResult).toBe(false);
+    await expect(im.receive(incomingMessage('yes'))).resolves.toMatchObject({
+      matched: false,
+    });
+  });
+
+  it('createPrompt(bind.subjectId) 只接受该用户的回复', async () => {
+    const { im } = await createPromptFixture();
+    const incoming = incomingMessage('start', 'user-1');
+    const delivered: string[] = [];
+    const message = new Message(
+      incoming.conversation,
+      incoming.content,
+      1,
+      async (content) => {
+        delivered.push(String(content));
+        return { status: 'sent' as const };
+      },
+      { id: 'user-1' },
+      Object.freeze({}),
+      undefined,
+      { conversation: incoming.conversation, id: 'm-ask' },
+      'memory',
+    );
+    const prompt = im.createPrompt(message, { subjectId: 'master-1' });
+    expect(prompt).toBeDefined();
+    const pending = prompt!.confirm('请 master 确认');
+    await vi.waitFor(() => { expect(delivered.length).toBeGreaterThanOrEqual(1); });
+    await expect(im.receive(incomingMessage('yes', 'user-1'))).resolves.toMatchObject({ matched: false });
+    await expect(im.receive(incomingMessage('yes', 'master-1'))).resolves.toMatchObject({
+      matched: true,
+      command: 'prompt',
+    });
+    await expect(pending).resolves.toBe(true);
   });
 });

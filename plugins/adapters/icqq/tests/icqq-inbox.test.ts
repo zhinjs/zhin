@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { MessageGateway } from '@zhin.js/core/runtime';
+
+vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
+
 import {
-  IcqqIpcEndpoint,
+  IcqqEndpoint,
   type IcqqInboxHooks,
-  type IcqqIpcTransport,
 } from '../src/endpoint.js';
 import {
   buildIcqqInboxNoticeRow,
@@ -13,8 +15,8 @@ import {
   isIcqqNoticePayload,
   isIcqqRequestPayload,
 } from '../src/icqq-inbox.js';
-import { Actions, resolveIcqqConfig } from '../src/protocol.js';
-import type { IpcSystemMessage } from '../src/types.js';
+import { resolveIcqqConfig } from '../src/protocol.js';
+import type { SystemMessage } from '../src/types.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const endpointKey = capabilityId(rootPluginId(), adapterFeature, 'icqq');
@@ -22,32 +24,6 @@ const endpointKey = capabilityId(rootPluginId(), adapterFeature, 'icqq');
 const baseConfig = resolveIcqqConfig({ id: '10001', autoReconnect: false });
 
 const base = { adapter: 'icqq', endpointKey: '10001' };
-
-function createMockIpc(systemMsg?: { friendRequests?: IpcSystemMessage[]; groupRequests?: IpcSystemMessage[] }) {
-  const handlers: Array<(event: { id: string; event: string; data: unknown }) => void> = [];
-  const mock: IcqqIpcTransport & {
-    emitEvent: (event: string, data: unknown) => void;
-  } = {
-    emitEvent(event, data) {
-      for (const handler of handlers) handler({ id: '*', event, data });
-    },
-    request: vi.fn(async (action: string) => {
-      if (action === Actions.LIST_FRIENDS) return { id: '1', ok: true, data: [] };
-      if (action === Actions.LIST_GROUPS) return { id: '1', ok: true, data: [] };
-      if (action === Actions.GET_SYSTEM_MSG) {
-        return { id: '1', ok: true, data: systemMsg ?? {} };
-      }
-      return { id: '1', ok: true, data: {} };
-    }),
-    subscribe: vi.fn((_action, _params, handler) => {
-      handlers.push(handler);
-      return { unsubscribe: vi.fn(async () => undefined) };
-    }),
-    setOnRemoteDisconnect: vi.fn(),
-    close: vi.fn(),
-  };
-  return mock;
-}
 
 function createHooks(): IcqqInboxHooks & {
   requests: Record<string, unknown>[];
@@ -74,20 +50,21 @@ function createHooks(): IcqqInboxHooks & {
 }
 
 async function startEndpoint(
-  mock: IcqqIpcTransport,
-  inbox?: IcqqInboxHooks,
-): Promise<IcqqIpcEndpoint> {
+  options?: { systemMsg?: unknown[]; inbox?: IcqqInboxHooks },
+): Promise<IcqqEndpoint> {
   const gateway: MessageGateway = {
     receive: vi.fn(async () => Object.freeze({ matched: true })),
     send: vi.fn(async () => 'sent'),
   };
-  const endpoint = new IcqqIpcEndpoint({
+  const endpoint = new IcqqEndpoint({
     id: endpointKey,
     gateway,
     config: baseConfig,
-    createIpc: async () => mock,
-    ...(inbox ? { inbox } : {}),
+    ...(options?.inbox ? { inbox: options.inbox } : {}),
   });
+  if (options?.systemMsg) {
+    vi.mocked(endpoint.getSystemMsg).mockResolvedValue(options.systemMsg as never);
+  }
   await endpoint.start();
   endpoint.open();
   return endpoint;
@@ -222,11 +199,10 @@ describe('buildIcqqSystemRequestRow', () => {
 
 describe('icqq.endpoint inbox wiring', () => {
   it('records request events and publishes endpoint:request', async () => {
-    const mock = createMockIpc();
     const hooks = createHooks();
-    const endpoint = await startEndpoint(mock, hooks);
+    const endpoint = await startEndpoint({ inbox: hooks });
     try {
-      mock.emitEvent('request.friend.add', {
+      (endpoint as any).emit('request.friend.add', {
         post_type: 'request',
         request_type: 'friend',
         user_id: 20002,
@@ -247,8 +223,7 @@ describe('icqq.endpoint inbox wiring', () => {
         { type: 'endpoint:request', data: hooks.requests[0] },
       ]);
 
-      // 同一 flag 重复推送去重
-      mock.emitEvent('request.friend.add', {
+      (endpoint as any).emit('request.friend.add', {
         post_type: 'request',
         request_type: 'friend',
         user_id: 20002,
@@ -263,70 +238,57 @@ describe('icqq.endpoint inbox wiring', () => {
   });
 
   it('records notice events and publishes endpoint:notice', async () => {
-    const mock = createMockIpc();
     const hooks = createHooks();
-    const endpoint = await startEndpoint(mock, hooks);
-    try {
-      mock.emitEvent('notice.group.increase', {
-        post_type: 'notice',
-        notice_type: 'group',
-        sub_type: 'increase',
-        group_id: 888,
-        user_id: 20002,
-        operator_id: 20002,
-        time: 1_700_000_000,
-      });
-      await flush();
-      expect(hooks.notices).toHaveLength(1);
-      expect(hooks.notices[0]).toMatchObject({
-        adapter: 'icqq',
-        endpoint_id: '10001',
-        type: 'group',
-        scene_id: '888',
-      });
-      expect(hooks.published).toEqual([
-        { type: 'endpoint:notice', data: hooks.notices[0] },
-      ]);
-    } finally {
-      await endpoint.stop();
-    }
+    const endpoint = await startEndpoint({ inbox: hooks });
+    (endpoint as any).emit('notice.group.increase', {
+      post_type: 'notice',
+      notice_type: 'group',
+      sub_type: 'increase',
+      group_id: 888,
+      user_id: 20002,
+      operator_id: 20002,
+      time: 1_700_000_000,
+    });
+    await flush();
+    expect(hooks.notices).toHaveLength(1);
+    expect(hooks.notices[0]).toMatchObject({
+      adapter: 'icqq',
+      endpoint_id: '10001',
+      type: 'group',
+      scene_id: '888',
+    });
+    expect(hooks.published).toEqual([
+      { type: 'endpoint:notice', data: hooks.notices[0] },
+    ]);
+    await endpoint.stop();
   });
 
   it('pulls GET_SYSTEM_MSG once at startup for offline requests', async () => {
-    const mock = createMockIpc({
-      friendRequests: [
-        { type: 'friend', user_id: 30003, nickname: '李四', flag: 'flag-9', time: 1_700_000_000 },
-      ],
-      groupRequests: [
-        { type: 'invite', user_id: 40004, group_id: 888, flag: 'flag-10', time: 1_700_000_000 },
-      ],
-    });
     const hooks = createHooks();
-    const endpoint = await startEndpoint(mock, hooks);
-    try {
-      await flush();
-      expect(mock.request).toHaveBeenCalledWith(Actions.GET_SYSTEM_MSG);
-      expect(hooks.requests.map((row) => row.platform_request_id)).toEqual([
-        'flag-9', 'flag-10',
-      ]);
-      expect(hooks.published.map((p) => p.type)).toEqual([
-        'endpoint:request', 'endpoint:request',
-      ]);
-    } finally {
-      await endpoint.stop();
-    }
+    const endpoint = await startEndpoint({
+      systemMsg: [
+        { type: 'friend', user_id: 30003, nickname: '李四', flag: 'flag-9', time: 1_700_000_000 } as SystemMessage,
+        { type: 'invite', user_id: 40004, group_id: 888, flag: 'flag-10', time: 1_700_000_000 } as SystemMessage,
+      ],
+      inbox: hooks,
+    });
+    await flush();
+    expect(endpoint.getSystemMsg).toHaveBeenCalled();
+    expect(hooks.requests.map((row) => row.platform_request_id)).toEqual([
+      'flag-9', 'flag-10',
+    ]);
+    expect(hooks.published.map((p) => p.type)).toEqual([
+      'endpoint:request', 'endpoint:request',
+    ]);
+    await endpoint.stop();
   });
 
   it('ignores request/notice payloads when no inbox hooks are injected', async () => {
-    const mock = createMockIpc();
-    const endpoint = await startEndpoint(mock);
-    try {
-      expect(() => mock.emitEvent('request.friend.add', {
-        post_type: 'request', request_type: 'friend', user_id: 1, flag: 'f', time: 1,
-      })).not.toThrow();
-      await flush();
-    } finally {
-      await endpoint.stop();
-    }
+    const endpoint = await startEndpoint();
+    expect(() => (endpoint as any).emit('request.friend.add', {
+      post_type: 'request', request_type: 'friend', user_id: 1, flag: 'f', time: 1,
+    })).not.toThrow();
+    await flush();
+    await endpoint.stop();
   });
 });

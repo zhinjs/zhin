@@ -112,20 +112,21 @@ zhin runtime start
 
 CLI 会以当前目录为项目根，扫描它的 manifest 树并启动。这意味着：开发一个游戏插件时，你可以直接在插件目录里启动它自测，不需要先装进某个 Bot 项目。`examples/minimal-bot` 就是一个 Root Plugin 的最小完整形态。
 
-## platformFeatures：Root 继承的四件套
+## platformFeatures：Root 继承的平台 Features
 
-`@zhin.js/core` 在自己的 manifest 里声明了四个 Stable Features：
+`@zhin.js/core` 在自己的 manifest 里声明了五个 Stable Features：
 
 ```json
 "features": [
-  { "package": "@zhin.js/adapter",    "api": "^1.0.0" },
-  { "package": "@zhin.js/command",    "api": "^1.0.0" },
-  { "package": "@zhin.js/component",  "api": "^1.0.0" },
-  { "package": "@zhin.js/middleware", "api": "^1.0.0" }
+  { "package": "@zhin.js/adapter",     "api": "^1.0.0" },
+  { "package": "@zhin.js/command",     "api": "^1.0.0" },
+  { "package": "@zhin.js/component",   "api": "^1.0.0" },
+  { "package": "@zhin.js/middleware",  "api": "^1.0.0" },
+  { "package": "@zhin.js/feature-kit", "api": "^1.0.0" }
 ]
 ```
 
-当 Root Plugin 依赖了 `@zhin.js/core`（或依赖 `zhin.js` 门面，后者依赖 core）时，即使自己的 `features` 数组为空，也会**自动继承**这四个 Feature——适配器、命令、组件、中间件开箱可用。合并规则：用户显式声明的同包引用优先（可用于锁定版本或覆盖），其余自动补齐。
+当 Root Plugin 依赖了 `@zhin.js/core`（或依赖 `zhin.js` 门面，后者依赖 core）时，即使自己的 `features` 数组为空，也会**自动继承**这些 Feature——适配器、命令、组件、中间件、Handler 开箱可用。合并规则：用户显式声明的同包引用优先（可用于锁定版本或覆盖），其余自动补齐。
 
 在 Root 的 manifest 里设 `"platformFeatures": false` 可以关闭这套继承（比如做一个刻意不含命令系统的 Root）。
 

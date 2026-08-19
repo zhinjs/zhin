@@ -1,15 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   IcqqGuildCatalog,
-  isIcqqGuildIpcEvent,
+  isIcqqGuildEvent,
   normalizeIcqqGuildInboundMessage,
+  type IcqqGuildClient,
 } from "../src/icqq-guild.js";
-import { Actions } from "../src/protocol.js";
 
 describe("icqq guild", () => {
-  it("detects guild IPC event names", () => {
-    expect(isIcqqGuildIpcEvent("message.guild.normal")).toBe(true);
-    expect(isIcqqGuildIpcEvent("message.group.normal")).toBe(false);
+  it("detects guild event names", () => {
+    expect(isIcqqGuildEvent("message.guild.normal")).toBe(true);
+    expect(isIcqqGuildEvent("message.group.normal")).toBe(false);
   });
 
   it("normalizes guild inbound with parent.guild channel shape", () => {
@@ -37,24 +37,15 @@ describe("icqq guild", () => {
 
   it("syncAll builds getGuildChannelList with parent.guild", async () => {
     const catalog = new IcqqGuildCatalog();
-    const request = vi.fn(async (action: string, params?: Record<string, unknown>) => {
-      if (action === Actions.GUILD_LIST) {
-        return {
-          ok: true,
-          data: [{ guild_id: "g1", guild_name: "Guild One" }],
-        };
-      }
-      if (action === Actions.GUILD_CHANNELS) {
-        expect(params?.guild_id).toBe("g1");
-        return {
-          ok: true,
-          data: [{ channel_id: "c1", channel_name: "chat" }],
-        };
-      }
-      return { ok: false };
-    });
+    const client: IcqqGuildClient = {
+      getGuildList: vi.fn(() => [{ guild_id: "g1", guild_name: "Guild One" }]),
+      getChannelList: vi.fn((guildId: string) => {
+        expect(guildId).toBe("g1");
+        return [{ guild_id: "g1", channel_id: "c1", channel_name: "chat" }];
+      }),
+    };
 
-    await catalog.syncAll({ request } as never);
+    await catalog.syncAll(client);
     expect(catalog.getGuildChannelList()).toEqual([
       {
         id: "c1",

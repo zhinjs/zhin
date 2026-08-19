@@ -1,20 +1,7 @@
-/**
- * Agent tool deps for icqq.
- * Endpoints register themselves on start; tools look up by config name / QQ uin.
- */
+import type { Client } from '@icqqjs/icqq';
 
-import type { IpcClient } from './ipc-client.js';
-import type { IpcFriendInfo, IpcGroupInfo } from './types.js';
-import type { IpcResponse } from './protocol.js';
-
-export interface IcqqAgentEndpoint {
-  readonly name: string;
-  readonly ipc: {
-    request(action: string, params?: Record<string, unknown>): Promise<IpcResponse>;
-  };
-  readonly friends: Map<number, IpcFriendInfo>;
-  readonly groups: Map<number, IpcGroupInfo>;
-  request(action: string, params?: Record<string, unknown>): Promise<IpcResponse>;
+export interface IcqqAgentEndpoint extends Client {
+  readonly endpointName: string;
 }
 
 export interface IcqqAgentDeps {
@@ -37,7 +24,6 @@ export function registerIcqqAgentEndpoint(
   };
 }
 
-/** Optional override used by tests / transitional callers. Pass `null` to clear. */
 export function setIcqqAgentDeps(deps: IcqqAgentDeps | null): void {
   override = deps;
 }

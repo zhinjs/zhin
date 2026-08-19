@@ -27,10 +27,10 @@ describe('icqq AgentPromptContributor', () => {
     })).toBe(false);
   });
 
-  it('selectDeferredTools prefers icqq MCP and excludes filesystem', () => {
+  it('selectDeferredTools prefers icqq plugin tools and excludes filesystem', () => {
     const catalog = [
       t('weather'),
-      t('icqq_send_user_like', 'like friend'),
+      t('icqq__send_user_like', 'like friend'),
       t('mcp_icqq_icqq_invoke', 'icqq ipc'),
       t('mcp_filesystem_search_files', 'search files friend pattern'),
     ];
@@ -40,7 +40,8 @@ describe('icqq AgentPromptContributor', () => {
       catalog,
       5,
     );
-    expect(loaded!.map(x => x.name)).toContain('mcp_icqq_icqq_invoke');
+    expect(loaded!.map(x => x.name)).toContain('icqq__send_user_like');
+    expect(loaded!.map(x => x.name)).not.toContain('mcp_icqq_icqq_invoke');
     expect(loaded!.some(x => x.name.startsWith('mcp_filesystem_'))).toBe(false);
   });
 
@@ -49,6 +50,7 @@ describe('icqq AgentPromptContributor', () => {
       slot: 'orchestrator',
       platform: 'icqq',
     });
-    expect(sections?.[0].body).toMatch(/mcp_icqq/);
+    expect(sections?.[0].body).toMatch(/icqq__send_user_like/);
+    expect(sections?.[0].body).not.toMatch(/mcp_icqq/);
   });
 });

@@ -8,6 +8,7 @@ import {
   createRuntimeTurnRequest,
   createRuntimeQuestionPort,
   consumeRuntimeInteraction,
+  createRuntimeApprovalPort,
   recordRuntimeTranscript,
   recordPassiveGroupContext,
   resolveRuntimeSenderRoles,
@@ -136,6 +137,68 @@ describe('canonical IM interaction adapter', () => {
     const router = new InteractionRouter();
     await expect(consumeRuntimeInteraction(router, makeMessage({ content: '42', metadata: {} })))
       .resolves.toBe(false);
+  });
+
+  it('auto-approves master without asking Prompt', async () => {
+    let asked = false;
+    const port = createRuntimeApprovalPort({
+      isMaster: true,
+      prompt: {
+        text: async () => '',
+        number: async () => 0,
+        list: async () => [],
+        pick: async () => '',
+        async confirm() {
+          asked = true;
+          return false;
+        },
+      },
+    });
+    await expect(port.requestApproval({
+      requestId: 'a1',
+      toolName: 'icqq__announce',
+      question: 'continue?',
+      signal: new AbortController().signal,
+    })).resolves.toBe(true);
+    expect(asked).toBe(false);
+  });
+
+  it('asks master via Prompt.confirm when the sender is not master', async () => {
+    const seen: string[] = [];
+    const port = createRuntimeApprovalPort({
+      isMaster: false,
+      prompt: {
+        text: async () => '',
+        number: async () => 0,
+        list: async () => [],
+        pick: async () => '',
+        async confirm(tips, options) {
+          seen.push(tips);
+          expect(options?.default).toBe(false);
+          expect(options?.signal).toBeDefined();
+          return true;
+        },
+      },
+    });
+    await expect(port.requestApproval({
+      requestId: 'a2',
+      toolName: 'icqq__announce',
+      question: '工具「icqq__announce」需要确认后执行。是否继续？',
+      signal: new AbortController().signal,
+    })).resolves.toBe(true);
+    expect(seen[0]).toContain('请 master 确认');
+    expect(seen[0]).toContain('是否继续');
+  });
+
+  it('fails closed when a non-master has no master Prompt', async () => {
+    const port = createRuntimeApprovalPort({ isMaster: false });
+    expect(port.available).toBe(false);
+    await expect(port.requestApproval({
+      requestId: 'a3',
+      toolName: 'icqq__announce',
+      question: 'continue?',
+      signal: new AbortController().signal,
+    })).resolves.toBe(false);
   });
 });
 

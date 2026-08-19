@@ -222,9 +222,10 @@ export class CommandIndex {
     input: CommandMatchInput,
     source: unknown = undefined,
     promptFactory?: CommandPromptFactory,
+    commandPrefix = '',
   ): Promise<CommandDispatchResult> {
     if (this.#menu) {
-      const menuValue = this.#dispatchMenu(input);
+      const menuValue = this.#dispatchMenu(input, commandPrefix);
       if (menuValue !== undefined) {
         return Object.freeze({
           matched: true,
@@ -369,20 +370,20 @@ export class CommandIndex {
   // 内置菜单命令
   // ==========================================================================
 
-  #dispatchMenu(input: CommandMatchInput): string | undefined {
+  #dispatchMenu(input: CommandMatchInput, commandPrefix = ''): string | undefined {
     const text = typeof input === 'string' ? input.trim() : exactMessageText(input);
     if (text === undefined) return undefined;
     const keyword = this.#menu!.keyword;
-    if (text === keyword) return this.#buildMenu();
+    if (text === keyword) return this.#buildMenu(undefined, commandPrefix);
     if (text.startsWith(keyword + ' ')) {
       const key = text.slice(keyword.length + 1).trim();
-      if (key) return this.#buildMenu(key);
-      return this.#buildMenu();
+      if (key) return this.#buildMenu(key, commandPrefix);
+      return this.#buildMenu(undefined, commandPrefix);
     }
     return undefined;
   }
 
-  #buildMenu(pluginKey?: string): string {
+  #buildMenu(pluginKey?: string, commandPrefix = ''): string {
     const root = this.snapshot.root;
     const targetId = pluginKey
       ? `${root}/${pluginKey.split('.').join('/')}` as PluginId
@@ -404,7 +405,7 @@ export class CommandIndex {
       lines.push('');
       for (const cmd of directCommands) {
         const desc = cmd.description ? `  - ${cmd.description}` : '';
-        lines.push(`  ${cmd.name}${desc}`);
+        lines.push(`  ${commandPrefix}${cmd.name}${desc}`);
       }
     }
 
@@ -425,7 +426,7 @@ export class CommandIndex {
 
     if (children.length > 0) {
       lines.push('');
-      lines.push(`提示：使用「${keyword} <插件名>」查看子插件的指令`);
+      lines.push(`提示：使用「${commandPrefix}${keyword} <插件名>」查看子插件的指令`);
     }
 
     return lines.join('\n');

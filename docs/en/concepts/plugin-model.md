@@ -112,20 +112,21 @@ zhin runtime start
 
 The CLI treats the current directory as the project root, scans its manifest tree, and starts up. This means: when developing a game plugin, you can start it directly in the plugin directory for testing, without first installing it into a Bot project. `examples/minimal-bot` is the minimal complete form of a Root Plugin.
 
-## platformFeatures: The Four Inherited Capabilities of Root
+## platformFeatures: Inherited Platform Features of Root
 
-`@zhin.js/core` declares four Stable Features in its own manifest:
+`@zhin.js/core` declares five Stable Features in its own manifest:
 
 ```json
 "features": [
-  { "package": "@zhin.js/adapter",    "api": "^1.0.0" },
-  { "package": "@zhin.js/command",    "api": "^1.0.0" },
-  { "package": "@zhin.js/component",  "api": "^1.0.0" },
-  { "package": "@zhin.js/middleware", "api": "^1.0.0" }
+  { "package": "@zhin.js/adapter",     "api": "^1.0.0" },
+  { "package": "@zhin.js/command",     "api": "^1.0.0" },
+  { "package": "@zhin.js/component",   "api": "^1.0.0" },
+  { "package": "@zhin.js/middleware",  "api": "^1.0.0" },
+  { "package": "@zhin.js/feature-kit", "api": "^1.0.0" }
 ]
 ```
 
-When the Root Plugin depends on `@zhin.js/core` (or depends on the `zhin.js` facade, which in turn depends on core), even if its own `features` array is empty, it **automatically inherits** these four Features -- adapter, command, component, and middleware are available out of the box. Merge rule: user-explicit declarations of the same package take priority (can be used to pin versions or override), and the rest are auto-filled.
+When the Root Plugin depends on `@zhin.js/core` (or depends on the `zhin.js` facade, which in turn depends on core), even if its own `features` array is empty, it **automatically inherits** these Features -- adapter, command, component, middleware, and handler are available out of the box. Merge rule: user-explicit declarations of the same package take priority (can be used to pin versions or override), and the rest are auto-filled.
 
 Setting `"platformFeatures": false` in the Root's manifest disables this inheritance (e.g., for creating a Root that intentionally has no command system).
 

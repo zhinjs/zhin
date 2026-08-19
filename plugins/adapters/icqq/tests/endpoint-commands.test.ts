@@ -50,10 +50,9 @@ describe('icqq.endpoint command definitions', () => {
     }
   });
 
-  it('add 无 id 时回复用法与 icqq login 引导', () => {
+  it('add 无 id 时回复用法', () => {
     const text = addCommand.execute(fakeContext()) as string;
     expect(text).toContain('用法：icqq.endpoint add <uin>');
-    expect(text).toContain('icqq login');
   });
 
   it('add 非数字 id 拒绝', () => {
@@ -61,11 +60,10 @@ describe('icqq.endpoint command definitions', () => {
       .toContain('纯数字');
   });
 
-  it('add 合法 uin：写入 { id } 配置项并引导 icqq login + 重启', () => {
+  it('add 合法 uin：写入 { id } 配置项并引导重启', () => {
     const text = addCommand.execute(fakeContext({ params: { id: '8596238' } })) as string;
 
     expect(text).toContain('✅');
-    expect(text).toContain('icqq login 8596238');
     expect(text).toContain('重启');
     const config = fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8');
     expect(config).toContain('id: "8596238"');
@@ -80,13 +78,13 @@ describe('icqq.endpoint command definitions', () => {
   it('list 显示运行中 + 配置中的 endpoints', () => {
     const context = fakeContext();
     (context as { state: ReturnType<typeof createEndpointRuntimeState> }).state
-      .endpoints.set('8596238', { id: '8596238', mode: 'ipc' });
+      .endpoints.set('8596238', { id: '8596238', mode: 'direct' });
     addCommand.execute(fakeContext({ params: { id: '10001' } }));
 
     const text = listCommand.execute(context) as string;
 
-    expect(text).toContain('8596238（ipc）');
-    expect(text).toContain('10001（ipc（本地守护进程））');
+    expect(text).toContain('8596238（direct）');
+    expect(text).toContain('10001（direct（直连 @icqqjs/icqq））');
   });
 
   it('remove 从配置移除并提示重启', () => {

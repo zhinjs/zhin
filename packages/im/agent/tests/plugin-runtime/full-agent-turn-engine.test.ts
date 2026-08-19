@@ -1,10 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createUserMessage } from '@zhin.js/ai';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import { PromptController } from '../../src/turn/prompt-controller.js';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { createFullAgentTurnEngine } from '../../src/plugin-runtime/full-agent-turn-engine.js';
+import { activityFeedbackAiBus } from '../../src/activity-feedback/ai-bus.js';
 
 function selection() {
   return {
@@ -20,11 +21,15 @@ function selection() {
 import type { AgentTurnExecutionContext } from '../../src/plugin-runtime/agent-runtime.js';
 
 describe('FullAgentTurnEngine', () => {
+  afterEach(() => {
+    activityFeedbackAiBus.clear();
+  });
+
   it('runs canonical ingress through session, deferred capability, PromptController, and full AgentCore seams', async () => {
     const order: string[] = [];
     const turn = createTurnIngress({
       identity: { rootId: 'root', generation: 7, traceId: 'trace', turnId: 'turn' },
-      origin: { kind: 'im', platform: 'sandbox', endpoint: 'main', scope: 'private', sceneId: 'user' },
+      origin: { kind: 'im', platform: 'sandbox', endpoint: 'main', scope: 'private', sceneId: 'user', messageId: 'm-1' },
       principal: { subjectId: 'user', roles: ['user'] },
       input: { text: 'hello' },
       session: { key: 'im:sandbox:main:private:user' },
@@ -111,6 +116,13 @@ describe('FullAgentTurnEngine', () => {
       contextSystem: contextSystem as never,
     });
     const events: string[] = [];
+    const started: Array<Record<string, unknown>> = [];
+    const finished: Array<Record<string, unknown>> = [];
+    activityFeedbackAiBus.on('ai.processing.start', (payload) => started.push(payload as never));
+    activityFeedbackAiBus.on('ai.processing.finish', (payload) => {
+      order.push('finish');
+      finished.push(payload as never);
+    });
     const stream = engine.run(context);
     while (true) {
       const step = await stream.next();
@@ -123,7 +135,17 @@ describe('FullAgentTurnEngine', () => {
     }
 
     expect(events).toEqual(['chunk', 'turn_end']);
-    expect(order).toEqual(['terminal', 'touch', 'finalize', 'reply']);
+    expect(order).toEqual(['terminal', 'touch', 'finalize', 'reply', 'finish']);
+    expect(started).toHaveLength(1);
+    expect(started[0]).toMatchObject({
+      platform: 'sandbox',
+      endpointKey: 'main',
+      sceneId: 'user',
+      messageId: 'm-1',
+      userId: 'user',
+      hookContext: { activityFeedbackEligible: true },
+    });
+    expect(finished).toHaveLength(1);
     expect(coreInput).toMatchObject({
       toolLoading: 'deferred',
       generation: 7,
@@ -131,6 +153,106 @@ describe('FullAgentTurnEngine', () => {
     });
     expect((coreInput?.resolvedTools as Array<{ name: string }>).map((tool) => tool.name))
       .toEqual(['discover', 'load_tool', 'load_skill']);
+  });
+
+  it('emits ai.thinking once when AgentCore streams a thinking event', async () => {
+    const turn = createTurnIngress({
+      identity: { rootId: 'root', generation: 7, traceId: 'trace', turnId: 'turn' },
+      origin: { kind: 'im', platform: 'icqq', endpoint: '210723495', scope: 'group', sceneId: '1048877509', messageId: 'm-1' },
+      principal: { subjectId: 'user', roles: ['user'] },
+      input: { text: '你好呀' },
+      session: { key: 'im:icqq:210723495:group:1048877509' },
+      policy: { permissions: ['user'], unattended: false },
+      capabilities: { tools: [], skills: [] },
+      signal: new AbortController().signal,
+      ports: { journal: { append: async () => undefined } },
+    });
+    const core = {
+      runText() {
+        return (async function* () {
+          yield { type: 'thinking' as const, text: '用户在打招呼' };
+          yield { type: 'thinking' as const, text: '继续想' };
+          yield {
+            type: 'turn_end' as const,
+            output: [{ type: 'text' as const, content: '你好' }],
+            usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+          };
+          return {
+            reply: '你好',
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+            path: 'agent' as const,
+            iterations: 1,
+            model: 'model',
+            toolCalls: [],
+          };
+        })();
+      },
+    };
+    const host = {
+      config: { deferredTools: {} },
+      rateLimiter: { check: () => ({ allowed: true }) },
+      contextRepository: {
+        getDeferredToolSnapshot: async () => ({ loadedTools: {}, loadedSkills: [] }),
+        setDeferredToolSnapshot: async () => undefined,
+      },
+      promptController: new PromptController('one-at-a-time', 'one-at-a-time'),
+      activeBinding: { providerAlias: 'provider', model: 'model', nickname: 'bot' },
+      finalizeActiveTurn: vi.fn(async () => undefined),
+    };
+    const contextSystem = {
+      buildTextTurnContext: vi.fn(async () => ({
+        userMessages: [createUserMessage('你好呀')],
+        personaEnhanced: 'persona',
+        modelCandidates: ['model'],
+        modelId: 'model',
+        providerAlias: 'provider',
+        turnEnvelope: null,
+      })),
+    };
+    const sessionSystem = {
+      prepareIngressTurn: vi.fn(async () => ({
+        sessionKey: turn.session.key,
+        userId: 'user',
+        sessionId: 'session-id',
+        isNewSession: false,
+        passiveBlock: null,
+        turnUser: { rawContent: '你好呀', promptMessages: [createUserMessage('你好呀')] },
+      })),
+      touchAfterTurn: vi.fn(async () => undefined),
+    };
+    const thinking: Array<Record<string, unknown>> = [];
+    activityFeedbackAiBus.on('ai.thinking', (payload) => thinking.push(payload as never));
+    const engine = createFullAgentTurnEngine({
+      host: host as never,
+      core: core as never,
+      sessionSystem: sessionSystem as never,
+      contextSystem: contextSystem as never,
+    });
+    const stream = engine.run({
+      turn,
+      capabilities: {
+        generation: 7,
+        owner: rootPluginId(),
+        tools: [],
+        skills: [],
+        agents: [],
+        mcp: [],
+      },
+      toolCapabilities: [],
+      tools: new TurnToolRuntime(turn, []),
+      selection: selection(),
+    });
+    while (true) {
+      const step = await stream.next();
+      if (step.done) break;
+    }
+    expect(thinking).toHaveLength(1);
+    expect(thinking[0]).toMatchObject({
+      thinking: '用户在打招呼',
+      platform: 'icqq',
+      endpointKey: '210723495',
+      hookContext: { activityFeedbackEligible: true },
+    });
   });
 
   it('runs schedule ingress statelessly with a direct frozen capability plan', async () => {
@@ -215,6 +337,8 @@ describe('FullAgentTurnEngine', () => {
       sessionSystem: sessionSystem as never, contextSystem: contextSystem as never,
     });
     const events: import('../../src/event/turn-event.js').TurnEvent[] = [];
+    const started: unknown[] = [];
+    activityFeedbackAiBus.on('ai.processing.start', (payload) => started.push(payload));
     const stream = engine.run(context);
     while (true) {
       const step = await stream.next();
@@ -232,5 +356,6 @@ describe('FullAgentTurnEngine', () => {
     });
     expect(sessionSystem.prepareIngressTurn).not.toHaveBeenCalled();
     expect(sessionSystem.touchAfterTurn).not.toHaveBeenCalled();
+    expect(started).toEqual([]);
   });
 });

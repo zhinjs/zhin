@@ -31,6 +31,7 @@ import {
   type MessageRef,
 } from '@zhin.js/im-contract';
 import { MiddlewareIndex, isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
+import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/handler.js';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import {
   Message,
@@ -198,49 +199,75 @@ export class ImRuntime implements MessageGateway {
   // Prompt claim — 命令对话式交互
   // ==========================================================================
 
-  #promptConversationKey(message: Message): string {
+  #promptConversationKey(message: Message, subjectId = message.sender?.id ?? ''): string {
     const conv = message.conversation;
-    return `${conv.endpoint.adapter}:${conv.endpoint.id}:${conv.kind}:${conv.id}:${message.sender?.id ?? ''}`;
+    return `${conv.endpoint.adapter}:${conv.endpoint.id}:${conv.kind}:${conv.id}:${subjectId}`;
   }
 
   #resolvePromptClaim(message: Message): boolean {
     const key = this.#promptConversationKey(message);
     const claim = this.#promptClaims.get(key);
     if (!claim) return false;
-    this.#promptClaims.delete(key);
-    clearTimeout(claim.timer);
     claim.resolve(message.content);
     return true;
   }
 
-  #claimNextMessage(message: Message, timeout: number, timeoutText: string): Promise<string> {
+  #claimNextMessage(
+    message: Message,
+    timeout: number,
+    timeoutText: string,
+    signal?: AbortSignal,
+    subjectId?: string,
+  ): Promise<string> {
     return new Promise<string>((resolve, reject) => {
-      const key = this.#promptConversationKey(message);
+      if (signal?.aborted) {
+        reject(abortError(signal, timeoutText));
+        return;
+      }
+      const key = this.#promptConversationKey(message, subjectId);
       const existing = this.#promptClaims.get(key);
       if (existing) {
         clearTimeout(existing.timer);
         existing.reject(new Error('Prompt superseded'));
       }
       const timer = setTimeout(() => {
-        this.#promptClaims.delete(key);
-        reject(new Error(timeoutText));
+        settle(undefined, new Error(timeoutText));
       }, timeout);
-      this.#promptClaims.set(key, { resolve, reject, timer });
+      const onAbort = () => settle(undefined, abortError(signal, timeoutText));
+      signal?.addEventListener('abort', onAbort, { once: true });
+      const settle = (value?: string, error?: Error) => {
+        if (this.#promptClaims.get(key) !== claim) return;
+        this.#promptClaims.delete(key);
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', onAbort);
+        if (value !== undefined) resolve(value);
+        else reject(error ?? new Error(timeoutText));
+      };
+      const claim: PromptClaim = {
+        resolve: (raw) => settle(raw),
+        reject: (error) => settle(undefined, error),
+        timer,
+      };
+      this.#promptClaims.set(key, claim);
     });
   }
 
-  #buildCommandPrompt(message: Message): CommandPrompt {
+  #buildCommandPrompt(message: Message, subjectId?: string): CommandPrompt {
     const DEFAULT_TIMEOUT = 3 * 60 * 1000;
     const DEFAULT_TIMEOUT_TEXT = '输入超时';
-    const claim = (timeout: number, timeoutText: string) =>
-      this.#claimNextMessage(message, timeout, timeoutText);
+    const claim = (timeout: number, timeoutText: string, signal?: AbortSignal) =>
+      this.#claimNextMessage(message, timeout, timeoutText, signal, subjectId);
     const reply = (content: string) => message.$reply(content);
 
     return {
       async text(tips, options) {
         await reply(tips);
         try {
-          return await claim(options?.timeout ?? DEFAULT_TIMEOUT, options?.timeoutText ?? DEFAULT_TIMEOUT_TEXT);
+          return await claim(
+            options?.timeout ?? DEFAULT_TIMEOUT,
+            options?.timeoutText ?? DEFAULT_TIMEOUT_TEXT,
+            options?.signal,
+          );
         } catch (e) {
           if (options?.default !== undefined) return options.default;
           await reply((e as Error).message);
@@ -250,7 +277,11 @@ export class ImRuntime implements MessageGateway {
       async number(tips, options) {
         await reply(tips);
         try {
-          const raw = await claim(options?.timeout ?? DEFAULT_TIMEOUT, options?.timeoutText ?? DEFAULT_TIMEOUT_TEXT);
+          const raw = await claim(
+            options?.timeout ?? DEFAULT_TIMEOUT,
+            options?.timeoutText ?? DEFAULT_TIMEOUT_TEXT,
+            options?.signal,
+          );
           return +raw;
         } catch (e) {
           if (options?.default !== undefined) return options.default;
@@ -262,7 +293,11 @@ export class ImRuntime implements MessageGateway {
         const condition = options?.condition ?? 'yes';
         await reply(`${tips}\n输入"${condition}"以确认`);
         try {
-          const raw = await claim(options?.timeout ?? DEFAULT_TIMEOUT, options?.timeoutText ?? DEFAULT_TIMEOUT_TEXT);
+          const raw = await claim(
+            options?.timeout ?? DEFAULT_TIMEOUT,
+            options?.timeoutText ?? DEFAULT_TIMEOUT_TEXT,
+            options?.signal,
+          );
           return raw === condition;
         } catch (e) {
           if (options?.default !== undefined) return options.default;
@@ -274,7 +309,11 @@ export class ImRuntime implements MessageGateway {
         const separator = options?.separator ?? ',';
         await reply(`${tips}\n值之间使用"${separator}"分隔`);
         try {
-          const raw = await claim(options?.timeout ?? DEFAULT_TIMEOUT, options?.timeoutText ?? DEFAULT_TIMEOUT_TEXT);
+          const raw = await claim(
+            options?.timeout ?? DEFAULT_TIMEOUT,
+            options?.timeoutText ?? DEFAULT_TIMEOUT_TEXT,
+            options?.signal,
+          );
           const type = options?.type ?? 'text';
           return raw.split(separator).map((v) => {
             if (type === 'number') return +v;
@@ -293,7 +332,11 @@ export class ImRuntime implements MessageGateway {
         if (options.multiple) items.push(`多选请用"${separator}"分隔`);
         await reply(`${tips}\n${items.join('\n')}`);
         try {
-          const raw = await claim(options.timeout ?? DEFAULT_TIMEOUT, options.timeoutText ?? DEFAULT_TIMEOUT_TEXT);
+          const raw = await claim(
+            options.timeout ?? DEFAULT_TIMEOUT,
+            options.timeoutText ?? DEFAULT_TIMEOUT_TEXT,
+            options.signal,
+          );
           if (!options.multiple) {
             return options.options.find((_, i) => i + 1 === +raw)?.value as never;
           }
@@ -308,6 +351,20 @@ export class ImRuntime implements MessageGateway {
         }
       },
     };
+  }
+
+  /**
+   * Bound Prompt for this conversation.
+   * `bind.subjectId` waits for that user (e.g. master) instead of the message sender.
+   */
+  createPrompt(
+    message: Message,
+    bind?: { readonly subjectId: string },
+  ): CommandPrompt | undefined {
+    const subjectId = bind?.subjectId?.trim();
+    if (bind && !subjectId) return undefined;
+    if (typeof message.$reply !== 'function' || !message.conversation) return undefined;
+    return this.#buildCommandPrompt(message, subjectId);
   }
 
   #createPromptForSource(source: unknown): CommandPrompt | undefined {
@@ -391,6 +448,7 @@ export class ImRuntime implements MessageGateway {
         input.mentioned,
         input.replyTo,
       );
+      await runHandlers(lease.value, 'message.receive', message);
       let result: MessageDispatchResult = Object.freeze({ matched: false });
       const claimed = await this.#inboundClaim?.(message) === true;
       if (claimed) {
@@ -912,6 +970,20 @@ async function runMiddleware<TInput>(
   else await terminal();
 }
 
+function handlers(snapshot: RuntimeSnapshot): HandlerIndex | undefined {
+  const projection = snapshot.projections.get(handlerFeatureId);
+  return isHandlerIndex(projection) ? projection : undefined;
+}
+
+async function runHandlers(
+  snapshot: RuntimeSnapshot,
+  event: string,
+  ...args: unknown[]
+): Promise<void> {
+  const index = handlers(snapshot);
+  if (index) await index.dispatch(event, ...args);
+}
+
 function normalizeConsoleContent(content: unknown): SendContent {
   if (typeof content === 'string') return content;
   // Array content passes through untouched, matching the legacy console RPC
@@ -959,4 +1031,9 @@ function flattenContent(content: unknown): string {
     }
   }
   return String(content);
+}
+
+function abortError(signal: AbortSignal | undefined, fallback: string): Error {
+  if (signal?.reason instanceof Error) return signal.reason;
+  return new Error(fallback);
 }

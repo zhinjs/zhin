@@ -8,6 +8,8 @@ export const CLOUDFLARE_DEFAULT_IMAGE_MODEL = '@cf/black-forest-labs/flux-1-schn
 export const OPENAI_DEFAULT_IMAGE_MODEL = 'gpt-image-2';
 /** Gemini Nano Banana（generateContent + IMAGE modality） */
 export const GOOGLE_DEFAULT_IMAGE_MODEL = 'gemini-2.5-flash-image';
+/** MiniMax 文生图 */
+export const MINIMAX_DEFAULT_IMAGE_MODEL = 'image-01';
 
 /**
  * 文生图默认项（`ai.imageGeneration` 或 `ai.providers.<alias>.imageGeneration`）。

@@ -2,7 +2,7 @@ import type { ChildPluginReference, PackageReference } from './manifest.js';
 
 /**
  * Package whose `zhin.features` define the Stable Feature composition
- * (adapter / command / component / middleware).
+ * (adapter / command / component / middleware / handler).
  *
  * Root inherits these when it depends on `@zhin.js/core` directly, or on the
  * `zhin.js` facade (which depends on `@zhin.js/core`).

@@ -44,6 +44,33 @@ describe('DeferredCapabilityPlan', () => {
     expect(saved).toHaveLength(2);
   });
 
+  it('always loads platform-scoped plugin tools that already passed ingress', () => {
+    const owner = rootPluginId();
+    const plan = createDeferredCapabilityPlan({
+      capabilities: Object.freeze({
+        generation: 1,
+        owner,
+        tools: Object.freeze([
+          tool(owner, 'weather', 'Look up weather'),
+          Object.freeze({
+            ...tool(owner, 'icqq__send_user_like', '给用户点赞'),
+            platforms: Object.freeze(['icqq']),
+          }),
+        ]),
+        skills: Object.freeze([]),
+        agents: Object.freeze([]),
+        mcp: Object.freeze([]),
+      }),
+      sessionSnapshot: { loadedTools: {}, loadedSkills: [] },
+      config: { deferredTools: { alwaysLoadedTools: ['discover', 'load_tool', 'load_skill'] } },
+      persistSnapshot: async () => undefined,
+    });
+
+    expect(plan.resolvedTools.map((entry) => entry.name)).toEqual([
+      'discover', 'load_tool', 'load_skill', 'icqq__send_user_like',
+    ]);
+  });
+
   it('fails closed on ambiguous or missing projected skills', async () => {
     const owner = rootPluginId();
     const plan = createDeferredCapabilityPlan({

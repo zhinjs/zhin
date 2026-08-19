@@ -10,6 +10,7 @@ import {
   type Tool,
 } from '@zhin.js/core';
 import { ingressRouteToken, type ImRuntime, type Message, type SendContent } from '@zhin.js/core/runtime';
+import type { CommandPrompt } from '@zhin.js/command';
 import {
   expandEnvironmentValue,
   type ConfigDocumentPort,
@@ -23,14 +24,6 @@ import {
   composeZhinAgentRuntime,
   AgentOrchestrator,
   discoverWorkspaceAgents,
-  createReadFileTool,
-  createWriteFileTool,
-  createEditFileTool,
-  createListDirTool,
-  createGlobTool,
-  createGrepTool,
-  createWebSearchTool,
-  createWebFetchTool,
   createBashTool,
   activateAiDatabaseStorage,
   defineAiDatabaseModels,
@@ -71,6 +64,7 @@ import {
   type SessionTreeRuntimeHandle,
   type ImTranscriptWriteInput,
   type ApprovalPort,
+  type ApprovalRequestInput,
   type TurnRequestPorts,
   type TurnRequest,
   type TurnOutcome,
@@ -102,6 +96,8 @@ import {
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 export { InteractionRouter } from '@zhin.js/agent';
+
+import type { AgentTool, JsonSchema } from '@zhin.js/ai';
 
 /** Minimal OutputElement shape for reply flattening (avoid direct @zhin.js/ai dep). */
 type OutputElementLike = {
@@ -195,7 +191,7 @@ export interface InstallAgentHostOptions {
   readonly extraTools?: readonly AgentToolLike[];
   /** Optional inbound STT (Speech Host). */
   readonly transcribeUrl?: (audioUrl: string) => Promise<string | null>;
-  /** Optional host approval channel; absent channels fail closed for on-risk tools. */
+  /** Optional host approval override; IM turns otherwise use createRuntimeApprovalPort. */
   readonly approvalPort?: ApprovalPort;
 }
 
@@ -376,6 +372,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       addFeature(projected.feature, projected.name, projected.definition);
     }
 
+    // extraTools (e.g. voice_stt / voice_tts) join the candidate ToolFeature.
+    // Native builtin file tools are projected via createNativeFileToolFeatures
+    // below — they are the SSOT and own the security context (workspaceRoot
+    // + execPreset). bash stays a Tool projection here for back-compat with
+    // subagent createRuntimeSubagentAgentTools consumers that read it as a Tool.
     for (const tool of [
       ...(options.extraTools ?? []),
       bashTool,
@@ -576,7 +577,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         );
         const routed = routeSpecialistAgent(inbound.text, capabilities);
         // thinkingMessage：进入 AI 处理前先回占位（对齐 legacy inbound-turn-pipeline）。
-        // 占位消息不 await 回包——平台 ack 慢（实测 icqq 守护进程 10s+）不应拖住 turn 启动；
+        // 占位消息不 await 回包——平台 ack 慢不应拖住 turn 启动；
         // 失败仅记日志（正式回复仍走 replyAndRecord 的完整确认）。
         if (trigger.thinkingMessage) {
           message.$reply(trigger.thinkingMessage).catch((error: unknown) => {
@@ -601,7 +602,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               workspaceRoot: options.projectRoot,
               network: interactiveNetworkPolicy(service.getAgentConfig()),
               ports: {
-                ...(options.approvalPort ? { approval: options.approvalPort } : {}),
+                approval: options.approvalPort ?? createRuntimeApprovalPort({
+                  isMaster: senderRoles.isMaster,
+                  prompt: ownerId
+                    ? options.im.createPrompt(message, { subjectId: ownerId })
+                    : undefined,
+                }),
                 question: createRuntimeQuestionPort(options.interactions, message),
                 reply: {
                   send: async (output) => {
@@ -1028,27 +1034,37 @@ function createRuntimeZhinAgent(
   };
 }
 
-function buildRuntimeSubagentAgentTools(projectRoot: string) {
-  const plainTools: Tool[] = [
-    createReadFileTool(),
-    createWriteFileTool(),
-    createEditFileTool(),
-    createListDirTool(),
-    createGlobTool(),
-    createGrepTool(),
-    createWebSearchTool(),
-    createWebFetchTool(),
-    createBashTool(),
-  ];
-  return plainTools.map((tool) => ({
-    name: tool.name,
-    description: tool.description,
-    parameters: tool.parameters,
+/**
+ * Subagent tool pool — derived from the same generation projection as the
+ * main turn so the ToolIndex is the single source of truth. Native builtin
+ * tools (file / web) are projected via the same helpers the main agent uses;
+ * bash stays on the legacy Tool path until its native projection lands.
+ */
+function buildRuntimeSubagentAgentTools(_projectRoot: string): AgentTool[] {
+  const nativeFiles = createNativeFileToolFeatures();
+  const nativeWeb = createNativeWebToolFeatures();
+  const bash = createBashTool();
+  const fromNative: AgentTool[] = [...nativeFiles, ...nativeWeb].map((native) => ({
+    name: native.name,
+    description: native.definition.description,
+    parameters: native.definition.inputSchema as JsonSchema,
     source: 'builtin',
-    execute: tool.execute as (args: Record<string, unknown>) => Promise<unknown>,
-    tags: tool.tags,
-    keywords: tool.keywords,
+    execute: (args: Record<string, unknown>, _ctx?: unknown, execCtx?: unknown) =>
+      (native.definition.execute as (input: unknown, context: unknown) => Promise<unknown>)(
+        args,
+        execCtx,
+      ),
   }));
+  return [
+    ...fromNative,
+    {
+      name: bash.name,
+      description: bash.description,
+      parameters: bash.parameters as JsonSchema,
+      source: 'builtin',
+      execute: bash.execute as (args: Record<string, unknown>) => Promise<unknown>,
+    },
+  ];
 }
 
 async function seedOrchestratorAgentPresets(
@@ -1211,6 +1227,29 @@ export function createRuntimeQuestionPort(
     ask: (request: Parameters<NonNullable<TurnRequestPorts['question']>['ask']>[0]) => (
       interactions.ask(address, request, (text) => deliverInteraction(message, text))
     ),
+  });
+}
+
+/** IM ApprovalPort: master is already the authority; others wait for master via Prompt. */
+export function createRuntimeApprovalPort(options: {
+  readonly isMaster: boolean;
+  readonly prompt?: CommandPrompt;
+}): ApprovalPort {
+  return Object.freeze({
+    available: options.isMaster || options.prompt != null,
+    async requestApproval(input: ApprovalRequestInput) {
+      if (options.isMaster) return true;
+      if (!options.prompt) return false;
+      try {
+        return await options.prompt.confirm(`请 master 确认：${input.question}`, {
+          ...(input.timeoutMs !== undefined ? { timeout: input.timeoutMs } : {}),
+          default: false,
+          signal: input.signal,
+        });
+      } catch {
+        return false;
+      }
+    },
   });
 }
 

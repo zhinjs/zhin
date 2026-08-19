@@ -54,7 +54,7 @@ First, nesting: `commands/` is scanned recursively, and nested directories map d
 - **Unicode names**: at least one non-ASCII character and no ASCII uppercase, e.g. `赞我.ts` (trigger word `赞我`)
 - Dynamic parameter files remain ASCII-only: `[name].ts` / `[[name]].ts`, etc.
 
-`instanceKey` and other convention directories (middlewares / tools / …) are **not** relaxed; they stay ASCII kebab.
+`instanceKey` and other convention directories (middlewares / …) stay ASCII kebab. `tools/` allows ASCII kebab or snake (e.g. `send_user_like.ts`).
 
 Dynamic parameter segments use Next.js-style file names to declare their shape and must be the last segment of the path; **type and default value are not written into the file name** — they are declared in `defineCommand({ params })`, where `params.<name>.type` is required and `default` is optional:
 

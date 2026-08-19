@@ -25,6 +25,7 @@ export const SDK_IDS = [
   'anthropic',
   'google',
   'deepseek',
+  'minimax',
   'ollama',
   'openai-compatible',
 ] as const;
@@ -163,6 +164,16 @@ export function createLanguageModel(
       });
       return deepseek(modelId);
     }
+    case 'minimax': {
+      const { createMiniMax } = loadPeer<typeof import('@ai-sdk/minimax')>('@ai-sdk/minimax');
+      const minimax = createMiniMax({
+        apiKey: config.apiKey?.trim(),
+        baseURL: trimUrl(config.baseUrl),
+        headers,
+        ...transport,
+      });
+      return minimax(modelId);
+    }
     case 'ollama': {
       const compat = createOpenAiCompatibleProvider(
         config,
@@ -232,5 +243,5 @@ export function createImageModel(
 }
 
 export function sdkSupportsImageGeneration(sdk: SdkId): boolean {
-  return sdk === 'openai' || sdk === 'google' || sdk === 'openai-compatible';
+  return sdk === 'openai' || sdk === 'google' || sdk === 'openai-compatible' || sdk === 'minimax';
 }

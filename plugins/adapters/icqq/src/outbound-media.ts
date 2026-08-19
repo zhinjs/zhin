@@ -34,24 +34,19 @@ function spoolBase64ToFile(
   return filePath;
 }
 
-/**
- * 出站媒体模式：file=本机落盘后 CQ [image:path]（与 icqq 同机时可用）；
- * base64=保留 MediaRef base64，CQ 编码为 [image:base64://...] 经 IPC 交给守护进程解码（异机 RPC 默认）。
- */
 export function resolveIcqqOutboundMediaMode(
-  config: Pick<IcqqEndpointConfig, "rpc" | "outboundMedia">,
+  config: Pick<IcqqEndpointConfig, "outboundMedia">,
 ): IcqqOutboundMediaMode {
   if (config.outboundMedia === "base64" || config.outboundMedia === "file") {
     return config.outboundMedia;
   }
-  return config.rpc ? "base64" : "file";
+  return "file";
 }
 
 /**
  * file 模式：将 canonical MediaRef（`data.media`，kind=base64）物化为本机路径，
- * 并把 media 改写为 path 引用（与 icqq 同机时守护进程直接读盘）。
- * base64 模式：不改动（由 toCqString/formatOutboundBody 生成 base64://，供异机守护进程解码）。
- * 无 canonical MediaRef 的段原样保留（不可投递，由下游 CQ 序列化 warn + 丢弃）。
+ * 并把 media 改写为 path 引用（icqq 客户端直接读盘）。
+ * base64 模式：不改动（由 toCqString/formatOutboundBody 生成 base64://）。
  */
 export function materializeOutboundBase64(
   content: SendContent,

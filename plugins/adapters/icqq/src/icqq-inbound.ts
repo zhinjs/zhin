@@ -1,5 +1,5 @@
 /**
- * icqq 守护进程 IPC 入站事件归一化（post_type / message_type / message 段）
+ * icqq 入站事件归一化（post_type / message_type / message 段）
  */
 import { Message, toCanonicalSegments, type MessageSegment, type QuotedMessagePayload } from "zhin.js";
 import { parseCqMessage, icqqMediaRefFromString } from "./cq-message.js";
@@ -7,13 +7,13 @@ import { extractForwardResidFromJsonElement } from "./forward-msg.js";
 import type { GroupRole } from "./types.js";
 
 /** 守护进程推送的通用事件壳 */
-export interface IcqqIpcEventBase {
+export interface IcqqEventBase {
   post_type?: string;
   self_id?: number;
 }
 
 /** post_type=message 时的消息体（字段随 icqqjs/cli 演进，未知字段保留） */
-export interface IcqqIpcMessageEvent extends IcqqIpcEventBase {
+export interface IcqqMessageEvent extends IcqqEventBase {
   post_type: "message";
   message_id?: string;
   msg_id?: string;
@@ -32,7 +32,7 @@ export interface IcqqIpcMessageEvent extends IcqqIpcEventBase {
     card?: string;
     /** 群临时会话来源群号 */
     group_id?: number;
-    /** NT/IPC 群成员角色：owner | admin | member */
+    /** 群成员角色：owner | admin | member */
     role?: GroupRole | string;
   };
   from_id?: number;
@@ -40,7 +40,7 @@ export interface IcqqIpcMessageEvent extends IcqqIpcEventBase {
   group_id?: number;
   to_id?: number;
   nickname?: string;
-  /** 旧版 IPC 仅有 type 无 message_type */
+  /** 旧版仅有 type 无 message_type */
   type?: "group" | "private";
   /** oicq Message#source：被引用回复的源消息 */
   source?: IcqqMessageSource;
@@ -87,19 +87,19 @@ export interface NormalizedIcqqInbound {
   channelParentGroupId?: string;
   userId: string;
   nickname: string;
-  /** 群聊时来自 IPC sender.role（私聊无） */
+  /** 群聊时来自 sender.role（私聊无） */
   senderRole?: GroupRole;
   content: MessageSegment[];
   rawMessage: string;
   timestampMs: number;
-  raw: IcqqIpcMessageEvent;
+  raw: IcqqMessageEvent;
 }
 
 const DEDUPE_TTL_MS = 120_000;
 
 const ICQQ_GROUP_ROLES = new Set<GroupRole>(["owner", "admin", "member"]);
 
-/** 从 IPC sender.role 解析群成员角色（供 Message.$sender → resolveSenderRoles） */
+/** 从 sender.role 解析群成员角色（供 Message.$sender → resolveSenderRoles） */
 export function parseIcqqSenderGroupRole(
   sender: { role?: unknown } | undefined,
 ): GroupRole | undefined {
@@ -148,15 +148,15 @@ function isMessagePostType(postType: unknown): boolean {
   return postType.startsWith("message.");
 }
 
-/** 从 IPC 事件壳中取出 OneBot/icqq 载荷（兼容 data 嵌套或字段在根级） */
-export function unwrapIcqqIpcEventPayload(event: {
+/** 从事件壳中取出 OneBot/icqq 载荷（兼容 data 嵌套或字段在根级） */
+export function unwrapIcqqEventPayload(event: {
   data?: unknown;
   [key: string]: unknown;
 }): unknown {
   const nested = event.data;
   if (nested && typeof nested === "object" && !Array.isArray(nested)) {
     const d = nested as Record<string, unknown>;
-    if (isRecognizedIcqqIpcPayload(d)) {
+    if (isRecognizedIcqqPayload(d)) {
       return nested;
     }
     for (const key of ["data", "detail", "payload", "event"]) {
@@ -168,13 +168,13 @@ export function unwrapIcqqIpcEventPayload(event: {
   }
 
   const { id: _id, event: _ev, data: _data, ok: _ok, ...rest } = event;
-  if (isRecognizedIcqqIpcPayload(rest)) {
+  if (isRecognizedIcqqPayload(rest)) {
     return rest;
   }
   return nested;
 }
 
-function isRecognizedIcqqIpcPayload(d: Record<string, unknown>): boolean {
+function isRecognizedIcqqPayload(d: Record<string, unknown>): boolean {
   const pt = d.post_type;
   if (typeof pt === "string") {
     if (
@@ -216,7 +216,7 @@ export function resolveIcqqInboundUserId(
 
 export function isIcqqMessagePostType(
   data: unknown,
-): data is IcqqIpcMessageEvent {
+): data is IcqqMessageEvent {
   if (!data || typeof data !== "object") return false;
   const d = data as Record<string, unknown>;
   if (isMessagePostType(d.post_type)) return true;
@@ -232,14 +232,14 @@ export function isIcqqMessagePostType(
 }
 
 export function shouldSkipSelfInboundMessage(
-  data: IcqqIpcMessageEvent,
+  data: IcqqMessageEvent,
 ): boolean {
   if (data.self_id == null || data.user_id == null) return false;
   return Number(data.self_id) === Number(data.user_id);
 }
 
 /** 群临时会话私聊：icqq message_type=private & sub_type=group */
-export function isIcqqGroupTempPrivateMessage(data: IcqqIpcMessageEvent): boolean {
+export function isIcqqGroupTempPrivateMessage(data: IcqqMessageEvent): boolean {
   const messageType =
     data.message_type ??
     (data.type === "group" || data.type === "private" ? data.type : undefined);
@@ -250,7 +250,7 @@ export function isIcqqGroupTempPrivateMessage(data: IcqqIpcMessageEvent): boolea
 }
 
 export function resolveChannelFromIcqqMessage(
-  data: IcqqIpcMessageEvent,
+  data: IcqqMessageEvent,
 ): {
   channelType: "group" | "private";
   channelId: string;
@@ -287,7 +287,7 @@ export function resolveChannelFromIcqqMessage(
 }
 
 export function resolveIcqqInboundMessageId(
-  data: IcqqIpcMessageEvent,
+  data: IcqqMessageEvent,
   channelId: string,
 ): { id: string; source: "message_id" | "msg_id" | "seq" | "synthetic" } {
   if (data.message_id != null && String(data.message_id) !== "") {
@@ -485,7 +485,7 @@ function looksLikeIcqqMessageSource(value: unknown): value is IcqqMessageSource 
   return !!resolveQuoteIdFromIcqqSource(value);
 }
 
-/** IPC 载荷可能把 source 嵌在 data / event 等字段，深度查找 */
+/** 载荷可能把 source 嵌在 data / event 等字段，深度查找 */
 export function findIcqqNestedMessageSource(
   root: unknown,
   maxDepth = MAX_SOURCE_WALK_DEPTH,
@@ -590,16 +590,16 @@ export function quotedPayloadFromIcqqSource(
   };
 }
 
-/** 从 IPC 事件顶层字段解析引用 message_id（与 message 段互补） */
+/** 从事件顶层字段解析引用 message_id（与 message 段互补） */
 export function resolveIcqqQuoteIdFromEvent(
-  data: IcqqIpcMessageEvent,
+  data: IcqqMessageEvent,
 ): string | undefined {
   const fromSource =
     resolveQuoteIdFromIcqqSource(data.source) ??
     resolveQuoteIdFromIcqqSource(findIcqqNestedMessageSource(data));
   if (fromSource) return fromSource;
 
-  const ext = data as IcqqIpcMessageEvent & Record<string, unknown>;
+  const ext = data as IcqqMessageEvent & Record<string, unknown>;
   const candidates = [
     ext.reply,
     ext.quoted_message_id,
@@ -634,7 +634,7 @@ function mergeReplyFromRawMessage(
 
 function mergeReplyFromSource(
   content: MessageSegment[],
-  data: IcqqIpcMessageEvent,
+  data: IcqqMessageEvent,
 ): MessageSegment[] {
   if (Message.quoteIdFromContent(content)) return content;
   const quoteId =
@@ -648,7 +648,7 @@ function mergeReplyFromSource(
 }
 
 export function resolveInboundContent(
-  data: IcqqIpcMessageEvent,
+  data: IcqqMessageEvent,
 ): MessageSegment[] {
   const fromElements = icqqElementsToSegments(data.message);
   const raw = data.raw_message ?? "";
@@ -664,10 +664,10 @@ export function resolveInboundContent(
 }
 
 export function normalizeIcqqInboundMessage(
-  data: IcqqIpcMessageEvent,
+  data: IcqqMessageEvent,
 ): NormalizedIcqqInbound | null {
   if (!isIcqqMessagePostType(data)) return null;
-  const ext = data as IcqqIpcMessageEvent & Record<string, unknown>;
+  const ext = data as IcqqMessageEvent & Record<string, unknown>;
   const userIdNum = resolveIcqqInboundUserId(ext);
   if (userIdNum == null) return null;
   const { channelType, channelId, channelParentGroupId } = resolveChannelFromIcqqMessage(data);

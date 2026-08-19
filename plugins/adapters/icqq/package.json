@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-icqq",
   "version": "8.0.9",
-  "description": "Zhin.js ICQQ adapter for Plugin Runtime (IPC daemon client)",
+  "description": "Zhin.js ICQQ adapter — direct connection to @icqqjs/icqq",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -45,11 +45,14 @@
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/command": "workspace:*",
     "@zhin.js/core": "workspace:*",
+    "@zhin.js/tool": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
+    "@zhin.js/permission": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*"
   },
   "peerDependencies": {
+    "@icqqjs/icqq": "^1.12.2",
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/core": "workspace:*",
@@ -59,6 +62,9 @@
   },
   "peerDependenciesMeta": {
     "zhin.js": {
+      "optional": true
+    },
+    "@icqqjs/icqq": {
       "optional": true
     },
     "@zhin.js/agent": {
@@ -84,6 +90,7 @@
     "src",
     "lib",
     "agent",
+    "tools",
     "README.md",
     "CHANGELOG.md"
   ],
@@ -107,6 +114,10 @@
       },
       {
         "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/tool",
         "api": "^1.0.0"
       }
     ],

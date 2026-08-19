@@ -90,6 +90,10 @@ describe('Console RPC protocol', () => {
       'Demo scope: RPC "endpoint.group_kick" is forbidden',
     );
     expect(assertDemoConsoleRpcAllowed('db:delete')).toContain('forbidden');
+    // endpoint.send_message (alias endpoint:sendMessage) is a write op:
+    // demo token must NOT be able to drive bots into sending messages.
+    expect(assertDemoConsoleRpcAllowed('endpoint:sendMessage')).toContain('forbidden');
+    expect(assertDemoConsoleRpcAllowed('endpoint.send_message')).toContain('forbidden');
   });
 
   it('stabilizes endpoint send response aliases', () => {

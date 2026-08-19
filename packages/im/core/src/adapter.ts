@@ -174,10 +174,16 @@ export abstract class Adapter<
       return false;
     }
     this.#pendingMessages++;
-    await this.inboundPipeline.receive(message, () => {
-      EventEmitter.prototype.emit.call(this, 'message.receive', message);
-    });
-    return true;
+    try {
+      await this.inboundPipeline.receive(message, () => {
+        EventEmitter.prototype.emit.call(this, 'message.receive', message);
+      });
+      return true;
+    } finally {
+      // Inbound pipeline errors must not leak the concurrency budget; the
+      // non-await path uses InboundMessagePipeline.decrementPending in finally.
+      this.#pendingMessages = Math.max(0, this.#pendingMessages - 1);
+    }
   }
 
   /** 运行时 Endpoint 管理（add/remove/edit/start/stop）；未实现则 core 尝试 endpointConfigSchema 通用向导 */

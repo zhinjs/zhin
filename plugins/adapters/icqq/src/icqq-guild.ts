@@ -2,15 +2,12 @@
  * ICQQ guild (QQ 频道) catalog sync, inbound normalize, Console channel list.
  */
 import { toCanonicalSegments, type MessageSegment } from "zhin.js";
-import { Actions, type IpcGuildMessageEventData } from "./protocol.js";
+import type { GuildMessageEventData } from "./protocol.js";
 import { parseCqMessage } from "./cq-message.js";
 
-/** Narrow request port shared by the real IPC client and endpoint test transports. */
-export interface IcqqGuildRpc {
-  request(
-    action: string,
-    params?: Record<string, unknown>,
-  ): Promise<{ ok: boolean; data?: unknown }>;
+export interface IcqqGuildClient {
+  getGuildList(): Array<{ guild_id: string; guild_name: string }>;
+  getChannelList(guildId: string): Array<{ guild_id: string; channel_id: string; channel_name: string }>;
 }
 
 export interface IcqqGuildChannelEntry {
@@ -31,7 +28,7 @@ export interface NormalizedIcqqGuildInbound {
   content: MessageSegment[];
   rawMessage: string;
   timestampMs: number;
-  raw: IpcGuildMessageEventData;
+  raw: GuildMessageEventData;
 }
 
 export class IcqqGuildCatalog {
@@ -43,25 +40,19 @@ export class IcqqGuildCatalog {
     this.guilds.clear();
   }
 
-  async syncAll(ipc: IcqqGuildRpc): Promise<void> {
-    const listResp = await ipc.request(Actions.GUILD_LIST);
-    if (!listResp.ok) return;
-
-    const guildRows = Array.isArray(listResp.data) ? listResp.data : [];
+  async syncAll(client: IcqqGuildClient): Promise<void> {
+    const guildRows = client.getGuildList();
     for (const row of guildRows) {
-      const rec = row as Record<string, unknown>;
-      const guild_id = String(rec.guild_id ?? rec.id ?? "");
+      const guild_id = String(row.guild_id ?? "");
       if (!guild_id) continue;
-      const guild_name = String(rec.guild_name ?? rec.name ?? guild_id);
+      const guild_name = String(row.guild_name ?? guild_id);
       this.guilds.set(guild_id, { guild_id, guild_name });
 
-      const chResp = await ipc.request(Actions.GUILD_CHANNELS, { guild_id });
-      if (!chResp.ok || !Array.isArray(chResp.data)) continue;
-      for (const ch of chResp.data) {
-        const chRec = ch as Record<string, unknown>;
-        const channel_id = String(chRec.channel_id ?? chRec.id ?? "");
+      const channels = client.getChannelList(guild_id);
+      for (const ch of channels) {
+        const channel_id = String(ch.channel_id ?? "");
         if (!channel_id) continue;
-        const channel_name = String(chRec.channel_name ?? chRec.name ?? channel_id);
+        const channel_name = String(ch.channel_name ?? channel_id);
         this.channels.set(channel_id, {
           channel_id,
           channel_name,
@@ -72,7 +63,7 @@ export class IcqqGuildCatalog {
     }
   }
 
-  upsertFromInbound(data: IpcGuildMessageEventData): void {
+  upsertFromInbound(data: GuildMessageEventData): void {
     const guild_id = String(data.guild_id ?? "");
     const channel_id = String(data.channel_id ?? "");
     if (!guild_id || !channel_id) return;
@@ -119,12 +110,12 @@ export class IcqqGuildCatalog {
   }
 }
 
-export function isIcqqGuildIpcEvent(eventName: string | undefined): boolean {
+export function isIcqqGuildEvent(eventName: string | undefined): boolean {
   return typeof eventName === "string" && eventName.startsWith("message.guild");
 }
 
 export function normalizeIcqqGuildInboundMessage(
-  data: IpcGuildMessageEventData & Record<string, unknown>,
+  data: GuildMessageEventData & Record<string, unknown>,
 ): NormalizedIcqqGuildInbound | null {
   if (data.type !== "guild") return null;
   const guildId = String(data.guild_id ?? "");

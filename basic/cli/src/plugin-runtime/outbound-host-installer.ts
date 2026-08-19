@@ -36,22 +36,41 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
       }
     },
     async addReaction(input) {
-      return im.addEndpointReaction({
-        adapter: input.adapter,
-        endpointKey: input.endpointKey,
-        message: input.message,
-        emoji: input.emoji,
-        sceneType: input.sceneType,
-        channelId: input.channelId,
-      });
+      try {
+        return await im.addEndpointReaction({
+          adapter: input.adapter,
+          endpointKey: input.endpointKey,
+          message: input.message,
+          emoji: input.emoji,
+          sceneType: input.sceneType,
+          channelId: input.channelId,
+        });
+      } catch (error) {
+        logger.debug(formatCompact({
+          op: 'outbound_add_reaction_failed',
+          adapter: input.adapter,
+          endpointKey: input.endpointKey,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+        return null;
+      }
     },
     async removeReaction(input) {
-      await im.removeEndpointReaction({
-        adapter: input.adapter,
-        endpointKey: input.endpointKey,
-        message: input.message,
-        reactionId: input.reactionId,
-      });
+      try {
+        await im.removeEndpointReaction({
+          adapter: input.adapter,
+          endpointKey: input.endpointKey,
+          message: input.message,
+          reactionId: input.reactionId,
+        });
+      } catch (error) {
+        logger.debug(formatCompact({
+          op: 'outbound_remove_reaction_failed',
+          adapter: input.adapter,
+          endpointKey: input.endpointKey,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      }
     },
     async recall(input) {
       await im.recallEndpointMessage({

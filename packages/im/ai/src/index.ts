@@ -128,6 +128,7 @@ export {
   CLOUDFLARE_DEFAULT_IMAGE_MODEL,
   OPENAI_DEFAULT_IMAGE_MODEL,
   GOOGLE_DEFAULT_IMAGE_MODEL,
+  MINIMAX_DEFAULT_IMAGE_MODEL,
   hasGenerateImage,
 } from './image-generation.js';
 export type {

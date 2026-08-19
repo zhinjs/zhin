@@ -1,14 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
-  buildIcqqIpcMessage,
+  buildIcqqMessage,
   parseCqMessage,
   toCqString,
 } from "../src/cq-message.js";
 
-describe("buildIcqqIpcMessage", () => {
+describe("buildIcqqMessage", () => {
   it("reply + 正文编码为 [reply:id] 前缀字符串", () => {
     expect(
-      buildIcqqIpcMessage([
+      buildIcqqMessage([
         { type: "reply", data: { id: "M0zHrrS7mJ0AC8rBcOxj/moZcDUB" } },
         { type: "text", data: { text: "hello" } },
       ]),
@@ -17,7 +17,7 @@ describe("buildIcqqIpcMessage", () => {
 
   it("仅 reply 段时仍为非空字符串", () => {
     expect(
-      buildIcqqIpcMessage([{ type: "reply", data: { id: "abc" } }]),
+      buildIcqqMessage([{ type: "reply", data: { id: "abc" } }]),
     ).toBe("[reply:abc]");
   });
 });
@@ -45,7 +45,7 @@ describe("toCqString", () => {
     ).toBe("[reply:x/y]hi");
   });
 
-  it("image canonical base64 MediaRef 编码为 base64://（异机 icqq 守护进程可解码）", () => {
+  it("image canonical base64 MediaRef 编码为 base64://", () => {
     expect(
       toCqString([
         { type: "image", data: { media: { kind: "base64", value: "aGVsbG8=" } } },

@@ -14,7 +14,7 @@ import {
   resolveQuoteIdFromIcqqSource,
   quotedPayloadFromIcqqSource,
   shouldSkipSelfInboundMessage,
-  unwrapIcqqIpcEventPayload,
+  unwrapIcqqEventPayload,
 } from "../src/icqq-inbound.js";
 
 const ntPrivatePayload = {
@@ -256,10 +256,10 @@ describe("shouldSkipSelfInboundMessage", () => {
   });
 });
 
-describe("unwrapIcqqIpcEventPayload", () => {
+describe("unwrapIcqqEventPayload", () => {
   it("从 event.data 解包", () => {
     expect(
-      unwrapIcqqIpcEventPayload({
+      unwrapIcqqEventPayload({
         id: "sub",
         event: "message",
         data: ntPrivatePayload,
@@ -269,7 +269,7 @@ describe("unwrapIcqqIpcEventPayload", () => {
 
   it("从根级 OneBot 字段解包", () => {
     const flat = { id: "sub", event: "push", ...ntPrivatePayload };
-    expect(unwrapIcqqIpcEventPayload(flat as any)).toMatchObject({
+    expect(unwrapIcqqEventPayload(flat as any)).toMatchObject({
       post_type: "message",
       user_id: 1659488338,
     });

@@ -9,7 +9,7 @@ import { filterTools, type AgentTool } from 'zhin.js/ai';
 function isIcqqDelegatedTask(query: string, goal: string): boolean {
   const text = `${query} ${goal}`;
   const lower = text.toLowerCase();
-  if (/\bicqq\b|mcp_icqq|send_private_msg|friend\s+send/i.test(text)) return true;
+  if (/\bicqq\b|icqq__|send_private_msg|friend\s+send/i.test(text)) return true;
   if (/\bfriend\s+like\b/.test(lower) && /qq|好友|\d{5,}/i.test(text)) return true;
   if (/点赞/.test(text) && /qq|好友|\d{5,}/i.test(text)) return true;
   if (/发消息|发送消息|私聊/.test(text) && /qq|\d{5,}/i.test(text)) return true;
@@ -23,27 +23,22 @@ function selectIcqqDeferredTools(
   maxTools: number,
 ): DeferredToolCatalogItem[] {
   const pool = deferredCatalog.filter(
-    t => !t.name.startsWith('mcp_filesystem') && !t.name.startsWith('mcp_memory_'),
+    t => !t.name.startsWith('mcp_filesystem')
+      && !t.name.startsWith('mcp_memory_')
+      && !t.name.startsWith('mcp_icqq_'),
   );
-  const icqqMcpTools = pool.filter(t => t.name.startsWith('mcp_icqq_'));
-  const icqqTools = pool.filter(t => t.name.startsWith('icqq_'));
+  const icqqTools = pool.filter(t => t.name.startsWith('icqq__') || t.name.startsWith('icqq_'));
   const pinned: DeferredToolCatalogItem[] = [];
-  const bash = pool.find(t => t.name === 'bash');
-  if (bash) pinned.push(bash);
   const preferOrder = [
-    'mcp_icqq_icqq_invoke',
-    'mcp_icqq_icqq_list_actions',
-    'icqq_send_user_like',
-    'icqq_friend_list',
-    'icqq_poke',
+    'icqq__send_user_like',
+    'icqq__friend_list',
+    'icqq__poke',
   ];
   for (const name of preferOrder) {
-    const t =
-      icqqMcpTools.find(x => x.name === name) ??
-      icqqTools.find(x => x.name === name);
+    const t = icqqTools.find(x => x.name === name);
     if (t) pinned.push(t);
   }
-  for (const t of [...icqqMcpTools, ...icqqTools]) {
+  for (const t of icqqTools) {
     if (pinned.length >= maxTools) break;
     if (!pinned.some(p => p.name === t.name)) pinned.push(t);
   }
@@ -61,16 +56,16 @@ function selectIcqqDeferredTools(
 }
 
 const ORCHESTRATOR_ICQQ = [
-  'On icqq/QQ: use run_deferred_task with tool_query "mcp_icqq_icqq_invoke" or "icqq_send_user_like".',
-  'Examples: send_private_msg, friend_like; do not use mcp_filesystem_* for QQ tasks.',
-  'Skip tool_search when the user clearly asks to send a message, like a friend, or poke on QQ.',
+  'On icqq/QQ: if icqq__send_user_like is in your tool list, call it now with { endpoint_id, user_id, times }.',
+  'endpoint_id is this bot QQ (Session endpoint). user_id is the sender to like. times is 1-20.',
+  'Do not tell the user the tool is missing until you have called it this turn (or load_tool("icqq__send_user_like") failed).',
+  'Ignore prior turns that said the like tool was unavailable. Other social tools: icqq__poke, icqq__friend_list.',
 ].join('\n');
 
 const WORKER_ICQQ = [
-  'Send private message: `mcp_icqq_icqq_invoke` action `send_private_msg` params `{ user_id, message }`, or bash `icqq friend send <uid> "<text>"`.',
-  'Friend like: action `friend_like` or `icqq_send_user_like`, or bash `icqq friend like <uid> -t <times>`.',
-  'Use `icqq_list_actions` only if action name is unclear.',
-  'Do NOT use mcp_filesystem_* or explore node_modules / package.json to "discover" icqq.',
+  'Friend like: load_tool("icqq__send_user_like") then call with { endpoint_id, user_id, times }. endpoint_id is this bot QQ (origin.endpoint).',
+  'Poke: icqq__poke. Friend list: icqq__friend_list.',
+  'Do NOT use mcp_icqq_*, mcp_filesystem_*, or bash `icqq friend like`.',
   'Do not stop at --help; execute the action the goal describes.',
 ].map(line => `- ${line}`).join('\n');
 

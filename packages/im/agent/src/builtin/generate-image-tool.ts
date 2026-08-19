@@ -11,7 +11,7 @@ export const GENERATE_IMAGE_PARAMETERS: ToolParametersSchema = {
     provider_alias: {
       type: 'string',
       description:
-        'Provider instance name from ai.providers; SDK must support generateImage: openai, google, openai-compatible (e.g. Zhipu), Cloudflare (accountId)',
+        'Provider instance name from ai.providers; SDK must support generateImage: openai, google, openai-compatible (e.g. Zhipu), Cloudflare (accountId), minimax (image-01)',
     },
     prompt: {
       type: 'string',
@@ -21,7 +21,7 @@ export const GENERATE_IMAGE_PARAMETERS: ToolParametersSchema = {
     model: {
       type: 'string',
       description:
-        'Optional; defaults: Zhipu cogview-3-flash, OpenAI gpt-image-2, Gemini gemini-2.5-flash-image, Cloudflare flux-1-schnell',
+        'Optional; defaults: Zhipu cogview-3-flash, OpenAI gpt-image-2, Gemini gemini-2.5-flash-image, Cloudflare flux-1-schnell, MiniMax image-01 (or image-01-live for stylized)',
     },
     size: {
       type: 'string',
@@ -63,7 +63,7 @@ function resolveWatermarkEnabled(
 export class GenerateImageBuiltinTool extends BuiltinBaseTool {
   readonly name = 'generate_image';
   readonly description =
-    'Text-to-image generation. SDKs: openai-compatible + Zhipu (cogview-3-flash), Cloudflare (flux, accountId), openai (gpt-image-2), google (gemini-2.5-flash-image). Unless user wants anime, use photorealistic/realistic photography in prompt.';
+    'Text-to-image generation. SDKs: openai-compatible + Zhipu (cogview-3-flash), Cloudflare (flux, accountId), openai (gpt-image-2), google (gemini-2.5-flash-image), minimax (image-01/image-01-live). Unless user wants anime, use photorealistic/realistic photography in prompt.';
   readonly parameters = GENERATE_IMAGE_PARAMETERS;
   readonly kind = 'media';
 

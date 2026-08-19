@@ -335,6 +335,32 @@ describe('ReactionTypingIndicator', () => {
     expect(indicator.isActive()).toBe(false);
   });
 
+  it('stop 不等待 removeReaction 完成', async () => {
+    const addReaction = vi.fn().mockResolvedValue('reaction-123');
+    let resolveRemove!: () => void;
+    const removeReaction = vi.fn().mockImplementation(
+      () => new Promise<void>((resolve) => { resolveRemove = resolve; }),
+    );
+
+    const indicator = new ReactionTypingIndicator(
+      {
+        platform: 'icqq',
+        endpointKey: '75318',
+        messageId: '123456',
+        sceneType: 'group',
+      },
+      { type: 'reaction', emoji: '⏳' },
+      addReaction,
+      removeReaction,
+    );
+
+    await indicator.start();
+    await expect(indicator.stop()).resolves.toBeUndefined();
+    expect(removeReaction).toHaveBeenCalledTimes(1);
+    expect(indicator.isActive()).toBe(false);
+    resolveRemove();
+  });
+
   it('并发 stop 只应 remove 一次', async () => {
     const addReaction = vi.fn().mockResolvedValue('reaction-123');
     const removeReaction = vi.fn().mockImplementation(

@@ -8,6 +8,7 @@ import { createImageModel, sdkSupportsImageGeneration, type SdkId } from '../sdk
 import type { ProviderInstanceConfig } from '../types/model.js';
 import type { ImageGenerateRequest, ImageGenerateResult } from '../../image-generation.js';
 import { generateCloudflareImage } from '../cloudflare-image.js';
+import { generateMiniMaxImage } from '../minimax-image.js';
 
 function parseSize(size: string | undefined): `${number}x${number}` | undefined {
   if (!size?.trim()) return undefined;
@@ -31,6 +32,10 @@ export async function generateImageViaAiSdk(
 ): Promise<ImageGenerateResult> {
   if (config.accountId && !config.baseUrl?.trim()) {
     return generateCloudflareImage(config, request, defaults);
+  }
+
+  if (sdk === 'minimax') {
+    return generateMiniMaxImage(config, request, defaults);
   }
 
   if (!sdkSupportsImageGeneration(sdk)) {

@@ -54,7 +54,7 @@ HMR 粒度缩小到单个命令文件。
 - **Unicode 名**：含至少一个非 ASCII 字符、无 ASCII 大写，如 `赞我.ts`（触发词即 `赞我`）
 - 动态参数文件仍限 ASCII：`[name].ts` / `[[name]].ts` 等
 
-`instanceKey`、中间件 / 工具等其它约定目录**不**放宽，仍为 ASCII kebab。
+`instanceKey`、中间件等其它约定目录仍为 ASCII kebab。`tools/` 允许 ASCII kebab 或 snake（如 `send_user_like.ts`）。
 
 动态参数段用 Next.js 风格文件名声明形态，且必须是路径的最后一段；**类型与默认值不写进文件名**，统一在 `defineCommand({ params })` 里声明——`params.<name>.type` 必填，`default` 可选：
 

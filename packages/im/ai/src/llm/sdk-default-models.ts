@@ -47,6 +47,11 @@ export const SDK_DEFAULT_MODELS: Readonly<Record<SdkId, readonly string[]>> = {
     'deepseek-chat',
     'deepseek-reasoner',
   ],
+  minimax: [
+    'minimax-m3',
+    'minimax-m2.7',
+    'minimax-m2.5',
+  ],
   /** Discovery via GET /v1/models or Ollama /api/tags */
   ollama: [],
   /** Discovery via GET /v1/models when gateway supports it */

@@ -1,10 +1,5 @@
-/**
- * 合并转发（聊天记录）解析：从 json/xml 提取 resid，经 IPC get_forward_msg 拉取正文。
- */
 import { segment, type MessageSegment, type QuotedMessagePayload } from 'zhin.js';
 
-import { Actions } from "./protocol.js";
-import type { IpcClient } from "./ipc-client.js";
 import {
   icqqElementsToSegments,
   type IcqqMessageElement,
@@ -215,7 +210,7 @@ export function extractForwardResidFromPayload(
   return undefined;
 }
 
-/** 在 get_msg / IPC 原始对象里深度搜索 resid */
+/** 在 get_msg 原始对象里深度搜索 resid */
 export function extractForwardResidDeep(
   root: unknown,
   maxDepth = 14,
@@ -367,22 +362,14 @@ export function formatForwardMsgResponse(data: unknown): string {
 }
 
 export async function fetchForwardMsgText(
-  ipc: IpcClient,
+  client: { getForwardMsg(resId: string, fileName?: string): Promise<unknown[]> },
   id: string,
 ): Promise<string> {
-  const attempts: Record<string, unknown>[] = [
-    { message_id: id },
-    { id },
-    { resid: id },
-    { res_id: id },
-    { msg_id: id },
-  ];
-  for (const params of attempts) {
-    const resp = await ipc.request(Actions.GET_FORWARD_MSG, params);
-    if (!resp.ok) continue;
-    const text = formatForwardMsgResponse(resp.data);
+  try {
+    const messages = await client.getForwardMsg(id);
+    const text = formatForwardMsgResponse(messages);
     if (text.trim()) return text.trim();
-  }
+  } catch { /* ignore */ }
   return "";
 }
 
@@ -404,18 +391,17 @@ function appendForwardBlock(
   };
 }
 
-/** 若 payload 含合并转发，拉取并追加到 content */
 export async function enrichQuotedPayloadWithForward(
-  ipc: IpcClient | null | undefined,
+  client: { getForwardMsg(resId: string, fileName?: string): Promise<unknown[]> } | null | undefined,
   payload: QuotedMessagePayload,
-  ipcRaw?: unknown,
+  rawData?: unknown,
 ): Promise<QuotedMessagePayload> {
-  if (!ipc || hasMergedForwardBlock(payload)) return payload;
+  if (!client || hasMergedForwardBlock(payload)) return payload;
 
   const resid =
     extractForwardResidFromPayload(payload) ??
-    (ipcRaw ? extractForwardResidFromGetMsg(ipcRaw) : undefined) ??
-    (ipcRaw ? extractForwardResidDeep(ipcRaw) : undefined);
+    (rawData ? extractForwardResidFromGetMsg(rawData) : undefined) ??
+    (rawData ? extractForwardResidDeep(rawData) : undefined);
 
   const fetchIds = [
     resid,
@@ -423,7 +409,7 @@ export async function enrichQuotedPayloadWithForward(
   ].filter((v, i, a): v is string => !!v && a.indexOf(v) === i);
 
   for (const fetchId of fetchIds) {
-    const forwardText = await fetchForwardMsgText(ipc, fetchId);
+    const forwardText = await fetchForwardMsgText(client, fetchId);
     if (!forwardText.trim()) continue;
     const block = `[Merged chat history — id ${fetchId}]\n${forwardText.trim()}`;
     return appendForwardBlock(payload, block);

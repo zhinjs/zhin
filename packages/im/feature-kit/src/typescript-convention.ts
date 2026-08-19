@@ -10,12 +10,15 @@ export interface TypeScriptConventionOptions {
   readonly directory: string;
   readonly tsx?: boolean;
   readonly recursive?: boolean;
+  /** Separator for nested local names. Defaults to `'/'`. Use `'.'` for event-style names. */
+  readonly separator?: string;
 }
 
 /** Discovers stable, nested local names without assigning Feature semantics. */
 export function typeScriptModules(
   options: TypeScriptConventionOptions,
 ): SourceConvention {
+  const separator = options.separator ?? '/';
   const convention: SourceConvention = {
     id: options.id,
     async *discover(context) {
@@ -26,6 +29,7 @@ export function typeScriptModules(
         [],
         Boolean(options.tsx),
         options.recursive !== false,
+        separator,
       );
     },
     async load(source, context) {
@@ -42,6 +46,7 @@ async function* discoverDirectory(
   ancestors: readonly string[],
   tsx: boolean,
   recursive: boolean,
+  separator = '/',
 ): AsyncIterable<DiscoveredSource> {
   const entries = [...await context.host.list(directory)]
     .sort((left, right) => left.name.localeCompare(right.name));
@@ -57,6 +62,7 @@ async function* discoverDirectory(
         [...ancestors, entry.name],
         tsx,
         recursive,
+        separator,
       );
       continue;
     }
@@ -72,7 +78,7 @@ async function* discoverDirectory(
     if (preferred !== entry.name) continue;
     discoveredNames.add(localName);
     yield Object.freeze({
-      localName: [...ancestors, localName].join('/'),
+      localName: [...ancestors, localName].join(separator),
       source: join(directory, entry.name),
       target: 'server' as const,
     });
@@ -83,9 +89,10 @@ function isSegment(value: string): boolean {
   return /^[a-z0-9][a-z0-9-]*$/u.test(value);
 }
 
+/** Filenames follow capability local names: ASCII kebab or snake (`voice_stt.ts`). */
 function isModule(value: string, tsx: boolean): boolean {
   const extension = tsx ? '(?:tsx?|[cm]?js)' : '(?:ts|[cm]?js)';
-  return new RegExp(`^[a-z0-9][a-z0-9-]*\\.${extension}$`, 'u').test(value);
+  return new RegExp(`^[a-z0-9][a-z0-9_-]*\\.${extension}$`, 'u').test(value);
 }
 
 function preferredSibling(

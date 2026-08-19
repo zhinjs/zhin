@@ -196,6 +196,8 @@ export interface CommandSession {
 export interface CommandPromptOptions {
   readonly timeout?: number;
   readonly timeoutText?: string;
+  /** Cancel the pending claim when the owning turn aborts. */
+  readonly signal?: AbortSignal;
 }
 
 export interface CommandPromptListOptions extends CommandPromptOptions {

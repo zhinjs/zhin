@@ -60,6 +60,11 @@
       "types": "./lib/feature/middleware.d.ts",
       "development": "./src/feature/middleware.ts",
       "import": "./lib/feature/middleware.js"
+    },
+    "./feature/handler": {
+      "types": "./lib/feature/handler.d.ts",
+      "development": "./src/feature/handler.ts",
+      "import": "./lib/feature/handler.js"
     }
   },
   "files": [
@@ -74,6 +79,7 @@
     "@zhin.js/command": "workspace:*",
     "@zhin.js/component": "workspace:*",
     "@zhin.js/database": "workspace:*",
+    "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/kernel": "workspace:*",
     "@zhin.js/logger": "workspace:*",
@@ -140,6 +146,10 @@
       },
       {
         "package": "@zhin.js/middleware",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/feature-kit",
         "api": "^1.0.0"
       }
     ],

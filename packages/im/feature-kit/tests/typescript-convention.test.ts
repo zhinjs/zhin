@@ -15,6 +15,19 @@ describe('typeScriptModules runtime extensions', () => {
     expect(sources).toEqual(['/workspace/plugin/tools/status.ts']);
   });
 
+  it('discovers snake_case filenames matching capability local names', async () => {
+    const sources = await discover('/workspace/plugin', [
+      { name: 'send_user_like.ts', kind: 'file' },
+      { name: 'friend-list.ts', kind: 'file' },
+      { name: 'IgnoreMe.ts', kind: 'file' },
+    ]);
+
+    expect(sources).toEqual([
+      '/workspace/plugin/tools/friend-list.ts',
+      '/workspace/plugin/tools/send_user_like.ts',
+    ]);
+  });
+
   it('prefers JavaScript under node_modules and accepts mjs/cjs', async () => {
     const root = '/workspace/node_modules/@test/plugin';
     const sources = await discover(root, [

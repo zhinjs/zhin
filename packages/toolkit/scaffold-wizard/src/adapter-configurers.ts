@@ -869,6 +869,142 @@ export async function configureSatoriBot(ctx: EndpointConfigureContext): Promise
 }
 
 /**
+ * ICQQ（QQ 非官方协议）配置向导 —— 直连 @icqqjs/icqq，引导用户配置
+ * 登录凭据、设备平台、签名服务等参数。
+ */
+export async function configureIcqqBot(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
+  console.log(chalk.gray('     文档: ' + adapterDocsUrl('icqq')));
+  console.log(chalk.gray('     直连 @icqqjs/icqq 协议库，启动时自动登录'));
+
+  const basic = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'id',
+      message: '  QQ 号（uin）:',
+      validate: (v: string) => /^\d+$/.test(v.trim()) ? true : 'QQ 号必须为纯数字',
+    },
+    {
+      type: 'input',
+      name: 'master',
+      message: '  主人 QQ 号（master，/approve 等管理命令）:',
+      validate: (v: string) => /^\d+$/.test(v.trim()) ? true : '主人 QQ 号必须为纯数字',
+    },
+  ]);
+
+  const { loginMethod } = await inquirer.prompt([
+    {
+      type: 'select',
+      name: 'loginMethod',
+      message: '  登录方式:',
+      choices: [
+        { name: '扫码登录（无需密码，推荐）', value: 'qrcode' },
+        { name: '密码登录', value: 'password' },
+      ],
+      default: 'qrcode',
+    },
+  ]);
+
+  let password: string | undefined;
+  if (loginMethod === 'password') {
+    const { pwd } = await inquirer.prompt([
+      {
+        type: 'password',
+        name: 'pwd',
+        message: '  QQ 密码:',
+        validate: (v: string) => (v.trim() ? true : '密码不能为空'),
+      },
+    ]);
+    ctx.envVars[`ICQQ_PASSWORD_${basic.id.trim()}`] = pwd;
+    password = `\${ICQQ_PASSWORD_${basic.id.trim()}}`;
+  }
+
+  const { platform } = await inquirer.prompt([
+    {
+      type: 'select',
+      name: 'platform',
+      message: '  登录设备平台:',
+      choices: [
+        { name: 'Android 手机（默认）', value: 1 },
+        { name: 'Android 平板 (aPad)', value: 2 },
+        { name: 'Android 手表 (Watch)', value: 3 },
+        { name: 'MacOS (iMac)', value: 4 },
+        { name: 'iPad', value: 5 },
+        { name: 'Tim', value: 6 },
+      ],
+      default: 2,
+    },
+  ]);
+
+  const { signApiAddr } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'signApiAddr',
+      message: '  签名服务器地址（留空则尝试用本地 @icqqjs/qqsign）:',
+      default: '',
+    },
+  ]);
+
+  const { wantAdvanced } = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'wantAdvanced',
+      message: '  配置高级选项（数据目录、QQNT、协议版本等）？',
+      default: false,
+    },
+  ]);
+
+  const advanced: Record<string, unknown> = {};
+  if (wantAdvanced) {
+    const opts = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'ver',
+        message: '  协议版本号（留空使用9.1.70）:',
+        default: '9.1.70',
+      },
+      {
+        type: 'input',
+        name: 'dataDir',
+        message: '  数据存储目录（留空使用默认）:',
+        default: `data/icqq/${basic.id.trim()}`,
+      },
+      {
+        type: 'confirm',
+        name: 'qqnt',
+        message: '  使用 QQNT 协议？',
+        default: true,
+      },
+      {
+        type: 'confirm',
+        name: 'cacheGroupMember',
+        message: '  缓存群员列表？（群多时占内存较大）',
+        default: true,
+      },
+    ]);
+    if (opts.ver?.trim()) advanced.ver = opts.ver.trim();
+    if (opts.dataDir?.trim()) advanced.dataDir = opts.dataDir.trim();
+    if (!opts.qqnt) advanced.qqnt = false;
+    if (!opts.cacheGroupMember) advanced.cacheGroupMember = false;
+  }
+
+  ctx.envVars.ICQQ_ACCOUNT = basic.id.trim();
+
+  const endpointConfig: Record<string, unknown> = {
+    id: basic.id.trim(),
+    ...(password ? { password } : {}),
+    ...advanced,
+  };
+
+  const sharedConfig: Record<string, unknown> = {
+    master: basic.master.trim(),
+    ...(platform !== 1 ? { platform } : {}),
+    ...(signApiAddr?.trim() ? { signApiAddr: signApiAddr.trim() } : {}),
+  };
+
+  return { ...sharedConfig, endpoints: [endpointConfig] };
+}
+
+/**
  * 微信 iLink（个人微信 / ClawBot）配置：默认走扫码绑定 —— 终端展示二维码，
  * 微信扫码确认后 bot_token 写入 .env（`WEIXIN_ILINK_TOKEN`），
  * zhin.config.yml 只留 `${WEIXIN_ILINK_TOKEN}` 引用；扫码失败可降级手动输入 token。
