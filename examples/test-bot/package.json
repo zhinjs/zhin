@@ -24,7 +24,6 @@
     "@ai-sdk/google": "^4.0.29",
     "@ai-sdk/openai": "4.0.8",
     "@ai-sdk/openai-compatible": "^3.0.18",
-    "@icqqjs/qqsign": "^0.1.1",
     "@puniyu/system-info": "1.5.7",
     "@zhin.js/adapter-dingtalk": "workspace:*",
     "@zhin.js/adapter-discord": "workspace:*",

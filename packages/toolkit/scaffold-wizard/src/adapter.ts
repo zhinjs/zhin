@@ -83,6 +83,10 @@ export const ADAPTERS: AdapterDefinition[] = [
     value: 'icqq',
     package: '@zhin.js/adapter-icqq',
     plugin: '@zhin.js/adapter-icqq',
+    extraDeps: {
+      '@icqqjs/icqq': 'latest',
+      '@icqqjs/qqsign': 'latest',
+    },
     needsHttp: false,
     description: '非官方 QQ 协议，直连 @icqqjs/icqq',
     setupHint: '直连 @icqqjs/icqq 协议库，支持扫码或密码登录；建议配置签名服务以提高稳定性。',

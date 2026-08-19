@@ -6,6 +6,7 @@ import {
   collectAdapterPluginManifest,
   getAdapterDependencies,
   getAdapterSetupNotes,
+  ADAPTERS,
   type AdapterDefinition,
   type AdapterSetupResult,
 } from '../src/adapter.js';
@@ -225,6 +226,14 @@ describe('collectAdapterPluginManifest', () => {
 });
 
 describe('getAdapterDependencies', () => {
+  it('declares icqq protocol deps as application-level extraDeps', () => {
+    const icqq = ADAPTERS.find(a => a.value === 'icqq');
+    expect(icqq?.extraDeps).toEqual({
+      '@icqqjs/icqq': 'latest',
+      '@icqqjs/qqsign': 'latest',
+    });
+  });
+
   it('uses latest for @zhin.js adapters in user projects', () => {
     const deps = getAdapterDependencies({
       packages: ['@zhin.js/adapter-sandbox', '@zhin.js/adapter-telegram', '@icqqjs/icqq@latest'],

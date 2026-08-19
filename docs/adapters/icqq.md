@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=3b9e85d632f4583b -->
+<!-- sync-adapter-docs:sha256=131f9d4a0c65fcaf -->
 
 # @zhin.js/adapter-icqq
 
@@ -25,9 +25,15 @@ ICQQ Plugin Runtime 适配器 — 进程内直接使用 [@icqqjs/icqq](https://g
 
 ## 安装
 
+适配器本身不捆绑协议库，需在**应用项目**中同时安装 `@icqqjs/icqq`（及可选的本地签名 `@icqqjs/qqsign`）：
+
 ```bash
-pnpm add @zhin.js/adapter-icqq
+pnpm add @zhin.js/adapter-icqq @icqqjs/icqq
+# 可选：未配置 signApiAddr 时走本地签名
+pnpm add @icqqjs/qqsign
 ```
+
+`@icqqjs/icqq` 为 `@zhin.js/adapter-icqq` 的**可选对等依赖**——仅在使用 ICQQ 适配器时由应用侧安装。仓库 CI 不安装该包；适配器源码通过 `src/icqqjs-icqq.d.ts` 做类型检查。
 
 签名：未配置 `signApiAddr` 时，若已安装 `@icqqjs/qqsign` 则自动走本地签名。
 
