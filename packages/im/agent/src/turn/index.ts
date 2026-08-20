@@ -49,6 +49,10 @@ export {
 } from './prompt-controller.js';
 export type { PromptTurnHooks, PromptTurnRequest } from './prompt-controller.js';
 
+export { TriggerCancelledError, TriggerTimeoutError } from './trigger-cancelled-error.js';
+
+export { isCancelIntent } from './cancel-intent.js';
+
 export { SessionMessageQueue } from './session-message-queue.js';
 
 export {

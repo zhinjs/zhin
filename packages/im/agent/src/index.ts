@@ -35,7 +35,7 @@ export type {
 } from './config/agent-interfaces.js';
 export type {
   TurnEvent, TurnUsage,
-  TurnStartEvent, ChunkEvent, CapabilityResolutionEvent,
+  TurnStartEvent, ChunkEvent, CapabilityResolutionEvent, IterationStartEvent,
   ToolCallEvent as TurnToolCallEvent,
   ToolResultEvent,
   ThinkingEvent, TurnEndEvent, TurnErrorEvent,

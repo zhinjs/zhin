@@ -112,6 +112,10 @@ export interface ZhinAgentConfig {
   contextPaths?: string[];
   /** 系统提示词总字符上限，超出按牺牲顺序截断可截断段（skills → globalContext → bootstrap） */
   systemPromptMaxChars?: number;
+  /** Activity feedback 展示 LLM 实际 thinking 内容（截断），而非静态 "思考中..."。 */
+  thinkingPreview?: boolean;
+  /** thinkingPreview 展示的最大字符数。 */
+  thinkingPreviewMaxLength?: number;
   /** 无人值守 schedule execution domain。 */
   schedule?: ScheduleDomainConfig;
 }

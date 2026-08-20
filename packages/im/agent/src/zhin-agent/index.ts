@@ -74,6 +74,7 @@ import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 import { continueAfterSubagent } from '../turn/auto-continue.js';
 import { createSubagentSystem } from '../subagent/subagent-system-init.js';
 import { processTextTurnStream } from '../turn/process-stream.js';
+import { isCancelIntent } from '../turn/cancel-intent.js';
 import { followUpMessage, runPromptTurn, steerMessage } from '../turn/prompt-api.js';
 import {
   getAgentTurnConfiguration,
@@ -512,6 +513,13 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
    * concurrent IM messages from overwriting activeBinding/bootstrapContext.
    */
   async processTurn(request: AgentTurnRequest): Promise<OutputElement[]> {
+    if (isCancelIntent(request.content ?? '')) {
+      const sessionKey = resolveIMSessionIdFromMessage(request.message);
+      if (this.promptController.cancelSession(sessionKey)) {
+        return [{ type: 'text', content: '已取消' }];
+      }
+      return [{ type: 'text', content: '当前没有正在执行的任务' }];
+    }
     const executeTurn = (content: string) => processTextTurn(
       asPrivate(this),
       content,

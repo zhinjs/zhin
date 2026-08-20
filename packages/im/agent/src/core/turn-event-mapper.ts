@@ -8,10 +8,12 @@ export interface TurnEventMapperState {
   accumulatedText: string;
   accumulatedThinking: string;
   toolStartTimes: Map<string, number>;
+  iteration: number;
+  maxIterations: number;
 }
 
-export function createTurnEventMapperState(): TurnEventMapperState {
-  return { accumulatedText: '', accumulatedThinking: '', toolStartTimes: new Map() };
+export function createTurnEventMapperState(maxIterations = 15): TurnEventMapperState {
+  return { accumulatedText: '', accumulatedThinking: '', toolStartTimes: new Map(), iteration: 0, maxIterations };
 }
 
 export function* mapAgentEventToTurnEvents(
@@ -19,6 +21,16 @@ export function* mapAgentEventToTurnEvents(
   state: TurnEventMapperState,
 ): Generator<TurnEvent> {
   switch (event.type) {
+    case 'turn_start':
+      state.iteration += 1;
+      state.accumulatedText = '';
+      state.accumulatedThinking = '';
+      yield {
+        type: 'iteration_start',
+        iteration: state.iteration,
+        maxIterations: state.maxIterations,
+      };
+      break;
     case 'message_end':
       if (event.message.role === 'assistant') {
         const usage = (event.message as AssistantMessage).usage;

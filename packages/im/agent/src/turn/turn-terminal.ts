@@ -25,6 +25,9 @@ export function turnCancelledEvent(error: unknown): TurnCancelledEvent {
   if (name === 'TurnSupersededError') {
     return { type: 'turn_cancelled', code: 'superseded', reason };
   }
+  if (name === 'TriggerCancelledError') {
+    return { type: 'turn_cancelled', code: 'cancelled', reason };
+  }
   if (name === 'TriggerTimeoutError' || name === 'InboundTurnExpiredError') {
     return { type: 'turn_cancelled', code: 'timeout', reason };
   }
@@ -41,5 +44,6 @@ export function isTurnCancellation(error: unknown): boolean {
     || error.name === 'InboundTurnCancelledError'
     || error.name === 'InboundTurnExpiredError'
     || error.name === 'TriggerTimeoutError'
+    || error.name === 'TriggerCancelledError'
     || error.name === 'AbortError';
 }

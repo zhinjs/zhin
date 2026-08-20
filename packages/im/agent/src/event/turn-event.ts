@@ -15,6 +15,7 @@ export type TurnEvent =
   | TurnStartEvent
   | ChunkEvent
   | CapabilityResolutionEvent
+  | IterationStartEvent
   | ToolCallEvent
   | ToolResultEvent
   | ToolDeniedEvent
@@ -42,6 +43,12 @@ export interface ChunkEvent {
   type: 'chunk';
   text: string;
   accumulated: string;
+}
+
+export interface IterationStartEvent {
+  type: 'iteration_start';
+  iteration: number;
+  maxIterations: number;
 }
 
 /** Immutable capability plan selected before model execution. */

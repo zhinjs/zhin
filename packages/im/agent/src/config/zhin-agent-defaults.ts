@@ -68,6 +68,8 @@ export const DEFAULT_CONFIG = {
   gitStatus: true,
   contextPaths: [],
   systemPromptMaxChars: 100_000,
+  thinkingPreview: false,
+  thinkingPreviewMaxLength: 200,
   schedule: {
     budget: {
       maxTokens: 32_000,

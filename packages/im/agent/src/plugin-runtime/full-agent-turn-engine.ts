@@ -160,10 +160,30 @@ async function* runInteractiveTurn(
   });
 
   let thinkingSent = false;
+  let accumulatedThinking = '';
+  const thinkingPreview = host.config.thinkingPreview === true;
+  const thinkingMaxLen = host.config.thinkingPreviewMaxLength ?? 200;
   const completion = yield* bufferTerminal(stream, (event) => {
-    if (event.type !== 'thinking' || !event.text || !payload || thinkingSent) return;
-    thinkingSent = true;
-    emitActivityEvent(host, 'ai.thinking', { ...payload, thinking: event.text });
+    if (!payload) return;
+    if (event.type === 'iteration_start' && event.iteration > 1) {
+      emitActivityEvent(host, 'ai.processing.start', {
+        ...payload,
+        iterations: event.iteration,
+        content: `处理中 [${event.iteration}/${event.maxIterations}]...`,
+      });
+      return;
+    }
+    if (event.type !== 'thinking' || !event.text) return;
+    accumulatedThinking += event.text;
+    if (thinkingPreview) {
+      const preview = accumulatedThinking.length > thinkingMaxLen
+        ? accumulatedThinking.slice(0, thinkingMaxLen) + '...'
+        : accumulatedThinking;
+      emitActivityEvent(host, 'ai.thinking', { ...payload, thinking: preview });
+    } else if (!thinkingSent) {
+      thinkingSent = true;
+      emitActivityEvent(host, 'ai.thinking', { ...payload, thinking: event.text });
+    }
   });
   yield completion.terminal;
   return {

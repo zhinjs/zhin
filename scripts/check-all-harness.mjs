@@ -2,27 +2,62 @@
 /**
  * 综合 harness 检查脚本
  * 运行所有 harness 检查并生成报告
+ *
+ * 并行执行独立检查，按 CPU 核心数限制并发。
+ * 设 HARNESS_SEQUENTIAL=1 回退到串行模式（调试用）。
  */
-import { execSync } from 'node:child_process';
+import { exec } from 'node:child_process';
+import { availableParallelism } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 
-/** CI 若另跑 coverage，可设 HARNESS_SKIP_TEST=1 跳过本脚本内的 pnpm test，避免双跑 */
 const skipUnitTests = process.env.HARNESS_SKIP_TEST === '1';
+const sequential = process.env.HARNESS_SEQUENTIAL === '1';
+const concurrency = sequential ? 1 : Math.min(availableParallelism(), 4);
+
+const HEAVY_CHECKS = new Set([
+  'Unit Tests', 'Install Size (IM core)', 'Lint', 'Type Check',
+  'Plugin Runtime Migration Verify', 'L4-CI (deterministic subset)', 'Stable Smoke',
+]);
 
 const checks = [
+  {
+    name: 'Unit Tests',
+    command: 'pnpm test',
+    description: '全量 Vitest（pnpm test）',
+  },
+  {
+    name: 'Install Size (IM core)',
+    command: 'pnpm check:install-size',
+    description: 'zhin.js production node_modules ≤10MB（ADR 0019）',
+  },
+  {
+    name: 'Lint',
+    command: 'pnpm lint:ci',
+    description: 'ESLint（.ts/.tsx）',
+  },
   {
     name: 'Type Check',
     command: 'pnpm type-check',
     description: 'tsc --noEmit（tsconfig.typecheck.json）',
   },
   {
-    name: 'Lint',
-    command: 'pnpm lint:ci',
-    description: 'ESLint（.ts/.tsx）',
+    name: 'Plugin Runtime Migration Verify',
+    command: 'pnpm check:plugin-runtime-migration-verify',
+    description: '离线 E2E：cutover 后构建，公开包 tarball 含 JS entry 与 manifest 契约',
+  },
+  {
+    name: 'L4-CI (deterministic subset)',
+    command: 'pnpm check:l4-ci',
+    description: 'PR 门禁 L4 子集；全量 check:l4 见 nightly-smoke',
+  },
+  {
+    name: 'Stable Smoke',
+    command: 'pnpm check:stable',
+    description: 'Stable 路径 smoke（Sandbox + Agent 核心单测 + minimal-bot 契约）',
   },
   {
     name: 'IM Send Path',
@@ -135,16 +170,6 @@ const checks = [
     description: '配置文档与 DEFAULT_CONFIG 关键字段对齐',
   },
   {
-    name: 'Stable Smoke',
-    command: 'pnpm check:stable',
-    description: 'Stable 路径 smoke（Sandbox + Agent 核心单测 + minimal-bot 契约）',
-  },
-  {
-    name: 'L4-CI (deterministic subset)',
-    command: 'pnpm check:l4-ci',
-    description: 'PR 门禁 L4 子集；全量 check:l4 见 nightly-smoke',
-  },
-  {
     name: 'usePlugin Top-Level',
     command: 'pnpm check:use-plugin-top-level',
     description: '插件 usePlugin() 须在模块顶层',
@@ -158,16 +183,6 @@ const checks = [
     name: 'Plugin Runtime Migration Readiness',
     command: 'pnpm check:plugin-runtime-migration-readiness',
     description: '已迁移插件必须保持 native manifest，且函数体不得调用 legacy usePlugin/getPlugin',
-  },
-  {
-    name: 'Plugin Runtime Migration Verify',
-    command: 'pnpm check:plugin-runtime-migration-verify',
-    description: '离线 E2E：cutover 后构建，公开包 tarball 含 JS entry 与 manifest 契约',
-  },
-  {
-    name: 'Install Size (IM core)',
-    command: 'pnpm check:install-size',
-    description: 'zhin.js production node_modules ≤10MB（ADR 0019）',
   },
   {
     name: 'Rich Segment Adapters',
@@ -204,69 +219,90 @@ const checks = [
     command: 'pnpm check:a2a-mesh',
     description: '禁止残留 MCP Agent Mesh v1 符号',
   },
-  {
-    name: 'Unit Tests',
-    command: 'pnpm test',
-    description: '全量 Vitest（pnpm test）',
-  },
 ].filter((c) => !(skipUnitTests && c.name === 'Unit Tests'));
 
-if (skipUnitTests) {
-  console.log('HARNESS_SKIP_TEST=1 — skipping Unit Tests (expect a separate coverage/test job)\n');
-}
-
-console.log('Running all harness checks...\n');
-
-const results = [];
-let allPassed = true;
-
-for (const check of checks) {
-  console.log(`Running: ${check.name}`);
-  console.log(`  ${check.description}`);
-
-  try {
-    execSync(check.command, {
+function runCheck(check) {
+  const start = performance.now();
+  return new Promise((resolve) => {
+    exec(check.command, {
       cwd: repoRoot,
-      stdio: 'pipe',
       maxBuffer: 32 * 1024 * 1024,
+    }, (error, _stdout, stderr) => {
+      const elapsed = ((performance.now() - start) / 1000).toFixed(1);
+      if (error) {
+        console.log(`  ✗ ${check.name} FAILED (${elapsed}s)`);
+        resolve({ name: check.name, status: 'FAILED', elapsed, error: stderr || error.message });
+      } else {
+        console.log(`  ✓ ${check.name} (${elapsed}s)`);
+        resolve({ name: check.name, status: 'PASSED', elapsed });
+      }
     });
-    results.push({ name: check.name, status: 'PASSED' });
-    console.log('  ✓ PASSED\n');
-  } catch (error) {
-    results.push({
-      name: check.name,
-      status: 'FAILED',
-      error: error.stderr?.toString() || error.message,
-    });
-    console.log('  ✗ FAILED\n');
-    allPassed = false;
-  }
+  });
 }
 
-console.log('='.repeat(60));
-console.log('Harness Check Summary');
-console.log('='.repeat(60));
-
-for (const result of results) {
-  const status = result.status === 'PASSED' ? '✓' : '✗';
-  console.log(`${status} ${result.name}: ${result.status}`);
-}
-
-console.log('='.repeat(60));
-
-if (!allPassed) {
-  console.error('\nSome harness checks failed. See above for details.\n');
-
-  // Print detailed errors for failed checks
-  console.error('Detailed errors:');
-  for (const result of results) {
-    if (result.status === 'FAILED') {
-      console.error(`\n${result.name}:`);
-      console.error(result.error);
+async function runPool(items, limit) {
+  const results = [];
+  let idx = 0;
+  async function worker() {
+    while (idx < items.length) {
+      const check = items[idx++];
+      results.push(await runCheck(check));
     }
   }
-
-  process.exit(1);
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
 }
 
-console.log('\nAll harness checks passed! ✓\n');
+async function main() {
+  if (skipUnitTests) {
+    console.log('HARNESS_SKIP_TEST=1 — skipping Unit Tests (expect a separate coverage/test job)\n');
+  }
+
+  const heavy = checks.filter((c) => HEAVY_CHECKS.has(c.name));
+  const light = checks.filter((c) => !HEAVY_CHECKS.has(c.name));
+
+  const mode = sequential ? 'sequential' : `parallel (concurrency=${concurrency})`;
+  console.log(`Running ${checks.length} harness checks [${mode}]...`);
+  console.log(`  Phase 1: ${light.length} lightweight checks`);
+  console.log(`  Phase 2: ${heavy.length} heavyweight checks\n`);
+
+  const totalStart = performance.now();
+
+  console.log('── Phase 1: lightweight ──');
+  const lightResults = await runPool(light, concurrency);
+
+  console.log('\n── Phase 2: heavyweight ──');
+  const heavyResults = await runPool(heavy, Math.min(concurrency, 2));
+
+  const results = [...lightResults, ...heavyResults];
+  const totalElapsed = ((performance.now() - totalStart) / 1000).toFixed(1);
+  const cpuTotal = results.reduce((s, r) => s + parseFloat(r.elapsed), 0).toFixed(1);
+  const allPassed = results.every((r) => r.status === 'PASSED');
+
+  console.log('\n' + '='.repeat(60));
+  console.log(`Harness Check Summary (${totalElapsed}s wall, ${cpuTotal}s CPU)`);
+  console.log('='.repeat(60));
+
+  for (const result of results) {
+    const status = result.status === 'PASSED' ? '✓' : '✗';
+    console.log(`${status} ${result.name}: ${result.status} (${result.elapsed}s)`);
+  }
+
+  console.log('='.repeat(60));
+
+  if (!allPassed) {
+    console.error('\nSome harness checks failed. See above for details.\n');
+    console.error('Detailed errors:');
+    for (const result of results) {
+      if (result.status === 'FAILED') {
+        console.error(`\n${result.name}:`);
+        console.error(result.error);
+      }
+    }
+    process.exit(1);
+  }
+
+  console.log('\nAll harness checks passed! ✓\n');
+}
+
+main();

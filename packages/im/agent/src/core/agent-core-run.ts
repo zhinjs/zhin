@@ -643,7 +643,7 @@ export async function* runAgentLoopTextTurnRun(
     toolExecution: host.config.toolExecution ?? 'tiered',
   };
 
-  const mapperState = createTurnEventMapperState();
+  const mapperState = createTurnEventMapperState(maxIterations);
 
   const emitTurnEvent = (event: TurnEvent) => {
     input.onTurnEvent?.(event);

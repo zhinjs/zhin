@@ -4,6 +4,7 @@ import type { OnChunkCallback } from '../config/index.js';
 import type { AgentLoopTurnResult } from '../core/agent-loop-turn.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import { SessionMessageQueue } from './session-message-queue.js';
+import { TriggerCancelledError } from './trigger-cancelled-error.js';
 
 export interface PromptTurnHooks {
   getSteeringMessages: () => Promise<AgentMessage[]>;
@@ -118,6 +119,14 @@ export class PromptController {
       if (sessionKey && turn.sessionKey !== sessionKey) continue;
       turn.abortController.abort(new TurnCancelledError(turn.sessionKey));
     }
+  }
+
+  /** Cancel the active turn for a session (user-initiated). Returns true if a turn was cancelled. */
+  cancelSession(sessionKey: string): boolean {
+    const turn = this.resolveLatestTurn(sessionKey);
+    if (!turn) return false;
+    turn.abortController.abort(new TriggerCancelledError(sessionKey));
+    return true;
   }
 
   clearSteeringQueue(sessionKey?: string): void {
