@@ -16,6 +16,8 @@ flowchart LR
 
 **作者 import**：依赖 `zhin.js` 的应用可从门面子路径导入 `define*`——`zhin.js/command`、`zhin.js/middleware`、`zhin.js/handler`、`zhin.js/adapter`、`zhin.js/component`（以及主入口 `zhin.js` 的 `definePlugin`）。下表「Feature 包」是 `platformFeatures` 挂载的实现包名；Root 依赖 `zhin.js` / `@zhin.js/core` 时已自动继承。
 
+**`zhin.features` 与依赖声明**（`@zhin.js/runtime` ≥1.0.12）：manifest 里引用的 Feature 包名必须出现在该插件的 `dependencies` / `peerDependencies` / `optionalDependencies` 之一，否则启动抛 `PackageResolutionError`。子插件对 Stable Feature（command / middleware / component / handler）应声明为 **optional `peerDependencies`**，由 Root 经 `zhin.js` 提供——**不要**再 `pnpm add` 进 `dependencies`（避免重复安装实现包）。适配器的 `@zhin.js/adapter`、实验性 `@zhin.js/tool` 等仍按需装进 `dependencies` 或非 optional peer。
+
 ## 目录一览
 
 | 目录 | 文件形态 | 递归 | target | Feature 包 | featureId | 默认导出 |

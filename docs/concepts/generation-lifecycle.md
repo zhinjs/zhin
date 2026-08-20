@@ -4,7 +4,7 @@
 
 ## 快照：一代的世界状态
 
-每一代是一份不可变的 `RuntimeSnapshot`（实现包 `@zhin.js/plugin-runtime`；作者也可从 `zhin.js` 取类型）：
+每一代是一份不可变的 `RuntimeSnapshot`（从 `zhin.js` 导入类型）：
 
 ```ts
 interface RuntimeSnapshot {

@@ -100,7 +100,7 @@ export default definePlugin({
 
 ## Host token
 
-Host tokens are capability handles provided by the Host to plugins, resolved in `setup` via `context.resources`. The CLI Host automatically assembles them at startup; tokens not assembled are checked with `has()` for graceful degradation. The first six are exported from `zhin.js` (implementation package `@zhin.js/plugin-runtime`), and `httpHostToken` is exported from `@zhin.js/host-http`.
+Host tokens are capability handles provided by the Host to plugins, resolved in `setup` via `context.resources`. The CLI Host automatically assembles them at startup; tokens not assembled are checked with `has()` for graceful degradation. The first six are exported from `zhin.js`, and `httpHostToken` is exported from `@zhin.js/host-http`.
 
 | token | token id | Availability condition | Key methods |
 | --- | --- | --- | --- |

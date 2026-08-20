@@ -34,7 +34,7 @@ Three tiers:
 
 | Convention | Stability | Consumer | One-liner |
 |------------|-----------|----------|-----------|
-| `plugin.ts` | `stable` | `zhin.js` (impl `@zhin.js/plugin-runtime`) | Plugin root entry, default exports `definePlugin(...)` |
+| `plugin.ts` | `stable` | `zhin.js` | Plugin root entry, default exports `definePlugin(...)` |
 | `commands/` | `stable` | `@zhin.js/command` (author import: `zhin.js/command`) | Command module directory, supports `[name]` / `[[name]]` / `[...name]` dynamic parameter segments |
 | `adapters/` | `stable` | `@zhin.js/adapter` (author import: `zhin.js/adapter`) | Adapter module directory |
 | `middlewares/` | `stable` | `@zhin.js/middleware` (author import: `zhin.js/middleware`) | Middleware module directory |

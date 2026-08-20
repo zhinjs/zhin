@@ -185,6 +185,11 @@ const checks = [
     description: '已迁移插件必须保持 native manifest，且函数体不得调用 legacy usePlugin/getPlugin',
   },
   {
+    name: 'Feature Peer Deps',
+    command: 'pnpm check:feature-peers',
+    description: 'zhin.features 引用的包须出现在 peerDependencies（runtime 1.0.12+）',
+  },
+  {
     name: 'Rich Segment Adapters',
     command: 'pnpm check:rich-segments',
     description: '各 adapter 在 adapters/*.ts 声明 segments.outboundMedia（或豁免）',

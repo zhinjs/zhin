@@ -4,7 +4,7 @@ After modifying a command file, you don't need to restart the process, and in-fl
 
 ## Snapshot: The World State of a Generation
 
-Each generation is an immutable `RuntimeSnapshot` (implementation package `@zhin.js/plugin-runtime`; authors may also import types from `zhin.js`):
+Each generation is an immutable `RuntimeSnapshot` (import types from `zhin.js`):
 
 ```ts
 interface RuntimeSnapshot {

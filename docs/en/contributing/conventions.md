@@ -23,7 +23,7 @@ import { DisposeStack } from './dispose';           // Wrong
 
 The only startup path is `zhin runtime start`. For new plugins:
 
-- `plugin.ts` default-exports `definePlugin()` (author: `zhin.js`; implementation package `@zhin.js/plugin-runtime`)
+- `plugin.ts` default-exports `definePlugin()` (import from `zhin.js`)
 - Capabilities go in convention directories (`commands/` -> `defineCommand`, `tools/` -> `defineAgentTool`, ...), one default export per file
 - **Do not** use `usePlugin()` / `getPlugin()` / `MessageCommand` anymore
 

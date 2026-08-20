@@ -2,7 +2,7 @@
  * pi Context ↔ AI SDK ModelMessage bridge (ADR 0018).
  */
 
-import { type ModelMessage, type ToolSet, type UserModelMessage, tool } from 'ai';
+import { type AssistantContent, type ModelMessage, type ToolSet, type UserModelMessage, tool } from 'ai';
 import type { Context } from '../types/context.js';
 import { isLlmAgentMessage, type AgentMessage, type AssistantMessage, type ToolResultMessage, type UserMessage } from '../types/agent-message.js';
 import type { AnthropicThinkingProviderOptions, ThinkingContentBlock } from '../types/content-block.js';
@@ -149,7 +149,7 @@ function assistantToAiMessage(
   const content = [...textParts, ...reasoningParts, ...toolCalls];
   return {
     role: 'assistant',
-    content: content.length > 0 ? content : '',
+    content: (content.length > 0 ? content : '') as AssistantContent,
   };
 }
 

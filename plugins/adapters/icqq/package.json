@@ -53,18 +53,22 @@
     "@icqqjs/icqq": "^1.12.2",
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent": "workspace:*",
+    "@zhin.js/command": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "zhin.js": "workspace:*",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
-    "zhin.js": {
-      "optional": true
-    },
     "@icqqjs/icqq": {
       "optional": true
     },
     "@zhin.js/agent": {
+      "optional": true
+    },
+    "@zhin.js/command": {
+      "optional": true
+    },
+    "zhin.js": {
       "optional": true
     },
     "zod": {

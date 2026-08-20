@@ -234,6 +234,8 @@ ai:
     execPreset: readonly       # readonly | network | development | custom
     execAllowlist: ["^ls ", "^cat "]
     maxIterations: 15          # Maximum tool iterations per turn, default 15
+    thinkingPreview: false     # Show LLM actual thinking content (truncated) in activity feedback instead of static "Thinking...", default false
+    thinkingPreviewMaxLength: 200  # Max chars for thinkingPreview, default 200
   trigger:                 # AI trigger rules
     prefixes: ["ai:"]          # Trigger prefixes, default ['#', 'AI:']
     respondToAt: true          # Respond to @bot, default true

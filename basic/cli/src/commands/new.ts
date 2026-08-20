@@ -53,6 +53,7 @@ function tryZhinWorkspaceDevDependencies(): Record<string, string> | null {
     return {
       'zhin.js': 'workspace:*',
       '@zhin.js/cli': 'workspace:*',
+      '@zhin.js/command': 'workspace:*',
       '@zhin.js/adapter': 'workspace:*',
       '@zhin.js/core': 'workspace:*',
     };
@@ -181,6 +182,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
     ({
       'zhin.js': 'latest',
       '@zhin.js/cli': 'latest',
+      '@zhin.js/command': 'latest',
       '@zhin.js/adapter': 'latest',
       '@zhin.js/core': 'latest',
     } satisfies Record<string, string>);
@@ -199,7 +201,8 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
         ? (['zhin.js', 'service', pluginName] as string[])
         : (['zhin.js', 'plugin', pluginName] as string[]);
 
-  // 作者 import 走 zhin.js 门面；实现包经 peer + zhin.features 挂载，勿重复装 @zhin.js/command 等
+  // 作者 import 走 zhin.js 门面；zhin.features 引用须在 peer/deps 声明（runtime 解析门禁）。
+  // Stable Feature 用 optional peer，由 Root 的 zhin.js/@zhin.js/core 提供，勿装进 dependencies。
   const dependencies: Record<string, string> = {};
   if (kind === 'adapter') {
     dependencies['@zhin.js/adapter'] = zhinStack['@zhin.js/adapter'];
@@ -209,6 +212,18 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
   const peerDependencies: Record<string, string> = {
     'zhin.js': zhinStack['zhin.js'],
   };
+  const peerDependenciesMeta: Record<string, { optional: true }> = {};
+
+  const features: Array<{ package: string; api: string }> = [];
+  if (kind === 'normal') {
+    features.push({ package: '@zhin.js/command', api: '^1.0.0' });
+    peerDependencies['@zhin.js/command'] = zhinStack['@zhin.js/command'];
+    peerDependenciesMeta['@zhin.js/command'] = { optional: true };
+  }
+  if (kind === 'adapter') {
+    features.push({ package: '@zhin.js/adapter', api: '^1.0.0' });
+    peerDependencies['@zhin.js/adapter'] = zhinStack['@zhin.js/adapter'];
+  }
 
   const devDependencies: Record<string, string> = {
     '@types/node': 'latest',
@@ -233,10 +248,6 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
   if (kind === 'adapter') files.push('adapters');
   files.push('src', 'agent', 'README.md', 'CHANGELOG.md');
 
-  const features: Array<{ package: string; api: string }> = [];
-  if (kind === 'normal') features.push({ package: '@zhin.js/command', api: '^1.0.0' });
-  if (kind === 'adapter') features.push({ package: '@zhin.js/adapter', api: '^1.0.0' });
-
   const packageJson: Record<string, unknown> = {
     name: packageName,
     version: '0.1.0',
@@ -252,6 +263,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
     license: 'MIT',
     dependencies,
     peerDependencies,
+    ...(Object.keys(peerDependenciesMeta).length > 0 ? { peerDependenciesMeta } : {}),
     devDependencies,
     publishConfig: { access: 'public', registry: 'https://registry.npmjs.org' },
     engines: { node: '^20.19.0 || >=22.12.0' },

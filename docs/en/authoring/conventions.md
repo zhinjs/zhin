@@ -16,6 +16,8 @@ A few key points. The full capability id takes the form `owner\0feature\0localNa
 
 **Author imports (do not reinstall Features):** Apps that depend on `zhin.js` should import `define*` from facade subpaths -- `zhin.js/command`, `zhin.js/middleware`, `zhin.js/handler`, `zhin.js/adapter`, `zhin.js/component` (and `definePlugin` from `zhin.js`). The "Feature package" column below is the implementation package mounted by `platformFeatures`; Roots that depend on `zhin.js` / `@zhin.js/core` already inherit them -- **do not** `pnpm add @zhin.js/command` and friends.
 
+**`zhin.features` vs package dependencies** (`@zhin.js/runtime` ≥1.0.12): every Feature package named in the manifest must also appear in that plugin's `dependencies` / `peerDependencies` / `optionalDependencies`, or startup throws `PackageResolutionError`. Child plugins should list Stable Features (command / middleware / component / handler) as **optional `peerDependencies`** provided by the Root via `zhin.js` -- **do not** add them to `dependencies`. Keep `@zhin.js/adapter` and experimental `@zhin.js/tool` in `dependencies` (or non-optional peers) when the plugin mounts them.
+
 ## Directory Overview
 
 | Directory | File format | Recursive | target | Feature package | featureId | Default export |

@@ -142,11 +142,11 @@ function resolveThinkingParts(input: {
   reasoningParts: ReadonlyArray<{ text?: string; providerMetadata?: unknown }> | undefined;
 }): CapturedThinkingPart[] {
   const fromSdk = (input.reasoningParts ?? [])
-    .map((part) => {
+    .map((part): CapturedThinkingPart | undefined => {
       const text = typeof part.text === 'string' ? part.text : '';
       const providerOptions = anthropicOptionsFromProviderMetadata(part.providerMetadata);
       if (!text && !providerOptions?.anthropic?.redactedData) return undefined;
-      return { text, providerOptions } satisfies CapturedThinkingPart;
+      return { text, providerOptions };
     })
     .filter((part): part is CapturedThinkingPart => part !== undefined);
 

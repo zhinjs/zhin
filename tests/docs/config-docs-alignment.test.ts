@@ -57,6 +57,11 @@ describe('config documentation alignment', () => {
     expect(aiMd).not.toMatch(/maxMessagesBeforeSummary/);
   });
 
+  it('configuration.md 文档化 thinkingPreview 配置项', () => {
+    expect(configurationMd).toMatch(/thinkingPreview/);
+    expect(configurationMd).toMatch(/thinkingPreviewMaxLength/);
+  });
+
   it('minimal-bot 与 Stable 文档契约一致', () => {
     expect(minimalConfig).not.toMatch(/toolSearch:/);
     expect(minimalConfig).toMatch(/plugins:\s*\{\}/);

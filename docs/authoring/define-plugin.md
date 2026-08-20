@@ -102,7 +102,7 @@ export default definePlugin({
 
 ## Host token
 
-Host token 是 Host 提供给插件的能力句柄，`setup` 里通过 `context.resources` 解析。CLI Host 启动时自动装配，未装配的 token 用 `has()` 判空降级。前六个从 `zhin.js` 导出（实现包 `@zhin.js/plugin-runtime`），`httpHostToken` 从 `@zhin.js/host-http` 导出。
+Host token 是 Host 提供给插件的能力句柄，`setup` 里通过 `context.resources` 解析。CLI Host 启动时自动装配，未装配的 token 用 `has()` 判空降级。前六个从 `zhin.js` 导出，`httpHostToken` 从 `@zhin.js/host-http` 导出。
 
 | token | token id | 提供条件 | 关键方法 |
 | --- | --- | --- | --- |

@@ -61,10 +61,14 @@
   },
   "peerDependencies": {
     "@zhin.js/agent": "workspace:*",
+    "@zhin.js/command": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@zhin.js/agent": {
+      "optional": true
+    },
+    "@zhin.js/command": {
       "optional": true
     }
   },

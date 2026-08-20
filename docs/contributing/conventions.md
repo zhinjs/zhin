@@ -23,7 +23,7 @@ import { DisposeStack } from './dispose';           // ❌
 
 唯一启动路径是 `zhin runtime start`。新插件：
 
-- `plugin.ts` default-export `definePlugin()`（作者：`zhin.js`；实现包 `@zhin.js/plugin-runtime`）
+- `plugin.ts` default-export `definePlugin()`（从 `zhin.js` 导入）
 - 能力放在约定目录（`commands/` → `defineCommand`，`tools/` → `defineAgentTool`，…），一个文件一个 default export
 - **不要**调用已移除的 `usePlugin()` / `getPlugin()`，也不要导入已删除的 `zhin.js/node`
 

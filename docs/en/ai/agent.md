@@ -32,6 +32,38 @@ A few facts worth remembering. ZhinAgent, sub-agents, background workers, and `A
 
 The tool pool for a turn = plugin-registered tools + `ai.mcpServers` connected tools + built-in tools + deferred meta tools + `schedule_*` + `bash` + Host extension tools (e.g. `voice_stt` / `voice_tts`).
 
+### Thinking transparency and step visualization
+
+During turn execution, the Agent pushes real-time status to the IM side via Activity Feedback. The default behavior sends a static "Thinking..." placeholder, but you can enable **thinking transparency** to show the LLM's actual thinking content (truncated) as activity feedback:
+
+```yaml
+ai:
+  agent:
+    thinkingPreview: true          # Show LLM actual thinking content (truncated), default false
+    thinkingPreviewMaxLength: 200  # Max chars to show, default 200
+```
+
+When enabled, users see snippets of the model's reasoning process while waiting for the AI reply, instead of a static placeholder.
+
+When a turn requires multiple tool iterations (e.g. the model calls a tool then continues reasoning), each iteration emits an `iteration_start` event. Activity Feedback updates to show progress like `Processing [2/15]...`. Plugin developers can listen for the `iteration_start` event in the `TurnEvent` stream:
+
+| TurnEvent type | Description |
+|----------------|-------------|
+| `iteration_start` | A new iteration begins, with `iteration` (current round) and `maxIterations` |
+| `thinking` | LLM thinking text fragment (accumulated and pushed continuously when `thinkingPreview` is on) |
+
+### Cancelling a running turn
+
+Users can send any of the following messages in IM to **cancel a running Agent turn**:
+
+- `取消`
+- `/cancel`
+- `cancel`
+
+When ZhinAgent receives a cancel message, it aborts the current turn's LLM call and tool execution via `PromptController.cancelSession()`, and replies "已取消" (cancelled). If no turn is currently running, it replies "当前没有正在执行的任务" (no active task).
+
+The cancellation terminal event appears as `turn_cancelled` (`code: 'cancelled'`) in the `TurnEvent` stream. Timeout-induced interruptions (`DEFAULT_CONFIG.timeout`) similarly appear as `turn_cancelled` (`code: 'timeout'`).
+
 ## Deferred tools (discover / load_tool / load_skill)
 
 When the number of tools is large, stuffing all schemas into the prompt crowds the context. Zhin.js uses **lazy loading**: a turn keeps only a small set of meta-tools resident, and the model retrieves and loads by name on demand.

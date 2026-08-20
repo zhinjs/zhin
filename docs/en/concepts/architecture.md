@@ -51,16 +51,16 @@ flowchart BT
 
 The authoritative source for dependency relationships is each package's `package.json`. Before reading them, keep a few key facts in mind.
 
-The foundation is `@zhin.js/plugin-runtime`: it depends on no workspace packages; generation, snapshot, dispose, and tokens all grow from here. One layer up, `@zhin.js/feature-kit` depends only on `plugin-runtime` and provides the registration, discovery, and projection mechanism for Feature providers. Feature-layer packages (adapter / command / component / middleware / handler / tool / skill / ...) depend only on `feature-kit` + `plugin-runtime` and do not depend on each other.
+The foundation is the runtime base package (`packages/im/plugin-runtime`): it depends on no workspace packages; generation, snapshot, dispose, and tokens all grow from here. One layer up, `@zhin.js/feature-kit` depends only on the runtime base and provides the registration, discovery, and projection mechanism for Feature providers. Feature-layer packages (adapter / command / component / middleware / handler / tool / skill / ...) depend only on `feature-kit` + the runtime base and do not depend on each other.
 
-Moving further up, `@zhin.js/core` assembles the adapter / command / component / middleware Features together with the kernel into the IM layer (Plugin, Adapter, Endpoint, message send/receive). The facade package `zhin.js` has workspace `dependencies` of only `@zhin.js/core`, `@zhin.js/logger`, and `@zhin.js/plugin-runtime`; `@zhin.js/agent`, `@zhin.js/ai`, etc. are optional peer dependencies -- so the default installation contains only the IM core, with AI added on demand.
+Moving further up, `@zhin.js/core` assembles the adapter / command / component / middleware Features together with the kernel into the IM layer (Plugin, Adapter, Endpoint, message send/receive). The facade package `zhin.js` re-exports core packages as a unified entry -- plugin authors only need `import { ... } from 'zhin.js'`. `@zhin.js/agent`, `@zhin.js/ai`, etc. are optional peer dependencies, so the default installation contains only the IM core, with AI added on demand.
 
 ## Layer responsibilities
 
 | Layer | Package | Responsibility |
 |-------|---------|---------------|
 | Foundation | `basic/logger` `schema` `schedule` `database` | Logging, config validation, scheduling, database -- zero/near-zero dependencies |
-| Runtime base | `@zhin.js/plugin-runtime` | Generation transactions, snapshot leases, handoff, dispose (see [Generation & lifecycle](./generation-lifecycle.md)) |
+| Runtime base | `packages/im/plugin-runtime` (users import from `zhin.js`) | Generation transactions, snapshot leases, handoff, dispose (see [Generation & lifecycle](./generation-lifecycle.md)) |
 | Feature mechanism | `@zhin.js/feature-kit` | Declare Feature providers, discover capabilities by convention, project into runtime indexes |
 | Kernel | `@zhin.js/kernel` | Plugin system and error hierarchy, no IM concepts |
 | Feature layer | `@zhin.js/adapter` `command` `component` `middleware` ... | Contract for a capability type (e.g. `defineAdapter`) + projection index (e.g. `AdapterIndex`) |

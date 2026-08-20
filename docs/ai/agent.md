@@ -32,6 +32,38 @@ sequenceDiagram
 
 回合产出的工具池 = 插件注册工具 + `ai.mcpServers` 连接工具 + 内置工具 + deferred meta 工具 + `schedule_*` + `bash` + Host 扩展工具（如 `voice_stt` / `voice_tts`）。
 
+### Thinking 透明与步骤可视化
+
+回合执行中，Agent 会通过 Activity Feedback 向 IM 侧推送实时状态。默认行为是发送静态 "思考中…" 占位，但可以开启 **thinking 透明**，将 LLM 实际的 thinking 内容（截断后）作为活动反馈展示给用户：
+
+```yaml
+ai:
+  agent:
+    thinkingPreview: true          # 展示 LLM 实际 thinking 内容（截断），默认 false
+    thinkingPreviewMaxLength: 200  # 展示的最大字符数，默认 200
+```
+
+开启后，用户在等待 AI 回复时能看到模型的思考过程片段，而不是一成不变的占位文本。
+
+当回合需要多轮工具迭代时（如模型调用工具后继续推理），每一轮迭代会发出 `iteration_start` 事件，Activity Feedback 会更新为 `处理中 [2/15]...` 等进度提示。插件开发者可以监听 `TurnEvent` 流中的 `iteration_start` 事件获取当前迭代进度：
+
+| TurnEvent 类型 | 说明 |
+|----------------|------|
+| `iteration_start` | 新一轮迭代开始，含 `iteration`（当前轮次）和 `maxIterations` |
+| `thinking` | LLM thinking 文本片段（`thinkingPreview` 开启时会持续累积推送） |
+
+### 取消正在执行的回合
+
+用户可以在 IM 中发送以下任一消息来**取消正在执行的 Agent 回合**：
+
+- `取消`
+- `/cancel`
+- `cancel`
+
+ZhinAgent 收到取消消息后，会通过 `PromptController.cancelSession()` 中断当前回合的 LLM 调用和工具执行，并回复 "已取消"。如果当前没有正在执行的回合，则回复 "当前没有正在执行的任务"。
+
+取消机制的终止事件在 `TurnEvent` 流中表现为 `turn_cancelled`（`code: 'cancelled'`）。超时（`DEFAULT_CONFIG.timeout`）导致的中断同样表现为 `turn_cancelled`（`code: 'timeout'`）。
+
 ## Deferred tools（discover / load_tool / load_skill）
 
 工具数量大时，全量 schema 塞进 prompt 会挤占上下文。Zhin.js 的做法是**延迟加载**：回合只常驻少量元工具，模型按需检索、按名加载。

@@ -59,11 +59,15 @@
   },
   "peerDependencies": {
     "@zhin.js/agent": "workspace:*",
+    "@zhin.js/command": "workspace:*",
     "zhin.js": "workspace:*",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
     "@zhin.js/agent": {
+      "optional": true
+    },
+    "@zhin.js/command": {
       "optional": true
     },
     "zod": {

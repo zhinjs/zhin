@@ -64,10 +64,14 @@
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/command": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
+    "@zhin.js/command": {
+      "optional": true
+    },
     "zhin.js": {
       "optional": true
     }

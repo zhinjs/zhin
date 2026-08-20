@@ -58,16 +58,20 @@
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent": "workspace:*",
+    "@zhin.js/command": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "zhin.js": "workspace:*",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
-    "zhin.js": {
+    "@zhin.js/agent": {
       "optional": true
     },
-    "@zhin.js/agent": {
+    "@zhin.js/command": {
+      "optional": true
+    },
+    "zhin.js": {
       "optional": true
     },
     "zod": {

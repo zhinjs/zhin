@@ -234,6 +234,8 @@ ai:
     execPreset: readonly       # readonly | network | development | custom
     execAllowlist: ["^ls ", "^cat "]
     maxIterations: 15          # 单回合最大工具迭代轮次，默认 15
+    thinkingPreview: false     # Activity 反馈展示 LLM 实际 thinking 内容（截断），而非静态 "思考中..."，默认 false
+    thinkingPreviewMaxLength: 200  # thinkingPreview 展示的最大字符数，默认 200
   trigger:                 # AI 触发规则
     prefixes: ["ai:"]          # 触发前缀，默认 ['#', 'AI:']
     respondToAt: true          # 响应 @机器人，默认 true

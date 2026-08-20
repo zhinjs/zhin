@@ -75,6 +75,8 @@ describe('CLI new command integration', () => {
       { package: '@zhin.js/command', api: '^1.0.0' },
     ])
     expect(packageJson.peerDependencies?.['zhin.js'] ?? packageJson.devDependencies?.['zhin.js']).toBeDefined()
+    expect(packageJson.peerDependencies?.['@zhin.js/command']).toBeDefined()
+    expect(packageJson.peerDependenciesMeta?.['@zhin.js/command']?.optional).toBe(true)
     expect(packageJson.dependencies?.['@zhin.js/command']).toBeUndefined()
     expect(packageJson.dependencies?.['@zhin.js/plugin-runtime']).toBeUndefined()
 
