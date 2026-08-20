@@ -1,5 +1,11 @@
 # @zhin.js/speech
 
+## 3.0.11
+
+### Patch Changes
+
+- @zhin.js/core@1.5.11
+
 ## 3.0.10
 
 ### Patch Changes

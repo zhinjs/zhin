@@ -1,5 +1,13 @@
 # @zhin.js/game-shared
 
+## 3.0.11
+
+### Patch Changes
+
+- @zhin.js/core@1.5.11
+- zhin.js@6.0.11
+- @zhin.js/html-renderer@3.0.11
+
 ## 3.0.10
 
 ### Patch Changes

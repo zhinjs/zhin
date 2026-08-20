@@ -1,5 +1,11 @@
 # @zhin.js/handler
 
+## 1.0.2
+
+### Patch Changes
+
+- b9e6302: Map `handlers/**` path localName (`/` segments) to Lifecycle event names (`.` segments) when `event` is omitted, so `handlers/notice/receive.ts` listens on `notice.receive` without invalid capability dots.
+
 ## 1.0.1
 
 ### Patch Changes

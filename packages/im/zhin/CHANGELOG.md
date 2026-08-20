@@ -1,5 +1,14 @@
 # zhin.js
 
+## 6.0.11
+
+### Patch Changes
+
+- @zhin.js/core@1.5.11
+- @zhin.js/agent@1.1.13
+- @zhin.js/html-renderer@3.0.11
+- @zhin.js/speech@3.0.11
+
 ## 6.0.10
 
 ### Patch Changes

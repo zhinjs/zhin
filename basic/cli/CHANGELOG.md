@@ -1,5 +1,13 @@
 # @zhin.js/cli
 
+## 3.0.12
+
+### Patch Changes
+
+- @zhin.js/core@1.5.11
+- @zhin.js/agent@1.1.13
+- @zhin.js/speech@3.0.11
+
 ## 3.0.11
 
 ### Patch Changes
