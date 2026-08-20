@@ -1,5 +1,12 @@
 # @zhin.js/plugin-lottery
 
+## 2.0.13
+
+### Patch Changes
+
+- @zhin.js/agent@1.1.13
+- zhin.js@6.0.11
+
 ## 2.0.12
 
 ### Patch Changes

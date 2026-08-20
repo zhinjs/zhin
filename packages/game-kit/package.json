@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/game-kit",
-  "version": "3.0.10",
+  "version": "3.0.11",
   "description": "Zhin.js 游戏插件通用工具包",
   "type": "module",
   "main": "./lib/index.js",
@@ -16,7 +16,7 @@
     "build": "tsc"
   },
   "peerDependencies": {
-    "zhin.js": "^6.0.10",
+    "zhin.js": "^6.0.11",
     "@zhin.js/html-renderer": "workspace:*"
   },
   "peerDependenciesMeta": {

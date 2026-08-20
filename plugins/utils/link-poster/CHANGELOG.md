@@ -1,5 +1,13 @@
 # @zhin.js/plugin-link-poster
 
+## 3.0.20
+
+### Patch Changes
+
+- @zhin.js/core@1.5.11
+- zhin.js@6.0.11
+- @zhin.js/html-renderer@3.0.11
+
 ## 3.0.19
 
 ### Patch Changes

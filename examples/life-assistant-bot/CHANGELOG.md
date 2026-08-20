@@ -1,5 +1,13 @@
 # life-assistant-bot
 
+## 0.1.27
+
+### Patch Changes
+
+- @zhin.js/agent@1.1.13
+- zhin.js@6.0.11
+- @zhin.js/adapter-sandbox@7.0.12
+
 ## 0.1.26
 
 ### Patch Changes

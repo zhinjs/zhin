@@ -1,5 +1,12 @@
 # @zhin.js/core
 
+## 1.5.11
+
+### Patch Changes
+
+- Updated dependencies [b9e6302]
+  - @zhin.js/handler@1.0.2
+
 ## 1.5.10
 
 ### Patch Changes
