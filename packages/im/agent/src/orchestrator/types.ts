@@ -105,9 +105,18 @@ export interface Skill {
 }
 
 export interface SkillMetadata {
+  /** Catalog / lookup name（Seam `catalog()` 等目录面使用；frontmatter 侧可省略） */
+  name?: string;
   description: string;
   keywords?: string[];
   tags?: string[];
+  category?: string;
+  /** 依赖的其他 skill */
+  prerequisites?: string[];
+  examples?: Array<{
+    input: string;
+    output: string;
+  }>;
 }
 
 // ============================================================================

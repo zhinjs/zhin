@@ -6,22 +6,9 @@
  */
 
 import type { SeamProvider, SeamScope } from './seam-provider.js';
+import type { SkillMetadata } from '../orchestrator/types.js';
 
-/**
- * Skill 元数据
- */
-export interface SkillMetadata {
-  name: string;
-  description: string;
-  keywords?: string[];
-  category?: string;
-  /** 依赖的其他 skill */
-  prerequisites?: string[];
-  examples?: Array<{
-    input: string;
-    output: string;
-  }>;
-}
+export type { SkillMetadata };
 
 /**
  * Skill 调用请求

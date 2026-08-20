@@ -44,9 +44,17 @@ export class PromptSectionLoader {
 
     let files: string[];
     try {
-      files = fs
-        .readdirSync(dirPath, { recursive: true } as Parameters<typeof fs.readdirSync>[1])
-        .filter((f): f is string => typeof f === 'string' && (f.endsWith('.ts') || f.endsWith('.js')));
+      // Node recursive readdir may be typed as Dirent[] depending on overloads; normalize to relative paths.
+      const entries = fs.readdirSync(dirPath, { recursive: true }) as Array<
+        string | { name: string; parentPath?: string; path?: string }
+      >;
+      files = entries
+        .map((entry) => {
+          if (typeof entry === 'string') return entry;
+          const parent = entry.parentPath ?? entry.path;
+          return parent ? path.relative(dirPath, path.join(parent, entry.name)) : entry.name;
+        })
+        .filter((f) => f.endsWith('.ts') || f.endsWith('.js'));
     } catch {
       // 目录不存在时静默忽略
       return sections;
