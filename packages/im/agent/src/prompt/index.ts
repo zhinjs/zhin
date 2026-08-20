@@ -31,6 +31,21 @@ export type { PromptAssemblyToken, PromptAssemblyResource } from './tokens.js';
 export type { AgentPromptProfile } from './turn-prompt-profile.js';
 
 export {
+  defineAgentPromptSection,
+} from './define-agent-prompt-section.js';
+export type { AgentPromptSectionConfig } from './define-agent-prompt-section.js';
+
+export {
+  PromptSectionLoader,
+} from './prompt-section-loader.js';
+export type { PromptSectionLoaderOptions } from './prompt-section-loader.js';
+
+export {
+  discoverAndRegisterPromptSections,
+  bootstrapPromptSections,
+} from './discover-prompt-sections.js';
+
+export {
   buildDisciplinedPrompt,
   describeAgentPathPromptSections,
   buildAgentPathSystemPrompt,

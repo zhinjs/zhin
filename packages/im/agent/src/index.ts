@@ -121,6 +121,18 @@ export type {
 export { promptAssemblyToken } from './prompt/tokens.js';
 export type { PromptAssemblyToken, PromptAssemblyResource } from './prompt/tokens.js';
 export {
+  defineAgentPromptSection,
+} from './prompt/define-agent-prompt-section.js';
+export type { AgentPromptSectionConfig } from './prompt/define-agent-prompt-section.js';
+export {
+  PromptSectionLoader,
+} from './prompt/prompt-section-loader.js';
+export type { PromptSectionLoaderOptions } from './prompt/prompt-section-loader.js';
+export {
+  discoverAndRegisterPromptSections,
+  bootstrapPromptSections,
+} from './prompt/discover-prompt-sections.js';
+export {
   buildAgentsEnvelopeContext,
   collectAgentsInstructionChain,
   clearAgentsInstructionCache,

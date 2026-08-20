@@ -174,3 +174,50 @@ export default defineAgentTool<{ url: string }>({
   },
 });
 ```
+
+## Custom Prompt Sections
+
+Plugins can extend the Agent's system prompt by defining custom prompt sections in the `agent/prompt-sections/` convention directory.
+
+### Defining a prompt section
+
+Create a TypeScript file that default-exports a `defineAgentPromptSection()` call:
+
+```typescript
+// agent/prompt-sections/my-context.ts
+import { defineAgentPromptSection } from '@zhin.js/agent';
+
+export default defineAgentPromptSection({
+  id: 'my-plugin:context',
+  title: 'My Plugin Context',
+  content: 'Rules and context for my plugin...',
+  priority: 75,
+  truncatable: true,
+  maxChars: 1000,
+});
+```
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | — | 唯一标识符（建议格式：`plugin-name:section-name`） |
+| `title` | `string` | — | 节点标题 |
+| `content` | `string` | — | 提示词内容 |
+| `priority` | `number` | `50` | 数字越大，排序越靠前 |
+| `truncatable` | `boolean` | `true` | 是否允许在预算不足时截断 |
+| `maxChars` | `number` | `undefined` | 单节点最大字符数 |
+| `layer` | `string` | `'plugin'` | 层级标记（仅用于分类） |
+
+### Auto-discovery
+
+The sections are discovered automatically when the Agent starts. No registration code is needed in your plugin — just place the file under `agent/prompt-sections/` and Zhin.js will pick it up.
+
+You can also call the discovery functions directly when integrating into a custom Agent setup:
+
+```typescript
+import { bootstrapPromptSections, PromptAssemblyRegistry } from '@zhin.js/agent';
+
+const registry = new PromptAssemblyRegistry();
+await bootstrapPromptSections(ctx, registry);
+```
+
+A real example is available at `examples/full-bot/agent/prompt-sections/custom.ts`.

@@ -22,9 +22,22 @@ export interface PromptSectionRegistry {
 
 export class PromptAssemblyRegistry implements PromptSectionRegistry {
   private readonly sections = new Map<string, PromptAssemblySection>();
+  private onRegisterCallbacks: Array<(id: string, section: PromptAssemblySection) => void> = [];
 
   register(id: string, section: PromptAssemblySection): void {
     this.sections.set(id, section);
+    for (const cb of this.onRegisterCallbacks) cb(id, section);
+  }
+
+  /**
+   * 注册回调函数，在新节点注册时调用（用于 debug/logging）。
+   * 返回取消注册的函数。
+   */
+  onRegister(callback: (id: string, section: PromptAssemblySection) => void): () => void {
+    this.onRegisterCallbacks.push(callback);
+    return () => {
+      this.onRegisterCallbacks = this.onRegisterCallbacks.filter(cb => cb !== callback);
+    };
   }
 
   merge(other: PromptAssemblyRegistry): this {
