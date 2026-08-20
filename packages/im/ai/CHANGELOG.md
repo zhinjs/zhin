@@ -1,5 +1,11 @@
 # @zhin.js/ai
 
+## 1.5.5
+
+### Patch Changes
+
+- 0b8b5bd: Fix Anthropic-protocol reasoning round-trip (MiniMax / Claude): do not re-send unsigned thinking parts that trigger AI SDK `unsupported reasoning metadata` warnings. Capture Anthropic thinking signatures when present; keep openai-compatible DeepSeek placeholder behavior unchanged.
+
 ## 1.5.4
 
 ### Patch Changes

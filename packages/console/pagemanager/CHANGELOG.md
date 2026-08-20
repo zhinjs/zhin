@@ -1,5 +1,11 @@
 # @zhin.js/pagemanager
 
+## 2.0.18
+
+### Patch Changes
+
+- @zhin.js/contract@1.0.14
+
 ## 2.0.17
 
 ### Patch Changes
