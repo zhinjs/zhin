@@ -1,5 +1,12 @@
 # @zhin.js/pagemanager
 
+## 2.0.17
+
+### Patch Changes
+
+- @zhin.js/layout@1.0.11
+- @zhin.js/page@1.0.11
+
 ## 2.0.16
 
 ### Patch Changes

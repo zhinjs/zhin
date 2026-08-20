@@ -1,5 +1,12 @@
 # @zhin.js/html-renderer
 
+## 3.0.10
+
+### Patch Changes
+
+- Updated dependencies [d3920e9]
+  - @zhin.js/core@1.5.10
+
 ## 3.0.9
 
 ### Patch Changes

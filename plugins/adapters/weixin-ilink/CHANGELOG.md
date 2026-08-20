@@ -1,5 +1,15 @@
 # @zhin.js/adapter-weixin-ilink
 
+## 5.0.10
+
+### Patch Changes
+
+- eb84b77: fix: 更新文档,建立正确的依赖关系
+- Updated dependencies [d3920e9]
+  - @zhin.js/core@1.5.10
+  - zhin.js@6.0.10
+  - @zhin.js/adapter@1.1.10
+
 ## 5.0.9
 
 ### Patch Changes

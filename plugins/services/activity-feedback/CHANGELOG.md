@@ -1,5 +1,14 @@
 # @zhin.js/service-activity-feedback
 
+## 3.0.11
+
+### Patch Changes
+
+- eb84b77: fix: 更新文档,建立正确的依赖关系
+- Updated dependencies [d3920e9]
+  - zhin.js@6.0.10
+  - @zhin.js/agent@1.1.11
+
 ## 3.0.10
 
 ### Patch Changes

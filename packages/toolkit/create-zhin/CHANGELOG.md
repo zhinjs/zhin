@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.63
+
+### Patch Changes
+
+- eb84b77: fix: 更新文档,建立正确的依赖关系
+
 ## 1.0.62
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-satori",
-  "version": "5.0.9",
+  "version": "5.0.10",
   "description": "Zhin.js Satori adapter for Plugin Runtime (WebSocket client)",
   "type": "module",
   "main": "./lib/index.js",

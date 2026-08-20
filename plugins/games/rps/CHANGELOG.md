@@ -1,5 +1,15 @@
 # @zhin.js/plugin-rps
 
+## 1.0.18
+
+### Patch Changes
+
+- eb84b77: fix: 更新文档,建立正确的依赖关系
+- Updated dependencies [d3920e9]
+  - @zhin.js/core@1.5.10
+  - zhin.js@6.0.10
+  - @zhin.js/game-kit@3.0.10
+
 ## 1.0.17
 
 ### Patch Changes

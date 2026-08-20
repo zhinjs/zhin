@@ -1,5 +1,16 @@
 # @zhin.js/adapter-dingtalk
 
+## 6.0.11
+
+### Patch Changes
+
+- eb84b77: fix: 更新文档,建立正确的依赖关系
+- Updated dependencies [d3920e9]
+  - @zhin.js/core@1.5.10
+  - zhin.js@6.0.10
+  - @zhin.js/adapter@1.1.10
+  - @zhin.js/agent@1.1.11
+
 ## 6.0.10
 
 ### Patch Changes

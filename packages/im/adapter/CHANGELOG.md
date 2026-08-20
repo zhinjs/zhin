@@ -1,5 +1,12 @@
 # @zhin.js/adapter
 
+## 1.1.10
+
+### Patch Changes
+
+- Updated dependencies [d3920e9]
+  - @zhin.js/feature-kit@1.0.11
+
 ## 1.1.9
 
 ### Patch Changes

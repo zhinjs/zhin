@@ -1,5 +1,23 @@
 # full-bot
 
+## 0.0.29
+
+### Patch Changes
+
+- eb84b77: fix: 更新文档,建立正确的依赖关系
+- Updated dependencies [d3920e9]
+- Updated dependencies [eb84b77]
+  - zhin.js@6.0.10
+  - @zhin.js/adapter-sandbox@7.0.10
+  - @zhin.js/adapter-napcat@6.0.11
+  - @zhin.js/adapter-kook@7.0.11
+  - @zhin.js/page@1.0.11
+  - @zhin.js/skill@1.0.11
+  - @zhin.js/tool@1.0.11
+  - @zhin.js/a2a@3.0.11
+  - @zhin.js/mcp@6.0.10
+  - @zhin.js/agent@1.1.11
+
 ## 0.0.28
 
 ### Patch Changes
