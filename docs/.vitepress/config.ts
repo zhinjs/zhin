@@ -38,6 +38,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     { text: '配置即数据', link: '/concepts/config-as-data' },
     { text: 'Generation 生命周期', link: '/concepts/generation-lifecycle' },
     { text: '消息流', link: '/concepts/message-flow' },
+    { text: '能力接缝', link: '/concepts/capability-seams' },
   ]),
   sidebarGroup('插件创作', [
     { text: 'definePlugin 全景', link: '/authoring/define-plugin' },
