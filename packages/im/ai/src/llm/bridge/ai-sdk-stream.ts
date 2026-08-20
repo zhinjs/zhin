@@ -9,9 +9,16 @@ import { createAssistantMessageEventStream, getProviderConfig, type StreamFn, ty
 import type { Model } from '../types/model.js';
 import type { Context } from '../types/context.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../types/agent-message.js';
+import type { AnthropicThinkingProviderOptions, ThinkingContentBlock } from '../types/content-block.js';
 
 import { formatRedactedJson } from '../redact-request-body.js';
-import { contextToAiSdkPrompt, llmToolsToAiSdk, shouldEnsureToolCallReasoning, TOOL_CALL_REASONING_PLACEHOLDER } from './ai-sdk-messages.js';
+import {
+  contextToAiSdkPrompt,
+  llmToolsToAiSdk,
+  shouldEnsureToolCallReasoning,
+  TOOL_CALL_REASONING_PLACEHOLDER,
+  usesAnthropicReasoningProtocol,
+} from './ai-sdk-messages.js';
 import {
   applyPromptCacheToTools,
   buildPromptCacheProviderOptions,
@@ -91,23 +98,94 @@ function usageFromAiSdk(usage: {
   };
 }
 
+type CapturedThinkingPart = {
+  text: string;
+  providerOptions?: AnthropicThinkingProviderOptions;
+};
+
+function anthropicOptionsFromProviderMetadata(
+  metadata: unknown,
+): AnthropicThinkingProviderOptions | undefined {
+  if (!metadata || typeof metadata !== 'object') return undefined;
+  const anthropic = (metadata as { anthropic?: unknown }).anthropic;
+  if (!anthropic || typeof anthropic !== 'object') return undefined;
+  const record = anthropic as { signature?: unknown; redactedData?: unknown };
+  const signature = typeof record.signature === 'string' ? record.signature : undefined;
+  const redactedData = typeof record.redactedData === 'string' ? record.redactedData : undefined;
+  if (signature === undefined && redactedData === undefined) return undefined;
+  return {
+    anthropic: {
+      ...(signature !== undefined ? { signature } : {}),
+      ...(redactedData !== undefined ? { redactedData } : {}),
+    },
+  };
+}
+
+function mergeAnthropicOptions(
+  left: AnthropicThinkingProviderOptions | undefined,
+  right: AnthropicThinkingProviderOptions | undefined,
+): AnthropicThinkingProviderOptions | undefined {
+  if (!left) return right;
+  if (!right) return left;
+  return {
+    anthropic: {
+      ...left.anthropic,
+      ...right.anthropic,
+    },
+  };
+}
+
+/** Prefer AI SDK reasoning parts (with signature metadata); fall back to streamed text. */
+function resolveThinkingParts(input: {
+  streamedText: string;
+  finalText: string;
+  reasoningParts: ReadonlyArray<{ text?: string; providerMetadata?: unknown }> | undefined;
+}): CapturedThinkingPart[] {
+  const fromSdk = (input.reasoningParts ?? [])
+    .map((part) => {
+      const text = typeof part.text === 'string' ? part.text : '';
+      const providerOptions = anthropicOptionsFromProviderMetadata(part.providerMetadata);
+      if (!text && !providerOptions?.anthropic?.redactedData) return undefined;
+      return { text, providerOptions } satisfies CapturedThinkingPart;
+    })
+    .filter((part): part is CapturedThinkingPart => part !== undefined);
+
+  if (fromSdk.length > 0) return fromSdk;
+
+  const text = input.streamedText || input.finalText || '';
+  return text ? [{ text }] : [];
+}
+
 function buildAssistantMessage(
   model: Model,
   text: string,
-  thinking: string,
+  thinkingParts: readonly CapturedThinkingPart[],
   toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>,
   stopReason: AssistantMessage['stopReason'],
   usage: AssistantMessage['usage'],
 ): AssistantMessage {
   const content: AssistantMessage['content'] = [];
   if (text) content.push({ type: 'text', text });
+
+  const parts = [...thinkingParts];
   // Persist a placeholder CoT when gateway omitted reasoning on tool_calls (DeepSeek round-trip).
-  const resolvedThinking =
-    thinking ||
-    (toolCalls.length > 0 && shouldEnsureToolCallReasoning(model)
-      ? TOOL_CALL_REASONING_PLACEHOLDER
-      : '');
-  if (resolvedThinking) content.push({ type: 'thinking', thinking: resolvedThinking });
+  if (
+    parts.length === 0
+    && toolCalls.length > 0
+    && shouldEnsureToolCallReasoning(model)
+  ) {
+    parts.push({ text: TOOL_CALL_REASONING_PLACEHOLDER });
+  }
+
+  for (const part of parts) {
+    const block: ThinkingContentBlock = {
+      type: 'thinking',
+      thinking: part.text,
+    };
+    if (part.providerOptions) block.providerOptions = part.providerOptions;
+    content.push(block);
+  }
+
   for (const call of toolCalls) {
     content.push({
       type: 'toolCall',
@@ -151,6 +229,12 @@ function buildProviderOptions(
   return Object.keys(opts).length > 0 ? opts : undefined;
 }
 
+function reasoningDeltaText(part: { text?: unknown; delta?: unknown }): string {
+  if (typeof part.text === 'string' && part.text.length > 0) return part.text;
+  if (typeof part.delta === 'string' && part.delta.length > 0) return part.delta;
+  return '';
+}
+
 export function createAiSdkStreamFn(): StreamFn {
   return (model, context, options) => {
     return createAssistantMessageEventStream(async (push) => {
@@ -173,6 +257,7 @@ export function createAiSdkStreamFn(): StreamFn {
       );
       const { system: systemText, messages } = contextToAiSdkPrompt(context, undefined, {
         ensureToolCallReasoning: shouldEnsureToolCallReasoning(model),
+        sdk: model.sdk,
       });
       const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
       const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
@@ -188,6 +273,7 @@ export function createAiSdkStreamFn(): StreamFn {
         sdk: model.sdk,
         prompt_cache: cacheCtx.enabled || undefined,
         prompt_cache_key: cacheCtx.cacheKey,
+        anthropic_reasoning_protocol: usesAnthropicReasoningProtocol(model.sdk) || undefined,
         messages: formatRedactedJson(messages),
         tools: tools ? Object.keys(tools).length : 0,
       }));
@@ -209,6 +295,7 @@ export function createAiSdkStreamFn(): StreamFn {
 
       let text = '';
       let thinking = '';
+      let streamedThinkingOptions: AnthropicThinkingProviderOptions | undefined;
       const toolCalls = new Map<string, { id: string; name: string; arguments: Record<string, unknown> }>();
       const toolInputBuffers = new Map<string, string>();
 
@@ -217,8 +304,15 @@ export function createAiSdkStreamFn(): StreamFn {
           text += part.text;
           push({ type: 'text_delta', text: part.text });
         } else if (part.type === 'reasoning-delta') {
-          thinking += part.text;
-          push({ type: 'thinking_delta', thinking: part.text });
+          const chunk = reasoningDeltaText(part);
+          if (chunk) {
+            thinking += chunk;
+            push({ type: 'thinking_delta', thinking: chunk });
+          }
+          streamedThinkingOptions = mergeAnthropicOptions(
+            streamedThinkingOptions,
+            anthropicOptionsFromProviderMetadata(part.providerMetadata),
+          );
         } else if (part.type === 'tool-input-start') {
           toolInputBuffers.set(part.id, '');
         } else if (part.type === 'tool-input-delta') {
@@ -257,6 +351,7 @@ export function createAiSdkStreamFn(): StreamFn {
       const structured = await readStructuredOutput(final, Boolean(options?.outputSchema));
       const finalText = await final.text;
       const finalReasoning = await Promise.resolve(final.reasoningText).catch(() => '');
+      const finalReasoningParts = await Promise.resolve(final.reasoning).catch(() => undefined);
       const finishReason = await final.finishReason;
       const finalUsage = await final.usage;
 
@@ -264,11 +359,26 @@ export function createAiSdkStreamFn(): StreamFn {
       const resolvedText = structured !== undefined
         ? formatStructuredAsAssistantText(structured)
         : (text || finalText);
-      const resolvedThinking = thinking || finalReasoning || '';
+      let thinkingParts = resolveThinkingParts({
+        streamedText: thinking,
+        finalText: finalReasoning || '',
+        reasoningParts: finalReasoningParts,
+      });
+      // If SDK returned plain text without metadata but stream captured a signature, attach it.
+      if (
+        thinkingParts.length === 1
+        && !thinkingParts[0]?.providerOptions
+        && streamedThinkingOptions
+      ) {
+        thinkingParts = [{
+          text: thinkingParts[0]!.text,
+          providerOptions: streamedThinkingOptions,
+        }];
+      }
       const assistant = buildAssistantMessage(
         model,
         resolvedText,
-        resolvedThinking,
+        thinkingParts,
         calls,
         mapFinishReason(finishReason, calls.length > 0),
         usageFromAiSdk(finalUsage),
@@ -292,6 +402,7 @@ export async function generateTextViaAiSdk(
   );
   const { system: systemText, messages } = contextToAiSdkPrompt(context, undefined, {
     ensureToolCallReasoning: shouldEnsureToolCallReasoning(model),
+    sdk: model.sdk,
   });
   const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
   const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
@@ -321,7 +432,11 @@ export async function generateTextViaAiSdk(
   return buildAssistantMessage(
     model,
     structured !== undefined ? formatStructuredAsAssistantText(structured) : result.text,
-    result.reasoningText ?? '',
+    resolveThinkingParts({
+      streamedText: '',
+      finalText: result.reasoningText ?? '',
+      reasoningParts: result.reasoning,
+    }),
     toolCalls,
     mapFinishReason(result.finishReason, toolCalls.length > 0),
     usageFromAiSdk(result.usage),

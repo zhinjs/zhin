@@ -29,9 +29,23 @@ export interface MediaContentBlock {
   };
 }
 
+/**
+ * Anthropic / MiniMax（Anthropic 兼容）thinking 回传所需的签名元数据。
+ * 无 signature / redactedData 时不得作为 `reasoning` 再发给模型（否则 AI SDK 刷
+ * `unsupported reasoning metadata`，且内容会被静默丢弃）。
+ */
+export interface AnthropicThinkingProviderOptions {
+  readonly anthropic?: {
+    readonly signature?: string;
+    readonly redactedData?: string;
+  };
+}
+
 export interface ThinkingContentBlock {
   type: 'thinking';
   thinking: string;
+  /** AI SDK providerOptions；Anthropic 协议下用于 round-trip signed thinking。 */
+  providerOptions?: AnthropicThinkingProviderOptions;
 }
 
 export interface ToolCallContentBlock {

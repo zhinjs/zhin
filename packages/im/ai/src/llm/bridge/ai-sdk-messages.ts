@@ -5,6 +5,7 @@
 import { type ModelMessage, type ToolSet, type UserModelMessage, tool } from 'ai';
 import type { Context } from '../types/context.js';
 import { isLlmAgentMessage, type AgentMessage, type AssistantMessage, type ToolResultMessage, type UserMessage } from '../types/agent-message.js';
+import type { AnthropicThinkingProviderOptions, ThinkingContentBlock } from '../types/content-block.js';
 import {
   DEFAULT_PROVIDER_MEDIA,
   filterMediaBlocksForProvider,
@@ -21,6 +22,9 @@ import type { LlmTool } from '../types/tool.js';
  * reasoning text is empty; gateways (e.g. OpenCode Zen) sometimes strip CoT
  * from tool_call responses. A zero-width placeholder keeps the field present
  * so subsequent tool-loop requests are not rejected with 400.
+ *
+ * Do **not** use this for Anthropic-protocol SDKs (anthropic / minimax): they
+ * require signed thinking blocks and treat unsigned reasoning as a warning.
  */
 export const TOOL_CALL_REASONING_PLACEHOLDER = '\u200b';
 
@@ -28,6 +32,27 @@ type AiSdkUserPart =
   | { type: 'text'; text: string }
   | { type: 'image'; image: string }
   | { type: 'file'; data: string; mediaType: string };
+
+export type AiSdkMessageBridgeOptions = {
+  readonly preRepaired?: boolean;
+  /** openai-compatible CoT placeholder for tool_calls (DeepSeek-style). */
+  readonly ensureToolCallReasoning?: boolean;
+  /** Provider SDK id — gates Anthropic signed-thinking round-trip. */
+  readonly sdk?: string;
+};
+
+/** SDKs that convert messages via Anthropic prompt + signed thinking blocks. */
+export function usesAnthropicReasoningProtocol(sdk?: string): boolean {
+  return sdk === 'anthropic' || sdk === 'minimax';
+}
+
+function hasAnthropicThinkingMetadata(
+  providerOptions: AnthropicThinkingProviderOptions | undefined,
+): boolean {
+  const anthropic = providerOptions?.anthropic;
+  return typeof anthropic?.signature === 'string'
+    || typeof anthropic?.redactedData === 'string';
+}
 
 function userBlocksToAiContent(
   message: UserMessage,
@@ -58,21 +83,51 @@ function userBlocksToAiContent(
   return parts as UserModelMessage['content'];
 }
 
+type AiSdkReasoningPart = {
+  type: 'reasoning';
+  text: string;
+  providerOptions?: AnthropicThinkingProviderOptions;
+};
+
+function thinkingToReasoningParts(
+  message: AssistantMessage,
+  options?: AiSdkMessageBridgeOptions,
+): AiSdkReasoningPart[] {
+  const anthropicProtocol = usesAnthropicReasoningProtocol(options?.sdk);
+  const thinkingBlocks = message.content.filter(
+    (b): b is ThinkingContentBlock => b.type === 'thinking',
+  );
+
+  const reasoningParts: AiSdkReasoningPart[] = [];
+  for (const block of thinkingBlocks) {
+    if (anthropicProtocol) {
+      // Unsigned thinking (e.g. MiniMax adaptive CoT) is display-only — never re-send.
+      if (!hasAnthropicThinkingMetadata(block.providerOptions)) continue;
+      reasoningParts.push({
+        type: 'reasoning',
+        text: block.thinking,
+        providerOptions: block.providerOptions,
+      });
+      continue;
+    }
+
+    const text = block.thinking
+      || (options?.ensureToolCallReasoning ? TOOL_CALL_REASONING_PLACEHOLDER : '');
+    if (!text) continue;
+    reasoningParts.push({ type: 'reasoning', text });
+  }
+
+  return reasoningParts;
+}
+
 function assistantToAiMessage(
   message: AssistantMessage,
-  options?: { ensureToolCallReasoning?: boolean },
+  options?: AiSdkMessageBridgeOptions,
 ): ModelMessage {
   const textParts = message.content
     .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
     .map((b) => ({ type: 'text' as const, text: b.text }));
-  const reasoningParts: Array<{ type: 'reasoning'; text: string }> = message.content
-    .filter((b): b is Extract<typeof b, { type: 'thinking' }> => b.type === 'thinking')
-    .map((b) => ({
-      type: 'reasoning' as const,
-      // Empty CoT must still round-trip as a non-empty string for openai-compatible convert.
-      text: b.thinking || (options?.ensureToolCallReasoning ? TOOL_CALL_REASONING_PLACEHOLDER : ''),
-    }))
-    .filter((b) => b.text.length > 0);
+  const reasoningParts = thinkingToReasoningParts(message, options);
   const toolCalls = message.content
     .filter((b): b is Extract<typeof b, { type: 'toolCall' }> => b.type === 'toolCall')
     .map((b) => ({
@@ -83,9 +138,10 @@ function assistantToAiMessage(
     }));
 
   if (
-    options?.ensureToolCallReasoning &&
-    toolCalls.length > 0 &&
-    reasoningParts.length === 0
+    options?.ensureToolCallReasoning
+    && !usesAnthropicReasoningProtocol(options.sdk)
+    && toolCalls.length > 0
+    && reasoningParts.length === 0
   ) {
     reasoningParts.push({ type: 'reasoning', text: TOOL_CALL_REASONING_PLACEHOLDER });
   }
@@ -121,7 +177,7 @@ function toolResultToAiMessage(message: ToolResultMessage): ModelMessage {
 export function agentMessagesToAiSdk(
   messages: AgentMessage[],
   mediaCapabilities: readonly ProviderMediaKind[] = DEFAULT_PROVIDER_MEDIA,
-  options?: { preRepaired?: boolean; ensureToolCallReasoning?: boolean },
+  options?: AiSdkMessageBridgeOptions,
 ): ModelMessage[] {
   const out: ModelMessage[] = [];
   const source = options?.preRepaired ? messages : repairAgentMessagesForLlm(messages);
@@ -130,9 +186,7 @@ export function agentMessagesToAiSdk(
     if (message.role === 'user') {
       out.push({ role: 'user', content: userBlocksToAiContent(message, mediaCapabilities) });
     } else if (message.role === 'assistant') {
-      out.push(assistantToAiMessage(message, {
-        ensureToolCallReasoning: options?.ensureToolCallReasoning,
-      }));
+      out.push(assistantToAiMessage(message, options));
     } else if (message.role === 'toolResult') {
       out.push(toolResultToAiMessage(message));
     }
@@ -143,7 +197,7 @@ export function agentMessagesToAiSdk(
 export function contextToAiSdkPrompt(
   context: Context,
   mediaCapabilities: readonly ProviderMediaKind[] = DEFAULT_PROVIDER_MEDIA,
-  options?: { ensureToolCallReasoning?: boolean },
+  options?: AiSdkMessageBridgeOptions,
 ): {
   system?: string;
   messages: ModelMessage[];
@@ -151,16 +205,23 @@ export function contextToAiSdkPrompt(
   const messages = agentMessagesToAiSdk(context.messages, mediaCapabilities, {
     preRepaired: context.preRepaired === true,
     ensureToolCallReasoning: options?.ensureToolCallReasoning,
+    sdk: options?.sdk,
   });
   const system = context.systemPrompt.trim() || undefined;
   return { system, messages };
 }
 
-/** Thinking-mode models that require reasoning_content round-trip on tool_calls. */
+/**
+ * Thinking-mode models that need openai-compatible `reasoning_content` round-trip
+ * on tool_calls. Anthropic-protocol SDKs are excluded — they need signatures, not placeholders.
+ */
 export function shouldEnsureToolCallReasoning(model: {
   reasoning?: boolean;
+  sdk?: string;
 }): boolean {
-  return model.reasoning === true;
+  if (model.reasoning !== true) return false;
+  if (usesAnthropicReasoningProtocol(model.sdk)) return false;
+  return true;
 }
 
 export function llmToolsToAiSdk(tools: LlmTool[] | undefined): ToolSet | undefined {
