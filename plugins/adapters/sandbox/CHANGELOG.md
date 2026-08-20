@@ -1,5 +1,13 @@
 # @zhin.js/adapter-process
 
+## 7.0.11
+
+### Patch Changes
+
+- @zhin.js/core@1.5.10
+- zhin.js@6.0.10
+- @zhin.js/client@2.1.9
+
 ## 7.0.10
 
 ### Patch Changes

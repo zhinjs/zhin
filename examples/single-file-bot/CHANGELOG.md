@@ -1,5 +1,14 @@
 # single-file-bot
 
+## 0.1.18
+
+### Patch Changes
+
+- Updated dependencies [3556601]
+  - @zhin.js/adapter-icqq@8.0.12
+  - zhin.js@6.0.10
+  - @zhin.js/adapter-sandbox@7.0.11
+
 ## 0.1.17
 
 ### Patch Changes

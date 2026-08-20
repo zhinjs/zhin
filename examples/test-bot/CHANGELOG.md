@@ -1,5 +1,58 @@
 # test-bot
 
+## 0.1.137
+
+### Patch Changes
+
+- Updated dependencies [3556601]
+  - @zhin.js/cli@3.0.11
+  - @zhin.js/adapter-dingtalk@6.0.12
+  - @zhin.js/adapter-discord@7.0.12
+  - @zhin.js/adapter-github@5.0.12
+  - @zhin.js/adapter-icqq@8.0.12
+  - @zhin.js/adapter-kook@7.0.12
+  - @zhin.js/adapter-lark@6.0.12
+  - @zhin.js/adapter-line@4.0.12
+  - @zhin.js/adapter-milky@6.0.12
+  - @zhin.js/adapter-napcat@6.0.12
+  - @zhin.js/adapter-onebot11@6.0.12
+  - @zhin.js/adapter-onebot12@5.0.11
+  - @zhin.js/adapter-qq@7.0.12
+  - @zhin.js/adapter-satori@5.0.11
+  - @zhin.js/adapter-slack@6.0.12
+  - @zhin.js/adapter-telegram@7.0.12
+  - @zhin.js/adapter-wechat-mp@5.0.11
+  - @zhin.js/adapter-wecom@4.0.12
+  - @zhin.js/adapter-weixin-ilink@5.0.11
+  - @zhin.js/process-monitor@3.0.17
+  - @zhin.js/plugin-blackjack@0.0.19
+  - @zhin.js/plugin-dice-duel@1.0.19
+  - @zhin.js/plugin-dungeon-expedition@1.0.15
+  - @zhin.js/plugin-guess-number@1.0.19
+  - @zhin.js/plugin-game-hub@1.0.18
+  - @zhin.js/plugin-idiom-chain@1.0.19
+  - @zhin.js/plugin-rps@1.0.19
+  - @zhin.js/plugin-text-adventure@1.0.19
+  - @zhin.js/plugin-tic-tac-toe@1.0.19
+  - @zhin.js/plugin-word-riddle@1.0.19
+  - @zhin.js/plugin-60s@4.0.12
+  - @zhin.js/plugin-code-runner@4.0.12
+  - @zhin.js/plugin-content-moderation@1.0.8
+  - @zhin.js/plugin-group-suite@4.0.12
+  - @zhin.js/plugin-link-poster@3.0.19
+  - @zhin.js/plugin-lottery@2.0.12
+  - @zhin.js/plugin-music@7.0.12
+  - @zhin.js/plugin-qrcode@4.0.12
+  - @zhin.js/plugin-repeater@3.0.19
+  - @zhin.js/plugin-rss@4.0.12
+  - @zhin.js/plugin-short-url@4.0.12
+  - @zhin.js/contract@1.0.14
+  - @zhin.js/agent@1.1.12
+  - zhin.js@6.0.10
+  - @zhin.js/client@2.1.9
+  - @zhin.js/service-activity-feedback@3.0.12
+  - @zhin.js/adapter-sandbox@7.0.11
+
 ## 0.1.136
 
 ### Patch Changes

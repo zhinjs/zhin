@@ -1,5 +1,13 @@
 # @zhin.js/plugin-idiom-chain
 
+## 1.0.19
+
+### Patch Changes
+
+- 3556601: Declare Stable Feature packages referenced by `zhin.features` as optional `peerDependencies` on official plugins/adapters (`@zhin.js/runtime` ≥1.0.12 requires features to be declared in deps/peers). Keeps authoring via `zhin.js` facades without installing Feature implementation packages into `dependencies`, and removes the need for consumer postinstall peer-patch scripts. `zhin new` scaffolds the same peer shape.
+  - @zhin.js/core@1.5.10
+  - zhin.js@6.0.10
+
 ## 1.0.18
 
 ### Patch Changes
