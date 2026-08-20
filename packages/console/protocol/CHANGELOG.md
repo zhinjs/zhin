@@ -1,5 +1,11 @@
 # @zhin.js/console-protocol
 
+## 1.1.2
+
+### Patch Changes
+
+- e4757a8: fix: bump
+
 ## 1.1.1
 
 ### Patch Changes

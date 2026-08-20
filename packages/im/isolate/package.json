@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/isolate",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Worker and child-process isolation adapter for the Zhin Plugin Runtime",
   "type": "module",
   "main": "./lib/index.js",

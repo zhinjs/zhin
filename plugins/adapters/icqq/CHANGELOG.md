@@ -1,5 +1,20 @@
 # @zhin.js/adapter-icqq
 
+## 8.0.10
+
+### Patch Changes
+
+- e4757a8: fix: bump
+- c3c0ebf: fix: jiagouyouhau
+- Updated dependencies [e4757a8]
+- Updated dependencies [c3c0ebf]
+  - @zhin.js/command@1.0.13
+  - @zhin.js/agent@1.1.10
+  - @zhin.js/core@1.5.9
+  - @zhin.js/tool@1.0.10
+  - @zhin.js/adapter@1.1.9
+  - zhin.js@6.0.9
+
 ## 8.0.9
 
 ### Patch Changes

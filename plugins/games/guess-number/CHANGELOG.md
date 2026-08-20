@@ -1,5 +1,16 @@
 # @zhin.js/plugin-guess-number
 
+## 1.0.17
+
+### Patch Changes
+
+- Updated dependencies [e4757a8]
+- Updated dependencies [c3c0ebf]
+  - @zhin.js/command@1.0.13
+  - @zhin.js/core@1.5.9
+  - @zhin.js/middleware@1.0.10
+  - @zhin.js/game-kit@3.0.9
+
 ## 1.0.16
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @zhin.js/ai
 
+## 1.5.4
+
+### Patch Changes
+
+- e4757a8: fix: bump
+- c3c0ebf: fix: jiagouyouhau
+
 ## 1.5.3
 
 ### Patch Changes
