@@ -1,5 +1,16 @@
 # @zhin.js/service-activity-feedback
 
+## 3.0.10
+
+### Patch Changes
+
+- e4757a8: fix: bump
+- c3c0ebf: fix: jiagouyouhau
+- Updated dependencies [e4757a8]
+- Updated dependencies [c3c0ebf]
+  - @zhin.js/agent@1.1.10
+  - zhin.js@6.0.9
+
 ## 3.0.9
 
 ### Patch Changes

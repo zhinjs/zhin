@@ -1,5 +1,14 @@
 # @zhin.js/contract
 
+## 1.0.13
+
+### Patch Changes
+
+- Updated dependencies [e4757a8]
+- Updated dependencies [c3c0ebf]
+  - @zhin.js/console-protocol@1.1.2
+  - @zhin.js/ai@1.5.4
+
 ## 1.0.12
 
 ### Patch Changes

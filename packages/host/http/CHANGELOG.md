@@ -1,5 +1,13 @@
 # @zhin.js/host-http
 
+## 1.0.10
+
+### Patch Changes
+
+- e4757a8: fix: bump
+- Updated dependencies [e4757a8]
+  - @zhin.js/console-protocol@1.1.2
+
 ## 1.0.9
 
 ### Patch Changes

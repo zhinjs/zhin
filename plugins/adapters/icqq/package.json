@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-icqq",
-  "version": "8.0.9",
+  "version": "8.0.10",
   "description": "Zhin.js ICQQ adapter — direct connection to @icqqjs/icqq",
   "type": "module",
   "main": "./lib/index.js",

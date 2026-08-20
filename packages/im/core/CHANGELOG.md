@@ -1,5 +1,19 @@
 # @zhin.js/core
 
+## 1.5.9
+
+### Patch Changes
+
+- e4757a8: fix: bump
+- c3c0ebf: fix: jiagouyouhau
+- Updated dependencies [e4757a8]
+- Updated dependencies [c3c0ebf]
+  - @zhin.js/feature-kit@1.0.10
+  - @zhin.js/command@1.0.13
+  - @zhin.js/adapter@1.1.9
+  - @zhin.js/component@1.0.10
+  - @zhin.js/middleware@1.0.10
+
 ## 1.5.8
 
 ### Patch Changes

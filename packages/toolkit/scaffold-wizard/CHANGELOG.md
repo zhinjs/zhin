@@ -1,5 +1,12 @@
 # @zhin.js/scaffold-wizard
 
+## 0.2.5
+
+### Patch Changes
+
+- e4757a8: fix: bump
+- c3c0ebf: fix: jiagouyouhau
+
 ## 0.2.4
 
 ### Patch Changes

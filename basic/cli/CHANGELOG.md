@@ -1,5 +1,26 @@
 # @zhin.js/cli
 
+## 3.0.9
+
+### Patch Changes
+
+- e4757a8: fix: bump
+- c3c0ebf: fix: jiagouyouhau
+- Updated dependencies [e4757a8]
+- Updated dependencies [c3c0ebf]
+  - @zhin.js/scaffold-wizard@0.2.5
+  - @zhin.js/command@1.0.13
+  - @zhin.js/runtime@1.0.11
+  - @zhin.js/host-http@1.0.10
+  - @zhin.js/agent@1.1.10
+  - @zhin.js/core@1.5.9
+  - @zhin.js/ai@1.5.4
+  - @zhin.js/pagemanager@2.0.16
+  - @zhin.js/adapter@1.1.9
+  - @zhin.js/component@1.0.10
+  - @zhin.js/config-yaml@1.0.11
+  - @zhin.js/speech@3.0.9
+
 ## 3.0.8
 
 ### Patch Changes
