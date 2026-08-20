@@ -1,5 +1,12 @@
 # @zhin.js/command
 
+## 1.0.14
+
+### Patch Changes
+
+- Updated dependencies [d3920e9]
+  - @zhin.js/feature-kit@1.0.11
+
 ## 1.0.13
 
 ### Patch Changes

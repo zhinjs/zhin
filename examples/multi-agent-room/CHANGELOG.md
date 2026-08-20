@@ -1,5 +1,16 @@
 # multi-agent-room
 
+## 0.0.22
+
+### Patch Changes
+
+- eb84b77: fix: 更新文档,建立正确的依赖关系
+- Updated dependencies [d3920e9]
+- Updated dependencies [eb84b77]
+  - zhin.js@6.0.10
+  - @zhin.js/adapter-sandbox@7.0.10
+  - @zhin.js/agent@1.1.11
+
 ## 0.0.21
 
 ### Patch Changes

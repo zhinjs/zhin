@@ -1,5 +1,13 @@
 # minimal-bot
 
+## 0.0.30
+
+### Patch Changes
+
+- eb84b77: fix: 更新文档,建立正确的依赖关系
+- Updated dependencies [d3920e9]
+  - zhin.js@6.0.10
+
 ## 0.0.29
 
 ### Patch Changes

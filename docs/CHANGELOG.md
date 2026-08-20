@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.48
+
+### Patch Changes
+
+- eb84b77: fix: 更新文档,建立正确的依赖关系
+
 ## 1.0.47
 
 ### Patch Changes
