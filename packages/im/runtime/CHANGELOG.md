@@ -1,5 +1,15 @@
 # @zhin.js/runtime
 
+## 1.0.11
+
+### Patch Changes
+
+- e4757a8: fix: bump
+- c3c0ebf: fix: jiagouyouhau
+- Updated dependencies [e4757a8]
+- Updated dependencies [c3c0ebf]
+  - @zhin.js/feature-kit@1.0.10
+
 ## 1.0.10
 
 ### Patch Changes

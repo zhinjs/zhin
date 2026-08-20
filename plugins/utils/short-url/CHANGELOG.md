@@ -1,5 +1,14 @@
 # @zhin.js/plugin-short-url
 
+## 4.0.10
+
+### Patch Changes
+
+- Updated dependencies [e4757a8]
+- Updated dependencies [c3c0ebf]
+  - @zhin.js/command@1.0.13
+  - @zhin.js/agent@1.1.10
+
 ## 4.0.9
 
 ### Patch Changes

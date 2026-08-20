@@ -1,5 +1,20 @@
 # @zhin.js/agent
 
+## 1.1.10
+
+### Patch Changes
+
+- e4757a8: fix: bump
+- c3c0ebf: fix: jiagouyouhau
+- Updated dependencies [e4757a8]
+- Updated dependencies [c3c0ebf]
+  - @zhin.js/core@1.5.9
+  - @zhin.js/tool@1.0.10
+  - @zhin.js/ai@1.5.4
+  - @zhin.js/agent-feature@1.0.10
+  - @zhin.js/mcp-feature@1.0.10
+  - @zhin.js/skill@1.0.10
+
 ## 1.1.9
 
 ### Patch Changes

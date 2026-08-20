@@ -1,5 +1,13 @@
 # minimal-bot
 
+## 0.0.29
+
+### Patch Changes
+
+- e4757a8: fix: bump
+- c3c0ebf: fix: jiagouyouhau
+  - zhin.js@6.0.9
+
 ## 0.0.28
 
 ### Patch Changes
