@@ -133,17 +133,30 @@ During daily development you only need `pnpm release` to commit the changeset fi
 
 ## Publishing (GitHub CI)
 
-Publishing is driven by `.github/workflows/publish.yml`, triggered on push to `main`:
+Publishing is driven by `.github/workflows/publish.yml`: on **push to `main`** or via **Actions → workflow_dispatch**.
 
 ```mermaid
 flowchart LR
-  push["push main"] --> install["pnpm install"] --> build["pnpm build"]
+  trigger["push main / workflow_dispatch"] --> install["pnpm install"] --> build["pnpm build"]
   build --> harness["pnpm check:all"]
-  harness --> init["init-new-packages<br/>First-time publish for new packages"]
-  init --> action["changesets/action"]
+  harness --> gate["check:unpublished<br/>detect first-time packages"]
+  gate -->|"new packages"| stop["Fail with package list<br/>manual first publish, then re-run"]
+  gate -->|"all on npm"| action["changesets/action"]
   action -->|"Unconsumed changesets exist"| pr["Open version PR<br/>pnpm bump"]
   action -->|"main merges version PR"| pub["pnpm pub<br/>Publish to npm"]
 ```
+
+### First publish for new packages
+
+npm no longer allows this pipeline to create a package name for the first time. Maintainers must publish once with a token; later versions go through changesets.
+
+```bash
+pnpm check:unpublished
+pnpm build
+(cd path/to/pkg && npm publish --access public)
+```
+
+Then re-run **Build and Publish** (push `main` or workflow_dispatch).
 
 PR gates are in `.github/workflows/ci.yml` (Node 22/24 matrix), which also runs `pnpm check:all`.
 

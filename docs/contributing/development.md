@@ -133,17 +133,37 @@ pnpm pub       # = pnpm changeset publish，发布到 npm
 
 ## 发版（GitHub CI）
 
-发版由 `.github/workflows/publish.yml` 驱动，push 到 `main` 即触发：
+发版由 `.github/workflows/publish.yml` 驱动：`push` 到 `main` 或在 Actions 里 **workflow_dispatch 手动运行**。
 
 ```mermaid
 flowchart LR
-  push["push main"] --> install["pnpm install"] --> build["pnpm build"]
+  trigger["push main / workflow_dispatch"] --> install["pnpm install"] --> build["pnpm build"]
   build --> harness["pnpm check:all"]
-  harness --> init["init-new-packages<br/>首次发布的新包"]
-  init --> action["changesets/action"]
+  harness --> gate["check:unpublished<br/>检测未首次发包"]
+  gate -->|"有新包"| stop["失败并列出包名<br/>请手动首次发包后重跑"]
+  gate -->|"全部已在 npm"| action["changesets/action"]
   action -->|"有未消费 changeset"| pr["开 version PR<br/>pnpm bump"]
   action -->|"main 合并 version PR"| pub["pnpm pub<br/>发布 npm"]
 ```
+
+### 新包首次发包
+
+npm 不再允许本流水线代发「第一次」：包名必须先由维护者用 token 手动发布一次，之后才走 changesets。
+
+本地检测：
+
+```bash
+pnpm check:unpublished
+```
+
+若列出未发布包，构建后逐个首次发布，例如：
+
+```bash
+pnpm build
+(cd path/to/pkg && npm publish --access public)
+```
+
+然后到 Actions → **Build and Publish** → **Run workflow** 重新执行（或再 push `main`）。
 
 PR 门禁在 `.github/workflows/ci.yml`（Node 22/24 矩阵），同样跑 `pnpm check:all`。
 

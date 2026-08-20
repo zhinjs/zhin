@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      skip_unpublished_check:
+        description: 'Skip unpublished-package gate (emergency only; do not use for normal releases)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -17,6 +23,7 @@ concurrency:
 
 env:
   CI: true
+  NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
 
 jobs:
   publish:
@@ -39,18 +46,16 @@ jobs:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
           cache: 'pnpm'
-    
+
       - name: configure github packages auth
         if: env.NPM_TOKEN != ''
         run: echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc
-        env:
-          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
 
       - name: install dependencies
         run: pnpm install
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: build packages
         run: pnpm build
 
@@ -58,11 +63,10 @@ jobs:
       - name: run harness checks (incl. type-check, lint, test)
         run: pnpm check:all
 
-      - name: init new packages (first-time publish)
-        run: node scripts/init-new-packages.mjs
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
-          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+      # npm 要求包名已存在后才能走可信发布 / changesets；新包需维护者手动首次发包。
+      - name: detect packages needing first publish
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_unpublished_check) }}
+        run: pnpm check:unpublished
 
       - name: bump versions and publish
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0

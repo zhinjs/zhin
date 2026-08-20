@@ -1,6 +1,6 @@
 /**
- * @icqqjs/icqq 为可选对等依赖（应用侧安装）。CI / 未安装协议库时仅用此最小类型面做 tsc。
- * 运行时由用户项目的 node_modules 提供真实实现。
+ * Fallback types when `@icqqjs/icqq` peer is not installed.
+ * Prefer package types when the real dependency is present.
  */
 declare module '@icqqjs/icqq' {
   export interface Config extends Record<string, unknown> {

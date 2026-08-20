@@ -17,6 +17,7 @@ concurrency:
 
 env:
   CI: true
+  NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
 
 jobs:
   test:
@@ -60,13 +61,11 @@ jobs:
       - name: configure github packages auth
         if: env.NPM_TOKEN != ''
         run: echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc
-        env:
-          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
 
       - name: install dependencies
         run: pnpm install
         env:
-          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+          NPM_TOKEN: ${{ env.PERSONAL_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: audit dependencies

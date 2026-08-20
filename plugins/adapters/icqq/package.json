@@ -75,6 +75,7 @@
     }
   },
   "devDependencies": {
+    "@icqqjs/icqq": "^1.12.2",
     "@types/node": "^26.1.2",
     "@zhin.js/agent": "workspace:*",
     "typescript": "^6.0.3",

@@ -34,7 +34,6 @@
     "release": "pnpm changeset",
     "bump": "pnpm changeset version",
     "pub": "pnpm changeset publish",
-    "init-publish": "node scripts/init-new-packages.mjs",
     "stop:test": "pnpm --filter test-bot stop",
     "init": "pnpm install",
     "prepare:logger": "pnpm --filter @zhin.js/logger build && pnpm --filter @zhin.js/schedule build && pnpm --filter @zhin.js/cli install",
@@ -93,6 +92,7 @@
     "check:plugin": "node scripts/check-plugin-spec.mjs",
     "check:plugin-agent-publish": "node scripts/check-plugin-agent-publish.mjs",
     "check:publish-repository": "node scripts/check-publish-repository.mjs",
+    "check:unpublished": "node scripts/check-unpublished-packages.mjs",
     "check:agent-tool-schema": "node scripts/check-agent-tool-schema.mjs",
     "check:no-package-skills": "node scripts/check-no-package-skills.mjs",
     "check:install-size": "node scripts/check-install-size.mjs"
