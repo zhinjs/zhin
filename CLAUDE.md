@@ -90,7 +90,7 @@ packages/toolkit/{create-zhin,satori}         # 脚手架与渲染库
 
 ```ts
 // plugin.ts — thin wiring only
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 
 export default definePlugin({
   name: 'my-plugin',                      // /^[a-z][a-z0-9-]*$/

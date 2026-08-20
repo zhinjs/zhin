@@ -4,7 +4,7 @@
 
 ## 快照：一代的世界状态
 
-每一代是一份不可变的 `RuntimeSnapshot`（`@zhin.js/plugin-runtime`）：
+每一代是一份不可变的 `RuntimeSnapshot`（实现包 `@zhin.js/plugin-runtime`；作者也可从 `zhin.js` 取类型）：
 
 ```ts
 interface RuntimeSnapshot {
@@ -106,7 +106,7 @@ commit 只换指针，旧代不立刻销毁——它可能还在服务在途消�
 跨模块共享的代级状态用 `createGenerationStore`，它是模块级单例的代安全替代品：
 
 ```ts
-import { createGenerationStore } from '@zhin.js/plugin-runtime';
+import { createGenerationStore } from 'zhin.js';
 
 const dbStore = createGenerationStore<Database>('my-plugin.db');
 

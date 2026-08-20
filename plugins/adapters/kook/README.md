@@ -21,7 +21,7 @@ pnpm add @zhin.js/adapter-kook
 - `@zhin.js/adapter` — 约定式 `adapters/kook.ts`（`defineAdapter`）
 - `@zhin.js/core` — `messageGatewayToken` 入站/出站
 - `@zhin.js/host-http` — Webhook 模式 POST 路由（WebSocket 不需要）
-- `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
+- `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 - **WebSocket 路径无需** `@zhin.js/host-http` / `@zhin.js/host-router`
 

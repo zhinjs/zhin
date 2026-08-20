@@ -2,7 +2,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { capabilityId, featureId, rootPluginId } from 'zhin.js/plugin-runtime';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { EmailEndpoint } from '../src/endpoint.js';
 import {

@@ -56,7 +56,7 @@
 
 ## Plugin 与 Feature
 
-- **Plugin** 是组装单元：它声明自己用哪些 Feature、挂哪些子插件，入口默认导出 `definePlugin({...})`（`@zhin.js/plugin-runtime`）。
+- **Plugin** 是组装单元：它声明自己用哪些 Feature、挂哪些子插件，入口默认导出 `definePlugin({...})`（作者从 `zhin.js` 导入）。
 - **Feature** 是能力类型：它定义"一类能力长什么样"（契约 + 发现约定 + 投影）。`@zhin.js/adapter` 定义了 Adapter 能力，`@zhin.js/command` 定义了命令能力，以此类推。
 
 插件通过 `features` 数组声明依赖某类能力后，就可以按该 Feature 的约定提供能力实现。例如沙箱适配器插件（`@zhin.js/adapter-sandbox`）声明了 `@zhin.js/adapter` 能力后，在包内 `adapters/` 目录放置约定式入口：

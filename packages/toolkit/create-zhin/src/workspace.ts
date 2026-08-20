@@ -627,7 +627,7 @@ HTTP_TOKEN=change-me
 
   // plugin.ts（根插件入口）
   await fs.writeFile(path.join(projectPath, 'plugin.ts'),
-`import { definePlugin } from 'zhin.js/plugin-runtime';
+`import { definePlugin } from 'zhin.js';
 
 export default definePlugin({
   name: '${projectName}',

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/discord/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/discord/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=3dd8af45e66bb7aa -->
+<!-- sync-adapter-docs:sha256=ed98ed0f525ec331 -->
 
 # @zhin.js/adapter-discord
 
@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-discord discord.js
 
 - `@zhin.js/adapter` — 约定式 `adapters/discord.ts`（`defineAdapter`）
 - `@zhin.js/core` — `messageGatewayToken` 入站/出站
-- `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
+- `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 - **无需** `@zhin.js/host-http` / `@zhin.js/host-router`（Gateway 路径）
 

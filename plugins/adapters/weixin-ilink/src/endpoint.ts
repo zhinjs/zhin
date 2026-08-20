@@ -12,7 +12,7 @@ import type {
 } from 'zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import type { CapabilityId } from 'zhin.js/plugin-runtime';
+import type { CapabilityId } from 'zhin.js';
 import { getUpdates, notifyStart, notifyStop, sendTyping } from './ilink-api.js';
 import { configureIlinkMeta } from './ilink-meta.js';
 import {

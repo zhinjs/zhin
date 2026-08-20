@@ -4,7 +4,7 @@ After modifying a command file, you don't need to restart the process, and in-fl
 
 ## Snapshot: The World State of a Generation
 
-Each generation is an immutable `RuntimeSnapshot` (`@zhin.js/plugin-runtime`):
+Each generation is an immutable `RuntimeSnapshot` (implementation package `@zhin.js/plugin-runtime`; authors may also import types from `zhin.js`):
 
 ```ts
 interface RuntimeSnapshot {
@@ -110,7 +110,7 @@ The rule is simple: **all resources with a lifecycle must be registered in `cont
 Cross-module generation-scoped state should use `createGenerationStore`, the generation-safe replacement for module-level singletons:
 
 ```ts
-import { createGenerationStore } from '@zhin.js/plugin-runtime';
+import { createGenerationStore } from 'zhin.js';
 
 const dbStore = createGenerationStore<Database>('my-plugin.db');
 

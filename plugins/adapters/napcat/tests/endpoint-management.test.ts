@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost } from '@zhin.js/host-http';
-import { capabilityId, featureId, rootPluginId } from 'zhin.js/plugin-runtime';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createNapCatEndpointManagement } from '../src/endpoint-management.js';
 import { NapCatHttpEndpoint } from '../src/http-endpoint.js';
 import {

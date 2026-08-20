@@ -119,7 +119,7 @@ plugins/{name}/
 **只做装配与生命周期，不堆业务：**
 
 ```typescript
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 
 export default definePlugin({
   name: '{name}',
@@ -137,7 +137,7 @@ export default definePlugin({
 - `plugin.ts` **必须** default-export `definePlugin()`，否则装配抛 `does not default-export a Plugin definition`
 - 新代码**不要**调用 `usePlugin()` / `getPlugin()` / `MessageCommand`
 - TS 文件间互导使用 `.js` 扩展名
-- 本地导入 Feature 包：`zhin.js/command`、`zhin.js/plugin-runtime` 等（或 `@zhin.js/*`）
+- 本地导入 Feature 包：主入口 `zhin.js`（`definePlugin`）与 `zhin.js/command` 等门面子路径
 - 使用 AI / Agent 时从 `zhin.js/agent` 引入；须安装 `@zhin.js/agent`、`zod`、`ai` 与所选 `@ai-sdk/*`
 
 ### 第 5 步：生成首个命令

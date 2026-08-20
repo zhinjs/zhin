@@ -7,22 +7,22 @@ In the Plugin Runtime, plugins consume Host capabilities by token: `context.use(
 | Token | Yields | Key methods |
 | --- | --- | --- |
 | `messageGatewayToken` (`@zhin.js/core/runtime`) | `MessageGateway` | `receive` / `send(request) → DeliveryReceipt` / `sendEndpointMessage` / `onMessage` / `registerInteractiveHandler` |
-| `outboundHostToken` (`@zhin.js/plugin-runtime`) | `OutboundHost` | `send({ adapter, endpointId, conversation, content })` — cross-platform outbound, addressed by ConversationRef |
-| `runtimeEventPublisherToken` (`@zhin.js/plugin-runtime`) | `RuntimeEventPublisher` | Broadcasts runtime events (source of inbox/Console message stream) |
+| `outboundHostToken` (`zhin.js`) | `OutboundHost` | `send({ adapter, endpointId, conversation, content })` — cross-platform outbound, addressed by ConversationRef |
+| `runtimeEventPublisherToken` (`zhin.js`) | `RuntimeEventPublisher` | Broadcasts runtime events (source of inbox/Console message stream) |
 
 ## Persistence
 
 | Token | Yields | Key methods |
 | --- | --- | --- |
-| `databaseHostToken` (`@zhin.js/plugin-runtime`) | `PluginDatabaseHost` (tables isolated per owner) | `define(name, def)` / `models.get(name)` → `select / insert / update / delete / count`; `select()` requires explicit column names (`'*'` rejected) |
-| `databaseRootHostToken` (`@zhin.js/plugin-runtime`, root only) | `DatabaseHost` | Process-wide host for Console administration and custom composition roots |
+| `databaseHostToken` (`zhin.js`) | `PluginDatabaseHost` (tables isolated per owner) | `define(name, def)` / `models.get(name)` → `select / insert / update / delete / count`; `select()` requires explicit column names (`'*'` rejected) |
+| `databaseRootHostToken` (`zhin.js`, root only) | `DatabaseHost` | Process-wide host for Console administration and custom composition roots |
 
 ## Scheduling
 
 | Token | Yields | Key methods |
 | --- | --- | --- |
-| `scheduleHostToken` (`@zhin.js/plugin-runtime`) | `PluginScheduleHost` (isolated per owner) | Register/cancel cron jobs; combine with `messageGatewayToken` for scheduled pushes |
-| `scheduleRootHostToken` (`@zhin.js/plugin-runtime`, root only) | `ScheduleHost` | Process-wide schedule host |
+| `scheduleHostToken` (`zhin.js`) | `PluginScheduleHost` (isolated per owner) | Register/cancel cron jobs; combine with `messageGatewayToken` for scheduled pushes |
+| `scheduleRootHostToken` (`zhin.js`, root only) | `ScheduleHost` | Process-wide schedule host |
 
 ## Agent
 
@@ -34,7 +34,7 @@ In the Plugin Runtime, plugins consume Host capabilities by token: `context.use(
 
 | Token | Yields | Key methods |
 | --- | --- | --- |
-| `htmlRendererToken` (`@zhin.js/plugin-runtime`) | `HtmlRendererHost` | `render(html, opts)` → png (requires `@zhin.js/html-renderer`; outbound html degrades to text otherwise) |
+| `htmlRendererToken` (`zhin.js`) | `HtmlRendererHost` | `render(html, opts)` → png (requires `@zhin.js/html-renderer`; outbound html degrades to text otherwise) |
 | `httpHostToken` (`@zhin.js/host-http`) | `HttpHost` | `route(method, path, handler, meta?)` — shared by Console/MCP/A2A/adapter webhooks |
 
 ## Example

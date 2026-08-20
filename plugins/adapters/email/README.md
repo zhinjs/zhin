@@ -20,7 +20,7 @@ pnpm add @zhin.js/adapter-email
 
 - `@zhin.js/adapter` — 约定式 `adapters/email.ts`（`defineAdapter`）
 - `@zhin.js/core` — `messageGatewayToken` 入站/出站
-- `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
+- `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`（`smtp` / `imap`）
 
 入站：`gateway.receive({ conversation, message, content: text, sender, metadata })`（`conversation` 为 kind=private、id=发件人地址的 ConversationRef）  

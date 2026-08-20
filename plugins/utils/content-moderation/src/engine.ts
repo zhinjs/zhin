@@ -3,7 +3,7 @@ import {
   createGenerationStore,
   type Dispose,
   type GenerationStoreContext,
-} from 'zhin.js/plugin-runtime';
+} from 'zhin.js';
 import { resolveModerationConfig } from './config.js';
 import { mergeMatches, type ExtractedContent } from './extract.js';
 import { redactOutboundPayload } from './redact.js';

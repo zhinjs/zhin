@@ -3,7 +3,7 @@ import {
   databaseHostToken,
   outboundHostToken,
   scheduleHostToken,
-} from 'zhin.js/plugin-runtime';
+} from 'zhin.js';
 import {
   lotteryEnabledGames,
   lotteryKl8,

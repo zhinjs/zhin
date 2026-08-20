@@ -1,4 +1,4 @@
-import { createToken, type Token } from 'zhin.js/plugin-runtime';
+import { createToken, type Token } from 'zhin.js';
 import type { SessionService } from './session-service.js';
 
 /** Owner-scoped service consumed by discovered commands and middleware. */

@@ -14,7 +14,7 @@ flowchart LR
 
 A few key points. The full capability id takes the form `owner\0feature\0localName` (`\0`-separated), where `localName` is determined by the relative path within the directory; duplicate `localName`s (or the same file source) under the same owner throw `DiscoveryConflictError`. When a directory does not exist or has no matching files, that Feature is silently skipped -- plugins only need to declare the directories they use. Additionally, modules with `target: server` are loaded and executed on the Node side, while `target: client` (pages) are loaded in the browser via build artifacts.
 
-**Author imports (do not reinstall Features):** Apps that depend on `zhin.js` should import `define*` from facade subpaths -- `zhin.js/command`, `zhin.js/middleware`, `zhin.js/handler`, `zhin.js/adapter`, `zhin.js/component` (and `definePlugin` from `zhin.js/plugin-runtime`). The "Feature package" column below is the implementation package mounted by `platformFeatures`; Roots that depend on `zhin.js` / `@zhin.js/core` already inherit them -- **do not** `pnpm add @zhin.js/command` and friends.
+**Author imports (do not reinstall Features):** Apps that depend on `zhin.js` should import `define*` from facade subpaths -- `zhin.js/command`, `zhin.js/middleware`, `zhin.js/handler`, `zhin.js/adapter`, `zhin.js/component` (and `definePlugin` from `zhin.js`). The "Feature package" column below is the implementation package mounted by `platformFeatures`; Roots that depend on `zhin.js` / `@zhin.js/core` already inherit them -- **do not** `pnpm add @zhin.js/command` and friends.
 
 ## Directory Overview
 
@@ -35,7 +35,7 @@ A few key points. The full capability id takes the form `owner\0feature\0localNa
 
 Default segment rule: after removing extensions, directory names and regular file names must match `^[a-z0-9][a-z0-9-]*$` (lowercase letter/digit start, hyphens allowed). Non-matching files are skipped.
 
-**Exception: `commands/`** static segments also allow Unicode names (e.g. `赞我.ts`), matching `isCapabilityLocalSegment` (`@zhin.js/plugin-runtime`) — ASCII kebab, or a Unicode identifier with at least one non-ASCII character and no ASCII uppercase. Dynamic parameter files (`[name].ts`, etc.) remain ASCII-only. `tools/` also allows ASCII snake (e.g. `send_user_like.ts`). Other convention directories (middlewares / adapters / …) are not relaxed.
+**Exception: `commands/`** static segments also allow Unicode names (e.g. `赞我.ts`), matching `isCapabilityLocalSegment` (`zhin.js`) — ASCII kebab, or a Unicode identifier with at least one non-ASCII character and no ASCII uppercase. Dynamic parameter files (`[name].ts`, etc.) remain ASCII-only. `tools/` also allows ASCII snake (e.g. `send_user_like.ts`). Other convention directories (middlewares / adapters / …) are not relaxed.
 
 Supplementary rules per directory:
 

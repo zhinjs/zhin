@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-telegram
 
 - `@zhin.js/adapter` — convention-based `adapters/telegram.ts` (`defineAdapter`)
 - `@zhin.js/core` — `messageGatewayToken` inbound/outbound
-- `@zhin.js/plugin-runtime` — `plugin.ts` (`definePlugin`)
+- `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 - **Does not require** `@zhin.js/host-http` (polling path)
 

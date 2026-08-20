@@ -6,7 +6,7 @@ export {
   type RssModel,
 } from './memory-store.js';
 
-import { createGenerationStore, type Dispose, type GenerationStoreContext } from 'zhin.js/plugin-runtime';
+import { createGenerationStore, type Dispose, type GenerationStoreContext } from 'zhin.js';
 import {
   createInMemoryRssDb,
   RSS_SEEN_TABLE,

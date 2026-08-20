@@ -1,6 +1,6 @@
 import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
-import { outboundHostToken } from 'zhin.js/plugin-runtime';
+import { outboundHostToken } from 'zhin.js';
 import {
   buildScanContext,
   extractFromTextAndSegments,

@@ -155,7 +155,7 @@ interface Bot<C extends Endpoint.Config = Endpoint.Config, M = any> {
 
 ```typescript
 // ✅ plugin.ts
-import { definePlugin } from 'zhin.js/plugin-runtime'
+import { definePlugin } from 'zhin.js'
 export default definePlugin({ name: 'my-plugin', setup() {} })
 
 // ✅ commands/hello/[name].ts
@@ -175,7 +175,7 @@ export default defineCommand({
 ### 2. 导入路径规范
 ```typescript
 // ✅ 正确 - 本地相对导入必须使用 .js 扩展名
-import { definePlugin } from 'zhin.js/plugin-runtime'
+import { definePlugin } from 'zhin.js'
 import { myHelper } from './utils.js'
 
 // ❌ 错误

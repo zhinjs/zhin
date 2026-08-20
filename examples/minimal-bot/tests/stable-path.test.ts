@@ -4,7 +4,7 @@ import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { AdapterIndex, adapterFeatureId, isAdapterIndex } from 'zhin.js/adapter';
 import { ImRuntime, type MessageGateway } from 'zhin.js/core/runtime';
-import { capabilityId, rootPluginId } from 'zhin.js/plugin-runtime';
+import { capabilityId, rootPluginId } from 'zhin.js';
 import {
   NativeDevelopmentModuleRuntime,
   RootRuntime,

@@ -3,7 +3,7 @@ import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { onebot11RuntimeStateToken } from '../src/onebot11-runtime-state.js';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
-import { capabilityId, featureId, rootPluginId } from 'zhin.js/plugin-runtime';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { OneBot11WsEndpoint } from '../src/ws-endpoint.js';
 import type { OneBot11WsSocket } from '../src/ws-types.js';
 import {

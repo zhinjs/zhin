@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
-import { capabilityId, featureId, rootPluginId } from 'zhin.js/plugin-runtime';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 
 vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));

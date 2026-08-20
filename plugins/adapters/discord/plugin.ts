@@ -1,5 +1,5 @@
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 import { permissionHostToken } from '@zhin.js/permission';
 import { checkDiscordPlatformPermit } from './src/platform-permit.js';
 import { discordRuntimeStateToken } from './src/discord-runtime-state.js';

@@ -23,7 +23,7 @@ import { DisposeStack } from './dispose';           // Wrong
 
 The only startup path is `zhin runtime start`. For new plugins:
 
-- `plugin.ts` default-exports `definePlugin()` (`@zhin.js/plugin-runtime` / `zhin.js/plugin-runtime`)
+- `plugin.ts` default-exports `definePlugin()` (author: `zhin.js`; implementation package `@zhin.js/plugin-runtime`)
 - Capabilities go in convention directories (`commands/` -> `defineCommand`, `tools/` -> `defineAgentTool`, ...), one default export per file
 - **Do not** use `usePlugin()` / `getPlugin()` / `MessageCommand` anymore
 
@@ -35,10 +35,10 @@ See [Writing Your First Plugin](../getting-started/first-plugin.md), [definePlug
 
 ## Module-Level State: createGenerationStore
 
-Plugin hot-reload means the same module code will be used by multiple generations in succession. A bare module-level `let _x` singleton would cause a new generation to read resources already released by the previous one, or cause the old generation's teardown to accidentally clear the new generation's value. Use `createGenerationStore<T>(name)` (`@zhin.js/plugin-runtime`) consistently:
+Plugin hot-reload means the same module code will be used by multiple generations in succession. A bare module-level `let _x` singleton would cause a new generation to read resources already released by the previous one, or cause the old generation's teardown to accidentally clear the new generation's value. Use `createGenerationStore<T>(name)` (`zhin.js`) consistently:
 
 ```ts
-import { createGenerationStore } from '@zhin.js/plugin-runtime';
+import { createGenerationStore } from 'zhin.js';
 
 const dbStore = createGenerationStore<Database>('my-plugin-db');
 

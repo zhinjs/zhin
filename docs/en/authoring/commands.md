@@ -20,7 +20,7 @@ export default defineCommand({
 Single-file Bots can register the same definition in the plugin entry:
 
 ```ts
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 
 export default definePlugin({
   name: 'my-bot',
@@ -48,7 +48,7 @@ Command name = plugin tree path segments (instanceKey, without root, joined by `
 | `commands/endpoint/add/[[name]].ts` | `qq` | `qq.endpoint add [name]` |
 | `commands/foo.ts` | `a` under `b` (`root/b/a`) | `b.a.foo` |
 
-First, nesting: `commands/` is scanned recursively, and nested directories map directly to subcommand segments. Static file / directory names must pass `isCapabilityLocalSegment` (`@zhin.js/plugin-runtime`):
+First, nesting: `commands/` is scanned recursively, and nested directories map directly to subcommand segments. Static file / directory names must pass `isCapabilityLocalSegment` (`zhin.js`):
 
 - **ASCII kebab**: `/^[a-z0-9][a-z0-9-]*$/` (e.g. `hello.ts`, `lottery-today.ts`)
 - **Unicode names**: at least one non-ASCII character and no ASCII uppercase, e.g. `赞我.ts` (trigger word `赞我`)

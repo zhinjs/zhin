@@ -25,13 +25,13 @@ describe('package cutover', () => {
     expect(plan.capabilities).toEqual(['command', 'component', 'middleware']);
     expect(plan.dependencies).toMatchObject({
       existing: '^1.0.0',
-      '@zhin.js/plugin-runtime': 'latest',
       '@zhin.js/runtime': 'latest',
       'zhin.js': 'latest',
       '@zhin.js/command': 'latest',
       '@zhin.js/component': 'latest',
       '@zhin.js/middleware': 'latest',
     });
+    expect(plan.dependencies['@zhin.js/plugin-runtime']).toBeUndefined();
     await expect(readFile(plan.entryFile, 'utf8')).rejects.toThrow();
 
     await cutover.apply(plan);
@@ -52,7 +52,7 @@ describe('package cutover', () => {
     await expect(cutover.apply(repeated)).resolves.toBeUndefined();
 
     await writeFile(plan.entryFile, [
-      "import { definePlugin } from '@zhin.js/plugin-runtime';",
+      "import { definePlugin } from 'zhin.js';",
       '',
       "export default definePlugin({ name: 'fixture-plugin', metadata: { order: 1 } });",
       '',
@@ -78,7 +78,6 @@ describe('package cutover', () => {
         "package": {
           "dependencies": {
             "@zhin.js/command": "latest",
-            "@zhin.js/plugin-runtime": "latest",
             "@zhin.js/runtime": "latest",
             "existing": "^1.0.0",
             "zhin.js": "latest",
@@ -172,7 +171,7 @@ describe('package cutover', () => {
     });
     await writeFile(join(root, 'commands/status.ts'), legacyCommandDefinition());
     await writeFile(join(root, 'plugin.ts'), [
-      "import { definePlugin } from '@zhin.js/plugin-runtime';",
+      "import { definePlugin } from 'zhin.js';",
       '',
       "export default definePlugin({ name: 'fixture-plugin' });",
       '',

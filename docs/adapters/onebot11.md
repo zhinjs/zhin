@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/onebot11/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot11/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=b0067f6f98d26ab5 -->
+<!-- sync-adapter-docs:sha256=9d6479dce87d5fdc -->
 
 # @zhin.js/adapter-onebot11
 
@@ -32,7 +32,7 @@ pnpm add @zhin.js/adapter-onebot11
 
 - `@zhin.js/adapter` — 约定式 `adapters/onebot11.ts`（`defineAdapter`）
 - `@zhin.js/core` — `messageGatewayToken` 入站/出站
-- `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
+- `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
 入站：`gateway.receive({ conversation, message, content, sender, metadata })`（`conversation.kind` 为 `private`/`group`，`id` 为 uid/gid）  

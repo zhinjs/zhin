@@ -10,7 +10,7 @@ import type {
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import type { CapabilityId } from 'zhin.js/plugin-runtime';
+import type { CapabilityId } from 'zhin.js';
 import { readRequestBody, verifyMilkyAccessToken } from './milky-auth.js';
 import { createMilkyEndpointManagement } from './endpoint-management.js';
 import { registerMilkyAgentEndpoint } from './milky-agent-deps.js';

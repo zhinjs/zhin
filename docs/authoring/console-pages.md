@@ -101,7 +101,7 @@ sandbox 适配器（`plugins/adapters/sandbox`）是这套机制的标准消费�
 插件入口本身可以保持极简（`plugins/adapters/sandbox/plugin.ts`）：
 
 ```ts
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 
 export default definePlugin({
   name: 'sandbox',

@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-slack
 - `@zhin.js/adapter` — convention-based `adapters/slack.ts` (`defineAdapter`)
 - `@zhin.js/core` — `messageGatewayToken` inbound/outbound
 - `@zhin.js/host-http` — only needed for HTTP mode to register Events route via `httpHostToken`
-- `@zhin.js/plugin-runtime` — `plugin.ts` (`definePlugin`)
+- `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.id` is the channelId, threads land in `conversation.threadId`)

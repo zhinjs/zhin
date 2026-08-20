@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-kook
 - `@zhin.js/adapter` — convention-based `adapters/kook.ts` (`defineAdapter`)
 - `@zhin.js/core` — `messageGatewayToken` inbound/outbound
 - `@zhin.js/host-http` — Webhook mode POST route (not needed for WebSocket)
-- `@zhin.js/plugin-runtime` — `plugin.ts` (`definePlugin`)
+- `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 - **WebSocket path does not require** `@zhin.js/host-http` / `@zhin.js/host-router`
 

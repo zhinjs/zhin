@@ -1,4 +1,4 @@
-import { definePlugin, databaseHostToken } from 'zhin.js/plugin-runtime';
+import { definePlugin, databaseHostToken } from 'zhin.js';
 import type { GroupSuiteConfig } from './src/config.js';
 import { registerGroupSuiteDb } from './src/db-store.js';
 import { createInMemoryGroupSuiteDb, type GroupSuiteMemoryDb } from './src/memory-store.js';

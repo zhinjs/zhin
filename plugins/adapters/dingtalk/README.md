@@ -21,7 +21,7 @@ pnpm add @zhin.js/adapter-dingtalk
 - 实现：`src/endpoint.ts`（生命周期/出站/OpenAPI）、`src/webhook.ts`（验签入站）、`src/protocol.ts`
 - `@zhin.js/core` — `messageGatewayToken` 入站/出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
-- `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
+- `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
 入站：`gateway.receive({ conversation: ConversationRef, message: { conversation, id }, content: text, sender, metadata })`  

@@ -21,6 +21,10 @@ export interface MigrationImportReference {
   readonly module: string;
   readonly line: number;
   readonly column: number;
+  /** How the module was imported; used to classify `zhin.js` facade vs classic APIs. */
+  readonly kind: 'named' | 'namespace' | 'default' | 'star' | 'side-effect' | 'dynamic';
+  /** Named bindings (empty for namespace/default/dynamic/side-effect). */
+  readonly bindings: readonly string[];
 }
 
 export interface MigrationCutoverStatus {
@@ -42,7 +46,18 @@ export interface MigrationReadinessReport {
 const ignoredDirectories = new Set([
   '.git', '.zhin', 'coverage', 'dist', 'lib', 'node_modules',
 ]);
-const legacyModules = new Set(['zhin.js', '@zhin.js/core', '@zhin.js/kernel']);
+/** Direct imports of IM internals still count as dual-run for plugin authors. */
+const legacyModules = new Set(['@zhin.js/core', '@zhin.js/kernel']);
+/**
+ * `zhin.js` 主入口已是作者门面（definePlugin / Host tokens 等）。
+ * 仅当仍从 `zhin.js` 拉取经典 API 时记为 dual-run。
+ */
+const legacyZhinJsBindings = new Set([
+  'usePlugin',
+  'getPlugin',
+  'bootstrapNode',
+  'MessageCommand',
+]);
 
 export class MigrationReadiness {
   async inspect(projectRoot: string): Promise<MigrationReadinessReport> {
@@ -51,7 +66,7 @@ export class MigrationReadiness {
     const plan = await migrator.plan(root);
     const extraction = migrator.summarize(plan);
     const imports = await importReferences(root);
-    const legacyImports = imports.filter((item) => legacyModules.has(item.module));
+    const legacyImports = imports.filter((item) => isLegacyImport(item));
     const compatImports = imports.filter((item) => item.module === '@zhin.js/next-compat');
     const cutover = await inspectCutover(root);
     return Object.freeze({
@@ -64,6 +79,15 @@ export class MigrationReadiness {
       diagnostics: plan.diagnostics,
     });
   }
+}
+
+function isLegacyImport(item: MigrationImportReference): boolean {
+  if (legacyModules.has(item.module)) return true;
+  if (item.module !== 'zhin.js') return false;
+  // namespace / default / bare re-export of the whole facade still treated as dual-run
+  if (item.kind === 'namespace' || item.kind === 'default' || item.kind === 'star') return true;
+  if (item.kind === 'dynamic') return true;
+  return item.bindings.some((name) => legacyZhinJsBindings.has(name));
 }
 
 async function inspectCutover(root: string): Promise<MigrationCutoverStatus> {
@@ -109,16 +133,8 @@ async function importReferences(root: string): Promise<MigrationImportReference[
       source.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
     );
     const visit = (node: ts.Node): void => {
-      const module = moduleSpecifier(node);
-      if (module) {
-        const position = file.getLineAndCharacterOfPosition(node.getStart(file));
-        result.push(Object.freeze({
-          source,
-          module,
-          line: position.line + 1,
-          column: position.character + 1,
-        }));
-      }
+      const reference = importReference(node, source, file);
+      if (reference) result.push(reference);
       ts.forEachChild(node, visit);
     };
     visit(file);
@@ -127,20 +143,78 @@ async function importReferences(root: string): Promise<MigrationImportReference[
     || left.line - right.line || left.column - right.column || left.module.localeCompare(right.module));
 }
 
-function moduleSpecifier(node: ts.Node): string | undefined {
+function importReference(
+  node: ts.Node,
+  source: string,
+  file: ts.SourceFile,
+): MigrationImportReference | undefined {
   if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node))
     && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-    return node.moduleSpecifier.text;
+    const position = file.getLineAndCharacterOfPosition(node.getStart(file));
+    const { kind, bindings } = classifyModuleImport(node);
+    return Object.freeze({
+      source,
+      module: node.moduleSpecifier.text,
+      line: position.line + 1,
+      column: position.character + 1,
+      kind,
+      bindings: Object.freeze(bindings),
+    });
   }
   if (ts.isCallExpression(node) && node.arguments.length === 1) {
     const dynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
     const requireCall = ts.isIdentifier(node.expression) && node.expression.text === 'require';
     const argument = node.arguments[0];
     if ((dynamicImport || requireCall) && argument && ts.isStringLiteral(argument)) {
-      return argument.text;
+      const position = file.getLineAndCharacterOfPosition(node.getStart(file));
+      return Object.freeze({
+        source,
+        module: argument.text,
+        line: position.line + 1,
+        column: position.character + 1,
+        kind: 'dynamic',
+        bindings: Object.freeze([]),
+      });
     }
   }
   return undefined;
+}
+
+function classifyModuleImport(node: ts.ImportDeclaration | ts.ExportDeclaration): {
+  readonly kind: MigrationImportReference['kind'];
+  readonly bindings: readonly string[];
+} {
+  if (ts.isExportDeclaration(node)) {
+    if (!node.exportClause) return { kind: 'star', bindings: [] };
+    if (ts.isNamespaceExport(node.exportClause)) return { kind: 'namespace', bindings: [] };
+    if (ts.isNamedExports(node.exportClause)) {
+      return {
+        kind: 'named',
+        bindings: node.exportClause.elements.map((el) => (
+          el.propertyName ? el.propertyName.text : el.name.text
+        )),
+      };
+    }
+    return { kind: 'side-effect', bindings: [] };
+  }
+
+  if (!node.importClause) return { kind: 'side-effect', bindings: [] };
+  if (node.importClause.isTypeOnly && !node.importClause.namedBindings && !node.importClause.name) {
+    return { kind: 'side-effect', bindings: [] };
+  }
+  if (node.importClause.name && !node.importClause.namedBindings) {
+    return { kind: 'default', bindings: [] };
+  }
+  const named = node.importClause.namedBindings;
+  if (named && ts.isNamespaceImport(named)) return { kind: 'namespace', bindings: [] };
+  if (named && ts.isNamedImports(named)) {
+    return {
+      kind: 'named',
+      bindings: named.elements.map((el) => (el.propertyName ? el.propertyName.text : el.name.text)),
+    };
+  }
+  if (node.importClause.name) return { kind: 'default', bindings: [] };
+  return { kind: 'side-effect', bindings: [] };
 }
 
 async function sourceFiles(root: string): Promise<string[]> {

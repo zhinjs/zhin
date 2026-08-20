@@ -12,7 +12,7 @@ import {
   type DatabaseHost,
   type DatabaseHostModel,
   type Token,
-} from 'zhin.js/plugin-runtime';
+} from 'zhin.js';
 
 export { GITHUB_OAUTH_USERS_TABLE };
 

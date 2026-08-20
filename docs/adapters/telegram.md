@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/telegram/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=2dae4553deba1a01 -->
+<!-- sync-adapter-docs:sha256=3dd00a258a9fa723 -->
 
 # @zhin.js/adapter-telegram
 
@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-telegram
 
 - `@zhin.js/adapter` — 约定式 `adapters/telegram.ts`（`defineAdapter`）
 - `@zhin.js/core` — `messageGatewayToken` 入站/出站
-- `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
+- `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 - **无需** `@zhin.js/host-http`（polling 路径）
 

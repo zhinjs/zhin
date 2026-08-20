@@ -118,7 +118,7 @@ describe('createWorkspace', () => {
     expect(config).not.toContain('inbox:')
 
     // 骨架文件：创作面 import 走 zhin.js 便利入口
-    expect(pluginEntry).toContain("from 'zhin.js/plugin-runtime'")
+    expect(pluginEntry).toContain("from 'zhin.js'")
     expect(pluginEntry).toContain('definePlugin(')
     expect(helloCommand).toContain("from 'zhin.js/command'")
     expect(cardCommand).toContain("from 'zhin.js/core/runtime'")

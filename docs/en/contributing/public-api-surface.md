@@ -20,7 +20,7 @@ Three tiers:
 
 | API | Stability | Author import | Implementation | One-liner |
 |-----|-----------|---------------|----------------|-----------|
-| `definePlugin` | `stable` | `zhin.js/plugin-runtime` | `@zhin.js/plugin-runtime` | Convention-based plugin entry, default export from `plugin.ts` |
+| `definePlugin` | `stable` | `zhin.js` | `@zhin.js/plugin-runtime` | Convention-based plugin entry, default export from `plugin.ts` |
 | `defineCommand` | `stable` | `zhin.js/command` | `@zhin.js/command` | Command module (default export in `commands/`) |
 | `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | Adapter module (default export in `adapters/`), `create(context)` returns an Endpoint |
 | `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR component (default export in `components/`) |
@@ -34,7 +34,7 @@ Three tiers:
 
 | Convention | Stability | Consumer | One-liner |
 |------------|-----------|----------|-----------|
-| `plugin.ts` | `stable` | `@zhin.js/plugin-runtime` | Plugin root entry, default exports `definePlugin(...)` |
+| `plugin.ts` | `stable` | `zhin.js` (impl `@zhin.js/plugin-runtime`) | Plugin root entry, default exports `definePlugin(...)` |
 | `commands/` | `stable` | `@zhin.js/command` (author import: `zhin.js/command`) | Command module directory, supports `[name]` / `[[name]]` / `[...name]` dynamic parameter segments |
 | `adapters/` | `stable` | `@zhin.js/adapter` (author import: `zhin.js/adapter`) | Adapter module directory |
 | `middlewares/` | `stable` | `@zhin.js/middleware` (author import: `zhin.js/middleware`) | Middleware module directory |
@@ -48,9 +48,9 @@ Three tiers:
 
 | Token | Stability | Source Package | One-liner |
 |-------|-----------|----------------|-----------|
-| `databaseHostToken` | `stable` | `@zhin.js/plugin-runtime` | Database Host capability |
-| `scheduleHostToken` | `stable` | `@zhin.js/plugin-runtime` | Scheduled task Host capability |
-| `outboundHostToken` | `stable` | `@zhin.js/plugin-runtime` | Cross-platform outbound message capability |
+| `databaseHostToken` | `stable` | `zhin.js` | Database Host capability |
+| `scheduleHostToken` | `stable` | `zhin.js` | Scheduled task Host capability |
+| `outboundHostToken` | `stable` | `zhin.js` | Cross-platform outbound message capability |
 | `messageGatewayToken` | `stable` | `@zhin.js/core` (`zhin.js/core/runtime`) | Inbound message delivery gateway (used by adapters) |
 | `httpHostToken` | `stable` | `@zhin.js/host-http` | HTTP/WS Host capability (used by Console, Webhooks) |
 

@@ -8,7 +8,7 @@ import { httpHostToken } from '@zhin.js/host-http';
 import {
   databaseHostToken,
   type PluginDatabaseHost,
-} from 'zhin.js/plugin-runtime';
+} from 'zhin.js';
 import { GithubEndpoint } from '../src/endpoint.js';
 import { githubRuntimeStateToken } from '../src/github-runtime-state.js';
 import {

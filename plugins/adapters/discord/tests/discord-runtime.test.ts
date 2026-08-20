@@ -4,7 +4,7 @@ import { discordRuntimeStateToken } from '../src/discord-runtime-state.js';
 import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
-import { capabilityId, featureId, rootPluginId } from 'zhin.js/plugin-runtime';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import defineDiscordAdapter from '../adapters/discord.js';
 import {
   DiscordGatewayEndpoint,

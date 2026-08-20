@@ -38,7 +38,7 @@ Save and it hot-reloads. Send `roll` in Console's Sandbox and you will get a res
 Need "send a message to a group every day at 9am"? Use the schedule host -- in `plugin.ts`'s `setup()`:
 
 ```ts
-import { definePlugin, scheduleHostToken } from 'zhin.js/plugin-runtime'
+import { definePlugin, scheduleHostToken } from 'zhin.js'
 
 export default definePlugin({
   name: 'my-bot',

@@ -54,7 +54,7 @@ plugin.addCommand(new MessageCommand('hit').action(async (message) => {
 
 ```ts
 // 新 plugin.ts：只装配，状态成为 Resource
-import { createToken, definePlugin } from 'zhin.js/plugin-runtime';
+import { createToken, definePlugin } from 'zhin.js';
 
 export const hitsToken = createToken<Map<string, number>>('demo.hits');
 

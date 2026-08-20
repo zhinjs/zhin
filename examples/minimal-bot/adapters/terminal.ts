@@ -2,7 +2,7 @@ import { createInterface, type Interface as ReadlineInterface } from 'node:readl
 import type { Readable, Writable } from 'node:stream';
 import { defineAdapter, type EndpointInstance } from 'zhin.js/adapter';
 import { messageGatewayToken, type MessageGateway } from 'zhin.js/core/runtime';
-import type { CapabilityId } from 'zhin.js/plugin-runtime';
+import type { CapabilityId } from 'zhin.js';
 
 interface TerminalConfig {
   readonly terminal?: {

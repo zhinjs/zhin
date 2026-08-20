@@ -3,7 +3,7 @@
  * 扫码绑定 / 待选 botKind 流程。由 plugin.ts setup() provide，
  * adapter create 与 commands / middleware 通过 use(qqRuntimeStateToken) 共享。
  */
-import { createToken } from 'zhin.js/plugin-runtime';
+import { createToken } from 'zhin.js';
 
 export interface QqRunningEndpoint {
   id: string;

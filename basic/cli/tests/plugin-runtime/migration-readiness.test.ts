@@ -118,7 +118,6 @@ async function completedProject(source: string): Promise<string> {
   const root = await project({
     private: true,
     dependencies: {
-      '@zhin.js/plugin-runtime': 'latest',
       '@zhin.js/runtime': 'latest',
       'zhin.js': 'latest',
     },
@@ -143,7 +142,7 @@ async function completedProject(source: string): Promise<string> {
     },
   });
   await writeFile(join(root, 'plugin.ts'), [
-    "import { definePlugin } from '@zhin.js/plugin-runtime';",
+    "import { definePlugin } from 'zhin.js';",
     '',
     "export default definePlugin({ name: 'readiness' });",
     '',

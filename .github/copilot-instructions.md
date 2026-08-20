@@ -21,7 +21,7 @@
 
 ```typescript
 // plugin.ts
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 
 export default definePlugin({
   name: 'my-plugin',
@@ -81,7 +81,7 @@ pnpm release / pnpm bump / pnpm pub   # changesets
 - Host 由 CLI 装配；插件侧 `context.resources.has(token)` 再 `use(token)`。
 - 定时：`scheduleHostToken.register` + `context.lifecycle.add(dispose)`（见 skill assets/cron-template）。
 - 配置：插件自有字段写 `schema.json`，`context.config.get()` 读取。
-- 模块级状态：优先 `createGenerationStore`（`@zhin.js/plugin-runtime`）。
+- 模块级状态：优先 `createGenerationStore`（`zhin.js`）。
 
 ## 适配器要点
 

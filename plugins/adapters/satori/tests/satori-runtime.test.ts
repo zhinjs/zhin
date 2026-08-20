@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createEndpointRuntimeState, listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import { satoriRuntimeStateToken } from '../src/satori-runtime-state.js';
-import { capabilityId, featureId, rootPluginId } from 'zhin.js/plugin-runtime';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import defineSatoriAdapter from '../adapters/satori.js';

@@ -53,8 +53,6 @@ function tryZhinWorkspaceDevDependencies(): Record<string, string> | null {
     return {
       'zhin.js': 'workspace:*',
       '@zhin.js/cli': 'workspace:*',
-      '@zhin.js/plugin-runtime': 'workspace:*',
-      '@zhin.js/command': 'workspace:*',
       '@zhin.js/adapter': 'workspace:*',
       '@zhin.js/core': 'workspace:*',
     };
@@ -183,8 +181,6 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
     ({
       'zhin.js': 'latest',
       '@zhin.js/cli': 'latest',
-      '@zhin.js/plugin-runtime': 'latest',
-      '@zhin.js/command': 'latest',
       '@zhin.js/adapter': 'latest',
       '@zhin.js/core': 'latest',
     } satisfies Record<string, string>);
@@ -333,7 +329,7 @@ export default defineConfig({
 
   // plugin.ts：约定式插件入口
   if (kind === 'service') {
-    const pluginTs = `import { definePlugin, databaseHostToken } from 'zhin.js/plugin-runtime';
+    const pluginTs = `import { definePlugin, databaseHostToken } from 'zhin.js';
 
 /**
  * 服务型约定插件：setup(context) 在插件装配时执行。
@@ -365,7 +361,7 @@ export default definePlugin({
 `;
     await fs.writeFile(path.join(pluginDir, 'plugin.ts'), pluginTs, 'utf8');
   } else if (kind === 'adapter') {
-    const pluginTs = `import { definePlugin } from 'zhin.js/plugin-runtime';
+    const pluginTs = `import { definePlugin } from 'zhin.js';
 
 /**
  * 适配器约定插件入口：适配器定义在 adapters/ 目录（defineAdapter），
@@ -380,7 +376,7 @@ export default definePlugin({
 `;
     await fs.writeFile(path.join(pluginDir, 'plugin.ts'), pluginTs, 'utf8');
   } else {
-    const pluginTs = `import { definePlugin } from 'zhin.js/plugin-runtime';
+    const pluginTs = `import { definePlugin } from 'zhin.js';
 
 /**
  * 约定式插件入口（Plugin Runtime）：

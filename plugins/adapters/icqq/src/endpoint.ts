@@ -14,7 +14,7 @@ import type {
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { MessageRef } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
-import type { CapabilityId } from 'zhin.js/plugin-runtime';
+import type { CapabilityId } from 'zhin.js';
 import { registerIcqqAgentEndpoint } from './icqq-agent-deps.js';
 import {
   InboundMessageDeduper,

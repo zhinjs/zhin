@@ -101,7 +101,7 @@ This makes "debugging without a real platform" the default development path: `pn
 The plugin entry itself can remain minimal (`plugins/adapters/sandbox/plugin.ts`):
 
 ```ts
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 
 export default definePlugin({
   name: 'sandbox',

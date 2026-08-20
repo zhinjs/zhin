@@ -90,7 +90,7 @@ describe('CLI new command integration', () => {
     // Check plugin.ts（definePlugin 裸定义）
     const pluginTs = await fs.readFile(path.join(pluginDir, 'plugin.ts'), 'utf-8')
     expect(pluginTs).toContain('definePlugin')
-    expect(pluginTs).toContain('zhin.js/plugin-runtime')
+    expect(pluginTs).toContain('zhin.js')
     expect(pluginTs).toContain(`name: '${pluginName}'`)
     expect(pluginTs).not.toContain('usePlugin')
 

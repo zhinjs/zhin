@@ -41,7 +41,7 @@ Breaking（4.x）：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`�
 <!-- #region imports -->
 | 用途 | 包 / 子路径 |
 |------|-------------|
-| `definePlugin` | `zhin.js/plugin-runtime` |
+| `definePlugin` | `zhin.js` |
 | `defineCommand` / `defineAdapter` / `defineComponent` | `zhin.js/command` / `zhin.js/adapter` / `zhin.js/component` |
 | Plugin、Message、Adapter 等 IM 运行时 API | `zhin.js` |
 | `ZhinAgent`、`AIService`、`registerAIHook` | `zhin.js/agent` 或 `@zhin.js/agent` |

@@ -56,7 +56,7 @@ Example projects are private workspaces, so they can use `plugin.ts` as the entr
 
 ## Plugin vs. Feature
 
-- A **Plugin** is an assembly unit: it declares which Features it uses and which child plugins it mounts. Its entry point default-exports `definePlugin({...})` (`@zhin.js/plugin-runtime`).
+- A **Plugin** is an assembly unit: it declares which Features it uses and which child plugins it mounts. Its entry point default-exports `definePlugin({...})` (import from `zhin.js`).
 - A **Feature** is a capability type: it defines "what a class of capabilities looks like" (contract + discovery convention + projection). `@zhin.js/adapter` defines the Adapter capability, `@zhin.js/command` defines the command capability, and so on.
 
 After a plugin declares a dependency on a capability type via the `features` array, it can provide capability implementations following that Feature's conventions. For example, the sandbox adapter plugin (`@zhin.js/adapter-sandbox`) declares the `@zhin.js/adapter` capability and places a convention-based entry in the `adapters/` directory:

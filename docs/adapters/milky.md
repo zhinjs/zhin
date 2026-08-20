@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/milky/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=2db98bbb32395c0a -->
+<!-- sync-adapter-docs:sha256=0bd7747cf2102970 -->
 
 # @zhin.js/adapter-milky
 
@@ -32,7 +32,7 @@ pnpm add @zhin.js/adapter-milky
 
 - `@zhin.js/adapter` — 约定式 `adapters/milky.ts`（`defineAdapter`）
 - `@zhin.js/core` — `messageGatewayToken` 入站/出站
-- `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
+- `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
 入站：`gateway.receive({ conversation: ConversationRef(kind: "private"|"group", id), message, content, sender, metadata })`  

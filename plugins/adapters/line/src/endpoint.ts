@@ -5,7 +5,7 @@ import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from '
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import type { CapabilityId } from 'zhin.js/plugin-runtime';
+import type { CapabilityId } from 'zhin.js';
 import { registerLineAgentEndpoint } from './line-agent-deps.js';
 import {
   formatInboundContent,

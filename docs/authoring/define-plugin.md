@@ -1,9 +1,9 @@
 # definePlugin
 
-声明一个插件不需要继承基类，也不用往任何注册表里手工挂条目——默认导出 `definePlugin(...)`（来自 `@zhin.js/plugin-runtime`）的返回值就够了。这份返回值叫 `PluginDefinition`：名字、元数据、依赖声明，外加一个 `setup(context)` 装配函数。
+声明一个插件不需要继承基类，也不用往任何注册表里手工挂条目——默认导出 `definePlugin(...)`（来自 `zhin.js`）的返回值就够了。这份返回值叫 `PluginDefinition`：名字、元数据、依赖声明，外加一个 `setup(context)` 装配函数。
 
 ```ts
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 
 export default definePlugin<MyConfig>({
   name: 'my-plugin',
@@ -41,7 +41,7 @@ export default definePlugin<MyConfig>({
 ```ts
 import { defineCommand } from 'zhin.js/command';
 import { defineComponent } from 'zhin.js/component';
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 
 export default definePlugin({
   name: 'single-file-bot',
@@ -102,7 +102,7 @@ export default definePlugin({
 
 ## Host token
 
-Host token 是 Host 提供给插件的能力句柄，`setup` 里通过 `context.resources` 解析。CLI Host 启动时自动装配，未装配的 token 用 `has()` 判空降级。前六个从 `@zhin.js/plugin-runtime` 导出，`httpHostToken` 从 `@zhin.js/host-http` 导出。
+Host token 是 Host 提供给插件的能力句柄，`setup` 里通过 `context.resources` 解析。CLI Host 启动时自动装配，未装配的 token 用 `has()` 判空降级。前六个从 `zhin.js` 导出（实现包 `@zhin.js/plugin-runtime`），`httpHostToken` 从 `@zhin.js/host-http` 导出。
 
 | token | token id | 提供条件 | 关键方法 |
 | --- | --- | --- | --- |

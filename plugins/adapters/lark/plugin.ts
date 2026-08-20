@@ -1,5 +1,5 @@
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 import { permissionHostToken } from '@zhin.js/permission';
 import { checkLarkPlatformPermit } from './src/platform-permit.js';
 import { larkRuntimeStateToken } from './src/lark-runtime-state.js';

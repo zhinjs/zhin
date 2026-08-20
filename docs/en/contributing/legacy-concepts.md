@@ -5,7 +5,7 @@ After zhin.js 4.x completed the Plugin Runtime consolidation, the following lega
 ## `usePlugin()` Plugin System -> Convention-based plugin.ts + definePlugin
 
 - **Old approach**: `usePlugin()` from `@zhin.js/core` -- a React Hooks-like design that uses AsyncLocalStorage to locate the calling file and automatically build the plugin tree. The constraint is that it must be called at module top level (gate: `pnpm check:use-plugin-top-level`). This function still exists in `packages/im/core/src/plugin.ts` for backward compatibility with the legacy app layer (`packages/im/zhin`).
-- **New approach**: A convention-based `plugin.ts` at the plugin package root that default-exports `definePlugin(...)` (`@zhin.js/plugin-runtime`). Commands, middleware, adapters, etc. go in convention directories (`commands/`, `middlewares/`, `adapters/`...) for auto-discovery. See [definePlugin](../authoring/define-plugin.md) and [Convention Directories](../authoring/conventions.md).
+- **New approach**: A convention-based `plugin.ts` at the plugin package root that default-exports `definePlugin(...)` (`zhin.js`). Commands, middleware, adapters, etc. go in convention directories (`commands/`, `middlewares/`, `adapters/`...) for auto-discovery. See [definePlugin](../authoring/define-plugin.md) and [Convention Directories](../authoring/conventions.md).
 
 ```ts
 // Old: const plugin = usePlugin(); plugin.command('ping', ...);
@@ -19,7 +19,7 @@ export default definePlugin({
 ## "Host Plugin" Narrative -> basic/cli Assembly + Host Tokens
 
 - **Old approach**: `@zhin.js/host` series router / api plugin packages that installed HTTP routing and Console API as "plugins" (these packages have been deleted).
-- **New approach**: The Host is a composition root -- `basic/cli`'s `zhin runtime start` assembles IM / Agent / Console Host uniformly. Plugins do not install Hosts; instead they consume Host capabilities through Host tokens in `setup` (`@zhin.js/plugin-runtime` exports six tokens like `databaseHostToken`, `@zhin.js/host-http` exports `httpHostToken`). When a token is not assembled, use `has()` to check and degrade gracefully.
+- **New approach**: The Host is a composition root -- `basic/cli`'s `zhin runtime start` assembles IM / Agent / Console Host uniformly. Plugins do not install Hosts; instead they consume Host capabilities through Host tokens in `setup` (`zhin.js` exports six tokens like `databaseHostToken`, `@zhin.js/host-http` exports `httpHostToken`). When a token is not assembled, use `has()` to check and degrade gracefully.
 
 ```ts
 // Old: Install host plugin to get HTTP capability

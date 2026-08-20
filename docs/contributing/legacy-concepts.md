@@ -5,7 +5,7 @@ zhin.js 4.x 完成 Plugin Runtime 收口后，以下 legacy 概念不再出现�
 ## `usePlugin()` 类插件体系 → 约定式 plugin.ts + definePlugin
 
 - **旧写法**：`@zhin.js/core` 的 `usePlugin()`——类 React Hooks 设计，靠 AsyncLocalStorage 定位调用方文件自动创建插件树，约束是必须模块顶层调用（门禁 `pnpm check:use-plugin-top-level`）。该函数至今仍存在于 `packages/im/core/src/plugin.ts`，供 legacy app 层（`packages/im/zhin`）兼容使用。
-- **新写法**：插件包根目录的约定式 `plugin.ts` 默认导出 `definePlugin(...)`（`@zhin.js/plugin-runtime`），命令、中间件、适配器等放进约定目录（`commands/`、`middlewares/`、`adapters/`…）自动发现，见 [definePlugin](../authoring/define-plugin.md) 与 [约定目录](../authoring/conventions.md)。
+- **新写法**：插件包根目录的约定式 `plugin.ts` 默认导出 `definePlugin(...)`（`zhin.js`），命令、中间件、适配器等放进约定目录（`commands/`、`middlewares/`、`adapters/`…）自动发现，见 [definePlugin](../authoring/define-plugin.md) 与 [约定目录](../authoring/conventions.md)。
 
 ```ts
 // 旧：const plugin = usePlugin(); plugin.command('ping', ...);
@@ -19,7 +19,7 @@ export default definePlugin({
 ## `host` 插件叙事 → basic/cli 装配 + Host token
 
 - **旧写法**：`@zhin.js/host` 系列的 router / api 插件包，把 HTTP 路由与 Console API 当作「插件」安装挂载（这些包已删除）。
-- **新写法**：Host 是 composition root——`basic/cli` 的 `zhin runtime start` 统一装配 IM / Agent / Console Host；插件不安装 Host，而是在 `setup` 里通过 Host token 消费 Host 能力（`@zhin.js/plugin-runtime` 导出 `databaseHostToken` 等六个，`@zhin.js/host-http` 导出 `httpHostToken`），未装配的 token 用 `has()` 判空降级。
+- **新写法**：Host 是 composition root——`basic/cli` 的 `zhin runtime start` 统一装配 IM / Agent / Console Host；插件不安装 Host，而是在 `setup` 里通过 Host token 消费 Host 能力（`zhin.js` 导出 `databaseHostToken` 等六个，`@zhin.js/host-http` 导出 `httpHostToken`），未装配的 token 用 `has()` 判空降级。
 
 ```ts
 // 旧：安装 host 插件获得 HTTP 能力

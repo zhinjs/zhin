@@ -7,22 +7,22 @@ Plugin Runtime 里，插件通过 `context.use(token)`（setup 期）或命令/�
 | Token | 注入后得到 | 关键方法 |
 | --- | --- | --- |
 | `messageGatewayToken`（`@zhin.js/core/runtime`） | `MessageGateway` | `receive` / `send(request) → DeliveryReceipt` / `sendEndpointMessage` / `onMessage` / `registerInteractiveHandler` |
-| `outboundHostToken`（`@zhin.js/plugin-runtime`） | `OutboundHost` | `send({ adapter, endpointId, conversation, content })` —— 跨平台出站，寻址用 ConversationRef |
-| `runtimeEventPublisherToken`（`@zhin.js/plugin-runtime`） | `RuntimeEventPublisher` | 广播 runtime 事件（inbox/Console 消息流的来源） |
+| `outboundHostToken`（`zhin.js`） | `OutboundHost` | `send({ adapter, endpointId, conversation, content })` —— 跨平台出站，寻址用 ConversationRef |
+| `runtimeEventPublisherToken`（`zhin.js`） | `RuntimeEventPublisher` | 广播 runtime 事件（inbox/Console 消息流的来源） |
 
 ## 持久化
 
 | Token | 注入后得到 | 关键方法 |
 | --- | --- | --- |
-| `databaseHostToken`（`@zhin.js/plugin-runtime`） | `PluginDatabaseHost`（按 owner 隔离表名） | `define(name, def)` / `models.get(name)` → `select / insert / update / delete / count`；`select()` 须显式列名（不支持 `'*'`） |
-| `databaseRootHostToken`（`@zhin.js/plugin-runtime`，仅 root） | `DatabaseHost` | 进程级宿主：Console 管理面、自定义 composition root 用 |
+| `databaseHostToken`（`zhin.js`） | `PluginDatabaseHost`（按 owner 隔离表名） | `define(name, def)` / `models.get(name)` → `select / insert / update / delete / count`；`select()` 须显式列名（不支持 `'*'`） |
+| `databaseRootHostToken`（`zhin.js`，仅 root） | `DatabaseHost` | 进程级宿主：Console 管理面、自定义 composition root 用 |
 
 ## 定时与日程
 
 | Token | 注入后得到 | 关键方法 |
 | --- | --- | --- |
-| `scheduleHostToken`（`@zhin.js/plugin-runtime`） | `PluginScheduleHost`（按 owner 隔离） | 注册/取消 cron 任务；与 `messageGatewayToken` 组合即可做定时推送 |
-| `scheduleRootHostToken`（`@zhin.js/plugin-runtime`，仅 root） | `ScheduleHost` | 进程级日程宿主 |
+| `scheduleHostToken`（`zhin.js`） | `PluginScheduleHost`（按 owner 隔离） | 注册/取消 cron 任务；与 `messageGatewayToken` 组合即可做定时推送 |
+| `scheduleRootHostToken`（`zhin.js`，仅 root） | `ScheduleHost` | 进程级日程宿主 |
 
 ## Agent
 
@@ -34,7 +34,7 @@ Plugin Runtime 里，插件通过 `context.use(token)`（setup 期）或命令/�
 
 | Token | 注入后得到 | 关键方法 |
 | --- | --- | --- |
-| `htmlRendererToken`（`@zhin.js/plugin-runtime`） | `HtmlRendererHost` | `render(html, opts)` → png（装了 `@zhin.js/html-renderer` 时可用；未装时出站 html 段降级文本） |
+| `htmlRendererToken`（`zhin.js`） | `HtmlRendererHost` | `render(html, opts)` → png（装了 `@zhin.js/html-renderer` 时可用；未装时出站 html 段降级文本） |
 | `httpHostToken`（`@zhin.js/host-http`） | `HttpHost` | `route(method, path, handler, meta?)` 注册 HTTP 路由（Console/MCP/A2A/适配器 webhook 共用） |
 
 ## 用法示例

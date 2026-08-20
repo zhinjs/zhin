@@ -23,7 +23,7 @@ import { DisposeStack } from './dispose';           // ❌
 
 唯一启动路径是 `zhin runtime start`。新插件：
 
-- `plugin.ts` default-export `definePlugin()`（`@zhin.js/plugin-runtime` / `zhin.js/plugin-runtime`）
+- `plugin.ts` default-export `definePlugin()`（作者：`zhin.js`；实现包 `@zhin.js/plugin-runtime`）
 - 能力放在约定目录（`commands/` → `defineCommand`，`tools/` → `defineAgentTool`，…），一个文件一个 default export
 - **不要**调用已移除的 `usePlugin()` / `getPlugin()`，也不要导入已删除的 `zhin.js/node`
 
@@ -34,10 +34,10 @@ import { DisposeStack } from './dispose';           // ❌
 `zhin.js/node` 与 `bootstrapNode` **已删除且不再导出**。唯一入口是 `definePlugin()` + `zhin runtime start`。仓库内 legacy Plugin 引用由门禁 `pnpm check:use-plugin-top-level` / `pnpm check:get-plugin-runtime` 拦截。迁移：`.github/skills/migrate-zhin-plugin-runtime`。
 ## 模块级状态：createGenerationStore
 
-插件热重载意味着同一份模块代码会被多个 generation 先后使用。裸的模块级 `let _x` 单例会让新一代读到上一代已释放的资源，或让旧代卸载时误清掉新代的值。统一用 `createGenerationStore<T>(name)`（`@zhin.js/plugin-runtime`）：
+插件热重载意味着同一份模块代码会被多个 generation 先后使用。裸的模块级 `let _x` 单例会让新一代读到上一代已释放的资源，或让旧代卸载时误清掉新代的值。统一用 `createGenerationStore<T>(name)`（`zhin.js`）：
 
 ```ts
-import { createGenerationStore } from '@zhin.js/plugin-runtime';
+import { createGenerationStore } from 'zhin.js';
 
 const dbStore = createGenerationStore<Database>('my-plugin-db');
 

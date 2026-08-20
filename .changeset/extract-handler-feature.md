@@ -12,6 +12,6 @@ Also add the `zhin.js/middleware` facade re-export so Stable Feature authoring i
 
 `@zhin.js/feature-kit` is now kit-only: handler authoring, `HandlerIndex`, and the Feature provider entry are removed. Do not list `@zhin.js/feature-kit` in `zhin.features`.
 
-**Authoring:** apps and plugins that depend on `zhin.js` should import `define*` from facade subpaths (`zhin.js/command`, `zhin.js/middleware`, `zhin.js/handler`, `zhin.js/adapter`, `zhin.js/component`, `zhin.js/plugin-runtime`) — do not separately install the `@zhin.js/*` Feature implementation packages. Workspace plugins/examples were updated accordingly (redundant Feature deps removed; child plugins keep `zhin.features` mounts and peer `zhin.js`).
+**Authoring:** apps and plugins that depend on `zhin.js` should import `definePlugin` from the main entry (`zhin.js`) and other `define*` from facade subpaths (`zhin.js/command`, `zhin.js/middleware`, `zhin.js/handler`, `zhin.js/adapter`, `zhin.js/component`) — do not separately install `@zhin.js/plugin-runtime` or the `@zhin.js/*` Feature implementation packages. Workspace plugins/examples/adapters were updated accordingly (imports + deps; child plugins keep `zhin.features` mounts and peer `zhin.js`). CLI `zhin new` / migrate cutover scaffolds follow the same rule.
 
 BREAKING CHANGE: `@zhin.js/feature-kit` no longer exports handler APIs and is no longer a `type: "feature"` package.

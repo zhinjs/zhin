@@ -53,7 +53,7 @@ addCommand(new MessageCommand('profile').action(async (message) => {
 
 ```ts
 // 新 plugin.ts：状态成为 owner Resource
-import { createToken, definePlugin } from 'zhin.js/plugin-runtime';
+import { createToken, definePlugin } from 'zhin.js';
 
 export const cacheToken = createToken<Map<string, Profile>>('my-plugin.cache');
 

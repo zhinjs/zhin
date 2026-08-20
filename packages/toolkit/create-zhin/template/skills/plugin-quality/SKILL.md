@@ -48,7 +48,7 @@ const plugin = usePlugin()
 plugin.addCommand(new MessageCommand('hi').action(() => 'hi'))
 
 // ✅ Runtime
-import { definePlugin } from 'zhin.js/plugin-runtime'
+import { definePlugin } from 'zhin.js'
 export default definePlugin({ name: 'my-plugin', setup() {} })
 // + commands/hi.ts → defineCommand(...)
 ```

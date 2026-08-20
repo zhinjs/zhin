@@ -8,7 +8,7 @@ import {
   databaseHostToken,
   definePlugin,
   scheduleHostToken,
-} from 'zhin.js/plugin-runtime';
+} from 'zhin.js';
 import { defineAgentTool } from '@zhin.js/tool';
 
 interface ShowcaseConfig {

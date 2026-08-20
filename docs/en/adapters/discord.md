@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-discord discord.js
 
 - `@zhin.js/adapter` — convention-based `adapters/discord.ts` (`defineAdapter`)
 - `@zhin.js/core` — `messageGatewayToken` inbound/outbound
-- `@zhin.js/plugin-runtime` — `plugin.ts` (`definePlugin`)
+- `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 - **Does not require** `@zhin.js/host-http` / `@zhin.js/host-router` (Gateway path)
 

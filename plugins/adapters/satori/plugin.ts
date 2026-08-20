@@ -1,5 +1,5 @@
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 import { satoriRuntimeStateToken } from './src/satori-runtime-state.js';
 
 export default definePlugin({

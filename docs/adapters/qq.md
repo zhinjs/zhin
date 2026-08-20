@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=fe9dacbde5c082c6 -->
+<!-- sync-adapter-docs:sha256=1215f48d500c7966 -->
 
 # @zhin.js/adapter-qq
 
@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-qq
 
 - `@zhin.js/adapter` — 约定式 `adapters/qq.ts`（`defineAdapter`）
 - `@zhin.js/core` — `messageGatewayToken` 入站/出站
-- `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
+- `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 - **无需** `@zhin.js/host-http` / `@zhin.js/host-router`（WebSocket 路径）
 

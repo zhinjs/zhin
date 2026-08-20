@@ -12,7 +12,7 @@ import {
 } from 'zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import type { CapabilityId } from 'zhin.js/plugin-runtime';
+import type { CapabilityId } from 'zhin.js';
 import { createOneBot11EndpointManagement } from './endpoint-management.js';
 import { registerOnebot11AgentEndpoint } from './onebot11-agent-deps.js';
 import {

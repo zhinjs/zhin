@@ -1,5 +1,5 @@
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 import { permissionHostToken, createSceneRolePlatformChecker } from '@zhin.js/permission';
 import { napcatRuntimeStateToken } from './src/napcat-runtime-state.js';
 

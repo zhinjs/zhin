@@ -23,7 +23,7 @@ pnpm add @zhin.js/adapter-satori
 
 - `@zhin.js/adapter` — 约定式 `adapters/satori.ts`（`defineAdapter`）
 - `@zhin.js/core` — `messageGatewayToken` 入站/出站
-- `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
+- `zhin.js` — `plugin.ts`（`definePlugin`）
 - `@zhin.js/host-http` — Webhook 模式需 `httpHostToken` 注册 POST 路由
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`（`baseUrl` / `token` / …）
 

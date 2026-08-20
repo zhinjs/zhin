@@ -10,7 +10,7 @@ import {
   type MessageRef,
 } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import type { CapabilityId } from 'zhin.js/plugin-runtime';
+import type { CapabilityId } from 'zhin.js';
 import { runTelegramPollLoop } from './polling.js';
 import { normalizeTelegramChatMember } from './platform-permit.js';
 import {

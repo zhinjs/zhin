@@ -4,7 +4,7 @@ import {
   type ActivityFeedbackEventContext,
   type ResolvedActivityFeedbackPhaseConfig,
 } from '@zhin.js/agent';
-import type { OutboundHost, OutboundSendInput } from 'zhin.js/plugin-runtime';
+import type { OutboundHost, OutboundSendInput } from 'zhin.js';
 import { ActivityFeedbackExecutor, createOutboundEndpointAccess } from '../src/executor.js';
 
 function createCtx(): ActivityFeedbackEventContext {

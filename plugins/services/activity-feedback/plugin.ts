@@ -1,4 +1,4 @@
-import { definePlugin, outboundHostToken } from 'zhin.js/plugin-runtime';
+import { definePlugin, outboundHostToken } from 'zhin.js';
 import { getLogger } from '@zhin.js/logger';
 import {
   loadActivityFeedbackServiceConfig,

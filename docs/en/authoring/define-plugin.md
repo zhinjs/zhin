@@ -1,9 +1,9 @@
 # definePlugin
 
-Declaring a plugin requires no base class inheritance and no manual registration in any registry -- default-exporting the return value of `definePlugin(...)` (from `@zhin.js/plugin-runtime`) is all you need. This return value is called a `PluginDefinition`: a name, metadata, dependency declarations, plus a `setup(context)` assembly function.
+Declaring a plugin requires no base class inheritance and no manual registration in any registry -- default-exporting the return value of `definePlugin(...)` (from `zhin.js`) is all you need. This return value is called a `PluginDefinition`: a name, metadata, dependency declarations, plus a `setup(context)` assembly function.
 
 ```ts
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 
 export default definePlugin<MyConfig>({
   name: 'my-plugin',
@@ -41,7 +41,7 @@ they do not create a second registry.
 ```ts
 import { defineCommand } from 'zhin.js/command';
 import { defineComponent } from 'zhin.js/component';
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 
 export default definePlugin({
   name: 'single-file-bot',
@@ -100,7 +100,7 @@ export default definePlugin({
 
 ## Host token
 
-Host tokens are capability handles provided by the Host to plugins, resolved in `setup` via `context.resources`. The CLI Host automatically assembles them at startup; tokens not assembled are checked with `has()` for graceful degradation. The first six are exported from `@zhin.js/plugin-runtime`, and `httpHostToken` is exported from `@zhin.js/host-http`.
+Host tokens are capability handles provided by the Host to plugins, resolved in `setup` via `context.resources`. The CLI Host automatically assembles them at startup; tokens not assembled are checked with `has()` for graceful degradation. The first six are exported from `zhin.js` (implementation package `@zhin.js/plugin-runtime`), and `httpHostToken` is exported from `@zhin.js/host-http`.
 
 | token | token id | Availability condition | Key methods |
 | --- | --- | --- | --- |

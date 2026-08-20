@@ -22,7 +22,7 @@ zhin runtime migrate status        # 输出 JSON；state 为 ready 时退出码 
 | `blocked` | 有 `error` 或 `manual` 诊断，自动迁移无法证明语义等价 | 人工清掉诊断，见 [人工诊断处理](./references/manual-diagnostics.md) |
 | `extraction-required` | 还有能自动搬运的注册（`automatic > 0`） | `zhin runtime migrate extract --write` |
 | `cutover-required` | 能力已就位，但 `package.json#zhin` / `plugin.ts` 还没生成 | `zhin runtime migrate cutover --write` |
-| `dual-run` | 仍在 import `zhin.js` / `@zhin.js/core` / `@zhin.js/kernel` | 删掉旧入口与旧 import |
+| `dual-run` | 仍在从 `zhin.js` 导入经典 API（`usePlugin` / `MessageCommand` 等），或直接 import `@zhin.js/core` / `@zhin.js/kernel` | 改用门面约定 API（`definePlugin` / `defineCommand` 等），删掉旧入口 |
 | `compat` | 仍在 import `@zhin.js/next-compat` | 移除 compat 依赖 |
 | `ready` | 完成 | 跑构建与测试 |
 
@@ -39,8 +39,7 @@ zhin runtime migrate status        # 输出 JSON；state 为 ready 时退出码 
 4. **清诊断**：每条 `manual` 都要人工处理，见 [人工诊断处理](./references/manual-diagnostics.md)。
    最常见的是 action 捕获了模块级变量 —— 把它提升为 owner Resource，能力文件再从执行上下文读。
 5. **装配**：`zhin runtime migrate cutover --write` 生成 `package.json#zhin` 与 `plugin.ts`，
-   并补齐 `@zhin.js/plugin-runtime`、`@zhin.js/runtime` 以及按能力所需的
-   `@zhin.js/command|middleware|component` 依赖。启动脚本统一是
+   并补齐 `zhin.js`、`@zhin.js/runtime`；Stable Features 可由 Root 继承，不必再装 `@zhin.js/command|middleware|component`（cutover 仍可能按约定目录写入 features 挂载）。启动脚本统一是
    `zhin runtime start`，不要再写失效的 `zhin dev` / `zhin start` / `zhin build`。
    - `package.json#private: true` 的本地 TS root 使用 `entry: "./plugin.ts"`，直接执行
      `pnpm dev` 或 `zhin runtime start`。
@@ -62,7 +61,7 @@ zhin runtime migrate status        # 输出 JSON；state 为 ready 时退出码 
 
 ```ts
 // plugin.ts
-import { createToken, definePlugin, databaseHostToken } from 'zhin.js/plugin-runtime';
+import { createToken, definePlugin, databaseHostToken } from 'zhin.js';
 
 export const storeToken = createToken<Store>('my-plugin.store');
 

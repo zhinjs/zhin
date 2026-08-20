@@ -38,7 +38,7 @@ export default defineCommand({
 需要"每天 9 点往群里发一句"？用 schedule host——在 `plugin.ts` 的 `setup()` 里：
 
 ```ts
-import { definePlugin, scheduleHostToken } from 'zhin.js/plugin-runtime'
+import { definePlugin, scheduleHostToken } from 'zhin.js'
 
 export default definePlugin({
   name: 'my-bot',

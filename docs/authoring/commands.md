@@ -20,7 +20,7 @@ export default defineCommand({
 单文件 Bot 可以在插件入口注册同一个 definition：
 
 ```ts
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 
 export default definePlugin({
   name: 'my-bot',
@@ -48,7 +48,7 @@ HMR 粒度缩小到单个命令文件。
 | `commands/endpoint/add/[[name]].ts` | `qq` | `qq.endpoint add [name]` |
 | `commands/foo.ts` | `b` 下的 `a`（`root/b/a`） | `b.a.foo` |
 
-先看嵌套：`commands/` 递归扫描，嵌套目录直接映射为子命令段。静态段文件名 / 目录名须通过 `isCapabilityLocalSegment`（`@zhin.js/plugin-runtime`）：
+先看嵌套：`commands/` 递归扫描，嵌套目录直接映射为子命令段。静态段文件名 / 目录名须通过 `isCapabilityLocalSegment`（`zhin.js`）：
 
 - **ASCII kebab**：`/^[a-z0-9][a-z0-9-]*$/`（如 `hello.ts`、`lottery-today.ts`）
 - **Unicode 名**：含至少一个非 ASCII 字符、无 ASCII 大写，如 `赞我.ts`（触发词即 `赞我`）

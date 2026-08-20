@@ -18,7 +18,7 @@ Module state cannot identify the calling root, plugin owner, generation, or snap
 Define one token that aggregates the plugin's runtime capabilities:
 
 ```ts
-import { createToken } from 'zhin.js/plugin-runtime';
+import { createToken } from 'zhin.js';
 
 export interface LotteryRuntime {
   readonly db: LotteryDb;

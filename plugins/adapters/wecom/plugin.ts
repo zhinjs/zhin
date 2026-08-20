@@ -1,5 +1,5 @@
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 import { permissionHostToken } from '@zhin.js/permission';
 import { checkWecomPlatformPermit } from './src/platform-permit.js';
 import { wecomRuntimeStateToken } from './src/wecom-runtime-state.js';

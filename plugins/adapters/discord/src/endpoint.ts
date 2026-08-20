@@ -16,7 +16,7 @@ import {
   type MessageRef,
 } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import type { CapabilityId } from 'zhin.js/plugin-runtime';
+import type { CapabilityId } from 'zhin.js';
 import { registerDiscordAgentEndpoint } from './discord-agent-deps.js';
 import {
   connectDiscordGatewayClient,

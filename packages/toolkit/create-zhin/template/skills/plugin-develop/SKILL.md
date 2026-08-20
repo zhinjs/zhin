@@ -90,7 +90,7 @@ export default defineAgentTool({
 **定时任务**（在 `plugin.ts` setup；完整骨架见仓库 skill `assets/cron-template.ts`）：
 
 ```typescript
-import { definePlugin, scheduleHostToken } from 'zhin.js/plugin-runtime';
+import { definePlugin, scheduleHostToken } from 'zhin.js';
 
 export default definePlugin({
   name: 'my-plugin',

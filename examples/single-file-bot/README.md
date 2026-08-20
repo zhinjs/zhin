@@ -4,7 +4,7 @@
 
 ```ts
 import { defineCommand } from 'zhin.js/command';
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 
 export default definePlugin({
   name: 'single-file-bot',

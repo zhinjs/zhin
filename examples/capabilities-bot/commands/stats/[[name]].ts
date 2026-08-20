@@ -1,4 +1,4 @@
-import { databaseHostToken } from 'zhin.js/plugin-runtime';
+import { databaseHostToken } from 'zhin.js';
 import { defineCommand } from 'zhin.js/command';
 
 interface ShowcaseConfig {

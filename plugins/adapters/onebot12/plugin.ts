@@ -1,5 +1,5 @@
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 import { onebot12RuntimeStateToken } from './src/onebot12-runtime-state.js';
 
 export default definePlugin({

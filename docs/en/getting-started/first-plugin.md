@@ -30,7 +30,7 @@ ping-pong/
   },
   "dependencies": {
     "@zhin.js/command": "^1.0.0",
-    "@zhin.js/plugin-runtime": "^1.0.0"
+    "zhin.js": "^4.0.0"
   },
   "devDependencies": {
     "@zhin.js/cli": "^1.0.0"
@@ -61,7 +61,7 @@ The `zhin` field is the plugin topology manifest:
 ## 2. plugin.ts
 
 ```ts
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 
 interface PingPongConfig {
   reply: string;

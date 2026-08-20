@@ -6,7 +6,7 @@
 //     package.json        ← "zhin": { "protocol": 1, "type": "plugin", "entry": "./plugin.ts", ... }
 //     plugin.ts           ← 本文件：只做装配与生命周期
 //     commands/hello.ts   ← 命令（见文件末尾）
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 
 export default definePlugin({
   // 必须匹配 /^[a-z][a-z0-9-]*$/

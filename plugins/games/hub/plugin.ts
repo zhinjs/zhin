@@ -1,4 +1,4 @@
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 
 /**
  * Plugin Runtime game hub — lists games registered via `registerRuntimeGame`.

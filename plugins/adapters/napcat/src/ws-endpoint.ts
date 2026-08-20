@@ -12,7 +12,7 @@ import {
 } from 'zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import type { CapabilityId } from 'zhin.js/plugin-runtime';
+import type { CapabilityId } from 'zhin.js';
 import { createNapCatEndpointManagement } from './endpoint-management.js';
 import { registerNapcatAgentEndpoint } from './napcat-agent-deps.js';
 import {

@@ -2,7 +2,7 @@
  * github_oauth_users — SSOT for Runtime user-token binding (gh bind / Endpoint lookup).
  */
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import type { DatabaseHost, PluginDatabaseHost } from 'zhin.js/plugin-runtime';
+import type { DatabaseHost, PluginDatabaseHost } from 'zhin.js';
 
 const logger = getLogger('github');
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { DisposeStack } from 'zhin.js/plugin-runtime';
+import { DisposeStack } from 'zhin.js';
 import { activityFeedbackAiBus } from '@zhin.js/agent';
 import plugin from '../plugin.ts';
 import { loadActivityFeedbackServiceConfig } from '../src/config.js';

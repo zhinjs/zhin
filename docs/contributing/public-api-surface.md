@@ -20,7 +20,7 @@
 
 | API | 稳定性 | 作者 import | 实现包 | 一句话 |
 |-----|--------|-------------|--------|--------|
-| `definePlugin` | `stable` | `zhin.js/plugin-runtime` | `@zhin.js/plugin-runtime` | 约定式插件入口，`plugin.ts` 默认导出 |
+| `definePlugin` | `stable` | `zhin.js` | `@zhin.js/plugin-runtime` | 约定式插件入口，`plugin.ts` 默认导出 |
 | `defineCommand` | `stable` | `zhin.js/command` | `@zhin.js/command` | 命令模块（`commands/` 下默认导出） |
 | `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | 适配器模块（`adapters/` 下默认导出），`create(context)` 返回 Endpoint |
 | `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR 组件（`components/` 下默认导出） |
@@ -34,7 +34,7 @@
 
 | 约定 | 稳定性 | 消费方 | 一句话 |
 |------|--------|--------|--------|
-| `plugin.ts` | `stable` | `@zhin.js/plugin-runtime` | 插件根入口，默认导出 `definePlugin(...)` |
+| `plugin.ts` | `stable` | `zhin.js`（实现 `@zhin.js/plugin-runtime`） | 插件根入口，默认导出 `definePlugin(...)` |
 | `commands/` | `stable` | `@zhin.js/command`（作者 import：`zhin.js/command`） | 命令模块目录，支持 `[name]` / `[[name]]` / `[...name]` 动态参数段 |
 | `adapters/` | `stable` | `@zhin.js/adapter`（作者 import：`zhin.js/adapter`） | 适配器模块目录 |
 | `middlewares/` | `stable` | `@zhin.js/middleware`（作者 import：`zhin.js/middleware`） | 中间件模块目录 |
@@ -48,9 +48,9 @@
 
 | Token | 稳定性 | 来源包 | 一句话 |
 |-------|--------|--------|--------|
-| `databaseHostToken` | `stable` | `@zhin.js/plugin-runtime` | 数据库 Host 能力 |
-| `scheduleHostToken` | `stable` | `@zhin.js/plugin-runtime` | 定时任务 Host 能力 |
-| `outboundHostToken` | `stable` | `@zhin.js/plugin-runtime` | 跨平台出站消息能力 |
+| `databaseHostToken` | `stable` | `zhin.js` | 数据库 Host 能力 |
+| `scheduleHostToken` | `stable` | `zhin.js` | 定时任务 Host 能力 |
+| `outboundHostToken` | `stable` | `zhin.js` | 跨平台出站消息能力 |
 | `messageGatewayToken` | `stable` | `@zhin.js/core`（`zhin.js/core/runtime`） | 入站消息投递网关（适配器用） |
 | `httpHostToken` | `stable` | `@zhin.js/host-http` | HTTP/WS Host 能力（Console、Webhook 用） |
 

@@ -236,7 +236,7 @@ function pluginName(packageName: string): string {
 
 function renderEntry(name: string): string {
   return [
-    "import { definePlugin } from 'zhin.js/plugin-runtime';",
+    "import { definePlugin } from 'zhin.js';",
     '',
     `export default definePlugin({ name: '${name}' });`,
     '',
@@ -280,7 +280,7 @@ function withRuntimeDependencies(
   // 仅全新 cutover（尚无 zhin manifest）按约定目录补齐能力依赖；
   // 已迁移项目尊重作者声明——Stable Features 可由 zhin.js 挂载，不强制逐项依赖。
   if (!scaffold) return dependencies;
-  setRequiredDependency(dependencies, '@zhin.js/plugin-runtime');
+  // definePlugin / Host tokens 经 zhin.js 主入口 re-export，勿再强制装 @zhin.js/plugin-runtime
   setRequiredDependency(dependencies, '@zhin.js/runtime');
   for (const capability of capabilities) setRequiredDependency(dependencies, capabilityProviders[capability]);
   return dependencies;
@@ -445,7 +445,6 @@ async function assertCompletedDependencies(
   const required = hasFacadeOrCarrier
     ? []
     : [
-      '@zhin.js/plugin-runtime',
       '@zhin.js/runtime',
       'zhin.js',
       ...capabilities.map((capability) => capabilityProviders[capability]),

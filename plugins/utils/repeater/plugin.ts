@@ -1,4 +1,4 @@
-import { definePlugin } from 'zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js';
 import { getRepeaterEngine } from './src/engine.js';
 
 export default definePlugin({

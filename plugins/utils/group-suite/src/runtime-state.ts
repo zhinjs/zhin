@@ -1,4 +1,4 @@
-import { createToken, type Token } from 'zhin.js/plugin-runtime';
+import { createToken, type Token } from 'zhin.js';
 import type { GroupSuiteMemoryDb } from './memory-store.js';
 
 export interface PendingStatsIncrement {
