@@ -4,6 +4,8 @@ import {
   parseHandlerDefinition,
   HandlerIndex,
   isHandlerIndex,
+  handlerEventFromLocalName,
+  resolveHandlerEvent,
   handlerFeatureId,
   handlerFeature,
   type HandlerDefinition,
@@ -114,10 +116,28 @@ function createSlot(
     id: `slot-${localName}` as never,
     owner,
     localName,
-    source: `/handlers/${localName.replace(/\./g, '/')}.ts`,
+    source: `/handlers/${localName}.ts`,
     definition,
   });
 }
+
+describe('handlerEventFromLocalName', () => {
+  it('maps / capability segments to Lifecycle event dots', () => {
+    expect(handlerEventFromLocalName('notice/receive')).toBe('notice.receive');
+    expect(handlerEventFromLocalName('ai/tool/call')).toBe('ai.tool.call');
+    expect(handlerEventFromLocalName('message-receive')).toBe('message-receive');
+  });
+});
+
+describe('resolveHandlerEvent', () => {
+  it('prefers explicit event over localName mapping', () => {
+    expect(resolveHandlerEvent('notice/receive', 'custom.event')).toBe('custom.event');
+  });
+
+  it('infers event from localName when omitted', () => {
+    expect(resolveHandlerEvent('notice/receive', undefined)).toBe('notice.receive');
+  });
+});
 
 describe('HandlerIndex', () => {
   it('indexes handlers by event name from definition.event', () => {
@@ -126,7 +146,7 @@ describe('HandlerIndex', () => {
     const snapshot = createSnapshot();
 
     const index = new HandlerIndex(
-      [createSlot('message.receive', h1), createSlot('endpoint.connect', h2)],
+      [createSlot('message/receive', h1), createSlot('endpoint/connect', h2)],
       snapshot,
     );
 
@@ -136,16 +156,17 @@ describe('HandlerIndex', () => {
     expect(index.has('unknown.event')).toBe(false);
   });
 
-  it('falls back to localName when definition.event is omitted', () => {
+  it('maps path localName to dotted event when definition.event is omitted', () => {
     const handler = defineHandler({ handle() {} });
     const snapshot = createSnapshot();
 
     const index = new HandlerIndex(
-      [createSlot('ai.tool.call', handler)],
+      [createSlot('ai/tool/call', handler)],
       snapshot,
     );
 
     expect(index.has('ai.tool.call')).toBe(true);
+    expect(index.has('ai/tool/call')).toBe(false);
   });
 
   it('dispatches to matching handlers', async () => {
@@ -155,7 +176,7 @@ describe('HandlerIndex', () => {
       handle(...args: unknown[]) { called.push(args); },
     });
     const snapshot = createSnapshot();
-    const index = new HandlerIndex([createSlot('test.event', handler)], snapshot);
+    const index = new HandlerIndex([createSlot('test/event', handler)], snapshot);
 
     await index.dispatch('test.event', 'arg1', 'arg2');
     expect(called).toEqual([['arg1', 'arg2']]);
@@ -185,17 +206,30 @@ describe('HandlerIndex', () => {
   it('list() returns descriptors without internal slot', () => {
     const handler = defineHandler({ event: 'foo.bar', handle() {} });
     const snapshot = createSnapshot();
-    const index = new HandlerIndex([createSlot('foo.bar', handler)], snapshot);
+    const index = new HandlerIndex([createSlot('foo/bar', handler)], snapshot);
 
     const descriptors = index.list();
     expect(descriptors).toHaveLength(1);
     expect(descriptors[0]).toEqual({
       owner: 'test-plugin',
-      name: 'foo.bar',
+      name: 'foo/bar',
       source: '/handlers/foo/bar.ts',
       event: 'foo.bar',
     });
     expect((descriptors[0] as Record<string, unknown>).slot).toBeUndefined();
+  });
+
+  it('list() infers event from slash localName when event omitted', () => {
+    const handler = defineHandler({ handle() {} });
+    const snapshot = createSnapshot();
+    const index = new HandlerIndex([createSlot('notice/receive', handler)], snapshot);
+
+    expect(index.list()).toEqual([{
+      owner: 'test-plugin',
+      name: 'notice/receive',
+      source: '/handlers/notice/receive.ts',
+      event: 'notice.receive',
+    }]);
   });
 });
 
@@ -218,11 +252,11 @@ describe('isHandlerIndex', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Handler convention (separator = '.')
+// Handler convention (localName uses `/`; event mapping is HandlerIndex)
 // ---------------------------------------------------------------------------
 
-describe('typeScriptModules with separator', () => {
-  it('joins nested local names with dot separator for handlers', async () => {
+describe('typeScriptModules for handlers', () => {
+  it('joins nested handler paths with / for capability localName', async () => {
     const sources = await discoverHandlers('/workspace/plugin', {
       'handlers': [
         { name: 'message', kind: 'directory' },
@@ -233,11 +267,11 @@ describe('typeScriptModules with separator', () => {
     });
 
     expect(sources).toEqual([
-      { localName: 'message.receive', source: '/workspace/plugin/handlers/message/receive.ts' },
+      { localName: 'message/receive', source: '/workspace/plugin/handlers/message/receive.ts' },
     ]);
   });
 
-  it('handles deeply nested event paths', async () => {
+  it('handles deeply nested handler paths', async () => {
     const sources = await discoverHandlers('/workspace/plugin', {
       'handlers': [
         { name: 'ai', kind: 'directory' },
@@ -252,8 +286,8 @@ describe('typeScriptModules with separator', () => {
     });
 
     expect(sources).toEqual([
-      { localName: 'ai.tool.call', source: '/workspace/plugin/handlers/ai/tool/call.ts' },
-      { localName: 'ai.tool.result', source: '/workspace/plugin/handlers/ai/tool/result.ts' },
+      { localName: 'ai/tool/call', source: '/workspace/plugin/handlers/ai/tool/call.ts' },
+      { localName: 'ai/tool/result', source: '/workspace/plugin/handlers/ai/tool/result.ts' },
     ]);
   });
 
@@ -344,7 +378,6 @@ async function discoverHandlers(
   const convention = typeScriptModules({
     id: 'handlers-ts',
     directory: 'handlers',
-    separator: '.',
   });
   const sources: Array<{ localName: string; source: string }> = [];
   for await (const source of convention.discover({

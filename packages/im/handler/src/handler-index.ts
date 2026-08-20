@@ -13,6 +13,21 @@ interface HandlerRecord extends HandlerDescriptor {
   readonly slot: Readonly<CapabilitySlot<HandlerDefinition>>;
 }
 
+/**
+ * Capability localName（`/` 分段）→ Lifecycle 事件名（`.` 分段）。
+ * `handlers/notice/receive.ts` → localName `notice/receive` → event `notice.receive`。
+ */
+export function handlerEventFromLocalName(localName: string): string {
+  return localName.replaceAll('/', '.');
+}
+
+export function resolveHandlerEvent(
+  localName: string,
+  event: string | undefined,
+): string {
+  return event ?? handlerEventFromLocalName(localName);
+}
+
 export class HandlerIndex {
   readonly $projection = 'zhin.handler-index/1' as const;
   readonly #byEvent: ReadonlyMap<string, readonly HandlerRecord[]>;
@@ -25,7 +40,7 @@ export class HandlerIndex {
     this.#snapshot = snapshot;
     const buckets = new Map<string, HandlerRecord[]>();
     for (const slot of slots) {
-      const event = slot.definition.event ?? slot.localName;
+      const event = resolveHandlerEvent(slot.localName, slot.definition.event);
       let list = buckets.get(event);
       if (!list) {
         list = [];

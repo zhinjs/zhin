@@ -25,7 +25,7 @@ Three tiers:
 | `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | Adapter module (default export in `adapters/`), `create(context)` returns an Endpoint |
 | `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR component (default export in `components/`) |
 | `defineMiddleware` | `stable` | `zhin.js/middleware` | `@zhin.js/middleware` | Middleware module (default export in `middlewares/`) |
-| `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle event handler (default export in `handlers/`; path segments joined with `.`) |
+| `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle event handler (default export in `handlers/`; `/` → `.` event inference) |
 | `defineAgentTool` | `experimental` | `@zhin.js/tool` (`tools/`); `zhin.js/agent` (`agent/tools/*.ts`) | `@zhin.js/tool` | AI tool module, auto-discovered by Agent |
 
 > Note: **There is no `defineAgentSkill`**. Agent skills are pure Markdown (`agent/skills/*.md`, parsed by `parseSkillMarkdown` from `@zhin.js/skill`), not code symbols.
@@ -38,7 +38,7 @@ Three tiers:
 | `commands/` | `stable` | `@zhin.js/command` (author import: `zhin.js/command`) | Command module directory, supports `[name]` / `[[name]]` / `[...name]` dynamic parameter segments |
 | `adapters/` | `stable` | `@zhin.js/adapter` (author import: `zhin.js/adapter`) | Adapter module directory |
 | `middlewares/` | `stable` | `@zhin.js/middleware` (author import: `zhin.js/middleware`) | Middleware module directory |
-| `handlers/` | `stable` | `@zhin.js/handler` (author import: `zhin.js/handler`) | Lifecycle event handler directory (path segments joined with `.`; runtime currently wires `message.receive`) |
+| `handlers/` | `stable` | `@zhin.js/handler` (author import: `zhin.js/handler`) | Lifecycle event handler directory (`/` localName segments; omit `event` → `.` event; runtime currently wires `message.receive`) |
 | `tools/` | `experimental` | `@zhin.js/tool` | Agent tool directory (`defineAgentTool`) |
 | `agent/tools` | `experimental` | `zhin.js/agent` authoring | File-based Agent tool authoring surface |
 | `agent/skills` | `experimental` | `@zhin.js/skill` / Agent discovery | Agent skill Markdown (published with npm packages) |

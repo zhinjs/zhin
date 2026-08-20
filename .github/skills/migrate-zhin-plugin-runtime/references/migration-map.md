@@ -6,7 +6,7 @@
 |---|---|
 | `addCommand(new MessageCommand(...))` | `commands/**/*.ts` + `defineCommand()` |
 | `addMiddleware(fn)` | `middlewares/*.ts` + `defineMiddleware()` |
-| `plugin.on('message.*.receive')` / `plugin.on('message.receive')` | 有序链：`middlewares/*.ts` + `target: 'inbound'`；fire-and-forget：`handlers/message/receive.ts` + `defineHandler()`（路径段用 `.` 拼 localName） |
+| `plugin.on('message.*.receive')` / `plugin.on('message.receive')` | 有序链：`middlewares/*.ts` + `target: 'inbound'`；fire-and-forget：`handlers/message/receive.ts` + `defineHandler()`（localName 用 `/`，省略 `event` 时映为 `message.receive`） |
 | `plugin.on('before.sendMessage')` | `middlewares/*.ts` + `target: 'outbound'` |
 | `addComponent(fn)` | `components/*.ts(x)` + `defineComponent()` |
 | `addTool()` / Tool registry | `tools/*.ts` + `defineAgentTool()` |

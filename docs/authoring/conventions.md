@@ -24,7 +24,7 @@ flowchart LR
 | --- | --- | --- | --- | --- | --- | --- |
 | `commands/` | `.ts` / `.tsx`，支持动态参数文件 | 是（子目录拼层级） | server | `@zhin.js/command` | `zhin.command` | `defineCommand(...)` |
 | `middlewares/` | `.ts` | 是 | server | `@zhin.js/middleware` | `zhin.middleware` | `defineMiddleware(...)` |
-| `handlers/` | `.ts` | 是（路径段用 `.` 拼接） | server | `@zhin.js/handler` | `zhin.handler` | `defineHandler(...)` |
+| `handlers/` | `.ts` | 是（`/` 分段；省略 `event` 时映为 `.` 事件名） | server | `@zhin.js/handler` | `zhin.handler` | `defineHandler(...)` |
 | `components/` | `.ts` / `.tsx` | 是 | server | `@zhin.js/component` | `zhin.component` | `defineComponent(...)` |
 | `adapters/` | `.ts` | 是 | server | `@zhin.js/adapter` | `zhin.adapter` | `defineAdapter(...)` |
 | `tools/` | `.ts` | 否 | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
@@ -45,7 +45,7 @@ flowchart LR
 | --- | --- | --- |
 | `commands/` | 子目录与文件名用 `/` 拼接；静态段可为 ASCII kebab 或 Unicode 名（如 `赞我`）；动态参数文件用 Next.js 风格方括号声明形态并映射为 `$name` 段：`[name].ts(x)` 必需、`[[name]].ts(x)` 可选、`[...name].ts(x)` 捕获所有、`[[...name]].ts(x)` 可选捕获所有；类型与默认值在 `defineCommand({ params })` 中声明 | `commands/lottery-today.ts` → `lottery-today`；`commands/赞我.ts` → `赞我`；`commands/lottery/[[game]].ts` → `lottery/$game` |
 | `middlewares/` | 相对路径去扩展名，`/` 拼接 | `middlewares/keyword-reply.ts` → `keyword-reply` |
-| `handlers/` | 相对路径去扩展名，路径段用 `.` 拼接（与 Lifecycle 事件名对齐）；省略 `event` 时 localName 即事件名 | `handlers/message/receive.ts` → `message.receive` |
+| `handlers/` | 相对路径去扩展名，`/` 拼接为 capability localName；省略 `event` 时把 `/` 映成 `.` 作为 Lifecycle 事件名 | `handlers/message/receive.ts` → localName `message/receive` → event `message.receive` |
 | `components/` | 相对路径去扩展名，`/` 拼接 | `components/share-music.ts` → `share-music` |
 | `adapters/` | 同上 | `adapters/napcat.ts` → `napcat` |
 | `tools/` | 文件名去扩展名（不递归子目录）；ASCII kebab 或 snake | `tools/music-search.ts` → `music-search`；`tools/send_user_like.ts` → `send_user_like` |
@@ -94,7 +94,7 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
 
 ### handlers/ — `defineHandler`
 
-按 **Lifecycle 事件名** 注册监听器（无 `next()` 链）。路径段用 `.` 拼接成 localName；省略 `event` 时用 localName 作为事件名。从 `@zhin.js/core/feature/handler` 导入时，`Plugin.Lifecycle` 已并入 `HandlerEventMap`，写 `event: 'message.receive'` 时参数类型可推断。
+按 **Lifecycle 事件名** 注册监听器（无 `next()` 链）。目录路径用 `/` 作为 capability localName；省略 `event` 时把路径中的 `/` 映成 `.` 得到事件名（如 `handlers/notice/receive.ts` → `notice.receive`）。从 `@zhin.js/core/feature/handler` 导入时，`Plugin.Lifecycle` 已并入 `HandlerEventMap`，写 `event: 'message.receive'` 时参数类型可推断。
 
 依赖 `zhin.js` / `@zhin.js/core` 的 Root 会经由 `platformFeatures` 挂载 `@zhin.js/handler`，无需再单独声明或安装。当前 `ImRuntime` 在入站消息进入命令/中间件流水线**之前**会 `dispatch('message.receive', message)`；其它 Lifecycle 事件名可声明，但未必已由运行时接线。
 

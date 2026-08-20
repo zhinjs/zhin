@@ -23,7 +23,7 @@ adapters/**/*.ts                 defineAdapter()      // import from zhin.js/ada
 commands/**/*.ts                 defineCommand()      // import from zhin.js/command
 components/**/*.ts               defineComponent()    // import from zhin.js/component
 middlewares/**/*.ts              defineMiddleware()   // import from zhin.js/middleware
-handlers/**/*.ts                 defineHandler()      // import from zhin.js/handler; `.`-joined event name
+handlers/**/*.ts                 defineHandler()      // import from zhin.js/handler; path `/` → event `.` when event omitted
 tools/*.ts                       defineAgentTool()
 skills/<name>/SKILL.md           Markdown Skill SSOT
 agents/<name>.agent.md           Markdown Agent SSOT

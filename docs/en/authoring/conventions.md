@@ -24,7 +24,7 @@ A few key points. The full capability id takes the form `owner\0feature\0localNa
 | --- | --- | --- | --- | --- | --- | --- |
 | `commands/` | `.ts` / `.tsx`, supports dynamic parameter files | Yes (subdirectories form hierarchy) | server | `@zhin.js/command` | `zhin.command` | `defineCommand(...)` |
 | `middlewares/` | `.ts` | Yes | server | `@zhin.js/middleware` | `zhin.middleware` | `defineMiddleware(...)` |
-| `handlers/` | `.ts` | Yes (path segments joined with `.`) | server | `@zhin.js/handler` | `zhin.handler` | `defineHandler(...)` |
+| `handlers/` | `.ts` | Yes (`/` segments; omit `event` → map to `.` event name) | server | `@zhin.js/handler` | `zhin.handler` | `defineHandler(...)` |
 | `components/` | `.ts` / `.tsx` | Yes | server | `@zhin.js/component` | `zhin.component` | `defineComponent(...)` |
 | `adapters/` | `.ts` | Yes | server | `@zhin.js/adapter` | `zhin.adapter` | `defineAdapter(...)` |
 | `tools/` | `.ts` | No | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
@@ -45,7 +45,7 @@ Supplementary rules per directory:
 | --- | --- | --- |
 | `commands/` | Subdirectories and file names joined with `/`; static segments may be ASCII kebab or Unicode names (e.g. `赞我`); dynamic parameter files use Next.js-style brackets to declare their shape and map to `$name` segments: `[name].ts(x)` required, `[[name]].ts(x)` optional, `[...name].ts(x)` catch-all, `[[...name]].ts(x)` optional catch-all; type and default value are declared in `defineCommand({ params })` | `commands/lottery-today.ts` -> `lottery-today`; `commands/赞我.ts` -> `赞我`; `commands/lottery/[[game]].ts` -> `lottery/$game` |
 | `middlewares/` | Relative path without extension, joined with `/` | `middlewares/keyword-reply.ts` -> `keyword-reply` |
-| `handlers/` | Relative path without extension, path segments joined with `.` (aligned with Lifecycle event names); when `event` is omitted, localName is the event name | `handlers/message/receive.ts` -> `message.receive` |
+| `handlers/` | Relative path without extension, `/`-joined capability localName; when `event` is omitted, `/` maps to `.` for the Lifecycle event name | `handlers/message/receive.ts` → localName `message/receive` → event `message.receive` |
 | `components/` | Relative path without extension, joined with `/` | `components/share-music.ts` -> `share-music` |
 | `adapters/` | Same as above | `adapters/napcat.ts` -> `napcat` |
 | `tools/` | File name without extension (no subdirectory recursion); ASCII kebab or snake | `tools/music-search.ts` -> `music-search`; `tools/send_user_like.ts` -> `send_user_like` |
@@ -94,7 +94,7 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
 
 ### handlers/ -- `defineHandler`
 
-Register listeners by **Lifecycle event name** (no `next()` chain). Path segments are joined with `.` into localName; when `event` is omitted, localName is the event name. Importing from `@zhin.js/core/feature/handler` merges `Plugin.Lifecycle` into `HandlerEventMap`, so `event: 'message.receive'` gets typed arguments.
+Register listeners by **Lifecycle event name** (no `next()` chain). Directory paths use `/` as the capability localName; when `event` is omitted, `/` maps to `.` for the event name (e.g. `handlers/notice/receive.ts` → `notice.receive`). Importing from `@zhin.js/core/feature/handler` merges `Plugin.Lifecycle` into `HandlerEventMap`, so `event: 'message.receive'` gets typed arguments.
 
 Plugins that depend on `zhin.js` / `@zhin.js/core` get `@zhin.js/handler` via `platformFeatures` — no extra declaration or install needed. Today `ImRuntime` calls `dispatch('message.receive', message)` **before** the command/middleware pipeline; other Lifecycle event names may be declared but are not necessarily wired yet.
 

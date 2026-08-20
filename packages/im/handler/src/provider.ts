@@ -13,7 +13,6 @@ const handlerFeature = defineFeatureProvider({
     conventions: [typeScriptModules({
       id: 'handlers-ts',
       directory: 'handlers',
-      separator: '.',
     })],
     validate: parseHandlerDefinition,
   },
