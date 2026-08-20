@@ -1,7 +1,7 @@
 /**
  * Convention entry: discover `adapters/icqq.ts` → defineAdapter.
  */
-import { defineAdapter, type AdapterContext } from '@zhin.js/adapter';
+import { defineAdapter, type AdapterContext } from 'zhin.js/adapter';
 import { messageGatewayToken } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
@@ -10,7 +10,7 @@ import {
   INBOX_TABLE_REQUEST,
   runtimeEventPublisherToken,
   type Token,
-} from '@zhin.js/plugin-runtime';
+} from 'zhin.js/plugin-runtime';
 import { IcqqEndpoint, type IcqqInboxHooks } from '../src/endpoint.js';
 import { icqqRuntimeStateToken } from '../src/icqq-runtime-state.js';
 import {

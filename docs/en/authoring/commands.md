@@ -5,11 +5,11 @@ description: commands/ file routing, execute context, return value rendering, ma
 
 # Commands (defineCommand)
 
-Create a `commands/` directory in your plugin package root and drop a `hello.ts` file in it -- users can then type `hello` in a group chat to trigger it. **The file path is the command name**, and after editing a file, hot reload takes effect immediately without restarting the process. This pipeline is provided by the `@zhin.js/command` Feature, no manual registration needed.
+Create a `commands/` directory in your plugin package root and drop a `hello.ts` file in it -- users can then type `hello` in a group chat to trigger it. **The file path is the command name**, and after editing a file, hot reload takes effect immediately without restarting the process. This pipeline is provided by the `@zhin.js/command` Feature (inherited via `platformFeatures` when depending on `zhin.js`); no manual registration needed. Authors import from `zhin.js/command` — **do not** `pnpm add @zhin.js/command`.
 
 ```ts
 // commands/hello.ts
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
   description: 'Say hello',
@@ -20,7 +20,7 @@ export default defineCommand({
 Single-file Bots can register the same definition in the plugin entry:
 
 ```ts
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 
 export default definePlugin({
   name: 'my-bot',
@@ -150,7 +150,7 @@ Structured parameter example:
 
 ```ts
 // commands/upload/[asset].ts
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
   params: {

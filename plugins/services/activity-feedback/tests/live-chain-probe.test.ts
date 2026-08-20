@@ -4,7 +4,7 @@ import {
   createActivityFeedbackOrchestratorForRuntime,
 } from '../src/ai-event-binder.js';
 import { createOutboundEndpointAccess } from '../src/executor.js';
-import type { OutboundHost, OutboundSendInput } from '@zhin.js/plugin-runtime';
+import type { OutboundHost, OutboundSendInput } from 'zhin.js/plugin-runtime';
 
 const logger = { debug: vi.fn(), error: vi.fn() };
 

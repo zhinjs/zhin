@@ -1,4 +1,4 @@
-import { defineMiddleware } from '@zhin.js/middleware';
+import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 import { messageFromCommandInput } from '@zhin.js/game-kit';
 import { resolveGameServices } from '../src/runtime-store.js';

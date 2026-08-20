@@ -51,7 +51,7 @@ flowchart BT
 
 依赖关系的权威来源是各包的 `package.json`。读它之前，先记住几个关键事实。
 
-底座是 `@zhin.js/plugin-runtime`：它不依赖任何 workspace 包，generation、snapshot、dispose、token 都从这里长出来。往上一层，`@zhin.js/feature-kit` 只依赖 `plugin-runtime`，提供 Feature provider 的注册、发现与投影机制。Feature 层各包（adapter / command / component / middleware / tool / skill / …）只依赖 `feature-kit` + `plugin-runtime`，彼此不互相依赖。
+底座是 `@zhin.js/plugin-runtime`：它不依赖任何 workspace 包，generation、snapshot、dispose、token 都从这里长出来。往上一层，`@zhin.js/feature-kit` 只依赖 `plugin-runtime`，提供 Feature provider 的注册、发现与投影机制。Feature 层各包（adapter / command / component / middleware / handler / tool / skill / …）只依赖 `feature-kit` + `plugin-runtime`，彼此不互相依赖。
 
 再往上，`@zhin.js/core` 把 adapter / command / component / middleware 四个 Feature 和 kernel 组装成 IM 层（Plugin、Adapter、Endpoint、消息收发）。门面包 `zhin.js` 对 workspace 包的 `dependencies` 只有 `@zhin.js/core`、`@zhin.js/logger`、`@zhin.js/plugin-runtime`；`@zhin.js/agent`、`@zhin.js/ai` 等是可选 peer 依赖——所以默认安装只含 IM 核心，AI 按需加装。
 

@@ -79,7 +79,7 @@
     "@zhin.js/command": "workspace:*",
     "@zhin.js/component": "workspace:*",
     "@zhin.js/database": "workspace:*",
-    "@zhin.js/feature-kit": "workspace:*",
+    "@zhin.js/handler": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/kernel": "workspace:*",
     "@zhin.js/logger": "workspace:*",
@@ -149,7 +149,7 @@
         "api": "^1.0.0"
       },
       {
-        "package": "@zhin.js/feature-kit",
+        "package": "@zhin.js/handler",
         "api": "^1.0.0"
       }
     ],

@@ -1009,6 +1009,7 @@ const FEATURE_GROUPS: Record<string, { name: string; icon: string; desc: string 
   'zhin.command': { name: 'command', icon: 'Terminal', desc: '命令' },
   'zhin.component': { name: 'component', icon: 'Box', desc: '组件' },
   'zhin.middleware': { name: 'middleware', icon: 'Layers', desc: '中间件' },
+  'zhin.handler': { name: 'handler', icon: 'Radio', desc: '事件处理器' },
   'zhin.agent-tool': { name: 'tool', icon: 'Wrench', desc: '工具' },
   'zhin.skill': { name: 'skill', icon: 'Brain', desc: '技能' },
   'zhin.agent': { name: 'agent', icon: 'Bot', desc: 'Agent' },

@@ -3,7 +3,7 @@
 声明一个插件不需要继承基类，也不用往任何注册表里手工挂条目——默认导出 `definePlugin(...)`（来自 `@zhin.js/plugin-runtime`）的返回值就够了。这份返回值叫 `PluginDefinition`：名字、元数据、依赖声明，外加一个 `setup(context)` 装配函数。
 
 ```ts
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 
 export default definePlugin<MyConfig>({
   name: 'my-plugin',
@@ -34,14 +34,14 @@ export default definePlugin<MyConfig>({
 | `addFeature(feature, name, definition)` | 通用 Feature 注册入口 | 将内存 definition 注册为当前插件的 Capability；仍走 provider 校验、冲突检测和 generation transaction |
 
 导入 Stable Feature 的 authoring 包后，context 会通过类型扩展获得对应快捷方法：
-`addCommand`、`addComponent`、`addMiddleware`、`addAdapter`。可选 AI 能力同样提供
+`addCommand`、`addComponent`、`addMiddleware`、`addHandler`、`addAdapter`。可选 AI 能力同样提供
 `addAgent`、`addSkill`、`addTool`、`addMcp`。它们只是 `addFeature` 的强类型窄化，
 不会建立第二套注册表。
 
 ```ts
-import { defineCommand } from '@zhin.js/command';
-import { defineComponent } from '@zhin.js/component';
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { defineCommand } from 'zhin.js/command';
+import { defineComponent } from 'zhin.js/component';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 
 export default definePlugin({
   name: 'single-file-bot',

@@ -1,5 +1,5 @@
-import { databaseHostToken } from '@zhin.js/plugin-runtime';
-import { defineCommand } from '@zhin.js/command';
+import { databaseHostToken } from 'zhin.js/plugin-runtime';
+import { defineCommand } from 'zhin.js/command';
 
 interface ShowcaseConfig {
   greeting: string;

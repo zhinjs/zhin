@@ -48,12 +48,10 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
-    "@zhin.js/command": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "ws": "^8.21.1"
   },
   "devDependencies": {
@@ -61,12 +59,12 @@
     "@types/ws": "^8.18.1",
     "@zhin.js/host-http": "workspace:*",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "zhin.js": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {

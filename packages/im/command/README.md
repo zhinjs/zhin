@@ -11,7 +11,7 @@ Zhin Plugin Runtime 的约定式 Command Feature。它发现 `commands/**/*.ts(x
 ```ts
 // commands/gh/issue/list.ts -> gh issue list
 // commands/赞我.ts -> 赞我
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
   description: 'List GitHub issues',

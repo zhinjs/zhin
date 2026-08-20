@@ -16,14 +16,17 @@ Three tiers:
 
 ### define\* Authoring Functions
 
-| API | Stability | Source Package | One-liner |
-|-----|-----------|----------------|-----------|
-| `definePlugin` | `stable` | `@zhin.js/plugin-runtime` | Convention-based plugin entry, default export from `plugin.ts` |
-| `defineCommand` | `stable` | `@zhin.js/command` | Command module (default export in `commands/`) |
-| `defineAdapter` | `stable` | `@zhin.js/adapter` | Adapter module (default export in `adapters/`), `create(context)` returns an Endpoint |
-| `defineComponent` | `stable` | `@zhin.js/component` | Satori/SSR component (default export in `components/`) |
-| `defineMiddleware` | `stable` | `@zhin.js/middleware` | Middleware module (default export in `middlewares/`) |
-| `defineAgentTool` | `experimental` | `@zhin.js/tool` (`tools/` convention); `zhin.js/agent` (`agent/tools/*.ts` authoring surface) | AI tool module, auto-discovered by Agent |
+> App authors should import from **`zhin.js/*` facade subpaths** (depending on `zhin.js` is enough). The "Implementation package" column is the Feature provider / `platformFeatures` mount name — **do not** separately `pnpm add` those packages.
+
+| API | Stability | Author import | Implementation | One-liner |
+|-----|-----------|---------------|----------------|-----------|
+| `definePlugin` | `stable` | `zhin.js/plugin-runtime` | `@zhin.js/plugin-runtime` | Convention-based plugin entry, default export from `plugin.ts` |
+| `defineCommand` | `stable` | `zhin.js/command` | `@zhin.js/command` | Command module (default export in `commands/`) |
+| `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | Adapter module (default export in `adapters/`), `create(context)` returns an Endpoint |
+| `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR component (default export in `components/`) |
+| `defineMiddleware` | `stable` | `zhin.js/middleware` | `@zhin.js/middleware` | Middleware module (default export in `middlewares/`) |
+| `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle event handler (default export in `handlers/`; path segments joined with `.`) |
+| `defineAgentTool` | `experimental` | `@zhin.js/tool` (`tools/`); `zhin.js/agent` (`agent/tools/*.ts`) | `@zhin.js/tool` | AI tool module, auto-discovered by Agent |
 
 > Note: **There is no `defineAgentSkill`**. Agent skills are pure Markdown (`agent/skills/*.md`, parsed by `parseSkillMarkdown` from `@zhin.js/skill`), not code symbols.
 
@@ -32,9 +35,10 @@ Three tiers:
 | Convention | Stability | Consumer | One-liner |
 |------------|-----------|----------|-----------|
 | `plugin.ts` | `stable` | `@zhin.js/plugin-runtime` | Plugin root entry, default exports `definePlugin(...)` |
-| `commands/` | `stable` | `@zhin.js/command` | Command module directory, supports `[name]` / `[[name]]` / `[...name]` dynamic parameter segments |
-| `adapters/` | `stable` | `@zhin.js/adapter` | Adapter module directory |
-| `middlewares/` | `stable` | `@zhin.js/middleware` | Middleware module directory |
+| `commands/` | `stable` | `@zhin.js/command` (author import: `zhin.js/command`) | Command module directory, supports `[name]` / `[[name]]` / `[...name]` dynamic parameter segments |
+| `adapters/` | `stable` | `@zhin.js/adapter` (author import: `zhin.js/adapter`) | Adapter module directory |
+| `middlewares/` | `stable` | `@zhin.js/middleware` (author import: `zhin.js/middleware`) | Middleware module directory |
+| `handlers/` | `stable` | `@zhin.js/handler` (author import: `zhin.js/handler`) | Lifecycle event handler directory (path segments joined with `.`; runtime currently wires `message.receive`) |
 | `tools/` | `experimental` | `@zhin.js/tool` | Agent tool directory (`defineAgentTool`) |
 | `agent/tools` | `experimental` | `zhin.js/agent` authoring | File-based Agent tool authoring surface |
 | `agent/skills` | `experimental` | `@zhin.js/skill` / Agent discovery | Agent skill Markdown (published with npm packages) |

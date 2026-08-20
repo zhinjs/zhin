@@ -12,6 +12,7 @@ const migratedRoots = [
   ['command', 'packages/im/command/src'],
   ['component', 'packages/im/component/src'],
   ['middleware', 'packages/im/middleware/src'],
+  ['handler', 'packages/im/handler/src'],
   ['core/runtime', 'packages/im/core/src/plugin-runtime/im'],
   ['tool', 'packages/im/tool/src'],
   ['skill', 'packages/im/skill/src'],

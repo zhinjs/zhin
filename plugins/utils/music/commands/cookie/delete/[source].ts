@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { deleteCredential } from '../../../src/credential-store.js';
 import { SOURCE_DISPLAY_NAME } from '../../../src/config.js';
 import type { MusicSource } from '../../../src/types.js';

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseCommandDefinition } from '@zhin.js/command';
-import { DisposeStack, outboundHostToken } from '@zhin.js/plugin-runtime';
+import { parseCommandDefinition } from 'zhin.js/command';
+import { DisposeStack, outboundHostToken } from 'zhin.js/plugin-runtime';
 import plugin from '../plugin.ts';
 import gameCommand from '../commands/ttt/[[action]].ts';
 import { TTT_HELP } from '../src/index.js';

@@ -1,4 +1,4 @@
-import { pickCredential } from '@zhin.js/adapter';
+import { pickCredential } from 'zhin.js/adapter';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import type { MessageSegment } from "zhin.js";
 import { resolveCqMediaArg } from "./cq-message.js";

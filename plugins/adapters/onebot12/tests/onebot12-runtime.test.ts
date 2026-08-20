@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { createEndpointRuntimeState } from '@zhin.js/adapter';
+import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { onebot12RuntimeStateToken } from '../src/onebot12-runtime-state.js';
-import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js/plugin-runtime';
 import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import defineOneBot12Adapter from '../adapters/onebot12.js';

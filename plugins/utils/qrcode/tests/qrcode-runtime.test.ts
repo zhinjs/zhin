@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCommandDefinition } from '@zhin.js/command';
+import { parseCommandDefinition } from 'zhin.js/command';
 import { isRawContent } from '@zhin.js/core/runtime';
 import { buildQrImageUrl, qrImageSegment } from '../src/qrcode-lib.js';
 import plugin from '../plugin.js';

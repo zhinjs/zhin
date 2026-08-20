@@ -1,4 +1,4 @@
-import { defineMiddleware } from '@zhin.js/middleware';
+import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 import { sessionKey, resolveMessageIds, getPending, clearPending } from '../src/session.js';
 import { shareMusicDetail, buildMusicShareSegment } from '../src/music-lib.js';

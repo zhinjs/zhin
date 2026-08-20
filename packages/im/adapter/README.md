@@ -8,7 +8,7 @@ generation lifecycle。候选 Endpoint 可完成连接 readiness，但入站由 
 销毁整组候选 Endpoint 并拒绝本次 generation，不存在 inert stub 或后台 late-open。
 
 ```ts
-import { defineAdapter } from '@zhin.js/adapter';
+import { defineAdapter } from 'zhin.js/adapter';
 
 export default defineAdapter({
   capabilities: ['inbound', 'outbound'],

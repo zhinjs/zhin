@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { parseCommandDefinition } from '@zhin.js/command';
+import { parseCommandDefinition } from 'zhin.js/command';
 import {
   formatRuntimeGamesHelp,
   getRuntimeGame,

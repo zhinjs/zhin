@@ -6,7 +6,7 @@
 |---|---|
 | `addCommand(new MessageCommand(...))` | `commands/**/*.ts` + `defineCommand()` |
 | `addMiddleware(fn)` | `middlewares/*.ts` + `defineMiddleware()` |
-| `plugin.on('message.*.receive')` | `middlewares/*.ts` + `target: 'inbound'` |
+| `plugin.on('message.*.receive')` / `plugin.on('message.receive')` | 有序链：`middlewares/*.ts` + `target: 'inbound'`；fire-and-forget：`handlers/message/receive.ts` + `defineHandler()`（路径段用 `.` 拼 localName） |
 | `plugin.on('before.sendMessage')` | `middlewares/*.ts` + `target: 'outbound'` |
 | `addComponent(fn)` | `components/*.ts(x)` + `defineComponent()` |
 | `addTool()` / Tool registry | `tools/*.ts` + `defineAgentTool()` |
@@ -54,7 +54,7 @@ plugin.addCommand(new MessageCommand('hit').action(async (message) => {
 
 ```ts
 // 新 plugin.ts：只装配，状态成为 Resource
-import { createToken, definePlugin } from '@zhin.js/plugin-runtime';
+import { createToken, definePlugin } from 'zhin.js/plugin-runtime';
 
 export const hitsToken = createToken<Map<string, number>>('demo.hits');
 
@@ -69,8 +69,8 @@ export default definePlugin({
 ```
 
 ```ts
-// 新 commands/hit.ts：文件路径即路由
-import { defineCommand } from '@zhin.js/command';
+// 新 commands/hit.ts：文件路径即路由（依赖 zhin.js 时从门面导入，勿再装 @zhin.js/command）
+import { defineCommand } from 'zhin.js/command';
 import { hitsToken } from '../plugin.js';
 
 export default defineCommand({

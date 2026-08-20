@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DatabaseHost, DatabaseHostModel } from '@zhin.js/plugin-runtime';
+import type { DatabaseHost, DatabaseHostModel } from 'zhin.js/plugin-runtime';
 import {
   GITHUB_OAUTH_USERS_TABLE,
   defineGithubOauthUsersTable,

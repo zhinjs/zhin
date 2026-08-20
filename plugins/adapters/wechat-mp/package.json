@@ -15,12 +15,10 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
-    "@zhin.js/command": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "axios": "^1.19.0",
     "xml2js": "^0.6.2"
   },
@@ -28,7 +26,6 @@
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
@@ -40,7 +37,8 @@
     "@types/node": "^26.1.2",
     "@types/xml2js": "^0.4.14",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "zhin.js": "workspace:*"
   },
   "keywords": [
     "zhin",

@@ -5,7 +5,7 @@
 //   my-plugin/
 //     components/
 //       user-badge.tsx     ← 本文件，供消息侧以组件调用引用
-import { defineComponent } from '@zhin.js/component';
+import { defineComponent } from 'zhin.js/component';
 
 interface UserBadgeProps {
   name: string;

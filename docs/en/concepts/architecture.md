@@ -51,7 +51,7 @@ flowchart BT
 
 The authoritative source for dependency relationships is each package's `package.json`. Before reading them, keep a few key facts in mind.
 
-The foundation is `@zhin.js/plugin-runtime`: it depends on no workspace packages; generation, snapshot, dispose, and tokens all grow from here. One layer up, `@zhin.js/feature-kit` depends only on `plugin-runtime` and provides the registration, discovery, and projection mechanism for Feature providers. Feature-layer packages (adapter / command / component / middleware / tool / skill / ...) depend only on `feature-kit` + `plugin-runtime` and do not depend on each other.
+The foundation is `@zhin.js/plugin-runtime`: it depends on no workspace packages; generation, snapshot, dispose, and tokens all grow from here. One layer up, `@zhin.js/feature-kit` depends only on `plugin-runtime` and provides the registration, discovery, and projection mechanism for Feature providers. Feature-layer packages (adapter / command / component / middleware / handler / tool / skill / ...) depend only on `feature-kit` + `plugin-runtime` and do not depend on each other.
 
 Moving further up, `@zhin.js/core` assembles the adapter / command / component / middleware Features together with the kernel into the IM layer (Plugin, Adapter, Endpoint, message send/receive). The facade package `zhin.js` has workspace `dependencies` of only `@zhin.js/core`, `@zhin.js/logger`, and `@zhin.js/plugin-runtime`; `@zhin.js/agent`, `@zhin.js/ai`, etc. are optional peer dependencies -- so the default installation contains only the IM core, with AI added on demand.
 

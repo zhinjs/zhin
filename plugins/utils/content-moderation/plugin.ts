@@ -1,4 +1,4 @@
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 import { ModerationEngine, provideModerationEngine } from './src/engine.js';
 
 export default definePlugin({

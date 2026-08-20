@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { messageFromCommandInput } from '@zhin.js/game-kit';
 import {
   DUNGEON_HELP,

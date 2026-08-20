@@ -45,8 +45,7 @@
   },
   "dependencies": {
     "@zhin.js/agent": "workspace:*",
-    "@zhin.js/logger": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*"
+    "@zhin.js/logger": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

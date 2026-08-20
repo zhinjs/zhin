@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { messageFromCommandInput, normalizeRiddleAction } from '@zhin.js/game-kit';
 import { RIDDLE_HELP, runRiddleCommand } from '../../src/riddle-command.js';
 import { resolveGameServices } from '../../src/runtime-store.js';

@@ -203,17 +203,16 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
         ? (['zhin.js', 'service', pluginName] as string[])
         : (['zhin.js', 'plugin', pluginName] as string[]);
 
-  // 运行时真实 import 的包放进 dependencies；zhin.js / cli 仅开发期需要
-  const dependencies: Record<string, string> = {
-    '@zhin.js/plugin-runtime': zhinStack['@zhin.js/plugin-runtime'],
-  };
-  if (kind === 'normal') {
-    dependencies['@zhin.js/command'] = zhinStack['@zhin.js/command'];
-  }
+  // 作者 import 走 zhin.js 门面；实现包经 peer + zhin.features 挂载，勿重复装 @zhin.js/command 等
+  const dependencies: Record<string, string> = {};
   if (kind === 'adapter') {
     dependencies['@zhin.js/adapter'] = zhinStack['@zhin.js/adapter'];
     dependencies['@zhin.js/core'] = zhinStack['@zhin.js/core'];
   }
+
+  const peerDependencies: Record<string, string> = {
+    'zhin.js': zhinStack['zhin.js'],
+  };
 
   const devDependencies: Record<string, string> = {
     '@types/node': 'latest',
@@ -256,6 +255,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
     author: '',
     license: 'MIT',
     dependencies,
+    peerDependencies,
     devDependencies,
     publishConfig: { access: 'public', registry: 'https://registry.npmjs.org' },
     engines: { node: '^20.19.0 || >=22.12.0' },
@@ -333,7 +333,7 @@ export default defineConfig({
 
   // plugin.ts：约定式插件入口
   if (kind === 'service') {
-    const pluginTs = `import { definePlugin, databaseHostToken } from '@zhin.js/plugin-runtime';
+    const pluginTs = `import { definePlugin, databaseHostToken } from 'zhin.js/plugin-runtime';
 
 /**
  * 服务型约定插件：setup(context) 在插件装配时执行。
@@ -365,7 +365,7 @@ export default definePlugin({
 `;
     await fs.writeFile(path.join(pluginDir, 'plugin.ts'), pluginTs, 'utf8');
   } else if (kind === 'adapter') {
-    const pluginTs = `import { definePlugin } from '@zhin.js/plugin-runtime';
+    const pluginTs = `import { definePlugin } from 'zhin.js/plugin-runtime';
 
 /**
  * 适配器约定插件入口：适配器定义在 adapters/ 目录（defineAdapter），
@@ -380,7 +380,7 @@ export default definePlugin({
 `;
     await fs.writeFile(path.join(pluginDir, 'plugin.ts'), pluginTs, 'utf8');
   } else {
-    const pluginTs = `import { definePlugin } from '@zhin.js/plugin-runtime';
+    const pluginTs = `import { definePlugin } from 'zhin.js/plugin-runtime';
 
 /**
  * 约定式插件入口（Plugin Runtime）：
@@ -398,7 +398,7 @@ export default definePlugin({
   }
 
   if (kind === 'normal') {
-    const commandTs = `import { defineCommand } from '@zhin.js/command';
+    const commandTs = `import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
   description: '${capitalizedName} 示例命令',
@@ -409,7 +409,7 @@ export default defineCommand({
 `;
     await fs.writeFile(path.join(pluginDir, 'commands', `${pluginName}.ts`), commandTs, 'utf8');
 
-    const echoCommandTs = `import { defineCommand } from '@zhin.js/command';
+    const echoCommandTs = `import { defineCommand } from 'zhin.js/command';
 
 /**
  * 动态段命令：目录名 [text] 声明一个必需参数，类型在 params 中定义。
@@ -437,7 +437,7 @@ export default defineCommand({
  * Convention entry: discover \`adapters/${pluginName}.ts\` → defineAdapter.
  * 最小形态参考 plugins/adapters/sandbox 与 plugins/adapters/email。
  */
-import { defineAdapter, type EndpointInstance } from '@zhin.js/adapter';
+import { defineAdapter, type EndpointInstance } from 'zhin.js/adapter';
 import { messageGatewayToken } from '@zhin.js/core/runtime';
 
 export interface ${capitalizedName}AdapterConfig {
@@ -639,7 +639,7 @@ async function generateTestFile(
 
   if (kind === 'adapter') {
     testContent = `import { describe, expect, it } from 'vitest';
-import { parseAdapterDefinition } from '@zhin.js/adapter';
+import { parseAdapterDefinition } from 'zhin.js/adapter';
 import plugin from '../plugin.ts';
 import adapter from '../adapters/${pluginName}.ts';
 
@@ -706,7 +706,7 @@ describe('zhin.js-${pluginName}', () => {
 `;
   } else {
     testContent = `import { describe, expect, it } from 'vitest';
-import { parseCommandDefinition } from '@zhin.js/command';
+import { parseCommandDefinition } from 'zhin.js/command';
 import plugin from '../plugin.ts';
 import mainCommand from '../commands/${pluginName}.ts';
 import echoCommand from '../commands/${pluginName}-echo/[text].ts';

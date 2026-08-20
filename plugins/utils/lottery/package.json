@@ -50,18 +50,18 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@zhin.js/command": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@zhin.js/agent": "workspace:*",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "@zhin.js/agent": "workspace:*"
+    "@zhin.js/agent": "workspace:*",
+    "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@zhin.js/agent": {

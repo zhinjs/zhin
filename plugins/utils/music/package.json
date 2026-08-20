@@ -51,19 +51,17 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@zhin.js/command": "workspace:*",
-    "@zhin.js/component": "workspace:*",
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/middleware": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/tool": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "@zhin.js/adapter-icqq": "workspace:*"
+    "@zhin.js/adapter-icqq": "workspace:*",
+    "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@zhin.js/adapter-icqq": {
@@ -89,6 +87,14 @@
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/middleware",
+        "api": "^1.0.0"
+      },
       {
         "package": "@zhin.js/component",
         "api": "^1.0.0"

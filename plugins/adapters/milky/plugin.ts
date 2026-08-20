@@ -1,5 +1,5 @@
-import { createEndpointRuntimeState } from '@zhin.js/adapter';
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { createEndpointRuntimeState } from 'zhin.js/adapter';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 import { milkyRuntimeStateToken } from './src/milky-runtime-state.js';
 
 export default definePlugin({

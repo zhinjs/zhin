@@ -3,11 +3,11 @@
  */
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import type { EndpointGroup, EndpointInstance, EndpointManagement, EndpointSendRequest } from '@zhin.js/adapter';
+import type { EndpointGroup, EndpointInstance, EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import type { CapabilityId } from 'zhin.js/plugin-runtime';
 import { registerLarkAgentEndpoint } from './lark-agent-deps.js';
 import {
   buildImageUploadForm,

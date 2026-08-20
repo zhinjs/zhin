@@ -58,7 +58,7 @@ export default defineAgentTool<{ message: string }>({
 
 ```ts
 // plugins/utils/lottery/plugin.ts（节选）
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 import { defineAgentTool } from '@zhin.js/tool';
 
 export default definePlugin({

@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { messageFromCommandInput } from '@zhin.js/game-kit';
 import { BJ_HELP, runBjCommand } from '../../src/bj-command.js';
 import { resolveGameServices } from '../../src/runtime-store.js';

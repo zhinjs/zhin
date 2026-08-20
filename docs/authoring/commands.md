@@ -5,11 +5,11 @@ description: commands/ 文件路由、execute 上下文、返回值渲染、mast
 
 # 命令（defineCommand）
 
-在插件包根目录建一个 `commands/` 目录、往里放一个 `hello.ts`，用户就能在群里敲 `hello` 触发它——**文件路径即命令名**，改完文件热重载立即生效，不用重启进程。这条链路由 `@zhin.js/command` Feature 提供，无需手工注册。
+在插件包根目录建一个 `commands/` 目录、往里放一个 `hello.ts`，用户就能在群里敲 `hello` 触发它——**文件路径即命令名**，改完文件热重载立即生效，不用重启进程。这条链路由 `@zhin.js/command` Feature 提供（依赖 `zhin.js` 时经 `platformFeatures` 继承），无需手工注册；作者从 `zhin.js/command` 导入即可，**不要**再 `pnpm add @zhin.js/command`。
 
 ```ts
 // commands/hello.ts
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
   description: '打个招呼',
@@ -20,7 +20,7 @@ export default defineCommand({
 单文件 Bot 可以在插件入口注册同一个 definition：
 
 ```ts
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 
 export default definePlugin({
   name: 'my-bot',
@@ -150,7 +150,7 @@ flowchart LR
 
 ```ts
 // commands/upload/[asset].ts
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
   params: {

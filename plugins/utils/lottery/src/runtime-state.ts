@@ -1,4 +1,4 @@
-import { createToken } from '@zhin.js/plugin-runtime';
+import { createToken } from 'zhin.js/plugin-runtime';
 import type { LotteryConfig } from './config.js';
 import type { LotteryDb } from './db.js';
 import type { GameId } from './types.js';

@@ -6,11 +6,11 @@ import type {
   EndpointInstance,
   EndpointManagement,
   EndpointSendRequest,
-} from '@zhin.js/adapter';
+} from 'zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
-import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import type { CapabilityId } from 'zhin.js/plugin-runtime';
 import { formatOutbound } from './outbound.js';
 import { registerQqAgentEndpoint } from './qq-agent-deps.js';
 import {

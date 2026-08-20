@@ -2,7 +2,7 @@
  * TelegramEndpoint — lifecycle, outbound, admit, Bot API helpers for agent tools.
  */
 import { readFile } from 'node:fs/promises';
-import type { EndpointControl, EndpointInstance, EndpointSendRequest } from '@zhin.js/adapter';
+import type { EndpointControl, EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
@@ -10,7 +10,7 @@ import {
   type MessageRef,
 } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import type { CapabilityId } from 'zhin.js/plugin-runtime';
 import { runTelegramPollLoop } from './polling.js';
 import { normalizeTelegramChatMember } from './platform-permit.js';
 import {

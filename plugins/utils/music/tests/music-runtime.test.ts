@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseComponentDefinition } from '@zhin.js/component';
-import { parseCommandDefinition } from '@zhin.js/command';
+import { parseComponentDefinition } from 'zhin.js/component';
+import { parseCommandDefinition } from 'zhin.js/command';
 import { parseAgentToolDefinition } from '@zhin.js/tool';
 import plugin from '../plugin.ts';
 import shareMusic from '../components/share-music.ts';

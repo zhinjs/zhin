@@ -57,16 +57,13 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
-    "@zhin.js/command": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
-    "@zhin.js/logger": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*"
+    "@zhin.js/logger": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
@@ -77,7 +74,8 @@
   "devDependencies": {
     "@types/node": "^26.1.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "zhin.js": "workspace:*"
   },
   "ilink_appid": "bot",
   "engines": {

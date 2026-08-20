@@ -1,4 +1,4 @@
-import { createToken, type Token } from '@zhin.js/plugin-runtime';
+import { createToken, type Token } from 'zhin.js/plugin-runtime';
 import type { SessionService } from './session-service.js';
 
 export const gameServicesToken = createToken<SessionService>(

@@ -4,8 +4,8 @@
  * 注：applicationId / publicKey 为顶层共享字段（slash commands / interactions 用），
  * endpoints[i] 仅需 name + token（见 schema.json），故 add 只录入 token。
  */
-import { createEndpointCommands } from '@zhin.js/adapter';
-import { defineCommand } from '@zhin.js/command';
+import { createEndpointCommands } from 'zhin.js/adapter';
+import { defineCommand } from 'zhin.js/command';
 import { discordRuntimeStateToken } from './discord-runtime-state.js';
 
 export const discordEndpointCommands = createEndpointCommands({

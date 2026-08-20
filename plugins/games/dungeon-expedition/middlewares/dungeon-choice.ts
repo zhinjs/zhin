@@ -1,5 +1,5 @@
 import type { Message } from '@zhin.js/core/runtime';
-import { defineMiddleware } from '@zhin.js/middleware';
+import { defineMiddleware } from 'zhin.js/middleware';
 import {
   buildChoiceFallbackMap,
   channelKey,

@@ -4,7 +4,7 @@
  * Spec: https://satori.chat/zh-CN/protocol/overview.html
  */
 
-import { pickCredential } from '@zhin.js/adapter';
+import { pickCredential } from 'zhin.js/adapter';
 import { isMediaRef } from '@zhin.js/core';
 import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';

@@ -13,8 +13,8 @@
   "dependencies": {
     "@zhin.js/adapter-sandbox": "workspace:*",
     "@zhin.js/agent": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "ai": "^6.0.238",
+    "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

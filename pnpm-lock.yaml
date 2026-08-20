@@ -294,15 +294,12 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../packages/im/command
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../packages/im/plugin-runtime
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../packages/im/tool
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/im/zhin
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -395,18 +392,15 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../packages/im/command
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../packages/im/plugin-runtime
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../packages/im/tool
       ai:
         specifier: ^7.0.44
         version: 7.0.44(zod@4.4.3)
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/im/zhin
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -454,12 +448,12 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../packages/im/plugin-runtime
       ai:
         specifier: ^6.0.238
         version: 6.0.238(zod@4.4.3)
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/im/zhin
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -479,21 +473,9 @@ importers:
 
   examples/plugin-runtime-migration-bot:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../packages/im/command
-      '@zhin.js/component':
-        specifier: workspace:*
-        version: link:../../packages/im/component
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../packages/im/core
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../packages/im/middleware
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../packages/im/plugin-runtime
       '@zhin.js/runtime':
         specifier: workspace:*
         version: link:../../packages/im/runtime
@@ -537,9 +519,6 @@ importers:
       '@zhin.js/plugin-rps':
         specifier: workspace:*
         version: link:../../plugins/games/rps
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../packages/im/plugin-runtime
       '@zhin.js/plugin-text-adventure':
         specifier: workspace:*
         version: link:../../plugins/games/text-adventure
@@ -552,6 +531,9 @@ importers:
       sqlite3:
         specifier: latest
         version: 6.0.1
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/im/zhin
     devDependencies:
       '@zhin.js/cli':
         specifier: workspace:*
@@ -689,9 +671,6 @@ importers:
       '@zhin.js/mcp-feature':
         specifier: workspace:*
         version: link:../../packages/im/mcp-feature
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../packages/im/middleware
       '@zhin.js/page':
         specifier: workspace:*
         version: link:../../packages/console/page
@@ -1336,9 +1315,9 @@ importers:
       '@zhin.js/database':
         specifier: workspace:*
         version: link:../../../basic/database
-      '@zhin.js/feature-kit':
+      '@zhin.js/handler':
         specifier: workspace:*
-        version: link:../feature-kit
+        version: link:../handler
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../im-contract
@@ -1394,6 +1373,22 @@ importers:
 
   packages/im/feature-kit:
     dependencies:
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/im/handler:
+    dependencies:
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
@@ -1759,9 +1754,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -1777,9 +1769,6 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -1805,9 +1794,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -1823,9 +1809,6 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       discord.js:
         specifier: ^14.27.0
         version: 14.27.0
@@ -1863,9 +1846,6 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       imap:
         specifier: ^0.8.19
         version: 0.8.19
@@ -1875,9 +1855,6 @@ importers:
       nodemailer:
         specifier: ^9.0.1
         version: 9.0.3
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
     devDependencies:
       '@types/imap':
         specifier: ^0.8.43
@@ -1897,15 +1874,15 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/adapters/github:
     dependencies:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -1918,9 +1895,6 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -1946,9 +1920,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -1961,9 +1932,6 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -1995,9 +1963,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2013,9 +1978,6 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       kook-client:
         specifier: ^1.0.4
         version: 1.0.4
@@ -2044,9 +2006,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2062,9 +2021,6 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2090,9 +2046,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2105,12 +2058,6 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2124,6 +2071,9 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -2133,9 +2083,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2148,15 +2095,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       ws:
         specifier: ^8.21.1
         version: 8.21.1
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2173,6 +2114,9 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -2182,9 +2126,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2200,15 +2141,9 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       ws:
         specifier: ^8.21.1
         version: 8.21.1
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2225,6 +2160,9 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -2234,9 +2172,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2252,15 +2187,9 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       ws:
         specifier: ^8.21.1
         version: 8.21.1
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2277,6 +2206,9 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -2286,9 +2218,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2301,15 +2230,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       ws:
         specifier: ^8.21.1
         version: 8.21.1
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2323,15 +2246,15 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/adapters/qq:
     dependencies:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2344,15 +2267,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../../packages/im/middleware
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       qq-official-bot:
         specifier: ^1.2.3
         version: 1.2.3
@@ -2402,9 +2319,6 @@ importers:
       '@zhin.js/page':
         specifier: workspace:*
         version: link:../../../packages/console/page
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       lucide-react:
         specifier: ^0.525.0
         version: 0.525.0(react@19.2.8)
@@ -2433,15 +2347,15 @@ importers:
       ws:
         specifier: ^8.21.1
         version: 8.21.1
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/adapters/satori:
     dependencies:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2454,15 +2368,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       ws:
         specifier: ^8.21.1
         version: 8.21.1
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2476,6 +2384,9 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/adapters/slack:
     dependencies:
@@ -2488,9 +2399,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2506,9 +2414,6 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2534,9 +2439,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2552,9 +2454,6 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2580,9 +2479,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2595,18 +2491,12 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       axios:
         specifier: ^1.19.0
         version: 1.19.0
       xml2js:
         specifier: ^0.6.2
         version: 0.6.2
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2620,15 +2510,15 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/adapters/wecom:
     dependencies:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2644,9 +2534,6 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2672,9 +2559,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2684,12 +2568,6 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2700,15 +2578,12 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/features/process-monitor:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -2722,24 +2597,18 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/games/blackjack:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
       '@zhin.js/game-kit':
         specifier: workspace:*
         version: link:../../../packages/game-kit
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../../packages/im/middleware
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -2747,24 +2616,18 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/games/dice-duel:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
       '@zhin.js/game-kit':
         specifier: workspace:*
         version: link:../../../packages/game-kit
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../../packages/im/middleware
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -2772,24 +2635,18 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/games/dungeon-expedition:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
       '@zhin.js/game-kit':
         specifier: workspace:*
         version: link:../../../packages/game-kit
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../../packages/im/middleware
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -2797,24 +2654,18 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/games/guess-number:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
       '@zhin.js/game-kit':
         specifier: workspace:*
         version: link:../../../packages/game-kit
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../../packages/im/middleware
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -2822,18 +2673,15 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/games/hub:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/game-kit':
         specifier: workspace:*
         version: link:../../../packages/game-kit
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -2841,24 +2689,18 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/games/idiom-chain:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
       '@zhin.js/game-kit':
         specifier: workspace:*
         version: link:../../../packages/game-kit
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../../packages/im/middleware
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       chinese-idiom-chengyu:
         specifier: ^1.1.0
         version: 1.1.0
@@ -2869,24 +2711,18 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/games/rps:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
       '@zhin.js/game-kit':
         specifier: workspace:*
         version: link:../../../packages/game-kit
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../../packages/im/middleware
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -2894,24 +2730,18 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/games/text-adventure:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
       '@zhin.js/game-kit':
         specifier: workspace:*
         version: link:../../../packages/game-kit
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../../packages/im/middleware
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -2919,24 +2749,18 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/games/tic-tac-toe:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
       '@zhin.js/game-kit':
         specifier: workspace:*
         version: link:../../../packages/game-kit
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../../packages/im/middleware
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -2944,24 +2768,18 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/games/word-riddle:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
       '@zhin.js/game-kit':
         specifier: workspace:*
         version: link:../../../packages/game-kit
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../../packages/im/middleware
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       chinese-idiom-chengyu:
         specifier: ^1.1.0
         version: 1.1.0
@@ -2972,6 +2790,9 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/services/activity-feedback:
     dependencies:
@@ -2981,9 +2802,6 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -3000,12 +2818,6 @@ importers:
 
   plugins/utils/60s:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -3019,18 +2831,14 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
       zod:
         specifier: ^4.4.3
         version: 4.4.3
 
   plugins/utils/code-runner:
-    dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       '@zhin.js/agent':
         specifier: workspace:*
@@ -3041,6 +2849,9 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -3053,12 +2864,6 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../../packages/im/middleware
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -3066,21 +2871,15 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/utils/group-suite:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../../packages/im/middleware
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../../../packages/toolkit/satori
@@ -3109,12 +2908,6 @@ importers:
       '@zhin.js/html-renderer':
         specifier: workspace:*
         version: link:../../../packages/toolkit/html-renderer
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../../packages/im/middleware
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -3122,15 +2915,12 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/utils/lottery:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -3147,27 +2937,18 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/utils/music:
     dependencies:
       '@zhin.js/adapter-icqq':
         specifier: workspace:*
         version: link:../../adapters/icqq
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
-      '@zhin.js/component':
-        specifier: workspace:*
-        version: link:../../../packages/im/component
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../../packages/im/middleware
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -3178,18 +2959,15 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/utils/qrcode:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       '@zhin.js/agent':
         specifier: workspace:*
@@ -3200,24 +2978,18 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
       zod:
         specifier: ^4.4.3
         version: 4.4.3
 
   plugins/utils/repeater:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../../packages/im/middleware
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -3225,15 +2997,12 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
 
   plugins/utils/rss:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
       rss-parser:
         specifier: ^3.13.0
         version: 3.13.0
@@ -3247,18 +3016,14 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
       zod:
         specifier: ^4.4.3
         version: 4.4.3
 
   plugins/utils/short-url:
-    dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../../packages/im/plugin-runtime
     devDependencies:
       '@zhin.js/agent':
         specifier: workspace:*
@@ -3269,6 +3034,9 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
       zod:
         specifier: ^4.4.3
         version: 4.4.3

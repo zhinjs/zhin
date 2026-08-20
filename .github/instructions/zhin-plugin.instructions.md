@@ -7,19 +7,23 @@ applyTo: "plugins/**,examples/**"
 ## Package contract
 
 - Every Plugin is an npm package with `package.json#zhin`, `plugin.ts` and optional `schema.json`.
-- `plugin.ts` default-exports `definePlugin()` from `@zhin.js/plugin-runtime`; it owns lifecycle and
+- `plugin.ts` default-exports `definePlugin()` from `zhin.js/plugin-runtime` (or
+  `@zhin.js/plugin-runtime` when authoring a Feature package itself); it owns lifecycle and
   Resources, not capability registration.
 - Child packages live one level below `plugins/*`. Logical ancestry comes from `zhin.plugins`, not
   nested directories.
-- Feature providers are explicit dependencies and explicit `zhin.features` mounts.
+- Feature providers are explicit `zhin.features` mounts. Apps that depend on `zhin.js` inherit
+  Stable Features via `platformFeatures` — do **not** separately install `@zhin.js/command` /
+  `@zhin.js/middleware` / `@zhin.js/handler` / `@zhin.js/adapter` / `@zhin.js/component`.
 
 ## Convention directories
 
 ```text
-adapters/**/*.ts                 defineAdapter()
-commands/**/*.ts                 defineCommand()
-components/**/*.ts               defineComponent()
-middlewares/**/*.ts              defineMiddleware()
+adapters/**/*.ts                 defineAdapter()      // import from zhin.js/adapter
+commands/**/*.ts                 defineCommand()      // import from zhin.js/command
+components/**/*.ts               defineComponent()    // import from zhin.js/component
+middlewares/**/*.ts              defineMiddleware()   // import from zhin.js/middleware
+handlers/**/*.ts                 defineHandler()      // import from zhin.js/handler; `.`-joined event name
 tools/*.ts                       defineAgentTool()
 skills/<name>/SKILL.md           Markdown Skill SSOT
 agents/<name>.agent.md           Markdown Agent SSOT
@@ -35,8 +39,8 @@ Each TypeScript capability default-exports exactly one definition. Do not call `
 ## Imports and native TypeScript
 
 - Local imports use `.js` specifiers.
-- Import definitions from their Feature package; import IM execution contracts from
-  `@zhin.js/core/runtime`.
+- Import Stable Feature `define*` from `zhin.js/*` facade subpaths when the app depends on `zhin.js`.
+  Import IM execution contracts from `zhin.js/core/runtime` (or `@zhin.js/core/runtime`).
 - Node-authored files must use erasable TypeScript syntax. Do not use enums, namespaces,
   constructor parameter properties or TSX in server capability directories.
 - Browser `pages/*.tsx` are compiled by the Client Build adapter and are not imported by Node.

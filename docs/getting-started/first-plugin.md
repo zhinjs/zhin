@@ -61,7 +61,7 @@ ping-pong/
 ## 2. plugin.ts
 
 ```ts
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 
 interface PingPongConfig {
   reply: string;
@@ -88,7 +88,7 @@ export default definePlugin<PingPongConfig>({
 `commands/` 下的文件由 Command Feature 自动发现，文件名即命令名：
 
 ```ts
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 
 interface PingPongConfig {
   reply: string;

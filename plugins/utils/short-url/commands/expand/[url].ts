@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { expandUrl, isValidUrl } from '../../src/short-url-lib.js';
 
 export default defineCommand({

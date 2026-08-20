@@ -3,8 +3,10 @@
 Zhin Plugin Runtime 的 Middleware Feature。它从 `middlewares/**/*.ts` 发现定义，并按
 phase、order、Plugin topology 与 capability identity 形成稳定执行链。
 
+依赖 `zhin.js` 时从门面导入（勿再单独安装本包）：
+
 ```ts
-import { defineMiddleware } from '@zhin.js/middleware';
+import { defineMiddleware } from 'zhin.js/middleware';
 
 export default defineMiddleware({
   phase: 'before-dispatch',

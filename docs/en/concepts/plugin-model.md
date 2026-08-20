@@ -63,7 +63,7 @@ After a plugin declares a dependency on a capability type via the `features` arr
 
 ```ts
 // plugins/adapters/sandbox/adapters/sandbox.ts
-import { defineAdapter } from '@zhin.js/adapter';
+import { defineAdapter } from 'zhin.js/adapter';
 import { messageGatewayToken } from '@zhin.js/core/runtime';
 import { SandboxWsEndpoint } from '../src/endpoint.js';
 
@@ -122,7 +122,7 @@ The CLI treats the current directory as the project root, scans its manifest tre
   { "package": "@zhin.js/command",     "api": "^1.0.0" },
   { "package": "@zhin.js/component",   "api": "^1.0.0" },
   { "package": "@zhin.js/middleware",  "api": "^1.0.0" },
-  { "package": "@zhin.js/feature-kit", "api": "^1.0.0" }
+  { "package": "@zhin.js/handler",     "api": "^1.0.0" }
 ]
 ```
 
@@ -141,7 +141,7 @@ The `PluginSetupContext` received by the plugin entry `definePlugin({ setup(cont
 | `resources` | This plugin's scoped resource Scope |
 | `lifecycle` | `DisposeStack`: registered resources are automatically deregistered when the generation ends (see [Generation and Lifecycle](./generation-lifecycle.md)) |
 | `handoff` | Entry point for participating in generation handoff |
-| `addFeature` | Generic entry for declaring Capabilities within setup; corresponding Feature packages extend this with `addCommand` / `addComponent` / `addMiddleware` / `addAdapter` / `addAgent` / `addSkill` / `addTool` / `addMcp` |
+| `addFeature` | Generic entry for declaring Capabilities within setup; corresponding Feature packages extend this with `addCommand` / `addComponent` / `addMiddleware` / `addHandler` / `addAdapter` / `addAgent` / `addSkill` / `addTool` / `addMcp` |
 
 `setup` can return a `Dispose` synchronously or asynchronously, or attach cleanup functions directly to `lifecycle`.
 Registration in setup and discovery from convention directories feed into the same Feature projection; the former is suited for single-file Bots, while the latter is suited for

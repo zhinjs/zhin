@@ -2,7 +2,7 @@ import {
   buildEndpointEnvKey,
   persistEndpointEnvValues,
   resolveProjectRoot,
-} from '@zhin.js/adapter';
+} from 'zhin.js/adapter';
 
 export { resolveProjectRoot };
 

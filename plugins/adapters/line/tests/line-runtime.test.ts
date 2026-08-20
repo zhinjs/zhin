@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js/plugin-runtime';
 import { createHttpHost } from '@zhin.js/host-http';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { LineEndpoint } from '../src/endpoint.js';

@@ -27,13 +27,6 @@
     "@types/node": "^26.1.2",
     "typescript": "^6.0.3"
   },
-  "zhin": {
-    "protocol": 1,
-    "type": "feature",
-    "entry": "./lib/handler-provider.js",
-    "engine": "^1.0.0",
-    "featureApi": "1.0.0"
-  },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
   },

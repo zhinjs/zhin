@@ -2,11 +2,11 @@
  * GithubEndpoint — lifecycle, outbound send, inbound admit.
  */
 import path from 'node:path';
-import type { EndpointInstance, EndpointSendRequest } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import type { CapabilityId, PluginDatabaseHost } from '@zhin.js/plugin-runtime';
+import type { CapabilityId, PluginDatabaseHost } from 'zhin.js/plugin-runtime';
 import { GhClient } from './gh-client.js';
 import { registerGithubAgentEndpoint } from './github-agent-deps.js';
 import { lookupGithubOauthAccessToken } from './oauth-users.js';

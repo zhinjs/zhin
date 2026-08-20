@@ -90,7 +90,7 @@ packages/toolkit/{create-zhin,satori}         # 脚手架与渲染库
 
 ```ts
 // plugin.ts — thin wiring only
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 
 export default definePlugin({
   name: 'my-plugin',                      // /^[a-z][a-z0-9-]*$/
@@ -107,9 +107,10 @@ Capabilities are **discovered from convention directories**, not registered impe
 
 | Directory | Authoring API |
 |---|---|
-| `commands/**/*.ts` | `defineCommand()` (`@zhin.js/command`) — path is the route; Next.js-style param files `[name].ts` / `[[name]].ts` (optional) / `[...name].ts` (catch-all), type and default declared in `defineCommand({ params })` |
-| `middlewares/*.ts` | `defineMiddleware()` (`@zhin.js/middleware`) |
-| `components/*.tsx` | `defineComponent()` |
+| `commands/**/*.ts` | `defineCommand()` (`zhin.js/command`) — path is the route; Next.js-style param files `[name].ts` / `[[name]].ts` (optional) / `[...name].ts` (catch-all), type and default declared in `defineCommand({ params })` |
+| `middlewares/*.ts` | `defineMiddleware()` (`zhin.js/middleware`) |
+| `handlers/**/*.ts` | `defineHandler()` (`zhin.js/handler`) — path segments joined with `.` (e.g. `handlers/message/receive.ts` → `message.receive`) |
+| `components/*.tsx` | `defineComponent()` (`zhin.js/component`) |
 | `tools/*.ts` | `defineAgentTool()` (`@zhin.js/tool`) |
 | `pages/*.tsx` | `definePage()` (`$nav.tsx` / `$footer.tsx` for chrome) |
 | `skills/<name>/SKILL.md`, `agents/<name>.agent.md` | markdown + frontmatter |

@@ -53,7 +53,6 @@
     "@zhin.js/html-renderer": "workspace:*",
     "@zhin.js/mcp": "workspace:*",
     "@zhin.js/mcp-feature": "workspace:*",
-    "@zhin.js/middleware": "workspace:*",
     "@zhin.js/page": "workspace:*",
     "@zhin.js/plugin-60s": "workspace:*",
     "@zhin.js/plugin-blackjack": "workspace:*",
@@ -109,10 +108,6 @@
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [
-      {
-        "package": "@zhin.js/middleware",
-        "api": "^1.0.0"
-      },
       {
         "package": "@zhin.js/tool",
         "api": "^1.0.0"

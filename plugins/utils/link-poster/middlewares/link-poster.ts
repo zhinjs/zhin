@@ -1,4 +1,4 @@
-import { defineMiddleware } from '@zhin.js/middleware';
+import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 import { detectAndParse } from '../src/platforms.js';
 import { renderPoster } from '../src/render.js';

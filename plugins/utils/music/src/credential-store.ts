@@ -2,7 +2,7 @@ import {
   createGenerationStore,
   type Dispose,
   type GenerationStoreContext,
-} from '@zhin.js/plugin-runtime';
+} from 'zhin.js/plugin-runtime';
 import type { MusicSource } from './types.js';
 
 export const MUSIC_CREDENTIALS_TABLE = 'music_credentials';

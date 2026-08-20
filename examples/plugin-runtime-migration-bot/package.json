@@ -10,11 +10,7 @@
     "test": "vitest run --root ../.. examples/plugin-runtime-migration-bot/tests"
   },
   "dependencies": {
-    "@zhin.js/command": "workspace:*",
-    "@zhin.js/component": "workspace:*",
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/middleware": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
     "zhin.js": "workspace:*"
   },
@@ -31,20 +27,7 @@
     "entry": "./plugin.ts",
     "engine": "^1.0.0",
     "runtime": "trusted",
-    "features": [
-      {
-        "package": "@zhin.js/command",
-        "api": "^1.0.0"
-      },
-      {
-        "package": "@zhin.js/component",
-        "api": "^1.0.0"
-      },
-      {
-        "package": "@zhin.js/middleware",
-        "api": "^1.0.0"
-      }
-    ],
+    "features": [],
     "plugins": []
   }
 }

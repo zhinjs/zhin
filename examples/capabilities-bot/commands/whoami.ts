@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 
 /** whoami —— 展示命令上下文里的插件实例视图与配置 */
 export default defineCommand<{ greeting: string }, string>({

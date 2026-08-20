@@ -5,14 +5,14 @@ description: defineMiddleware 的 inbound/outbound 执行序，defineComponent �
 
 # 中间件与组件
 
-消息流上有两类相邻的扩展点：`defineMiddleware`（`@zhin.js/middleware`）拦截消息流，`defineComponent`（`@zhin.js/component`）把结构化 props 渲染成可发送的内容（通常是图片）。游戏插件把它们配在一起用——中间件归一输入，组件统一输出。
+消息流上有两类相邻的扩展点：`defineMiddleware`（从 `zhin.js/middleware` 导入）拦截消息流，`defineComponent`（从 `zhin.js/component` 导入）把结构化 props 渲染成可发送的内容（通常是图片）。游戏插件把它们配在一起用——中间件归一输入，组件统一输出。依赖 `zhin.js` 时勿再单独安装 `@zhin.js/middleware` / `@zhin.js/component`。
 
 ## defineMiddleware
 
 插件包根目录下的 `middlewares/` 是约定目录，每个 `.ts` 文件默认导出 `defineMiddleware(...)`：
 
 ```ts
-import { defineMiddleware } from '@zhin.js/middleware';
+import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 
 export default defineMiddleware<Message>({
@@ -65,7 +65,7 @@ sequenceDiagram
 
 ```tsx
 // components/status-card.ts（提炼自 examples/minimal-bot）
-import { defineComponent } from '@zhin.js/component';
+import { defineComponent } from 'zhin.js/component';
 import { raw } from 'zhin.js/core/runtime';
 import { Card, CardHeader, Row, StatChip, h, wrapCardHtml, DEFAULT_CARD_THEME } from '@zhin.js/satori';
 

@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { parseGameId } from '../../src/games/registry.js';
 import { loadDraws } from '../../src/db.js';
 import { recommendGame, formatPickLine, formatPickStats } from '../../src/recommend/game-pick.js';

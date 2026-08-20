@@ -1,7 +1,7 @@
 /**
  * Convention entry: discover `adapters/email.ts` → defineAdapter.
  */
-import { defineAdapter } from '@zhin.js/adapter';
+import { defineAdapter } from 'zhin.js/adapter';
 import { messageGatewayToken } from '@zhin.js/core/runtime';
 import { EmailEndpoint } from '../src/endpoint.js';
 import {

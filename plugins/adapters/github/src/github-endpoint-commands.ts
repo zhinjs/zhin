@@ -6,8 +6,8 @@
  * resolvePrivateKey）本就支持 PEM 内容或文件路径，故 add 采用**内联路径**形式：
  * `github.endpoint add mybot app_id=123456 private_key=./data/mybot.pem`。
  */
-import { createEndpointCommands } from '@zhin.js/adapter';
-import { defineCommand } from '@zhin.js/command';
+import { createEndpointCommands } from 'zhin.js/adapter';
+import { defineCommand } from 'zhin.js/command';
 import { githubRuntimeStateToken } from './github-runtime-state.js';
 
 export const githubEndpointCommands = createEndpointCommands({

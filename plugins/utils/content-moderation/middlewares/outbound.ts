@@ -1,4 +1,4 @@
-import { defineMiddleware } from '@zhin.js/middleware';
+import { defineMiddleware } from 'zhin.js/middleware';
 import type { OutboundEnvelope } from '@zhin.js/core/runtime';
 import {
   buildScanContext,

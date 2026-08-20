@@ -5,7 +5,7 @@ import {
   type GameEventSession,
   type InMemoryGameDb,
 } from '@zhin.js/game-kit';
-import { outboundHostToken } from '@zhin.js/plugin-runtime';
+import { outboundHostToken } from 'zhin.js/plugin-runtime';
 import { defineHostTables, type TttSessionRow } from './src/models.js';
 import { gameServicesToken } from './src/runtime-store.js';
 import { renderBoard } from './src/game-flow.js';

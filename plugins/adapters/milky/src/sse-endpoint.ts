@@ -8,10 +8,10 @@ import {
   type EndpointLifecycle,
   type EndpointManagement,
   type EndpointSendRequest,
-} from '@zhin.js/adapter';
+} from 'zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import type { CapabilityId } from 'zhin.js/plugin-runtime';
 import { createMilkyEndpointManagement } from './endpoint-management.js';
 import { registerMilkyAgentEndpoint } from './milky-agent-deps.js';
 import {

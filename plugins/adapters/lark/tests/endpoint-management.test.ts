@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
-import { listEndpointManagementCapabilities } from '@zhin.js/adapter';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js/plugin-runtime';
+import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import type { HttpHost } from '@zhin.js/host-http';
 import { LarkEndpoint, type LarkFetch } from '../src/endpoint.js';
 import { resolveLarkConfig } from '../src/protocol.js';

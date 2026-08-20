@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   defineHandler,
   parseHandlerDefinition,
@@ -6,12 +6,14 @@ import {
   isHandlerIndex,
   handlerFeatureId,
   handlerFeature,
+  type HandlerDefinition,
+} from '../src/index.js';
+import {
   typeScriptModules,
   type DirectoryEntry,
   type DiscoveryHost,
-} from '../src/index.js';
+} from '@zhin.js/feature-kit';
 import type { CapabilitySlot, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import type { HandlerDefinition } from '../src/handler.js';
 
 // ---------------------------------------------------------------------------
 // defineHandler

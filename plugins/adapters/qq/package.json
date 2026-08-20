@@ -43,21 +43,17 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
-    "@zhin.js/command": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
-    "@zhin.js/middleware": "workspace:*",
     "@zhin.js/permission": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "qq-official-bot": "^1.2.3"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "zhin.js": "workspace:*",
     "zod": "^4.0.0"
   },

@@ -8,7 +8,7 @@ import {
   findEndpointConfigFile,
   listConfiguredEndpoints,
   removeEndpointFromConfig,
-} from '@zhin.js/adapter';
+} from 'zhin.js/adapter';
 
 export interface QqEndpointConfigEntry {
   id: string;

@@ -19,7 +19,7 @@ export function getDb() { return currentDb; }
 
 ```ts
 // src/runtime-state.ts
-import { createToken } from '@zhin.js/plugin-runtime';
+import { createToken } from 'zhin.js/plugin-runtime';
 
 export interface LotteryRuntime {
   readonly db: LotteryDb;

@@ -46,14 +46,13 @@
     "directory": "plugins/features/process-monitor"
   },
   "dependencies": {
-    "@zhin.js/command": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/tool": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "zhin.js": "workspace:*"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
@@ -79,5 +78,8 @@
       }
     ],
     "plugins": []
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
   }
 }

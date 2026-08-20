@@ -58,7 +58,7 @@ When configuration or injected resources decide whether a tool exists, call `con
 
 ```ts
 // plugins/utils/lottery/plugin.ts (excerpt)
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 import { defineAgentTool } from '@zhin.js/tool';
 
 export default definePlugin({

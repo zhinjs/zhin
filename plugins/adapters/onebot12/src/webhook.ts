@@ -2,11 +2,11 @@
  * OneBot12 HTTP webhook endpoint — POST inbound + api_url outbound.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import type { CapabilityId } from 'zhin.js/plugin-runtime';
 import { createOneBot12EndpointManagement } from './endpoint-management.js';
 import {
   buildSendMessageParams,

@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@zhin.js/adapter-qq": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/plugin-blackjack": "workspace:*",
     "@zhin.js/plugin-dice-duel": "workspace:*",
     "@zhin.js/plugin-dungeon-expedition": "workspace:*",
@@ -24,7 +23,8 @@
     "@zhin.js/plugin-text-adventure": "workspace:*",
     "@zhin.js/plugin-tic-tac-toe": "workspace:*",
     "@zhin.js/plugin-word-riddle": "workspace:*",
-    "sqlite3": "latest"
+    "sqlite3": "latest",
+    "zhin.js": "workspace:*"
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { listEndpointManagementCapabilities } from '@zhin.js/adapter';
+import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost } from '@zhin.js/host-http';
-import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js/plugin-runtime';
 import { createOneBot11EndpointManagement } from '../src/endpoint-management.js';
 import {
   resolveOneBot11Config,

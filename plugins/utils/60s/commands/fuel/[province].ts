@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import handler from '../../src/handlers/fuel-price.js';
 
 export default defineCommand({

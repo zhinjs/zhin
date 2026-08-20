@@ -28,7 +28,7 @@ Two more state-checking details: `started` is `true` if and only if the state is
 ## Configuration
 
 ```ts
-import { createEndpointLifecycle } from '@zhin.js/adapter';
+import { createEndpointLifecycle } from 'zhin.js/adapter';
 
 const lifecycle = createEndpointLifecycle({
   name: config.name,              // Used only for log fields

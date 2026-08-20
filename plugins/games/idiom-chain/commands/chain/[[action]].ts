@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { messageFromCommandInput, normalizeChainAction } from '@zhin.js/game-kit';
 import { CHAIN_HELP, runChainCommand } from '../../src/chain-command.js';
 import { resolveGameServices } from '../../src/runtime-store.js';

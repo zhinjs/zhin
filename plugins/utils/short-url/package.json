@@ -44,18 +44,16 @@
     "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
-  "dependencies": {
-    "@zhin.js/command": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*"
-  },
   "devDependencies": {
     "@zhin.js/agent": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
+    "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@zhin.js/agent": "workspace:*",
+    "zhin.js": "workspace:*",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {

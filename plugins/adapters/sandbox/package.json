@@ -62,7 +62,6 @@
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/page": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "lucide-react": "^0.525.0",
     "react": "^19.2.8"
   },
@@ -73,7 +72,8 @@
     "@zhin.js/runtime": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
-    "ws": "^8.21.1"
+    "ws": "^8.21.1",
+    "zhin.js": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:*",
@@ -82,8 +82,8 @@
     "@zhin.js/core": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/page": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
-    "react": "^19.0.0"
+    "react": "^19.0.0",
+    "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
     "react": {

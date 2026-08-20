@@ -28,7 +28,7 @@ stateDiagram-v2
 ## 配置
 
 ```ts
-import { createEndpointLifecycle } from '@zhin.js/adapter';
+import { createEndpointLifecycle } from 'zhin.js/adapter';
 
 const lifecycle = createEndpointLifecycle({
   name: config.name,              // 仅用于日志字段

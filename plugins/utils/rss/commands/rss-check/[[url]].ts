@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { extractChannelInfo } from '../../src/channel.js';
 import { getRssSubs } from '../../src/db-store.js';
 import { resolveRssConfig, type RssConfig } from '../../src/feed.js';

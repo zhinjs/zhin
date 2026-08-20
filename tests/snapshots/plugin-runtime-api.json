@@ -81,11 +81,15 @@
     "export * from './catalog.js';",
     "export * from './context.js';",
     "export * from './discovery.js';",
-    "export * from './handler-provider.js';",
-    "export * from './handler.js';",
     "export * from './owner-capability-index.js';",
     "export * from './provider.js';",
     "export * from './typescript-convention.js';"
+  ],
+  "handler": [
+    "export * from './definition.js';",
+    "export * from './handler-index.js';",
+    "export * from './provider.js';",
+    "export{default}from './provider.js';"
   ],
   "isolate": [
     "export * from './contracts.js';",

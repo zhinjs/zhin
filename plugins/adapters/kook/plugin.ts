@@ -1,5 +1,5 @@
-import { createEndpointRuntimeState } from '@zhin.js/adapter';
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { createEndpointRuntimeState } from 'zhin.js/adapter';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 import { permissionHostToken } from '@zhin.js/permission';
 import { checkKookPlatformPermit } from './src/platform-permit.js';
 import { kookRuntimeStateToken } from './src/kook-runtime-state.js';

@@ -14,12 +14,15 @@ flowchart LR
 
 A few key points. The full capability id takes the form `owner\0feature\0localName` (`\0`-separated), where `localName` is determined by the relative path within the directory; duplicate `localName`s (or the same file source) under the same owner throw `DiscoveryConflictError`. When a directory does not exist or has no matching files, that Feature is silently skipped -- plugins only need to declare the directories they use. Additionally, modules with `target: server` are loaded and executed on the Node side, while `target: client` (pages) are loaded in the browser via build artifacts.
 
+**Author imports (do not reinstall Features):** Apps that depend on `zhin.js` should import `define*` from facade subpaths -- `zhin.js/command`, `zhin.js/middleware`, `zhin.js/handler`, `zhin.js/adapter`, `zhin.js/component` (and `definePlugin` from `zhin.js/plugin-runtime`). The "Feature package" column below is the implementation package mounted by `platformFeatures`; Roots that depend on `zhin.js` / `@zhin.js/core` already inherit them -- **do not** `pnpm add @zhin.js/command` and friends.
+
 ## Directory Overview
 
 | Directory | File format | Recursive | target | Feature package | featureId | Default export |
 | --- | --- | --- | --- | --- | --- | --- |
 | `commands/` | `.ts` / `.tsx`, supports dynamic parameter files | Yes (subdirectories form hierarchy) | server | `@zhin.js/command` | `zhin.command` | `defineCommand(...)` |
 | `middlewares/` | `.ts` | Yes | server | `@zhin.js/middleware` | `zhin.middleware` | `defineMiddleware(...)` |
+| `handlers/` | `.ts` | Yes (path segments joined with `.`) | server | `@zhin.js/handler` | `zhin.handler` | `defineHandler(...)` |
 | `components/` | `.ts` / `.tsx` | Yes | server | `@zhin.js/component` | `zhin.component` | `defineComponent(...)` |
 | `adapters/` | `.ts` | Yes | server | `@zhin.js/adapter` | `zhin.adapter` | `defineAdapter(...)` |
 | `tools/` | `.ts` | No | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
@@ -40,7 +43,8 @@ Supplementary rules per directory:
 | --- | --- | --- |
 | `commands/` | Subdirectories and file names joined with `/`; static segments may be ASCII kebab or Unicode names (e.g. `赞我`); dynamic parameter files use Next.js-style brackets to declare their shape and map to `$name` segments: `[name].ts(x)` required, `[[name]].ts(x)` optional, `[...name].ts(x)` catch-all, `[[...name]].ts(x)` optional catch-all; type and default value are declared in `defineCommand({ params })` | `commands/lottery-today.ts` -> `lottery-today`; `commands/赞我.ts` -> `赞我`; `commands/lottery/[[game]].ts` -> `lottery/$game` |
 | `middlewares/` | Relative path without extension, joined with `/` | `middlewares/keyword-reply.ts` -> `keyword-reply` |
-| `components/` | Same as above | `components/share-music.ts` -> `share-music` |
+| `handlers/` | Relative path without extension, path segments joined with `.` (aligned with Lifecycle event names); when `event` is omitted, localName is the event name | `handlers/message/receive.ts` -> `message.receive` |
+| `components/` | Relative path without extension, joined with `/` | `components/share-music.ts` -> `share-music` |
 | `adapters/` | Same as above | `adapters/napcat.ts` -> `napcat` |
 | `tools/` | File name without extension (no subdirectory recursion); ASCII kebab or snake | `tools/music-search.ts` -> `music-search`; `tools/send_user_like.ts` -> `send_user_like` |
 | `skills/` | Subdirectory name is the localName, directory must contain `SKILL.md` | `skills/memory-consolidate/SKILL.md` -> `memory-consolidate` |
@@ -56,7 +60,7 @@ Malformed bracket syntax in command dynamic parameter files throws `CommandPathS
 
 ```ts
 // plugins/utils/lottery/commands/lottery-today.ts
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand<LotteryConfig>({
   description: 'Show today published recommendation report',
@@ -71,7 +75,7 @@ export default defineCommand<LotteryConfig>({
 
 ```ts
 // plugins/utils/group-suite/middlewares/keyword-reply.ts (excerpt)
-import { defineMiddleware } from '@zhin.js/middleware';
+import { defineMiddleware } from 'zhin.js/middleware';
 
 export default defineMiddleware<Message, GroupSuiteConfig>({
   target: 'inbound',
@@ -86,11 +90,34 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
 });
 ```
 
+### handlers/ -- `defineHandler`
+
+Register listeners by **Lifecycle event name** (no `next()` chain). Path segments are joined with `.` into localName; when `event` is omitted, localName is the event name. Importing from `@zhin.js/core/feature/handler` merges `Plugin.Lifecycle` into `HandlerEventMap`, so `event: 'message.receive'` gets typed arguments.
+
+Plugins that depend on `zhin.js` / `@zhin.js/core` get `@zhin.js/handler` via `platformFeatures` — no extra declaration or install needed. Today `ImRuntime` calls `dispatch('message.receive', message)` **before** the command/middleware pipeline; other Lifecycle event names may be declared but are not necessarily wired yet.
+
+vs `middlewares/`: use middleware for ordered inbound/outbound chains with `await next()`; use handlers for fire-and-forget work on a named event.
+
+```ts
+// handlers/message/receive.ts
+import { defineHandler } from 'zhin.js/handler';
+
+export default defineHandler({
+  // optional: path already derives message.receive
+  event: 'message.receive',
+  async handle(message) {
+    // `this` is CapabilityContext; message is the inbound Message
+  },
+});
+```
+
+You can also call `addHandler(localName, defineHandler(...))` in `setup`; it lands in the same `HandlerIndex` as directory discovery.
+
 ### adapters/ -- `defineAdapter`
 
 ```ts
 // plugins/adapters/napcat/adapters/napcat.ts (excerpt)
-import { defineAdapter } from '@zhin.js/adapter';
+import { defineAdapter } from 'zhin.js/adapter';
 
 export default defineAdapter<NapCatAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
@@ -144,4 +171,4 @@ tools:
 
 ## Repository Examples
 
-When looking for production-grade references, browse these directories directly: `commands` -- see `plugins/utils/lottery/commands/` (including dynamic parameter `lottery/[[game]].ts`); `middlewares` -- see `plugins/utils/group-suite/middlewares/` and `plugins/games/*/middlewares/`; `components` -- see `plugins/utils/music/components/share-music.ts`; `adapters` -- see `plugins/adapters/napcat/adapters/napcat.ts`; `tools` -- see `plugins/utils/music/tools/` and `plugins/utils/group-suite/tools/`; `skills` -- see `examples/full-bot/skills/memory-consolidate/`; `agents` -- see `examples/multi-agent-room/agents/`; `pages` -- see `examples/full-bot/pages/orchestration.tsx`.
+When looking for production-grade references, browse these directories directly: `commands` -- see `plugins/utils/lottery/commands/` (including dynamic parameter `lottery/[[game]].ts`); `middlewares` -- see `plugins/utils/group-suite/middlewares/` and `plugins/games/*/middlewares/`; `handlers` -- use `handlers/message/receive.ts` + `defineHandler` (see the minimal form above; add in-repo examples as needed); `components` -- see `plugins/utils/music/components/share-music.ts`; `adapters` -- see `plugins/adapters/napcat/adapters/napcat.ts`; `tools` -- see `plugins/utils/music/tools/` and `plugins/utils/group-suite/tools/`; `skills` -- see `examples/full-bot/skills/memory-consolidate/`; `agents` -- see `examples/multi-agent-room/agents/`; `pages` -- see `examples/full-bot/pages/orchestration.tsx`.

@@ -62,7 +62,7 @@ zhin runtime migrate status        # 输出 JSON；state 为 ready 时退出码 
 
 ```ts
 // plugin.ts
-import { createToken, definePlugin, databaseHostToken } from '@zhin.js/plugin-runtime';
+import { createToken, definePlugin, databaseHostToken } from 'zhin.js/plugin-runtime';
 
 export const storeToken = createToken<Store>('my-plugin.store');
 
@@ -80,7 +80,7 @@ export default definePlugin({
 
 ```ts
 // commands/profile.ts —— 文件路径即路由；参数写在文件名里
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { storeToken } from '../plugin.js';
 
 export default defineCommand({

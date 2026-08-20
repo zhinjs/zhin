@@ -53,7 +53,7 @@ addCommand(new MessageCommand('profile').action(async (message) => {
 
 ```ts
 // 新 plugin.ts：状态成为 owner Resource
-import { createToken, definePlugin } from '@zhin.js/plugin-runtime';
+import { createToken, definePlugin } from 'zhin.js/plugin-runtime';
 
 export const cacheToken = createToken<Map<string, Profile>>('my-plugin.cache');
 
@@ -69,7 +69,7 @@ export default definePlugin({
 
 ```ts
 // 新 commands/profile.ts：从上下文取，不 import 单例
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { cacheToken } from '../plugin.js';
 
 export default defineCommand({

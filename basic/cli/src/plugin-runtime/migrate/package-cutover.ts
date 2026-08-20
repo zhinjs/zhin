@@ -236,7 +236,7 @@ function pluginName(packageName: string): string {
 
 function renderEntry(name: string): string {
   return [
-    "import { definePlugin } from '@zhin.js/plugin-runtime';",
+    "import { definePlugin } from 'zhin.js/plugin-runtime';",
     '',
     `export default definePlugin({ name: '${name}' });`,
     '',

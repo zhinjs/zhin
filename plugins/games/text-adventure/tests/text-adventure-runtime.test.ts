@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { parseCommandDefinition } from '@zhin.js/command';
+import { parseCommandDefinition } from 'zhin.js/command';
 import plugin from '../plugin.ts';
 import gameCommand from '../commands/adv/[[action]].ts';
 import { ADV_HELP } from '../src/index.js';

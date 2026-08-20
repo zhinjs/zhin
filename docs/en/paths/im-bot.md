@@ -21,7 +21,7 @@ set Host to `http://127.0.0.1:8086`, and the token is in `.env` under `HTTP_TOKE
 The project already has a `hello` command. Write another one just like it -- create `roll.ts` in `commands/`:
 
 ```ts
-import { defineCommand } from '@zhin.js/command'
+import { defineCommand } from 'zhin.js/command'
 
 export default defineCommand({
   description: 'Roll a die',
@@ -38,7 +38,7 @@ Save and it hot-reloads. Send `roll` in Console's Sandbox and you will get a res
 Need "send a message to a group every day at 9am"? Use the schedule host -- in `plugin.ts`'s `setup()`:
 
 ```ts
-import { definePlugin, scheduleHostToken } from '@zhin.js/plugin-runtime'
+import { definePlugin, scheduleHostToken } from 'zhin.js/plugin-runtime'
 
 export default definePlugin({
   name: 'my-bot',

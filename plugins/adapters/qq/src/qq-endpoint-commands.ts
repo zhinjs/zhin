@@ -14,8 +14,8 @@ import {
   removeEndpointById,
   type ConfiguredEndpointEntry,
   type EndpointCommandReply,
-} from '@zhin.js/adapter';
-import { defineCommand } from '@zhin.js/command';
+} from 'zhin.js/adapter';
+import { defineCommand } from 'zhin.js/command';
 import { QQ_BOT_KIND_PROMPT, qqCommandSessionKey } from './qq-bot-kind-prompt.js';
 import { startQqBindFlow } from './qq-bind-flow.js';
 import { persistQqCredentialsToEnv } from './qq-bind-persist.js';

@@ -1,4 +1,4 @@
-import { defineMiddleware } from '@zhin.js/middleware';
+import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 import type { GroupSuiteConfig } from '../src/config.js';
 import { recordMessage } from '../src/stats-lib.js';

@@ -1,7 +1,7 @@
 /**
  * Convention entry: discover `adapters/wechat-mp.ts` → defineAdapter.
  */
-import { defineAdapter } from '@zhin.js/adapter';
+import { defineAdapter } from 'zhin.js/adapter';
 import { messageGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import { WeChatMpEndpoint } from '../src/endpoint.js';

@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { formatResult, runCode } from '../../src/run-code.js';
 
 export default defineCommand({

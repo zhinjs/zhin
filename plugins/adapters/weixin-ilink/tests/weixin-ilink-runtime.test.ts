@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js/plugin-runtime';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { WeixinIlinkEndpoint } from '../src/endpoint.js';
 import {

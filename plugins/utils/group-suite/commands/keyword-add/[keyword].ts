@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { addKeyword } from '../../src/keyword-store.js';
 import type { GroupSuiteConfig } from '../../src/config.js';
 import { resolveGroupSuiteRuntime } from '../../src/runtime-state.js';

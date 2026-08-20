@@ -3,7 +3,7 @@ import {
   databaseHostToken,
   outboundHostToken,
   scheduleHostToken,
-} from '@zhin.js/plugin-runtime';
+} from 'zhin.js/plugin-runtime';
 import { fetchFeed, resolveRssConfig, type RssConfig } from './src/feed.js';
 import {
   ensureRssMemoryDb,

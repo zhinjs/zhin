@@ -61,6 +61,7 @@ plugin-package/
   commands/**/*.ts(x)
   components/**/*.ts(x)
   middlewares/**/*.ts
+  handlers/**/*.ts
   tools/**/*.ts
   skills/<name>/SKILL.md
   agents/<name>.agent.md
@@ -119,6 +120,7 @@ disposal. Standard providers use the following conventions:
 | Command | `commands/**/*.ts(x)` / `defineCommand()` | CommandIndex |
 | Component | `components/**/*.ts(x)` / `defineComponent()` | OutboundRenderer |
 | Middleware | `middlewares/**/*.ts` / `defineMiddleware()` | Inbound/outbound pipeline |
+| Handler | `handlers/**/*.ts` / `defineHandler()` (`.`-joined localName) | HandlerIndex (`message.receive` wired in ImRuntime) |
 | Adapter | `adapters/**/*.ts` / `defineAdapter()` | AdapterIndex |
 | Tool | `tools/**/*.ts` / `defineAgentTool()` | Agent capability catalog |
 | Skill | `skills/<name>/SKILL.md` | Agent capability catalog |

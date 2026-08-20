@@ -1,4 +1,4 @@
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 import { permissionHostToken } from '@zhin.js/permission';
 import { checkQqPlatformPermit } from './src/platform-permit.js';
 import { createQqRuntimeState, qqRuntimeStateToken } from './src/qq-runtime-state.js';

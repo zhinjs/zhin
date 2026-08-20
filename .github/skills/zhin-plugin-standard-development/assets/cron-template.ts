@@ -3,7 +3,7 @@
 //
 // 定时任务在 plugin.ts 的 setup() 中通过 ScheduleHost 注册（参考 plugins/utils/lottery）。
 // Host 是可选资源：先 has() 再 use()，否则在未安装该 Host 的精简环境下会装配失败。
-import { definePlugin, scheduleHostToken } from '@zhin.js/plugin-runtime';
+import { definePlugin, scheduleHostToken } from 'zhin.js/plugin-runtime';
 
 interface MyPluginConfig {
   pollCron?: string;

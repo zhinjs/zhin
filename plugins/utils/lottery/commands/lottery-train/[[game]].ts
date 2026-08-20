@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { parseGameId } from '../../src/games/registry.js';
 import {
   formatTrainReport,

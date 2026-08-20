@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import type { Message } from '@zhin.js/core/runtime';
 import { resolveGroupSuiteConfig, type GroupSuiteConfig } from '../src/config.js';
 import { resolveGroupId, statsRankText, weekStartStr } from '../src/stats-lib.js';

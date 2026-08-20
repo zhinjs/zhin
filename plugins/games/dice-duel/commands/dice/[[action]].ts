@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { messageFromCommandInput, normalizeDiceAction } from '@zhin.js/game-kit';
 import { DICE_HELP, runDiceCommand } from '../../src/dice-command.js';
 import { resolveGameServices } from '../../src/runtime-store.js';

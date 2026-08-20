@@ -31,7 +31,7 @@ describe('legacy capability migration', () => {
       'MessageCommand matcher options require manual migration',
     ]);
     const generated = plan.changes[0]!.content;
-    expect(generated).toContain("import { defineCommand } from '@zhin.js/command';");
+    expect(generated).toContain("import { defineCommand } from 'zhin.js/command';");
     expect(generated).toContain('params: { title: { type: "string" } },');
     expect(generated).toContain('return action(context.input, { params: context.params, args: context.args });');
     expect(generated).toContain('description: "create\\npull request"');

@@ -1,5 +1,5 @@
-import { createEndpointRuntimeState } from '@zhin.js/adapter';
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { createEndpointRuntimeState } from 'zhin.js/adapter';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 import { weixinIlinkRuntimeStateToken } from './src/weixin-ilink-runtime-state.js';
 
 export default definePlugin({

@@ -13,7 +13,7 @@ import type {
   EndpointFriend,
   EndpointGroup,
   EndpointManagement,
-} from '@zhin.js/adapter';
+} from 'zhin.js/adapter';
 
 /** 管理面只依赖 endpoint 的 callApi（ws/wss/sse/webhook 四种传输各自实现）。 */
 export interface MilkyManagementCaller {

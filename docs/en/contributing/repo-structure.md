@@ -11,7 +11,7 @@ Cloning this repo for the first time, the 20-odd top-level directories can feel 
 | Directory | Contents |
 | --- | --- |
 | `basic/` | Foundation layer: `cli`, `database`, `logger`, `schedule`, `schema` (logging, database, config validation, CLI) |
-| `packages/im/` | IM core layer: `adapter`, `agent`, `ai`, `command`, `component`, `config-yaml`, `core`, `feature-kit`, `isolate`, `kernel`, `mcp-feature`, `middleware`, `plugin-runtime`, `runtime`, `skill`, `tool`, `zhin`, etc. |
+| `packages/im/` | IM core layer: `adapter`, `agent`, `ai`, `command`, `component`, `config-yaml`, `core`, `feature-kit`, `handler`, `isolate`, `kernel`, `mcp-feature`, `middleware`, `plugin-runtime`, `runtime`, `skill`, `tool`, `zhin`, etc. |
 | `packages/console/` | Remote Console support packages (`client`, `contract`, `layout`, `page`, `pagemanager`, `plugin-contract`, `protocol`). The Host only provides the API; the UI lives in a separate repo [zhin-console](https://github.com/zhinjs/console) (console.zhin.dev) |
 | `packages/host/` | Host runtime: `http` (`@zhin.js/host-http`), `mcp` (MCP Server), `a2a` (A2A Server) |
 | `packages/toolkit/` | `create-zhin` (`pnpm create zhin-app`), `scaffold-wizard` (config wizard), `satori`, `html-renderer`, `speech` |

@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import type { Message } from '@zhin.js/core/runtime';
 import { searchMusic, formatSearchResults } from '../../src/music-lib.js';
 import { resolveSourceAlias, SOURCE_DISPLAY_NAME } from '../../src/config.js';

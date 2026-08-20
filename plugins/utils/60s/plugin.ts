@@ -1,4 +1,4 @@
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 import { DEFAULT_API_BASE, registerSixtySApiBase } from './src/runtime-deps.js';
 
 export interface SixtySConfig {

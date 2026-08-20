@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { messageFromCommandInput, normalizeGuessAction } from '@zhin.js/game-kit';
 import { GUESS_HELP, runGuessCommand } from '../../src/guess-command.js';
 import { resolveGameServices } from '../../src/runtime-store.js';

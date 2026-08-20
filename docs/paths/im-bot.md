@@ -21,7 +21,7 @@ Host 填 `http://127.0.0.1:8086`，token 在 `.env` 的 `HTTP_TOKEN`。Sandbox �
 项目里已有一个 `hello` 命令。照它再写一个——在 `commands/` 新建 `roll.ts`：
 
 ```ts
-import { defineCommand } from '@zhin.js/command'
+import { defineCommand } from 'zhin.js/command'
 
 export default defineCommand({
   description: '掷骰子',
@@ -38,7 +38,7 @@ export default defineCommand({
 需要"每天 9 点往群里发一句"？用 schedule host——在 `plugin.ts` 的 `setup()` 里：
 
 ```ts
-import { definePlugin, scheduleHostToken } from '@zhin.js/plugin-runtime'
+import { definePlugin, scheduleHostToken } from 'zhin.js/plugin-runtime'
 
 export default definePlugin({
   name: 'my-bot',

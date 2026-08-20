@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { fetchFeed, formatFeedPreview, resolveRssConfig, type RssConfig } from '../../src/feed.js';
 
 export default defineCommand<RssConfig>({

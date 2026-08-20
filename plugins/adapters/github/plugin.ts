@@ -1,5 +1,5 @@
-import { createEndpointRuntimeState } from '@zhin.js/adapter';
-import { definePlugin, databaseHostToken } from '@zhin.js/plugin-runtime';
+import { createEndpointRuntimeState } from 'zhin.js/adapter';
+import { definePlugin, databaseHostToken } from 'zhin.js/plugin-runtime';
 import { githubRuntimeStateToken } from './src/github-runtime-state.js';
 import { defineGithubOauthUsersTable } from './src/oauth-users.js';
 

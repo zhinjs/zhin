@@ -1,7 +1,7 @@
 /**
  * Convention entry: discover `adapters/onebot11.ts` → defineAdapter.
  */
-import { defineAdapter } from '@zhin.js/adapter';
+import { defineAdapter } from 'zhin.js/adapter';
 import { messageGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import { OneBot11WsEndpoint } from '../src/ws-endpoint.js';

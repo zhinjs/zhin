@@ -4,7 +4,7 @@ Zhin Plugin Runtime 的 Component Feature。它从 `components/**/*.ts(x)` 发�
 按请求 Plugin 解析最近 owner override，并通过统一 IM 出站链路生成内容。
 
 ```ts
-import { defineComponent } from '@zhin.js/component';
+import { defineComponent } from 'zhin.js/component';
 
 export default defineComponent({
   render: (props: { text: string }) => props.text,

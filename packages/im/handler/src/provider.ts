@@ -1,7 +1,7 @@
 import { featureId } from '@zhin.js/plugin-runtime';
-import { defineFeatureProvider } from './provider.js';
-import { typeScriptModules } from './typescript-convention.js';
-import { parseHandlerDefinition, HandlerIndex } from './handler.js';
+import { defineFeatureProvider, typeScriptModules } from '@zhin.js/feature-kit';
+import { parseHandlerDefinition } from './definition.js';
+import { HandlerIndex } from './handler-index.js';
 
 export const handlerFeatureId = featureId('zhin.handler');
 

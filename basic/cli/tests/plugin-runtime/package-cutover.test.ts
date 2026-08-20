@@ -218,11 +218,11 @@ async function mkdirSource(root: string, name: string): Promise<void> {
 }
 
 function legacyCommandDefinition(): string {
-  return "import { defineCommand } from '@zhin.js/command';\n";
+  return "import { defineCommand } from 'zhin.js/command';\n";
 }
 
 function legacyMiddlewareDefinition(): string {
-  return "import { defineMiddleware } from '@zhin.js/middleware';\n";
+  return "import { defineMiddleware } from 'zhin.js/middleware';\n";
 }
 
 function componentDefinition(): string {

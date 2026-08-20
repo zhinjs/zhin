@@ -61,7 +61,7 @@ The `zhin` field is the plugin topology manifest:
 ## 2. plugin.ts
 
 ```ts
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 
 interface PingPongConfig {
   reply: string;
@@ -88,7 +88,7 @@ export default definePlugin<PingPongConfig>({
 Files under `commands/` are auto-discovered by the Command Feature; the filename becomes the command name:
 
 ```ts
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 
 interface PingPongConfig {
   reply: string;

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseCommandDefinition } from '@zhin.js/command';
+import { parseCommandDefinition } from 'zhin.js/command';
 import listCommand from '../commands/endpoint/list.js';
 import addCommand from '../commands/endpoint/add/[[id]].js';
 import cancelCommand from '../commands/endpoint/cancel.js';

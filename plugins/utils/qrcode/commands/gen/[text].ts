@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { raw } from '@zhin.js/core/runtime';
 import { buildQrImageUrl } from '../../src/qrcode-lib.js';
 

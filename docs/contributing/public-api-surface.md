@@ -16,14 +16,17 @@
 
 ### define\* 创作函数
 
-| API | 稳定性 | 来源包 | 一句话 |
-|-----|--------|--------|--------|
-| `definePlugin` | `stable` | `@zhin.js/plugin-runtime` | 约定式插件入口，`plugin.ts` 默认导出 |
-| `defineCommand` | `stable` | `@zhin.js/command` | 命令模块（`commands/` 下默认导出） |
-| `defineAdapter` | `stable` | `@zhin.js/adapter` | 适配器模块（`adapters/` 下默认导出），`create(context)` 返回 Endpoint |
-| `defineComponent` | `stable` | `@zhin.js/component` | Satori/SSR 组件（`components/` 下默认导出） |
-| `defineMiddleware` | `stable` | `@zhin.js/middleware` | 中间件模块（`middlewares/` 下默认导出） |
-| `defineAgentTool` | `experimental` | `@zhin.js/tool`（`tools/` 约定）；`zhin.js/agent`（`agent/tools/*.ts` 创作面） | AI 工具模块，Agent 自动发现 |
+> 应用侧请从 **`zhin.js/*` 门面子路径**导入（依赖 `zhin.js` 即可）。下表「实现包」是 Feature provider / platformFeatures 挂载名，**不要**再单独 `pnpm add` 这些实现包。
+
+| API | 稳定性 | 作者 import | 实现包 | 一句话 |
+|-----|--------|-------------|--------|--------|
+| `definePlugin` | `stable` | `zhin.js/plugin-runtime` | `@zhin.js/plugin-runtime` | 约定式插件入口，`plugin.ts` 默认导出 |
+| `defineCommand` | `stable` | `zhin.js/command` | `@zhin.js/command` | 命令模块（`commands/` 下默认导出） |
+| `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | 适配器模块（`adapters/` 下默认导出），`create(context)` 返回 Endpoint |
+| `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR 组件（`components/` 下默认导出） |
+| `defineMiddleware` | `stable` | `zhin.js/middleware` | `@zhin.js/middleware` | 中间件模块（`middlewares/` 下默认导出） |
+| `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle 事件处理器（`handlers/` 下默认导出；路径段用 `.` 拼接） |
+| `defineAgentTool` | `experimental` | `@zhin.js/tool`（`tools/`）；`zhin.js/agent`（`agent/tools/*.ts`） | `@zhin.js/tool` | AI 工具模块，Agent 自动发现 |
 
 > 注意：**没有 `defineAgentSkill`**。Agent 技能是纯 Markdown（`agent/skills/*.md`，由 `@zhin.js/skill` 的 `parseSkillMarkdown` 解析），不是代码符号。
 
@@ -32,9 +35,10 @@
 | 约定 | 稳定性 | 消费方 | 一句话 |
 |------|--------|--------|--------|
 | `plugin.ts` | `stable` | `@zhin.js/plugin-runtime` | 插件根入口，默认导出 `definePlugin(...)` |
-| `commands/` | `stable` | `@zhin.js/command` | 命令模块目录，支持 `[name]` / `[[name]]` / `[...name]` 动态参数段 |
-| `adapters/` | `stable` | `@zhin.js/adapter` | 适配器模块目录 |
-| `middlewares/` | `stable` | `@zhin.js/middleware` | 中间件模块目录 |
+| `commands/` | `stable` | `@zhin.js/command`（作者 import：`zhin.js/command`） | 命令模块目录，支持 `[name]` / `[[name]]` / `[...name]` 动态参数段 |
+| `adapters/` | `stable` | `@zhin.js/adapter`（作者 import：`zhin.js/adapter`） | 适配器模块目录 |
+| `middlewares/` | `stable` | `@zhin.js/middleware`（作者 import：`zhin.js/middleware`） | 中间件模块目录 |
+| `handlers/` | `stable` | `@zhin.js/handler`（作者 import：`zhin.js/handler`） | Lifecycle 事件处理器目录（路径段用 `.` 拼接；当前运行时接线 `message.receive`） |
 | `tools/` | `experimental` | `@zhin.js/tool` | Agent 工具目录（`defineAgentTool`） |
 | `agent/tools` | `experimental` | `zhin.js/agent` authoring | 文件化 Agent 工具创作面 |
 | `agent/skills` | `experimental` | `@zhin.js/skill` / Agent 发现 | Agent 技能 Markdown（随 npm 包发布） |

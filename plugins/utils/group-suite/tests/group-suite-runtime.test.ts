@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { parseCommandDefinition } from '@zhin.js/command';
-import { parseMiddlewareDefinition } from '@zhin.js/middleware';
+import { parseCommandDefinition } from 'zhin.js/command';
+import { parseMiddlewareDefinition } from 'zhin.js/middleware';
 import plugin from '../plugin.ts';
 import checkinCommand from '../commands/checkin.ts';
 import mypointsCommand from '../commands/mypoints.ts';

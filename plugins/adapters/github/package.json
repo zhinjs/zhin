@@ -50,19 +50,16 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
-    "@zhin.js/command": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
-    "@zhin.js/logger": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*"
+    "@zhin.js/logger": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "zhin.js": "workspace:*",
     "zod": "^4.0.0"
   },

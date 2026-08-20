@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
-import { listEndpointManagementCapabilities } from '@zhin.js/adapter';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js/plugin-runtime';
+import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { createHttpHost } from '@zhin.js/host-http';
 import { WeChatMpEndpoint, type WeChatMpFetch } from '../src/endpoint.js';

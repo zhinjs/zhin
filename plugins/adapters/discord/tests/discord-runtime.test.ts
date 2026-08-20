@@ -1,10 +1,10 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { createEndpointRuntimeState, listEndpointManagementCapabilities } from '@zhin.js/adapter';
+import { createEndpointRuntimeState, listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import { discordRuntimeStateToken } from '../src/discord-runtime-state.js';
 import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
-import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js/plugin-runtime';
 import defineDiscordAdapter from '../adapters/discord.js';
 import {
   DiscordGatewayEndpoint,

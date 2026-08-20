@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseMiddlewareDefinition } from '@zhin.js/middleware';
+import { parseMiddlewareDefinition } from 'zhin.js/middleware';
 import plugin from '../plugin.ts';
 import middleware from '../middlewares/link-poster.ts';
 import { renderPoster } from '../src/render.js';

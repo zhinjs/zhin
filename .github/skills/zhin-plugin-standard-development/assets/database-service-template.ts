@@ -7,7 +7,7 @@
 //   my-plugin/
 //     plugin.ts               ← 本文件的 default export
 //     commands/profile.ts     ← 见文件末尾
-import { createToken, definePlugin, databaseHostToken } from '@zhin.js/plugin-runtime';
+import { createToken, definePlugin, databaseHostToken } from 'zhin.js/plugin-runtime';
 
 export const PROFILE_MODEL = 'plugin_profiles';
 
@@ -58,7 +58,7 @@ export default definePlugin({
 });
 
 // ── commands/profile.ts ──────────────────────────────────────────────────────
-// import { defineCommand } from '@zhin.js/command';
+// import { defineCommand } from 'zhin.js/command';
 // import { profileStoreToken } from '../plugin.js';
 //
 // export default defineCommand({

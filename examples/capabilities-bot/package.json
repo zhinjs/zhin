@@ -11,9 +11,8 @@
   "dependencies": {
     "@zhin.js/adapter-sandbox": "workspace:*",
     "@zhin.js/agent": "workspace:*",
-    "@zhin.js/command": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/tool": "workspace:*",
+    "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },
   "zhin": {
@@ -23,10 +22,6 @@
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [
-      {
-        "package": "@zhin.js/command",
-        "api": "^1.0.0"
-      },
       {
         "package": "@zhin.js/tool",
         "api": "^1.0.0"

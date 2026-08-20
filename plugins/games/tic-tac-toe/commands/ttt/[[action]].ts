@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { messageFromCommandInput, normalizeTttAction } from '@zhin.js/game-kit';
 import { TTT_HELP, runTttCommand } from '../../src/ttt-command.js';
 import { resolveGameServices } from '../../src/runtime-store.js';

@@ -13,10 +13,9 @@
     "@ai-sdk/openai-compatible": "^3.0.18",
     "@zhin.js/adapter-sandbox": "workspace:*",
     "@zhin.js/agent": "workspace:*",
-    "@zhin.js/command": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "ai": "^7.0.44",
+    "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -34,10 +33,6 @@
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [
-      {
-        "package": "@zhin.js/command",
-        "api": "^1.0.0"
-      },
       {
         "package": "@zhin.js/tool",
         "api": "^1.0.0"

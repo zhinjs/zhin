@@ -14,12 +14,15 @@ flowchart LR
 
 几个要点。能力的完整 id 形如 `owner\0feature\0localName`（`\0` 分隔），`localName` 由目录内的相对路径决定；同一 owner 下 `localName`（或同一文件来源）重复会抛 `DiscoveryConflictError`。目录不存在或没有匹配文件时该 Feature 静默跳过——插件只声明自己用到的目录就行。另外，`target: server` 的模块在 Node 侧加载执行，`target: client`（pages）则经构建产物在浏览器加载。
 
+**作者 import**：依赖 `zhin.js` 的应用可从门面子路径导入 `define*`——`zhin.js/command`、`zhin.js/middleware`、`zhin.js/handler`、`zhin.js/adapter`、`zhin.js/component`（以及 `zhin.js/plugin-runtime` 的 `definePlugin`）。下表「Feature 包」是 `platformFeatures` 挂载的实现包名；Root 依赖 `zhin.js` / `@zhin.js/core` 时已自动继承。
+
 ## 目录一览
 
 | 目录 | 文件形态 | 递归 | target | Feature 包 | featureId | 默认导出 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `commands/` | `.ts` / `.tsx`，支持动态参数文件 | 是（子目录拼层级） | server | `@zhin.js/command` | `zhin.command` | `defineCommand(...)` |
 | `middlewares/` | `.ts` | 是 | server | `@zhin.js/middleware` | `zhin.middleware` | `defineMiddleware(...)` |
+| `handlers/` | `.ts` | 是（路径段用 `.` 拼接） | server | `@zhin.js/handler` | `zhin.handler` | `defineHandler(...)` |
 | `components/` | `.ts` / `.tsx` | 是 | server | `@zhin.js/component` | `zhin.component` | `defineComponent(...)` |
 | `adapters/` | `.ts` | 是 | server | `@zhin.js/adapter` | `zhin.adapter` | `defineAdapter(...)` |
 | `tools/` | `.ts` | 否 | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
@@ -40,7 +43,8 @@ flowchart LR
 | --- | --- | --- |
 | `commands/` | 子目录与文件名用 `/` 拼接；静态段可为 ASCII kebab 或 Unicode 名（如 `赞我`）；动态参数文件用 Next.js 风格方括号声明形态并映射为 `$name` 段：`[name].ts(x)` 必需、`[[name]].ts(x)` 可选、`[...name].ts(x)` 捕获所有、`[[...name]].ts(x)` 可选捕获所有；类型与默认值在 `defineCommand({ params })` 中声明 | `commands/lottery-today.ts` → `lottery-today`；`commands/赞我.ts` → `赞我`；`commands/lottery/[[game]].ts` → `lottery/$game` |
 | `middlewares/` | 相对路径去扩展名，`/` 拼接 | `middlewares/keyword-reply.ts` → `keyword-reply` |
-| `components/` | 同上 | `components/share-music.ts` → `share-music` |
+| `handlers/` | 相对路径去扩展名，路径段用 `.` 拼接（与 Lifecycle 事件名对齐）；省略 `event` 时 localName 即事件名 | `handlers/message/receive.ts` → `message.receive` |
+| `components/` | 相对路径去扩展名，`/` 拼接 | `components/share-music.ts` → `share-music` |
 | `adapters/` | 同上 | `adapters/napcat.ts` → `napcat` |
 | `tools/` | 文件名去扩展名（不递归子目录）；ASCII kebab 或 snake | `tools/music-search.ts` → `music-search`；`tools/send_user_like.ts` → `send_user_like` |
 | `skills/` | 子目录名即 localName，目录内必须含 `SKILL.md` | `skills/memory-consolidate/SKILL.md` → `memory-consolidate` |
@@ -56,7 +60,7 @@ flowchart LR
 
 ```ts
 // plugins/utils/lottery/commands/lottery-today.ts
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand<LotteryConfig>({
   description: 'Show today published recommendation report',
@@ -71,7 +75,7 @@ export default defineCommand<LotteryConfig>({
 
 ```ts
 // plugins/utils/group-suite/middlewares/keyword-reply.ts（节选）
-import { defineMiddleware } from '@zhin.js/middleware';
+import { defineMiddleware } from 'zhin.js/middleware';
 
 export default defineMiddleware<Message, GroupSuiteConfig>({
   target: 'inbound',
@@ -86,11 +90,34 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
 });
 ```
 
+### handlers/ — `defineHandler`
+
+按 **Lifecycle 事件名** 注册监听器（无 `next()` 链）。路径段用 `.` 拼接成 localName；省略 `event` 时用 localName 作为事件名。从 `@zhin.js/core/feature/handler` 导入时，`Plugin.Lifecycle` 已并入 `HandlerEventMap`，写 `event: 'message.receive'` 时参数类型可推断。
+
+依赖 `zhin.js` / `@zhin.js/core` 的 Root 会经由 `platformFeatures` 挂载 `@zhin.js/handler`，无需再单独声明或安装。当前 `ImRuntime` 在入站消息进入命令/中间件流水线**之前**会 `dispatch('message.receive', message)`；其它 Lifecycle 事件名可声明，但未必已由运行时接线。
+
+与 `middlewares/` 的分工：需要 `await next()` 的有序入/出站链用 middleware；只需在某事件上 fire-and-forget 处理用 handler。
+
+```ts
+// handlers/message/receive.ts
+import { defineHandler } from 'zhin.js/handler';
+
+export default defineHandler({
+  // 可省略：文件路径已推导出 message.receive
+  event: 'message.receive',
+  async handle(message) {
+    // this 为 CapabilityContext；message 为入站 Message
+  },
+});
+```
+
+也可在 `setup` 里用 `addHandler(localName, defineHandler(...))`，与目录发现进入同一 `HandlerIndex`。
+
 ### adapters/ — `defineAdapter`
 
 ```ts
 // plugins/adapters/napcat/adapters/napcat.ts（节选）
-import { defineAdapter } from '@zhin.js/adapter';
+import { defineAdapter } from 'zhin.js/adapter';
 
 export default defineAdapter<NapCatAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
@@ -144,4 +171,4 @@ tools:
 
 ## 仓库实例
 
-想找生产级参照时，直接翻这些目录：`commands` 看 `plugins/utils/lottery/commands/`（含动态参数 `lottery/[[game]].ts`）；`middlewares` 看 `plugins/utils/group-suite/middlewares/` 和 `plugins/games/*/middlewares/`；`components` 看 `plugins/utils/music/components/share-music.ts`；`adapters` 看 `plugins/adapters/napcat/adapters/napcat.ts`；`tools` 看 `plugins/utils/music/tools/` 与 `plugins/utils/group-suite/tools/`；`skills` 看 `examples/full-bot/skills/memory-consolidate/`；`agents` 看 `examples/multi-agent-room/agents/`；`pages` 看 `examples/full-bot/pages/orchestration.tsx`。
+想找生产级参照时，直接翻这些目录：`commands` 看 `plugins/utils/lottery/commands/`（含动态参数 `lottery/[[game]].ts`）；`middlewares` 看 `plugins/utils/group-suite/middlewares/` 和 `plugins/games/*/middlewares/`；`handlers` 用 `handlers/message/receive.ts` + `defineHandler`（见上文最小形态；仓库内示例可按需自加）；`components` 看 `plugins/utils/music/components/share-music.ts`；`adapters` 看 `plugins/adapters/napcat/adapters/napcat.ts`；`tools` 看 `plugins/utils/music/tools/` 与 `plugins/utils/group-suite/tools/`；`skills` 看 `examples/full-bot/skills/memory-consolidate/`；`agents` 看 `examples/multi-agent-room/agents/`；`pages` 看 `examples/full-bot/pages/orchestration.tsx`。

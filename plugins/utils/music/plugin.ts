@@ -1,4 +1,4 @@
-import { definePlugin, databaseHostToken } from '@zhin.js/plugin-runtime';
+import { definePlugin, databaseHostToken } from 'zhin.js/plugin-runtime';
 import { cleanExpired } from './src/session.js';
 import { cleanExpiredLogins } from './src/login/index.js';
 import {

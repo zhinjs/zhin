@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 
 const QR_API_BASE = 'https://api.qrserver.com/v1';
 

@@ -1,5 +1,5 @@
-import { defineMiddleware } from '@zhin.js/middleware';
-import type { CommandMessage } from '@zhin.js/command';
+import { defineMiddleware } from 'zhin.js/middleware';
+import type { CommandMessage } from 'zhin.js/command';
 import {
   completeQqPendingBotKind,
 } from '../src/qq-endpoint-commands.js';

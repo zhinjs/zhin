@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { parseCommandDefinition } from '@zhin.js/command';
-import { databaseHostToken } from '@zhin.js/plugin-runtime';
+import { parseCommandDefinition } from 'zhin.js/command';
+import { databaseHostToken } from 'zhin.js/plugin-runtime';
 import plugin from '../plugin.ts';
 import previewCommand from '../commands/rss-preview/[url].ts';
 import listCommand from '../commands/rss-list.ts';

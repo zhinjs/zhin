@@ -10,7 +10,7 @@
 //   my-plugin/
 //     middlewares/
 //       audit.ts       ← 本文件
-import { defineMiddleware } from '@zhin.js/middleware';
+import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 
 export default defineMiddleware<Message>({

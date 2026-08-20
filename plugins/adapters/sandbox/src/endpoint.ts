@@ -2,11 +2,11 @@
  * SandboxWsEndpoint — WebSocket lifecycle and MessageGateway bridge for /sandbox.
  */
 import { randomUUID } from 'node:crypto';
-import type { EndpointInstance, EndpointSendRequest } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import type { CapabilityId } from 'zhin.js/plugin-runtime';
 import {
   bindSandboxWsSocket,
   formatSandboxOutbound,

@@ -55,7 +55,7 @@ export class ProjectScaffolder {
       properties: {},
     });
     await writeFile(join(this.root, 'plugin.ts'), [
-      "import { definePlugin } from '@zhin.js/plugin-runtime';",
+      "import { definePlugin } from 'zhin.js/plugin-runtime';",
       '',
       "export default definePlugin({ name: 'root' });",
       '',
@@ -115,7 +115,7 @@ export class ProjectScaffolder {
       },
     });
     await writeFile(join(packageRoot, 'plugin.ts'), [
-      "import { definePlugin } from '@zhin.js/plugin-runtime';",
+      "import { definePlugin } from 'zhin.js/plugin-runtime';",
       '',
       `export default definePlugin({ name: '${options.name}' });`,
       '',
@@ -165,7 +165,7 @@ export class ProjectScaffolder {
     await mkdir(join(packageRoot, 'src'), { recursive: true });
     await writeFile(join(packageRoot, 'src/provider.ts'), [
       "import { defineFeatureProvider } from '@zhin.js/feature-kit';",
-      "import { featureId } from '@zhin.js/plugin-runtime';",
+      "import { featureId } from 'zhin.js/plugin-runtime';",
       '',
       'export default defineFeatureProvider({',
       '  protocol: 1,',

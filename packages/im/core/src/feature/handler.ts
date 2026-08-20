@@ -1,4 +1,4 @@
-/** Authoring API for Handler Feature — implementation in `@zhin.js/feature-kit`. */
+/** Authoring API for Handler Feature — implementation in `@zhin.js/handler`. */
 export {
   defineHandler,
   parseHandlerDefinition,
@@ -9,7 +9,7 @@ export {
   type HandlerEventMap,
   type HandlerDefinition,
   type HandlerDescriptor,
-} from '@zhin.js/feature-kit';
+} from '@zhin.js/handler';
 
 import type { Plugin } from '../plugin.js';
 
@@ -17,6 +17,6 @@ type KnownKeys<T> = {
   [K in keyof T as string extends K ? never : number extends K ? never : K]: T[K];
 };
 
-declare module '@zhin.js/feature-kit' {
+declare module '@zhin.js/handler' {
   interface HandlerEventMap extends KnownKeys<Plugin.Lifecycle> {}
 }

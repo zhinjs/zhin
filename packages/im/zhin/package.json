@@ -70,6 +70,16 @@
       "development": "./src/component.ts",
       "import": "./lib/component.js"
     },
+    "./middleware": {
+      "types": "./lib/middleware.d.ts",
+      "development": "./src/middleware.ts",
+      "import": "./lib/middleware.js"
+    },
+    "./handler": {
+      "types": "./lib/handler.d.ts",
+      "development": "./src/handler.ts",
+      "import": "./lib/handler.js"
+    },
     "./core/runtime": {
       "types": "./lib/core-runtime.d.ts",
       "development": "./src/core-runtime.ts",

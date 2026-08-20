@@ -31,13 +31,12 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@zhin.js/command": "workspace:*",
-    "@zhin.js/game-kit": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*"
+    "@zhin.js/game-kit": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "zhin.js": "workspace:*"
   },
   "repository": {
     "type": "git",
@@ -64,5 +63,8 @@
       }
     ],
     "plugins": []
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
   }
 }

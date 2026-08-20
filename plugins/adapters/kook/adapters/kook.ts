@@ -2,7 +2,7 @@
  * Convention entry: discover `adapters/kook.ts` → defineAdapter.
  * Implementation lives under `src/` (endpoint / webhook / ws / protocol).
  */
-import { defineAdapter } from '@zhin.js/adapter';
+import { defineAdapter } from 'zhin.js/adapter';
 import { messageGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import {

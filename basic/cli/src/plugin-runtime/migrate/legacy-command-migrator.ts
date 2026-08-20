@@ -322,7 +322,7 @@ function topLevelFunctions(file: ts.SourceFile): ReadonlyMap<string, MigratableF
 function renderMiddleware(file: ts.SourceFile, handler: MigratableFunction): string {
   const source = handler.getText(file);
   return [
-    "import { defineMiddleware } from '@zhin.js/middleware';",
+    "import { defineMiddleware } from 'zhin.js/middleware';",
     '',
     'export default defineMiddleware({',
     '  handle(context, next) {',
@@ -339,7 +339,7 @@ function renderComponent(file: ts.SourceFile, component: MigratableFunction): st
   // also mutate whitespace inside multiline template literals.
   const source = component.getText(file);
   return [
-    "import { defineComponent } from '@zhin.js/component';",
+    "import { defineComponent } from 'zhin.js/component';",
     '',
     'export default defineComponent({',
     `  render: ${source},`,
@@ -447,7 +447,7 @@ function renderCommand(
   parameter?: CommandRouteParameter,
 ): string {
   const lines = [
-    "import { defineCommand } from '@zhin.js/command';",
+    "import { defineCommand } from 'zhin.js/command';",
     '',
     'export default defineCommand({',
   ];

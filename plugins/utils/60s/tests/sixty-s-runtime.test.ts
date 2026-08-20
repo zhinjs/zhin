@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { parseCommandDefinition } from '@zhin.js/command';
+import { parseCommandDefinition } from 'zhin.js/command';
 import { fetchApi, formatList } from '../src/api.js';
 import { DEFAULT_API_BASE, registerSixtySApiBase, resolveApiBase } from '../src/runtime-deps.js';
 import plugin from '../plugin.ts';

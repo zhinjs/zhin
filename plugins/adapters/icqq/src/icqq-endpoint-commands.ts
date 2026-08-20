@@ -1,5 +1,5 @@
-import { addEndpointToConfig, createEndpointCommands } from '@zhin.js/adapter';
-import { defineCommand } from '@zhin.js/command';
+import { addEndpointToConfig, createEndpointCommands } from 'zhin.js/adapter';
+import { defineCommand } from 'zhin.js/command';
 import { icqqRuntimeStateToken } from './icqq-runtime-state.js';
 
 export const icqqEndpointCommands = createEndpointCommands({

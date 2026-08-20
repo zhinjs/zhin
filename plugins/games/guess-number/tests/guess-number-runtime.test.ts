@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseCommandDefinition } from '@zhin.js/command';
-import { DisposeStack, scheduleHostToken } from '@zhin.js/plugin-runtime';
+import { parseCommandDefinition } from 'zhin.js/command';
+import { DisposeStack, scheduleHostToken } from 'zhin.js/plugin-runtime';
 import {
   createMemoryGameServices,
   getRuntimeGame,

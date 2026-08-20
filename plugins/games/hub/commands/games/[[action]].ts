@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { formatRuntimeGamesHelp, getRuntimeGame } from '@zhin.js/game-kit';
 
 export default defineCommand({

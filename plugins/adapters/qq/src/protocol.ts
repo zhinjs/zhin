@@ -3,7 +3,7 @@
  * Canonicalization is owned by gateway/core before endpoint.send.
  */
 
-import { pickCredential } from '@zhin.js/adapter';
+import { pickCredential } from 'zhin.js/adapter';
 import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { resolveQqIntents } from './qq-intents.js';

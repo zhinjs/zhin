@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
-import { listEndpointManagementCapabilities } from '@zhin.js/adapter';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js/plugin-runtime';
+import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { SlackEndpoint, type SlackSocketLike, type SlackWebClientLike } from '../src/endpoint.js';
 import { resolveSlackConfig } from '../src/protocol.js';

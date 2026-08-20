@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCommandDefinition } from '@zhin.js/command';
+import { parseCommandDefinition } from 'zhin.js/command';
 import plugin from '../plugin.ts';
 import lotteryCommand from '../commands/lottery/[[game]].ts';
 import todayCommand from '../commands/lottery-today.ts';

@@ -1,4 +1,4 @@
-import { defineComponent } from '@zhin.js/component';
+import { defineComponent } from 'zhin.js/component';
 import { musicServices } from '../src/sources/index.js';
 import { sourceConfigMap } from '../src/config.js';
 import type { MusicSource } from '../src/types.js';

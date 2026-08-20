@@ -2,13 +2,13 @@
  * Convention entry: discover `adapters/github.ts` → defineAdapter.
  * Implementation lives under `src/` (endpoint / webhook / oauth / protocol).
  */
-import { defineAdapter, type AdapterContext } from '@zhin.js/adapter';
+import { defineAdapter, type AdapterContext } from 'zhin.js/adapter';
 import { messageGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import {
   databaseHostToken,
   type PluginDatabaseHost,
-} from '@zhin.js/plugin-runtime';
+} from 'zhin.js/plugin-runtime';
 import { GithubEndpoint } from '../src/endpoint.js';
 import { githubRuntimeStateToken } from '../src/github-runtime-state.js';
 import {

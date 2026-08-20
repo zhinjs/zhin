@@ -6,7 +6,7 @@
 //     package.json        ← "zhin": { "protocol": 1, "type": "plugin", "entry": "./plugin.ts", ... }
 //     plugin.ts           ← 本文件：只做装配与生命周期
 //     commands/hello.ts   ← 命令（见文件末尾）
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 
 export default definePlugin({
   // 必须匹配 /^[a-z][a-z0-9-]*$/
@@ -26,7 +26,7 @@ export default definePlugin({
 // ── commands/hello.ts ────────────────────────────────────────────────────────
 // 文件路径即命令路由：commands/hello.ts -> `hello`
 //
-// import { defineCommand } from '@zhin.js/command';
+// import { defineCommand } from 'zhin.js/command';
 //
 // export default defineCommand({
 //   description: 'Example command',

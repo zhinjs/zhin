@@ -9,7 +9,7 @@ import {
   extractPageMetadata,
 } from '@zhin.js/pagemanager/client-build';
 import { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
-import { definePlugin, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { definePlugin, type RuntimeSnapshot } from 'zhin.js/plugin-runtime';
 import pageFeature, { PageIndex, pageFeatureId } from '@zhin.js/page';
 import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
 import { createHttpHost } from '@zhin.js/host-http';

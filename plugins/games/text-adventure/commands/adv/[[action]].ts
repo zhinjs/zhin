@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { messageFromCommandInput, normalizeAdvAction } from '@zhin.js/game-kit';
 import { ADV_HELP, runAdvCommand } from '../../src/adv-command.js';
 import { resolveGameServices } from '../../src/runtime-store.js';

@@ -74,8 +74,9 @@ describe('CLI new command integration', () => {
     expect(packageJson.zhin.features).toEqual([
       { package: '@zhin.js/command', api: '^1.0.0' },
     ])
-    expect(packageJson.dependencies['@zhin.js/plugin-runtime']).toBeDefined()
-    expect(packageJson.dependencies['@zhin.js/command']).toBeDefined()
+    expect(packageJson.peerDependencies?.['zhin.js'] ?? packageJson.devDependencies?.['zhin.js']).toBeDefined()
+    expect(packageJson.dependencies?.['@zhin.js/command']).toBeUndefined()
+    expect(packageJson.dependencies?.['@zhin.js/plugin-runtime']).toBeUndefined()
 
     // Check tsconfig.json（include 覆盖 plugin.ts 与约定目录）
     const tsconfigPath = path.join(pluginDir, 'tsconfig.json')
@@ -89,7 +90,7 @@ describe('CLI new command integration', () => {
     // Check plugin.ts（definePlugin 裸定义）
     const pluginTs = await fs.readFile(path.join(pluginDir, 'plugin.ts'), 'utf-8')
     expect(pluginTs).toContain('definePlugin')
-    expect(pluginTs).toContain('@zhin.js/plugin-runtime')
+    expect(pluginTs).toContain('zhin.js/plugin-runtime')
     expect(pluginTs).toContain(`name: '${pluginName}'`)
     expect(pluginTs).not.toContain('usePlugin')
 
@@ -99,7 +100,7 @@ describe('CLI new command integration', () => {
       'utf-8'
     )
     expect(commandTs).toContain('defineCommand')
-    expect(commandTs).toContain('@zhin.js/command')
+    expect(commandTs).toContain('zhin.js/command')
     const echoTs = await fs.readFile(
       path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text].ts'),
       'utf-8'
@@ -202,7 +203,7 @@ describe('CLI new command integration', () => {
       'utf-8'
     )
     expect(adapterTs).toContain('defineAdapter')
-    expect(adapterTs).toContain('@zhin.js/adapter')
+    expect(adapterTs).toContain('zhin.js/adapter')
     expect(adapterTs).toContain('messageGatewayToken')
     expect(adapterTs).toContain("capabilities: ['inbound', 'outbound']")
     expect(adapterTs).toContain('async start()')

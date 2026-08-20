@@ -32,7 +32,7 @@ const repoRoot = path.resolve(__dirname, '..');
 // 该例外只适用于 basic/cli，basic/{logger,schema,database} 仍保持最底层约束。
 // Plugin Runtime 新层（约定式插件运行时迁移引入）：
 // plugin-runtime（契约/宿主 token，零 zhin 依赖）→ feature-kit（feature provider 基座）
-// → 8 个 provider 包（adapter/command/component/middleware/tool/skill/agent-feature/mcp-feature）
+// → 9 个 provider 包（adapter/command/component/middleware/handler/tool/skill/agent-feature/mcp-feature）
 // → runtime（RootHost 装配）→ isolate / config-yaml（依赖 runtime，仅契约）。
 // packages/host/http-contract 是协议 Host 的最小端口（路由 + body），零业务依赖。
 // packages/host/http 是具体 HTTP / WebSocket Host，仅依赖 basic + plugin-runtime。
@@ -50,17 +50,18 @@ const layers = {
   'packages/im/command': { level: 1, allowedImports: providerLayerAllowed },
   'packages/im/component': { level: 1, allowedImports: providerLayerAllowed },
   'packages/im/middleware': { level: 1, allowedImports: providerLayerAllowed },
+  'packages/im/handler': { level: 1, allowedImports: providerLayerAllowed },
   'packages/im/tool': { level: 1, allowedImports: providerLayerAllowed },
   'packages/im/skill': { level: 1, allowedImports: providerLayerAllowed },
   'packages/im/agent-feature': { level: 1, allowedImports: providerLayerAllowed },
   'packages/im/mcp-feature': { level: 1, allowedImports: providerLayerAllowed },
-  'packages/im/runtime': { level: 1, allowedImports: [...providerLayerAllowed, 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/tool', 'packages/im/skill', 'packages/im/agent-feature', 'packages/im/mcp-feature'] },
+  'packages/im/runtime': { level: 1, allowedImports: [...providerLayerAllowed, 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler', 'packages/im/tool', 'packages/im/skill', 'packages/im/agent-feature', 'packages/im/mcp-feature'] },
   'packages/im/isolate': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/im/runtime'] },
   'packages/im/config-yaml': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/im/runtime'] },
   'packages/host/http': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/console/protocol', 'packages/host/http-contract'] },
   'packages/im/kernel': { level: 1, allowedImports: ['basic'] },
   'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel'] },
-  'packages/im/core': { level: 3, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/feature-kit', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware'] },
+  'packages/im/core': { level: 3, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler'] },
   'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/skill', 'packages/im/tool'] },
   // define-plugin.ts 是 @zhin.js/plugin-runtime 的门面 re-export（zhin.js/plugin-runtime 子路径），允许。
   'packages/im/zhin': { level: 5, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime'] },
@@ -97,6 +98,7 @@ const packageNameToPath = {
   '@zhin.js/command': 'packages/im/command',
   '@zhin.js/component': 'packages/im/component',
   '@zhin.js/middleware': 'packages/im/middleware',
+  '@zhin.js/handler': 'packages/im/handler',
   '@zhin.js/tool': 'packages/im/tool',
   '@zhin.js/skill': 'packages/im/skill',
   '@zhin.js/agent-feature': 'packages/im/agent-feature',

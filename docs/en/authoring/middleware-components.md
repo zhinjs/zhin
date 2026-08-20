@@ -5,14 +5,14 @@ description: defineMiddleware inbound/outbound execution order, defineComponent 
 
 # Middleware and Components
 
-There are two adjacent extension points on the message flow: `defineMiddleware` (`@zhin.js/middleware`) intercepts the message flow, and `defineComponent` (`@zhin.js/component`) renders structured props into sendable content (usually images). Game plugins use them together -- middleware normalizes input, components unify output.
+There are two adjacent extension points on the message flow: `defineMiddleware` (import from `zhin.js/middleware`) intercepts the message flow, and `defineComponent` (import from `zhin.js/component`) renders structured props into sendable content (usually images). Game plugins use them together -- middleware normalizes input, components unify output. When depending on `zhin.js`, do not separately install `@zhin.js/middleware` / `@zhin.js/component`.
 
 ## defineMiddleware
 
 The `middlewares/` directory under the plugin package root is a convention directory. Each `.ts` file default-exports `defineMiddleware(...)`:
 
 ```ts
-import { defineMiddleware } from '@zhin.js/middleware';
+import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 
 export default defineMiddleware<Message>({
@@ -65,7 +65,7 @@ For a real-world example, see `plugins/games/rps/middlewares/rps-choice.ts`: it 
 
 ```tsx
 // components/status-card.ts (distilled from examples/minimal-bot)
-import { defineComponent } from '@zhin.js/component';
+import { defineComponent } from 'zhin.js/component';
 import { raw } from 'zhin.js/core/runtime';
 import { Card, CardHeader, Row, StatChip, h, wrapCardHtml, DEFAULT_CARD_THEME } from '@zhin.js/satori';
 

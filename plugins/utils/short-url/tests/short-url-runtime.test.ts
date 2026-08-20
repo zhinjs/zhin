@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { parseCommandDefinition } from '@zhin.js/command';
+import { parseCommandDefinition } from 'zhin.js/command';
 import plugin from '../plugin.ts';
 import shortenCommand from '../commands/shorten/[url].ts';
 import expandCommand from '../commands/expand/[url].ts';

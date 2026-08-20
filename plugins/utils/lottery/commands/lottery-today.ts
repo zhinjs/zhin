@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { formatDailyReportText, loadTodayReport } from '../src/recommend/report.js';
 import type { LotteryConfig } from '../src/command-helpers.js';
 import { lotteryRuntimeToken } from '../src/runtime-state.js';

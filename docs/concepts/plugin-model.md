@@ -63,7 +63,7 @@
 
 ```ts
 // plugins/adapters/sandbox/adapters/sandbox.ts
-import { defineAdapter } from '@zhin.js/adapter';
+import { defineAdapter } from 'zhin.js/adapter';
 import { messageGatewayToken } from '@zhin.js/core/runtime';
 import { SandboxWsEndpoint } from '../src/endpoint.js';
 
@@ -122,7 +122,7 @@ CLI 会以当前目录为项目根，扫描它的 manifest 树并启动。这意
   { "package": "@zhin.js/command",     "api": "^1.0.0" },
   { "package": "@zhin.js/component",   "api": "^1.0.0" },
   { "package": "@zhin.js/middleware",  "api": "^1.0.0" },
-  { "package": "@zhin.js/feature-kit", "api": "^1.0.0" }
+  { "package": "@zhin.js/handler",     "api": "^1.0.0" }
 ]
 ```
 
@@ -141,7 +141,7 @@ CLI 会以当前目录为项目根，扫描它的 manifest 树并启动。这意
 | `resources` | 本插件作用域的资源 Scope |
 | `lifecycle` | `DisposeStack`：注册的资源在 generation 结束时自动反注册（见 [generation 与生命周期](./generation-lifecycle.md)） |
 | `handoff` | generation 交接的参与入口 |
-| `addFeature` | setup 内声明 Capability 的通用入口；对应 Feature 包会扩展 `addCommand` / `addComponent` / `addMiddleware` / `addAdapter` / `addAgent` / `addSkill` / `addTool` / `addMcp` |
+| `addFeature` | setup 内声明 Capability 的通用入口；对应 Feature 包会扩展 `addCommand` / `addComponent` / `addMiddleware` / `addHandler` / `addAdapter` / `addAgent` / `addSkill` / `addTool` / `addMcp` |
 
 `setup` 可同步/异步返回一个 `Dispose`，或直接往 `lifecycle` 里挂清理函数。
 setup 注册与约定目录发现进入同一个 Feature projection；前者适合单文件 Bot，后者适合

@@ -3,7 +3,7 @@
 Declaring a plugin requires no base class inheritance and no manual registration in any registry -- default-exporting the return value of `definePlugin(...)` (from `@zhin.js/plugin-runtime`) is all you need. This return value is called a `PluginDefinition`: a name, metadata, dependency declarations, plus a `setup(context)` assembly function.
 
 ```ts
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 
 export default definePlugin<MyConfig>({
   name: 'my-plugin',
@@ -34,14 +34,14 @@ The `PluginSetupContext<TConfig>` received by `setup` has all read-only members:
 | `addFeature(feature, name, definition)` | General Feature registration entry point | Registers an in-memory definition as the current plugin's Capability; still goes through provider validation, conflict detection, and generation transaction |
 
 After importing a Stable Feature's authoring package, the context gains corresponding shortcut methods through type augmentation:
-`addCommand`, `addComponent`, `addMiddleware`, `addAdapter`. Optional AI capabilities also provide
+`addCommand`, `addComponent`, `addMiddleware`, `addHandler`, `addAdapter`. Optional AI capabilities also provide
 `addAgent`, `addSkill`, `addTool`, `addMcp`. These are just strongly-typed narrowings of `addFeature`,
 they do not create a second registry.
 
 ```ts
-import { defineCommand } from '@zhin.js/command';
-import { defineComponent } from '@zhin.js/component';
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { defineCommand } from 'zhin.js/command';
+import { defineComponent } from 'zhin.js/component';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 
 export default definePlugin({
   name: 'single-file-bot',

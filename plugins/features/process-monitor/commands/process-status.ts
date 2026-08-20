@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { formatProcessStatus, type ProcessMonitorConfig } from '../src/monitor.js';
 
 export default defineCommand<ProcessMonitorConfig>({
