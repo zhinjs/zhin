@@ -54,6 +54,8 @@ export interface WorkroomA2aAuthRegistrySnapshot {
 
 interface CompiledBinding {
   readonly credentialDigest: Buffer;
+  /** Trusted transport-only secret; never exposed through snapshots or serialization. */
+  readonly credential: string;
   readonly authority: WorkroomA2aEndpointAuthoritySnapshot;
   readonly enabled: boolean;
   readonly expiresAt?: number;
@@ -114,6 +116,7 @@ export class WorkroomA2aAuthRegistry {
       });
       bindings.push({
         credentialDigest,
+        credential,
         authority,
         enabled: input.enabled,
         ...(input.expiresAt === undefined ? {} : { expiresAt: input.expiresAt }),
@@ -148,6 +151,23 @@ export class WorkroomA2aAuthRegistry {
       throw new WorkroomA2aAuthenticationError();
     }
     return matched.authority;
+  }
+
+  /**
+   * Issues the callback credential only to the trusted outbound transport.
+   * The endpoint id is resolved against this exact generation and inactive
+   * credentials fail closed just like inbound authentication.
+   */
+  callbackAuthorization(endpointId: string): string {
+    text(endpointId, 'endpointId');
+    const matched = this.#bindings.find(binding => binding.authority.endpointId === endpointId);
+    const now = this.#now();
+    if (!Number.isFinite(now)) throw new Error('Workroom A2A authentication clock must be finite');
+    if (!matched || !matched.enabled
+      || (matched.expiresAt !== undefined && now >= matched.expiresAt)) {
+      throw new WorkroomA2aAuthenticationError();
+    }
+    return `Bearer ${matched.credential}`;
   }
 }
 
@@ -201,18 +221,24 @@ function resolveCredential(
   }
   if (reference.source === 'config') {
     assertExactKeys(reference, ['source', 'value'], 'config credential');
-    text(reference.value, 'credential value');
-    return reference.value;
+    return credential(reference.value);
   }
   if (reference.source === 'secure_provider') {
     assertExactKeys(reference, ['source', 'secretRef'], 'secure credential');
     text(reference.secretRef, 'credential secretRef');
     if (!provider) throw new Error('Workroom A2A secure credential provider is required');
-    const value = provider.resolve(reference.secretRef);
-    text(value, `secure credential ${reference.secretRef}`);
-    return value;
+    return credential(provider.resolve(reference.secretRef));
   }
   throw new Error('Workroom A2A credential source is unsupported');
+}
+
+function credential(value: unknown): string {
+  text(value, 'credential value');
+  const result = value;
+  if (result.length > 8_192 || /\s/u.test(result)) {
+    throw new Error('Workroom A2A credential must be a bounded token without whitespace');
+  }
+  return result;
 }
 
 function hash(value: string): Buffer {

@@ -12,7 +12,7 @@ import {
   buildBingSearchUrl,
 } from '../../src/builtin/bing-search-html.js';
 import { DEFAULT_WEB_SEARCH_MARKET } from '../../src/builtin/web-search-locale.js';
-import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
+import { normalizeTool } from '../../src/resource-hub/tool-selection.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 const originalFetch = globalThis.fetch;

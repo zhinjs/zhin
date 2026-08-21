@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { GovernedDisclosureManifestSnapshot } from '../data-governance/disclosure-manifest.js';
 
 export const WORKROOM_A2A_EXTENSION_URI =
   'https://zhin.dev/extensions/workroom-executor/v1' as const;
@@ -42,7 +43,11 @@ export interface WorkroomRemoteDispatchEnvelope {
   readonly contextView: Readonly<{ ref: string; hash: string }>;
   readonly acceptanceContract: Readonly<{ ref: string; hash: string }>;
   readonly capabilitySnapshot: Readonly<{ ref: string; hash: string; grantRef: string }>;
-  readonly disclosureManifest: Readonly<{ ref: string; hash: string }>;
+  readonly disclosureManifest: GovernedDisclosureManifestSnapshot;
+  readonly supersedes?: Readonly<{
+    dispatchId: string;
+    manifestDigest: string;
+  }>;
   readonly workspace: WorkroomGithubWorkspaceReference;
 }
 
@@ -106,6 +111,11 @@ export function assertWorkroomRemoteDispatchRetry(
 }
 
 function validateInput(input: WorkroomRemoteDispatchInput): void {
+  if (!input.disclosureManifest?.request || !input.disclosureManifest.manifest) {
+    throw new Error(
+      'Legacy opaque Disclosure Manifest is unsupported; rematerialize the Assignment before admission',
+    );
+  }
   requireText([
     input.projectId,
     input.runId,
@@ -122,16 +132,43 @@ function validateInput(input: WorkroomRemoteDispatchInput): void {
     input.capabilitySnapshot.ref,
     input.capabilitySnapshot.hash,
     input.capabilitySnapshot.grantRef,
-    input.disclosureManifest.ref,
-    input.disclosureManifest.hash,
+    input.disclosureManifest.request.operationId,
+    input.disclosureManifest.request.projectId,
+    input.disclosureManifest.request.sourceRef,
+    input.disclosureManifest.request.sourceDigest,
+    input.disclosureManifest.request.sinkRuleId,
+    input.disclosureManifest.request.principalId,
+    input.disclosureManifest.manifest.id,
+    input.disclosureManifest.manifest.digest,
     input.workspace.repositoryId,
     input.workspace.integrationBindingId,
     input.workspace.targetRef,
     input.workspace.branchRef,
   ]);
+  if (input.supersedes) {
+    requireText([input.supersedes.dispatchId, input.supersedes.manifestDigest]);
+    requireDigest(input.supersedes.manifestDigest, 'supersedes.manifestDigest');
+  }
   requirePositiveInteger(input.taskRevision, 'taskRevision');
   requirePositiveInteger(input.attempt, 'attempt');
   requirePositiveInteger(input.fence, 'fence');
+  const disclosure = input.disclosureManifest;
+  const { id: manifestId, digest: manifestDigest, ...manifestProjection } = disclosure.manifest;
+  if (manifestId !== `disclosure-manifest:${manifestDigest}`
+    || digestEnvelopeValue(manifestProjection) !== manifestDigest
+    || disclosure.request.projectId !== input.projectId
+    || disclosure.request.assignmentId !== input.assignmentId
+    || disclosure.request.sourceRef !== input.contextView.ref
+    || disclosure.request.sourceDigest !== input.contextView.hash
+    || disclosure.request.sourceRef !== disclosure.manifest.source.objectId
+    || disclosure.request.sourceDigest !== disclosure.manifest.source.payloadHash
+    || disclosure.request.principalId !== disclosure.manifest.principal.principalId
+    || disclosure.manifest.principal.assignmentId !== input.assignmentId
+    || disclosure.manifest.channel !== 'a2a'
+    || disclosure.manifest.purpose !== 'remote_execution'
+    || disclosure.manifest.destination.id !== input.endpoint.id) {
+    throw new Error('Remote dispatch Disclosure Manifest exact binding is invalid');
+  }
   if (input.workspace.fence !== input.fence) {
     throw new Error('Remote dispatch Workspace fence does not match the Assignment fence');
   }
@@ -154,6 +191,33 @@ function validateInput(input: WorkroomRemoteDispatchInput): void {
   }
 }
 
+export function assertWorkroomGovernedDispatchSupersession(
+  blocked: Readonly<{
+    status: string;
+    item: WorkroomRemoteDispatchOutboxItem;
+    governanceBlock?: Readonly<{ manifestDigest: string }>;
+  }>,
+  successor: WorkroomRemoteDispatchOutboxItem,
+): void {
+  const supersedes = successor.envelope.supersedes;
+  if (!supersedes
+    || blocked.status !== 'blocked'
+    || supersedes.dispatchId !== blocked.item.dispatchId
+    || supersedes.manifestDigest !== blocked.item.envelope.disclosureManifest.manifest.digest
+    || blocked.governanceBlock?.manifestDigest !== supersedes.manifestDigest
+    || successor.dispatchId === blocked.item.dispatchId
+    || successor.envelope.projectId !== blocked.item.envelope.projectId
+    || successor.envelope.runId !== blocked.item.envelope.runId
+    || successor.envelope.taskKey !== blocked.item.envelope.taskKey
+    || successor.envelope.taskRevision !== blocked.item.envelope.taskRevision
+    || successor.envelope.attempt <= blocked.item.envelope.attempt
+    || successor.envelope.fence <= blocked.item.envelope.fence) {
+    throw new Error(
+      'Governance-blocked Remote Dispatch requires a new attempt/fence with exact supersedes authority',
+    );
+  }
+}
+
 function freezeEnvelope(value: WorkroomRemoteDispatchEnvelope): WorkroomRemoteDispatchEnvelope {
   return Object.freeze({
     ...value,
@@ -164,7 +228,8 @@ function freezeEnvelope(value: WorkroomRemoteDispatchEnvelope): WorkroomRemoteDi
     contextView: Object.freeze({ ...value.contextView }),
     acceptanceContract: Object.freeze({ ...value.acceptanceContract }),
     capabilitySnapshot: Object.freeze({ ...value.capabilitySnapshot }),
-    disclosureManifest: Object.freeze({ ...value.disclosureManifest }),
+    disclosureManifest: Object.freeze(structuredClone(value.disclosureManifest)),
+    ...(value.supersedes ? { supersedes: Object.freeze({ ...value.supersedes }) } : {}),
     workspace: Object.freeze({
       ...value.workspace,
       pathScope: Object.freeze([...value.workspace.pathScope]),
@@ -173,6 +238,10 @@ function freezeEnvelope(value: WorkroomRemoteDispatchEnvelope): WorkroomRemoteDi
 }
 
 function digestEnvelope(value: WorkroomRemoteDispatchEnvelope): string {
+  return digestEnvelopeValue(value);
+}
+
+function digestEnvelopeValue(value: unknown): string {
   return `sha256:${createHash('sha256').update(canonicalJson(value)).digest('hex')}`;
 }
 
@@ -196,6 +265,10 @@ function requirePositiveInteger(value: number, name: string): void {
   if (!Number.isSafeInteger(value) || value < 1) {
     throw new Error(`Remote dispatch ${name} must be a positive integer`);
   }
+}
+
+function requireDigest(value: string, name: string): void {
+  if (!/^sha256:[a-f0-9]{64}$/u.test(value)) throw new Error(`Remote dispatch ${name} is invalid`);
 }
 
 function requireSha(value: string, name: string): void {

@@ -6,7 +6,7 @@
  */
 
 import { Feature, type FeatureJSON } from '@zhin.js/kernel';
-import type { AgentPreset } from '../orchestrator/types.js';
+import type { AgentPreset } from '../resource-hub/types.js';
 
 export class AgentFeature extends Feature<AgentPreset> {
   readonly name = 'agentFeature' as const;

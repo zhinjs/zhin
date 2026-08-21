@@ -21,6 +21,8 @@ export interface RunWorkroomRemoteDispatchOnceInput {
   readonly leaseExpiresAt: number;
   readonly observationId: string;
   readonly signal: AbortSignal;
+  /** Trusted worker clock used for the transport observation timestamp. */
+  readonly clock?: Readonly<{ now(): number }>;
 }
 
 /** Runs at most one persisted Remote Dispatch transport attempt. */
@@ -88,7 +90,7 @@ export async function runWorkroomRemoteDispatchOnce(
   await input.repository.recordTransportObservation({
     dispatchId: current.dispatchId,
     expectedSequence: current.sequence + 1,
-    now: input.now,
+    now: input.clock?.now() ?? input.now,
     leaseId: input.leaseId,
     leaseFence: input.leaseFence,
     observationId: input.observationId,

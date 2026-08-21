@@ -22,6 +22,7 @@ import {
   createWorkroomRemoteDispatchOutboxItem,
   type WorkroomRemoteDispatchInput,
 } from '../../src/workroom/remote-dispatch.js';
+import { remoteDisclosureFixture } from './remote-disclosure-fixture.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -86,6 +87,79 @@ describe.each(adapters)('$name Workroom Remote Dispatch Outbox contract', ({ cre
       attemptCount: 0,
       observations: [],
     });
+  });
+
+  it('enumerates only pending, retryable and expired leased work after restart', async () => {
+    const { repository, restart } = create();
+    const pending = dispatchItem({ assignmentId: 'assignment-pending' });
+    const retryable = dispatchItem({ assignmentId: 'assignment-retryable' });
+    const active = dispatchItem({ assignmentId: 'assignment-active' });
+    const expired = dispatchItem({ assignmentId: 'assignment-expired' });
+    await repository.enqueue(pending, -1, 1_000);
+    for (const item of [retryable, active, expired]) {
+      await repository.enqueue(item, -1, 1_000);
+      await repository.claim({
+        dispatchId: item.dispatchId,
+        expectedSequence: 0,
+        now: 1_100,
+        ownerId: 'worker:old',
+        leaseId: `lease:${item.envelope.assignmentId}`,
+        leaseFence: 1,
+        leaseExpiresAt: item === expired ? 1_200 : 2_000,
+      });
+    }
+    await repository.recordTransportObservation({
+      dispatchId: retryable.dispatchId,
+      expectedSequence: 1,
+      now: 1_150,
+      leaseId: 'lease:assignment-retryable',
+      leaseFence: 1,
+      observationId: 'failed:1',
+      observation: { outcome: 'failed', receiptId: 'receipt:failed' },
+    });
+
+    await expect(restart().listRunnable(1_300)).resolves.toEqual([
+      expect.objectContaining({ dispatchId: expired.dispatchId, status: 'leased' }),
+      expect.objectContaining({ dispatchId: pending.dispatchId, status: 'pending' }),
+      expect.objectContaining({ dispatchId: retryable.dispatchId, status: 'retryable' }),
+    ].sort((left, right) => String(left.dispatchId).localeCompare(String(right.dispatchId))));
+  });
+
+  it('discovers governance-blocked predecessors by exact Task revision after restart', async () => {
+    const { repository, restart } = create();
+    const predecessor = dispatchItem();
+    const otherRevision = dispatchItem({ taskRevision: 3, assignmentId: 'assignment-revision-3' });
+    for (const item of [predecessor, otherRevision]) {
+      await repository.enqueue(item, -1, 1_000);
+      await repository.recordGovernanceBlock({
+        dispatchId: item.dispatchId,
+        expectedSequence: 0,
+        now: 1_100,
+        reason: 'disclosure_recipient_revoked',
+        manifestDigest: item.envelope.disclosureManifest.manifest.digest,
+        attempt: item.envelope.attempt,
+        assignmentFence: item.envelope.fence,
+      });
+    }
+
+    await expect(restart().listGovernanceBlocked({
+      projectId: predecessor.envelope.projectId,
+      runId: predecessor.envelope.runId,
+      taskKey: predecessor.envelope.taskKey,
+      taskRevision: predecessor.envelope.taskRevision,
+    })).resolves.toEqual([
+      expect.objectContaining({
+        status: 'blocked',
+        dispatchId: predecessor.dispatchId,
+        governanceBlock: {
+          reason: 'disclosure_recipient_revoked',
+          manifestDigest: predecessor.envelope.disclosureManifest.manifest.digest,
+          attempt: predecessor.envelope.attempt,
+          assignmentFence: predecessor.envelope.fence,
+          blockedAt: 1_100,
+        },
+      }),
+    ]);
   });
 
   it('makes persisted dispatch and event identity payload-sensitive', async () => {
@@ -513,6 +587,34 @@ describe('File Workroom Remote Dispatch Outbox durability', () => {
     await expect(new FileWorkroomRemoteDispatchOutboxRepository(directory).read(item.dispatchId))
       .rejects.toThrow();
   });
+
+  it('fails closed when blocked-work discovery finds an event under a forged filename', async () => {
+    const directory = temporaryDirectory('forged-discovery-segment');
+    const repository = new FileWorkroomRemoteDispatchOutboxRepository(directory);
+    const item = dispatchItem();
+    await repository.enqueue(item, -1, 1_000);
+    await repository.recordGovernanceBlock({
+      dispatchId: item.dispatchId,
+      expectedSequence: 0,
+      now: 1_100,
+      reason: 'disclosure_recipient_revoked',
+      manifestDigest: item.envelope.disclosureManifest.manifest.digest,
+      attempt: item.envelope.attempt,
+      assignmentFence: item.envelope.fence,
+    });
+    const [segment] = (await readdir(directory)).filter(name => name.endsWith('.json'));
+    await appendFile(join(directory, 'forged-dispatch.0000000000000000.json'), await readFile(
+      join(directory, segment!),
+      'utf8',
+    ), 'utf8');
+
+    await expect(repository.listGovernanceBlocked({
+      projectId: item.envelope.projectId,
+      runId: item.envelope.runId,
+      taskKey: item.envelope.taskKey,
+      taskRevision: item.envelope.taskRevision,
+    })).rejects.toThrow('identity');
+  });
 });
 
 function temporaryDirectory(label: string): string {
@@ -565,7 +667,7 @@ function tracingFileSystem(trace: string[]): WorkroomRemoteDispatchOutboxFileSys
 }
 
 function dispatchItem(overrides: Partial<WorkroomRemoteDispatchInput> = {}) {
-  return createWorkroomRemoteDispatchOutboxItem({
+  const base: WorkroomRemoteDispatchInput = {
     projectId: 'project-1',
     runId: 'run-1',
     taskKey: 'build',
@@ -586,7 +688,9 @@ function dispatchItem(overrides: Partial<WorkroomRemoteDispatchInput> = {}) {
     contextView: { ref: 'view:1', hash: 'sha256:view' },
     acceptanceContract: { ref: 'acceptance:1', hash: 'sha256:acceptance' },
     capabilitySnapshot: { ref: 'capability:1', hash: 'sha256:capability', grantRef: 'grant:1' },
-    disclosureManifest: { ref: 'disclosure:1', hash: 'sha256:disclosure' },
+    disclosureManifest: remoteDisclosureFixture({
+      endpointId: 'remote-main', sourceRef: 'view:1', sourceDigest: 'sha256:view',
+    }),
     workspace: {
       provider: 'github_pull_request',
       repositoryId: 'github:org/repo',
@@ -598,6 +702,16 @@ function dispatchItem(overrides: Partial<WorkroomRemoteDispatchInput> = {}) {
       mode: 'branch_and_pr',
       fence: 7,
     },
-    ...overrides,
+  };
+  const merged = { ...base, ...overrides };
+  return createWorkroomRemoteDispatchOutboxItem({
+    ...merged,
+    disclosureManifest: overrides.disclosureManifest ?? remoteDisclosureFixture({
+      projectId: merged.projectId,
+      assignmentId: merged.assignmentId,
+      endpointId: merged.endpoint.id,
+      sourceRef: merged.contextView.ref,
+      sourceDigest: merged.contextView.hash,
+    }),
   });
 }

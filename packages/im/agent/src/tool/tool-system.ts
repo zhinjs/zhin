@@ -1,7 +1,7 @@
 import type { AgentTool } from '@zhin.js/ai';
 import { type PreExecuteResult, runPreExecutableTools } from './pre-exec.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
-import type { Tool } from '../orchestrator/types.js';
+import type { Tool } from '../resource-hub/types.js';
 import { createSpawnTaskTool } from '../builtin/spawn-task-tool.js';
 import { filterAgentsForSpawnDescription } from '../spawn/permission-task.js';
 import type { ToolFilter, ToolSource, ToolSystemConfig } from './contracts.js';

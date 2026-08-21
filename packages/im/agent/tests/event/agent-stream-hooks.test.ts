@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AgentStreamEventType } from '@zhin.js/ai/agent-stream';
-import { HookRegistry, AgentOrchestrator } from '../../src/orchestrator/index.js';
+import { HookRegistry, AgentResourceHub } from '../../src/resource-hub/index.js';
 import {
   LEGACY_HOOK_STREAM_ALIASES,
   agentStreamEventToAIHookEvent,
@@ -29,13 +29,13 @@ describe('HookRegistry stream vocabulary (ADR 0039 P0)', () => {
   });
 
   it('legacy message:received also fires message.received stream hooks via bus sink', async () => {
-    const orchestrator = new AgentOrchestrator();
+    const resourceHub = new AgentResourceHub();
     const legacyHandler = vi.fn();
     const streamHandler = vi.fn();
-    orchestrator.hooks.add({ name: 'legacy', event: 'message:received', handler: legacyHandler });
-    orchestrator.hooks.add({ name: 'stream', event: AgentStreamEventType.MESSAGE_RECEIVED, handler: streamHandler });
+    resourceHub.hooks.add({ name: 'legacy', event: 'message:received', handler: legacyHandler });
+    resourceHub.hooks.add({ name: 'stream', event: AgentStreamEventType.MESSAGE_RECEIVED, handler: streamHandler });
 
-    await orchestrator.agentStreamBus.publish({
+    await resourceHub.agentStreamBus.publish({
       type: AgentStreamEventType.MESSAGE_RECEIVED,
       data: { message: 'hi' },
     }, { sessionId: 'ses_1' });

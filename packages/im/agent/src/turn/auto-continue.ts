@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { UserMessage } from '@zhin.js/ai';
-import type { Message } from '../orchestrator/types.js';
+import type { Message } from '../resource-hub/types.js';
 import type { SubagentCompletePayload } from '../subagent/index.js';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 import { resolveAgentTurnSessionKey } from '../session/session-key.js';

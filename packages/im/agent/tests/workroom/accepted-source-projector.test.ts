@@ -6,6 +6,7 @@ import {
   type WorkroomStructuredTaskReport,
 } from '../../src/workroom/accepted-source-projector.js';
 import type { WorkroomAcceptanceRecord } from '../../src/workroom/acceptance-policy.js';
+import { createWorkroomStructuredTaskReport } from '../../src/workroom/workroom-task-report-store.js';
 
 describe('accepted Workroom source projection', () => {
   it('projects only explicitly accepted structured claims into Task Memory and Project State', () => {
@@ -145,6 +146,53 @@ describe('accepted Workroom source projection', () => {
       },
       baseStateRevision: 4, previousSourceSequence: 6,
     })).toThrow('schema digest does not match its rules');
+  });
+
+  it('projects and reviews only the Host claim id, never the producer label', () => {
+    const generated = createWorkroomStructuredTaskReport({
+      projectId: 'project-1', runId: 'run-1', planRef: 'plan://1', planRevision: 2,
+      taskKey: 'build', taskRevision: 1,
+      assignmentId: 'assignment-1', assignmentAttempt: 1, assignmentFence: 7,
+      claims: [{
+        label: 'model-label-with-customer@example.com',
+        key: 'runtime.node.support', value: '22', status: 'assumed',
+        evidenceRefs: [], artifactRefs: [],
+      }],
+    });
+    const hostClaimId = generated.claims[0]!.id;
+    const base = acceptance();
+    const candidate = {
+      ...base.candidate,
+      reportRef: generated.ref,
+      hash: generated.candidateHash,
+      claimIds: [hostClaimId],
+      evidenceRefs: [],
+    };
+    const accepted: WorkroomAcceptanceRecord = {
+      ...base,
+      id: `acceptance:${candidate.id}:${candidate.hash}`,
+      candidate,
+      riskAssessment: { ...base.riskAssessment, candidateHash: candidate.hash },
+      acceptedClaimIds: [hostClaimId], rejectedClaimIds: [],
+      candidateHash: candidate.hash,
+    };
+
+    const projected = projectAcceptedTaskMemory({
+      projectId: 'project-1', runId: 'run-1', report: generated, acceptance: accepted,
+      schema: schema('runtime.node.support'), baseStateRevision: 0, previousSourceSequence: 6,
+    });
+    expect(projected.memory.claimIds).toEqual([hostClaimId]);
+    expect(projected.memory.claimIds).not.toContain('model-label-with-customer@example.com');
+
+    expect(() => projectAcceptedTaskMemory({
+      projectId: 'project-1', runId: 'run-1', report: generated,
+      acceptance: {
+        ...accepted,
+        candidate: { ...candidate, claimIds: ['model-label-with-customer@example.com'] },
+        acceptedClaimIds: ['model-label-with-customer@example.com'],
+      },
+      schema: schema('runtime.node.support'), baseStateRevision: 0, previousSourceSequence: 6,
+    })).toThrow('Candidate claim ids');
   });
 });
 

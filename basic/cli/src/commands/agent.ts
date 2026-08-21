@@ -1,4 +1,6 @@
 import { Command } from 'commander';
+import { registerLegacyRunsOfflineCommand } from './agent-legacy-runs.js';
+import { registerLegacyPayloadsOfflineCommand } from './agent-legacy-payloads.js';
 
 export const agentCommand = new Command('agent')
   .description('Agent authoring surface diagnostics (ADR 0039 P2)');
@@ -26,3 +28,6 @@ agentCommand
     }
     console.log(mod.formatAgentSurfaceInfoReport(report));
   });
+
+registerLegacyRunsOfflineCommand(agentCommand);
+registerLegacyPayloadsOfflineCommand(agentCommand);

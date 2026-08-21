@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentTool } from '@zhin.js/ai';
 import { DEFAULT_CONFIG } from '../src/config/index.js';
-import { resolveSubagentAgentTools } from '../src/orchestrator/resolve-subagent-tools.js';
+import { resolveSubagentAgentTools } from '../src/resource-hub/resolve-subagent-tools.js';
 
 function makeTool(name: string, keywords: string[] = []): AgentTool {
   return {

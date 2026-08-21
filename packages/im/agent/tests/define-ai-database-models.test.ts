@@ -9,7 +9,7 @@ describe('defineAiDatabaseModels', () => {
       expect(definition).toBeTruthy();
       expect(typeof definition).toBe('object');
     });
-    expect(count).toBe(7);
+    expect(count).toBe(16);
     expect(names).toEqual([
       'agent_sessions',
       'agent_messages',
@@ -17,6 +17,15 @@ describe('defineAiDatabaseModels', () => {
       'ai_user_profiles',
       'workroom_events',
       'workroom_catalog',
+      'workroom_assignment_authority_grants',
+      'portfolio_control_outbox',
+      'payload_lifecycle_events',
+      'payload_vault_objects',
+      'payload_vault_audit',
+      'payload_vault_handoffs',
+      'payload_vault_handoff_retirements',
+      'workroom_project_knowledge',
+      'workroom_overlay_pack_promotions',
       'memory_entries',
     ]);
   });

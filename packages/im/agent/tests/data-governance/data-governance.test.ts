@@ -327,6 +327,19 @@ describe('data governance', () => {
     expect(Object.isFrozen(decision.contextBinding.recipientSnapshot.recipients)).toBe(true);
   });
 
+  it('hard-denies materialization at or after the payload deletion deadline', () => {
+    const decision = decideDisclosure({
+      descriptor,
+      policy,
+      context,
+      approvals: [],
+      evaluatedAt: descriptor.retention.deleteAfter,
+    });
+
+    expect(decision.disposition).toBe('deny');
+    expect(decision.reasonCodes).toEqual(['payload_retention_expired']);
+  });
+
   it('denies a request when any exact scope or recipient binding is stale', () => {
     const decision = decideDisclosure({
       descriptor,

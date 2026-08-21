@@ -12,7 +12,7 @@ import type {
   SkillInvocationRequest,
   SkillInvocationResult,
 } from '../seam/skill-service.js';
-import type { SkillRegistry } from '../orchestrator/skill-registry.js';
+import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 
 /**
  * 将 SkillRegistry 适配为 SkillService

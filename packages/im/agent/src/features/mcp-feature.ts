@@ -5,7 +5,7 @@
  */
 
 import { Feature, type FeatureJSON } from '@zhin.js/kernel';
-import type { McpServerEntry } from '../orchestrator/types.js';
+import type { McpServerEntry } from '../resource-hub/types.js';
 
 export interface McpFeatureEntry extends McpServerEntry {
   /** 来源插件或 config */

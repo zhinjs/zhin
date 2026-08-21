@@ -26,6 +26,8 @@ import {
   registerConsoleRestPages,
   type ConsoleAgentRuntime,
   type ConsoleScheduleEngine,
+  type ConsoleWorkroomProfileControlPort,
+  type ConsoleWorkroomKnowledgeControlPort,
   type ConsoleEventHub,
   type HttpHost,
   type RuntimeConsolePage,
@@ -46,7 +48,17 @@ import {
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller, RuntimeConfigDocument } from '@zhin.js/runtime';
 import { installInboxMessageRecorder } from './inbox-installer.js';
-import { validateWorkroomDefinitions, type WorkroomDefinition } from '@zhin.js/agent';
+import {
+  validateWorkroomDefinitions,
+  type PortfolioSponsorProjection,
+  type WorkroomDefinition,
+} from '@zhin.js/agent';
+import type {
+  PortfolioSponsorCommand,
+  WorkroomEffectSponsorDecisionCommand,
+  WorkroomEffectSponsorDecisionRecord,
+  WorkroomRuntimeHandle,
+} from '@zhin.js/agent/runtime';
 
 interface LoginAssistBinding {
   readonly hub: ConsoleEventHub;
@@ -286,7 +298,7 @@ export function resolveGenerationAgentIntrospection(
 
 type AgentConsolePort = {
   readonly sessionTree: ConsoleAgentRuntime['sessionTree'];
-  readonly workroom: WorkroomRuntime;
+  readonly workroom: WorkroomRuntimeHandle;
   readonly assistant: AssistantRuntime | null;
   readonly workroomCatalog: {
     read(): Promise<Readonly<{
@@ -316,6 +328,22 @@ type AgentConsolePort = {
     };
   };
   readonly cancelSession?: (sessionKey: string) => boolean;
+  readonly workroomProfiles?: ConsoleWorkroomProfileControlPort;
+  readonly workroomKnowledge?: ConsoleWorkroomKnowledgeControlPort;
+  readonly portfolioSponsor?: {
+    read(portfolioId: string): Promise<PortfolioSponsorProjection>;
+    execute(
+      portfolioId: string,
+      command: PortfolioSponsorCommand,
+      authenticatedPrincipal: Readonly<{ principalId: string }>,
+    ): Promise<PortfolioSponsorProjection>;
+  };
+  readonly effectSponsor?: {
+    decide(
+      command: Omit<WorkroomEffectSponsorDecisionCommand, 'principalId'>,
+      authenticatedPrincipal: Readonly<{ principalId: string }>,
+    ): Promise<WorkroomEffectSponsorDecisionRecord>;
+  };
 };
 
 export function resolveGenerationAgentConsole(
@@ -677,7 +705,9 @@ export function registerConsoleApiRoutes(
     tags: ['plugins'],
   });
 
-  http.route('POST', `${base}/console/request`, async (request, response, _url, authScope) => {
+  http.route('POST', `${base}/console/request`, async (
+    request, response, _url, authScope, authenticatedPrincipal,
+  ) => {
     try {
       const message = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
       const agentLease = acquireGenerationAgentConsole(snapshots);
@@ -784,6 +814,11 @@ export function registerConsoleApiRoutes(
             };
           },
           loginAssist: im?.loginAssist,
+          authenticatedPrincipal: authenticatedPrincipal
+            ? Object.freeze({ principalId: authenticatedPrincipal.principalId })
+            : undefined,
+          workroomProfileControl: agentLease?.value?.workroomProfiles,
+          workroomKnowledgeControl: agentLease?.value?.workroomKnowledge,
         },
         listPluginKeys: () => listConsoleConfigKeys(projectRoot, primaryConfigDocument),
         publishEvent: (type, data) => hub.publish(type, data),
@@ -990,16 +1025,35 @@ export function registerConsoleApiRoutes(
     tags: ['agent', 'tasks'],
   });
 
-  // Workroom REST — read-only replay projection from the request generation.
-  http.route('GET', `${base}/agent/workroom/runs`, async (_request, response, url) => {
+  // Workroom REST — authenticated, content-free replay projection from the request generation.
+  http.route('GET', `${base}/agent/workroom/runs`, async (
+    _request, response, url, authScope, authenticatedPrincipal,
+  ) => {
+    if (authScope !== 'full' || !authenticatedPrincipal) {
+      writeJson(response, 403, {
+        success: false, error: '需要绑定 principal 的 full scope 才能读取 Workroom Run',
+      });
+      return;
+    }
+    if (url.searchParams.has('principalId')) {
+      writeJson(response, 400, { success: false, error: 'principalId 只能来自认证 token' });
+      return;
+    }
     const projectId = url.searchParams.get('projectId') ?? '';
     if (!projectId) {
       writeJson(response, 400, { success: false, error: '请提供 projectId 查询参数' });
       return;
     }
     const handled = await withGenerationAgentConsole(snapshots, async ({ workroom }) => {
-      const runs = await workroom.listRuns(projectId);
-      writeJson(response, 200, { success: true, data: { projectId, runs } });
+      const result = await workroom.listRuns({
+        projectId,
+        authenticatedPrincipal: { principalId: authenticatedPrincipal.principalId },
+      });
+      if (result.status === 'forbidden') {
+        writeJson(response, 403, { success: false, error: '无权读取该 Project 的 Workroom Run' });
+        return;
+      }
+      writeJson(response, 200, { success: true, data: { projectId, runs: result.runs } });
     });
     if (!handled) {
       writeJson(response, 503, {
@@ -1012,7 +1066,19 @@ export function registerConsoleApiRoutes(
     tags: ['agent', 'workroom'],
   });
 
-  http.route('GET', `${base}/agent/workroom/runs/*`, async (_request, response, url) => {
+  http.route('GET', `${base}/agent/workroom/runs/*`, async (
+    _request, response, url, authScope, authenticatedPrincipal,
+  ) => {
+    if (authScope !== 'full' || !authenticatedPrincipal) {
+      writeJson(response, 403, {
+        success: false, error: '需要绑定 principal 的 full scope 才能读取 Workroom Run',
+      });
+      return;
+    }
+    if (url.searchParams.has('principalId')) {
+      writeJson(response, 400, { success: false, error: 'principalId 只能来自认证 token' });
+      return;
+    }
     const prefix = `${base}/agent/workroom/runs/`;
     const runId = url.pathname.startsWith(prefix)
       ? url.pathname.slice(prefix.length).replace(/\/+$/u, '')
@@ -1027,12 +1093,20 @@ export function registerConsoleApiRoutes(
         writeJson(response, 400, { success: false, error: '请提供 projectId 查询参数' });
         return;
       }
-      const runSnapshot = await workroom.getRun(projectId, runId);
-      if (!runSnapshot) {
+      const result = await workroom.getRun({
+        projectId,
+        runId,
+        authenticatedPrincipal: { principalId: authenticatedPrincipal.principalId },
+      });
+      if (result.status === 'forbidden') {
+        writeJson(response, 403, { success: false, error: '无权读取该 Project 的 Workroom Run' });
+        return;
+      }
+      if (result.status === 'not_found') {
         writeJson(response, 404, { success: false, error: `Run ${runId} 不存在` });
         return;
       }
-      writeJson(response, 200, { success: true, data: runSnapshot });
+      writeJson(response, 200, { success: true, data: result.run });
     });
     if (!handled) {
       writeJson(response, 503, {
@@ -1043,6 +1117,104 @@ export function registerConsoleApiRoutes(
   }, {
     summary: 'Get Workroom run',
     tags: ['agent', 'workroom'],
+  });
+
+  http.route('GET', `${base}/agent/workroom/portfolio`, async (_request, response, url) => {
+    const portfolioId = url.searchParams.get('portfolioId')?.trim() ?? '';
+    if (!portfolioId) {
+      writeJson(response, 400, { success: false, error: '请提供 portfolioId 查询参数' });
+      return;
+    }
+    const handled = await withGenerationAgentConsole(snapshots, async ({ portfolioSponsor }) => {
+      if (!portfolioSponsor) {
+        writeJson(response, 503, { success: false, error: 'Portfolio Sponsor projection 尚未就绪' });
+        return;
+      }
+      writeJson(response, 200, { success: true, data: await portfolioSponsor.read(portfolioId) });
+    });
+    if (!handled) writeJson(response, 503, { success: false, error: 'Agent Runtime 尚未就绪' });
+  }, {
+    summary: 'Read content-free Portfolio Sponsor projection',
+    tags: ['agent', 'workroom', 'portfolio'],
+  });
+
+  http.route('POST', `${base}/agent/workroom/portfolio/commands`, async (
+    request, response, _url, authScope, authenticatedPrincipal,
+  ) => {
+    if (authScope !== 'full' || !authenticatedPrincipal) {
+      writeJson(response, 403, { success: false, error: '需要绑定 principal 的 full scope credential' });
+      return;
+    }
+    const body = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
+    if (Object.hasOwn(body, 'principalId') || Object.hasOwn(body, 'authenticatedPrincipalId')
+      || Object.hasOwn(body, 'authority') || Object.hasOwn(body, 'discussion')) {
+      writeJson(response, 400, { success: false, error: 'Sponsor command 不能携带身份、权威或 discussion 字段' });
+      return;
+    }
+    const portfolioId = typeof body.portfolioId === 'string' ? body.portfolioId.trim() : '';
+    const command = body.command as PortfolioSponsorCommand | undefined;
+    if (!portfolioId || !command || typeof command !== 'object') {
+      writeJson(response, 400, { success: false, error: '请提供 typed portfolioId/command' });
+      return;
+    }
+    const handled = await withGenerationAgentConsole(snapshots, async ({ portfolioSponsor }) => {
+      if (!portfolioSponsor) {
+        writeJson(response, 503, { success: false, error: 'Portfolio Sponsor command 尚未就绪' });
+        return;
+      }
+      try {
+        const projection = await portfolioSponsor.execute(portfolioId, command, {
+          principalId: authenticatedPrincipal.principalId,
+        });
+        writeJson(response, 200, { success: true, data: projection });
+      } catch (error) {
+        writeJson(response, 409, {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+    if (!handled) writeJson(response, 503, { success: false, error: 'Agent Runtime 尚未就绪' });
+  }, {
+    summary: 'Execute authenticated typed Portfolio Sponsor command',
+    tags: ['agent', 'workroom', 'portfolio'],
+  });
+
+  http.route('POST', `${base}/agent/workroom/effects/sponsor-decisions`, async (
+    request, response, _url, authScope, authenticatedPrincipal,
+  ) => {
+    if (authScope !== 'full' || !authenticatedPrincipal) {
+      writeJson(response, 403, { success: false, error: '需要绑定 principal 的 full scope credential' });
+      return;
+    }
+    const body = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
+    if (Object.hasOwn(body, 'principalId') || Object.hasOwn(body, 'authenticatedPrincipalId')
+      || Object.hasOwn(body, 'authority') || Object.hasOwn(body, 'discussion')) {
+      writeJson(response, 400, { success: false, error: 'Effect Sponsor decision 不能携带身份、权威或 discussion 字段' });
+      return;
+    }
+    const command = body as unknown as Omit<WorkroomEffectSponsorDecisionCommand, 'principalId'>;
+    const handled = await withGenerationAgentConsole(snapshots, async ({ effectSponsor }) => {
+      if (!effectSponsor) {
+        writeJson(response, 503, { success: false, error: 'Effect Sponsor decision control 尚未就绪' });
+        return;
+      }
+      try {
+        const record = await effectSponsor.decide(command, {
+          principalId: authenticatedPrincipal.principalId,
+        });
+        writeJson(response, 200, { success: true, data: record });
+      } catch (error) {
+        writeJson(response, 409, {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+    if (!handled) writeJson(response, 503, { success: false, error: 'Agent Runtime 尚未就绪' });
+  }, {
+    summary: 'Submit an authenticated typed Effect Sponsor decision',
+    tags: ['agent', 'workroom', 'effect'],
   });
 }
 
@@ -1897,11 +2069,6 @@ function normalizeBase(value: string): string {
   if (!value.startsWith('/')) return `/${value}`;
   return value.replace(/\/+$/u, '') || '/api';
 }
-
-type WorkroomRuntime = {
-  listRuns(projectId: string): Promise<readonly unknown[]>;
-  getRun(projectId: string, runId: string): Promise<unknown | null>;
-};
 
 type AssistantRuntime = {
   readonly events: {

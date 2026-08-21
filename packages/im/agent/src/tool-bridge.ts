@@ -12,6 +12,6 @@ export {
 
 export {
   normalizeTool as pluginToolToAgentTool,
-} from './orchestrator/tool-selection.js';
+} from './resource-hub/tool-selection.js';
 
-export type { NormalizableTool } from './orchestrator/tool-selection.js';
+export type { NormalizableTool } from './resource-hub/tool-selection.js';

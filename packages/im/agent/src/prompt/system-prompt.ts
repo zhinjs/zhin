@@ -7,7 +7,7 @@
 
 import * as os from 'node:os';
 import type { AgentMessage, AssistantMessage, UserMessage } from '@zhin.js/ai';
-import type { SkillRegistry } from '../orchestrator/skill-registry.js';
+import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import { type ZhinAgentConfig, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from '../config/index.js';
 import { buildSenderRolesFilePermissionsPrompt } from '../security/file-role-policy.js';
 import type { TurnContextView } from '../context/turn-envelope.js';
@@ -164,7 +164,7 @@ function readAttr(attrs: string, name: string): string | undefined {
 }
 
 /** toolSearch 编排层：技能目录仅 name + 短触发说明，不含全文 desc XML */
-function buildOrchestratorSkillsCatalog(
+function buildResourceHubSkillsCatalog(
   skillsSummaryXML: string,
   skillRegistry: SkillRegistry | null,
 ): string | null {
@@ -306,7 +306,7 @@ function buildSkillsSection(
   skillRegistry: SkillRegistry | null,
   skillsSummaryXML: string,
 ): string | null {
-  const catalog = buildOrchestratorSkillsCatalog(skillsSummaryXML, skillRegistry);
+  const catalog = buildResourceHubSkillsCatalog(skillsSummaryXML, skillRegistry);
   if (!catalog) return null;
   return [
     '# Skills (catalog)',

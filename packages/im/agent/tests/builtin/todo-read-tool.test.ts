@@ -8,7 +8,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createTodoReadTool, TodoReadBuiltinTool } from '../../src/builtin/todo-read-tool.js';
-import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
+import { normalizeTool } from '../../src/resource-hub/tool-selection.js';
 import type { Message } from '@zhin.js/core';
 
 describe('TodoReadBuiltinTool', () => {

@@ -1,13 +1,9 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import {
-  link as nodeLink,
-  mkdir as nodeMkdir,
-  open as nodeOpen,
   readFile as nodeReadFile,
   readdir as nodeReaddir,
-  unlink as nodeUnlink,
 } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import {
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
@@ -17,35 +13,26 @@ import type {
   InteractionSpaceBinding,
   InteractionSpaceBindingRepository,
 } from './interaction-space-router.js';
+import {
+  DurableFileStore,
+  nodeDurableFileSystem,
+  type DurableFileHandle,
+  type DurableFileSystem,
+} from './durable-file-store.js';
 
-export interface InteractionSpaceBindingFileHandle {
-  writeFile(value: string, encoding: 'utf8'): Promise<void>;
-  sync(): Promise<void>;
-  close(): Promise<void>;
-}
+export type InteractionSpaceBindingFileHandle = DurableFileHandle;
 
 /** Injectable only at the durable filesystem boundary. */
-export interface InteractionSpaceBindingFileSystem {
-  mkdir(path: string): Promise<void>;
+export interface InteractionSpaceBindingFileSystem extends DurableFileSystem {
   readdir(path: string): Promise<readonly string[]>;
   readFile(path: string, encoding: 'utf8'): Promise<string>;
-  open(path: string, flags: 'wx' | 'r'): Promise<InteractionSpaceBindingFileHandle>;
-  link(existingPath: string, newPath: string): Promise<void>;
-  unlink(path: string): Promise<void>;
 }
 
 const nodeFileSystem: InteractionSpaceBindingFileSystem = Object.freeze({
-  mkdir: async (path: string): Promise<void> => { await nodeMkdir(path); },
+  ...nodeDurableFileSystem,
   readdir: async (path: string): Promise<readonly string[]> => await nodeReaddir(path),
   readFile: async (path: string, encoding: 'utf8'): Promise<string> =>
     await nodeReadFile(path, encoding),
-  open: async (
-    path: string,
-    flags: 'wx' | 'r',
-  ): Promise<InteractionSpaceBindingFileHandle> => await nodeOpen(path, flags),
-  link: async (existingPath: string, newPath: string): Promise<void> =>
-    await nodeLink(existingPath, newPath),
-  unlink: async (path: string): Promise<void> => await nodeUnlink(path),
 });
 
 interface InteractionSpaceBindingSegmentPayload {
@@ -70,15 +57,19 @@ interface InteractionSpaceBindingSegment extends InteractionSpaceBindingSegmentP
  */
 export class FileInteractionSpaceBindingRepository
 implements InteractionSpaceBindingRepository {
+  readonly #durable: DurableFileStore;
+
   constructor(
     readonly directory: string,
     readonly fileSystem: InteractionSpaceBindingFileSystem = nodeFileSystem,
-  ) {}
+  ) {
+    this.#durable = new DurableFileStore(directory, fileSystem);
+  }
 
   async read(conversationKey: string): Promise<readonly InteractionSpaceBinding[]> {
     const key = identifier(conversationKey, 'conversationKey');
     const bindings = await this.#readBindings(key);
-    if (bindings.length > 0) await this.#syncPath(this.directory);
+    if (bindings.length > 0) await this.#durable.syncLeaf();
     return bindings;
   }
 
@@ -96,7 +87,7 @@ implements InteractionSpaceBindingRepository {
     const current = await this.#readBindings(key);
     const replay = exactReplay(current, expectedRevision, bindings);
     if (replay) {
-      if (current.length > 0) await this.#syncPath(this.directory);
+      if (current.length > 0) await this.#durable.syncLeaf();
       return replay;
     }
     if (current.length !== expectedRevision) {
@@ -118,38 +109,20 @@ implements InteractionSpaceBindingRepository {
       payloadDigest: digestCanonicalWorkroomValue(payload),
     });
 
-    await this.#ensureDurableLeaf();
+    await this.#durable.ensureDurableLeaf('Interaction Space binding repository');
     const path = this.#segmentPath(key, firstBindingRevision);
-    const temporaryPath = `${path}.${randomUUID()}.tmp`;
-    let temporaryExists = false;
-    try {
-      const handle = await this.fileSystem.open(temporaryPath, 'wx');
-      temporaryExists = true;
-      try {
-        await handle.writeFile(JSON.stringify(segment), 'utf8');
-        await handle.sync();
-      } finally {
-        await handle.close();
-      }
-      await this.fileSystem.link(temporaryPath, path);
-      await this.fileSystem.unlink(temporaryPath);
-      temporaryExists = false;
-      await this.#syncPath(this.directory);
-    } catch (error) {
-      if (temporaryExists) {
-        await this.#removeTemporary(temporaryPath);
-        temporaryExists = false;
-      }
-      if (!isAlreadyExists(error)) throw error;
-      const winner = await this.#readBindings(key);
-      const exact = exactReplay(winner, expectedRevision, bindings);
-      await this.#syncPath(this.directory);
-      if (exact) return exact;
-      throw revisionConflict(key, expectedRevision, winner.length);
-    } finally {
-      if (temporaryExists) await this.#removeTemporary(temporaryPath);
-    }
-    return bindings;
+    const published = await this.#durable.publishCreateOnly({
+      target: path,
+      content: JSON.stringify(segment),
+      createdValue: bindings,
+      onConflict: async () => {
+        const winner = await this.#readBindings(key);
+        const exact = exactReplay(winner, expectedRevision, bindings);
+        if (exact) return exact;
+        throw revisionConflict(key, expectedRevision, winner.length);
+      },
+    });
+    return published.value;
   }
 
   async #readBindings(conversationKey: string): Promise<readonly InteractionSpaceBinding[]> {
@@ -187,37 +160,6 @@ implements InteractionSpaceBindingRepository {
     return join(this.directory, segmentName(conversationKey, firstRevision));
   }
 
-  async #ensureDurableLeaf(): Promise<void> {
-    try {
-      await this.fileSystem.mkdir(this.directory);
-    } catch (error) {
-      if (!isAlreadyExists(error)) {
-        if (isMissingFile(error)) {
-          throw new Error(
-            `Interaction Space binding repository requires a pre-existing durable parent directory: ${dirname(this.directory)}`,
-            { cause: error },
-          );
-        }
-        throw error;
-      }
-    }
-    await this.#syncPath(dirname(this.directory));
-  }
-
-  async #syncPath(path: string): Promise<void> {
-    const handle = await this.fileSystem.open(path, 'r');
-    try {
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-  }
-
-  async #removeTemporary(path: string): Promise<void> {
-    await this.fileSystem.unlink(path).catch(error => {
-      if (!isMissingFile(error)) throw error;
-    });
-  }
 }
 
 function snapshotBindings(
@@ -416,11 +358,6 @@ function revisionConflict(conversationKey: string, expected: number, actual: num
   return new Error(
     `Interaction Space binding ${conversationKey} revision conflict: expected ${expected}, actual ${actual}`,
   );
-}
-
-function isAlreadyExists(error: unknown): boolean {
-  return Boolean(error && typeof error === 'object' && 'code' in error
-    && (error as { code?: unknown }).code === 'EEXIST');
 }
 
 function isMissingFile(error: unknown): boolean {

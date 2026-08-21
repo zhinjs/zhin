@@ -562,7 +562,7 @@ export async function* runAgentLoopTextTurnRun(
     getSteeringMessages: promptHooks?.getSteeringMessages,
     getFollowUpMessages: promptHooks?.getFollowUpMessages,
     executeTool: async (toolCall: ParsedToolCall, _tools: typeof llmTools, toolSignal?: AbortSignal, cause?: ToolExecutionCause) => {
-      const hookRegistry = host.orchestrator?.hooks;
+      const hookRegistry = host.resourceHub?.hooks;
       const currentAliases = input.toolAliases;
       const resolvedName = currentAliases?.[toolCall.name] ?? toolCall.name;
       let effectiveArgs = toolCall.arguments;

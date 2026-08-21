@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { resolveIMSessionIdFromMessage, type Plugin } from '@zhin.js/core';
 import type { AgentMessage, MediaContentBlock, OutputElement, UserMessage } from '@zhin.js/ai';
-import type { Message } from '../orchestrator/types.js';
+import type { Message } from '../resource-hub/types.js';
 import { PromptAccessDeniedError } from './prompt-access.js';
 import { resolveToolRequesterRole } from '../security/owner-approve-always-store.js';
 import { normalizePromptMessages } from './prompt-input.js';

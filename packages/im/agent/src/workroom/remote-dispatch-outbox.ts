@@ -24,7 +24,8 @@ export type WorkroomRemoteDispatchOutboxStatus =
   | 'leased'
   | 'delivered'
   | 'reconcile_required'
-  | 'retryable';
+  | 'retryable'
+  | 'blocked';
 
 export interface WorkroomRemoteDispatchLease {
   readonly ownerId: string;
@@ -61,6 +62,13 @@ export interface WorkroomRemoteDispatchOutboxProjection {
   readonly lease?: WorkroomRemoteDispatchLease;
   readonly lastLeaseFence?: number;
   readonly lastRecoveryCause?: WorkroomRemoteDispatchRecoveryCause;
+  readonly governanceBlock?: Readonly<{
+    reason: string;
+    manifestDigest: string;
+    attempt: number;
+    assignmentFence: number;
+    blockedAt: number;
+  }>;
 }
 
 interface WorkroomRemoteDispatchEnqueuedEventDraft {
@@ -89,6 +97,18 @@ interface WorkroomRemoteDispatchObservationEventDraft {
   }>;
 }
 
+interface WorkroomRemoteDispatchGovernanceBlockedEventDraft {
+  readonly eventId: string;
+  readonly occurredAt: number;
+  readonly type: 'dispatch.governance_blocked';
+  readonly payload: Readonly<{
+    reason: string;
+    manifestDigest: string;
+    attempt: number;
+    assignmentFence: number;
+  }>;
+}
+
 export type WorkroomRemoteDispatchRecoveryCause =
   | 'outcome_unknown'
   | 'transport_failed'
@@ -108,6 +128,7 @@ export type WorkroomRemoteDispatchOutboxEventDraft =
   | WorkroomRemoteDispatchEnqueuedEventDraft
   | WorkroomRemoteDispatchClaimedEventDraft
   | WorkroomRemoteDispatchObservationEventDraft
+  | WorkroomRemoteDispatchGovernanceBlockedEventDraft
   | WorkroomRemoteDispatchRecoveredEventDraft;
 
 export type WorkroomRemoteDispatchOutboxEvent = WorkroomRemoteDispatchOutboxEventDraft & Readonly<{
@@ -136,10 +157,28 @@ export interface WorkroomRemoteDispatchObservationInput {
   readonly observation: WorkroomRemoteDispatchTransportObservation;
 }
 
+export interface WorkroomRemoteDispatchGovernanceBlockInput {
+  readonly dispatchId: string;
+  readonly expectedSequence: number;
+  readonly now: number;
+  readonly reason: string;
+  readonly manifestDigest: string;
+  readonly attempt: number;
+  readonly assignmentFence: number;
+}
+
 export type WorkroomRemoteDispatchRecoverInput = WorkroomRemoteDispatchClaimInput;
 
 export interface WorkroomRemoteDispatchOutboxRepository {
   read(dispatchId: string): Promise<WorkroomRemoteDispatchOutboxProjection | undefined>;
+  /** Restart-safe work discovery; excludes delivered, reconciliation and live leases. */
+  listRunnable(now: number): Promise<readonly WorkroomRemoteDispatchOutboxProjection[]>;
+  listGovernanceBlocked(input: Readonly<{
+    projectId: string;
+    runId: string;
+    taskKey: string;
+    taskRevision: number;
+  }>): Promise<readonly WorkroomRemoteDispatchOutboxProjection[]>;
   append(
     dispatchId: string,
     expectedSequence: number,
@@ -153,6 +192,9 @@ export interface WorkroomRemoteDispatchOutboxRepository {
   claim(input: WorkroomRemoteDispatchClaimInput): Promise<WorkroomRemoteDispatchOutboxEvent>;
   recordTransportObservation(
     input: WorkroomRemoteDispatchObservationInput,
+  ): Promise<WorkroomRemoteDispatchOutboxEvent>;
+  recordGovernanceBlock(
+    input: WorkroomRemoteDispatchGovernanceBlockInput,
   ): Promise<WorkroomRemoteDispatchOutboxEvent>;
   recover(input: WorkroomRemoteDispatchRecoverInput): Promise<WorkroomRemoteDispatchOutboxEvent>;
 }
@@ -211,6 +253,29 @@ implements WorkroomRemoteDispatchOutboxRepository {
     return project(this.#events.get(identifier(dispatchId, 'dispatchId')) ?? []);
   }
 
+  async listRunnable(now: number): Promise<readonly WorkroomRemoteDispatchOutboxProjection[]> {
+    const trustedNow = timestamp(now, 'now');
+    return Object.freeze([...this.#events.values()]
+      .map(events => project(events))
+      .filter((entry): entry is WorkroomRemoteDispatchOutboxProjection =>
+        entry !== undefined && isRunnable(entry, trustedNow))
+      .sort((left, right) => left.dispatchId.localeCompare(right.dispatchId)));
+  }
+
+  async listGovernanceBlocked(input: Readonly<{
+    projectId: string; runId: string; taskKey: string; taskRevision: number;
+  }>): Promise<readonly WorkroomRemoteDispatchOutboxProjection[]> {
+    return Object.freeze([...this.#events.values()]
+      .map(events => project(events))
+      .filter((entry): entry is WorkroomRemoteDispatchOutboxProjection =>
+        entry?.status === 'blocked'
+        && entry.item.envelope.projectId === input.projectId
+        && entry.item.envelope.runId === input.runId
+        && entry.item.envelope.taskKey === input.taskKey
+        && entry.item.envelope.taskRevision === input.taskRevision)
+      .sort(compareBlockedDispatch));
+  }
+
   async append(
     dispatchId: string,
     expectedSequence: number,
@@ -243,6 +308,10 @@ implements WorkroomRemoteDispatchOutboxRepository {
     return recordTransportObservation(this, input);
   }
 
+  async recordGovernanceBlock(input: WorkroomRemoteDispatchGovernanceBlockInput) {
+    return recordGovernanceBlock(this, input);
+  }
+
   async recover(input: WorkroomRemoteDispatchRecoverInput): Promise<WorkroomRemoteDispatchOutboxEvent> {
     return recover(this, input);
   }
@@ -261,6 +330,52 @@ implements WorkroomRemoteDispatchOutboxRepository {
 
   async read(dispatchId: string): Promise<WorkroomRemoteDispatchOutboxProjection | undefined> {
     return project(await this.#readEvents(identifier(dispatchId, 'dispatchId')));
+  }
+
+  async listRunnable(now: number): Promise<readonly WorkroomRemoteDispatchOutboxProjection[]> {
+    const trustedNow = timestamp(now, 'now');
+    return Object.freeze((await this.#readAllProjections())
+      .filter(entry => isRunnable(entry, trustedNow)));
+  }
+
+  async listGovernanceBlocked(input: Readonly<{
+    projectId: string; runId: string; taskKey: string; taskRevision: number;
+  }>): Promise<readonly WorkroomRemoteDispatchOutboxProjection[]> {
+    const entries = await this.#readAllProjections();
+    return Object.freeze(entries.filter(entry =>
+      entry.status === 'blocked'
+      && entry.item.envelope.projectId === input.projectId
+      && entry.item.envelope.runId === input.runId
+      && entry.item.envelope.taskKey === input.taskKey
+      && entry.item.envelope.taskRevision === input.taskRevision)
+      .sort(compareBlockedDispatch));
+  }
+
+  async #readAllProjections(): Promise<WorkroomRemoteDispatchOutboxProjection[]> {
+    let names: readonly string[];
+    try {
+      names = (await this.fileSystem.readdir(this.directory)).filter(name => name.endsWith('.json')).sort();
+    } catch (error) {
+      if (isMissingFile(error)) return [];
+      throw error;
+    }
+    const byDispatch = new Map<string, WorkroomRemoteDispatchOutboxEvent[]>();
+    for (const name of names) {
+      const value = JSON.parse(await this.fileSystem.readFile(join(this.directory, name), 'utf8')) as unknown;
+      if (!Array.isArray(value)) throw new Error('Remote Dispatch Outbox segment must be an event array');
+      for (const event of value.map(parseEvent)) {
+        if (!name.startsWith(`${digest(event.dispatchId)}.`)) {
+          throw new Error('Remote Dispatch Outbox segment identity does not match its filename');
+        }
+        const stream = byDispatch.get(event.dispatchId) ?? [];
+        stream.push(event);
+        byDispatch.set(event.dispatchId, stream);
+      }
+    }
+    return [...byDispatch.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([, events]) => project(events.sort((left, right) => left.sequence - right.sequence)))
+      .filter((entry): entry is WorkroomRemoteDispatchOutboxProjection => entry !== undefined);
   }
 
   async append(
@@ -339,6 +454,10 @@ implements WorkroomRemoteDispatchOutboxRepository {
     input: WorkroomRemoteDispatchObservationInput,
   ): Promise<WorkroomRemoteDispatchOutboxEvent> {
     return recordTransportObservation(this, input);
+  }
+
+  async recordGovernanceBlock(input: WorkroomRemoteDispatchGovernanceBlockInput) {
+    return recordGovernanceBlock(this, input);
   }
 
   async recover(input: WorkroomRemoteDispatchRecoverInput): Promise<WorkroomRemoteDispatchOutboxEvent> {
@@ -488,6 +607,27 @@ async function recordTransportObservation(
   return event!;
 }
 
+async function recordGovernanceBlock(
+  repository: WorkroomRemoteDispatchOutboxRepository,
+  input: WorkroomRemoteDispatchGovernanceBlockInput,
+): Promise<WorkroomRemoteDispatchOutboxEvent> {
+  const dispatchId = identifier(input.dispatchId, 'dispatchId');
+  const reason = identifier(input.reason, 'governance reason');
+  const manifestDigest = sha(input.manifestDigest, 'manifestDigest');
+  const [event] = await repository.append(dispatchId, input.expectedSequence, [{
+    eventId: `${dispatchId}:governance-blocked:${input.attempt}:${input.assignmentFence}`,
+    occurredAt: timestamp(input.now, 'now'),
+    type: 'dispatch.governance_blocked',
+    payload: {
+      reason,
+      manifestDigest,
+      attempt: positiveSequence(input.attempt, 'attempt'),
+      assignmentFence: positiveSequence(input.assignmentFence, 'assignmentFence'),
+    },
+  }]);
+  return event!;
+}
+
 async function recover(
   repository: WorkroomRemoteDispatchOutboxRepository,
   input: WorkroomRemoteDispatchRecoverInput,
@@ -610,6 +750,19 @@ function normalizeDraft(
       },
     });
   }
+  if (draft.type === 'dispatch.governance_blocked') {
+    return deepFreeze({
+      eventId,
+      occurredAt,
+      type: draft.type,
+      payload: {
+        reason: identifier(draft.payload?.reason, 'governance reason'),
+        manifestDigest: sha(draft.payload?.manifestDigest, 'manifestDigest'),
+        attempt: positiveSequence(draft.payload?.attempt, 'attempt'),
+        assignmentFence: positiveSequence(draft.payload?.assignmentFence, 'assignmentFence'),
+      },
+    });
+  }
   if (draft.type === 'dispatch.recovered') {
     return deepFreeze({
       eventId,
@@ -658,6 +811,7 @@ function project(
   const observations: WorkroomRemoteDispatchPersistedObservation[] = [];
   const observationIds = new Set<string>();
   let lastRecoveryCause: WorkroomRemoteDispatchRecoveryCause | undefined;
+  let governanceBlock: WorkroomRemoteDispatchOutboxProjection['governanceBlock'];
   for (const event of events.slice(1)) {
     assertDeterministicEventId(event);
     if (event.type === 'dispatch.claimed') {
@@ -702,6 +856,21 @@ function project(
       lease = undefined;
       continue;
     }
+    if (event.type === 'dispatch.governance_blocked') {
+      if (status !== 'pending' && status !== 'retryable') {
+        throw new Error('Invalid Remote Dispatch governance block transition');
+      }
+      if (event.payload.attempt !== first.payload.item.envelope.attempt
+        || event.payload.assignmentFence !== first.payload.item.envelope.fence
+        || event.payload.manifestDigest
+          !== first.payload.item.envelope.disclosureManifest.manifest.digest) {
+        throw new Error('Remote Dispatch governance block escaped exact Assignment/Manifest authority');
+      }
+      status = 'blocked';
+      governanceBlock = deepFreeze({ ...event.payload, blockedAt: event.occurredAt });
+      lease = undefined;
+      continue;
+    }
     if (event.type === 'dispatch.recovered') {
       const expectedCause: WorkroomRemoteDispatchRecoveryCause | undefined =
         status === 'reconcile_required'
@@ -740,7 +909,28 @@ function project(
     ...(lease ? { lease } : {}),
     ...(lastLeaseFence === undefined ? {} : { lastLeaseFence }),
     ...(lastRecoveryCause === undefined ? {} : { lastRecoveryCause }),
+    ...(governanceBlock === undefined ? {} : { governanceBlock }),
   });
+}
+
+function isRunnable(
+  projection: WorkroomRemoteDispatchOutboxProjection,
+  now: number,
+): boolean {
+  return projection.status === 'pending'
+    || projection.status === 'retryable'
+    || (projection.status === 'leased'
+      && projection.lease !== undefined
+      && now >= projection.lease.expiresAt);
+}
+
+function compareBlockedDispatch(
+  left: WorkroomRemoteDispatchOutboxProjection,
+  right: WorkroomRemoteDispatchOutboxProjection,
+): number {
+  return right.item.envelope.attempt - left.item.envelope.attempt
+    || right.item.envelope.fence - left.item.envelope.fence
+    || left.dispatchId.localeCompare(right.dispatchId);
 }
 
 function assertDeterministicEventId(event: WorkroomRemoteDispatchOutboxEvent): void {
@@ -752,6 +942,9 @@ function assertDeterministicEventId(event: WorkroomRemoteDispatchOutboxEvent): v
       : event.type === 'dispatch.transport_observed'
         ? `${event.dispatchId}:transport-observed:`
           + encodeURIComponent(event.payload.observationId)
+        : event.type === 'dispatch.governance_blocked'
+          ? `${event.dispatchId}:governance-blocked:${event.payload.attempt}:`
+            + event.payload.assignmentFence
         : `${event.dispatchId}:recovered:${event.payload.lease.leaseFence}:`
           + encodeURIComponent(event.payload.lease.leaseId);
   if (event.eventId !== expected) {
@@ -854,6 +1047,12 @@ function digest(value: string): string {
 function identifier(value: unknown, name: string): string {
   if (typeof value !== 'string' || !value.trim()) throw new Error(`Invalid ${name}`);
   return value;
+}
+
+function sha(value: unknown, name: string): string {
+  const normalized = identifier(value, name);
+  if (!/^sha256:[a-f0-9]{64}$/u.test(normalized)) throw new Error(`Invalid ${name}`);
+  return normalized;
 }
 
 function timestamp(value: unknown, name: string): number {

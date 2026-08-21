@@ -150,6 +150,9 @@ export interface WorkroomRunState {
 
 export type WorkroomEventType =
   | 'run.created'
+  | 'plan.admitted'
+  | 'plan.revision_applied'
+  | 'plan_gate.decided'
   | 'run.cancel_requested'
   | 'run.cancelled'
   | 'task.planned'
@@ -170,15 +173,25 @@ export type WorkroomEventType =
   | 'sponsor_gate.expired'
   | 'task.rework_requested'
   | 'task.revised'
+  | 'task.plan_revised'
   | 'assignment.claimed'
   | 'assignment.started'
   | 'assignment.progress'
   | 'assignment.heartbeat'
   | 'assignment.checkpointed'
+  | 'assignment.checkpoint_requested'
+  | 'assignment.preempted'
   | 'assignment.execution_completed'
   | 'assignment.cancel_requested'
   | 'assignment.cancelled'
   | 'assignment.lease_expired'
+  | 'scheduler.dispatch_requested'
+  | 'scheduler.priority_changed'
+  | 'scheduler.preemption_requested'
+  | 'scheduler.preemption_checkpoint_acknowledged'
+  | 'scheduler.preemption_timed_out'
+  | 'local_execution.requested'
+  | 'remote_dispatch.requested'
   | 'clock.advanced';
 
 export interface WorkroomEvent {

@@ -5,7 +5,7 @@ import type { RegisteredAgentTool } from '../../src/tool/contracts.js';
 import type { AgentTool } from '@zhin.js/ai';
 import { createSyntheticMessage } from '@zhin.js/core';
 import { createPermissionHost } from '@zhin.js/permission';
-import type { Tool } from '../../src/orchestrator/types.js';
+import type { Tool } from '../../src/resource-hub/types.js';
 
 describe('ToolSystem', () => {
   it('dedupes tools by name when collecting', async () => {

@@ -9,6 +9,14 @@ describe('validateAiRoutingConfig', () => {
     } as never)).toThrow('ai.workrooms removed; manage the persistent Workroom Catalog');
   });
 
+  it.each([
+    [{ remoteAgents: [] }, 'ai.remoteAgents removed'],
+    [{ remote_mesh: null }, 'ai.remote_mesh removed'],
+    [{ remoteMesh: {} }, 'ai.remote_mesh removed'],
+  ] as const)('rejects removed remote execution config %j', (legacy, message) => {
+    expect(() => normalizeAiRoutingConfig(legacy as never)).toThrow(message);
+  });
+
   it('校验 Workroom 的 Agent 成员、角色与协作空间关联', () => {
     const workrooms = {
         support: {

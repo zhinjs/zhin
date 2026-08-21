@@ -26,6 +26,8 @@ export interface WorkroomDefinition {
   description?: string;
   enabled?: boolean;
   members: WorkroomAgentMemberDefinition[];
+  /** Authenticated human principal ids allowed to decide typed Project Sponsor controls. */
+  sponsors?: string[];
   /** One Workroom owns one collaboration space; an Endpoint may serve many Workrooms. */
   conversation?: WorkroomConversationBindingDefinition;
 }

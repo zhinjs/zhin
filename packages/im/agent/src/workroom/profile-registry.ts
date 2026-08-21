@@ -34,6 +34,9 @@ export interface ProjectProfileGovernanceComposition {
   readonly skills: readonly ProfileCompositionCapabilityRef[];
   readonly agents: readonly ProfileCompositionCapabilityRef[];
   readonly workflows: readonly ProfileCompositionCapabilityRef[];
+  readonly memories: readonly ProfileCompositionCapabilityRef[];
+  readonly glossaries: readonly ProfileCompositionCapabilityRef[];
+  readonly acceptancePolicies: readonly ProfileCompositionCapabilityRef[];
 }
 
 export interface ProfileSemanticCapabilityDiff {
@@ -53,6 +56,9 @@ export interface ProjectProfileSemanticDiff {
   readonly skill: ProfileSemanticCapabilityDiff;
   readonly agent: ProfileSemanticCapabilityDiff;
   readonly workflow: ProfileSemanticCapabilityDiff;
+  readonly memory: ProfileSemanticCapabilityDiff;
+  readonly glossary: ProfileSemanticCapabilityDiff;
+  readonly acceptancePolicy: ProfileSemanticCapabilityDiff;
   /** Pack kind is absent from compiler output, so any Pack add/change is conservatively policy expansion. */
   readonly policy: ProfileSemanticCapabilityDiff;
   readonly overlay: Readonly<{
@@ -423,6 +429,38 @@ export function createProjectProfileGovernanceAuthorizationInput(
       || workflowChanges.removed.length > 0
       || workflowChanges.changed.length > 0,
   });
+  const memoryChanges = semanticCapabilityDiff(
+    activeComposition?.memories ?? [],
+    candidateComposition.memories,
+  );
+  const memory = deepFreeze({
+    ...memoryChanges,
+    authorityExpansion: memoryChanges.added.length > 0
+      || memoryChanges.removed.length > 0
+      || memoryChanges.changed.length > 0,
+  });
+  const glossaryChanges = semanticCapabilityDiff(
+    activeComposition?.glossaries ?? [],
+    candidateComposition.glossaries,
+  );
+  const glossary = deepFreeze({
+    ...glossaryChanges,
+    authorityExpansion: glossaryChanges.added.length > 0
+      || glossaryChanges.removed.length > 0
+      || glossaryChanges.changed.length > 0,
+  });
+  const acceptancePolicyChanges = semanticCapabilityDiff(
+    activeComposition?.acceptancePolicies ?? [],
+    candidateComposition.acceptancePolicies,
+  );
+  const acceptancePolicy = deepFreeze({
+    ...acceptancePolicyChanges,
+    // Adding, changing or removing criteria/Memory rules can all relax a
+    // previous acceptance floor, so the diff is conservatively privileged.
+    authorityExpansion: acceptancePolicyChanges.added.length > 0
+      || acceptancePolicyChanges.removed.length > 0
+      || acceptancePolicyChanges.changed.length > 0,
+  });
   const policyChanges = semanticCapabilityDiff(
     (activeComposition?.packs ?? []).map(packSemanticRef),
     candidateComposition.packs.map(packSemanticRef),
@@ -449,6 +487,9 @@ export function createProjectProfileGovernanceAuthorizationInput(
     skill,
     agent,
     workflow,
+    memory,
+    glossary,
+    acceptancePolicy,
     policy,
     overlay: {
       changed: overlayChanged,
@@ -460,6 +501,9 @@ export function createProjectProfileGovernanceAuthorizationInput(
       || skill.authorityExpansion
       || agent.authorityExpansion
       || workflow.authorityExpansion
+      || memory.authorityExpansion
+      || glossary.authorityExpansion
+      || acceptancePolicy.authorityExpansion
       || policy.authorityExpansion
       || overlayChanged,
   });
@@ -725,6 +769,13 @@ function profileGovernanceComposition(
     skills: value.compiledProfile.skills.map(semanticCompositionRef),
     agents: value.compiledProfile.agents.map(semanticCompositionRef),
     workflows: value.compiledProfile.workflows.map(semanticCompositionRef),
+    memories: value.compiledProfile.memories.map(semanticCompositionRef),
+    glossaries: value.compiledProfile.glossaries.map(semanticCompositionRef),
+    acceptancePolicies: (value.compiledProfile.acceptancePolicies ?? []).map(value => ({
+      id: value.id,
+      digest: value.digest,
+      semanticDigest: digest(value),
+    })),
   });
 }
 
@@ -779,6 +830,9 @@ function copyGovernanceComposition(
     skills: value.skills.map(copyCompositionRef),
     agents: value.agents.map(copyCompositionRef),
     workflows: value.workflows.map(copyCompositionRef),
+    memories: value.memories.map(copyCompositionRef),
+    glossaries: value.glossaries.map(copyCompositionRef),
+    acceptancePolicies: value.acceptancePolicies.map(copyCompositionRef),
   });
 }
 
@@ -804,6 +858,9 @@ function copySemanticDiff(value: ProjectProfileSemanticDiff): ProjectProfileSema
     skill: copySemanticCapabilityDiff(value.skill),
     agent: copySemanticCapabilityDiff(value.agent),
     workflow: copySemanticCapabilityDiff(value.workflow),
+    memory: copySemanticCapabilityDiff(value.memory),
+    glossary: copySemanticCapabilityDiff(value.glossary),
+    acceptancePolicy: copySemanticCapabilityDiff(value.acceptancePolicy),
     policy: copySemanticCapabilityDiff(value.policy),
     overlay: {
       changed: value.overlay.changed,
@@ -844,6 +901,42 @@ function copyCompiledProfile(value: CompiledWorkroomProfile): CompiledWorkroomPr
           skills: [...(task.requires.skills ?? [])],
         },
       })),
+    })),
+    memories: value.memories.map(memory => ({
+      id: memory.id,
+      digest: memory.digest,
+      allowedRoles: [...memory.allowedRoles],
+      taskKeys: [...memory.taskKeys],
+    })),
+    glossaries: value.glossaries.map(glossary => ({
+      id: glossary.id,
+      digest: glossary.digest,
+      allowedRoles: [...glossary.allowedRoles],
+      taskKeys: [...glossary.taskKeys],
+    })),
+    acceptancePolicies: (value.acceptancePolicies ?? []).map(policy => ({
+      id: policy.id,
+      digest: policy.digest,
+      tasks: policy.tasks.map(task => ({
+        taskKey: task.taskKey,
+        kind: task.kind,
+        criteria: task.criteria.map(criterion => ({ ...criterion })),
+        requiredEvidence: [...task.requiredEvidence],
+        minimumRoute: task.minimumRoute,
+        reviewerPrincipalId: task.reviewerPrincipalId,
+        sponsorPrincipalId: task.sponsorPrincipalId,
+        reviewerTimeoutMs: task.reviewerTimeoutMs,
+        sponsorTimeoutMs: task.sponsorTimeoutMs,
+      })),
+      memorySchema: {
+        revision: policy.memorySchema.revision,
+        claimRules: policy.memorySchema.claimRules.map(rule => ({
+          key: rule.key,
+          valueType: rule.valueType,
+          allowedStatuses: [...rule.allowedStatuses],
+          allowSupersedes: rule.allowSupersedes,
+        })),
+      },
     })),
     digest: value.digest,
   });

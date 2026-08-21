@@ -807,5 +807,6 @@ export function isDemoHttpAllowed(method: string, pathname: string, apiBase: str
   if (m === 'GET' && pathname === `${normalizedBase}/stats`) return true;
   if (m === 'GET' && (pathname === `${normalizedBase}/plugins`
     || pathname.startsWith(`${normalizedBase}/plugins/`))) return true;
+  if (m === 'GET' && pathname === `${normalizedBase}/agent/workroom/portfolio`) return true;
   return false;
 }

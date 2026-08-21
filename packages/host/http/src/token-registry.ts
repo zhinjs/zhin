@@ -6,7 +6,14 @@ export type AuthScope = 'full' | 'demo';
 export type ScopedTokenConfig = {
   readonly token: string;
   readonly scope: AuthScope;
+  /** Root-configured subject binding; never accepted from an HTTP payload. */
+  readonly principalId?: string;
 };
+
+export interface AuthenticatedTokenPrincipal {
+  readonly principalId: string;
+  readonly scope: AuthScope;
+}
 
 export type TokenRegistryConfig = {
   readonly primaryToken?: string;
@@ -14,19 +21,40 @@ export type TokenRegistryConfig = {
 };
 
 export class TokenRegistry {
-  readonly #entries = new Map<string, AuthScope>();
+  readonly #entries = new Map<string, Readonly<{ scope: AuthScope; principalId?: string }>>();
 
   constructor(config: TokenRegistryConfig = {}) {
-    if (config.primaryToken) this.#entries.set(config.primaryToken, 'full');
-    for (const { token, scope } of config.scopedTokens ?? []) {
-      if (token) this.#entries.set(token, scope);
+    if (config.primaryToken) this.#entries.set(config.primaryToken, Object.freeze({ scope: 'full' }));
+    for (const { token, scope, principalId } of config.scopedTokens ?? []) {
+      if (!token) continue;
+      if (principalId !== undefined && (!principalId.trim() || principalId !== principalId.trim())) {
+        throw new Error('HTTP token principalId is invalid');
+      }
+      const candidate = Object.freeze({ scope, ...(principalId === undefined ? {} : { principalId }) });
+      const existing = this.#entries.get(token);
+      if (existing && (existing.scope !== candidate.scope || existing.principalId !== candidate.principalId)) {
+        throw new Error('HTTP token has conflicting authority bindings');
+      }
+      this.#entries.set(token, candidate);
     }
   }
 
   resolve(token: string): AuthScope | null {
     if (!token) return null;
-    for (const [known, scope] of this.#entries) {
-      if (timingSafeEqualString(known, token)) return scope;
+    for (const [known, binding] of this.#entries) {
+      if (timingSafeEqualString(known, token)) return binding.scope;
+    }
+    return null;
+  }
+
+  resolvePrincipal(token: string): AuthenticatedTokenPrincipal | null {
+    if (!token) return null;
+    for (const [known, binding] of this.#entries) {
+      if (timingSafeEqualString(known, token)) {
+        return binding.principalId
+          ? Object.freeze({ principalId: binding.principalId, scope: binding.scope })
+          : null;
+      }
     }
     return null;
   }
@@ -36,8 +64,8 @@ export class TokenRegistry {
   }
 
   primaryTokenPrefixForLog(): string {
-    for (const [tok, scope] of this.#entries) {
-      if (scope === 'full') return tok.slice(0, 6);
+    for (const [tok, binding] of this.#entries) {
+      if (binding.scope === 'full') return tok.slice(0, 6);
     }
     const first = this.#entries.keys().next().value;
     return first ? first.slice(0, 6) : '';

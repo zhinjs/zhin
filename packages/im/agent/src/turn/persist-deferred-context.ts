@@ -10,7 +10,7 @@ import { resolveAgentTurnSessionKey } from '../session/session-key.js';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 import { resolveSubagentDisplayLabel } from '../subagent-goal-notify.js';
 import { packageSubagentResult } from '../subagent-artifact.js';
-import type { Message } from '../orchestrator/types.js';
+import type { Message } from '../resource-hub/types.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { extractDeferredBody } from './deferred-delivery.js';
 

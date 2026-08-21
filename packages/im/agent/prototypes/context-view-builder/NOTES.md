@@ -19,7 +19,7 @@ Current-code observations are kept separate from target decisions:
 - `renderUserMessageForLlm` treats first-class actor as authoritative over legacy sender extra.
 - Interactive turns currently load one flat Session context; role-specific Workroom views do not yet exist.
 - Current persisted compaction injects a plain conversation summary without fact-level provenance. It remains valid for ordinary chat, but is not a Workroom Task/Project memory primitive.
-- Current `TurnExecutionProfile` distinguishes interactive/schedule, not orchestrator/executor/reviewer.
+- Current `TurnExecutionProfile` distinguishes interactive/schedule, not resource-hub/executor/reviewer.
 
 ## What the prototype proved
 

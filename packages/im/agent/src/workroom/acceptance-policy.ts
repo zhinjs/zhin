@@ -107,6 +107,9 @@ export interface WorkroomAcceptanceDecisionInput {
     id: WorkroomAssignmentState['id'];
     owner: WorkroomAssignmentState['owner'];
     reportRef: string;
+    reportDigest: string;
+    candidateRef: string;
+    candidateHash: string;
   }>;
 }
 
@@ -234,7 +237,8 @@ export function createAcceptanceDecisionInput(
     throw new Error(`Task ${taskKey} has no completed execution candidate`);
   }
   const assignment = state.assignments[task.currentAssignmentId];
-  if (!assignment || assignment.status !== 'execution_completed' || assignment.reportRef !== task.reportRef) {
+  if (!assignment || assignment.status !== 'execution_completed' || assignment.reportRef !== task.reportRef
+    || !assignment.reportDigest || !assignment.candidateRef || !assignment.candidateHash) {
     throw new Error(`Task ${taskKey} has no matching completed Assignment`);
   }
   return Object.freeze({
@@ -251,7 +255,14 @@ export function createAcceptanceDecisionInput(
       }),
     } : {}),
     task: Object.freeze({ key: task.key, revision: task.revision, reportRef: task.reportRef }),
-    assignment: Object.freeze({ id: assignment.id, owner: assignment.owner, reportRef: assignment.reportRef }),
+    assignment: Object.freeze({
+      id: assignment.id,
+      owner: assignment.owner,
+      reportRef: assignment.reportRef,
+      reportDigest: assignment.reportDigest,
+      candidateRef: assignment.candidateRef,
+      candidateHash: assignment.candidateHash,
+    }),
   });
 }
 
@@ -530,6 +541,9 @@ export function assertPersistedAcceptanceRecord(
         id: requireString(candidate.producerAssignmentId, 'producer Assignment id'),
         owner: requireString(candidate.producerPrincipalId, 'producer principal id'),
         reportRef,
+        reportDigest: 'persisted-record-validation',
+        candidateRef: requireString(candidate.id, 'candidate id'),
+        candidateHash: requireString(candidate.hash, 'candidate hash'),
       },
     };
     assertDecisionBindings(input, decision);

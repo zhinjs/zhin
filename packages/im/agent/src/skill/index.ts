@@ -16,5 +16,5 @@ export {
   defaultSkillSystem,
 } from './skill-system.js';
 
-export { SkillRegistry } from '../orchestrator/skill-registry.js';
-export type { Skill as OrchestratorSkill, SkillMetadata } from '../orchestrator/types.js';
+export { SkillRegistry } from '../resource-hub/skill-registry.js';
+export type { Skill as ResourceHubSkill, SkillMetadata } from '../resource-hub/types.js';

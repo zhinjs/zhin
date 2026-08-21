@@ -3,10 +3,32 @@ import {
   PortfolioEventIdentityConflictError,
   PortfolioRequestIdentityConflictError,
   PortfolioSequenceConflictError,
+  createPortfolioPolicySnapshot,
   parsePortfolioCapacityRequest,
   type PortfolioCapacityRequest,
   type PortfolioFactDraft,
 } from '../../src/portfolio/portfolio-journal.js';
+
+describe('Portfolio lease policy snapshot', () => {
+  it('pins heartbeat, renewal and max-quantum limits into the policy digest', () => {
+    const input = {
+      revision: 1, globalBudgetMicros: 100, offerTtlTicks: 2, leaseTtlTicks: 5,
+      leaseHeartbeatTicks: 1, maxLeaseQuantumTicks: 7, maxLeaseRenewals: 2,
+      reclaimTtlTicks: 2,
+      pools: { model: { poolId: 'model', capacityUnits: 1, rateUnitsPerWindow: 10,
+        rateWindowTicks: 10, priceMicrosPerBudgetUnit: 1 } },
+      projects: { project: { projectId: 'project', revision: 1, lane: 'normal', weight: 1,
+        hardBudgetMicros: 100, allowedPools: ['model'], maxOutstandingRequests: 2,
+        maxConcurrentGrants: 1, burstLimit: 1, starvationTicks: 2, status: 'active' } },
+    } as const;
+    const policy = createPortfolioPolicySnapshot(input);
+    expect(policy).toMatchObject({
+      leaseHeartbeatTicks: 1, maxLeaseQuantumTicks: 7, maxLeaseRenewals: 2,
+    });
+    expect(() => createPortfolioPolicySnapshot({ ...input, maxLeaseQuantumTicks: 4 }))
+      .toThrow('quantum');
+  });
+});
 
 function capacityRequest(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {

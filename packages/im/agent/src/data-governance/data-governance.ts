@@ -389,7 +389,8 @@ export type DisclosureReasonCode =
   | 'channel_policy_missing'
   | 'recipient_snapshot_empty'
   | 'destination_tenant_mismatch'
-  | 'destination_project_mismatch';
+  | 'destination_project_mismatch'
+  | 'payload_retention_expired';
 
 export interface DisclosureDecision {
   readonly disposition: DisclosureDisposition;
@@ -758,6 +759,9 @@ function hashStable(value: unknown): string {
 export function decideDisclosure(input: DisclosureDecisionInput): DisclosureDecision {
   const requestDigest = disclosureRequestDigest(input.descriptor, input.context, input.policy);
   const hardDenials: DisclosureReasonCode[] = [];
+  if (input.evaluatedAt >= input.descriptor.retention.deleteAfter) {
+    hardDenials.push('payload_retention_expired');
+  }
   if (input.policy.channelCeilings[input.context.channel] === undefined) {
     hardDenials.push('channel_policy_missing');
   }

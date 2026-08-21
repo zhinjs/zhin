@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   WORKROOM_A2A_EXTENSION_URI,
   assertWorkroomRemoteDispatchRetry,
+  assertWorkroomGovernedDispatchSupersession,
   createWorkroomRemoteDispatchOutboxItem,
   type WorkroomRemoteDispatchInput,
 } from '../../src/workroom/remote-dispatch.js';
+import { remoteDisclosureFixture } from './remote-disclosure-fixture.js';
 
 describe('Workroom remote dispatch outbox boundary', () => {
   it('materializes stable transport identity and digest for replay', () => {
@@ -59,6 +61,40 @@ describe('Workroom remote dispatch outbox boundary', () => {
       workspace: { ...input().workspace, branchRef },
     }))).toThrow('canonical');
   });
+
+  it('requires a new attempt/fence and exact supersedes proof after governance_blocked', () => {
+    const blocked = createWorkroomRemoteDispatchOutboxItem(input());
+    const successor = createWorkroomRemoteDispatchOutboxItem(input({
+      attempt: 2,
+      fence: 8,
+      supersedes: {
+        dispatchId: blocked.dispatchId,
+        manifestDigest: blocked.envelope.disclosureManifest.manifest.digest,
+      },
+      workspace: {
+        ...blocked.envelope.workspace,
+        branchRef: 'refs/heads/workroom/assignment-1-retry-2',
+        fence: 8,
+      },
+    }));
+    const blockedProjection = {
+      status: 'blocked',
+      item: blocked,
+      governanceBlock: { manifestDigest: blocked.envelope.disclosureManifest.manifest.digest },
+    };
+    expect(() => assertWorkroomGovernedDispatchSupersession(blockedProjection, successor))
+      .not.toThrow();
+    expect(() => assertWorkroomGovernedDispatchSupersession(blockedProjection, blocked))
+      .toThrow('new attempt/fence');
+    const forged = createWorkroomRemoteDispatchOutboxItem(input({
+      attempt: 2,
+      fence: 8,
+      supersedes: { dispatchId: blocked.dispatchId, manifestDigest: `sha256:${'9'.repeat(64)}` },
+      workspace: { ...blocked.envelope.workspace, branchRef: 'refs/heads/forged', fence: 8 },
+    }));
+    expect(() => assertWorkroomGovernedDispatchSupersession(blockedProjection, forged))
+      .toThrow('exact supersedes');
+  });
 });
 
 function input(overrides: Partial<WorkroomRemoteDispatchInput> = {}): WorkroomRemoteDispatchInput {
@@ -83,7 +119,9 @@ function input(overrides: Partial<WorkroomRemoteDispatchInput> = {}): WorkroomRe
     contextView: { ref: 'view:1', hash: 'sha256:view' },
     acceptanceContract: { ref: 'acceptance:1', hash: 'sha256:acceptance' },
     capabilitySnapshot: { ref: 'capability:1', hash: 'sha256:capability', grantRef: 'grant:1' },
-    disclosureManifest: { ref: 'disclosure:1', hash: 'sha256:disclosure' },
+    disclosureManifest: remoteDisclosureFixture({
+      endpointId: 'remote-main', sourceRef: 'view:1', sourceDigest: 'sha256:view',
+    }),
     workspace: {
       provider: 'github_pull_request',
       repositoryId: 'github:org/repo',

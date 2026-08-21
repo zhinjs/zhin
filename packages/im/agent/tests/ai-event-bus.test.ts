@@ -8,7 +8,7 @@ import {
   onAISessionCompact,
   onAISessionNew,
 } from '../src/ai-event-bus.js';
-import { createAIHookEvent } from '../src/orchestrator/index.js';
+import { createAIHookEvent } from '../src/resource-hub/index.js';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
 
 describe('ai-event-bus helpers', () => {

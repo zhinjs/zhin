@@ -1,7 +1,7 @@
 /**
  * Bridge AgentStream wire events ↔ HookRegistry subscriptions (ADR 0039 P0).
  */
-import type { AIHookEvent, AIHookEventType } from '../orchestrator/types.js';
+import type { AIHookEvent, AIHookEventType } from '../resource-hub/types.js';
 import { AgentStreamEventType, type AgentStreamEvent, type AgentStreamEventTypeName } from '@zhin.js/ai/agent-stream';
 
 /** Legacy `type:action` hook keys → Eve-aligned stream event names. */

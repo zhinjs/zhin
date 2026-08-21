@@ -77,7 +77,7 @@ describe('materialized Disclosure Manifest', () => {
     expect(vault.putDerived).toHaveBeenCalledOnce();
     const put = vi.mocked(vault.putDerived).mock.calls[0]![0];
     expect(new TextDecoder().decode(put.payload)).not.toContain('secret body must not be read');
-    expect(put.lineage.sourceObjectIds).toEqual(['object:source-1']);
+    expect(put.descriptor.lineage.sourceObjectIds).toEqual(['object:source-1']);
   });
 
   it('requires the exact trusted transform and rejects non-materializable decisions before Vault I/O', async () => {
@@ -554,9 +554,9 @@ function vaultFixture(
     putDerived: vi.fn(async (input) => {
       derivedPayload.current = input.payload;
       return {
-        version: 1, vaultObjectId: 'vault:derived-1', objectId: input.objectId,
-        payloadHash: input.payloadHash, descriptorDigest: input.descriptorDigest,
-        tenantId: input.tenantId, projectId: input.projectId,
+        version: 1, vaultObjectId: 'vault:derived-1', objectId: input.descriptor.objectId,
+        payloadHash: input.descriptor.payloadHash, descriptorDigest: input.descriptorDigest,
+        tenantId: input.descriptor.tenantId, projectId: input.descriptor.projectId,
         locationManifestDigest: `sha256:${'9'.repeat(64)}`,
       };
     }),

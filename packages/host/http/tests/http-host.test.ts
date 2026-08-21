@@ -444,6 +444,32 @@ describe('HttpHost', () => {
     });
     expect(denied.status).toBe(401);
   });
+
+  it('injects the token-bound principal into handlers without accepting it from the body', async () => {
+    const host = createHttpHost({
+      host: '127.0.0.1',
+      port: 0,
+      tokens: [{ token: 'sponsor-token', scope: 'full', principalId: 'human:alice' }],
+    });
+    hosts.push(host);
+    host.route('POST', '/api/sponsor', async (request, response, _url, _scope, principal) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(Buffer.from(chunk));
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ principal, body: JSON.parse(Buffer.concat(chunks).toString()) }));
+    });
+    const { port } = await host.listen();
+
+    const result = await fetch(`http://127.0.0.1:${port}/api/sponsor`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ principalId: 'human:mallory' }),
+    });
+    expect(await result.json()).toEqual({
+      principal: { principalId: 'human:alice', scope: 'full' },
+      body: { principalId: 'human:mallory' },
+    });
+  });
 });
 
 function admissionState(gate: GenerationAdmissionGate): SnapshotState {

@@ -106,6 +106,22 @@ export function validateWorkroomDefinitions(
     if (workroom.enabled !== undefined && typeof workroom.enabled !== 'boolean') {
       errors.push(`${path}.enabled: enabled must be a boolean`);
     }
+    if (workroom.sponsors !== undefined) {
+      if (!Array.isArray(workroom.sponsors)) {
+        errors.push(`${path}.sponsors: sponsors must be an array of authenticated principal ids`);
+      } else {
+        const seenSponsors = new Set<string>();
+        workroom.sponsors.forEach((principalId, index) => {
+          if (typeof principalId !== 'string' || !principalId.trim() || principalId !== principalId.trim()) {
+            errors.push(`${path}.sponsors.${index}: Sponsor principal id must be canonical non-empty text`);
+          } else if (seenSponsors.has(principalId)) {
+            errors.push(`${path}.sponsors.${index}: duplicate Sponsor principal id "${principalId}"`);
+          } else {
+            seenSponsors.add(principalId);
+          }
+        });
+      }
+    }
     if (!Array.isArray(workroom.members)) {
       errors.push(`${path}.members: members must be an array`);
       continue;

@@ -9,7 +9,13 @@ import {
   type AITriggerConfig,
   type Tool,
 } from '@zhin.js/core';
-import { ingressRouteToken, type ImRuntime, type Message, type SendContent } from '@zhin.js/core/runtime';
+import {
+  ingressRouteToken,
+  messageGatewayToken,
+  type ImRuntime,
+  type Message,
+  type SendContent,
+} from '@zhin.js/core/runtime';
 import type { UserInteraction } from '@zhin.js/interaction';
 import {
   expandEnvironmentValue,
@@ -17,12 +23,12 @@ import {
   type RootResourceInstaller,
   type RuntimeConfigDocument,
 } from '@zhin.js/runtime';
-import { databaseRootHostToken, rootPluginId, type DisposeStack, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { databaseRootHostToken, rootPluginId, type DisposeStack, type PluginId, type RuntimeSnapshot, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import {
   AIService,
   ZhinAgent,
   composeZhinAgentRuntime,
-  AgentOrchestrator,
+  AgentResourceHub,
   discoverWorkspaceAgents,
   createBashTool,
   activateAiDatabaseStorage,
@@ -66,15 +72,51 @@ import {
   type DeliveryOutcome,
   type WorkroomCatalog,
   FileJournalStore,
-  InteractionRouter,
   demoteScheduleCreator,
   type ScheduleActivityEvent,
   type ScheduleTurnExecutionRequest,
   resolveWorkroomBotIdentity,
   validateWorkroomDefinitions,
   FileHumanIngressProposalRepository,
+  FileHumanIngressApplicationRepository,
+  HumanIngressApplicationService,
+  type HumanIngressOrchestratorProposalPort,
+  type HumanIngressPlanningPort,
+  WorkroomPlanningClarificationError,
+  type WorkroomPlanGateAuthorityPort,
+  ConversationEventHumanIngressSourceReader,
+  ProductionHumanIngressOrchestratorPort,
+  createPlanGateHumanIngressControlPort,
   FileInteractionSpaceBindingRepository,
   InteractionSpaceRouter,
+  FileWorkroomProjectionRepository,
+  WorkroomProjectionRevisionConflictError,
+  type WorkroomCatalogSnapshot,
+  type WorkroomProjectionBinding,
+  FileAssignmentAuthorityGrantRepository,
+  FilePortfolioJournalRepository,
+  FilePortfolioControlOutboxRepository,
+  DatabasePortfolioControlOutboxRepository,
+  ActivatablePortfolioControlOutboxRepository,
+  DatabaseAssignmentAuthorityGrantRepository,
+  ActivatableAssignmentAuthorityGrantRepository,
+  ActivatableProjectKnowledgeJournal,
+  FileProjectKnowledgeJournal,
+  DatabaseProjectKnowledgeJournal,
+  ProjectKnowledgeRegistry,
+  ActivatableOverlayPackPromotionRepository,
+  FileOverlayPackPromotionRepository,
+  DatabaseOverlayPackPromotionRepository,
+  JournalWorkroomAssignmentGrantClaimPreview,
+  createDurableWorkroomAssignmentAuthorityGrantProvider,
+  FileWorkroomTaskReportStore,
+  FileProjectMemoryApplicationRepository,
+  type WorkroomTaskReportPayloadReadInput,
+  type WorkroomTaskReportPayloadWriteInput,
+  LocalAssignmentExecutor,
+  createWorkroomRoleCapabilitySnapshot,
+  createAssignmentExecutionEnvelope,
+  type WorkroomPreemptionState,
 } from '@zhin.js/agent';
 import {
   agentHostToken,
@@ -94,6 +136,7 @@ import {
   FileTodoStore,
   AgentRuntime,
   createAgentTraceRuntime,
+  createCatalogGovernedWorkroomProjectionAuthority,
   createWorkroomRuntime,
   createSessionTreeRuntimeFromAgent,
   type AgentCapabilities,
@@ -108,23 +151,162 @@ import {
   workroomAcceptancePolicyDecisionToken,
   createGenerationWorkroomAcceptanceAuthority,
   workroomAcceptanceAuthorityToken,
+  createCatalogWorkroomPlanGateAuthority,
+  createGenerationWorkroomPlanGateAuthority,
+  workroomPlanGateAuthorityToken,
+  createCatalogWorkroomPriorityAuthority,
+  createGenerationWorkroomPriorityAuthority,
+  workroomPriorityAuthorityToken,
+  createGenerationHumanIngressPlanningPort,
+  createGenerationOwnedDynamicPlanningProvider,
+  createWorkroomDynamicPlanningGenerationSnapshot,
+  type WorkroomDynamicPlanningPolicyPort,
+  type WorkroomPlanningDisclosurePort,
+  type WorkroomStructuredDagModelInput,
+  workroomHumanIngressPlanningToken,
+  workroomDynamicPlanningPolicyToken,
+  workroomPlanningDisclosureToken,
   createWorkroomRemoteCallbackRuntime,
   workroomRemoteCallbackRuntimeToken,
+  createGenerationWorkroomRemoteAssignmentAuthority,
+  workroomRemoteAssignmentAuthorityToken,
+  createWorkroomProjectionMessageGatewayPort,
+  createProjectionHumanIngressTargetResolver,
+  WorkroomProjectionReplyResolver,
+  WorkroomProjectionRuntime,
+  WorkroomProjectionScheduler,
+  workroomProjectionCatalogBindingDigest,
+  WorkroomSchedulerRuntime,
+  WorkroomSchedulerSupplyUnavailableError,
+  createWorkroomSchedulerKernelCommandPort,
+  workroomSchedulerDispatchSupplyToken,
+  workroomSchedulerRuntimeToken,
+  installWorkroomSchedulerPortfolioDispatchResources,
+  WorkroomAssignmentCheckpointDelivery,
+  WorkroomPreemptionRuntime,
+  workroomCheckpointDeliveryProviderToken,
+  workroomPreemptionRuntimeToken,
+  workroomProjectProfileRegistryToken,
+  workroomAssignmentAuthorityGrantToken,
+  workroomAssignmentAuthorityGrantRepositoryToken,
+  workroomAssignmentGrantClaimPreviewToken,
+  workroomLocalAssignmentAuthorityToken,
+  createGenerationWorkroomLocalAssignmentAuthority,
+  GenerationOwnedWorkroomAssignmentAuthorityProvider,
+  createWorkroomGenerationAuthoritySnapshotFromRuntime,
+  WorkroomLocalAssignmentRuntime,
+  workroomLocalAssignmentRuntimeToken,
+  PinnedProfileCatalogLocalAssignmentRoute,
+  DurableReportLocalModelExecutionPort,
+  workroomEvidencePayloadWriterToken,
+  workroomTaskReportPayloadToken,
+  type WorkroomEvidencePayloadWriteInput,
+  createAgentCoreWorkroomLocalTurnPort,
+  bindWorkroomCapabilityRealization,
+  installWorkroomDataGovernanceResources,
+  resolveWorkroomDataGovernanceRootAuthorities,
+  createGenerationOwnedWorkroomDataGovernanceStorage,
+  createFileWorkroomDataLifecycleRuntime,
+  createGenerationOwnedWorkroomJournalPayloadPort,
+  createGenerationOwnedWorkroomGovernedOutboundComposition,
+  installWorkroomProfileAuthorityResources,
+  createCatalogWorkroomProfilePublisherAuthority,
+  createWorkroomProfileGenerationView,
+  digestWorkroomProfileCatalogProject,
+  WORKROOM_CONTROL_PLANE_ROOT_PRINCIPAL,
+  JournalWorkroomRunProfilePinAuthority,
+  KernelPlanAdmissionRunProfilePinWriter,
+  type AgentHostWorkroomProfileControlPort,
+  type AgentHostWorkroomKnowledgeControlPort,
+  type AgentHostEffectSponsorControlPort,
+  createCatalogProjectKnowledgeSourceAuthority,
+  createGenerationWorkroomEphemeralAssignmentContext,
+  createP12WorkroomKnowledgeContentReader,
+  workroomEphemeralAssignmentContextToken,
+  workroomAssignmentKnowledgeContextToken,
+  WorkroomAssignmentKnowledgeContextProjector,
+  installWorkroomEffectResources,
+  installWorkroomAcceptanceResources,
+  FileWorkroomAcceptanceProjectionRepository,
+  FileWorkroomKernelRiskHeaderRepository,
+  ImmutableWorkroomTypedCheckRegistry,
+  PinnedProfileWorkroomAcceptanceProjectionSource,
+  WorkroomAcceptanceProfileProjectionRuntime,
+  WorkroomAuthenticatedArtifactRiskProducer,
+  WorkroomArtifactRiskHeaderResolver,
+  workroomTypedAcceptanceCheckRegistryToken,
+  workroomRemoteContextReleaseProviderToken,
+  createGenerationRemoteContextReleaseCapability,
+  FileWorkroomEphemeralContextDisposer,
+  createRoutedWorkroomEphemeralContextProvider,
+  workroomAcceptanceProjectionSourceBindingDigest,
+  workroomAcceptanceProjectionPayloadToken,
+  workroomAcceptanceProjectionSourceAuthorityToken,
+  type WorkroomAcceptanceProjectionAuthorityPort,
+  type WorkroomAcceptanceProjectionSourceAuthorityPort,
+  type WorkroomRiskHeaderProducerAuthorityPort,
+  type WorkroomEphemeralContextRoutePort,
+  type WorkroomEphemeralContextReleaseCapabilityPort,
+  WorkroomAcceptedSourceRuntime,
+  FileWorkroomContextReleaseJournal,
+  workroomProjectMemorySchemaAuthorityToken,
+  workroomAcceptedReportReaderToken,
+  workroomExecutionContextReleaseToken,
+  workroomAcceptedSourceRecallToken,
+  workroomAcceptedSourceRuntimeToken,
+  type WorkroomProjectMemorySchemaAuthorityPort,
+  type WorkroomExecutionContextReleasePort,
+  GenerationOwnedPortfolioCapacityRuntime,
+  WorkroomPortfolioSponsorRuntime,
+  WorkroomPortfolioCheckpointAckAdapter,
+  JournalWorkroomPreemptionCheckpointAckReader,
+  WorkroomPortfolioAssignmentFailureAuthority,
+  KernelPortfolioGrantAssignmentIssuance,
+  PortfolioGrantAssignmentAuthority,
+  WorkroomPortfolioGrantAssignmentSaga,
+  installWorkroomPortfolioControlWorker,
+  createCatalogPortfolioSponsorCommandAuthority,
+  portfolioJournalRepositoryToken,
+  portfolioPolicyAuthorityToken,
+  portfolioAtomicBundleAuthorityToken,
+  portfolioKernelCommandAuthorityToken,
+  portfolioUsageGatewayAuthorityToken,
+  portfolioClockAuthorityToken,
+  portfolioCapacityRuntimeToken,
+  portfolioSponsorCommandToken,
+  portfolioControlOutboxRepositoryToken,
+  workroomPortfolioCheckpointAckAdapterToken,
+  workroomSchedulerCapacityRequestToken,
+  type PortfolioAtomicBundleAuthorityPort,
+  type PortfolioKernelCommandAuthorityPort,
+  type PortfolioUsageGatewayAuthorityPort,
+  type PortfolioClockAuthorityPort,
+  type WorkroomEffectClockPort,
+  type WorkroomEffectBlockerPolicyPort,
+  type WorkroomPayloadLifecycleIndexPort,
 } from '@zhin.js/agent/runtime';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
-export { InteractionRouter } from '@zhin.js/agent';
 
 import type { AgentTool, JsonSchema } from '@zhin.js/ai';
 import type {
   ConversationReference,
+  ConversationRef,
   ConversationResolution,
 } from '@zhin.js/im-contract';
 import { resolveSandboxTurnPolicy } from './sandbox-turn-policy.js';
 import {
   WorkroomHumanIngressPreRoute,
   createCatalogWorkroomSpace,
+  resolveWorkroomHumanIntent,
 } from './workroom-human-ingress-route.js';
+
+const WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT = `You produce one untrusted Workroom DAG candidate as strict JSON.
+Return exactly: {"version":1,"strategy":{"id":"...","version":"...","digest":"sha256:..."},"tasks":[...]}
+Each task must contain exactly: key, title, role, required, maxAttempts, localRank, dependsOn, requires, approval.
+requires must contain exactly tools, skills, integrations, authorities arrays. approval is "none" or "sponsor_required".
+Use only the supplied strategies, roles, capabilities and constraints. Include at least one required task.
+Do not output markdown, commentary, identity, authority, Project state, Sponsor lane, deadline, policy, assignment, or execution state.`;
 
 /** Minimal OutputElement shape for reply flattening (avoid direct @zhin.js/ai dep). */
 type OutputElementLike = {
@@ -208,6 +390,47 @@ export async function assertWorkroomCatalogMatchesGeneration(
   }
 }
 
+/** Catalog supplies role identity; authenticated ingress supplies the canonical EndpointRef. */
+export function createCatalogWorkroomProjectionBinding(
+  catalog: WorkroomCatalogSnapshot,
+  projectId: string,
+  conversation: ConversationRef,
+  bindingRevision: number,
+): WorkroomProjectionBinding {
+  const definition = catalog.definitions[projectId];
+  if (!definition?.conversation || definition.enabled === false) {
+    throw new Error(`Workroom Projection requires an enabled Catalog binding for ${projectId}`);
+  }
+  if (definition.conversation.kind === 'repository'
+    || definition.conversation.kind !== conversation.kind
+    || definition.conversation.id !== conversation.id) {
+    throw new Error(`Workroom Projection canonical conversation does not match Catalog ${projectId}`);
+  }
+  const orchestratorMember = definition.members.find(member =>
+    member.agent === definition.conversation!.agent && member.role === 'orchestrator');
+  if (!orchestratorMember) {
+    throw new Error(`Workroom Projection Catalog ${projectId} has no exact Orchestrator`);
+  }
+  const identity = (member: (typeof definition.members)[number]) => Object.freeze({
+    principalId: member.agent,
+    agentDefinitionId: member.agent,
+    displayName: member.agent,
+    role: member.role,
+  });
+  return Object.freeze({
+    version: 1,
+    projectId,
+    catalogBindingDigest: workroomProjectionCatalogBindingDigest(definition),
+    bindingRevision,
+    projectionPolicyRevision: 1,
+    conversation: Object.freeze(structuredClone(conversation)),
+    orchestrator: identity(orchestratorMember) as WorkroomProjectionBinding['orchestrator'],
+    agents: Object.freeze(definition.members
+      .filter(member => member !== orchestratorMember)
+      .map(identity)) as WorkroomProjectionBinding['agents'],
+  });
+}
+
 export async function resolveAssistantConfigDocument(
   config: RuntimeConfigDocument | ConfigDocumentPort,
 ): Promise<AssistantConfig | undefined> {
@@ -221,10 +444,10 @@ export async function resolveAssistantConfigDocument(
 export interface InstallAgentHostOptions {
   /** Process-owned execution authority attached to exactly one Root. */
   readonly runtime: AgentRuntime;
+  /** Process-owned Snapshot reader; local Assignment operations hold an exact generation lease. */
+  readonly snapshots?: SnapshotReader;
   /** Process-fixed Workroom storage identity. Changing it requires restart. */
   readonly workroomStorageMode: WorkroomStorageMode;
-  /** Root-owned authority shared by every Agent generation. */
-  readonly interactions: InteractionRouter;
   /** @deprecated Prefer the generation-owned Primary Config. Test overrides only. */
   readonly ai?: AIConfig;
   /** @deprecated Prefer the generation-owned Primary Config. Test overrides only. */
@@ -249,6 +472,29 @@ export interface InstallAgentHostOptions {
   readonly approvalPort?: ApprovalPort;
   /** Trusted product-policy seam for explicit steer/follow-up/observe intent and authorization. */
   readonly resolveTurnIntent?: TurnIntentResolver;
+  /** Trusted idempotent Orchestrator/Kernel proposal seam for Workroom human ingress. */
+  readonly workroomHumanIngressPort?: HumanIngressOrchestratorProposalPort;
+  /** @deprecated Test override. Standard startup installs the generation-owned planner. */
+  readonly workroomHumanIngressPlanningPort?: HumanIngressPlanningPort;
+  /** P12 governed model-provider disclosure; absence fails closed before model invocation. */
+  readonly workroomPlanningDisclosurePort?: WorkroomPlanningDisclosurePort;
+  /** Persistent exact Project/Profile planning policy; absence fails closed. */
+  readonly workroomDynamicPlanningPolicyPort?: WorkroomDynamicPlanningPolicyPort;
+  /** Authenticated Sponsor authority for typed pre-execution Plan Gate decisions. */
+  readonly workroomPlanGateAuthority?: WorkroomPlanGateAuthorityPort;
+  /** Process-owned shared Pack publisher membership; never accepted from HTTP request bodies. */
+  readonly workroomTrustedPackPublishers?: readonly string[];
+  /**
+   * Trusted Root-only wrap/unwrap capability. It is never published through a
+   * Feature, Resource snapshot or Console API and never exposes KEK bytes.
+   */
+  readonly workroomPayloadVaultCryptography?: NonNullable<
+    Parameters<typeof installWorkroomDataGovernanceResources>[0]['cryptography']
+  >;
+  /** @internal Trusted Root test/embedding fallback; production uses the Root-private provider token. */
+  readonly workroomDataGovernanceVerification?: NonNullable<
+    Parameters<typeof installWorkroomDataGovernanceResources>[0]['governance']
+  >;
 }
 
 /**
@@ -263,7 +509,7 @@ export interface InstallAgentHostOptions {
  * - Subagent/main-turn `bash` (sandbox + safety) + Owner `/approve` 命令面
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
-  return async ({ resources, lifecycle, handoff, config: primaryConfig, addFeature }) => {
+  return async ({ generation, signal, resources, lifecycle, handoff, config: primaryConfig, addFeature }) => {
     const configuredAi = options.ai ?? primaryConfig.get<AIConfig>('ai');
     const aiConfig = configuredAi;
     const assistantConfig = options.assistant
@@ -307,7 +553,35 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       : null;
     if (semanticMemory) lifecycle.add(() => semanticMemory.dispose());
     const workroomJournal = new ActivatableWorkroomJournal();
+    const workroomJournalPayloads = createGenerationOwnedWorkroomJournalPayloadPort({
+      generation,
+      signal,
+    });
     const workroomCatalog = new ActivatableWorkroomCatalog();
+    if (!resources.has(workroomPlanGateAuthorityToken)) {
+      resources.provide(
+        workroomPlanGateAuthorityToken,
+        options.workroomPlanGateAuthority ?? createCatalogWorkroomPlanGateAuthority(workroomCatalog),
+      );
+    }
+    if (!resources.has(workroomPriorityAuthorityToken)) {
+      resources.provide(
+        workroomPriorityAuthorityToken,
+        createCatalogWorkroomPriorityAuthority(workroomCatalog),
+      );
+    }
+    if (options.workroomHumanIngressPlanningPort
+      && !resources.has(workroomHumanIngressPlanningToken)) {
+      resources.provide(workroomHumanIngressPlanningToken, options.workroomHumanIngressPlanningPort);
+    }
+    if (options.workroomPlanningDisclosurePort
+      && !resources.has(workroomPlanningDisclosureToken)) {
+      resources.provide(workroomPlanningDisclosureToken, options.workroomPlanningDisclosurePort);
+    }
+    if (options.workroomDynamicPlanningPolicyPort
+      && !resources.has(workroomDynamicPlanningPolicyToken)) {
+      resources.provide(workroomDynamicPlanningPolicyToken, options.workroomDynamicPlanningPolicyPort);
+    }
     const workroomKernel = new WorkroomKernel({
       journal: workroomJournal,
       acceptancePolicy: createGenerationWorkroomAcceptancePolicyPort(() =>
@@ -318,10 +592,29 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         resources.has(workroomAcceptanceAuthorityToken)
           ? resources.use(workroomAcceptanceAuthorityToken)
           : undefined),
+      remoteAssignmentAuthority: createGenerationWorkroomRemoteAssignmentAuthority(() =>
+        resources.has(workroomRemoteAssignmentAuthorityToken)
+          ? resources.use(workroomRemoteAssignmentAuthorityToken)
+          : undefined),
+      localAssignmentAuthority: createGenerationWorkroomLocalAssignmentAuthority(() =>
+        resources.has(workroomLocalAssignmentAuthorityToken)
+          ? resources.use(workroomLocalAssignmentAuthorityToken)
+          : undefined),
+      planGateAuthority: createGenerationWorkroomPlanGateAuthority(() =>
+        resources.has(workroomPlanGateAuthorityToken)
+          ? resources.use(workroomPlanGateAuthorityToken)
+          : undefined),
+      priorityAuthority: createGenerationWorkroomPriorityAuthority(() =>
+        resources.has(workroomPriorityAuthorityToken)
+          ? resources.use(workroomPriorityAuthorityToken)
+          : undefined),
     });
     const activateFileWorkroomJournal = () => {
       if (!workroomJournal.active) {
-        workroomJournal.activate(new FileWorkroomJournal(join(options.projectRoot, '.zhin', 'workroom-journal')));
+        workroomJournal.activate(new FileWorkroomJournal(
+          join(options.projectRoot, '.zhin', 'workroom-journal'),
+          workroomJournalPayloads.payloads,
+        ));
       }
     };
     const activateFileWorkroomCatalog = async () => {
@@ -333,9 +626,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       );
     };
     let workroomRuntime: WorkroomRuntimeHandle;
+    const dataGovernanceRuntimeRef: {
+      current?: ReturnType<typeof installWorkroomDataGovernanceResources>;
+    } = {};
     let sessionTreeRuntime: SessionTreeRuntimeHandle;
     const traceRuntime = createAgentTraceRuntime();
-    const rememberedSandboxApprovals = new Set<string>();
+    const rememberedSandboxApprovals = new Map<string, Set<string>>();
     let schedule: ReturnType<typeof wireRuntimeSchedule>;
     try {
       const created = createRuntimeZhinAgent(
@@ -351,7 +647,16 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 
       // Console reads the same replayed facts as tools; it never receives the
       // command authority or a mutable repository.
-      workroomRuntime = createWorkroomRuntime(workroomKernel);
+      workroomRuntime = createWorkroomRuntime(
+        workroomJournal,
+        createCatalogGovernedWorkroomProjectionAuthority({
+          catalog: workroomCatalog,
+          governance: Object.freeze({
+            readProject: async (projectId: string) =>
+              await dataGovernanceRuntimeRef.current?.options.repository.readProject(projectId),
+          }),
+        }),
+      );
       sessionTreeRuntime = createSessionTreeRuntimeFromAgent(asPrivate(zhinAgent));
       schedule = wireRuntimeSchedule(
         zhinAgent,
@@ -392,7 +697,25 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     const useDatabase = aiConfig.sessions?.useDatabase !== false;
     const requestedWorkroomStorageMode = resolveWorkroomStorageMode(aiConfig);
     assertFixedWorkroomStorageMode(options.workroomStorageMode, requestedWorkroomStorageMode);
+    const workroomStateRoot = join(options.projectRoot, '.zhin');
+    const assignmentAuthorityGrants = new ActivatableAssignmentAuthorityGrantRepository();
+    const projectKnowledgeJournal = new ActivatableProjectKnowledgeJournal();
+    const fileProjectKnowledgeJournal = new FileProjectKnowledgeJournal(
+      join(workroomStateRoot, 'workroom-project-knowledge'),
+    );
+    const overlayPackPromotions = new ActivatableOverlayPackPromotionRepository();
+    const fileOverlayPackPromotions = new FileOverlayPackPromotionRepository(
+      join(workroomStateRoot, 'workroom-overlay-pack-promotions'),
+    );
+    const portfolioControlOutbox = new ActivatablePortfolioControlOutboxRepository();
+    const filePortfolioControlOutbox = new FilePortfolioControlOutboxRepository(
+      join(workroomStateRoot, 'portfolio-control-outbox'),
+    );
     let persistencePendingActivate = false;
+    let dataGovernanceStorage: ReturnType<
+      typeof createGenerationOwnedWorkroomDataGovernanceStorage
+    > | undefined;
+    let recoverHumanIngress = async (): Promise<void> => {};
     if (useDatabase) {
       if (!resources.has(databaseRootHostToken)) {
         throw new Error('Process-fixed Workroom database storage requires the Database Root Host');
@@ -416,14 +739,85 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 { aiService: service, zhinAgent },
                 aiConfig,
                 workroomJournal,
+                workroomJournalPayloads.payloads,
                 workroomCatalog,
                 semanticMemory,
+              );
+              const grantModel = raw.models?.get('workroom_assignment_authority_grants');
+              if (!grantModel) {
+                throw new Error('Workroom requires the Assignment Authority Grant database model');
+              }
+              assignmentAuthorityGrants.activate(new DatabaseAssignmentAuthorityGrantRepository(
+                raw as ConstructorParameters<typeof DatabaseAssignmentAuthorityGrantRepository>[0],
+                grantModel as ConstructorParameters<typeof DatabaseAssignmentAuthorityGrantRepository>[1],
+              ));
+              const catalogSnapshot = await workroomCatalog.read();
+              const projectIds = Object.keys(catalogSnapshot.definitions).sort();
+              if (dataGovernanceStorage) {
+                await dataGovernanceStorage.activateDatabase({
+                  database: raw,
+                  projectIds,
+                  repositoryIdentity: 'database-root:primary',
+                  signal,
+                });
+              }
+              const knowledgeModel = raw.models?.get('workroom_project_knowledge');
+              const promotionModel = raw.models?.get('workroom_overlay_pack_promotions');
+              if (!knowledgeModel || !promotionModel) {
+                throw new Error('Workroom requires the Project Knowledge and Overlay Promotion database models');
+              }
+              const databaseKnowledge = new DatabaseProjectKnowledgeJournal(
+                raw as ConstructorParameters<typeof DatabaseProjectKnowledgeJournal>[0],
+                knowledgeModel as ConstructorParameters<typeof DatabaseProjectKnowledgeJournal>[1],
+              );
+              await projectKnowledgeJournal.activate(
+                databaseKnowledge,
+                projectIds,
+                fileProjectKnowledgeJournal,
+              );
+              const databasePromotions = new DatabaseOverlayPackPromotionRepository(
+                raw as ConstructorParameters<typeof DatabaseOverlayPackPromotionRepository>[0],
+                promotionModel as ConstructorParameters<typeof DatabaseOverlayPackPromotionRepository>[1],
+              );
+              const promotionIds = new Set<string>();
+              for (const projectId of projectIds) {
+                for (const record of await fileOverlayPackPromotions.list(projectId)) {
+                  promotionIds.add(record.promotionId);
+                }
+                for (const record of await databasePromotions.list(projectId)) {
+                  promotionIds.add(record.promotionId);
+                }
+              }
+              await overlayPackPromotions.activate(
+                databasePromotions,
+                [...promotionIds].sort(),
+                fileOverlayPackPromotions,
+              );
+              const portfolioControlModel = raw.models?.get('portfolio_control_outbox');
+              if (!portfolioControlModel) {
+                throw new Error('Workroom requires the Portfolio Control Outbox database model');
+              }
+              const portfolioRepository = resources.has(portfolioJournalRepositoryToken)
+                ? resources.use(portfolioJournalRepositoryToken)
+                : undefined;
+              const portfolioIds = new Set([
+                ...await filePortfolioControlOutbox.listPortfolioIds(),
+                ...(portfolioRepository ? await portfolioRepository.listPortfolioIds() : []),
+              ]);
+              await portfolioControlOutbox.activate(
+                new DatabasePortfolioControlOutboxRepository(
+                  raw as ConstructorParameters<typeof DatabasePortfolioControlOutboxRepository>[0],
+                  portfolioControlModel as ConstructorParameters<typeof DatabasePortfolioControlOutboxRepository>[1],
+                ),
+                [...portfolioIds].sort(),
+                filePortfolioControlOutbox,
               );
               await assertWorkroomCatalogMatchesGeneration(
                 workroomCatalog,
                 listGenerationBindings().map((binding) => binding.name),
                 generationEndpointKeys(),
               );
+              await recoverHumanIngress();
               signal.throwIfAborted();
               logger.info(formatCompact({
                 op: 'agent_host_persistence',
@@ -445,6 +839,22 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     } else {
       activateFileWorkroomJournal();
       await activateFileWorkroomCatalog();
+      assignmentAuthorityGrants.activate(new FileAssignmentAuthorityGrantRepository(
+        join(workroomStateRoot, 'workroom-assignment-authority-grants'),
+      ));
+      const projectIds = Object.keys((await workroomCatalog.read()).definitions).sort();
+      await projectKnowledgeJournal.activate(fileProjectKnowledgeJournal, projectIds);
+      const promotionIds = new Set<string>();
+      for (const projectId of projectIds) {
+        for (const record of await fileOverlayPackPromotions.list(projectId)) {
+          promotionIds.add(record.promotionId);
+        }
+      }
+      await overlayPackPromotions.activate(fileOverlayPackPromotions, [...promotionIds].sort());
+      await portfolioControlOutbox.activate(
+        filePortfolioControlOutbox,
+        await filePortfolioControlOutbox.listPortfolioIds(),
+      );
       zhinAgent.markMemoryPersistenceReady();
     }
 
@@ -511,10 +921,18 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       }
     }
 
-    const orchestrator = zhinAgent.orchestrator;
-    if (!orchestrator) {
-      throw new Error('Agent Host requires a ready orchestrator before generation publication');
+    const resourceHub = zhinAgent.resourceHub;
+    if (!resourceHub) {
+      throw new Error('Agent Host requires a ready AgentResourceHub before generation publication');
     }
+    const workroomProfileConsoleControl: { current?: AgentHostWorkroomProfileControlPort } = {};
+    const workroomKnowledgeConsoleControl: { current?: AgentHostWorkroomKnowledgeControlPort } = {};
+    const portfolioSponsorConsoleControl: {
+      current?: WorkroomPortfolioSponsorRuntime;
+    } = {};
+    const effectSponsorConsoleControl: {
+      current?: AgentHostEffectSponsorControlPort;
+    } = {};
 
     // Protocol Hosts (MCP/A2A) and Console consume this generation-owned port.
     // The Scope is sealed after all Root installers finish, so publication must
@@ -533,15 +951,15 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         },
       }),
       introspection: Object.freeze({
-        listTools: () => orchestrator.tools.getAll().map((tool) => Object.freeze({
+        listTools: () => resourceHub.tools.getAll().map((tool) => Object.freeze({
           name: tool.name,
           description: tool.description,
           hidden: 'hidden' in tool && tool.hidden === true,
         })),
-        listMcpServers: () => orchestrator.mcps.getAll().map((entry) => Object.freeze({
+        listMcpServers: () => resourceHub.mcps.getAll().map((entry) => Object.freeze({
           name: entry.name,
-          connected: orchestrator.mcps.isConnected(entry.name),
-          toolCount: orchestrator.mcps.getToolsFromServer(entry.name).length,
+          connected: resourceHub.mcps.isConnected(entry.name),
+          toolCount: resourceHub.mcps.getToolsFromServer(entry.name).length,
         })),
       }),
       console: Object.freeze({
@@ -552,6 +970,10 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         assistant: schedule.assistantRuntime,
         trace: traceRuntime,
         cancelSession: (sessionKey: string) => zhinAgent.cancelSession(sessionKey),
+        get workroomProfiles() { return workroomProfileConsoleControl.current; },
+        get workroomKnowledge() { return workroomKnowledgeConsoleControl.current; },
+        get portfolioSponsor() { return portfolioSponsorConsoleControl.current; },
+        get effectSponsor() { return effectSponsorConsoleControl.current; },
       }),
     }));
     resources.provide(
@@ -570,13 +992,1180 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     const presetCount = await seedPresets();
 
     const binding = service.getBindingRegistry().requireZhinBinding();
-    const workroomStateRoot = join(options.projectRoot, '.zhin');
     mkdirSync(workroomStateRoot, { recursive: true });
+    const rootDataGovernance = await resolveWorkroomDataGovernanceRootAuthorities({
+      resources,
+      generation,
+      requester: rootPluginId(),
+      signal,
+    });
+    const dataGovernanceCryptography = rootDataGovernance?.cryptography
+      ?? options.workroomPayloadVaultCryptography;
+    if (dataGovernanceCryptography) {
+      dataGovernanceStorage = createGenerationOwnedWorkroomDataGovernanceStorage({
+        stateRoot: workroomStateRoot,
+        generation,
+        cryptography: dataGovernanceCryptography,
+      });
+      if (!useDatabase) await dataGovernanceStorage.activateFile();
+    }
+    const lifecycleAuthorities = rootDataGovernance?.lifecycle;
+    const dataLifecycle = dataGovernanceStorage && lifecycleAuthorities
+      ? createFileWorkroomDataLifecycleRuntime({
+          stateRoot: workroomStateRoot,
+          generation,
+          signal,
+          journal: dataGovernanceStorage.lifecycle,
+          clock: lifecycleAuthorities.clock,
+          authority: lifecycleAuthorities.authority,
+          subjects: lifecycleAuthorities.subjects,
+          deletion: lifecycleAuthorities.deletion,
+          receipts: lifecycleAuthorities.receipts,
+          objects: Object.freeze({
+            resolve: async (
+              handle: Parameters<
+                Parameters<typeof createFileWorkroomDataLifecycleRuntime>[0]['objects']['resolve']
+              >[0],
+              operationSignal: AbortSignal,
+            ) =>
+              await dataGovernanceStorage?.vault.resolveLifecycleObject?.(handle, operationSignal),
+          }),
+        })
+      : undefined;
+    const dataGovernanceRuntime = installWorkroomDataGovernanceResources({
+      projectRoot: options.projectRoot,
+      generation,
+      signal,
+      resources,
+      ...(rootDataGovernance?.cryptography ?? options.workroomPayloadVaultCryptography
+        ? { cryptography: rootDataGovernance?.cryptography ?? options.workroomPayloadVaultCryptography }
+        : {}),
+      ...(rootDataGovernance?.governance ?? options.workroomDataGovernanceVerification
+        ? { governance: rootDataGovernance?.governance ?? options.workroomDataGovernanceVerification }
+        : {}),
+      ...(dataGovernanceStorage ? { vault: dataGovernanceStorage.vault } : {}),
+      ...(dataLifecycle && lifecycleAuthorities
+        ? {
+            payloadLifecycleIndex: Object.freeze({
+              register: async (
+                input: Parameters<WorkroomPayloadLifecycleIndexPort['register']>[0],
+                operationSignal: AbortSignal,
+              ) => {
+                const state = await dataLifecycle.control.register({
+                  version: 1,
+                  operationId: input.operationId,
+                  authenticatedPrincipalId: lifecycleAuthorities.registrationPrincipalId,
+                  handle: input.handle,
+                }, operationSignal);
+                return Object.freeze({ digest: state.digest });
+              },
+            }),
+          }
+        : {}),
+      ...(lifecycleAuthorities ? { payloadPurge: lifecycleAuthorities.orphanPurge } : {}),
+      payloadPublicationVerifier: Object.freeze({
+        async verify(
+          intent: Parameters<NonNullable<
+            Parameters<typeof installWorkroomDataGovernanceResources>[0]['payloadPublicationVerifier']
+          >['verify']>[0],
+          operationSignal: AbortSignal,
+        ) {
+          operationSignal.throwIfAborted();
+          if (intent.consumer === 'journal_header') {
+            return workroomJournal.verifyGovernedPayloadPublication
+              ? await workroomJournal.verifyGovernedPayloadPublication(intent)
+              : Object.freeze({ status: 'unknown' as const });
+          }
+          if (intent.consumer === 'evidence_header'
+            || intent.consumer === 'task_report_header') {
+            return await workroomReports.verifyGovernedPayloadPublication(intent);
+          }
+          return Object.freeze({ status: 'unknown' as const });
+        },
+      }),
+      acceptanceProjectionSources: Object.freeze({
+        async resolve(
+          input: Parameters<WorkroomAcceptanceProjectionSourceAuthorityPort['resolve']>[0],
+          operationSignal: AbortSignal,
+        ) {
+          if (!resources.has(workroomAcceptanceProjectionSourceAuthorityToken)) return undefined;
+          return await resources.use(workroomAcceptanceProjectionSourceAuthorityToken)
+            .resolve(input, operationSignal);
+        },
+      }),
+    });
+    dataGovernanceRuntimeRef.current = dataGovernanceRuntime;
+    workroomJournalPayloads.activate(dataGovernanceRuntime.journalPayloads);
+    handoff.add({
+      activateNext: async operationSignal => {
+        const catalog = await workroomCatalog.read();
+        await dataGovernanceRuntime.reconcilePayloadPurges(
+          Object.keys(catalog.definitions).sort(),
+          operationSignal,
+        );
+      },
+    });
+    const governedOutbound = createGenerationOwnedWorkroomGovernedOutboundComposition({
+      generation,
+      signal,
+      runtime: dataGovernanceRuntime,
+    });
+    const emergencyEffectBlockerPolicyBody = Object.freeze({
+      kind: 'root_emergency_fallback' as const,
+      ref: 'root-emergency-effect-blocker-policy:1',
+      description: 'Conservative coordination blocker only; never authorizes an Effect',
+    });
+    const emergencyEffectBlockerPolicy = Object.freeze({
+      kind: emergencyEffectBlockerPolicyBody.kind,
+      ref: emergencyEffectBlockerPolicyBody.ref,
+      digest: `sha256:${createHash('sha256')
+        .update(JSON.stringify(emergencyEffectBlockerPolicyBody))
+        .digest('hex')}`,
+    });
+    const effectComposition = installWorkroomEffectResources({
+      projectRoot: options.projectRoot,
+      generation,
+      signal,
+      resources,
+      projects: Object.freeze({
+        listProjectIds: async () => Object.freeze(Object.entries((await workroomCatalog.read()).definitions)
+          .filter(([, definition]) => definition.enabled !== false)
+          .map(([projectId]) => projectId)),
+      }),
+      clock: Object.freeze({
+        read: async (state: Parameters<WorkroomEffectClockPort['read']>[0]) => (await workroomKernel.read(
+          state.intent.projectId,
+          state.intent.runId,
+        )).now,
+      }),
+      blockerPolicy: Object.freeze({
+        resolve: async ({ state, phase }: Parameters<WorkroomEffectBlockerPolicyPort['resolve']>[0]) => {
+          const [catalog, run] = await Promise.all([
+            workroomCatalog.read(),
+            workroomKernel.read(state.intent.projectId, state.intent.runId),
+          ]);
+          const definition = catalog.definitions[state.intent.projectId];
+          if (!definition || definition.enabled === false) {
+            throw new Error('Effect blocker policy requires the current enabled Catalog Project');
+          }
+          const sponsors = [...new Set(definition.sponsors ?? [])];
+          const exactOwner = sponsors.length === 1
+            ? `sponsor:${sponsors[0]}@catalog:${catalog.revision}`
+            : sponsors.length > 1
+              ? `sponsor-set:${createHash('sha256').update(sponsors.sort().join('\0')).digest('hex')}@catalog:${catalog.revision}`
+              : `orchestrator:${definition.conversation?.agent ?? 'project-role'}@catalog:${catalog.revision}`;
+          return Object.freeze({
+            owner: exactOwner,
+            policy: emergencyEffectBlockerPolicy,
+            deadline: run.now + 60_000,
+            allowedSuccessors: Object.freeze(phase === 'reconcile'
+              ? ['reconcile', 'cancel'] as const
+              : ['retry', 'cancel'] as const),
+          });
+        },
+      }),
+      intervalMs: 1_000,
+      onError: error => logger.error(formatCompact({
+        op: 'workroom_effect_runtime',
+        error: error instanceof Error ? error.message : String(error),
+      })),
+    });
+    lifecycle.add(() => effectComposition.runtime.dispose());
+    handoff.add({
+      activateNext: operationSignal => {
+        operationSignal.throwIfAborted();
+        effectComposition.runtime.start();
+      },
+    });
+    if (!options.snapshots) {
+      throw new Error('Workroom Profile authority requires the process-owned SnapshotReader');
+    }
+    const runProfilePinAuthority = new JournalWorkroomRunProfilePinAuthority({
+      generation,
+      journal: workroomJournal,
+    });
+    const profileAuthority = createCatalogWorkroomProfilePublisherAuthority({
+      catalog: workroomCatalog,
+      trustedPackPublishers: options.workroomTrustedPackPublishers ?? [],
+      decisionDirectory: join(workroomStateRoot, 'workroom-profile-authority-decisions'),
+    });
+    const profileComposition = installWorkroomProfileAuthorityResources({
+      projectRoot: options.projectRoot,
+      generation,
+      signal,
+      snapshots: options.snapshots,
+      resources,
+      authority: profileAuthority,
+      runPinAuthority: runProfilePinAuthority,
+      resolveGenerationView: snapshot => {
+        const authority = createWorkroomGenerationAuthoritySnapshotFromRuntime(
+          snapshot,
+          listGenerationBindings(),
+        );
+        return createWorkroomProfileGenerationView({
+          generation: authority.generation,
+          tools: authority.tools.map(tool => ({ id: tool.name, digest: tool.digest })),
+          skills: authority.skills.map(skill => ({ id: skill.name, digest: skill.digest })),
+          agents: authority.agents.map(agent => ({ id: agent.id, digest: agent.digest })),
+        });
+      },
+    });
+    const projectProfiles = profileComposition.profiles;
+    const profileRunPinWriter = new KernelPlanAdmissionRunProfilePinWriter({
+      authority: runProfilePinAuthority,
+      profiles: projectProfiles,
+      runPins: profileComposition.runPins,
+    });
+    const acceptanceProfileSource = new PinnedProfileWorkroomAcceptanceProjectionSource({
+      profiles: projectProfiles,
+      catalog: workroomCatalog,
+    });
+    if (!resources.has(workroomAcceptanceProjectionSourceAuthorityToken)) {
+      resources.provide(workroomAcceptanceProjectionSourceAuthorityToken, acceptanceProfileSource);
+    }
+    workroomProfileConsoleControl.current = Object.freeze({
+      publishPack: async (
+        command: Parameters<AgentHostWorkroomProfileControlPort['publishPack']>[0],
+        authenticatedPrincipal: Parameters<AgentHostWorkroomProfileControlPort['publishPack']>[1],
+      ) => {
+        if (authenticatedPrincipal.principalId === WORKROOM_CONTROL_PLANE_ROOT_PRINCIPAL) {
+          throw new Error('Control-plane Root Pack bootstrap is not exposed through Console HTTP');
+        }
+        return await profileComposition.control.publishPack({
+          ...structuredClone(command),
+          version: 1,
+          authenticatedPrincipalId: authenticatedPrincipal.principalId,
+        }, signal);
+      },
+      publishProfile: (
+        command: Parameters<AgentHostWorkroomProfileControlPort['publishProfile']>[0],
+        authenticatedPrincipal: Parameters<AgentHostWorkroomProfileControlPort['publishProfile']>[1],
+      ) =>
+        profileComposition.control.publishProfile({
+        ...structuredClone(command),
+        version: 1,
+        authenticatedPrincipalId: authenticatedPrincipal.principalId,
+        source: Object.freeze({
+          kind: 'sponsor_decision' as const,
+          sourceId: `console:${command.operationId}`,
+        }),
+      }, signal),
+      publishRollback: (
+        command: Parameters<AgentHostWorkroomProfileControlPort['publishRollback']>[0],
+        authenticatedPrincipal: Parameters<AgentHostWorkroomProfileControlPort['publishRollback']>[1],
+      ) =>
+        profileComposition.control.publishRollback({
+        ...structuredClone(command),
+        version: 1,
+        authenticatedPrincipalId: authenticatedPrincipal.principalId,
+        source: Object.freeze({
+          kind: 'sponsor_decision' as const,
+          sourceId: `console:${command.operationId}`,
+        }),
+      }, signal),
+      publishPlanningPolicy: async (
+        command: Parameters<AgentHostWorkroomProfileControlPort['publishPlanningPolicy']>[0],
+        authenticatedPrincipal: Parameters<AgentHostWorkroomProfileControlPort['publishPlanningPolicy']>[1],
+      ) => {
+        const [catalog, profiles] = await Promise.all([
+          workroomCatalog.read(),
+          projectProfiles.read(command.projectId),
+        ]);
+        const definition = catalog.definitions[command.projectId];
+        const profile = profiles.revisions[command.profileRevisionId];
+        if (!definition || definition.enabled === false || !profile) {
+          throw new Error('Console Planning Policy targets an unavailable Project/Profile');
+        }
+        return await profileComposition.control.publishPlanningPolicy({
+          ...structuredClone(command),
+          version: 1,
+          authenticatedPrincipalId: authenticatedPrincipal.principalId,
+          catalogRevision: catalog.revision,
+          projectDigest: digestWorkroomProfileCatalogProject(definition),
+          profileDigest: profile.compiledDigest,
+        }, signal);
+      },
+    });
+    const knowledgeSourceAuthority = createCatalogProjectKnowledgeSourceAuthority({
+      catalog: workroomCatalog,
+      directory: join(workroomStateRoot, 'workroom-project-knowledge-authority'),
+    });
+    const projectKnowledge = new ProjectKnowledgeRegistry({
+      journal: projectKnowledgeJournal,
+      sourceAuthority: knowledgeSourceAuthority,
+      generationView: Object.freeze({
+        async withCurrent<TResult>(operation: Readonly<{
+          generation: number; operationId: string; signal: AbortSignal;
+        }>, use: () => TResult | Promise<TResult>): Promise<TResult> {
+          operation.signal.throwIfAborted();
+          if (operation.generation !== generation || !options.snapshots) {
+            throw new Error('Project Knowledge operation targets another Root generation');
+          }
+          const lease = options.snapshots.acquire();
+          try {
+            if (!options.snapshots.owns(lease) || lease.value.generation !== generation) {
+              throw new Error('Project Knowledge generation is no longer current');
+            }
+            return await use();
+          } finally {
+            lease.release();
+          }
+        },
+      }),
+    });
+    const ephemeralAssignmentContext = createGenerationWorkroomEphemeralAssignmentContext({
+      generation,
+      signal,
+    });
+    const assignmentKnowledge = new WorkroomAssignmentKnowledgeContextProjector({
+      profiles: projectProfiles,
+      knowledge: projectKnowledge,
+      contentReader: createP12WorkroomKnowledgeContentReader({
+        governance: dataGovernanceRuntime.disclosureManifest,
+        signal,
+      }),
+      publisher: ephemeralAssignmentContext,
+    });
+    resources.provide(workroomEphemeralAssignmentContextToken, ephemeralAssignmentContext);
+    resources.provide(workroomAssignmentKnowledgeContextToken, assignmentKnowledge);
+    lifecycle.add(() => ephemeralAssignmentContext.dispose());
+    workroomKnowledgeConsoleControl.current = Object.freeze({
+      read: (projectId: string) => projectKnowledge.read(projectId),
+      publish: async (
+        command: Parameters<AgentHostWorkroomKnowledgeControlPort['publish']>[0],
+        authenticatedPrincipal: Parameters<AgentHostWorkroomKnowledgeControlPort['publish']>[1],
+      ) => {
+        const source = await knowledgeSourceAuthority.issueSponsorDecision({
+          operationId: command.operationId,
+          projectId: command.projectId,
+          principalId: authenticatedPrincipal.principalId,
+        });
+        return await projectKnowledge.publish({
+          ...structuredClone(command),
+          version: 1,
+          generation,
+          ownerPrincipalId: authenticatedPrincipal.principalId,
+          source,
+        }, signal);
+      },
+      rollback: async (
+        command: Parameters<AgentHostWorkroomKnowledgeControlPort['rollback']>[0],
+        authenticatedPrincipal: Parameters<AgentHostWorkroomKnowledgeControlPort['rollback']>[1],
+      ) => {
+        const source = await knowledgeSourceAuthority.issueSponsorDecision({
+          operationId: command.operationId,
+          projectId: command.projectId,
+          principalId: authenticatedPrincipal.principalId,
+        });
+        return await projectKnowledge.rollback({
+          ...structuredClone(command),
+          version: 1,
+          generation,
+          ownerPrincipalId: authenticatedPrincipal.principalId,
+          source,
+        }, signal);
+      },
+    });
+    const workroomReports = new FileWorkroomTaskReportStore(
+      join(workroomStateRoot, 'workroom-task-reports'),
+      Object.freeze({
+        write: async (input: WorkroomTaskReportPayloadWriteInput, operationSignal: AbortSignal) => {
+          if (!resources.has(workroomTaskReportPayloadToken)) {
+            throw new Error('Governed Workroom Task Report Payload Port is unavailable');
+          }
+          return await resources.use(workroomTaskReportPayloadToken).write(input, operationSignal);
+        },
+        read: async (input: WorkroomTaskReportPayloadReadInput, operationSignal: AbortSignal) => {
+          if (!resources.has(workroomTaskReportPayloadToken)) {
+            throw new Error('Governed Workroom Task Report Payload Port is unavailable');
+          }
+          return await resources.use(workroomTaskReportPayloadToken).read(input, operationSignal);
+        },
+      }),
+      signal,
+    );
+    if (!resources.has(workroomAcceptedReportReaderToken)) {
+      resources.provide(workroomAcceptedReportReaderToken, workroomReports);
+    }
+    const acceptanceProjectionAuthority: WorkroomAcceptanceProjectionAuthorityPort = Object.freeze({
+      async authorize(
+        candidate: Parameters<WorkroomAcceptanceProjectionAuthorityPort['authorize']>[0],
+      ) {
+        if (!resources.has(workroomAcceptanceProjectionSourceAuthorityToken)) return false;
+        const bindingDigest = workroomAcceptanceProjectionSourceBindingDigest(candidate);
+        const trusted = await resources.use(workroomAcceptanceProjectionSourceAuthorityToken).resolve({
+          projectId: candidate.projection.projectId,
+          projectionDigest: candidate.projection.digest,
+          source: Object.freeze({ ...candidate.source, bindingDigest }),
+        }, signal);
+        return Boolean(trusted && trusted.verification === 'verified'
+          && trusted.kind === candidate.source.kind && trusted.ref === candidate.source.ref
+          && trusted.digest === candidate.source.digest && trusted.issuer === candidate.source.issuer
+          && trusted.issuerDigest === candidate.source.issuerDigest
+          && trusted.revision === candidate.source.revision
+          && trusted.bindingDigest === bindingDigest);
+      },
+    });
+    const acceptanceProjections = new FileWorkroomAcceptanceProjectionRepository({
+      directory: join(workroomStateRoot, 'workroom-acceptance-projections'),
+      payloads: resources.use(workroomAcceptanceProjectionPayloadToken),
+      authority: acceptanceProjectionAuthority,
+      signal,
+    });
+    const acceptanceProjects = Object.freeze({
+      listProjectIds: async () => Object.freeze(Object.entries((await workroomCatalog.read()).definitions)
+        .filter(([, definition]) => definition.enabled !== false)
+        .map(([projectId]) => projectId)),
+    });
+    const acceptanceProfileProjector = new WorkroomAcceptanceProfileProjectionRuntime({
+      source: acceptanceProfileSource,
+      repository: acceptanceProjections,
+      projects: acceptanceProjects,
+      signal,
+      intervalMs: 1_000,
+      onError: error => logger.error(formatCompact({
+        op: 'workroom_acceptance_profile_projector',
+        error: error instanceof Error ? error.message : String(error),
+      })),
+    });
+    lifecycle.add(() => acceptanceProfileProjector.dispose());
+    handoff.add({
+      activateNext: operationSignal => {
+        operationSignal.throwIfAborted();
+        acceptanceProfileProjector.start();
+      },
+    });
+    const resolveCurrentAssignmentIssuance = async (input: Readonly<{
+      projectId: string;
+      runId: string;
+      taskKey: string;
+    }>) => {
+      const [local, remote] = await Promise.all([
+        workroomKernel.listLocalAssignmentIssuances(),
+        workroomKernel.listRemoteAssignmentIssuances(),
+      ]);
+      const matching = [
+        ...local.map(issuance => ({ kind: 'local' as const, issuance })),
+        ...remote.map(issuance => ({ kind: 'remote' as const, issuance })),
+      ].filter(({ issuance }) => {
+        const envelope = issuance.envelope;
+        return envelope.projectId === input.projectId && envelope.runId === input.runId
+          && envelope.taskKey === input.taskKey
+          && issuance.state.tasks[input.taskKey]?.currentAssignmentId === envelope.assignmentId;
+      });
+      return matching.length === 1 ? matching[0] : undefined;
+    };
+    const artifactRiskProducer = new WorkroomAuthenticatedArtifactRiskProducer({
+      generation,
+      reports: workroomReports,
+      effectJournal: effectComposition.journal,
+    });
+    const riskHeaderAuthority: WorkroomRiskHeaderProducerAuthorityPort = Object.freeze({
+      async authorize(
+        publication: Parameters<WorkroomRiskHeaderProducerAuthorityPort['authorize']>[0],
+      ) {
+        if (publication.producer.generation !== generation) return false;
+        if (publication.producer.kind === 'workspace-artifact') {
+          return await artifactRiskProducer.authorize(publication);
+        }
+        if (publication.producer.kind === 'effect-ledger') {
+          if (publication.producer.issuer !== 'workroom-effect-ledger') return false;
+          const events = await effectComposition.journal.read(publication.header.scope.projectId);
+          return events.some(event => {
+            if (event.type !== 'effect.intent_recorded') return false;
+            const intent = event.payload.intent;
+            return Boolean(intent && typeof intent === 'object'
+              && 'id' in intent && intent.id === publication.producer.factRef
+              && 'digest' in intent && intent.digest === publication.producer.factDigest
+              && event.digest === publication.producer.issuerDigest);
+          });
+        }
+        if (publication.producer.issuer !== 'workroom-kernel') return false;
+        const current = await resolveCurrentAssignmentIssuance(publication.header.scope);
+        if (!current) return false;
+        const fact = publication.producer.kind === 'kernel-plan'
+          ? current.issuance.envelope.plan
+          : current.issuance.envelope.capabilitySnapshot;
+        return fact.ref === publication.producer.factRef
+          && fact.digest === publication.producer.factDigest
+          && current.issuance.envelope.digest === publication.producer.issuerDigest;
+      },
+    });
+    const riskHeaders = new FileWorkroomKernelRiskHeaderRepository({
+      directory: join(workroomStateRoot, 'workroom-risk-headers'),
+      generation,
+      authority: riskHeaderAuthority,
+    });
+    const artifactRiskHeaders = new WorkroomArtifactRiskHeaderResolver({
+      repository: riskHeaders,
+      producer: artifactRiskProducer,
+    });
+    const typedChecks = resources.has(workroomTypedAcceptanceCheckRegistryToken)
+      ? resources.use(workroomTypedAcceptanceCheckRegistryToken)
+      : new ImmutableWorkroomTypedCheckRegistry([]);
+    const contextRoutes: WorkroomEphemeralContextRoutePort = Object.freeze({
+      async resolve(eligibility: Parameters<WorkroomEphemeralContextRoutePort['resolve']>[0]) {
+        const current = await resolveCurrentAssignmentIssuance(eligibility);
+        if (!current) return undefined;
+        return Object.freeze({
+          kind: current.kind,
+          ref: `kernel-assignment:${current.issuance.envelope.assignmentId}`,
+          digest: current.issuance.envelope.digest,
+        });
+      },
+    });
+    const localContextCapability: WorkroomEphemeralContextReleaseCapabilityPort = Object.freeze({
+      async release(
+        input: Parameters<WorkroomEphemeralContextReleaseCapabilityPort['release']>[0],
+        operationSignal: AbortSignal,
+      ) {
+        operationSignal.throwIfAborted();
+        const receipt = ephemeralAssignmentContext.releaseTask(input.request.eligibility);
+        return Object.freeze({
+          status: 'released' as const,
+          receiptRef: `${receipt.receiptRef}:route:${input.route.digest}`,
+          authenticatedBy: `local-assignment-context-generation:${generation}`,
+        });
+      },
+      async reconcile(
+        input: Parameters<WorkroomEphemeralContextReleaseCapabilityPort['reconcile']>[0],
+        operationSignal: AbortSignal,
+      ) {
+        operationSignal.throwIfAborted();
+        const receipt = ephemeralAssignmentContext.releaseTask(input.request.eligibility);
+        return Object.freeze({
+          status: 'released' as const,
+          receiptRef: `${receipt.receiptRef}:route:${input.route.digest}`,
+          authenticatedBy: `local-assignment-context-generation:${generation}`,
+        });
+      },
+    });
+    const contextIdentity = (kind: 'local' | 'remote') => Object.freeze({
+      kind,
+      id: `${kind}-assignment-context-generation:${generation}`,
+      digest: `sha256:${createHash('sha256').update(JSON.stringify({
+        version: 1, kind, generation,
+      })).digest('hex')}`,
+    });
+    const contextConsumer = new FileWorkroomEphemeralContextDisposer({
+      directory: join(workroomStateRoot, 'workroom-ephemeral-context-release'),
+      signal,
+      providers: Object.freeze([
+        createRoutedWorkroomEphemeralContextProvider({
+          identity: contextIdentity('local'), routes: contextRoutes, capability: localContextCapability,
+        }),
+        createRoutedWorkroomEphemeralContextProvider({
+          identity: contextIdentity('remote'),
+          routes: contextRoutes,
+          capability: createGenerationRemoteContextReleaseCapability(() =>
+            resources.has(workroomRemoteContextReleaseProviderToken)
+              ? resources.use(workroomRemoteContextReleaseProviderToken)
+              : undefined),
+        }),
+      ]),
+    });
+    const acceptanceComposition = installWorkroomAcceptanceResources({
+      projectRoot: options.projectRoot,
+      generation,
+      signal,
+      resources,
+      profiles: projectProfiles,
+      catalog: workroomCatalog,
+      reports: workroomReports,
+      projections: acceptanceProjections,
+      riskHeaders: artifactRiskHeaders,
+      checks: typedChecks.list(),
+      contextConsumer,
+      effectJournal: effectComposition.journal,
+      runState: Object.freeze({
+        read: (projectId: string, runId: string) => workroomKernel.read(projectId, runId),
+      }),
+      projects: acceptanceProjects,
+      projectorIntervalMs: 1_000,
+      onProjectorError: error => logger.error(formatCompact({
+        op: 'workroom_effect_authorization_projector',
+        error: error instanceof Error ? error.message : String(error),
+      })),
+    });
+    effectSponsorConsoleControl.current = Object.freeze({
+      decide: (
+        command: Parameters<AgentHostEffectSponsorControlPort['decide']>[0],
+        authenticatedPrincipal: Parameters<AgentHostEffectSponsorControlPort['decide']>[1],
+      ) => acceptanceComposition.effectSponsorControl.decide({
+        ...structuredClone(command),
+        principalId: authenticatedPrincipal.principalId,
+      }),
+    });
+    lifecycle.add(() => acceptanceComposition.projectorRuntime.dispose());
+    handoff.add({
+      activateNext: operationSignal => {
+        operationSignal.throwIfAborted();
+        acceptanceComposition.projectorRuntime.start();
+      },
+    });
+    const acceptedSourceRuntime = new WorkroomAcceptedSourceRuntime({
+      journal: workroomJournal,
+      repository: new FileProjectMemoryApplicationRepository(
+        join(workroomStateRoot, 'workroom-project-memory'),
+      ),
+      reports: workroomReports,
+      schemas: Object.freeze({
+        resolve: async (input: Parameters<WorkroomProjectMemorySchemaAuthorityPort['resolve']>[0]) => {
+          if (!resources.has(workroomProjectMemorySchemaAuthorityToken)) {
+            throw new Error('Generation/Profile Project Memory Schema authority is unavailable');
+          }
+          return await resources.use(workroomProjectMemorySchemaAuthorityToken).resolve(input);
+        },
+      }),
+      release: Object.freeze({
+        release: async (input: Parameters<WorkroomExecutionContextReleasePort['release']>[0]) => {
+          if (!resources.has(workroomExecutionContextReleaseToken)) {
+            throw new Error('Execution Context Release authority is unavailable');
+          }
+          return await resources.use(workroomExecutionContextReleaseToken).release(input);
+        },
+      }),
+      releases: new FileWorkroomContextReleaseJournal(
+        join(workroomStateRoot, 'workroom-context-release'),
+      ),
+      intervalMs: 1_000,
+      onError: error => logger.error(formatCompact({
+        op: 'workroom_accepted_source',
+        error: error instanceof Error ? error.message : String(error),
+      })),
+    });
+    resources.provide(workroomAcceptedSourceRuntimeToken, acceptedSourceRuntime);
+    if (!resources.has(workroomAcceptedSourceRecallToken)) {
+      resources.provide(workroomAcceptedSourceRecallToken, acceptedSourceRuntime);
+    }
+    lifecycle.add(() => acceptedSourceRuntime.dispose());
+    handoff.add({
+      activateNext: operationSignal => {
+        operationSignal.throwIfAborted();
+        acceptedSourceRuntime.start();
+      },
+    });
+    if (!resources.has(portfolioJournalRepositoryToken)) {
+      resources.provide(
+        portfolioJournalRepositoryToken,
+        new FilePortfolioJournalRepository(join(workroomStateRoot, 'portfolio-journal')),
+      );
+    }
+    if (!resources.has(portfolioControlOutboxRepositoryToken)) {
+      resources.provide(portfolioControlOutboxRepositoryToken, portfolioControlOutbox);
+    }
+    if (!resources.has(portfolioSponsorCommandToken)) {
+      const portfolioSponsor = new WorkroomPortfolioSponsorRuntime({
+        generation,
+        repository: resources.use(portfolioJournalRepositoryToken),
+        authority: createCatalogPortfolioSponsorCommandAuthority(workroomCatalog),
+      });
+      resources.provide(portfolioSponsorCommandToken, portfolioSponsor);
+      portfolioSponsorConsoleControl.current = portfolioSponsor;
+    }
+    const portfolioCapacity = resources.has(portfolioCapacityRuntimeToken)
+      ? resources.use(portfolioCapacityRuntimeToken)
+      : new GenerationOwnedPortfolioCapacityRuntime({
+        generation,
+        repository: resources.use(portfolioJournalRepositoryToken),
+        policyAuthority: Object.freeze({
+          resolve: async (portfolioId: string) => resources.has(portfolioPolicyAuthorityToken)
+            ? await resources.use(portfolioPolicyAuthorityToken).resolve(portfolioId)
+            : undefined,
+        }),
+        bundleAuthority: Object.freeze({
+          validate: async (input: Parameters<PortfolioAtomicBundleAuthorityPort['validate']>[0]) => resources.has(portfolioAtomicBundleAuthorityToken)
+            ? await resources.use(portfolioAtomicBundleAuthorityToken).validate(input)
+            : undefined,
+        }),
+        kernelAuthority: new WorkroomPortfolioAssignmentFailureAuthority({
+          generation,
+          portfolioJournal: resources.use(portfolioJournalRepositoryToken),
+          workroomJournal,
+          fallback: Object.freeze({
+            authorize: async (input: Parameters<PortfolioKernelCommandAuthorityPort['authorize']>[0]) => resources.has(portfolioKernelCommandAuthorityToken)
+              ? await resources.use(portfolioKernelCommandAuthorityToken).authorize(input)
+              : undefined,
+          }),
+        }),
+        usageAuthority: Object.freeze({
+          authenticate: async (input: Parameters<PortfolioUsageGatewayAuthorityPort['authenticate']>[0]) => resources.has(portfolioUsageGatewayAuthorityToken)
+            ? await resources.use(portfolioUsageGatewayAuthorityToken).authenticate(input)
+            : undefined,
+        }),
+        clockAuthority: Object.freeze({
+          read: async (input: Parameters<PortfolioClockAuthorityPort['read']>[0]) => resources.has(portfolioClockAuthorityToken)
+            ? await resources.use(portfolioClockAuthorityToken).read(input)
+            : undefined,
+        }),
+      });
+    if (!resources.has(portfolioCapacityRuntimeToken)) {
+      resources.provide(portfolioCapacityRuntimeToken, portfolioCapacity);
+    }
+    if (!resources.has(workroomSchedulerCapacityRequestToken)) {
+      resources.provide(workroomSchedulerCapacityRequestToken, portfolioCapacity);
+    }
+    const schedulerDispatch = installWorkroomSchedulerPortfolioDispatchResources({
+      generation,
+      signal,
+      resources,
+      catalog: workroomCatalog,
+      profiles: projectProfiles,
+      journal: workroomJournal,
+    });
+    resources.provide(workroomAssignmentAuthorityGrantRepositoryToken, assignmentAuthorityGrants);
+    resources.provide(
+      workroomAssignmentAuthorityGrantToken,
+      createDurableWorkroomAssignmentAuthorityGrantProvider({
+        repository: assignmentAuthorityGrants,
+        generation,
+      }),
+    );
+    resources.provide(
+      workroomAssignmentGrantClaimPreviewToken,
+      new JournalWorkroomAssignmentGrantClaimPreview({
+        generation,
+        journal: workroomJournal,
+        profiles: projectProfiles,
+        catalog: workroomCatalog,
+      }),
+    );
+    if (options.snapshots && !resources.has(workroomLocalAssignmentAuthorityToken)) {
+      resources.provide(workroomLocalAssignmentAuthorityToken, Object.freeze({
+        resolveLocal: async (
+          input: Parameters<GenerationOwnedWorkroomAssignmentAuthorityProvider['resolveLocal']>[0],
+        ) => {
+          const lease = options.snapshots!.acquire();
+          try {
+            if (lease.value.generation !== generation) {
+              throw new Error('Local Assignment authority generation is no longer current');
+            }
+            return await new GenerationOwnedWorkroomAssignmentAuthorityProvider({
+              generation: createWorkroomGenerationAuthoritySnapshotFromRuntime(
+                lease.value,
+                listGenerationBindings(),
+              ),
+              profiles: projectProfiles,
+              catalog: workroomCatalog,
+              grants: resources.use(workroomAssignmentAuthorityGrantToken),
+              endpoints: Object.freeze({ resolve: async () => undefined }),
+            }).resolveLocal(input);
+          } finally {
+            lease.release();
+          }
+        },
+      }));
+    }
+    if (!resources.has(workroomHumanIngressPlanningToken)) {
+      resources.provide(workroomHumanIngressPlanningToken, createGenerationOwnedDynamicPlanningProvider({
+        generation: createWorkroomDynamicPlanningGenerationSnapshot(generation),
+        profiles: resources.use(workroomProjectProfileRegistryToken),
+        catalog: workroomCatalog,
+        resolvePolicy: () => resources.has(workroomDynamicPlanningPolicyToken)
+          ? resources.use(workroomDynamicPlanningPolicyToken)
+          : undefined,
+        resolveDisclosure: () => resources.has(workroomPlanningDisclosureToken)
+          ? resources.use(workroomPlanningDisclosureToken)
+          : undefined,
+        signal,
+        model: Object.freeze({
+          async generate(modelInput: WorkroomStructuredDagModelInput, operationSignal: AbortSignal) {
+            operationSignal.throwIfAborted();
+            if (modelInput.binding.generation !== generation) {
+              throw new Error('Dynamic planning model binding escaped its Root generation');
+            }
+            const binding = service.getBindingRegistry()
+              .getBinding(modelInput.binding.agentDefinitionId);
+            if (!binding) throw new WorkroomPlanningClarificationError('planning_unavailable');
+            const result = await service.runAgent(JSON.stringify(modelInput.prompt), {
+              provider: binding.providerAlias,
+              model: binding.model,
+              systemPrompt: WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT,
+              tools: [],
+              useBuiltinTools: false,
+              collectExternalTools: false,
+              maxIterations: 1,
+              signal: operationSignal,
+            });
+            operationSignal.throwIfAborted();
+            try {
+              return JSON.parse(result.content) as unknown;
+            } catch (error) {
+              throw new Error('Dynamic planning model did not return one strict JSON DAG candidate', {
+                cause: error,
+              });
+            }
+          },
+        }),
+      }));
+    }
+    const projectionRepository = new FileWorkroomProjectionRepository(
+      join(workroomStateRoot, 'workroom-projections'),
+    );
+    const projectionReplyResolver = new WorkroomProjectionReplyResolver({
+      repository: projectionRepository,
+      runState: Object.freeze({
+        read: async (projectId: string, runId: string) =>
+          await workroomKernel.read(projectId, runId),
+      }),
+    });
+    const projectionRuntime = new WorkroomProjectionRuntime({
+      catalog: workroomCatalog,
+      journal: workroomJournal,
+      repository: projectionRepository,
+      outbound: createWorkroomProjectionMessageGatewayPort(
+        resources.use(messageGatewayToken),
+        rootPluginId(),
+      ),
+      workerId: `workroom-projection:${randomUUID()}`,
+      leaseMs: 30_000,
+      maxRunsPerTick: 64,
+      maxDeliveriesPerTick: 32,
+      governance: governedOutbound.projection,
+    });
+    const projectionScheduler = new WorkroomProjectionScheduler({
+      runtime: projectionRuntime,
+      intervalMs: 1_000,
+      onError: error => logger.error(formatCompact({
+        op: 'workroom_projection_tick',
+        error: error instanceof Error ? error.message : String(error),
+      })),
+    });
+    lifecycle.add(() => projectionScheduler.dispose());
+    handoff.add({
+      activateNext: signal => {
+        signal.throwIfAborted();
+        projectionScheduler.start();
+      },
+    });
+    if (options.snapshots && resources.has(workroomLocalAssignmentAuthorityToken)) {
+      const localTurn = createAgentCoreWorkroomLocalTurnPort({
+        host: asPrivate(zhinAgent),
+        core: composedRuntime.agentCore,
+        generation,
+        loopHooks: service.loopHooks,
+        resolveBinding: agentDefinitionId => agentDefinitionId
+          ? service.getBindingRegistry().getBinding(agentDefinitionId) ?? undefined
+          : undefined,
+      });
+      const localModel = new DurableReportLocalModelExecutionPort({
+        turn: localTurn,
+        reports: workroomReports,
+        payloads: Object.freeze({
+          write: async (input: WorkroomEvidencePayloadWriteInput, signal: AbortSignal) => {
+            if (!resources.has(workroomEvidencePayloadWriterToken)) {
+              throw new Error('Governed Workroom Evidence Payload Writer is unavailable');
+            }
+            return await resources.use(workroomEvidencePayloadWriterToken).write(input, signal);
+          },
+        }),
+        readPrompt: async request => {
+          const state = await workroomKernel.read(
+            request.envelope.projectId,
+            request.envelope.runId,
+          );
+          const task = state.tasks[request.envelope.taskKey];
+          if (!task || task.revision !== request.envelope.taskRevision) {
+            throw new Error('Local Assignment prompt targets a stale Task revision');
+          }
+          return [
+            `Execute Workroom Task: ${task.title}`,
+            `Task identity: ${task.key}@${task.revision}`,
+            `Workspace mount: ${request.envelope.workspace.mountRef}`,
+            `Acceptance Contract: ${task.acceptanceContract?.id ?? 'missing'}`,
+            'Return only structured Task Report JSON with claims[] and evidence[].',
+          ].join('\n');
+        },
+      });
+      const capabilityProjection = Object.freeze({
+        resolve: async (envelope: Parameters<LocalAssignmentExecutor['execute']>[0]) => {
+          const lease = options.snapshots!.acquire();
+          let releaseOwned = true;
+          try {
+            if (lease.value.generation !== generation) {
+              throw new Error('Local Assignment capability generation is no longer current');
+            }
+            const issuance = (await workroomKernel.listLocalAssignmentIssuances())
+              .find(candidate => candidate.envelope.assignmentId === envelope.assignmentId);
+            if (!issuance || issuance.envelope.digest !== envelope.digest) {
+              throw new Error('Local Assignment capability projection lacks exact issuance');
+            }
+            const state = await workroomKernel.read(envelope.projectId, envelope.runId);
+            const task = state.tasks[envelope.taskKey];
+            if (!task?.acceptanceContract || task.revision !== envelope.taskRevision) {
+              throw new Error('Local Assignment capability projection targets a stale Task');
+            }
+            const authority = await resources.use(workroomLocalAssignmentAuthorityToken).resolveLocal({
+              projectId: envelope.projectId,
+              runId: envelope.runId,
+              task: Object.freeze({
+                key: task.key,
+                revision: task.revision,
+                acceptanceContract: task.acceptanceContract,
+              }),
+              assignment: Object.freeze({
+                id: envelope.assignmentId,
+                revision: envelope.assignmentRevision,
+                attempt: envelope.attempt,
+                fence: envelope.fence,
+              }),
+              requestedAgentDefinitionId: issuance.agentDefinitionId,
+              factAnchor: envelope.factAnchor,
+            });
+            const canonicalEnvelope = createAssignmentExecutionEnvelope({
+              projectId: envelope.projectId,
+              runId: envelope.runId,
+              taskKey: envelope.taskKey,
+              taskRevision: envelope.taskRevision,
+              assignmentId: envelope.assignmentId,
+              assignmentRevision: envelope.assignmentRevision,
+              attempt: envelope.attempt,
+              fence: envelope.fence,
+              principalId: authority.principalId,
+              role: authority.role,
+              agentDefinition: authority.agentDefinition,
+              plan: authority.plan,
+              contextPolicy: authority.contextPolicy,
+              factAnchor: envelope.factAnchor,
+              capabilitySnapshot: authority.capabilitySnapshot,
+              policySnapshot: authority.policySnapshot,
+              workspace: authority.workspace,
+            });
+            if (canonicalEnvelope.digest !== envelope.digest) {
+              throw new Error('Local Assignment current generation authority drifted from Envelope');
+            }
+            const capabilities = await ingress.read(
+              lease.value,
+              rootPluginId(),
+              () => lease.active,
+            );
+            const capabilitySnapshot = createWorkroomRoleCapabilitySnapshot({
+              envelope,
+              ...authority.capabilitySupplies,
+            });
+            const projection = Object.freeze({
+              agentDefinitionId: issuance.agentDefinitionId,
+              capabilities,
+              capabilitySnapshot,
+              realization: bindWorkroomCapabilityRealization(
+                capabilities,
+                envelope,
+                capabilitySnapshot,
+              ),
+              sessionSnapshot: Object.freeze({ loadedTools: {}, loadedSkills: [] }),
+              config: asPrivate(zhinAgent).config,
+              persistSnapshot: async () => undefined,
+              release: () => {
+                if (!releaseOwned) return;
+                releaseOwned = false;
+                lease.release();
+              },
+            });
+            return projection;
+          } catch (error) {
+            if (releaseOwned) {
+              releaseOwned = false;
+              lease.release();
+            }
+            throw error;
+          }
+        },
+      });
+      const localAssignments = new WorkroomLocalAssignmentRuntime({
+        kernel: workroomKernel,
+        executor: new LocalAssignmentExecutor(localModel, capabilityProjection),
+        intervalMs: 1_000,
+        onError: error => logger.error(formatCompact({
+          op: 'workroom_local_assignment',
+          error: error instanceof Error ? error.message : String(error),
+        })),
+      });
+      resources.provide(workroomLocalAssignmentRuntimeToken, localAssignments);
+      const localRoute = new PinnedProfileCatalogLocalAssignmentRoute({ profiles: projectProfiles });
+      lifecycle.add(schedulerDispatch.routes.register({
+        providerId: `local-agent-bindings:generation:${generation}`,
+        generation,
+        resolve: async input => {
+          if (!resources.has(workroomEvidencePayloadWriterToken)
+            || !resources.has(workroomTaskReportPayloadToken)) return null;
+          const route = await localRoute.resolve(input);
+          if (!route || route.kind !== 'local') return null;
+          return service.getBindingRegistry().getBinding(route.agentDefinitionId)
+            ? route
+            : null;
+        },
+      }));
+      lifecycle.add(() => localAssignments.dispose());
+      handoff.add({
+        activateNext: signal => {
+          signal.throwIfAborted();
+          localAssignments.start();
+        },
+      });
+    }
+    const workroomScheduler = new WorkroomSchedulerRuntime({
+      journal: workroomJournal,
+      commands: createWorkroomSchedulerKernelCommandPort(workroomKernel),
+      resolveSupply: () => resources.has(workroomSchedulerDispatchSupplyToken)
+        ? resources.use(workroomSchedulerDispatchSupplyToken)
+        : undefined,
+      unavailableControl: Object.freeze({
+        block: async decision => {
+          const state = await workroomKernel.read(decision.projectId, decision.runId);
+          const task = state.tasks[decision.taskKey];
+          const blockerId = `scheduler-supply:${decision.decisionId}`;
+          if (!task || task.revision !== decision.taskRevision || task.status !== 'ready') return;
+          if (task.blockers.some(blocker => blocker.id === blockerId)) return;
+          await workroomKernel.execute(decision.projectId, decision.runId, {
+            type: 'block_task',
+            taskKey: decision.taskKey,
+            blockerId,
+            kind: 'capability',
+            owner: 'workroom-scheduler-assignment-supply',
+            reason: 'No exact generation-owned Assignment route or trusted Portfolio Capacity authority is available',
+            deadline: state.now + 300_000,
+          });
+        },
+        recover: async decision => {
+          const state = await workroomKernel.read(decision.projectId, decision.runId);
+          const task = state.tasks[decision.taskKey];
+          const blockerId = `scheduler-supply:${decision.decisionId}`;
+          if (!task || task.revision !== decision.taskRevision) return;
+          if (!task.blockers.some(blocker => blocker.id === blockerId
+            && blocker.owner === 'workroom-scheduler-assignment-supply')) return;
+          await workroomKernel.execute(decision.projectId, decision.runId, {
+            type: 'resolve_blocker',
+            taskKey: decision.taskKey,
+            blockerId,
+          });
+        },
+      }),
+      intervalMs: 1_000,
+      onError: error => {
+        // Missing exact route/Portfolio authority is an expected fail-closed
+        // state; no Assignment is claimed and a later provider can recover
+        // from the same Journal.
+        if (error instanceof WorkroomSchedulerSupplyUnavailableError) return;
+        logger.error(formatCompact({
+          op: 'workroom_scheduler_tick',
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      },
+    });
+    resources.provide(workroomSchedulerRuntimeToken, workroomScheduler);
+    lifecycle.add(() => workroomScheduler.dispose());
+    handoff.add({
+      activateNext: signal => {
+        signal.throwIfAborted();
+        workroomScheduler.start();
+      },
+    });
+    const workroomPreemption = new WorkroomPreemptionRuntime({
+      journal: workroomJournal,
+      delivery: new WorkroomAssignmentCheckpointDelivery({
+        kernel: workroomKernel,
+        resolveProvider: () => resources.has(workroomCheckpointDeliveryProviderToken)
+          ? resources.use(workroomCheckpointDeliveryProviderToken)
+          : undefined,
+      }),
+      unavailableControl: Object.freeze({
+        block: async (preemption: WorkroomPreemptionState, reason: string) => {
+          const state = await workroomKernel.read(preemption.projectId, preemption.runId);
+          const task = state.tasks[preemption.reservedTaskKey];
+          const blockerId = `checkpoint-delivery:${preemption.decisionId}`;
+          if (!task || task.revision !== preemption.reservedTaskRevision
+            || !['ready', 'blocked'].includes(task.status)
+            || task.blockers.some(blocker => blocker.id === blockerId)) return;
+          await workroomKernel.execute(preemption.projectId, preemption.runId, {
+            type: 'block_task',
+            taskKey: preemption.reservedTaskKey,
+            blockerId,
+            kind: 'capability',
+            owner: 'workroom-checkpoint-delivery',
+            reason: `Typed Assignment checkpoint transport unavailable: ${reason}`,
+            deadline: preemption.deadline,
+          });
+        },
+        recover: async (preemption: WorkroomPreemptionState) => {
+          const state = await workroomKernel.read(preemption.projectId, preemption.runId);
+          const task = state.tasks[preemption.reservedTaskKey];
+          const blockerId = `checkpoint-delivery:${preemption.decisionId}`;
+          if (!task || task.revision !== preemption.reservedTaskRevision
+            || !task.blockers.some(blocker => blocker.id === blockerId
+              && blocker.owner === 'workroom-checkpoint-delivery')) return;
+          await workroomKernel.execute(preemption.projectId, preemption.runId, {
+            type: 'resolve_blocker',
+            taskKey: preemption.reservedTaskKey,
+            blockerId,
+          });
+        },
+      }),
+      intervalMs: 1_000,
+      onError: error => logger.error(formatCompact({
+        op: 'workroom_preemption_tick',
+        error: error instanceof Error ? error.message : String(error),
+      })),
+    });
+    resources.provide(workroomPreemptionRuntimeToken, workroomPreemption);
+    if (!resources.has(workroomPortfolioCheckpointAckAdapterToken)) {
+      resources.provide(
+        workroomPortfolioCheckpointAckAdapterToken,
+        new WorkroomPortfolioCheckpointAckAdapter(
+          new JournalWorkroomPreemptionCheckpointAckReader(workroomJournal),
+        ),
+      );
+    }
+    const portfolioIssuances = new KernelPortfolioGrantAssignmentIssuance(workroomKernel);
+    const portfolioGrantAuthority = new PortfolioGrantAssignmentAuthority({
+      portfolioJournal: resources.use(portfolioJournalRepositoryToken),
+      workroomJournal,
+      catalog: workroomCatalog,
+      schedulerRoute: schedulerDispatch.routes,
+      issuances: portfolioIssuances,
+    });
+    const portfolioGrantAssignments = new WorkroomPortfolioGrantAssignmentSaga({
+      generation,
+      capacity: portfolioCapacity,
+      bindings: portfolioGrantAuthority,
+      issuances: portfolioIssuances,
+    });
+    const portfolioControlWorker = installWorkroomPortfolioControlWorker({
+      generation,
+      signal,
+      resources,
+      journal: resources.use(portfolioJournalRepositoryToken),
+      outbox: resources.use(portfolioControlOutboxRepositoryToken),
+      capacity: portfolioCapacity,
+      route: portfolioGrantAuthority.routeAuthority,
+      grantAssignments: portfolioGrantAssignments,
+      checkpointAcks: resources.use(workroomPortfolioCheckpointAckAdapterToken),
+      intervalMs: 1_000,
+      autoStart: false,
+      onError: error => logger.error(formatCompact({
+        op: 'portfolio_control_tick',
+        error: error instanceof Error ? error.message : String(error),
+      })),
+    });
+    lifecycle.add(() => portfolioControlWorker.dispose());
+    handoff.add({
+      activateNext: operationSignal => {
+        operationSignal.throwIfAborted();
+        portfolioControlWorker.start();
+      },
+    });
+    lifecycle.add(() => workroomPreemption.dispose());
+    handoff.add({
+      activateNext: signal => {
+        signal.throwIfAborted();
+        workroomPreemption.start();
+      },
+    });
     resources.provide(
       workroomRemoteCallbackRuntimeToken,
       createWorkroomRemoteCallbackRuntime({
         kernel: workroomKernel,
         stateRoot: workroomStateRoot,
+        governance: governedOutbound.remote,
       }),
     );
     const interactionSpaceBindings = new FileInteractionSpaceBindingRepository(
@@ -585,10 +2174,133 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     const humanIngressProposals = new FileHumanIngressProposalRepository(
       join(workroomStateRoot, 'workroom-human-ingress'),
     );
+    const humanIngressApplications = new FileHumanIngressApplicationRepository(
+      join(workroomStateRoot, 'workroom-human-ingress-application'),
+    );
+    const interactionSpaceRouter = new InteractionSpaceRouter(interactionSpaceBindings);
+    const productionHumanIngressPort = new ProductionHumanIngressOrchestratorPort({
+      sources: new ConversationEventHumanIngressSourceReader(() => options.im.conversationEvents),
+      kernel: workroomKernel,
+      resolveProject: async projectId => {
+        const snapshot = await workroomCatalog.read();
+        const definition = snapshot.definitions[projectId];
+        if (!definition || definition.enabled === false || !definition.conversation) return null;
+        const agent = definition.conversation.agent;
+        if (!definition.members.some(member => member.agent === agent && member.role === 'orchestrator')) {
+          throw new Error(`Workroom Catalog ${projectId} has no valid Orchestrator binding`);
+        }
+        const projectDigest = workroomProjectionCatalogBindingDigest(definition);
+        return Object.freeze({
+          orchestratorAgentDefinitionId: agent,
+          projectRevision: snapshot.revision,
+          projectDigest,
+          orchestratorAuthorityDigest: `sha256:${createHash('sha256').update(JSON.stringify({
+            projectId,
+            projectRevision: snapshot.revision,
+            projectDigest,
+            agentDefinitionId: agent,
+            role: 'orchestrator',
+          })).digest('hex')}`,
+        });
+      },
+      authorizeProjectSource: async ({ projectId, proposal, source }) => {
+        const decision = await interactionSpaceRouter.resolve({
+          conversation: source.event.conversation,
+          conversationSequence: source.sequence,
+        });
+        return decision.status === 'resolved'
+          && decision.source === 'binding'
+          && decision.projectId === projectId
+          && decision.space === proposal.space
+          && decision.bindingRevision === proposal.bindingRevision
+          && decision.bindingDigest === proposal.bindingDigest;
+      },
+      planning: resources.has(workroomHumanIngressPlanningToken)
+        ? createGenerationHumanIngressPlanningPort(() =>
+            resources.has(workroomHumanIngressPlanningToken)
+              ? resources.use(workroomHumanIngressPlanningToken)
+              : undefined)
+        : undefined,
+      controls: createPlanGateHumanIngressControlPort(workroomKernel),
+      afterPlanAdmission: input => profileRunPinWriter.afterPlanAdmission(input, signal),
+    });
+    const humanIngressApplication = new HumanIngressApplicationService({
+      proposals: humanIngressProposals,
+      applications: humanIngressApplications,
+      port: options.workroomHumanIngressPort ?? productionHumanIngressPort,
+    });
+    let humanIngressRetryTimer: ReturnType<typeof setTimeout> | undefined;
+    let humanIngressRetryAt: number | undefined;
+    const scheduleHumanIngressRetry = (retryAt: number) => {
+      if (humanIngressRetryAt !== undefined && humanIngressRetryAt <= retryAt) return;
+      if (humanIngressRetryTimer) clearTimeout(humanIngressRetryTimer);
+      humanIngressRetryAt = retryAt;
+      humanIngressRetryTimer = setTimeout(() => {
+        humanIngressRetryTimer = undefined;
+        humanIngressRetryAt = undefined;
+        void recoverHumanIngress().catch(error => {
+          logger.error(formatCompact({
+            op: 'workroom_human_ingress_recovery',
+            error: error instanceof Error ? error.message : String(error),
+          }));
+          scheduleHumanIngressRetry(Date.now() + 5_000);
+        });
+      }, Math.max(0, retryAt - Date.now()));
+      humanIngressRetryTimer.unref?.();
+    };
+    lifecycle.add(() => {
+      if (humanIngressRetryTimer) clearTimeout(humanIngressRetryTimer);
+      humanIngressRetryTimer = undefined;
+      humanIngressRetryAt = undefined;
+    });
+    const drainHumanIngressProject = async (projectId: string) => {
+      const results = await humanIngressApplication.drain(projectId);
+      for (const result of results) {
+        if (result.status === 'retry_scheduled') scheduleHumanIngressRetry(result.retryAt);
+        if (result.status === 'waiting') scheduleHumanIngressRetry(result.wakeAt);
+      }
+      return results;
+    };
+    recoverHumanIngress = async () => {
+      const catalog = await workroomCatalog.read();
+      for (const projectId of Object.keys(catalog.definitions).sort()) {
+        await drainHumanIngressProject(projectId);
+      }
+    };
+    if (!persistencePendingActivate) await recoverHumanIngress();
     const workroomHumanIngress = new WorkroomHumanIngressPreRoute({
       bindings: interactionSpaceBindings,
-      bindingRouter: new InteractionSpaceRouter(interactionSpaceBindings),
+      bindingRouter: interactionSpaceRouter,
       proposals: humanIngressProposals,
+      application: Object.freeze({ drain: drainHumanIngressProject }),
+      sourceEvents: () => options.im.conversationEvents,
+      resolveIntent: resolveWorkroomHumanIntent,
+      createTargetResolver: (message, intent) => createProjectionHumanIngressTargetResolver({
+        resolver: projectionReplyResolver,
+        ...(message.replyTo
+          ? { replyTo: { conversation: message.conversation, id: message.replyTo.id } }
+          : {}),
+        intent,
+      }),
+      onWorkroomResolved: async (message, decision) => {
+        const catalog = await workroomCatalog.read();
+        const exact = createCatalogWorkroomProjectionBinding(
+          catalog,
+          decision.projectId,
+          message.conversation,
+          decision.bindingRevision,
+        );
+        for (let conflict = 0; conflict < 8; conflict += 1) {
+          const current = await projectionRepository.read();
+          try {
+            await projectionRepository.bind(current.revision, exact);
+            return;
+          } catch (error) {
+            if (!(error instanceof WorkroomProjectionRevisionConflictError)) throw error;
+          }
+        }
+        throw new Error('Workroom Projection binding CAS retries exhausted');
+      },
       principalOwner: String(rootPluginId()),
       resolveCatalogSpace: async message => {
         const adapter = capabilityLocalName(String(message.conversation.endpoint.id));
@@ -800,12 +2512,18 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                     : undefined,
                   ...(turnPolicy.shell?.approvalMode === 'ask' ? {
                     rememberSession: {
-                      isApproved: (approval) => rememberedSandboxApprovals.has(
-                        `${sessionKey}:${approval.scopeKey ?? approval.toolName}`,
-                      ),
+                      isApproved: (approval) => rememberedSandboxApprovals
+                        .get(sessionKey)
+                        ?.has(approval.scopeKey ?? approval.toolName) === true,
                       grant: (approval) => {
-                        if (rememberedSandboxApprovals.size >= 256) rememberedSandboxApprovals.clear();
-                        rememberedSandboxApprovals.add(`${sessionKey}:${approval.scopeKey ?? approval.toolName}`);
+                        let sessionApprovals = rememberedSandboxApprovals.get(sessionKey);
+                        if (!sessionApprovals) {
+                          if (rememberedSandboxApprovals.size >= 64) rememberedSandboxApprovals.clear();
+                          sessionApprovals = new Set<string>();
+                          rememberedSandboxApprovals.set(sessionKey, sessionApprovals);
+                        }
+                        if (sessionApprovals.size >= 64) sessionApprovals.clear();
+                        sessionApprovals.add(approval.scopeKey ?? approval.toolName);
                       },
                     },
                   } : {}),
@@ -1242,7 +2960,7 @@ function createRuntimeZhinAgent(
   });
   asPrivate(agent).approvalPort = approvalPort;
   const composed = composeZhinAgentRuntime(agent, provider, createRuntimeProactiveOutbound(im));
-  const orchestrator = new AgentOrchestrator();
+  const resourceHub = new AgentResourceHub();
   agent.configure({
     agentCore: composed.agentCore,
     toolSystem: composed.toolSystem,
@@ -1250,7 +2968,7 @@ function createRuntimeZhinAgent(
     memorySystem: composed.memorySystem,
     sessionSystem: composed.sessionSystem,
     eventSystem: composed.eventSystem,
-    orchestrator,
+    resourceHub,
     providerResolver: (alias) => service.getProvider(alias),
     activeBinding: binding,
     deferredResultSender: composed.deliverOutbound,
@@ -1274,7 +2992,7 @@ function createRuntimeZhinAgent(
   return {
     agent,
     runtime: composed,
-    seedPresets: () => seedOrchestratorAgentPresets(orchestrator, projectRoot),
+    seedPresets: () => seedResourceHubAgentPresets(resourceHub, projectRoot),
   };
 }
 
@@ -1311,15 +3029,15 @@ function buildRuntimeSubagentAgentTools(_projectRoot: string): AgentTool[] {
   ];
 }
 
-async function seedOrchestratorAgentPresets(
-  orchestrator: AgentOrchestrator,
+async function seedResourceHubAgentPresets(
+  resourceHub: AgentResourceHub,
   projectRoot: string,
 ): Promise<number> {
   try {
     const metas = await discoverWorkspaceAgents(null, projectRoot);
     for (const meta of metas) {
-      if (orchestrator.subagents.getPreset(meta.name)) continue;
-      orchestrator.addAgentPreset({
+      if (resourceHub.subagents.getPreset(meta.name)) continue;
+      resourceHub.addAgentPreset({
         name: meta.name,
         description: meta.description,
         systemPrompt: '',
@@ -1785,39 +3503,6 @@ export function createRuntimeApprovalPort(options: {
         return false;
       }
     },
-  });
-}
-
-/** Consume an interaction reply before middleware, commands, or Agent fallback. */
-export function consumeRuntimeInteraction(
-  interactions: InteractionRouter,
-  message: Message,
-): Promise<boolean> {
-  const address = runtimeInteractionAddress(message);
-  if (!address) return Promise.resolve(false);
-  return interactions.consume({
-    ...address,
-    text: message.content,
-    deliver: async (text) => {
-      const receipt = await message.$reply(text);
-      if (receipt.status !== 'sent') {
-        throw new Error(`Interaction delivery failed: ${receipt.status}${receipt.failure ? ` (${receipt.failure.code})` : ''}`);
-      }
-    },
-  });
-}
-
-function runtimeInteractionAddress(
-  message: Message,
-): Readonly<{ sessionKey: string; subjectId: string }> | undefined {
-  const platform = capabilityLocalName(String(message.conversation.endpoint.id)).trim();
-  const endpoint = message.endpointId?.trim();
-  const subjectId = message.sender?.id?.trim();
-  const sceneId = message.conversation.id.trim();
-  if (!platform || !endpoint || !subjectId || !sceneId) return undefined;
-  return Object.freeze({
-    sessionKey: `${platform}:${endpoint}:${message.conversation.kind}:${sceneId}`,
-    subjectId,
   });
 }
 

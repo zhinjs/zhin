@@ -263,7 +263,7 @@ Type: Discuss
 | `AgentDispatcher` | 删除，不 deprecate | capability/availability 匹配归纯 Scheduler decision；交付归 durable Assignment Dispatch Outbox/worker；状态归 Journal projection | 不存在 mutable task map、`recordResult`、`canExecute` 或第二个 terminal writer |
 | `remote_mesh`、`RemoteAgentRegistry`、poller | 删除，不保留配置别名 | `RemoteAssignmentExecutor` 作为与 local 同构的 `AssignmentExecutorPort` adapter；endpoint 能力来自 generation/Profile snapshot | A2A task/status 只是 transport receipt/observation，不能直接 complete/fail/accept Workroom Task |
 | 固定 five-agent workflow strategy | 删除执行策略；角色模板可作为 Profile/Agent Definition 示例保留 | #10 的 versioned Workflow Strategy + Capability Pack | 角色字符串和静态 tool allowlist 不是 authority；每次 Assignment 以 Execution Envelope 的 capability/policy snapshot 为准 |
-| 当前名为 `AgentOrchestrator` 的 tool/skill/subagent/MCP/hook registry | 保留实现职责，但从 Workroom 术语中移出并改为 `AgentResourceHub`（或最终等价名） | Agent capability/resource module | 它不生成 Plan、不调度 Assignment、不写 Workroom Journal；`Orchestrator` 只指 Workroom 中受 Envelope 约束的协作角色 |
+| `AgentResourceHub` tool/skill/subagent/MCP/hook registry | 保留资源注册职责，不是 Workroom Orchestrator | Agent capability/resource module | 它不生成 Plan、不调度 Assignment、不写 Workroom Journal；`Orchestrator` 只指 Workroom 中受 Envelope 约束的协作角色 |
 | schedule 侧 `TaskExecutor` | 保留，但明确属于独立 Schedule execution domain | schedule module | Schedule Job 不是 Workroom Task；若未来接入 Workroom，必须通过显式 Inbox/Plan admission，不能因同名共享状态 |
 
 目标执行接口刻意保持很窄：Kernel 签发不可伪造的 Assignment Execution Envelope；`AssignmentExecutorPort` 只接收这份 envelope 并提交 progress、heartbeat、checkpoint、typed report/candidate 等 observation。Local 与 Remote 是这个 seam 的两个真实 adapter。Executor 不获得任意 `runId/taskId/owner/clock` 参数来替别人 claim、accept 或推进状态；Scheduler 也只返回确定性 decisions，网络交付由 outbox worker 完成。由此删除 `AgentDispatcher` 后没有必要再造一个同义 class。
@@ -278,7 +278,7 @@ Workroom 的模型工具也必须随迁移收窄。当前生产切片中的通�
 4. 旧持久化 Run 只提供离线只读导出/审计，不自动恢复为新 Assignment。旧 `completed` 没有 claim-level Acceptance Record，不能升级成 `accepted` Project State；迁移工具最多把目标、输入、artifact ref 与历史结果作为带 `legacy_import` provenance 的 untrusted Inbox/Evidence 候选，由 Sponsor 显式 replan/re-accept。升级时仍 active 的旧 Run 标记 `migration_required`，必须可导出、取消或重规划，禁止两套 runtime 继续抢占。
 5. changeset 对 `@zhin.js/agent`、`zhin.js`、CLI/Console 及受影响契约包标记 major，逐项列出 removed export/config/route、替代 API 与数据处理规则。完成标准不是“类型能编译”，而是 repository-wide 搜索无旧生产符号、无第二状态 writer、普通 chat `spawn_task` 不产生 Workroom event、Workroom Agent 看不到 `spawn_task`，local/remote adapter 对 Kernel 产生同构事件，旧数据不会被误认作 accepted。
 
-现状审计：当前工作树已经删除旧 `OrchestrationService/Kernel`、mutable repositories、`AgentDispatcher`、five-agent executing strategy、remote registry/poller、旧 Console route，以及执行型 `zhin.js/agent` pipeline APIs，并增加了 major changeset、breaking migration matrix 与 `check:workroom-ssot`；`spawn_task` 也已移除 `run_id/task_id` 和 Session→Run 隐式创建。尚未完成的是纯 Plan builder、`AgentOrchestrator` 资源中心改名、真正的 Space Router 隔离、role-scoped Workroom command ports、旧数据导出/拒绝策略，以及 API/config 门禁。因此这些进入生产化 Ledger，不能因旧文件已经删除就宣告 #9 全部上线。
+现状审计：当前工作树已经删除旧 `OrchestrationService/Kernel`、mutable repositories、`AgentDispatcher`、five-agent executing strategy、remote registry/poller、旧 Console route，以及执行型 `zhin.js/agent` pipeline APIs，并增加了 major changeset、breaking migration matrix 与 `check:workroom-ssot`；`spawn_task` 也已移除 `run_id/task_id` 和 Session→Run 隐式创建。资源中心已以 `AgentResourceHub` 公开且无旧名 alias；仍未完成的 #9 项目包括旧数据导出/拒绝策略与全链验收，不能因单个 tracer 完成就宣告 #9 全部上线。
 
 ## #10: 定义领域 Workroom Profile 与受治理演进
 

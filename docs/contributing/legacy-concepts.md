@@ -72,10 +72,41 @@ export default defineAdapter<MyConfig>({
 | `zhin.js/agent` 的 `runPipeline` / `runParallel` / `route` | 普通一次性模型调用改用 `AIService.runAgent`（需要并行时由调用方显式组合 Promise）；需要 durable 多 Agent 协作时提交 Workroom Inbox/Plan proposal。未来的 workflow builder 只构造 Plan，不直接执行 Agent。 |
 | `spawn_task(run_id, task_id, ...)` | 普通 chat 只保留不带 Workroom identity 的临时 `spawn_task`；Project 工作必须由 Workroom Kernel 创建 Task/Assignment，不能把 subtask id 当 Task id。 |
 | `OrchestrationService` / `OrchestrationKernel` / repositories / `AgentDispatcher` | 无兼容替代对象。状态读取转向 Workroom Journal replay/projection；写入必须使用受 principal/role 约束的 Workroom command port。 |
-| `ai.remoteAgents` / `remote_mesh` / Remote Agent poller | 不再支持。Remote A2A 将作为标准 `AssignmentExecutorPort` adapter 接入，复用 local Assignment 的 lease/fence/report/acceptance；在正式发布前不得用旧配置模拟。 |
+| `ai.remoteAgents` / `remote_mesh` / Remote Agent poller | 不再支持。Remote A2A 已作为标准 `AssignmentExecutorPort` transport 接入，复用 local Assignment 的 lease/fence/report/acceptance，并且只接受持久 Catalog 与 generation-owned authority；不得用旧配置模拟或绕过 Grant。 |
 | `/api/agent/orchestration/runs` / `/console/orchestration` | 改为 Project-scoped `/api/agent/workroom/runs?projectId=...` 与 Workroom Console 页面；它们都是只读 projection。 |
 
 旧 Run 不自动恢复或升级成新状态。特别是旧 `completed` 没有 claim-level Acceptance Record，不能当成 `accepted` Project State；历史数据只可离线导出审计，或以带 `legacy_import` provenance 的 untrusted Inbox/Evidence 候选重新规划和验收。已落地的权威边界见 [Agent CONTEXT](../../packages/im/agent/CONTEXT.md)。
+
+离线工具只接受两种真实旧表面：包含 `orchestration_runs`、`orchestration_tasks`、`orchestration_events` 三个数组的旧 Repository 表导出，或旧只读 API 的单个 `{ run, tasks, events }` `RunSnapshot` JSON。字段、状态枚举、JSON 列、引用和 event sequence 任一损坏或未知都会拒绝，不做宽松修复：
+
+```bash
+# 只读审计；输出文件采用 create-only，绝不覆盖来源或已有审计
+zhin agent legacy-runs ./legacy-orchestration.json --output ./legacy-audit.json
+
+# active 旧 Run 只能产生纯数据 proposal；该命令不会启动 Agent 或写新 Journal
+zhin agent legacy-runs ./legacy-orchestration.json \
+  --run old-run-id --proposal replan --project target-project \
+  --output ./legacy-replan-proposal.json
+
+zhin agent legacy-runs ./legacy-orchestration.json \
+  --run old-run-id --proposal cancel \
+  --output ./legacy-cancel-proposal.json
+```
+
+`open/running/waiting` 报告为 `migration_required`，只允许 `export | cancel_proposal | replan_proposal`；终态只作 `historical_only` 导出。所有报告固定 `accepted: false`，所有 Inbox/Evidence 输出固定为 `trust: untrusted` + `legacy_import` provenance。replan proposal 必须显式指定目标 Project，且仍需由新版 Kernel 的受信 migration admission 重新验收；离线工具自身永远不写 `workroom_events`。
+
+旧 Workroom Journal、Projection、Evidence/Task Report 或 Artifact Header 若曾内嵌正文、subject identifier 或 credential，必须先离线隔离审计，再由人工审批独立执行 export/purge。扫描器只输出字段路径、category、record ref 与 record hash；不会输出原值、片段或原始 JSON，purge plan 固定为 `proposal_only`：
+
+```bash
+zhin agent legacy-payloads ./.zhin/workroom-projections \
+  --kind projection --storage file --output ./legacy-payload-audit.json
+
+# Database 必须先做显式 versioned read-only row mapping export；工具不连接生产 writer。
+zhin agent legacy-payloads ./legacy-workroom-events-export.json \
+  --kind journal --storage database --output ./legacy-journal-payload-audit.json
+```
+
+active store 必须在打开 production writer 前运行同一 fail-closed gate；发现任意 legacy embedded payload 时固定拒绝启动 writer，不自动导入、重写或删除。
 
 ## 相关阅读
 

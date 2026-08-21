@@ -28,9 +28,9 @@ _避免使用_：`getScheduleTurnContext()`、ambient prompt mode、Schedule 借
 Agent 执行的唯一终态，判别为 `completed | failed | cancelled | budget_exceeded`，包含输出内容、usage、tool calls 与 terminal reason；每个 turn 恰好产生一次，并先进入 Event Journal，再由入口决定同步返回、流式投影或投递。
 _避免使用_：string reply、throw-or-message 双轨、无终态 generator
 
-**Agent Orchestrator**:
+**Agent Resource Hub**:
 工具、技能、子代理、MCP 服务和 AI 生命周期 Hook 的注册表所有者。
-_避免使用_：manager、registry bag、service locator
+_避免使用_：Agent Orchestrator、manager、registry bag、service locator
 
 **Tool**:
 面向 Zhin 运行时的可调用能力，带有元数据、权限级别和可选的上下文注入参数。
@@ -73,7 +73,7 @@ Agent Runtime 中的 MCP server **声明** Feature；不含已连接后的工具
 _避免使用_：已连接工具池、MCP host server
 
 **Capability Ingress**:
-把 Capability Feature（及常驻核心）按需装入 **Agent Orchestrator** 的 seam；Boot 装 reserved/builtin，入站按 `canAccessTool`（platforms / scopes / permissions）装载并按可达投影缓存；换出上一轮 on-demand 条目（有活动回合持有时延迟到 lease 释放再清除）。实现类为 `FeatureCapabilityIngress`（`src/ingress/`），与 `@zhin.js/agent/runtime` 的 Plugin Runtime `CapabilityIngress`（`src/plugin-runtime/`）区分。
+把 Capability Feature（及常驻核心）按需装入 **Agent Resource Hub** 的 seam；Boot 装 reserved/builtin，入站按 `canAccessTool`（platforms / scopes / permissions）装载并按可达投影缓存；换出上一轮 on-demand 条目（有活动回合持有时延迟到 lease 释放再清除）。实现类为 `FeatureCapabilityIngress`（`src/ingress/`），与 `@zhin.js/agent/runtime` 的 Plugin Runtime `CapabilityIngress`（`src/plugin-runtime/`）区分。
 _避免使用_：双写 bridge、mount 全量同步、作者侧第二套 adapter/scene/role 声明语言
 
 **Tool Ingress**:
@@ -455,8 +455,8 @@ Session lifecycle 写权威只有 `ContextRepository`；archive 不得再代理�
 
 ## 关系
 
-- 插件与文件发现向 **Capability Feature** 写入；**Capability Ingress** 在 Boot（常驻核心）与入站（命中 **Agent Binding** 作用域）把能力装入 **Agent Orchestrator**；回合只读 Orchestrator。
-- **ZhinAgent** 通过 **Agent Orchestrator** 发现已装载的 **Tool**、**Skill**、**Subagent** 与 Hook；MCP **声明** 在 **MCPFeature**，generation 激活时连接，入站再按 **Agent Binding** 的 `mcpServers` 过滤；工具以 `${qualifiedServer}__${tool}` 的 owner-qualified 名称并入工具池。
+- 插件与文件发现向 **Capability Feature** 写入；**Capability Ingress** 在 Boot（常驻核心）与入站（命中 **Agent Binding** 作用域）把能力装入 **Agent Resource Hub**；回合只读 Resource Hub。
+- **ZhinAgent** 通过 **Agent Resource Hub** 发现已装载的 **Tool**、**Skill**、**Subagent** 与 Hook；MCP **声明** 在 **MCPFeature**，generation 激活时连接，入站再按 **Agent Binding** 的 `mcpServers` 过滤；工具以 `${qualifiedServer}__${tool}` 的 owner-qualified 名称并入工具池。
 - 主路径 Agent 选用由配置 **Agent Binding**（`agents[].match`）决定；**AgentFeature** 仅提供专长 / **Subagent** 预设。
 - **Tool Selection** 在 **Permission Level** 检查后把 **Tool** 转换为 **AgentTool**；装载过滤与 Selection 共用 `platforms` / `scopes` / `permissions`。
 - **Tool Runtime** 基于 **Tool Selection** 的结果补充上下文工具，并决定 **Pre-executable Tool** 是走快速路径还是完整 Agent 路径。
@@ -482,7 +482,7 @@ Session lifecycle 写权威只有 `ContextRepository`；archive 不得再代理�
 ## 示例对话
 
 > **开发者：** “我可以直接注册一个模型函数作为 **AgentTool** 吗？”
-> **领域专家：** “装配期写入 **ToolFeature**（或 `defineAgentTool` 发现）。**Capability Ingress** 再装入 **Agent Orchestrator**；**Tool Selection** 负责权限检查、上下文注入，以及转换为 **AgentTool**。”
+> **领域专家：** “装配期写入 **ToolFeature**（或 `defineAgentTool` 发现）。**Capability Ingress** 再装入 **Agent Resource Hub**；**Tool Selection** 负责权限检查、上下文注入，以及转换为 **AgentTool**。”
 
 ## 已标记歧义
 
@@ -508,9 +508,9 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 | 理想模块 | 包内路径 | 主要落层 | 与下层关系 |
 |----------|----------|----------|------------|
 | Agent Core | `src/core/` | agent | **委托** `@zhin.js/ai` `agentLoop`；禁止自有 LLM 迭代（ADR 0009） |
-| Tool System | `src/tool/` | agent | 包装 orchestrator + builtin + MCP 生命周期 |
+| Tool System | `src/tool/` | agent | 组合 `AgentResourceHub` 能力注册表、builtin 与 MCP 生命周期；不拥有 Workroom 状态 |
 | Session System | `src/session/` | agent | origin-neutral session store + explicit transport-provided `ApprovalPort` |
-| Event System | `src/event/` | agent | Agent turn 域事件 + **AgentStreamBus**（per-orchestrator egress）；不替代 Kernel RunEvent 或 plugin `before.*` |
+| Event System | `src/event/` | agent | Agent turn 域事件 + **AgentStreamBus**（per-resource-hub egress）；不替代 Kernel RunEvent 或 plugin `before.*` |
 | Skill System | `src/skill/` | agent | 包装 `SkillRegistry` + discovery |
 | Memory System | `src/memory/` | agent → port → ai | `MemoryStore` 适配 `ContextRepository`；压缩委托 ai compaction |
 | Subagent System | `src/subagent/` | agent | `SubagentSystem` spawn/cancel；`ResultSink` 对接 outbound |
@@ -526,7 +526,7 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 | Tool System | `src/tool/` | `@zhin.js/agent/tool` |
 | Session System | `src/session/` | `@zhin.js/agent/session` |
 | Event System | `src/event/`（含 `event-emitter.ts`、`session-events.ts`） | `@zhin.js/agent/event` |
-| Skill System | `src/skill/`、`orchestrator/skill-registry.ts` | `@zhin.js/agent/skill` |
+| Skill System | `src/skill/`、`resource-hub/skill-registry.ts` | `@zhin.js/agent/skill` |
 | Memory System | `src/memory/`、`ContextRepository`（ai） | `@zhin.js/agent/memory` |
 | Subagent System | `src/subagent/`、`SubagentSystem` | `@zhin.js/agent/subagent` |
 | Context System | `src/context/` | `@zhin.js/agent/context` |

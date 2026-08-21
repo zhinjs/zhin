@@ -122,7 +122,7 @@ a2a:
   path: /a2a
 ```
 
-Both sections are mounted on the HTTP Host and enabled as needed; when not configured, the corresponding SDK is not loaded.
+Both sections are mounted on the HTTP Host and enabled as needed; when not configured, the corresponding SDK is not loaded. Remote Workroom execution uses fixed-generation `a2a.workroomCallbacks` and `a2a.workroomRemoteExecutors` transport bindings. Project membership and conversation bindings remain in the persistent Workroom Catalog, not in process configuration. See the complete [`@zhin.js/a2a` example](../../packages/host/a2a/README.md#workroom-execution-callbacks).
 
 ## ai
 
@@ -247,7 +247,7 @@ ai:
     timeout: 60000
 ```
 
-`ai.multimodal` (image/audio/video inbound and outbound strategies), `ai.knowledge.baseDir` (local knowledge base directory, default `knowledge`), etc., are configured as needed. Remote Agents are no longer attached through an `ai.remoteAgents` side path; a future A2A Executor must follow Workroom Assignment leases and Journal events.
+`ai.multimodal` (image/audio/video inbound and outbound strategies), `ai.knowledge.baseDir` (local knowledge base directory, default `knowledge`), etc., are configured as needed. Remote Agents are no longer attached through an `ai.remoteAgents` side path. The optional A2A Executor is admitted only through the persistent Workroom Catalog and generation-owned Profile/Grant/Workspace/Disclosure/Endpoint authority, and it follows Workroom Assignment lease/fence and Journal events.
 
 `ai.workrooms` has been removed. Projects, members, and collaboration spaces are managed by the persistent Workroom Catalog in Console; revision-checked saves take effect without restarting the runtime.
 

@@ -1,11 +1,7 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import {
-  link,
-  mkdir,
-  open,
   readFile,
   rename,
-  unlink,
 } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { WorkroomDefinition } from './catalog-definition.js';
@@ -14,6 +10,7 @@ import {
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
 } from './canonical-value.js';
+import { DurableFileStore } from './durable-file-store.js';
 
 export interface WorkroomCatalogSnapshot {
   readonly definitions: Readonly<Record<string, WorkroomDefinition>>;
@@ -63,8 +60,11 @@ export class ActivatableWorkroomCatalog implements WorkroomCatalog {
 /** Restart-durable fallback used when ai.sessions.useDatabase=false. */
 export class FileWorkroomCatalog implements WorkroomCatalog {
   #tail: Promise<unknown> = Promise.resolve();
+  readonly #durable: DurableFileStore;
 
-  constructor(readonly file: string) {}
+  constructor(readonly file: string) {
+    this.#durable = new DurableFileStore(dirname(file));
+  }
 
   async read(): Promise<WorkroomCatalogSnapshot> {
     return parseCatalogFile(await readFile(this.file, 'utf8').catch((error: NodeJS.ErrnoException) => {
@@ -91,45 +91,36 @@ export class FileWorkroomCatalog implements WorkroomCatalog {
     const current = await this.read();
     if (current.revision !== expectedRevision) {
       if (current.revision === candidate.revision) {
-        await syncDirectory(dirname(this.file));
+        await this.#durable.syncLeaf();
         return current;
       }
       throw new WorkroomCatalogRevisionConflictError(expectedRevision, current.revision);
     }
-    const directory = dirname(this.file);
-    await ensureDurableDirectory(directory);
-    const temporary = `${this.file}.${randomUUID()}.tmp`;
+    await this.#durable.ensureDurableLeaf('Workroom Catalog');
     const lock = `${this.file}.cas-${expectedRevision}`;
     const encoded = JSON.stringify({
       version: 1,
       revision: candidate.revision,
       definitions: candidate.definitions,
     });
-    const handle = await open(temporary, 'wx');
-    try {
-      await handle.writeFile(encoded, 'utf8');
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
     let ownsLock = false;
     try {
-      try {
-        await link(temporary, lock);
-        ownsLock = true;
-      } catch (error) {
-        if (!isNodeError(error, 'EEXIST')) throw error;
-        const recovered = await this.#publishPending(lock, expectedRevision, directory);
-        if (recovered.revision === candidate.revision) return recovered;
-        throw new WorkroomCatalogRevisionConflictError(expectedRevision, recovered.revision);
-      }
-      await unlink(temporary).catch(error => {
-        if (!isNodeError(error, 'ENOENT')) throw error;
+      const lockPublication = await this.#durable.publishCreateOnly({
+        target: lock,
+        content: encoded,
+        createdValue: undefined,
+        onConflict: async () => {
+          const recovered = await this.#publishPending(lock, expectedRevision);
+          if (recovered.revision === candidate.revision) return recovered;
+          throw new WorkroomCatalogRevisionConflictError(expectedRevision, recovered.revision);
+        },
       });
+      if (lockPublication.status === 'replayed') return lockPublication.value;
+      ownsLock = true;
       const latest = await this.read();
       if (latest.revision !== expectedRevision) {
         if (latest.revision === candidate.revision) {
-          await syncDirectory(directory);
+          await this.#durable.syncLeaf();
           return latest;
         }
         throw new WorkroomCatalogRevisionConflictError(expectedRevision, latest.revision);
@@ -144,22 +135,22 @@ export class FileWorkroomCatalog implements WorkroomCatalog {
         }
       }
       ownsLock = false;
-      await syncDirectory(directory);
+      await this.#durable.syncLeaf();
       const stored = await this.read();
       if (stored.revision !== candidate.revision) {
         throw new Error('Workroom Catalog durable publish drift');
       }
       return stored;
     } finally {
-      await unlink(temporary).catch(() => undefined);
-      if (ownsLock) await unlink(lock).catch(() => undefined);
+      if (ownsLock) {
+        await this.#durable.removeIfExists(lock, true);
+      }
     }
   }
 
   async #publishPending(
     lock: string,
     expectedRevision: string,
-    directory: string,
   ): Promise<WorkroomCatalogSnapshot> {
     const pending = await readFile(lock, 'utf8').then(parseCatalogFile).catch(async error => {
       if (!isNodeError(error, 'ENOENT')) throw error;
@@ -167,10 +158,7 @@ export class FileWorkroomCatalog implements WorkroomCatalog {
     });
     const current = await this.read();
     if (current.revision !== expectedRevision) {
-      await unlink(lock).catch(error => {
-        if (!isNodeError(error, 'ENOENT')) throw error;
-      });
-      await syncDirectory(directory);
+      await this.#durable.removeIfExists(lock, true);
       return current;
     }
     try {
@@ -178,7 +166,7 @@ export class FileWorkroomCatalog implements WorkroomCatalog {
     } catch (error) {
       if (!isNodeError(error, 'ENOENT')) throw error;
     }
-    await syncDirectory(directory);
+    await this.#durable.syncLeaf();
     const published = await this.read();
     if (published.revision === expectedRevision && pending.revision !== expectedRevision) {
       throw new Error('Workroom Catalog pending publish disappeared before recovery');
@@ -311,7 +299,7 @@ function normalizeDefinitions(
     }
     const definition = value[projectId];
     if (!isRecord(definition)) throw new Error(`Invalid Workroom Catalog ${projectId} schema`);
-    exactKeys(definition, ['name', 'description', 'enabled', 'members', 'conversation'], projectId);
+    exactKeys(definition, ['name', 'description', 'enabled', 'members', 'sponsors', 'conversation'], projectId);
     text(definition.name, `${projectId}.name`);
     if (definition.description !== undefined && typeof definition.description !== 'string') {
       throw new Error(`Invalid Workroom Catalog ${projectId}.description`);
@@ -329,6 +317,19 @@ function normalizeDefinitions(
       }
       return { agent: member.agent, role: member.role } as WorkroomDefinition['members'][number];
     });
+    let sponsors: string[] | undefined;
+    if (definition.sponsors !== undefined) {
+      if (!Array.isArray(definition.sponsors)) throw new Error(`Invalid Workroom Catalog ${projectId}.sponsors`);
+      const seenSponsors = new Set<string>();
+      sponsors = definition.sponsors.map((principalId, index) => {
+        text(principalId, `${projectId}.sponsors.${index}`);
+        if (seenSponsors.has(principalId)) {
+          throw new Error(`Invalid Workroom Catalog ${projectId}.sponsors duplicate: ${principalId}`);
+        }
+        seenSponsors.add(principalId);
+        return principalId;
+      }).sort((left, right) => left.localeCompare(right));
+    }
     let conversation: WorkroomDefinition['conversation'];
     if (definition.conversation !== undefined) {
       const entry = definition.conversation;
@@ -354,6 +355,7 @@ function normalizeDefinitions(
       ...(definition.description?.trim() ? { description: definition.description } : {}),
       ...(definition.enabled === undefined ? {} : { enabled: definition.enabled }),
       members,
+      ...(sponsors === undefined ? {} : { sponsors }),
       ...(conversation === undefined ? {} : { conversation }),
     };
   }
@@ -384,22 +386,6 @@ function revision(value: unknown, field: string): asserts value is string {
   if (typeof value !== 'string' || !/^[a-f0-9]{64}$/u.test(value)) {
     throw new Error(`Invalid Workroom Catalog ${field}`);
   }
-}
-
-async function syncDirectory(directory: string): Promise<void> {
-  const handle = await open(directory, 'r');
-  try {
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-}
-
-async function ensureDurableDirectory(directory: string): Promise<void> {
-  await mkdir(directory).catch(error => {
-    if (!isNodeError(error, 'EEXIST')) throw error;
-  });
-  await syncDirectory(dirname(directory));
 }
 
 function isNodeError(error: unknown, code: string): error is NodeJS.ErrnoException {

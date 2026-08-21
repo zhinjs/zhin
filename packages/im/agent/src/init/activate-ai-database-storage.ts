@@ -4,7 +4,11 @@
 import { type AIConfig, AgentSessionStore, DatabaseContextRepository, DatabaseMemoryEntryRepository } from '@zhin.js/ai';
 import { DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT } from '../context/context-tail-limit.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
-import { ActivatableWorkroomJournal, DatabaseWorkroomJournal } from '../workroom/journal.js';
+import {
+  ActivatableWorkroomJournal,
+  DatabaseWorkroomJournal,
+  type WorkroomJournalPayloadPort,
+} from '../workroom/journal.js';
 import { ActivatableWorkroomCatalog, DatabaseWorkroomCatalog } from '../workroom/catalog.js';
 import type { AIServiceRefs } from '../internal/ai-service-refs.js';
 import {
@@ -17,6 +21,7 @@ export async function activateAiDatabaseStorage(
   refs: AIServiceRefs,
   config: AIConfig,
   workroomJournal: ActivatableWorkroomJournal,
+  workroomJournalPayloads: WorkroomJournalPayloadPort,
   workroomCatalog: ActivatableWorkroomCatalog,
   semanticMemory: SemanticMemoryRuntime | null,
 ): Promise<void> {
@@ -67,7 +72,15 @@ export async function activateAiDatabaseStorage(
 
   const workroomEventModel = db.models?.get('workroom_events');
   if (!workroomEventModel) throw new Error('Workroom requires the workroom_events database model');
-  workroomJournal.activate(new DatabaseWorkroomJournal(db, workroomEventModel));
+  const databaseWorkroomJournal = new DatabaseWorkroomJournal(
+    db,
+    workroomEventModel,
+    workroomJournalPayloads,
+  );
+  // Validate every persisted row before publishing the production writer latch.
+  // Old unsigned v2 rows remain offline migration candidates and never become active state.
+  await databaseWorkroomJournal.scanStoredHeaders();
+  workroomJournal.activate(databaseWorkroomJournal);
   const workroomCatalogModel = db.models?.get('workroom_catalog');
   if (!workroomCatalogModel) throw new Error('Workroom requires the workroom_catalog database model');
   workroomCatalog.activate(new DatabaseWorkroomCatalog(db, workroomCatalogModel));

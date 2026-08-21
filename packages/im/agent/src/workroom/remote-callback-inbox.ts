@@ -1,19 +1,21 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import {
-  link as nodeLink,
-  mkdir as nodeMkdir,
-  open as nodeOpen,
   readFile as nodeReadFile,
   readdir as nodeReaddir,
-  unlink as nodeUnlink,
 } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import {
   canonicalWorkroomJson as stableJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
 } from './canonical-value.js';
 import type { AssignmentExecutionObservation } from './assignment-executor.js';
+import {
+  DurableFileStore,
+  nodeDurableFileSystem,
+  type DurableFileHandle,
+  type DurableFileSystem,
+} from './durable-file-store.js';
 
 export interface RemoteExecutionLinkInput {
   readonly linkedAt: number;
@@ -298,47 +300,36 @@ export class MemoryRemoteCallbackInboxRepository implements RemoteCallbackInboxR
   }
 }
 
-export interface RemoteCallbackInboxFileHandle {
-  writeFile(value: string, encoding: 'utf8'): Promise<void>;
-  sync(): Promise<void>;
-  close(): Promise<void>;
-}
+export type RemoteCallbackInboxFileHandle = DurableFileHandle;
 
-export interface RemoteCallbackInboxFileSystem {
-  mkdir(path: string): Promise<void>;
+export interface RemoteCallbackInboxFileSystem extends DurableFileSystem {
   readdir(path: string): Promise<readonly string[]>;
   readFile(path: string, encoding: 'utf8'): Promise<string>;
-  open(path: string, flags: 'wx' | 'r'): Promise<RemoteCallbackInboxFileHandle>;
-  link(existingPath: string, newPath: string): Promise<void>;
-  unlink(path: string): Promise<void>;
 }
 
 const nodeFileSystem: RemoteCallbackInboxFileSystem = Object.freeze({
-  mkdir: async (path: string): Promise<void> => { await nodeMkdir(path); },
+  ...nodeDurableFileSystem,
   readdir: async (path: string): Promise<readonly string[]> => await nodeReaddir(path),
   readFile: async (path: string, encoding: 'utf8'): Promise<string> =>
     await nodeReadFile(path, encoding),
-  open: async (
-    path: string,
-    flags: 'wx' | 'r',
-  ): Promise<RemoteCallbackInboxFileHandle> => await nodeOpen(path, flags),
-  link: async (existingPath: string, newPath: string): Promise<void> =>
-    await nodeLink(existingPath, newPath),
-  unlink: async (path: string): Promise<void> => await nodeUnlink(path),
 });
 
 /** Immutable file segments plus hard-link claim provide a restart-safe filesystem CAS. */
 export class FileRemoteCallbackInboxRepository implements RemoteCallbackInboxRepository {
+  readonly #durable: DurableFileStore;
+
   constructor(
     readonly directory: string,
     readonly fileSystem: RemoteCallbackInboxFileSystem = nodeFileSystem,
-  ) {}
+  ) {
+    this.#durable = new DurableFileStore(directory, fileSystem);
+  }
 
   async read(linkId: string): Promise<RemoteCallbackInboxProjection | undefined> {
     const events = await this.#readEvents(identifier(linkId, 'linkId'));
     // A prior hard-link may have succeeded while its directory fsync failed.
     // Re-observing the file is not durability proof; sync before confirming it.
-    if (events.length > 0) await this.#syncDirectory();
+    if (events.length > 0) await this.#durable.syncLeaf();
     return project(events);
   }
 
@@ -351,10 +342,10 @@ export class FileRemoteCallbackInboxRepository implements RemoteCallbackInboxRep
     const current = await this.#readEvents(id);
     const appended = materializeAppend(id, current, expectedSequence, drafts);
     if (appended.length === 0 || appended.every(event => event.sequence < current.length)) {
-      if (current.length > 0) await this.#syncDirectory();
+      if (current.length > 0) await this.#durable.syncLeaf();
       return appended;
     }
-    await this.#ensureDirectory();
+    await this.#durable.ensureDurableLeaf('Remote Callback Inbox');
     const firstSequence = appended[0]!.sequence;
     const streamDigest = hash(id);
     const segmentPath = join(
@@ -362,48 +353,24 @@ export class FileRemoteCallbackInboxRepository implements RemoteCallbackInboxRep
       `${streamDigest}.${String(firstSequence).padStart(16, '0')}.json`,
     );
     const encoded = JSON.stringify(appended);
-    // UUID is only an ephemeral filesystem staging name. All durable/domain
-    // identities remain deterministic and caller supplied.
-    const temporaryPath = `${segmentPath}.${randomUUID()}.tmp`;
-    let temporaryExists = false;
-    try {
-      const handle = await this.fileSystem.open(temporaryPath, 'wx');
-      temporaryExists = true;
-      try {
-        await handle.writeFile(encoded, 'utf8');
-        await handle.sync();
-      } finally {
-        await handle.close();
-      }
-      await this.fileSystem.link(temporaryPath, segmentPath);
-      await this.fileSystem.unlink(temporaryPath);
-      temporaryExists = false;
-      await this.#syncDirectory();
-    } catch (error) {
-      if (temporaryExists) {
-        await this.fileSystem.unlink(temporaryPath).catch(cleanupError => {
-          if (!isMissingFile(cleanupError)) throw cleanupError;
-        });
-        temporaryExists = false;
-      }
-      if (!isAlreadyExists(error)) throw error;
-      const winner = await this.#readEvents(id);
-      const replay = materializeAppend(id, winner, expectedSequence, drafts);
-      await this.#syncDirectory();
-      if (replay.length > 0 && replay.every(event => event.sequence < winner.length)) return replay;
-      throw new RemoteCallbackInboxSequenceConflictError(
-        id,
-        expectedSequence,
-        winner.at(-1)?.sequence ?? -1,
-      );
-    } finally {
-      if (temporaryExists) {
-        await this.fileSystem.unlink(temporaryPath).catch(error => {
-          if (!isMissingFile(error)) throw error;
-        });
-      }
-    }
-    return appended;
+    const published = await this.#durable.publishCreateOnly({
+      target: segmentPath,
+      content: encoded,
+      createdValue: appended,
+      onConflict: async () => {
+        const winner = await this.#readEvents(id);
+        const replay = materializeAppend(id, winner, expectedSequence, drafts);
+        if (replay.length > 0 && replay.every(event => event.sequence < winner.length)) {
+          return replay;
+        }
+        throw new RemoteCallbackInboxSequenceConflictError(
+          id,
+          expectedSequence,
+          winner.at(-1)?.sequence ?? -1,
+        );
+      },
+    });
+    return published.value;
   }
 
   async #readEvents(linkId: string): Promise<readonly RemoteCallbackInboxEvent[]> {
@@ -439,35 +406,6 @@ export class FileRemoteCallbackInboxRepository implements RemoteCallbackInboxRep
     return Object.freeze(events);
   }
 
-  async #ensureDirectory(): Promise<void> {
-    try {
-      await this.fileSystem.mkdir(this.directory);
-    } catch (error) {
-      if (!isAlreadyExists(error)) {
-        if (isMissingFile(error)) {
-          throw new Error(
-            `Remote Callback Inbox requires a pre-existing durable parent directory: ${dirname(this.directory)}`,
-            { cause: error },
-          );
-        }
-        throw error;
-      }
-    }
-    await this.#syncPath(dirname(this.directory));
-  }
-
-  async #syncDirectory(): Promise<void> {
-    await this.#syncPath(this.directory);
-  }
-
-  async #syncPath(path: string): Promise<void> {
-    const handle = await this.fileSystem.open(path, 'r');
-    try {
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-  }
 }
 
 export interface RemoteCallbackInboxOptions {
@@ -1534,8 +1472,4 @@ function hash(value: string): string {
 
 function isMissingFile(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
-}
-
-function isAlreadyExists(error: unknown): boolean {
-  return error instanceof Error && 'code' in error && error.code === 'EEXIST';
 }

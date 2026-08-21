@@ -213,6 +213,50 @@ describe('DeferredCapabilityPlan', () => {
     expect(chat.allTools.map((entry) => entry.name)).not.toContain(qualifiedCommand);
   });
 
+  it('keeps every Workroom writer and projector capability out of ordinary chat', async () => {
+    const owner = rootPluginId();
+    const forbidden = [
+      'workroom_claim_task',
+      'plugin__workroom_advance_clock',
+      'workroom_accept_task',
+      'plugin__workroom_lease_recovery',
+      'workroom_projector_apply',
+    ];
+    const plan = createDeferredCapabilityPlan({
+      capabilities: Object.freeze({
+        generation: 7,
+        owner,
+        tools: Object.freeze([
+          tool(owner, 'spawn_task', 'Spawn a chat-only subtask'),
+          tool(owner, 'workroomish_helper', 'Ordinary domain tool with a similar word'),
+          ...forbidden.map(name => tool(owner, name, name)),
+        ]),
+        skills: Object.freeze([]),
+        agents: Object.freeze([]),
+        mcp: Object.freeze([]),
+      }),
+      sessionSnapshot: {
+        loadedTools: Object.fromEntries(forbidden.map((name, index) => [name, index + 1])),
+        loadedSkills: [],
+      },
+      config: { deferredTools: { alwaysLoadedTools: ['spawn_task', ...forbidden] } },
+      persistSnapshot: async () => undefined,
+    });
+
+    expect(plan.allTools.map(entry => entry.name)).toContain('spawn_task');
+    expect(plan.allTools.map(entry => entry.name)).toContain('workroomish_helper');
+    expect(plan.allTools.map(entry => entry.name)).not.toEqual(expect.arrayContaining(forbidden));
+    const discovery = String(await execute(
+      plan.capabilities,
+      'discover',
+      { query: 'workroom', kind: 'tool' },
+    ));
+    expect(discovery).toContain('workroomish_helper');
+    for (const name of forbidden) expect(discovery).not.toContain(name);
+    await expect(execute(plan.capabilities, 'load_tool', { name: forbidden[0] }))
+      .resolves.toContain('not found in catalog');
+  });
+
   it('rejects same-name capabilities outside the trusted generation realization', () => {
     const owner = rootPluginId();
     const capabilities: AgentCapabilities = Object.freeze({

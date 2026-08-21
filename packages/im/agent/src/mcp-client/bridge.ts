@@ -7,7 +7,7 @@
 
 import type { AgentTool, JsonSchema } from '@zhin.js/ai';
 import { formatMcpQualifiedToolName } from '@zhin.js/ai/mcp-qualified-name';
-import type { McpResource, McpPrompt } from '../orchestrator/types.js';
+import type { McpResource, McpPrompt } from '../resource-hub/types.js';
 
 export interface McpToolDefinition {
   name: string;

@@ -7,8 +7,7 @@ import type { ContextSystem } from '../context/context-system.js';
 import type { MemorySystem } from '../memory/memory-system.js';
 import type { SessionSystem } from '../session/session-system.js';
 import type { EventSystem } from '../event/event-system.js';
-import type { SkillRegistry } from '../orchestrator/skill-registry.js';
-import type { AgentOrchestrator } from '../orchestrator/index.js';
+import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import { bindingToModelConfig } from '../routing/runtime-binding.js';
 import type { ZhinAgentDependencies } from '../config/index.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
@@ -18,7 +17,7 @@ const logger = getLogger('ZhinAgent');
 /** configure 的写入目标：权威接口（ZhinAgentPrivate）Pick + 门面内部装配字段。 */
 export type ConfigureZhinAgentTarget = Pick<
   ZhinAgentPrivate,
-  | 'config' | 'skillRegistry' | 'skillSystem' | 'orchestrator' | 'agentCore' | 'toolSystem'
+  | 'config' | 'skillRegistry' | 'skillSystem' | 'resourceHub' | 'agentCore' | 'toolSystem'
   | 'contextSystem' | 'sessionSystem'
   | 'imSessionStore' | 'agentSessionStore' | 'contextRepository'
   | 'modelRegistry' | 'subagentSystem' | 'emitter' | 'activeBinding'
@@ -42,9 +41,9 @@ export function applyZhinAgentConfigure(
     target.skillSystem = deps.skillRegistry ? createSkillSystem(deps.skillRegistry) : null;
     logger.debug(`SkillRegistry connected (${deps.skillRegistry.size} skills)`);
   }
-  if (deps.orchestrator !== undefined) {
-    target.orchestrator = deps.orchestrator;
-    logger.debug('AgentOrchestrator connected for MCP and resources');
+  if (deps.resourceHub !== undefined) {
+    target.resourceHub = deps.resourceHub;
+    logger.debug('AgentResourceHub connected for MCP and resources');
   }
   if (deps.agentCore !== undefined) target.agentCore = deps.agentCore;
   if (deps.toolSystem !== undefined) target.toolSystem = deps.toolSystem;

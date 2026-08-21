@@ -161,14 +161,14 @@ export type AIHookHandler = (event: AIHookEvent) => Promise<void> | void;
  * ```
  */
 export function registerAIHook(eventKey: string, handler: AIHookHandler): () => void {
-  return registerModuleAIHook(eventKey, handler as import('./orchestrator/types.js').AIHookHandler);
+  return registerModuleAIHook(eventKey, handler as import('./resource-hub/types.js').AIHookHandler);
 }
 
 /**
  * 注销 Hook 处理函数
  */
 export function unregisterAIHook(eventKey: string, handler: AIHookHandler): void {
-  unregisterModuleAIHook(eventKey, handler as import('./orchestrator/types.js').AIHookHandler);
+  unregisterModuleAIHook(eventKey, handler as import('./resource-hub/types.js').AIHookHandler);
 }
 
 /**
@@ -191,7 +191,7 @@ export function getRegisteredAIHookKeys(): string[] {
  * 扇出到 Runtime bus + `registerAIHook` handlers +（若有）host Plugin。
  */
 export async function triggerAIHook(event: AIHookEvent): Promise<void> {
-  emitAIHookBusEvent(event as import('./orchestrator/types.js').AIHookEvent, 'ai-hook');
+  emitAIHookBusEvent(event as import('./resource-hub/types.js').AIHookEvent, 'ai-hook');
 }
 
 export { runModuleAIHookHandlers };

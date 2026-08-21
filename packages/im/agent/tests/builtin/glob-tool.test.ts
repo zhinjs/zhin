@@ -9,7 +9,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { createGlobTool, GlobBuiltinTool, type GlobExecAsync } from '../../src/builtin/glob-tool.js';
 
-import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
+import { normalizeTool } from '../../src/resource-hub/tool-selection.js';
 import type { Message } from '@zhin.js/core';
 
 describe('GlobBuiltinTool', () => {

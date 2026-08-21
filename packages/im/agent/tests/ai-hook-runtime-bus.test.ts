@@ -25,7 +25,7 @@ describe('aiHookRuntimeBus + registerAIHook (Plugin Runtime)', () => {
       content: 'hi',
       platform: 'sandbox',
     });
-    emitAIHookBusEvent(event as import('../src/orchestrator/types.js').AIHookEvent, 'ai-hook');
+    emitAIHookBusEvent(event as import('../src/resource-hub/types.js').AIHookEvent, 'ai-hook');
 
     expect(seen).toEqual(['ai-hook:sess-1']);
   });
@@ -58,7 +58,7 @@ describe('aiHookRuntimeBus + registerAIHook (Plugin Runtime)', () => {
     aiHookRuntimeBus.on('ai.session.new', () => hooks.push('session.new'));
 
     emitAIHookBusEvent(
-      createAIHookEvent('session', 'new', 's3') as import('../src/orchestrator/types.js').AIHookEvent,
+      createAIHookEvent('session', 'new', 's3') as import('../src/resource-hub/types.js').AIHookEvent,
       'ai-hook',
     );
 

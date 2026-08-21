@@ -5,7 +5,7 @@
  */
 
 import type { AgentTool } from '@zhin.js/ai';
-import type { McpServerEntry, McpResource, McpPrompt } from '../orchestrator/types.js';
+import type { McpServerEntry, McpResource, McpPrompt } from '../resource-hub/types.js';
 import { McpClientConnection } from './connection.js';
 
 export class McpClientManager {

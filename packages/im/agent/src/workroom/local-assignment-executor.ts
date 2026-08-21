@@ -53,6 +53,8 @@ export type LocalAssignmentCapabilityProjection = Omit<
   WorkroomDeferredCapabilityPlanOptions,
   'authority'
 > & Readonly<{
+  /** Exact pinned Agent Definition selected by trusted Profile/Catalog routing. */
+  agentDefinitionId?: string;
   capabilitySnapshot: WorkroomRoleCapabilitySnapshot;
   realization: WorkroomCapabilityRealization;
   release(): void;
@@ -68,6 +70,7 @@ export interface LocalAssignmentCapabilityProjectionPort {
 
 export interface LocalModelExecutionRequest {
   readonly envelope: AssignmentExecutionEnvelope;
+  readonly agentDefinitionId?: string;
   /** The only Tool/Skill surface the model adapter may expose. */
   readonly capabilityPlan: DeferredCapabilityPlan;
 }
@@ -118,7 +121,13 @@ export class LocalAssignmentExecutor implements AssignmentExecutorPort {
         platform: projection.platform,
         persistSnapshot: projection.persistSnapshot,
       });
-      const request: LocalModelExecutionRequest = Object.freeze({ envelope, capabilityPlan });
+      const request: LocalModelExecutionRequest = Object.freeze({
+        envelope,
+        capabilityPlan,
+        ...(projection.agentDefinitionId === undefined
+          ? {}
+          : { agentDefinitionId: projection.agentDefinitionId }),
+      });
       completion = yield* executeLocalModel(this.model, request, signal);
     } finally {
       projection.release();

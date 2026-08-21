@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WorkroomRemoteExecutorPort } from '../../src/plugin-runtime/workroom-remote-executor.js';
+import { remoteDisclosureFixture } from './remote-disclosure-fixture.js';
 import {
   FileWorkroomRemoteDispatchOutboxRepository,
   MemoryWorkroomRemoteDispatchOutboxRepository,
@@ -469,7 +470,9 @@ function dispatchItem() {
     capabilitySnapshot: {
       ref: 'capability:1', hash: 'sha256:capability', grantRef: 'grant:1',
     },
-    disclosureManifest: { ref: 'disclosure:1', hash: 'sha256:disclosure' },
+    disclosureManifest: remoteDisclosureFixture({
+      endpointId: 'remote-main', sourceRef: 'view:1', sourceDigest: 'sha256:view',
+    }),
     workspace: {
       provider: 'github_pull_request',
       repositoryId: 'github:org/repo',

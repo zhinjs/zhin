@@ -177,6 +177,16 @@ export class HumanIngressProposalSequenceConflictError extends Error {
   }
 }
 
+export class HumanIngressProposalReplayConflictError extends Error {
+  constructor(
+    readonly projectId: string,
+    readonly proposalId?: string,
+  ) {
+    super(`Human ingress ${projectId} replay payload drift${proposalId ? `: ${proposalId}` : ''}`);
+    this.name = 'HumanIngressProposalReplayConflictError';
+  }
+}
+
 /**
  * Contract adapter for tests and embedders. This adapter is process-local and
  * is explicitly not a production-durable Workroom Inbox.
@@ -244,7 +254,10 @@ export class HumanIngressProposalService {
     const prior = events.find(event => event.proposal.id === proposal.id);
     if (prior) {
       if (stableJson(prior.proposal) !== stableJson(proposal)) {
-        throw new Error('Human ingress proposal replay payload drift');
+        throw new HumanIngressProposalReplayConflictError(
+          request.decision.projectId,
+          proposal.id,
+        );
       }
       return deepFreeze({
         status: 'proposed',
@@ -501,7 +514,7 @@ function materializeAppend(
   if (expectedSequence < actualSequence) {
     const replay = current.slice(expectedSequence + 1, expectedSequence + 1 + candidate.length);
     if (replay.length === candidate.length && stableJson(replay) === stableJson(candidate)) return deepFreeze(replay);
-    throw new Error('Human ingress proposal repository replay payload drift');
+    throw new HumanIngressProposalReplayConflictError(projectId);
   }
   if (expectedSequence !== actualSequence) {
     throw new HumanIngressProposalSequenceConflictError(projectId, expectedSequence, actualSequence);

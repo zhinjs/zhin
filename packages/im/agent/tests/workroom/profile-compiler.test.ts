@@ -103,6 +103,37 @@ describe('compileWorkroomProfile', () => {
     expect(first.ok && Object.isFrozen(first.profile.skills[0]?.requiresTools)).toBe(true);
   });
 
+  it('pins content-free Portfolio resource requirements into each Workflow Task digest', () => {
+    const domain = pack({
+      workflows: [{
+        id: 'change-workflow',
+        digest: 'sha256:change-workflow-v1',
+        requiredByProfile: true,
+        tasks: [{
+          key: 'inspect',
+          role: 'researcher',
+          requires: { skills: ['inspect-repository'] },
+          resourceRequirements: { demands: [
+            { poolId: 'model:standard', capacityUnits: 1, rateUnits: 2, budgetUnits: 50 },
+            { poolId: 'executor:sandbox', capacityUnits: 1, rateUnits: 1, budgetUnits: 0 },
+          ] },
+        }],
+      }],
+    });
+    const compiled = compileWorkroomProfile(compilerInput({ packs: [domain] }));
+
+    expect(compiled).toMatchObject({
+      ok: true,
+      profile: { workflows: [{ tasks: [{
+        key: 'inspect',
+        resourceRequirements: { demands: [
+          { poolId: 'executor:sandbox', capacityUnits: 1, rateUnits: 1, budgetUnits: 0 },
+          { poolId: 'model:standard', capacityUnits: 1, rateUnits: 2, budgetUnits: 50 },
+        ] },
+      }] }] },
+    });
+  });
+
   it('fails closed on exact Pack and dependency digest mismatches with stable diagnostics', () => {
     const domain = pack();
     const competency = pack({
@@ -306,5 +337,91 @@ describe('compileWorkroomProfile', () => {
         path: 'generationSupply.tools.repo.read',
       })]),
     });
+  });
+
+  it('binds content-free Memory/Glossary handles and their role/task closure into the compiled digest', () => {
+    const domain = pack({
+      memories: [{
+        id: 'runtime-contract', digest: 'sha256:runtime-memory-v1',
+        allowedRoles: ['researcher'], taskKeys: ['inspect'],
+      }],
+      glossaries: [{
+        id: 'engineering-terms', digest: 'sha256:engineering-glossary-v1',
+        allowedRoles: ['researcher'], taskKeys: [],
+      }],
+    });
+    const input = compilerInput({
+      packs: [domain],
+      revision: {
+        ...compilerInput().revision,
+        enabledMemories: ['runtime-contract'],
+        enabledGlossaries: ['engineering-terms'],
+      },
+    });
+    const compiled = compileWorkroomProfile(input);
+    expect(compiled).toMatchObject({ ok: true, profile: {
+      memories: [{ id: 'runtime-contract', allowedRoles: ['researcher'], taskKeys: ['inspect'] }],
+      glossaries: [{ id: 'engineering-terms', allowedRoles: ['researcher'], taskKeys: [] }],
+    } });
+    const widened = compileWorkroomProfile({
+      ...input,
+      packs: [{ ...domain, memories: [{
+        id: 'runtime-contract', digest: 'sha256:runtime-memory-v1',
+        allowedRoles: ['integration', 'researcher'], taskKeys: [],
+      }] }],
+    });
+    expect(widened.ok && compiled.ok && widened.profile.digest).not.toBe(compiled.ok && compiled.profile.digest);
+  });
+
+  it('binds explicit Acceptance criteria and Memory schema into the compiled Profile digest', () => {
+    const domain = pack({
+      acceptancePolicies: [{
+        id: 'software-acceptance',
+        digest: 'sha256:software-acceptance-v1',
+        tasks: [{
+          taskKey: 'inspect', kind: 'task_result',
+          criteria: [{ id: 'tests', kind: 'deterministic', description: 'Tests pass' }],
+          requiredEvidence: ['ci'], minimumRoute: 'reviewer_required',
+          reviewerPrincipalId: 'reviewer', sponsorPrincipalId: 'human:sponsor',
+          reviewerTimeoutMs: 10_000, sponsorTimeoutMs: 20_000,
+        }],
+        memorySchema: {
+          revision: 1,
+          claimRules: [{
+            key: 'software.result', valueType: 'string',
+            allowedStatuses: ['verified'], allowSupersedes: true,
+          }],
+        },
+      }],
+    });
+    const input = compilerInput({
+      packs: [domain],
+      revision: {
+        ...compilerInput().revision,
+        enabledAcceptancePolicies: ['software-acceptance'],
+      },
+    });
+    const compiled = compileWorkroomProfile(input);
+    expect(compiled).toMatchObject({ ok: true, profile: {
+      acceptancePolicies: [{
+        id: 'software-acceptance',
+        tasks: [{ taskKey: 'inspect', criteria: [{ id: 'tests' }] }],
+        memorySchema: { revision: 1, claimRules: [{ key: 'software.result' }] },
+      }],
+    } });
+    const relaxed = compileWorkroomProfile({
+      ...input,
+      packs: [{
+        ...domain,
+        acceptancePolicies: [{
+          ...domain.acceptancePolicies![0]!,
+          tasks: [{
+            ...domain.acceptancePolicies![0]!.tasks[0]!,
+            minimumRoute: 'baseline',
+          }],
+        }],
+      }],
+    });
+    expect(compiled.ok && relaxed.ok && compiled.profile.digest).not.toBe(relaxed.ok && relaxed.profile.digest);
   });
 });

@@ -261,7 +261,8 @@ function assertExactRuntimeProjection<
 }
 
 function isWorkroomControl(name: string): boolean {
-  return WORKROOM_CONTROL_NAMES.has(name.split('__').at(-1) ?? name);
+  const canonicalName = name.split('__').at(-1) ?? name;
+  return canonicalName.startsWith('workroom_') || WORKROOM_CONTROL_NAMES.has(canonicalName);
 }
 
 function projectSessionSnapshot(

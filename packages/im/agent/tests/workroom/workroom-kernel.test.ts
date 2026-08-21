@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -7,6 +8,7 @@ import {
   DatabaseWorkroomJournal,
   FileWorkroomJournal,
   MemoryWorkroomJournal,
+  MemoryWorkroomJournalPayloadPort,
   WorkroomSequenceConflictError,
 } from '../../src/workroom/journal.js';
 import type {
@@ -720,7 +722,7 @@ describe('WorkroomKernel', () => {
         insertMany: async () => undefined,
       }),
     }, { select: () => ({ where: async () => rows }) });
-    await expect(journal.read('run-bad')).rejects.toThrow('Invalid Workroom event payload envelope');
+    await expect(journal.read('run-bad')).rejects.toThrow('offline export/purge');
   });
 
   it.each([
@@ -773,7 +775,7 @@ describe('WorkroomKernel', () => {
     _name,
     type,
     payload,
-    message,
+    _message,
   ) => {
     const rows = [{
       run_id: 'run-corrupt-observation', sequence: 0, version: 1, type,
@@ -784,7 +786,7 @@ describe('WorkroomKernel', () => {
         select: () => ({ where: async () => rows }), insertMany: async () => undefined,
       }),
     }, { select: () => ({ where: async () => rows }) });
-    await expect(journal.read('run-corrupt-observation')).rejects.toThrow(message);
+    await expect(journal.read('run-corrupt-observation')).rejects.toThrow('offline export/purge');
   });
 
   it('rejects Assignment observation body drift while materializing a Journal append', async () => {
@@ -816,7 +818,7 @@ describe('WorkroomKernel', () => {
     }])).rejects.toThrow('observationDigest');
   });
 
-  it('keeps trusted heartbeat lease metadata outside the Executor observation digest', async () => {
+  it('quarantines legacy heartbeat rows before trusted metadata can be replayed', async () => {
     const payload = {
       assignmentId: 'assignment-1',
       observationId: 'observation-heartbeat-trusted-metadata',
@@ -838,9 +840,7 @@ describe('WorkroomKernel', () => {
         select: () => ({ where: async () => rows }), insertMany: async () => undefined,
       }),
     }, { select: () => ({ where: async () => rows }) });
-    await expect(journal.read('run-heartbeat-metadata')).resolves.toMatchObject([{
-      payload: { leaseExpiresAt: 999 },
-    }]);
+    await expect(journal.read('run-heartbeat-metadata')).rejects.toThrow('offline export/purge');
   });
 
   it('rejects a persisted acceptance event without a valid policy record', async () => {
@@ -860,7 +860,7 @@ describe('WorkroomKernel', () => {
     }, { select: () => ({ where: async () => rows }) });
 
     await expect(journal.read('run-bad-acceptance'))
-      .rejects.toThrow('Invalid Workroom Acceptance Record');
+      .rejects.toThrow('offline export/purge');
   });
 
   it('persists a contiguous journal in one serializable transaction', async () => {
@@ -878,7 +878,11 @@ describe('WorkroomKernel', () => {
         });
       },
     };
-    const journal = new DatabaseWorkroomJournal(database, { select: () => ({ where }) });
+    const journal = new DatabaseWorkroomJournal(
+      database,
+      { select: () => ({ where }) },
+      new MemoryWorkroomJournalPayloadPort(),
+    );
     const kernel = new WorkroomKernel({
       journal,
       now: () => 100,
@@ -917,8 +921,9 @@ describe('WorkroomKernel', () => {
   it('atomically persists and replays file-backed runs', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'zhin-workroom-'));
     try {
+      const payloads = new MemoryWorkroomJournalPayloadPort();
       const first = new WorkroomKernel({
-        journal: new FileWorkroomJournal(directory),
+        journal: new FileWorkroomJournal(directory, payloads),
         now: () => 100,
         createId: (() => { let id = 0; return () => `file-${++id}`; })(),
       });
@@ -927,7 +932,7 @@ describe('WorkroomKernel', () => {
         type: 'plan_task', taskKey: 'task', title: 'Task', required: true, maxAttempts: 1,
       });
 
-      const restarted = new WorkroomKernel({ journal: new FileWorkroomJournal(directory) });
+      const restarted = new WorkroomKernel({ journal: new FileWorkroomJournal(directory, payloads) });
       expect(await restarted.read('file-project', 'file-run')).toMatchObject({ sequence: 1, projectId: 'file-project' });
       expect((await restarted.list('file-project')).map(run => run.runId)).toEqual(['file-run']);
     } finally {
@@ -938,8 +943,9 @@ describe('WorkroomKernel', () => {
   it('enforces file CAS across generation journal instances', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'zhin-workroom-cas-'));
     try {
-      const first = new FileWorkroomJournal(directory);
-      const second = new FileWorkroomJournal(directory);
+      const payloads = new MemoryWorkroomJournalPayloadPort();
+      const first = new FileWorkroomJournal(directory, payloads);
+      const second = new FileWorkroomJournal(directory, payloads);
       const create = {
         eventId: 'create',
         occurredAt: 100,
@@ -947,6 +953,11 @@ describe('WorkroomKernel', () => {
         payload: { projectId: 'project', title: 'Run' },
       };
       await first.append('shared-run', -1, [create]);
+      const runDigest = createHash('sha256').update('shared-run').digest('hex');
+      await writeFile(join(
+        directory,
+        `${runDigest}.0000000000000001.json.00000000-0000-4000-8000-000000000000.tmp`,
+      ), '{', 'utf8');
       const draft = (eventId: string) => ({
         eventId,
         occurredAt: 101,

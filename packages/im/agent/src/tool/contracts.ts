@@ -7,7 +7,7 @@
 
 import type { AgentTool } from '@zhin.js/ai';
 import type { Message } from '@zhin.js/core';
-import type { ToolScope } from '../orchestrator/types.js';
+import type { ToolScope } from '../resource-hub/types.js';
 
 /**
  * Tool registered on `ZhinAgent.registerTool` (runtime agent tool directory).

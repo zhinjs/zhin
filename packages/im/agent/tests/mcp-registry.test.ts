@@ -35,7 +35,7 @@ vi.mock('../src/mcp-client/index.js', () => ({
   }),
 }));
 
-type McpRegistryCtor = typeof import('../src/orchestrator/mcp-registry.js').McpRegistry;
+type McpRegistryCtor = typeof import('../src/resource-hub/mcp-registry.js').McpRegistry;
 let McpRegistry: McpRegistryCtor;
 
 describe('McpRegistry', () => {
@@ -50,7 +50,7 @@ describe('McpRegistry', () => {
       prompts: [],
     }));
     vi.resetModules();
-    ({ McpRegistry } = await import('../src/orchestrator/mcp-registry.js'));
+    ({ McpRegistry } = await import('../src/resource-hub/mcp-registry.js'));
   });
 
   it('reconnects when cached connection fails health check', async () => {

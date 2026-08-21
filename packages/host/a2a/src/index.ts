@@ -9,8 +9,10 @@ export {
   type InstallRuntimeA2aOptions,
   type RuntimeA2aConfig,
   type RuntimeWorkroomCallbackConfig,
+  type RuntimeWorkroomRemoteExecutorsConfig,
 } from './runtime.js';
 export type { RuntimeA2aConfig as A2aConfig } from './runtime.js';
 export { verifyA2aBearer } from './auth.js';
 export * from './workroom-auth-registry.js';
 export * from './workroom-callback-runtime.js';
+export * from './workroom-remote-transport.js';

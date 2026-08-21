@@ -1,13 +1,9 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import {
-  link as nodeLink,
-  mkdir as nodeMkdir,
-  open as nodeOpen,
   readFile as nodeReadFile,
   readdir as nodeReaddir,
-  unlink as nodeUnlink,
 } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import {
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
@@ -20,33 +16,26 @@ import {
   type HumanIngressProposalEventDraft,
   type HumanIngressProposalRepository,
 } from './human-ingress.js';
+import {
+  DurableFileStore,
+  nodeDurableFileSystem,
+  type DurableFileHandle,
+  type DurableFileSystem,
+} from './durable-file-store.js';
 
-export interface HumanIngressFileHandle {
-  writeFile(value: string, encoding: 'utf8'): Promise<void>;
-  sync(): Promise<void>;
-  close(): Promise<void>;
-}
+export type HumanIngressFileHandle = DurableFileHandle;
 
 /** Injectable only at the crash-durable filesystem boundary. */
-export interface HumanIngressFileSystem {
-  mkdir(path: string): Promise<void>;
+export interface HumanIngressFileSystem extends DurableFileSystem {
   readdir(path: string): Promise<readonly string[]>;
   readFile(path: string, encoding: 'utf8'): Promise<string>;
-  open(path: string, flags: 'wx' | 'r'): Promise<HumanIngressFileHandle>;
-  link(existingPath: string, newPath: string): Promise<void>;
-  unlink(path: string): Promise<void>;
 }
 
 const nodeFileSystem: HumanIngressFileSystem = Object.freeze({
-  mkdir: async (path: string): Promise<void> => { await nodeMkdir(path); },
+  ...nodeDurableFileSystem,
   readdir: async (path: string): Promise<readonly string[]> => await nodeReaddir(path),
   readFile: async (path: string, encoding: 'utf8'): Promise<string> =>
     await nodeReadFile(path, encoding),
-  open: async (path: string, flags: 'wx' | 'r'): Promise<HumanIngressFileHandle> =>
-    await nodeOpen(path, flags),
-  link: async (existingPath: string, newPath: string): Promise<void> =>
-    await nodeLink(existingPath, newPath),
-  unlink: async (path: string): Promise<void> => { await nodeUnlink(path); },
 });
 
 interface HumanIngressSegmentPayload {
@@ -71,15 +60,19 @@ interface HumanIngressSegment extends HumanIngressSegmentPayload {
  */
 export class FileHumanIngressProposalRepository
 implements HumanIngressProposalRepository {
+  readonly #durable: DurableFileStore;
+
   constructor(
     readonly directory: string,
     readonly fileSystem: HumanIngressFileSystem = nodeFileSystem,
-  ) {}
+  ) {
+    this.#durable = new DurableFileStore(directory, fileSystem);
+  }
 
   async read(projectId: string): Promise<readonly HumanIngressProposalEvent[]> {
     const id = identifier(projectId, 'projectId');
     const events = await this.#readEvents(id);
-    if (events.length > 0) await this.#syncPath(this.directory);
+    if (events.length > 0) await this.#durable.syncLeaf();
     return events;
   }
 
@@ -95,7 +88,7 @@ implements HumanIngressProposalRepository {
     const events = await materializeAgainst(id, current, expectedSequence, snapshots);
     const actualSequence = current.at(-1)?.sequence ?? -1;
     if (events.every(event => event.sequence <= actualSequence)) {
-      if (current.length > 0) await this.#syncPath(this.directory);
+      if (current.length > 0) await this.#durable.syncLeaf();
       return events;
     }
 
@@ -113,45 +106,26 @@ implements HumanIngressProposalRepository {
       payloadDigest: digestCanonicalWorkroomValue(payload),
     });
 
-    await this.#ensureDurableLeaf();
+    await this.#durable.ensureDurableLeaf('Human ingress proposal repository');
     const path = this.#segmentPath(id, firstSequence);
-    const temporaryPath = `${path}.${randomUUID()}.tmp`;
-    let temporaryExists = false;
-    try {
-      const handle = await this.fileSystem.open(temporaryPath, 'wx');
-      temporaryExists = true;
-      try {
-        await handle.writeFile(JSON.stringify(segment), 'utf8');
-        await handle.sync();
-      } finally {
-        await handle.close();
-      }
-      await this.fileSystem.link(temporaryPath, path);
-      await this.fileSystem.unlink(temporaryPath);
-      temporaryExists = false;
-      await this.#syncPath(this.directory);
-    } catch (error) {
-      if (temporaryExists) {
-        await this.#removeTemporary(temporaryPath);
-        temporaryExists = false;
-      }
-      if (!isAlreadyExists(error)) throw error;
-      const winner = await this.#readEvents(id);
-      const winnerSequence = winner.at(-1)?.sequence ?? -1;
-      if (expectedSequence + snapshots.length > winnerSequence) {
-        throw new HumanIngressProposalSequenceConflictError(
-          id,
-          expectedSequence,
-          winnerSequence,
-        );
-      }
-      const replay = await materializeAgainst(id, winner, expectedSequence, snapshots);
-      await this.#syncPath(this.directory);
-      return replay;
-    } finally {
-      if (temporaryExists) await this.#removeTemporary(temporaryPath);
-    }
-    return events;
+    const published = await this.#durable.publishCreateOnly({
+      target: path,
+      content: JSON.stringify(segment),
+      createdValue: events,
+      onConflict: async () => {
+        const winner = await this.#readEvents(id);
+        const winnerSequence = winner.at(-1)?.sequence ?? -1;
+        if (expectedSequence + snapshots.length > winnerSequence) {
+          throw new HumanIngressProposalSequenceConflictError(
+            id,
+            expectedSequence,
+            winnerSequence,
+          );
+        }
+        return await materializeAgainst(id, winner, expectedSequence, snapshots);
+      },
+    });
+    return published.value;
   }
 
   async #readEvents(projectId: string): Promise<readonly HumanIngressProposalEvent[]> {
@@ -188,37 +162,6 @@ implements HumanIngressProposalRepository {
     return join(this.directory, segmentName(projectId, firstSequence));
   }
 
-  async #ensureDurableLeaf(): Promise<void> {
-    try {
-      await this.fileSystem.mkdir(this.directory);
-    } catch (error) {
-      if (!isAlreadyExists(error)) {
-        if (isMissingFile(error)) {
-          throw new Error(
-            `Human ingress proposal repository requires a pre-existing durable parent directory: ${dirname(this.directory)}`,
-            { cause: error },
-          );
-        }
-        throw error;
-      }
-    }
-    await this.#syncPath(dirname(this.directory));
-  }
-
-  async #syncPath(path: string): Promise<void> {
-    const handle = await this.fileSystem.open(path, 'r');
-    try {
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-  }
-
-  async #removeTemporary(path: string): Promise<void> {
-    await this.fileSystem.unlink(path).catch(error => {
-      if (!isMissingFile(error)) throw error;
-    });
-  }
 }
 
 function snapshotDrafts(
@@ -353,10 +296,6 @@ function assertExactKeys(value: Record<string, unknown>, keys: readonly string[]
   if (unexpected || missing) {
     throw new Error(`Invalid Human ingress proposal ${field} schema`);
   }
-}
-
-function isAlreadyExists(error: unknown): boolean {
-  return isNodeError(error) && error.code === 'EEXIST';
 }
 
 function isMissingFile(error: unknown): boolean {

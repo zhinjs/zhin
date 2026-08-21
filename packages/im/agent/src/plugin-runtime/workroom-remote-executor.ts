@@ -17,6 +17,7 @@ export interface WorkroomRemoteExecutorPort {
   dispatch(
     item: WorkroomRemoteDispatchOutboxItem,
     signal: AbortSignal,
+    governedBody?: Uint8Array,
   ): Promise<WorkroomRemoteDispatchObservation>;
 }
 
@@ -40,10 +41,15 @@ export function createGenerationWorkroomRemoteExecutorPort(
   const dispatch = async (
     item: WorkroomRemoteDispatchOutboxItem,
     signal: AbortSignal,
+    governedBody?: Uint8Array,
   ): Promise<WorkroomRemoteDispatchObservation> => {
     const current = resolve();
     if (!current) throw new Error('Workroom Remote Executor Port is not installed');
-    return normalizeWorkroomRemoteDispatchObservation(await current.dispatch(item, signal));
+    return normalizeWorkroomRemoteDispatchObservation(
+      await (governedBody === undefined
+        ? current.dispatch(item, signal)
+        : current.dispatch(item, signal, governedBody)),
+    );
   };
   return Object.freeze({
     dispatch,

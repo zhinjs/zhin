@@ -6,6 +6,24 @@ import type { AgentTraceRuntimeHandle } from './agent-trace-runtime.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { TurnOutcome, TurnRequest } from '../turn/turn-ingress.js';
 import type { WorkroomCatalog } from '../workroom/catalog.js';
+import type {
+  PublishCapabilityPackCommand,
+  PublishPlanningPolicyCommand,
+  PublishProjectProfileCommand,
+  PublishProjectProfileRollbackCommand,
+  WorkroomProfileControlPort,
+} from './workroom-profile-authority-runtime.js';
+import type {
+  PortfolioSponsorCommandPort,
+} from './workroom-portfolio-sponsor.js';
+import type {
+  WorkroomEffectSponsorDecisionCommand,
+  WorkroomEffectSponsorDecisionRecord,
+} from './workroom-acceptance-production-composition.js';
+import type {
+  ProjectKnowledgeEntry,
+  ProjectKnowledgeSnapshot,
+} from '../workroom/project-knowledge-registry.js';
 
 /**
  * Stable Host boundary for protocols that expose Agent capabilities externally.
@@ -54,6 +72,54 @@ export interface AgentHostConsolePort {
   listBindings(): readonly ResolvedAgentBinding[];
   readonly assistant: AssistantRuntimeHandle | null;
   readonly trace: AgentTraceRuntimeHandle;
+  /** Authenticated Host-only mutations; identity is injected by the Root and absent from caller DTOs. */
+  readonly workroomProfiles?: AgentHostWorkroomProfileControlPort;
+  /** Content-free Knowledge registry; identity and Sponsor authority are Host-injected. */
+  readonly workroomKnowledge?: AgentHostWorkroomKnowledgeControlPort;
+  /** Content-free Sponsor projection and typed commands; HTTP injects the authenticated principal. */
+  readonly portfolioSponsor?: PortfolioSponsorCommandPort;
+  /** Root-private Effect approval plane; HTTP injects identity and discussion has no ingress. */
+  readonly effectSponsor?: AgentHostEffectSponsorControlPort;
+}
+
+export interface AgentHostEffectSponsorControlPort {
+  decide(
+    command: Omit<WorkroomEffectSponsorDecisionCommand, 'principalId'>,
+    authenticatedPrincipal: Readonly<{ principalId: string }>,
+  ): Promise<WorkroomEffectSponsorDecisionRecord>;
+}
+
+export interface AgentHostWorkroomProfileControlPort {
+  publishPack(command: Omit<PublishCapabilityPackCommand, 'version' | 'authenticatedPrincipalId'>,
+    authenticatedPrincipal: Readonly<{ principalId: string }>):
+    ReturnType<WorkroomProfileControlPort['publishPack']>;
+  publishProfile(command: Omit<PublishProjectProfileCommand, 'version' | 'authenticatedPrincipalId' | 'source'>,
+    authenticatedPrincipal: Readonly<{ principalId: string }>):
+    ReturnType<WorkroomProfileControlPort['publishProfile']>;
+  publishRollback(command: Omit<PublishProjectProfileRollbackCommand,
+    'version' | 'authenticatedPrincipalId' | 'source'>,
+    authenticatedPrincipal: Readonly<{ principalId: string }>):
+    ReturnType<WorkroomProfileControlPort['publishRollback']>;
+  publishPlanningPolicy(command: Omit<PublishPlanningPolicyCommand,
+    'version' | 'authenticatedPrincipalId' | 'catalogRevision' | 'projectDigest' | 'profileDigest'>,
+    authenticatedPrincipal: Readonly<{ principalId: string }>):
+    ReturnType<WorkroomProfileControlPort['publishPlanningPolicy']>;
+}
+
+export interface AgentHostWorkroomKnowledgeControlPort {
+  read(projectId: string): Promise<ProjectKnowledgeSnapshot>;
+  publish(command: Readonly<{
+    operationId: string;
+    projectId: string;
+    expectedRevision: number;
+    entries: readonly ProjectKnowledgeEntry[];
+  }>, authenticatedPrincipal: Readonly<{ principalId: string }>): Promise<ProjectKnowledgeSnapshot>;
+  rollback(command: Readonly<{
+    operationId: string;
+    projectId: string;
+    expectedRevision: number;
+    restoreRevision: number;
+  }>, authenticatedPrincipal: Readonly<{ principalId: string }>): Promise<ProjectKnowledgeSnapshot>;
 }
 
 export const agentHostToken = createToken<AgentHostPort>(

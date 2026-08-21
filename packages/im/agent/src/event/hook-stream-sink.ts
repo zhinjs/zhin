@@ -2,7 +2,7 @@
  * HookRegistry adapter — AgentStreamBus sink (ADR 0041).
  */
 import type { AgentStreamSink } from './agent-stream-bus.js';
-import type { HookRegistry } from '../orchestrator/hook-registry.js';
+import type { HookRegistry } from '../resource-hub/hook-registry.js';
 
 export function createHookStreamSink(hooks: HookRegistry): AgentStreamSink {
   return {

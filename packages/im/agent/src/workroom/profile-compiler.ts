@@ -1,4 +1,8 @@
 import { createHash } from 'node:crypto';
+import {
+  parsePortfolioResourceBundle,
+  type PortfolioResourceBundle,
+} from '../portfolio/portfolio-journal.js';
 
 export type CapabilityPackKind = 'domain' | 'competency' | 'integration' | 'policy';
 
@@ -25,6 +29,40 @@ export interface ProfileAgentDefinition extends CapabilityDefinition {
   readonly allowedSkills: readonly string[];
 }
 
+/** Content-free Project Knowledge handle plus its exact Assignment closure. */
+export interface ProfileKnowledgeDefinition extends CapabilityDefinition {
+  readonly allowedRoles: readonly string[];
+  /** Empty means every Task assigned to an allowed role. */
+  readonly taskKeys: readonly string[];
+}
+
+export interface ProfileAcceptancePolicyDefinition extends CapabilityDefinition {
+  readonly tasks: readonly Readonly<{
+    taskKey: string;
+    kind: 'task_result' | 'integration_candidate' | 'effect_intent';
+    criteria: readonly Readonly<{
+      id: string;
+      kind: 'deterministic' | 'judgment';
+      description: string;
+    }>[];
+    requiredEvidence: readonly string[];
+    minimumRoute: 'baseline' | 'reviewer_required' | 'sponsor_required' | 'reviewer_then_sponsor';
+    reviewerPrincipalId: string;
+    sponsorPrincipalId: string;
+    reviewerTimeoutMs: number;
+    sponsorTimeoutMs: number;
+  }>[];
+  readonly memorySchema: Readonly<{
+    revision: number;
+    claimRules: readonly Readonly<{
+      key: string;
+      valueType: 'string';
+      allowedStatuses: readonly ('verified' | 'assumed')[];
+      allowSupersedes: boolean;
+    }>[];
+  }>;
+}
+
 export interface WorkflowCapabilityRequirement {
   readonly tools?: readonly string[];
   readonly skills?: readonly string[];
@@ -34,6 +72,8 @@ export interface WorkflowTaskTemplate {
   readonly key: string;
   readonly role: string;
   readonly requires: WorkflowCapabilityRequirement;
+  /** Exact content-free atomic demand; absence makes Portfolio admission unavailable. */
+  readonly resourceRequirements?: PortfolioResourceBundle;
 }
 
 export interface WorkflowStrategyDefinition extends CapabilityDefinition {
@@ -48,6 +88,9 @@ export interface CapabilityPack extends CapabilityPackRef {
   readonly skills?: readonly ProfileSkillDefinition[];
   readonly agents?: readonly ProfileAgentDefinition[];
   readonly workflows?: readonly WorkflowStrategyDefinition[];
+  readonly memories?: readonly ProfileKnowledgeDefinition[];
+  readonly glossaries?: readonly ProfileKnowledgeDefinition[];
+  readonly acceptancePolicies?: readonly ProfileAcceptancePolicyDefinition[];
 }
 
 export interface WorkroomProfileRevision {
@@ -59,6 +102,9 @@ export interface WorkroomProfileRevision {
   readonly enabledSkills: readonly string[];
   readonly enabledAgents: readonly string[];
   readonly enabledWorkflows: readonly string[];
+  readonly enabledMemories?: readonly string[];
+  readonly enabledGlossaries?: readonly string[];
+  readonly enabledAcceptancePolicies?: readonly string[];
 }
 
 export interface GenerationCapabilitySupply {
@@ -88,6 +134,9 @@ export interface CompiledWorkroomProfile {
   readonly skills: readonly ProfileSkillDefinition[];
   readonly agents: readonly ProfileAgentDefinition[];
   readonly workflows: readonly WorkflowStrategyDefinition[];
+  readonly memories: readonly ProfileKnowledgeDefinition[];
+  readonly glossaries: readonly ProfileKnowledgeDefinition[];
+  readonly acceptancePolicies: readonly ProfileAcceptancePolicyDefinition[];
   readonly digest: string;
 }
 
@@ -178,6 +227,46 @@ export function compileWorkroomProfile(input: WorkroomProfileCompilerInput): Com
     'workflow',
     diagnostics,
   ) as WorkflowStrategyDefinition[];
+  const memories = selectPackDefinitions(
+    input.revision.enabledMemories ?? [],
+    packs.flatMap((pack) => pack.memories ?? []),
+    'memory',
+    diagnostics,
+  ) as ProfileKnowledgeDefinition[];
+  const glossaries = selectPackDefinitions(
+    input.revision.enabledGlossaries ?? [],
+    packs.flatMap((pack) => pack.glossaries ?? []),
+    'glossary',
+    diagnostics,
+  ) as ProfileKnowledgeDefinition[];
+  const acceptancePolicies = selectPackDefinitions(
+    input.revision.enabledAcceptancePolicies ?? [],
+    packs.flatMap((pack) => pack.acceptancePolicies ?? []),
+    'acceptancePolicy',
+    diagnostics,
+  ) as ProfileAcceptancePolicyDefinition[];
+  if (acceptancePolicies.length > 1) {
+    diagnostics.push({
+      code: 'acceptancePolicy.multiple_selected',
+      path: 'revision.enabledAcceptancePolicies',
+      message: 'A Profile revision must select exactly one Acceptance Policy authority',
+    });
+  }
+  const acceptanceTaskOwners = new Map<string, string>();
+  for (const policy of acceptancePolicies) {
+    for (const task of policy.tasks) {
+      const owner = acceptanceTaskOwners.get(task.taskKey);
+      if (owner) {
+        diagnostics.push({
+          code: 'acceptancePolicy.task_conflict',
+          path: `acceptancePolicies.${policy.id}.tasks.${task.taskKey}`,
+          message: `Acceptance Task ${task.taskKey} is already owned by Policy ${owner}`,
+        });
+      } else {
+        acceptanceTaskOwners.set(task.taskKey, policy.id);
+      }
+    }
+  }
 
   const enabledToolIds = new Set(tools.map((tool) => tool.id));
   const enabledSkills = new Map(skills.map((skill) => [skill.id, skill]));
@@ -192,8 +281,20 @@ export function compileWorkroomProfile(input: WorkroomProfileCompilerInput): Com
     }
   }
 
-  for (const workflow of workflows.filter((item) => item.requiredByProfile)) {
+  for (const workflow of workflows) {
     for (const task of workflow.tasks) {
+      if (task.resourceRequirements !== undefined) {
+        try {
+          parsePortfolioResourceBundle(task.resourceRequirements);
+        } catch (error) {
+          diagnostics.push({
+            code: 'workflow.task_resource_requirements_invalid',
+            path: `workflows.${workflow.id}.tasks.${task.key}.resourceRequirements`,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+      if (!workflow.requiredByProfile) continue;
       const requiredSkills = unique(task.requires.skills ?? []);
       const requiredTools = unique([
         ...(task.requires.tools ?? []),
@@ -224,6 +325,9 @@ export function compileWorkroomProfile(input: WorkroomProfileCompilerInput): Com
     skills: sortById(skills).map(copySkill),
     agents: sortById(agents).map(copyAgent),
     workflows: sortById(workflows).map(copyWorkflow),
+    memories: sortById(memories).map(copyKnowledge),
+    glossaries: sortById(glossaries).map(copyKnowledge),
+    acceptancePolicies: sortById(acceptancePolicies).map(copyAcceptancePolicy),
   };
   const profile = deepFreeze({
     ...projection,
@@ -387,7 +491,54 @@ function copyWorkflow(value: WorkflowStrategyDefinition): WorkflowStrategyDefini
           tools: unique(task.requires.tools ?? []),
           skills: unique(task.requires.skills ?? []),
         },
+        ...(task.resourceRequirements === undefined
+          ? {}
+          : { resourceRequirements: parsePortfolioResourceBundle(task.resourceRequirements) }),
       })),
+  };
+}
+
+function copyKnowledge(value: ProfileKnowledgeDefinition): ProfileKnowledgeDefinition {
+  return {
+    id: value.id,
+    digest: value.digest,
+    allowedRoles: unique(value.allowedRoles),
+    taskKeys: unique(value.taskKeys),
+  };
+}
+
+function copyAcceptancePolicy(
+  value: ProfileAcceptancePolicyDefinition,
+): ProfileAcceptancePolicyDefinition {
+  return {
+    id: value.id,
+    digest: value.digest,
+    tasks: [...value.tasks]
+      .sort((left, right) => left.taskKey.localeCompare(right.taskKey))
+      .map(task => ({
+        taskKey: task.taskKey,
+        kind: task.kind,
+        criteria: [...task.criteria]
+          .sort((left, right) => left.id.localeCompare(right.id))
+          .map(criterion => ({ ...criterion })),
+        requiredEvidence: unique(task.requiredEvidence),
+        minimumRoute: task.minimumRoute,
+        reviewerPrincipalId: task.reviewerPrincipalId,
+        sponsorPrincipalId: task.sponsorPrincipalId,
+        reviewerTimeoutMs: task.reviewerTimeoutMs,
+        sponsorTimeoutMs: task.sponsorTimeoutMs,
+      })),
+    memorySchema: {
+      revision: value.memorySchema.revision,
+      claimRules: [...value.memorySchema.claimRules]
+        .sort((left, right) => left.key.localeCompare(right.key))
+        .map(rule => ({
+          key: rule.key,
+          valueType: rule.valueType,
+          allowedStatuses: [...new Set(rule.allowedStatuses)].sort(),
+          allowSupersedes: rule.allowSupersedes,
+        })),
+    },
   };
 }
 

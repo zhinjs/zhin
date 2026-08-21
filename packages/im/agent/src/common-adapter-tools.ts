@@ -6,7 +6,7 @@
  */
 
 import { createSceneManagementToolsRaw, buildSceneMethodArgs, SCENE_MANAGEMENT_METHOD_SPECS, SCENE_MANAGEMENT_SKILL_KEYWORDS, SCENE_MANAGEMENT_SKILL_TAGS, type ISceneManagement, type SceneManagementMethodSpec } from '@zhin.js/core';
-import type { Tool, ToolScope } from './orchestrator/types.js';
+import type { Tool, ToolScope } from './resource-hub/types.js';
 export type { ISceneManagement, SceneManagementMethodSpec };
 export { SCENE_MANAGEMENT_METHOD_SPECS, SCENE_MANAGEMENT_SKILL_KEYWORDS, SCENE_MANAGEMENT_SKILL_TAGS, buildSceneMethodArgs };
 

@@ -440,6 +440,25 @@ describe('ProjectProfileRegistry', () => {
       .toThrow('Sponsor governance is required');
   });
 
+  it('treats every Acceptance policy semantic change as a conservative authority expansion', () => {
+    const activeCandidate = acceptanceRevision('profile-a', 'reviewer_required');
+    const active = persistedRevision(activeCandidate, -1);
+    const candidate = acceptanceRevision('profile-b', 'baseline', 'profile-a');
+    const input = createProjectProfileGovernanceAuthorizationInput(
+      candidate,
+      'register_revision',
+      2,
+      active,
+    );
+    expect(input.semanticDiff).toMatchObject({
+      acceptancePolicy: {
+        changed: ['software-acceptance'],
+        authorityExpansion: true,
+      },
+      authorityExpansion: true,
+    });
+  });
+
   it('snapshots a Revision before awaiting journal IO', async () => {
     const registry = createRegistry();
     const candidate = revision('profile-1');
@@ -663,3 +682,42 @@ describe('ProjectProfileRegistry', () => {
       .rejects.toThrow('does not restore Revision profile-1');
   });
 });
+
+function acceptanceRevision(
+  revisionId: string,
+  minimumRoute: 'baseline' | 'reviewer_required',
+  parentRevisionId?: string,
+): ProjectProfileRevisionCandidate {
+  const pack: CapabilityPack = {
+    id: 'acceptance-pack', version: '1.0.0', digest: 'sha256:acceptance-pack-v1', kind: 'policy',
+    tools: [], skills: [], agents: [], workflows: [],
+    acceptancePolicies: [{
+      id: 'software-acceptance', digest: 'sha256:software-acceptance-v1',
+      tasks: [{
+        taskKey: 'build', kind: 'task_result',
+        criteria: [{ id: 'tests', kind: 'deterministic', description: 'Tests pass' }],
+        requiredEvidence: [], minimumRoute,
+        reviewerPrincipalId: 'reviewer', sponsorPrincipalId: 'sponsor',
+        reviewerTimeoutMs: 10, sponsorTimeoutMs: 20,
+      }],
+      memorySchema: { revision: 1, claimRules: [] },
+    }],
+  };
+  const compiled = compileWorkroomProfile({
+    revision: {
+      id: revisionId, projectId: 'project-a', charterRevisionId: 'charter-7',
+      packs: [{ id: pack.id, version: pack.version, digest: pack.digest }],
+      enabledTools: [], enabledSkills: [], enabledAgents: [], enabledWorkflows: [],
+      enabledAcceptancePolicies: ['software-acceptance'],
+    },
+    packs: [pack], generationSupply: { tools: [], skills: [], agents: [] },
+  });
+  if (!compiled.ok) throw new Error('Acceptance Profile fixture must compile');
+  return {
+    revisionId, projectId: 'project-a', charterRevisionId: 'charter-7',
+    packRefs: compiled.profile.packRefs, overlayDigest: 'sha256:overlay',
+    compiledDigest: compiled.profile.digest, compiledProfile: compiled.profile,
+    ...(parentRevisionId ? { parentRevisionId } : {}),
+    source: { kind: 'sponsor_decision', sourceId: `source:${revisionId}` },
+  };
+}

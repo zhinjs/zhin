@@ -1,9 +1,9 @@
 /**
  * ZhinAgent 理想模块运行时状态 — configure / asPrivate(host) 共用存储。
  */
-import type { SkillRegistry } from '../orchestrator/skill-registry.js';
+import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { SkillSystem } from '../skill/skill-system.js';
-import type { AgentOrchestrator } from '../orchestrator/index.js';
+import type { AgentResourceHub } from '../resource-hub/index.js';
 import type { AgentCore } from '../core/agent-core.js';
 import type { ToolSystem } from '../tool/tool-system.js';
 import { type ContextSystem, createContextSystemForHost } from '../context/context-system.js';
@@ -14,7 +14,7 @@ import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 export interface ZhinAgentRuntimeModules {
   skillRegistry: SkillRegistry | null;
   skillSystem: SkillSystem | null;
-  orchestrator: AgentOrchestrator | null;
+  resourceHub: AgentResourceHub | null;
   agentCore: AgentCore | null;
   toolSystem: ToolSystem | null;
   contextSystem: ContextSystem | null;
@@ -27,7 +27,7 @@ export function createZhinAgentRuntimeModules(host: ZhinAgentPrivate): ZhinAgent
   return {
     skillRegistry: null,
     skillSystem: null,
-    orchestrator: null,
+    resourceHub: null,
     agentCore: null,
     toolSystem: null,
     memorySystem: null,
@@ -38,7 +38,7 @@ export function createZhinAgentRuntimeModules(host: ZhinAgentPrivate): ZhinAgent
 }
 
 const MODULE_KEYS: ReadonlyArray<keyof ZhinAgentRuntimeModules> = [
-  'skillRegistry', 'skillSystem', 'orchestrator', 'agentCore',
+  'skillRegistry', 'skillSystem', 'resourceHub', 'agentCore',
   'toolSystem', 'contextSystem', 'memorySystem', 'sessionSystem', 'eventSystem',
 ];
 
@@ -60,7 +60,7 @@ export function bindModuleProperties(target: object, modules: ZhinAgentRuntimeMo
 export function clearZhinAgentRuntimeModules(modules: ZhinAgentRuntimeModules): void {
   modules.skillRegistry = null;
   modules.skillSystem = null;
-  modules.orchestrator = null;
+  modules.resourceHub = null;
   modules.agentCore = null;
   modules.toolSystem = null;
   modules.contextSystem = null;

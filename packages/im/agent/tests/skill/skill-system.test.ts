@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SkillSystem } from '../../src/skill/skill-system.js';
-import { SkillRegistry } from '../../src/orchestrator/skill-registry.js';
+import { SkillRegistry } from '../../src/resource-hub/skill-registry.js';
 
 describe('SkillSystem', () => {
   it('getAlwaysSkills returns empty for registries without the hook', () => {

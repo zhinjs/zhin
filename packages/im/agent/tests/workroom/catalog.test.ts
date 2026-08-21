@@ -24,6 +24,7 @@ describe('FileWorkroomCatalog', () => {
       alpha: {
         name: 'Alpha',
         members: [{ agent: 'zhin', role: 'orchestrator' as const }],
+        sponsors: ['control-plane:root'],
         conversation: { adapter: 'sandbox', endpoint: 'bot', kind: 'group' as const, id: 'a', agent: 'zhin' },
       },
     };

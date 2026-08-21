@@ -35,6 +35,7 @@ describe('WorkroomA2aAuthRegistry', () => {
     expect(Object.isFrozen(registry.snapshot.bindings[0])).toBe(true);
     expect(JSON.stringify(registry.snapshot)).not.toContain('credential-secret-1');
     expect(JSON.stringify(registry.snapshot)).not.toContain('credential-1');
+    expect(registry.callbackAuthorization('a2a-primary')).toBe('Bearer credential-secret-1');
   });
 
   it('resolves secure-provider credentials at generation registration time', () => {

@@ -1,4 +1,4 @@
-import type { Message } from '../orchestrator/types.js';
+import type { Message } from '../resource-hub/types.js';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 
 export function emitSessionNewEvent(

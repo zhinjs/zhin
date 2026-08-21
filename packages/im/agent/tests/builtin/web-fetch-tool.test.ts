@@ -11,7 +11,7 @@ import {
   stripFetchedHtmlToText,
 } from '../../src/builtin/web-fetch-tool.js';
 import { ZHIN_WEB_USER_AGENT } from '../../src/builtin/web-tool-utils.js';
-import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
+import { normalizeTool } from '../../src/resource-hub/tool-selection.js';
 
 const originalFetch = globalThis.fetch;
 

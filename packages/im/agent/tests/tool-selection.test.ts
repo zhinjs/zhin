@@ -18,11 +18,11 @@ import {
   canAccessToolFromSkill,
   createRestrictedToolView,
   normalizeTool,
-} from '../src/orchestrator/tool-selection.js';
+} from '../src/resource-hub/tool-selection.js';
 import { planToolRun } from '../src/tool/runtime.js';
 import { createPermissionHost, createSceneRolePlatformChecker } from '@zhin.js/permission';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
-import type { Tool } from '../src/orchestrator/types.js';
+import type { Tool } from '../src/resource-hub/types.js';
 import type { ZhinAgentConfig } from '../src/config/index.js';
 
 function makeConfig(overrides: Partial<ZhinAgentConfig> = {}): Required<ZhinAgentConfig> {

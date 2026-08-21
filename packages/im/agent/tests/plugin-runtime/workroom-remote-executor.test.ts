@@ -9,6 +9,7 @@ import {
   createWorkroomRemoteDispatchOutboxItem,
   type WorkroomRemoteDispatchOutboxItem,
 } from '../../src/workroom/remote-dispatch.js';
+import { remoteDisclosureFixture } from '../workroom/remote-disclosure-fixture.js';
 
 describe('generation Workroom remote executor', () => {
   it('fails closed without a current provider and resolves after generation provision', async () => {
@@ -75,7 +76,9 @@ function dispatchItem(): WorkroomRemoteDispatchOutboxItem {
     contextView: { ref: 'view:1', hash: 'sha256:view' },
     acceptanceContract: { ref: 'contract:1', hash: 'sha256:contract' },
     capabilitySnapshot: { ref: 'capability:1', hash: 'sha256:capability', grantRef: 'grant:1' },
-    disclosureManifest: { ref: 'manifest:1', hash: 'sha256:manifest' },
+    disclosureManifest: remoteDisclosureFixture({
+      endpointId: 'remote', sourceRef: 'view:1', sourceDigest: 'sha256:view',
+    }),
     workspace: {
       provider: 'github_pull_request', repositoryId: 'github:org/repo',
       integrationBindingId: 'github-app:1', baseSha: 'a'.repeat(40),

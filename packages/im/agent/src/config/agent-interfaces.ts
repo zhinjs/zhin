@@ -6,7 +6,7 @@
  */
 
 import type { AgentMessage, AgentEvent, MediaContentBlock, OutputElement } from '@zhin.js/ai';
-import type { Message, Tool } from '../orchestrator/types.js';
+import type { Message, Tool } from '../resource-hub/types.js';
 import type { SubagentSystem } from '../subagent/index.js';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import type { ZhinAgentTurnMetrics } from '../turn/turn-metrics.js';

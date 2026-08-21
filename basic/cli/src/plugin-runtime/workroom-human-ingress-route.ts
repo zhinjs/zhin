@@ -2,10 +2,16 @@ import { createHash } from 'node:crypto';
 import type { Message } from '@zhin.js/core/runtime';
 import {
   HumanIngressProposalSequenceConflictError,
+  HumanIngressProposalReplayConflictError,
   HumanIngressProposalService,
   InteractionSpaceBindingService,
+  digestHumanIngressConversationEvent,
+  humanIngressConversationEventRef,
   type HumanIngressIntent,
+  type HumanIngressSpaceDecision,
+  type HumanIngressApplicationService,
   type HumanIngressProposalRepository,
+  type HumanIngressTargetResolverPort,
   type HumanPrincipalSnapshot,
   type InteractionSpace,
   type InteractionSpaceBindingRepository,
@@ -14,6 +20,7 @@ import {
 import {
   conversationRefKey,
   messageRefKey,
+  type ConversationEventStore,
 } from '@zhin.js/im-contract';
 
 export interface CatalogWorkroomSpaceInput {
@@ -30,8 +37,19 @@ export interface WorkroomHumanIngressPreRouteOptions {
   readonly bindings: InteractionSpaceBindingRepository;
   readonly bindingRouter: InteractionSpaceRouter;
   readonly proposals: HumanIngressProposalRepository;
+  readonly application: Pick<HumanIngressApplicationService, 'drain'>;
+  /** Required by production composition; omitted only by isolated contract embedders. */
+  readonly sourceEvents?: ConversationEventStore | (() => ConversationEventStore);
   readonly resolveCatalogSpace: (message: Message) => CatalogWorkroomSpace | null | Promise<CatalogWorkroomSpace | null>;
   readonly resolveIntent?: (message: Message) => HumanIngressIntent;
+  readonly createTargetResolver?: (
+    message: Message,
+    intent: HumanIngressIntent,
+  ) => HumanIngressTargetResolverPort;
+  readonly onWorkroomResolved?: (
+    message: Message,
+    decision: HumanIngressSpaceDecision & Readonly<{ space: 'workroom' }>,
+  ) => void | Promise<void>;
   readonly principalOwner: string;
 }
 
@@ -79,20 +97,39 @@ export class WorkroomHumanIngressPreRoute {
     if (boundSpace !== 'workroom' && boundSpace !== 'sponsor_room') {
       throw new Error('Workroom human ingress resolved an unsupported non-chat space');
     }
+    if (boundSpace === 'workroom') {
+      await this.options.onWorkroomResolved?.(
+        message,
+        Object.freeze({ ...decision, space: boundSpace, projectId: decision.projectId }),
+      );
+    }
     if (!message.message || !message.sender?.id) {
       throw new Error('Workroom human ingress requires durable message and human principal identity');
+    }
+
+    const sourceStore = typeof this.options.sourceEvents === 'function'
+      ? this.options.sourceEvents()
+      : this.options.sourceEvents;
+    const sourceEvent = sourceStore
+      ? (await sourceStore.listBetween(
+          message.conversation,
+          sequence - 1,
+          sequence,
+          1,
+        ))[0]
+      : createEmbeddedSourceEvent(message, sequence);
+    if (!sourceEvent || sourceEvent.sequence !== sequence
+      || sourceEvent.event.type !== 'message.created'
+      || messageRefKey(sourceEvent.event.message.ref) !== messageRefKey(message.message)) {
+      throw new Error('Workroom human ingress canonical source event is unavailable');
     }
 
     const input = Object.freeze({
       decision: Object.freeze({ ...decision, space: boundSpace, projectId: decision.projectId }),
       sourceEvent: Object.freeze({
         version: 1 as const,
-        ref: `conversation-event:${messageRefKey(message.message)}`,
-        digest: digestParts('workroom-human-source-v1', [
-          messageRefKey(message.message),
-          sequence,
-          conversationKey,
-        ]),
+        ref: humanIngressConversationEventRef(sourceEvent.event),
+        digest: digestHumanIngressConversationEvent(sequence, sourceEvent.event),
         sequence,
         conversation: message.conversation,
       }),
@@ -101,11 +138,13 @@ export class WorkroomHumanIngressPreRoute {
         ? { entryAgentDefinitionId: configured.agentDefinitionId }
         : {}),
     });
-    const intent = this.options.resolveIntent?.(message) ?? 'work_request';
+    const intent = this.options.resolveIntent?.(message) ?? 'discussion';
     const resolverRef = 'workroom-human-target-resolver:unaddressed:v1';
     const resolverDigest = digestParts(resolverRef, ['unaddressed', intent]);
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const service = new HumanIngressProposalService(this.options.proposals, {
+      const service = new HumanIngressProposalService(
+        this.options.proposals,
+        this.options.createTargetResolver?.(message, intent) ?? {
         resolve: request => Object.freeze({
           ...request,
           status: 'unaddressed' as const,
@@ -113,14 +152,20 @@ export class WorkroomHumanIngressPreRoute {
           resolverRef,
           resolverDigest,
         }),
-      });
+        },
+      );
       try {
         await service.propose(input);
+        const applications = await this.options.application.drain(decision.projectId);
+        for (const application of applications) {
+          if (application.status === 'clarification_required') {
+            await message.$reply(renderHumanIngressClarification(application.reason));
+          }
+        }
         return true;
       } catch (error) {
         const concurrent = error instanceof HumanIngressProposalSequenceConflictError
-          || (error instanceof Error
-            && error.message === 'Human ingress proposal repository replay payload drift');
+          || error instanceof HumanIngressProposalReplayConflictError;
         if (!concurrent || attempt === 2) throw error;
         // A healthy reread distinguishes a concurrent winner from durable
         // corruption before retrying at the new expected sequence.
@@ -163,6 +208,58 @@ export class WorkroomHumanIngressPreRoute {
       sourceRef: `${desired.sourceRef}:at:${effectiveAfterConversationSequence}`,
       sourceDigest: desired.sourceDigest,
     });
+  }
+}
+
+function createEmbeddedSourceEvent(
+  message: Message,
+  sequence: number,
+): import('@zhin.js/im-contract').SequencedConversationEvent {
+  const ref = message.message!;
+  const event = Object.freeze({
+    eventId: `message:${messageRefKey(ref)}`,
+    conversation: message.conversation,
+    timestamp: sequence,
+    type: 'message.created' as const,
+    message: Object.freeze({
+      ref,
+      ...(message.sender ? { actor: Object.freeze({ id: message.sender.id }) } : {}),
+      segments: Object.freeze(message.segments?.length
+        ? [...message.segments]
+        : [{ type: 'text' as const, data: Object.freeze({ text: message.content }) }]),
+      timestamp: sequence,
+    }),
+  });
+  return Object.freeze({ sequence, event });
+}
+
+/**
+ * Conservative product intent syntax. Free text is discussion; only explicit
+ * Workroom verbs can request planning or control authority.
+ */
+export function resolveWorkroomHumanIntent(message: Message): HumanIngressIntent {
+  const content = typeof message.content === 'string' ? message.content.trimStart() : '';
+  if (/^\/control(?:\s|$)/iu.test(content)) return 'control';
+  if (/^\/(?:work|task)(?:\s|$)/iu.test(content)) return 'work_request';
+  return 'discussion';
+}
+
+function renderHumanIngressClarification(reason: string): string {
+  switch (reason) {
+    case 'missing_work_scope':
+      return '这条工作请求已进入项目收件箱，但还需要明确工作范围和验收目标。请补充后重新使用 /work 提交。';
+    case 'planning_unavailable':
+      return '这条工作请求已进入项目收件箱，但当前 Project 尚未安装受治理的动态工作流规划器，未创建默认单任务。请配置 Profile/Strategy 后重试。';
+    case 'planning_disclosure_unavailable':
+      return '这条工作请求已进入项目收件箱，但缺少可用于模型规划的 P12 数据披露目标或策略，正文未发送给模型。请完成数据治理配置后重试。';
+    case 'missing_control_target':
+      return '这条控制请求已进入项目收件箱，但还需要明确 Run/Task 目标和具体动作。请补充后重新使用 /control 提交。';
+    case 'unauthorized_control':
+      return '这条控制请求需要具备相应权限的负责人确认。';
+    case 'stale_target':
+      return '目标任务已变化，请确认当前 Run/Task 后重新提交。';
+    default:
+      return '这条请求需要进一步澄清，请补充明确的目标、范围和期望结果。';
   }
 }
 

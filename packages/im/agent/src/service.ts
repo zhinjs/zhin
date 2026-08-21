@@ -7,7 +7,7 @@ import { type AITriggerConfig, type AIAccessConfig, type Tool } from '@zhin.js/c
 import { type AIProvider, type AIConfig, type AgentTool, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, registerLlmApiFromProviders } from '@zhin.js/ai';
 import type { AgentRunInput } from './media/media-types.js';
 import { DEFAULT_CONFIG } from './config/index.js';
-import { normalizeTool } from './orchestrator/tool-selection.js';
+import { normalizeTool } from './resource-hub/tool-selection.js';
 import { createWebSearchTool } from './builtin/web-search-tool.js';
 import { registerProviderInstances } from './config/provider-instance.js';
 import { normalizeAiRoutingConfig, type NormalizedAiRoutingConfig } from './config/normalize-ai-config.js';
@@ -48,6 +48,8 @@ export interface CreateServiceAgentOptions {
   collectExternalTools?: boolean;
   maxIterations?: number;
   contextWindow?: number;
+  /** Cancels provider I/O and releases the caller even for a non-cooperative provider. */
+  signal?: AbortSignal;
 }
 
 export class AIService {
@@ -230,6 +232,7 @@ export class AIService {
         tools,
         userInput,
         maxIterations,
+        signal: options.signal,
       }).then(toServiceAgentResult),
       dispose: () => undefined,
     };

@@ -122,7 +122,10 @@ a2a:
   path: /a2a
 ```
 
-两段都挂在 HTTP Host 上，按需启用；未配置时对应 SDK 不会被加载。
+两段都挂在 HTTP Host 上，按需启用；未配置时对应 SDK 不会被加载。Workroom
+远程执行使用 `a2a.workroomCallbacks` 与 `a2a.workroomRemoteExecutors` 的固定代级
+transport binding；Project/成员/群绑定不放在这里，而由持久 Workroom Catalog 管理。
+完整示例见 [`@zhin.js/a2a`](../../packages/host/a2a/README.md#workroom-execution-callbacks)。
 
 ## ai
 
@@ -247,7 +250,7 @@ ai:
     timeout: 60000
 ```
 
-`ai.multimodal`（图片/音频/视频入出站策略）、`ai.knowledge.baseDir`（本地知识库目录，默认 `knowledge`）等按需配置。远程 Agent 不再通过 `ai.remoteAgents` 旁路接入；未来的 A2A Executor 必须服从 Workroom Assignment lease 与 Journal 事件契约。
+`ai.multimodal`（图片/音频/视频入出站策略）、`ai.knowledge.baseDir`（本地知识库目录，默认 `knowledge`）等按需配置。远程 Agent 不再通过 `ai.remoteAgents` 旁路接入；可选 A2A Executor 只通过持久 Workroom Catalog 与 generation-owned Profile/Grant/Workspace/Disclosure/Endpoint authority 接入，并服从 Assignment lease/fence 与 Journal 事件契约。
 
 `ai.workrooms` 已删除。Project、成员和协作空间由 Console 的持久化 Workroom Catalog 管理，保存后通过 revision CAS 立即生效，不需要重启运行时。
 

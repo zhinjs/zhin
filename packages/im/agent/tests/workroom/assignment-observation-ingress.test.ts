@@ -21,6 +21,26 @@ const DIGEST_E = `sha256:${'e'.repeat(64)}`;
 const DIGEST_F = `sha256:${'f'.repeat(64)}`;
 
 describe('AssignmentObservationIngress', () => {
+  it('binds one Executor command port to the trusted Envelope scope', async () => {
+    const fixture = await runningAssignment();
+    const command = fixture.ingress.bind(fixture.envelope);
+    const expectedSequence = (await fixture.kernel.read('project-1', 'run-1')).sequence;
+
+    await command.apply(
+      progress(fixture.envelope, 'observation-bound-port', 'Bound to one Assignment'),
+      expectedSequence,
+    );
+
+    expect(Object.keys(command)).toEqual(['apply']);
+    expect((await fixture.kernel.read('project-1', 'run-1')).assignments['assignment-1'])
+      .toMatchObject({ latestProgress: { summary: 'Bound to one Assignment' } });
+    const forged = reissueEnvelope(fixture.envelope, { assignmentId: 'assignment-forged' });
+    await expect(command.apply(
+      progress(forged, 'observation-forged-bound-port', 'Forged'),
+      expectedSequence + 1,
+    )).rejects.toThrow('not bound to the current Envelope');
+  });
+
   it('persists progress through the Workroom Kernel CAS authority', async () => {
     const fixture = await runningAssignment();
     const expectedSequence = (await fixture.kernel.read('project-1', 'run-1')).sequence;

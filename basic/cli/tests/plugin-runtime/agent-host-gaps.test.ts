@@ -2,13 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { Message, type ImRuntime } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { AITriggerConfig } from '@zhin.js/core';
-import { InteractionRouter } from '@zhin.js/agent';
 import { turnIntentResolverToken } from '@zhin.js/agent/runtime';
 import {
   createRuntimeTurnAccess,
   createRuntimeTurnRequest,
   createRuntimeQuestionPort,
-  consumeRuntimeInteraction,
   createRuntimeApprovalPort,
   resolveRuntimeTurnIntent,
   resolveProductTurnIntent,
@@ -22,6 +20,7 @@ import {
   deliveryOutcomeFromReceipt,
   assertFixedWorkroomStorageMode,
   assertWorkroomCatalogMatchesGeneration,
+  createCatalogWorkroomProjectionBinding,
   resolveWorkroomStorageMode,
 } from '../../src/plugin-runtime/agent-host-installer.js';
 import { createEndpointRoleResolver } from '../../src/plugin-runtime/start-command.js';
@@ -45,6 +44,45 @@ describe('Plugin Runtime Tool policy bridge', () => {
 });
 
 describe('process-fixed Workroom storage identity', () => {
+  it('constructs the exact named Projection binding from Catalog plus canonical ingress', () => {
+    const conversation = {
+      endpoint: { id: 'root\0zhin.adapter\0slack~main', adapter: 'adapter-owner' },
+      kind: 'channel' as const,
+      id: 'engineering',
+    };
+    expect(createCatalogWorkroomProjectionBinding({
+      revision: 'a'.repeat(64),
+      definitions: {
+        engineering: {
+          name: 'Engineering',
+          members: [
+            { agent: 'orchestrator', role: 'orchestrator' },
+            { agent: 'developer', role: 'executor' },
+          ],
+          conversation: {
+            adapter: 'slack', endpoint: 'main', kind: 'channel',
+            id: 'engineering', agent: 'orchestrator',
+          },
+        },
+      },
+    }, 'engineering', conversation, 4)).toEqual({
+      version: 1,
+      projectId: 'engineering',
+      catalogBindingDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+      bindingRevision: 4,
+      projectionPolicyRevision: 1,
+      conversation,
+      orchestrator: {
+        principalId: 'orchestrator', agentDefinitionId: 'orchestrator',
+        displayName: 'orchestrator', role: 'orchestrator',
+      },
+      agents: [{
+        principalId: 'developer', agentDefinitionId: 'developer',
+        displayName: 'developer', role: 'executor',
+      }],
+    });
+  });
+
   it('derives one backend from the initial process configuration', () => {
     expect(resolveWorkroomStorageMode(undefined)).toBe('database');
     expect(resolveWorkroomStorageMode({ sessions: { useDatabase: false } } as never)).toBe('file');
@@ -364,12 +402,6 @@ describe('canonical IM interaction adapter', () => {
       ],
       signal: expect.any(AbortSignal),
     }));
-  });
-
-  it('does not claim messages without canonical endpoint identity', async () => {
-    const router = new InteractionRouter();
-    await expect(consumeRuntimeInteraction(router, makeMessage({ content: '42', metadata: {} })))
-      .resolves.toBe(false);
   });
 
   it('auto-approves master without asking UserInteraction', async () => {

@@ -11,6 +11,7 @@ import { ZhinA2AExecutor } from './agent-executor.js';
 import { handleAgentCard, handleJsonRpc, handleRest } from './http-handlers.js';
 import { verifyA2aBearer } from './auth.js';
 import type { WorkroomA2aAuthBindingInput } from './workroom-auth-registry.js';
+import type { WorkroomA2aRemoteTransportBindingInput } from './workroom-remote-transport.js';
 
 export interface RuntimeWorkroomCallbackConfig {
   readonly enabled?: boolean;
@@ -21,12 +22,20 @@ export interface RuntimeWorkroomCallbackConfig {
   readonly bindings: readonly WorkroomA2aAuthBindingInput[];
 }
 
+export interface RuntimeWorkroomRemoteExecutorsConfig {
+  readonly enabled?: boolean;
+  readonly maxResponseBytes?: number;
+  readonly bindings: readonly WorkroomA2aRemoteTransportBindingInput[];
+}
+
 export interface RuntimeA2aConfig {
   readonly enabled?: boolean;
   readonly path?: string;
   readonly token?: string;
   readonly publicUrl?: string;
   readonly workroomCallbacks?: RuntimeWorkroomCallbackConfig;
+  /** Transport endpoints only. Project/Workroom topology remains in the persistent Catalog. */
+  readonly workroomRemoteExecutors?: RuntimeWorkroomRemoteExecutorsConfig;
 }
 
 export interface InstallRuntimeA2aOptions {
@@ -164,3 +173,11 @@ export {
   type WorkroomA2aAuthRegistryOptions,
   type WorkroomA2aEndpointAuthoritySnapshot,
 } from './workroom-auth-registry.js';
+export {
+  WorkroomA2aHttpRemoteTransport,
+  type WorkroomA2aHttpRemoteTransportOptions,
+  type WorkroomA2aPinnedNetworkPort,
+  type WorkroomA2aPinnedRequest,
+  type WorkroomA2aResolvedAddress,
+  type WorkroomA2aRemoteTransportBindingInput,
+} from './workroom-remote-transport.js';

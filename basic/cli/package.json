@@ -67,6 +67,9 @@
     "zod": "^4.4.3"
   },
   "peerDependenciesMeta": {
+    "@zhin.js/a2a": {
+      "optional": true
+    },
     "@zhin.js/agent": {
       "optional": true
     },
@@ -78,6 +81,7 @@
     }
   },
   "peerDependencies": {
+    "@zhin.js/a2a": "^3.0.13",
     "@zhin.js/agent": "^1.1.13",
     "@zhin.js/speech": "^3.0.11",
     "typescript": ">=5.8.0 <7.0.0"

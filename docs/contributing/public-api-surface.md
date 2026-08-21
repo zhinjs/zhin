@@ -54,6 +54,12 @@
 | `messageGatewayToken` | `stable` | `@zhin.js/core`（`zhin.js/core/runtime`） | 入站消息投递网关（适配器用） |
 | `httpHostToken` | `stable` | `@zhin.js/host-http` | HTTP/WS Host 能力（Console、Webhook 用） |
 
+### Agent 能力资源
+
+| API | 稳定性 | 来源包 | 一句话 |
+|-----|--------|--------|--------|
+| `ctx.agent` / `AgentResourceHub` | `experimental` | `@zhin.js/agent` | generation-scoped Tool/Skill/SubAgent/MCP/Hook 能力注册；不拥有 Workroom Run/Task/Assignment 状态 |
+
 ### Removed Legacy Hooks
 
 | API | 稳定性 | 来源包 | 一句话 |
@@ -84,6 +90,8 @@
 | `zhin runtime start` | `stable` | `@zhin.js/cli` | Plugin Runtime 启动入口（composition root） |
 | `zhin setup` | `stable` | `@zhin.js/cli` | 已有项目增量配置向导 |
 | `zhin doctor` | `stable` | `@zhin.js/cli` | 环境/配置体检 |
+| `zhin agent legacy-runs <input>` | `experimental` | `@zhin.js/cli` | 只读审计已删除的 legacy Run export；输出到文件时仅 create-only，不写新 Workroom Journal |
+| `zhin agent legacy-payloads <input> --kind <kind>` | `experimental` | `@zhin.js/cli` | 只读扫描 legacy 内嵌 Workroom payload；只输出 content-free quarantine audit/proposal，不自动删除或迁移 |
 | `pnpm create zhin-app` | `stable` | `create-zhin-app` | 新建项目脚手架 |
 
 ## Internal（可读但不承诺不 break）
@@ -98,6 +106,7 @@
 | `ToolIndex` / `SkillIndex` / `McpIndex` / `PageIndex` / `LayoutIndex` 等 | `internal` | 各 feature 包 | 其余 projection，同属内部机制 |
 | `defineFeatureProvider`（Feature Provider 协议） | `internal` | `@zhin.js/feature-kit` | 新增 feature 类型的协议，面向框架扩展者而非插件作者 |
 | `MessageDispatcher` | `internal` | `@zhin.js/core` | 消息分发器（`createMessageDispatcher` 装配，路由策略可配置） |
+| `@zhin.js/agent/runtime` Workroom tokens / composition ports | `internal` | `@zhin.js/agent` | generation-owned Host 装配机制；不是插件作者可直接取得 Run 状态写权限的 API |
 | `basic/cli/src/plugin-runtime/*-installer.ts` | `internal` | `@zhin.js/cli` | Root Host 安装器（database / schedule / outbound / inbox / http / console / agent / speech / html-renderer / protocol），装配细节随时可变 |
 
 ## Deprecated / 已迁移
@@ -107,6 +116,7 @@
 | legacy `usePlugin()` / `getPlugin()` 插件体系 | `removed` | 调用 throw（throwing stub） | 唯一入口：`definePlugin` + `zhin runtime start` |
 | `MessageCommand` / classic `CommandFeature` | `deprecated` | Agent init / game-kit hub 仍用 | 迁到 `defineCommand` + Runtime `CommandIndex` 后删除 |
 | `bootstrapNode` / `zhin.js/node` | `removed` | 不再导出 | 唯一启动入口：`zhin runtime start` |
+| `AgentOrchestrator` / `ResourceHub` | `removed` | 兼容名称不再导出 | 能力注册改用 `AgentResourceHub`；Workroom 编排改走 Kernel 与专用 typed ports |
 | 「`host` 插件」叙事 | `deprecated` | 文档已收口 | Host 能力改为 token 化（见上表 Host Token），不再是插件概念 |
 | `examples/test-bot` 作为用户路径 | `deprecated` | 维护者厨房水槽 | 用户路径为 minimal-bot（Stable）→ full-bot（L4），勿把 test-bot 配置当模板 |
 | `plugin.yml` 插件清单 | `deprecated` | legacy `Plugin` 与 `zhin build` 仍在读取（`packages/im/core/src/plugin.ts`、`basic/cli/src/libs/plugin-package-build.ts`） | 属 legacy 体系的一部分，随 legacy 一起退役；约定式插件以 `package.json` 为准 |

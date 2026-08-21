@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Plugin, ToolFeature } from '@zhin.js/core';
-import { AgentOrchestrator } from '../src/orchestrator/index.js';
+import { AgentResourceHub } from '../src/resource-hub/index.js';
 import {
   collectIntrospectionAgentTools,
   collectIntrospectionSkills,
@@ -8,7 +8,7 @@ import {
 } from '../src/init/introspection-collectors.js';
 
 describe('collectIntrospection agent resources', () => {
-  it('collects tool names from ToolFeature and orchestrator', () => {
+  it('collects tool names from ToolFeature and resource hub', () => {
     const root = new Plugin('/test/root.ts');
     const toolFeature = new ToolFeature();
     toolFeature.addTool({
@@ -19,22 +19,22 @@ describe('collectIntrospection agent resources', () => {
     }, 'demo');
     root.provide(toolFeature);
 
-    const orchestrator = new AgentOrchestrator();
-    orchestrator.addTool({
+    const resourceHub = new AgentResourceHub();
+    resourceHub.addTool({
       name: 'ping',
       description: 'ping',
       parameters: { type: 'object' },
       execute: async () => 'pong',
     });
-    root.provide({ name: 'agent', description: 'test', value: orchestrator });
+    root.provide({ name: 'agent', description: 'test', value: resourceHub });
 
     expect(collectIntrospectionAgentTools(root)).toEqual(['ping', 'slack_send']);
   });
 
-  it('collects orchestrator skill names', () => {
+  it('collects resource hub skill names', () => {
     const root = new Plugin('/test/root.ts');
-    const orchestrator = new AgentOrchestrator();
-    orchestrator.addSkill({
+    const resourceHub = new AgentResourceHub();
+    resourceHub.addSkill({
       name: 'search',
       description: 'search',
       tools: [],
@@ -42,21 +42,21 @@ describe('collectIntrospection agent resources', () => {
       keywords: [],
       tags: [],
     });
-    root.provide({ name: 'agent', description: 'test', value: orchestrator });
+    root.provide({ name: 'agent', description: 'test', value: resourceHub });
 
     expect(collectIntrospectionSkills(root)).toEqual(['search']);
   });
 
   it('formats MCP server labels with connection state', () => {
     const root = new Plugin('/test/root.ts');
-    const orchestrator = new AgentOrchestrator();
-    orchestrator.addMcp({
+    const resourceHub = new AgentResourceHub();
+    resourceHub.addMcp({
       name: 'filesystem',
       transport: 'stdio',
       command: 'npx',
       args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'],
     });
-    root.provide({ name: 'agent', description: 'test', value: orchestrator });
+    root.provide({ name: 'agent', description: 'test', value: resourceHub });
 
     expect(collectIntrospectionMcpLabels(root)).toEqual(['filesystem (idle)']);
   });

@@ -1,6 +1,6 @@
 import { defineMcp, mcpFeatureId, type McpDefinition } from '@zhin.js/mcp-feature';
 import { McpClientConnection } from '../mcp-client/index.js';
-import type { McpServerEntry } from '../orchestrator/types.js';
+import type { McpServerEntry } from '../resource-hub/types.js';
 
 export interface HostMcpProjection {
   readonly feature: typeof mcpFeatureId;

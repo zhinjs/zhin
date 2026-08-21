@@ -2,7 +2,7 @@
  * Module-level `registerAIHook` handler registry (legacy + Runtime shared).
  */
 import { getLogger } from '@zhin.js/logger';
-import type { AIHookEvent, AIHookHandler } from './orchestrator/types.js';
+import type { AIHookEvent, AIHookHandler } from './resource-hub/types.js';
 
 const logger = getLogger('AIHook');
 const handlers = new Map<string, AIHookHandler[]>();

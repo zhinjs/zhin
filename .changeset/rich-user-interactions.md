@@ -11,6 +11,10 @@
 "@zhin.js/adapter-telegram": minor
 "@zhin.js/adapter-dingtalk": minor
 "@zhin.js/adapter-lark": minor
+"@zhin.js/adapter-sandbox": minor
+"@zhin.js/host-http": minor
+"@zhin.js/client": minor
+"@zhin.js/console-protocol": minor
 "@zhin.js/cli": patch
 "zhin.js": major
 ---

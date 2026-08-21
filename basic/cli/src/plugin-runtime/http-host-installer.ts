@@ -50,7 +50,11 @@ function parseScopedTokens(value: unknown): readonly ScopedTokenConfig[] | undef
     const record = entry as Record<string, unknown>;
     if (typeof record.token !== 'string' || !record.token) continue;
     const scope = record.scope === 'demo' || record.scope === 'full' ? record.scope : 'demo';
-    tokens.push(Object.freeze({ token: record.token, scope }));
+    const principalId = typeof record.principalId === 'string' && record.principalId.trim() === record.principalId
+      && record.principalId.length > 0
+      ? record.principalId
+      : undefined;
+    tokens.push(Object.freeze({ token: record.token, scope, ...(principalId ? { principalId } : {}) }));
   }
   return tokens.length > 0 ? Object.freeze(tokens) : undefined;
 }

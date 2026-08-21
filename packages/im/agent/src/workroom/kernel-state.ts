@@ -15,6 +15,7 @@ import {
   reviewerVerdictRequiresRework,
   type ReviewerVerdict,
 } from './acceptance-control.js';
+import { replayWorkroomPreemptions } from './workroom-preemption.js';
 
 const TERMINAL_TASKS = new Set(['accepted', 'failed', 'cancelled']);
 const ACTIVE_ASSIGNMENTS = new Set(['leased', 'running', 'cancel_requested']);
@@ -42,6 +43,7 @@ export function replayWorkroom(events: readonly WorkroomEvent[]): WorkroomRunSta
     if (event.sequence !== state.sequence + 1) throw new Error('Workroom journal sequence is not contiguous');
     state = evolveWorkroom(state, event);
   }
+  replayWorkroomPreemptions(events);
   return deriveRunStatus(state);
 }
 
@@ -67,8 +69,12 @@ export function decideWorkroom(
     }
     case 'resolve_blocker': {
       const task = requireTask(state, command.taskKey, ['blocked']);
-      if (!task.blockers.some(blocker => blocker.id === command.blockerId)) {
+      const blocker = task.blockers.find(item => item.id === command.blockerId);
+      if (!blocker) {
         throw new Error(`Blocker ${command.blockerId} not found`);
+      }
+      if (blocker.kind === 'approval') {
+        throw new Error('Approval Blocker requires a typed Sponsor authority decision');
       }
       return [event('task.blocker_resolved', { ...command })];
     }
@@ -150,6 +156,17 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
 
   switch (event.type) {
     case 'run.created': break;
+    case 'plan.admitted': break;
+    case 'plan.revision_applied': break;
+    case 'plan_gate.decided': break;
+    case 'local_execution.requested': break;
+    case 'remote_dispatch.requested': break;
+    case 'scheduler.dispatch_requested': break;
+    case 'scheduler.priority_changed': break;
+    case 'scheduler.preemption_requested': break;
+    case 'scheduler.preemption_checkpoint_acknowledged': break;
+    case 'scheduler.preemption_timed_out': break;
+    case 'assignment.checkpoint_requested': break;
     case 'run.cancel_requested': cancelRequested = true; status = 'cancelling'; break;
     case 'run.cancelled': status = 'cancelled'; break;
     case 'task.planned': {
@@ -229,6 +246,7 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
     case 'assignment.progress':
     case 'assignment.heartbeat':
     case 'assignment.checkpointed':
+    case 'assignment.preempted':
     case 'assignment.execution_completed':
     case 'assignment.cancel_requested':
     case 'assignment.cancelled':
@@ -457,6 +475,36 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
       });
       break;
     }
+    case 'task.plan_revised': {
+      const task = requireTask(state, String(payload.taskKey));
+      if (task.revision !== Number(payload.expectedTaskRevision)
+        || Number(payload.newTaskRevision) !== task.revision + 1) {
+        throw new Error(`Task ${task.key} Plan Revision targets another revision`);
+      }
+      tasks = replaceTask(tasks, task.key, {
+        ...task,
+        title: String(payload.title),
+        required: payload.required === true,
+        status: 'ready',
+        revision: task.revision + 1,
+        attempt: 0,
+        maxAttempts: Number(payload.maxAttempts),
+        blockers: [],
+        currentAssignmentId: undefined,
+        reportRef: undefined,
+        reportDigest: undefined,
+        candidateRef: undefined,
+        candidateHash: undefined,
+        completionReceiptDigest: undefined,
+        acceptanceContract: undefined,
+        acceptanceRecord: undefined,
+        currentReviewerAssignmentId: undefined,
+        currentSponsorGateId: undefined,
+        acceptanceBlockReason: undefined,
+        terminalReason: String(payload.reason),
+      });
+      break;
+    }
     case 'task.cancel_requested': {
       const task = requireTask(state, String(payload.taskKey));
       tasks = replaceTask(tasks, task.key, { ...task, status: 'cancelling' });
@@ -555,6 +603,13 @@ function evolveAssignment(
         checkpointRef: String(event.payload.checkpointRef),
         checkpointDigest: String(event.payload.checkpointDigest),
       });
+    case 'assignment.preempted':
+      requireAssignmentStatusForReplay(assignment, ['running'], event.type);
+      if (assignment.checkpointRef !== event.payload.checkpointRef
+        || assignment.checkpointDigest !== event.payload.checkpointDigest) {
+        throw new Error('Persisted Assignment preemption is not bound to its checkpoint');
+      }
+      return { ...assignment, status: 'cancelled', outcome: 'interrupted' };
     case 'assignment.execution_completed':
       requireAssignmentStatusForReplay(assignment, ['running'], event.type);
       return {
@@ -600,6 +655,9 @@ function evolveTaskFromAssignment(
     };
   }
   if (event.type === 'assignment.cancel_requested') return { ...task, status: 'cancelling' };
+  if (event.type === 'assignment.preempted') {
+    return { ...task, status: 'ready', currentAssignmentId: undefined };
+  }
   if (event.type === 'assignment.cancelled') return { ...task, status: 'cancelled' };
   if (event.type === 'assignment.lease_expired') {
     return task.attempt >= task.maxAttempts

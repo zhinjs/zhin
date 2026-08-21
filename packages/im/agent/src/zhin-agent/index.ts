@@ -21,10 +21,10 @@ import {
   createMemoryContextRepository,
   RateLimiter,
 } from '@zhin.js/ai';
-import type { Tool, Message } from '../orchestrator/types.js';
-import type { SkillRegistry } from '../orchestrator/skill-registry.js';
+import type { Tool, Message } from '../resource-hub/types.js';
+import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { SkillSystem } from '../skill/skill-system.js';
-import type { AgentOrchestrator } from '../orchestrator/index.js';
+import type { AgentResourceHub } from '../resource-hub/index.js';
 import type { AgentCore } from '../core/agent-core.js';
 import type { ToolSystem } from '../tool/tool-system.js';
 import type { RegisteredAgentTool } from '../tool/contracts.js';
@@ -170,7 +170,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   declare skillRegistry: SkillRegistry | null;
   declare skillSystem: SkillSystem | null;
-  declare orchestrator: AgentOrchestrator | null;
+  declare resourceHub: AgentResourceHub | null;
   declare agentCore: AgentCore | null;
   declare toolSystem: ToolSystem | null;
   declare contextSystem: ContextSystem | null;

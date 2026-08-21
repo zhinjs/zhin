@@ -12,7 +12,7 @@ import {
   TodoWriteBuiltinTool,
 } from '../../src/builtin/todo-write-tool.js';
 import { TodoReadBuiltinTool } from '../../src/builtin/todo-read-tool.js';
-import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
+import { normalizeTool } from '../../src/resource-hub/tool-selection.js';
 import type { Message } from '@zhin.js/core';
 
 describe('TodoWriteBuiltinTool', () => {

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { AgentRunJournal } from '@zhin.js/ai/agent-stream';
-import type { Message, Tool } from '../orchestrator/types.js';
+import type { Message, Tool } from '../resource-hub/types.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import { publishTurnStreamEvents } from '../event/publish-agent-stream.js';
 import type { InboundTurnQueue } from '../turn/inbound-turn-queue.js';

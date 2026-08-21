@@ -2,8 +2,8 @@
  * Default sub-agent templates — common presets available to all agents.
  */
 
-import type { AgentOrchestrator } from '../orchestrator/index.js';
-import type { SubAgentDef } from '../orchestrator/types.js';
+import type { AgentResourceHub } from '../resource-hub/index.js';
+import type { SubAgentDef } from '../resource-hub/types.js';
 
 const DEFAULT_SUBAGENTS: SubAgentDef[] = [
   {
@@ -20,8 +20,8 @@ const DEFAULT_SUBAGENTS: SubAgentDef[] = [
   },
 ];
 
-export function registerDefaultSubAgents(orchestrator: AgentOrchestrator): void {
+export function registerDefaultSubAgents(resourceHub: AgentResourceHub): void {
   for (const def of DEFAULT_SUBAGENTS) {
-    orchestrator.addSubAgent(def, undefined, 'builtin');
+    resourceHub.addSubAgent(def, undefined, 'builtin');
   }
 }

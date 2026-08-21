@@ -61,6 +61,26 @@ a2a:
           source: config
           value: ${A2A_CALLBACK_TOKEN}
         enabled: true
+  # Transport bindings only. Workroom/Project definitions stay in the
+  # persistent Workroom Catalog and are never read from ai.workrooms.
+  workroomRemoteExecutors:
+    enabled: true
+    maxResponseBytes: 1048576
+    bindings:
+      - endpointId: remote-reviewer
+        cardDigest: sha256:${REMOTE_CARD_SHA256}
+        authBindingId: callback-auth-v1
+        dispatchUrl: https://agents.example.com/workroom-a2a/dispatch
+        pollUrl: https://agents.example.com/workroom-a2a/poll
+        credential:
+          source: config
+          value: ${A2A_REMOTE_TOKEN}
+        authority:
+          workroomExtension: https://zhin.dev/extensions/workroom-executor/v1
+          idempotentDispatch: true
+          typedCompletionEnvelope: true
+          workspaceProviders: [github_pull_request]
+        enabled: true
 ```
 
 `workroomCallbacks` may remain enabled while ordinary `a2a.enabled` is false.
@@ -70,9 +90,19 @@ Registry / Callback Inbox, then translated through Assignment Observation
 Ingress. Only the Workroom Kernel can append the resulting Assignment event.
 
 At generation activation the Host enumerates every durable registered Link and
-replays pending observations. A sequence gap stays `reconcile_required`; until
-an endpoint poll transport is installed, recovery fails closed without marking
-the Assignment or Task complete.
+replays pending observations. When `workroomRemoteExecutors` is enabled, the
+same fixed-generation transport is installed for durable dispatch and typed
+poll recovery. Endpoint id, Agent Card digest, and auth binding must match the
+persisted dispatch exactly. The optional `authority` block is required before
+that endpoint can claim a new Workroom Assignment; its extension URI digest
+must match `workroomCallbacks.bindings[].extensionDigest`. Omitting it keeps
+callback/poll recovery available but makes new claim issuance fail closed.
+A sequence gap or uncertain transport result stays
+`reconcile_required` and never marks the Assignment or Task complete.
+
+For a provider-style reference, use `source: secure_provider` with an
+`env://VARIABLE_NAME` `secretRef`; the CLI resolves it once into the candidate
+generation and never places the value in runtime snapshots or logs.
 
 ## Related
 

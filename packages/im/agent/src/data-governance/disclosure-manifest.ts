@@ -40,20 +40,10 @@ export interface PayloadVaultReadInput {
 }
 
 export interface PayloadVaultDerivedWriteInput {
-  readonly objectId: string;
-  readonly payload: Uint8Array;
-  readonly payloadHash: string;
+  /** Complete canonical descriptor; the Vault independently binds every field. */
+  readonly descriptor: DataDescriptor;
   readonly descriptorDigest: string;
-  readonly tenantId: string;
-  readonly projectId: string;
-  readonly confidentiality: Exclude<ConfidentialityClass, 'unknown'>;
-  readonly categories: readonly string[];
-  readonly subjectRefs: readonly string[];
-  readonly lineage: Readonly<{
-    sourceObjectIds: readonly string[];
-    transformRef?: string;
-  }>;
-  readonly retention: DataDescriptor['retention'];
+  readonly payload: Uint8Array;
 }
 
 /** Generation-owned governed body store; implementations audit every exact read/write. */
@@ -93,6 +83,7 @@ export interface MaterializedDisclosureManifest {
     objectId: string;
     payloadHash: string;
     descriptorDigest: string;
+    lineageDigest: string;
     handle: PayloadVaultObjectHandle;
   }>;
   readonly output: Readonly<{
@@ -117,6 +108,22 @@ export interface MaterializedDisclosureManifest {
   readonly policy: Readonly<{ revision: number; digest: string }>;
   readonly approvalIds: readonly string[];
   readonly expiresAt: number;
+}
+
+/** Authenticated identity plus authority object ids; no caller policy snapshots. */
+export interface GovernedDisclosureManifestRequest {
+  readonly operationId: string;
+  readonly projectId: string;
+  readonly sourceRef: string;
+  readonly sourceDigest: string;
+  readonly sinkRuleId: string;
+  readonly principalId: string;
+  readonly assignmentId?: string;
+}
+
+export interface GovernedDisclosureManifestSnapshot {
+  readonly request: GovernedDisclosureManifestRequest;
+  readonly manifest: MaterializedDisclosureManifest;
 }
 
 export async function materializeDisclosureManifest(input: Readonly<{
@@ -164,6 +171,7 @@ export async function materializeDisclosureManifest(input: Readonly<{
       objectId: request.decisionInput.descriptor.objectId,
       payloadHash: request.decisionInput.descriptor.payloadHash,
       descriptorDigest: digestCanonicalWorkroomValue(request.decisionInput.descriptor),
+      lineageDigest: digestCanonicalWorkroomValue(request.decisionInput.descriptor.lineage),
       handle: copyHandle(request.source),
     },
     output: materialized.output,
@@ -226,17 +234,9 @@ async function materializeOutput(
     assertRegisteredDataDescriptor(outputDescriptor, input.categoryRegistry);
     const descriptorDigest = digestCanonicalWorkroomValue(outputDescriptor);
     const handle = await abortable(input.vault.putDerived({
-      objectId,
-      payload,
-      payloadHash,
+      descriptor: outputDescriptor,
       descriptorDigest,
-      tenantId: input.decisionInput.descriptor.tenantId,
-      projectId: input.decisionInput.descriptor.projectId,
-      confidentiality: input.decisionInput.descriptor.confidentiality,
-      categories: input.decisionInput.descriptor.categories,
-      subjectRefs: input.decisionInput.descriptor.subjectRefs,
-      lineage: { sourceObjectIds: [input.decisionInput.descriptor.objectId] },
-      retention: input.decisionInput.descriptor.retention,
+      payload,
     }, input.signal), input.signal);
     if (hashBytes(payload) !== payloadHash) throw new Error('Payload Vault mutated materialized metadata');
     assertDerivedHandle(handle, objectId, payloadHash, descriptorDigest, input.decisionInput.descriptor);
@@ -321,20 +321,9 @@ async function materializeOutput(
     input.decisionInput.evaluatedAt,
   );
   const handle = await abortable(input.vault.putDerived({
-    objectId,
-    payload: output,
-    payloadHash: observation.outputHash,
+    descriptor: outputDescriptor,
     descriptorDigest,
-    tenantId: input.decisionInput.descriptor.tenantId,
-    projectId: input.decisionInput.descriptor.projectId,
-    confidentiality: observation.outputConfidentiality,
-    categories: [...observation.outputCategories].sort(),
-    subjectRefs: input.decisionInput.descriptor.subjectRefs,
-    lineage: {
-      sourceObjectIds: [input.decisionInput.descriptor.objectId],
-      transformRef: transformId,
-    },
-    retention: input.decisionInput.descriptor.retention,
+    payload: output,
   }, input.signal), input.signal);
   if (hashBytes(output) !== observation.outputHash) throw new Error('Payload Vault mutated transformed output');
   assertDerivedHandle(

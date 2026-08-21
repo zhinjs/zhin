@@ -1,5 +1,5 @@
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
-import type { Message } from '../orchestrator/types.js';
+import type { Message } from '../resource-hub/types.js';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import { InboundTurnQueue } from './inbound-turn-queue.js';
 import {
