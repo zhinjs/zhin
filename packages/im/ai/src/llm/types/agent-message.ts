@@ -10,9 +10,19 @@ export interface AgentMessageBase {
   timestamp: number;
 }
 
+/** Stable participant attribution carried by shared conversation history. */
+export interface ConversationActor {
+  readonly subjectId: string;
+  readonly displayName?: string;
+  readonly roles?: readonly string[];
+  /** Shared-scene hint used only when rendering participant labels. */
+  readonly scope?: 'private' | 'group' | 'channel';
+}
+
 export interface UserMessage extends AgentMessageBase {
   role: 'user';
   content: UserContentBlock[];
+  actor?: ConversationActor;
   /**
    * 当前 turn 的媒体块（canonical Segment 子集同构，agent 层透传）。
    * 不随 session 历史持久化——持久化层写入前剥离该字段，历史中只留文本占位。
@@ -92,11 +102,13 @@ export function createUserMessage(
   text: string,
   media?: MediaContentBlock[],
   timestamp = Date.now(),
+  actor?: ConversationActor,
 ): UserMessage {
   const content: UserContentBlock[] = [{ type: 'text', text }];
   return {
     role: 'user',
     content,
+    ...(actor ? { actor } : {}),
     ...(media?.length ? { media } : {}),
     timestamp,
   };

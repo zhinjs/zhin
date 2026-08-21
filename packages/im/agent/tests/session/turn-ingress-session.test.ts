@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createMemoryContextRepository } from '@zhin.js/ai';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 import {
   buildTurnSessionCreateInput,
@@ -7,9 +8,11 @@ import {
   resolveIngressUserMessage,
 } from '../../src/session/turn-ingress-session.js';
 import { recordPassiveGroupObservation, consumePassiveGroupContextForTurn } from '../../src/session/passive-group-session.js';
+import { PromptController } from '../../src/turn/prompt-controller.js';
 
 function turn() {
   return createTurnIngress({
+    intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 2, traceId: 'trace', turnId: 'turn' },
     origin: {
       kind: 'im',
@@ -36,6 +39,16 @@ function turn() {
   });
 }
 
+function participantTurn(subjectId: string, displayName: string, text: string, turnId: string) {
+  return createTurnIngress({
+    intent: { kind: 'new' },
+    ...turn(),
+    identity: { ...turn().identity, turnId },
+    principal: { subjectId, displayName, roles: ['user'] },
+    input: { text },
+  });
+}
+
 describe('TurnIngress session projection', () => {
   it('builds persisted and model user messages without reading classic Message fields', () => {
     const result = resolveIngressUserMessage(turn());
@@ -51,6 +64,12 @@ describe('TurnIngress session projection', () => {
       quote: { block: 'previous answer', messageId: 'quoted-1' },
     });
     const text = result.llmMessage.content.find((block) => block.type === 'text');
+    expect(result.llmMessage.actor).toEqual({
+      subjectId: 'user-7',
+      displayName: 'Ada Lovelace',
+      roles: ['trusted', 'admin'],
+      scope: 'group',
+    });
     expect(text?.type === 'text' && text.text).toContain('previous answer');
     expect(text?.type === 'text' && text.text).toContain('hello');
   });
@@ -86,6 +105,7 @@ describe('TurnIngress session projection', () => {
 
   it('opens origin-neutral Agent sessions while keeping transcript projection IM-only', () => {
     const http = createTurnIngress({
+    intent: { kind: 'new' },
       ...turn(),
       origin: { kind: 'http', sessionId: 'http-1' },
       session: { key: 'http:http-1' },
@@ -110,5 +130,66 @@ describe('TurnIngress session projection', () => {
       sessionKey: 'im:qq:bot-1:group:group-9',
       sessionId: 'agent-session-1',
     });
+  });
+
+  it('runs a two-participant shared-group steering fixture without anonymizing either user', async () => {
+    const { repository, sessionStore } = createMemoryContextRepository();
+    const alice = participantTurn('alice-id', 'Alice', '先不要改数据库', 'turn-alice');
+    const bob = participantTurn('bob-id', 'Bob', '可以直接迁移 schema', 'turn-bob');
+    const session = await sessionStore.getOrCreateActive(buildTurnSessionCreateInput(alice));
+    const aliceMessage = resolveIngressUserMessage(alice);
+    const bobMessage = resolveIngressUserMessage(bob);
+    const controller = new PromptController('one-at-a-time', 'one-at-a-time');
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+
+    const active = controller.schedule({
+      turnId: alice.identity.turnId,
+      intent: alice.intent,
+      principal: alice.principal,
+      sessionKey: alice.session.key,
+      sessionId: session.session_id,
+      userMessages: [aliceMessage.llmMessage],
+      execute: async (initial, hooks) => {
+        await gate;
+        const steered = await hooks.getSteeringMessages();
+        await repository.appendMessages(session.session_id, [...initial, ...steered], {
+          messageExtras: [aliceMessage.extra, ...steered.map(() => undefined)],
+        });
+        return {
+          reply: 'ok',
+          usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+          path: 'chat' as const,
+          iterations: 1,
+          model: 'fixture',
+          toolCalls: [],
+        };
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await controller.schedule({
+      turnId: bob.identity.turnId,
+      intent: {
+        kind: 'steer', targetTurnId: alice.identity.turnId, authorizedBy: 'product_policy',
+      },
+      principal: bob.principal,
+      sessionKey: bob.session.key,
+      sessionId: session.session_id,
+      userMessages: [bobMessage.llmMessage],
+      execute: async () => { throw new Error('steering must use the active turn'); },
+    });
+    release();
+    await active;
+
+    const restored = await repository.loadContext(session.session_id);
+    expect(restored.messages).toHaveLength(2);
+    expect(restored.messages[0]).toMatchObject({
+      role: 'user', actor: { subjectId: 'alice-id', displayName: 'Alice' },
+    });
+    expect(restored.messages[1]).toMatchObject({
+      role: 'user', actor: { subjectId: 'bob-id', displayName: 'Bob' },
+    });
+    expect(JSON.stringify(restored.messages[0])).toContain('sender:id=alice-id');
+    expect(JSON.stringify(restored.messages[1])).toContain('sender:id=bob-id');
   });
 });

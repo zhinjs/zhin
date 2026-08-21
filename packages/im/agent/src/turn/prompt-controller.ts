@@ -5,6 +5,7 @@ import type { AgentLoopTurnResult } from '../core/agent-loop-turn.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import { SessionMessageQueue } from './session-message-queue.js';
 import { TriggerCancelledError } from './trigger-cancelled-error.js';
+import type { TurnIntent, TurnPrincipal } from './turn-ingress.js';
 
 export interface PromptTurnHooks {
   getSteeringMessages: () => Promise<AgentMessage[]>;
@@ -12,6 +13,10 @@ export interface PromptTurnHooks {
 }
 
 export interface PromptTurnRequest {
+  turnId?: string;
+  intent: TurnIntent;
+  principal?: TurnPrincipal;
+  onAdmitted?: () => void;
   sessionKey: string;
   sessionId: string;
   userMessages: AgentMessage[];
@@ -64,6 +69,7 @@ interface ActiveTurn {
   sessionKey: string;
   queue: SessionMessageQueue;
   abortController: AbortController;
+  principal?: TurnPrincipal;
 }
 
 export class PromptController {
@@ -173,11 +179,53 @@ export class PromptController {
 
   /** Schedule the authoritative TurnEvent stream under the same steering/cancellation lifecycle. */
   scheduleStream(request: PromptStreamTurnRequest): AsyncGenerator<TurnEvent, AgentLoopTurnResult> {
-    for (const turn of this.activeTurns.values()) {
-      if (turn.sessionKey !== request.sessionKey) continue;
-      turn.abortController.abort(new TurnSupersededError(request.sessionKey));
+    const intent = request.intent;
+    if (intent.kind === 'steer' || intent.kind === 'follow_up') {
+      const target = this.resolveIntentTarget(request.sessionKey, intent.targetTurnId);
+      if (!target) {
+        throw new Error(`${intent.kind} requires an active turn on the same session`);
+      }
+      if (
+        request.principal
+        && target.principal
+        && request.principal.subjectId !== target.principal.subjectId
+        && intent.authorizedBy !== 'product_policy'
+      ) {
+        throw new Error(`${intent.kind} across principals requires product_policy authorization`);
+      }
+      if (intent.kind === 'steer') target.queue.pushSteering(request.userMessages);
+      else target.queue.pushFollowUp(request.userMessages);
+      request.onAdmitted?.();
+      return controlTurnStream(intent);
+    }
+    if (intent.kind === 'observe') {
+      request.onAdmitted?.();
+      return controlTurnStream(intent);
+    }
+    if (intent.kind === 'supersede') {
+      const targets = [...this.activeTurns.values()]
+        .filter((turn) => turn.sessionKey === request.sessionKey);
+      if (
+        request.principal
+        && targets.some((turn) => turn.principal
+          && turn.principal.subjectId !== request.principal?.subjectId)
+        && intent.authorizedBy !== 'product_policy'
+      ) {
+        throw new Error('supersede across principals requires product_policy authorization');
+      }
+      for (const turn of targets) {
+        turn.abortController.abort(new TurnSupersededError(request.sessionKey));
+      }
     }
     return this.runTurnStream(request);
+  }
+
+  private resolveIntentTarget(sessionKey: string, targetTurnId?: string): ActiveTurn | undefined {
+    if (targetTurnId) {
+      const target = this.activeTurns.get(targetTurnId);
+      return target?.sessionKey === sessionKey ? target : undefined;
+    }
+    return this.resolveLatestTurn(sessionKey);
   }
 
   private resolveLatestTurn(sessionKey: string): ActiveTurn | undefined {
@@ -218,7 +266,7 @@ export class PromptController {
   private async *runTurnStream(
     request: PromptStreamTurnRequest,
   ): AsyncGenerator<TurnEvent, AgentLoopTurnResult> {
-    const turnId = randomUUID();
+    const turnId = request.turnId ?? randomUUID();
     const abortController = new AbortController();
     const signal = abortController.signal;
     const abortFromCaller = () => {
@@ -233,9 +281,11 @@ export class PromptController {
       sessionKey: request.sessionKey,
       queue,
       abortController,
+      principal: request.principal,
     };
     this.activeTurns.set(turnId, activeTurn);
     this.promoteLatestTurn(request.sessionKey, turnId);
+    request.onAdmitted?.();
 
     let lastResult: AgentLoopTurnResult | null = null;
 
@@ -295,6 +345,28 @@ export class PromptController {
     for (const resolve of waiters) resolve();
     this.lastResult = null;
   }
+}
+
+async function* controlTurnStream(
+  intent: Extract<TurnIntent, { kind: 'steer' | 'follow_up' | 'observe' }> | TurnIntent,
+): AsyncGenerator<TurnEvent, AgentLoopTurnResult> {
+  yield {
+    type: 'turn_end',
+    output: [],
+    usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    control: {
+      intent: intent.kind as 'steer' | 'follow_up' | 'observe',
+      ...(intent.targetTurnId ? { targetTurnId: intent.targetTurnId } : {}),
+    },
+  };
+  return {
+    reply: '',
+    usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    path: 'chat',
+    iterations: 0,
+    model: '',
+    toolCalls: [],
+  };
 }
 
 async function collectPromptStream(

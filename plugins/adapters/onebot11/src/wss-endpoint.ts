@@ -3,7 +3,7 @@
  */
 import { clearInterval } from 'node:timers';
 import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -21,6 +21,7 @@ import {
   type OneBot11Event,
   type OneBot11WssConfig,
 } from './protocol.js';
+import { receiveOneBot11SideEvent } from './side-event-dispatch.js';
 import { verifyOneBotAccessToken } from './wss-auth.js';
 import {
   callOneBot11WsAction,
@@ -37,6 +38,7 @@ import {
 export interface OneBot11WssEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: OneBot11WssConfig;
 }
@@ -145,7 +147,17 @@ export class OneBot11WssEndpoint implements EndpointInstance {
   }
 
   admit(ev: OneBot11Event): void {
-    if (!this.#open || !isMessageEvent(ev)) return;
+    if (!this.#open) return;
+    if (!isMessageEvent(ev)) {
+      receiveOneBot11SideEvent(
+        this.#options.sideEvents,
+        this.#options.config.id,
+        this,
+        ev,
+        this.#logger,
+      );
+      return;
+    }
     const conversation = onebot11InboundConversation(String(this.#options.id), ev);
     const inbound = formatInboundMetadata(ev, this.#options.config.id);
     void this.#options.gateway.receive({

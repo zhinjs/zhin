@@ -30,7 +30,7 @@ export function endpointControlOf(endpoint: unknown): EndpointControl | undefine
   return explicit && typeof explicit === 'object' ? explicit : undefined;
 }
 
-/** Checks only an Endpoint's explicit `control` port, never the legacy bridge. */
+/** Checks only an Endpoint's explicit `control` port; protocol methods are never probed. */
 export function hasExplicitEndpointOperation(
   endpoint: unknown,
   operation: 'recall' | 'edit' | 'reaction' | 'typing',

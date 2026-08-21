@@ -3,7 +3,7 @@
  * Implementation lives under `src/` (endpoint / webhook / protocol).
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken } from '@zhin.js/core/runtime';
+import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import { WecomEndpoint } from '../src/endpoint.js';
 import {
@@ -33,6 +33,7 @@ export default defineAdapter<WecomAdapterConfig>({
     return new WecomEndpoint({
       id: context.id,
       gateway: context.use(messageGatewayToken),
+      sideEvents: context.use(sideEventGatewayToken),
       http: context.use(httpHostToken),
       config,
     });

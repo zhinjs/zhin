@@ -1,6 +1,17 @@
 import type { CapabilitySlot, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { createCapabilityContext } from '@zhin.js/feature-kit';
 import type { HandlerDefinition } from './definition.js';
+import type {
+  HandlerContext,
+  HandlerDispatchOptions,
+} from './context.js';
+
+export type {
+  HandlerContext,
+  HandlerPrompt,
+  HandlerPromptOptions,
+  HandlerDispatchOptions,
+} from './context.js';
 
 export interface HandlerDescriptor {
   readonly owner: PluginId;
@@ -80,11 +91,20 @@ export class HandlerIndex {
     return !!records && records.length > 0;
   }
 
-  async dispatch(event: string, ...args: unknown[]): Promise<void> {
+  async dispatch(
+    event: string,
+    args: readonly unknown[] = [],
+    options?: HandlerDispatchOptions,
+  ): Promise<void> {
     const records = this.#byEvent.get(event);
     if (!records) return;
     for (const record of records) {
-      const context = createCapabilityContext(this.#snapshot, record.owner);
+      const base = createCapabilityContext(this.#snapshot, record.owner);
+      const prompt = options?.resolvePrompt?.(event, args);
+      const context: HandlerContext = Object.freeze({
+        ...base,
+        ...(prompt !== undefined ? { prompt } : {}),
+      });
       await record.slot.definition.handle.call(context, ...args);
     }
   }

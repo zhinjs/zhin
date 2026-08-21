@@ -109,7 +109,7 @@ Capabilities are **discovered from convention directories**, not registered impe
 |---|---|
 | `commands/**/*.ts` | `defineCommand()` (`zhin.js/command`) — path is the route; Next.js-style param files `[name].ts` / `[[name]].ts` (optional) / `[...name].ts` (catch-all), type and default declared in `defineCommand({ params })` |
 | `middlewares/*.ts` | `defineMiddleware()` (`zhin.js/middleware`) |
-| `handlers/**/*.ts` | `defineHandler()` (`zhin.js/handler`) — path uses `/` (e.g. `handlers/message/receive.ts` → localName `message/receive` → event `message.receive` when `event` omitted) |
+| `handlers/**/*.ts` | `defineHandler()` (`zhin.js/handler`) — path uses `/` (e.g. `handlers/message/receive.ts` → localName `message/receive` → event `message.receive` when `event` omitted); `this.prompt` available |
 | `components/*.tsx` | `defineComponent()` (`zhin.js/component`) |
 | `tools/*.ts` | `defineAgentTool()` (`@zhin.js/tool`) |
 | `pages/*.tsx` | `definePage()` (`$nav.tsx` / `$footer.tsx` for chrome) |

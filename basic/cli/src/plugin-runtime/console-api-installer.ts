@@ -31,7 +31,9 @@ import {
   type RuntimeEndpointSummary,
 } from '@zhin.js/host-http';
 import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';
+import type { LoginAssist } from '@zhin.js/core';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
+import { bindLoginAssistStdin } from './login-assist-stdin.js';
 import {
   runtimeEventPublisherToken,
   type DatabaseHost,
@@ -42,6 +44,51 @@ import {
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller, RuntimeConfigDocument } from '@zhin.js/runtime';
 import { installInboxMessageRecorder } from './inbox-installer.js';
+
+interface LoginAssistBinding {
+  readonly hub: ConsoleEventHub;
+  refs: number;
+  readonly dispose: () => void;
+}
+
+const loginAssistBindings = new WeakMap<LoginAssist, LoginAssistBinding>();
+
+function acquireLoginAssistBinding(assist: LoginAssist, hub: ConsoleEventHub): () => void {
+  const existing = loginAssistBindings.get(assist);
+  if (existing) {
+    if (existing.hub !== hub) {
+      throw new Error('LoginAssist cannot publish to multiple process Console hubs');
+    }
+    existing.refs += 1;
+    return () => releaseLoginAssistBinding(assist, existing);
+  }
+  const unsubPending = assist.subscribe('endpoint.login.pending', (task) => {
+    hub.publish('endpoint.login.pending', task);
+  });
+  const unsubExpired = assist.subscribe('endpoint.login.expired', (task) => {
+    hub.publish('endpoint.login.expired', task);
+  });
+  const unbindStdin = bindLoginAssistStdin(assist);
+  const binding: LoginAssistBinding = {
+    hub,
+    refs: 1,
+    dispose: () => {
+      unsubPending();
+      unsubExpired();
+      unbindStdin();
+    },
+  };
+  loginAssistBindings.set(assist, binding);
+  return () => releaseLoginAssistBinding(assist, binding);
+}
+
+function releaseLoginAssistBinding(assist: LoginAssist, binding: LoginAssistBinding): void {
+  if (loginAssistBindings.get(assist) !== binding) return;
+  binding.refs -= 1;
+  if (binding.refs > 0) return;
+  loginAssistBindings.delete(assist);
+  binding.dispose();
+}
 
 /**
  * 新 Runtime 的 agent 门面。Session tree 仍由独立服务端口提供；Agent 本体只从
@@ -351,12 +398,18 @@ export function installConsoleApi(options: {
   readonly eventHub?: ConsoleEventHub;
 }): RootResourceInstaller {
   const apiBase = normalizeBase(options.apiBase ?? '/api');
-  return ({ resources, config }) => {
+  const hub = options.eventHub ?? createConsoleEventHub();
+  return ({ resources, config, lifecycle }) => {
     const http = resources.use(httpHostToken);
     // Console SSE hub 同时作为 Root 级事件发布口（插件经 runtimeEventPublisherToken
     // publish endpoint:request/endpoint:notice 等收件箱事件）。
-    const hub = options.eventHub ?? createConsoleEventHub();
     resources.provide(runtimeEventPublisherToken, hub);
+
+    const loginAssist = options.im?.loginAssist;
+    if (loginAssist) {
+      lifecycle.add(acquireLoginAssistBinding(loginAssist, hub));
+    }
+
     registerConsoleApiRoutes(
       http,
       options.console,
@@ -601,6 +654,7 @@ export function registerConsoleApiRoutes(
             ? { models: databaseHost.models }
             : undefined,
           resolveScheduleEngine: () => agentLease?.value?.assistant?.engine ?? null,
+          loginAssist: im?.loginAssist,
         },
         listPluginKeys: () => listConsoleConfigKeys(projectRoot, primaryConfigDocument),
         publishEvent: (type, data) => hub.publish(type, data),

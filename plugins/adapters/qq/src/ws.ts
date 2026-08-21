@@ -39,6 +39,11 @@ export interface QqBotTransport {
     userId: string,
     roleId: string,
   ): Promise<boolean>;
+  approveGroupJoinRequest?(
+    groupId: string,
+    userId: string,
+    options: { op: 'approve' | 'reject'; join_request_id: string; reason?: string },
+  ): Promise<unknown>;
 }
 
 export type CreateQqBot = (config: ResolvedQqWebsocketConfig) => QqBotTransport;
@@ -288,5 +293,9 @@ export function defaultCreateBot(config: ResolvedQqWebsocketConfig): QqBotTransp
       await bot.memberService.removeMemberRole(guildId, channelId, userId, roleId);
       return true;
     },
+    approveGroupJoinRequest: (groupId, userId, options) =>
+      (bot as { approveGroupJoinRequest?: QqBotTransport['approveGroupJoinRequest'] })
+        .approveGroupJoinRequest?.(groupId, userId, options)
+      ?? Promise.reject(new Error('approveGroupJoinRequest is not available')),
   };
 }

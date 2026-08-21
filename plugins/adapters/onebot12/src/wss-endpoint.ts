@@ -3,7 +3,7 @@
  */
 import { clearInterval } from 'node:timers';
 import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -23,12 +23,14 @@ import {
   type OneBot12Event,
   type OneBot12WssConfig,
 } from './protocol.js';
+import { receiveOneBot12SideEvent } from './side-event-dispatch.js';
 import { verifyOneBotAccessToken } from './wss-auth.js';
 import { type OneBot12WsSocket, WS_OPEN } from './ws-types.js';
 
 export interface OneBot12WssEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: OneBot12WssConfig;
 }
@@ -140,7 +142,17 @@ export class OneBot12WssEndpoint implements EndpointInstance {
   }
 
   admit(ev: OneBot12Event): void {
-    if (!this.#open || !isMessageEvent(ev)) return;
+    if (!this.#open) return;
+    if (!isMessageEvent(ev)) {
+      receiveOneBot12SideEvent(
+        this.#options.sideEvents,
+        this.#options.config.id,
+        this,
+        ev,
+        this.#logger,
+      );
+      return;
+    }
     const conversation = onebot12InboundConversation(String(this.#options.id), ev);
     const nickname = senderNickname(ev);
     const mentioned = isBotMentioned(ev);

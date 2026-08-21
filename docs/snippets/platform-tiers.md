@@ -9,7 +9,7 @@ sidebar: false
 | sandbox | Stable | Sandbox | `@zhin.js/adapter-sandbox` | — |
 | dingtalk | Advanced | 钉钉 | `@zhin.js/adapter-dingtalk` | — |
 | discord | Advanced | Discord | `@zhin.js/adapter-discord` | — |
-| icqq | Advanced | ICQQ (QQ) | `@zhin.js/adapter-icqq` | listFriends, listGroups, listChannels, listGroupMembers, approveRequest, rejectRequest, kickGroupMember, muteGroupMember, setGroupAdmin, deleteFriend |
+| icqq | Advanced | ICQQ (QQ) | `@zhin.js/adapter-icqq` | listFriends, listGroups, listChannels, listGroupMembers, listRequests, approveRequest, rejectRequest, kickGroupMember, muteGroupMember, setGroupAdmin, deleteFriend |
 | kook | Advanced | KOOK | `@zhin.js/adapter-kook` | — |
 | lark | Advanced | 飞书 | `@zhin.js/adapter-lark` | — |
 | onebot11 | Advanced | OneBot v11 | `@zhin.js/adapter-onebot11` | — |

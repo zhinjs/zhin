@@ -27,7 +27,7 @@ export interface EndpointSendRequest {
   readonly payload: unknown;
 }
 
-export interface EndpointInstance<TResult = unknown> {
+export interface EndpointInstance {
   /** Optional platform-neutral Console/Host management surface. */
   readonly management?: EndpointManagement;
   /** Optional platform-neutral control surface for existing messages. */
@@ -40,7 +40,8 @@ export interface EndpointInstance<TResult = unknown> {
   close?(): void | Promise<void>;
   /** Releases transport resources. Calls must be idempotent. */
   stop?(): void | Promise<void>;
-  send?(request: EndpointSendRequest): TResult | Promise<TResult>;
+  /** Platform message id. Core wraps it in the canonical MessageRef/DeliveryReceipt. */
+  send?(request: EndpointSendRequest): string | Promise<string>;
 }
 
 export interface AdapterContext<TConfig = unknown> extends CapabilityContext<TConfig> {
@@ -87,7 +88,7 @@ const OUTBOUND_MEDIA_FORMS: readonly AdapterOutboundMedia[] = [
 
 const ADAPTER_OPERATIONS: readonly AdapterOperation[] = ['recall', 'edit', 'reaction', 'typing'];
 
-export interface AdapterDefinition<TConfig = unknown, TResult = unknown> {
+export interface AdapterDefinition<TConfig = unknown> {
   readonly $feature: typeof adapterBrand;
   readonly capabilities: readonly AdapterCapability[];
   /**
@@ -100,21 +101,21 @@ export interface AdapterDefinition<TConfig = unknown, TResult = unknown> {
   readonly segments?: AdapterSegmentPolicy;
   create(
     context: AdapterContext<TConfig>,
-  ): EndpointInstance<TResult> | Promise<EndpointInstance<TResult>>;
+  ): EndpointInstance | Promise<EndpointInstance>;
 }
 
 declare module '@zhin.js/plugin-runtime' {
-  interface PluginSetupContext<TConfig> {
-    addAdapter<TResult = unknown>(
+  interface PluginSetupContext<TConfig = unknown> {
+    addAdapter(
       localName: string,
-      definition: AdapterDefinition<TConfig, TResult>,
+      definition: AdapterDefinition<TConfig>,
     ): void;
   }
 }
 
-export function defineAdapter<TConfig = unknown, TResult = unknown>(
-  definition: Omit<AdapterDefinition<TConfig, TResult>, '$feature'>,
-): Readonly<AdapterDefinition<TConfig, TResult>> {
+export function defineAdapter<TConfig = unknown>(
+  definition: Omit<AdapterDefinition<TConfig>, '$feature'>,
+): Readonly<AdapterDefinition<TConfig>> {
   if (typeof definition.create !== 'function') {
     throw new TypeError('Adapter create must be a function');
   }

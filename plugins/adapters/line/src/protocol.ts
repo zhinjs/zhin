@@ -201,6 +201,13 @@ export function isMessageEvent(event: LineEvent): event is LineMessageEvent {
   return event.type === 'message' && 'message' in event && (event as LineMessageEvent).message != null;
 }
 
+export function isLineLifecycleEvent(event: LineEvent): boolean {
+  return event.type === 'follow'
+    || event.type === 'unfollow'
+    || event.type === 'join'
+    || event.type === 'leave';
+}
+
 export function isPostbackEvent(event: LineEvent): event is LinePostbackEvent {
   return event.type === 'postback' && 'postback' in event;
 }

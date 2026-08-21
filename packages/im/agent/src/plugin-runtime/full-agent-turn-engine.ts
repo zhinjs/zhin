@@ -127,6 +127,10 @@ async function* runInteractiveTurn(
   });
 
   const stream = host.promptController.scheduleStream({
+    turnId: context.turn.identity.turnId,
+    intent: context.turn.intent,
+    principal: context.turn.principal,
+    onAdmitted: context.admit,
     sessionKey: prep.sessionKey,
     sessionId: prep.sessionId,
     userMessages,
@@ -203,7 +207,15 @@ async function* runInteractiveTurn(
             throw new Error(`Synchronous reply projection failed: ${code}`);
           }
         }
-        await completion.result.projectConversation?.();
+        if (context.turn.intent.kind === 'observe') {
+          await host.contextRepository.appendMessages(
+            prep.sessionId,
+            prep.turnUser.promptMessages,
+            { messageExtras: [prep.turnUser.userMessageExtra] },
+          );
+        } else {
+          await completion.result.projectConversation?.();
+        }
         await sessionSystem.touchAfterTurn(host, prep.sessionId);
         await host.finalizeActiveTurn({
           usage: completion.result.usage,
@@ -284,6 +296,10 @@ async function* runScheduleTurn(
     providerAlias: host.activeBinding?.providerAlias,
   });
   const stream = host.promptController.scheduleStream({
+    turnId: context.turn.identity.turnId,
+    intent: context.turn.intent,
+    principal: context.turn.principal,
+    onAdmitted: context.admit,
     sessionKey: context.turn.session.key,
     sessionId: context.turn.session.key,
     userMessages: prompt.userMessages,

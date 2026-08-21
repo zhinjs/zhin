@@ -7,6 +7,7 @@ vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
 import { IcqqEndpoint } from '../src/endpoint.js';
 import { resolveIcqqConfig } from '../src/protocol.js';
 import { setIcqqAgentDeps } from '../src/icqq-agent-deps.js';
+import { createIcqqTestPorts } from './_icqq-mock.js';
 
 const adapterFeature = featureId('zhin.adapter');
 
@@ -30,6 +31,7 @@ async function startEndpoint(options: EndpointSetup = {}): Promise<IcqqEndpoint>
     id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
     gateway,
     config: baseConfig,
+    ...createIcqqTestPorts(),
   });
   const friends = options.friends ?? new Map([[2, { user_id: 2, nickname: 'bob', remark: '小博', sex: 'unknown', age: 0 }]]);
   const groups = options.groups ?? new Map([[100, { group_id: 100, group_name: 'g', member_count: 1, max_member_count: 200 }]]);
@@ -51,7 +53,7 @@ async function startEndpoint(options: EndpointSetup = {}): Promise<IcqqEndpoint>
     });
   }
 
-  await endpoint.start();
+  await endpoint.start(new AbortController().signal);
   return endpoint;
 }
 

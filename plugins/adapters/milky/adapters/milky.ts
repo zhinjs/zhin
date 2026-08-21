@@ -2,7 +2,7 @@
  * Convention entry: discover `adapters/milky.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken } from '@zhin.js/core/runtime';
+import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import {
   MilkySseEndpoint,
@@ -42,6 +42,7 @@ export default defineAdapter<MilkyAdapterConfig>({
   create(context) {
     const config = resolveMilkyConfig(context.config);
     const gateway = context.use(messageGatewayToken);
+    const sideEvents = context.use(sideEventGatewayToken);
     // 注册到插件运行时状态（milky.endpoint list 的"运行中"数据源）
     context.use(milkyRuntimeStateToken).endpoints.set(config.id, {
       id: config.id,
@@ -51,6 +52,7 @@ export default defineAdapter<MilkyAdapterConfig>({
       return new MilkyWebhookEndpoint({
         id: context.id,
         gateway,
+        sideEvents,
         http: context.use(httpHostToken),
         config,
       });
@@ -59,6 +61,7 @@ export default defineAdapter<MilkyAdapterConfig>({
       return new MilkyWssEndpoint({
         id: context.id,
         gateway,
+        sideEvents,
         http: context.use(httpHostToken),
         config,
       });
@@ -67,12 +70,14 @@ export default defineAdapter<MilkyAdapterConfig>({
       return new MilkySseEndpoint({
         id: context.id,
         gateway,
+        sideEvents,
         config,
       });
     }
     return new MilkyWsEndpoint({
       id: context.id,
       gateway,
+      sideEvents,
       config,
     });
   },

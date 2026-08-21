@@ -251,7 +251,7 @@ export class AdapterIndex {
     await stack.dispose();
   }
 
-  async send(id: CapabilityId, request: EndpointSendRequest): Promise<unknown> {
+  async send(id: CapabilityId, request: EndpointSendRequest): Promise<string> {
     const record = this.#records.get(id);
     if (!record) throw new Error(`Unknown Adapter Endpoint: ${id}`);
     if (!record.capabilities.includes('outbound') || !record.endpoint.send) {
@@ -260,7 +260,11 @@ export class AdapterIndex {
     if (!record.started || record.stopped) {
       throw new Error(`Adapter Endpoint is not active: ${id}`);
     }
-    return record.endpoint.send(request);
+    const messageId = await record.endpoint.send(request);
+    if (typeof messageId !== 'string' || !messageId.trim()) {
+      throw new TypeError(`Adapter Endpoint send() must return a non-empty platform message id: ${id}`);
+    }
+    return messageId;
   }
 }
 
@@ -384,6 +388,11 @@ async function createEndpoint(
     }),
   );
   assertEndpoint(endpoint, expansion?.id ?? slot.id);
+  if (slot.definition.capabilities.includes('outbound') && typeof endpoint.send !== 'function') {
+    throw new TypeError(
+      `Adapter Endpoint ${String(expansion?.id ?? slot.id)} declares outbound but send() is missing`,
+    );
+  }
   assertDeclaredEndpointOperations(
     endpoint,
     slot.definition.operations,

@@ -57,6 +57,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
           withTools: (invocation, operation) => runtime.withTools(rootPluginId(), {
             identity: { traceId: invocation.traceId, turnId: invocation.turnId },
             origin: { kind: 'http', sessionId: invocation.sessionKey },
+            intent: { kind: 'new' },
             principal: invocation.principal,
             input: { text: 'MCP tool protocol request' },
             session: { key: invocation.sessionKey },

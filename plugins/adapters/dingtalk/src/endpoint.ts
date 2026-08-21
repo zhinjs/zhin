@@ -2,7 +2,7 @@
  * DingTalkEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
 import type { EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -42,6 +42,7 @@ export type DingTalkFetch = (
 export interface DingTalkEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: ResolvedDingTalkConfig;
   readonly fetch?: DingTalkFetch;

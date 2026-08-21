@@ -13,6 +13,7 @@ import {
   resolveIcqqConfig,
 } from '../src/protocol.js';
 import { getIcqqAgentDeps, setIcqqAgentDeps } from '../src/icqq-agent-deps.js';
+import { createIcqqTestPorts } from './_icqq-mock.js';
 
 const adapterFeature = featureId('zhin.adapter');
 
@@ -33,6 +34,7 @@ function createEndpoint(overrides: {
     id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
     gateway,
     config: baseConfig,
+    ...createIcqqTestPorts(),
   });
   const friends = overrides.friends ?? new Map([[2, { user_id: 2, nickname: 'bob', sex: 'unknown', age: 0 }]]);
   const groups = overrides.groups ?? new Map([[100, { group_id: 100, group_name: 'g', member_count: 1, max_member_count: 200, owner_id: 1, admin_flag: false, last_join_time: 0, last_sent_time: 0, shutup_time_whole: 0, shutup_time_me: 0, create_time: 0, grade: 0, max_admin_count: 0, active_member_count: 0 }]]);
@@ -117,7 +119,7 @@ describe('icqq plugin runtime adapter', () => {
   it('admits message events via MessageGateway when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const endpoint = createEndpoint({ receive });
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.open();
 
     (endpoint as any).emit('message.group.normal', {
@@ -144,7 +146,7 @@ describe('icqq plugin runtime adapter', () => {
   it('holds inbound until open() then flushes to the gateway', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const endpoint = createEndpoint({ receive });
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
 
     (endpoint as any).emit('message.group.normal', {
       post_type: 'message',
@@ -170,7 +172,7 @@ describe('icqq plugin runtime adapter', () => {
   it('admits native GroupMessage whose toJSON(keys) throws if called without keys', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const endpoint = createEndpoint({ receive });
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.open();
 
     (endpoint as any).emit('message.group.normal', {
@@ -201,7 +203,7 @@ describe('icqq plugin runtime adapter', () => {
   it('passes quote metadata to gateway when event carries a source', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const endpoint = createEndpoint({ receive });
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.open();
 
     (endpoint as any).emit('message.group.normal', {
@@ -238,7 +240,7 @@ describe('icqq plugin runtime adapter', () => {
   it('omits quote metadata when event has no quote source', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const endpoint = createEndpoint({ receive });
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.open();
 
     (endpoint as any).emit('message.group.normal', {
@@ -264,7 +266,7 @@ describe('icqq plugin runtime adapter', () => {
   it('marks mentioned when group message @s the bot uin', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const endpoint = createEndpoint({ receive });
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.open();
 
     (endpoint as any).emit('message.group.normal', {
@@ -290,7 +292,7 @@ describe('icqq plugin runtime adapter', () => {
   it('does not mark mentioned when @ targets someone else', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const endpoint = createEndpoint({ receive });
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.open();
 
     (endpoint as any).emit('message.group.normal', {
@@ -312,7 +314,7 @@ describe('icqq plugin runtime adapter', () => {
   it('does not admit while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const endpoint = createEndpoint({ receive });
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.admit({
       id: '1',
       conversation: {
@@ -330,7 +332,7 @@ describe('icqq plugin runtime adapter', () => {
 
   it('send posts group message via Client.sendGroupMsg', async () => {
     const endpoint = createEndpoint();
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.open();
     const id = await endpoint.send({
       conversation: {
@@ -347,7 +349,7 @@ describe('icqq plugin runtime adapter', () => {
 
   it('send posts temp message (群容器内的 private 会话)', async () => {
     const endpoint = createEndpoint();
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.open();
     await endpoint.send({
       conversation: {
@@ -364,7 +366,7 @@ describe('icqq plugin runtime adapter', () => {
 
   it('send posts guild channel message (guild 容器内的 channel 会话)', async () => {
     const endpoint = createEndpoint();
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.open();
     await endpoint.send({
       conversation: {
@@ -381,7 +383,7 @@ describe('icqq plugin runtime adapter', () => {
 
   it('send throws a clear error after stop', async () => {
     const endpoint = createEndpoint();
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     await endpoint.stop();
     await expect(endpoint.send({
       conversation: {
@@ -395,7 +397,7 @@ describe('icqq plugin runtime adapter', () => {
 
   it('registers agent endpoint with fl/gl cache', async () => {
     const endpoint = createEndpoint();
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     const registered = getIcqqAgentDeps().getEndpoint('10001');
     expect(registered.fl.size).toBe(1);
     expect(registered.gl.size).toBe(1);

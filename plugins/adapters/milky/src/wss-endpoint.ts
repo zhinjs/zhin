@@ -7,7 +7,7 @@ import type {
   EndpointManagement,
   EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -39,6 +39,7 @@ const WS_OPEN = 1;
 export interface MilkyWssEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: MilkyWssConfig;
   readonly callApi?: typeof callApi;

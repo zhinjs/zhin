@@ -10,7 +10,7 @@ import type {
   EndpointManagement,
   EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -37,6 +37,7 @@ import { normalizeSlackReactionName } from './slack-reaction.js';
 import { postSlackEphemeral } from './slack-response-url.js';
 import { editSlackContent, sendSlackContent, type SlackChatClient } from './slack-outbound.js';
 import { registerSlackWebhookRoutes, type SlackWebhookHandler } from './webhook.js';
+import { receiveSlackSideEvent } from './side-event-dispatch.js';
 
 export interface SlackSocketLike {
   on(
@@ -91,6 +92,7 @@ export interface SlackWebClientLike extends SlackChatClient {
 export interface SlackEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly config: ResolvedSlackConfig;
   readonly http?: HttpHost;
   readonly createClient?: (token: string) => SlackWebClientLike;
@@ -316,7 +318,18 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
   handleEnvelope(body: unknown): void {
     const envelope = body as SlackEventEnvelope;
     if (envelope?.type === 'event_callback' && envelope.event) {
-      this.admit(envelope.event);
+      const event = envelope.event;
+      if (event.type !== 'message' && event.type !== 'app_mention') {
+        receiveSlackSideEvent(
+          this.#options.sideEvents,
+          String(this.#options.id),
+          this.#options.config.id,
+          event,
+          this.#logger,
+        );
+        return;
+      }
+      this.admit(event);
     }
   }
 

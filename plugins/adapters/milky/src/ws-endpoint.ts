@@ -10,7 +10,7 @@ import {
   type EndpointManagement,
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { createMilkyEndpointManagement } from './endpoint-management.js';
@@ -41,6 +41,7 @@ const WS_OPEN = 1;
 export interface MilkyWsEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly config: MilkyWsConfig;
   readonly createWebSocket?: (
     url: string,

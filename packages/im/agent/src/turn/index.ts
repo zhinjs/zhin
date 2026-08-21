@@ -26,6 +26,8 @@ export type {
   TurnAccessContext,
   TurnIngress,
   TurnIngressInput,
+  TurnIntent,
+  TurnIntentKind,
   TurnJournalPort,
   TurnInput,
   TurnMedia,

@@ -45,6 +45,104 @@ import { turnToolExecutionAuthority } from '../../src/tool/turn-tool-runtime.js'
 import { getAgentTurnConfiguration } from '../../src/turn/agent-turn-context.js';
 
 describe('Agent CapabilityIngress', () => {
+  it('admits supersede in arrival order and aborts the active operation before replacement starts', async () => {
+    const coordinator = new AgentTurnCoordinator();
+    const callerSignal = new AbortController().signal;
+    const order: string[] = [];
+    let firstAdmitted!: () => void;
+    const admitted = new Promise<void>((resolve) => { firstAdmitted = resolve; });
+
+    const first = coordinator.runIntent(
+      'shared', callerSignal, { kind: 'supersede' }, principal('user-1'), async (admit, signal) => {
+        order.push('first:start');
+        admit();
+        firstAdmitted();
+        await new Promise<void>((resolve) => {
+          signal.addEventListener('abort', () => {
+            order.push('first:aborted');
+            resolve();
+          }, { once: true });
+        });
+        return 'first';
+      },
+    );
+    await admitted;
+
+    const second = coordinator.runIntent(
+      'shared', callerSignal, { kind: 'supersede' }, principal('user-1'), async (admit) => {
+        order.push('second:start');
+        admit();
+        return 'second';
+      },
+    );
+
+    await expect(Promise.all([first, second])).resolves.toEqual(['first', 'second']);
+    expect(order).toEqual(['first:start', 'first:aborted', 'second:start']);
+  });
+
+  it('keeps control intents attached to the active tail so a later new turn waits', async () => {
+    const coordinator = new AgentTurnCoordinator();
+    const signal = new AbortController().signal;
+    const order: string[] = [];
+    let release!: () => void;
+    let activeAdmitted!: () => void;
+    const admitted = new Promise<void>((resolve) => { activeAdmitted = resolve; });
+    const active = coordinator.runIntent(
+      'shared', signal, { kind: 'supersede' }, principal('user-1'), async (admit) => {
+        order.push('active:start');
+        admit();
+        activeAdmitted();
+        await new Promise<void>((resolve) => { release = resolve; });
+        order.push('active:end');
+      },
+    );
+    await admitted;
+    await coordinator.runIntent(
+      'shared', signal, { kind: 'steer' }, principal('user-1'), async (admit) => {
+        order.push('control');
+        admit();
+      },
+    );
+
+    const next = coordinator.runIntent(
+      'shared', signal, { kind: 'new' }, principal('user-1'), async (admit) => {
+        order.push('new');
+        admit();
+      },
+    );
+    await Promise.resolve();
+    expect(order).toEqual(['active:start', 'control']);
+    release!();
+    await Promise.all([active, next]);
+    expect(order).toEqual(['active:start', 'control', 'active:end', 'new']);
+  });
+
+  it('rejects cross-principal supersede before aborting the active operation', async () => {
+    const coordinator = new AgentTurnCoordinator();
+    const signal = new AbortController().signal;
+    let admitted!: () => void;
+    const ready = new Promise<void>((resolve) => { admitted = resolve; });
+    let finish!: () => void;
+    const held = new Promise<void>((resolve) => { finish = resolve; });
+    let firstAborted = false;
+    const first = coordinator.runIntent(
+      'shared', signal, { kind: 'new' }, principal('user-1'), async (admit, turnSignal) => {
+        turnSignal.addEventListener('abort', () => { firstAborted = true; }, { once: true });
+        admit();
+        admitted();
+        await held;
+      },
+    );
+    await ready;
+
+    await expect(coordinator.runIntent(
+      'shared', signal, { kind: 'supersede' }, principal('user-2'), async () => undefined,
+    )).rejects.toThrow('product_policy');
+    expect(firstAborted).toBe(false);
+    finish();
+    await first;
+  });
+
   it('serializes turns for the same session across generation runtimes', async () => {
     const coordinator = new AgentTurnCoordinator();
     let release!: () => void;
@@ -194,6 +292,7 @@ describe('Agent CapabilityIngress', () => {
     const outcome = await runtime.execute(fixture.child, {
       identity: { traceId: 'trace-1', turnId: 'turn-1' },
       origin: { kind: 'http', sessionId: 'http-1' },
+      intent: { kind: 'new' },
       principal: { subjectId: 'user-1', roles: ['user'] },
       input: { text: 'hello' },
       session: { key: 'http:http-1' },
@@ -298,7 +397,9 @@ describe('Agent CapabilityIngress', () => {
 
     const first = firstRuntime.execute(fixture.child, externalRequest('first'), selection());
     await started;
-    const next = nextRuntime.execute(fixture.child, externalRequest('next'), selection());
+    const next = nextRuntime.execute(fixture.child, {
+      ...externalRequest('next'), intent: { kind: 'new' },
+    }, selection());
     await Promise.resolve();
     expect(order).toEqual(['old:start']);
     release();
@@ -451,6 +552,7 @@ async function createFixture(access: {
 
 function accessTurn(platform: string) {
   return createTurnIngress({
+    intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn' },
     origin: { kind: 'im', platform, endpoint: 'bot', scope: 'group', sceneId: '100' },
     principal: { subjectId: 'trusted-user', roles: ['trusted'] },
@@ -475,10 +577,15 @@ function invocation() {
   } as const;
 }
 
+function principal(subjectId: string) {
+  return { subjectId, roles: ['user'] } as const;
+}
+
 function externalRequest(id: string) {
   return {
     identity: { traceId: `trace-${id}`, turnId: `turn-${id}` },
     origin: { kind: 'http' as const, sessionId: 'mcp' },
+    intent: { kind: 'new' as const },
     principal: { subjectId: 'mcp-client', roles: ['authenticated'] },
     input: { text: 'MCP tool request' },
     session: { key: 'mcp:stateless' },

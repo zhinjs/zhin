@@ -10,7 +10,7 @@ import type {
   EndpointManagement,
   EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
   type MessageRef,
@@ -42,6 +42,7 @@ import {
   type ResolvedDiscordInteractionsConfig,
 } from './protocol.js';
 import { registerDiscordInteractionRoutes } from './webhook.js';
+import { receiveDiscordGuildMemberSideEvent } from './side-event-dispatch.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 /** 出站 HTTP 调用统一 30s 超时。 */
@@ -54,6 +55,7 @@ export type {
 export interface DiscordEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly config: ResolvedDiscordGatewayConfig;
   readonly createClient?: CreateDiscordClient;
 }
@@ -103,6 +105,24 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
       await connectDiscordGatewayClient(this.#client, this.#options.config, {
         onMessage: (msg) => this.admit(msg),
         onButton: (interaction) => this.admitButton(interaction),
+        onGuildMemberAdd: (member) => {
+          receiveDiscordGuildMemberSideEvent(
+            this.#options.sideEvents,
+            this.#options.config.id,
+            'member_increase',
+            member,
+            this.#logger,
+          );
+        },
+        onGuildMemberRemove: (member) => {
+          receiveDiscordGuildMemberSideEvent(
+            this.#options.sideEvents,
+            this.#options.config.id,
+            'member_decrease',
+            member,
+            this.#logger,
+          );
+        },
       });
       this.#logger.info(formatCompact({
         op: 'connect',
@@ -405,6 +425,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
 export interface DiscordInteractionsEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: ResolvedDiscordInteractionsConfig;
   readonly fetch?: typeof globalThis.fetch;

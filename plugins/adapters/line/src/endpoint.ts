@@ -2,7 +2,7 @@
  * LineEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
 import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -11,6 +11,7 @@ import {
   formatInboundContent,
   formatOutboundMessages,
   generateMessageId,
+  isLineLifecycleEvent,
   isMessageEvent,
   isValidLineRecipientId,
   lineInboundConversation,
@@ -19,6 +20,7 @@ import {
   type ResolvedLineConfig,
 } from './protocol.js';
 import { registerLineWebhookRoutes } from './webhook.js';
+import { receiveLineSideEvent } from './side-event-dispatch.js';
 
 /** LINE replyToken 有效期短，过期后 reply 必 400；缓存带时间戳，超时弃用改走 push。 */
 const REPLY_TOKEN_TTL_MS = 60_000;
@@ -43,6 +45,7 @@ export type LineFetch = (
 export interface LineEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: ResolvedLineConfig;
   readonly fetch?: LineFetch;
@@ -155,6 +158,16 @@ export class LineEndpoint implements EndpointInstance {
   /** Test / internal: admit a parsed event when open (non-webhook path). */
   admit(event: LineEvent): void {
     if (!this.#open) return;
+    if (isLineLifecycleEvent(event)) {
+      receiveLineSideEvent(
+        this.#options.sideEvents,
+        String(this.#options.id),
+        this.#options.config.id,
+        event,
+        this.#logger,
+      );
+      return;
+    }
     const conversation = lineInboundConversation(String(this.#options.id), event.source);
     if ('replyToken' in event && typeof event.replyToken === 'string') {
       this.#replyTokenCache.set(conversation.id, { token: event.replyToken, timestamp: Date.now() });

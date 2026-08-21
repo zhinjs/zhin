@@ -3,7 +3,7 @@
  */
 import { clearInterval } from 'node:timers';
 import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -27,6 +27,7 @@ import {
   type NapCatEvent,
   type NapCatWssConfig,
 } from './protocol.js';
+import { receiveNapCatSideEvent } from './side-event-dispatch.js';
 import {
   callNapCatWsAction,
   handleNapCatWsMessage,
@@ -43,6 +44,7 @@ import { verifyNapCatAccessToken } from './wss-auth.js';
 export interface NapCatWssEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: NapCatWssConfig;
 }
@@ -134,7 +136,17 @@ export class NapCatWssEndpoint implements EndpointInstance {
   }
 
   admit(ev: NapCatEvent): void {
-    if (!this.#open || !isMessageEvent(ev)) return;
+    if (!this.#open) return;
+    if (!isMessageEvent(ev)) {
+      receiveNapCatSideEvent(
+        this.#options.sideEvents,
+        this.#options.config.id,
+        this,
+        ev,
+        this.#logger,
+      );
+      return;
+    }
     if (isSelfMessage(ev)) return;
     const msgId = String(ev.message_id);
     if (!this.#inboundDeduper.shouldProcess(msgId)) return;

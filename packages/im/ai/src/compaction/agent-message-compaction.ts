@@ -3,7 +3,12 @@
  */
 
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { createUserMessage, type AgentMessage } from '../llm/types/agent-message.js';
+import {
+  createUserMessage,
+  type AgentMessage,
+  type ConversationActor,
+  type UserMessage,
+} from '../llm/types/agent-message.js';
 
 import type { Model } from '../llm/types/model.js';
 import { completeSimple, createContext } from '../llm/index.js';
@@ -18,6 +23,7 @@ import {
   findKeepRecentStartIndex,
 } from './agent-message-tokens.js';
 import { microCompactAgentMessages } from './agent-micro-compact.js';
+import { stripSenderPrefixFromText } from '../memory/sender-extra.js';
 
 const logger = getLogger('AgentCompaction');
 
@@ -28,6 +34,9 @@ const SUMMARY_SYSTEM = `You are a conversation summarization assistant. Compress
 - Key decisions and conclusions
 - Unfinished TODOs and open questions
 - Important user preferences and constraints
+- Which participant made each request, decision, constraint, or TODO
+- Conflicting opinions and whether they remain unresolved
+- The source of authority-sensitive decisions
 - Core topics discussed
 
 The summary should be brief but informative so that later turns can quickly recover context.`;
@@ -72,7 +81,17 @@ function textBlocks(message: AgentMessage): string {
 
 function agentMessageToTranscriptLine(message: AgentMessage): string {
   if (message.role === 'user') {
-    return `[User] ${textBlocks(message)}`;
+    const text = textBlocks(message);
+    const legacy = stripSenderPrefixFromText(text);
+    const actor: ConversationActor | undefined = (message as UserMessage).actor ?? (legacy.sender ? {
+      subjectId: legacy.sender.id,
+      displayName: legacy.sender.name,
+      roles: legacy.sender.roles,
+    } : undefined);
+    if (!actor) return `[User] ${legacy.body}`;
+    const name = actor.displayName?.trim() || actor.subjectId;
+    const roles = actor.roles?.length ? actor.roles.join(',') : 'user';
+    return `[User:${name} id=${actor.subjectId} roles=${roles}] ${legacy.body}`;
   }
   if (message.role === 'assistant') {
     return `[Assistant] ${textBlocks(message)}`;

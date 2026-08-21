@@ -130,6 +130,10 @@ IM 主路径数据模型（见 [docs/advanced/ai.md](../../docs/advanced/ai.md)�
 | `ContextRepository` | `agent_messages` | epoch 内 LLM `AgentMessage[]`（含 tool 轮） |
 | `AgentSessionStore` | `agent_sessions` | origin-neutral `session_key` → 活跃 `session_id`；`/reset` 归档；不保存 IM platform / endpoint / scene |
 
+共享 group/channel session 的 `UserMessage.actor` 会保留稳定 `subjectId`、显示名与角色；
+数据库旧有 `extra.sender` 数据在重建时仍会投影为 actor。Compaction transcript 使用带参与者
+标签的 user 行，并要求摘要保留决定、约束、TODO、分歧及 authority 来源的归属。
+
 数据库返回空集合才表示 Not Found；查询或写入异常统一抛出 `PersistenceUnavailableError`。Session/Context 调用方必须 fail closed，禁止把存储故障降级为空历史或新 epoch。
 
 ```typescript

@@ -3,7 +3,7 @@ import { createEndpointRuntimeState, listEndpointManagementCapabilities } from '
 import { discordRuntimeStateToken } from '../src/discord-runtime-state.js';
 import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
+import { messageGatewayToken, sideEventGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import defineDiscordAdapter from '../adapters/discord.js';
 import {
@@ -564,6 +564,13 @@ describe('discord plugin runtime adapter', () => {
         if (token === httpHostToken) return http;
         if (token === messageGatewayToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
+        }
+        if (token === sideEventGatewayToken) {
+          return {
+            receiveNotice: vi.fn(async () => {}),
+            receiveRequest: vi.fn(async () => {}),
+            receiveSystem: vi.fn(async () => {}),
+          };
         }
         if (token === discordRuntimeStateToken) return createEndpointRuntimeState();
         throw new Error(`unexpected token: ${String(token)}`);

@@ -3,7 +3,7 @@
  */
 import path from 'node:path';
 import type { EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId, PluginDatabaseHost } from 'zhin.js';
@@ -25,6 +25,7 @@ import { WorkspaceManager } from './workspace-manager.js';
 export interface GithubEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly http?: HttpHost;
   readonly database?: PluginDatabaseHost;
   readonly config: ResolvedGithubConfig;

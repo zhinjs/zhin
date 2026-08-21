@@ -98,7 +98,7 @@ export const AGENT_MESSAGE_MODEL = {
   role: { type: 'text' as const, nullable: false },
   payload: { type: 'text' as const, nullable: false },
   parent_id: { type: 'integer' as const, nullable: true },
-  /** JSON：群/频道 user 消息的 sender 元数据（id/name/roles/scope），payload 仅存用户正文 */
+  /** JSON compatibility projection for sender/quote metadata; actor also lives in user payload. */
   extra: { type: 'text' as const, default: '' },
   timestamp: { type: 'integer' as const, nullable: false },
 };
@@ -160,7 +160,7 @@ export function agentMessageRowToLlm(row: AgentMessageRow): AgentMessage | null 
   if (!parsed) return null;
   if (parsed.role !== 'user') return parsed;
   const extra = parseAgentMessageExtra(row.extra);
-  if (extra?.sender || extra?.quote) {
+  if (extra?.sender || extra?.quote || (parsed as UserMessage).actor) {
     return renderUserMessageForLlm(parsed as UserMessage, extra);
   }
   return parsed;

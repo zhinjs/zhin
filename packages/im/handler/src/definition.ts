@@ -1,3 +1,5 @@
+import type { HandlerContext } from './context.js';
+
 const handlerBrand = 'zhin.handler/1' as const;
 
 /**
@@ -12,27 +14,30 @@ export interface HandlerEventMap {
 export interface HandlerDefinition<K extends string = string> {
   readonly $feature: typeof handlerBrand;
   readonly event?: K;
-  handle(...args: unknown[]): void | Promise<void>;
+  handle(this: HandlerContext, ...args: unknown[]): void | Promise<void>;
 }
 
 export function defineHandler<K extends keyof HandlerEventMap & string>(
   options: {
     readonly event: K;
-    handle(...args: HandlerEventMap[K] extends unknown[] ? HandlerEventMap[K] : unknown[]): void | Promise<void>;
+    handle(
+      this: HandlerContext,
+      ...args: HandlerEventMap[K] extends unknown[] ? HandlerEventMap[K] : unknown[]
+    ): void | Promise<void>;
   },
 ): Readonly<HandlerDefinition<K>>;
 
 export function defineHandler(
   options: {
     readonly event?: string;
-    handle(...args: unknown[]): void | Promise<void>;
+    handle(this: HandlerContext, ...args: unknown[]): void | Promise<void>;
   },
 ): Readonly<HandlerDefinition>;
 
 export function defineHandler(
   options: {
     readonly event?: string;
-    handle(...args: unknown[]): void | Promise<void>;
+    handle(this: HandlerContext, ...args: unknown[]): void | Promise<void>;
   },
 ): Readonly<HandlerDefinition> {
   if (typeof options.handle !== 'function') {
@@ -52,7 +57,9 @@ export function defineHandler(
 }
 
 declare module '@zhin.js/plugin-runtime' {
-  interface PluginSetupContext<TConfig> {
+  // Generic name must match the canonical declaration for module merging.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface PluginSetupContext<TConfig = unknown> {
     addHandler(
       localName: string,
       definition: HandlerDefinition,

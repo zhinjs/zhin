@@ -122,6 +122,10 @@ export function defaultCreateHttpBot(config: ResolvedQqHttpConfig): QqHttpBotTra
       await bot.memberService.removeMemberRole(guildId, channelId, userId, roleId);
       return true;
     },
+    approveGroupJoinRequest: (groupId, userId, options) =>
+      (bot as { approveGroupJoinRequest?: QqBotTransport['approveGroupJoinRequest'] })
+        .approveGroupJoinRequest?.(groupId, userId, options)
+      ?? Promise.reject(new Error('approveGroupJoinRequest is not available')),
     middleware: (ctx, next) => bot.middleware(ctx as never, next as never),
   };
 }

@@ -174,6 +174,7 @@ export async function processTextTurn(
     let loopResult: AgentLoopTurnResult;
     try {
       loopResult = await host.promptController.schedule({
+        intent: { kind: 'new' },
         sessionKey,
         sessionId,
         userMessages,

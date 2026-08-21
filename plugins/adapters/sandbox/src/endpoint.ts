@@ -3,7 +3,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -69,6 +69,7 @@ interface SandboxConnection {
 export interface SandboxEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly defaults: ResolvedSandboxBot;
 }
@@ -144,8 +145,8 @@ export class SandboxWsEndpoint implements EndpointInstance {
     this.#logger.debug(formatCompact({ op: 'sandbox_stopped' }));
   }
 
-  send({ conversation, payload }: EndpointSendRequest): unknown {
-    if (!this.#open) return undefined;
+  send({ conversation, payload }: EndpointSendRequest): string {
+    if (!this.#open) throw new Error('Sandbox Endpoint is not open');
     // Reply targets this endpoint's own live socket (fixed bot name, or the
     // only live random-name connection); conversation carries kind/id stamp.
     const connection = this.#connections.get(this.#options.defaults.id)
@@ -155,14 +156,14 @@ export class SandboxWsEndpoint implements EndpointInstance {
         op: 'sandbox_send_miss',
         target: `${conversation.kind}:${conversation.id}`,
       }));
-      return undefined;
+      throw new Error('Sandbox Endpoint has no live connection');
     }
     if (connection.placeholder) {
       this.#logger.debug(formatCompact({
         op: 'sandbox_send_placeholder',
         target: `${conversation.kind}:${conversation.id}`,
       }));
-      return undefined;
+      throw new Error('Sandbox Endpoint has no live connection');
     }
     // Console UI filters by type+id; stamp the conversation onto outbound wire.
     connection.socket.send(formatSandboxOutbound(payload, {
@@ -177,7 +178,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
       channelType: conversation.kind,
       channelId: conversation.id,
     }));
-    return payload;
+    return randomUUID();
   }
 
   /** Prefer a real (non-placeholder) socket when reply target key is wrong/stale. */

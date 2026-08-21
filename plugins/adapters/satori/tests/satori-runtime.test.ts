@@ -2,7 +2,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createEndpointRuntimeState, listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import { satoriRuntimeStateToken } from '../src/satori-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
+import { messageGatewayToken, sideEventGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import defineSatoriAdapter from '../adapters/satori.js';
 import {
@@ -365,6 +365,13 @@ describe('satori plugin runtime adapter', () => {
         if (token === httpHostToken) return http;
         if (token === messageGatewayToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
+        }
+        if (token === sideEventGatewayToken) {
+          return {
+            receiveNotice: vi.fn(async () => {}),
+            receiveRequest: vi.fn(async () => {}),
+            receiveSystem: vi.fn(async () => {}),
+          };
         }
         if (token === satoriRuntimeStateToken) return createEndpointRuntimeState();
         throw new Error(`unexpected token: ${String(token)}`);

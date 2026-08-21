@@ -55,8 +55,15 @@ describe('runtime reply delivery outcome bridge', () => {
   it('maps successful receipts to sent with message id when available', () => {
     expect(deliveryOutcomeFromReceipt({
       status: 'sent',
-      legacyMessageId: 'legacy-1',
-    })).toEqual({ status: 'sent', messageId: 'legacy-1' });
+      message: {
+        conversation: {
+          endpoint: { id: 'sandbox~main', adapter: 'sandbox' },
+          kind: 'private',
+          id: 'user-1',
+        },
+        id: 'message-1',
+      },
+    })).toEqual({ status: 'sent', messageId: 'message-1' });
   });
 });
 
@@ -137,6 +144,29 @@ describe('canonical IM TurnRequest ingress', () => {
     }, { traceId: 't', turnId: 'u', signal: new AbortController().signal, workspaceRoot: '/workspace', ports: {} });
     expect(request.principal.roles).toEqual(['owner', 'admin', 'trusted']);
     expect(request.policy.permissions).toEqual(['owner', 'admin', 'trusted']);
+  });
+
+  it('maps an explicit trusted runtime turn intent', () => {
+    const message = makeMessage({
+      content: 'more detail',
+      sender: { id: 'u' },
+      metadata: {
+        endpoint: 'bot',
+        turnIntent: { kind: 'follow_up', targetTurnId: 'active-turn' },
+      },
+    });
+    const request = createRuntimeTurnRequest(message, 'more detail', {
+      isMaster: false,
+      isTrusted: false,
+    }, {
+      traceId: 't',
+      turnId: 'u',
+      signal: new AbortController().signal,
+      workspaceRoot: '/workspace',
+      ports: {},
+      intent: { kind: 'follow_up', targetTurnId: 'active-turn' },
+    });
+    expect(request.intent).toEqual({ kind: 'follow_up', targetTurnId: 'active-turn' });
   });
 });
 

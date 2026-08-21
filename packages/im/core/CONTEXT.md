@@ -73,7 +73,7 @@ _避免使用_：双格式 text+html 回退；Endpoint 层重复做 semantic 转
 _避免使用_：zhin.config.yml、raw config file
 
 **Side Event**:
-非聊天入站的 IM 事件，分 **Notice**（只读通知）与 **Request**（可 `$approve`/`$reject`）。统一字段 `$foo_bar`；`$type` 仅存命名空间（`notice`/`request`），`$scene_id` + `$scene_type` + `$sub_type` 组合完整名。
+非聊天入站的 IM 事件，分 **Notice**（只读通知）、**Request**（可 `$approve`/`$reject`）与 **System Event**（Endpoint 生命周期/登录等系统信号）。统一字段 `$foo_bar`；`$type` 仅存命名空间（`notice`/`request`/`system`），`$scene_id` + `$scene_type` + `$sub_type` 组合完整名。
 _避免使用_：side event、notification event（泛指）
 
 **Side Event Type**:

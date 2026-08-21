@@ -9,6 +9,7 @@ import defineIcqqAdapter from '../adapters/icqq.js';
 import { IcqqEndpoint } from '../src/endpoint.js';
 import { resolveIcqqConfig } from '../src/protocol.js';
 import { setIcqqAgentDeps } from '../src/icqq-agent-deps.js';
+import { createIcqqTestPorts } from './_icqq-mock.js';
 
 const adapterFeature = featureId('zhin.adapter');
 
@@ -32,6 +33,7 @@ function createEndpoint(
     id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
     gateway,
     config,
+    ...createIcqqTestPorts(),
   });
 }
 
@@ -43,7 +45,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
   it('元素数组归一为 canonical 段，content 保留 CQ 原文', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
     const endpoint = createEndpoint(receive);
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.open();
 
     (endpoint as any).emit('message.group.normal', {
@@ -89,7 +91,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
   it('quote 元数据（oicq source）归一为 reply 段置于段首', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
     const endpoint = createEndpoint(receive);
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.open();
 
     (endpoint as any).emit('message.group.normal', {
@@ -126,7 +128,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
   it('结构化段的 mention 可用于 @ 本机判定（raw_message 缺失时）', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
     const endpoint = createEndpoint(receive);
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.open();
 
     (endpoint as any).emit('message.group.normal', {
@@ -157,7 +159,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
 describe('UNI-Channel 出站：canonical segments → CQ 串', () => {
   it('mention/face/reply/text 映射为 CQ 段', async () => {
     const endpoint = createEndpoint(vi.fn(), base64MediaConfig);
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.open();
 
     await endpoint.send({
@@ -180,7 +182,7 @@ describe('UNI-Channel 出站：canonical segments → CQ 串', () => {
 
   it('image/record/video 的 canonical MediaRef（url/base64/path）映射为 CQ 媒体值', async () => {
     const endpoint = createEndpoint(vi.fn(), base64MediaConfig);
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.open();
 
     await endpoint.send({
@@ -206,7 +208,7 @@ describe('UNI-Channel 出站：canonical segments → CQ 串', () => {
 
   it('file 模式把 canonical base64 MediaRef 落盘为本地路径', async () => {
     const endpoint = createEndpoint(vi.fn(), baseConfig);
-    await endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.open();
 
     await endpoint.send({

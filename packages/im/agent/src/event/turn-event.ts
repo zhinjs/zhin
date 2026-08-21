@@ -116,6 +116,11 @@ export interface TurnEndEvent {
   type: 'turn_end';
   output: OutputElement[];
   usage: TurnUsage;
+  /** Control-only ingress links its own principal/journal to the affected turn. */
+  control?: Readonly<{
+    intent: 'steer' | 'follow_up' | 'observe';
+    targetTurnId?: string;
+  }>;
 }
 
 export interface TurnErrorEvent {

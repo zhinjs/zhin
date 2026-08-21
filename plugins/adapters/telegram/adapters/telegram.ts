@@ -2,7 +2,7 @@
  * Convention entry: discover `adapters/telegram.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken } from '@zhin.js/core/runtime';
+import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import { TelegramEndpoint } from '../src/endpoint.js';
 import {
@@ -33,6 +33,7 @@ export default defineAdapter<TelegramAdapterConfig>({
     return new TelegramEndpoint({
       id: context.id,
       gateway: context.use(messageGatewayToken),
+      sideEvents: context.use(sideEventGatewayToken),
       config,
       http: config.mode === 'webhook' ? context.use(httpHostToken) : undefined,
     });

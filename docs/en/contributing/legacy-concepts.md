@@ -54,15 +54,14 @@ export default defineAdapter<MyConfig>({
 });
 ```
 
-## Old Console loginAssist -> Removed (QR code login via CLI / logs / wizard)
+## Old Console loginAssist → Plugin Runtime LoginAssist
 
-- **Old approach**: The loginAssist page/route provided by the Console plugin -- adapters posted pending tasks like QR code scans and slider verifications, and users consumed/confirmed them in the Web Console. Console-side code has been entirely removed (zero residue in `packages/console`).
-- **Current status**: QR code login is handled out-of-band via CLI and log guidance -- e.g. ICQQ uses `icqq login <uin>` to start a daemon process for QR code scanning, then restart zhin to take effect. New project platform configuration goes through the `zhin setup` config wizard. The IM kernel still retains the `LoginAssist` producer-consumer service (`@zhin.js/core` built-in, `packages/im/core/src/built/login-assist.ts`), but only the legacy app layer (`packages/im/zhin`'s Node startup) registers a stdin consumer. The Plugin Runtime (`basic/cli`) path does not assemble it.
-
-```text
-Old: Open the Web Console login assist page to confirm QR code scan
-New: icqq login <uin> to complete QR scan -> restart zhin (or follow terminal log instructions)
-```
+- **Old approach**: The loginAssist page/route provided by the Console plugin — adapters posted pending tasks like QR code scans and slider verifications, and users consumed/confirmed them in the Web Console. The old Console page has been removed.
+- **Current status (Plugin Runtime)**: `ImRuntime` provides `loginAssistToken`; ICQQ (and similar adapters) call `waitForInput` on `system.login.*`. Consumers:
+  - Console RPC: `login.list` / `login.submit` / `login.cancel` (refresh-safe via `list`)
+  - SSE: `endpoint.login.pending` / `endpoint.login.expired`
+  - Interactive TTY: one-line stdin confirm (aligned with the official icqq example)
+- Out-of-band path still works: `icqq login <uin>` daemon QR scan, then start zhin; `zhin setup` wizard.
 
 ## Related Reading
 

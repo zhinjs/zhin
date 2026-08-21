@@ -22,7 +22,7 @@ export interface McpDefinition<TConfig = unknown> {
 }
 
 declare module '@zhin.js/plugin-runtime' {
-  interface PluginSetupContext<TConfig> {
+  interface PluginSetupContext<TConfig = unknown> {
     addMcp(localName: string, definition: McpDefinition<TConfig>): void;
   }
 }

@@ -3,7 +3,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -28,6 +28,7 @@ import {
   type NapCatEvent,
   type NapCatHttpConfig,
 } from './protocol.js';
+import { receiveNapCatSideEvent } from './side-event-dispatch.js';
 import { readRequestBody } from './webhook.js';
 import { NapCatWsEndpoint } from './ws-endpoint.js';
 import { verifyNapCatAccessToken } from './wss-auth.js';
@@ -35,6 +36,7 @@ import { verifyNapCatAccessToken } from './wss-auth.js';
 export interface NapCatHttpEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: NapCatHttpConfig;
   readonly callHttpAction?: typeof callNapCatHttpAction;
@@ -131,7 +133,17 @@ export class NapCatHttpEndpoint implements EndpointInstance {
   }
 
   admit(ev: NapCatEvent): void {
-    if (!this.#open || !isMessageEvent(ev)) return;
+    if (!this.#open) return;
+    if (!isMessageEvent(ev)) {
+      receiveNapCatSideEvent(
+        this.#options.sideEvents,
+        this.#options.config.id,
+        this,
+        ev,
+        this.#logger,
+      );
+      return;
+    }
     if (isSelfMessage(ev)) return;
     const msgId = String(ev.message_id);
     if (!this.#inboundDeduper.shouldProcess(msgId)) return;

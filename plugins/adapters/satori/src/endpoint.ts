@@ -11,7 +11,7 @@ import {
   type EndpointManagement,
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -48,6 +48,7 @@ export type SatoriApiCaller = typeof callSatoriApi;
 export interface SatoriWsEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly config: ResolvedSatoriWsConfig;
   readonly createWebSocket?: CreateSatoriWebSocket;
   readonly callApi?: SatoriApiCaller;
@@ -307,6 +308,7 @@ export class SatoriWsEndpoint implements EndpointInstance {
 export interface SatoriWebhookEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: ResolvedSatoriWebhookConfig;
   readonly callApi?: SatoriApiCaller;

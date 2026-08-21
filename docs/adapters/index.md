@@ -33,7 +33,7 @@ _（当前无）_
 | 飞书 | `@zhin.js/adapter-lark` | — | [飞书](/adapters/lark) |
 | 微信公众号 | `@zhin.js/adapter-wechat-mp` | — | [微信公众号](/adapters/wechat-mp) |
 | Discord | `@zhin.js/adapter-discord` | — | [Discord](/adapters/discord) |
-| ICQQ (QQ) | `@zhin.js/adapter-icqq` | listFriends, listGroups, listChannels, listGroupMembers, approveRequest, rejectRequest, kickGroupMember, muteGroupMember, setGroupAdmin, deleteFriend | [ICQQ (QQ)](/adapters/icqq) |
+| ICQQ (QQ) | `@zhin.js/adapter-icqq` | listFriends, listGroups, listChannels, listGroupMembers, listRequests, approveRequest, rejectRequest, kickGroupMember, muteGroupMember, setGroupAdmin, deleteFriend | [ICQQ (QQ)](/adapters/icqq) |
 | KOOK | `@zhin.js/adapter-kook` | — | [KOOK](/adapters/kook) |
 | OneBot v11 | `@zhin.js/adapter-onebot11` | — | [OneBot v11](/adapters/onebot11) |
 | QQ 官方 | `@zhin.js/adapter-qq` | listChannels | [QQ 官方](/adapters/qq) |

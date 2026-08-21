@@ -3,7 +3,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -22,6 +22,7 @@ import {
   type OneBot12Event,
   type OneBot12WebhookConfig,
 } from './protocol.js';
+import { receiveOneBot12SideEvent } from './side-event-dispatch.js';
 import { verifyOneBotAccessToken } from './wss-auth.js';
 
 const logger = getLogger('onebot12');
@@ -29,6 +30,7 @@ const logger = getLogger('onebot12');
 export interface OneBot12WebhookEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: OneBot12WebhookConfig;
   readonly callAction?: typeof callOneBot12Action;
@@ -124,7 +126,17 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
   }
 
   admit(ev: OneBot12Event): void {
-    if (!this.#open || !isMessageEvent(ev)) return;
+    if (!this.#open) return;
+    if (!isMessageEvent(ev)) {
+      receiveOneBot12SideEvent(
+        this.#options.sideEvents,
+        this.#options.config.id,
+        this,
+        ev,
+        logger,
+      );
+      return;
+    }
     const conversation = onebot12InboundConversation(String(this.#options.id), ev);
     const content = formatInboundContent(ev);
     const nickname = senderNickname(ev);

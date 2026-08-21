@@ -1,5 +1,6 @@
 import { Notice, type NoticeBase } from '../notice.js';
 import { Request, type RequestBase } from '../request.js';
+import { SystemEvent, type SystemEventBase } from '../system-event.js';
 import {
   composeSideEventName,
   parseSideEventName,
@@ -171,4 +172,8 @@ export function buildNotice<T extends object>(input: T, format: NoticeBase) {
 
 export function buildRequest<T extends object>(input: T, format: RequestBase) {
   return Request.from(input, format);
+}
+
+export function buildSystem<T extends object>(input: T, format: SystemEventBase) {
+  return SystemEvent.from(input, format);
 }

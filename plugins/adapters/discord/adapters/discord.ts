@@ -2,7 +2,7 @@
  * Convention entry: discover `adapters/discord.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken } from '@zhin.js/core/runtime';
+import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import {
   DiscordGatewayEndpoint,
@@ -36,6 +36,7 @@ export default defineAdapter<DiscordAdapterConfig>({
   create(context) {
     const config = resolveDiscordConfig(context.config);
     const gateway = context.use(messageGatewayToken);
+    const sideEvents = context.use(sideEventGatewayToken);
     // 注册到插件运行时状态（discord.endpoint list 的"运行中"数据源）
     context.use(discordRuntimeStateToken).endpoints.set(config.id, {
       id: config.id,
@@ -45,6 +46,7 @@ export default defineAdapter<DiscordAdapterConfig>({
       return new DiscordInteractionsEndpoint({
         id: context.id,
         gateway,
+        sideEvents,
         http: context.use(httpHostToken),
         config,
       });
@@ -52,6 +54,7 @@ export default defineAdapter<DiscordAdapterConfig>({
     return new DiscordGatewayEndpoint({
       id: context.id,
       gateway,
+      sideEvents,
       config,
     });
   },

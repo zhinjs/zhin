@@ -169,6 +169,7 @@ function createA2aTurnRequest(
   return Object.freeze({
     identity: Object.freeze({ traceId: context.taskId, turnId: randomUUID() }),
     origin: Object.freeze({ kind: 'a2a' as const, taskId: context.taskId }),
+    intent: Object.freeze({ kind: 'new' as const }),
     principal: Object.freeze({ subjectId: 'a2a-client', roles: Object.freeze(['user']) }),
     input: Object.freeze({ text }),
     session: Object.freeze({ key: `a2a:${context.contextId}` }),

@@ -25,6 +25,57 @@ describe('PersistentTurnJournal', () => {
     expect(journal.terminal).toEqual(events[2]);
   });
 
+  it('attributes tool calls and outputs to the authenticated turn principal', async () => {
+    const events: AgentRunEvent[] = [];
+    const journal = new PersistentTurnJournal(
+      { sessionId: 'shared', turnId: 'turn-bob' },
+      memoryStore(events),
+      { subjectId: 'bob-id', displayName: 'Bob', roles: ['trusted'] },
+    );
+
+    await journal.append({
+      type: 'tool_call', toolName: 'deploy', args: {}, toolUseId: 'call-1',
+    });
+    await journal.append({
+      type: 'tool_result', toolName: 'deploy', output: 'ok', durationMs: 2, toolUseId: 'call-1',
+    });
+
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      run: { turnId: 'turn-bob' },
+      data: { callId: 'call-1', principal: { subjectId: 'bob-id', roles: ['trusted'] } },
+    });
+    expect(events[1]).toMatchObject({
+      run: { turnId: 'turn-bob' },
+      data: { callId: 'call-1', principal: { subjectId: 'bob-id' } },
+    });
+  });
+
+  it('links a participant control turn to the active turn it influenced', async () => {
+    const events: AgentRunEvent[] = [];
+    const journal = new PersistentTurnJournal(
+      { sessionId: 'shared', turnId: 'turn-bob' },
+      memoryStore(events),
+      { subjectId: 'bob-id', displayName: 'Bob', roles: ['user'] },
+    );
+
+    await journal.append({
+      type: 'turn_end',
+      output: [],
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      control: { intent: 'steer', targetTurnId: 'turn-alice' },
+    });
+
+    expect(events.at(-1)).toMatchObject({
+      terminal: 'completed',
+      run: { turnId: 'turn-bob' },
+      data: {
+        principal: { subjectId: 'bob-id' },
+        control: { intent: 'steer', targetTurnId: 'turn-alice' },
+      },
+    });
+  });
+
   it('does not commit or close the terminal when persistence fails', async () => {
     const append = vi.fn(async (event: AgentRunEvent) => {
       if (event.terminal) throw new Error('disk full');

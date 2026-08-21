@@ -446,7 +446,7 @@ export default defineCommand({
  * 最小形态参考 plugins/adapters/sandbox 与 plugins/adapters/email。
  */
 import { defineAdapter, type EndpointInstance } from 'zhin.js/adapter';
-import { messageGatewayToken } from '@zhin.js/core/runtime';
+import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 
 export interface ${capitalizedName}AdapterConfig {
   /** Endpoint 名称（对应 schema.json 的 name 字段） */
@@ -455,10 +455,11 @@ export interface ${capitalizedName}AdapterConfig {
   token?: string;
 }
 
-export default defineAdapter<${capitalizedName}AdapterConfig, string>({
+export default defineAdapter<${capitalizedName}AdapterConfig>({
   capabilities: ['inbound', 'outbound'],
   create(context) {
     const gateway = context.use(messageGatewayToken);
+    const sideEvents = context.use(sideEventGatewayToken);
     let opened = false;
 
     /** 入站：平台事件 → 标准消息投递（仅在 open() 之后调用） */
@@ -472,11 +473,13 @@ export default defineAdapter<${capitalizedName}AdapterConfig, string>({
       });
     };
 
-    const endpoint: EndpointInstance<string> = {
+    const endpoint: EndpointInstance = {
       async start() {
         // TODO: 建立平台连接（WebSocket / Webhook / 轮询），
         // 收到平台消息后调用 admit(target, content, sender) 投递入站。
+        // notice/request/system 经 sideEvents.receiveNotice|Request|System 上报。
         void admit;
+        void sideEvents;
       },
       open() {
         opened = true;
@@ -502,7 +505,7 @@ export default defineAdapter<${capitalizedName}AdapterConfig, string>({
 
   const readmeIntro =
     kind === 'adapter'
-      ? `${capitalizedName} 适配器（\`zhin new --type adapter\` 生成）：约定式 Plugin Runtime 形态，\`adapters/\` 下的 \`defineAdapter\` 模块即适配器，Endpoint 骨架含 start/open/close/stop/send，入站经 \`messageGatewayToken\` 投递。`
+      ? `${capitalizedName} 适配器（\`zhin new --type adapter\` 生成）：约定式 Plugin Runtime 形态，\`adapters/\` 下的 \`defineAdapter\` 模块即适配器，Endpoint 骨架含 start/open/close/stop/send，入站经 \`messageGatewayToken\` / \`sideEventGatewayToken\` 投递。`
       : kind === 'service'
         ? `${capitalizedName} 服务插件（\`zhin new --type service\` 生成）：\`plugin.ts\` 的 \`setup(context)\` 负责初始化与清理，宿主资源（database/schedule/outbound）经 \`context.resources\` 按需取用。`
         : `${capitalizedName} 普通插件（\`zhin new\` / \`--type normal\` 生成）：\`commands/\` 下的 \`defineCommand\` 模块即命令，含动态段 \`[text]\` 示例。`;

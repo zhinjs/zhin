@@ -71,11 +71,13 @@
     "export * from './contracts.js';",
     "export * from './im-runtime.js';",
     "export * from './interactive.js';",
+    "export * from './login-assist-host.js';",
     "export * from './message-bus.js';",
     "export * from './message-dispatcher.js';",
     "export * from './outbound-renderer.js';",
     "export * from './outbound-segments.js';",
-    "export * from './service-tokens.js';"
+    "export * from './service-tokens.js';",
+    "export * from './side-event-gateway.js';"
   ],
   "feature-kit": [
     "export * from './catalog.js';",
@@ -86,6 +88,7 @@
     "export * from './typescript-convention.js';"
   ],
   "handler": [
+    "export * from './context.js';",
     "export * from './definition.js';",
     "export * from './handler-index.js';",
     "export * from './provider.js';",

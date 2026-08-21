@@ -20,7 +20,7 @@ export interface MiddlewareDefinition<TInput = unknown, TConfig = unknown> {
 }
 
 declare module '@zhin.js/plugin-runtime' {
-  interface PluginSetupContext<TConfig> {
+  interface PluginSetupContext<TConfig = unknown> {
     addMiddleware<TInput = unknown>(
       localName: string,
       definition: MiddlewareDefinition<TInput, TConfig>,

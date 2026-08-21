@@ -8,7 +8,9 @@
  * 数据源约定（只读真实数据源，不做内存假数据）：
  * - cron：`ctx.scheduleHost`（Plugin Runtime ScheduleHost，仅 register/list，
  *   无持久化引擎，故 cron:add/remove/pause/resume 报"未接线"）。
- * - inbox：`ctx.databaseHost.models`（unified_inbox_message/request/notice 三张表，
+ * - request.list：优先 `management.listRequests()`（live endpoint）；否则回退
+ *   unified_inbox_request。审批始终走 approveRequest/rejectRequest。
+ * - inbox（历史）：`ctx.databaseHost.models`（unified_inbox_message/request/notice，
  *   表不存在或查询失败 → 空数组 + inboxEnabled:false；requestConsumed/noticeConsumed
  *   按行 id update consumed=1，表/model 缺失时报"未接线"）。
  * - 社交/群管：`ctx.withEndpointManagement` 在固定 generation lease 内
@@ -41,6 +43,20 @@ export interface ConsoleRpcExtendedCtx {
   databaseHost?: { models: { get(name: string): unknown } };
   /** Agent Host 持久化调度引擎（@zhin.js/agent getAssistantRuntime().engine），未 init 时返回 null。 */
   resolveScheduleEngine?: () => ConsoleScheduleEngine | null | undefined;
+  /** LoginAssist list/submit/cancel（刷新后仍可消费扫码/滑块待办）。 */
+  loginAssist?: {
+    listPending(): readonly {
+      id: string;
+      adapter: string;
+      endpointKey: string;
+      type: string;
+      payload: Record<string, unknown>;
+      createdAt: number;
+      expiresAt?: number;
+    }[];
+    submit(id: string, value: string | Record<string, unknown>): boolean;
+    cancel(id: string, reason?: string): boolean;
+  };
 }
 
 export interface ConsoleScheduleEngine {
@@ -94,6 +110,17 @@ interface EndpointManagementPort {
     parent?: { type: string; id: string; name?: string };
   }[]>;
   listGroupMembers?(groupId: string): Promise<readonly unknown[]>;
+  listRequests?(): Promise<readonly {
+    platform_request_id: string;
+    type: string;
+    scene_type?: string | null;
+    scene_id: string;
+    sub_type?: string | null;
+    actor_id: string;
+    actor_name?: string | null;
+    comment?: string | null;
+    created_at: number;
+  }[]>;
   approveRequest?(requestId: string, remark?: string): Promise<void>;
   rejectRequest?(requestId: string, reason?: string): Promise<void>;
   kickGroupMember?(groupId: string, userId: string): Promise<void>;
@@ -139,6 +166,13 @@ export async function dispatchExtendedConsoleRpc(
     case 'request.approve':
     case 'request.reject':
       return actOnRequest(type, d, ctx);
+
+    case 'login.list':
+      return listLoginPending(ctx);
+    case 'login.submit':
+      return submitLogin(d, ctx);
+    case 'login.cancel':
+      return cancelLogin(d, ctx);
 
     case 'request.consumed':
       return markInboxConsumed(d, ctx, TABLE_REQUEST);
@@ -359,7 +393,7 @@ async function listInbox(
   return { data: { [key]: sorted, inboxEnabled: enabled } };
 }
 
-/** request.list —— 未处理的好友/群请求（unified_inbox_request 中 resolved=0）。 */
+/** request.list —— 优先 live EndpointManagement.listRequests；否则回退 unified_inbox_request。 */
 async function listPendingRequests(
   d: Record<string, unknown>,
   ctx: ConsoleRpcExtendedCtx,
@@ -367,6 +401,32 @@ async function listPendingRequests(
   const adapter = strField(d, '$adapter', 'adapter');
   const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
   if (!adapter || !endpointKey) return { error: '$adapter and $endpoint required' };
+
+  if (ctx.withEndpointManagement) {
+    try {
+      const live = await ctx.withEndpointManagement(adapter, endpointKey, async (management) => {
+        if (!management.listRequests) return undefined;
+        const pending = await management.listRequests();
+        const requests = pending.map((row) => mapRequestRow({
+          platform_request_id: row.platform_request_id,
+          type: row.type,
+          scene_type: row.scene_type ?? null,
+          scene_id: row.scene_id,
+          sub_type: row.sub_type ?? null,
+          actor_id: row.actor_id,
+          actor_name: row.actor_name ?? null,
+          comment: row.comment ?? null,
+          created_at: row.created_at,
+          resolved: 0,
+        }));
+        return { data: { requests, inboxEnabled: false, source: 'endpoint' } };
+      });
+      if (live) return live;
+    } catch (error) {
+      return { error: errorMessage(error) };
+    }
+  }
+
   const { rows, enabled } = await readInboxRows(ctx, TABLE_REQUEST, {
     adapter,
     endpoint_id: endpointKey,
@@ -377,7 +437,7 @@ async function listPendingRequests(
     .filter((row) => Number(row.resolved ?? 0) === 0)
     .sort((a, b) => Number(a.created_at ?? 0) - Number(b.created_at ?? 0))
     .map(mapRequestRow);
-  return { data: { requests, inboxEnabled: enabled } };
+  return { data: { requests, inboxEnabled: enabled, source: 'inbox' } };
 }
 
 async function listInboxMessages(
@@ -544,6 +604,52 @@ async function actOnRequest(
     await method.call(management, requestId, extra || undefined);
     return { data: { success: true } };
   });
+}
+
+function listLoginPending(ctx: ConsoleRpcExtendedCtx): ExtendedRpcResult {
+  const assist = ctx.loginAssist;
+  if (!assist) return { error: '登录辅助未接线（LoginAssist 未挂载）' };
+  const tasks = assist.listPending().map((task) => ({
+    id: task.id,
+    adapter: task.adapter,
+    endpointKey: task.endpointKey,
+    type: task.type,
+    payload: task.payload,
+    createdAt: task.createdAt,
+    expiresAt: task.expiresAt,
+  }));
+  return { data: { tasks, count: tasks.length } };
+}
+
+function submitLogin(
+  d: Record<string, unknown>,
+  ctx: ConsoleRpcExtendedCtx,
+): ExtendedRpcResult {
+  const assist = ctx.loginAssist;
+  if (!assist) return { error: '登录辅助未接线（LoginAssist 未挂载）' };
+  const id = strField(d, '$id', 'id', 'taskId');
+  if (!id) return { error: '$id required' };
+  const raw = d.$value ?? d.value ?? d.ticket ?? d.code ?? '';
+  const value = typeof raw === 'string' || (raw && typeof raw === 'object')
+    ? raw as string | Record<string, unknown>
+    : String(raw ?? '');
+  const ok = assist.submit(id, value);
+  if (!ok) return { error: `login task not found: ${id}` };
+  return { data: { success: true } };
+}
+
+function cancelLogin(
+  d: Record<string, unknown>,
+  ctx: ConsoleRpcExtendedCtx,
+): ExtendedRpcResult {
+  const assist = ctx.loginAssist;
+  if (!assist) return { error: '登录辅助未接线（LoginAssist 未挂载）' };
+  const id = strField(d, '$id', 'id', 'taskId');
+  if (!id) return { error: '$id required' };
+  const reason = strField(d, '$reason', 'reason') || 'cancelled';
+  const ok = assist.cancel(id, reason);
+  if (!ok) return { error: `login task not found: ${id}` };
+  return { data: { success: true } };
 }
 
 // ---------------------------------------------------------------- 社交读取

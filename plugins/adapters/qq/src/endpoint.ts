@@ -7,7 +7,7 @@ import type {
   EndpointManagement,
   EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -37,6 +37,11 @@ import {
   type CreateQqBot,
   type QqBotTransport,
 } from './ws.js';
+import {
+  bindQqBotSideEvents,
+  receiveQqSideEvent,
+  type QqSideEventCaller,
+} from './side-event-dispatch.js';
 
 export type { CreateQqBot, QqBotTransport } from './ws.js';
 export type { CreateQqHttpBot, QqHttpBotTransport } from './webhook.js';
@@ -44,6 +49,7 @@ export type { CreateQqHttpBot, QqHttpBotTransport } from './webhook.js';
 export interface QqEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly config: ResolvedQqWebsocketConfig;
   readonly createBot?: CreateQqBot;
 }
@@ -246,6 +252,16 @@ export class QqWebsocketEndpoint implements EndpointInstance {
       const msg = normalizeQqMessage(raw);
       if (msg) this.admit(msg);
     });
+    bindQqBotSideEvents(bot, (eventName, raw) => {
+      receiveQqSideEvent(
+        this.#options.sideEvents,
+        this.#options.config.id,
+        bot as QqSideEventCaller,
+        eventName,
+        raw,
+        this.#logger,
+      );
+    });
   }
 
   #requireBot(): QqBotTransport {
@@ -257,6 +273,7 @@ export class QqWebsocketEndpoint implements EndpointInstance {
 export interface QqHttpEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: ResolvedQqHttpConfig;
   readonly createBot?: CreateQqHttpBot;
@@ -468,6 +485,16 @@ export class QqHttpEndpoint implements EndpointInstance {
     bindQqBotInboundEvents(bot, (raw) => {
       const msg = normalizeQqMessage(raw);
       if (msg) this.admit(msg);
+    });
+    bindQqBotSideEvents(bot, (eventName, raw) => {
+      receiveQqSideEvent(
+        this.#options.sideEvents,
+        this.#options.config.id,
+        bot as QqSideEventCaller,
+        eventName,
+        raw,
+        this.#logger,
+      );
     });
   }
 

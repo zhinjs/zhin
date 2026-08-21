@@ -6,6 +6,7 @@ import { TurnJournalCommitError } from '../../src/turn/journal-integrity.js';
 
 function turn(): ReturnType<typeof createTurnIngress> {
   return createTurnIngress({
+    intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 3, traceId: 'trace', turnId: 'turn' },
     origin: { kind: 'http', sessionId: 'http-session' },
     principal: { subjectId: 'user', roles: ['user'] },
@@ -20,6 +21,7 @@ function turn(): ReturnType<typeof createTurnIngress> {
 
 function turnWithJournal(events: TurnEvent[]): ReturnType<typeof createTurnIngress> {
   return createTurnIngress({
+    intent: { kind: 'new' },
     ...turn(),
     ports: { journal: { append: (event) => { events.push(event); } } },
   });
@@ -118,6 +120,7 @@ describe('executeAgentTurn', () => {
     const journal: TurnEvent[] = [];
     const controller = new AbortController();
     const source = createTurnIngress({
+    intent: { kind: 'new' },
       ...turnWithJournal(journal),
       signal: controller.signal,
     });
@@ -163,6 +166,7 @@ describe('executeAgentTurn', () => {
   it('commits the terminal fact before applying its conversation projection', async () => {
     const order: string[] = [];
     const source = createTurnIngress({
+    intent: { kind: 'new' },
       ...turn(),
       ports: { journal: { append: async (event) => { order.push(`journal:${event.type}`); } } },
     });
@@ -181,6 +185,7 @@ describe('executeAgentTurn', () => {
   it('does not rewrite a committed terminal when a projection fails', async () => {
     const diagnostics: string[] = [];
     const source = createTurnIngress({
+    intent: { kind: 'new' },
       ...turn(),
       ports: {
         journal: { append: async () => undefined },
@@ -201,6 +206,7 @@ describe('executeAgentTurn', () => {
 
   it('fails closed when the required journal cannot commit the terminal', async () => {
     const source = createTurnIngress({
+    intent: { kind: 'new' },
       ...turn(),
       ports: { journal: { append: () => { throw new Error('journal unavailable'); } } },
     });

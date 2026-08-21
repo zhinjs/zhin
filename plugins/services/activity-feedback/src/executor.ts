@@ -56,15 +56,16 @@ export function createOutboundEndpointAccess(
       const key = `${platform}:${endpointKey}`;
       const cached = cache.get(key);
       if (cached) return cached;
+      const recall = outbound.recall;
       const addReaction = outbound.addReaction;
       const removeReaction = outbound.removeReaction;
       const endpoint = {
         $id: endpointKey,
         control: {
-          ...(outbound.recall ? {
-            recall: async (message: Parameters<NonNullable<typeof outbound.recall>>[0]['message']) => {
+          ...(recall ? {
+            recall: async (message: Parameters<typeof recall>[0]['message']) => {
               try {
-                await outbound.recall!({ adapter: platform, endpointKey, message });
+                await recall({ adapter: platform, endpointKey, message });
               } catch (error) {
                 logger?.debug(
                   `[ActivityFeedback] outbound recall failed (${key}):`,

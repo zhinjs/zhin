@@ -21,6 +21,7 @@ export const ADAPTER_META = {
     packageName: '@zhin.js/adapter-icqq',
     management: [
       'listFriends', 'listGroups', 'listChannels', 'listGroupMembers',
+      'listRequests',
       'approveRequest', 'rejectRequest', 'kickGroupMember', 'muteGroupMember',
       'setGroupAdmin', 'deleteFriend',
     ],

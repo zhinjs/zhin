@@ -28,6 +28,7 @@ describe('FullAgentTurnEngine', () => {
   it('runs canonical ingress through session, deferred capability, PromptController, and full AgentCore seams', async () => {
     const order: string[] = [];
     const turn = createTurnIngress({
+    intent: { kind: 'new' },
       identity: { rootId: 'root', generation: 7, traceId: 'trace', turnId: 'turn' },
       origin: { kind: 'im', platform: 'sandbox', endpoint: 'main', scope: 'private', sceneId: 'user', messageId: 'm-1' },
       principal: { subjectId: 'user', roles: ['user'] },
@@ -157,6 +158,7 @@ describe('FullAgentTurnEngine', () => {
 
   it('emits ai.thinking once when AgentCore streams a thinking event', async () => {
     const turn = createTurnIngress({
+    intent: { kind: 'new' },
       identity: { rootId: 'root', generation: 7, traceId: 'trace', turnId: 'turn' },
       origin: { kind: 'im', platform: 'icqq', endpoint: '210723495', scope: 'group', sceneId: '1048877509', messageId: 'm-1' },
       principal: { subjectId: 'user', roles: ['user'] },
@@ -258,6 +260,7 @@ describe('FullAgentTurnEngine', () => {
   it('sends the reply before persistence/finalize side effects', async () => {
     const order: string[] = [];
     const turn = createTurnIngress({
+    intent: { kind: 'new' },
       identity: { rootId: 'root', generation: 7, traceId: 'trace', turnId: 'turn' },
       origin: { kind: 'im', platform: 'icqq', endpoint: '210723495', scope: 'group', sceneId: '1048877509', messageId: 'm-1' },
       principal: { subjectId: 'user', roles: ['user'] },
@@ -356,6 +359,7 @@ describe('FullAgentTurnEngine', () => {
   it('falls back to result.reply when terminal output is empty', async () => {
     const send = vi.fn(async () => ({ status: 'sent' as const }));
     const turn = createTurnIngress({
+    intent: { kind: 'new' },
       identity: { rootId: 'root', generation: 7, traceId: 'trace', turnId: 'turn' },
       origin: { kind: 'im', platform: 'icqq', endpoint: '210723495', scope: 'private', sceneId: 'user', messageId: 'm-1' },
       principal: { subjectId: 'user', roles: ['user'] },
@@ -454,6 +458,7 @@ describe('FullAgentTurnEngine', () => {
 
   it('runs schedule ingress statelessly with a direct frozen capability plan', async () => {
     const turn = createTurnIngress({
+    intent: { kind: 'new' },
       identity: { rootId: 'root', generation: 8, traceId: 'exec', turnId: 'exec' },
       origin: { kind: 'schedule', jobId: 'daily' },
       principal: { subjectId: 'owner', roles: ['trusted'] },

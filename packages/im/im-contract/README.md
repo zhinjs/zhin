@@ -18,9 +18,8 @@ structured values instead:
 - `EndpointCapabilities`: declared operations rather than optional-method
   detection.
 
-Adapters may use `parseLegacyConversationTarget()` and
-`formatLegacyConversationTarget()` only at a legacy platform boundary. New
-framework APIs should accept or return the structured forms.
+Adapters carry `ConversationRef` and `MessageRef` unchanged until their native
+protocol boundary. Framework packages do not encode compound string identities.
 
 ## Example
 

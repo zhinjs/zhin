@@ -702,6 +702,7 @@ export namespace Plugin {
     'endpoint.error': [import('./built/endpoint-lifecycle.js').EndpointLifecyclePayload];
     "request.receive": [import('./request.js').Request];
     "notice.receive": [import('./notice.js').Notice];
+    "system.receive": [import('./system-event.js').SystemEvent];
     "ai.processing.start": [Plugin.AIEventPayload];
     "ai.processing.finish": [Plugin.AIEventPayload];
     "ai.processing.error": [Plugin.AIEventPayload];

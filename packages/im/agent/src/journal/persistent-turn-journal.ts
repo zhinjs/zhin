@@ -13,14 +13,22 @@ import type { TurnJournalPort } from '../turn/turn-ingress.js';
 export class PersistentTurnJournal implements TurnJournalPort {
   readonly #run: AgentRunIdentity;
   readonly #store: JournalStore;
+  readonly #principal?: Readonly<{ subjectId: string; displayName?: string; roles: readonly string[] }>;
   #sequence = 0;
   #terminal: AgentRunEvent | undefined;
   #initialized = false;
   #tail: Promise<void> = Promise.resolve();
 
-  constructor(run: AgentRunIdentity, store: JournalStore) {
+  constructor(
+    run: AgentRunIdentity,
+    store: JournalStore,
+    principal?: Readonly<{ subjectId: string; displayName?: string; roles: readonly string[] }>,
+  ) {
     this.#run = Object.freeze({ ...run });
     this.#store = store;
+    this.#principal = principal
+      ? Object.freeze({ ...principal, roles: Object.freeze([...principal.roles]) })
+      : undefined;
   }
 
   append(event: TurnEvent): Promise<void> {
@@ -50,6 +58,12 @@ export class PersistentTurnJournal implements TurnJournalPort {
     for (const input of mapped) {
       const persisted: AgentRunEvent = Object.freeze({
         ...input,
+        ...(this.#principal ? {
+          data: Object.freeze({
+            ...(input.data ?? {}),
+            principal: this.#principal,
+          }),
+        } : {}),
         version: AGENT_RUN_EVENT_VERSION,
         run: this.#run,
         sequence: this.#sequence + 1,

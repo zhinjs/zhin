@@ -19,6 +19,7 @@ describe('PromptController', () => {
   it('schedules the canonical TurnEvent stream without collecting it first', async () => {
     const controller = new PromptController('one-at-a-time', 'one-at-a-time');
     const stream = controller.scheduleStream({
+      intent: { kind: 'new' },
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('stream')],
@@ -50,6 +51,7 @@ describe('PromptController', () => {
 
     const run = (sessionKey: string, label: string) =>
       controller.schedule({
+        intent: { kind: 'new' },
         sessionKey,
         sessionId: `${sessionKey}#1`,
         userMessages: [createUserMessage(label)],
@@ -78,6 +80,7 @@ describe('PromptController', () => {
     const firstAborted: boolean[] = [];
 
     const first = controller.schedule({
+      intent: { kind: 'new' },
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('first')],
@@ -91,6 +94,7 @@ describe('PromptController', () => {
     await new Promise((r) => setTimeout(r, 5));
 
     const second = await controller.schedule({
+      intent: { kind: 'supersede' },
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('second')],
@@ -110,6 +114,7 @@ describe('PromptController', () => {
     let observedSignal: AbortSignal | undefined;
 
     const turn = controller.schedule({
+      intent: { kind: 'new' },
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('cancel me')],
@@ -143,6 +148,7 @@ describe('PromptController', () => {
     const steered: string[] = [];
 
     const first = controller.schedule({
+      intent: { kind: 'new' },
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('first')],
@@ -165,9 +171,131 @@ describe('PromptController', () => {
     expect(steered).toContain('steer-msg');
   });
 
+  it('routes steer intent through schedule without superseding or executing a second turn', async () => {
+    const controller = new PromptController('one-at-a-time', 'one-at-a-time');
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const steered: string[] = [];
+    const first = controller.schedule({
+      turnId: 'turn-alice',
+      intent: { kind: 'supersede' },
+      principal: { subjectId: 'alice', roles: ['owner'] },
+      sessionKey: 'shared',
+      sessionId: 'shared#1',
+      userMessages: [createUserMessage('design a deployment')],
+      execute: async (_initial, hooks, signal) => {
+        await gate;
+        expect(signal.aborted).toBe(false);
+        for (const message of await hooks.getSteeringMessages()) {
+          const block = message.content.find((item) => item.type === 'text');
+          if (block?.type === 'text') steered.push(block.text);
+        }
+        return makeResult('deployment');
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const control = await controller.schedule({
+      turnId: 'turn-bob',
+      intent: {
+        kind: 'steer', targetTurnId: 'turn-alice', authorizedBy: 'product_policy',
+      },
+      principal: { subjectId: 'bob', roles: ['user'] },
+      sessionKey: 'shared',
+      sessionId: 'shared#1',
+      userMessages: [createUserMessage('no Kubernetes', undefined, 2, {
+        subjectId: 'bob', displayName: 'Bob', roles: ['user'], scope: 'group',
+      })],
+      execute: async () => { throw new Error('steer must not start another model turn'); },
+    });
+
+    expect(control.reply).toBe('');
+    release();
+    await expect(first).resolves.toMatchObject({ reply: 'deployment' });
+    expect(steered).toEqual(['no Kubernetes']);
+  });
+
+  it('routes follow_up intent through schedule and runs it after the active execution', async () => {
+    const controller = new PromptController('one-at-a-time', 'one-at-a-time');
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const batches: string[] = [];
+    const active = controller.schedule({
+      intent: { kind: 'new' },
+      turnId: 'turn-alice',
+      principal: { subjectId: 'alice', roles: ['owner'] },
+      sessionKey: 'shared',
+      sessionId: 'shared#1',
+      userMessages: [createUserMessage('deployment plan')],
+      execute: async (messages) => {
+        const block = messages[0]?.content.find((item) => item.type === 'text');
+        if (block?.type === 'text') batches.push(block.text);
+        if (batches.length === 1) await gate;
+        return makeResult(block?.type === 'text' ? block.text : '');
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await controller.schedule({
+      turnId: 'turn-bob',
+      intent: {
+        kind: 'follow_up', targetTurnId: 'turn-alice', authorizedBy: 'product_policy',
+      },
+      principal: { subjectId: 'bob', roles: ['user'] },
+      sessionKey: 'shared',
+      sessionId: 'shared#1',
+      userMessages: [createUserMessage('add a migration checklist')],
+      execute: async () => { throw new Error('follow-up uses the active execution'); },
+    });
+    release();
+
+    await active;
+    expect(batches).toEqual(['deployment plan', 'add a migration checklist']);
+  });
+
+  it('rejects cross-principal control without explicit product policy authorization', async () => {
+    const controller = new PromptController('one-at-a-time', 'one-at-a-time');
+    let release!: () => void;
+    const active = controller.schedule({
+      intent: { kind: 'new' },
+      turnId: 'turn-alice',
+      principal: { subjectId: 'alice', roles: ['owner'] },
+      sessionKey: 'shared',
+      sessionId: 'shared#1',
+      userMessages: [createUserMessage('deployment plan')],
+      execute: async () => {
+        await new Promise<void>((resolve) => { release = resolve; });
+        return makeResult('done');
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(() => controller.schedule({
+      intent: { kind: 'steer', targetTurnId: 'turn-alice' },
+      principal: { subjectId: 'bob', roles: ['user'] },
+      sessionKey: 'shared',
+      sessionId: 'shared#1',
+      userMessages: [createUserMessage('run privileged tool')],
+      execute: async () => makeResult('unreachable'),
+    })).toThrow('product_policy authorization');
+
+    expect(() => controller.schedule({
+      intent: { kind: 'supersede' },
+      principal: { subjectId: 'bob', roles: ['user'] },
+      sessionKey: 'shared',
+      sessionId: 'shared#1',
+      userMessages: [createUserMessage('replace alice')],
+      execute: async () => makeResult('unreachable'),
+    })).toThrow('product_policy authorization');
+
+    release!();
+    await active;
+  });
+
   it('waitForIdle resolves after all turns complete', async () => {
     const controller = new PromptController('one-at-a-time', 'one-at-a-time');
     void controller.schedule({
+      intent: { kind: 'new' },
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('x')],

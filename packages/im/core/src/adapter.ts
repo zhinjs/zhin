@@ -436,6 +436,9 @@ export abstract class Adapter<
   }
 }
 export interface Adapters {}
+
+/** Per-adapter live Endpoint class map for HandlerContext.$endpoint() typing. */
+export interface AdapterEndpoints {}
 export namespace Adapter {
   export type Factory<R extends Adapter = Adapter> = {
     new (

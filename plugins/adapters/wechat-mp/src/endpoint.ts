@@ -3,7 +3,7 @@
  */
 import axios from 'axios';
 import type { EndpointFriend, EndpointInstance, EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -29,6 +29,7 @@ import {
   recordPassiveReplyText,
 } from './passive-reply.js';
 import { registerWeChatMpWebhookRoutes } from './webhook.js';
+import { receiveWeChatMpSideEvent } from './side-event-dispatch.js';
 
 /** token 失效类错误码：40001/40014 invalid access_token、42001 access_token expired。 */
 const TOKEN_INVALID_ERRCODES = new Set([40001, 40014, 42001]);
@@ -52,6 +53,7 @@ export type WeChatMpFetch = (
 export interface WeChatMpEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: ResolvedWeChatMpConfig;
   readonly fetch?: WeChatMpFetch;
@@ -184,6 +186,14 @@ export class WeChatMpEndpoint implements EndpointInstance {
   /** Test / internal: admit a parsed message when open (non-webhook path). */
   admit(msg: WeChatMessage): void {
     if (!this.#open) return;
+    if (receiveWeChatMpSideEvent(
+      this.#options.sideEvents,
+      this.#options.config.id,
+      msg,
+      this.#logger,
+    )) {
+      return;
+    }
     const conversation = wechatMpInboundConversation(String(this.#options.id), msg);
     void this.#options.gateway.receive({
       conversation,

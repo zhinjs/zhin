@@ -3,6 +3,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
+import type { SideEventGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   isKookWebhookChallenge,
@@ -15,6 +16,7 @@ import {
   type KookWebhookFrame,
   type ResolvedKookWebhookConfig,
 } from './protocol.js';
+import { receiveKookSideEvent } from './side-event-dispatch.js';
 
 const logger = getLogger('kook');
 
@@ -22,6 +24,7 @@ export interface KookWebhookHandler {
   readonly config: ResolvedKookWebhookConfig;
   readonly isOpen: boolean;
   readonly selfId?: string;
+  readonly sideEvents?: SideEventGateway;
   admit(msg: KookInboundMessage): void;
   checkAndRememberSn(sn: number): boolean;
 }
@@ -108,6 +111,9 @@ function handleKookWebhookEvent(
   event: KookWebhookEventData,
   handler: KookWebhookHandler,
 ): void {
+  if (receiveKookSideEvent(handler.sideEvents, handler.config.id, event, logger)) {
+    return;
+  }
   const msg = normalizeKookWebhookEvent(event, {
     ignore: handler.config.ignore,
     selfId: handler.selfId,

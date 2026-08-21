@@ -96,7 +96,17 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
 
 按 **Lifecycle 事件名** 注册监听器（无 `next()` 链）。目录路径用 `/` 作为 capability localName；省略 `event` 时把路径中的 `/` 映成 `.` 得到事件名（如 `handlers/notice/receive.ts` → `notice.receive`）。从 `@zhin.js/core/feature/handler` 导入时，`Plugin.Lifecycle` 已并入 `HandlerEventMap`，写 `event: 'message.receive'` 时参数类型可推断。
 
-依赖 `zhin.js` / `@zhin.js/core` 的 Root 会经由 `platformFeatures` 挂载 `@zhin.js/handler`，无需再单独声明或安装。当前 `ImRuntime` 在入站消息进入命令/中间件流水线**之前**会 `dispatch('message.receive', message)`；其它 Lifecycle 事件名可声明，但未必已由运行时接线。
+依赖 `zhin.js` / `@zhin.js/core` 的 Root 会经由 `platformFeatures` 挂载 `@zhin.js/handler`，无需再单独声明或安装。`ImRuntime` 会分发：
+
+- `message.receive`（消息入站，命令/中间件之前）
+- `notice.receive` / `request.receive` / `system.receive`（适配器经 `sideEventGatewayToken` 上报）
+
+Handler 的 `this` 为 `HandlerContext`：
+
+- `this.prompt`：交互式问答（与命令 `CommandPrompt` 同源；侧事件按场景通道合成）
+
+事件上的 `$endpoint` 是不可变 identity。Handler 不暴露可保存的 live Endpoint；发送、
+审批与交互必须走 generation-bound port，避免热切换后继续操作已退役资源。
 
 与 `middlewares/` 的分工：需要 `await next()` 的有序入/出站链用 middleware；只需在某事件上 fire-and-forget 处理用 handler。
 
@@ -108,7 +118,32 @@ export default defineHandler({
   // 可省略：文件路径已推导出 message.receive
   event: 'message.receive',
   async handle(message) {
-    // this 为 CapabilityContext；message 为入站 Message
+    await this.prompt?.text('继续？');
+  },
+});
+```
+
+```ts
+// handlers/request/receive.ts
+import { defineHandler } from 'zhin.js/handler';
+
+export default defineHandler({
+  event: 'request.receive',
+  async handle(req) {
+    if (await this.prompt?.confirm('同意该请求？')) await req.$approve();
+  },
+});
+```
+
+```ts
+// handlers/system/receive.ts — 登录扫码等
+import { defineHandler } from 'zhin.js/handler';
+
+export default defineHandler({
+  event: 'system.receive',
+  async handle(ev) {
+    if (ev.$sub_type !== 'qrcode') return;
+    await this.prompt?.text('扫码完成后回复 done');
   },
 });
 ```

@@ -1,4 +1,20 @@
 import { vi } from 'vitest';
+import { LoginAssist } from '@zhin.js/core';
+import type { SideEventGateway } from '@zhin.js/core/runtime';
+
+export function createIcqqTestPorts(): {
+  readonly sideEvents: SideEventGateway;
+  readonly loginAssist: LoginAssist;
+} {
+  return {
+    sideEvents: {
+      receiveNotice: vi.fn(async () => undefined),
+      receiveRequest: vi.fn(async () => undefined),
+      receiveSystem: vi.fn(async () => undefined),
+    },
+    loginAssist: new LoginAssist(null, { defaultTimeoutMs: 60_000 }),
+  };
+}
 
 /**
  * Mock @icqqjs/icqq module for testing IcqqEndpoint (which extends Client).
@@ -52,6 +68,9 @@ export class Client {
   login = vi.fn(async (_password?: string) => { this.emit('system.online'); });
   logout = vi.fn(async () => {});
   terminate = vi.fn();
+  submitSlider = vi.fn(async (_ticket?: string) => {});
+  sendSmsCode = vi.fn(async () => {});
+  submitSmsCode = vi.fn(async (_code?: string) => {});
 
   sendPrivateMsg = vi.fn(async () => ({ message_id: 'sent-1' }));
   sendGroupMsg = vi.fn(async () => ({ message_id: 'sent-1' }));

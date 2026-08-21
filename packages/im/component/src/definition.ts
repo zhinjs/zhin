@@ -17,7 +17,7 @@ export interface ComponentDefinition<
 }
 
 declare module '@zhin.js/plugin-runtime' {
-  interface PluginSetupContext<TConfig> {
+  interface PluginSetupContext<TConfig = unknown> {
     addComponent<TProps = unknown, TResult = unknown>(
       localName: string,
       definition: ComponentDefinition<TProps, TResult, TConfig>,

@@ -178,7 +178,7 @@ describe('HandlerIndex', () => {
     const snapshot = createSnapshot();
     const index = new HandlerIndex([createSlot('test/event', handler)], snapshot);
 
-    await index.dispatch('test.event', 'arg1', 'arg2');
+    await index.dispatch('test.event', ['arg1', 'arg2']);
     expect(called).toEqual([['arg1', 'arg2']]);
   });
 
@@ -231,6 +231,7 @@ describe('HandlerIndex', () => {
       event: 'notice.receive',
     }]);
   });
+
 });
 
 // ---------------------------------------------------------------------------

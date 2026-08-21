@@ -2,7 +2,7 @@
  * Convention entry: discover `adapters/dingtalk.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken } from '@zhin.js/core/runtime';
+import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import { DingTalkEndpoint } from '../src/endpoint.js';
 import {
@@ -31,6 +31,7 @@ export default defineAdapter<DingTalkAdapterConfig>({
     return new DingTalkEndpoint({
       id: context.id,
       gateway: context.use(messageGatewayToken),
+      sideEvents: context.use(sideEventGatewayToken),
       http: context.use(httpHostToken),
       config,
     });

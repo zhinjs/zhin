@@ -10,8 +10,6 @@
  *   endpoint.login.expired — 超时自动取消时触发，payload: PendingLoginTask
  */
 
-import type { Plugin } from '../plugin.js';
-
 // ============================================================================
 // 类型
 // ============================================================================
@@ -44,6 +42,8 @@ export interface PendingLoginTask {
 }
 
 export interface WaitForInputOptions {
+  /** Endpoint-instance owner. Only this owner may cancel the task during rollback/retirement. */
+  owner: object;
   /**
    * 超时毫秒。默认 {@link DEFAULT_LOGIN_ASSIST_TIMEOUT_MS}。
    * 传 `0` / `Infinity` / 负数表示不超时（仅测试或显式长驻场景）。
@@ -51,8 +51,19 @@ export interface WaitForInputOptions {
   timeoutMs?: number;
 }
 
+export type LoginAssistEventName =
+  | 'endpoint.login.pending'
+  | 'endpoint.login.resolved'
+  | 'endpoint.login.expired';
+
+/** Minimal bus — Plugin Runtime / classic Plugin / test EventEmitter all qualify. */
+export interface LoginAssistBus {
+  emit(name: LoginAssistEventName, task: PendingLoginTask): void;
+}
+
 interface PendingEntry {
   task: PendingLoginTask;
+  owner: object;
   resolve: (value: string | Record<string, unknown>) => void;
   reject: (err: Error) => void;
   timer?: ReturnType<typeof setTimeout>;
@@ -63,15 +74,35 @@ interface PendingEntry {
 // ============================================================================
 
 export class LoginAssist {
-  private readonly plugin: Plugin;
+  private readonly bus: LoginAssistBus | null;
   private readonly pending = new Map<string, PendingEntry>();
+  private readonly local = new Map<LoginAssistEventName, Set<(task: PendingLoginTask) => void>>();
   private idSeq = 0;
   /** 构造时默认超时；可被 waitForInput options 覆盖 */
   private readonly defaultTimeoutMs: number;
 
-  constructor(plugin: Plugin, options?: { defaultTimeoutMs?: number }) {
-    this.plugin = plugin;
+  constructor(bus?: LoginAssistBus | null, options?: { defaultTimeoutMs?: number }) {
+    this.bus = bus ?? null;
     this.defaultTimeoutMs = options?.defaultTimeoutMs ?? DEFAULT_LOGIN_ASSIST_TIMEOUT_MS;
+  }
+
+  /**
+   * Subscribe without requiring a Plugin EventEmitter.
+   * Returns unsubscribe.
+   */
+  subscribe(
+    name: LoginAssistEventName,
+    listener: (task: PendingLoginTask) => void,
+  ): () => void {
+    let set = this.local.get(name);
+    if (!set) {
+      set = new Set();
+      this.local.set(name, set);
+    }
+    set.add(listener);
+    return () => {
+      set!.delete(listener);
+    };
   }
 
   /**
@@ -82,8 +113,8 @@ export class LoginAssist {
     adapter: string,
     endpointKey: string,
     type: LoginAssistType,
-    payload: PendingLoginTaskPayload = {},
-    options?: WaitForInputOptions,
+    payload: PendingLoginTaskPayload,
+    options: WaitForInputOptions,
   ): Promise<string | Record<string, unknown>> {
     const id = `login-${Date.now()}-${++this.idSeq}`;
     const timeoutMs = resolveTimeoutMs(options?.timeoutMs, this.defaultTimeoutMs);
@@ -98,13 +129,13 @@ export class LoginAssist {
       ...(timeoutMs != null ? { expiresAt: createdAt + timeoutMs } : {}),
     };
     const promise = new Promise<string | Record<string, unknown>>((resolve, reject) => {
-      const entry: PendingEntry = { task, resolve, reject };
+      const entry: PendingEntry = { task, owner: options.owner, resolve, reject };
       if (timeoutMs != null) {
         entry.timer = setTimeout(() => {
           if (!this.pending.has(id)) return;
           this.pending.delete(id);
           try {
-            this.plugin.emit('endpoint.login.expired', task);
+            this.#notify('endpoint.login.expired', task);
           } catch {
             /* observer failure must not leave the producer hanging forever */
           }
@@ -114,7 +145,7 @@ export class LoginAssist {
         entry.timer.unref?.();
       }
       this.pending.set(id, entry);
-      this.plugin.emit('endpoint.login.pending', task);
+      this.#notify('endpoint.login.pending', task);
     });
     return promise;
   }
@@ -128,6 +159,7 @@ export class LoginAssist {
     this.pending.delete(id);
     if (entry.timer) clearTimeout(entry.timer);
     entry.resolve(value);
+    this.#notify('endpoint.login.resolved', entry.task);
     return true;
   }
 
@@ -140,7 +172,24 @@ export class LoginAssist {
     this.pending.delete(id);
     if (entry.timer) clearTimeout(entry.timer);
     entry.reject(new Error(reason));
+    this.#notify('endpoint.login.resolved', entry.task);
     return true;
+  }
+
+  /**
+   * Cancel pending tasks created by one exact Endpoint instance.
+   */
+  cancelOwned(owner: object, reason = 'superseded'): number {
+    let count = 0;
+    for (const [id, entry] of [...this.pending]) {
+      if (entry.owner !== owner) continue;
+      this.pending.delete(id);
+      if (entry.timer) clearTimeout(entry.timer);
+      entry.reject(new Error(reason));
+      this.#notify('endpoint.login.resolved', entry.task);
+      count += 1;
+    }
+    return count;
   }
 
   /**
@@ -150,12 +199,38 @@ export class LoginAssist {
     return [...this.pending.values()].map((e) => e.task);
   }
 
+  hasPending(adapter?: string, endpointKey?: string): boolean {
+    if (adapter == null) return this.pending.size > 0;
+    for (const entry of this.pending.values()) {
+      if (entry.task.adapter !== adapter) continue;
+      if (endpointKey != null && entry.task.endpointKey !== endpointKey) continue;
+      return true;
+    }
+    return false;
+  }
+
   dispose(): void {
     for (const [, entry] of this.pending) {
       if (entry.timer) clearTimeout(entry.timer);
       entry.reject(new Error('LoginAssist disposed'));
     }
     this.pending.clear();
+    this.local.clear();
+  }
+
+  #notify(name: LoginAssistEventName, task: PendingLoginTask): void {
+    try {
+      this.bus?.emit(name, task);
+    } catch {
+      /* bus observers must not break producer */
+    }
+    for (const listener of this.local.get(name) ?? []) {
+      try {
+        listener(task);
+      } catch {
+        /* same */
+      }
+    }
   }
 }
 

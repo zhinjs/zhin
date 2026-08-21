@@ -11,7 +11,7 @@ generation lifecycle。候选 Endpoint 可完成连接 readiness，但入站由 
 import { defineAdapter } from 'zhin.js/adapter';
 
 export default defineAdapter({
-  capabilities: ['inbound', 'outbound'],
+  capabilities: ['inbound'],
   create: (context) => ({ name: context.name }),
 });
 ```
@@ -32,7 +32,9 @@ instead of probing optional endpoint methods. The zero-dependency types live in
 
 Framework-facing outbound code carries a structured `ConversationRef`.
 `EndpointSendRequest` is `{ conversation, payload }`; platform adapters derive
-their native target from `conversation` at the endpoint boundary.
+their native target from `conversation` at the endpoint boundary and return one
+non-empty platform message id. IM Runtime alone wraps that id as a structured
+`MessageRef` / `DeliveryReceipt`; arbitrary endpoint result shapes are rejected.
 
 ## Endpoint Control Port
 
@@ -66,7 +68,7 @@ stop 主动断开不重连、心跳 PONG 看门狗、定时器集中清理、陈
 
 展开由 `expandEndpointConfigs`（`src/adapter-index.ts`）完成：endpoint record id 为
 `<slotId>~<name>`，合并顺序 `{...通用, ...项}`（项优先），`endpoints` 键不下传给适配器。
-record name 即 entry.name——Console 展示、`resolve`/`instance` 查找、inbox 落库都按它命中
+record name 即 entry.name——Console 展示、endpoint identity 解析、inbox 落库都按它命中
 唯一 endpoint（适配器实例的 live name 如 icqq uin 优先于它展示）。entry.name 不得含
 `~`/`\0`（会破坏 id 结构），重名/缺名的 entry 会被丢弃并 warn。
 多账号示例见 `plugins/adapters/icqq` / `plugins/adapters/qq` 的 README 与 schema。

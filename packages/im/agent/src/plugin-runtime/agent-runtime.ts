@@ -16,6 +16,7 @@ import { TurnToolRuntime, type TurnToolOutcome } from '../tool/turn-tool-runtime
 import type { ToolDescriptor } from '@zhin.js/tool';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import { runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
+import { TurnSupersededError } from '../turn/prompt-controller.js';
 
 abstract class SnapshotAttachedRuntime {
   protected snapshots?: SnapshotReader;
@@ -121,11 +122,18 @@ export interface AgentTurnExecutionContext {
   /** Executable descriptors bound to the same active generation lease. */
   readonly toolCapabilities: readonly ToolCapability[];
   readonly selection: AgentCapabilitySelection;
+  /** Signals that this ingress has reached the ordered PromptController boundary. */
+  readonly admit?: () => void;
 }
 
 /** Root-owned serialization authority shared by every Agent generation. */
 export class AgentTurnCoordinator {
   readonly #tails = new Map<string, Promise<void>>();
+  readonly #admissions = new Map<string, Promise<void>>();
+  readonly #active = new Map<string, Readonly<{
+    controller: AbortController;
+    principal: import('../turn/turn-ingress.js').TurnPrincipal;
+  }>>();
 
   async run<TResult>(
     sessionKey: string,
@@ -143,6 +151,59 @@ export class AgentTurnCoordinator {
     } finally {
       release();
       if (this.#tails.get(sessionKey) === tail) this.#tails.delete(sessionKey);
+    }
+  }
+
+  async runIntent<TResult>(
+    sessionKey: string,
+    signal: AbortSignal,
+    intent: import('../turn/turn-ingress.js').TurnIntent,
+    principal: import('../turn/turn-ingress.js').TurnPrincipal,
+    operation: (admit: () => void, signal: AbortSignal) => Promise<TResult>,
+  ): Promise<TResult> {
+    const previous = this.#tails.get(sessionKey) ?? Promise.resolve();
+    const previousAdmission = this.#admissions.get(sessionKey);
+    let admit!: () => void;
+    let complete!: () => void;
+    const admitted = new Promise<void>((resolve) => { admit = once(resolve); });
+    const completed = new Promise<void>((resolve) => { complete = once(resolve); });
+    const cumulative = Promise.all([previous.catch(() => undefined), completed]).then(() => undefined);
+    const controller = new AbortController();
+    const abortFromCaller = () => controller.abort(signal.reason);
+    if (signal.aborted) abortFromCaller();
+    else signal.addEventListener('abort', abortFromCaller, { once: true });
+    this.#tails.set(sessionKey, cumulative);
+    void cumulative.finally(() => {
+      if (this.#tails.get(sessionKey) === cumulative) this.#tails.delete(sessionKey);
+    });
+    this.#admissions.set(sessionKey, admitted);
+    try {
+      if (intent.kind === 'new') {
+        await waitForTurn(previous.catch(() => undefined), signal);
+        this.#active.set(sessionKey, { controller, principal });
+      } else if (intent.kind === 'supersede') {
+        await waitForAdmission(previousAdmission, signal);
+        const active = this.#active.get(sessionKey);
+        if (
+          active
+          && active.principal.subjectId !== principal.subjectId
+          && intent.authorizedBy !== 'product_policy'
+        ) {
+          throw new Error('supersede across principals requires product_policy authorization');
+        }
+        active?.controller.abort(new TurnSupersededError(sessionKey));
+        await waitForTurn(previous.catch(() => undefined), signal);
+        this.#active.set(sessionKey, { controller, principal });
+      } else {
+        await waitForAdmission(previousAdmission, signal);
+      }
+      return await operation(admit, controller.signal);
+    } finally {
+      signal.removeEventListener('abort', abortFromCaller);
+      admit();
+      complete();
+      if (this.#active.get(sessionKey)?.controller === controller) this.#active.delete(sessionKey);
+      if (this.#admissions.get(sessionKey) === admitted) this.#admissions.delete(sessionKey);
     }
   }
 }
@@ -210,8 +271,22 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     const snapshots = this.requireSnapshots();
     if (!snapshots.owns(lease)) throw new Error('AgentRuntime rejected a lease owned by another Root');
     if (!lease.active) throw new Error('AgentRuntime requires an active generation lease');
-    return this.options.coordinator.run(request.session.key, request.signal, () =>
-      this.#executeLeased(lease, owner, request, selection, observe));
+    const intent = request.intent;
+    if (!intent) throw new TypeError('AgentRuntime requires an explicit TurnIntent');
+    return this.options.coordinator.runIntent(
+      request.session.key,
+      request.signal,
+      intent,
+      request.principal,
+      (admit, signal) => this.#executeLeased(
+        lease,
+        owner,
+        { ...request, signal },
+        selection,
+        observe,
+        admit,
+      ),
+    );
   }
 
   async #executeLeased(
@@ -220,6 +295,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     request: TurnRequest,
     selection: AgentCapabilitySelection,
     observe?: TurnEventObserver,
+    admit: () => void = () => undefined,
   ): Promise<TurnOutcome> {
     let active = true;
     try {
@@ -247,6 +323,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
           tools,
           toolCapabilities: capabilities.tools,
           selection,
+          admit,
         }), observe),
       );
     } finally {
@@ -274,6 +351,20 @@ async function waitForTurn(previous: Promise<void>, signal: AbortSignal): Promis
   } finally {
     signal.removeEventListener('abort', onAbort);
   }
+}
+
+async function waitForAdmission(previous: Promise<void> | undefined, signal: AbortSignal): Promise<void> {
+  if (!previous) return;
+  await waitForTurn(previous.catch(() => undefined), signal);
+}
+
+function once(callback: () => void): () => void {
+  let called = false;
+  return () => {
+    if (called) return;
+    called = true;
+    callback();
+  };
 }
 
 export async function expandMcpTools(
@@ -328,7 +419,7 @@ function createIngressTurn(
       journal: new PersistentTurnJournal({
         sessionId: request.session.key,
         turnId: request.identity.turnId,
-      }, resolveJournalStore(snapshot)),
+      }, resolveJournalStore(snapshot), request.principal),
     },
   });
 }

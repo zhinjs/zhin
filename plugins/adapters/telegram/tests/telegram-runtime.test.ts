@@ -6,7 +6,7 @@ import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { telegramRuntimeStateToken } from '../src/telegram-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
+import { messageGatewayToken, sideEventGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
 import { TelegramEndpoint, type TelegramFetch } from '../src/endpoint.js';
 import { runTelegramPollLoop, type TelegramPollingHost } from '../src/polling.js';
 import { safeTokenEqual } from '../src/webhook.js';
@@ -657,6 +657,13 @@ describe('telegram plugin runtime adapter', () => {
       use: (token: unknown) => {
         if (token === httpHostToken) return http;
         if (token === messageGatewayToken) return gateway;
+        if (token === sideEventGatewayToken) {
+          return {
+            receiveNotice: vi.fn(async () => {}),
+            receiveRequest: vi.fn(async () => {}),
+            receiveSystem: vi.fn(async () => {}),
+          };
+        }
         if (token === telegramRuntimeStateToken) return createEndpointRuntimeState();
         throw new Error(`unexpected token: ${String(token)}`);
       },

@@ -1,13 +1,14 @@
 /**
  * Side Event 标准类型。
- * 运行时 `$type` 仅存命名空间（`notice` / `request`）；
+ * 运行时 `$type` 仅存命名空间（`notice` / `request` / `system`）；
  * 完整名由 `${$type}.${$scene_type}.${$sub_type}` 组合。
  */
 
-export type SideEventKind = 'notice' | 'request';
+export type SideEventKind = 'notice' | 'request' | 'system';
 
 export type NoticeKind = 'notice';
 export type RequestKind = 'request';
+export type SystemKind = 'system';
 
 /** 完整组合名（测试 / 文档 / 消费者匹配用） */
 export type ComposedNoticeName =
@@ -33,6 +34,18 @@ export type ComposedRequestName =
   | 'request.friend.add'
   | 'request.group.add'
   | 'request.group.invite'
+  | (string & {});
+
+export type ComposedSystemName =
+  | 'system.login.qrcode'
+  | 'system.login.slider'
+  | 'system.login.device'
+  | 'system.login.error'
+  | 'system.login.auth'
+  | 'system.offline'
+  | 'system.offline.network'
+  | 'system.offline.kickoff'
+  | 'system.online'
   | (string & {});
 
 export interface SideEventParts {

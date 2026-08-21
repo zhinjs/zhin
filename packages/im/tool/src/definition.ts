@@ -100,7 +100,7 @@ export interface AgentToolDefinition<
 }
 
 declare module '@zhin.js/plugin-runtime' {
-  interface PluginSetupContext<TConfig> {
+  interface PluginSetupContext<TConfig = unknown> {
     addTool<TInput = unknown, TResult = unknown>(
       localName: string,
       definition: AgentToolDefinition<TInput, TResult, TConfig>,

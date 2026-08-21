@@ -78,7 +78,9 @@ plugins:
 - `autoReconnect`：Client 断线后按配置自动重连（`stop()` 为主动断开，不触发重连）。
 - `outboundMedia: file | base64`：`file` 把 segment base64 落盘后发本地路径；`base64` 发 CQ `base64://` 内联。
 - **Console 社交/群管 RPC 已接线**：endpoint 把好友/群/群成员列表、请求审批和群管操作归一化为冻结的 `EndpointManagement`。Host 只消费该语义端口。
-- 好友/入群请求与通知写入 unified inbox（有 DatabaseHost 时），不再走已删除的 `notice.receive` / `request.receive` 事件。
+- 好友/入群请求与通知：经 `sideEventGatewayToken` 分发到 `handlers`（`notice.receive` / `request.receive`）；审批走 `Request.$approve` / `EndpointManagement.approveRequest`。Console `request.list` 优先读 `management.listRequests()`（`getSystemMsg`），不再写入 `unified_inbox_request/notice`。
+- `system.*`（登录扫码等）分发到 `system.receive`。
+- **登录辅助**：`system.login.qrcode|slider|device|auth` 经 `loginAssistToken`（`LoginAssist`）挂起待办；刷新后可用 Console `login.list` / `login.submit` 或终端 stdin 继续（对齐 icqq 官方 stdin 流程）。`system.online` / `login.error` 会清理该 endpoint 待办。
 
 ## License
 

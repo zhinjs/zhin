@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
+import { messageGatewayToken, sideEventGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import defineQqAdapter from '../adapters/qq.js';
 import {
@@ -259,6 +259,13 @@ describe('qq plugin runtime adapter', () => {
         if (token === messageGatewayToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
         }
+        if (token === sideEventGatewayToken) {
+          return {
+            receiveNotice: vi.fn(async () => {}),
+            receiveRequest: vi.fn(async () => {}),
+            receiveSystem: vi.fn(async () => {}),
+          };
+        }
         if (token === qqRuntimeStateToken) return state;
         throw new Error(`unexpected token: ${String(token)}`);
       },
@@ -496,6 +503,13 @@ describe('qq plugin runtime adapter', () => {
         if (token === httpHostToken) return http;
         if (token === messageGatewayToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
+        }
+        if (token === sideEventGatewayToken) {
+          return {
+            receiveNotice: vi.fn(async () => {}),
+            receiveRequest: vi.fn(async () => {}),
+            receiveSystem: vi.fn(async () => {}),
+          };
         }
         if (token === qqRuntimeStateToken) return createQqRuntimeState();
         throw new Error(`unexpected token: ${String(token)}`);

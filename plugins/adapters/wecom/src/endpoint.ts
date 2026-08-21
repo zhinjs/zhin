@@ -2,7 +2,7 @@
  * WecomEndpoint — lifecycle, outbound send, inbound admit, OpenAPI helpers for agent tools.
  */
 import type { EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -25,6 +25,7 @@ import {
   type WecomMessage,
 } from './protocol.js';
 import { registerWecomWebhookRoutes } from './webhook.js';
+import { receiveWecomSideEvent } from './side-event-dispatch.js';
 
 export type WecomFetch = (
   url: string,
@@ -43,6 +44,7 @@ export type WecomFetch = (
 export interface WecomEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: ResolvedWecomConfig;
   readonly fetch?: WecomFetch;
@@ -202,6 +204,15 @@ export class WecomEndpoint implements EndpointInstance {
   /** Test / internal: admit a parsed message when open (non-webhook path). */
   admit(msg: WecomMessage): void {
     if (!this.#open) return;
+    if (receiveWecomSideEvent(
+      this.#options.sideEvents,
+      String(this.#options.id),
+      this.#options.config.id,
+      msg,
+      this.#logger,
+    )) {
+      return;
+    }
     const chatType = resolveChatType(msg.FromUserName);
     const conversation = wecomInboundConversation(String(this.#options.id), msg);
     void this.#options.gateway.receive({

@@ -3,7 +3,7 @@
  * Implementation lives under `src/` (endpoint / webhook / oauth / protocol).
  */
 import { defineAdapter, type AdapterContext } from 'zhin.js/adapter';
-import { messageGatewayToken } from '@zhin.js/core/runtime';
+import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import {
   databaseHostToken,
@@ -36,6 +36,8 @@ export default defineAdapter<GithubAdapterConfig>({
   },
   create(context) {
     const config = resolveGithubConfig(context.config);
+    const gateway = context.use(messageGatewayToken);
+    const sideEvents = context.use(sideEventGatewayToken);
     const database = optionalDatabase(context);
     // 注册到插件运行时状态（github.endpoint list 的"运行中"数据源）
     context.use(githubRuntimeStateToken).endpoints.set(config.id, {
@@ -45,7 +47,8 @@ export default defineAdapter<GithubAdapterConfig>({
     if (config.webhookSecret) {
       return new GithubEndpoint({
         id: context.id,
-        gateway: context.use(messageGatewayToken),
+        gateway,
+        sideEvents,
         http: context.use(httpHostToken),
         database,
         config,
@@ -54,7 +57,8 @@ export default defineAdapter<GithubAdapterConfig>({
     // API-only: Issue/PR send + agent tools without webhook.
     return new GithubEndpoint({
       id: context.id,
-      gateway: context.use(messageGatewayToken),
+      gateway,
+      sideEvents,
       database,
       config,
     });

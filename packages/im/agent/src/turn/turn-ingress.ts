@@ -21,6 +21,16 @@ export interface TurnPrincipal {
   readonly roles: readonly string[];
 }
 
+export type TurnIntentKind = 'new' | 'steer' | 'follow_up' | 'supersede' | 'observe';
+
+/** Product-resolved semantics for how an ingress affects a shared active turn. */
+export interface TurnIntent {
+  readonly kind: TurnIntentKind;
+  readonly targetTurnId?: string;
+  /** Required when product policy allows one principal to control another principal's turn. */
+  readonly authorizedBy?: 'product_policy';
+}
+
 export interface TurnMedia {
   readonly kind: 'image' | 'audio' | 'video' | 'file';
   readonly source: Readonly<{
@@ -122,6 +132,7 @@ export interface TurnIngress {
   readonly identity: Readonly<TurnIdentity>;
   readonly origin: TurnOrigin;
   readonly principal: Readonly<TurnPrincipal>;
+  readonly intent: Readonly<TurnIntent>;
   readonly input: Readonly<TurnInput>;
   readonly session: Readonly<TurnSessionAddress>;
   readonly policy: Readonly<TurnPolicyContext>;
@@ -142,6 +153,7 @@ export interface TurnRequest {
   }>;
   readonly origin: TurnOrigin;
   readonly principal: Readonly<TurnPrincipal>;
+  readonly intent: TurnIntent;
   readonly input: Readonly<TurnInput>;
   readonly session: Readonly<TurnSessionAddress>;
   readonly policy: Readonly<TurnPolicyContext>;
@@ -178,11 +190,14 @@ export function createTurnIngress(input: TurnIngressInput): TurnIngress {
   }
 
   const execution: TurnExecutionProfile = input.execution ?? Object.freeze({ kind: 'interactive' });
+  const intent = input.intent;
+  validateTurnIntent(intent);
   validateExecutionAuthority(input, execution);
   return Object.freeze({
     identity: freezeData(input.identity),
     origin: freezeData(input.origin),
     principal: freezeData(input.principal),
+    intent: freezeData(intent),
     input: freezeData(input.input),
     session: freezeData(input.session),
     policy: freezeData(input.policy),
@@ -191,6 +206,19 @@ export function createTurnIngress(input: TurnIngressInput): TurnIngress {
     signal: input.signal,
     ports: Object.freeze({ ...input.ports }),
   });
+}
+
+function validateTurnIntent(intent: TurnIntent): void {
+  if (!intent || typeof intent !== 'object') {
+    throw new TypeError('TurnIngress intent is required');
+  }
+  if (!['new', 'steer', 'follow_up', 'supersede', 'observe'].includes(intent.kind)) {
+    throw new TypeError(`TurnIngress intent.kind is invalid: ${String(intent.kind)}`);
+  }
+  if (intent.targetTurnId !== undefined) requireText(intent.targetTurnId, 'intent.targetTurnId');
+  if (intent.authorizedBy !== undefined && intent.authorizedBy !== 'product_policy') {
+    throw new TypeError(`TurnIngress intent.authorizedBy is invalid: ${String(intent.authorizedBy)}`);
+  }
 }
 
 function validateExecutionAuthority(

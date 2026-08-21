@@ -61,11 +61,6 @@ export interface DeliveryFailure {
 export interface DeliveryReceipt {
   readonly status: DeliveryStatus;
   readonly message?: MessageRef;
-  /**
-   * Transitional identifier returned by an endpoint that has not yet adopted
-   * `MessageRef`. Framework code must not compose or parse this value.
-   */
-  readonly legacyMessageId?: string;
   readonly failure?: DeliveryFailure;
 }
 
@@ -84,86 +79,7 @@ export function isDeliveryReceipt(value: unknown): value is DeliveryReceipt {
   if (typeof receipt.status !== 'string' || !deliveryStatuses.has(receipt.status as DeliveryStatus)) {
     return false;
   }
-  if (receipt.legacyMessageId !== undefined && typeof receipt.legacyMessageId !== 'string') {
-    return false;
-  }
   return true;
-}
-
-export interface LegacyConversationTarget {
-  readonly kind: ConversationKind;
-  readonly id: string;
-}
-
-export interface LegacyMessageReference {
-  readonly target: string;
-  readonly messageId: string;
-}
-
-const legacyConversationKinds: Readonly<Record<string, ConversationKind>> = {
-  private: 'private',
-  direct: 'private',
-  c2c: 'private',
-  temp: 'private',
-  group: 'group',
-  channel: 'channel',
-};
-
-/**
- * Decodes the legacy `kind:id` representation at an adapter boundary.
- * Unknown prefixes and empty ids are rejected rather than silently guessed.
- */
-export function parseLegacyConversationTarget(target: string): LegacyConversationTarget | undefined {
-  const separator = target.indexOf(':');
-  if (separator <= 0 || separator === target.length - 1) return undefined;
-
-  const kind = legacyConversationKinds[target.slice(0, separator)];
-  const id = target.slice(separator + 1);
-  return kind ? { kind, id } : undefined;
-}
-
-/** Encodes a conversation only for a legacy adapter API that still needs it. */
-export function formatLegacyConversationTarget(target: LegacyConversationTarget): string {
-  return `${target.kind}:${target.id}`;
-}
-
-/** Encodes a structured conversation only when crossing a legacy adapter boundary. */
-export function formatLegacyConversationRef(conversation: ConversationRef): string {
-  return formatLegacyConversationTarget(conversation);
-}
-
-/**
- * Returns the native platform conversation id from a legacy `kind:id` target.
- * Unknown target formats stay opaque.
- */
-export function nativeConversationId(target: string): string {
-  return parseLegacyConversationTarget(target)?.id ?? target;
-}
-
-/**
- * Parses the historical `target:messageId` format from the final separator so
- * an already-prefixed target (`group:123:456`) is not corrupted.
- */
-export function parseLegacyMessageReference(reference: string): LegacyMessageReference | undefined {
-  const separator = reference.lastIndexOf(':');
-  if (separator <= 0 || separator === reference.length - 1) return undefined;
-  return {
-    target: reference.slice(0, separator),
-    messageId: reference.slice(separator + 1),
-  };
-}
-
-/** formatLegacyMessageRef 的内部实现；外部一律走 MessageRef 入参版。 */
-function formatLegacyMessageReference(reference: LegacyMessageReference): string {
-  return `${reference.target}:${reference.messageId}`;
-}
-
-/** Encodes a structured message only when crossing a legacy adapter boundary. */
-export function formatLegacyMessageRef(message: MessageRef): string {
-  return formatLegacyMessageReference({
-    target: formatLegacyConversationRef(message.conversation),
-    messageId: message.id,
-  });
 }
 
 /**

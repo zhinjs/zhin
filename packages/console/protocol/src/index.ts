@@ -3,6 +3,8 @@ export const SIDE_EVENT_PUSH = {
   REQUEST_RECEIVE: 'request.receive',
   MESSAGE_RECEIVE: 'message.receive',
   ENDPOINT_LIFECYCLE: 'endpoint.lifecycle',
+  LOGIN_PENDING: 'endpoint.login.pending',
+  LOGIN_EXPIRED: 'endpoint.login.expired',
 } as const;
 
 export const SIDE_EVENT_RPC = {
@@ -11,6 +13,12 @@ export const SIDE_EVENT_RPC = {
   REQUEST_REJECT: 'request.reject',
   REQUEST_CONSUMED: 'request.consumed',
   NOTICE_CONSUMED: 'notice.consumed',
+} as const;
+
+export const LOGIN_RPC = {
+  LIST: 'login.list',
+  SUBMIT: 'login.submit',
+  CANCEL: 'login.cancel',
 } as const;
 
 export const INBOX_RPC = {
@@ -39,6 +47,7 @@ export const ENDPOINT_MANAGEMENT_CAPABILITIES = [
   'listGroups',
   'listChannels',
   'listGroupMembers',
+  'listRequests',
   'approveRequest',
   'rejectRequest',
   'kickGroupMember',
@@ -79,6 +88,7 @@ export const SIDE_EVENT_NAMES = {
   ...SIDE_EVENT_RPC,
   ...INBOX_RPC,
   ...ENDPOINT_RPC,
+  ...LOGIN_RPC,
 } as const;
 
 const PUSH_TYPE_ALIASES: Readonly<Record<string, string>> = Object.freeze({
@@ -251,6 +261,7 @@ export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
   ENDPOINT_RPC.CHANNELS,
   ENDPOINT_RPC.GROUP_MEMBERS,
   SIDE_EVENT_RPC.REQUEST_LIST,
+  LOGIN_RPC.LIST,
   INBOX_RPC.MESSAGES,
   INBOX_RPC.REQUESTS,
   INBOX_RPC.NOTICES,
@@ -280,6 +291,8 @@ export const DEMO_RPC_WRITE_BLOCKLIST: ReadonlySet<string> = new Set([
   SIDE_EVENT_RPC.REQUEST_REJECT,
   SIDE_EVENT_RPC.REQUEST_CONSUMED,
   SIDE_EVENT_RPC.NOTICE_CONSUMED,
+  LOGIN_RPC.SUBMIT,
+  LOGIN_RPC.CANCEL,
   ENDPOINT_RPC.SEND_MESSAGE,
   ENDPOINT_RPC.GROUP_KICK,
   ENDPOINT_RPC.GROUP_MUTE,

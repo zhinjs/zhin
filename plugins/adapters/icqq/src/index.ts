@@ -15,7 +15,6 @@ export {
 export {
   IcqqEndpoint,
   type IcqqEndpointOptions,
-  type IcqqInboxHooks,
 } from './endpoint.js';
 
 export * from './types.js';

@@ -289,7 +289,7 @@ export interface CommandDefinition<
 }
 
 declare module '@zhin.js/plugin-runtime' {
-  interface PluginSetupContext<TConfig> {
+  interface PluginSetupContext<TConfig = unknown> {
     addCommand<TResult = unknown, TInput extends CommandMessage = CommandMessage>(
       localName: string,
       definition: CommandDefinition<TConfig, TResult, TInput>,

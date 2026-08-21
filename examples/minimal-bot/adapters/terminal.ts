@@ -23,6 +23,7 @@ export interface TerminalEndpointOptions {
 
 export class TerminalEndpoint implements EndpointInstance {
   readonly #options: TerminalEndpointOptions;
+  #messageSequence = 0;
   #readline?: ReadlineInterface;
   #promptTimer?: ReturnType<typeof setTimeout>;
   #open = false;
@@ -94,9 +95,10 @@ export class TerminalEndpoint implements EndpointInstance {
     this.#readline = undefined;
   }
 
-  send({ payload }: { readonly payload: unknown }): unknown {
+  send({ payload }: { readonly payload: unknown }): string {
     this.#options.output.write(`${formatPayload(payload)}\n`);
-    return payload;
+    this.#messageSequence += 1;
+    return `terminal-${this.#messageSequence}`;
   }
 
   #schedulePrompt(): void {

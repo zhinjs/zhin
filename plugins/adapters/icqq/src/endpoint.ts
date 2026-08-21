@@ -9,13 +9,16 @@ import type {
   EndpointControl,
   EndpointInstance,
   EndpointManagement,
+  EndpointPendingRequest,
   EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
+import { receiveOneBotLikeSideEvent, SystemEvent, type LoginAssist } from '@zhin.js/core';
 import type { MessageRef } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { registerIcqqAgentEndpoint } from './icqq-agent-deps.js';
+import { runIcqqLoginAssistStep } from './icqq-login-assist.js';
 import {
   InboundMessageDeduper,
   findIcqqNestedMessageSource,
@@ -28,9 +31,6 @@ import {
   type IcqqMessageEvent,
 } from './icqq-inbound.js';
 import {
-  buildIcqqInboxNoticeRow,
-  buildIcqqInboxRequestRow,
-  buildIcqqSystemRequestRow,
   isIcqqNoticePayload,
   isIcqqRequestPayload,
 } from './icqq-inbox.js';
@@ -52,17 +52,12 @@ import {
 } from './protocol.js';
 import type { SystemMessage as IcqqSystemMessage } from './types.js';
 
-export interface IcqqInboxHooks {
-  recordRequest(row: Record<string, unknown>): void | Promise<void>;
-  recordNotice(row: Record<string, unknown>): void | Promise<void>;
-  publish?(type: string, data: unknown): void;
-}
-
 export interface IcqqEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
   readonly config: ResolvedIcqqConfig;
-  readonly inbox?: IcqqInboxHooks;
+  readonly sideEvents: SideEventGateway;
+  readonly loginAssist: LoginAssist;
 }
 
 const BOUND_EVENTS = [
@@ -90,9 +85,11 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   readonly endpointName: string;
   readonly #guildCatalog = new IcqqGuildCatalog();
   readonly #inboundDeduper = new InboundMessageDeduper();
-  readonly #inboxDeduper = new InboundMessageDeduper();
+  readonly #sideEventDeduper = new InboundMessageDeduper();
+  readonly #loginAssistOwner = Object.freeze({});
   #open = false;
   #started = false;
+  #resolveStartOnline?: () => void;
   #heldInbound: IcqqInboundMessage[] = [];
   #unregisterAgent?: () => void;
 
@@ -114,6 +111,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     },
     listGroupMembers: async (groupId) =>
       Array.from((await this.getGroupMemberList(Number(groupId))).values()),
+    listRequests: () => this.#listPendingRequests(),
     approveRequest: (requestId, remark) => this.#approveRequest(requestId, remark),
     rejectRequest: (requestId, reason) => this.#rejectRequest(requestId, reason),
     kickGroupMember: async (groupId, userId) => {
@@ -186,17 +184,24 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     });
   }
 
-  async start(): Promise<void> {
+  async start(signal: AbortSignal): Promise<void> {
     if (this.#started) return;
+    signal.throwIfAborted();
     this.#started = true;
+    let resolveOnline!: () => void;
+    const onlineReady = new Promise<void>((resolve) => {
+      resolveOnline = resolve;
+    });
+    const onAbort = () => resolveOnline();
+    this.#resolveStartOnline = resolveOnline;
+    signal.addEventListener('abort', onAbort, { once: true });
     try {
-      const onlineReady = new Promise<void>((resolve) => {
-        this.on('system.online', () => resolve());
-      });
       this.#bindClientEvents();
-      await this.login(this.#options.config.password);
+      await raceAbort(Promise.resolve(this.login(this.#options.config.password)), signal);
       await onlineReady;
-      await this.#pullPendingSystemMessages();
+      signal.throwIfAborted();
+      await this.#pullPendingSystemMessages(signal);
+      signal.throwIfAborted();
       this.#unregisterAgent = registerIcqqAgentEndpoint(this.endpointName, this);
       this.#logger.info(
         `connected (direct) | friends: ${this.fl.size} | groups: ${this.gl.size}`,
@@ -205,6 +210,9 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       await this.stop();
       this.#logger.debug(`Failed to connect ICQQ client: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
       throw error;
+    } finally {
+      signal.removeEventListener('abort', onAbort);
+      if (this.#resolveStartOnline === resolveOnline) this.#resolveStartOnline = undefined;
     }
   }
 
@@ -220,6 +228,8 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
 
   async stop(): Promise<void> {
     this.#open = false;
+    this.#resolveStartOnline?.();
+    this.#options.loginAssist.cancelOwned(this.#loginAssistOwner, 'endpoint_stopped');
     this.#heldInbound.length = 0;
     this.#unregisterAgent?.();
     this.#unregisterAgent = undefined;
@@ -230,8 +240,8 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     try {
       this.terminate();
     } catch { /* ignore */ }
-    this.#inboundDeduper.clear();
-    this.#inboxDeduper.clear();
+      this.#inboundDeduper.clear();
+      this.#sideEventDeduper.clear();
     this.#guildCatalog.clear();
     this.#started = false;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
@@ -353,20 +363,49 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     this.on('message.private', (event) => safe('message.private', () => this.#handleMessageEvent('message.private', event)));
     this.on('message.group', (event) => safe('message.group', () => this.#handleMessageEvent('message.group', event)));
     this.on('message.guild', (event) => safe('message.guild', () => this.#handleGuildEvent(event)));
-    this.on('request.friend', (event) => safe('request.friend', () => this.#recordInboxRequest(serializeIcqqEvent(event))));
-    this.on('request.group', (event) => safe('request.group', () => this.#recordInboxRequest(serializeIcqqEvent(event))));
-    this.on('notice.friend', (event) => safe('notice.friend', () => this.#recordInboxNotice(serializeIcqqEvent(event))));
-    this.on('notice.group', (event) => safe('notice.group', () => this.#recordInboxNotice(serializeIcqqEvent(event))));
+    this.on('request.friend', (event) => safe('request.friend', () => this.#onRequestEvent(serializeIcqqEvent(event))));
+    this.on('request.group', (event) => safe('request.group', () => this.#onRequestEvent(serializeIcqqEvent(event))));
+    this.on('notice.friend', (event) => safe('notice.friend', () => this.#onNoticeEvent(serializeIcqqEvent(event))));
+    this.on('notice.group', (event) => safe('notice.group', () => this.#onNoticeEvent(serializeIcqqEvent(event))));
+    this.on('system.online', (event) => safe('system.online', () => {
+      this.#resolveStartOnline?.();
+      this.#options.loginAssist.cancelOwned(this.#loginAssistOwner, 'online');
+      this.#logSystemEvent('online', event);
+    }));
     this.on('system.offline', (event) => this.#logSystemEvent('offline', event));
     this.on('system.offline.network', (event) => this.#logSystemEvent('offline.network', event));
     this.on('system.offline.kickoff', (event) => this.#logSystemEvent('offline.kickoff', event));
-    this.on('system.login.qrcode', () => {
-      this.#logger.info('icqq 收到二维码登录事件，请按 icqq 默认流程扫码后继续登录');
+    this.on('system.login.qrcode', (event) => {
+      this.#logger.info('icqq 收到二维码登录事件，等待 LoginAssist / 终端确认后继续');
+      this.#handleLoginChallenge('qrcode', event);
     });
-    this.on('system.login.device', (event) => this.#logSystemEvent('login.device', event));
-    this.on('system.login.slider', (event) => this.#logSystemEvent('login.slider', event));
-    this.on('system.login.error', (event) => this.#logSystemEvent('login.error', event));
-    this.on('system.login.auth', (event) => this.#logSystemEvent('login.auth', event));
+    this.on('system.login.device', (event) => this.#handleLoginChallenge('device', event));
+    this.on('system.login.slider', (event) => this.#handleLoginChallenge('slider', event));
+    this.on('system.login.error', (event) => {
+      this.#options.loginAssist.cancelOwned(this.#loginAssistOwner, 'login_error');
+      this.#logSystemEvent('login.error', event);
+    });
+    this.on('system.login.auth', (event) => this.#handleLoginChallenge('auth', event));
+  }
+
+  #handleLoginChallenge(
+    step: 'qrcode' | 'slider' | 'device' | 'auth',
+    event: unknown,
+  ): void {
+    const payload = serializeIcqqEvent(event) ?? (event && typeof event === 'object'
+      ? event as Record<string, unknown>
+      : null);
+    this.#logSystemEvent(`login.${step}`, event);
+    void runIcqqLoginAssistStep({
+      assist: this.#options.loginAssist,
+      client: this,
+      adapter: 'icqq',
+      endpointKey: this.endpointName,
+      owner: this.#loginAssistOwner,
+      logger: this.#logger,
+      step,
+      event: payload ?? event,
+    });
   }
 
   #logSystemEvent(type: string, event: unknown): void {
@@ -376,6 +415,53 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       endpoint: this.endpointName,
       ...(payload ? { event: JSON.stringify(payload) } : {}),
     }));
+    this.#dispatchIcqqSystemSideEvent(type, payload);
+  }
+
+  #dispatchIcqqSideEvent(payload: Record<string, unknown>): void {
+    const sideEvents = this.#options.sideEvents;
+    const postType = String(payload.post_type ?? '');
+    const isRequest = postType === 'request' || postType.startsWith('request.');
+    const flag = payload.flag != null ? String(payload.flag) : '';
+    void receiveOneBotLikeSideEvent(sideEvents, {
+      adapter: 'icqq',
+      endpointKey: this.endpointName,
+      platform: 'icqq',
+      raw: payload,
+      ...(isRequest ? {
+        approve: (id, remark) => this.#approveRequest(flag || id, remark),
+        reject: (id, reason) => this.#rejectRequest(flag || id, reason),
+      } : {}),
+    }).catch((err) => {
+      this.#logger.warn(formatCompact({
+        op: 'icqq_side_event_failed',
+        endpoint: this.endpointName,
+        post_type: postType || undefined,
+        error: err instanceof Error ? err.message : String(err),
+      }));
+    });
+  }
+
+  #dispatchIcqqSystemSideEvent(type: string, payload: Record<string, unknown> | null): void {
+    const sideEvents = this.#options.sideEvents;
+    const { scene_type, sub_type } = parseIcqqSystemScene(type);
+    void sideEvents.receiveSystem(SystemEvent.from(payload ?? {}, {
+      $id: `system:${this.endpointName}:${type}:${Date.now()}`,
+      $adapter: 'icqq' as never,
+      $endpoint: this.endpointName,
+      $type: 'system',
+      $scene_id: this.endpointName,
+      $scene_type: scene_type,
+      $sub_type: sub_type,
+      $timestamp: Date.now(),
+    })).catch((err) => {
+      this.#logger.warn(formatCompact({
+        op: 'icqq_system_side_event_failed',
+        endpoint: this.endpointName,
+        type,
+        error: err instanceof Error ? err.message : String(err),
+      }));
+    });
   }
 
   #handleMessageEvent(eventName: 'message.private' | 'message.group', event: unknown): void {
@@ -484,61 +570,76 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     });
   }
 
-  #recordInboxRequest(payload: Record<string, unknown> | null): void {
+  #onRequestEvent(payload: Record<string, unknown> | null): void {
     if (!payload || !isIcqqRequestPayload(payload)) return;
-    const hooks = this.#options.inbox;
-    if (!hooks) return;
-    const row = buildIcqqInboxRequestRow(payload, this.#inboxBase());
-    if (!row) return;
-    if (!this.#inboxDeduper.shouldProcess(`request:${String(row.platform_request_id)}`)) return;
-    void hooks.recordRequest(row);
-    hooks.publish?.('endpoint:request', row);
+    const flag = payload.flag != null ? String(payload.flag) : (payload.seq != null ? String(payload.seq) : '');
+    if (flag && !this.#sideEventDeduper.shouldProcess(`request:${flag}`)) return;
+    this.#dispatchIcqqSideEvent(payload);
   }
 
-  #recordInboxNotice(payload: Record<string, unknown> | null): void {
+  #onNoticeEvent(payload: Record<string, unknown> | null): void {
     if (!payload || !isIcqqNoticePayload(payload)) return;
-    const hooks = this.#options.inbox;
-    if (!hooks) return;
-    const row = buildIcqqInboxNoticeRow(payload, this.#inboxBase());
-    if (!row) return;
-    if (!this.#inboxDeduper.shouldProcess(`notice:${String(row.platform_notice_id)}`)) return;
-    void hooks.recordNotice(row);
-    hooks.publish?.('endpoint:notice', row);
+    const key = [
+      payload.time,
+      payload.operator_id ?? payload.user_id,
+      payload.notice_type ?? payload.type,
+      payload.sub_type,
+    ].join('_');
+    if (!this.#sideEventDeduper.shouldProcess(`notice:${key}`)) return;
+    this.#dispatchIcqqSideEvent(payload);
   }
 
-  #inboxBase(): { adapter: string; endpointKey: string } {
-    const id = String(this.#options.id);
-    return { adapter: id.split('\0').pop() ?? id, endpointKey: this.endpointName };
+  async #listPendingRequests(): Promise<readonly EndpointPendingRequest[]> {
+    const messages = await this.getSystemMsg();
+    const rows: EndpointPendingRequest[] = [];
+    for (const raw of messages) {
+      const msg = raw as unknown as IcqqSystemMessage & { request_type?: string };
+      const kind = msg.request_type === 'friend' ? 'friend' : 'group';
+      const platformRequestId = (msg.flag && String(msg.flag).trim())
+        || (msg.seq != null ? String(msg.seq) : '');
+      if (!platformRequestId || msg.user_id == null) continue;
+      const createdAt = Number(msg.time);
+      rows.push(Object.freeze({
+        platform_request_id: platformRequestId,
+        type: kind,
+        scene_type: kind === 'group' ? 'group' : null,
+        scene_id: String(kind === 'group' ? (msg.group_id ?? msg.user_id) : msg.user_id),
+        sub_type: kind === 'group' ? (msg.type != null ? String(msg.type) : null) : null,
+        actor_id: String(msg.user_id),
+        actor_name: msg.nickname != null ? String(msg.nickname) : null,
+        comment: msg.comment != null ? String(msg.comment) : null,
+        created_at: Number.isFinite(createdAt) && createdAt > 0
+          ? (createdAt < 1e12 ? createdAt * 1000 : createdAt)
+          : Date.now(),
+      }));
+    }
+    return Object.freeze(rows);
   }
 
-  async #pullPendingSystemMessages(): Promise<void> {
-    const hooks = this.#options.inbox;
-    if (!hooks) return;
+  async #pullPendingSystemMessages(signal: AbortSignal): Promise<void> {
     try {
-      const messages = await this.getSystemMsg();
-      const friendRequests: IcqqSystemMessage[] = [];
-      const groupRequests: IcqqSystemMessage[] = [];
-      for (const msg of messages) {
-        if ((msg as { request_type?: string }).request_type === 'friend') {
-          friendRequests.push(msg as unknown as IcqqSystemMessage);
-        } else {
-          groupRequests.push(msg as unknown as IcqqSystemMessage);
-        }
-      }
-      const base = this.#inboxBase();
-      const rows = [
-        ...friendRequests.map((m) => buildIcqqSystemRequestRow(m, 'friend', base)),
-        ...groupRequests.map((m) => buildIcqqSystemRequestRow(m, 'group', base)),
-      ];
-      for (const row of rows) {
-        if (!row) continue;
-        if (!this.#inboxDeduper.shouldProcess(`request:${String(row.platform_request_id)}`)) continue;
-        void hooks.recordRequest(row);
-        hooks.publish?.('endpoint:request', row);
+      const messages = await raceAbort(Promise.resolve(this.getSystemMsg()), signal);
+      for (const raw of messages) {
+        signal.throwIfAborted();
+        const msg = raw as unknown as IcqqSystemMessage & { request_type?: string };
+        const kind = msg.request_type === 'friend' ? 'friend' : 'group';
+        const flag = msg.flag != null ? String(msg.flag) : (msg.seq != null ? String(msg.seq) : '');
+        if (!flag || !this.#sideEventDeduper.shouldProcess(`request:${flag}`)) continue;
+        this.#dispatchIcqqSideEvent({
+          post_type: 'request',
+          request_type: kind,
+          flag: msg.flag,
+          user_id: msg.user_id,
+          group_id: msg.group_id,
+          comment: msg.comment,
+          time: msg.time,
+          sub_type: msg.type,
+        });
       }
     } catch (error) {
+      if (signal.aborted) throw signal.reason ?? error;
       this.#logger.debug(formatCompact({
-        op: 'inbox_pull_system_msg',
+        op: 'side_event_pull_system_msg',
         endpoint: this.endpointName,
         error: error instanceof Error ? error.message : String(error),
       }));
@@ -575,6 +676,19 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     } else {
       await this.setGroupAddRequest(target.flag, false, reason);
     }
+  }
+}
+
+async function raceAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted();
+  let rejectAbort!: (reason: unknown) => void;
+  const aborted = new Promise<never>((_resolve, reject) => { rejectAbort = reject; });
+  const onAbort = () => rejectAbort(signal.reason ?? new Error('ICQQ operation aborted'));
+  signal.addEventListener('abort', onAbort, { once: true });
+  try {
+    return await Promise.race([operation, aborted]);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
   }
 }
 
@@ -651,10 +765,6 @@ function buildIcqqQuoteMetadata(
   return metadata;
 }
 
-const INBOUND_HOLD_LIMIT = 32;
-
-const ICQQ_SERIALIZE_SKIP = ['group', 'member', 'friend', 'discuss', 'client'] as const;
-
 function serializeIcqqEvent(event: unknown): Record<string, unknown> | null {
   if (!event || typeof event !== 'object') return null;
   const nativeToJSON = (event as { toJSON?: (keys: string[]) => unknown }).toJSON;
@@ -675,3 +785,23 @@ function serializeIcqqEvent(event: unknown): Record<string, unknown> | null {
   }
   return Object.keys(out).length > 0 ? out : null;
 }
+
+function parseIcqqSystemScene(type: string): { scene_type: string; sub_type: string } {
+  if (type.startsWith('login.')) {
+    return { scene_type: 'login', sub_type: type.slice('login.'.length) || 'unknown' };
+  }
+  if (type.startsWith('offline.')) {
+    return { scene_type: 'offline', sub_type: type.slice('offline.'.length) || 'unknown' };
+  }
+  if (type === 'online') {
+    return { scene_type: 'online', sub_type: 'online' };
+  }
+  if (type === 'offline') {
+    return { scene_type: 'offline', sub_type: 'offline' };
+  }
+  return { scene_type: 'system', sub_type: type };
+}
+
+const INBOUND_HOLD_LIMIT = 32;
+
+const ICQQ_SERIALIZE_SKIP = ['group', 'member', 'friend', 'discuss', 'client'] as const;

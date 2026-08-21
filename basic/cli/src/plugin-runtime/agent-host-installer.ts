@@ -67,6 +67,7 @@ import {
   type ApprovalRequestInput,
   type TurnRequestPorts,
   type TurnRequest,
+  type TurnIntent,
   type TurnOutcome,
   type TurnAccessContext,
   type DeliveryOutcome,
@@ -517,7 +518,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           op: 'replychain_message_reply',
           status: receipt.status,
           code: receipt.failure?.code,
-          messageId: receipt.message?.id ?? receipt.legacyMessageId,
+          messageId: receipt.message?.id,
         }));
         if (receipt.status !== 'sent') return receipt;
         await recordRuntimeTranscript(zhinAgent, turnAccess, {
@@ -613,6 +614,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               signal,
               workspaceRoot: options.projectRoot,
               network: interactiveNetworkPolicy(service.getAgentConfig()),
+              intent: resolveRuntimeTurnIntent(message),
               ports: {
                 approval: options.approvalPort ?? createRuntimeApprovalPort({
                   isMaster: senderRoles.isMaster,
@@ -894,6 +896,7 @@ function createRuntimeScheduleTurnPort(
       const request: TurnRequest = {
         identity: { traceId: input.executionId, turnId: input.executionId },
         origin: { kind: 'schedule', jobId: input.jobId },
+        intent: { kind: 'new' },
         principal: {
           subjectId: creator?.userId ?? 'schedule',
           ...(creator?.name ? { displayName: creator.name } : {}),
@@ -1194,6 +1197,7 @@ export function createRuntimeTurnRequest(
     signal: AbortSignal;
     workspaceRoot: string;
     network?: TurnRequest['policy']['network'];
+    intent: TurnIntent;
     ports: TurnRequestPorts;
   }>,
 ): TurnRequest {
@@ -1221,6 +1225,7 @@ export function createRuntimeTurnRequest(
     identity: Object.freeze({ traceId: input.traceId, turnId: input.turnId }),
     origin,
     principal: access.principal,
+    intent: Object.freeze({ ...input.intent }),
     input: Object.freeze({
       text,
       ...(media.length > 0 ? { media: Object.freeze(media) } : {}),
@@ -1243,6 +1248,36 @@ export function createRuntimeTurnRequest(
     }),
     signal: input.signal,
     ports: Object.freeze({ ...input.ports }),
+  });
+}
+
+/**
+ * Trusted adapter metadata may select an active-turn coordination intent.
+ * Unknown/malformed values fail closed instead of silently becoming supersede.
+ */
+function resolveRuntimeTurnIntent(message: Message): TurnIntent {
+  const raw = message.metadata?.turnIntent;
+  if (raw === undefined) return Object.freeze({ kind: 'new' });
+  if (!raw || typeof raw !== 'object') {
+    throw new TypeError('Runtime turnIntent metadata must be an object');
+  }
+  const record = raw as Record<string, unknown>;
+  const kind = record.kind;
+  if (!['new', 'steer', 'follow_up', 'supersede', 'observe'].includes(String(kind))) {
+    throw new TypeError(`Runtime turnIntent kind is invalid: ${String(kind)}`);
+  }
+  const targetTurnId = record.targetTurnId;
+  if (targetTurnId !== undefined && (typeof targetTurnId !== 'string' || !targetTurnId.trim())) {
+    throw new TypeError('Runtime turnIntent targetTurnId must be a non-empty string');
+  }
+  const authorizedBy = record.authorizedBy;
+  if (authorizedBy !== undefined && authorizedBy !== 'product_policy') {
+    throw new TypeError(`Runtime turnIntent authorizedBy is invalid: ${String(authorizedBy)}`);
+  }
+  return Object.freeze({
+    kind: kind as TurnIntent['kind'],
+    ...(targetTurnId ? { targetTurnId } : {}),
+    ...(authorizedBy ? { authorizedBy } : {}),
   });
 }
 
@@ -1334,8 +1369,8 @@ export function deliveryOutcomeFromReceipt(
     case 'sent':
       return {
         status: 'sent' as const,
-        ...(receipt.message?.id || receipt.legacyMessageId
-          ? { messageId: receipt.message?.id ?? receipt.legacyMessageId }
+        ...(receipt.message?.id
+          ? { messageId: receipt.message.id }
           : {}),
       };
     case 'suppressed':

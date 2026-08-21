@@ -6,9 +6,14 @@ export {
   isHandlerIndex,
   handlerFeatureId,
   handlerFeature,
+  handlerEventFromLocalName,
+  resolveHandlerEvent,
   type HandlerEventMap,
   type HandlerDefinition,
   type HandlerDescriptor,
+  type HandlerContext,
+  type HandlerPrompt,
+  type HandlerDispatchOptions,
 } from '@zhin.js/handler';
 
 import type { Plugin } from '../plugin.js';

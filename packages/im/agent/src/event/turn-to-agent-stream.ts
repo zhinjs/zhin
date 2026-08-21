@@ -121,6 +121,7 @@ function mapTurnEvent(
         },
         terminalEvent('completed', AgentStreamEventType.TURN_COMPLETED, {
           usage: event.usage,
+          ...(event.control ? { control: event.control } : {}),
         }, ctx),
       ];
     }

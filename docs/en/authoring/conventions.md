@@ -96,7 +96,17 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
 
 Register listeners by **Lifecycle event name** (no `next()` chain). Directory paths use `/` as the capability localName; when `event` is omitted, `/` maps to `.` for the event name (e.g. `handlers/notice/receive.ts` → `notice.receive`). Importing from `@zhin.js/core/feature/handler` merges `Plugin.Lifecycle` into `HandlerEventMap`, so `event: 'message.receive'` gets typed arguments.
 
-Plugins that depend on `zhin.js` / `@zhin.js/core` get `@zhin.js/handler` via `platformFeatures` — no extra declaration or install needed. Today `ImRuntime` calls `dispatch('message.receive', message)` **before** the command/middleware pipeline; other Lifecycle event names may be declared but are not necessarily wired yet.
+Plugins that depend on `zhin.js` / `@zhin.js/core` get `@zhin.js/handler` via `platformFeatures` — no extra declaration or install needed. `ImRuntime` dispatches:
+
+- `message.receive` (before command/middleware)
+- `notice.receive` / `request.receive` / `system.receive` (via `sideEventGatewayToken`)
+
+Handler `this` is `HandlerContext`:
+
+- `this.prompt` — interactive Q&A (same machinery as command `CommandPrompt`)
+
+The event `$endpoint` field is immutable identity. Handlers never receive an escapable live
+Endpoint; delivery, approval, and interaction use generation-bound ports.
 
 vs `middlewares/`: use middleware for ordered inbound/outbound chains with `await next()`; use handlers for fire-and-forget work on a named event.
 
@@ -105,10 +115,21 @@ vs `middlewares/`: use middleware for ordered inbound/outbound chains with `awai
 import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
-  // optional: path already derives message.receive
   event: 'message.receive',
   async handle(message) {
-    // `this` is CapabilityContext; message is the inbound Message
+    await this.prompt?.text('Continue?');
+  },
+});
+```
+
+```ts
+// handlers/request/receive.ts
+import { defineHandler } from 'zhin.js/handler';
+
+export default defineHandler({
+  event: 'request.receive',
+  async handle(req) {
+    if (await this.prompt?.confirm('Approve?')) await req.$approve();
   },
 });
 ```

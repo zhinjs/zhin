@@ -23,6 +23,19 @@ export interface EndpointChannel {
   readonly parent?: EndpointChannelParent;
 }
 
+/** Pending friend/group request for Console / Host listing (live, not inbox DB). */
+export interface EndpointPendingRequest {
+  readonly platform_request_id: string;
+  readonly type: string;
+  readonly scene_type?: string | null;
+  readonly scene_id: string;
+  readonly sub_type?: string | null;
+  readonly actor_id: string;
+  readonly actor_name?: string | null;
+  readonly comment?: string | null;
+  readonly created_at: number;
+}
+
 /**
  * Optional, platform-neutral management surface exposed by an Endpoint.
  *
@@ -35,6 +48,8 @@ export interface EndpointManagement {
   listGroups?(): Promise<readonly EndpointGroup[]>;
   listChannels?(): Promise<readonly EndpointChannel[]>;
   listGroupMembers?(groupId: string): Promise<readonly unknown[]>;
+  /** Live pending friend/group requests (preferred over unified_inbox_request). */
+  listRequests?(): Promise<readonly EndpointPendingRequest[]>;
   approveRequest?(requestId: string, remark?: string): Promise<void>;
   rejectRequest?(requestId: string, reason?: string): Promise<void>;
   kickGroupMember?(groupId: string, userId: string): Promise<void>;
@@ -57,6 +72,7 @@ export const endpointManagementCapabilityIds = [
   'listGroups',
   'listChannels',
   'listGroupMembers',
+  'listRequests',
   'approveRequest',
   'rejectRequest',
   'kickGroupMember',

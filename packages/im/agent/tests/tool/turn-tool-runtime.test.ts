@@ -321,6 +321,7 @@ function fixture(options: {
 } = {}) {
   const events: TurnEvent[] = [];
   const turn = createTurnIngress({
+    intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn' },
     origin: { kind: 'http', sessionId: 'http-session' },
     principal: { subjectId: 'user', roles: options.roles ?? ['user'] },

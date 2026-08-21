@@ -193,6 +193,7 @@ describe('dispatchExtendedConsoleRpc', () => {
       expect(result).toEqual({
         data: {
           inboxEnabled: true,
+          source: 'inbox',
           requests: [
             {
               id: 1,
@@ -218,6 +219,78 @@ describe('dispatchExtendedConsoleRpc', () => {
           ],
         },
       });
+    });
+
+    it('endpoint:requests prefers management.listRequests when available', async () => {
+      const listRequests = vi.fn().mockResolvedValue([
+        {
+          platform_request_id: 'live-1',
+          type: 'friend',
+          scene_id: '20002',
+          actor_id: '20002',
+          actor_name: '李四',
+          comment: 'hi',
+          created_at: 2000,
+        },
+      ]);
+      const ctx = makeCtx({
+        databaseHost: makeInboxDb({ unified_inbox_request: requestRows }),
+        withEndpointManagement: async (_adapter, _endpointKey, run) => run({ listRequests }),
+      });
+      const result = await dispatchExtendedConsoleRpc(
+        'endpoint:requests',
+        { $adapter: 'icqq', $endpoint: '1234' },
+        ctx,
+      );
+      expect(listRequests).toHaveBeenCalled();
+      expect(result).toEqual({
+        data: {
+          inboxEnabled: false,
+          source: 'endpoint',
+          requests: [
+            expect.objectContaining({
+              platform_request_id: 'live-1',
+              platformRequestId: 'live-1',
+              type: 'friend',
+              sender_id: '20002',
+              sender_name: '李四',
+              comment: 'hi',
+              created_at: 2000,
+              resolved: 0,
+            }),
+          ],
+        },
+      });
+    });
+
+    it('login.list / login.submit round-trip via LoginAssist', async () => {
+      const tasks = [
+        {
+          id: 'login-1',
+          adapter: 'icqq',
+          endpointKey: '10001',
+          type: 'qrcode',
+          payload: { message: 'scan' },
+          createdAt: 1,
+        },
+      ];
+      const submit = vi.fn().mockReturnValue(true);
+      const ctx = makeCtx({
+        loginAssist: {
+          listPending: () => tasks,
+          submit,
+          cancel: vi.fn().mockReturnValue(true),
+        },
+      });
+      await expect(dispatchExtendedConsoleRpc('login.list', {}, ctx)).resolves.toEqual({
+        data: { tasks, count: 1 },
+      });
+      await expect(dispatchExtendedConsoleRpc(
+        'login.submit',
+        { $id: 'login-1', $value: 'ok' },
+        ctx,
+      )).resolves.toEqual({ data: { success: true } });
+      expect(submit).toHaveBeenCalledWith('login-1', 'ok');
     });
 
     it('endpoint:inboxRequests pages newest first with limit/offset', async () => {

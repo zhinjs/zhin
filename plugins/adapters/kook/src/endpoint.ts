@@ -9,7 +9,7 @@ import type {
   EndpointManagement,
   EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -32,10 +32,12 @@ import {
   type CreateKookClient,
   type KookClientTransport,
 } from './ws.js';
+import { receiveKookSideEvent } from './side-event-dispatch.js';
 
 export interface KookEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly config: ResolvedKookWebsocketConfig;
   readonly createClient?: CreateKookClient;
 }
@@ -191,6 +193,10 @@ export class KookWebsocketEndpoint implements EndpointInstance {
       const msg = normalizeKookMessage(raw);
       if (msg) this.admit(msg);
     });
+    const receiver = (client as { receiver?: { on(event: string, listener: (...args: unknown[]) => void): void } }).receiver;
+    receiver?.on('event', (raw) => {
+      receiveKookSideEvent(this.#options.sideEvents, this.#options.config.id, raw, this.#logger);
+    });
   }
 
   #requireClient(): KookClientTransport {
@@ -202,6 +208,7 @@ export class KookWebsocketEndpoint implements EndpointInstance {
 export interface KookWebhookEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: ResolvedKookWebhookConfig;
   readonly createClient?: CreateKookClient;

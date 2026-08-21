@@ -3,7 +3,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import type { EndpointControl, EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
   type ConversationRef,
@@ -61,6 +61,7 @@ export type TelegramFetch = (
 export interface TelegramEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly config: ResolvedTelegramConfig;
   readonly http?: HttpHost;
   readonly fetch?: TelegramFetch;

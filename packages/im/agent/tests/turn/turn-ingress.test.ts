@@ -24,6 +24,7 @@ function input(overrides: Partial<TurnIngressInput> = {}): TurnIngressInput {
       sceneId: 'group-42',
       messageId: 'message-9',
     },
+    intent: { kind: 'new' },
     principal: {
       subjectId: 'user-1',
       displayName: 'Ada',
@@ -51,6 +52,7 @@ describe('TurnIngress', () => {
     expect(turn).toMatchObject({
       origin: { kind: 'im', platform: 'telegram', sceneId: 'group-42' },
       principal: { subjectId: 'user-1', roles: ['trusted'] },
+      intent: { kind: 'new' },
       session: { key: 'im:telegram:work-bot:group:group-42' },
       input: { text: 'summarize this' },
     });
@@ -64,6 +66,21 @@ describe('TurnIngress', () => {
     expect(Object.isFrozen(turn.capabilities.tools)).toBe(true);
     expect('$adapter' in turn).toBe(false);
     expect('$reply' in turn).toBe(false);
+  });
+
+  it('accepts an explicit immutable overlap intent targeting an active turn', () => {
+    const turn = createTurnIngress(input({
+      intent: { kind: 'steer', targetTurnId: 'turn-active' },
+    }));
+
+    expect(turn.intent).toEqual({ kind: 'steer', targetTurnId: 'turn-active' });
+    expect(Object.isFrozen(turn.intent)).toBe(true);
+  });
+
+  it('fails closed when product intent resolution is omitted', () => {
+    const source = input();
+    expect(() => createTurnIngress({ ...source, intent: undefined } as never))
+      .toThrow('TurnIngress intent is required');
   });
 
   it('fails closed when identity or session ownership is missing', () => {

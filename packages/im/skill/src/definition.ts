@@ -12,7 +12,7 @@ export interface SkillDefinition {
 declare module '@zhin.js/plugin-runtime' {
   // Type parameter name must match the base PluginSetupContext declaration (TS2428).
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  interface PluginSetupContext<TConfig> {
+  interface PluginSetupContext<TConfig = unknown> {
     addSkill(localName: string, markdown: string): void;
   }
 }

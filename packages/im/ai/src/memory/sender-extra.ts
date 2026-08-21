@@ -1,4 +1,9 @@
-import { type AgentMessage, type UserMessage, createUserMessage } from '../llm/types/agent-message.js';
+import {
+  type AgentMessage,
+  type ConversationActor,
+  type UserMessage,
+  createUserMessage,
+} from '../llm/types/agent-message.js';
 export type SenderScope = 'group' | 'channel' | 'private';
 
 /** 与 core `QUOTED_MESSAGE_CONTEXT_MARKER` / `CURRENT_USER_MESSAGE_MARKER` 对齐 */
@@ -114,7 +119,27 @@ function cloneUserMessageWithText(message: UserMessage, text: string): UserMessa
     text,
     message.media,
     message.timestamp,
+    message.actor,
   );
+}
+
+function actorFromSender(sender: AgentMessageSenderExtra): ConversationActor {
+  return {
+    subjectId: sender.id,
+    ...(sender.name ? { displayName: sender.name } : {}),
+    roles: [...sender.roles],
+    scope: sender.scope,
+  };
+}
+
+function senderFromActor(actor: ConversationActor): AgentMessageSenderExtra | undefined {
+  if (actor.scope !== 'group' && actor.scope !== 'channel') return undefined;
+  return {
+    id: actor.subjectId,
+    ...(actor.displayName ? { name: actor.displayName } : {}),
+    roles: [...(actor.roles ?? ['user'])],
+    scope: actor.scope,
+  };
 }
 
 /** 发给 LLM：按 extra 拼接引用块 + sender 前缀（不修改 DB payload） */
@@ -122,22 +147,26 @@ export function renderUserMessageForLlm(
   message: UserMessage,
   extra?: AgentMessageExtra | null,
 ): UserMessage {
-  if (!extra?.quote?.block && !extra?.sender) return message;
+  // The first-class actor is authoritative; `extra.sender` is the legacy
+  // compatibility source for rows written before actor persistence existed.
+  const sender = (message.actor ? senderFromActor(message.actor) : undefined) ?? extra?.sender;
+  const quote = extra?.quote;
+  if (!quote?.block && !sender) return message;
   let text = userMessagePlainText(message);
   const stripped = stripSenderPrefixFromText(text);
   text = stripped.body;
   const quoteSplit = splitQuoteFromUserText(text);
   text = quoteSplit.body;
 
-  if (extra.quote?.block?.trim()) {
-    text = `${extra.quote.block.trim()}\n\n${CURRENT_USER_MESSAGE_MARKER}\n${text}`;
+  if (quote?.block?.trim()) {
+    text = `${quote.block.trim()}\n\n${CURRENT_USER_MESSAGE_MARKER}\n${text}`;
   } else if (quoteSplit.quote?.block) {
     text = `${quoteSplit.quote.block}\n\n${CURRENT_USER_MESSAGE_MARKER}\n${text}`;
   }
 
   let out = cloneUserMessageWithText(message, text);
-  if (extra.sender) {
-    out = applySenderExtraToUserMessage(out, { sender: extra.sender });
+  if (sender) {
+    out = applySenderExtraToUserMessage(out, { sender });
   }
   return out;
 }
@@ -151,7 +180,10 @@ export function applySenderExtraToUserMessage(
   const prefix = buildSenderPrefix(extra.sender);
   if (!prefix) return message;
   const { body } = stripSenderPrefixFromText(userMessagePlainText(message));
-  return cloneUserMessageWithText(message, `${prefix} ${body}`);
+  return {
+    ...cloneUserMessageWithText(message, `${prefix} ${body}`),
+    actor: message.actor ?? actorFromSender(extra.sender),
+  };
 }
 
 /** 从 ai_messages 等表的 sender_id / sender_roles 列构建 extra */

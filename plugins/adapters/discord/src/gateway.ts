@@ -287,6 +287,8 @@ function decodeBase64(value: string): Buffer {
 export interface DiscordGatewayConnectHandlers {
   onMessage(msg: DiscordInboundMessage): void;
   onButton(interaction: DiscordButtonInbound): void;
+  onGuildMemberAdd?(member: { guildId: string; userId: string; userName?: string }): void;
+  onGuildMemberRemove?(member: { guildId: string; userId: string; userName?: string }): void;
 }
 
 export async function connectDiscordGatewayClient(
@@ -328,6 +330,36 @@ export async function connectDiscordGatewayClient(
         userId: interaction.user.id,
         userName: interaction.user.username || interaction.user.displayName || interaction.user.id,
         sourceMessageId: interaction.message?.id,
+      });
+    });
+
+    client.on('guildMemberAdd', (raw) => {
+      const member = raw as {
+        guild?: { id?: string };
+        user?: { id?: string; username?: string; displayName?: string };
+      };
+      const guildId = member.guild?.id;
+      const userId = member.user?.id;
+      if (!guildId || !userId) return;
+      handlers.onGuildMemberAdd?.({
+        guildId,
+        userId,
+        userName: member.user?.username || member.user?.displayName,
+      });
+    });
+
+    client.on('guildMemberRemove', (raw) => {
+      const member = raw as {
+        guild?: { id?: string };
+        user?: { id?: string; username?: string; displayName?: string };
+      };
+      const guildId = member.guild?.id;
+      const userId = member.user?.id;
+      if (!guildId || !userId) return;
+      handlers.onGuildMemberRemove?.({
+        guildId,
+        userId,
+        userName: member.user?.username || member.user?.displayName,
       });
     });
 

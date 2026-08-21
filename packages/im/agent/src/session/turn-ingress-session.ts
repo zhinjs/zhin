@@ -37,7 +37,12 @@ export function resolveIngressUserMessage(
   });
   const inlinedContext = layered !== content;
   const llmMessage = renderUserMessageForLlm(
-    createUserMessage(layered),
+    createUserMessage(layered, undefined, Date.now(), {
+      subjectId: turn.principal.subjectId,
+      ...(turn.principal.displayName ? { displayName: turn.principal.displayName } : {}),
+      roles: [...turn.principal.roles],
+      ...(turn.origin.kind === 'im' ? { scope: turn.origin.scope } : {}),
+    }),
     inlinedContext
       ? (sender ? { sender } : undefined)
       : (hasExtra ? extra : undefined),

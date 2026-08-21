@@ -2,7 +2,7 @@
  * Convention entry: discover `adapters/weixin-ilink.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken } from '@zhin.js/core/runtime';
+import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { WeixinIlinkEndpoint } from '../src/endpoint.js';
 import {
   resolveWeixinIlinkConfig,
@@ -38,6 +38,7 @@ export default defineAdapter<WeixinIlinkAdapterConfig>({
     return new WeixinIlinkEndpoint({
       id: context.id,
       gateway: context.use(messageGatewayToken),
+      sideEvents: context.use(sideEventGatewayToken),
       config,
     });
   },

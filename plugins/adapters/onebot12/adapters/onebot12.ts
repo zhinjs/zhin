@@ -2,7 +2,7 @@
  * Convention entry: discover `adapters/onebot12.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken } from '@zhin.js/core/runtime';
+import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import { OneBot12WebhookEndpoint } from '../src/webhook.js';
 import { OneBot12WsEndpoint } from '../src/ws-endpoint.js';
@@ -21,6 +21,12 @@ export { OneBot12WssEndpoint } from '../src/wss-endpoint.js';
 export type { OneBot12WssEndpointOptions } from '../src/wss-endpoint.js';
 export type { OneBot12WsSocket, OneBot12WsCreateOptions } from '../src/ws-types.js';
 
+declare module '@zhin.js/core' {
+  interface AdapterEndpoints {
+    onebot12: import('../src/ws-endpoint.js').OneBot12WsEndpoint;
+  }
+}
+
 export default defineAdapter<OneBot12AdapterConfig>({
   capabilities: ['inbound', 'outbound'],
   // 媒体段经 upload_file 物化为 file_id（spec 正式投递）；上传失败降级扩展字段透传。
@@ -32,6 +38,7 @@ export default defineAdapter<OneBot12AdapterConfig>({
   create(context) {
     const config = resolveOneBot12Config(context.config);
     const gateway = context.use(messageGatewayToken);
+    const sideEvents = context.use(sideEventGatewayToken);
     // 注册到插件运行时状态（onebot12.endpoint list 的"运行中"数据源）
     context.use(onebot12RuntimeStateToken).endpoints.set(config.id, {
       id: config.id,
@@ -41,6 +48,7 @@ export default defineAdapter<OneBot12AdapterConfig>({
       return new OneBot12WebhookEndpoint({
         id: context.id,
         gateway,
+        sideEvents,
         http: context.use(httpHostToken),
         config,
       });
@@ -49,6 +57,7 @@ export default defineAdapter<OneBot12AdapterConfig>({
       return new OneBot12WssEndpoint({
         id: context.id,
         gateway,
+        sideEvents,
         http: context.use(httpHostToken),
         config,
       });
@@ -56,6 +65,7 @@ export default defineAdapter<OneBot12AdapterConfig>({
     return new OneBot12WsEndpoint({
       id: context.id,
       gateway,
+      sideEvents,
       config,
     });
   },

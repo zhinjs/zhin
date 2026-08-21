@@ -73,6 +73,7 @@ export type {
   ModelApi,
   ProviderInstanceConfig,
   AgentMessage,
+  ConversationActor,
   UserMessage,
   AssistantMessage,
   ToolResultMessage,

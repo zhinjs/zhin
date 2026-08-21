@@ -134,4 +134,36 @@ describe('agent-message-compaction 失败语义', () => {
     expect(JSON.stringify(result.messages[0])).toContain('[Previous conversation summary]');
     expect(result.messages.length).toBe(2); // 摘要 + 保留的最近一条
   });
+
+  it('多人会话 transcript 明确标注参与者并要求保留归属与分歧', async () => {
+    completeSimpleMock.mockResolvedValue(assistantOf('Alice 与 Bob 对迁移方案存在分歧。'));
+    const messages: AgentMessage[] = [
+      createUserMessage('先不要改数据库', undefined, 1, {
+        subjectId: 'alice-id', displayName: 'Alice', roles: ['owner'], scope: 'group',
+      }),
+      createUserMessage('可以直接迁移 schema', undefined, 2, {
+        subjectId: 'bob-id', displayName: 'Bob', roles: ['user'], scope: 'group',
+      }),
+      createUserMessage('先评估兼容性', undefined, 3, {
+        subjectId: 'alice-id', displayName: 'Alice', roles: ['owner'], scope: 'group',
+      }),
+      createUserMessage('最近消息', undefined, 4, {
+        subjectId: 'bob-id', displayName: 'Bob', roles: ['user'], scope: 'group',
+      }),
+    ];
+
+    await compactAgentMessages({
+      model,
+      messages,
+      keepRecentTokens: 2,
+      minKeepCount: 1,
+    });
+
+    const context = completeSimpleMock.mock.calls[0]?.[1];
+    const serialized = JSON.stringify(context);
+    expect(serialized).toContain('[User:Alice id=alice-id roles=owner] 先不要改数据库');
+    expect(serialized).toContain('[User:Bob id=bob-id roles=user] 可以直接迁移 schema');
+    expect(serialized.toLowerCase()).toContain('conflicting opinions');
+    expect(serialized).toContain('authority-sensitive');
+  });
 });

@@ -78,7 +78,10 @@ describe('Adapter Feature', () => {
       definition: defineAdapter({
         capabilities: ['outbound'],
         operations: ['edit', 'typing'],
-        create: () => ({ control: { recall: async () => undefined } }),
+        create: () => ({
+          send: async () => 'message-1',
+          control: { recall: async () => undefined },
+        }),
       }),
     });
     await expect(createAdapterIndex([invalid], snapshot([invalid])))
@@ -93,6 +96,7 @@ describe('Adapter Feature', () => {
         capabilities: ['outbound'],
         operations: ['recall', 'edit', 'reaction', 'typing'],
         create: () => ({
+          send: async () => 'message-1',
           control: {
             recall: async () => undefined,
             edit: async () => 'edited',
@@ -106,7 +110,7 @@ describe('Adapter Feature', () => {
     await index.stop();
   });
 
-  it('forwards structured conversations alongside legacy targets', async () => {
+  it('forwards only the structured conversation request', async () => {
     const root = rootPluginId();
     let received: unknown;
     const slot = createCapabilitySlot({
@@ -116,7 +120,10 @@ describe('Adapter Feature', () => {
       source: '/adapters/memory.ts',
       definition: defineAdapter({
         capabilities: ['outbound'],
-        create: () => ({ send: async (request) => { received = request; } }),
+        create: () => ({ send: async (request) => {
+          received = request;
+          return 'message-1';
+        } }),
       }),
     });
     const index = await createAdapterIndex([slot], snapshot([slot]));
@@ -128,12 +135,27 @@ describe('Adapter Feature', () => {
       id: 'room-1',
     };
     await index.send(slot.id, {
-      target: 'group:room-1',
       conversation,
       payload: 'hello',
     });
-    expect(received).toEqual({ target: 'group:room-1', conversation, payload: 'hello' });
+    expect(received).toEqual({ conversation, payload: 'hello' });
     await index.stop();
+  });
+
+  it('rejects outbound declarations without the exact send contract', async () => {
+    const root = rootPluginId();
+    const missing = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'missing-send',
+      source: '/adapters/missing-send.ts',
+      definition: defineAdapter({
+        capabilities: ['outbound'],
+        create: () => ({}),
+      }),
+    });
+    await expect(createAdapterIndex([missing], snapshot([missing])))
+      .rejects.toThrow('declares outbound but send() is missing');
   });
 
   it('brands definitions and discovers nested TypeScript modules', async () => {
@@ -258,6 +280,7 @@ describe('Adapter Feature', () => {
             await started;
             events.push('start-done');
           },
+          send: async () => 'message-1',
           open() { events.push('open'); },
           stop() { events.push('stop'); },
         }),

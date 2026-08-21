@@ -54,15 +54,14 @@ export default defineAdapter<MyConfig>({
 });
 ```
 
-## 旧 Console loginAssist → 已移除（扫码走 CLI / 日志 / 向导）
+## 旧 Console loginAssist → Plugin Runtime LoginAssist
 
-- **旧写法**：Console 插件提供的 loginAssist 页面/路由——适配器投递扫码、滑块等待办，用户在 Web Console 里消费确认。Console 侧代码已整体移除（`packages/console` 零残留）。
-- **现状**：扫码登录走带外 CLI 与日志引导——如 ICQQ 用 `icqq login <uin>` 启动守护进程完成扫码，再重启 zhin 生效；新项目的平台配置走 `zhin setup` 配置向导。IM 内核仍保留 `LoginAssist` 生产者-消费者服务（`@zhin.js/core` 内建，`packages/im/core/src/built/login-assist.ts`），但仅 legacy app 层（`packages/im/zhin` 的 Node 启动）注册 stdin 消费者；Plugin Runtime（`basic/cli`）路径不装配它。
-
-```text
-旧：打开 Web Console 的登录辅助页确认扫码
-新：icqq login <uin> 完成扫码 → 重启 zhin（或按终端日志提示操作）
-```
+- **旧写法**：Console 插件提供的 loginAssist 页面/路由——适配器投递扫码、滑块等待办，用户在 Web Console 里消费确认。旧 Console 侧页面已移除。
+- **现状（Plugin Runtime）**：`ImRuntime` 提供 `loginAssistToken`；ICQQ 等适配器在 `system.login.*` 上 `waitForInput`。消费者：
+  - Console RPC：`login.list` / `login.submit` / `login.cancel`（刷新后 `list` 可重拉未消费待办）
+  - SSE：`endpoint.login.pending` / `endpoint.login.expired`
+  - 交互式 TTY：stdin 一行确认（对齐 icqq 官方示例）
+- 带外路径仍可用：`icqq login <uin>` 守护进程扫码后再启动 zhin；`zhin setup` 配置向导。
 
 ## 相关阅读
 

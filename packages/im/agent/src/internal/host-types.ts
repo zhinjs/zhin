@@ -76,6 +76,10 @@ export interface HostPromptStreamTurnRequest extends Omit<HostPromptTurnRequest,
 }
 
 export interface HostPromptTurnRequest {
+  turnId?: string;
+  intent?: import('../turn/turn-ingress.js').TurnIntent;
+  principal?: import('../turn/turn-ingress.js').TurnPrincipal;
+  onAdmitted?: () => void;
   sessionKey: string;
   sessionId: string;
   userMessages: import('@zhin.js/ai').AgentMessage[];

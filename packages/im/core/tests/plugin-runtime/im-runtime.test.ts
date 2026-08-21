@@ -672,7 +672,7 @@ describe('IM Runtime', () => {
           open() {},
           close() {},
           stop() {},
-          send() { return { id: 'sent-1' }; },
+          send() { return 'sent-1'; },
         }),
       }),
     });
@@ -865,7 +865,10 @@ describe('IM Runtime', () => {
       content: 'initial payload',
     });
 
-    expect(receipt).toEqual({ status: 'sent', legacyMessageId: 'sent-1' });
+    expect(receipt).toEqual({
+      status: 'sent',
+      message: { conversation: expect.any(Object), id: 'sent-1' },
+    });
     expect(sent).toContainEqual(expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'private', id: 'room-1' }),
       payload: [{
@@ -1272,7 +1275,7 @@ async function createFixture(
     middleware?: boolean;
     adapterSegments?: { interactive?: 'native' | 'text'; outboundMedia?: readonly ('url' | 'path' | 'base64' | 'upload')[] };
     adapterCapabilities?: readonly ('inbound' | 'outbound')[];
-    endpointSend?: (request: unknown) => unknown;
+    endpointSend?: (request: unknown) => string;
     endpointControl?: EndpointControl;
     endpointManagement?: EndpointManagement;
     outboundMiddleware?: (input: OutboundEnvelope, next: () => Promise<void>) => Promise<void> | void;
@@ -1298,7 +1301,7 @@ async function createFixture(
         send(request) {
           events.push('endpoint:send');
           sent.push(request);
-          return options?.endpointSend?.(request) ?? { id: 'sent-1' };
+          return options?.endpointSend?.(request) ?? 'sent-1';
         },
       }),
     }),

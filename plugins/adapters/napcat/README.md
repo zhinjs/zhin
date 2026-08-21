@@ -67,7 +67,7 @@ plugins:
 
 ## 迁移说明（Plugin Runtime）
 
-- **notice / request 侧事件已移除**：旧 Adapter 对 `post_type: notice|request` 构建 `notice.receive` / `request.receive` 事件（含 `$approve` / `$reject`）；新 Plugin Runtime（`messageGatewayToken`）暂无侧事件总线，入站仅处理 `post_type: message`，notice / request 事件静默丢弃。加好友 / 加群请求审批可改用 `callApi('set_friend_add_request' | 'set_group_add_request')`。
+- **notice / request / meta 侧事件**：经 `sideEventGatewayToken` 归一后分发到 `handlers`（`notice.receive` / `request.receive` / `system.receive`），请求带 `$approve` / `$reject`。消息仍走 `messageGatewayToken`。
 - **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后 `agent/tools/` 仅覆盖 NapCat 扩展 API，其余群管能力可通过 `callApi`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
 - **平台权限门禁**：`plugin.ts` setup 已注册 `registerDefaultScenePlatformPermitChecker('napcat')`，`scene_admin` / `scene_owner` 依据入站 metadata 中的 sender `role`（owner / admin）判定。
 

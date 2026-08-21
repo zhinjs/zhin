@@ -2,7 +2,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { onebot12RuntimeStateToken } from '../src/onebot12-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
+import { messageGatewayToken, sideEventGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import defineOneBot12Adapter from '../adapters/onebot12.js';
 import { OneBot12WebhookEndpoint } from '../src/webhook.js';
@@ -652,6 +652,13 @@ describe('onebot12 plugin runtime adapter', () => {
       use: (token: unknown) => {
         if (token === httpHostToken) return http;
         if (token === messageGatewayToken) return gateway;
+        if (token === sideEventGatewayToken) {
+          return {
+            receiveNotice: vi.fn(async () => {}),
+            receiveRequest: vi.fn(async () => {}),
+            receiveSystem: vi.fn(async () => {}),
+          };
+        }
         if (token === onebot12RuntimeStateToken) return createEndpointRuntimeState();
         throw new Error(`unexpected token: ${String(token)}`);
       },
@@ -670,6 +677,13 @@ describe('onebot12 plugin runtime adapter', () => {
         if (token === httpHostToken) return http;
         if (token === messageGatewayToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
+        }
+        if (token === sideEventGatewayToken) {
+          return {
+            receiveNotice: vi.fn(async () => {}),
+            receiveRequest: vi.fn(async () => {}),
+            receiveSystem: vi.fn(async () => {}),
+          };
         }
         if (token === onebot12RuntimeStateToken) return createEndpointRuntimeState();
         throw new Error(`unexpected token: ${String(token)}`);

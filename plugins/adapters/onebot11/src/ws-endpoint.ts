@@ -10,7 +10,7 @@ import {
   type EndpointManagement,
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { createOneBot11EndpointManagement } from './endpoint-management.js';
@@ -28,6 +28,7 @@ import {
   type OneBot11Event,
   type OneBot11WsConfig,
 } from './protocol.js';
+import { receiveOneBot11SideEvent } from './side-event-dispatch.js';
 import {
   callOneBot11WsAction,
   handleOneBot11WsMessage,
@@ -42,6 +43,7 @@ import {
 export interface OneBot11WsEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
+  readonly sideEvents?: SideEventGateway;
   readonly config: OneBot11WsConfig;
   readonly createWebSocket?: (
     url: string,
@@ -159,7 +161,17 @@ export class OneBot11WsEndpoint implements EndpointInstance {
 
   /** Test / internal: admit a parsed event when the endpoint is open. */
   admit(ev: OneBot11Event): void {
-    if (!this.#open || !isMessageEvent(ev)) return;
+    if (!this.#open) return;
+    if (!isMessageEvent(ev)) {
+      receiveOneBot11SideEvent(
+        this.#options.sideEvents,
+        this.#options.config.id,
+        this,
+        ev,
+        this.#logger,
+      );
+      return;
+    }
     const conversation = onebot11InboundConversation(String(this.#options.id), ev);
     const content = formatInboundContent(ev);
     const inbound = formatInboundMetadata(ev, this.#options.config.id);

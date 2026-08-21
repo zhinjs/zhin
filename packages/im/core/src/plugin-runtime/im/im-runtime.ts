@@ -25,13 +25,13 @@ import {
   type AdapterEndpointPhase,
 } from '@zhin.js/adapter';
 import {
-  isDeliveryReceipt,
   type ConversationRef,
   type DeliveryReceipt,
   type MessageRef,
 } from '@zhin.js/im-contract';
 import { MiddlewareIndex, isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/handler.js';
+import type { HandlerDispatchOptions, HandlerPrompt } from '@zhin.js/handler';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import {
   Message,
@@ -45,6 +45,16 @@ import {
   type SendContent,
   type SendRequest,
 } from './contracts.js';
+import {
+  sideEventGatewayToken,
+  type SideEventGateway,
+} from './side-event-gateway.js';
+import { loginAssistToken } from './login-assist-host.js';
+import { LoginAssist } from '../../built/login-assist.js';
+import type { Notice } from '../../notice.js';
+import type { Request } from '../../request.js';
+import type { SystemEvent } from '../../system-event.js';
+import { sideEventSendChannel } from '../../side-event/base.js';
 import type { CommandPrompt } from '@zhin.js/command';
 import { defaultCommandPrefixResolver, MessageDispatcher } from './message-dispatcher.js';
 import { OutboundRenderer } from './outbound-renderer.js';
@@ -123,6 +133,12 @@ interface PromptClaim {
   readonly timer: ReturnType<typeof setTimeout>;
 }
 
+interface PromptSource {
+  readonly conversation: ConversationRef;
+  readonly sender?: MessageSenderRef;
+  readonly $reply: (content: SendContent) => Promise<DeliveryReceipt>;
+}
+
 export class ImRuntime implements MessageGateway {
   readonly #dispatcher: MessageDispatcher;
   readonly #renderer: OutboundRenderer;
@@ -155,12 +171,42 @@ export class ImRuntime implements MessageGateway {
 
   readonly permissionHost = createPermissionHost();
   readonly messageBus = new MessageBus();
+  readonly loginAssist = new LoginAssist();
 
   install(resources: Scope): void {
     resources.provide(messageGatewayToken, this);
+    resources.provide(sideEventGatewayToken, this.#sideEventGateway);
+    resources.provide(loginAssistToken, this.loginAssist);
     resources.provide(permissionHostToken, this.permissionHost);
     resources.provide(messageBusToken, this.messageBus);
   }
+
+  readonly #sideEventGateway: SideEventGateway & {
+    [generationAdmissionBinder](gate: GenerationAdmissionGate): SideEventGateway;
+  } = (() => {
+    const self = this;
+    const gateway: SideEventGateway & {
+      [generationAdmissionBinder](gate: GenerationAdmissionGate): SideEventGateway;
+    } = {
+      receiveNotice: (notice) => self.receiveNotice(notice),
+      receiveRequest: (request) => self.receiveRequest(request),
+      receiveSystem: (event) => self.receiveSystem(event),
+      [generationAdmissionBinder](gate: GenerationAdmissionGate): SideEventGateway {
+        return Object.freeze({
+          receiveNotice: async (notice: Notice) => {
+            await gate.enter(() => self.receiveNotice(notice));
+          },
+          receiveRequest: async (request: Request) => {
+            await gate.enter(() => self.receiveRequest(request));
+          },
+          receiveSystem: async (event: SystemEvent) => {
+            await gate.enter(() => self.receiveSystem(event));
+          },
+        });
+      },
+    };
+    return gateway;
+  })();
 
   [generationAdmissionBinder](gate: GenerationAdmissionGate): MessageGateway {
     const gateway: MessageGateway = {
@@ -199,7 +245,7 @@ export class ImRuntime implements MessageGateway {
   // Prompt claim — 命令对话式交互
   // ==========================================================================
 
-  #promptConversationKey(message: Message, subjectId = message.sender?.id ?? ''): string {
+  #promptConversationKey(message: PromptSource, subjectId = message.sender?.id ?? ''): string {
     const conv = message.conversation;
     return `${conv.endpoint.adapter}:${conv.endpoint.id}:${conv.kind}:${conv.id}:${subjectId}`;
   }
@@ -213,7 +259,7 @@ export class ImRuntime implements MessageGateway {
   }
 
   #claimNextMessage(
-    message: Message,
+    message: PromptSource,
     timeout: number,
     timeoutText: string,
     signal?: AbortSignal,
@@ -252,7 +298,7 @@ export class ImRuntime implements MessageGateway {
     });
   }
 
-  #buildCommandPrompt(message: Message, subjectId?: string): CommandPrompt {
+  #buildCommandPrompt(message: PromptSource, subjectId?: string): CommandPrompt {
     const DEFAULT_TIMEOUT = 3 * 60 * 1000;
     const DEFAULT_TIMEOUT_TEXT = '输入超时';
     const claim = (timeout: number, timeoutText: string, signal?: AbortSignal) =>
@@ -448,7 +494,7 @@ export class ImRuntime implements MessageGateway {
         input.mentioned,
         input.replyTo,
       );
-      await runHandlers(lease.value, 'message.receive', message);
+      await this.#runHandlers(lease.value, 'message.receive', [message]);
       let result: MessageDispatchResult = Object.freeze({ matched: false });
       const claimed = await this.#inboundClaim?.(message) === true;
       if (claimed) {
@@ -504,6 +550,121 @@ export class ImRuntime implements MessageGateway {
     } finally {
       lease.release();
     }
+  }
+
+  async receiveNotice(notice: Notice): Promise<void> {
+    await this.#receiveSideEvent('notice.receive', notice);
+  }
+
+  async receiveRequest(request: Request): Promise<void> {
+    await this.#withRequestActionScope(request, async (scoped) => {
+      await this.#receiveSideEvent('request.receive', scoped);
+    });
+  }
+
+  async #withRequestActionScope(
+    request: Request,
+    dispatch: (request: Request) => Promise<void>,
+  ): Promise<void> {
+    let active = true;
+    const actions = new Set<Promise<void>>();
+    const run = (action: () => void | Promise<void>): Promise<void> => {
+      if (!active) throw new Error('Request action port expired with its generation operation');
+      const operation = Promise.resolve().then(action);
+      actions.add(operation);
+      void operation.then(
+        () => actions.delete(operation),
+        () => actions.delete(operation),
+      );
+      return operation;
+    };
+    const scoped = Object.assign(Object.create(Object.getPrototypeOf(request)), request, {
+      $approve: async (remark?: string) => run(() => request.$approve(remark)),
+      $reject: async (reason?: string) => run(() => request.$reject(reason)),
+    }) as Request;
+    try {
+      await dispatch(scoped);
+    } finally {
+      active = false;
+      await Promise.allSettled([...actions]);
+    }
+  }
+
+  async receiveSystem(event: SystemEvent): Promise<void> {
+    await this.#receiveSideEvent('system.receive', event);
+  }
+
+  async #receiveSideEvent(
+    event: 'notice.receive' | 'request.receive' | 'system.receive',
+    payload: Notice | Request | SystemEvent,
+  ): Promise<void> {
+    const lease = this.#acquire();
+    try {
+      await this.#runHandlers(lease.value, event, [payload]);
+    } finally {
+      lease.release();
+    }
+  }
+
+  /**
+   * Prompt bound to a side-event scene (private/group channel derived from
+   * `$scene_type` / `$scene_id`). Returns undefined when outbound is unavailable.
+   */
+  #createPromptForSideEvent(
+    payload: Notice | Request | SystemEvent,
+    snapshot: RuntimeSnapshot,
+  ): HandlerPrompt | undefined {
+    const adapter = String(payload.$adapter);
+    const endpointKey = String(payload.$endpoint);
+    if (!adapter || !endpointKey) return undefined;
+    const channel = sideEventSendChannel(payload);
+    const conversation: ConversationRef = Object.freeze({
+      endpoint: Object.freeze({ adapter, id: endpointKey }),
+      kind: channel.type,
+      id: channel.id || endpointKey,
+    });
+    const requester = snapshot.root;
+    const source: PromptSource = Object.freeze({
+      conversation,
+      ...(payload.$actor?.id
+        ? { sender: Object.freeze({ id: payload.$actor.id }) }
+        : {}),
+      $reply: (content: SendContent) => this.#sendWithSnapshot({
+        conversation,
+        requester,
+        content,
+      }, snapshot),
+    });
+    return this.#buildCommandPrompt(source) as HandlerPrompt;
+  }
+
+  async #runHandlers(
+    snapshot: RuntimeSnapshot,
+    event: string,
+    args: readonly unknown[],
+  ): Promise<void> {
+    const index = handlers(snapshot);
+    if (!index) return;
+    const options: HandlerDispatchOptions = {
+      resolvePrompt: (name, promptArgs) => {
+        const payload = promptArgs[0];
+        if (name === 'message.receive' && payload instanceof Message) {
+          return this.createPrompt(payload) as HandlerPrompt | undefined;
+        }
+        if (
+          name === 'notice.receive'
+          || name === 'request.receive'
+          || name === 'system.receive'
+        ) {
+          return this.#createPromptForSideEvent(
+            payload as Notice | Request | SystemEvent,
+            snapshot,
+          );
+        }
+        return undefined;
+      },
+    };
+    await index.dispatch(event, args, options);
   }
 
   /** Console `endpoint.list` — empty until Adapter Feature projection is ready. */
@@ -625,7 +786,7 @@ export class ImRuntime implements MessageGateway {
         requester,
         content,
       }, lease.value);
-      return { messageId: result.message?.id ?? result.legacyMessageId ?? '' };
+      return { messageId: result.message?.id ?? '' };
     } finally {
       lease.release();
     }
@@ -776,7 +937,7 @@ export class ImRuntime implements MessageGateway {
               conversation: request.conversation,
               payload,
             });
-            receipt = receiptFromEndpointResult(result);
+            receipt = receiptFromEndpointResult(result, request.conversation);
           } catch (error) {
             receipt = receiptFromEndpointError(error);
           }
@@ -787,8 +948,8 @@ export class ImRuntime implements MessageGateway {
               conversation: request.conversation,
               requester: request.requester,
               contentPreview: previewText(payload),
-              ...(receipt.message?.id || receipt.legacyMessageId
-                ? { messageId: receipt.message?.id ?? receipt.legacyMessageId }
+              ...(receipt.message?.id
+                ? { messageId: receipt.message.id }
                 : {}),
               timestamp: Date.now(),
             });
@@ -908,20 +1069,14 @@ async function prepareOutboundPayload(
   return payload;
 }
 
-function receiptFromEndpointResult(result: unknown): DeliveryReceipt {
-  if (isDeliveryReceipt(result)) return result;
-  const legacyMessageId = legacyMessageIdOf(result);
+function receiptFromEndpointResult(
+  messageId: string,
+  conversation: ConversationRef,
+): DeliveryReceipt {
   return Object.freeze({
     status: 'sent' as const,
-    ...(legacyMessageId ? { legacyMessageId } : {}),
+    message: Object.freeze({ conversation, id: messageId }),
   });
-}
-
-function legacyMessageIdOf(result: unknown): string | undefined {
-  if (typeof result === 'string' || typeof result === 'number') return String(result);
-  if (!result || typeof result !== 'object') return undefined;
-  const id = (result as { id?: unknown }).id;
-  return typeof id === 'string' || typeof id === 'number' ? String(id) : undefined;
 }
 
 function receiptFromEndpointError(error: unknown): DeliveryReceipt {
@@ -987,15 +1142,6 @@ async function runMiddleware<TInput>(
 function handlers(snapshot: RuntimeSnapshot): HandlerIndex | undefined {
   const projection = snapshot.projections.get(handlerFeatureId);
   return isHandlerIndex(projection) ? projection : undefined;
-}
-
-async function runHandlers(
-  snapshot: RuntimeSnapshot,
-  event: string,
-  ...args: unknown[]
-): Promise<void> {
-  const index = handlers(snapshot);
-  if (index) await index.dispatch(event, ...args);
 }
 
 function normalizeConsoleContent(content: unknown): SendContent {

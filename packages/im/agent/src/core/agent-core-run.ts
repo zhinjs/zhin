@@ -686,7 +686,7 @@ export async function* runAgentLoopTextTurnRun(
       const userBatch = event.userMessages ?? promptMessages;
       const batch = [...userBatch, ...event.messages];
       const messageExtras = batch.map((msg, i) => (
-        msg.role === 'user' && i < userBatch.length ? userMessageExtra : undefined
+        msg.role === 'user' && i === 0 ? userMessageExtra : undefined
       ));
       if (persistentConversation) {
         conversationBatches.push({ messages: batch, messageExtras });
