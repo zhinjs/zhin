@@ -11,6 +11,8 @@ export {
 } from '../session-tree-runtime.js';
 export * from './turn-intent-resolver.js';
 export * from './workroom-acceptance-policy.js';
+export * from './workroom-acceptance-authority.js';
+export * from './workroom-remote-executor.js';
 export * from './capability-ingress.js';
 export * from './deferred-capability-plan.js';
 export * from './full-agent-turn-engine.js';

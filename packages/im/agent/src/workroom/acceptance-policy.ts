@@ -135,6 +135,7 @@ export interface WorkroomAcceptanceDecision {
   readonly decidedBy: string;
   readonly reason?: string;
   readonly wait?: WorkroomAcceptanceWaitRequest;
+  readonly nextWait?: WorkroomAcceptanceWaitRequest;
 }
 
 export interface WorkroomAcceptanceRecord extends WorkroomAcceptanceDecision {
@@ -144,6 +145,10 @@ export interface WorkroomAcceptanceRecord extends WorkroomAcceptanceDecision {
   readonly candidateHash: string;
   readonly contractId: string;
   readonly policy: WorkroomAcceptancePolicySnapshot;
+  readonly reviewerAssignmentId?: string;
+  readonly reviewerPrincipalId?: string;
+  readonly sponsorGateId?: string;
+  readonly sponsorPrincipalId?: string;
 }
 
 /**
@@ -285,11 +290,16 @@ export function decideTaskAcceptance(
   }
   if (decision.route === 'reviewer_required' || decision.route === 'reviewer_then_sponsor') {
     assertGatedRouteFloor(decision);
-    const wait = requireAcceptanceWait(input, decision);
+    assertGatedAcceptancePrerequisites(decision);
+    const wait = requireAcceptanceWait(input, decision.wait, 'reviewer');
+    if (decision.route === 'reviewer_then_sponsor') {
+      requireAcceptanceWait(input, decision.nextWait, 'sponsor');
+    } else if (decision.nextWait) {
+      throw new Error('Reviewer-only acceptance cannot retain an unused Sponsor wait');
+    }
     return [event('reviewer.assigned', {
       taskKey: input.task.key,
       reason,
-      evaluation: freezeDecision(decision),
       assignment: Object.freeze({
         id: `review:${decision.candidate.id}:${input.expectedSequence + 1}`,
         taskKey: input.task.key,
@@ -303,17 +313,19 @@ export function decideTaskAcceptance(
         owner: wait.owner,
         deadline: wait.deadline,
         allowedActions: Object.freeze([...wait.allowedActions]),
+        evaluation: freezeDecision(decision),
         status: 'open' as const,
       }),
     })];
   }
   if (decision.route === 'sponsor_required') {
     assertGatedRouteFloor(decision);
-    const wait = requireAcceptanceWait(input, decision);
+    assertGatedAcceptancePrerequisites(decision);
+    const wait = requireAcceptanceWait(input, decision.wait, 'sponsor');
+    if (decision.nextWait) throw new Error('Sponsor-only acceptance cannot retain an unused next wait');
     return [event('sponsor_gate.opened', {
       taskKey: input.task.key,
       reason,
-      evaluation: freezeDecision(decision),
       gate: Object.freeze({
         id: `sponsor:${decision.candidate.id}:${input.expectedSequence + 1}`,
         taskKey: input.task.key,
@@ -326,6 +338,7 @@ export function decideTaskAcceptance(
         owner: wait.owner,
         deadline: wait.deadline,
         allowedActions: Object.freeze([...wait.allowedActions]),
+        evaluation: freezeDecision(decision),
         status: 'open' as const,
       }),
     })];
@@ -377,9 +390,9 @@ const RISK_RANK: Readonly<Record<WorkroomRiskTier, number>> = Object.freeze({
 
 function requireAcceptanceWait(
   input: WorkroomAcceptanceDecisionInput,
-  decision: WorkroomAcceptanceDecision,
+  wait: WorkroomAcceptanceWaitRequest | undefined,
+  kind: 'reviewer' | 'sponsor',
 ): WorkroomAcceptanceWaitRequest {
-  const wait = decision.wait;
   if (!wait) throw new Error('Gated acceptance requires an owner, deadline and allowed actions');
   requireStrings([wait.owner]);
   if (!Number.isFinite(wait.deadline) || wait.deadline <= input.now) {
@@ -393,7 +406,7 @@ function requireAcceptanceWait(
   if (wait.allowedActions.some(action => !allowed.has(action))) {
     throw new Error('Acceptance wait contains an unsupported action');
   }
-  const required = decision.route === 'sponsor_required'
+  const required = kind === 'sponsor'
     ? ['approve', 'reject', 'request_changes', 'reopen', 'rebase', 'replan', 'cancel'] as const
     : ['claim', 'submit_verdict', 'reassign', 'replan', 'cancel'] as const;
   if (required.some(action => !wait.allowedActions.includes(action))) {
@@ -431,6 +444,43 @@ function createAcceptanceRecord(
     candidateHash: decision.candidate.hash,
     contractId: decision.contract.id,
     policy: Object.freeze({ ...decision.contract.policy }),
+  });
+}
+
+export function createGatedAcceptanceRecord(input: Readonly<{
+  decision: WorkroomAcceptanceDecision;
+  sourceSequence: number;
+  acceptanceSequence: number;
+  acceptedClaimIds: readonly string[];
+  rejectedClaimIds: readonly string[];
+  reviewer?: Readonly<{ assignmentId: string; principalId: string }>;
+  sponsor?: Readonly<{ gateId: string; principalId: string }>;
+}>): WorkroomAcceptanceRecord {
+  const decision = freezeDecision({
+    ...input.decision,
+    disposition: 'accepted',
+    acceptedClaimIds: input.acceptedClaimIds,
+    rejectedClaimIds: input.rejectedClaimIds,
+    wait: undefined,
+    nextWait: undefined,
+  });
+  assertGatedAcceptanceProof(decision, input.reviewer, input.sponsor);
+  return Object.freeze({
+    ...decision,
+    id: `acceptance:${decision.candidate.id}:${decision.candidate.hash}`,
+    sourceSequence: input.sourceSequence,
+    acceptanceSequence: input.acceptanceSequence,
+    candidateHash: decision.candidate.hash,
+    contractId: decision.contract.id,
+    policy: Object.freeze({ ...decision.contract.policy }),
+    ...(input.reviewer ? {
+      reviewerAssignmentId: input.reviewer.assignmentId,
+      reviewerPrincipalId: input.reviewer.principalId,
+    } : {}),
+    ...(input.sponsor ? {
+      sponsorGateId: input.sponsor.gateId,
+      sponsorPrincipalId: input.sponsor.principalId,
+    } : {}),
   });
 }
 
@@ -483,7 +533,8 @@ export function assertPersistedAcceptanceRecord(
       },
     };
     assertDecisionBindings(input, decision);
-    assertSafeAutoAcceptance(decision);
+    if (decision.route === 'auto_accept') assertSafeAutoAcceptance(decision);
+    else assertPersistedGatedAcceptanceProof(record, decision);
     const expectedId = `acceptance:${decision.candidate.id}:${decision.candidate.hash}`;
     if (record.id !== expectedId
       || record.sourceSequence !== acceptanceSequence - 1
@@ -500,6 +551,63 @@ export function assertPersistedAcceptanceRecord(
     }
   } catch (error) {
     throw new Error('Invalid Workroom Acceptance Record', { cause: error });
+  }
+}
+
+function assertPersistedGatedAcceptanceProof(
+  record: Record<string, unknown>,
+  decision: WorkroomAcceptanceDecision,
+): void {
+  const reviewer = record.reviewerAssignmentId === undefined && record.reviewerPrincipalId === undefined
+    ? undefined
+    : {
+        assignmentId: requireString(record.reviewerAssignmentId, 'Reviewer Assignment id'),
+        principalId: requireString(record.reviewerPrincipalId, 'Reviewer principal id'),
+      };
+  const sponsor = record.sponsorGateId === undefined && record.sponsorPrincipalId === undefined
+    ? undefined
+    : {
+        gateId: requireString(record.sponsorGateId, 'Sponsor Gate id'),
+        principalId: requireString(record.sponsorPrincipalId, 'Sponsor principal id'),
+      };
+  assertGatedAcceptanceProof(decision, reviewer, sponsor);
+}
+
+function assertGatedAcceptanceProof(
+  decision: WorkroomAcceptanceDecision,
+  reviewer?: Readonly<{ assignmentId: string; principalId: string }>,
+  sponsor?: Readonly<{ gateId: string; principalId: string }>,
+): void {
+  if (decision.route === 'auto_accept' || decision.route === 'rework' || decision.route === 'policy_blocked') {
+    throw new Error('Gated Acceptance Record has an invalid route');
+  }
+  if ((decision.route === 'reviewer_required' || decision.route === 'reviewer_then_sponsor') && !reviewer) {
+    throw new Error('Gated Acceptance Record is missing Reviewer proof');
+  }
+  if ((decision.route === 'sponsor_required' || decision.route === 'reviewer_then_sponsor') && !sponsor) {
+    throw new Error('Gated Acceptance Record is missing Sponsor proof');
+  }
+  assertGatedRouteFloor(decision);
+  assertGatedAcceptancePrerequisites(decision);
+  if (!sameStringSet(
+    [...decision.acceptedClaimIds, ...decision.rejectedClaimIds],
+    decision.candidate.claimIds,
+  )) {
+    throw new Error('Gated acceptance must disposition every Candidate claim');
+  }
+  if (decision.decidedBy !== `acceptance-policy:${decision.contract.policy.id}`) {
+    throw new Error('Acceptance Record decider does not match the pinned Policy snapshot');
+  }
+}
+
+function assertGatedAcceptancePrerequisites(decision: WorkroomAcceptanceDecision): void {
+  const results = new Map(decision.checkResults.map(result => [result.criterionId, result]));
+  if (decision.contract.criteria.some(criterion =>
+    criterion.kind === 'deterministic' && results.get(criterion.id)?.status !== 'passed')) {
+    throw new Error('Sponsor or Reviewer cannot waive a deterministic Acceptance criterion');
+  }
+  if (decision.contract.requiredEvidence.some(ref => !decision.candidate.evidenceRefs.includes(ref))) {
+    throw new Error('Gated acceptance is missing required evidence');
   }
 }
 
@@ -631,6 +739,12 @@ function freezeDecision(value: WorkroomAcceptanceDecision): WorkroomAcceptanceDe
       wait: Object.freeze({
         ...value.wait,
         allowedActions: Object.freeze([...value.wait.allowedActions]),
+      }),
+    } : {}),
+    ...(value.nextWait ? {
+      nextWait: Object.freeze({
+        ...value.nextWait,
+        allowedActions: Object.freeze([...value.nextWait.allowedActions]),
       }),
     } : {}),
   });

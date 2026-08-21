@@ -1,5 +1,6 @@
 import type {
   WorkroomAcceptanceContract,
+  WorkroomAcceptanceDecision,
   WorkroomAcceptancePolicySnapshot,
   WorkroomAcceptanceRecord,
   WorkroomAcceptanceRoute,
@@ -81,14 +82,24 @@ export interface WorkroomAcceptanceWaitState {
   readonly owner: string;
   readonly deadline: number;
   readonly allowedActions: readonly WorkroomAcceptanceWaitAction[];
-  readonly status: WorkroomAcceptanceWaitStatus;
+  readonly evaluation: WorkroomAcceptanceDecision;
 }
 
 export interface WorkroomReviewerAssignmentState extends WorkroomAcceptanceWaitState {
   readonly producerPrincipalId: string;
+  readonly status: WorkroomAcceptanceWaitStatus | 'claimed' | 'passed' | 'rework';
+  readonly reviewerPrincipalId?: string;
+  readonly authorizationRef?: string;
+  readonly verdict?: Readonly<Record<string, unknown>>;
 }
 
-export interface WorkroomSponsorGateState extends WorkroomAcceptanceWaitState {}
+export interface WorkroomSponsorGateState extends WorkroomAcceptanceWaitState {
+  readonly status: WorkroomAcceptanceWaitStatus | 'approved' | 'rejected' | 'changes_requested';
+  readonly reviewerAssignmentId?: string;
+  readonly sponsorPrincipalId?: string;
+  readonly authorizationRef?: string;
+  readonly decisionReason?: string;
+}
 
 export interface WorkroomAssignmentState {
   readonly id: string;
@@ -133,8 +144,11 @@ export type WorkroomEventType =
   | 'task.acceptance_pinned'
   | 'task.acceptance_blocked'
   | 'reviewer.assigned'
+  | 'reviewer.claimed'
+  | 'reviewer.verdict_recorded'
   | 'reviewer.expired'
   | 'sponsor_gate.opened'
+  | 'sponsor_gate.decided'
   | 'sponsor_gate.expired'
   | 'task.rework_requested'
   | 'task.revised'

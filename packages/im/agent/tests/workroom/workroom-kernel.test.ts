@@ -258,6 +258,75 @@ describe('WorkroomKernel', () => {
     expect(rework.tasks.build?.acceptanceContract).toBeUndefined();
   });
 
+  it('accepts a medium-risk Task only after an independently authorized Reviewer verdict', async () => {
+    const journal = new MemoryWorkroomJournal();
+    const kernel = new WorkroomKernel({
+      journal,
+      now: () => 100,
+      createId: (() => { let id = 0; return () => `review-id-${++id}`; })(),
+      acceptancePolicy: {
+        ...pinnedAcceptancePolicy(),
+        decide(input) {
+          const baseline = lowRiskAcceptance(input);
+          return {
+            ...baseline,
+            disposition: 'policy_blocked' as const,
+            route: 'reviewer_required' as const,
+            reason: 'Independent judgment is required',
+            riskAssessment: { ...baseline.riskAssessment, tier: 'medium' as const },
+            wait: {
+              owner: 'reviewer-pool:default', deadline: input.now + 20,
+              allowedActions: ['claim', 'submit_verdict', 'reassign', 'replan', 'cancel'] as const,
+            },
+          };
+        },
+      },
+      acceptanceAuthority: allowingAcceptanceAuthority(),
+    });
+    await kernel.createRun({ runId: 'run-1', projectId: 'project-1', title: 'Reviewed result' });
+    await kernel.execute('project-1', 'run-1', {
+      type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 1,
+    });
+    await kernel.pinTaskAcceptance('project-1', 'run-1', 'build');
+    await kernel.execute('project-1', 'run-1', {
+      type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
+      owner: 'builder', role: 'executor', leaseExpiresAt: 200,
+    });
+    await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
+    await kernel.execute('project-1', 'run-1', {
+      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
+    });
+    const routed = await kernel.evaluateTaskAcceptance('project-1', 'run-1', 'build');
+    const reviewId = routed.tasks.build!.currentReviewerAssignmentId!;
+
+    await expect(kernel.claimReviewerAssignment(
+      'project-1', 'run-1', reviewId, 'intruder',
+    )).rejects.toThrow('Acceptance authority denied');
+    await expect(kernel.claimReviewerAssignment(
+      'project-1', 'run-1', reviewId, 'builder',
+    )).rejects.toThrow('Producer cannot review its own Candidate');
+    await kernel.claimReviewerAssignment('project-1', 'run-1', reviewId, 'reviewer-bob');
+    const accepted = await kernel.submitReviewerVerdict(
+      'project-1', 'run-1', reviewId, 'reviewer-bob', {
+        candidateHash: 'sha256:candidate-1',
+        criteria: [{ criterionId: 'criterion-build', status: 'passed', evidenceRefs: ['review://1'] }],
+        acceptedClaimIds: ['claim-1'],
+        rejectedClaimIds: [],
+        evidenceRefs: ['review://1'],
+      },
+    );
+
+    expect(accepted.tasks.build?.status).toBe('accepted');
+    expect(accepted.status).toBe('completed');
+    expect(accepted.reviewerAssignments[reviewId]).toMatchObject({
+      status: 'passed', reviewerPrincipalId: 'reviewer-bob',
+    });
+    expect(accepted.tasks.build?.acceptanceRecord).toMatchObject({
+      route: 'reviewer_required', reviewerAssignmentId: reviewId,
+      acceptedClaimIds: ['claim-1'], rejectedClaimIds: [],
+    });
+  });
+
   it('opens a hash-bound Sponsor Gate for high-risk mechanical work without Reviewer cost', async () => {
     const acceptancePolicy: WorkroomAcceptancePolicyDecisionPort = {
       ...pinnedAcceptancePolicy(),
@@ -299,11 +368,105 @@ describe('WorkroomKernel', () => {
       taskKey: 'publish', candidateHash: 'sha256:candidate-1',
       contractId: 'contract:publish:1', owner: 'sponsor:project-1', deadline: 120, status: 'open',
     });
+    await expect(kernel.decideSponsorGate('project-1', 'run-1', gate!.id, 'sponsor-alice', {
+      candidateHash: 'sha256:candidate-1', decision: 'approve', reason: 'approve exact candidate',
+    })).rejects.toThrow('Workroom Acceptance Authority Port is not installed');
     const cancelled = await kernel.execute('project-1', 'run-1', {
       type: 'cancel_run', reason: 'Sponsor cancelled the pending publication', controlDeadline: 130,
     });
     expect(cancelled.sponsorGates[gate!.id]?.status).toBe('cancelled');
     expect(cancelled.status).toBe('cancelled');
+  });
+
+  it('requires Reviewer then Sponsor for high-risk judgment and preserves claim disposition', async () => {
+    const journal = new MemoryWorkroomJournal();
+    const basePolicy = pinnedAcceptancePolicy();
+    const kernel = new WorkroomKernel({
+      journal,
+      now: () => 100,
+      createId: (() => { let id = 0; return () => `gated-id-${++id}`; })(),
+      acceptanceAuthority: allowingAcceptanceAuthority(),
+      acceptancePolicy: {
+        ...basePolicy,
+        pinContract(input) {
+          const contract = basePolicy.pinContract(input);
+          return {
+            ...contract,
+            criteria: [{ id: 'criterion-build', kind: 'judgment' as const, description: 'Editorial quality' }],
+          };
+        },
+        decide(input) {
+          const baseline = lowRiskAcceptance(input);
+          return {
+            ...baseline,
+            disposition: 'policy_blocked' as const,
+            route: 'reviewer_then_sponsor' as const,
+            reason: 'Judgment and high-risk authority are required',
+            candidate: {
+              ...baseline.candidate,
+              claimIds: ['claim-1', 'claim-2'],
+            },
+            riskAssessment: { ...baseline.riskAssessment, tier: 'high' as const },
+            wait: {
+              owner: 'reviewer-pool:default', deadline: input.now + 20,
+              allowedActions: ['claim', 'submit_verdict', 'reassign', 'replan', 'cancel'] as const,
+            },
+            nextWait: {
+              owner: 'sponsor:project-1', deadline: input.now + 40,
+              allowedActions: ['approve', 'reject', 'request_changes', 'reopen', 'rebase', 'replan', 'cancel'] as const,
+            },
+          };
+        },
+      },
+    });
+    await kernel.createRun({ runId: 'run-1', projectId: 'project-1', title: 'Two gates' });
+    await kernel.execute('project-1', 'run-1', {
+      type: 'plan_task', taskKey: 'publish', title: 'Publish', required: true, maxAttempts: 1,
+    });
+    await kernel.pinTaskAcceptance('project-1', 'run-1', 'publish');
+    await kernel.execute('project-1', 'run-1', {
+      type: 'claim_task', taskKey: 'publish', assignmentId: 'assignment-1',
+      owner: 'writer', role: 'executor', leaseExpiresAt: 200,
+    });
+    await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
+    await kernel.execute('project-1', 'run-1', {
+      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
+    });
+    const routed = await kernel.evaluateTaskAcceptance('project-1', 'run-1', 'publish');
+    const reviewId = routed.tasks.publish!.currentReviewerAssignmentId!;
+    await kernel.claimReviewerAssignment('project-1', 'run-1', reviewId, 'reviewer-bob');
+    const reviewed = await kernel.submitReviewerVerdict(
+      'project-1', 'run-1', reviewId, 'reviewer-bob', {
+        candidateHash: 'sha256:candidate-1',
+        criteria: [{ criterionId: 'criterion-build', status: 'passed', evidenceRefs: ['review://1'] }],
+        acceptedClaimIds: ['claim-1'],
+        rejectedClaimIds: ['claim-2'],
+        evidenceRefs: ['review://1'],
+      },
+    );
+    expect(reviewed.tasks.publish?.status).toBe('awaiting_acceptance');
+    expect(reviewed.reviewerAssignments[reviewId]?.status).toBe('passed');
+    const gateId = reviewed.tasks.publish!.currentSponsorGateId!;
+    expect(reviewed.sponsorGates[gateId]).toMatchObject({
+      reviewerAssignmentId: reviewId, candidateHash: 'sha256:candidate-1', status: 'open',
+    });
+
+    await expect(kernel.decideSponsorGate('project-1', 'run-1', gateId, 'sponsor-alice', {
+      candidateHash: 'sha256:wrong', decision: 'approve', reason: 'wrong target',
+    })).rejects.toThrow('stale for the current Candidate hash');
+    const accepted = await kernel.decideSponsorGate('project-1', 'run-1', gateId, 'sponsor-alice', {
+      candidateHash: 'sha256:candidate-1', decision: 'approve', reason: 'approved exact candidate',
+    });
+    expect(accepted.tasks.publish?.status).toBe('accepted');
+    expect(accepted.tasks.publish?.acceptanceRecord).toMatchObject({
+      route: 'reviewer_then_sponsor',
+      reviewerAssignmentId: reviewId,
+      reviewerPrincipalId: 'reviewer-bob',
+      sponsorGateId: gateId,
+      sponsorPrincipalId: 'sponsor-alice',
+      acceptedClaimIds: ['claim-1'],
+      rejectedClaimIds: ['claim-2'],
+    });
   });
 
   it('rejects a policy route that removes the baseline Sponsor requirement', async () => {
@@ -707,6 +870,36 @@ function pinnedAcceptancePolicy() {
     },
     decide(input: WorkroomAcceptanceDecisionInput) {
       return lowRiskAcceptance(input);
+    },
+  };
+}
+
+function allowingAcceptanceAuthority() {
+  return {
+    authorize(input: {
+      action: 'claim_review' | 'submit_review' | 'decide_sponsor';
+      principalId: string;
+      requiredRole: 'reviewer' | 'sponsor';
+      projectId: string;
+      runId: string;
+      taskKey: string;
+      targetId: string;
+      expectedSequence: number;
+    }) {
+      if (input.principalId === 'intruder') {
+        return Object.freeze({
+          ...input,
+          authorized: false as const,
+          role: input.requiredRole,
+          reason: 'principal is not a Project Reviewer or Sponsor',
+        });
+      }
+      return Object.freeze({
+        ...input,
+        authorized: true as const,
+        role: input.requiredRole,
+        authorizedBy: 'project-membership:v1',
+      });
     },
   };
 }

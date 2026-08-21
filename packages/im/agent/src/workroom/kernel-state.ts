@@ -1,5 +1,6 @@
 import type {
   WorkroomAssignmentState,
+  WorkroomAcceptanceWaitStatus,
   WorkroomCommand,
   WorkroomEvent,
   WorkroomEventDraft,
@@ -212,6 +213,7 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
       const record = payload.record as NonNullable<WorkroomTaskState['acceptanceRecord']>;
       if (!task.acceptanceContract) throw new Error(`Task ${task.key} Acceptance Contract is not pinned`);
       assertPinnedAcceptanceContract(record.contract, task.acceptanceContract);
+      assertAcceptanceRecordControlBindings(state, task, record);
       ({ reviewerAssignments, sponsorGates } = settleAcceptanceWaits(
         task, reviewerAssignments, sponsorGates, 'satisfied',
       ));
@@ -264,7 +266,7 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
       break;
     }
     case 'reviewer.expired': {
-      const assignment = requireReviewerAssignment(state, String(payload.assignmentId), ['open']);
+      const assignment = requireReviewerAssignment(state, String(payload.assignmentId), ['open', 'claimed']);
       if (payload.taskKey !== assignment.taskKey) throw new Error('Reviewer expiry targets another Task');
       reviewerAssignments = {
         ...reviewerAssignments,
@@ -275,6 +277,42 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
         ...task,
         acceptanceBlockReason: 'Reviewer deadline expired; reassign, replan or cancel',
       });
+      break;
+    }
+    case 'reviewer.claimed': {
+      const assignment = requireReviewerAssignment(state, String(payload.assignmentId), ['open']);
+      if (payload.taskKey !== assignment.taskKey) throw new Error('Reviewer claim targets another Task');
+      assertPersistedAcceptanceAuthorization(state, payload, {
+        action: 'claim_review', role: 'reviewer', principalKey: 'reviewerPrincipalId', targetId: assignment.id,
+      });
+      reviewerAssignments = {
+        ...reviewerAssignments,
+        [assignment.id]: {
+          ...assignment,
+          status: 'claimed',
+          reviewerPrincipalId: String(payload.reviewerPrincipalId),
+          authorizationRef: String(payload.authorizedBy),
+        },
+      };
+      break;
+    }
+    case 'reviewer.verdict_recorded': {
+      const assignment = requireReviewerAssignment(state, String(payload.assignmentId), ['claimed']);
+      if (payload.taskKey !== assignment.taskKey) throw new Error('Reviewer verdict targets another Task');
+      assertPersistedAcceptanceAuthorization(state, payload, {
+        action: 'submit_review', role: 'reviewer', principalKey: 'reviewerPrincipalId', targetId: assignment.id,
+      });
+      if (payload.reviewerPrincipalId !== assignment.reviewerPrincipalId) {
+        throw new Error('Reviewer verdict principal does not match the claimed Assignment');
+      }
+      reviewerAssignments = {
+        ...reviewerAssignments,
+        [assignment.id]: {
+          ...assignment,
+          status: payload.outcome === 'passed' ? 'passed' : 'rework',
+          verdict: payload.verdict as Readonly<Record<string, unknown>>,
+        },
+      };
       break;
     }
     case 'sponsor_gate.opened': {
@@ -301,6 +339,29 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
         ...task,
         acceptanceBlockReason: 'Sponsor Gate expired; reopen, rebase, replan or cancel',
       });
+      break;
+    }
+    case 'sponsor_gate.decided': {
+      const gate = requireSponsorGate(state, String(payload.gateId), ['open']);
+      if (payload.taskKey !== gate.taskKey) throw new Error('Sponsor decision targets another Task');
+      assertPersistedAcceptanceAuthorization(state, payload, {
+        action: 'decide_sponsor', role: 'sponsor', principalKey: 'sponsorPrincipalId', targetId: gate.id,
+      });
+      const decision = payload.decision as 'approve' | 'reject' | 'request_changes' | 'cancel';
+      sponsorGates = {
+        ...sponsorGates,
+        [gate.id]: {
+          ...gate,
+          status: decision === 'approve'
+            ? 'approved'
+            : decision === 'request_changes'
+              ? 'changes_requested'
+              : decision === 'reject' ? 'rejected' : 'cancelled',
+          sponsorPrincipalId: String(payload.sponsorPrincipalId),
+          authorizationRef: String(payload.authorizedBy),
+          decisionReason: String(payload.reason),
+        },
+      };
       break;
     }
     case 'task.rework_requested': {
@@ -401,7 +462,7 @@ function decideClock(
     }
   }
   for (const assignment of Object.values(state.reviewerAssignments)) {
-    if (assignment.status === 'open' && assignment.deadline <= now) {
+    if ((assignment.status === 'open' || assignment.status === 'claimed') && assignment.deadline <= now) {
       events.push(event('reviewer.expired', {
         taskKey: assignment.taskKey,
         assignmentId: assignment.id,
@@ -566,18 +627,84 @@ function assertNoOpenAcceptanceWait(state: WorkroomRunState, task: WorkroomTaskS
   }
 }
 
+function assertAcceptanceRecordControlBindings(
+  state: WorkroomRunState,
+  task: WorkroomTaskState,
+  record: NonNullable<WorkroomTaskState['acceptanceRecord']>,
+): void {
+  if (record.route === 'auto_accept') {
+    if (record.reviewerAssignmentId || record.sponsorGateId) {
+      throw new Error('Automatic Acceptance Record cannot reference Reviewer or Sponsor proof');
+    }
+    return;
+  }
+  if (record.route === 'reviewer_required' || record.route === 'reviewer_then_sponsor') {
+    const reviewId = record.reviewerAssignmentId;
+    const review = reviewId ? state.reviewerAssignments[reviewId] : undefined;
+    if (!review
+      || (record.route === 'reviewer_required' && task.currentReviewerAssignmentId !== review.id)
+      || review.status !== 'passed'
+      || review.reviewerPrincipalId !== record.reviewerPrincipalId
+      || review.candidateHash !== record.candidateHash) {
+      throw new Error('Acceptance Record is not bound to a passed Reviewer verdict');
+    }
+  }
+  if (record.route === 'sponsor_required' || record.route === 'reviewer_then_sponsor') {
+    const gateId = record.sponsorGateId;
+    const gate = gateId ? state.sponsorGates[gateId] : undefined;
+    if (!gate
+      || task.currentSponsorGateId !== gate.id
+      || gate.status !== 'approved'
+      || gate.sponsorPrincipalId !== record.sponsorPrincipalId
+      || gate.candidateHash !== record.candidateHash
+      || (record.route === 'reviewer_then_sponsor'
+        && gate.reviewerAssignmentId !== record.reviewerAssignmentId)) {
+      throw new Error('Acceptance Record is not bound to an approved Sponsor Gate');
+    }
+  }
+}
+
+function assertPersistedAcceptanceAuthorization(
+  state: WorkroomRunState,
+  payload: Readonly<Record<string, unknown>>,
+  expected: Readonly<{
+    action: 'claim_review' | 'submit_review' | 'decide_sponsor';
+    role: 'reviewer' | 'sponsor';
+    principalKey: 'reviewerPrincipalId' | 'sponsorPrincipalId';
+    targetId: string;
+  }>,
+): void {
+  const authorization = payload.authorization;
+  if (!authorization || typeof authorization !== 'object' || Array.isArray(authorization)) {
+    throw new Error('Acceptance control event is missing its authorization decision');
+  }
+  const value = authorization as Readonly<Record<string, unknown>>;
+  if (value.authorized !== true
+    || value.action !== expected.action
+    || value.role !== expected.role
+    || value.principalId !== payload[expected.principalKey]
+    || value.projectId !== state.projectId
+    || value.runId !== state.runId
+    || value.taskKey !== payload.taskKey
+    || value.targetId !== expected.targetId
+    || value.expectedSequence !== state.sequence
+    || value.authorizedBy !== payload.authorizedBy) {
+    throw new Error('Acceptance control event authorization is stale or targets another scope');
+  }
+}
+
 function settleAcceptanceWaits(
   task: WorkroomTaskState,
   reviewerAssignments: WorkroomRunState['reviewerAssignments'],
   sponsorGates: WorkroomRunState['sponsorGates'],
-  status: WorkroomReviewerAssignmentState['status'],
+  status: Extract<WorkroomAcceptanceWaitStatus, 'cancelled' | 'satisfied' | 'stale'>,
 ): Pick<WorkroomRunState, 'reviewerAssignments' | 'sponsorGates'> {
   const reviewId = task.currentReviewerAssignmentId;
   const review = reviewId ? reviewerAssignments[reviewId] : undefined;
   const gateId = task.currentSponsorGateId;
   const gate = gateId ? sponsorGates[gateId] : undefined;
   return {
-    reviewerAssignments: review?.status === 'open'
+    reviewerAssignments: review?.status === 'open' || review?.status === 'claimed'
       ? { ...reviewerAssignments, [review.id]: { ...review, status } }
       : reviewerAssignments,
     sponsorGates: gate?.status === 'open'

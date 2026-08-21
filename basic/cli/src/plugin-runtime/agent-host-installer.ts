@@ -95,6 +95,8 @@ import {
   type TurnIntentResolver,
   createGenerationWorkroomAcceptancePolicyPort,
   workroomAcceptancePolicyDecisionToken,
+  createGenerationWorkroomAcceptanceAuthority,
+  workroomAcceptanceAuthorityToken,
 } from '@zhin.js/agent/runtime';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
@@ -271,6 +273,10 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       acceptancePolicy: createGenerationWorkroomAcceptancePolicyPort(() =>
         resources.has(workroomAcceptancePolicyDecisionToken)
           ? resources.use(workroomAcceptancePolicyDecisionToken)
+          : undefined),
+      acceptanceAuthority: createGenerationWorkroomAcceptanceAuthority(() =>
+        resources.has(workroomAcceptanceAuthorityToken)
+          ? resources.use(workroomAcceptanceAuthorityToken)
           : undefined),
     });
     const activateFileWorkroomJournal = () => {

@@ -15,6 +15,16 @@ import {
   type WorkroomAcceptancePolicyDecisionPort,
 } from './acceptance-policy.js';
 import { decideWorkroom, replayWorkroom } from './kernel-state.js';
+import {
+  decideReviewerClaim,
+  decideReviewerVerdict,
+  decideSponsorGate,
+  type ReviewerVerdict,
+  type WorkroomAcceptanceAuthorityPort,
+  type WorkroomAcceptanceAuthorizationDecision,
+  type WorkroomAcceptanceAuthorizationInput,
+  type WorkroomSponsorDecision,
+} from './acceptance-control.js';
 
 export interface CreateWorkroomRunInput {
   readonly runId?: string;
@@ -27,6 +37,7 @@ export interface WorkroomKernelOptions {
   readonly now?: () => number;
   readonly createId?: () => string;
   readonly acceptancePolicy?: WorkroomAcceptancePolicyDecisionPort;
+  readonly acceptanceAuthority?: WorkroomAcceptanceAuthorityPort;
 }
 
 /** The sole command and state-transition authority for Workroom Run facts. */
@@ -35,12 +46,14 @@ export class WorkroomKernel {
   readonly #now: () => number;
   readonly #createId: () => string;
   readonly #acceptancePolicy?: WorkroomAcceptancePolicyDecisionPort;
+  readonly #acceptanceAuthority?: WorkroomAcceptanceAuthorityPort;
 
   constructor(options: WorkroomKernelOptions) {
     this.#journal = options.journal;
     this.#now = options.now ?? Date.now;
     this.#createId = options.createId ?? (() => randomUUID());
     this.#acceptancePolicy = options.acceptancePolicy;
+    this.#acceptanceAuthority = options.acceptanceAuthority;
   }
 
   async createRun(input: CreateWorkroomRunInput): Promise<WorkroomRunState> {
@@ -113,6 +126,87 @@ export class WorkroomKernel {
     return this.read(scopedProjectId, runId);
   }
 
+  async claimReviewerAssignment(
+    projectId: string,
+    runId: string,
+    assignmentId: string,
+    principalId: string,
+  ): Promise<WorkroomRunState> {
+    const { scopedProjectId, state } = await this.#readProject(projectId, runId);
+    const assignment = state.reviewerAssignments[assignmentId];
+    if (!assignment) throw new Error(`Reviewer Assignment ${assignmentId} not found`);
+    const authorization = await this.#authorize(state, {
+      action: 'claim_review',
+      principalId,
+      requiredRole: 'reviewer',
+      taskKey: assignment.taskKey,
+      targetId: assignment.id,
+    });
+    const drafts = decideReviewerClaim(
+      state,
+      { assignmentId, principalId, authorization },
+      (type, payload) => this.#event(type, payload),
+    );
+    await this.#journal.append(runId, state.sequence, drafts);
+    return this.read(scopedProjectId, runId);
+  }
+
+  async submitReviewerVerdict(
+    projectId: string,
+    runId: string,
+    assignmentId: string,
+    principalId: string,
+    verdict: ReviewerVerdict,
+  ): Promise<WorkroomRunState> {
+    const { scopedProjectId, state } = await this.#readProject(projectId, runId);
+    const assignment = state.reviewerAssignments[assignmentId];
+    if (!assignment) throw new Error(`Reviewer Assignment ${assignmentId} not found`);
+    const authorization = await this.#authorize(state, {
+      action: 'submit_review',
+      principalId,
+      requiredRole: 'reviewer',
+      taskKey: assignment.taskKey,
+      targetId: assignment.id,
+    });
+    const drafts = decideReviewerVerdict(
+      state,
+      { assignmentId, principalId, authorization, verdict },
+      (type, payload) => this.#event(type, payload),
+    );
+    await this.#journal.append(runId, state.sequence, drafts);
+    return this.read(scopedProjectId, runId);
+  }
+
+  async decideSponsorGate(
+    projectId: string,
+    runId: string,
+    gateId: string,
+    principalId: string,
+    input: Readonly<{
+      candidateHash: string;
+      decision: WorkroomSponsorDecision;
+      reason: string;
+    }>,
+  ): Promise<WorkroomRunState> {
+    const { scopedProjectId, state } = await this.#readProject(projectId, runId);
+    const gate = state.sponsorGates[gateId];
+    if (!gate) throw new Error(`Sponsor Gate ${gateId} not found`);
+    const authorization = await this.#authorize(state, {
+      action: 'decide_sponsor',
+      principalId,
+      requiredRole: 'sponsor',
+      taskKey: gate.taskKey,
+      targetId: gate.id,
+    });
+    const drafts = decideSponsorGate(
+      state,
+      { gateId, principalId, authorization, ...input },
+      (type, payload) => this.#event(type, payload),
+    );
+    await this.#journal.append(runId, state.sequence, drafts);
+    return this.read(scopedProjectId, runId);
+  }
+
   async read(projectId: string, runId: string): Promise<WorkroomRunState> {
     assertProjectId(projectId);
     const scopedProjectId = projectId.trim();
@@ -137,6 +231,32 @@ export class WorkroomKernel {
     const events = await this.#journal.read(runId);
     if (events.length === 0) throw new Error(`Workroom run ${runId} not found`);
     return replayWorkroom(events);
+  }
+
+  async #readProject(
+    projectId: string,
+    runId: string,
+  ): Promise<Readonly<{ scopedProjectId: string; state: WorkroomRunState }>> {
+    assertProjectId(projectId);
+    const scopedProjectId = projectId.trim();
+    assertRunId(runId);
+    const state = await this.#readUnscoped(runId);
+    assertProject(state, scopedProjectId);
+    return { scopedProjectId, state };
+  }
+
+  async #authorize(
+    state: WorkroomRunState,
+    input: Omit<WorkroomAcceptanceAuthorizationInput, 'projectId' | 'runId' | 'expectedSequence'>,
+  ): Promise<WorkroomAcceptanceAuthorizationDecision> {
+    const authority = this.#acceptanceAuthority;
+    if (!authority) throw new Error('Workroom Acceptance Authority Port is not installed');
+    return await authority.authorize(Object.freeze({
+      ...input,
+      projectId: state.projectId,
+      runId: state.runId,
+      expectedSequence: state.sequence,
+    }));
   }
 
   #event(type: WorkroomEventType, payload: Record<string, unknown>): WorkroomEventDraft {

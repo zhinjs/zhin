@@ -365,7 +365,8 @@ const WORKROOM_EVENT_TYPES = new Set<WorkroomEvent['type']>([
   'task.planned', 'task.blocked', 'task.blocker_resolved',
   'task.cancel_requested', 'task.cancelled', 'task.failed',
   'task.accepted', 'task.acceptance_pinned', 'task.acceptance_blocked', 'task.rework_requested', 'task.revised',
-  'reviewer.assigned', 'reviewer.expired', 'sponsor_gate.opened', 'sponsor_gate.expired',
+  'reviewer.assigned', 'reviewer.claimed', 'reviewer.verdict_recorded', 'reviewer.expired',
+  'sponsor_gate.opened', 'sponsor_gate.decided', 'sponsor_gate.expired',
   'assignment.claimed', 'assignment.started', 'assignment.heartbeat',
   'assignment.execution_completed', 'assignment.cancel_requested',
   'assignment.cancelled', 'assignment.lease_expired', 'clock.advanced',
@@ -423,16 +424,28 @@ function validatePayload(
       requirePayloadString(payload, 'reason'); requirePayloadRecord(payload, 'evaluation'); return;
     case 'reviewer.assigned':
       requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'reason');
-      requirePayloadRecord(payload, 'evaluation');
       validateAcceptanceWait(requirePayloadRecord(payload, 'assignment'), String(payload.taskKey), true); return;
     case 'reviewer.expired':
       requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'assignmentId'); return;
+    case 'reviewer.claimed':
+      requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'assignmentId');
+      requirePayloadString(payload, 'reviewerPrincipalId'); requirePayloadString(payload, 'authorizedBy');
+      requirePayloadRecord(payload, 'authorization'); return;
+    case 'reviewer.verdict_recorded':
+      requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'assignmentId');
+      requirePayloadEnum(payload, 'outcome', ['passed', 'rework']);
+      requirePayloadRecord(payload, 'verdict'); requirePayloadRecord(payload, 'authorization'); return;
     case 'sponsor_gate.opened':
       requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'reason');
-      requirePayloadRecord(payload, 'evaluation');
       validateAcceptanceWait(requirePayloadRecord(payload, 'gate'), String(payload.taskKey), false); return;
     case 'sponsor_gate.expired':
       requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'gateId'); return;
+    case 'sponsor_gate.decided':
+      requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'gateId');
+      requirePayloadString(payload, 'sponsorPrincipalId'); requirePayloadString(payload, 'authorizedBy');
+      requirePayloadString(payload, 'reason');
+      requirePayloadEnum(payload, 'decision', ['approve', 'reject', 'request_changes', 'cancel']);
+      requirePayloadRecord(payload, 'authorization'); return;
     case 'task.rework_requested':
       requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'reason'); return;
     case 'task.revised':
@@ -470,6 +483,7 @@ function validateAcceptanceWait(value: Record<string, unknown>, taskKey: string,
   if (value.taskKey !== taskKey) throw new Error('Invalid Workroom event payload: wait taskKey');
   requirePayloadNumber(value, 'deadline');
   requirePayloadEnum(value, 'status', ['open']);
+  requirePayloadRecord(value, 'evaluation');
   const policy = requirePayloadRecord(value, 'policy');
   requirePayloadString(policy, 'id'); requirePayloadString(policy, 'digest');
   requirePayloadPositiveInteger(policy, 'revision');

@@ -371,10 +371,14 @@ export { AGENT_ROLE_CONFIGS } from './orchestrator/role-configs.js';
 
 export * from './workroom/kernel-contracts.js';
 export * from './workroom/acceptance-policy.js';
+export * from './workroom/acceptance-control.js';
 export * from './workroom/journal.js';
 export * from './workroom/journal-model.js';
 export * from './workroom/workroom-kernel.js';
 export * from './workroom/runtime.js';
+export * from './workroom/remote-dispatch.js';
+export * from './workroom/profile-compiler.js';
+export * from './workroom/workflow-plan-builder.js';
 
 export {
   introspectionRestBindings,
