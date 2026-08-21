@@ -32,6 +32,7 @@ import {
   type OneBot12WsConfig,
 } from './protocol.js';
 import { receiveOneBot12SideEvent } from './side-event-dispatch.js';
+import { createOneBot12ContentPort } from './content-port.js';
 import {
   type OneBot12WsCreateOptions,
   type OneBot12WsSocket,
@@ -54,6 +55,7 @@ export class OneBot12WsEndpoint implements EndpointInstance {
 
   readonly #options: OneBot12WsEndpointOptions;
   readonly management: EndpointManagement = createOneBot12EndpointManagement(this);
+  readonly content = createOneBot12ContentPort((action, params) => this.callApi(action, params));
   readonly #lifecycle: EndpointLifecycle;
   #ws?: OneBot12WsSocket;
   #requestId = 0;

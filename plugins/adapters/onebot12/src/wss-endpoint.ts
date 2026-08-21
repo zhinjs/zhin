@@ -24,6 +24,7 @@ import {
   type OneBot12WssConfig,
 } from './protocol.js';
 import { receiveOneBot12SideEvent } from './side-event-dispatch.js';
+import { createOneBot12ContentPort } from './content-port.js';
 import { verifyOneBotAccessToken } from './wss-auth.js';
 import { type OneBot12WsSocket, WS_OPEN } from './ws-types.js';
 
@@ -40,6 +41,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
 
   readonly #options: OneBot12WssEndpointOptions;
   readonly management: EndpointManagement = createOneBot12EndpointManagement(this);
+  readonly content = createOneBot12ContentPort((action, params) => this.callApi(action, params));
   #ws?: OneBot12WsSocket;
   #wsRelease?: () => void;
   #heartbeatTimer?: NodeJS.Timeout;

@@ -23,6 +23,7 @@ import {
   type OneBot12WebhookConfig,
 } from './protocol.js';
 import { receiveOneBot12SideEvent } from './side-event-dispatch.js';
+import { createOneBot12ContentPort } from './content-port.js';
 import { verifyOneBotAccessToken } from './wss-auth.js';
 
 const logger = getLogger('onebot12');
@@ -39,6 +40,7 @@ export interface OneBot12WebhookEndpointOptions {
 export class OneBot12WebhookEndpoint implements EndpointInstance {
   readonly #options: OneBot12WebhookEndpointOptions;
   readonly management: EndpointManagement = createOneBot12EndpointManagement(this);
+  readonly content = createOneBot12ContentPort((action, params) => this.callApi(action, params));
   readonly #callAction: typeof callOneBot12Action;
   #routeReleases: HttpRouteRegistration[] = [];
   #open = false;
