@@ -210,6 +210,46 @@ describe('runtime console RPC', () => {
     expect(document.http).toEqual({ port: 8080 });
   });
 
+  it('reads and revision-checks the Workroom-only config RPC', async () => {
+    const revision = 'a'.repeat(64);
+    const nextRevision = 'b'.repeat(64);
+    const workrooms = { support: { name: 'Support' } };
+    const ctx = {
+      authScope: 'full' as const,
+      listPages: async () => [],
+      readWorkroomCatalog: async () => ({ agents: { zhin: {} }, workrooms, revision }),
+      setWorkroomCatalog: async (next: unknown, expected: string) => {
+        expect(next).toEqual(workrooms);
+        expect(expected).toBe(revision);
+        return { revision: nextRevision, restartRequired: true as const };
+      },
+    };
+    const read = await dispatchRuntimeConsoleRpc({ type: 'workrooms:get', requestId: 81 }, ctx);
+    expect(pickRpcReply({ type: 'workrooms:get', requestId: 81 }, read)).toMatchObject({
+      data: { workrooms, revision },
+    });
+    const set = await dispatchRuntimeConsoleRpc({
+      type: 'workrooms:set', requestId: 82, data: workrooms, expectedRevision: revision,
+    }, ctx);
+    expect(pickRpcReply({ type: 'workrooms:set', requestId: 82 }, set)).toMatchObject({
+      data: { success: true, revision: nextRevision, restartRequired: true },
+    });
+
+    const demoRead = await dispatchRuntimeConsoleRpc(
+      { type: 'workrooms:get', requestId: 83 },
+      { ...ctx, authScope: 'demo' },
+    );
+    expect(pickRpcReply({ type: 'workrooms:get', requestId: 83 }, demoRead)).toMatchObject({
+      data: { workrooms, revision },
+    });
+    const demoWrite = await dispatchRuntimeConsoleRpc(
+      { type: 'workrooms:set', requestId: 84, data: workrooms, expectedRevision: revision },
+      { ...ctx, authScope: 'demo' },
+    );
+    expect(pickRpcReply({ type: 'workrooms:set', requestId: 84 }, demoWrite)?.error)
+      .toMatch(/Demo scope/u);
+  });
+
   it('publishes config:updated after config:set / config:save-yaml and system:restarting on restart', async () => {
     const published: Array<{ type: string; data: unknown }> = [];
     const publishEvent = (type: string, data: unknown) => {

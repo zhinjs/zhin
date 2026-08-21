@@ -1,5 +1,7 @@
 import { rootPluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { HttpHostOptions } from '@zhin.js/host-http';
 import type { RuntimeMcpConfig } from '@zhin.js/mcp/runtime';
 import type { RuntimeA2aConfig } from '@zhin.js/a2a/runtime';
@@ -17,6 +19,8 @@ interface ProtocolConfig {
   readonly publicBaseUrl: string;
 }
 
+const logger = getLogger('protocol-host');
+
 export interface InstallProtocolHostsOptions {
   readonly config: RuntimeConfigDocument | ConfigDocumentPort;
   readonly http: HttpHostOptions;
@@ -30,7 +34,7 @@ export interface InstallProtocolHostsOptions {
  * outside the default IM-only installation and load them only when configured.
  */
 export function installProtocolHosts(options: InstallProtocolHostsOptions): RootResourceInstaller {
-  return async ({ resources, lifecycle }) => {
+  return async ({ resources, lifecycle, handoff, signal: candidateSignal }) => {
     const resolved = await resolveProtocolConfig(options.config, options.http);
     const { httpHostToken } = await import('@zhin.js/host-http');
     const http = resources.use(httpHostToken);
@@ -84,24 +88,114 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
       }));
     }
 
-    if (resolved.a2a && resolved.a2a.enabled !== false) {
-      const [{ installRuntimeA2a }, { agentHostToken }] = await Promise.all([
+    if (resolved.a2a) {
+      const [{
+        installRuntimeA2a,
+        installRuntimeWorkroomCallbacks,
+        WorkroomA2aAuthRegistry,
+      }, {
+        agentHostToken,
+        workroomRemoteCallbackRuntimeToken,
+      }, {
+        WorkroomRemoteCallbackGateway,
+      }] = await Promise.all([
         import('@zhin.js/a2a/runtime'),
         import('@zhin.js/agent/runtime'),
+        import('@zhin.js/agent'),
       ]);
-      if (!resources.has(agentHostToken)) {
-        throw new Error('a2a.enabled requires a ready Agent Host (configure ai.providers and ai.agents.zhin)');
+      if (resolved.a2a.enabled !== false) {
+        if (!resources.has(agentHostToken)) {
+          throw new Error('a2a.enabled requires a ready Agent Host (configure ai.providers and ai.agents.zhin)');
+        }
+        lifecycle.add(installRuntimeA2a({
+          http,
+          agentHost: resources.use(agentHostToken),
+          config: resolved.a2a,
+          fallbackToken: resolved.httpToken,
+          fallbackPublicUrl: resolved.publicBaseUrl,
+          production: options.production,
+        }));
       }
-      lifecycle.add(installRuntimeA2a({
-        http,
-        agentHost: resources.use(agentHostToken),
-        config: resolved.a2a,
-        fallbackToken: resolved.httpToken,
-        fallbackPublicUrl: resolved.publicBaseUrl,
-        production: options.production,
-      }));
+      const callbacks = resolved.a2a.workroomCallbacks;
+      if (callbacks?.enabled === true) {
+        if (!resources.has(workroomRemoteCallbackRuntimeToken)) {
+          throw new Error('a2a.workroomCallbacks.enabled requires the Workroom Agent runtime');
+        }
+        if (!Array.isArray(callbacks.bindings) || callbacks.bindings.length === 0) {
+          throw new Error('a2a.workroomCallbacks.bindings requires at least one endpoint credential');
+        }
+        const generation = nextGeneration(options.snapshots);
+        const authRegistry = new WorkroomA2aAuthRegistry({
+          generation,
+          bindings: callbacks.bindings,
+        });
+        const maxSequenceGap = callbacks.maxSequenceGap ?? 32;
+        const maxBodyBytes = callbacks.maxBodyBytes ?? 1_048_576;
+        const callbackRuntime = resources.use(workroomRemoteCallbackRuntimeToken);
+        const application = callbackRuntime.createApplication(maxSequenceGap);
+        const gateway = new WorkroomRemoteCallbackGateway({
+          authRegistry,
+          linkRegistry: callbackRuntime.linkRegistry,
+          inboxRepository: callbackRuntime.inboxRepository,
+          application,
+          clock: { now: () => Date.now() },
+          receiptIds: {
+            create: identity => `workroom-callback:${identity.endpointId}:${randomUUID()}`,
+          },
+          maxBodyBytes,
+          maxSequenceGap,
+        });
+        const installed = await installRuntimeWorkroomCallbacks({
+          http,
+          path: callbacks.path ?? '/workroom-a2a/callback',
+          ordinaryA2aBasePath: resolved.a2a.path ?? '/a2a',
+          dependencies: {
+            authRegistry,
+            gateway,
+            linkRegistry: callbackRuntime.linkRegistry,
+            application,
+          },
+          maxBodyBytes,
+          signal: candidateSignal,
+          deferRecovery: true,
+          onRecoveryError: (linkId, error) => {
+            logger.warn(formatCompact({
+              op: 'workroom_remote_callback_recovery_failed',
+              linkId,
+              error: error instanceof Error ? error.message : String(error),
+            }));
+          },
+        });
+        lifecycle.add(installed.dispose);
+        handoff.add({
+          activateNext: async signal => {
+            const recovery = await installed.recover(signal);
+            logger.info(formatCompact({
+              op: 'workroom_remote_callback_ready',
+              path: callbacks.path ?? '/workroom-a2a/callback',
+              generation,
+              bindings: callbacks.bindings.length,
+              recovered: recovery.recovered,
+              recoveryFailed: recovery.failed,
+            }));
+          },
+        });
+      }
     }
   };
+}
+
+function nextGeneration(snapshots: SnapshotReader): number {
+  const lease = snapshots.acquire();
+  try {
+    const candidate = lease.value.generation + 1;
+    if (!Number.isSafeInteger(candidate) || candidate < 1) {
+      throw new Error('A2A callback generation is invalid');
+    }
+    return candidate;
+  } finally {
+    lease.release();
+  }
 }
 
 async function resolveProtocolConfig(

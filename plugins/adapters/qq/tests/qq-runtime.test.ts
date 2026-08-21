@@ -430,7 +430,7 @@ describe('qq plugin runtime adapter', () => {
             }),
             expect.objectContaining({
               id: 'b2',
-              action: expect.objectContaining({ type: 1, data: 'cancel' }),
+              action: expect.objectContaining({ type: 0, data: 'cancel' }),
             }),
           ],
         },

@@ -47,13 +47,14 @@ import {
   type DangerousToolDecision,
   type FileToolName,
 } from './dangerous-tool-policy.js';
-import { checkExecPolicyWithOptions, checkUnattendedExecPreset } from './exec-policy.js';
+import { checkExecPolicyWithOptions, checkTurnExecPolicy, checkUnattendedExecPreset } from './exec-policy.js';
 import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approve-always-store.js';
 import {
   checkUrlNetworkAccess,
   extractUrlsFromCommand,
   NETWORK_COMMAND_PATTERNS,
 } from './network-policy.js';
+import { attachTurnSandboxAuthority } from './turn-sandbox-authority.js';
 import type { ToolNetworkPolicy } from './network-policy-context.js';
 import type { ToolDescriptor } from '@zhin.js/tool';
 import type { TurnIngress } from '../turn/turn-ingress.js';
@@ -136,6 +137,7 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
       input.tool.name,
       input.input,
       input.turn.policy.filesystem?.workspaceRoot,
+      input.turn.policy.filesystem?.workingDirectory,
     );
     if (!fileAuthority.allowed) {
       return Object.freeze({ status: 'denied', policy: 'workspace-access', reason: fileAuthority.reason });
@@ -149,17 +151,52 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
     );
     const decision = turnFilePermissionDecision(permission, 'file-permission-matrix', authorizedInput);
     if (decision) return decision;
+    if (input.turn.policy.filesystem?.access === 'read-only' && fileOperation !== 'read') {
+      return Object.freeze({
+        status: 'denied',
+        policy: 'workspace-access',
+        reason: `Turn workspace is read-only; ${fileOperation} is not allowed`,
+      });
+    }
   }
   if (input.tool.name === 'bash') {
-    const command = stringArgument(input.input, 'command');
+    const cwdAuthority = await authorizeTurnFileInput(
+      'bash',
+      authorizedInput,
+      input.turn.policy.filesystem?.workspaceRoot,
+      input.turn.policy.filesystem?.workingDirectory,
+    );
+    if (!cwdAuthority.allowed) {
+      return Object.freeze({ status: 'denied', policy: 'workspace-access', reason: cwdAuthority.reason });
+    }
+    authorizedInput = cwdAuthority.input;
+    const command = stringArgument(authorizedInput, 'command');
     if (command) {
-      if (input.turn.policy.shell) {
+      if (input.turn.policy.shell?.preset) {
         const exec = checkUnattendedExecPreset(command, input.turn.policy.shell.preset);
         if (!exec.allowed) {
           return Object.freeze({
             status: 'denied',
             policy: 'exec-policy',
             reason: exec.reason ?? `command denied by ${input.turn.policy.shell.preset} preset`,
+          });
+        }
+      }
+      if (input.turn.policy.shell?.security) {
+        const exec = checkTurnExecPolicy(command, input.turn.policy.shell);
+        if (!exec.allowed) {
+          if (exec.needsApproval) {
+            return Object.freeze({
+              status: 'approval_required',
+              policy: 'exec-policy',
+              reason: exec.reason ?? 'shell command requires approval',
+              input: withTurnSandboxAuthority(input.turn, authorizedInput),
+            });
+          }
+          return Object.freeze({
+            status: 'denied',
+            policy: 'exec-policy',
+            reason: exec.reason ?? 'shell command denied',
           });
         }
       }
@@ -181,9 +218,17 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
         if (decision) return decision;
       }
       const permission = checkBashFilePermission(toolRequesterRoleToFileRole(requesterRole), command);
-      const decision = turnFilePermissionDecision(permission, 'bash-file-permission', input.input);
+      const decision = turnFilePermissionDecision(permission, 'bash-file-permission', authorizedInput);
       if (decision) return decision;
+      if (input.turn.policy.filesystem?.access === 'read-only' && permission.fileOperation !== null && permission.fileOperation !== 'read') {
+        return Object.freeze({
+          status: 'denied',
+          policy: 'workspace-access',
+          reason: `Turn workspace is read-only; shell ${permission.fileOperation} is not allowed`,
+        });
+      }
     }
+    authorizedInput = withTurnSandboxAuthority(input.turn, authorizedInput);
   }
   if (input.tool.approval !== 'never') {
     return Object.freeze({
@@ -194,6 +239,26 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
     });
   }
   return Object.freeze({ status: 'allowed', input: authorizedInput });
+}
+
+function withTurnSandboxAuthority(
+  turn: TurnIngress,
+  input: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const filesystem = turn.policy.filesystem;
+  const workingDirectory = filesystem?.workingDirectory ?? filesystem?.workspaceRoot;
+  const access = filesystem?.access;
+  const isolated = turn.policy.shell?.isolation === 'required'
+    && (access === 'read-only' || access === 'workspace-write');
+  const unrestricted = turn.policy.shell?.isolation === 'none' && access === 'danger-full-access';
+  if (!workingDirectory || (!isolated && !unrestricted)) {
+    return input;
+  }
+  return attachTurnSandboxAuthority(input, {
+    workingDirectory,
+    access,
+    networkAccess: turn.policy.network?.enabled === true,
+  });
 }
 
 function checkTurnNetworkPolicy(input: TurnToolPolicyInput): TurnToolPolicyDecision | undefined {

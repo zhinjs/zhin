@@ -7,6 +7,7 @@ Zhin.js 钉钉适配器（Plugin Runtime），通过 Runtime Host HTTP Webhook �
 - Webhook 事件接收（`httpHostToken` POST + HMAC-SHA256 签名验证）
 - Access Token 自动刷新
 - Session Webhook 优先回复 / `/robot/send` 主动发送
+- canonical `markdown` 段编码为钉钉原生 `msgtype: markdown`
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 
 ## 安装

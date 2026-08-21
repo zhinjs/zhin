@@ -1,5 +1,6 @@
 export * from './agent-runtime.js';
 export * from './agent-host-port.js';
+export * from './agent-trace-runtime.js';
 export type { AssistantRuntimeHandle } from '../assistant/runtime-contract.js';
 export {
   createWorkroomRuntime,
@@ -13,6 +14,7 @@ export * from './turn-intent-resolver.js';
 export * from './workroom-acceptance-policy.js';
 export * from './workroom-acceptance-authority.js';
 export * from './workroom-remote-executor.js';
+export * from './workroom-remote-callback-runtime.js';
 export * from './capability-ingress.js';
 export * from './deferred-capability-plan.js';
 export * from './full-agent-turn-engine.js';

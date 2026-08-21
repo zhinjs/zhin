@@ -16,10 +16,10 @@ if (!process.env.L4_SKIP_PLATFORM) {
 
 /** @type {string[]} */
 const l4TestFiles = [
-  'packages/im/agent/tests/orchestration-dispatcher.test.ts',
-  'packages/im/agent/tests/orchestrator/executor-contract.test.ts',
+  'packages/im/agent/tests/workroom/workroom-kernel.test.ts',
+  'packages/im/agent/tests/workroom/assignment-observation-ingress.test.ts',
   'packages/im/agent/tests/remote-loopback.test.ts',
-  'packages/im/agent/tests/memory-entry.test.ts',
+  'packages/im/agent/tests/memory/memory-system.test.ts',
   'packages/host/mcp/tests/mesh-auth.test.ts',
   'packages/host/mcp/tests/runtime.test.ts',
   'packages/host/a2a/tests/runtime.test.ts',

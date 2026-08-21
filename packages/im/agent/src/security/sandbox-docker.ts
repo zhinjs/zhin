@@ -115,7 +115,7 @@ export async function executeInDocker(
     '--security-opt', 'no-new-privileges',  // 禁止提权
     '--cap-drop', 'ALL',             // 丢弃所有 capabilities
     '--workdir', '/workspace',
-    '-v', `${cwd}:/workspace:ro`,    // 只读挂载工作目录
+    '-v', `${cwd}:/workspace:${merged.filesystemAccess === 'workspace-write' ? 'rw' : 'ro'}`,
   ];
 
   // 网络隔离

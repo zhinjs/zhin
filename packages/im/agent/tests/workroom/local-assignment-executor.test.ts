@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { rootPluginId } from '@zhin.js/plugin-runtime';
+import type { AgentCapabilities, ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
+import { bindWorkroomCapabilityRealization } from '../../src/plugin-runtime/deferred-capability-plan.js';
 import {
   createAssignmentExecutionEnvelope,
   type AssignmentExecutionObservation,
@@ -6,19 +9,92 @@ import {
 } from '../../src/workroom/assignment-executor.js';
 import {
   LocalAssignmentExecutor,
+  type LocalAssignmentCapabilityProjectionPort,
   type LocalModelExecutionEvent,
   type LocalModelExecutionPort,
 } from '../../src/workroom/local-assignment-executor.js';
+import {
+  createWorkroomRoleCapabilityReference,
+  createWorkroomRoleCapabilitySnapshot,
+  createWorkroomRoleCapabilitySupply,
+  type WorkroomRoleCapabilitySnapshotInput,
+} from '../../src/workroom/role-capability-snapshot.js';
 
 describe('Local Assignment Executor', () => {
+  it('starts the local model only with the Envelope-bound physical capability plan', async () => {
+    const envelope = createAssignmentExecutionEnvelope(envelopeInput());
+    let releases = 0;
+    let received: unknown;
+    const model: LocalModelExecutionPort = {
+      async *execute(request) {
+        received = request;
+        yield completedEvent('model-event-1');
+      },
+    };
+
+    await collect(new LocalAssignmentExecutor(model, capabilityProjection(() => {
+      releases += 1;
+    })).execute(
+      envelope,
+      new AbortController().signal,
+    ));
+
+    expect(received).toMatchObject({
+      envelope,
+      capabilityPlan: {
+        allTools: [
+          { name: 'read_repo' },
+          { name: 'discover' },
+          { name: 'load_tool' },
+          { name: 'load_skill' },
+        ],
+      },
+    });
+    expect((received as { capabilityPlan: { controller: { loadedToolNames(): string[] } } })
+      .capabilityPlan.controller.loadedToolNames()).toEqual(['read_repo']);
+    expect(releases).toBe(1);
+  });
+
+  it('does not start the model when the active generation cannot realize the snapshot', async () => {
+    const envelope = createAssignmentExecutionEnvelope(envelopeInput());
+    let releases = 0;
+    const trusted = capabilityProjection(() => { releases += 1; });
+    let modelCalls = 0;
+    const model: LocalModelExecutionPort = {
+      async *execute() {
+        modelCalls += 1;
+        yield completedEvent('must-not-run');
+      },
+    };
+    const missing: LocalAssignmentCapabilityProjectionPort = {
+      async resolve(input, signal) {
+        const projection = await trusted.resolve(input, signal);
+        return Object.freeze({
+          ...projection,
+          capabilities: Object.freeze({
+            ...projection.capabilities,
+            tools: Object.freeze([]),
+          }),
+        });
+      },
+    };
+
+    await expect(collect(new LocalAssignmentExecutor(model, missing).execute(
+      envelope,
+      new AbortController().signal,
+    ))).rejects.toThrow('trusted generation realization');
+    expect(modelCalls).toBe(0);
+    expect(releases).toBe(1);
+  });
+
   it('projects local model events into immutable observations bound to the trusted Envelope', async () => {
     const envelope = createAssignmentExecutionEnvelope(envelopeInput());
     const controller = new AbortController();
     let receivedEnvelope: unknown;
     let receivedSignal: unknown;
     const model: LocalModelExecutionPort = {
-      async *execute(input, signal) {
-        receivedEnvelope = input;
+      async *execute(request, signal) {
+        receivedEnvelope = request.envelope;
         receivedSignal = signal;
         yield {
           version: 1,
@@ -63,7 +139,7 @@ describe('Local Assignment Executor', () => {
     };
 
     const observations = await collect(
-      new LocalAssignmentExecutor(model).execute(envelope, controller.signal),
+      new LocalAssignmentExecutor(model, capabilityProjection()).execute(envelope, controller.signal),
     );
 
     expect(receivedEnvelope).toBe(envelope);
@@ -121,6 +197,7 @@ describe('Local Assignment Executor', () => {
 
   it('fails closed when local model execution ends without one typed completion', async () => {
     const envelope = createAssignmentExecutionEnvelope(envelopeInput());
+    let releases = 0;
     const model: LocalModelExecutionPort = {
       async *execute() {
         yield {
@@ -132,8 +209,12 @@ describe('Local Assignment Executor', () => {
     };
 
     await expect(collect(
-      new LocalAssignmentExecutor(model).execute(envelope, new AbortController().signal),
+      new LocalAssignmentExecutor(model, capabilityProjection(() => { releases += 1; })).execute(
+        envelope,
+        new AbortController().signal,
+      ),
     )).rejects.toThrow('ended without execution_completed');
+    expect(releases).toBe(1);
   });
 
   it('rejects model events that smuggle Workroom command authority', async () => {
@@ -150,7 +231,10 @@ describe('Local Assignment Executor', () => {
     };
 
     await expect(collect(
-      new LocalAssignmentExecutor(model).execute(envelope, new AbortController().signal),
+      new LocalAssignmentExecutor(model, capabilityProjection()).execute(
+        envelope,
+        new AbortController().signal,
+      ),
     )).rejects.toThrow('contains forbidden field cancel');
   });
 
@@ -169,7 +253,10 @@ describe('Local Assignment Executor', () => {
       };
 
       await expect(collect(
-        new LocalAssignmentExecutor(model).execute(envelope, new AbortController().signal),
+        new LocalAssignmentExecutor(model, capabilityProjection()).execute(
+          envelope,
+          new AbortController().signal,
+        ),
       )).rejects.toThrow('unsupported event type');
     },
   );
@@ -181,6 +268,7 @@ describe('Local Assignment Executor', () => {
     let markStarted!: () => void;
     const started = new Promise<void>((resolve) => { markStarted = resolve; });
     let stopCalls = 0;
+    let releases = 0;
     const model: LocalModelExecutionPort = {
       execute(_input, signal) {
         expect(signal).toBe(controller.signal);
@@ -197,7 +285,10 @@ describe('Local Assignment Executor', () => {
         };
       },
     };
-    const pending = collect(new LocalAssignmentExecutor(model).execute(
+    const pending = collect(new LocalAssignmentExecutor(
+      model,
+      capabilityProjection(() => { releases += 1; }),
+    ).execute(
       envelope,
       controller.signal,
     ));
@@ -213,6 +304,7 @@ describe('Local Assignment Executor', () => {
       )),
     ])).rejects.toBe(cancelled);
     expect(stopCalls).toBe(1);
+    expect(releases).toBe(1);
   });
 
   it('does not let a completion escape when the model emits another event after it', async () => {
@@ -230,7 +322,10 @@ describe('Local Assignment Executor', () => {
     const escaped: AssignmentExecutionObservation[] = [];
 
     const consume = async (): Promise<void> => {
-      for await (const observation of new LocalAssignmentExecutor(model).execute(
+      for await (const observation of new LocalAssignmentExecutor(
+        model,
+        capabilityProjection(),
+      ).execute(
         envelope,
         new AbortController().signal,
       )) {
@@ -256,7 +351,7 @@ describe('Local Assignment Executor', () => {
       },
     };
 
-    await expect(collect(new LocalAssignmentExecutor(model).execute(
+    await expect(collect(new LocalAssignmentExecutor(model, capabilityProjection()).execute(
       envelope,
       new AbortController().signal,
     ))).rejects.toThrow('repeated eventId model-event-1');
@@ -270,17 +365,19 @@ async function collect<T>(source: AsyncIterable<T>): Promise<T[]> {
 }
 
 function envelopeInput(): AssignmentExecutionEnvelopeInput {
+  const scope = assignmentScope();
+  const supplies = capabilitySupplies(scope);
   return {
-    projectId: 'project-1',
-    runId: 'run-1',
-    taskKey: 'build',
-    taskRevision: 2,
-    assignmentId: 'assignment-1',
-    assignmentRevision: 3,
+    projectId: scope.projectId,
+    runId: scope.runId,
+    taskKey: scope.taskKey,
+    taskRevision: scope.taskRevision,
+    assignmentId: scope.assignmentId,
+    assignmentRevision: scope.assignmentRevision,
     attempt: 1,
     fence: 7,
     principalId: 'agent:developer-1',
-    role: 'executor',
+    role: scope.role,
     agentDefinition: snapshot('agent-definition:developer:1', 1, 'a'),
     plan: snapshot('workflow-plan:run-1:2', 2, 'b'),
     contextPolicy: snapshot('context-policy:project-1:1', 1, 'c'),
@@ -289,7 +386,7 @@ function envelopeInput(): AssignmentExecutionEnvelopeInput {
       sequence: 12,
       digest: `sha256:${'d'.repeat(64)}`,
     },
-    capabilitySnapshot: snapshot('capability-snapshot:assignment-1:1', 1, 'e'),
+    capabilitySnapshot: createWorkroomRoleCapabilityReference(supplies),
     policySnapshot: snapshot('policy-snapshot:run-1:1', 1, 'f'),
     workspace: {
       leaseRef: 'workspace-lease:assignment-1:1',
@@ -298,6 +395,135 @@ function envelopeInput(): AssignmentExecutionEnvelopeInput {
       fence: 7,
     },
   };
+}
+
+function capabilityProjection(
+  release: () => void = () => undefined,
+): LocalAssignmentCapabilityProjectionPort {
+  const capabilities = assignmentCapabilities();
+  return Object.freeze({
+    async resolve(envelope) {
+      const supplies = capabilitySupplies(assignmentScope());
+      const capabilitySnapshot = createWorkroomRoleCapabilitySnapshot({ envelope, ...supplies });
+      return Object.freeze({
+        capabilities,
+        capabilitySnapshot,
+        realization: bindWorkroomCapabilityRealization(
+          capabilities,
+          envelope,
+          capabilitySnapshot,
+        ),
+        sessionSnapshot: {
+          loadedTools: {
+            read_repo: 3,
+            spawn_task: 2,
+            plugin__workroom_executor_report_progress: 1,
+          },
+          loadedSkills: ['research', 'deploy'],
+        },
+        config: {
+          deferredTools: {
+            alwaysLoadedTools: [
+              'discover', 'load_tool', 'load_skill', 'read_repo', 'spawn_task',
+              'plugin__workroom_executor_report_progress',
+            ],
+          },
+        },
+        persistSnapshot: async () => undefined,
+        release,
+      });
+    },
+  });
+}
+
+function assignmentScope() {
+  return {
+    projectId: 'project-1',
+    runId: 'run-1',
+    taskKey: 'build',
+    taskRevision: 2,
+    assignmentId: 'assignment-1',
+    assignmentRevision: 3,
+    role: 'executor' as const,
+    capabilitySnapshotRef: 'capability-snapshot:assignment-1:1',
+    capabilitySnapshotRevision: 1,
+  };
+}
+
+function capabilitySupplies(
+  scope: ReturnType<typeof assignmentScope>,
+): Omit<WorkroomRoleCapabilitySnapshotInput, 'envelope'> {
+  const sources = [
+    'generation', 'profile', 'agent_definition', 'role', 'task', 'policy',
+  ] as const;
+  return Object.fromEntries(sources.map((source, index) => [source,
+    createWorkroomRoleCapabilitySupply({
+      source,
+      id: `authority-${index + 1}`,
+      revision: 1,
+      ...scope,
+      tools: [{ name: 'read_repo', digest: sha('a') }],
+      skills: [{
+        name: 'research',
+        digest: sha('b'),
+        requiredTools: ['read_repo'],
+      }],
+    }),
+  ])) as unknown as Omit<WorkroomRoleCapabilitySnapshotInput, 'envelope'>;
+}
+
+function assignmentCapabilities(): AgentCapabilities {
+  const owner = rootPluginId();
+  return Object.freeze({
+    generation: 7,
+    owner,
+    tools: Object.freeze([
+      testTool(owner, 'read_repo'),
+      testTool(owner, 'spawn_task'),
+      testTool(owner, 'plugin__workroom_executor_report_progress'),
+    ]),
+    skills: Object.freeze([
+      testSkill(owner, 'research', 'Use primary sources.'),
+      testSkill(owner, 'deploy', 'Deploy the application.'),
+    ]),
+    agents: Object.freeze([]),
+    mcp: Object.freeze([]),
+  });
+}
+
+function testTool(
+  owner: ReturnType<typeof rootPluginId>,
+  name: string,
+): ToolCapability {
+  return Object.freeze({
+    owner,
+    name,
+    qualifiedName: name,
+    description: name,
+    approval: 'never',
+    source: `/tools/${name}.ts`,
+    execute: async <TInput = unknown, TResult = unknown>(input: TInput) => input as TResult,
+  });
+}
+
+function testSkill(
+  owner: ReturnType<typeof rootPluginId>,
+  name: string,
+  instructions: string,
+) {
+  return Object.freeze({
+    $feature: 'zhin.skill/1' as const,
+    owner,
+    name,
+    qualifiedName: name,
+    description: name,
+    instructions,
+    source: `/skills/${name}/SKILL.md`,
+  });
+}
+
+function sha(character: string): string {
+  return `sha256:${character.repeat(64)}`;
 }
 
 function snapshot(ref: string, revision: number, hex: string) {

@@ -224,6 +224,7 @@ ai:
       enabled: true        # Generation-owned memory_search/memory_upsert; requires the Database Host
       autoConsolidate: false
     # memory_entries must be ready during candidate activation or that generation fails closed
+    # memoryMcp is deprecated; use the native memory_search / memory_upsert tools above
   access:                  # AI access control
     mode: open             # open | closed | whitelist, default open
     users: []              # Allowed user IDs in whitelist mode
@@ -247,6 +248,8 @@ ai:
 ```
 
 `ai.multimodal` (image/audio/video inbound and outbound strategies), `ai.knowledge.baseDir` (local knowledge base directory, default `knowledge`), etc., are configured as needed. Remote Agents are no longer attached through an `ai.remoteAgents` side path; a future A2A Executor must follow Workroom Assignment leases and Journal events.
+
+`ai.workrooms` has been removed. Projects, members, and collaboration spaces are managed by the persistent Workroom Catalog in Console; revision-checked saves take effect without restarting the runtime.
 
 ## plugin and plugins
 

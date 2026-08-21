@@ -327,6 +327,7 @@ describe('discord protocol helpers', () => {
   });
 
   it('formats outbound string and segment payloads', () => {
+    expect(defineDiscordAdapter.segments?.markdown).toBe('native');
     expect(formatOutboundBody('pong')).toEqual({ content: 'pong' });
     expect(formatOutboundBody([
       { type: 'text', data: { text: 'see' } },
@@ -335,6 +336,9 @@ describe('discord protocol helpers', () => {
       content: 'see',
       files: [{ name: 'a.png', url: 'https://example.com/a.png' }],
     });
+    expect(formatOutboundBody([
+      { type: 'markdown', data: { content: '# Title\n\n**important**' } },
+    ])).toEqual({ content: '# Title\n\n**important**' });
   });
 
   it('maps canonical MediaRef media to outbound files and drops unusable media with a warn', () => {

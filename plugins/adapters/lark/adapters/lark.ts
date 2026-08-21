@@ -18,10 +18,12 @@ export default defineAdapter<LarkAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
   // image 段 canonical MediaRef 经 /im/v1/images 物化为 image_key
   // （base64 解码 / path 读盘 / url 下载后上传，kind=file 平台引用直通）；
+  // canonical Markdown 由 endpoint codec 转为 lark_md 消息卡片；
   // 卡片交互未接入出站通道，交互段降级纯文本。
   segments: {
     outboundMedia: ['url', 'upload'],
     interactive: 'text',
+    markdown: 'native',
   },
   create(context) {
     const config = resolveLarkConfig(context.config);

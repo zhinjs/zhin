@@ -10,12 +10,23 @@ import { buildAgentCardForBinding } from './card-builder.js';
 import { ZhinA2AExecutor } from './agent-executor.js';
 import { handleAgentCard, handleJsonRpc, handleRest } from './http-handlers.js';
 import { verifyA2aBearer } from './auth.js';
+import type { WorkroomA2aAuthBindingInput } from './workroom-auth-registry.js';
+
+export interface RuntimeWorkroomCallbackConfig {
+  readonly enabled?: boolean;
+  /** Must remain outside the ordinary `/a2a/{agent}/*` route tree. */
+  readonly path?: string;
+  readonly maxBodyBytes?: number;
+  readonly maxSequenceGap?: number;
+  readonly bindings: readonly WorkroomA2aAuthBindingInput[];
+}
 
 export interface RuntimeA2aConfig {
   readonly enabled?: boolean;
   readonly path?: string;
   readonly token?: string;
   readonly publicUrl?: string;
+  readonly workroomCallbacks?: RuntimeWorkroomCallbackConfig;
 }
 
 export interface InstallRuntimeA2aOptions {
@@ -139,3 +150,17 @@ function normalizePath(path: string): string {
   const leading = path.startsWith('/') ? path : `/${path}`;
   return trimTrailingSlashes(leading) || '/a2a';
 }
+
+export {
+  installRuntimeWorkroomCallbacks,
+  type InstallRuntimeWorkroomCallbacksOptions,
+  type RuntimeWorkroomCallbackDependencies,
+  type RuntimeWorkroomCallbackInstallation,
+  type RuntimeWorkroomCallbackRecoverySummary,
+} from './workroom-callback-runtime.js';
+export {
+  WorkroomA2aAuthRegistry,
+  WorkroomA2aAuthenticationError,
+  type WorkroomA2aAuthRegistryOptions,
+  type WorkroomA2aEndpointAuthoritySnapshot,
+} from './workroom-auth-registry.js';

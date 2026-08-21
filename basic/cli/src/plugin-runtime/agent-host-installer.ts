@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   collectSegmentMedia,
@@ -10,7 +10,7 @@ import {
   type Tool,
 } from '@zhin.js/core';
 import { ingressRouteToken, type ImRuntime, type Message, type SendContent } from '@zhin.js/core/runtime';
-import type { CommandPrompt } from '@zhin.js/command';
+import type { UserInteraction } from '@zhin.js/interaction';
 import {
   expandEnvironmentValue,
   type ConfigDocumentPort,
@@ -45,6 +45,8 @@ import {
   bootstrapAssistantHome,
   ActivatableWorkroomJournal,
   FileWorkroomJournal,
+  ActivatableWorkroomCatalog,
+  FileWorkroomCatalog,
   WorkroomKernel,
   asPrivate,
   handleRuntimeOwnerApproveCommand,
@@ -59,13 +61,20 @@ import {
   type TurnRequest,
   type TurnIntent,
   type TurnOutcome,
+  type TurnEvent,
   type TurnAccessContext,
   type DeliveryOutcome,
+  type WorkroomCatalog,
   FileJournalStore,
   InteractionRouter,
   demoteScheduleCreator,
   type ScheduleActivityEvent,
   type ScheduleTurnExecutionRequest,
+  resolveWorkroomBotIdentity,
+  validateWorkroomDefinitions,
+  FileHumanIngressProposalRepository,
+  FileInteractionSpaceBindingRepository,
+  InteractionSpaceRouter,
 } from '@zhin.js/agent';
 import {
   agentHostToken,
@@ -84,6 +93,7 @@ import {
   SemanticMemoryRuntime,
   FileTodoStore,
   AgentRuntime,
+  createAgentTraceRuntime,
   createWorkroomRuntime,
   createSessionTreeRuntimeFromAgent,
   type AgentCapabilities,
@@ -91,12 +101,15 @@ import {
   type WorkroomRuntimeHandle,
   type SessionTreeRuntimeHandle,
   type ToolCapability,
+  type AgentTraceRecorder,
   turnIntentResolverToken,
   type TurnIntentResolver,
   createGenerationWorkroomAcceptancePolicyPort,
   workroomAcceptancePolicyDecisionToken,
   createGenerationWorkroomAcceptanceAuthority,
   workroomAcceptanceAuthorityToken,
+  createWorkroomRemoteCallbackRuntime,
+  workroomRemoteCallbackRuntimeToken,
 } from '@zhin.js/agent/runtime';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
@@ -107,6 +120,11 @@ import type {
   ConversationReference,
   ConversationResolution,
 } from '@zhin.js/im-contract';
+import { resolveSandboxTurnPolicy } from './sandbox-turn-policy.js';
+import {
+  WorkroomHumanIngressPreRoute,
+  createCatalogWorkroomSpace,
+} from './workroom-human-ingress-route.js';
 
 /** Minimal OutputElement shape for reply flattening (avoid direct @zhin.js/ai dep). */
 type OutputElementLike = {
@@ -176,6 +194,18 @@ export function assertFixedWorkroomStorageMode(
 ): void {
   if (requested === fixed) return;
   throw new Error(`Workroom storage mode changed from ${fixed} to ${requested}; process restart required`);
+}
+
+export async function assertWorkroomCatalogMatchesGeneration(
+  catalog: Pick<WorkroomCatalog, 'read'>,
+  agentNames: readonly string[],
+  endpointKeys: ReadonlySet<string>,
+): Promise<void> {
+  const snapshot = await catalog.read();
+  const errors = validateWorkroomDefinitions(snapshot.definitions, agentNames, endpointKeys);
+  if (errors.length > 0) {
+    throw new Error(`Persisted Workroom Catalog is incompatible with this Agent generation: ${errors.join('; ')}`);
+  }
 }
 
 export async function resolveAssistantConfigDocument(
@@ -256,6 +286,15 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       throw new Error('Agent Host requires a ready ai.agents.zhin binding');
     }
     lifecycle.add(() => service.dispose());
+    const listGenerationBindings = () => Object.freeze(
+      service.getBindingRegistry().listAgentNames()
+        .map((name) => service.getBindingRegistry().getBinding(name))
+        .filter((entry): entry is NonNullable<typeof entry> => entry != null)
+        .map((entry) => Object.freeze({ ...entry, mcpServers: [...entry.mcpServers] })),
+    );
+    const generationEndpointKeys = () => new Set(
+      options.im.listEndpoints().map((endpoint) => `${endpoint.adapter}:${endpoint.name}`),
+    );
 
     let zhinAgent: ZhinAgent | undefined;
     let composedRuntime: ReturnType<typeof composeZhinAgentRuntime> | undefined;
@@ -268,6 +307,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       : null;
     if (semanticMemory) lifecycle.add(() => semanticMemory.dispose());
     const workroomJournal = new ActivatableWorkroomJournal();
+    const workroomCatalog = new ActivatableWorkroomCatalog();
     const workroomKernel = new WorkroomKernel({
       journal: workroomJournal,
       acceptancePolicy: createGenerationWorkroomAcceptancePolicyPort(() =>
@@ -284,8 +324,18 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         workroomJournal.activate(new FileWorkroomJournal(join(options.projectRoot, '.zhin', 'workroom-journal')));
       }
     };
+    const activateFileWorkroomCatalog = async () => {
+      workroomCatalog.activate(new FileWorkroomCatalog(join(options.projectRoot, '.zhin', 'workroom-catalog.json')));
+      await assertWorkroomCatalogMatchesGeneration(
+        workroomCatalog,
+        listGenerationBindings().map((binding) => binding.name),
+        generationEndpointKeys(),
+      );
+    };
     let workroomRuntime: WorkroomRuntimeHandle;
     let sessionTreeRuntime: SessionTreeRuntimeHandle;
+    const traceRuntime = createAgentTraceRuntime();
+    const rememberedSandboxApprovals = new Set<string>();
     let schedule: ReturnType<typeof wireRuntimeSchedule>;
     try {
       const created = createRuntimeZhinAgent(
@@ -311,6 +361,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         options.projectRoot,
         assistantConfig,
         lifecycle,
+        traceRuntime,
       );
       scheduleTools = schedule.tools;
       assistantEnabled = schedule.assistantEnabled;
@@ -365,7 +416,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 { aiService: service, zhinAgent },
                 aiConfig,
                 workroomJournal,
+                workroomCatalog,
                 semanticMemory,
+              );
+              await assertWorkroomCatalogMatchesGeneration(
+                workroomCatalog,
+                listGenerationBindings().map((binding) => binding.name),
+                generationEndpointKeys(),
               );
               signal.throwIfAborted();
               logger.info(formatCompact({
@@ -387,6 +444,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       throw new Error('ai.memory.semantic.enabled requires the Database Root Host');
     } else {
       activateFileWorkroomJournal();
+      await activateFileWorkroomCatalog();
       zhinAgent.markMemoryPersistenceReady();
     }
 
@@ -463,12 +521,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     // happen here rather than through a mutable process-global registry.
     resources.provide(agentHostToken, Object.freeze({
       protocol: Object.freeze({
-        listBindings: () => Object.freeze(
-          service.getBindingRegistry().listAgentNames()
-            .map((name) => service.getBindingRegistry().getBinding(name))
-            .filter((entry): entry is NonNullable<typeof entry> => entry != null)
-            .map((entry) => Object.freeze({ ...entry, mcpServers: [...entry.mcpServers] })),
-        ),
+        listBindings: listGenerationBindings,
         execute: (bindingName: string, request: TurnRequest) => {
           const selected = service.getBindingRegistry().getBinding(bindingName);
           if (!selected) throw new Error(`Agent binding not found: ${bindingName}`);
@@ -476,7 +529,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
             binding: selected,
             mcpServers: selected.mcpServers,
             ...(selected.name === 'zhin' ? {} : { agent: selected.name }),
-          });
+          }, observeTrace(traceRuntime, request));
         },
       }),
       introspection: Object.freeze({
@@ -494,7 +547,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       console: Object.freeze({
         sessionTree: sessionTreeRuntime,
         workroom: workroomRuntime,
+        workroomCatalog,
+        listBindings: listGenerationBindings,
         assistant: schedule.assistantRuntime,
+        trace: traceRuntime,
+        cancelSession: (sessionKey: string) => zhinAgent.cancelSession(sessionKey),
       }),
     }));
     resources.provide(
@@ -513,13 +570,81 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     const presetCount = await seedPresets();
 
     const binding = service.getBindingRegistry().requireZhinBinding();
+    const workroomStateRoot = join(options.projectRoot, '.zhin');
+    mkdirSync(workroomStateRoot, { recursive: true });
+    resources.provide(
+      workroomRemoteCallbackRuntimeToken,
+      createWorkroomRemoteCallbackRuntime({
+        kernel: workroomKernel,
+        stateRoot: workroomStateRoot,
+      }),
+    );
+    const interactionSpaceBindings = new FileInteractionSpaceBindingRepository(
+      join(workroomStateRoot, 'interaction-space-bindings'),
+    );
+    const humanIngressProposals = new FileHumanIngressProposalRepository(
+      join(workroomStateRoot, 'workroom-human-ingress'),
+    );
+    const workroomHumanIngress = new WorkroomHumanIngressPreRoute({
+      bindings: interactionSpaceBindings,
+      bindingRouter: new InteractionSpaceRouter(interactionSpaceBindings),
+      proposals: humanIngressProposals,
+      principalOwner: String(rootPluginId()),
+      resolveCatalogSpace: async message => {
+        const adapter = capabilityLocalName(String(message.conversation.endpoint.id));
+        const endpoint = adapterLiveEndpointId(message);
+        const repository = adapter === 'github'
+          ? stringMetadata(message.metadata, 'repo')
+          : undefined;
+        const kind = repository
+          ? 'repository' as const
+          : message.conversation.kind === 'group' || message.conversation.kind === 'channel'
+            ? message.conversation.kind
+            : null;
+        if (!kind) return null;
+        const catalogSnapshot = await workroomCatalog.read();
+        const identity = resolveWorkroomBotIdentity(catalogSnapshot.definitions, {
+          adapter,
+          endpoint,
+          kind,
+          id: repository ?? message.conversation.id,
+        });
+        if (!identity) return null;
+        const definition = catalogSnapshot.definitions[identity.projectId];
+        if (!definition?.conversation) {
+          throw new Error(`Workroom Catalog ${identity.projectId} has no collaboration space`);
+        }
+        const sourceRef = `workroom-catalog:${encodeURIComponent(identity.projectId)}:conversation`;
+        return createCatalogWorkroomSpace({
+          projectId: identity.projectId,
+          agentDefinitionId: identity.agent,
+          space: 'workroom',
+          sourceRef,
+          sourceDigest: `sha256:${createHash('sha256').update(JSON.stringify([
+            identity.projectId,
+            definition.conversation.adapter,
+            definition.conversation.endpoint,
+            definition.conversation.kind,
+            definition.conversation.id,
+            definition.conversation.agent,
+          ])).digest('hex')}`,
+        });
+      },
+    });
 
-    resources.provide(ingressRouteToken, Object.freeze({ route: async (
-      message: Message,
-      lease: import('@zhin.js/plugin-runtime').SnapshotLease,
-      requester: PluginId,
-      conversationSequence: number | undefined,
-    ) => {
+    resources.provide(ingressRouteToken, Object.freeze({
+      preRoute: async (
+        message: Message,
+        _lease: import('@zhin.js/plugin-runtime').SnapshotLease,
+        _requester: PluginId,
+        conversationSequence: number | undefined,
+      ) => await workroomHumanIngress.preRoute(message, conversationSequence),
+      route: async (
+        message: Message,
+        lease: import('@zhin.js/plugin-runtime').SnapshotLease,
+        requester: PluginId,
+        conversationSequence: number | undefined,
+      ) => {
       const snapshot = lease.value;
       const trigger = service.getTriggerConfig();
       const matched = matchAiTrigger(message, trigger);
@@ -619,12 +744,22 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 
         const outcome = await withTriggerTimeout(
           async (signal) => {
+            const turnPolicy = resolveSandboxTurnPolicy({
+              platform: turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '',
+              isMaster: senderRoles.isMaster,
+              metadata: message.metadata,
+              projectRoot: options.projectRoot,
+              defaultNetwork: interactiveNetworkPolicy(service.getAgentConfig()),
+            });
             const request = createRuntimeTurnRequest(message, routed.userText, senderRoles, {
               traceId: randomUUID(),
               turnId: randomUUID(),
               signal,
-              workspaceRoot: options.projectRoot,
-              network: interactiveNetworkPolicy(service.getAgentConfig()),
+              workspaceRoot: turnPolicy.filesystem.workspaceRoot,
+              workingDirectory: turnPolicy.filesystem.workingDirectory,
+              filesystemAccess: turnPolicy.filesystem.access,
+              shell: turnPolicy.shell,
+              network: turnPolicy.network,
               intent: await resolveProductTurnIntent(
                 message,
                 senderRoles,
@@ -657,12 +792,25 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               }),
               ports: {
                 approval: options.approvalPort ?? createRuntimeApprovalPort({
-                  isMaster: senderRoles.isMaster,
-                  prompt: ownerId
-                    ? options.im.createPrompt(message, { subjectId: ownerId })
+                  // Sandbox `ask` must be a real interaction, even though the
+                  // authenticated Console user maps to the endpoint owner.
+                  isMaster: senderRoles.isMaster && turnPolicy.shell?.approvalMode !== 'ask',
+                  interaction: ownerId
+                    ? options.im.createInteraction(message, { subjectId: ownerId })
                     : undefined,
+                  ...(turnPolicy.shell?.approvalMode === 'ask' ? {
+                    rememberSession: {
+                      isApproved: (approval) => rememberedSandboxApprovals.has(
+                        `${sessionKey}:${approval.scopeKey ?? approval.toolName}`,
+                      ),
+                      grant: (approval) => {
+                        if (rememberedSandboxApprovals.size >= 256) rememberedSandboxApprovals.clear();
+                        rememberedSandboxApprovals.add(`${sessionKey}:${approval.scopeKey ?? approval.toolName}`);
+                      },
+                    },
+                  } : {}),
                 }),
-                question: createRuntimeQuestionPort(options.interactions, message),
+                question: createRuntimeQuestionPort(options.im, message),
                 reply: {
                   send: async (output) => {
                     logger.debug(formatCompact({
@@ -699,6 +847,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 mcpServers: binding.mcpServers,
                 agent: routed.agent?.qualifiedName ?? routed.agent?.name,
               },
+              observeTrace(traceRuntime, request),
             );
           },
           resolveTriggerTimeoutMs(trigger),
@@ -737,7 +886,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       } finally {
         capabilityActive = false;
       }
-    }}));
+      },
+    }));
 
     const providers = service.listProviders();
     const features = [
@@ -777,6 +927,7 @@ function wireRuntimeSchedule(
   projectRoot: string,
   assistantRaw: AssistantConfig | undefined,
   lifecycle: DisposeStack,
+  trace: AgentTraceRecorder,
 ): {
   tools: ReturnType<typeof createScheduleTools>;
   dispose: () => Promise<void>;
@@ -827,7 +978,7 @@ function wireRuntimeSchedule(
     },
   });
   const executor = createTaskExecutor({
-    turn: createRuntimeScheduleTurnPort(runtime, service, projectRoot),
+    turn: createRuntimeScheduleTurnPort(runtime, service, projectRoot, trace),
     config: asPrivate(agent).config,
     activity: createScheduleActivityPort(agent),
     dataDir,
@@ -929,6 +1080,7 @@ function createRuntimeScheduleTurnPort(
   runtime: AgentRuntime,
   service: AIService,
   projectRoot: string,
+  trace: AgentTraceRecorder,
 ) {
   return Object.freeze({
     execute: async (input: ScheduleTurnExecutionRequest): Promise<TurnOutcome> => {
@@ -975,9 +1127,25 @@ function createRuntimeScheduleTurnPort(
         binding,
         mcpServers: binding.mcpServers,
         ...(binding.name === 'zhin' ? {} : { agent: binding.name }),
-      }, input.onTurnEvent);
+      }, observeTrace(trace, request, input.onTurnEvent));
     },
   });
+}
+
+function observeTrace(
+  trace: AgentTraceRecorder,
+  request: TurnRequest,
+  downstream?: (event: TurnEvent) => void,
+): (event: TurnEvent) => void {
+  return (event) => {
+    const tracedEvent: TurnEvent = event.type === 'turn_start'
+      && request.origin.kind === 'im'
+      && request.origin.messageId
+      ? { ...event, sourceMessageId: request.origin.messageId }
+      : event;
+    trace.record(request.session.key, request.identity.turnId, tracedEvent);
+    downstream?.(event);
+  };
 }
 
 function createScheduleActivityPort(agent: ZhinAgent) {
@@ -1240,6 +1408,9 @@ export function createRuntimeTurnRequest(
     turnId: string;
     signal: AbortSignal;
     workspaceRoot: string;
+    workingDirectory?: string;
+    filesystemAccess?: NonNullable<TurnRequest['policy']['filesystem']>['access'];
+    shell?: TurnRequest['policy']['shell'];
     network?: TurnRequest['policy']['network'];
     intent: TurnIntent;
     ports: TurnRequestPorts;
@@ -1253,6 +1424,8 @@ export function createRuntimeTurnRequest(
       cursor: number;
     }>>;
     commitConversationContext?: (consumer: string, cursor: number) => Promise<void>;
+    /** Configuration-owned metadata; applied after untrusted adapter metadata. */
+    trustedMetadata?: Readonly<Record<string, unknown>>;
   }>,
 ): TurnRequest {
   const access = createRuntimeTurnAccess(message, roles);
@@ -1360,14 +1533,19 @@ export function createRuntimeTurnRequest(
       text,
       ...(media.length > 0 ? { media: Object.freeze(media) } : {}),
       ...(turnReferences.length > 0 ? { references: Object.freeze(turnReferences) } : {}),
-      metadata: Object.freeze({ ...message.metadata }),
+      metadata: Object.freeze({ ...message.metadata, ...input.trustedMetadata }),
     }),
     session: Object.freeze({
       key: sessionKey,
     }),
     policy: Object.freeze({
       ...access.policy,
-      filesystem: Object.freeze({ workspaceRoot: input.workspaceRoot }),
+      filesystem: Object.freeze({
+        workspaceRoot: input.workspaceRoot,
+        ...(input.workingDirectory ? { workingDirectory: input.workingDirectory } : {}),
+        ...(input.filesystemAccess ? { access: input.filesystemAccess } : {}),
+      }),
+      ...(input.shell ? { shell: Object.freeze({ ...input.shell }) } : {}),
       ...(input.network ? { network: Object.freeze({
         enabled: input.network.enabled,
         httpsOnly: input.network.httpsOnly,
@@ -1503,29 +1681,102 @@ export async function resolveProductTurnIntent(
 
 /** IM adapter for the origin-neutral interaction authority. */
 export function createRuntimeQuestionPort(
-  interactions: InteractionRouter,
+  im: ImRuntime,
   message: Message,
 ): NonNullable<TurnRequestPorts['question']> {
-  const address = requireRuntimeInteractionAddress(message);
+  const interaction = im.createInteraction(message);
+  if (!interaction) throw new Error('User interaction is unavailable for this message');
   return Object.freeze({
-    ask: (request: Parameters<NonNullable<TurnRequestPorts['question']>['ask']>[0]) => (
-      interactions.ask(address, request, (text) => deliverInteraction(message, text))
-    ),
+    async ask(request: Parameters<NonNullable<TurnRequestPorts['question']>['ask']>[0]) {
+      const options = {
+        ...(request.timeoutMs !== undefined ? { timeout: request.timeoutMs } : {}),
+        ...(request.defaultValue !== undefined ? { default: request.defaultValue } : {}),
+        signal: request.signal,
+      };
+      if (request.type === 'text') {
+        const value = await interaction.ask({ type: 'text', title: request.question, ...options });
+        return Object.freeze({ type: 'text' as const, value });
+      }
+      if (request.type === 'number') {
+        const numericDefault = request.defaultValue === undefined
+          ? undefined
+          : Number(request.defaultValue);
+        const value = await interaction.ask({
+          type: 'number',
+          title: request.question,
+          ...(request.timeoutMs !== undefined ? { timeout: request.timeoutMs } : {}),
+          ...(Number.isFinite(numericDefault) ? { default: numericDefault } : {}),
+          signal: request.signal,
+        });
+        return Object.freeze({ type: 'number' as const, value });
+      }
+      if (request.type === 'confirm') {
+        const value = await interaction.ask({
+          type: 'confirm',
+          title: request.question,
+          ...(request.timeoutMs !== undefined ? { timeout: request.timeoutMs } : {}),
+          ...(request.defaultValue !== undefined
+            ? { default: /^(?:y|yes|true|1|是|确认|同意)$/i.test(request.defaultValue) }
+            : {}),
+          signal: request.signal,
+        });
+        return Object.freeze({ type: 'confirm' as const, value });
+      }
+      const choices = request.options ?? [];
+      const value = await interaction.ask({
+        type: 'select',
+        title: request.question,
+        options: choices.map((label) => ({ label, value: label })),
+        ...(request.timeoutMs !== undefined ? { timeout: request.timeoutMs } : {}),
+        ...(request.defaultValue !== undefined ? { default: request.defaultValue } : {}),
+        signal: request.signal,
+      }) as string;
+      return Object.freeze({ type: 'pick' as const, value, index: choices.indexOf(value) });
+    },
   });
 }
 
-/** IM ApprovalPort: master is already the authority; others wait for master via Prompt. */
+/** IM ApprovalPort: master is already the authority; others wait via UserInteraction. */
 export function createRuntimeApprovalPort(options: {
   readonly isMaster: boolean;
-  readonly prompt?: CommandPrompt;
+  readonly interaction?: UserInteraction;
+  readonly rememberSession?: Readonly<{
+    isApproved(input: ApprovalRequestInput): boolean;
+    grant(input: ApprovalRequestInput): void;
+  }>;
 }): ApprovalPort {
   return Object.freeze({
-    available: options.isMaster || options.prompt != null,
+    available: options.isMaster || options.interaction != null,
     async requestApproval(input: ApprovalRequestInput) {
       if (options.isMaster) return true;
-      if (!options.prompt) return false;
+      if (!options.interaction) return false;
       try {
-        return await options.prompt.confirm(`请 master 确认：${input.question}`, {
+        if (options.rememberSession?.isApproved(input)) return true;
+        if (options.rememberSession) {
+          const decision = await options.interaction.ask({
+            type: 'select',
+            title: '操作确认',
+            description: input.question,
+            tip: '“本会话允许”仅在当前 Host 生命周期内生效。',
+            options: [
+              { label: '允许一次', value: 'once', description: '仅执行当前操作。' },
+              { label: '本会话允许', value: 'session', description: '后续同会话、同一具体操作自动放行。' },
+              { label: '拒绝', value: 'deny', description: '阻止当前操作。' },
+            ],
+            default: 'deny',
+            ...(input.timeoutMs !== undefined ? { timeout: input.timeoutMs } : {}),
+            signal: input.signal,
+          });
+          if (decision === 'session') options.rememberSession.grant(input);
+          return decision === 'once' || decision === 'session';
+        }
+        return await options.interaction.ask({
+          type: 'confirm',
+          title: '操作确认',
+          description: input.question,
+          tip: '请由 master 用户确认是否继续。',
+          confirmLabel: '允许一次',
+          cancelLabel: '拒绝',
           ...(input.timeoutMs !== undefined ? { timeout: input.timeoutMs } : {}),
           default: false,
           signal: input.signal,
@@ -1547,7 +1798,12 @@ export function consumeRuntimeInteraction(
   return interactions.consume({
     ...address,
     text: message.content,
-    deliver: (text) => deliverInteraction(message, text),
+    deliver: async (text) => {
+      const receipt = await message.$reply(text);
+      if (receipt.status !== 'sent') {
+        throw new Error(`Interaction delivery failed: ${receipt.status}${receipt.failure ? ` (${receipt.failure.code})` : ''}`);
+      }
+    },
   });
 }
 
@@ -1563,23 +1819,6 @@ function runtimeInteractionAddress(
     sessionKey: `${platform}:${endpoint}:${message.conversation.kind}:${sceneId}`,
     subjectId,
   });
-}
-
-function requireRuntimeInteractionAddress(
-  message: Message,
-): Readonly<{ sessionKey: string; subjectId: string }> {
-  const address = runtimeInteractionAddress(message);
-  if (!address) {
-    throw new TypeError('Runtime interaction requires platform, endpoint, scene, and authenticated sender identity');
-  }
-  return address;
-}
-
-async function deliverInteraction(message: Message, text: string): Promise<void> {
-  const receipt = await message.$reply(text);
-  if (receipt.status !== 'sent') {
-    throw new Error(`Interaction delivery failed: ${receipt.status}${receipt.failure ? ` (${receipt.failure.code})` : ''}`);
-  }
 }
 
 export function deliveryOutcomeFromReceipt(
@@ -1772,6 +2011,11 @@ function adapterLiveEndpointId(message: Message): string {
   const live = String(message.metadata?.endpoint ?? message.metadata?.endpointKey ?? '');
   if (live) return live;
   return capabilityLocalName(String(message.conversation.endpoint.id));
+}
+
+function stringMetadata(metadata: Message['metadata'], key: string): string | undefined {
+  const value = metadata?.[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 function resolveChannelType(

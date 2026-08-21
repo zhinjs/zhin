@@ -81,6 +81,16 @@ export type RuntimeConsoleRpcContext = {
    * Returns whether a process restart is required (always true without ConfigFeature).
    */
   setConfigKey?(pluginName: string, data: unknown): Promise<{ restartRequired: boolean }>;
+  /** Atomic, revision-checked runtime Workroom Catalog read/write. */
+  readWorkroomCatalog?(): Promise<Readonly<{
+    agents: Readonly<Record<string, unknown>>;
+    workrooms: Readonly<Record<string, unknown>>;
+    revision: string;
+  }>>;
+  setWorkroomCatalog?(
+    workrooms: unknown,
+    expectedRevision: string,
+  ): Promise<Readonly<{ revision: string; restartRequired: boolean }>>;
   /** Project file manager (allowlisted paths under project root). */
   listProjectFiles?(): Promise<readonly unknown[]>;
   readProjectFile?(filePath: string): Promise<{ content: string; size: number }>;
@@ -237,6 +247,39 @@ export async function dispatchRuntimeConsoleRpc(
           requestId,
           error: `Failed to read config: ${error instanceof Error ? error.message : String(error)}`,
         });
+      }
+      return payloads;
+    }
+    case 'workrooms:get': {
+      try {
+        if (!ctx.readWorkroomCatalog) {
+          emit({ requestId, error: 'Workroom Catalog read is not configured' });
+          return payloads;
+        }
+        emit({ requestId, data: await ctx.readWorkroomCatalog() });
+      } catch (error) {
+        emit({ requestId, error: error instanceof Error ? error.message : String(error) });
+      }
+      return payloads;
+    }
+    case 'workrooms:set': {
+      try {
+        if (!ctx.setWorkroomCatalog) {
+          emit({ requestId, error: 'Workroom Catalog write is not configured' });
+          return payloads;
+        }
+        const expectedRevision = typeof message.expectedRevision === 'string'
+          ? message.expectedRevision
+          : '';
+        if (!/^[a-f0-9]{64}$/u.test(expectedRevision)) {
+          emit({ requestId, error: 'expectedRevision is required' });
+          return payloads;
+        }
+        const result = await ctx.setWorkroomCatalog(message.data, expectedRevision);
+        ctx.publishEvent?.('workrooms:updated', { revision: result.revision });
+        emit({ requestId, data: { success: true, ...result } });
+      } catch (error) {
+        emit({ requestId, error: error instanceof Error ? error.message : String(error) });
       }
       return payloads;
     }

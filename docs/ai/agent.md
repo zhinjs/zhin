@@ -121,6 +121,52 @@ ai:
 
 `WorkroomKernel` 只接受显式 Project-scoped command，并以 versioned append-only Journal 作为 Run / Task / Assignment 的唯一事实源。普通聊天与 `spawn_task` 不会隐式创建 Workroom，也不会发布允许模型伪造 execution/acceptance 的通用 transition 工具。command adapter 必须持有认证后的 Project capability，并分别接入 Scheduler、Executor 与 Acceptance port。
 
+Console 的 **Workrooms** 菜单用于声明 Project 边界、Agent 成员/角色，以及群、频道或 GitHub 仓库的协作空间。一个 Workroom 绑定一个完整协作空间地址；同一个 Bot/App Endpoint 可以服务多个 Workroom。人类入站先由 Space Router 按完整地址进入 content-free Project Inbox，再由 Orchestrator 仲裁任务；`conversation.agent` 标识该 Inbox 所属的 Orchestrator，但绝不能绕过仲裁把消息直接执行成 Task 状态。Workroom 定义写入持久化运行时 Catalog，而不是 `ai` 配置文件；保存立即生效，无需重启 Host。旧 `ai.workrooms` 会明确拒绝并提示迁移。记录键就是 Workroom Kernel 使用的 `projectId`：
+
+```json
+{
+  "projectId": "support",
+  "name": "客户支持",
+  "enabled": true,
+  "members": [
+    { "agent": "zhin", "role": "orchestrator" },
+    { "agent": "support", "role": "executor" },
+    { "agent": "reviewer", "role": "reviewer" }
+  ],
+  "conversation": {
+    "adapter": "telegram",
+    "endpoint": "support-bot",
+    "kind": "group",
+    "id": "10001",
+    "agent": "support"
+  }
+}
+```
+
+`members[].agent` 必须引用 `ai.agents`；角色闭表为 `orchestrator | executor | reviewer | integration`。`conversation` 引用已配置的 Adapter Endpoint，`agent` 必须是承担 `orchestrator` 角色的 Workroom 成员，并成为该空间 Project Inbox 的入口 Agent；`kind` 为 `group | channel | repository`。启用的 Workroom 至少需要一个 Orchestrator 和一个协作空间。只有完整地址 `adapter:endpoint:kind:id` 不能被两个启用 Workroom 重复绑定，Endpoint 本身可以复用。
+
+GitHub 适配器会用 Webhook 的稳定 `repo` 元数据（`owner/repo`）匹配 `repository` Workroom，因此同一仓库下的 Issue/PR 评论通道都归入同一个 Workroom：
+
+```json
+{
+  "projectId": "zhin-repo",
+  "name": "Zhin Repository",
+  "enabled": true,
+  "members": [{ "agent": "zhin", "role": "orchestrator" }],
+  "conversation": {
+    "adapter": "github",
+    "endpoint": "my-github-bot",
+    "kind": "repository",
+    "id": "zhinjs/zhin",
+    "agent": "zhin"
+  }
+}
+```
+
+GitHub Project Item 是 Task 的外部投影/同步目标，不是 Workroom 身份的一部分。当前 Console 的 Task 页仍只读 Journal + Kernel 事实；Project V2 同步需要独立的 Integration Port、幂等 task-key ↔ item-id 映射和冲突策略，不能由 Console 直接改 Task 状态。
+
+Catalog 与 Run Journal 使用相同的持久化选择：数据库模式写入 `workroom_catalog`，`ai.sessions.useDatabase: false` 时回退到 `.zhin/workroom-catalog.json`。Catalog 保存采用 revision CAS；成员引用仍以当前 generation 的 `ai.agents` 为准，失效引用会被拒绝。已有 Run 的 Journal 事实不会被 Catalog 编辑覆盖。
+
 Workroom 的 Journal 后端在进程启动时固定：`ai.sessions.useDatabase !== false` 使用 `workroom_events`，Database Root Host 未就绪会使候选 generation 发布失败；显式设为 `false` 时使用 `.zhin/workroom-journal` 的原子文件事件流。热重载不能切换后端，修改该选择必须重启进程，避免旧代 lease 与新代写入两个无 CAS 关系的事实源。Console 只暴露 Project-scoped 只读投影（`GET /api/agent/workroom/runs?projectId=...`）。远程 A2A Executor 将按相同 Assignment lease/event 契约另行接入，不保留旧 `ai.remoteAgents` poller。
 
 ## 会话持久化与会话树

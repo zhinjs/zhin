@@ -36,7 +36,7 @@ const repoRoot = path.resolve(__dirname, '..');
 // → runtime（RootHost 装配）→ isolate / config-yaml（依赖 runtime，仅契约）。
 // packages/host/http-contract 是协议 Host 的最小端口（路由 + body），零业务依赖。
 // packages/host/http 是具体 HTTP / WebSocket Host，仅依赖 basic + plugin-runtime。
-const providerLayerAllowed = ['basic', 'packages/im/plugin-runtime', 'packages/im/feature-kit'];
+const providerLayerAllowed = ['basic', 'packages/im/interaction', 'packages/im/plugin-runtime', 'packages/im/feature-kit'];
 const layers = {
   // Console wire SSOT must remain zero-dependency so browsers, both Hosts and
   // external Console builds can share it without pulling runtime packages.
@@ -44,6 +44,7 @@ const layers = {
   'packages/host/http-contract': { level: 0, allowedImports: [] },
   'basic/cli': { level: 0, allowedImports: ['basic', 'packages/im', 'packages/host', 'packages/console'] },
   'basic': { level: 0, allowedImports: ['basic'] },
+  'packages/im/interaction': { level: 0, allowedImports: [] },
   'packages/im/plugin-runtime': { level: 1, allowedImports: ['basic'] },
   'packages/im/feature-kit': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime'] },
   'packages/im/adapter': { level: 1, allowedImports: providerLayerAllowed },
@@ -106,6 +107,7 @@ const packageNameToPath = {
   '@zhin.js/runtime': 'packages/im/runtime',
   '@zhin.js/isolate': 'packages/im/isolate',
   '@zhin.js/config-yaml': 'packages/im/config-yaml',
+  '@zhin.js/interaction': 'packages/im/interaction',
   '@zhin.js/console-protocol': 'packages/console/protocol',
   '@zhin.js/contract': 'packages/console/contract',
   '@zhin.js/pagemanager': 'packages/console/pagemanager',

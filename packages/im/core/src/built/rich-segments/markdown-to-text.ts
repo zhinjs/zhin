@@ -9,8 +9,8 @@ export function markdownToPlainText(md: string): string {
   text = text.replace(/!\[[^\]]*\]\([^)]*\)/g, '');
   text = text.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
   text = text.replace(/^#{1,6}\s+/gm, '');
-  text = text.replace(/^\s*>\s?/gm, '');
-  text = text.replace(/^\s*[-*+]\s+/gm, '');
+  text = text.replace(/^[ \t]*>[ \t]?/gm, '');
+  text = text.replace(/^[ \t]*[-*+][ \t]+/gm, '');
   text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
   text = text.replace(/__([^_]+)__/g, '$1');
   text = text.replace(/\*([^*]+)\*/g, '$1');

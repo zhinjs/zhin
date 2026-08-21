@@ -26,7 +26,26 @@ export {
   agentToolsToLlmTools,
 } from './tool-bridge.js';
 export type { NormalizableTool } from './tool-bridge.js';
-export type { ZhinAgentConfig, OnChunkCallback } from './config/index.js';
+export type {
+  ZhinAgentConfig,
+  OnChunkCallback,
+} from './config/index.js';
+export type {
+  WorkroomMemberRole,
+  WorkroomSpaceKind,
+  WorkroomAgentMemberDefinition,
+  WorkroomConversationBindingDefinition,
+  WorkroomDefinition,
+  WorkroomAgentMemberConfig,
+  WorkroomConversationBindingConfig,
+  WorkroomDefinitionConfig,
+} from './workroom/catalog-definition.js';
+export {
+  resolveWorkroomBotIdentity,
+  type WorkroomBotIdentityInput,
+  type ResolvedWorkroomBotIdentity,
+} from './routing/workroom-bot-identity.js';
+export { validateWorkroomDefinitions } from './config/validate-ai-config.js';
 export type {
   IAgentTurnProcessor,
   IAgentSessionManager,
@@ -377,13 +396,19 @@ export * from './workroom/assignment-executor.js';
 export * from './workroom/assignment-observation-ingress.js';
 export * from './workroom/interaction-space-router.js';
 export * from './workroom/file-interaction-space-binding-repository.js';
+export * from './workroom/interaction-space-binding-service.js';
+export * from './workroom/human-ingress.js';
+export * from './workroom/file-human-ingress.js';
 export * from './workroom/local-assignment-executor.js';
 export * from './workroom/journal.js';
 export * from './workroom/journal-model.js';
+export * from './workroom/catalog.js';
 export * from './workroom/workroom-kernel.js';
 export * from './workroom/runtime.js';
 export * from './workroom/remote-callback-inbox.js';
 export * from './workroom/remote-callback-reconciliation-worker.js';
+export * from './workroom/remote-callback-application.js';
+export * from './workroom/remote-callback-gateway.js';
 export * from './workroom/remote-dispatch.js';
 export * from './workroom/remote-dispatch-outbox.js';
 export * from './workroom/remote-dispatch-worker.js';

@@ -11,7 +11,7 @@ import { defineHandler } from 'zhin.js/handler';
 export default defineHandler({
   event: 'notice.receive',
   async handle(notice) {
-    await this.prompt?.confirm('继续？');
+    await this.interaction?.ask({ type: 'confirm', title: '继续？' });
   },
 });
 ```

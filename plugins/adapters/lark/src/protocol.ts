@@ -272,6 +272,7 @@ export function formatOutboundBody(payload: unknown): LarkSendBody {
     : payload && typeof payload === 'object' && 'type' in (payload as object)
       ? [payload as LarkWireSegment]
       : [];
+  const hasMarkdown = items.some((item) => typeof item !== 'string' && item.type === 'markdown');
 
   if (items.length === 0) {
     const text = payload == null
@@ -296,6 +297,9 @@ export function formatOutboundBody(payload: unknown): LarkSendBody {
     const data = item.data ?? {};
     switch (item.type) {
       case 'text':
+        textParts.push(String(data.content ?? data.text ?? ''));
+        break;
+      case 'markdown':
         textParts.push(String(data.content ?? data.text ?? ''));
         break;
       case 'at':
@@ -352,6 +356,17 @@ export function formatOutboundBody(payload: unknown): LarkSendBody {
   }
 
   if (media) return media;
+  if (hasMarkdown) {
+    return {
+      msg_type: 'interactive',
+      content: JSON.stringify({
+        elements: [{
+          tag: 'div',
+          text: { tag: 'lark_md', content: textParts.join('') },
+        }],
+      }),
+    };
+  }
   return {
     msg_type: 'text',
     content: JSON.stringify({ text: textParts.join('') }),

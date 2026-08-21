@@ -6,6 +6,7 @@ import type { ServerResponse } from 'node:http';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { commandFeatureId, isCommandIndex } from '@zhin.js/command';
 import { componentFeatureId, isComponentIndex } from '@zhin.js/component';
+import { isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import {
   formatDisplayPath,
   getLogger,
@@ -38,12 +39,14 @@ import {
   runtimeEventPublisherToken,
   type DatabaseHost,
   type PluginNodeSnapshot,
+  type PluginId,
   type RuntimeSnapshot,
   type SnapshotReader,
   type TokenId,
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller, RuntimeConfigDocument } from '@zhin.js/runtime';
 import { installInboxMessageRecorder } from './inbox-installer.js';
+import { validateWorkroomDefinitions, type WorkroomDefinition } from '@zhin.js/agent';
 
 interface LoginAssistBinding {
   readonly hub: ConsoleEventHub;
@@ -121,7 +124,52 @@ function createAgentRuntimeResolver(
           desc: command.description ?? '',
           // source 常为绝对路径；控制台展示遵循 workspace→./…、HOME→~/…
           plugin: display(command.source),
+          parameters: command.parameters.map((parameter) => ({
+            name: parameter.name,
+            type: parameter.type,
+            required: parameter.required,
+            optional: parameter.optional ?? !parameter.required,
+            rest: parameter.rest ?? false,
+            description: parameter.description ?? '',
+            ...(parameter.defaultValue === undefined
+              ? {}
+              : typeof parameter.defaultValue === 'function'
+                ? { default: '<dynamic>', defaultKind: 'dynamic' }
+                : { default: parameter.defaultValue, defaultKind: 'literal' }),
+          })),
+          aliases: command.alias ?? [],
+          permissions: command.permit ?? [],
+          shortcuts: command.shortcut ?? [],
         }));
+      },
+      middlewares: () => {
+        const snap = getSnapshot?.();
+        const index = snap?.projections.get(middlewareFeatureId);
+        if (!isMiddlewareIndex(index)) return [];
+        return index.list().map((middleware) => ({
+          name: middleware.name,
+          owner: String(middleware.owner),
+          phase: middleware.phase,
+          target: middleware.target,
+          order: middleware.order,
+          source: display(middleware.source),
+        }));
+      },
+      components: () => {
+        const snap = getSnapshot?.();
+        const index = snap?.projections.get(componentFeatureId);
+        if (!isComponentIndex(index)) return [];
+        return index.list().map((component) => ({
+          name: component.name,
+          owner: String(component.owner),
+          source: display(component.source),
+        }));
+      },
+      renderComponent: async ({ requester, name, props, signal }) => {
+        const snap = getSnapshot?.();
+        const index = snap?.projections.get(componentFeatureId);
+        if (!isComponentIndex(index)) throw new Error('Component Runtime 未就绪');
+        return index.render(requester as PluginId, name, props, { signal });
       },
       bindings: () => listIntrospectionBindings(projectRoot),
       tools: () => {
@@ -208,6 +256,18 @@ export function displayConsolePath(value: string, projectRoot: string): string {
   return formatDisplayPath(value, { projectRoot });
 }
 
+function parseBoundedInteger(
+  value: string | null,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number {
+  if (value == null || value.trim() === '') return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return fallback;
+  return Math.min(maximum, Math.max(minimum, parsed));
+}
+
 type AgentIntrospection = {
   listTools(): readonly { name: string; hidden?: boolean; description?: string }[];
   listMcpServers(): readonly { name: string; connected: boolean; toolCount: number }[];
@@ -228,6 +288,34 @@ type AgentConsolePort = {
   readonly sessionTree: ConsoleAgentRuntime['sessionTree'];
   readonly workroom: WorkroomRuntime;
   readonly assistant: AssistantRuntime | null;
+  readonly workroomCatalog: {
+    read(): Promise<Readonly<{
+      definitions: Readonly<Record<string, WorkroomDefinition>>;
+      revision: string;
+    }>>;
+    replace(
+      definitions: Readonly<Record<string, WorkroomDefinition>>,
+      expectedRevision: string,
+    ): Promise<Readonly<{ revision: string }>>;
+  };
+  listBindings(): readonly {
+    name: string;
+    providerAlias: string;
+    model: string;
+    nickname?: string;
+  }[];
+  readonly trace: {
+    list(
+      sessionKey: string,
+      options?: Readonly<{ afterSequence?: number; limit?: number }>,
+    ): {
+      readonly sessionKey: string;
+      readonly events: readonly Record<string, unknown>[];
+      readonly latestSequence: number;
+      readonly activeTurnIds: readonly string[];
+    };
+  };
+  readonly cancelSession?: (sessionKey: string) => boolean;
 };
 
 export function resolveGenerationAgentConsole(
@@ -609,6 +697,37 @@ export function registerConsoleApiRoutes(
         ),
         writeConfigYaml: (yaml) => writeProjectConfigYaml(projectRoot, yaml),
         setConfigKey: (pluginName, data) => setProjectConfigKey(projectRoot, pluginName, data),
+        readWorkroomCatalog: async () => {
+          const catalog = agentLease?.value?.workroomCatalog;
+          if (!catalog) throw new Error('Workroom Catalog Runtime 未就绪');
+          const snapshot = await catalog.read();
+          const bindings = agentLease?.value?.listBindings() ?? [];
+          return Object.freeze({
+            agents: Object.fromEntries(bindings.map(binding => [binding.name, Object.freeze({
+              provider: binding.providerAlias,
+              model: binding.model,
+              ...(binding.nickname ? { nickname: binding.nickname } : {}),
+            })])),
+            workrooms: snapshot.definitions,
+            revision: snapshot.revision,
+          });
+        },
+        setWorkroomCatalog: async (workrooms, expectedRevision) => {
+          const catalog = agentLease?.value?.workroomCatalog;
+          if (!catalog) throw new Error('Workroom Catalog Runtime 未就绪');
+          const agents = (agentLease?.value?.listBindings() ?? []).map(binding => binding.name);
+          const errors = validateWorkroomDefinitions(
+            workrooms,
+            agents,
+            new Set((im?.listEndpoints() ?? []).map((endpoint) => `${endpoint.adapter}:${endpoint.name}`)),
+          );
+          if (errors.length > 0) throw new Error(`Invalid Workroom Catalog: ${errors.join('; ')}`);
+          const snapshot = await catalog.replace(
+            recordValue(workrooms) as Record<string, WorkroomDefinition>,
+            expectedRevision,
+          );
+          return Object.freeze({ revision: snapshot.revision, restartRequired: false as const });
+        },
         listProjectFiles: () => buildProjectFileTree(projectRoot),
         readProjectFile: (filePath) => readProjectFile(projectRoot, filePath),
         saveProjectFile: (filePath, content) => saveProjectFile(projectRoot, filePath, content),
@@ -808,6 +927,67 @@ export function registerConsoleApiRoutes(
   }, {
     summary: 'List assistant jobs',
     tags: ['assistant'],
+  });
+
+  // Agent Trace REST — bounded, redacted live projection from the request generation.
+  http.route('GET', `${base}/agent/traces`, async (_request, response, url, authScope) => {
+    if (authScope !== 'full') {
+      writeJson(response, 403, { success: false, error: '需要 full scope 才能读取 Agent Trace' });
+      return;
+    }
+    const sessionKey = url.searchParams.get('sessionKey')?.trim() ?? '';
+    if (!sessionKey || sessionKey.length > 512) {
+      writeJson(response, 400, { success: false, error: '请提供有效的 sessionKey 查询参数' });
+      return;
+    }
+    const afterSequence = parseBoundedInteger(url.searchParams.get('after'), 0, 0, Number.MAX_SAFE_INTEGER);
+    const limit = parseBoundedInteger(url.searchParams.get('limit'), 200, 1, 500);
+    const handled = await withGenerationAgentConsole(snapshots, async ({ trace }) => {
+      writeJson(response, 200, {
+        success: true,
+        data: trace.list(sessionKey, { afterSequence, limit }),
+      });
+    });
+    if (!handled) {
+      writeJson(response, 503, {
+        success: false,
+        error: 'Agent Trace runtime 未就绪（未安装或未初始化 @zhin.js/agent）',
+      });
+    }
+  }, {
+    summary: 'Read Agent turn trace',
+    tags: ['agent', 'trace'],
+  });
+
+  http.route('POST', `${base}/agent/tasks/cancel`, async (request, response, _url, authScope) => {
+    if (authScope !== 'full') {
+      writeJson(response, 403, { success: false, error: '需要 full scope 才能停止 Agent 任务' });
+      return;
+    }
+    const body = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
+    const sessionKey = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : '';
+    if (!sessionKey || sessionKey.length > 512) {
+      writeJson(response, 400, { success: false, error: '请提供有效的 sessionKey' });
+      return;
+    }
+    const handled = await withGenerationAgentConsole(snapshots, async ({ cancelSession }) => {
+      if (!cancelSession) {
+        writeJson(response, 503, { success: false, error: 'Agent 取消能力尚未就绪' });
+        return;
+      }
+      const cancelled = cancelSession(sessionKey);
+      writeJson(response, 200, {
+        success: true,
+        data: { sessionKey, cancelled },
+        message: cancelled ? '已发送停止请求' : '当前会话没有运行中的任务',
+      });
+    });
+    if (!handled) {
+      writeJson(response, 503, { success: false, error: 'Agent Runtime 尚未就绪' });
+    }
+  }, {
+    summary: 'Cancel active Agent task',
+    tags: ['agent', 'tasks'],
   });
 
   // Workroom REST — read-only replay projection from the request generation.
@@ -1349,6 +1529,11 @@ async function writeProjectConfigYaml(projectRoot: string, yaml: string): Promis
  * 用 promise 链把写操作串行化；失败不断链。
  */
 let configWriteTail: Promise<unknown> = Promise.resolve();
+
+function recordValue(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return { ...value as Record<string, unknown> };
+}
 
 /**
  * 写入配置键：

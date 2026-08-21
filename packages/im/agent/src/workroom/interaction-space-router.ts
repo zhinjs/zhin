@@ -177,8 +177,8 @@ export class MemoryInteractionSpaceBindingRepository implements InteractionSpace
       }
       if (previous
         && binding.effectiveAfterConversationSequence
-          <= previous.effectiveAfterConversationSequence) {
-        throw new Error('Interaction Space binding anchor must increase');
+          < previous.effectiveAfterConversationSequence) {
+        throw new Error('Interaction Space binding anchor must not move backwards');
       }
       next.push(binding);
     }
@@ -268,8 +268,8 @@ function validateHistory(conversationKey: string, history: readonly InteractionS
     }
     if (previous
       && binding.effectiveAfterConversationSequence
-        <= previous.effectiveAfterConversationSequence) {
-      throw new Error('Interaction Space binding history anchor is not increasing');
+        < previous.effectiveAfterConversationSequence) {
+      throw new Error('Interaction Space binding history anchor moved backwards');
     }
     previous = binding;
   });

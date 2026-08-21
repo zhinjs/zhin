@@ -38,6 +38,8 @@ export interface TurnStartEvent {
   type: 'turn_start';
   sessionId: string;
   turnId: string;
+  /** Native inbound message anchor when the turn originates from IM. */
+  sourceMessageId?: string;
 }
 
 export interface ChunkEvent {

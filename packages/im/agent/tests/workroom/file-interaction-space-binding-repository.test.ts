@@ -43,6 +43,22 @@ describe('File Interaction Space Binding Repository', () => {
     expect(Object.isFrozen(await restarted.read(key))).toBe(true);
   });
 
+  it('round-trips ordered revisions sharing one event boundary across segments', async () => {
+    const directory = temporaryDirectory('same-anchor-restart');
+    const conversation = conversationFixture();
+    const key = conversationRefKey(conversation);
+    const removed = bindingFixture(conversation, 1, 3, 'chat');
+    const rebound = bindingFixture(conversation, 2, 3, 'workroom');
+    const repository = new FileInteractionSpaceBindingRepository(directory);
+
+    await repository.append(key, 0, [removed]);
+    await repository.append(key, 1, [rebound]);
+    expect(await readdir(directory)).toHaveLength(2);
+
+    await expect(new FileInteractionSpaceBindingRepository(directory).read(key))
+      .resolves.toEqual([removed, rebound]);
+  });
+
   it('allows one cross-instance CAS winner and only exact replay', async () => {
     const directory = temporaryDirectory('cross-instance-cas');
     const conversation = conversationFixture();

@@ -417,11 +417,14 @@ export function resolveExecApprovalMode(config: Required<ZhinAgentConfig>): Exec
 export interface ApplyExecPolicyOptions {
   /** 覆盖当前执行路径的审批模式（主/子/worker/task 可分别传入） */
   approvalMode?: ExecApprovalMode;
+  /** Trusted per-turn policy may require approval semantics even for an Endpoint Owner. */
+  requesterRole?: ToolRequesterRole;
 }
 
 export interface CheckExecPolicyOptions {
   /** 覆盖配置中的审批模式 */
   approvalMode?: ExecApprovalMode;
+  requesterRole?: ToolRequesterRole;
 }
 
 function resolveRequesterRole(): ToolRequesterRole {
@@ -599,7 +602,11 @@ function checkSingleCommand(
  *
  * @returns ExecPolicyResult — 允许/拒绝/需审批
  */
-export function checkExecPolicy(config: Required<ZhinAgentConfig>, command: string): ExecPolicyResult {
+export function checkExecPolicy(
+  config: Required<ZhinAgentConfig>,
+  command: string,
+  requesterRoleOverride?: ToolRequesterRole,
+): ExecPolicyResult {
   const security = config.execSecurity ?? 'deny';
   if (security === 'deny') {
     const result = { allowed: false, reason: '当前配置禁止执行 Shell 命令（execSecurity=deny）。如需开放请在配置中设置 ai.agent.execSecurity。' };
@@ -617,7 +624,7 @@ export function checkExecPolicy(config: Required<ZhinAgentConfig>, command: stri
 
   const allowlist = resolveExecAllowlist(config);
   const approvalMode = resolveExecApprovalMode(config);
-  const requesterRole = resolveRequesterRole();
+  const requesterRole = requesterRoleOverride ?? resolveRequesterRole();
   const cmd = (command || '').trim();
 
   if (!cmd) {
@@ -701,13 +708,32 @@ export function checkExecPolicyWithOptions(
   options: CheckExecPolicyOptions = {},
 ): ExecPolicyResult {
   if (!options.approvalMode) {
-    return checkExecPolicy(config, command);
+    return checkExecPolicy(config, command, options.requesterRole);
   }
   const shadowConfig = {
     ...config,
     execApprovalMode: options.approvalMode,
-  } as Required<ZhinAgentConfig>;
-  return checkExecPolicy(shadowConfig, command);
+  } as unknown as Required<ZhinAgentConfig>;
+  return checkExecPolicy(shadowConfig, command, options.requesterRole);
+}
+
+/** Trusted product ingress variant that does not depend on global Agent config. */
+export function checkTurnExecPolicy(
+  command: string,
+  policy: Readonly<{
+    security?: 'deny' | 'allowlist' | 'full';
+    execPreset?: 'readonly' | 'network' | 'development' | 'custom';
+    approvalMode?: ExecApprovalMode;
+  }>,
+): ExecPolicyResult {
+  const config = {
+    execSecurity: policy.security ?? 'deny',
+    execPreset: policy.execPreset ?? 'custom',
+    execAllowlist: [],
+    execApprovalMode: policy.approvalMode ?? 'deny',
+  } as unknown as Required<ZhinAgentConfig>;
+  // Per-turn authority must not inherit the IM sender's global owner bypass.
+  return checkExecPolicy(config, command, 'unknown');
 }
 
 /** Context-free command preset check for unattended canonical Turn execution. */
@@ -749,6 +775,7 @@ export function applyExecPolicyToTools(
         const cmd = args?.command != null ? String(args.command) : '';
         const result = checkExecPolicyWithOptions(config, cmd, {
           approvalMode: options.approvalMode,
+          requesterRole: options.requesterRole,
         });
         if (!result.allowed) {
           if (result.needsApproval) {

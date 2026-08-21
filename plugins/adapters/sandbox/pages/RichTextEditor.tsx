@@ -37,15 +37,22 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
 
             let text = ''
             const segments: MessageSegment[] = []
-            const nodes = Array.from(editorRef.current.childNodes)
 
-            for (const node of nodes) {
+            const appendText = (value: string) => {
+                if (!value) return
+                text += value
+                const previous = segments.at(-1)
+                if (previous?.type === 'text') {
+                    previous.data.text = String(previous.data.text ?? '') + value
+                } else {
+                    segments.push({ type: 'text', data: { text: value } })
+                }
+            }
+
+            const visit = (node: Node) => {
                 if (node.nodeType === Node.TEXT_NODE) {
                     const textContent = node.textContent || ''
-                    if (textContent) {
-                        text += textContent
-                        segments.push({ type: 'text', data: { text: textContent } })
-                    }
+                    appendText(textContent)
                 } else if (node.nodeType === Node.ELEMENT_NODE) {
                     const el = node as HTMLElement
 
@@ -74,10 +81,16 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
                             data: id ? { target: id, name } : { target: name, name },
                         })
                     } else if (el.tagName === 'BR') {
-                        text += '\n'
+                        appendText('\n')
+                    } else {
+                        const isBlock = el.tagName === 'DIV' || el.tagName === 'P'
+                        if (isBlock && text && !text.endsWith('\n')) appendText('\n')
+                        Array.from(el.childNodes).forEach(visit)
                     }
                 }
             }
+
+            Array.from(editorRef.current.childNodes).forEach(visit)
 
             return { text, segments }
         }
@@ -426,4 +439,3 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
 RichTextEditor.displayName = 'RichTextEditor'
 
 export default RichTextEditor
-

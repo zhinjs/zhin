@@ -44,6 +44,8 @@ commands/search/[...kw].ts    -> search <...kw>   （params: { kw: { type: 'text
 - `adapter` / `endpoint`：适配器实例 id 与 endpoint 名。
 - `scene`：`{ id, type, name? }` 场景对象。
 - `sender`：`{ id, name?, role: string[] }` 发送者对象。
+- `interaction`：可选的 `UserInteraction`。用 `ask()` 获取单个类型化结论，或用
+  `sequence()` 连续收集多个结论；请求可声明 `title`、`description`、`tip` 与校验规则。
 
 可选声明字段：
 

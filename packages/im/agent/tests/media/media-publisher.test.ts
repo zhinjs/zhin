@@ -6,6 +6,41 @@ import { publishOutboundElements } from '../../src/media/media-publisher.js';
 import type { OutputElement } from '@zhin.js/ai';
 
 describe('publishOutboundElements', () => {
+  it('保留 AI markdown 语义到 canonical segment', async () => {
+    await expect(publishOutboundElements([
+      { type: 'text', content: '**完成**', format: 'markdown' },
+      { type: 'text', content: 'plain', format: 'plain' },
+    ], 'qq')).resolves.toEqual([
+      { type: 'markdown', data: { content: '**完成**' } },
+      { type: 'text', data: { text: 'plain' } },
+    ]);
+  });
+
+  it('将带命令按钮的 card 发布为 markdown + keyboard', async () => {
+    const segs = await publishOutboundElements([{
+      type: 'card',
+      title: '确认操作',
+      description: '即将部署生产环境。',
+      buttons: [
+        { text: '确认', command: 'yes' },
+        { text: '文档', url: 'https://example.com/docs' },
+      ],
+    }], 'qq');
+    expect(segs).toEqual([
+      {
+        type: 'markdown',
+        data: { content: '## 确认操作\n\n即将部署生产环境。\n\n[文档](https://example.com/docs)' },
+      },
+      {
+        type: 'keyboard',
+        data: {
+          rows: [[expect.objectContaining({ label: '确认', payload: 'yes', mode: 'command' })]],
+          fallback: { hint: '也可以直接发送对应指令。', map: { '1': 'yes' } },
+        },
+      },
+    ]);
+  });
+
   it('应将 ImageElement.base64 转为 image segment', async () => {
     const elements: OutputElement[] = [
       { type: 'image', url: '', base64: 'aGVsbG8=', alt: 'test' },

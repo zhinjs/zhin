@@ -96,7 +96,7 @@ describe('InteractionSpaceRouter', () => {
     expect(conversationRefKey(conversation)).not.toBe(conversationRefKey(changedOwner));
   });
 
-  it('enforces contiguous revisions, increasing anchors and payload-sensitive replay', async () => {
+  it('enforces contiguous revisions, non-decreasing anchors and payload-sensitive replay', async () => {
     const conversation = baseConversation();
     const conversationKey = conversationRefKey(conversation);
     const repository = new MemoryInteractionSpaceBindingRepository();
@@ -120,6 +120,20 @@ describe('InteractionSpaceRouter', () => {
       sourceRef: 'registry:2',
       sourceDigest: `sha256:${'5'.repeat(64)}`,
     })])).rejects.toThrow(/anchor/iu);
+
+    await expect(repository.append(conversationKey, 1, [createInteractionSpaceBinding({
+      conversation,
+      bindingRevision: 2,
+      effectiveAfterConversationSequence: 10,
+      space: 'chat',
+      sourceRef: 'registry:2',
+      sourceDigest: `sha256:${'5'.repeat(64)}`,
+    })])).resolves.toHaveLength(1);
+    const router = new InteractionSpaceRouter(repository);
+    await expect(router.resolve({ conversation, conversationSequence: 10 }))
+      .resolves.toMatchObject({ status: 'ignored', bindingRevision: 2 });
+    await expect(router.resolve({ conversation, conversationSequence: 11 }))
+      .resolves.toMatchObject({ status: 'resolved', space: 'chat', bindingRevision: 2 });
 
     await expect(repository.append(conversationKey, 0, [createInteractionSpaceBinding({
       conversation,

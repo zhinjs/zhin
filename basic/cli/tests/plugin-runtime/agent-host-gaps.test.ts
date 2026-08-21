@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Message } from '@zhin.js/core/runtime';
+import { Message, type ImRuntime } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { AITriggerConfig } from '@zhin.js/core';
 import { InteractionRouter } from '@zhin.js/agent';
@@ -21,6 +21,7 @@ import {
   withTriggerTimeout,
   deliveryOutcomeFromReceipt,
   assertFixedWorkroomStorageMode,
+  assertWorkroomCatalogMatchesGeneration,
   resolveWorkroomStorageMode,
 } from '../../src/plugin-runtime/agent-host-installer.js';
 import { createEndpointRoleResolver } from '../../src/plugin-runtime/start-command.js';
@@ -55,6 +56,30 @@ describe('process-fixed Workroom storage identity', () => {
     expect(() => assertFixedWorkroomStorageMode('file', 'database'))
       .toThrow('process restart required');
     expect(() => assertFixedWorkroomStorageMode('database', 'database')).not.toThrow();
+  });
+
+  it('rejects a persisted Catalog that references another Agent generation', async () => {
+    const catalog = {
+      read: async () => ({
+        revision: 'a'.repeat(64),
+        definitions: {
+          support: {
+            name: 'Support',
+            members: [{ agent: 'removed-agent', role: 'orchestrator' as const }],
+            conversation: {
+              adapter: 'telegram', endpoint: 'bot', kind: 'group' as const,
+              id: 'support', agent: 'removed-agent',
+            },
+          },
+        },
+      }),
+    };
+
+    await expect(assertWorkroomCatalogMatchesGeneration(
+      catalog,
+      ['zhin'],
+      new Set(['telegram:bot']),
+    )).rejects.toThrow(/incompatible|unknown Agent/u);
   });
 });
 
@@ -291,18 +316,54 @@ describe('canonical IM TurnRequest ingress', () => {
 });
 
 describe('canonical IM interaction adapter', () => {
-  it('routes a later message from the same authenticated session into QuestionPort', async () => {
-    const delivered: string[] = [];
-    const router = new InteractionRouter();
-    const questionMessage = makeMessageWithReply('start', delivered);
-    const port = createRuntimeQuestionPort(router, questionMessage);
-    const answer = port.ask({
-      requestId: 'q1', question: 'How many?', type: 'number', signal: new AbortController().signal,
+  it('projects QuestionPort through the shared UserInteraction module', async () => {
+    const ask = vi.fn(async (request: { type: string }) => {
+      if (request.type === 'number') return 42;
+      if (request.type === 'confirm') return false;
+      if (request.type === 'select') return '生产环境';
+      return '';
     });
+    const interaction = {
+      ask,
+      sequence: vi.fn(async () => ({})),
+    };
+    const im = { createInteraction: vi.fn(() => interaction) } as unknown as ImRuntime;
+    const questionMessage = makeMessageWithReply('start', []);
+    const port = createRuntimeQuestionPort(im, questionMessage);
+    await expect(port.ask({
+      requestId: 'q1', question: 'How many?', type: 'number', signal: new AbortController().signal,
+    })).resolves.toEqual({ type: 'number', value: 42 });
+    expect(ask).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      type: 'number',
+      title: 'How many?',
+      signal: expect.any(AbortSignal),
+    }));
 
-    await expect.poll(() => delivered[0]).toBe('How many?');
-    await expect(consumeRuntimeInteraction(router, makeMessageWithReply('42', delivered))).resolves.toBe(true);
-    await expect(answer).resolves.toEqual({ type: 'number', value: 42 });
+    await expect(port.ask({
+      requestId: 'q2', question: '确认发布？', type: 'confirm', signal: new AbortController().signal,
+    })).resolves.toEqual({ type: 'confirm', value: false });
+    expect(ask).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      type: 'confirm',
+      title: '确认发布？',
+      signal: expect.any(AbortSignal),
+    }));
+
+    await expect(port.ask({
+      requestId: 'q3',
+      question: '选择环境',
+      type: 'pick',
+      options: ['开发环境', '生产环境'],
+      signal: new AbortController().signal,
+    })).resolves.toEqual({ type: 'pick', value: '生产环境', index: 1 });
+    expect(ask).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      type: 'select',
+      title: '选择环境',
+      options: [
+        { label: '开发环境', value: '开发环境' },
+        { label: '生产环境', value: '生产环境' },
+      ],
+      signal: expect.any(AbortSignal),
+    }));
   });
 
   it('does not claim messages without canonical endpoint identity', async () => {
@@ -311,19 +372,16 @@ describe('canonical IM interaction adapter', () => {
       .resolves.toBe(false);
   });
 
-  it('auto-approves master without asking Prompt', async () => {
+  it('auto-approves master without asking UserInteraction', async () => {
     let asked = false;
     const port = createRuntimeApprovalPort({
       isMaster: true,
-      prompt: {
-        text: async () => '',
-        number: async () => 0,
-        list: async () => [],
-        pick: async () => '',
-        async confirm() {
+      interaction: {
+        async ask() {
           asked = true;
-          return false;
+          return false as never;
         },
+        async sequence() { return {} as never; },
       },
     });
     await expect(port.requestApproval({
@@ -335,21 +393,19 @@ describe('canonical IM interaction adapter', () => {
     expect(asked).toBe(false);
   });
 
-  it('asks master via Prompt.confirm when the sender is not master', async () => {
-    const seen: string[] = [];
+  it('asks master via UserInteraction.ask when the sender is not master', async () => {
+    const seen: Array<{ title: string; description?: string; tip?: string }> = [];
     const port = createRuntimeApprovalPort({
       isMaster: false,
-      prompt: {
-        text: async () => '',
-        number: async () => 0,
-        list: async () => [],
-        pick: async () => '',
-        async confirm(tips, options) {
-          seen.push(tips);
-          expect(options?.default).toBe(false);
-          expect(options?.signal).toBeDefined();
-          return true;
+      interaction: {
+        async ask(request) {
+          seen.push(request);
+          expect(request.type).toBe('confirm');
+          if (request.type === 'confirm') expect(request.default).toBe(false);
+          expect(request.signal).toBeDefined();
+          return true as never;
         },
+        async sequence() { return {} as never; },
       },
     });
     await expect(port.requestApproval({
@@ -358,11 +414,12 @@ describe('canonical IM interaction adapter', () => {
       question: '工具「icqq__announce」需要确认后执行。是否继续？',
       signal: new AbortController().signal,
     })).resolves.toBe(true);
-    expect(seen[0]).toContain('请 master 确认');
-    expect(seen[0]).toContain('是否继续');
+    expect(seen[0]?.title).toBe('操作确认');
+    expect(seen[0]?.description).toContain('是否继续');
+    expect(seen[0]?.tip).toContain('master');
   });
 
-  it('fails closed when a non-master has no master Prompt', async () => {
+  it('fails closed when a non-master has no master UserInteraction', async () => {
     const port = createRuntimeApprovalPort({ isMaster: false });
     expect(port.available).toBe(false);
     await expect(port.requestApproval({
@@ -371,6 +428,35 @@ describe('canonical IM interaction adapter', () => {
       question: 'continue?',
       signal: new AbortController().signal,
     })).resolves.toBe(false);
+  });
+
+  it('can remember only the same concrete operation within one sandbox session', async () => {
+    const remembered = new Set<string>();
+    const ask = vi.fn(async () => 'session' as never);
+    const port = createRuntimeApprovalPort({
+      isMaster: false,
+      interaction: { ask, async sequence() { return {} as never; } },
+      rememberSession: {
+        isApproved: (input) => remembered.has(input.scopeKey ?? input.toolName),
+        grant: (input) => { remembered.add(input.scopeKey ?? input.toolName); },
+      },
+    });
+    const input = {
+      requestId: 'session-approval',
+      toolName: 'bash',
+      scopeKey: 'bash:{"command":"pnpm test"}',
+      question: 'run cargo?',
+      signal: new AbortController().signal,
+    };
+    await expect(port.requestApproval(input)).resolves.toBe(true);
+    await expect(port.requestApproval({ ...input, requestId: 'session-approval-2' })).resolves.toBe(true);
+    await expect(port.requestApproval({
+      ...input,
+      requestId: 'session-approval-3',
+      scopeKey: 'bash:{"command":"pnpm build"}',
+    })).resolves.toBe(true);
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(remembered).toContain('bash:{"command":"pnpm test"}');
   });
 });
 

@@ -206,11 +206,15 @@ describe('kook protocol helpers', () => {
   });
 
   it('formats outbound string and segment payloads', () => {
+    expect(defineKookAdapter.segments?.markdown).toBe('native');
     expect(formatOutboundKmarkdown('pong')).toBe('pong');
     expect(formatOutboundKmarkdown([
       { type: 'text', data: { text: 'hi ' } },
       { type: 'at', data: { id: 'u1' } },
     ])).toBe('hi (met)u1(met)');
+    expect(formatOutboundKmarkdown([
+      { type: 'markdown', data: { content: '# 标题\n\n**重点**' } },
+    ])).toBe('# 标题\n\n**重点**');
   });
 
   it('renders canonical url media segments as KMarkdown links', () => {

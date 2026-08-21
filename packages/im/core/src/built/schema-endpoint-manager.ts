@@ -1,6 +1,6 @@
 import type { Schema } from '@zhin.js/schema';
 import { Adapter } from '../adapter.js';
-import { Prompt } from '../prompt.js';
+import { SchemaInteraction } from '../schema-interaction.js';
 import type { ConfigFeature } from './config.js';
 import type {
   EndpointConfigRecord,
@@ -31,10 +31,10 @@ export class SchemaEndpointManager implements EndpointManager {
   }
 
   async addEndpoint(ctx: ProvisionContext): Promise<EndpointConfigRecord> {
-    const prompt = new Prompt(this.adapter.plugin, ctx.message);
+    const interaction = new SchemaInteraction(this.adapter.plugin, ctx.message);
     await ctx.onStatusUpdate(`请按提示填写 ${String(this.adapter.name)} endpoint 配置：`);
-    const name = await prompt.text('Endpoint id（zhin.config endpoints[].id）：');
-    const fields = await prompt.getValueWithSchema(this.schema);
+    const name = await interaction.text('Endpoint id（zhin.config endpoints[].id）：');
+    const fields = await interaction.getValueWithSchema(this.schema);
     return {
       context: String(this.adapter.name),
       id: name.trim(),
@@ -48,8 +48,8 @@ export class SchemaEndpointManager implements EndpointManager {
       throw new Error(`配置中不存在 ${String(this.adapter.name)}/${name}`);
     }
     await ctx.onStatusUpdate(`编辑 ${String(this.adapter.name)}/${name}，留空字段将保留原值。`);
-    const prompt = new Prompt(this.adapter.plugin, ctx.message);
-    const fields = await prompt.getValueWithSchema(this.schema);
+    const interaction = new SchemaInteraction(this.adapter.plugin, ctx.message);
+    const fields = await interaction.getValueWithSchema(this.schema);
     return {
       ...existing,
       ...(fields as Record<string, unknown>),

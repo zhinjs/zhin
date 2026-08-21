@@ -16,10 +16,12 @@ export type { DingTalkEndpointOptions, DingTalkFetch } from '../src/endpoint.js'
 
 export default defineAdapter<DingTalkAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
-  // 钉钉机器人媒体消息仅消费远程 URL；无按钮交互面，交互段降级纯文本。
+  // 钉钉机器人媒体消息仅消费远程 URL；Markdown 走原生 msgtype；
+  // 无按钮交互面，交互段降级纯文本。
   segments: {
     outboundMedia: ['url'],
     interactive: 'text',
+    markdown: 'native',
   },
   create(context) {
     const config = resolveDingTalkConfig(context.config);

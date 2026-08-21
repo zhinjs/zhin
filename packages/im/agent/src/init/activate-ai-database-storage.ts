@@ -5,6 +5,7 @@ import { type AIConfig, AgentSessionStore, DatabaseContextRepository, DatabaseMe
 import { DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT } from '../context/context-tail-limit.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 import { ActivatableWorkroomJournal, DatabaseWorkroomJournal } from '../workroom/journal.js';
+import { ActivatableWorkroomCatalog, DatabaseWorkroomCatalog } from '../workroom/catalog.js';
 import type { AIServiceRefs } from '../internal/ai-service-refs.js';
 import {
   upgradeAgentSessionTreeData,
@@ -16,6 +17,7 @@ export async function activateAiDatabaseStorage(
   refs: AIServiceRefs,
   config: AIConfig,
   workroomJournal: ActivatableWorkroomJournal,
+  workroomCatalog: ActivatableWorkroomCatalog,
   semanticMemory: SemanticMemoryRuntime | null,
 ): Promise<void> {
   if (!refs.zhinAgent) throw new Error('Agent database activation requires a ZhinAgent instance');
@@ -66,4 +68,7 @@ export async function activateAiDatabaseStorage(
   const workroomEventModel = db.models?.get('workroom_events');
   if (!workroomEventModel) throw new Error('Workroom requires the workroom_events database model');
   workroomJournal.activate(new DatabaseWorkroomJournal(db, workroomEventModel));
+  const workroomCatalogModel = db.models?.get('workroom_catalog');
+  if (!workroomCatalogModel) throw new Error('Workroom requires the workroom_catalog database model');
+  workroomCatalog.activate(new DatabaseWorkroomCatalog(db, workroomCatalogModel));
 }

@@ -12,6 +12,7 @@ import {
   type DingTalkMessage,
 } from '../src/protocol.js';
 import { getDingtalkAgentDeps, setDingtalkAgentDeps } from '../src/dingtalk-agent-deps.js';
+import defineDingTalkAdapter from '../adapters/dingtalk.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
@@ -105,6 +106,7 @@ describe('dingtalk protocol helpers', () => {
   });
 
   it('formats outbound string and segment payloads', () => {
+    expect(defineDingTalkAdapter.segments?.markdown).toBe('native');
     expect(formatOutboundBody('pong')).toEqual({
       msgtype: 'text',
       text: { content: 'pong' },
@@ -119,9 +121,10 @@ describe('dingtalk protocol helpers', () => {
     });
     expect(formatOutboundBody([
       { type: 'markdown', data: { title: 't', content: '# title' } },
+      { type: 'text', data: { text: '\n1. 确认\n2. 取消' } },
     ])).toEqual({
       msgtype: 'markdown',
-      markdown: { title: 't', text: '# title' },
+      markdown: { title: 't', text: '# title\n1. 确认\n2. 取消' },
     });
   });
 

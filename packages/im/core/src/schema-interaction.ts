@@ -6,10 +6,10 @@ import { Adapter } from './adapter.js';
 /**
  * Prompt类：用于实现机器人与用户的交互式提问与输入收集。
  * 支持文本、数字、确认、列表、选项、Schema等多种输入类型，自动处理超时、默认值、格式化等。
- * 典型用法：await new Prompt(plugin, event).text('请输入内容')
+ * 典型用法：await new SchemaInteraction(plugin, event).text('请输入内容')
  * @template P 适配器类型
  */
-export class Prompt<P extends RegisteredAdapter> {
+export class SchemaInteraction<P extends RegisteredAdapter> {
     /**
      * 构造函数
      * @param plugin 所属插件实例
@@ -26,10 +26,10 @@ export class Prompt<P extends RegisteredAdapter> {
      * 通用提问方法，支持自定义格式化、超时、默认值等
      * @param config 提问配置
      */
-    private prompt<T = any>(config: Prompt.Config<T>) {
+    private collect<T = any>(config: SchemaInteraction.Config<T>) {
         return new Promise<T>(async (resolve, reject) => {
             if (!this.event.$reply) {
-                reject(new Error('Prompt requires outbound capability on the current endpoint'));
+                reject(new Error('SchemaInteraction requires outbound capability on the current endpoint'));
                 return;
             }
             const id = await this.event.$reply(config.tips);
@@ -73,7 +73,7 @@ export class Prompt<P extends RegisteredAdapter> {
      * 文本输入
      */
     async text(tips: string, timeout?: number, defaultValue = '', timeoutText?: string): Promise<string> {
-        return this.prompt<string>({
+        return this.collect<string>({
             tips,
             defaultValue,
             timeoutText,
@@ -85,7 +85,7 @@ export class Prompt<P extends RegisteredAdapter> {
      * 任意输入
      */
     async any(tips: string, timeout?: number, defaultValue = '', timeoutText?: string) {
-        return this.prompt<string>({
+        return this.collect<string>({
             tips,
             defaultValue,
             timeoutText,
@@ -97,7 +97,7 @@ export class Prompt<P extends RegisteredAdapter> {
      * 数字输入
      */
     async number(tips: string, timeout?: number, defaultValue = 0, timeoutText?: string): Promise<number> {
-        return this.prompt<number>({
+        return this.collect<number>({
             tips,
             defaultValue,
             timeoutText,
@@ -115,7 +115,7 @@ export class Prompt<P extends RegisteredAdapter> {
         defaultValue = false,
         timeoutText?: string,
     ): Promise<boolean> {
-        return this.prompt<boolean>({
+        return this.collect<boolean>({
             tips: `${tips}\n输入“${condition}”以确认`,
             defaultValue,
             timeout,
@@ -126,13 +126,13 @@ export class Prompt<P extends RegisteredAdapter> {
     /**
      * 列表输入，支持多值分隔
      */
-    async list<T extends Prompt.SingleType = 'text'>(
+    async list<T extends SchemaInteraction.SingleType = 'text'>(
         tips: string,
-        config: Prompt.ListConfig<T> = { type: 'text' as T },
+        config: SchemaInteraction.ListConfig<T> = { type: 'text' as T },
         timeoutText?: string,
-    ): Promise<Prompt.Result<T>[]> {
+    ): Promise<SchemaInteraction.Result<T>[]> {
         const separator = config.separator || ',';
-        return this.prompt<Prompt.Result<T>[]>({
+        return this.collect<SchemaInteraction.Result<T>[]>({
             tips: `${tips}\n值之间使用“${separator}”分隔`,
             defaultValue: config.defaultValue || [],
             timeout: config.timeout,
@@ -147,7 +147,7 @@ export class Prompt<P extends RegisteredAdapter> {
                         case 'text':
                             return v;
                     }
-                }) as Prompt.Result<T>[],
+                }) as SchemaInteraction.Result<T>[],
         });
     }
     /**
@@ -159,17 +159,17 @@ export class Prompt<P extends RegisteredAdapter> {
     /**
      * 选项选择，支持单选/多选
      */
-    async pick<T extends Prompt.SingleType, M extends boolean = false>(
+    async pick<T extends SchemaInteraction.SingleType, M extends boolean = false>(
         tips: string,
-        config: Prompt.PickConfig<T, M>,
+        config: SchemaInteraction.PickConfig<T, M>,
         timeoutText?: string,
-    ): Promise<Prompt.PickResult<T, M>> {
+    ): Promise<SchemaInteraction.PickResult<T, M>> {
         const moreTextArr = config.options.map((o, idx) => {
             return `${idx + 1}.${o.label}`;
         });
         const separator = config.separator || ',';
         if (config.multiple) moreTextArr.push(`多选请用“${separator}”分隔`);
-        return this.prompt<Prompt.PickResult<T, M>>({
+        return this.collect<SchemaInteraction.PickResult<T, M>>({
             tips: `${tips}\n${moreTextArr.join('\n')}`,
             defaultValue: config.defaultValue,
             timeout: config.timeout,
@@ -178,13 +178,13 @@ export class Prompt<P extends RegisteredAdapter> {
                 if (!config.multiple)
                     return config.options.find((o, idx) => {
                         return idx + 1 === +input;
-                    })?.value as Prompt.PickResult<T, M>;
+                    })?.value as SchemaInteraction.PickResult<T, M>;
                 const pickIdx = input.split(separator).map(Number);
                 return config.options
                     .filter((o, idx) => {
                         return pickIdx.includes(idx + 1);
                     })
-                    .map(o => o.value) as Prompt.PickResult<T, M>;
+                    .map(o => o.value) as SchemaInteraction.PickResult<T, M>;
             },
         });
     }
@@ -230,13 +230,13 @@ export class Prompt<P extends RegisteredAdapter> {
                 if (!schema.options.object) throw new Error('Object schema missing object definition');
                 return (await this.getValueWithSchemas(schema.options.object)) as Schema.Types<T>;
             case 'date':
-                return await this.prompt({
+                return await this.collect({
                     tips: schema.meta.description || schema.meta.key || 'Enter a date',
                     defaultValue: schema.meta.default || new Date(),
                     format: (input: string) => new Date(input) as Schema.Types<T>,
                 });
             case 'regexp':
-                return await this.prompt({
+                return await this.collect({
                     tips: schema.meta.description || schema.meta.key || 'Enter a regex pattern',
                     defaultValue: schema.meta.default || '',
                     format: (input: string) => new RegExp(input) as Schema.Types<T>,
@@ -248,7 +248,7 @@ export class Prompt<P extends RegisteredAdapter> {
                 if (!['string', 'boolean', 'number'].includes(inner.meta.type!))
                     throw new Error(`unsupported inner type :${inner.meta.type}`);
                 return (await this.list(schema.meta.description || schema.meta.key || 'Enter list items', {
-                    type: inner.meta.type === 'string' ? 'text' : (inner.meta.type as Prompt.SingleType),
+                    type: inner.meta.type === 'string' ? 'text' : (inner.meta.type as SchemaInteraction.SingleType),
                     defaultValue: schema.meta.default,
                 })) as Schema.Types<T>;
             case 'dict':
@@ -260,7 +260,7 @@ export class Prompt<P extends RegisteredAdapter> {
 /**
  * Prompt命名空间：类型辅助定义
  */
-export namespace Prompt {
+export namespace SchemaInteraction {
     interface SingleMap {
         text: string;
         number: number;

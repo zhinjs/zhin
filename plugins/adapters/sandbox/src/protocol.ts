@@ -4,6 +4,10 @@ import { readFileSync } from 'node:fs';
 import { isMediaRef } from '@zhin.js/core';
 import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import {
+  normalizeSandboxAgentRunConfig,
+  type SandboxAgentRunConfig,
+} from './run-config.js';
 
 const logger = getLogger('sandbox');
 
@@ -70,7 +74,10 @@ export function resolveSandboxEndpoint(
     context: 'sandbox',
     id,
     owner,
-    randomNamePerConnection: !fixedName,
+    // The endpoint id participates in the Agent session key. Keep it stable
+    // across browser reconnects and Host restarts so a persisted playground
+    // session resumes the same Agent context.
+    randomNamePerConnection: false,
   };
 }
 
@@ -124,10 +131,12 @@ export function bindSandboxWsSocket(
 export function parseSandboxWsPayload(raw: string): {
   type: MessageType;
   id: string;
+  messageId?: string;
   content: MessageElement[];
   timestamp: number;
   text: string;
   action?: { id: string; payload: string };
+  agentRun?: SandboxAgentRunConfig;
 } {
   let payload: {
     type?: MessageType;
@@ -135,6 +144,8 @@ export function parseSandboxWsPayload(raw: string): {
     content?: MessageElement[] | string;
     text?: string;
     timestamp?: number;
+    messageId?: unknown;
+    agentRun?: unknown;
   };
   try {
     payload = JSON.parse(raw) as typeof payload;
@@ -175,7 +186,19 @@ export function parseSandboxWsPayload(raw: string): {
       ? payload.text
       : action?.payload ?? raw;
   }
-  return { type, id, content, timestamp: payload.timestamp ?? Date.now(), text, action };
+  const agentRun = normalizeSandboxAgentRunConfig(payload.agentRun);
+  const rawMessageId = typeof payload.messageId === 'string' ? payload.messageId.trim() : '';
+  const messageId = /^[A-Za-z0-9._:-]{1,160}$/u.test(rawMessageId) ? rawMessageId : undefined;
+  return {
+    type,
+    id,
+    ...(messageId ? { messageId } : {}),
+    content,
+    timestamp: payload.timestamp ?? Date.now(),
+    text,
+    action,
+    ...(agentRun ? { agentRun } : {}),
+  };
 }
 
 /**

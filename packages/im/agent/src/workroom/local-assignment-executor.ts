@@ -8,6 +8,13 @@ import {
   type AssignmentExecutorPort,
   type AssignmentProgressObservation,
 } from './assignment-executor.js';
+import {
+  createWorkroomDeferredCapabilityPlan,
+  type DeferredCapabilityPlan,
+  type WorkroomCapabilityRealization,
+  type WorkroomDeferredCapabilityPlanOptions,
+} from '../plugin-runtime/deferred-capability-plan.js';
+import type { WorkroomRoleCapabilitySnapshot } from './role-capability-snapshot.js';
 
 export interface LocalModelProgressEvent {
   readonly version: 1;
@@ -42,20 +49,46 @@ export type LocalModelExecutionEvent =
   | LocalModelCheckpointEvent
   | LocalModelExecutionCompletedEvent;
 
+export type LocalAssignmentCapabilityProjection = Omit<
+  WorkroomDeferredCapabilityPlanOptions,
+  'authority'
+> & Readonly<{
+  capabilitySnapshot: WorkroomRoleCapabilitySnapshot;
+  realization: WorkroomCapabilityRealization;
+  release(): void;
+}>;
+
+/** Trusted join of the Envelope snapshot and its generation-bound executable projection. */
+export interface LocalAssignmentCapabilityProjectionPort {
+  resolve(
+    envelope: AssignmentExecutionEnvelope,
+    signal: AbortSignal,
+  ): Promise<LocalAssignmentCapabilityProjection>;
+}
+
+export interface LocalModelExecutionRequest {
+  readonly envelope: AssignmentExecutionEnvelope;
+  /** The only Tool/Skill surface the model adapter may expose. */
+  readonly capabilityPlan: DeferredCapabilityPlan;
+}
+
 /**
  * Narrow local model boundary. Composition roots may adapt model-loop ability
  * to this port, but must not expose Subagent task identity, delivery or status.
  */
 export interface LocalModelExecutionPort {
   execute(
-    envelope: AssignmentExecutionEnvelope,
+    request: LocalModelExecutionRequest,
     signal: AbortSignal,
   ): AsyncIterable<LocalModelExecutionEvent>;
 }
 
 /** Local transport adapter for the shared Assignment Executor lifecycle. */
 export class LocalAssignmentExecutor implements AssignmentExecutorPort {
-  constructor(private readonly model: LocalModelExecutionPort) {}
+  constructor(
+    private readonly model: LocalModelExecutionPort,
+    private readonly capabilityProjection: LocalAssignmentCapabilityProjectionPort,
+  ) {}
 
   async *execute(
     envelope: AssignmentExecutionEnvelope,
@@ -63,41 +96,78 @@ export class LocalAssignmentExecutor implements AssignmentExecutorPort {
   ): AsyncIterable<AssignmentExecutionObservation> {
     assertAssignmentExecutionEnvelope(envelope);
     signal.throwIfAborted();
-    let completion: AssignmentExecutionCompletedObservation | undefined;
-    const seenEventIds = new Set<string>();
-    const iterator = this.model.execute(envelope, signal)[Symbol.asyncIterator]();
-    let streamEnded = false;
+    const projection = await awaitAbortable(
+      () => this.capabilityProjection.resolve(envelope, signal),
+      signal,
+      'Local capability projection cancelled',
+      late => late.release(),
+    );
+    let completion: AssignmentExecutionCompletedObservation;
     try {
-      while (true) {
-        const next = await nextWithAbort(iterator, signal);
-        if (next.done) {
-          streamEnded = true;
-          break;
-        }
-        signal.throwIfAborted();
-        if (seenEventIds.has(next.value.eventId)) {
-          throw new Error(`Local model execution repeated eventId ${next.value.eventId}`);
-        }
-        seenEventIds.add(next.value.eventId);
-        const observation = projectLocalModelEvent(envelope, next.value);
-        if (completion) {
-          throw new Error('Local model execution emitted an event after execution_completed');
-        }
-        if (observation.type === 'execution_completed') {
-          completion = observation;
-          continue;
-        }
-        yield observation;
-      }
+      signal.throwIfAborted();
+      const capabilityPlan = createWorkroomDeferredCapabilityPlan({
+        capabilities: projection.capabilities,
+        authority: Object.freeze({
+          kind: 'workroom_assignment',
+          envelope,
+          capabilitySnapshot: projection.capabilitySnapshot,
+          realization: projection.realization,
+        }),
+        sessionSnapshot: projection.sessionSnapshot,
+        config: projection.config,
+        platform: projection.platform,
+        persistSnapshot: projection.persistSnapshot,
+      });
+      const request: LocalModelExecutionRequest = Object.freeze({ envelope, capabilityPlan });
+      completion = yield* executeLocalModel(this.model, request, signal);
     } finally {
-      if (!streamEnded) stopIteratorWithoutWaiting(iterator);
-    }
-    if (!completion) {
-      throw new Error('Local model execution ended without execution_completed');
+      projection.release();
     }
     signal.throwIfAborted();
     yield completion;
   }
+}
+
+async function* executeLocalModel(
+  model: LocalModelExecutionPort,
+  request: LocalModelExecutionRequest,
+  signal: AbortSignal,
+): AsyncGenerator<AssignmentExecutionObservation, AssignmentExecutionCompletedObservation> {
+  let completion: AssignmentExecutionCompletedObservation | undefined;
+  const seenEventIds = new Set<string>();
+  const iterator = model.execute(request, signal)[Symbol.asyncIterator]();
+  let streamEnded = false;
+  try {
+    while (true) {
+      const next = await awaitAbortable(
+        () => iterator.next(),
+        signal,
+        'Local model execution cancelled',
+      );
+      if (next.done) {
+        streamEnded = true;
+        break;
+      }
+      signal.throwIfAborted();
+      if (seenEventIds.has(next.value.eventId)) {
+        throw new Error(`Local model execution repeated eventId ${next.value.eventId}`);
+      }
+      seenEventIds.add(next.value.eventId);
+      const observation = projectLocalModelEvent(request.envelope, next.value);
+      if (completion) {
+        throw new Error('Local model execution emitted an event after execution_completed');
+      }
+      if (observation.type === 'execution_completed') {
+        completion = observation;
+        continue;
+      }
+      yield observation;
+    }
+  } finally {
+    if (!streamEnded) stopIteratorWithoutWaiting(iterator);
+  }
+  if (!completion) throw new Error('Local model execution ended without execution_completed');
+  return completion;
 }
 
 function projectLocalModelEvent(
@@ -172,12 +242,14 @@ function assertExactEventKeys(
   }
 }
 
-function nextWithAbort<T>(
-  iterator: AsyncIterator<T>,
+function awaitAbortable<T>(
+  operation: () => PromiseLike<T>,
   signal: AbortSignal,
-): Promise<IteratorResult<T>> {
+  cancellationMessage: string,
+  onLateResolve?: (value: T) => void,
+): Promise<T> {
   signal.throwIfAborted();
-  return new Promise<IteratorResult<T>>((resolve, reject) => {
+  return new Promise<T>((resolve, reject) => {
     let settled = false;
     const finish = (operation: () => void): void => {
       if (settled) return;
@@ -187,7 +259,7 @@ function nextWithAbort<T>(
     };
     const onAbort = (): void => {
       finish(() => reject(signal.reason ?? new DOMException(
-        'Local model execution cancelled',
+        cancellationMessage,
         'AbortError',
       )));
     };
@@ -196,15 +268,25 @@ function nextWithAbort<T>(
       onAbort();
       return;
     }
-    let pending: PromiseLike<IteratorResult<T>>;
+    let pending: PromiseLike<T>;
     try {
-      pending = iterator.next();
+      pending = operation();
     } catch (error) {
       finish(() => reject(error));
       return;
     }
     Promise.resolve(pending).then(
-      (result) => finish(() => resolve(result)),
+      (result) => {
+        if (settled) {
+          try {
+            onLateResolve?.(result);
+          } catch {
+            // The caller already owns the abort outcome; late cleanup is best-effort.
+          }
+          return;
+        }
+        finish(() => resolve(result));
+      },
       (error: unknown) => finish(() => reject(error)),
     );
   });

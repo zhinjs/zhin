@@ -8,6 +8,7 @@ import { isMediaRef } from '@zhin.js/core';
 import type { Segment } from '@zhin.js/core/runtime';
 import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import { escapeTelegramHtml, markdownToTelegramHtml } from './markdown-to-html.js';
 
 const logger = getLogger('telegram');
 
@@ -172,6 +173,7 @@ export type TelegramOutboundAction =
     readonly params: {
       readonly chat_id: number | string;
       readonly text: string;
+      readonly parse_mode?: 'HTML';
       readonly reply_parameters?: { readonly message_id: number };
       readonly reply_markup?: { readonly inline_keyboard: TelegramInlineButton[][] };
     };
@@ -182,6 +184,7 @@ export type TelegramOutboundAction =
       readonly chat_id: number | string;
       readonly photo: string;
       readonly caption?: string;
+      readonly parse_mode?: 'HTML';
       readonly reply_parameters?: { readonly message_id: number };
     };
   }
@@ -191,6 +194,7 @@ export type TelegramOutboundAction =
       readonly chat_id: number | string;
       readonly video: string;
       readonly caption?: string;
+      readonly parse_mode?: 'HTML';
       readonly reply_parameters?: { readonly message_id: number };
     };
   }
@@ -200,6 +204,7 @@ export type TelegramOutboundAction =
       readonly chat_id: number | string;
       readonly audio: string;
       readonly caption?: string;
+      readonly parse_mode?: 'HTML';
       readonly reply_parameters?: { readonly message_id: number };
     };
   }
@@ -209,6 +214,7 @@ export type TelegramOutboundAction =
       readonly chat_id: number | string;
       readonly voice: string;
       readonly caption?: string;
+      readonly parse_mode?: 'HTML';
       readonly reply_parameters?: { readonly message_id: number };
     };
   }
@@ -218,6 +224,7 @@ export type TelegramOutboundAction =
       readonly chat_id: number | string;
       readonly document: string;
       readonly caption?: string;
+      readonly parse_mode?: 'HTML';
       readonly reply_parameters?: { readonly message_id: number };
     };
   }
@@ -511,6 +518,11 @@ function buildOutboundActions(
     : payload && typeof payload === 'object' && 'type' in (payload as object)
       ? [payload as TelegramWireSegment]
       : [];
+  const hasMarkdown = items.some((item) => typeof item !== 'string' && item.type === 'markdown');
+  const appendPlain = (value: unknown): string => hasMarkdown
+    ? escapeTelegramHtml(String(value ?? ''))
+    : String(value ?? '');
+  const htmlMode = hasMarkdown ? { parse_mode: 'HTML' as const } : {};
 
   if (items.length === 0) {
     const text = payload == null
@@ -576,16 +588,19 @@ function buildOutboundActions(
 
   for (const item of items) {
     if (typeof item === 'string') {
-      textContent += item;
+      textContent += appendPlain(item);
       continue;
     }
     const data = item.data ?? {};
     switch (item.type) {
       case 'text':
-        textContent += String(data.text ?? data.content ?? '');
+        textContent += appendPlain(data.text ?? data.content ?? '');
+        break;
+      case 'markdown':
+        textContent += markdownToTelegramHtml(String(data.content ?? data.text ?? ''));
         break;
       case 'at':
-        if (data.id) textContent += `@${String(data.name || data.id)}`;
+        if (data.id) textContent += `@${appendPlain(data.name || data.id)}`;
         break;
       case 'reply': {
         const id = Number(data.id ?? data.message_id);
@@ -617,6 +632,7 @@ function buildOutboundActions(
               chat_id: chatId,
               photo,
               caption: textContent.trim() || undefined,
+              ...(textContent.trim() ? htmlMode : {}),
               ...replyParams(),
             },
           });
@@ -633,6 +649,7 @@ function buildOutboundActions(
               chat_id: chatId,
               video,
               caption: textContent.trim() || undefined,
+              ...(textContent.trim() ? htmlMode : {}),
               ...replyParams(),
             },
           });
@@ -649,6 +666,7 @@ function buildOutboundActions(
               chat_id: chatId,
               audio,
               caption: textContent.trim() || undefined,
+              ...(textContent.trim() ? htmlMode : {}),
               ...replyParams(),
             },
           });
@@ -665,6 +683,7 @@ function buildOutboundActions(
               chat_id: chatId,
               voice,
               caption: textContent.trim() || undefined,
+              ...(textContent.trim() ? htmlMode : {}),
               ...replyParams(),
             },
           });
@@ -681,6 +700,7 @@ function buildOutboundActions(
               chat_id: chatId,
               document,
               caption: textContent.trim() || undefined,
+              ...(textContent.trim() ? htmlMode : {}),
               ...replyParams(),
             },
           });
@@ -711,7 +731,7 @@ function buildOutboundActions(
         break;
       }
       default:
-        textContent += String(data.text ?? `[${item.type}]`);
+        textContent += appendPlain(data.text ?? `[${item.type}]`);
     }
   }
 
@@ -723,6 +743,7 @@ function buildOutboundActions(
       params: {
         chat_id: chatId,
         text: text || ' ',
+        ...htmlMode,
         ...replyParams(),
         ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
       },
@@ -735,6 +756,7 @@ function buildOutboundActions(
       params: {
         chat_id: chatId,
         text: textContent.trim() || ' ',
+        ...htmlMode,
         ...replyParams(),
         ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
       },

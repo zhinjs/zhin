@@ -370,8 +370,8 @@ function validateHistory(
     }
     if (previous
       && binding.effectiveAfterConversationSequence
-        <= previous.effectiveAfterConversationSequence) {
-      throw new Error('Interaction Space binding anchor must increase');
+        < previous.effectiveAfterConversationSequence) {
+      throw new Error('Interaction Space binding anchor must not move backwards');
     }
     previous = binding;
   });

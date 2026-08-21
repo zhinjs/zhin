@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # Agent Workroom 与多 Agent 编排决策地图
 
 目标：把 Zhin 的多人 Session、动态多 Agent 工作流、可观察 Workroom、可靠调度与分层记忆收敛成一个 Kernel-owned 产品模型。

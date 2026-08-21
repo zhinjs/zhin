@@ -444,6 +444,11 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     );
   }
 
+  /** Cancel the latest active turn for one stable session key. */
+  cancelSession(sessionKey: string): boolean {
+    return this.promptController.cancelSession(sessionKey);
+  }
+
   async compactSession(sessionKey: string): Promise<{ ok: boolean; message: string }> {
     const priv = asPrivate(this);
     const memorySystem = this.memorySystem ?? createMemorySystemForHost(priv);

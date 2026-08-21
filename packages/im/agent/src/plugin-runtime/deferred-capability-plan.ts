@@ -12,6 +12,21 @@ import { buildDeferredStats, buildToolCatalog, discoverInCatalog, resolveDeferre
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import { DEFERRED_META_TOOL_NAMES, type ToolCatalogItem } from '../tool-catalog/types.js';
 import type { AgentCapabilities, ToolCapability } from './capability-ingress.js';
+import type { AssignmentExecutionEnvelope } from '../workroom/assignment-executor.js';
+import {
+  discoverWorkroomRoleCapabilities,
+  getWorkroomRoleCommandDescriptors,
+  type WorkroomRoleCapabilitySnapshot,
+} from '../workroom/role-capability-snapshot.js';
+
+const WORKROOM_CONTROL_NAMES = new Set([
+  ...(['orchestrator', 'executor', 'reviewer', 'integration'] as const)
+    .flatMap(role => getWorkroomRoleCommandDescriptors(role).map(command => command.toolName)),
+  'workroom_create_run',
+  'workroom_plan_task',
+  'workroom_transition',
+]);
+const WORKROOM_REALIZATION_ISSUER = Symbol('WorkroomCapabilityRealization.issuer');
 
 export interface DeferredCapabilityController {
   loadedToolNames(): string[];
@@ -29,10 +44,102 @@ export interface DeferredCapabilityPlan {
 
 export interface DeferredCapabilityPlanOptions {
   readonly capabilities: AgentCapabilities;
+  /**
+   * Workroom model turns must present the exact immutable Assignment authority.
+   * Ordinary chat omits this field and retains its own capability projection.
+   */
+  readonly authority?: WorkroomDeferredCapabilityAuthority;
   readonly sessionSnapshot: DeferredToolSessionSnapshot;
   readonly config: Parameters<typeof resolveDeferredToolsConfig>[0];
   readonly platform?: string;
   readonly persistSnapshot: (snapshot: DeferredToolSessionSnapshot) => Promise<void>;
+}
+
+export interface WorkroomDeferredCapabilityAuthority {
+  readonly kind: 'workroom_assignment';
+  readonly envelope: AssignmentExecutionEnvelope;
+  readonly capabilitySnapshot: WorkroomRoleCapabilitySnapshot;
+  readonly realization: WorkroomCapabilityRealization;
+}
+
+/** Opaque proof that one immutable capability projection was joined to this Snapshot. */
+export class WorkroomCapabilityRealization {
+  readonly #capabilities: AgentCapabilities;
+  readonly #envelopeDigest: string;
+  readonly #snapshotDigest: string;
+
+  constructor(
+    issuer: symbol,
+    capabilities: AgentCapabilities,
+    envelopeDigest: string,
+    snapshotDigest: string,
+  ) {
+    if (issuer !== WORKROOM_REALIZATION_ISSUER) {
+      throw new Error('Workroom capability realization requires the trusted issuer');
+    }
+    this.#capabilities = capabilities;
+    this.#envelopeDigest = envelopeDigest;
+    this.#snapshotDigest = snapshotDigest;
+    Object.freeze(this);
+  }
+
+  assertBound(
+    capabilities: AgentCapabilities,
+    envelope: AssignmentExecutionEnvelope,
+    snapshot: WorkroomRoleCapabilitySnapshot,
+  ): void {
+    if (capabilities !== this.#capabilities
+      || envelope.digest !== this.#envelopeDigest
+      || snapshot.digest !== this.#snapshotDigest) {
+      throw new Error('Workroom capabilities are outside the trusted generation realization');
+    }
+  }
+}
+
+/** Called only by the trusted generation/Assignment projection boundary. */
+export function bindWorkroomCapabilityRealization(
+  capabilities: AgentCapabilities,
+  envelope: AssignmentExecutionEnvelope,
+  snapshot: WorkroomRoleCapabilitySnapshot,
+): WorkroomCapabilityRealization {
+  if (!Object.isFrozen(capabilities)
+    || !Object.isFrozen(capabilities.tools)
+    || !Object.isFrozen(capabilities.skills)
+    || capabilities.tools.some(capability => !Object.isFrozen(capability))
+    || capabilities.skills.some(capability => !Object.isFrozen(capability))) {
+    throw new Error('Workroom generation capability projection must be deeply immutable');
+  }
+  const ceiling = discoverWorkroomRoleCapabilities(envelope, snapshot);
+  assertExactRuntimeProjection(
+    'Tool',
+    ceiling.tools.filter(item => item.name !== 'spawn_task' && !isWorkroomControl(item.name)),
+    capabilities.tools,
+    capability => capability.name,
+  );
+  assertExactRuntimeProjection(
+    'Skill',
+    ceiling.skills,
+    capabilities.skills,
+    capability => capability.qualifiedName,
+  );
+  return new WorkroomCapabilityRealization(
+    WORKROOM_REALIZATION_ISSUER,
+    capabilities,
+    envelope.digest,
+    snapshot.digest,
+  );
+}
+
+export type WorkroomDeferredCapabilityPlanOptions = Omit<
+  DeferredCapabilityPlanOptions,
+  'authority'
+> & Readonly<{ authority: WorkroomDeferredCapabilityAuthority }>;
+
+/** Explicit Workroom entry point: callers cannot omit the Assignment ceiling. */
+export function createWorkroomDeferredCapabilityPlan(
+  options: WorkroomDeferredCapabilityPlanOptions,
+): DeferredCapabilityPlan {
+  return createDeferredCapabilityPlan(options);
 }
 
 /**
@@ -45,8 +152,9 @@ export function createDeferredCapabilityPlan(
 ): DeferredCapabilityPlan {
   const config = resolveDeferredToolsConfig(options.config);
   const alwaysLoaded = new Set(config.alwaysLoadedTools);
-  const baseCapabilities = options.capabilities.tools.filter(
-    (tool) => !DEFERRED_META_TOOL_NAMES.has(tool.name),
+  const projected = projectCapabilities(options.capabilities, options.authority);
+  const baseCapabilities = projected.tools.filter(
+    (tool) => !DEFERRED_META_TOOL_NAMES.has(tool.name) && !isWorkroomControl(tool.name),
   );
   // Platform-scoped adapter tools already passed canAccess for this turn.
   // Keep them in the model tool list so QQ/social actions are not hidden behind discover.
@@ -55,7 +163,7 @@ export function createDeferredCapabilityPlan(
   }
   const baseTools = baseCapabilities.map(capabilityAsAgentTool);
   const baseCatalog = buildToolCatalog({ tools: baseTools, alwaysLoaded });
-  let snapshot = structuredClone(options.sessionSnapshot);
+  let snapshot = projectSessionSnapshot(options.sessionSnapshot, projected);
 
   const persist = async (next: DeferredToolSessionSnapshot): Promise<void> => {
     snapshot = next;
@@ -65,7 +173,7 @@ export function createDeferredCapabilityPlan(
   const metaCapabilities = createMetaCapabilities({
     owner: options.capabilities.owner,
     catalog: baseCatalog,
-    skills: options.capabilities.skills,
+    skills: projected.skills,
     platform: options.platform,
     topK: config.discoverTopK,
     maxLoaded: config.maxLoadedPerSession,
@@ -77,7 +185,7 @@ export function createDeferredCapabilityPlan(
   const catalog = buildToolCatalog({ tools: allTools, alwaysLoaded });
   const controller: DeferredCapabilityController = Object.freeze({
     loadedToolNames: () => getLoadedToolNamesFromSnapshot(snapshot),
-    loadedSkillInstructions: () => loadedSkillInstructions(options.capabilities.skills, snapshot),
+    loadedSkillInstructions: () => loadedSkillInstructions(projected.skills, snapshot),
   });
   const resolvedTools = resolveDeferredApiTools(
     catalog,
@@ -93,6 +201,82 @@ export function createDeferredCapabilityPlan(
     deferredStats: buildDeferredStats(catalog, resolvedTools),
     controller,
   });
+}
+
+function projectCapabilities(
+  capabilities: AgentCapabilities,
+  authority: WorkroomDeferredCapabilityAuthority | undefined,
+): Readonly<Pick<AgentCapabilities, 'tools' | 'skills'>> {
+  if (!authority) {
+    return Object.freeze({
+      tools: Object.freeze(capabilities.tools.filter(tool => !isWorkroomControl(tool.name))),
+      skills: capabilities.skills,
+    });
+  }
+  if (authority.kind !== 'workroom_assignment') {
+    throw new Error('Unsupported deferred capability authority');
+  }
+  if (!(authority.realization instanceof WorkroomCapabilityRealization)) {
+    throw new Error('Workroom deferred plan requires a trusted generation realization');
+  }
+  authority.realization.assertBound(
+    capabilities,
+    authority.envelope,
+    authority.capabilitySnapshot,
+  );
+  const ceiling = discoverWorkroomRoleCapabilities(
+    authority.envelope,
+    authority.capabilitySnapshot,
+  );
+  const toolCeiling = ceiling.tools.filter(
+    item => item.name !== 'spawn_task' && !isWorkroomControl(item.name),
+  );
+  const toolNames = new Set(toolCeiling.map(item => item.name));
+  const skillNames = new Set(ceiling.skills.map(item => item.name));
+  return Object.freeze({
+    tools: Object.freeze(capabilities.tools.filter(tool => toolNames.has(tool.name))),
+    skills: Object.freeze(capabilities.skills.filter(skill => skillNames.has(skill.qualifiedName))),
+  });
+}
+
+function assertExactRuntimeProjection<
+  TExpected extends Readonly<{ name: string }>,
+  TRuntime,
+>(
+  kind: 'Tool' | 'Skill',
+  expectedCapabilities: readonly TExpected[],
+  runtimeCapabilities: readonly TRuntime[],
+  runtimeName: (capability: TRuntime) => string,
+): void {
+  for (const expected of expectedCapabilities) {
+    const matches = runtimeCapabilities.filter(
+      capability => runtimeName(capability) === expected.name,
+    );
+    if (matches.length !== 1) {
+      throw new Error(
+        `Workroom ${kind} ${expected.name} has ${matches.length} active generation realizations`,
+      );
+    }
+  }
+}
+
+function isWorkroomControl(name: string): boolean {
+  return WORKROOM_CONTROL_NAMES.has(name.split('__').at(-1) ?? name);
+}
+
+function projectSessionSnapshot(
+  snapshot: DeferredToolSessionSnapshot,
+  capabilities: Readonly<Pick<AgentCapabilities, 'tools' | 'skills'>>,
+): DeferredToolSessionSnapshot {
+  const allowedTools = new Set(capabilities.tools.map(tool => tool.name));
+  const allowedSkills = new Set(capabilities.skills.flatMap(
+    skill => [skill.qualifiedName, skill.name],
+  ));
+  return {
+    loadedTools: Object.fromEntries(Object.entries(snapshot.loadedTools)
+      .filter(([name]) => allowedTools.has(name))),
+    loadedSkills: snapshot.loadedSkills.filter(name => allowedSkills.has(name)),
+  };
 }
 
 export function capabilityAsAgentTool(tool: ToolCapability): AgentTool {

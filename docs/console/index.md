@@ -49,9 +49,9 @@ http:
 | Cron | RPC `cron:*` | 插件注册的内存任务（list）；安装 Agent 后可增删暂停持久化任务 |
 | Database | RPC `db:info` / `db:tables` / `db:select` / `db:insert` / `db:update` / `db:delete` / `db:kv:*` | 数据库浏览与编辑、KV 存储 |
 | Files | RPC `files:tree` / `files:read` / `files:save`、`env:list` / `env:save` | 项目文件树与 `.env` 管理 |
-| Introspection | `GET /api/introspection/{commands,tools,endpoints,bindings,mcp}` | 分页内省：命令、工具、端点、绑定、MCP |
+| 运行时能力 | `GET /api/introspection/{commands,middlewares,components,tools,endpoints,bindings,mcp}`、`POST /api/introspection/components/render` | 当前 generation 的命令契约、中间件顺序、组件目录与 full-scope 渲染实验台，以及 Agent 工具面 |
 | Agent Sessions | `GET/POST /api/agent/sessions/*` | AI 会话树查看与分支切换 |
-| Workroom | `GET /api/agent/workroom/runs[/*]` | 按显式 Project 查询 replayed Run / Task / Assignment 状态 |
+| Workrooms | `config:get/set(ai)` + `GET /api/agent/workroom/runs[/*]` | 配置 Project、Agent 角色与 Bot→Agent 拓扑；按选中 Project 查询 replayed Run / Task / Assignment / Reviewer / Sponsor Gate |
 | Marketplace | `GET /pub/marketplace/search`、`/pub/marketplace/detail/*`、`GET /api/marketplace/updates` | 插件市场（plugins.json + npmmirror）与更新检查 |
 | Sandbox | WS `/sandbox` | 内置沙箱聊天，免平台联调直接对话 |
 

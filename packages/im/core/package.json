@@ -81,6 +81,7 @@
     "@zhin.js/database": "workspace:*",
     "@zhin.js/handler": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
+    "@zhin.js/interaction": "workspace:*",
     "@zhin.js/kernel": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/middleware": "workspace:*",

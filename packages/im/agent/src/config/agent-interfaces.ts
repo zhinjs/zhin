@@ -47,6 +47,7 @@ export interface IAgentTurnProcessor {
 export interface IAgentSessionManager {
   compactSession(sessionKey: string): Promise<{ ok: boolean; message: string }>;
   archiveSession(sessionKey: string): Promise<boolean>;
+  cancelSession(sessionKey: string): boolean;
   getLastTurnMetrics(): ZhinAgentTurnMetrics | null;
   upgradeProfilesToDatabase(model: any): void;
 }

@@ -1,6 +1,7 @@
 /**
  * UNI-Channel segments policy SSOT：全部 IM adapter 的 defineAdapter segments
- * 声明（outboundMedia / interactive）逐平台断言，防止声明被意外改弱或删回。
+ * 声明（outboundMedia / interactive / markdown / supported）逐平台断言，
+ * 防止声明被意外改弱或删回。
  * 门禁脚本（scripts/check-*-segment-adapters.mjs）只查存在性，本测试查精确值。
  */
 import { describe, expect, it } from 'vitest';
@@ -27,23 +28,28 @@ import defineWecomAdapter from '../../plugins/adapters/wecom/adapters/wecom.js';
 import defineWeixinIlinkAdapter from '../../plugins/adapters/weixin-ilink/adapters/weixin-ilink.js';
 
 const EXPECTED: Record<string, AdapterDefinition['segments']> = {
-  dingtalk: { outboundMedia: ['url'], interactive: 'text' },
-  discord: { outboundMedia: ['url', 'upload'], interactive: 'native' },
+  dingtalk: { outboundMedia: ['url'], interactive: 'text', markdown: 'native' },
+  discord: { outboundMedia: ['url', 'upload'], interactive: 'native', markdown: 'native' },
   email: { outboundMedia: ['url', 'path', 'base64'], interactive: 'text' },
   github: { outboundMedia: ['url'], interactive: 'text' },
   icqq: { outboundMedia: ['base64', 'url', 'path'], interactive: 'text' },
-  kook: { outboundMedia: ['url'], interactive: 'text' },
-  lark: { outboundMedia: ['url', 'upload'], interactive: 'text' },
+  kook: { outboundMedia: ['url'], interactive: 'text', markdown: 'native' },
+  lark: { outboundMedia: ['url', 'upload'], interactive: 'text', markdown: 'native' },
   line: { outboundMedia: ['url'], interactive: 'text' },
   milky: { outboundMedia: ['url', 'base64'], interactive: 'text' },
   napcat: { outboundMedia: ['url', 'base64', 'path'], interactive: 'text' },
   onebot11: { outboundMedia: ['url', 'base64'], interactive: 'text' },
   onebot12: { outboundMedia: ['url', 'path', 'base64', 'upload'], interactive: 'text' },
-  qq: { outboundMedia: ['url', 'upload'], interactive: 'native' },
+  qq: {
+    outboundMedia: ['url', 'upload'],
+    interactive: 'native',
+    markdown: 'native',
+    supported: ['text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'markdown', 'keyboard'],
+  },
   sandbox: { outboundMedia: ['url', 'base64', 'path'], interactive: 'native' },
   satori: { outboundMedia: ['url', 'base64'], interactive: 'text' },
   slack: { outboundMedia: ['url', 'upload', 'path'], interactive: 'native' },
-  telegram: { outboundMedia: ['url', 'upload'], interactive: 'native' },
+  telegram: { outboundMedia: ['url', 'upload'], interactive: 'native', markdown: 'native' },
   'wechat-mp': { outboundMedia: ['upload'], interactive: 'text' },
   wecom: { outboundMedia: ['upload'], interactive: 'text' },
   'weixin-ilink': { outboundMedia: ['upload'], interactive: 'text' },

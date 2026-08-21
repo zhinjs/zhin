@@ -11,7 +11,7 @@ export default defineAgentTool<{ endpoint_id: string; group_id: number; user_id:
     duration: z.number().optional().describe('持续时间(秒)，-1永久').default(-1),
   }),
   platforms: ['icqq'],
-  permissions: ['role(master,trusted)'],
+  approval: 'always',
   async execute({ endpoint_id, group_id, user_id, title, duration }: { endpoint_id: string; group_id: number; user_id: number; title: string; duration?: number }) {
     const endpoint = getIcqqAgentDeps().getEndpoint(endpoint_id);
     const selfInfo= endpoint.pickMember(group_id,endpoint.uin);

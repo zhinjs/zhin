@@ -36,6 +36,11 @@ import {
   middlewareFeatureId,
 } from '@zhin.js/middleware';
 import {
+  HandlerIndex,
+  defineHandler,
+  handlerFeatureId,
+} from '@zhin.js/handler';
+import {
   ImRuntime,
   ingressRouteToken,
   Message,
@@ -425,6 +430,132 @@ describe('IM Runtime', () => {
     await expect(fixture.im.receive({ conversation, content: 'next' }))
       .resolves.toEqual({ matched: false });
 
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it('runs a generation-owned pre-route after the pending claim and before commands', async () => {
+    const events: string[] = [];
+    const fixture = await createFixture(events, [], undefined, undefined, undefined, {
+      inboundClaim: async () => {
+        events.push('claim');
+        return false;
+      },
+    });
+    const current = fixture.store.current;
+    const resources = new Map(current.resources);
+    resources.set(current.root, new Map([
+      [ingressRouteToken.id, Object.freeze({
+        async preRoute(message, _lease, _requester, conversationSequence) {
+          events.push(`pre-route:${message.conversation.id}:${conversationSequence}`);
+          return true;
+        },
+        async route() {
+          events.push('terminal-route');
+          return true;
+        },
+      })],
+    ]));
+    fixture.store.commit(0, {
+      snapshot: { ...snapshotState(current), resources },
+      dispose: () => undefined,
+    });
+    const conversation = {
+      endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+      kind: 'private' as const,
+      id: 'workroom-1',
+    };
+
+    const result = await fixture.im.receive({
+      conversation,
+      message: { conversation, id: 'workroom-message' },
+      content: '/gh issue list open',
+      sender: { id: 'alice' },
+    });
+
+    expect(result).toMatchObject({ matched: true, command: 'pre-route' });
+    expect(events).toEqual([
+      'endpoint:start',
+      'endpoint:open',
+      'claim',
+      'inbound:enter',
+      'pre-route:workroom-1:1',
+      'inbound:exit',
+    ]);
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it('continues chat command dispatch when the generation-owned pre-route declines', async () => {
+    const events: string[] = [];
+    const fixture = await createFixture(events, []);
+    const current = fixture.store.current;
+    const resources = new Map(current.resources);
+    resources.set(current.root, new Map([
+      [ingressRouteToken.id, Object.freeze({
+        async preRoute() {
+          events.push('pre-route:false');
+          return false;
+        },
+        async route() {
+          events.push('terminal-route');
+          return true;
+        },
+      })],
+    ]));
+    fixture.store.commit(0, {
+      snapshot: { ...snapshotState(current), resources },
+      dispose: () => undefined,
+    });
+
+    const result = await fixture.im.receive({
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private',
+        id: 'chat-1',
+      },
+      content: '/gh issue list open',
+      sender: { id: 'alice' },
+    });
+
+    expect(result).toMatchObject({ matched: true, command: 'gh issue list' });
+    expect(events.indexOf('pre-route:false')).toBeLessThan(events.indexOf('command:open'));
+    expect(events).not.toContain('terminal-route');
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it('passes an undefined conversation sequence to pre-route when ingress has no message id', async () => {
+    const fixture = await createFixture([], []);
+    let receivedSequence: number | undefined = 42;
+    const current = fixture.store.current;
+    const resources = new Map(current.resources);
+    resources.set(current.root, new Map([
+      [ingressRouteToken.id, Object.freeze({
+        async preRoute(_message, _lease, _requester, conversationSequence) {
+          receivedSequence = conversationSequence;
+          return true;
+        },
+        async route() {
+          return false;
+        },
+      })],
+    ]));
+    fixture.store.commit(0, {
+      snapshot: { ...snapshotState(current), resources },
+      dispose: () => undefined,
+    });
+
+    await fixture.im.receive({
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private',
+        id: 'no-message-ref',
+      },
+      content: 'workroom ingress',
+    });
+
+    expect(receivedSequence).toBeUndefined();
     await fixture.adapters.stop();
     await fixture.store.close();
   });
@@ -1893,12 +2024,12 @@ describe('Message.$replyToChannel', () => {
   });
 });
 
-describe('CommandPrompt via ImRuntime', () => {
-  async function createPromptFixture() {
+describe('UserInteraction via ImRuntime', () => {
+  async function createInteractionFixture() {
     const sent: unknown[] = [];
     const events: string[] = [];
-    let promptResult: unknown;
-    let promptError: unknown;
+    let interactionResult: unknown;
+    let interactionError: unknown;
     const commandExecuted = vi.fn();
     const root = rootPluginId();
     const adapter = createCapabilitySlot({
@@ -1915,7 +2046,7 @@ describe('CommandPrompt via ImRuntime', () => {
           stop() {},
           send(request) {
             sent.push(request);
-            return { id: `sent-${sent.length}` };
+            return `sent-${sent.length}`;
           },
         }),
       }),
@@ -1929,12 +2060,17 @@ describe('CommandPrompt via ImRuntime', () => {
         async execute(context) {
           commandExecuted();
           try {
-            promptResult = await context.prompt!.text('请输入你的名字');
+            interactionResult = await context.interaction!.ask({
+              type: 'text',
+              title: '个人信息',
+              description: '请输入你的名字',
+              tip: '将用于后续问候',
+            });
           } catch (e) {
-            promptError = e;
+            interactionError = e;
             throw e;
           }
-          return `你好 ${promptResult}`;
+          return `你好 ${interactionResult}`;
         },
       }),
     });
@@ -1951,7 +2087,14 @@ describe('CommandPrompt via ImRuntime', () => {
     im.attach(store);
     await adapters.start();
     adapters.open();
-    return { im, sent, events, commandExecuted, getResult: () => promptResult, getError: () => promptError };
+    return {
+      im,
+      sent,
+      events,
+      commandExecuted,
+      getResult: () => interactionResult,
+      getError: () => interactionError,
+    };
   }
 
   function incomingMessage(content: string, sender = 'user-1') {
@@ -1967,27 +2110,33 @@ describe('CommandPrompt via ImRuntime', () => {
     };
   }
 
-  it('prompt.text 应发送提示并等待用户输入后返回', async () => {
-    const { im, sent } = await createPromptFixture();
+  it('text interaction 应发送提示并等待用户输入后返回', async () => {
+    const { im, sent, getResult } = await createInteractionFixture();
 
     const commandPromise = im.receive(incomingMessage('/ask'));
 
     await vi.waitFor(() => {
       expect(sent.length).toBeGreaterThanOrEqual(1);
     });
-    expect(sent[0]).toEqual(expect.objectContaining({ payload: '请输入你的名字' }));
+    expect(sent[0]).toEqual(expect.objectContaining({
+      payload: [{
+        type: 'text',
+        data: { text: '个人信息\n\n请输入你的名字\n\n💡 将用于后续问候' },
+      }],
+    }));
 
     const answerResult = await im.receive(incomingMessage('张三'));
     expect(answerResult.matched).toBe(true);
-    expect(answerResult.command).toBe('prompt');
+    expect(answerResult.command).toBe('interaction');
 
     const result = await commandPromise;
     expect(result.matched).toBe(true);
     expect(result.command).toBe('ask');
+    expect(getResult()).toBe('张三');
   });
 
-  it('prompt 应仅匹配同一用户同一频道的消息', async () => {
-    const { im, sent } = await createPromptFixture();
+  it('interaction 应仅匹配同一用户同一频道的消息', async () => {
+    const { im, sent } = await createInteractionFixture();
 
     im.receive(incomingMessage('/ask'));
 
@@ -1999,10 +2148,71 @@ describe('CommandPrompt via ImRuntime', () => {
     expect(otherUserResult.matched).toBe(false);
   });
 
-  it('prompt 超时时 reject 并回复超时消息', async () => {
+  it('consumes pending interaction replies before message.receive handlers can re-enter', async () => {
     const root = rootPluginId();
     const sent: unknown[] = [];
-    let promptError: unknown;
+    const handled = vi.fn();
+    let answer: unknown;
+    const adapter = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'memory',
+      source: '/adapters/memory.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound', 'outbound'],
+        create: () => ({
+          start() {}, open() {}, close() {}, stop() {},
+          send(request) {
+            sent.push(request);
+            return `sent-${sent.length}`;
+          },
+        }),
+      }),
+    });
+    const handler = createCapabilitySlot({
+      owner: root,
+      feature: handlerFeatureId,
+      localName: 'message/receive',
+      source: '/handlers/message/receive.ts',
+      definition: defineHandler({
+        event: 'message.receive',
+        async handle() {
+          handled();
+          answer = await this.interaction!.ask({ type: 'text', title: '请回复' });
+        },
+      }),
+    });
+    const slots = [adapter, handler];
+    const base = baseState(slots);
+    const view = createSnapshotView(0, base);
+    const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
+    const store = new SnapshotStore({
+      ...base,
+      projections: new Map([
+        [adapterFeatureId, adapters],
+        [handlerFeatureId, new HandlerIndex([handler], view)],
+      ]),
+    });
+    const im = new ImRuntime();
+    im.attach(store);
+    await adapters.start();
+    adapters.open();
+
+    const initial = im.receive(incomingMessage('start'));
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    await expect(im.receive(incomingMessage('完成'))).resolves.toMatchObject({
+      matched: true,
+      command: 'interaction',
+    });
+    await initial;
+    expect(answer).toBe('完成');
+    expect(handled).toHaveBeenCalledTimes(1);
+  });
+
+  it('interaction 超时时 reject 并回复超时消息', async () => {
+    const root = rootPluginId();
+    const sent: unknown[] = [];
+    let interactionError: unknown;
     const adapter = createCapabilitySlot({
       owner: root,
       feature: adapterFeatureId,
@@ -2017,7 +2227,7 @@ describe('CommandPrompt via ImRuntime', () => {
           stop() {},
           send(request) {
             sent.push(request);
-            return { id: `sent-${sent.length}` };
+            return `sent-${sent.length}`;
           },
         }),
       }),
@@ -2030,9 +2240,11 @@ describe('CommandPrompt via ImRuntime', () => {
       definition: defineCommand<{}, SendContent, Message>({
         async execute(context) {
           try {
-            await context.prompt!.text('请输入', { timeout: 50, timeoutText: '等太久了' });
+            await context.interaction!.ask({
+              type: 'text', title: '请输入', timeout: 50, timeoutText: '等太久了',
+            });
           } catch (e) {
-            promptError = e;
+            interactionError = e;
           }
           return '完成';
         },
@@ -2054,15 +2266,18 @@ describe('CommandPrompt via ImRuntime', () => {
 
     await im.receive(incomingMessage('/ask'));
 
-    expect(promptError).toBeInstanceOf(Error);
-    expect((promptError as Error).message).toBe('等太久了');
-    expect(sent.some((s: any) => s.payload === '等太久了')).toBe(true);
+    expect(interactionError).toBeInstanceOf(Error);
+    expect((interactionError as Error).message).toBe('等太久了');
+    expect(sent.some((s: any) => (
+      Array.isArray(s.payload)
+      && s.payload.some((segment: any) => segment.type === 'text' && segment.data?.text.includes('等太久了'))
+    ))).toBe(true);
   });
 
-  it('prompt.number 应解析数字', async () => {
+  it('number interaction 应解析数字', async () => {
     const root = rootPluginId();
     const sent: unknown[] = [];
-    let promptResult: unknown;
+    let interactionResult: unknown;
     const adapter = createCapabilitySlot({
       owner: root,
       feature: adapterFeatureId,
@@ -2077,7 +2292,7 @@ describe('CommandPrompt via ImRuntime', () => {
           stop() {},
           send(request) {
             sent.push(request);
-            return { id: `sent-${sent.length}` };
+            return `sent-${sent.length}`;
           },
         }),
       }),
@@ -2089,8 +2304,8 @@ describe('CommandPrompt via ImRuntime', () => {
       source: '/commands/age.ts',
       definition: defineCommand<{}, SendContent, Message>({
         async execute(context) {
-          promptResult = await context.prompt!.number('你几岁');
-          return `${promptResult}`;
+          interactionResult = await context.interaction!.ask({ type: 'number', title: '你几岁' });
+          return `${interactionResult}`;
         },
       }),
     });
@@ -2113,13 +2328,13 @@ describe('CommandPrompt via ImRuntime', () => {
 
     await im.receive(incomingMessage('25'));
     await commandPromise;
-    expect(promptResult).toBe(25);
+    expect(interactionResult).toBe(25);
   });
 
-  it('prompt.confirm 应判定确认条件', async () => {
+  it('confirm interaction 应判定确认条件', async () => {
     const root = rootPluginId();
     const sent: unknown[] = [];
-    let promptResult: unknown;
+    let interactionResult: unknown;
     const adapter = createCapabilitySlot({
       owner: root,
       feature: adapterFeatureId,
@@ -2134,7 +2349,7 @@ describe('CommandPrompt via ImRuntime', () => {
           stop() {},
           send(request) {
             sent.push(request);
-            return { id: `sent-${sent.length}` };
+            return `sent-${sent.length}`;
           },
         }),
       }),
@@ -2146,8 +2361,8 @@ describe('CommandPrompt via ImRuntime', () => {
       source: '/commands/confirm.ts',
       definition: defineCommand<{}, SendContent, Message>({
         async execute(context) {
-          promptResult = await context.prompt!.confirm('确认删除？');
-          return promptResult ? '已删除' : '已取消';
+          interactionResult = await context.interaction!.ask({ type: 'confirm', title: '确认删除？' });
+          return interactionResult ? '已删除' : '已取消';
         },
       }),
     });
@@ -2168,15 +2383,40 @@ describe('CommandPrompt via ImRuntime', () => {
     const commandPromise = im.receive(incomingMessage('/confirm'));
     await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(1); });
 
-    await im.receive(incomingMessage('yes'));
+    expect(sent[0]).toEqual(expect.objectContaining({
+      payload: [
+        expect.objectContaining({ type: 'text' }),
+        expect.objectContaining({
+          type: 'text',
+          data: { text: '也可以直接回复对应内容。\n1. 确认\n2. 取消' },
+        }),
+      ],
+    }));
+
+    await im.receive({
+      ...incomingMessage('[button:confirm]'),
+      segments: [{ type: 'action', data: { id: 'confirm', payload: 'yes' } }],
+    });
     await commandPromise;
-    expect(promptResult).toBe(true);
+    expect(interactionResult).toBe(true);
+
+    const sentBeforeSecondRun = sent.length;
+    const cancelledCommand = im.receive(incomingMessage('/confirm'));
+    await vi.waitFor(() => { expect(sent.length).toBeGreaterThan(sentBeforeSecondRun); });
+
+    await im.receive(incomingMessage('no'));
+    await cancelledCommand;
+    expect(interactionResult).toBe(false);
   });
 
-  it('prompt.confirm 在 signal abort 后应 fail closed 且不再占用后续消息', async () => {
+  it('interaction.sequence 应连续收集类型化结论并恢复原命令节点', async () => {
     const root = rootPluginId();
     const sent: unknown[] = [];
-    let promptResult: unknown;
+    let sequenceResult: Readonly<{
+      name: string;
+      environment: 'development' | 'production';
+      confirmed: boolean;
+    }> | undefined;
     const adapter = createCapabilitySlot({
       owner: root,
       feature: adapterFeatureId,
@@ -2191,7 +2431,94 @@ describe('CommandPrompt via ImRuntime', () => {
           stop() {},
           send(request) {
             sent.push(request);
-            return { id: `sent-${sent.length}` };
+            return `sent-${sent.length}`;
+          },
+        }),
+      }),
+    });
+    const command = createCapabilitySlot({
+      owner: root,
+      feature: commandFeatureId,
+      localName: 'environment',
+      source: '/commands/environment.ts',
+      definition: defineCommand<{}, SendContent, Message>({
+        async execute(context) {
+          sequenceResult = await context.interaction!.sequence({
+            title: '部署向导',
+            description: '请完成三个步骤。',
+            tip: '结果会在最后一步后一次性返回。',
+            steps: [
+              { id: 'name', type: 'text', title: '请输入发布名称', minLength: 2 },
+              {
+                id: 'environment',
+                type: 'select',
+                title: '请选择部署环境',
+                options: [
+                  { label: '开发环境', value: 'development' as const },
+                  { label: '生产环境', value: 'production' as const },
+                ],
+              },
+              { id: 'confirmed', type: 'confirm', title: '确认发布？' },
+            ],
+          });
+          return sequenceResult.environment;
+        },
+      }),
+    });
+    const slots = [adapter, command];
+    const base = baseState(slots);
+    const view = createSnapshotView(0, base);
+    const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
+    const projections = new Map([
+      [adapterFeatureId, adapters],
+      [commandFeatureId, new CommandIndex([command], view)],
+    ]);
+    const store = new SnapshotStore({ ...base, projections });
+    const im = new ImRuntime();
+    im.attach(store);
+    await adapters.start();
+    adapters.open();
+
+    const commandPromise = im.receive(incomingMessage('/environment'));
+    await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(1); });
+
+    const firstAnswer = await im.receive(incomingMessage('正式发布'));
+    expect(firstAnswer).toMatchObject({ matched: true, command: 'interaction' });
+    await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(2); });
+
+    const secondAnswer = await im.receive(incomingMessage('2'));
+    expect(secondAnswer).toMatchObject({ matched: true, command: 'interaction' });
+    await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(3); });
+
+    const thirdAnswer = await im.receive(incomingMessage('yes'));
+    expect(thirdAnswer).toMatchObject({ matched: true, command: 'interaction' });
+    await commandPromise;
+    expect(sequenceResult).toEqual({
+      name: '正式发布',
+      environment: 'production',
+      confirmed: true,
+    });
+  });
+
+  it('confirm interaction 在 signal abort 后应 fail closed 且不使用 default', async () => {
+    const root = rootPluginId();
+    const sent: unknown[] = [];
+    let interactionError: unknown;
+    const adapter = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'memory',
+      source: '/adapters/memory.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound', 'outbound'],
+        create: () => ({
+          start() {},
+          open() {},
+          close() {},
+          stop() {},
+          send(request) {
+            sent.push(request);
+            return `sent-${sent.length}`;
           },
         }),
       }),
@@ -2204,10 +2531,16 @@ describe('CommandPrompt via ImRuntime', () => {
       definition: defineCommand<{}, SendContent, Message>({
         async execute(context) {
           const ac = new AbortController();
-          const pending = context.prompt!.confirm('确认删除？', { signal: ac.signal, default: false });
+          const pending = context.interaction!.ask({
+            type: 'confirm', title: '确认删除？', signal: ac.signal, default: false,
+          });
           ac.abort();
-          promptResult = await pending;
-          return promptResult ? '已删除' : '已取消';
+          try {
+            await pending;
+          } catch (error) {
+            interactionError = error;
+          }
+          return '已终止';
         },
       }),
     });
@@ -2228,14 +2561,62 @@ describe('CommandPrompt via ImRuntime', () => {
     await expect(im.receive(incomingMessage('/abort-confirm'))).resolves.toMatchObject({
       matched: true,
     });
-    expect(promptResult).toBe(false);
+    expect(interactionError).toBeInstanceOf(Error);
     await expect(im.receive(incomingMessage('yes'))).resolves.toMatchObject({
       matched: false,
     });
   });
 
-  it('createPrompt(bind.subjectId) 只接受该用户的回复', async () => {
-    const { im } = await createPromptFixture();
+  it('initial interaction delivery failure rejects immediately without claiming later input', async () => {
+    const { im } = await createInteractionFixture();
+    const incoming = incomingMessage('start');
+    const message = new Message(
+      incoming.conversation,
+      incoming.content,
+      1,
+      async () => ({
+        status: 'rejected' as const,
+        failure: { code: 'policy_denied', message: 'not delivered' },
+      }),
+      { id: 'user-1' },
+    );
+    const interaction = im.createInteraction(message)!;
+
+    await expect(interaction.ask({ type: 'text', title: '请输入' }))
+      .rejects.toThrow(/delivery/i);
+    await expect(im.receive(incomingMessage('后续消息'))).resolves.toMatchObject({ matched: false });
+  });
+
+  it('keeps same-user interaction claims isolated by canonical thread identity', async () => {
+    const { im } = await createInteractionFixture();
+    const createThreadMessage = (threadId: string) => new Message(
+      { ...incomingMessage('start').conversation, threadId },
+      'start',
+      1,
+      async () => ({ status: 'sent' as const }),
+      { id: 'user-1' },
+    );
+    const threadOne = im.createInteraction(createThreadMessage('thread-1'))!;
+    const threadTwo = im.createInteraction(createThreadMessage('thread-2'))!;
+    const first = threadOne.ask({ type: 'text', title: '线程一' });
+    const second = threadTwo.ask({ type: 'text', title: '线程二' });
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+
+    await expect(im.receive({
+      ...incomingMessage('答案二'),
+      conversation: { ...incomingMessage('答案二').conversation, threadId: 'thread-2' },
+    })).resolves.toMatchObject({ matched: true, command: 'interaction' });
+    await expect(second).resolves.toBe('答案二');
+
+    await expect(im.receive({
+      ...incomingMessage('答案一'),
+      conversation: { ...incomingMessage('答案一').conversation, threadId: 'thread-1' },
+    })).resolves.toMatchObject({ matched: true, command: 'interaction' });
+    await expect(first).resolves.toBe('答案一');
+  });
+
+  it('createInteraction(bind.subjectId) 只接受该用户的回复', async () => {
+    const { im } = await createInteractionFixture();
     const incoming = incomingMessage('start', 'user-1');
     const delivered: string[] = [];
     const message = new Message(
@@ -2252,14 +2633,14 @@ describe('CommandPrompt via ImRuntime', () => {
       { conversation: incoming.conversation, id: 'm-ask' },
       'memory',
     );
-    const prompt = im.createPrompt(message, { subjectId: 'master-1' });
-    expect(prompt).toBeDefined();
-    const pending = prompt!.confirm('请 master 确认');
+    const interaction = im.createInteraction(message, { subjectId: 'master-1' });
+    expect(interaction).toBeDefined();
+    const pending = interaction!.ask({ type: 'confirm', title: '请 master 确认' });
     await vi.waitFor(() => { expect(delivered.length).toBeGreaterThanOrEqual(1); });
     await expect(im.receive(incomingMessage('yes', 'user-1'))).resolves.toMatchObject({ matched: false });
     await expect(im.receive(incomingMessage('yes', 'master-1'))).resolves.toMatchObject({
       matched: true,
-      command: 'prompt',
+      command: 'interaction',
     });
     await expect(pending).resolves.toBe(true);
   });

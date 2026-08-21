@@ -224,6 +224,7 @@ ai:
       enabled: true        # 语义记忆：generation-owned memory_search/memory_upsert；要求 Database Host
       autoConsolidate: false
     # 启用后 memory_entries 必须在候选代激活时可用，否则该代 fail-closed、不发布
+    # memoryMcp 已弃用；语义记忆由上述原生 memory_search / memory_upsert 提供
   access:                  # AI 访问控制
     mode: open             # open | closed | whitelist，默认 open
     users: []              # whitelist 模式下允许的用户 id
@@ -247,6 +248,8 @@ ai:
 ```
 
 `ai.multimodal`（图片/音频/视频入出站策略）、`ai.knowledge.baseDir`（本地知识库目录，默认 `knowledge`）等按需配置。远程 Agent 不再通过 `ai.remoteAgents` 旁路接入；未来的 A2A Executor 必须服从 Workroom Assignment lease 与 Journal 事件契约。
+
+`ai.workrooms` 已删除。Project、成员和协作空间由 Console 的持久化 Workroom Catalog 管理，保存后通过 revision CAS 立即生效，不需要重启运行时。
 
 ## plugin 与 plugins
 

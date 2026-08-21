@@ -47,9 +47,17 @@ export interface ConsoleRestCtx {
 /** 内省数据门面 — 由 basic/cli 用 agent 包 collectIntrospection* 装配。 */
 export interface ConsoleAgentIntrospection {
   commands?(): readonly unknown[];
+  middlewares?(): readonly unknown[];
+  components?(): readonly unknown[];
   bindings?(): readonly unknown[];
   tools?(): readonly unknown[];
   mcp?(): { rows: readonly unknown[]; note?: string } | readonly unknown[];
+  renderComponent?(input: Readonly<{
+    requester: string;
+    name: string;
+    props: unknown;
+    signal: AbortSignal;
+  }>): Promise<unknown>;
 }
 
 /** Session tree 门面 — 形状对齐 agent 包 SessionTreeRuntimeHandle。 */
@@ -79,6 +87,12 @@ export interface ConsoleRestPagesOptions {
   readonly pluginRegistryUrl?: string;
   /** 默认 `https://registry.npmmirror.com`（legacy 同源）。 */
   readonly npmRegistryUrl?: string;
+  /** Component preview deadline; default 5 seconds. */
+  readonly componentPreviewTimeoutMs?: number;
+  /** Maximum serialized Component preview; default 256 KiB. */
+  readonly componentPreviewMaxBytes?: number;
+  /** Maximum in-flight Component previews per Console route set; default 2. */
+  readonly componentPreviewMaxConcurrent?: number;
 }
 
 type LogModelLike = {
@@ -105,6 +119,8 @@ type LogRow = {
 
 const INTROSPECTION_PAGE_SIZES = {
   commands: 25,
+  middlewares: 30,
+  components: 30,
   tools: 15,
   endpoints: 30,
   bindings: 30,
@@ -139,7 +155,7 @@ export function registerConsoleRestPages(
 
   registerLogsRoutes(route, base, ctx);
   registerMarketplaceRoutes(route, base, ctx, fetchFn, pluginRegistryUrl, npmRegistryUrl);
-  registerIntrospectionRoutes(route, base, ctx);
+  registerIntrospectionRoutes(route, base, ctx, options);
   registerAgentSessionRoutes(route, base, ctx);
 
   return () => {
@@ -547,6 +563,7 @@ function registerIntrospectionRoutes(
   route: HttpHost['route'],
   base: string,
   ctx: ConsoleRestCtx,
+  options: ConsoleRestPagesOptions,
 ): void {
   const collectors: Array<{
     kind: IntrospectionKind;
@@ -555,11 +572,31 @@ function registerIntrospectionRoutes(
   }> = [
     {
       kind: 'commands',
-      collect: () => ({ rows: agentIntrospection(ctx)?.commands?.() ?? [] }),
+      collect: () => ({ rows: withAgentIntrospection(ctx, (value) => value?.commands?.() ?? []) }),
       fields: [
         (c) => stringProp(c, 'pattern'),
         (c) => stringProp(c, 'desc'),
         (c) => stringProp(c, 'plugin'),
+      ],
+    },
+    {
+      kind: 'middlewares',
+      collect: () => ({ rows: withAgentIntrospection(ctx, (value) => value?.middlewares?.() ?? []) }),
+      fields: [
+        (m) => stringProp(m, 'name'),
+        (m) => stringProp(m, 'owner'),
+        (m) => stringProp(m, 'phase'),
+        (m) => stringProp(m, 'target'),
+        (m) => stringProp(m, 'source'),
+      ],
+    },
+    {
+      kind: 'components',
+      collect: () => ({ rows: withAgentIntrospection(ctx, (value) => value?.components?.() ?? []) }),
+      fields: [
+        (c) => stringProp(c, 'name'),
+        (c) => stringProp(c, 'owner'),
+        (c) => stringProp(c, 'source'),
       ],
     },
     {
@@ -576,7 +613,7 @@ function registerIntrospectionRoutes(
     },
     {
       kind: 'bindings',
-      collect: () => ({ rows: agentIntrospection(ctx)?.bindings?.() ?? [] }),
+      collect: () => ({ rows: withAgentIntrospection(ctx, (value) => value?.bindings?.() ?? []) }),
       fields: [
         (a) => stringProp(a, 'name'),
         (a) => stringProp(a, 'provider'),
@@ -585,7 +622,7 @@ function registerIntrospectionRoutes(
     },
     {
       kind: 'tools',
-      collect: () => ({ rows: agentIntrospection(ctx)?.tools?.() ?? [] }),
+      collect: () => ({ rows: withAgentIntrospection(ctx, (value) => value?.tools?.() ?? []) }),
       fields: [
         (t) => stringProp(t, 'name'),
         (t) => stringProp(t, 'source'),
@@ -595,7 +632,7 @@ function registerIntrospectionRoutes(
     {
       kind: 'mcp',
       collect: () => {
-        const result = agentIntrospection(ctx)?.mcp?.();
+        const result = withAgentIntrospection(ctx, (value) => value?.mcp?.());
         if (result == null) return { rows: [] as readonly unknown[] };
         // readonly 数组不能用 Array.isArray 收窄，按对象形状判断
         if (typeof result === 'object' && 'rows' in result) {
@@ -621,7 +658,7 @@ function registerIntrospectionRoutes(
         );
         const missing = kind === 'endpoints'
           ? !ctx.getEndpoints
-          : !agentIntrospection(ctx);
+          : !hasAgentIntrospection(ctx);
         const degradedNote = note ?? (missing
           ? kind === 'endpoints'
             ? 'Endpoints 数据源未接线（ctx.getEndpoints 缺失）'
@@ -640,16 +677,144 @@ function registerIntrospectionRoutes(
       }
     }, { summary: `Introspection: ${kind}`, tags: ['console', 'introspection'] });
   }
+
+  let activeComponentPreviews = 0;
+  route('POST', `${base}/introspection/components/render`, async (request, response, _url, authScope) => {
+    if (!requireWriteScope(response, ctx, authScope)) return;
+    const body = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
+    const requester = typeof body.requester === 'string' ? body.requester.trim() : '';
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    if (!requester || !name || requester.length > 256 || name.length > 160) {
+      writeJson(response, 400, { success: false, error: '请提供有效的 requester 与 component name' });
+      return;
+    }
+    const maxConcurrent = clampPositiveInt(options.componentPreviewMaxConcurrent, 2, 8);
+    if (activeComponentPreviews >= maxConcurrent) {
+      writeJson(response, 503, { success: false, error: 'Component preview 正忙，请稍后重试' });
+      return;
+    }
+    const lease = ctx.acquireAgentRuntime?.();
+    const render = lease?.value.introspection?.renderComponent;
+    if (!lease || !render) {
+      lease?.release();
+      writeJson(response, 503, { success: false, error: 'Component Runtime 未就绪' });
+      return;
+    }
+    const controller = new AbortController();
+    const timeoutMs = clampPositiveInt(options.componentPreviewTimeoutMs, 5_000, 30_000);
+    const timeout = setTimeout(() => controller.abort(
+      new ComponentPreviewTimeoutError(`Component preview 超过 ${timeoutMs}ms`),
+    ), timeoutMs);
+    activeComponentPreviews += 1;
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      activeComponentPreviews -= 1;
+      lease.release();
+    };
+    const renderPromise = Promise.resolve().then(() =>
+      render({ requester, name, props: body.props ?? {}, signal: controller.signal }));
+    // A timed-out implementation may ignore AbortSignal. Keep its generation
+    // lease until the real operation settles; the bounded concurrency gate
+    // prevents non-cooperative previews from pinning unbounded generations.
+    void renderPromise.then(release, release);
+    try {
+      const output = await raceWithAbort(
+        renderPromise,
+        controller.signal,
+      );
+      assertPreviewOutput(output, options.componentPreviewMaxBytes ?? 256 * 1024);
+      writeJson(response, 200, { success: true, data: { requester, name, output } });
+    } catch (error) {
+      const status = error instanceof ComponentPreviewTimeoutError
+        ? 408
+        : error instanceof ComponentPreviewLimitError ? 413 : 422;
+      writeJson(response, status, {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      clearTimeout(timeout);
+      if (!controller.signal.aborted) controller.abort();
+    }
+  }, { summary: 'Render a Component preview', tags: ['console', 'introspection', 'component'] });
 }
 
-function agentIntrospection(ctx: ConsoleRestCtx): ConsoleAgentIntrospection | undefined {
-  const lease = ctx.acquireAgentRuntime?.();
-  if (!lease) return undefined;
+class ComponentPreviewTimeoutError extends Error {
+  override readonly name = 'ComponentPreviewTimeoutError';
+}
+
+class ComponentPreviewLimitError extends Error {
+  override readonly name = 'ComponentPreviewLimitError';
+}
+
+function clampPositiveInt(value: number | undefined, fallback: number, ceiling: number): number {
+  if (!Number.isFinite(value) || !value || value < 1) return fallback;
+  return Math.min(Math.floor(value), ceiling);
+}
+
+async function raceWithAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) throw abortReason(signal);
+  return await new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortReason(signal));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+}
+
+function abortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('Component preview aborted', 'AbortError');
+}
+
+function assertPreviewOutput(output: unknown, maxBytes: number): void {
+  const byteLimit = clampPositiveInt(maxBytes, 256 * 1024, 1024 * 1024);
+  const seen = new WeakSet<object>();
+  let nodes = 0;
+  const visit = (value: unknown, depth: number): void => {
+    nodes += 1;
+    if (nodes > 10_000) throw new ComponentPreviewLimitError('Component preview 节点数超过 10000');
+    if (depth > 24) throw new ComponentPreviewLimitError('Component preview 嵌套深度超过 24');
+    if (!value || typeof value !== 'object') return;
+    if (seen.has(value)) throw new ComponentPreviewLimitError('Component preview 不能包含循环引用');
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, depth + 1);
+    } else {
+      for (const item of Object.values(value as Record<string, unknown>)) visit(item, depth + 1);
+    }
+  };
+  visit(output, 0);
+  let serialized: string;
   try {
-    return lease.value.introspection;
+    serialized = JSON.stringify(output);
+  } catch (error) {
+    throw new ComponentPreviewLimitError(
+      `Component preview 无法序列化: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (Buffer.byteLength(serialized ?? '') > byteLimit) {
+    throw new ComponentPreviewLimitError(`Component preview 超过 ${byteLimit} bytes`);
+  }
+}
+
+function withAgentIntrospection<T>(
+  ctx: ConsoleRestCtx,
+  operation: (value: ConsoleAgentIntrospection | undefined) => T,
+): T {
+  const lease = ctx.acquireAgentRuntime?.();
+  if (!lease) return operation(undefined);
+  try {
+    return operation(lease.value.introspection);
   } finally {
     lease.release();
   }
+}
+
+function hasAgentIntrospection(ctx: ConsoleRestCtx): boolean {
+  return withAgentIntrospection(ctx, (value) => value !== undefined);
 }
 
 // ---------------------------------------------------------------------------

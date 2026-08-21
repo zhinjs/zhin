@@ -68,6 +68,9 @@ function rejectRemovedAiConfigFields(ai: AIConfig | undefined): void {
   if (typeof raw.defaultProvider === 'string' && raw.defaultProvider.trim()) {
     throw new Error('ai.defaultProvider removed; use ai.agents.zhin.provider');
   }
+  if (raw.workrooms !== undefined) {
+    throw new Error('ai.workrooms removed; manage the persistent Workroom Catalog through Console or its repository API');
+  }
   const agent = raw.agent;
   if (agent && typeof agent === 'object' && !Array.isArray(agent)) {
     const legacyAgent = agent as Record<string, unknown>;

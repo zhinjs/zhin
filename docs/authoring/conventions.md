@@ -103,7 +103,7 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
 
 Handler 的 `this` 为 `HandlerContext`：
 
-- `this.prompt`：交互式问答（与命令 `CommandPrompt` 同源；侧事件按场景通道合成）
+- `this.interaction`：用户输入、确认与选择（与命令 `UserInteraction` 同源；侧事件按场景通道合成）
 
 事件上的 `$endpoint` 是不可变 identity。Handler 不暴露可保存的 live Endpoint；发送、
 审批与交互必须走 generation-bound port，避免热切换后继续操作已退役资源。
@@ -118,7 +118,7 @@ export default defineHandler({
   // 可省略：文件路径已推导出 message.receive
   event: 'message.receive',
   async handle(message) {
-    await this.prompt?.text('继续？');
+    await this.interaction?.ask({ type: 'text', title: '继续？' });
   },
 });
 ```
@@ -130,7 +130,7 @@ import { defineHandler } from 'zhin.js/handler';
 export default defineHandler({
   event: 'request.receive',
   async handle(req) {
-    if (await this.prompt?.confirm('同意该请求？')) await req.$approve();
+    if (await this.interaction?.ask({ type: 'confirm', title: '同意该请求？' })) await req.$approve();
   },
 });
 ```
@@ -143,7 +143,7 @@ export default defineHandler({
   event: 'system.receive',
   async handle(ev) {
     if (ev.$sub_type !== 'qrcode') return;
-    await this.prompt?.text('扫码完成后回复 done');
+    await this.interaction?.ask({ type: 'text', title: '扫码完成后回复 done' });
   },
 });
 ```

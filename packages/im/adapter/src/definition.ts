@@ -21,6 +21,8 @@ export type AdapterOutboundMedia = 'url' | 'path' | 'base64' | 'upload';
 
 /** 交互段（卡片/按钮等富交互）的端点消费方式。 */
 export type AdapterInteractiveMode = 'native' | 'text';
+/** Markdown semantic segment consumption mode. */
+export type AdapterMarkdownMode = 'native' | 'text';
 
 export interface EndpointSendRequest {
   /** 结构化会话寻址；端点在平台边界自行派生原生 target。 */
@@ -78,9 +80,11 @@ export interface AdapterSegmentPolicy {
   readonly outboundMedia?: readonly AdapterOutboundMedia[];
   /**
    * 交互段（卡片/按钮等富交互）消费方式：`native` 原生渲染 / `text` 降级纯文本。
-   * 目前仅为声明（供出站协商与门禁消费），`text` 的降级执行随 Wave 2 落地。
+   * Core 在最终出站阶段执行统一降级。
    */
   readonly interactive?: AdapterInteractiveMode;
+  /** `native` preserves Markdown for the endpoint codec; `text` strips formatting in Core. */
+  readonly markdown?: AdapterMarkdownMode;
 }
 
 const HTML_OUTBOUND_MODES: readonly HtmlOutboundMode[] = ['direct', 'image', 'text'];
@@ -204,6 +208,13 @@ function normalizeSegmentPolicy(
   ) {
     throw new TypeError("Adapter segments.interactive must be 'native' or 'text'");
   }
+  if (
+    policy.markdown !== undefined
+    && policy.markdown !== 'native'
+    && policy.markdown !== 'text'
+  ) {
+    throw new TypeError("Adapter segments.markdown must be 'native' or 'text'");
+  }
   return Object.freeze({
     ...(policy.supported ? { supported: Object.freeze([...new Set(policy.supported)]) } : {}),
     ...(policy.html ? { html: policy.html } : {}),
@@ -211,6 +222,7 @@ function normalizeSegmentPolicy(
       ? { outboundMedia: Object.freeze([...new Set(policy.outboundMedia)]) }
       : {}),
     ...(policy.interactive ? { interactive: policy.interactive } : {}),
+    ...(policy.markdown ? { markdown: policy.markdown } : {}),
   });
 }
 

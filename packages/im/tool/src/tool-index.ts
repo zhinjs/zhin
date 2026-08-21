@@ -83,10 +83,10 @@ export class ToolIndex {
           allowedDomains: Object.freeze([...(invocation.policy.network.allowedDomains ?? [])]),
         }),
         ...(invocation.policy.shell
-          ? { shell: Object.freeze({ preset: invocation.policy.shell.preset }) }
+          ? { shell: Object.freeze({ ...invocation.policy.shell }) }
           : {}),
         ...(invocation.policy.filesystem
-          ? { filesystem: Object.freeze({ workspaceRoot: invocation.policy.filesystem.workspaceRoot }) }
+          ? { filesystem: Object.freeze({ ...invocation.policy.filesystem }) }
           : {}),
       }),
       ...(invocation.question ? { question: invocation.question } : {}),

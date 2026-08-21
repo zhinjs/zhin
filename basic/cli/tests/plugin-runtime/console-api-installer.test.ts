@@ -13,6 +13,7 @@ import {
   rootPluginId,
   tokenId,
   type RuntimeSnapshot,
+  type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
 import {
   buildConsoleEntriesBody,
@@ -139,6 +140,7 @@ async function startHost(options: {
   withTokens?: boolean;
   projectRoot: string;
   snapshot?: () => RuntimeSnapshot;
+  snapshots?: SnapshotReader;
   primaryConfigDocument?: Readonly<Record<string, unknown>>;
 }): Promise<{ port: number }> {
   const host = createHttpHost({
@@ -161,6 +163,7 @@ async function startHost(options: {
     undefined,
     undefined,
     options.primaryConfigDocument,
+    options.snapshots,
   );
   return host.listen();
 }
@@ -359,6 +362,7 @@ describe('generation-owned Agent introspection', () => {
       sessionTree: {},
       workroom: {},
       assistant: null,
+      trace: {},
     };
     const snapshot = {
       root,
@@ -376,6 +380,76 @@ describe('console REST routes', () => {
   beforeEach(async () => {
     packageRoot = await makePackageRoot();
     projectRoot = tempRoots[tempRoots.length - 1];
+  });
+
+  it('serves the bounded generation-owned Agent Trace projection', async () => {
+    await import('@zhin.js/agent/runtime');
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const root = rootPluginId();
+    const traceSnapshot = {
+      sessionKey: 'discord:bot:group:room',
+      events: [{ sequence: 4, type: 'tool_result', data: { toolName: 'lookup' } }],
+      latestSequence: 4,
+      activeTurnIds: ['turn-1'],
+    };
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+        console: {
+          sessionTree: {},
+          workroom: {},
+          assistant: null,
+          trace: { list: () => traceSnapshot },
+        },
+      }]])]]),
+    } as unknown as RuntimeSnapshot;
+    const snapshots = {
+      acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
+    } as unknown as SnapshotReader;
+    const { port } = await startHost({ projectRoot, withTokens: true, snapshots });
+
+    const response = await fetch(
+      `http://127.0.0.1:${port}/api/agent/traces?sessionKey=discord%3Abot%3Agroup%3Aroom`,
+      { headers: { authorization: 'Bearer full-token' } },
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ success: true, data: traceSnapshot });
+
+    const demoResponse = await fetch(
+      `http://127.0.0.1:${port}/api/agent/traces?sessionKey=discord%3Abot%3Agroup%3Aroom`,
+      { headers: { authorization: 'Bearer demo-token' } },
+    );
+    expect(demoResponse.status).toBe(401);
+  });
+
+  it('cancels an active Agent task through the generation-owned console port', async () => {
+    await import('@zhin.js/agent/runtime');
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const root = rootPluginId();
+    const cancelSession = vi.fn(() => true);
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+        console: {
+          sessionTree: {}, workroom: {}, assistant: null,
+          trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
+          cancelSession,
+        },
+      }]])]]),
+    } as unknown as RuntimeSnapshot;
+    const snapshots = {
+      acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
+    } as unknown as SnapshotReader;
+    const { port } = await startHost({ projectRoot, withTokens: true, snapshots });
+
+    const response = await fetch(`http://127.0.0.1:${port}/api/agent/tasks/cancel`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer full-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionKey: 'sandbox:sandbox-bot:private:sandbox-user' }),
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ success: true, data: { cancelled: true } });
+    expect(cancelSession).toHaveBeenCalledWith('sandbox:sandbox-bot:private:sandbox-user');
   });
 
   it('serves GET /entries without a token (public path)', async () => {
@@ -846,6 +920,7 @@ describe('config document flatten / write namespace', () => {
     };
     expect(after.plugins.d).toEqual({ ok: true });
   });
+
 });
 
 describe('jsonSchemaToConsoleSchema', () => {

@@ -30,7 +30,7 @@ describe('sandbox console page', () => {
   it('exposes static definePage metadata for convention discovery', async () => {
     const source = await readFile(sandboxPageSource, 'utf8');
     expect(extractPageMetadata(source, sandboxPageSource)).toMatchObject({
-      title: '沙盒',
+      title: 'Agent 试验台',
       order: 10,
     });
   });
@@ -51,7 +51,7 @@ describe('sandbox console page', () => {
     });
     expect(artifact).toMatchObject({
       module: expect.stringMatching(/^\/assets\/client\//u),
-      metadata: expect.objectContaining({ title: '沙盒' }),
+      metadata: expect.objectContaining({ title: 'Agent 试验台' }),
     });
   });
 
@@ -87,7 +87,7 @@ describe('sandbox console page', () => {
     expect(pages).toEqual(expect.arrayContaining([
       expect.objectContaining({
         localName: 'index',
-        title: '沙盒',
+        title: 'Agent 试验台',
         route: '/',
       }),
     ]));
@@ -151,12 +151,18 @@ async function createProject(): Promise<string> {
   await touch(join(root, 'packages/page/index.ts'));
   // Copy full pages/ so relative imports (SandboxChat, RichTextEditor, transport) resolve.
   const pagesDir = join(dirname(fileURLToPath(import.meta.url)), '../pages');
-  const pageFiles = ['index.tsx', 'SandboxChat.tsx', 'RichTextEditor.tsx', 'sandboxTransport.ts'];
+  const pageFiles = [
+    'index.tsx', 'SandboxChat.tsx', 'RichTextEditor.tsx', 'sandboxTransport.ts',
+    'agentTrace.ts', 'playgroundState.ts',
+  ];
   for (const name of pageFiles) {
     const dest = join(root, 'pages', name);
     await mkdir(dirname(dest), { recursive: true });
     await writeFile(dest, await readFile(join(pagesDir, name), 'utf8'));
   }
+  const runConfigSource = join(dirname(fileURLToPath(import.meta.url)), '../src/run-config.ts');
+  await mkdir(join(root, 'src'), { recursive: true });
+  await writeFile(join(root, 'src/run-config.ts'), await readFile(runConfigSource, 'utf8'));
   return realpath(root);
 }
 

@@ -1,8 +1,58 @@
 import { describe, it, expect } from 'vitest';
-import { validateAiRoutingConfig } from '../../src/config/validate-ai-config.js';
+import { validateAiRoutingConfig, validateWorkroomDefinitions } from '../../src/config/validate-ai-config.js';
 import { normalizeAiRoutingConfig } from '../../src/config/normalize-ai-config.js';
 
 describe('validateAiRoutingConfig', () => {
+  it('rejects removed ai.workrooms instead of silently requiring a restart', () => {
+    expect(() => normalizeAiRoutingConfig({
+      workrooms: { legacy: {} },
+    } as never)).toThrow('ai.workrooms removed; manage the persistent Workroom Catalog');
+  });
+
+  it('校验 Workroom 的 Agent 成员、角色与协作空间关联', () => {
+    const workrooms = {
+        support: {
+          name: '客户支持',
+          members: [
+            { agent: 'zhin', role: 'orchestrator' },
+            { agent: 'reviewer', role: 'reviewer' },
+          ],
+          conversation: { adapter: 'telegram', endpoint: 'support-bot', kind: 'group', id: '10001', agent: 'zhin' },
+        },
+    };
+    expect(validateWorkroomDefinitions(workrooms, ['zhin', 'reviewer'])).toEqual([]);
+
+    workrooms.support.conversation.agent = 'missing';
+    expect(validateWorkroomDefinitions(workrooms, ['zhin', 'reviewer'])).toContain(
+      'workroomCatalog.support.conversation.agent: Agent must be a Workroom member',
+    );
+  });
+
+  it('允许同一 Bot Endpoint 服务多个群，但拒绝重复绑定同一个完整会话地址', () => {
+    const definition = (id: string) => ({
+      name: 'Room',
+      members: [{ agent: 'zhin', role: 'orchestrator' }],
+      conversation: { adapter: 'telegram', endpoint: 'shared', kind: 'group', id, agent: 'zhin' },
+    });
+    const workrooms = { alpha: definition('group-a'), beta: definition('group-b') };
+    expect(validateWorkroomDefinitions(workrooms, ['zhin'])).toEqual([]);
+    workrooms.beta.conversation.id = 'group-a';
+    expect(validateWorkroomDefinitions(workrooms, ['zhin'])).toContain(
+      'workroomCatalog.beta.conversation: conversation "telegram:shared:group:group-a" is already owned by enabled Workroom "alpha"',
+    );
+  });
+
+  it('接受 GitHub 仓库作为 Workroom 协作空间', () => {
+    const workrooms = {
+        zhin: {
+          name: 'Zhin repo',
+          members: [{ agent: 'zhin', role: 'orchestrator' }],
+          conversation: { adapter: 'github', endpoint: 'app', kind: 'repository', id: 'zhinjs/zhin', agent: 'zhin' },
+        },
+    };
+    expect(validateWorkroomDefinitions(workrooms, ['zhin'])).toEqual([]);
+  });
+
   it('拒绝 agents.zhin 配置 priority/match', () => {
     const cfg = normalizeAiRoutingConfig({
       providers: { p: { sdk: 'openai', apiKey: 'k' } },
