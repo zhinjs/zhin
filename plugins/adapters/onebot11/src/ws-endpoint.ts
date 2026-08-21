@@ -29,6 +29,7 @@ import {
   type OneBot11WsConfig,
 } from './protocol.js';
 import { receiveOneBot11SideEvent } from './side-event-dispatch.js';
+import { createOneBot11ContentPort } from './content-port.js';
 import {
   callOneBot11WsAction,
   handleOneBot11WsMessage,
@@ -56,6 +57,7 @@ export class OneBot11WsEndpoint implements EndpointInstance {
 
   readonly #options: OneBot11WsEndpointOptions;
   readonly management: EndpointManagement = createOneBot11EndpointManagement(this);
+  readonly content = createOneBot11ContentPort((action, params) => this.callApi(action, params));
   readonly #lifecycle: EndpointLifecycle;
   #ws?: OneBot11WsSocket;
   #requestId = { value: 0 };

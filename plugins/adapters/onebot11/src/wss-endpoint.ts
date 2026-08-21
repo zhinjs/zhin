@@ -22,6 +22,7 @@ import {
   type OneBot11WssConfig,
 } from './protocol.js';
 import { receiveOneBot11SideEvent } from './side-event-dispatch.js';
+import { createOneBot11ContentPort } from './content-port.js';
 import { verifyOneBotAccessToken } from './wss-auth.js';
 import {
   callOneBot11WsAction,
@@ -48,6 +49,7 @@ export class OneBot11WssEndpoint implements EndpointInstance {
 
   readonly #options: OneBot11WssEndpointOptions;
   readonly management: EndpointManagement = createOneBot11EndpointManagement(this);
+  readonly content = createOneBot11ContentPort((action, params) => this.callApi(action, params));
   #ws?: OneBot11WsSocket;
   #wsRelease?: () => void;
   #heartbeatTimer?: NodeJS.Timeout;
