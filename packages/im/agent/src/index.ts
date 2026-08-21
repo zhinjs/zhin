@@ -379,6 +379,7 @@ export * from './workroom/runtime.js';
 export * from './workroom/remote-dispatch.js';
 export * from './workroom/profile-compiler.js';
 export * from './workroom/workflow-plan-builder.js';
+export * from './portfolio/portfolio-journal.js';
 
 export {
   introspectionRestBindings,

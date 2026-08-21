@@ -9,6 +9,7 @@
   ],
   "@zhin.js/agent": [
     "export * from './interaction/index.js';",
+    "export * from './portfolio/portfolio-journal.js';",
     "export * from './schedule-domain/index.js';",
     "export * from './workroom/acceptance-control.js';",
     "export * from './workroom/acceptance-policy.js';",
