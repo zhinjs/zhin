@@ -3,6 +3,7 @@ import { link, mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promi
 import { join } from 'node:path';
 import type { WorkroomEvent, WorkroomEventDraft } from './kernel-contracts.js';
 import { assertAcceptanceContract, assertPersistedAcceptanceRecord } from './acceptance-policy.js';
+import { digestCanonicalWorkroomValue } from './canonical-value.js';
 
 export class WorkroomSequenceConflictError extends Error {
   constructor(
@@ -368,6 +369,7 @@ const WORKROOM_EVENT_TYPES = new Set<WorkroomEvent['type']>([
   'reviewer.assigned', 'reviewer.claimed', 'reviewer.verdict_recorded', 'reviewer.expired',
   'sponsor_gate.opened', 'sponsor_gate.decided', 'sponsor_gate.expired',
   'assignment.claimed', 'assignment.started', 'assignment.heartbeat',
+  'assignment.progress', 'assignment.checkpointed',
   'assignment.execution_completed', 'assignment.cancel_requested',
   'assignment.cancelled', 'assignment.lease_expired', 'clock.advanced',
 ]);
@@ -455,14 +457,82 @@ function validatePayload(
       requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'assignmentId');
       requirePayloadString(payload, 'owner'); requirePayloadEnum(payload, 'role', ['executor', 'reviewer', 'integration']);
       requirePayloadPositiveInteger(payload, 'taskRevision'); requirePayloadPositiveInteger(payload, 'attempt');
+      requirePayloadPositiveInteger(payload, 'assignmentRevision'); requirePayloadPositiveInteger(payload, 'fence');
+      requirePayloadDigest(payload, 'envelopeDigest');
       requirePayloadNumber(payload, 'leaseExpiresAt'); return;
     case 'assignment.started':
     case 'assignment.lease_expired':
       requirePayloadString(payload, 'assignmentId'); return;
+    case 'assignment.progress':
+      validateAssignmentObservationHeader(payload);
+      assertExactPayloadKeys(payload, [
+        'assignmentId', 'observationId', 'observationDigest', 'envelopeDigest', 'progress',
+      ], type);
+      validateProgress(requirePayloadRecord(payload, 'progress'));
+      assertPersistedAssignmentObservationDigest(payload, {
+        version: 1,
+        type: 'progress',
+        observationId: payload.observationId,
+        envelopeDigest: payload.envelopeDigest,
+        progress: payload.progress,
+      });
+      return;
     case 'assignment.heartbeat':
-      requirePayloadString(payload, 'assignmentId'); requirePayloadNumber(payload, 'leaseExpiresAt'); return;
+      validateAssignmentObservationHeader(payload);
+      assertExactPayloadKeys(payload, [
+        'assignmentId', 'observationId', 'observationDigest', 'envelopeDigest', 'leaseExpiresAt',
+      ], type);
+      requirePayloadNumber(payload, 'leaseExpiresAt');
+      assertPersistedAssignmentObservationDigest(payload, {
+        version: 1,
+        type: 'heartbeat',
+        observationId: payload.observationId,
+        envelopeDigest: payload.envelopeDigest,
+      });
+      return;
+    case 'assignment.checkpointed':
+      validateAssignmentObservationHeader(payload);
+      assertExactPayloadKeys(payload, [
+        'assignmentId', 'observationId', 'observationDigest', 'envelopeDigest',
+        'checkpointRef', 'checkpointDigest',
+      ], type);
+      requirePayloadString(payload, 'checkpointRef'); requirePayloadDigest(payload, 'checkpointDigest');
+      assertPersistedAssignmentObservationDigest(payload, {
+        version: 1,
+        type: 'checkpoint',
+        observationId: payload.observationId,
+        envelopeDigest: payload.envelopeDigest,
+        checkpoint: { ref: payload.checkpointRef, digest: payload.checkpointDigest },
+      });
+      return;
     case 'assignment.execution_completed':
-      requirePayloadString(payload, 'assignmentId'); requirePayloadString(payload, 'reportRef'); return;
+      validateAssignmentObservationHeader(payload);
+      assertExactPayloadKeys(payload, [
+        'assignmentId', 'observationId', 'observationDigest', 'envelopeDigest',
+        'reportRef', 'reportDigest', 'candidateRef', 'candidateHash',
+        ...(payload.completionReceiptDigest === undefined
+          ? []
+          : ['completionReceiptDigest']),
+      ], type);
+      requirePayloadString(payload, 'reportRef'); requirePayloadDigest(payload, 'reportDigest');
+      requirePayloadString(payload, 'candidateRef'); requirePayloadDigest(payload, 'candidateHash');
+      if (payload.completionReceiptDigest !== undefined) {
+        requirePayloadDigest(payload, 'completionReceiptDigest');
+      }
+      assertPersistedAssignmentObservationDigest(payload, {
+        version: 1,
+        type: 'execution_completed',
+        observationId: payload.observationId,
+        envelopeDigest: payload.envelopeDigest,
+        completion: {
+          report: { ref: payload.reportRef, digest: payload.reportDigest },
+          candidate: { ref: payload.candidateRef, hash: payload.candidateHash },
+          ...(payload.completionReceiptDigest === undefined
+            ? {}
+            : { completionReceiptDigest: payload.completionReceiptDigest }),
+        },
+      });
+      return;
     case 'assignment.cancel_requested':
       requirePayloadString(payload, 'assignmentId'); requirePayloadNumber(payload, 'controlDeadline'); return;
     case 'assignment.cancelled':
@@ -470,6 +540,53 @@ function validatePayload(
       requirePayloadEnum(payload, 'outcome', ['interrupted', 'committed', 'outcome_unknown']); return;
     case 'clock.advanced':
       requirePayloadNumber(payload, 'now'); return;
+  }
+}
+
+function validateAssignmentObservationHeader(payload: Readonly<Record<string, unknown>>): void {
+  requirePayloadString(payload, 'assignmentId');
+  requirePayloadString(payload, 'observationId');
+  requirePayloadDigest(payload, 'observationDigest');
+  requirePayloadDigest(payload, 'envelopeDigest');
+}
+
+function assertPersistedAssignmentObservationDigest(
+  payload: Readonly<Record<string, unknown>>,
+  observation: Readonly<Record<string, unknown>>,
+): void {
+  if (digestCanonicalWorkroomValue(observation) !== payload.observationDigest) {
+    throw new Error('Invalid Workroom event payload: observationDigest does not match body');
+  }
+}
+
+function validateProgress(progress: Readonly<Record<string, unknown>>): void {
+  const keys = Object.keys(progress);
+  if (keys.some(key => !['summary', 'completedUnits', 'totalUnits'].includes(key))) {
+    throw new Error('Invalid Workroom event payload: progress keys');
+  }
+  requirePayloadString(progress, 'summary');
+  const completed = progress.completedUnits;
+  const total = progress.totalUnits;
+  if (completed !== undefined && (!Number.isSafeInteger(completed) || (completed as number) < 0)) {
+    throw new Error('Invalid Workroom event payload: completedUnits');
+  }
+  if (total !== undefined && (!Number.isSafeInteger(total) || (total as number) < 1)) {
+    throw new Error('Invalid Workroom event payload: totalUnits');
+  }
+  if (typeof completed === 'number' && typeof total === 'number' && completed > total) {
+    throw new Error('Invalid Workroom event payload: completedUnits exceeds totalUnits');
+  }
+}
+
+function assertExactPayloadKeys(
+  payload: Readonly<Record<string, unknown>>,
+  expected: readonly string[],
+  type: WorkroomEvent['type'],
+): void {
+  const actual = Object.keys(payload).sort();
+  const canonical = [...expected].sort();
+  if (actual.length !== canonical.length || actual.some((key, index) => key !== canonical[index])) {
+    throw new Error(`Invalid Workroom event payload keys: ${type}`);
   }
 }
 
@@ -522,6 +639,12 @@ function requirePayloadString(payload: Readonly<Record<string, unknown>>, key: s
 
 function requirePayloadNumber(payload: Readonly<Record<string, unknown>>, key: string): void {
   if (!isFiniteNumber(payload[key])) throw new Error(`Invalid Workroom event payload: ${key}`);
+}
+
+function requirePayloadDigest(payload: Readonly<Record<string, unknown>>, key: string): void {
+  if (typeof payload[key] !== 'string' || !/^sha256:[a-f0-9]{64}$/u.test(payload[key])) {
+    throw new Error(`Invalid Workroom event payload: ${key}`);
+  }
 }
 
 function requirePayloadRecord(payload: Readonly<Record<string, unknown>>, key: string): Record<string, unknown> {

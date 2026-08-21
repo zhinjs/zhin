@@ -88,6 +88,7 @@ export interface AssignmentExecutionCompletedObservation {
   readonly completion: Readonly<{
     report: Readonly<{ ref: string; digest: string }>;
     candidate: Readonly<{ ref: string; hash: string }>;
+    completionReceiptDigest?: string;
   }>;
 }
 
@@ -212,7 +213,9 @@ export function validateAssignmentExecutionObservation(
       'version', 'type', 'observationId', 'envelopeDigest', 'completion',
     ], 'execution_completed observation');
     const completion = requireRecord(observation.completion, 'completion');
-    assertExactKeys(completion, ['report', 'candidate'], 'completion payload');
+    assertExactKeys(completion, [
+      'report', 'candidate', 'completionReceiptDigest',
+    ], 'completion payload');
     const report = requireRecord(completion.report, 'completion.report');
     const candidate = requireRecord(completion.candidate, 'completion.candidate');
     assertExactKeys(report, ['ref', 'digest'], 'completion report');
@@ -221,6 +224,12 @@ export function validateAssignmentExecutionObservation(
     requireDigest(report.digest, 'completion.report.digest');
     requireText(candidate.ref, 'completion.candidate.ref');
     requireDigest(candidate.hash, 'completion.candidate.hash');
+    if (completion.completionReceiptDigest !== undefined) {
+      requireDigest(
+        completion.completionReceiptDigest,
+        'completion.completionReceiptDigest',
+      );
+    }
     return deepFreeze({
       version: 1,
       type: 'execution_completed',
@@ -229,6 +238,9 @@ export function validateAssignmentExecutionObservation(
       completion: {
         report: { ref: report.ref, digest: report.digest },
         candidate: { ref: candidate.ref, hash: candidate.hash },
+        ...(completion.completionReceiptDigest === undefined
+          ? {}
+          : { completionReceiptDigest: completion.completionReceiptDigest }),
       },
     });
   }

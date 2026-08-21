@@ -76,6 +76,21 @@ export function decideWorkroom(
       const task = requireTask(state, command.taskKey, ['ready']);
       if (!task.acceptanceContract) throw new Error(`Task ${task.key} Acceptance Contract is not pinned`);
       if (state.assignments[command.assignmentId]) throw new Error('Assignment already exists');
+      if (!Number.isSafeInteger(command.assignmentRevision) || command.assignmentRevision < 1) {
+        throw new Error('Assignment revision must be a positive safe integer');
+      }
+      if (!Number.isSafeInteger(command.fence) || command.fence < 1) {
+        throw new Error('Assignment fence must be a positive safe integer');
+      }
+      const priorFence = Object.values(state.assignments)
+        .filter(assignment => assignment.taskKey === task.key)
+        .reduce((highest, assignment) => Math.max(highest, assignment.fence), 0);
+      if (command.fence <= priorFence) {
+        throw new Error('Assignment fence must advance beyond every prior Task Assignment');
+      }
+      if (!/^sha256:[a-f0-9]{64}$/u.test(command.envelopeDigest)) {
+        throw new Error('Assignment Envelope digest must be a canonical sha256 digest');
+      }
       return [event('assignment.claimed', {
         ...command,
         taskRevision: task.revision,
@@ -85,12 +100,6 @@ export function decideWorkroom(
     case 'start_assignment':
       requireAssignment(state, command.assignmentId, ['leased']);
       return [event('assignment.started', { assignmentId: command.assignmentId })];
-    case 'heartbeat':
-      requireAssignment(state, command.assignmentId, ['leased', 'running']);
-      return [event('assignment.heartbeat', { ...command })];
-    case 'complete_execution':
-      requireAssignment(state, command.assignmentId, ['running']);
-      return [event('assignment.execution_completed', { ...command })];
     case 'request_rework':
       requireTask(state, command.taskKey, ['awaiting_acceptance']);
       return [event('task.rework_requested', { ...command })];
@@ -181,15 +190,31 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
     }
     case 'assignment.claimed': {
       const task = requireTask(state, String(payload.taskKey));
+      if (task.status !== 'ready'
+        || Number(payload.taskRevision) !== task.revision
+        || Number(payload.attempt) !== task.attempt + 1
+        || state.assignments[String(payload.assignmentId)]) {
+        throw new Error('Persisted Assignment claim is stale or targets another Task revision');
+      }
+      const priorFence = Object.values(state.assignments)
+        .filter(assignment => assignment.taskKey === task.key)
+        .reduce((highest, assignment) => Math.max(highest, assignment.fence), 0);
+      if (Number(payload.fence) <= priorFence) {
+        throw new Error('Persisted Assignment claim fence does not advance');
+      }
       const assignment: WorkroomAssignmentState = {
         id: String(payload.assignmentId),
         taskKey: task.key,
         taskRevision: Number(payload.taskRevision),
+        revision: Number(payload.assignmentRevision),
         attempt: Number(payload.attempt),
+        fence: Number(payload.fence),
+        envelopeDigest: String(payload.envelopeDigest),
         role: payload.role as WorkroomAssignmentState['role'],
         status: 'leased',
         owner: String(payload.owner),
         leaseExpiresAt: Number(payload.leaseExpiresAt),
+        observationDigests: {},
       };
       assignments = { ...assignments, [assignment.id]: assignment };
       tasks = replaceTask(tasks, task.key, {
@@ -201,7 +226,9 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
       break;
     }
     case 'assignment.started':
+    case 'assignment.progress':
     case 'assignment.heartbeat':
+    case 'assignment.checkpointed':
     case 'assignment.execution_completed':
     case 'assignment.cancel_requested':
     case 'assignment.cancelled':
@@ -393,6 +420,10 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
         attempt: 0,
         currentAssignmentId: undefined,
         reportRef: undefined,
+        reportDigest: undefined,
+        candidateRef: undefined,
+        candidateHash: undefined,
+        completionReceiptDigest: undefined,
         acceptanceContract: undefined,
         acceptanceRecord: undefined,
         currentReviewerAssignmentId: undefined,
@@ -413,6 +444,10 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
         maxAttempts: Number(payload.maxAttempts),
         currentAssignmentId: undefined,
         reportRef: undefined,
+        reportDigest: undefined,
+        candidateRef: undefined,
+        candidateHash: undefined,
+        completionReceiptDigest: undefined,
         acceptanceContract: undefined,
         acceptanceRecord: undefined,
         currentReviewerAssignmentId: undefined,
@@ -504,12 +539,35 @@ function evolveAssignment(
 ): WorkroomAssignmentState {
   switch (event.type) {
     case 'assignment.started': return { ...assignment, status: 'running' };
-    case 'assignment.heartbeat': return { ...assignment, leaseExpiresAt: Number(event.payload.leaseExpiresAt) };
-    case 'assignment.execution_completed': return {
-      ...assignment,
-      status: 'execution_completed',
-      reportRef: String(event.payload.reportRef),
-    };
+    case 'assignment.progress':
+      requireAssignmentStatusForReplay(assignment, ['running'], event.type);
+      return withObservation(assignment, event, {
+        latestProgress: event.payload.progress as NonNullable<WorkroomAssignmentState['latestProgress']>,
+      });
+    case 'assignment.heartbeat':
+      requireAssignmentStatusForReplay(assignment, ['leased', 'running'], event.type);
+      return withObservation(assignment, event, {
+        leaseExpiresAt: Number(event.payload.leaseExpiresAt),
+      });
+    case 'assignment.checkpointed':
+      requireAssignmentStatusForReplay(assignment, ['running'], event.type);
+      return withObservation(assignment, event, {
+        checkpointRef: String(event.payload.checkpointRef),
+        checkpointDigest: String(event.payload.checkpointDigest),
+      });
+    case 'assignment.execution_completed':
+      requireAssignmentStatusForReplay(assignment, ['running'], event.type);
+      return {
+        ...withObservation(assignment, event),
+        status: 'execution_completed',
+        reportRef: String(event.payload.reportRef),
+        reportDigest: String(event.payload.reportDigest),
+        candidateRef: String(event.payload.candidateRef),
+        candidateHash: String(event.payload.candidateHash),
+        completionReceiptDigest: event.payload.completionReceiptDigest === undefined
+          ? undefined
+          : String(event.payload.completionReceiptDigest),
+      };
     case 'assignment.cancel_requested': return {
       ...assignment,
       status: 'cancel_requested',
@@ -531,7 +589,15 @@ function evolveTaskFromAssignment(
   event: WorkroomEvent,
 ): WorkroomTaskState {
   if (event.type === 'assignment.execution_completed') {
-    return { ...task, status: 'awaiting_acceptance', reportRef: assignment.reportRef };
+    return {
+      ...task,
+      status: 'awaiting_acceptance',
+      reportRef: assignment.reportRef,
+      reportDigest: assignment.reportDigest,
+      candidateRef: assignment.candidateRef,
+      candidateHash: assignment.candidateHash,
+      completionReceiptDigest: assignment.completionReceiptDigest,
+    };
   }
   if (event.type === 'assignment.cancel_requested') return { ...task, status: 'cancelling' };
   if (event.type === 'assignment.cancelled') return { ...task, status: 'cancelled' };
@@ -541,6 +607,39 @@ function evolveTaskFromAssignment(
       : { ...task, status: 'ready', currentAssignmentId: undefined };
   }
   return task;
+}
+
+function withObservation(
+  assignment: WorkroomAssignmentState,
+  event: WorkroomEvent,
+  patch: Partial<WorkroomAssignmentState> = {},
+): WorkroomAssignmentState {
+  if (event.payload.envelopeDigest !== assignment.envelopeDigest) {
+    throw new Error('Persisted Assignment observation targets another Envelope');
+  }
+  const observationId = String(event.payload.observationId);
+  const observationDigest = String(event.payload.observationDigest);
+  if (assignment.observationDigests[observationId]) {
+    throw new Error(`Persisted Assignment observationId is duplicated: ${observationId}`);
+  }
+  return {
+    ...assignment,
+    ...patch,
+    observationDigests: {
+      ...assignment.observationDigests,
+      [observationId]: observationDigest,
+    },
+  };
+}
+
+function requireAssignmentStatusForReplay(
+  assignment: WorkroomAssignmentState,
+  allowed: readonly WorkroomAssignmentState['status'][],
+  eventType: WorkroomEvent['type'],
+): void {
+  if (!allowed.includes(assignment.status)) {
+    throw new Error(`Persisted ${eventType} is invalid while Assignment is ${assignment.status}`);
+  }
 }
 
 function deriveRunStatus(state: WorkroomRunState): WorkroomRunState {

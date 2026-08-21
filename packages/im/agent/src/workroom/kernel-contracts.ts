@@ -57,6 +57,10 @@ export interface WorkroomTaskState {
   readonly blockers: readonly WorkroomBlocker[];
   readonly currentAssignmentId?: string;
   readonly reportRef?: string;
+  readonly reportDigest?: string;
+  readonly candidateRef?: string;
+  readonly candidateHash?: string;
+  readonly completionReceiptDigest?: string;
   readonly acceptanceContract?: WorkroomAcceptanceContract;
   readonly acceptanceRecord?: WorkroomAcceptanceRecord;
   readonly currentReviewerAssignmentId?: string;
@@ -105,14 +109,28 @@ export interface WorkroomAssignmentState {
   readonly id: string;
   readonly taskKey: string;
   readonly taskRevision: number;
+  readonly revision: number;
   readonly attempt: number;
+  readonly fence: number;
+  readonly envelopeDigest: string;
   readonly role: WorkroomExecutionRole;
   readonly status: WorkroomAssignmentStatus;
   readonly owner: string;
   readonly leaseExpiresAt: number;
   readonly controlDeadline?: number;
   readonly checkpointRef?: string;
+  readonly checkpointDigest?: string;
   readonly reportRef?: string;
+  readonly reportDigest?: string;
+  readonly candidateRef?: string;
+  readonly candidateHash?: string;
+  readonly completionReceiptDigest?: string;
+  readonly latestProgress?: Readonly<{
+    summary: string;
+    completedUnits?: number;
+    totalUnits?: number;
+  }>;
+  readonly observationDigests: Readonly<Record<string, string>>;
   readonly outcome?: 'interrupted' | 'committed' | 'outcome_unknown';
 }
 
@@ -154,7 +172,9 @@ export type WorkroomEventType =
   | 'task.revised'
   | 'assignment.claimed'
   | 'assignment.started'
+  | 'assignment.progress'
   | 'assignment.heartbeat'
+  | 'assignment.checkpointed'
   | 'assignment.execution_completed'
   | 'assignment.cancel_requested'
   | 'assignment.cancelled'
@@ -177,10 +197,18 @@ export type WorkroomCommand =
   | Readonly<{ type: 'plan_task'; taskKey: string; title: string; required: boolean; maxAttempts: number }>
   | Readonly<{ type: 'block_task'; taskKey: string; blockerId: string; kind: WorkroomBlockerKind; owner: string; reason: string; deadline: number }>
   | Readonly<{ type: 'resolve_blocker'; taskKey: string; blockerId: string }>
-  | Readonly<{ type: 'claim_task'; taskKey: string; assignmentId: string; owner: string; role: WorkroomExecutionRole; leaseExpiresAt: number }>
+  | Readonly<{
+    type: 'claim_task';
+    taskKey: string;
+    assignmentId: string;
+    assignmentRevision: number;
+    fence: number;
+    envelopeDigest: string;
+    owner: string;
+    role: WorkroomExecutionRole;
+    leaseExpiresAt: number;
+  }>
   | Readonly<{ type: 'start_assignment'; assignmentId: string }>
-  | Readonly<{ type: 'heartbeat'; assignmentId: string; leaseExpiresAt: number }>
-  | Readonly<{ type: 'complete_execution'; assignmentId: string; reportRef: string }>
   | Readonly<{ type: 'request_rework'; taskKey: string; reason: string }>
   | Readonly<{ type: 'revise_task'; taskKey: string; title: string; reason: string; maxAttempts: number }>
   | Readonly<{ type: 'cancel_run'; reason: string; controlDeadline: number }>

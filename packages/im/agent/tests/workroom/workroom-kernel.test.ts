@@ -17,8 +17,18 @@ import type {
 } from '../../src/workroom/acceptance-policy.js';
 import type { WorkroomCommand } from '../../src/workroom/kernel-contracts.js';
 import type { WorkroomAcceptanceAuthorizationDecision } from '../../src/workroom/acceptance-control.js';
+import { AssignmentObservationIngress } from '../../src/workroom/assignment-observation-ingress.js';
+import {
+  createAssignmentExecutionEnvelope,
+  type AssignmentExecutionEnvelope,
+} from '../../src/workroom/assignment-executor.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 import { replayWorkroom } from '../../src/workroom/kernel-state.js';
+import { digestCanonicalWorkroomValue } from '../../src/workroom/canonical-value.js';
+
+const TEST_CANDIDATE_HASH = `sha256:${'c'.repeat(64)}`;
+const TEST_REPORT_DIGEST = `sha256:${'d'.repeat(64)}`;
+const TEST_ENVELOPES = new WeakMap<WorkroomKernel, Map<string, AssignmentExecutionEnvelope>>();
 
 function fixture(
   acceptancePolicy: WorkroomAcceptancePolicyDecisionPort | null = pinnedAcceptancePolicy(),
@@ -43,9 +53,8 @@ describe('WorkroomKernel', () => {
       type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 1,
     });
 
-    await expect(kernel.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
-      owner: 'builder', role: 'executor', leaseExpiresAt: 200,
+    await expect(claimAssignment(kernel, {
+      taskKey: 'build', assignmentId: 'assignment-1', owner: 'builder', leaseExpiresAt: 200,
     })).rejects.toThrow('Acceptance Contract is not pinned');
 
     const pinned = await kernel.pinTaskAcceptance('project-1', 'run-1', 'build');
@@ -57,9 +66,8 @@ describe('WorkroomKernel', () => {
     });
     expect((await journal.read('run-1')).at(-1)?.type).toBe('task.acceptance_pinned');
 
-    await expect(kernel.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
-      owner: 'builder', role: 'executor', leaseExpiresAt: 200,
+    await expect(claimAssignment(kernel, {
+      taskKey: 'build', assignmentId: 'assignment-1', owner: 'builder', leaseExpiresAt: 200,
     })).resolves.toMatchObject({ tasks: { build: { status: 'executing' } } });
   });
 
@@ -78,14 +86,11 @@ describe('WorkroomKernel', () => {
       type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 2,
     });
     await kernel.pinTaskAcceptance('project-1', 'run-1', 'build');
-    await kernel.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
-      owner: 'builder', role: 'executor', leaseExpiresAt: 200,
+    await claimAssignment(kernel, {
+      taskKey: 'build', assignmentId: 'assignment-1', owner: 'builder', leaseExpiresAt: 200,
     });
     await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
-    const awaiting = await kernel.execute('project-1', 'run-1', {
-      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
-    });
+    const awaiting = await completeAssignment(kernel, 'assignment-1', 'report://1');
 
     expect(awaiting.status).toBe('active');
     expect(awaiting.tasks.build?.status).toBe('awaiting_acceptance');
@@ -106,7 +111,7 @@ describe('WorkroomKernel', () => {
         taskKey: 'build',
         reportRef: 'report://1',
         record: {
-          candidateHash: 'sha256:candidate-1',
+          candidateHash: TEST_CANDIDATE_HASH,
           sourceSequence: 5,
           acceptanceSequence: 6,
           policy: { id: 'policy-1', revision: 1, digest: 'sha256:policy-1' },
@@ -145,14 +150,11 @@ describe('WorkroomKernel', () => {
       type: 'plan_task', taskKey: 'deploy', title: 'Deploy', required: true, maxAttempts: 1,
     });
     await kernel.pinTaskAcceptance('project-1', 'run-1', 'deploy');
-    await kernel.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'deploy', assignmentId: 'assignment-1',
-      owner: 'deployer', role: 'executor', leaseExpiresAt: 200,
+    await claimAssignment(kernel, {
+      taskKey: 'deploy', assignmentId: 'assignment-1', owner: 'deployer', leaseExpiresAt: 200,
     });
     await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
-    await kernel.execute('project-1', 'run-1', {
-      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
-    });
+    await completeAssignment(kernel, 'assignment-1', 'report://1');
 
     await expect(kernel.evaluateTaskAcceptance('project-1', 'run-1', 'deploy'))
       .rejects.toThrow('Only low-risk candidates may use automatic acceptance');
@@ -180,14 +182,11 @@ describe('WorkroomKernel', () => {
       type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 1,
     });
     await kernel.pinTaskAcceptance('project-1', 'run-1', 'build');
-    await kernel.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
-      owner: 'builder', role: 'executor', leaseExpiresAt: 200,
+    await claimAssignment(kernel, {
+      taskKey: 'build', assignmentId: 'assignment-1', owner: 'builder', leaseExpiresAt: 200,
     });
     await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
-    await kernel.execute('project-1', 'run-1', {
-      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
-    });
+    await completeAssignment(kernel, 'assignment-1', 'report://1');
 
     await expect(kernel.evaluateTaskAcceptance('project-1', 'run-1', 'build'))
       .rejects.toThrow('does not match the pinned Contract and Policy snapshot');
@@ -222,19 +221,16 @@ describe('WorkroomKernel', () => {
       type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 1,
     });
     await kernel.pinTaskAcceptance('project-1', 'run-1', 'build');
-    await kernel.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
-      owner: 'builder', role: 'executor', leaseExpiresAt: 200,
+    await claimAssignment(kernel, {
+      taskKey: 'build', assignmentId: 'assignment-1', owner: 'builder', leaseExpiresAt: 200,
     });
     await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
-    await kernel.execute('project-1', 'run-1', {
-      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
-    });
+    await completeAssignment(kernel, 'assignment-1', 'report://1');
 
     const routed = await kernel.evaluateTaskAcceptance('project-1', 'run-1', 'build');
     const first = Object.values(routed.reviewerAssignments)[0];
     expect(first).toMatchObject({
-      taskKey: 'build', candidateHash: 'sha256:candidate-1', producerPrincipalId: 'builder',
+      taskKey: 'build', candidateHash: TEST_CANDIDATE_HASH, producerPrincipalId: 'builder',
       owner: 'reviewer-pool:default', deadline: 110, status: 'open',
     });
     expect(Object.keys(routed.sponsorGates)).toHaveLength(0);
@@ -291,14 +287,11 @@ describe('WorkroomKernel', () => {
       type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 1,
     });
     await kernel.pinTaskAcceptance('project-1', 'run-1', 'build');
-    await kernel.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
-      owner: 'builder', role: 'executor', leaseExpiresAt: 200,
+    await claimAssignment(kernel, {
+      taskKey: 'build', assignmentId: 'assignment-1', owner: 'builder', leaseExpiresAt: 200,
     });
     await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
-    await kernel.execute('project-1', 'run-1', {
-      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
-    });
+    await completeAssignment(kernel, 'assignment-1', 'report://1');
     const routed = await kernel.evaluateTaskAcceptance('project-1', 'run-1', 'build');
     const reviewId = routed.tasks.build!.currentReviewerAssignmentId!;
 
@@ -317,7 +310,7 @@ describe('WorkroomKernel', () => {
     });
     const accepted = await kernel.submitReviewerVerdict(
       'project-1', 'run-1', reviewId, 'reviewer-bob', {
-        candidateHash: 'sha256:candidate-1',
+        candidateHash: TEST_CANDIDATE_HASH,
         criteria: [{ criterionId: 'criterion-build', status: 'passed', evidenceRefs: ['review://1'] }],
         acceptedClaimIds: ['claim-1'],
         rejectedClaimIds: [],
@@ -383,24 +376,21 @@ describe('WorkroomKernel', () => {
       type: 'plan_task', taskKey: 'publish', title: 'Publish', required: true, maxAttempts: 1,
     });
     await kernel.pinTaskAcceptance('project-1', 'run-1', 'publish');
-    await kernel.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'publish', assignmentId: 'assignment-1',
-      owner: 'publisher', role: 'executor', leaseExpiresAt: 200,
+    await claimAssignment(kernel, {
+      taskKey: 'publish', assignmentId: 'assignment-1', owner: 'publisher', leaseExpiresAt: 200,
     });
     await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
-    await kernel.execute('project-1', 'run-1', {
-      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
-    });
+    await completeAssignment(kernel, 'assignment-1', 'report://1');
 
     const routed = await kernel.evaluateTaskAcceptance('project-1', 'run-1', 'publish');
     expect(Object.keys(routed.reviewerAssignments)).toHaveLength(0);
     const gate = Object.values(routed.sponsorGates)[0];
     expect(gate).toMatchObject({
-      taskKey: 'publish', candidateHash: 'sha256:candidate-1',
+      taskKey: 'publish', candidateHash: TEST_CANDIDATE_HASH,
       contractId: 'contract:publish:1', owner: 'sponsor:project-1', deadline: 120, status: 'open',
     });
     await expect(kernel.decideSponsorGate('project-1', 'run-1', gate!.id, 'sponsor-alice', {
-      candidateHash: 'sha256:candidate-1', decision: 'approve', reason: 'approve exact candidate',
+      candidateHash: TEST_CANDIDATE_HASH, decision: 'approve', reason: 'approve exact candidate',
     })).rejects.toThrow('Workroom Acceptance Authority Port is not installed');
     const cancelled = await kernel.execute('project-1', 'run-1', {
       type: 'cancel_run', reason: 'Sponsor cancelled the pending publication', controlDeadline: 130,
@@ -455,20 +445,17 @@ describe('WorkroomKernel', () => {
       type: 'plan_task', taskKey: 'publish', title: 'Publish', required: true, maxAttempts: 1,
     });
     await kernel.pinTaskAcceptance('project-1', 'run-1', 'publish');
-    await kernel.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'publish', assignmentId: 'assignment-1',
-      owner: 'writer', role: 'executor', leaseExpiresAt: 200,
+    await claimAssignment(kernel, {
+      taskKey: 'publish', assignmentId: 'assignment-1', owner: 'writer', leaseExpiresAt: 200,
     });
     await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
-    await kernel.execute('project-1', 'run-1', {
-      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
-    });
+    await completeAssignment(kernel, 'assignment-1', 'report://1');
     const routed = await kernel.evaluateTaskAcceptance('project-1', 'run-1', 'publish');
     const reviewId = routed.tasks.publish!.currentReviewerAssignmentId!;
     await kernel.claimReviewerAssignment('project-1', 'run-1', reviewId, 'reviewer-bob');
     const reviewed = await kernel.submitReviewerVerdict(
       'project-1', 'run-1', reviewId, 'reviewer-bob', {
-        candidateHash: 'sha256:candidate-1',
+        candidateHash: TEST_CANDIDATE_HASH,
         criteria: [{ criterionId: 'criterion-build', status: 'passed', evidenceRefs: ['review://1'] }],
         acceptedClaimIds: ['claim-1'],
         rejectedClaimIds: ['claim-2'],
@@ -479,14 +466,14 @@ describe('WorkroomKernel', () => {
     expect(reviewed.reviewerAssignments[reviewId]?.status).toBe('passed');
     const gateId = reviewed.tasks.publish!.currentSponsorGateId!;
     expect(reviewed.sponsorGates[gateId]).toMatchObject({
-      reviewerAssignmentId: reviewId, candidateHash: 'sha256:candidate-1', status: 'open',
+      reviewerAssignmentId: reviewId, candidateHash: TEST_CANDIDATE_HASH, status: 'open',
     });
 
     await expect(kernel.decideSponsorGate('project-1', 'run-1', gateId, 'sponsor-alice', {
       candidateHash: 'sha256:wrong', decision: 'approve', reason: 'wrong target',
     })).rejects.toThrow('stale for the current Candidate hash');
     const accepted = await kernel.decideSponsorGate('project-1', 'run-1', gateId, 'sponsor-alice', {
-      candidateHash: 'sha256:candidate-1', decision: 'approve', reason: 'approved exact candidate',
+      candidateHash: TEST_CANDIDATE_HASH, decision: 'approve', reason: 'approved exact candidate',
     });
     expect(accepted.tasks.publish?.status).toBe('accepted');
     expect(accepted.tasks.publish?.acceptanceRecord).toMatchObject({
@@ -528,14 +515,11 @@ describe('WorkroomKernel', () => {
       type: 'plan_task', taskKey: 'publish', title: 'Publish', required: true, maxAttempts: 1,
     });
     await kernel.pinTaskAcceptance('project-1', 'run-1', 'publish');
-    await kernel.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'publish', assignmentId: 'assignment-1',
-      owner: 'publisher', role: 'executor', leaseExpiresAt: 200,
+    await claimAssignment(kernel, {
+      taskKey: 'publish', assignmentId: 'assignment-1', owner: 'publisher', leaseExpiresAt: 200,
     });
     await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
-    await kernel.execute('project-1', 'run-1', {
-      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
-    });
+    await completeAssignment(kernel, 'assignment-1', 'report://1');
 
     await expect(kernel.evaluateTaskAcceptance('project-1', 'run-1', 'publish'))
       .rejects.toThrow('cannot remove the baseline Sponsor requirement');
@@ -570,14 +554,11 @@ describe('WorkroomKernel', () => {
       type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 1,
     });
     await first.pinTaskAcceptance('project-1', 'run-1', 'build');
-    await first.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
-      owner: 'builder', role: 'executor', leaseExpiresAt: 200,
+    await claimAssignment(first, {
+      taskKey: 'build', assignmentId: 'assignment-1', owner: 'builder', leaseExpiresAt: 200,
     });
     await first.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
-    await first.execute('project-1', 'run-1', {
-      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
-    });
+    await completeAssignment(first, 'assignment-1', 'report://1');
 
     const settled = await Promise.allSettled([
       first.evaluateTaskAcceptance('project-1', 'run-1', 'build'),
@@ -596,6 +577,16 @@ describe('WorkroomKernel', () => {
     expect(forged.type).toBe('accept_task');
   });
 
+  it('does not expose commands that bypass the Assignment observation authority', () => {
+    // @ts-expect-error Executor heartbeats must enter through AssignmentObservationIngress.
+    const heartbeat: WorkroomCommand = { type: 'heartbeat', assignmentId: 'assignment-1', leaseExpiresAt: 999 };
+    // @ts-expect-error Executor completion must carry the typed Envelope-bound observation.
+    const completion: WorkroomCommand = {
+      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://forged',
+    };
+    expect([heartbeat.type, completion.type]).toEqual(['heartbeat', 'complete_execution']);
+  });
+
   it('creates a new task revision after rejected execution', async () => {
     const { kernel } = fixture();
     await kernel.createRun({ runId: 'run-1', projectId: 'project-1', title: 'Review' });
@@ -603,23 +594,22 @@ describe('WorkroomKernel', () => {
       type: 'plan_task', taskKey: 'draft', title: 'Draft', required: true, maxAttempts: 1,
     });
     await kernel.pinTaskAcceptance('project-1', 'run-1', 'draft');
-    await kernel.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'draft', assignmentId: 'assignment-1',
-      owner: 'writer', role: 'executor', leaseExpiresAt: 200,
+    await claimAssignment(kernel, {
+      taskKey: 'draft', assignmentId: 'assignment-1', owner: 'writer', leaseExpiresAt: 200,
     });
     await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
-    await kernel.execute('project-1', 'run-1', {
-      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
-    });
+    await completeAssignment(kernel, 'assignment-1', 'report://1');
 
     const rework = await kernel.execute('project-1', 'run-1', {
       type: 'request_rework', taskKey: 'draft', reason: 'missing evidence',
     });
     expect(rework.tasks.draft).toMatchObject({ status: 'ready', revision: 2, attempt: 0 });
     expect(rework.tasks.draft?.acceptanceContract).toBeUndefined();
-    await expect(kernel.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'draft', assignmentId: 'assignment-2',
-      owner: 'writer', role: 'executor', leaseExpiresAt: 300,
+    expect(rework.tasks.draft?.reportDigest).toBeUndefined();
+    expect(rework.tasks.draft?.candidateRef).toBeUndefined();
+    expect(rework.tasks.draft?.candidateHash).toBeUndefined();
+    await expect(claimAssignment(kernel, {
+      taskKey: 'draft', assignmentId: 'assignment-2', owner: 'writer', leaseExpiresAt: 300,
     })).rejects.toThrow('Acceptance Contract is not pinned');
   });
 
@@ -630,9 +620,8 @@ describe('WorkroomKernel', () => {
       type: 'plan_task', taskKey: 'research', title: 'Research', required: true, maxAttempts: 2,
     });
     await kernel.pinTaskAcceptance('project-1', 'run-1', 'research');
-    await kernel.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'research', assignmentId: 'assignment-1',
-      owner: 'researcher', role: 'executor', leaseExpiresAt: 120,
+    await claimAssignment(kernel, {
+      taskKey: 'research', assignmentId: 'assignment-1', owner: 'researcher', leaseExpiresAt: 120,
     });
     await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
     setNow(121);
@@ -642,6 +631,24 @@ describe('WorkroomKernel', () => {
     expect(recovered.tasks.research).toMatchObject({ status: 'ready', attempt: 1 });
   });
 
+  it('requires a strictly increasing fence when a new Assignment takes over a Task', async () => {
+    const { kernel, setNow } = fixture();
+    await kernel.createRun({ runId: 'run-1', projectId: 'project-1', title: 'Fenced takeover' });
+    await kernel.execute('project-1', 'run-1', {
+      type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 2,
+    });
+    await kernel.pinTaskAcceptance('project-1', 'run-1', 'build');
+    await claimAssignment(kernel, {
+      taskKey: 'build', assignmentId: 'assignment-1', owner: 'builder', leaseExpiresAt: 120, fence: 1,
+    });
+    setNow(121);
+    await kernel.execute('project-1', 'run-1', { type: 'advance_clock', now: 121 });
+
+    await expect(claimAssignment(kernel, {
+      taskKey: 'build', assignmentId: 'assignment-2', owner: 'builder', leaseExpiresAt: 200, fence: 1,
+    })).rejects.toThrow('fence must advance');
+  });
+
   it('revises a failed required task out of needs_replan', async () => {
     const { kernel, setNow } = fixture();
     await kernel.createRun({ runId: 'run-1', projectId: 'project-1', title: 'Recover' });
@@ -649,9 +656,8 @@ describe('WorkroomKernel', () => {
       type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 1,
     });
     await kernel.pinTaskAcceptance('project-1', 'run-1', 'build');
-    await kernel.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
-      owner: 'builder', role: 'executor', leaseExpiresAt: 120,
+    await claimAssignment(kernel, {
+      taskKey: 'build', assignmentId: 'assignment-1', owner: 'builder', leaseExpiresAt: 120,
     });
     setNow(121);
     const exhausted = await kernel.execute('project-1', 'run-1', { type: 'advance_clock', now: 121 });
@@ -680,9 +686,8 @@ describe('WorkroomKernel', () => {
       type: 'plan_task', taskKey: 'write', title: 'Write', required: true, maxAttempts: 2,
     });
     await kernel.pinTaskAcceptance('project-1', 'run-1', 'write');
-    await kernel.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'write', assignmentId: 'assignment-1',
-      owner: 'writer', role: 'executor', leaseExpiresAt: 200,
+    await claimAssignment(kernel, {
+      taskKey: 'write', assignmentId: 'assignment-1', owner: 'writer', leaseExpiresAt: 200,
     });
     await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
     await kernel.execute('project-1', 'run-1', { type: 'cancel_run', reason: 'stop', controlDeadline: 130 });
@@ -716,6 +721,126 @@ describe('WorkroomKernel', () => {
       }),
     }, { select: () => ({ where: async () => rows }) });
     await expect(journal.read('run-bad')).rejects.toThrow('Invalid Workroom event payload envelope');
+  });
+
+  it.each([
+    ['progress ratio drift', 'assignment.progress', {
+      assignmentId: 'assignment-1', observationId: 'observation-1',
+      observationDigest: TEST_REPORT_DIGEST, envelopeDigest: TEST_CANDIDATE_HASH,
+      progress: { summary: 'invalid', completedUnits: 2, totalUnits: 1 },
+    }, 'completedUnits exceeds totalUnits'],
+    ['progress extra field', 'assignment.progress', {
+      assignmentId: 'assignment-1', observationId: 'observation-1',
+      observationDigest: TEST_REPORT_DIGEST, envelopeDigest: TEST_CANDIDATE_HASH,
+      progress: { summary: 'invalid', secret: true },
+    }, 'progress keys'],
+    ['progress body digest drift', 'assignment.progress', {
+      assignmentId: 'assignment-1', observationId: 'observation-progress-drift',
+      observationDigest: digestCanonicalWorkroomValue({
+        version: 1,
+        type: 'progress',
+        observationId: 'observation-progress-drift',
+        envelopeDigest: TEST_CANDIDATE_HASH,
+        progress: { summary: 'original', completedUnits: 1, totalUnits: 2 },
+      }),
+      envelopeDigest: TEST_CANDIDATE_HASH,
+      progress: { summary: 'drifted', completedUnits: 1, totalUnits: 2 },
+    }, 'observationDigest'],
+    ['completion missing report digest', 'assignment.execution_completed', {
+      assignmentId: 'assignment-1', observationId: 'observation-1',
+      observationDigest: TEST_REPORT_DIGEST, envelopeDigest: TEST_CANDIDATE_HASH,
+      reportRef: 'report://1', candidateRef: 'candidate-1', candidateHash: TEST_CANDIDATE_HASH,
+    }, 'payload keys'],
+    ['completion body digest drift', 'assignment.execution_completed', {
+      assignmentId: 'assignment-1', observationId: 'observation-completion-drift',
+      observationDigest: digestCanonicalWorkroomValue({
+        version: 1,
+        type: 'execution_completed',
+        observationId: 'observation-completion-drift',
+        envelopeDigest: TEST_CANDIDATE_HASH,
+        completion: {
+          report: { ref: 'report://1', digest: TEST_REPORT_DIGEST },
+          candidate: { ref: 'candidate-1', hash: TEST_CANDIDATE_HASH },
+        },
+      }),
+      envelopeDigest: TEST_CANDIDATE_HASH,
+      reportRef: 'report://1',
+      reportDigest: TEST_REPORT_DIGEST,
+      candidateRef: 'candidate-1',
+      candidateHash: TEST_REPORT_DIGEST,
+    }, 'observationDigest'],
+  ] as const)('rejects persisted Assignment observation corruption: %s', async (
+    _name,
+    type,
+    payload,
+    message,
+  ) => {
+    const rows = [{
+      run_id: 'run-corrupt-observation', sequence: 0, version: 1, type,
+      payload_json: JSON.stringify({ eventId: 'corrupt-observation', payload }), occurred_at: 100,
+    }];
+    const journal = new DatabaseWorkroomJournal({
+      transaction: async (operation: (transaction: any) => Promise<unknown>) => operation({
+        select: () => ({ where: async () => rows }), insertMany: async () => undefined,
+      }),
+    }, { select: () => ({ where: async () => rows }) });
+    await expect(journal.read('run-corrupt-observation')).rejects.toThrow(message);
+  });
+
+  it('rejects Assignment observation body drift while materializing a Journal append', async () => {
+    const journal = new MemoryWorkroomJournal();
+    const payload = {
+      assignmentId: 'assignment-1',
+      observationId: 'observation-materialize-drift',
+      observationDigest: digestCanonicalWorkroomValue({
+        version: 1,
+        type: 'execution_completed',
+        observationId: 'observation-materialize-drift',
+        envelopeDigest: TEST_CANDIDATE_HASH,
+        completion: {
+          report: { ref: 'report://1', digest: TEST_REPORT_DIGEST },
+          candidate: { ref: 'candidate-1', hash: TEST_CANDIDATE_HASH },
+        },
+      }),
+      envelopeDigest: TEST_CANDIDATE_HASH,
+      reportRef: 'report://1',
+      reportDigest: TEST_REPORT_DIGEST,
+      candidateRef: 'candidate-1',
+      candidateHash: TEST_REPORT_DIGEST,
+    };
+    await expect(journal.append('run-materialize-drift', -1, [{
+      eventId: 'materialize-drift',
+      occurredAt: 100,
+      type: 'assignment.execution_completed',
+      payload,
+    }])).rejects.toThrow('observationDigest');
+  });
+
+  it('keeps trusted heartbeat lease metadata outside the Executor observation digest', async () => {
+    const payload = {
+      assignmentId: 'assignment-1',
+      observationId: 'observation-heartbeat-trusted-metadata',
+      observationDigest: digestCanonicalWorkroomValue({
+        version: 1,
+        type: 'heartbeat',
+        observationId: 'observation-heartbeat-trusted-metadata',
+        envelopeDigest: TEST_CANDIDATE_HASH,
+      }),
+      envelopeDigest: TEST_CANDIDATE_HASH,
+      leaseExpiresAt: 999,
+    };
+    const rows = [{
+      run_id: 'run-heartbeat-metadata', sequence: 0, version: 1, type: 'assignment.heartbeat',
+      payload_json: JSON.stringify({ eventId: 'heartbeat-metadata', payload }), occurred_at: 100,
+    }];
+    const journal = new DatabaseWorkroomJournal({
+      transaction: async (operation: (transaction: any) => Promise<unknown>) => operation({
+        select: () => ({ where: async () => rows }), insertMany: async () => undefined,
+      }),
+    }, { select: () => ({ where: async () => rows }) });
+    await expect(journal.read('run-heartbeat-metadata')).resolves.toMatchObject([{
+      payload: { leaseExpiresAt: 999 },
+    }]);
   });
 
   it('rejects a persisted acceptance event without a valid policy record', async () => {
@@ -846,6 +971,90 @@ describe('WorkroomKernel', () => {
 
 });
 
+async function claimAssignment(
+  kernel: WorkroomKernel,
+  input: Readonly<{
+    taskKey: string;
+    assignmentId: string;
+    owner: string;
+    leaseExpiresAt: number;
+    fence?: number;
+  }>,
+) {
+  const state = await kernel.read('project-1', 'run-1');
+  const task = state.tasks[input.taskKey];
+  if (!task) throw new Error(`Task ${input.taskKey} not found`);
+  const attempt = task.attempt + 1;
+  const fence = input.fence ?? attempt;
+  const envelope = createAssignmentExecutionEnvelope({
+    projectId: state.projectId,
+    runId: state.runId,
+    taskKey: task.key,
+    taskRevision: task.revision,
+    assignmentId: input.assignmentId,
+    assignmentRevision: 1,
+    attempt,
+    fence,
+    principalId: input.owner,
+    role: 'executor',
+    agentDefinition: {
+      ref: 'agent-definition:test:1', revision: 1, digest: `sha256:${'1'.repeat(64)}`,
+    },
+    plan: { ref: 'workflow-plan:test:1', revision: 1, digest: `sha256:${'2'.repeat(64)}` },
+    contextPolicy: { ref: 'context-policy:test:1', revision: 1, digest: `sha256:${'3'.repeat(64)}` },
+    factAnchor: {
+      ref: `workroom-facts:${state.runId}:${state.sequence}`,
+      sequence: state.sequence,
+      digest: `sha256:${'4'.repeat(64)}`,
+    },
+    capabilitySnapshot: { ref: 'capability:test:1', revision: 1, digest: `sha256:${'5'.repeat(64)}` },
+    policySnapshot: { ref: 'policy:test:1', revision: 1, digest: `sha256:${'6'.repeat(64)}` },
+    workspace: {
+      leaseRef: `workspace-lease:${input.assignmentId}:${attempt}`,
+      mountRef: `workspace-mount:${input.assignmentId}:${attempt}`,
+      baseRevision: 'base-sha-test',
+      fence,
+    },
+  });
+  let envelopes = TEST_ENVELOPES.get(kernel);
+  if (!envelopes) {
+    envelopes = new Map();
+    TEST_ENVELOPES.set(kernel, envelopes);
+  }
+  envelopes.set(input.assignmentId, envelope);
+  return kernel.execute(state.projectId, state.runId, {
+    type: 'claim_task',
+    taskKey: input.taskKey,
+    assignmentId: input.assignmentId,
+    assignmentRevision: envelope.assignmentRevision,
+    fence: envelope.fence,
+    envelopeDigest: envelope.digest,
+    owner: input.owner,
+    role: 'executor',
+    leaseExpiresAt: input.leaseExpiresAt,
+  });
+}
+
+async function completeAssignment(
+  kernel: WorkroomKernel,
+  assignmentId: string,
+  reportRef: string,
+) {
+  const envelope = TEST_ENVELOPES.get(kernel)?.get(assignmentId);
+  if (!envelope) throw new Error(`Execution Envelope ${assignmentId} not found`);
+  const state = await kernel.read(envelope.projectId, envelope.runId);
+  return new AssignmentObservationIngress({ kernel }).apply(envelope, {
+    version: 1,
+    type: 'execution_completed',
+    observationId: `${assignmentId}:execution-completed`,
+    envelopeDigest: envelope.digest,
+    completion: {
+      report: { ref: reportRef, digest: TEST_REPORT_DIGEST },
+      candidate: { ref: 'candidate-1', hash: TEST_CANDIDATE_HASH },
+    },
+  }, state.sequence);
+}
+
 function lowRiskAcceptance(input: WorkroomAcceptanceDecisionInput): WorkroomAcceptanceDecision {
   return Object.freeze({
     version: 1,
@@ -858,14 +1067,14 @@ function lowRiskAcceptance(input: WorkroomAcceptanceDecisionInput): WorkroomAcce
       producerAssignmentId: input.assignment.id,
       producerPrincipalId: input.assignment.owner,
       reportRef: input.task.reportRef,
-      hash: 'sha256:candidate-1',
+      hash: TEST_CANDIDATE_HASH,
       claimIds: Object.freeze(['claim-1']),
       evidenceRefs: Object.freeze(['evidence://1']),
     }),
     contract: input.contract,
     riskAssessment: Object.freeze({
       id: 'risk-1',
-      candidateHash: 'sha256:candidate-1',
+      candidateHash: TEST_CANDIDATE_HASH,
       tier: 'low',
       factsHash: 'sha256:risk-facts-1',
       assessor: 'kernel-risk-engine',
@@ -875,7 +1084,7 @@ function lowRiskAcceptance(input: WorkroomAcceptanceDecisionInput): WorkroomAcce
       id: 'check-1',
       criterionId: 'criterion-build',
       status: 'passed',
-      candidateHash: 'sha256:candidate-1',
+      candidateHash: TEST_CANDIDATE_HASH,
       runner: 'ci',
       runnerVersion: 'ci@1',
       evidenceRefs: Object.freeze(['evidence://1']),

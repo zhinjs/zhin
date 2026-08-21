@@ -193,6 +193,36 @@ describe('Assignment Executor boundary', () => {
     expect(Object.isFrozen(observation.completion)).toBe(true);
   });
 
+  it('accepts an optional trusted completion receipt digest and rejects malformed values', () => {
+    const envelope = createAssignmentExecutionEnvelope(envelopeInput());
+    const completionReceiptDigest = `sha256:${'f'.repeat(64)}`;
+    const value = {
+      version: 1 as const,
+      type: 'execution_completed' as const,
+      observationId: 'observation-remote-completion',
+      envelopeDigest: envelope.digest,
+      completion: {
+        report: {
+          ref: 'task-report:assignment-1:1',
+          digest: `sha256:${'d'.repeat(64)}`,
+        },
+        candidate: {
+          ref: 'candidate:assignment-1:1',
+          hash: `sha256:${'e'.repeat(64)}`,
+        },
+        completionReceiptDigest,
+      },
+    };
+
+    expect(validateAssignmentExecutionObservation(envelope, value)).toMatchObject({
+      completion: { completionReceiptDigest },
+    });
+    expect(() => validateAssignmentExecutionObservation(envelope, {
+      ...value,
+      completion: { ...value.completion, completionReceiptDigest: 'sha256:invalid' },
+    })).toThrow('completion.completionReceiptDigest');
+  });
+
   it('fails closed when an untrusted envelope tries to smuggle additional authority', () => {
     expect(() => createAssignmentExecutionEnvelope({
       ...envelopeInput(),
