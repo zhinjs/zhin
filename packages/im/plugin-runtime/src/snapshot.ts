@@ -36,14 +36,24 @@ export interface RuntimeSnapshot {
 
 export type SnapshotState = Omit<RuntimeSnapshot, 'generation'>;
 
-export interface PreparedGeneration {
+interface PreparedGenerationBase {
   readonly snapshot: SnapshotState;
   readonly dispose: Dispose;
   readonly handoff?: GenerationHandoff;
 }
 
-interface SnapshotRecord {
+export type PreparedGeneration<TState = undefined> = PreparedGenerationBase
+  & ([TState] extends [undefined]
+    ? { readonly state?: undefined }
+    : { /** State published atomically with the snapshot pointer. */ readonly state: TState });
+
+export interface CommittedGeneration<TState = undefined> {
   readonly snapshot: RuntimeSnapshot;
+  readonly state: TState;
+}
+
+interface SnapshotRecord<TState> extends CommittedGeneration<TState> {
+  readonly committed: CommittedGeneration<TState>;
   readonly dispose: Dispose;
   readonly admissions: ReadonlySet<GenerationAdmissionGate>;
   leases: number;
@@ -93,20 +103,27 @@ export interface SnapshotReader {
   owns(lease: SnapshotLease): boolean;
 }
 
-export class SnapshotStore implements SnapshotReader {
-  #current: SnapshotRecord;
-  readonly #retired = new Set<SnapshotRecord>();
+export class SnapshotStore<TState = undefined> implements SnapshotReader {
+  #current: SnapshotRecord<TState>;
+  readonly #retired = new Set<SnapshotRecord<TState>>();
   readonly #leases = new WeakSet<SnapshotLease>();
   #closed = false;
 
   constructor(
     initial: SnapshotState,
     private readonly onDisposalError: (error: unknown) => void = () => undefined,
+    ...state: [TState] extends [undefined]
+      ? [initialState?: undefined]
+      : [initialState: TState]
   ) {
+    const initialState = state[0] as TState;
     const snapshot = createSnapshotView(0, initial);
+    const committed = Object.freeze({ snapshot, state: initialState });
     const admissions = collectSnapshotAdmissions(snapshot);
-    const record: SnapshotRecord = {
+    const record: SnapshotRecord<TState> = {
       snapshot,
+      state: initialState,
+      committed,
       dispose: () => undefined,
       admissions,
       leases: 0,
@@ -118,6 +135,11 @@ export class SnapshotStore implements SnapshotReader {
 
   get current(): RuntimeSnapshot {
     return this.#current.snapshot;
+  }
+
+  /** Complete active record; snapshot and state always belong to one generation. */
+  get committed(): CommittedGeneration<TState> {
+    return this.#current.committed;
   }
 
   acquire(): SnapshotLease {
@@ -138,8 +160,8 @@ export class SnapshotStore implements SnapshotReader {
 
   commit(
     expectedGeneration: number,
-    prepared: PreparedGeneration,
-  ): RuntimeSnapshot {
+    prepared: PreparedGeneration<TState>,
+  ): CommittedGeneration<TState> {
     // The caller owns a candidate until this method succeeds. This lets the
     // transaction authority undo handoff state before disposing a rejection.
     if (this.#closed) {
@@ -154,9 +176,13 @@ export class SnapshotStore implements SnapshotReader {
 
     const previous = this.#current;
     const snapshot = createSnapshotView(expectedGeneration + 1, prepared.snapshot);
+    const state = prepared.state as TState;
+    const committed = Object.freeze({ snapshot, state });
     const admissions = collectSnapshotAdmissions(snapshot);
-    const next: SnapshotRecord = {
+    const next: SnapshotRecord<TState> = {
       snapshot,
+      state,
+      committed,
       dispose: prepared.dispose,
       admissions,
       leases: 0,
@@ -174,7 +200,7 @@ export class SnapshotStore implements SnapshotReader {
     previous.retired = true;
     this.#retired.add(previous);
     this.#disposeIfReady(previous);
-    return this.#current.snapshot;
+    return this.#current.committed;
   }
 
   async close(): Promise<void> {
@@ -190,7 +216,7 @@ export class SnapshotStore implements SnapshotReader {
     this.#retired.clear();
   }
 
-  #disposeIfReady(record: SnapshotRecord): void {
+  #disposeIfReady(record: SnapshotRecord<TState>): void {
     if (!record.retired || record.leases !== 0) return;
     if (!record.disposing) {
       record.disposing = Promise.resolve().then(record.dispose);
@@ -204,7 +230,7 @@ export class SnapshotStore implements SnapshotReader {
     }
   }
 
-  #retain(record: SnapshotRecord): () => void {
+  #retain(record: SnapshotRecord<TState>): () => void {
     record.leases += 1;
     let released = false;
     return () => {
@@ -216,7 +242,7 @@ export class SnapshotStore implements SnapshotReader {
     };
   }
 
-  #waitForDisposal(record: SnapshotRecord): Promise<void> {
+  #waitForDisposal(record: SnapshotRecord<TState>): Promise<void> {
     if (record.disposing) return record.disposing;
     if (!record.drain) {
       let resolve!: () => void;

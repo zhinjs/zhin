@@ -31,11 +31,16 @@ export class HmrCoordinator {
   }> = [];
   #draining?: Promise<void>;
   #unwatch?: Dispose;
+  #closing = false;
+  #restartRequired = false;
+  #stopResult?: Promise<void>;
 
   constructor(private readonly options: HmrCoordinatorOptions) {}
 
   start(): Dispose {
     if (this.#unwatch) throw new Error('HmrCoordinator is already started');
+    if (this.#closing) throw new Error('HmrCoordinator has been stopped');
+    if (this.#restartRequired) throw new Error('HmrCoordinator requires a process restart');
     if (!this.options.modules.watch) {
       throw new Error('ModuleRuntime does not provide a file watcher');
     }
@@ -46,12 +51,24 @@ export class HmrCoordinator {
     return () => this.stop();
   }
 
-  stop(): void {
+  stop(): Promise<void> {
+    if (this.#stopResult) return this.#stopResult;
+    this.#closing = true;
     this.#unwatch?.();
     this.#unwatch = undefined;
+    this.#stopResult = (async () => {
+      await this.#draining;
+    })();
+    return this.#stopResult;
   }
 
   enqueue(source: string): Promise<void> {
+    if (this.#closing) {
+      return Promise.reject(new Error('HMR coordinator is stopping'));
+    }
+    if (this.#restartRequired) {
+      return Promise.reject(new Error('HMR coordinator requires a process restart'));
+    }
     this.#pending.add(source);
     const completed = new Promise<void>((resolve, reject) => {
       this.#waiters.push({ resolve, reject });
@@ -80,14 +97,16 @@ export class HmrCoordinator {
           this.options.modules.requiresProcessRestart?.(source),
         );
         if (forcedRestart.length > 0) {
-          await this.options.onRestartRequired(Object.freeze({
+          this.#restartRequired = true;
+          this.#pending.clear();
+          this.#notifyRestart(Object.freeze({
             kind: 'process',
             changed: Object.freeze(changed),
             reasons: Object.freeze([
               `Module loader cannot safely invalidate: ${forcedRestart.join(', ')}`,
             ]),
           }));
-          continue;
+          break;
         }
         const dependencyPort = this.options.modules.affectedSources
           ? {
@@ -98,12 +117,15 @@ export class HmrCoordinator {
         const plan = new InvalidationPlanner(this.options.ownership(), dependencyPort).plan(
           changed,
         );
-        await this.options.onPlan?.(plan);
 
         if (plan.kind === 'process') {
-          await this.options.onRestartRequired(plan);
-          continue;
+          this.#restartRequired = true;
+          this.#pending.clear();
+          this.#notifyPlan(plan);
+          this.#notifyRestart(plan);
+          break;
         }
+        this.#notifyPlan(plan);
         if (plan.kind === 'none') continue;
 
         const startedAt = performance.now();
@@ -111,14 +133,28 @@ export class HmrCoordinator {
           await this.options.modules.invalidate?.(source);
         }
         const restart = await this.options.runtime.reload(plan);
-        if (restart) await this.options.onRestartRequired(restart);
+        if (restart) {
+          this.#restartRequired = true;
+          this.#pending.clear();
+          this.#notifyRestart(restart);
+          break;
+        }
         else {
           // reload resolves only after RootController has committed the new
           // generation. Read ownership now so failed transactions never make
           // newly discovered workspace packages observable to the watcher.
           this.#syncWatchRoots();
           const durationMs = Number((performance.now() - startedAt).toFixed(1));
-          await this.options.onReload?.(plan, durationMs);
+          try {
+            await this.options.onReload?.(plan, durationMs);
+          } catch (error) {
+            // A projection/observer cannot change an already committed reload.
+            try {
+              await this.options.onError(error);
+            } catch {
+              // Diagnostic reporting is deliberately outside the outcome.
+            }
+          }
         }
       }
       this.#resolveWaiters();
@@ -135,7 +171,7 @@ export class HmrCoordinator {
       this.#draining = undefined;
       // A source may arrive after the loop observed an empty queue but before
       // this promise settled. Keep its waiter attached to a fresh transaction.
-      if (this.#pending.size > 0) this.#ensureDrain();
+      if (!this.#closing && !this.#restartRequired && this.#pending.size > 0) this.#ensureDrain();
     }
   }
 
@@ -149,5 +185,37 @@ export class HmrCoordinator {
 
   #syncWatchRoots(): void {
     this.options.modules.updateWatchRoots?.(this.options.ownership().watchRoots());
+  }
+
+  #notifyRestart(plan: ProcessInvalidationPlan): void {
+    // Restart is a committed control outcome. Invoke the observer without
+    // awaiting it so a Process Host may await RootHost.stop() without waiting
+    // on the HMR drain that is currently delivering this notification.
+    try {
+      void Promise.resolve(this.options.onRestartRequired(plan)).catch((error) => {
+        this.#reportDiagnostic(error);
+      });
+    } catch (error) {
+      this.#reportDiagnostic(error);
+    }
+  }
+
+  #notifyPlan(plan: InvalidationPlan): void {
+    if (!this.options.onPlan) return;
+    try {
+      void Promise.resolve(this.options.onPlan(plan)).catch((error) => {
+        this.#reportDiagnostic(error);
+      });
+    } catch (error) {
+      this.#reportDiagnostic(error);
+    }
+  }
+
+  #reportDiagnostic(error: unknown): void {
+    try {
+      void Promise.resolve(this.options.onError(error)).catch(() => undefined);
+    } catch {
+      // Diagnostic reporting cannot change an invalidation outcome.
+    }
   }
 }

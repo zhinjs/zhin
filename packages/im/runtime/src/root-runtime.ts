@@ -68,9 +68,11 @@ import type {
   GenerationInvalidationPlan,
   ProcessInvalidationPlan,
 } from './invalidation-planner.js';
-import type {
-  PreparedRuntimeGeneration,
-  RuntimeGenerationModel,
+import {
+  prepareRuntimeGeneration,
+  type PreparedRuntimeGeneration,
+  type RuntimeGenerationModel,
+  type RuntimeGenerationState,
 } from './runtime-generation.js';
 import {
   RootProcessRestartExecutor,
@@ -134,11 +136,9 @@ export class RootRuntime {
   #configDocument?: RuntimeConfigDocument;
   readonly #installResources?: RootResourceInstaller;
   readonly #isolation?: IsolatedPluginRuntimePort;
-  #ownership = SourceOwnershipIndex.empty();
-  #model?: RuntimeGenerationModel;
   #configPatchTail: Promise<unknown> = Promise.resolve();
   #stopResult?: Promise<void>;
-  readonly #controller: RootController;
+  readonly #controller: RootController<RuntimeGenerationState>;
 
   constructor(options: RootRuntimeOptions) {
     this.#projectRoot = resolve(options.projectRoot);
@@ -150,7 +150,11 @@ export class RootRuntime {
     else this.#configDocument = structuredClone(options.config ?? {});
     this.#installResources = options.installResources;
     this.#isolation = options.isolation;
-    this.#controller = new RootController(emptyState(), options.onControlError);
+    this.#controller = new RootController(
+      emptyState(),
+      options.onControlError,
+      Object.freeze({ ownership: SourceOwnershipIndex.empty() }),
+    );
   }
 
   get snapshot(): RuntimeSnapshot {
@@ -161,12 +165,12 @@ export class RootRuntime {
     return this.#controller.snapshots;
   }
 
-  onGenerationCommit(listener: GenerationCommitListener): () => void {
+  onGenerationCommit(listener: GenerationCommitListener<RuntimeGenerationState>): () => void {
     return this.#controller.onGenerationCommit(listener);
   }
 
   get sourceOwnership(): SourceOwnershipIndex {
-    return this.#ownership;
+    return this.#controller.committed.state.ownership;
   }
 
   async start(): Promise<RuntimeSnapshot> {
@@ -175,22 +179,16 @@ export class RootRuntime {
       this.#configSnapshot = snapshot;
       this.#configDocument = structuredClone(snapshot.document);
     }
-    let prepared: PreparedRuntimeGeneration | undefined;
     const snapshot = await this.#controller.start(async (current, signal) => {
-      prepared = await this.#prepare(current, signal);
-      return prepared.generation;
+      return (await this.#prepare(current, signal)).generation;
     });
-    this.#accept(requirePrepared(prepared));
     return snapshot;
   }
 
   async reload(target: PluginId | string = rootPluginId()): Promise<RuntimeSnapshot> {
-    let prepared: PreparedRuntimeGeneration | undefined;
     const snapshot = await this.#controller.reload(target, async (current, signal) => {
-      prepared = await this.#prepare(current, signal);
-      return prepared.generation;
+      return (await this.#prepare(current, signal)).generation;
     });
-    this.#accept(requirePrepared(prepared));
     return snapshot;
   }
 
@@ -208,7 +206,7 @@ export class RootRuntime {
     return new HmrCoordinator({
       ...options,
       modules: this.#modules,
-      ownership: () => this.#ownership,
+      ownership: () => this.sourceOwnership,
       runtime: {
         reload: async (plan) => {
           const result = await this.#reloadPlan(plan);
@@ -238,11 +236,11 @@ export class RootRuntime {
   async #reloadPlan(
     plan: GenerationInvalidationPlan,
   ): Promise<RuntimeSnapshot | ProcessInvalidationPlan> {
-    let prepared: PreparedRuntimeGeneration | undefined;
     let restart: ProcessInvalidationPlan | undefined;
     const snapshot = await this.#controller.reload(
       plan.subtrees[0] ?? plan.slots[0] ?? rootPluginId(),
       async (current, signal) => {
+        let prepared: PreparedRuntimeGeneration | undefined;
         const resolved = await this.#resolveCapabilityDelta(current, plan);
         const effective = resolved.plan;
         if (this.#model && effective.manifestSources.length > 0) {
@@ -279,13 +277,11 @@ export class RootRuntime {
       },
     );
     if (restart) return restart;
-    if (prepared) this.#accept(prepared);
     return snapshot;
   }
 
-  #accept(prepared: PreparedRuntimeGeneration): void {
-    this.#ownership = prepared.ownership;
-    this.#model = prepared.model;
+  get #model(): RuntimeGenerationModel | undefined {
+    return this.#controller.committed.state.model;
   }
 
   async #resolveCapabilityDelta(
@@ -321,7 +317,7 @@ export class RootRuntime {
   #canPrepareSubtrees(plan: GenerationInvalidationPlan): boolean {
     if (plan.subtrees.length === 0 || plan.subtrees.includes(rootPluginId())) return false;
     return plan.changed.every((source) => {
-      const records = this.#ownership.recordsFor(source);
+      const records = this.sourceOwnership.recordsFor(source);
       return records.length > 0 && records.every(
         (record) => record.role === 'plugin' || record.role === 'schema',
       );
@@ -392,10 +388,10 @@ export class RootRuntime {
     await this.#refreshConfigDocument();
     const currentDocument = requireConfigDocument(this.#configDocument);
     let plan: ConfigPatchPlan | undefined;
-    let prepared: PreparedRuntimeGeneration | undefined;
     let documentTransaction: PreparedConfigDocument | undefined;
     let committedDocument: ConfigDocumentSnapshot | undefined;
     const snapshot = await this.#controller.reload(rootPluginId(), async (current, signal) => {
+      let prepared: PreparedRuntimeGeneration;
       signal.throwIfAborted();
       const resolver = await NodePackageResolver.create(this.#projectRoot);
       const graph = await new ProjectGraphService(resolver).inspect(this.#projectRoot);
@@ -449,7 +445,6 @@ export class RootRuntime {
       }
     });
     const completed = requireConfigPatchPlan(plan);
-    if (prepared) this.#accept(prepared);
     this.#configDocument = completed.candidate;
     if (committedDocument) this.#configSnapshot = committedDocument;
     return snapshot;
@@ -511,11 +506,11 @@ function isWithinInvalidationRoot(plugin: PluginId, root: PluginId): boolean {
   return plugin === root || plugin.startsWith(`${root}/`);
 }
 
-function withConfigDocumentHandoff(
-  generation: PreparedGeneration,
+function withConfigDocumentHandoff<TState>(
+  generation: PreparedGeneration<TState>,
   document: PreparedConfigDocument,
   committed: (snapshot: ConfigDocumentSnapshot) => void,
-): PreparedGeneration {
+): PreparedGeneration<TState> {
   const handoffs = new GenerationHandoffStack();
   if (generation.handoff) handoffs.add(generation.handoff);
   // File commit follows Resource activation, so reverse compensation restores
@@ -622,8 +617,8 @@ class GenerationAssembler {
         this.#plugins.createdScopeDisposers(),
         this.#projectionDisposers,
       );
-      return {
-        generation: {
+      return prepareRuntimeGeneration(
+        {
           snapshot: state,
           dispose: () => assets.dispose(),
           handoff: composeGenerationHandoffs(
@@ -632,7 +627,7 @@ class GenerationAssembler {
           ),
         },
         ownership,
-        model: {
+        {
           graph: this.graph,
           providers: new Map(
             this.#catalog.values().map((provider) => [provider.id, provider]),
@@ -647,7 +642,7 @@ class GenerationAssembler {
           scopes: new Map(this.#plugins.scopes),
           assets,
         },
-      };
+      );
     } catch (error) {
       await disposePreparedParts(
         this.#plugins.createdScopeDisposers().map(([, dispose]) => dispose),
@@ -731,12 +726,6 @@ function emptyState(): SnapshotState {
   };
 }
 
-function requirePrepared(
-  prepared: PreparedRuntimeGeneration | undefined,
-): PreparedRuntimeGeneration {
-  if (!prepared) throw new Error('RootController committed without a prepared generation');
-  return prepared;
-}
 
 function isProcessPlan(
   value: RuntimeSnapshot | ProcessInvalidationPlan,

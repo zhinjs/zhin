@@ -32,27 +32,13 @@ import { DisposeStack } from './dispose';           // ❌
 ## Removed：`usePlugin()` / `getPlugin()` / `bootstrapNode`
 
 `zhin.js/node` 与 `bootstrapNode` **已删除且不再导出**。唯一入口是 `definePlugin()` + `zhin runtime start`。仓库内 legacy Plugin 引用由门禁 `pnpm check:use-plugin-top-level` / `pnpm check:get-plugin-runtime` 拦截。迁移：`.github/skills/migrate-zhin-plugin-runtime`。
-## 模块级状态：createGenerationStore
+## 代级状态：Snapshot Resource
 
-插件热重载意味着同一份模块代码会被多个 generation 先后使用。裸的模块级 `let _x` 单例会让新一代读到上一代已释放的资源，或让旧代卸载时误清掉新代的值。统一用 `createGenerationStore<T>(name)`（`zhin.js`）：
-
-```ts
-import { createGenerationStore } from 'zhin.js';
-
-const dbStore = createGenerationStore<Database>('my-plugin-db');
-
-// setup 阶段：provide 自动挂 context.lifecycle 反注册，
-// 代际结束时该代的值被移除，上一代的值重新可见
-dbStore.provide(context, db);
-
-// 运行时路径（工具 execute、Cron、事件回调）：读最新 live 值
-const db = dbStore.use();      // 无值时抛出含 store 名的错误
-const maybe = dbStore.tryUse(); // 无值时返回 undefined
-```
-
-- 多代并存时栈顶（最新 live 注册）胜出，旧代先 dispose 不会误伤新代。
-- `clear()` 仅供测试复位。
-- 不要手写 `if (!x) throw new Error('... not initialized')`，`use()` 已经带这个语义。
+共享连接、数据库和其他有状态对象必须在 setup 中通过 `context.resources.provide`
+发布，并由当前 operation 持有的 Generation View 解析。禁止新增模块级 `let` 单例、
+latest-value stack 或 `createGenerationStore`；这些形式会跨 Root 串扰，也会让 shadow
+candidate 在 commit 前可见。现存内部 `createGenerationStore` 调用属于待删除技术债，
+不得作为插件创作接口继续扩散。详见[模块状态](../authoring/module-state.md)。
 
 ## WS/SSE 端点：createEndpointLifecycle
 

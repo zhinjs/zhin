@@ -54,6 +54,12 @@ describe('RootRuntime tracer bullet', () => {
         });
       },
     });
+    const committedWorlds: number[] = [];
+    runtime.onGenerationCommit(({ current }) => {
+      expect(runtime.snapshot).toBe(current.snapshot);
+      expect(runtime.sourceOwnership).toBe(current.state.ownership);
+      committedWorlds.push(current.snapshot.generation);
+    });
     const first = await runtime.start();
     expect('controller' in runtime).toBe(false);
     expect('commit' in runtime.snapshots).toBe(false);
@@ -106,6 +112,7 @@ describe('RootRuntime tracer bullet', () => {
     expect(commandIndex(runtime.snapshot).has('gh issue list')).toBe(false);
     expect(setupCalls).toBe(1);
     expect(resourceDisposals).toBe(0);
+    expect(committedWorlds).toEqual([1, 2, 3]);
 
     oldLease.release();
     await Promise.resolve();

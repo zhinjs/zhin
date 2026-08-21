@@ -18,7 +18,11 @@ interface RuntimeSnapshot {
 }
 ```
 
-Snapshots are deeply frozen (Maps are read-only views as well), so plugin code always sees the world state of a specific determined generation.
+Snapshot collections use read-only views. Serializable descriptors must be immutable, while stateful Resources are exposed only through controlled interfaces. Plugin code always sees one fixed generation world.
+
+`RuntimeSnapshot` and Runtime sidecars such as ownership and the generation model form one
+`CommittedGeneration`. Root swaps this complete record, so commit observers cannot see a new
+snapshot paired with previous-generation sidecars.
 
 ## One Atomic Publish Point
 
@@ -99,7 +103,7 @@ Committing only switches the pointer -- the old generation is not destroyed imme
 - **Generation-level**: Changes only affect certain plugin subtrees or capability slots -- only the affected parts are rebuilt (subtree / slot / topology, three kinds of preparers), going through the handoff described above;
 - **Process-level**: Changes that the module loader cannot safely invalidate, or manifest topology changes that cross the restart boundary (determined by `RestartBoundaryPlanner`, e.g., adding/removing child plugin dependencies) -- handed to `onRestartRequired`, with the outer layer (CLI) restarting the process.
 
-A failed HMR transaction cancels the remaining changes in the batch and invokes `onError`; it will not silently replay.
+A failed HMR transaction cancels the remaining changes in the batch and invokes `onError`; it will not silently replay. HMR stop closes admission and awaits the in-flight reload. Once a process restart is required, the coordinator rejects further generation work. Post-commit Console or logging observer failures are diagnostic only and cannot rewrite a committed reload as failed.
 
 ## Why Resources Must Be Attached to Lifecycle
 
@@ -107,26 +111,7 @@ Hot reload = old generation destroyed, new generation rebuilt. If a plugin store
 
 The rule is simple: **all resources with a lifecycle must be registered in `context.lifecycle` (a `DisposeStack`)**, and they are automatically deregistered when the generation ends.
 
-Cross-module generation-scoped state should use `createGenerationStore`, the generation-safe replacement for module-level singletons:
-
-```ts
-import { createGenerationStore } from 'zhin.js';
-
-const dbStore = createGenerationStore<Database>('my-plugin.db');
-
-// In setup: publish the value for this generation, automatically deregistered when lifecycle disposes
-export default definePlugin({
-  name: 'my-plugin',
-  setup(context) {
-    const db = openDatabase(context.config.get());
-    context.lifecycle.add(() => db.close());
-    dbStore.provide(context, db);
-  },
-});
-
-// At runtime in any module: always gets the value from the current active generation
-const db = dbStore.use();      // Throws an error with the store name if no active value
-const maybe = dbStore.tryUse(); // Or returns undefined if no active value
-```
-
-Values provided form a stack: the most recent active registration wins; when the owning generation ends and the registration is removed by `lifecycle`, the previous generation's value is automatically re-exposed. This structurally eliminates the possibility of "continuing to run with a reference to a destroyed generation."
+Cross-module generation state must be provided as a snapshot Resource and resolved through the
+`GenerationView` held by the current operation. Module-level latest-value stacks,
+`createGenerationStore`, and any “current live generation” lookup are forbidden: they cannot
+isolate multiple Roots and can expose a shadow candidate before commit.

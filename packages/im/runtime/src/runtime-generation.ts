@@ -21,8 +21,25 @@ export interface RuntimeGenerationModel {
   readonly assets: GenerationAssets;
 }
 
-export interface PreparedRuntimeGeneration {
-  readonly generation: PreparedGeneration;
+/** Sidecar state that must never be observed from a different generation. */
+export interface RuntimeGenerationState {
   readonly ownership: SourceOwnershipIndex;
-  readonly model: RuntimeGenerationModel;
+  readonly model?: RuntimeGenerationModel;
+}
+
+export interface PreparedRuntimeGeneration {
+  readonly generation: PreparedGeneration<RuntimeGenerationState>;
+}
+
+export function prepareRuntimeGeneration(
+  generation: PreparedGeneration,
+  ownership: SourceOwnershipIndex,
+  model: RuntimeGenerationModel,
+): PreparedRuntimeGeneration {
+  return Object.freeze({
+    generation: Object.freeze({
+      ...generation,
+      state: Object.freeze({ ownership, model }),
+    }),
+  });
 }

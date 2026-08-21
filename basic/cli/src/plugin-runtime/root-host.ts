@@ -10,6 +10,7 @@ import {
   type RuntimeEnvironment,
   type ConfigDocumentPort,
 } from '@zhin.js/runtime';
+import type { Dispose } from '@zhin.js/plugin-runtime';
 
 export interface RootHostOptions {
   readonly projectRoot: string;
@@ -50,7 +51,7 @@ export class RootHost {
   readonly #onPlan?: RootHostOptions['onPlan'];
   readonly #onReload?: RootHostOptions['onReload'];
   readonly #stopGenerationObservation: () => void;
-  #stopHmr?: () => void;
+  #stopHmr?: Dispose;
   #started = false;
   #stopPromise?: Promise<void>;
 
@@ -80,7 +81,7 @@ export class RootHost {
       },
     });
     this.#stopGenerationObservation = this.runtime.onGenerationCommit(
-      ({ current }) => options.onGenerationCommit?.(current.generation),
+      ({ current }) => options.onGenerationCommit?.(current.snapshot.generation),
     );
   }
 
@@ -108,7 +109,7 @@ export class RootHost {
   stop(): Promise<void> {
     if (this.#stopPromise) return this.#stopPromise;
     this.#stopPromise = (async () => {
-      this.#stopHmr?.();
+      await this.#stopHmr?.();
       this.#stopHmr = undefined;
       try {
         if (this.#started) await this.runtime.stop();

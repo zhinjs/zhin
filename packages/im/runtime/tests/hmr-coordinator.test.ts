@@ -199,6 +199,117 @@ describe('HmrCoordinator', () => {
     await expect(second).rejects.toBe(failure);
     expect(reported).toEqual([failure]);
   });
+
+  it('waits for an in-flight reload before stop settles and rejects later work', async () => {
+    const source = '/project/commands/status.ts';
+    const ownership = ownershipFor(source, '/project');
+    let finishReload!: () => void;
+    const reloadBlocked = new Promise<void>((resolve) => { finishReload = resolve; });
+    let reloadStarted!: () => void;
+    const started = new Promise<void>((resolve) => { reloadStarted = resolve; });
+    const coordinator = new HmrCoordinator({
+      modules: new FakeModules(),
+      ownership: () => ownership,
+      runtime: {
+        async reload() {
+          reloadStarted();
+          await reloadBlocked;
+        },
+      },
+      onRestartRequired() {},
+      onError() {},
+    });
+
+    const reload = coordinator.enqueue(source);
+    await started;
+    const stopping = coordinator.stop();
+    let stopped = false;
+    void stopping.then(() => { stopped = true; });
+    await Promise.resolve();
+    expect(stopped).toBe(false);
+    await expect(coordinator.enqueue(source)).rejects.toThrow('stopping');
+
+    finishReload();
+    await Promise.all([reload, stopping]);
+    expect(stopped).toBe(true);
+  });
+
+  it('reports post-commit observer failure without rejecting the reload', async () => {
+    const source = '/project/commands/status.ts';
+    const reported: unknown[] = [];
+    const failure = new Error('console projection failed');
+    const coordinator = new HmrCoordinator({
+      modules: new FakeModules(),
+      ownership: () => ownershipFor(source, '/project'),
+      runtime: { reload: async () => undefined },
+      onRestartRequired() {},
+      onError(error) { reported.push(error); },
+      onReload() { throw failure; },
+    });
+
+    await expect(coordinator.enqueue(source)).resolves.toBeUndefined();
+    expect(reported).toEqual([failure]);
+  });
+
+  it('stops accepting generation work after a process restart is required', async () => {
+    const source = '/project/pnpm-lock.yaml';
+    let releaseRestart!: () => void;
+    const restartBlocked = new Promise<void>((resolve) => { releaseRestart = resolve; });
+    let restartStarted!: () => void;
+    const started = new Promise<void>((resolve) => { restartStarted = resolve; });
+    const coordinator = new HmrCoordinator({
+      modules: new FakeModules(),
+      ownership: () => new SourceOwnershipIndex(),
+      runtime: { reload: async () => undefined },
+      async onRestartRequired() {
+        restartStarted();
+        await restartBlocked;
+      },
+      onError() {},
+    });
+
+    const restart = coordinator.enqueue(source);
+    await restart;
+    await started;
+    await expect(coordinator.enqueue('/project/plugin.ts')).rejects.toThrow('process restart');
+    releaseRestart();
+  });
+
+  it('allows a restart observer to drain the coordinator without self-waiting', async () => {
+    let resolveStopped!: () => void;
+    const stopped = new Promise<void>((resolve) => { resolveStopped = resolve; });
+    const coordinator = new HmrCoordinator({
+      modules: new FakeModules(),
+      ownership: () => new SourceOwnershipIndex(),
+      runtime: { reload: async () => undefined },
+      async onRestartRequired() {
+        await coordinator.stop();
+        resolveStopped();
+      },
+      onError() {},
+    });
+
+    await coordinator.enqueue('/project/pnpm-lock.yaml');
+    await stopped;
+  });
+
+  it('reports a synchronous restart observer failure without reopening admission', async () => {
+    const failure = new Error('restart observer failed');
+    const reported: unknown[] = [];
+    const coordinator = new HmrCoordinator({
+      modules: new FakeModules(),
+      ownership: () => new SourceOwnershipIndex(),
+      runtime: { reload: async () => undefined },
+      onRestartRequired() { throw failure; },
+      onError(error) { reported.push(error); },
+    });
+
+    await coordinator.enqueue('/project/pnpm-lock.yaml');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(reported).toEqual([failure]);
+    await expect(coordinator.enqueue('/project/plugin.ts')).rejects.toThrow('process restart');
+  });
 });
 
 class FakeModules implements ModuleRuntime {

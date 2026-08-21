@@ -33,27 +33,14 @@ See [Writing Your First Plugin](../getting-started/first-plugin.md), [definePlug
 
 `zhin.js/node` and `bootstrapNode` have been deleted and are no longer exported. The only startup entry is `definePlugin()` + `zhin runtime start`. New features must use Plugin Runtime. Migration guide: `.github/skills/migrate-zhin-plugin-runtime`.
 
-## Module-Level State: createGenerationStore
+## Generation State: Snapshot Resources
 
-Plugin hot-reload means the same module code will be used by multiple generations in succession. A bare module-level `let _x` singleton would cause a new generation to read resources already released by the previous one, or cause the old generation's teardown to accidentally clear the new generation's value. Use `createGenerationStore<T>(name)` (`zhin.js`) consistently:
-
-```ts
-import { createGenerationStore } from 'zhin.js';
-
-const dbStore = createGenerationStore<Database>('my-plugin-db');
-
-// Setup phase: provide automatically hooks into context.lifecycle for deregistration;
-// when a generation ends, that generation's value is removed and the previous generation's value becomes visible again
-dbStore.provide(context, db);
-
-// Runtime paths (tool execute, Cron, event callbacks): read the latest live value
-const db = dbStore.use();      // Throws an error with the store name if no value
-const maybe = dbStore.tryUse(); // Returns undefined if no value
-```
-
-- When multiple generations coexist, the stack top (most recently registered live value) wins; an older generation disposing first does not damage the newer one.
-- `clear()` is for test resets only.
-- Do not hand-write `if (!x) throw new Error('... not initialized')` -- `use()` already provides that semantic.
+Shared connections, databases, and other stateful objects must be provided through
+`context.resources.provide` during setup and resolved from the Generation View held by the current
+operation. Do not add module-level `let` singletons, latest-value stacks, or
+`createGenerationStore`: they cross Root boundaries and can expose a shadow candidate before
+commit. Existing internal `createGenerationStore` calls are removal debt, not a plugin authoring
+surface. See [Module State](../authoring/module-state.md).
 
 ## WS/SSE Endpoints: createEndpointLifecycle
 

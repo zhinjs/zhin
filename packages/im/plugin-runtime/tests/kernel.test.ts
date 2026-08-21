@@ -156,7 +156,7 @@ describe('Plugin Runtime kernel', () => {
     const root = new RootController(emptyState());
     const commits: Array<[number, number]> = [];
     const unsubscribe = root.onGenerationCommit((event) => {
-      commits.push([event.previous.generation, event.current.generation]);
+      commits.push([event.previous.snapshot.generation, event.current.snapshot.generation]);
     });
 
     await root.start(() => ({ snapshot: emptyState(), dispose: () => undefined }));
@@ -166,6 +166,32 @@ describe('Plugin Runtime kernel', () => {
     await root.transact(() => ({ snapshot: emptyState(), dispose: () => undefined }));
 
     expect(commits).toEqual([[0, 1], [1, 2]]);
+    await root.stop();
+  });
+
+  it('publishes snapshot and generation state as one committed record', async () => {
+    const root = new RootController(
+      emptyState(),
+      undefined,
+      Object.freeze({ label: 'initial' }),
+    );
+    const observed: Array<[number, string]> = [];
+    root.onGenerationCommit(({ current }) => {
+      observed.push([current.snapshot.generation, current.state.label]);
+      expect(root.committed).toBe(current);
+    });
+
+    await root.start(() => ({
+      snapshot: emptyState(),
+      dispose: () => undefined,
+      state: Object.freeze({ label: 'ready' }),
+    }));
+
+    expect(root.committed.snapshot).toBe(root.snapshot);
+    expect(root.committed.state).toEqual({ label: 'ready' });
+    expect('dispose' in root.committed).toBe(false);
+    expect('leases' in root.committed).toBe(false);
+    expect(observed).toEqual([[1, 'ready']]);
     await root.stop();
   });
 
@@ -183,6 +209,27 @@ describe('Plugin Runtime kernel', () => {
     expect(root.state).toBe('running');
     expect(reported).toEqual([
       expect.objectContaining({ message: 'observer failed' }),
+    ]);
+    await root.stop();
+  });
+
+  it('reports an asynchronous generation observer rejection without changing commit', async () => {
+    const reported: unknown[] = [];
+    const root = new RootController(emptyState(), (error) => { reported.push(error); });
+    root.onGenerationCommit(async () => {
+      throw new Error('async observer failed');
+    });
+
+    const snapshot = await root.start(() => ({
+      snapshot: emptyState(),
+      dispose: () => undefined,
+    }));
+    await Promise.resolve();
+
+    expect(snapshot.generation).toBe(1);
+    expect(root.state).toBe('running');
+    expect(reported).toEqual([
+      expect.objectContaining({ message: 'async observer failed' }),
     ]);
     await root.stop();
   });

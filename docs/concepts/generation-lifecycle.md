@@ -18,7 +18,11 @@ interface RuntimeSnapshot {
 }
 ```
 
-快照深冻结（Map 也是只读视图），插件代码拿到的永远是某个确定代的世界状态。
+快照的集合结构使用只读视图；可序列化 descriptor 必须不可变，有状态 Resource 则只通过受控接口暴露。插件代码拿到的永远是某个确定代的世界状态。
+
+`RuntimeSnapshot` 与 Runtime 的 ownership、generation model 等 sidecar 一起组成
+`CommittedGeneration`。Root 只交换这一条完整 record，commit observer 不可能看到
+“新 snapshot + 旧 ownership”的混合世界。
 
 ## 单一原子发布点
 
@@ -95,7 +99,10 @@ commit 只换指针，旧代不立刻销毁——它可能还在服务在途消�
 - **generation 级**：变更只影响某些插件子树或能力 slot → 只重建受影响部分（subtree / slot / topology 三种 preparer），走上面那套交接；
 - **process 级**：模块加载器无法安全失效的变更、或 manifest 拓扑变更越过了重启边界（`RestartBoundaryPlanner` 判定，比如新增/删除子插件依赖）→ 交给 `onRestartRequired`，由外层（CLI）重启进程。
 
-失败的 HMR 事务会作废本批次剩余变更并走 `onError`，不会静默重放。
+失败的 HMR 事务会作废本批次剩余变更并走 `onError`，不会静默重放。HMR stop
+会先停止接纳新事件，再等待在途 reload settlement；process restart 一旦确定，当前
+coordinator 不再接受新的 generation reload。commit 后的 Console/日志观察器失败只进入
+诊断通道，不会把已经提交的 reload 改写成失败。
 
 ## 为什么资源必须挂 lifecycle
 
@@ -103,26 +110,6 @@ commit 只换指针，旧代不立刻销毁——它可能还在服务在途消�
 
 规则很简单：**一切有生命周期的资源都注册进 `context.lifecycle`（一个 `DisposeStack`）**，generation 结束时统一反注册。
 
-跨模块共享的代级状态用 `createGenerationStore`，它是模块级单例的代安全替代品：
-
-```ts
-import { createGenerationStore } from 'zhin.js';
-
-const dbStore = createGenerationStore<Database>('my-plugin.db');
-
-// setup 中：发布本代的值，lifecycle 销毁时自动反注册
-export default definePlugin({
-  name: 'my-plugin',
-  setup(context) {
-    const db = openDatabase(context.config.get());
-    context.lifecycle.add(() => db.close());
-    dbStore.provide(context, db);
-  },
-});
-
-// 运行时任意模块：永远拿到当前活代的值
-const db = dbStore.use();      // 无活值时抛出带 store 名的错误
-const maybe = dbStore.tryUse(); // 或无活值时返回 undefined
-```
-
-provide 的值构成栈：最新活注册胜出；所属代结束、注册被 `lifecycle` 移除后，自动重新暴露上一代的值。结构上杜绝了"拿着已销毁代的引用继续跑"的可能。
+跨模块共享的代级状态必须作为 snapshot Resource 提供，并由一次 operation 持有的
+`GenerationView` 解析。禁止模块级 latest-value stack、`createGenerationStore` 或任何
+“当前活代”查询；它们既无法隔离多个 Root，也会让 shadow candidate 在 commit 前可见。

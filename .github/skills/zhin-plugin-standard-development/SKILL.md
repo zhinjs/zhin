@@ -159,7 +159,7 @@ Host（database / schedule / outbound / agentTools）一律可选：`has(token)`
 - 不要绕过 `Message.$reply` / `Adapter.sendMessage` 发送链
 - 不要把适配器协议写进普通插件
 - 不要无复杂度时拆大量空目录
-- 不要裸模块级单例悬挂（用 `createGenerationStore` / resources）
+- 代级状态只通过 snapshot resources / 当前 operation 的 Generation View 解析；禁止裸模块级单例或 `createGenerationStore`
 
 ## 输出要求
 

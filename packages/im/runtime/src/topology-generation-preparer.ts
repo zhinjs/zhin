@@ -30,9 +30,10 @@ import {
   type RootResourceInstaller,
 } from './plugin-scope-assembler.js';
 import type { PluginGraphNode, ProjectGraph } from './project-graph.js';
-import type {
-  PreparedRuntimeGeneration,
-  RuntimeGenerationModel,
+import {
+  prepareRuntimeGeneration,
+  type PreparedRuntimeGeneration,
+  type RuntimeGenerationModel,
 } from './runtime-generation.js';
 import { SourceOwnershipIndex } from './source-ownership.js';
 import {
@@ -180,8 +181,8 @@ export class TopologyGenerationPreparer {
         replacements,
         projectionDisposers,
       );
-      return {
-        generation: {
+      return prepareRuntimeGeneration(
+        {
           snapshot: projected.state,
           dispose: () => assets.dispose(),
           handoff: composeGenerationHandoffs(
@@ -190,7 +191,7 @@ export class TopologyGenerationPreparer {
           ),
         },
         ownership,
-        model: {
+        {
           graph: this.graph,
           providers: featureTopology.providers,
           rootsByFeature: featureTopology.rootsByFeature,
@@ -198,7 +199,7 @@ export class TopologyGenerationPreparer {
           scopes: new Map(plugins.scopes),
           assets,
         },
-      };
+      );
     } catch (error) {
       await rollback(
         plugins.createdScopeDisposers().map(([, dispose]) => dispose),

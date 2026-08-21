@@ -9,9 +9,10 @@ import { FeatureDiscovery } from '@zhin.js/feature-kit';
 import { FeatureProjector, composeGenerationHandoffs } from './feature-projector.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import { NodeDiscoveryHost } from './node-discovery-host.js';
-import type {
-  PreparedRuntimeGeneration,
-  RuntimeGenerationModel,
+import {
+  prepareRuntimeGeneration,
+  type PreparedRuntimeGeneration,
+  type RuntimeGenerationModel,
 } from './runtime-generation.js';
 import { SourceOwnershipIndex } from './source-ownership.js';
 import {
@@ -79,15 +80,15 @@ export class SlotGenerationPreparer {
         selectedByFeature.keys(),
         projected.disposers,
       );
-      return {
-        generation: {
+      return prepareRuntimeGeneration(
+        {
           snapshot: projected.state,
           dispose: () => assets.dispose(),
           handoff: composeGenerationHandoffs(projected.handoff),
         },
         ownership,
-        model: { ...this.model, assets },
-      };
+        { ...this.model, assets },
+      );
     } catch (error) {
       await disposeProjections(projected.disposers.values(), error);
       throw error;

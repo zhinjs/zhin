@@ -21,9 +21,10 @@ import {
   type RootResourceInstaller,
 } from './plugin-scope-assembler.js';
 import type { PluginGraphNode, ProjectGraph } from './project-graph.js';
-import type {
-  PreparedRuntimeGeneration,
-  RuntimeGenerationModel,
+import {
+  prepareRuntimeGeneration,
+  type PreparedRuntimeGeneration,
+  type RuntimeGenerationModel,
 } from './runtime-generation.js';
 import { SourceOwnershipIndex } from './source-ownership.js';
 import {
@@ -136,8 +137,8 @@ export class SubtreeGenerationPreparer {
         replacements,
         projectionDisposers,
       );
-      return {
-        generation: {
+      return prepareRuntimeGeneration(
+        {
           snapshot: projected.state,
           dispose: () => assets.dispose(),
           handoff: composeGenerationHandoffs(
@@ -146,13 +147,13 @@ export class SubtreeGenerationPreparer {
           ),
         },
         ownership,
-        model: {
+        {
           ...this.model,
           graph: this.graph,
           scopes: new Map(plugins.scopes),
           assets,
         },
-      };
+      );
     } catch (error) {
       await rollback(
         plugins.createdScopeDisposers().map(([, dispose]) => dispose),

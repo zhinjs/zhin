@@ -56,7 +56,7 @@ export default definePlugin({ name: 'my-plugin', setup() {} })
 ### 2. 生命周期与资源
 
 - 清理走 `context.lifecycle.add` 或 `setup` 返回 disposer
-- 共享连接/DB 用 `context.resources.provide`，禁止裸模块级单例（优先 `createGenerationStore`）
+- 共享连接/DB 用 `context.resources.provide`，禁止裸模块级单例或 `createGenerationStore`
 - Host token 先 `has` 再 `use`（精简安装下可选）
 
 ### 3. 发送与安全

@@ -2,6 +2,7 @@ import type { PluginId } from './identity.js';
 import { GenerationCompensationError } from './handoff.js';
 import {
   SnapshotStore,
+  type CommittedGeneration,
   type PreparedGeneration,
   type RuntimeSnapshot,
   type SnapshotLease,
@@ -10,20 +11,22 @@ import {
 } from './snapshot.js';
 
 export type RootState = 'idle' | 'running' | 'stopping' | 'stopped' | 'failed';
-export type PrepareGeneration = (
+export type PrepareGeneration<TState = undefined> = (
   current: RuntimeSnapshot,
   signal: AbortSignal,
-) => PreparedGeneration | Promise<PreparedGeneration>;
-export type PrepareTransaction = (
+) => PreparedGeneration<TState> | Promise<PreparedGeneration<TState>>;
+export type PrepareTransaction<TState = undefined> = (
   current: RuntimeSnapshot,
   signal: AbortSignal,
-) => PreparedGeneration | undefined | Promise<PreparedGeneration | undefined>;
+) => PreparedGeneration<TState> | undefined | Promise<PreparedGeneration<TState> | undefined>;
 export type ControlErrorHandler = (error: unknown) => void;
-export interface GenerationCommitEvent {
-  readonly previous: RuntimeSnapshot;
-  readonly current: RuntimeSnapshot;
+export interface GenerationCommitEvent<TState = undefined> {
+  readonly previous: CommittedGeneration<TState>;
+  readonly current: CommittedGeneration<TState>;
 }
-export type GenerationCommitListener = (event: GenerationCommitEvent) => void;
+export type GenerationCommitListener<TState = undefined> = (
+  event: GenerationCommitEvent<TState>
+) => void | Promise<void>;
 
 export class RootIntegrityError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -32,21 +35,28 @@ export class RootIntegrityError extends Error {
   }
 }
 
-export class RootController {
+export class RootController<TState = undefined> {
   readonly snapshots: SnapshotReader;
-  readonly #snapshotStore: SnapshotStore;
+  readonly #snapshotStore: SnapshotStore<TState>;
   #state: RootState = 'idle';
   #tail: Promise<unknown> = Promise.resolve();
   #stopResult?: Promise<void>;
   #stopRequested = false;
   #activeTransaction?: AbortController;
-  readonly #generationCommitListeners = new Set<GenerationCommitListener>();
+  readonly #generationCommitListeners = new Set<GenerationCommitListener<TState>>();
 
   constructor(
     initial: SnapshotState,
     private readonly onControlError: ControlErrorHandler = () => undefined,
+    ...state: [TState] extends [undefined]
+      ? [initialState?: undefined]
+      : [initialState: TState]
   ) {
-    this.#snapshotStore = new SnapshotStore(initial, (error) => this.#failIntegrity(error));
+    this.#snapshotStore = new SnapshotStore(
+      initial,
+      (error) => this.#failIntegrity(error),
+      ...state,
+    );
     const store = this.#snapshotStore;
     this.snapshots = Object.freeze({
       acquire: () => {
@@ -71,20 +81,24 @@ export class RootController {
     return this.#snapshotStore.current;
   }
 
+  get committed(): CommittedGeneration<TState> {
+    return this.#snapshotStore.committed;
+  }
+
   /** Observe successful generation commits, including the initial start. */
-  onGenerationCommit(listener: GenerationCommitListener): () => void {
+  onGenerationCommit(listener: GenerationCommitListener<TState>): () => void {
     this.#generationCommitListeners.add(listener);
     return () => {
       this.#generationCommitListeners.delete(listener);
     };
   }
 
-  start(prepare: PrepareGeneration): Promise<RuntimeSnapshot> {
+  start(prepare: PrepareGeneration<TState>): Promise<RuntimeSnapshot> {
     return this.#enqueue(async () => {
       if (this.#state !== 'idle') {
         throw new Error(`Cannot start RootController from ${this.#state}`);
       }
-      let prepared: PreparedGeneration | undefined;
+      let prepared: PreparedGeneration<TState> | undefined;
       let activated = false;
       const transaction = new AbortController();
       this.#activeTransaction = transaction;
@@ -108,13 +122,13 @@ export class RootController {
     });
   }
 
-  transact(prepare: PrepareTransaction): Promise<RuntimeSnapshot> {
+  transact(prepare: PrepareTransaction<TState>): Promise<RuntimeSnapshot> {
     return this.#enqueue(async () => {
       if (this.#state !== 'running') {
         throw new Error(`Cannot transact RootController from ${this.#state}`);
       }
       const previous = this.snapshots.acquire();
-      let prepared: PreparedGeneration | undefined;
+      let prepared: PreparedGeneration<TState> | undefined;
       let activated = false;
       const transaction = new AbortController();
       this.#activeTransaction = transaction;
@@ -140,7 +154,7 @@ export class RootController {
 
   reload(
     _target: PluginId | string,
-    prepare: PrepareTransaction,
+    prepare: PrepareTransaction<TState>,
   ): Promise<RuntimeSnapshot> {
     return this.transact(prepare);
   }
@@ -173,22 +187,24 @@ export class RootController {
 
   #commitGeneration(
     expectedGeneration: number,
-    prepared: PreparedGeneration,
+    prepared: PreparedGeneration<TState>,
   ): RuntimeSnapshot {
-    const previous = this.#snapshotStore.current;
-    const snapshot = this.#snapshotStore.commit(expectedGeneration, prepared);
-    const event = Object.freeze({ previous, current: snapshot });
+    const previous = this.#snapshotStore.committed;
+    const current = this.#snapshotStore.commit(expectedGeneration, prepared);
+    const event = Object.freeze({ previous, current });
     const listeners = [...this.#generationCommitListeners];
     queueMicrotask(() => {
       for (const listener of listeners) {
         try {
-          listener(event);
+          void Promise.resolve(listener(event)).catch((error) => {
+            this.#reportControlError(error);
+          });
         } catch (error) {
           this.#reportControlError(error);
         }
       }
     });
-    return snapshot;
+    return current.snapshot;
   }
 
   #reportControlError(error: unknown): void {
@@ -200,7 +216,7 @@ export class RootController {
   }
 
   async #rollback(
-    prepared: PreparedGeneration | undefined,
+    prepared: PreparedGeneration<TState> | undefined,
     state: { readonly activated?: boolean },
     transactionError: unknown,
   ): Promise<never> {
