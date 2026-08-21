@@ -30,10 +30,8 @@ import {
   toolFeatureId,
 } from '@zhin.js/tool';
 import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
-import { createMemoryContextRepository } from '@zhin.js/ai';
+import { compactAgentMessages, getLlmTransportModel } from '@zhin.js/ai';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
-import { resolveIngressUserMessage } from '../../src/session/turn-ingress-session.js';
-import { PromptController } from '../../src/turn/prompt-controller.js';
 import {
   AgentRuntime,
   AgentTurnCoordinator,
@@ -46,6 +44,12 @@ import {
 } from '../../src/plugin-runtime/index.js';
 import { turnToolExecutionAuthority } from '../../src/tool/turn-tool-runtime.js';
 import { getAgentTurnConfiguration } from '../../src/turn/agent-turn-context.js';
+import { createFullAgentTurnEngine } from '../../src/plugin-runtime/full-agent-turn-engine.js';
+import { assistantTextReply, assistantToolCallReply, wireMockLlmApi } from '../helpers/mock-llm-api.js';
+import { ZhinAgent } from '../../src/zhin-agent/index.js';
+import { asPrivate } from '../../src/internal/as-private.js';
+import { AgentCore } from '../../src/core/agent-core.js';
+import { DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps } from '../../src/core/compose-deps.js';
 
 describe('Agent CapabilityIngress', () => {
   it('admits supersede in arrival order and aborts the active operation before replacement starts', async () => {
@@ -317,46 +321,47 @@ describe('Agent CapabilityIngress', () => {
 
   it('routes Alice and Bob through runtime ingress, control arbitration, persistence, and journals', async () => {
     const fixture = await createFixture();
-    const { repository } = createMemoryContextRepository();
-    const controller = new PromptController('one-at-a-time', 'one-at-a-time');
     let release!: () => void;
     let activeStarted!: () => void;
-    const gate = new Promise<void>((resolve) => { release = resolve; });
     const started = new Promise<void>((resolve) => { activeStarted = resolve; });
-    const store = new SnapshotStore(stateWithEngine(fixture.snapshot, async function* (context) {
-      const ingressUser = resolveIngressUserMessage(context.turn);
-      const stream = controller.scheduleStream({
-        turnId: context.turn.identity.turnId,
-        intent: context.turn.intent,
-        principal: context.turn.principal,
-        onAdmitted: context.admit,
-        sessionKey: context.turn.session.key,
-        sessionId: 'shared-session',
-        userMessages: [ingressUser.llmMessage],
-        execute: async function* (initial, hooks) {
-          activeStarted();
-          await gate;
-          const steering = await hooks.getSteeringMessages();
-          await repository.appendMessages('shared-session', [...initial, ...steering], {
-            messageExtras: [ingressUser.extra, ...steering.map(() => undefined)],
-          });
-          yield terminalEvent();
-          return {
-            reply: '',
-            usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
-            path: 'chat' as const,
-            iterations: 1,
-            model: 'fixture',
-            toolCalls: [],
-          };
-        },
-      });
-      while (true) {
-        const step = await stream.next();
-        if (step.done) return { project: async () => undefined };
-        yield step.value;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const llm = wireMockLlmApi({ name: 'shared-session', models: ['model'] });
+    const agent = new ZhinAgent(llm.provider, {
+      maxIterations: 5,
+      toolExecution: 'sequential',
+      deferredTools: { maxLoadedPerSession: 8, alwaysLoadedTools: ['child__lookup'] },
+    });
+    agent.activeBinding = {
+      name: 'zhin', providerAlias: 'shared-session', model: 'model', mcpServers: [],
+    };
+    agent.markMemoryPersistenceReady();
+    const host = asPrivate(agent);
+    llm.respondWith(async (modelContext) => {
+      const toolResults = modelContext.messages.filter((message) => message.role === 'toolResult');
+      const hasBob = modelContext.messages.some((message) => (
+        message.role === 'user' && 'actor' in message && message.actor?.subjectId === 'bob-id'
+      ));
+      if (toolResults.length === 0) {
+        activeStarted();
+        await gate;
+        return assistantToolCallReply([{
+          id: 'call-alice', name: 'child__lookup', arguments: { value: 'alice' },
+        }]);
       }
-    }));
+      if (hasBob && toolResults.length === 1) {
+        return assistantToolCallReply([{
+          id: 'call-bob', name: 'child__lookup', arguments: { value: 'bob' },
+        }]);
+      }
+      return assistantTextReply('done');
+    });
+    const engine = createFullAgentTurnEngine({
+      host,
+      core: new AgentCore(DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps()),
+      sessionSystem: host.sessionSystem,
+      contextSystem: host.contextSystem,
+    });
+    const store = new SnapshotStore(stateWithEngine(fixture.snapshot, (context) => engine.run(context)));
     const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() });
     runtime.attach(store);
     const request = (
@@ -383,25 +388,67 @@ describe('Agent CapabilityIngress', () => {
       signal: new AbortController().signal,
       ports: {},
     });
+    const sharedSelection = {
+      binding: {
+        name: 'zhin', providerAlias: 'shared-session', model: 'model', mcpServers: [],
+      },
+      mcpServers: [],
+    };
 
     const alice = runtime.execute(fixture.child, request(
       'alice-id', 'Alice', '先不要改数据库', 'turn-alice', { kind: 'new' },
-    ), selection());
-    await started;
+    ), sharedSelection);
+    await Promise.race([
+      started,
+      alice.then((outcome) => {
+        throw new Error(`Alice turn completed before reaching the model: ${JSON.stringify(outcome)}`);
+      }),
+    ]);
     const bob = runtime.execute(fixture.child, request(
       'bob-id', 'Bob', '记得不能使用 Kubernetes', 'turn-bob', {
         kind: 'steer', targetTurnId: 'turn-alice', authorizedBy: 'product_policy',
       },
-    ), selection());
+    ), sharedSelection);
     await bob;
     release();
     await alice;
 
-    const restored = await repository.loadContext('shared-session');
-    expect(restored.messages).toMatchObject([
-      { role: 'user', actor: { subjectId: 'alice-id', displayName: 'Alice' } },
-      { role: 'user', actor: { subjectId: 'bob-id', displayName: 'Bob' } },
-    ]);
+    const session = await host.agentSessionStore.findActive('im:sandbox:main:group:team');
+    expect(session).toBeDefined();
+    const restored = await host.contextRepository.loadContext(session!.session_id);
+    expect(restored.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'user', actor: expect.objectContaining({ subjectId: 'alice-id', displayName: 'Alice' }) }),
+      expect.objectContaining({ role: 'user', actor: expect.objectContaining({ subjectId: 'bob-id', displayName: 'Bob' }) }),
+    ]));
+    llm.respondText('Alice 要求先不要改数据库；Bob 补充不能使用 Kubernetes。');
+    const compacted = await compactAgentMessages({
+      model: getLlmTransportModel('shared-session', 'model'),
+      messages: restored.messages,
+      keepRecentTokens: 1,
+      minKeepCount: 1,
+    });
+    const summaryPrompt = llm.calls.at(-1)?.context.messages
+      .filter((message) => message.role === 'user')
+      .flatMap((message) => message.content)
+      .filter((block) => block.type === 'text')
+      .map((block) => block.type === 'text' ? block.text : '')
+      .join('\n');
+    expect(summaryPrompt).toContain('[User:Alice id=alice-id');
+    expect(summaryPrompt).toContain('[User:Bob id=bob-id');
+    expect(compacted.summary).toContain('Alice');
+    expect(compacted.summary).toContain('Bob');
+    const bobToolEvent = fixture.journal.events.find((event) => event.data?.callId === 'call-bob');
+    expect(bobToolEvent)
+      .toMatchObject({
+        run: { turnId: 'turn-alice' },
+        data: {
+          principal: { subjectId: 'alice-id' },
+          causedBy: {
+            principal: { subjectId: 'bob-id' },
+            turn: { turnId: 'turn-bob', intent: 'steer', targetTurnId: 'turn-alice' },
+          },
+        },
+      });
     expect(fixture.journal.events.find((event) => (
       event.run.turnId === 'turn-bob' && event.terminal === 'completed'
     )))
@@ -414,6 +461,7 @@ describe('Agent CapabilityIngress', () => {
       });
     await fixture.mcp.stop();
     await store.close();
+    agent.dispose();
   });
 
   it('fails closed when the active generation has no Agent Turn Engine', async () => {

@@ -36,6 +36,7 @@ export function applyTurnContextToUserMessages(
       msg.media,
       msg.timestamp,
       msg.actor,
+      msg.cause,
     );
   });
 }

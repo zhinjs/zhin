@@ -121,15 +121,19 @@ describe('agentLoop', () => {
     const model = getLlmTransportModel('test', 'mock');
     let causedBy: unknown;
     for await (const _event of runLoop(
-      createUserMessage('tool:ping', undefined, 1, {
-        subjectId: 'bob-id', displayName: 'Bob', roles: ['trusted'], scope: 'group',
-      }),
+      createUserMessage(
+        'tool:ping',
+        undefined,
+        1,
+        { subjectId: 'bob-id', displayName: 'Bob', roles: ['trusted'], scope: 'group' },
+        { turnId: 'turn-bob', intent: 'steer', targetTurnId: 'turn-alice' },
+      ),
       agentContextFrom({ systemPrompt: 'sys', messages: [], tools: [echoTool] }),
       {
         model,
         maxIterations: 4,
         executeTool: async (call, _tools, _signal, context) => {
-          causedBy = context?.actor;
+          causedBy = context;
           return {
             role: 'toolResult',
             toolCallId: call.id,
@@ -145,7 +149,10 @@ describe('agentLoop', () => {
     }
 
     expect(causedBy).toEqual({
-      subjectId: 'bob-id', displayName: 'Bob', roles: ['trusted'], scope: 'group',
+      principal: {
+        subjectId: 'bob-id', displayName: 'Bob', roles: ['trusted'], scope: 'group',
+      },
+      turn: { turnId: 'turn-bob', intent: 'steer', targetTurnId: 'turn-alice' },
     });
   });
 });

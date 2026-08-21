@@ -120,6 +120,7 @@ function cloneUserMessageWithText(message: UserMessage, text: string): UserMessa
     message.media,
     message.timestamp,
     message.actor,
+    message.cause,
   );
 }
 

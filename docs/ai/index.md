@@ -42,17 +42,20 @@ ai:
       model: openrouter/free
   mcpServers: []    # MCP client 连接（可选）
   agent:
-    sharedSession:
-      overlapPolicy: supersede # 默认；可设为 new，让普通重叠消息 FIFO
+    inboundQueue:
+      groupMode: supersede # 默认；可设为 fifo，让普通重叠消息按到达顺序等待
   trigger: {}       # 触发规则（可选）
   access: {}        # 访问门控（可选）
 ```
 
 启动时会对 `ai:` 做 **soft-prune**：凭据展开后为空的 provider 被剔除（仅记 debug 日志），绑定到被剔除 provider 的 agent 一并跳过；`zhin` 绑定缺失时 Agent Host 不装配，不影响 IM 启动。
 
-`ai.agent.sharedSession.overlapPolicy` 只决定没有显式 Turn Intent 的普通入站如何影响
-同 Session 的 active turn：`supersede` 保持兼容的抢占行为，`new` 按到达顺序等待。
+`ai.agent.inboundQueue.groupMode` 同时是 canonical Turn Intent 的默认策略：`supersede`
+保持兼容的抢占行为，`fifo` 将普通入站解析为 `new` 并按到达顺序等待。
 `steer`、`follow_up` 与 `observe` 仍由 adapter、command 或其他产品策略显式解析。
+跨参与者的 `steer` / `follow_up` 授权只能由 Host 的可信 `resolveTurnIntent` 策略产生，消息
+metadata 不能自行声明授权。工具继续受 active turn 的 authority 约束，journal 会另外记录
+触发控制的 principal 与 Turn ID。
 
 ## ai.providers
 

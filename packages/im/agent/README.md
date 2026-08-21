@@ -68,14 +68,17 @@ turn either condition into an ordinary assistant reply.
 
 `TurnRequest.intent` 明确描述一条入站消息如何影响同 session 的 active turn：
 `supersede`、`steer`、`follow_up`、`new`（FIFO）或 `observe`。产品入口应显式解析 intent；
-为兼容现有行为，省略时以及普通 IM 入站默认解析为 `supersede`。可用
-`ai.agent.sharedSession.overlapPolicy: new` 将普通重叠消息改为 FIFO，但 Agent Runtime
+为兼容现有行为，省略时以及普通 IM 入站默认解析为 `supersede`。现有
+`ai.agent.inboundQueue.groupMode: fifo` 会将普通重叠消息解析为 `new`（FIFO），但 Agent Runtime
 不会自动猜测多人共识。
 `steer` / `follow_up` 可用 `targetTurnId` 精确指向 active turn；intent 由 adapter、
-command 或产品策略解析，Agent Runtime 不推断多人共识。跨 principal 控制必须显式设置
-`authorizedBy: 'product_policy'`，避免未授权参与者继承 active turn 的工具 authority。
+command 或产品策略解析，Agent Runtime 不推断多人共识。跨 principal 的 `steer` / `follow_up`
+必须由 Host 的可信产品策略显式设置 `authorizedBy: 'product_policy'`，避免未授权参与者继承
+active turn 的工具 authority。
+该标记只能由 Host 的 `resolveTurnIntent` 回调产生；入站消息 metadata 自行声明会被拒绝。
+授权表示产品策略明确允许控制 active turn，工具仍按 active turn 的 authority 执行。
 Tool Journal 同时记录 active-turn `principal` 与最近参与者消息的 `causedBy`，用于区分
-“谁拥有该 Turn 的执行 authority”和“谁的 steer/follow-up 导致了该工具调用”。
+“谁拥有该 Turn 的执行 authority”和“哪个参与者 Turn 导致了该工具调用”。
 
 Composition root 为每个 generation 创建独立的 `ScheduleManager`，并将它传给
 `createScheduleTools(manager)`；返回的 Tool definitions 闭包绑定该 manager，随 snapshot

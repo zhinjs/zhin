@@ -425,10 +425,11 @@ export interface AIConfig {
   }>;
   /** Agent 工具开关与执行安全 */
   agent?: {
-    /** Shared conversation arbitration policy. */
-    sharedSession?: {
-      /** Ordinary overlapping ingress defaults to supersede; new selects FIFO. */
-      overlapPolicy?: 'supersede' | 'new';
+    /** Existing same-session ingress queue policy, reused by canonical Turn Intent resolution. */
+    inboundQueue?: {
+      groupMode?: 'supersede' | 'fifo';
+      ttlMs?: number;
+      coalesceWindowMs?: number;
     };
     /** bash 执行策略：deny=禁止执行，allowlist=仅允许列表内命令，full=不限制 */
     execSecurity?: 'deny' | 'allowlist' | 'full';

@@ -70,6 +70,10 @@ describe('TurnIngress session projection', () => {
       roles: ['trusted', 'admin'],
       scope: 'group',
     });
+    expect(result.llmMessage.cause).toEqual({
+      turnId: 'turn',
+      intent: 'new',
+    });
     expect(text?.type === 'text' && text.text).toContain('previous answer');
     expect(text?.type === 'text' && text.text).toContain('hello');
   });

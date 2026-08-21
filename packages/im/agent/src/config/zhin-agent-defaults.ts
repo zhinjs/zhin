@@ -61,7 +61,6 @@ export const DEFAULT_CONFIG = {
   platformPromptMaxChars: 4096,
   steeringMode: DEFAULT_STEERING_MODE,
   followUpMode: DEFAULT_FOLLOW_UP_MODE,
-  sharedSession: { overlapPolicy: 'supersede' },
   policyDenialStopAfter: 2,
   deferredAutoContinue: false,
   deferredAutoContinueMaxDepth: 8,

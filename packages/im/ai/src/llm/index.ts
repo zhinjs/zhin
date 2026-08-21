@@ -22,6 +22,7 @@ export type { TokenUsage } from './types/agent-message.js';
 export type {
   AgentMessage,
   ConversationActor,
+  ConversationTurnCause,
   UserMessage,
   AssistantMessage,
   ToolResultMessage,

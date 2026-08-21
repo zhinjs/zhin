@@ -25,7 +25,10 @@ describe('mapTurnEventToAgentStreamEvents', () => {
   });
 
   it('maps tool_call and tool_result', () => {
-    const causedBy = { subjectId: 'bob-id', displayName: 'Bob', roles: ['user'] };
+    const causedBy = {
+      principal: { subjectId: 'bob-id', displayName: 'Bob', roles: ['user'] },
+      turn: { turnId: 'turn-bob', intent: 'steer' as const, targetTurnId: 'turn-alice' },
+    };
     const call = mapTurnEventToAgentStreamEvents(
       { type: 'tool_call', toolName: 'bash', args: { command: 'ls' }, toolUseId: 'c1', causedBy },
       ctx,

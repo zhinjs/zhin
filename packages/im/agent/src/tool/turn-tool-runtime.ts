@@ -8,6 +8,10 @@ import type { ToolExecutionAuthority } from '../core/tool-execution-authority.js
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
 import { NetworkAccessDeniedError } from '../security/network-policy.js';
 
+type ToolJournalEvent = Extract<import('../event/turn-event.js').TurnEvent, {
+  type: 'tool_call' | 'tool_result' | 'tool_denied' | 'tool_failed' | 'tool_cancelled';
+}>;
+
 export type TurnToolOutcome =
   | Readonly<{ status: 'completed'; output: unknown; durationMs: number }>
   | Readonly<{ status: 'denied'; policy: string; reason: string }>
@@ -32,9 +36,9 @@ export class TurnToolRuntime {
     cause?: ToolExecutionCause,
   ): Promise<TurnToolOutcome> {
     const tool = this.#tools.get(name);
-    const causedBy = freezeCauseActor(cause);
+    const causedBy = freezeToolExecutionCause(cause);
     if (!tool) return this.#deny(name, toolUseId, 'capability', `Unknown Tool capability: ${name}`, causedBy);
-    await this.#append({ type: 'tool_call', toolName: name, args: { ...input }, toolUseId, ...(causedBy ? { causedBy } : {}) });
+    await this.#append({ type: 'tool_call', toolName: name, args: { ...input }, toolUseId }, causedBy);
     if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
     const decision = await runTurnToolPolicies({ turn: this.turn, tool, input });
     if (decision.status === 'denied') {
@@ -59,7 +63,7 @@ export class TurnToolRuntime {
       const output = await tool.execute(decision.input, toolInvocationFromTurn(this.turn));
       const durationMs = Date.now() - startedAt;
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, durationMs, causedBy);
-      await this.#append({ type: 'tool_result', toolName: name, output, durationMs, toolUseId, ...(causedBy ? { causedBy } : {}) });
+      await this.#append({ type: 'tool_result', toolName: name, output, durationMs, toolUseId }, causedBy);
       return Object.freeze({ status: 'completed', output, durationMs });
     } catch (error) {
       if (error instanceof TurnJournalCommitError) throw error;
@@ -69,27 +73,27 @@ export class TurnToolRuntime {
         return this.#deny(name, toolUseId, error.policy, error.message, causedBy);
       }
       const message = error instanceof Error ? error.message : String(error);
-      await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: message, durationMs, ...(causedBy ? { causedBy } : {}) });
+      await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: message, durationMs }, causedBy);
       return Object.freeze({ status: 'failed', error: message, retryable: false });
     }
   }
 
-  async #deny(toolName: string, toolUseId: string, policy: string, reason: string, causedBy?: import('@zhin.js/ai').ConversationActor): Promise<TurnToolOutcome> {
-    await this.#append({ type: 'tool_denied', toolName, toolUseId, policy, reason, ...(causedBy ? { causedBy } : {}) });
+  async #deny(toolName: string, toolUseId: string, policy: string, reason: string, causedBy?: ToolExecutionCause): Promise<TurnToolOutcome> {
+    await this.#append({ type: 'tool_denied', toolName, toolUseId, policy, reason }, causedBy);
     return Object.freeze({ status: 'denied', policy, reason });
   }
 
-  async #cancel(toolName: string, toolUseId: string, durationMs: number, causedBy?: import('@zhin.js/ai').ConversationActor): Promise<TurnToolOutcome> {
+  async #cancel(toolName: string, toolUseId: string, durationMs: number, causedBy?: ToolExecutionCause): Promise<TurnToolOutcome> {
     const reason = this.turn.signal.reason instanceof Error
       ? this.turn.signal.reason.message
       : String(this.turn.signal.reason ?? 'turn cancelled');
-    await this.#append({ type: 'tool_cancelled', toolName, toolUseId, reason, durationMs, ...(causedBy ? { causedBy } : {}) });
+    await this.#append({ type: 'tool_cancelled', toolName, toolUseId, reason, durationMs }, causedBy);
     return Object.freeze({ status: 'cancelled', reason });
   }
 
-  async #append(event: import('../event/turn-event.js').TurnEvent): Promise<void> {
+  async #append(event: ToolJournalEvent, causedBy?: ToolExecutionCause): Promise<void> {
     try {
-      await this.turn.ports.journal.append(event);
+      await this.turn.ports.journal.append(causedBy ? { ...event, causedBy } : event);
     } catch (error) {
       throw new TurnJournalCommitError(error);
     }
@@ -104,10 +108,15 @@ export function turnToolExecutionAuthority(runtime: TurnToolRuntime): ToolExecut
   });
 }
 
-function freezeCauseActor(cause?: ToolExecutionCause): import('@zhin.js/ai').ConversationActor | undefined {
-  if (!cause?.actor) return undefined;
+function freezeToolExecutionCause(cause?: ToolExecutionCause): ToolExecutionCause | undefined {
+  if (!cause?.principal && !cause?.turn) return undefined;
   return Object.freeze({
-    ...cause.actor,
-    ...(cause.actor.roles ? { roles: Object.freeze([...cause.actor.roles]) } : {}),
+    ...(cause.principal ? {
+      principal: Object.freeze({
+        ...cause.principal,
+        ...(cause.principal.roles ? { roles: Object.freeze([...cause.principal.roles]) } : {}),
+      }),
+    } : {}),
+    ...(cause.turn ? { turn: Object.freeze({ ...cause.turn }) } : {}),
   });
 }

@@ -3,7 +3,7 @@
  *
  * Consumed by processMessageStream() callers; produced by the turn pipeline.
  */
-import type { ConversationActor, OutputElement, Usage } from '@zhin.js/ai';
+import type { OutputElement, ToolExecutionCause, Usage } from '@zhin.js/ai';
 
 export interface TurnUsage {
   promptTokens: number;
@@ -67,7 +67,7 @@ export interface ToolCallEvent {
   toolName: string;
   args: Record<string, unknown>;
   toolUseId: string;
-  causedBy?: ConversationActor;
+  causedBy?: ToolExecutionCause;
 }
 
 export interface ToolResultEvent {
@@ -76,7 +76,7 @@ export interface ToolResultEvent {
   output: unknown;
   durationMs: number;
   toolUseId: string;
-  causedBy?: ConversationActor;
+  causedBy?: ToolExecutionCause;
 }
 
 export interface ToolDeniedEvent {
@@ -85,7 +85,7 @@ export interface ToolDeniedEvent {
   toolUseId: string;
   policy: string;
   reason: string;
-  causedBy?: ConversationActor;
+  causedBy?: ToolExecutionCause;
 }
 
 export interface ToolFailedEvent {
@@ -94,7 +94,7 @@ export interface ToolFailedEvent {
   toolUseId: string;
   error: string;
   durationMs: number;
-  causedBy?: ConversationActor;
+  causedBy?: ToolExecutionCause;
 }
 
 export interface ToolCancelledEvent {
@@ -103,7 +103,7 @@ export interface ToolCancelledEvent {
   toolUseId: string;
   reason: string;
   durationMs: number;
-  causedBy?: ConversationActor;
+  causedBy?: ToolExecutionCause;
 }
 
 export interface ThinkingEvent {

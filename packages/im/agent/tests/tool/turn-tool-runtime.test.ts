@@ -315,17 +315,24 @@ describe('TurnToolRuntime', () => {
     const runtime = new TurnToolRuntime(turn, [tool(execute, 'never')]);
 
     await runtime.execute('danger', {}, 'call-bob', {
-      actor: { subjectId: 'bob-id', displayName: 'Bob', roles: ['trusted'], scope: 'group' },
+      principal: { subjectId: 'bob-id', displayName: 'Bob', roles: ['trusted'], scope: 'group' },
+      turn: { turnId: 'turn-bob', intent: 'steer', targetTurnId: 'turn-alice' },
     });
 
     expect(events).toEqual([
       expect.objectContaining({
         type: 'tool_call',
-        causedBy: expect.objectContaining({ subjectId: 'bob-id', displayName: 'Bob' }),
+        causedBy: expect.objectContaining({
+          principal: expect.objectContaining({ subjectId: 'bob-id', displayName: 'Bob' }),
+          turn: { turnId: 'turn-bob', intent: 'steer', targetTurnId: 'turn-alice' },
+        }),
       }),
       expect.objectContaining({
         type: 'tool_result',
-        causedBy: expect.objectContaining({ subjectId: 'bob-id', displayName: 'Bob' }),
+        causedBy: expect.objectContaining({
+          principal: expect.objectContaining({ subjectId: 'bob-id', displayName: 'Bob' }),
+          turn: { turnId: 'turn-bob', intent: 'steer', targetTurnId: 'turn-alice' },
+        }),
       }),
     ]);
   });

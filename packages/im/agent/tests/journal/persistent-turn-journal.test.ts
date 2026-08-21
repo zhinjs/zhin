@@ -35,7 +35,10 @@ describe('PersistentTurnJournal', () => {
 
     await journal.append({
       type: 'tool_call', toolName: 'deploy', args: {}, toolUseId: 'call-1',
-      causedBy: { subjectId: 'alice-id', displayName: 'Alice', roles: ['user'] },
+      causedBy: {
+        principal: { subjectId: 'alice-id', displayName: 'Alice', roles: ['user'] },
+        turn: { turnId: 'turn-alice', intent: 'steer', targetTurnId: 'turn-bob' },
+      },
     });
     await journal.append({
       type: 'tool_result', toolName: 'deploy', output: 'ok', durationMs: 2, toolUseId: 'call-1',
@@ -47,7 +50,10 @@ describe('PersistentTurnJournal', () => {
       data: {
         callId: 'call-1',
         principal: { subjectId: 'bob-id', roles: ['trusted'] },
-        causedBy: { subjectId: 'alice-id', displayName: 'Alice' },
+        causedBy: {
+          principal: { subjectId: 'alice-id', displayName: 'Alice' },
+          turn: { turnId: 'turn-alice', intent: 'steer', targetTurnId: 'turn-bob' },
+        },
       },
     });
     expect(events[1]).toMatchObject({

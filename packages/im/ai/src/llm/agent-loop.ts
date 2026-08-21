@@ -1,5 +1,5 @@
 import type { Context } from './types/context.js';
-import { type AgentMessage, type AssistantMessage, type ConversationActor, type UserMessage, EMPTY_TOKEN_USAGE, isLlmAgentMessage } from './types/agent-message.js';
+import { type AgentMessage, type AssistantMessage, type ConversationActor, type ConversationTurnCause, type UserMessage, EMPTY_TOKEN_USAGE, isLlmAgentMessage } from './types/agent-message.js';
 import type { AgentEvent, ThinkingLevel, ToolExecutionMode } from './types/agent-event.js';
 import type { Model } from './types/model.js';
 import type { LlmTool, ParsedToolCall } from './types/tool.js';
@@ -26,7 +26,8 @@ export interface AfterToolCallContext {
 
 /** Participant whose latest user message causally preceded a tool execution. */
 export interface ToolExecutionCause {
-  actor?: ConversationActor;
+  readonly principal?: ConversationActor;
+  readonly turn?: ConversationTurnCause;
 }
 
 export interface AgentLoopConfig {
@@ -205,7 +206,11 @@ function latestToolExecutionCause(messages: readonly AgentMessage[]): ToolExecut
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (!message || !isLlmAgentMessage(message) || message.role !== 'user') continue;
-    return message.actor ? { actor: message.actor } : undefined;
+    if (!message.actor && !message.cause) return undefined;
+    return {
+      ...(message.actor ? { principal: message.actor } : {}),
+      ...(message.cause ? { turn: message.cause } : {}),
+    };
   }
   return undefined;
 }

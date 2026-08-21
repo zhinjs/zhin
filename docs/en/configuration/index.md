@@ -230,8 +230,8 @@ ai:
     groups: []
     denyMessage: ...
   agent:                   # Tool execution security
-    sharedSession:
-      overlapPolicy: supersede # supersede (default) | new (FIFO)
+    inboundQueue:
+      groupMode: supersede # supersede (default) | fifo
     execSecurity: allowlist    # deny | allowlist | full
     execPreset: readonly       # readonly | network | development | custom
     execAllowlist: ["^ls ", "^cat "]

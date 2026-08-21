@@ -42,6 +42,10 @@ export function resolveIngressUserMessage(
       ...(turn.principal.displayName ? { displayName: turn.principal.displayName } : {}),
       roles: [...turn.principal.roles],
       ...(turn.origin.kind === 'im' ? { scope: turn.origin.scope } : {}),
+    }, {
+      turnId: turn.identity.turnId,
+      intent: turn.intent.kind,
+      ...(turn.intent.targetTurnId ? { targetTurnId: turn.intent.targetTurnId } : {}),
     }),
     inlinedContext
       ? (sender ? { sender } : undefined)

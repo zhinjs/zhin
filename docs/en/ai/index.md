@@ -42,18 +42,21 @@ ai:
       model: openrouter/free
   mcpServers: []    # MCP client connections (optional)
   agent:
-    sharedSession:
-      overlapPolicy: supersede # default; use new for FIFO overlap handling
+    inboundQueue:
+      groupMode: supersede # default; use fifo to wait in arrival order
   trigger: {}       # Trigger rules (optional)
   access: {}        # Access gating (optional)
 ```
 
 At startup, the `ai:` section undergoes **soft-prune**: providers whose credentials expand to empty are removed (logged at debug level only); agents bound to removed providers are skipped along with them. If the `zhin` binding is missing, the Agent Host is not assembled, but IM startup is unaffected.
 
-`ai.agent.sharedSession.overlapPolicy` only controls ordinary ingress without an
-explicit Turn Intent: `supersede` preserves replacement compatibility, while `new`
-waits in arrival order. Adapters, commands, or product policy still resolve
+`ai.agent.inboundQueue.groupMode` is also the default canonical Turn Intent policy:
+`supersede` preserves replacement compatibility, while `fifo` resolves ordinary
+ingress as `new` and waits in arrival order. Adapters, commands, or product policy still resolve
 `steer`, `follow_up`, and `observe` explicitly.
+Cross-participant `steer` and `follow_up` authorization may only come from the Host's trusted
+`resolveTurnIntent` policy; message metadata cannot self-assert it. Tools remain constrained by
+the active turn's authority, while the journal separately records the controlling principal and turn ID.
 
 ## ai.providers
 

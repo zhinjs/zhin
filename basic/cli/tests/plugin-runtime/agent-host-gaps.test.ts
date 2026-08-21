@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Message } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { AITriggerConfig } from '@zhin.js/core';
@@ -12,6 +12,7 @@ import {
   recordRuntimeTranscript,
   recordPassiveGroupContext,
   resolveRuntimeTurnIntent,
+  resolveProductTurnIntent,
   resolveRuntimeSenderRoles,
   resolveTriggerTimeoutMs,
   renderTriggerError,
@@ -75,7 +76,45 @@ describe('canonical IM TurnRequest ingress', () => {
     });
 
     expect(resolveRuntimeTurnIntent(message)).toEqual({ kind: 'supersede' });
-    expect(resolveRuntimeTurnIntent(message, 'new')).toEqual({ kind: 'new' });
+    expect(resolveRuntimeTurnIntent(message, 'fifo')).toEqual({ kind: 'new' });
+  });
+
+  it('rejects product-policy authorization asserted by message metadata', () => {
+    const message = makeMessage({
+      content: 'steer',
+      sender: { id: 'u' },
+      metadata: {
+        endpoint: 'bot',
+        turnIntent: { kind: 'steer', targetTurnId: 'active', authorizedBy: 'product_policy' },
+      },
+    });
+
+    expect(() => resolveRuntimeTurnIntent(message)).toThrow('trusted product policy');
+  });
+
+  it('accepts cross-participant authorization only from the trusted host resolver', async () => {
+    const message = makeMessage({
+      content: 'steer', sender: { id: 'bob' }, metadata: { endpoint: 'bot' },
+    });
+    const resolver = vi.fn(async ({ defaultIntent }) => ({
+      ...defaultIntent,
+      kind: 'steer' as const,
+      targetTurnId: 'turn-alice',
+      authorizedBy: 'product_policy' as const,
+    }));
+
+    await expect(resolveProductTurnIntent(
+      message,
+      { isMaster: false, isTrusted: true },
+      'supersede',
+      resolver,
+    )).resolves.toEqual({
+      kind: 'steer', targetTurnId: 'turn-alice', authorizedBy: 'product_policy',
+    });
+    expect(resolver).toHaveBeenCalledWith(expect.objectContaining({
+      senderRoles: { isMaster: false, isTrusted: true },
+      defaultIntent: { kind: 'supersede' },
+    }));
   });
 
   it('maps runtime identity, scene, media, policy, and session without classic Message fields', () => {

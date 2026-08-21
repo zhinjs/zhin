@@ -92,4 +92,21 @@ describe('sender-extra', () => {
       });
     }
   });
+
+  it('preserves the causal control turn through rendering and persistence', () => {
+    const cause = { turnId: 'turn-bob', intent: 'steer' as const, targetTurnId: 'turn-alice' };
+    const message = createUserMessage(
+      '继续', undefined, 1,
+      { subjectId: 'bob-id', displayName: 'Bob', roles: ['user'], scope: 'group' },
+      cause,
+    );
+    const rendered = renderUserMessageForLlm(message, { sender });
+    expect(rendered.cause).toEqual(cause);
+
+    const row = serializeAgentMessage(rendered, { sender });
+    row.session_id = 'shared';
+    row.id = 1;
+    const restored = agentMessageRowToLlm(row);
+    expect(restored).toMatchObject({ role: 'user', cause });
+  });
 });

@@ -195,6 +195,12 @@ export interface InstallAgentHostOptions {
   readonly transcribeUrl?: (audioUrl: string) => Promise<string | null>;
   /** Optional host approval override; IM turns otherwise use createRuntimeApprovalPort. */
   readonly approvalPort?: ApprovalPort;
+  /** Trusted product-policy seam for explicit steer/follow-up/observe intent and authorization. */
+  readonly resolveTurnIntent?: (input: Readonly<{
+    message: Message;
+    senderRoles: Readonly<RuntimeSenderRoles>;
+    defaultIntent: Readonly<TurnIntent>;
+  }>) => TurnIntent | Promise<TurnIntent>;
 }
 
 /**
@@ -614,9 +620,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               signal,
               workspaceRoot: options.projectRoot,
               network: interactiveNetworkPolicy(service.getAgentConfig()),
-              intent: resolveRuntimeTurnIntent(
+              intent: await resolveProductTurnIntent(
                 message,
-                service.getAgentConfig()?.sharedSession?.overlapPolicy,
+                senderRoles,
+                service.getAgentConfig()?.inboundQueue?.groupMode,
+                options.resolveTurnIntent,
               ),
               ports: {
                 approval: options.approvalPort ?? createRuntimeApprovalPort({
@@ -1160,7 +1168,7 @@ function createRuntimeProactiveOutbound(im: ImRuntime): ProactiveOutboundService
   };
 }
 
-interface RuntimeSenderRoles {
+export interface RuntimeSenderRoles {
   readonly isMaster: boolean;
   readonly isTrusted: boolean;
 }
@@ -1260,10 +1268,12 @@ export function createRuntimeTurnRequest(
  */
 export function resolveRuntimeTurnIntent(
   message: Message,
-  overlapPolicy: 'supersede' | 'new' = 'supersede',
+  groupMode: 'supersede' | 'fifo' = 'supersede',
 ): TurnIntent {
   const raw = message.metadata?.turnIntent;
-  if (raw === undefined) return Object.freeze({ kind: overlapPolicy });
+  if (raw === undefined) {
+    return Object.freeze({ kind: groupMode === 'fifo' ? 'new' : 'supersede' });
+  }
   if (!raw || typeof raw !== 'object') {
     throw new TypeError('Runtime turnIntent metadata must be an object');
   }
@@ -1277,14 +1287,25 @@ export function resolveRuntimeTurnIntent(
     throw new TypeError('Runtime turnIntent targetTurnId must be a non-empty string');
   }
   const authorizedBy = record.authorizedBy;
-  if (authorizedBy !== undefined && authorizedBy !== 'product_policy') {
-    throw new TypeError(`Runtime turnIntent authorizedBy is invalid: ${String(authorizedBy)}`);
+  if (authorizedBy !== undefined) {
+    throw new TypeError('Runtime turnIntent authorizedBy must be supplied by trusted product policy');
   }
   return Object.freeze({
     kind: kind as TurnIntent['kind'],
     ...(targetTurnId ? { targetTurnId } : {}),
-    ...(authorizedBy ? { authorizedBy } : {}),
   });
+}
+
+export async function resolveProductTurnIntent(
+  message: Message,
+  senderRoles: Readonly<RuntimeSenderRoles>,
+  groupMode: 'supersede' | 'fifo' | undefined,
+  resolver: InstallAgentHostOptions['resolveTurnIntent'],
+): Promise<TurnIntent> {
+  const defaultIntent = resolveRuntimeTurnIntent(message, groupMode);
+  if (!resolver) return defaultIntent;
+  const resolved = await resolver(Object.freeze({ message, senderRoles, defaultIntent }));
+  return Object.freeze({ ...resolved });
 }
 
 /** IM adapter for the origin-neutral interaction authority. */

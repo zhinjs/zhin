@@ -74,6 +74,7 @@ export type {
   ProviderInstanceConfig,
   AgentMessage,
   ConversationActor,
+  ConversationTurnCause,
   UserMessage,
   AssistantMessage,
   ToolResultMessage,

@@ -230,8 +230,8 @@ ai:
     groups: []
     denyMessage: ...
   agent:                   # 工具执行安全
-    sharedSession:
-      overlapPolicy: supersede # supersede（默认）| new（FIFO）
+    inboundQueue:
+      groupMode: supersede # supersede（默认）| fifo
     execSecurity: allowlist    # deny | allowlist | full
     execPreset: readonly       # readonly | network | development | custom
     execAllowlist: ["^ls ", "^cat "]
