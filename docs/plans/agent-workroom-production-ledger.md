@@ -54,6 +54,8 @@ Production slice 3 (2026-08-21): 已新增 durable Outbox worker，按 persisted
 
 Production slice 4 (2026-08-21): 已新增 crash-durable Remote Callback Inbox 与 Remote Execution Link；可信 Gateway receipt 与远端正文分离，固定 endpoint/Card/auth、dispatch/message、Task/Assignment revision、attempt/fence、remote identity 与 Git workspace receipt。endpoint+event id 的 exact callback 重放 no-op、drift fail closed；有界 gap 只能按 sequence reconciliation 释放。typed Completion 只投影为本地 Assignment observation，再经唯一 Kernel CAS 进入 `assignment.execution_completed`，不会直接 accept Task。poll reconciliation worker、Effect Ledger、Git capability gateway/branch protection 与 Host A2A E2E 尚未接入，P8 保持 `in_progress`。
 
+Production slice 5 (2026-08-21): 已新增单次、可重启的 Remote Callback poll reconciliation worker；只在 durable Inbox 为 `reconcile_required` 时以 exact Link/cursor 发起 poll，验证 endpoint/Card/auth、trusted poll time、完整 callback/Gateway receipt 与 canonical batch digest，再交给 Inbox CAS 收敛。deadline、noop、lost-response replay 与非合作 poll cancel 均为 typed/fail-closed，worker 不写 Task/Kernel。Host 仍缺 endpoint-specific auth registry、dispatch 后 Link 预注册/可枚举恢复、完整 Envelope 恢复与 accepted observation→Kernel application service，因此不得把普通 inbound A2A Turn 当作 Workroom callback；P8 保持 `in_progress`。
+
 ## P9：Legacy Multi-Agent Cutover
 
 Status: in_progress
@@ -82,6 +84,8 @@ Production slice 2 (2026-08-21): 已新增正式 `AssignmentExecutorPort` 与 ca
 Production slice 3 (2026-08-21): 已新增 `LocalAssignmentExecutor`，仅从 generation-owned model execution port 投影 progress/heartbeat/checkpoint/execution-completed，固定 Envelope digest 与唯一 event identity；completion 原子缓冲，重复/越权/终态后事件 fail closed，取消不依赖模型合作。observation→Kernel CAS adapter 与 Space/Tool Snapshot 隔离仍未接入，P9 保持 `in_progress`。
 
 Production slice 4 (2026-08-21): 已新增 `AssignmentObservationIngress`，Local/Remote observations 统一校验 Project/Run/Task revision、Assignment revision/attempt/fence/Envelope digest，并通过 `WorkroomKernel` 的 Journal `expectedSequence` CAS 追加 progress/heartbeat/checkpoint/execution-completed。heartbeat lease 只由可信 Kernel clock/policy 续期；重复 observation exact no-op、payload drift fail closed；旧公共 `heartbeat`/`complete_execution` command 已删除。Space Router/Tool Snapshot 物理隔离、剩余 role-scoped control ports 与 legacy tombstone/migration 仍未完成，P9 保持 `in_progress`。
+
+Production slice 5 (2026-08-21): 已新增以 canonical `ConversationRef/conversationRefKey` 为唯一地址 SSOT 的 Interaction Space Router 与 crash-durable File Binding Repository；binding revision + `effectiveAfterConversationSequence` 在重启、重复与并发 CAS 下稳定，任何不严格晚于当前 anchor 的延迟/replay 入站都返回 typed ignored，已绑定地址缺 sequence 时 fail closed。另新增两阶段签发的 Role Capability Snapshot：精确交集 generation/Profile/Agent Definition/role/Task/policy，内容摘要与 Assignment Envelope ref/revision/digest 对齐；每次 deferred discover/load 都重新要求可信 Envelope，Workroom executor/integration 永久拒绝 `spawn_task`、跨角色命令与自签越权加载。尚未接入正常 ingress/deferred catalog，binding authority 也必须由可信 Project registry + 当前 conversation barrier 签发，不能由调用方自填 anchor；因此本条物理隔离仍不勾选，P9 保持 `in_progress`。
 
 ## P10：Domain Workroom Profile
 
