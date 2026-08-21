@@ -288,14 +288,6 @@ export type {
   ChatMessageDirection,
 } from './memory/context-manager.js';
 
-// ── Conversation Memory ──
-export {
-  ConversationMemory,
-  AI_MESSAGE_MODEL,
-  AI_SUMMARY_MODEL,
-} from './memory/conversation-memory.js';
-export type { ConversationMemoryConfig, SaveRoundMeta } from './memory/conversation-memory.js';
-
 // ── Agent session persistence ──
 export {
   AGENT_SESSION_MODEL,
@@ -363,7 +355,6 @@ export {
   normalizeUserMessageForStorage,
   stripSenderPrefixFromText,
   splitQuoteFromUserText,
-  formatAuxiliaryUserContentForLlm,
   userMessagePlainText,
   type AgentMessageQuoteExtra,
 } from './memory/sender-extra.js';

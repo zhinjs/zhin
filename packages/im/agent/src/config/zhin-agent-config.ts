@@ -47,10 +47,7 @@ export interface ZhinAgentConfig {
   preExecTimeout?: number;
   maxSkills?: number;
   maxTools?: number;
-  minTopicRounds?: number;
-  slidingWindowSize?: number;
   contextTailMessageLimit?: number;
-  topicChangeThreshold?: number;
   rateLimit?: RateLimitConfig;
   toneAwareness?: boolean;
   chatModel?: string;

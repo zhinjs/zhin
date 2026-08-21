@@ -6,14 +6,10 @@ import {
 
 describe('resolveContextTailMessageLimit', () => {
   it('uses explicit contextTailMessageLimit when set', () => {
-    expect(resolveContextTailMessageLimit({ contextTailMessageLimit: 200, slidingWindowSize: 5 })).toBe(200);
+    expect(resolveContextTailMessageLimit({ contextTailMessageLimit: 200 })).toBe(200);
   });
 
-  it('defaults to at least 80 when only slidingWindowSize=5 (legacy misuse)', () => {
-    expect(resolveContextTailMessageLimit({ slidingWindowSize: 5 })).toBe(DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT);
-  });
-
-  it('respects slidingWindowSize when larger than default floor', () => {
-    expect(resolveContextTailMessageLimit({ slidingWindowSize: 100 })).toBe(100);
+  it('uses the canonical default when the explicit limit is absent', () => {
+    expect(resolveContextTailMessageLimit({})).toBe(DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT);
   });
 });

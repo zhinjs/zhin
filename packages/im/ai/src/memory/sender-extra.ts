@@ -187,42 +187,6 @@ export function applySenderExtraToUserMessage(
   };
 }
 
-/** 从 ai_messages 等表的 sender_id / sender_roles 列构建 extra */
-export function senderExtraFromColumns(
-  senderId: string | undefined,
-  senderRolesJson: string | undefined,
-  scope: SenderScope = 'group',
-): AgentMessageSenderExtra | undefined {
-  const id = senderId?.trim();
-  if (!id) return undefined;
-  let roles: string[] = ['user'];
-  if (senderRolesJson?.trim()) {
-    try {
-      const parsed = JSON.parse(senderRolesJson) as unknown;
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        roles = parsed.map(String);
-      }
-    } catch {
-      roles = senderRolesJson.split(',').map((r) => r.trim()).filter(Boolean);
-    }
-  }
-  return { id, roles, scope };
-}
-
-/** ConversationMemory 等辅助表：读库后拼 LLM 用正文 */
-export function formatAuxiliaryUserContentForLlm(
-  content: string,
-  senderId?: string,
-  senderRolesJson?: string,
-): string {
-  const sender = senderExtraFromColumns(senderId, senderRolesJson);
-  if (!sender) return content;
-  const prefix = buildSenderPrefix(sender);
-  if (!prefix) return content;
-  const { body } = stripSenderPrefixFromText(content);
-  return `${prefix} ${body}`;
-}
-
 function mergeExtras(
   known?: AgentMessageExtra,
   parsed?: Partial<AgentMessageExtra>,

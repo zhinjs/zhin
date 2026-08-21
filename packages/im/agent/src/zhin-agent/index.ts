@@ -18,7 +18,6 @@ import {
   type IMSessionStore,
   type MemoryAgentSessionStore,
   MemoryIMSessionStore,
-  ConversationMemory,
   createMemoryContextRepository,
   RateLimiter,
 } from '@zhin.js/ai';
@@ -147,7 +146,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   readonly imSessionStore: IMSessionStore | MemoryIMSessionStore = new MemoryIMSessionStore();
   agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
   contextRepository: ContextRepository;
-  memory: ConversationMemory;
   readonly externalTools: Map<string, RegisteredAgentTool> = new Map();
   userProfiles: UserProfileStore;
   rateLimiter: RateLimiter;
@@ -220,13 +218,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     this.provider = provider;
     const merged = { ...DEFAULT_CONFIG, ...config } as Required<ZhinAgentConfig>;
     this.config = merged;
-    this.memory = new ConversationMemory({
-      minTopicRounds: this.config.minTopicRounds,
-      slidingWindowSize: this.config.slidingWindowSize,
-      topicChangeThreshold: this.config.topicChangeThreshold,
-      topicDetectModel: this.config.chatModel || undefined,
-    });
-    this.memory.setProvider(provider);
     this.userProfiles = new UserProfileStore();
     this.rateLimiter = new RateLimiter(this.config.rateLimit);
     this.promptController = new PromptController(

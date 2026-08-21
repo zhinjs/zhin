@@ -15,3 +15,6 @@ untrusted context data rather than model-authority system instructions.
 The process-global passive-group buffer is removed: prior inbound conversation messages
 are now consumed from the same event store and cursor, with the current Turn
 message excluded from its own context projection.
+The unused `ConversationMemory` topic-memory runtime, its timers, legacy tables,
+and topic-window configuration are removed; `ContextRepository` is the only
+Agent conversation-history authority.

@@ -144,9 +144,9 @@ import {
 const { repository, sessionStore } = createMemoryContextRepository({ tailMessageLimit: 200 })
 ```
 
-### ContextManager / ConversationMemory（辅助）
+### ContextManager（辅助）
 
-`ContextManager`（`context_summaries`）与 `ConversationMemory`（话题检测 + 链式摘要）仍可用于场景级摘要或实验路径；**ZhinAgent 生产回合的历史以 `ContextRepository` 为准**，不再双写旧 `chat_messages` / `ai_messages` 表。
+`ContextManager`（`context_summaries`）仍可用于独立的场景级摘要实验；**ZhinAgent 生产回合的历史只以 `ContextRepository` 为准**，不再构造第二套话题记忆、定时器或 `ai_messages` 表。
 
 ### Compaction（上下文压缩）
 
@@ -272,7 +272,6 @@ const tools = cache.filter('天气查询', allTools, { maxTools: 10 })
 | `AgentLoopConfig` | `agentLoop`：模型、工具列表、超时、回调等（替代已删除的 `createAgent`） |
 | `SessionConfig` | 会话 `maxHistory`、`expireMs` |
 | `ContextConfig` | `ContextManager` 总结阈值与 token 预算 |
-| `ConversationMemoryConfig` | 话题切换与短期窗口 |
 | `AIConfig` | 应用级 YAML `ai:` 块的 TypeScript 形状（Provider、sessions、context、trigger、`agent.modelHarness` 等） |
 
 完整 AI 模块文档：[zhin.js.org/advanced/ai](https://zhin.js.org/advanced/ai)
@@ -286,7 +285,7 @@ const tools = cache.filter('天气查询', allTools, { maxTools: 10 })
 | `registerLlmApiFromProviders` / `ModelRegistry` | ApiRegistry 注册 + `/v1/models` 发现与白名单 |
 | `ContextRepository` / `AgentSessionStore` | Agent 会话持久化原语 |
 | `createSdkProviderAdapter` / `AIProvider` | LLM 提供者（AI SDK 传输，ADR 0018） |
-| `ContextManager` / `ConversationMemory` | 场景摘要 / 话题记忆（辅助） |
+| `ContextManager` | 场景摘要实验（辅助，不接入 ZhinAgent 生产回合） |
 | `compactSession` / `pruneHistoryForContext` / `microCompactMessages` | 上下文压缩库 API；IM 生产路径经 `@zhin.js/agent` 的 `transformContext`（ADR 0010） |
 | `CostTracker` | Token 用量与成本追踪 |
 | `FileStateCache` | 文件状态缓存 |

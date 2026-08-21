@@ -237,7 +237,7 @@ export { htmlToFallbackText, coerceHtmlSegmentsToText, registerHtmlSegmentFallba
 // AI 原语（来自 @zhin.js/ai，非 ZhinAgent）
 export {
   AIProvider, createSdkProviderAdapter, ModelRegistry,
-  ContextRepository, ContextManager, ConversationMemory, compactSession, ...
+  ContextRepository, ContextManager, compactSession, ...
 } from '@zhin.js/ai'
 ```
 

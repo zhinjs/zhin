@@ -28,7 +28,4 @@ export {
   manualCompactSession,
 } from './compaction-runtime.js';
 
-export type {
-  ContextRepository,
-  ConversationMemory,
-} from '@zhin.js/ai';
+export type { ContextRepository } from '@zhin.js/ai';
