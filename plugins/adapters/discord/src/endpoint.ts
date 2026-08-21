@@ -4,6 +4,8 @@
 import { ChannelType } from 'discord.js';
 import type {
   EndpointChannel,
+  EndpointContentPort,
+  EndpointContentResolveContext,
   EndpointControl,
   EndpointGroup,
   EndpointInstance,
@@ -13,6 +15,8 @@ import type {
 import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
+  type ConversationReference,
+  type ConversationResolution,
   type MessageRef,
 } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
@@ -58,6 +62,7 @@ export interface DiscordEndpointOptions {
   readonly sideEvents?: SideEventGateway;
   readonly config: ResolvedDiscordGatewayConfig;
   readonly createClient?: CreateDiscordClient;
+  readonly fetch?: typeof globalThis.fetch;
 }
 
 export class DiscordGatewayEndpoint implements EndpointInstance {
@@ -65,6 +70,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
 
   readonly #options: DiscordEndpointOptions;
   readonly #createClient: CreateDiscordClient;
+  readonly #fetch: typeof globalThis.fetch;
   #client: DiscordClientTransport | null = null;
   #open = false;
   #started = false;
@@ -86,11 +92,16 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
       return emoji;
     },
   });
+  readonly content: EndpointContentPort = Object.freeze({
+    resolve: (reference: ConversationReference, context: EndpointContentResolveContext) =>
+      resolveDiscordContent(this.#fetch, this.#options.config.token, reference, context),
+  });
 
   constructor(options: DiscordEndpointOptions) {
     this.#logger = getAdapterLogger('discord', options.config.id);
     this.#options = options;
     this.#createClient = options.createClient ?? defaultCreateClient;
+    this.#fetch = options.fetch ?? globalThis.fetch;
   }
 
   async start(): Promise<void> {
@@ -442,6 +453,10 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
   readonly control: EndpointControl = Object.freeze({
     recall: (message: MessageRef) => this.recallMessage(message),
   });
+  readonly content: EndpointContentPort = Object.freeze({
+    resolve: (reference: ConversationReference, context: EndpointContentResolveContext) =>
+      resolveDiscordContent(this.#fetch, this.#options.config.token, reference, context),
+  });
 
   constructor(options: DiscordInteractionsEndpointOptions) {
     this.#logger = getAdapterLogger('discord', options.config.id);
@@ -545,6 +560,57 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
         error: err instanceof Error ? err.message : String(err),
       }));
     });
+  }
+}
+
+async function resolveDiscordContent(
+  fetch: typeof globalThis.fetch,
+  token: string,
+  reference: ConversationReference,
+  context: EndpointContentResolveContext,
+): Promise<ConversationResolution> {
+  if (reference.kind === 'forward') {
+    return Object.freeze({ status: 'unsupported', code: 'discord_merged_forward_unavailable' });
+  }
+  if (reference.kind === 'media') {
+    return reference.media.kind === 'file'
+      ? Object.freeze({ status: 'unsupported', code: 'discord_opaque_media_unavailable' })
+      : Object.freeze({ status: 'resolved', reference, value: reference.media });
+  }
+  try {
+    context.signal.throwIfAborted();
+    const response = await fetch(
+      `${DISCORD_API}/channels/${reference.message.conversation.id}/messages/${reference.message.id}`,
+      { headers: { Authorization: `Bot ${token}` }, signal: context.signal },
+    );
+    if (response.status === 404) return Object.freeze({ status: 'not_found', code: 'discord_message_not_found' });
+    if (response.status === 403) return Object.freeze({ status: 'forbidden', code: 'discord_message_forbidden' });
+    if (!response.ok) return Object.freeze({ status: 'failed', code: 'discord_message_fetch_failed' });
+    const row = await response.json() as Record<string, unknown>;
+    const author = row.author as Record<string, unknown> | undefined;
+    const attachments = Array.isArray(row.attachments) ? row.attachments : [];
+    const segments: import('@zhin.js/im-contract').Segment[] = [];
+    if (typeof row.content === 'string' && row.content.trim()) segments.push({ type: 'text', data: { text: row.content } });
+    for (const item of attachments.slice(0, context.maxEntries)) {
+      const attachment = item as Record<string, unknown>;
+      if (typeof attachment.url !== 'string') continue;
+      const mime = typeof attachment.content_type === 'string' ? attachment.content_type : undefined;
+      const type = mime?.startsWith('image/') ? 'image' : mime?.startsWith('audio/') ? 'audio' : mime?.startsWith('video/') ? 'video' : 'file';
+      segments.push({ type, data: { media: { kind: 'url', value: attachment.url, ...(mime ? { mime_type: mime } : {}), ...(attachment.filename ? { file_name: String(attachment.filename) } : {}), ...(typeof attachment.size === 'number' ? { size: attachment.size } : {}) } } });
+    }
+    return Object.freeze({
+      status: 'resolved',
+      reference,
+      value: Object.freeze({
+        ref: reference.message,
+        ...(author?.id ? { actor: Object.freeze({ id: String(author.id), ...(author.global_name || author.username ? { displayName: String(author.global_name ?? author.username) } : {}) }) } : {}),
+        segments: Object.freeze(segments),
+        timestamp: typeof row.timestamp === 'string' ? Date.parse(row.timestamp) : Date.now(),
+      }),
+    });
+  } catch (error) {
+    if (context.signal.aborted) return Object.freeze({ status: 'expired', code: 'turn_aborted' });
+    return Object.freeze({ status: 'failed', code: 'discord_content_resolution_failed', message: error instanceof Error ? error.message : String(error) });
   }
 }
 

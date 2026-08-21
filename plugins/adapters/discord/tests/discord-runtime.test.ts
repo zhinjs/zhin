@@ -375,6 +375,38 @@ describe('discord protocol helpers', () => {
 });
 
 describe('discord plugin runtime adapter', () => {
+  it('resolves scoped message content and attachment media through Discord REST', async () => {
+    const endpoint = new DiscordGatewayEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+      gateway: { receive: vi.fn(), send: vi.fn() } as never,
+      config: baseConfig,
+      createClient: () => createMockClient(),
+      fetch: vi.fn(async () => new Response(JSON.stringify({
+        id: 'm1',
+        content: 'quoted',
+        timestamp: '2026-01-01T00:00:00.000Z',
+        author: { id: 'u1', global_name: 'Alice' },
+        attachments: [{ url: 'https://cdn.discord.test/a.png', filename: 'a.png', content_type: 'image/png', size: 3 }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } })),
+    });
+    const conversation = { endpoint: { id: 'main', adapter: 'discord' }, kind: 'channel' as const, id: 'c1' };
+    await expect(endpoint.content.resolve({ kind: 'message', message: { conversation, id: 'm1' } }, {
+      signal: new AbortController().signal,
+      maxDepth: 2,
+      maxEntries: 50,
+      maxChars: 12_000,
+    })).resolves.toMatchObject({
+      status: 'resolved',
+      value: {
+        actor: { id: 'u1', displayName: 'Alice' },
+        segments: [
+          { type: 'text', data: { text: 'quoted' } },
+          { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.discord.test/a.png', mime_type: 'image/png', file_name: 'a.png', size: 3 } } },
+        ],
+      },
+    });
+  });
+
   it('routes admitted messages through MessageGateway when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
