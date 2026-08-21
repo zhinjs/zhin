@@ -38,23 +38,6 @@ export {
 } from './session-key.js';
 
 export {
-  recordPassiveGroupObservation,
-  consumePassiveGroupContextForTurn,
-} from './passive-group-session.js';
-export type { PassiveGroupObservation } from './passive-group-session.js';
-
-export {
-  pushPassiveGroupLine,
-  drainPassiveGroupBuffer,
-  peekPassiveGroupBuffer,
-  formatPassiveGroupContextBlock,
-  prunePassiveLines,
-  MAX_PASSIVE_LINES,
-  PASSIVE_TTL_MS,
-} from './passive-group-buffer.js';
-export type { PassiveGroupLine } from './passive-group-buffer.js';
-
-export {
   listSessionTree,
   jumpSessionTree,
 } from './session-tree-commands.js';

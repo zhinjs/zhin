@@ -32,12 +32,14 @@ import {
   type ConversationEventStore,
   type ConversationEvent,
   type ConversationContextBlock,
+  type ConversationMessage,
   type ConversationReference,
   type ConversationResolution,
   type ConversationRef,
   type DeliveryReceipt,
   type MessageRef,
 } from '@zhin.js/im-contract';
+import { segmentsToPlainText } from '../../built/segment-contract/text.js';
 import { MiddlewareIndex, isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/handler.js';
 import type { HandlerDispatchOptions, HandlerPrompt } from '@zhin.js/handler';
@@ -93,6 +95,7 @@ export interface IngressRoute {
     message: Message,
     lease: SnapshotLease,
     requester: PluginId,
+    conversationSequence: number | undefined,
   ): Promise<boolean>;
 }
 
@@ -203,14 +206,24 @@ export class ImRuntime implements MessageGateway {
   async readConversationContext(
     conversation: ConversationRef,
     consumer: string,
+    throughSequence: number,
     limit = 50,
+    excludeMessageId?: string,
   ): Promise<Readonly<{ blocks: readonly ConversationContextBlock[]; cursor: number }>> {
+    if (!Number.isSafeInteger(throughSequence) || throughSequence < 0) {
+      throw new TypeError('Conversation context throughSequence must be a non-negative integer');
+    }
     const cursor = await this.conversationEvents.getCursor(consumer, conversation);
-    const events = await this.conversationEvents.listAfter(conversation, cursor, limit);
-    const blocks = aggregateConversationContext(events);
+    const events = await this.conversationEvents.listBetween(
+      conversation,
+      cursor,
+      throughSequence,
+      limit,
+    );
+    const blocks = aggregateConversationContext(events, excludeMessageId);
     return Object.freeze({
       blocks: Object.freeze(blocks),
-      cursor: events.at(-1)?.sequence ?? cursor,
+      cursor: Math.max(cursor, throughSequence),
     });
   }
 
@@ -554,8 +567,9 @@ export class ImRuntime implements MessageGateway {
         input.mentioned,
         input.replyTo,
       );
+      let conversationSequence: number | undefined;
       if (input.message?.id) {
-        await this.conversationEvents.append(Object.freeze({
+        const appended = await this.conversationEvents.append(Object.freeze({
           eventId: `message:${messageRefKey(input.message)}`,
           conversation,
           timestamp: Date.now(),
@@ -573,6 +587,7 @@ export class ImRuntime implements MessageGateway {
             ...(input.replyTo ? { replyTo: Object.freeze({ conversation, id: input.replyTo.id }) } : {}),
           }),
         }));
+        conversationSequence = appended.sequence;
       }
       await this.#runHandlers(lease.value, 'message.receive', [message]);
       let result: MessageDispatchResult = Object.freeze({ matched: false });
@@ -592,7 +607,12 @@ export class ImRuntime implements MessageGateway {
             const ingressRoute = resolveIngressRoute(lease.value);
             if (!result.matched && ingressRoute) {
               logger.debug(formatCompact({ op: 'unmatched', conv: formatConversationLog(conversation) }));
-              const handled = await ingressRoute.route(message, lease, requester);
+              const handled = await ingressRoute.route(
+                message,
+                lease,
+                requester,
+                conversationSequence,
+              );
               if (handled) {
                 result = Object.freeze({ matched: true, command: 'ai', owner: requester });
               }
@@ -1172,13 +1192,40 @@ function describeConversationEvent(event: ConversationEvent): string {
   }
 }
 
+function describeConversationMessage(message: ConversationMessage): string {
+  const actor = message.actor
+    ? `${message.actor.displayName ?? message.actor.id} (${message.actor.id})`
+    : undefined;
+  if (!actor) return '';
+  const text = segmentsToPlainText(message.segments).trim();
+  const attachmentTypes = [...new Set(message.segments
+    .filter((segment) => segment.type !== 'text' && segment.type !== 'mention' && segment.type !== 'at')
+    .map((segment) => segment.type))];
+  const attachmentNote = attachmentTypes.length > 0
+    ? ` [message also contains ${attachmentTypes.join(', ')} data; inspect its reference before relying on that content]`
+    : '';
+  return `${actor}: ${text || '(no plain-text content)'}${attachmentNote}`;
+}
+
 function aggregateConversationContext(
   events: readonly import('@zhin.js/im-contract').SequencedConversationEvent[],
+  excludeMessageId?: string,
 ): readonly ConversationContextBlock[] {
   const ordinary: ConversationContextBlock[] = [];
   const noisy = new Map<string, { sequence: number; event: ConversationEvent; count: number }>();
   for (const { sequence, event } of events) {
-    if (event.type === 'message.created') continue;
+    if (event.type === 'message.created') {
+      if (event.message.ref.id === excludeMessageId) continue;
+      const text = describeConversationMessage(event.message);
+      if (!text) continue;
+      ordinary.push(Object.freeze({
+        kind: 'conversation_event',
+        sequence,
+        eventType: event.type,
+        text,
+      }));
+      continue;
+    }
     if (event.type === 'message.reaction_changed' || event.type === 'conversation.poked') {
       const key = event.type === 'message.reaction_changed'
         ? `${event.type}:${event.message.id}:${event.actor?.id ?? ''}:${event.reaction}:${event.operation}`

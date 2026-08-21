@@ -19,7 +19,6 @@ export interface ResolvedIngressUserMessage {
 
 export function resolveIngressUserMessage(
   turn: TurnIngress,
-  options?: { passiveBlock?: string | null },
 ): ResolvedIngressUserMessage {
   const content = stripSpoofedSenderPrefix(turn.input.text);
   const sender = buildSenderExtra(turn);
@@ -29,7 +28,6 @@ export function resolveIngressUserMessage(
   };
   const hasExtra = Boolean(extra.sender);
   const layered = layerIngressUserBody(content, {
-    passiveBlock: options?.passiveBlock,
     quoteBlock: referenceBlock,
   });
   const inlinedContext = layered !== content;
@@ -85,9 +83,9 @@ export async function beginIngressTurnSession(
 
 export function layerIngressUserBody(
   body: string,
-  options?: { passiveBlock?: string | null; quoteBlock?: string | null },
+  options?: { quoteBlock?: string | null },
 ): string {
-  const parts = [options?.passiveBlock, options?.quoteBlock]
+  const parts = [options?.quoteBlock]
     .map((part) => part?.trim())
     .filter((part): part is string => Boolean(part));
   if (parts.length === 0) return body;

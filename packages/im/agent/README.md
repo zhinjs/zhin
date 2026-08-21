@@ -125,7 +125,7 @@ turn 会跨代执行。
 packages/im/agent/src/
   core/          Agent Core — agentLoop 薄适配（ADR 0009）
   tool/          Tool System — Source/Filter、deferred 解析、运行时
-  session/       Session System — IM/Agent 双 store、passive group、session-io
+  session/       Session System — Agent session/history；IM conversation context 由 ConversationEventStore 游标提供
   event/         Event System — Agent turn 域事件（不替代 Kernel RunEvent）
   skill/         Skill System — SkillRegistry 统一出口
   memory/        Memory System — Port → ContextRepository + compaction

@@ -67,11 +67,11 @@ describe('IM Runtime', () => {
     await fixture.im.receiveNotice(notice as never);
     await fixture.im.receiveNotice(notice as never);
     await fixture.im.receiveNotice({ ...notice, $scene_id: 'room-2' } as never);
-    const events = await fixture.im.conversationEvents.listAfter({
+    const events = await fixture.im.conversationEvents.listBetween({
       endpoint: { adapter: 'test', id: String(fixture.adapter.id) },
       kind: 'group',
       id: 'room-1',
-    }, 0, 10);
+    }, 0, Number.MAX_SAFE_INTEGER, 10);
     expect(events).toHaveLength(1);
     expect(events[0]?.event).toMatchObject({
       type: 'member.muted',
@@ -79,16 +79,16 @@ describe('IM Runtime', () => {
       actor: { id: 'admin', displayName: 'Admin' },
       durationSeconds: 60,
     });
-    await expect(fixture.im.conversationEvents.listAfter({
+    await expect(fixture.im.conversationEvents.listBetween({
       endpoint: { adapter: 'test', id: String(fixture.adapter.id) },
       kind: 'group',
       id: 'room-2',
-    }, 0, 10)).resolves.toHaveLength(1);
+    }, 0, Number.MAX_SAFE_INTEGER, 10)).resolves.toHaveLength(1);
     const pending = await fixture.im.readConversationContext({
       endpoint: { adapter: 'test', id: String(fixture.adapter.id) },
       kind: 'group',
       id: 'room-1',
-    }, 'agent:alice');
+    }, 'agent:alice', Number.MAX_SAFE_INTEGER);
     expect(pending.blocks).toEqual([expect.objectContaining({
       eventType: 'member.muted',
       text: expect.stringContaining('Member (member) was muted'),
@@ -102,7 +102,7 @@ describe('IM Runtime', () => {
       endpoint: { adapter: 'test', id: String(fixture.adapter.id) },
       kind: 'group',
       id: 'room-1',
-    }, 'agent:alice')).resolves.toMatchObject({ blocks: [] });
+    }, 'agent:alice', Number.MAX_SAFE_INTEGER)).resolves.toMatchObject({ blocks: [] });
     await fixture.adapters.stop();
     await fixture.store.close();
   });
@@ -139,7 +139,7 @@ describe('IM Runtime', () => {
       endpoint: { adapter: 'test', id: String(fixture.adapter.id) },
       kind: 'group',
       id: 'room-1',
-    }, 'agent-session:room-1');
+    }, 'agent-session:room-1', Number.MAX_SAFE_INTEGER);
 
     expect(pending.blocks).toHaveLength(2);
     expect(pending.blocks[0]).toMatchObject({
@@ -179,6 +179,134 @@ describe('IM Runtime', () => {
       }),
     }));
     lease.release();
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it('projects prior inbound messages from the event store without duplicating the current turn', async () => {
+    const fixture = await createFixture([], []);
+    const conversation = {
+      endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+      kind: 'group' as const,
+      id: 'room-context',
+    };
+    await fixture.im.receive({
+      conversation,
+      message: { conversation, id: 'background-1' },
+      content: 'background context',
+      segments: [{ type: 'text', data: { text: 'background context' } }],
+      sender: { id: 'alice', name: 'Alice' },
+    });
+    await fixture.im.receive({
+      conversation,
+      message: { conversation, id: 'current-2' },
+      content: 'current question',
+      segments: [{ type: 'text', data: { text: 'current question' } }],
+      sender: { id: 'bob', name: 'Bob' },
+    });
+
+    const pending = await fixture.im.readConversationContext(
+      conversation,
+      'agent-session:room-context',
+      2,
+      50,
+      'current-2',
+    );
+
+    expect(pending.blocks).toEqual([expect.objectContaining({
+      eventType: 'message.created',
+      text: 'Alice (alice): background context',
+    })]);
+    await fixture.im.commitConversationContext(
+      conversation,
+      'agent-session:room-context',
+      pending.cursor,
+    );
+    await expect(fixture.im.readConversationContext(
+      conversation,
+      'agent-session:room-context',
+      2,
+      50,
+      'current-2',
+    )).resolves.toMatchObject({ blocks: [] });
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it('anchors context to the current event sequence and reads the latest bounded backlog', async () => {
+    const fixture = await createFixture([], []);
+    const conversation = {
+      endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+      kind: 'group' as const,
+      id: 'room-window',
+    };
+    for (let index = 1; index <= 55; index += 1) {
+      await fixture.im.conversationEvents.append(Object.freeze({
+        eventId: `background-${index}`,
+        conversation,
+        timestamp: index,
+        type: 'message.created' as const,
+        message: Object.freeze({
+          ref: Object.freeze({ conversation, id: `background-${index}` }),
+          actor: Object.freeze({ id: `user-${index}` }),
+          segments: Object.freeze([{ type: 'text', data: Object.freeze({ text: `context-${index}` }) }]),
+          timestamp: index,
+        }),
+      }));
+    }
+    const current = await fixture.im.conversationEvents.append(Object.freeze({
+      eventId: 'current-56',
+      conversation,
+      timestamp: 56,
+      type: 'message.created' as const,
+      message: Object.freeze({
+        ref: Object.freeze({ conversation, id: 'current-56' }),
+        actor: Object.freeze({ id: 'current-user' }),
+        segments: Object.freeze([{ type: 'text', data: Object.freeze({ text: 'current question' }) }]),
+        timestamp: 56,
+      }),
+    }));
+    const future = await fixture.im.conversationEvents.append(Object.freeze({
+      eventId: 'future-57',
+      conversation,
+      timestamp: 57,
+      type: 'message.created' as const,
+      message: Object.freeze({
+        ref: Object.freeze({ conversation, id: 'future-57' }),
+        actor: Object.freeze({ id: 'future-user' }),
+        segments: Object.freeze([{ type: 'text', data: Object.freeze({ text: 'future message' }) }]),
+        timestamp: 57,
+      }),
+    }));
+
+    const pending = await fixture.im.readConversationContext(
+      conversation,
+      'agent-session:room-window',
+      current.sequence,
+      50,
+      'current-56',
+    );
+
+    expect(pending.cursor).toBe(current.sequence);
+    expect(pending.blocks).toHaveLength(49);
+    expect(pending.blocks[0]?.text).toContain('context-7');
+    expect(pending.blocks.at(-1)?.text).toContain('context-55');
+    expect(pending.blocks.some((block) => block.text.includes('future message'))).toBe(false);
+
+    await fixture.im.commitConversationContext(
+      conversation,
+      'agent-session:room-window',
+      pending.cursor,
+    );
+    const next = await fixture.im.readConversationContext(
+      conversation,
+      'agent-session:room-window',
+      future.sequence,
+      50,
+      'future-57',
+    );
+    expect(next.blocks).toEqual([]);
+    expect(next.cursor).toBe(future.sequence);
     await fixture.adapters.stop();
     await fixture.store.close();
   });
@@ -253,11 +381,13 @@ describe('IM Runtime', () => {
     const fixture = await createFixture(events, []);
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
+    let routedSequence: number | undefined;
     const current = fixture.store.current;
     const resources = new Map(current.resources);
     resources.set(current.root, new Map([
       [ingressRouteToken.id, Object.freeze({
-        async route() {
+        async route(_message, _lease, _requester, conversationSequence) {
+          routedSequence = conversationSequence;
           events.push('fallback:g1');
           await gate;
           return true;
@@ -274,8 +404,13 @@ describe('IM Runtime', () => {
       kind: 'private' as const,
       id: 'alice',
     };
-    const inFlight = fixture.im.receive({ conversation, content: 'hello' });
+    const inFlight = fixture.im.receive({
+      conversation,
+      message: { conversation, id: 'routed-message' },
+      content: 'hello',
+    });
     await vi.waitFor(() => expect(events).toContain('fallback:g1'));
+    expect(routedSequence).toBe(1);
 
     const generationOne = fixture.store.current;
     fixture.store.commit(1, {

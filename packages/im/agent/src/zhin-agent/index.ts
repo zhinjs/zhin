@@ -52,10 +52,6 @@ import { processTextTurn } from '../turn/turn-pipeline.js';
 import { DeferredTurnState } from '../turn/deferred-turn-state.js';
 import { resolveContextTailMessageLimit } from '../context/context-tail-limit.js';
 import { archiveSessionByKey } from '../session/session-io.js';
-import {
-  recordPassiveGroupObservation as recordPassiveGroupObservationInternal,
-  type PassiveGroupObservation,
-} from '../session/passive-group-session.js';
 import { asPrivate } from '../internal/as-private.js';
 import { PromptController } from '../turn/prompt-controller.js';
 import { getActiveTurnTracker } from '../internal/turn-context.js';
@@ -320,14 +316,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   upgradeProfilesToDatabase(model: Parameters<UserProfileStore['upgradeToDatabase']>[0]): void {
     this.userProfiles.upgradeToDatabase(model);
-  }
-
-  /**
-   * 群/频道旁听：未触发 AI 的共享会话消息写入会话背景（Passive Group Context），
-   * 供后续 @ 触发时带入上下文。仅群/频道场景调用（私聊/sandbox 由 Host 侧过滤）。
-   */
-  async recordPassiveGroupObservation(observation: PassiveGroupObservation): Promise<void> {
-    await recordPassiveGroupObservationInternal(asPrivate(this), observation);
   }
 
   initSubagentSystem(createTools: () => AgentTool[]): void {

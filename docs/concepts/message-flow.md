@@ -98,6 +98,8 @@ interface MediaRef {
 
 `ConversationEventStore` 是 IM 上下文的唯一事实源。入站/出站消息、撤回 tombstone、回应、成员加入/退出、禁言/解禁和角色变化按会话幂等追加；不再维护 `im_transcripts` 或文本型 `chat_history` 双轨。合并转发条目使用中性 `actor`，不映射成模型 `user/assistant/system` role。
 
+会话中尚未被 Agent session 消费的入站消息也从该 Store 按游标读取，作为不可信 `user-context` 投影；当前触发 Turn 的消息会被排除，避免重复。不存在进程级 passive buffer，失败 Turn 不推进游标，HMR 与多 Root 也不会共享旁路状态。
+
 当前 Turn 把 `replyTo`、forward 与媒体注册为 scoped `TurnReference`。Agent 只暴露 `inspect_conversation_reference(reference, depth?)`：先查本地事实源，再通过持租约的 Endpoint 回源；跨会话、跨 Endpoint、过期 Turn 均 fail-closed。尚未消费的重要 notice 会作为明确标注的“不可信会话数据”附在下一次用户 Turn，永远不进入 system/developer prompt；只有 Turn 成功提交才推进 session cursor，失败会保留。高频 reaction/poke 会聚合，登录、二维码、断线等 process 事件只进入诊断日志。
 
 **出站**：AI 回复 → `OutputElement[]` → canonical `Segment[]`（`publishOutboundElements`）→ `$reply`（Segment 是一等 `SendContent`）→ `normalizeOutboundPayload`（html→image/文本、keyboard、媒体协商）→ endpoint。媒体协商按 adapter definition 的 `segments.outboundMedia` 声明驱动（`'url' | 'path' | 'base64' | 'upload'`）：仅 `url-or-text` 端点会在中央把非 URL 媒体降级为文本；其余由 adapter 按平台最优路径自物化（URL 直发 / base64 直发 / 平台上传 / 读盘），无 `data.media` 的段会被 warn 丢弃——legacy `data.url/file/base64` 形状已不存在。

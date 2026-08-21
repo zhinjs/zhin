@@ -15,8 +15,11 @@ class FakeModel {
     const chain = {
       where: (query: Record<string, unknown>) => {
         rows = rows.filter((row) => Object.entries(query).every(([key, expected]) => {
-          if (expected && typeof expected === 'object' && '$gt' in expected) {
-            return Number(row[key]) > Number((expected as { $gt: number }).$gt);
+          if (expected && typeof expected === 'object') {
+            const range = expected as { $gt?: number; $lte?: number };
+            if (range.$gt !== undefined && Number(row[key]) <= range.$gt) return false;
+            if (range.$lte !== undefined && Number(row[key]) > range.$lte) return false;
+            return true;
           }
           return row[key] === expected;
         }));
@@ -106,7 +109,7 @@ describe('@zhin.js/im-contract', () => {
     expect(await store.append(event)).toEqual({ appended: true, sequence: 1 });
     expect(await store.append(event)).toEqual({ appended: false, sequence: 1 });
     expect(await store.getMessage(event.message.ref)).toEqual(event.message);
-    expect(await store.listAfter(conversation, 0, 10)).toEqual([
+    expect(await store.listBetween(conversation, 0, Number.MAX_SAFE_INTEGER, 10)).toEqual([
       expect.objectContaining({ sequence: 1, event }),
     ]);
   });
@@ -121,7 +124,7 @@ describe('@zhin.js/im-contract', () => {
     };
     expect(await store.append(event)).toEqual({ appended: true, sequence: 1 });
     expect(await store.append(event)).toEqual({ appended: false, sequence: 1 });
-    expect(await store.listAfter(conversation, 0, 10)).toEqual([{ sequence: 1, event }]);
+    expect(await store.listBetween(conversation, 0, Number.MAX_SAFE_INTEGER, 10)).toEqual([{ sequence: 1, event }]);
     await store.commitCursor('agent:u1', conversation, 1);
     expect(await store.getCursor('agent:u1', conversation)).toBe(1);
     await store.commitCursor('agent:u1', conversation, 2);

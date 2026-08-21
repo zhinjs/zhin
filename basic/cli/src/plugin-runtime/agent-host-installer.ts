@@ -511,6 +511,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       message: Message,
       lease: import('@zhin.js/plugin-runtime').SnapshotLease,
       requester: PluginId,
+      conversationSequence: number | undefined,
     ) => {
       const snapshot = lease.value;
       const trigger = service.getTriggerConfig();
@@ -572,8 +573,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       }
 
       if (!matched) {
-        // 群/频道旁听：未触发 AI 的共享会话消息写入会话背景（Passive Group Context）。
-        await recordPassiveGroupContext(zhinAgent, turnAccess, message.content);
         return false;
       }
 
@@ -632,15 +631,23 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                   maxEntries: limits.maxEntries,
                   maxChars: limits.maxChars,
                 }),
-              readConversationContext: async (consumer, contextSignal) => {
-                contextSignal.throwIfAborted();
-                if (!lease.active) throw new Error('Conversation context generation lease expired');
-                return options.im.readConversationContext(message.conversation, consumer);
-              },
-              commitConversationContext: async (consumer, cursor) => {
-                if (!lease.active) throw new Error('Conversation context generation lease expired');
-                await options.im.commitConversationContext(message.conversation, consumer, cursor);
-              },
+              ...(conversationSequence === undefined ? {} : {
+                readConversationContext: async (consumer: string, contextSignal: AbortSignal) => {
+                  contextSignal.throwIfAborted();
+                  if (!lease.active) throw new Error('Conversation context generation lease expired');
+                  return options.im.readConversationContext(
+                    message.conversation,
+                    consumer,
+                    conversationSequence,
+                    50,
+                    message.message?.id,
+                  );
+                },
+                commitConversationContext: async (consumer: string, cursor: number) => {
+                  if (!lease.active) throw new Error('Conversation context generation lease expired');
+                  await options.im.commitConversationContext(message.conversation, consumer, cursor);
+                },
+              }),
               ports: {
                 approval: options.approvalPort ?? createRuntimeApprovalPort({
                   isMaster: senderRoles.isMaster,
@@ -1679,39 +1686,6 @@ function resolveTrustedForRuntimeMessage(
   );
   const merged = [...resolve(localName, endpointKey), ...resolve(endpointKey, endpointKey)];
   return [...new Set(merged.map((id) => String(id).trim()).filter(Boolean))];
-}
-
-/**
- * 群/频道旁听（缺口 2，对齐 legacy register-group-session-passive）：
- * 未触发 AI 的共享会话消息写入 Passive Group Context，供后续 @ 时带入上下文。
- * 仅群/频道生效（私聊 / sandbox 不旁听，与 legacy dispatcher 适用范围一致）。
- */
-export async function recordPassiveGroupContext(
-  agent: Pick<ZhinAgent, 'recordPassiveGroupObservation'>,
-  access: TurnAccessContext,
-  content: string,
-): Promise<void> {
-  const origin = access.origin;
-  if (origin.kind !== 'im' || (origin.scope !== 'group' && origin.scope !== 'channel')) return;
-  const rawText = content.trim();
-  if (!rawText) return;
-  // 机器人自身消息不旁听（对齐 legacy isBotSelfMessage）。
-  const senderId = access.principal.subjectId;
-  const endpointKey = origin.endpoint;
-  if (senderId !== '' && endpointKey !== '' && senderId === endpointKey) return;
-  try {
-    await agent.recordPassiveGroupObservation({
-      sessionKey: runtimeImSessionKey(access),
-      senderId,
-      senderName: access.principal.displayName ?? senderId,
-      text: rawText,
-    });
-  } catch (error) {
-    logger.debug(formatCompact({
-      op: 'agent_host_passive_fail',
-      error: error instanceof Error ? error.message : String(error),
-    }));
-  }
 }
 
 /** ai.trigger.timeout（默认 60000，对齐 legacy DEFAULT_AI_TRIGGER_CONFIG）。 */

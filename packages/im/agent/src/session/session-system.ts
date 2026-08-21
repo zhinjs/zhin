@@ -6,7 +6,6 @@ import { buildTurnUserMessages } from '../context/turn-user-message.js';
 import { logPhase } from '../internal/phase-trace.js';
 import type { SessionStrategy, SessionSystemConfig } from './contracts.js';
 import { type SessionIODeps, beginTurnSession, resolveSessionIsNewBeforeCreate, touchSession, archiveSessionByKey } from './session-io.js';
-import { consumePassiveGroupContextForTurn } from './passive-group-session.js';
 import { GroupSessionStrategy } from './strategies.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import {
@@ -22,7 +21,6 @@ export interface TurnSessionPrep {
   userId: string;
   sessionId: string;
   isNewSession: boolean;
-  passiveBlock: string | null;
   turnUser: ReturnType<typeof buildTurnUserMessages>;
 }
 
@@ -31,7 +29,6 @@ export interface IngressTurnSessionPrep {
   userId: string;
   sessionId: string;
   isNewSession: boolean;
-  passiveBlock: string | null;
   turnUser: {
     rawContent: string;
     userMessageExtra?: import('@zhin.js/ai').AgentMessageExtra;
@@ -108,11 +105,7 @@ export class SessionSystem {
     const deps = this.sessionDeps(host);
     const sessionKey = this.resolveSessionKey(commMessage, options?.strategyName);
     const userId = commMessage.$sender.id || 'unknown';
-    const channelScope = commMessage.$channel?.type;
-    const passiveBlock = channelScope === 'group' || channelScope === 'channel'
-      ? consumePassiveGroupContextForTurn(sessionKey)
-      : null;
-    const turnUser = buildTurnUserMessages(commMessage, content, passiveBlock);
+    const turnUser = buildTurnUserMessages(commMessage, content);
     const isNewSession = await resolveSessionIsNewBeforeCreate(deps, sessionKey);
 
     if (options?.deferredAutoContinue) {
@@ -129,7 +122,6 @@ export class SessionSystem {
       userId,
       sessionId,
       isNewSession,
-      passiveBlock,
       turnUser,
     };
   }
@@ -142,11 +134,7 @@ export class SessionSystem {
     const deps = this.sessionDeps(host);
     const sessionKey = turn.session.key;
     const userId = turn.principal.subjectId;
-    const passiveBlock = turn.origin.kind === 'im'
-      && (turn.origin.scope === 'group' || turn.origin.scope === 'channel')
-      ? consumePassiveGroupContextForTurn(sessionKey)
-      : null;
-    const resolved = resolveIngressUserMessage(turn, { passiveBlock });
+    const resolved = resolveIngressUserMessage(turn);
     const isNewSession = await resolveSessionIsNewBeforeCreate(deps, sessionKey);
 
     if (options?.deferredAutoContinue) {
@@ -162,7 +150,6 @@ export class SessionSystem {
       userId,
       sessionId,
       isNewSession,
-      passiveBlock,
       turnUser: {
         rawContent: resolved.content,
         ...(resolved.extra ? { userMessageExtra: resolved.extra } : {}),

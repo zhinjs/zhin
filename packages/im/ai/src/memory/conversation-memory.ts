@@ -527,36 +527,6 @@ export class ConversationMemory {
     this.handleTopicAndSummary(sessionId, userContent, currentRound);
   }
 
-  /**
-   * 群/频道共享 session：记录未 @ 机器人的用户发言（仅 user 行，不触发话题摘要 LLM）。
-   */
-  async appendPassiveGroupUserMessage(
-    sessionId: string,
-    userContent: string,
-    meta?: SaveRoundMeta,
-  ): Promise<void> {
-    const text = userContent.trim();
-    if (!text) return;
-
-    this.lastAccess.set(sessionId, Date.now());
-    this.pruneStaleSessionCaches();
-
-    let round = this.roundCache.get(sessionId) ?? await this.store.getMaxRound(sessionId);
-    if (!Number.isFinite(round) || round < 0) round = 0;
-    round += 1;
-    this.roundCache.set(sessionId, round);
-
-    await this.store.addMessage({
-      session_id: sessionId,
-      role: 'user',
-      content: text,
-      round,
-      created_at: Date.now(),
-      sender_id: meta?.senderId ?? '',
-      sender_roles: meta?.senderRoles?.length ? JSON.stringify(meta.senderRoles) : '',
-    });
-  }
-
   // ── 话题检测 + 摘要触发 ──
 
   /**

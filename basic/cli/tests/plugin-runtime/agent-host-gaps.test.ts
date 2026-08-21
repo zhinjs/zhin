@@ -10,7 +10,6 @@ import {
   createRuntimeQuestionPort,
   consumeRuntimeInteraction,
   createRuntimeApprovalPort,
-  recordPassiveGroupContext,
   resolveRuntimeTurnIntent,
   resolveProductTurnIntent,
   resolveSnapshotTurnIntentResolver,
@@ -432,73 +431,6 @@ function privateMessage(content: string, metadata?: Record<string, unknown>): Me
   });
 }
 
-function runtimeAccess(message: Message) {
-  return createRuntimeTurnAccess(message, { isMaster: false, isTrusted: false });
-}
-
-function makeAgentStub() {
-  const passive: Array<{
-    sessionKey: string;
-    senderId: string;
-    senderName: string;
-    text: string;
-  }> = [];
-  return {
-    passive,
-    async recordPassiveGroupObservation(observation: typeof passive[number]) {
-      passive.push(observation);
-    },
-  };
-}
-
-describe('缺口 2：群聊旁听（recordPassiveGroupContext）', () => {
-  it('群聊未触发消息写入 Passive Group Context', async () => {
-    const agent = makeAgentStub();
-    const message = groupMessage('大家今晚吃什么');
-    await recordPassiveGroupContext(agent, runtimeAccess(message), message.content);
-    expect(agent.passive).toEqual([expect.objectContaining({
-      sessionKey: expect.stringContaining('group:100'),
-      senderId: 'user-1',
-      text: '大家今晚吃什么',
-    })]);
-  });
-
-  it('频道（channel）同样旁听', async () => {
-    const agent = makeAgentStub();
-    const message = makeMessage({
-      content: '频道消息',
-      target: 'channel:ch-1',
-      metadata: { channelType: 'channel', endpoint: '10001' },
-    });
-    await recordPassiveGroupContext(agent, runtimeAccess(message), message.content);
-    expect(agent.passive).toEqual([expect.objectContaining({
-      sessionKey: expect.stringContaining('channel:ch-1'),
-      text: '频道消息',
-    })]);
-  });
-
-  it('私聊不旁听（sandbox/私聊无噪音）', async () => {
-    const agent = makeAgentStub();
-    const message = privateMessage('私聊消息');
-    await recordPassiveGroupContext(agent, runtimeAccess(message), message.content);
-    expect(agent.passive).toHaveLength(0);
-  });
-
-  it('机器人自身消息不旁听', async () => {
-    const agent = makeAgentStub();
-    const message = groupMessage('机器人自己说的', undefined, '10001');
-    await recordPassiveGroupContext(agent, runtimeAccess(message), message.content);
-    expect(agent.passive).toHaveLength(0);
-  });
-
-  it('空白内容不旁听', async () => {
-    const agent = makeAgentStub();
-    const message = groupMessage('   ');
-    await recordPassiveGroupContext(agent, runtimeAccess(message), message.content);
-    expect(agent.passive).toHaveLength(0);
-  });
-});
-
 describe('缺口 3：ai.trigger timeout / errorTemplate', () => {
   it('timeout 默认 60000，配置生效，非法值回退默认', () => {
     expect(resolveTriggerTimeoutMs(undefined)).toBe(60_000);
@@ -614,25 +546,6 @@ describe('缺口 3：masters / trusted 角色解析', () => {
     expect(roles).toEqual({ isMaster: true, isTrusted: false });
   });
 
-});
-
-describe('conversation.kind 场景映射', () => {
-  it('group 消息进入 Passive Group Context', async () => {
-    const agent = makeAgentStub();
-    const message = makeMessage({
-      content: 'Telegram 群聊消息',
-      sender: { id: 'telegram-user-1', name: 'Alice' },
-      target: 'group:-100123',
-      metadata: { endpoint: 'telegram-bot' },
-    });
-    await recordPassiveGroupContext(agent, runtimeAccess(message), message.content);
-    expect(agent.passive).toEqual([expect.objectContaining({
-      sessionKey: expect.stringContaining('group:-100123'),
-      senderId: 'telegram-user-1',
-      senderName: 'Alice',
-      text: 'Telegram 群聊消息',
-    })]);
-  });
 });
 
 describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () => {

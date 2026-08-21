@@ -6,7 +6,6 @@ import {
   beginIngressTurnSession,
   resolveIngressUserMessage,
 } from '../../src/session/turn-ingress-session.js';
-import { recordPassiveGroupObservation, consumePassiveGroupContextForTurn } from '../../src/session/passive-group-session.js';
 import { PromptController } from '../../src/turn/prompt-controller.js';
 
 function turn() {
@@ -77,24 +76,6 @@ describe('TurnIngress session projection', () => {
     });
     expect(text?.type === 'text' && text.text).toContain('previous answer');
     expect(text?.type === 'text' && text.text).toContain('quoted-1');
-    expect(text?.type === 'text' && text.text).toContain('hello');
-  });
-
-  it('layers passive group context drained by canonical session identity', async () => {
-    const input = turn();
-    await recordPassiveGroupObservation({
-      agentSessionStore: { getOrCreateActive: vi.fn().mockResolvedValue({ session_id: 's1' }) },
-    } as never, {
-      sessionKey: input.session.key,
-      senderId: 'peer-1',
-      senderName: 'Grace',
-      text: 'prior group context',
-    });
-
-    const passiveBlock = consumePassiveGroupContextForTurn(input.session.key);
-    const result = resolveIngressUserMessage(input, { passiveBlock });
-    const text = result.llmMessage.content.find((block) => block.type === 'text');
-    expect(text?.type === 'text' && text.text).toContain('prior group context');
     expect(text?.type === 'text' && text.text).toContain('hello');
   });
 

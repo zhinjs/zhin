@@ -5,7 +5,6 @@ import { prependTurnContextEnvelope } from './turn-envelope.js';
 export function buildTurnUserMessages(
   commMessage: Message,
   rawContent: string,
-  passiveBlock?: string | null,
 ): {
   rawContent: string;
   userMessageExtra?: AgentMessageExtra;
@@ -14,7 +13,6 @@ export function buildTurnUserMessages(
   const { content, extra, llmMessage } = resolveTurnUserMessage(
     commMessage as import('@zhin.js/core').AgentTurnMessage,
     rawContent,
-    { passiveBlock },
   );
   return {
     rawContent: content,

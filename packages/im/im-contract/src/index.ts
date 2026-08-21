@@ -150,7 +150,13 @@ export interface ConversationContextBlock {
 export interface ConversationEventStore {
   append(event: ConversationEvent): Promise<Readonly<{ appended: boolean; sequence: number }>>;
   getMessage(ref: MessageRef): Promise<ConversationMessage | undefined>;
-  listAfter(conversation: ConversationRef, sequence: number, limit: number): Promise<readonly SequencedConversationEvent[]>;
+  /** Latest events in (afterExclusive, throughInclusive], returned in ascending sequence order. */
+  listBetween(
+    conversation: ConversationRef,
+    afterExclusive: number,
+    throughInclusive: number,
+    limit: number,
+  ): Promise<readonly SequencedConversationEvent[]>;
   getCursor(consumer: string, conversation: ConversationRef): Promise<number>;
   commitCursor(consumer: string, conversation: ConversationRef, sequence: number): Promise<void>;
 }
@@ -178,12 +184,20 @@ export class MemoryConversationEventStore implements ConversationEventStore {
     return this.#messages.get(messageRefKey(ref));
   }
 
-  async listAfter(conversation: ConversationRef, sequence: number, limit: number): Promise<readonly SequencedConversationEvent[]> {
+  async listBetween(
+    conversation: ConversationRef,
+    afterExclusive: number,
+    throughInclusive: number,
+    limit: number,
+  ): Promise<readonly SequencedConversationEvent[]> {
     const cap = Math.max(0, Math.floor(limit));
-    return Object.freeze([...this.#events.values()]
-      .filter((entry) => entry.sequence > sequence && sameConversation(entry.event.conversation, conversation))
-      .sort((left, right) => left.sequence - right.sequence)
-      .slice(0, cap));
+    const latest = [...this.#events.values()]
+      .filter((entry) => entry.sequence > afterExclusive && entry.sequence <= throughInclusive)
+      .filter((entry) => sameConversation(entry.event.conversation, conversation))
+      .sort((left, right) => right.sequence - left.sequence)
+      .slice(0, cap)
+      .reverse();
+    return Object.freeze(latest);
   }
 
   async getCursor(consumer: string, conversation: ConversationRef): Promise<number> {
@@ -265,16 +279,24 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
     return event.type === 'message.created' ? event.message : undefined;
   }
 
-  async listAfter(conversation: ConversationRef, sequence: number, limit: number): Promise<readonly SequencedConversationEvent[]> {
+  async listBetween(
+    conversation: ConversationRef,
+    afterExclusive: number,
+    throughInclusive: number,
+    limit: number,
+  ): Promise<readonly SequencedConversationEvent[]> {
     let selection = this.events.select('id', 'event_json')
-      .where({ conversation_key: conversationRefKey(conversation), id: { $gt: sequence } });
-    selection = selection.orderBy?.('id', 'ASC') ?? selection;
+      .where({
+        conversation_key: conversationRefKey(conversation),
+        id: { $gt: afterExclusive, $lte: throughInclusive },
+      });
+    selection = selection.orderBy?.('id', 'DESC') ?? selection;
     selection = selection.limit?.(Math.max(0, Math.floor(limit))) ?? selection;
     const rows = await Promise.resolve(selection);
     return Object.freeze(rows.map((row) => Object.freeze({
       sequence: Number(row.id),
       event: freezeConversationData(parseConversationEvent(row.event_json)),
-    })));
+    })).reverse());
   }
 
   async getCursor(consumer: string, conversation: ConversationRef): Promise<number> {

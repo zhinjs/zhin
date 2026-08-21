@@ -59,13 +59,12 @@ export function prepareUserContentForSession(
   return { content, extra };
 }
 
-/** 旁听块 + 引用块 + 当前 @ 正文分层（仅 LLM 侧；入库 payload 仍为干净正文） */
+/** 引用块 + 当前正文分层（仅 LLM 侧；入库 payload 仍为干净正文） */
 export function layerInboundUserTurnBody(
   body: string,
-  opts?: { passiveBlock?: string | null; quoteBlock?: string | null },
+  opts?: { quoteBlock?: string | null },
 ): string {
   const parts: string[] = [];
-  if (opts?.passiveBlock?.trim()) parts.push(opts.passiveBlock.trim());
   if (opts?.quoteBlock?.trim()) parts.push(opts.quoteBlock.trim());
   if (parts.length === 0) return body;
   return `${parts.join('\n\n')}\n\n${CURRENT_MESSAGE_MARKER}\n${body}`;
@@ -75,16 +74,13 @@ export function layerInboundUserTurnBody(
 export function resolveTurnUserMessage(
   commMessage: AgentTurnMessage,
   rawContent: string,
-  options?: { passiveBlock?: string | null },
 ): { content: string; extra?: AgentMessageExtra; llmMessage: UserMessage } {
   const { content, extra: senderExtra } = prepareUserContentForSession(commMessage, rawContent);
   const extra: AgentMessageExtra = {
     ...senderExtra,
   };
   const hasExtra = !!(extra.sender || extra.quote);
-  const layered = layerInboundUserTurnBody(content, {
-    passiveBlock: options?.passiveBlock,
-  });
+  const layered = layerInboundUserTurnBody(content);
   const inlinedContext = layered !== content;
   const llmMessage = renderUserMessageForLlm(
     createUserMessage(layered),
