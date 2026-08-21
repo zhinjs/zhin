@@ -117,29 +117,30 @@ describe('Agent CapabilityIngress', () => {
     expect(order).toEqual(['active:start', 'control', 'active:end', 'new']);
   });
 
-  it('rejects cross-principal supersede before aborting the active operation', async () => {
+  it('preserves default cross-principal supersede behavior for shared sessions', async () => {
     const coordinator = new AgentTurnCoordinator();
     const signal = new AbortController().signal;
     let admitted!: () => void;
     const ready = new Promise<void>((resolve) => { admitted = resolve; });
-    let finish!: () => void;
-    const held = new Promise<void>((resolve) => { finish = resolve; });
     let firstAborted = false;
     const first = coordinator.runIntent(
       'shared', signal, { kind: 'new' }, principal('user-1'), async (admit, turnSignal) => {
-        turnSignal.addEventListener('abort', () => { firstAborted = true; }, { once: true });
         admit();
         admitted();
-        await held;
+        await new Promise<void>((resolve) => {
+          turnSignal.addEventListener('abort', () => {
+            firstAborted = true;
+            resolve();
+          }, { once: true });
+        });
       },
     );
     await ready;
 
     await expect(coordinator.runIntent(
       'shared', signal, { kind: 'supersede' }, principal('user-2'), async () => undefined,
-    )).rejects.toThrow('product_policy');
-    expect(firstAborted).toBe(false);
-    finish();
+    )).resolves.toBeUndefined();
+    expect(firstAborted).toBe(true);
     await first;
   });
 

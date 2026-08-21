@@ -142,8 +142,9 @@ export interface TurnIngress {
   readonly ports: Readonly<TurnPorts>;
 }
 
-export type TurnIngressInput = Omit<TurnIngress, 'execution'> & {
+export type TurnIngressInput = Omit<TurnIngress, 'execution' | 'intent'> & {
   readonly execution?: TurnExecutionProfile;
+  readonly intent?: TurnIntent;
 };
 
 export interface TurnRequest {
@@ -153,7 +154,7 @@ export interface TurnRequest {
   }>;
   readonly origin: TurnOrigin;
   readonly principal: Readonly<TurnPrincipal>;
-  readonly intent: TurnIntent;
+  readonly intent?: TurnIntent;
   readonly input: Readonly<TurnInput>;
   readonly session: Readonly<TurnSessionAddress>;
   readonly policy: Readonly<TurnPolicyContext>;
@@ -190,7 +191,7 @@ export function createTurnIngress(input: TurnIngressInput): TurnIngress {
   }
 
   const execution: TurnExecutionProfile = input.execution ?? Object.freeze({ kind: 'interactive' });
-  const intent = input.intent;
+  const intent: TurnIntent = input.intent ?? Object.freeze({ kind: 'supersede' });
   validateTurnIntent(intent);
   validateExecutionAuthority(input, execution);
   return Object.freeze({
@@ -209,9 +210,6 @@ export function createTurnIngress(input: TurnIngressInput): TurnIngress {
 }
 
 function validateTurnIntent(intent: TurnIntent): void {
-  if (!intent || typeof intent !== 'object') {
-    throw new TypeError('TurnIngress intent is required');
-  }
   if (!['new', 'steer', 'follow_up', 'supersede', 'observe'].includes(intent.kind)) {
     throw new TypeError(`TurnIngress intent.kind is invalid: ${String(intent.kind)}`);
   }

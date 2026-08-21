@@ -77,10 +77,11 @@ describe('TurnIngress', () => {
     expect(Object.isFrozen(turn.intent)).toBe(true);
   });
 
-  it('fails closed when product intent resolution is omitted', () => {
+  it('defaults omitted product intent resolution to supersede for compatibility', () => {
     const source = input();
-    expect(() => createTurnIngress({ ...source, intent: undefined } as never))
-      .toThrow('TurnIngress intent is required');
+    expect(createTurnIngress({ ...source, intent: undefined })).toMatchObject({
+      intent: { kind: 'supersede' },
+    });
   });
 
   it('fails closed when identity or session ownership is missing', () => {

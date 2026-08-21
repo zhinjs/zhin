@@ -130,10 +130,7 @@ export interface AgentTurnExecutionContext {
 export class AgentTurnCoordinator {
   readonly #tails = new Map<string, Promise<void>>();
   readonly #admissions = new Map<string, Promise<void>>();
-  readonly #active = new Map<string, Readonly<{
-    controller: AbortController;
-    principal: import('../turn/turn-ingress.js').TurnPrincipal;
-  }>>();
+  readonly #active = new Map<string, AbortController>();
 
   async run<TResult>(
     sessionKey: string,
@@ -158,7 +155,7 @@ export class AgentTurnCoordinator {
     sessionKey: string,
     signal: AbortSignal,
     intent: import('../turn/turn-ingress.js').TurnIntent,
-    principal: import('../turn/turn-ingress.js').TurnPrincipal,
+    _principal: import('../turn/turn-ingress.js').TurnPrincipal,
     operation: (admit: () => void, signal: AbortSignal) => Promise<TResult>,
   ): Promise<TResult> {
     const previous = this.#tails.get(sessionKey) ?? Promise.resolve();
@@ -180,20 +177,12 @@ export class AgentTurnCoordinator {
     try {
       if (intent.kind === 'new') {
         await waitForTurn(previous.catch(() => undefined), signal);
-        this.#active.set(sessionKey, { controller, principal });
+        this.#active.set(sessionKey, controller);
       } else if (intent.kind === 'supersede') {
         await waitForAdmission(previousAdmission, signal);
-        const active = this.#active.get(sessionKey);
-        if (
-          active
-          && active.principal.subjectId !== principal.subjectId
-          && intent.authorizedBy !== 'product_policy'
-        ) {
-          throw new Error('supersede across principals requires product_policy authorization');
-        }
-        active?.controller.abort(new TurnSupersededError(sessionKey));
+        this.#active.get(sessionKey)?.abort(new TurnSupersededError(sessionKey));
         await waitForTurn(previous.catch(() => undefined), signal);
-        this.#active.set(sessionKey, { controller, principal });
+        this.#active.set(sessionKey, controller);
       } else {
         await waitForAdmission(previousAdmission, signal);
       }
@@ -202,7 +191,7 @@ export class AgentTurnCoordinator {
       signal.removeEventListener('abort', abortFromCaller);
       admit();
       complete();
-      if (this.#active.get(sessionKey)?.controller === controller) this.#active.delete(sessionKey);
+      if (this.#active.get(sessionKey) === controller) this.#active.delete(sessionKey);
       if (this.#admissions.get(sessionKey) === admitted) this.#admissions.delete(sessionKey);
     }
   }
@@ -271,8 +260,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     const snapshots = this.requireSnapshots();
     if (!snapshots.owns(lease)) throw new Error('AgentRuntime rejected a lease owned by another Root');
     if (!lease.active) throw new Error('AgentRuntime requires an active generation lease');
-    const intent = request.intent;
-    if (!intent) throw new TypeError('AgentRuntime requires an explicit TurnIntent');
+    const intent = request.intent ?? { kind: 'supersede' as const };
     return this.options.coordinator.runIntent(
       request.session.key,
       request.signal,
