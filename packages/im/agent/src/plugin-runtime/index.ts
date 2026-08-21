@@ -19,6 +19,7 @@ export * from './native-file-tools.js';
 export * from './native-web-tools.js';
 export * from './native-todo-tools.js';
 export * from './native-interaction-tools.js';
+export * from './native-semantic-memory-tools.js';
 export { FileJournalStore } from '../journal/file-journal-store.js';
 export {
   capabilityToTool,

@@ -221,9 +221,9 @@ ai:
     maxContextTokens: 4000
   memory:                  # 三层 Markdown 文件记忆，默认启用
     semantic:
-      enabled: true        # 语义记忆：memory_entries 表 + memory_search/memory_upsert 工具
+      enabled: true        # 语义记忆：generation-owned memory_search/memory_upsert；要求 Database Host
       autoConsolidate: false
-    # 注：旧的 memoryMcp（经 MCP server 提供记忆）已弃用，语义记忆为上表内建方案
+    # 启用后 memory_entries 必须在候选代激活时可用，否则该代 fail-closed、不发布
   access:                  # AI 访问控制
     mode: open             # open | closed | whitelist，默认 open
     users: []              # whitelist 模式下允许的用户 id

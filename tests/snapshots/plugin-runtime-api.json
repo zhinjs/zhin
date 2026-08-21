@@ -4,6 +4,7 @@
     "export * from './credentials.js';",
     "export * from './definition.js';",
     "export * from './endpoint-commands.js';",
+    "export * from './endpoint-content.js';",
     "export * from './endpoint-control.js';",
     "export * from './endpoint-lifecycle.js';",
     "export * from './endpoint-management.js';",
@@ -26,10 +27,15 @@
     "export * from './host-tool-projection.js';",
     "export * from './native-file-tools.js';",
     "export * from './native-interaction-tools.js';",
+    "export * from './native-semantic-memory-tools.js';",
     "export * from './native-todo-tools.js';",
     "export * from './native-web-tools.js';",
+    "export * from './turn-intent-resolver.js';",
+    "export type{AssistantRuntimeHandle}from '../assistant/runtime-contract.js';",
     "export{FileJournalStore}from '../journal/file-journal-store.js';",
-    "export{capabilityToTool,toolInvocationFromTurn,toolsFromCapabilities,type GenerationStampedTool,}from './capability-tools.js';"
+    "export{capabilityToTool,toolInvocationFromTurn,toolsFromCapabilities,type GenerationStampedTool,}from './capability-tools.js';",
+    "export{createOrchestrationRuntimeFromService,type OrchestrationRuntimeHandle,}from '../orchestration-runtime.js';",
+    "export{createSessionTreeRuntimeFromAgent,type SessionTreeRuntimeHandle,}from '../session-tree-runtime.js';"
   ],
   "cli/runtime": [
     "export * from './migrate/index.js';",

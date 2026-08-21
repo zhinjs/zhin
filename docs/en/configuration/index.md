@@ -221,9 +221,9 @@ ai:
     maxContextTokens: 4000
   memory:                  # Three-layer Markdown file memory, enabled by default
     semantic:
-      enabled: true        # Semantic memory: memory_entries table + memory_search/memory_upsert tools
+      enabled: true        # Generation-owned memory_search/memory_upsert; requires the Database Host
       autoConsolidate: false
-    # Note: the old memoryMcp (memory via MCP server) is deprecated; semantic memory is the built-in solution above
+    # memory_entries must be ready during candidate activation or that generation fails closed
   access:                  # AI access control
     mode: open             # open | closed | whitelist, default open
     users: []              # Allowed user IDs in whitelist mode

@@ -82,6 +82,8 @@ import {
   createNativeWebToolFeatures,
   createNativeTodoToolFeatures,
   createNativeInteractionToolFeatures,
+  createNativeSemanticMemoryToolFeatures,
+  SemanticMemoryRuntime,
   FileTodoStore,
   AgentRuntime,
   createOrchestrationRuntimeFromService,
@@ -244,6 +246,10 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     let scheduleTools: ReturnType<typeof createScheduleTools> = [];
     let homeTools: BootstrapAssistantHomeResult['tools'] = [];
     let assistantEnabled = false;
+    const semanticMemory = aiConfig.memory?.semantic?.enabled === true
+      ? new SemanticMemoryRuntime()
+      : null;
+    if (semanticMemory) lifecycle.add(() => semanticMemory.dispose());
     let orchService: OrchestrationService;
     let remoteAgents: RemoteAgentRegistry;
     let orchestrationRuntime: OrchestrationRuntimeHandle;
@@ -325,6 +331,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
             try {
               const raw = database.getRawDatabase();
               if (!raw) {
+                if (semanticMemory) {
+                  throw new Error('Semantic memory requires an active database connection');
+                }
                 logger.warn(formatCompact({
                   op: 'agent_host_persistence',
                   mode: 'memory',
@@ -337,6 +346,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 { aiService: service, zhinAgent },
                 aiConfig,
                 orchService,
+                semanticMemory,
               );
               signal.throwIfAborted();
               logger.info(formatCompact({
@@ -345,6 +355,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 tables: tableCount,
               }));
             } catch (error) {
+              if (semanticMemory) throw error;
               logger.warn(formatCompact({
                 op: 'agent_host_persistence',
                 mode: 'memory',
@@ -357,6 +368,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           },
         });
       } catch (error) {
+        if (semanticMemory) throw error;
         logger.warn(formatCompact({
           op: 'agent_host_persistence',
           mode: 'memory',
@@ -365,6 +377,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         }));
         zhinAgent.markMemoryPersistenceReady();
       }
+    } else if (semanticMemory) {
+      throw new Error('ai.memory.semantic.enabled requires the Database Root Host');
     } else {
       zhinAgent.markMemoryPersistenceReady();
     }
@@ -425,6 +439,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     }
     for (const tool of createNativeInteractionToolFeatures()) {
       addFeature(tool.feature, tool.name, tool.definition);
+    }
+    if (semanticMemory) {
+      for (const tool of createNativeSemanticMemoryToolFeatures(semanticMemory)) {
+        addFeature(tool.feature, tool.name, tool.definition);
+      }
     }
 
     const orchestrator = zhinAgent.orchestrator;

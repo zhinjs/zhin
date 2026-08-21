@@ -9,7 +9,6 @@ import {
   type OrchestrationAddTaskInput,
 } from '../orchestrator/orchestration-service.js';
 import { orchestrationSourceFromMessage } from '../orchestrator/orchestration-source.js';
-import { writeOrchestrationRunSummaryToMemory } from '../orchestration-memory-hook.js';
 function sessionKeyFromContext(commMessage: Message<any>): string {
   return resolveIMSessionIdFromMessage(commMessage);
 }
@@ -224,10 +223,6 @@ class OrchestrationCompleteTool extends BuiltinBaseTool {
     const runId = String(args.run_id ?? '');
     if (!runId) return '请提供 run_id';
     const result = await svc.completeRun(runId, args.force === true);
-    if (result.ok) {
-      const snapshot = await svc.getStatus(runId);
-      if (snapshot) await writeOrchestrationRunSummaryToMemory(snapshot);
-    }
     return result.message;
   }
 }

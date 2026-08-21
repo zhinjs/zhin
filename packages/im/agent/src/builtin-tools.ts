@@ -27,15 +27,11 @@ import { createTodoReadTool } from './builtin/todo-read-tool.js';
 import { createTodoWriteTool } from './builtin/todo-write-tool.js';
 import { createInstallSkillTool } from './builtin/install-skill-tool.js';
 import { createAnalyzeMediaTool } from './builtin/analyze-media-tool.js';
-import { createMemorySearchTool } from './builtin/memory-search-tool.js';
-import { createMemoryUpsertTool } from './builtin/memory-upsert-tool.js';
 import { createKnowledgeSearchTool } from './builtin/knowledge-search-tool.js';
 
 export interface BuiltinToolsOptions {
   /** Classic Plugin authority still required by the legacy bash definition. */
   plugin: Plugin;
-  /** L4 语义记忆：注册 memory_search / memory_upsert */
-  semanticMemory?: boolean;
   /** 知识库目录（注册 knowledge_search 工具） */
   knowledgeDir?: string;
 }
@@ -63,11 +59,6 @@ export function createBuiltinTools(options: BuiltinToolsOptions): ToolInput[] {
   tools.push(createTodoWriteTool(DATA_DIR));
 
   tools.push(createInstallSkillTool());
-
-  if (options?.semanticMemory) {
-    tools.push(createMemorySearchTool());
-    tools.push(createMemoryUpsertTool());
-  }
 
   if (options?.knowledgeDir) {
     tools.push(createKnowledgeSearchTool({ knowledgeDir: options.knowledgeDir }));
