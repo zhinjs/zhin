@@ -74,6 +74,7 @@ export interface WorkroomAcceptanceDecisionInput {
   readonly runId: string;
   readonly expectedSequence: number;
   readonly now: number;
+  readonly contract: WorkroomAcceptanceContract;
   readonly task: Readonly<{
     key: WorkroomTaskState['key'];
     revision: WorkroomTaskState['revision'];
@@ -83,6 +84,18 @@ export interface WorkroomAcceptanceDecisionInput {
     id: WorkroomAssignmentState['id'];
     owner: WorkroomAssignmentState['owner'];
     reportRef: string;
+  }>;
+}
+
+export interface WorkroomAcceptanceContractPinInput {
+  readonly projectId: string;
+  readonly runId: string;
+  readonly expectedSequence: number;
+  readonly now: number;
+  readonly task: Readonly<{
+    key: WorkroomTaskState['key'];
+    title: WorkroomTaskState['title'];
+    revision: WorkroomTaskState['revision'];
   }>;
 }
 
@@ -114,9 +127,61 @@ export interface WorkroomAcceptanceRecord extends WorkroomAcceptanceDecision {
  * artifact, risk and check stores; callers cannot supply an acceptance result.
  */
 export interface WorkroomAcceptancePolicyDecisionPort {
+  pinContract(
+    input: WorkroomAcceptanceContractPinInput,
+  ): WorkroomAcceptanceContract | Promise<WorkroomAcceptanceContract>;
   decide(
     input: WorkroomAcceptanceDecisionInput,
   ): WorkroomAcceptanceDecision | Promise<WorkroomAcceptanceDecision>;
+}
+
+export function createAcceptanceContractPinInput(
+  state: WorkroomRunState,
+  taskKey: string,
+): WorkroomAcceptanceContractPinInput {
+  const task = state.tasks[taskKey];
+  if (!task) throw new Error(`Task ${taskKey} not found`);
+  if (task.status !== 'ready') throw new Error(`Task ${taskKey} is ${task.status}`);
+  if (task.acceptanceContract) throw new Error(`Task ${taskKey} Acceptance Contract is already pinned`);
+  return Object.freeze({
+    projectId: state.projectId,
+    runId: state.runId,
+    expectedSequence: state.sequence,
+    now: state.now,
+    task: Object.freeze({ key: task.key, title: task.title, revision: task.revision }),
+  });
+}
+
+export function assertAcceptanceContract(
+  value: WorkroomAcceptanceContract,
+  taskKey: string,
+  taskRevision: number,
+): void {
+  requireStrings([
+    value.id, value.digest, value.taskKey, value.policy.id, value.policy.digest,
+  ]);
+  if (value.taskKey !== taskKey || value.taskRevision !== taskRevision) {
+    throw new Error('Acceptance Contract does not match the current Task revision');
+  }
+  if (!Number.isSafeInteger(value.taskRevision) || value.taskRevision < 1
+    || !Number.isSafeInteger(value.revision) || value.revision < 1
+    || !Number.isSafeInteger(value.policy.revision) || value.policy.revision < 1) {
+    throw new Error('Task, Acceptance Contract and Policy revisions must be positive integers');
+  }
+  if (!['task_result', 'integration_candidate', 'effect_intent'].includes(value.kind)) {
+    throw new Error('Acceptance Contract kind is invalid');
+  }
+  if (value.criteria.length === 0) throw new Error('Acceptance Contract requires explicit criteria');
+  const ids = new Set<string>();
+  for (const criterion of value.criteria) {
+    requireStrings([criterion.id, criterion.description]);
+    if (criterion.kind !== 'deterministic' && criterion.kind !== 'judgment') {
+      throw new Error('Acceptance Contract criterion kind is invalid');
+    }
+    if (ids.has(criterion.id)) throw new Error('Acceptance Contract criterion IDs must be unique');
+    ids.add(criterion.id);
+  }
+  assertUniqueStrings(value.requiredEvidence, 'required evidence refs');
 }
 
 export function createAcceptanceDecisionInput(
@@ -138,6 +203,7 @@ export function createAcceptanceDecisionInput(
     runId: state.runId,
     expectedSequence: state.sequence,
     now: state.now,
+    contract: freezeAcceptanceContract(task.acceptanceContract ?? failUnpinnedContract(taskKey)),
     task: Object.freeze({ key: task.key, revision: task.revision, reportRef: task.reportRef }),
     assignment: Object.freeze({ id: assignment.id, owner: assignment.owner, reportRef: assignment.reportRef }),
   });
@@ -232,6 +298,7 @@ export function assertPersistedAcceptanceRecord(
       runId: 'persisted',
       expectedSequence: 0,
       now: 0,
+      contract: decision.contract,
       task: {
         key: taskKey,
         revision: candidate.taskRevision as number,
@@ -288,6 +355,7 @@ function assertDecisionBindings(
   if (contract.taskKey !== input.task.key || contract.taskRevision !== input.task.revision) {
     throw new Error('Acceptance Contract does not match the current Task revision');
   }
+  assertPinnedAcceptanceContract(contract, input.contract);
   if (!Number.isSafeInteger(contract.revision) || contract.revision < 1
     || !Number.isSafeInteger(contract.policy.revision) || contract.policy.revision < 1) {
     throw new Error('Acceptance Contract and Policy revisions must be positive integers');
@@ -358,7 +426,7 @@ function freezeCandidate(value: WorkroomAcceptanceCandidate): WorkroomAcceptance
   });
 }
 
-function freezeContract(value: WorkroomAcceptanceContract): WorkroomAcceptanceContract {
+export function freezeAcceptanceContract(value: WorkroomAcceptanceContract): WorkroomAcceptanceContract {
   return Object.freeze({
     ...value,
     policy: Object.freeze({ ...value.policy }),
@@ -382,7 +450,7 @@ function freezeDecision(value: WorkroomAcceptanceDecision): WorkroomAcceptanceDe
   return Object.freeze({
     ...value,
     candidate: freezeCandidate(value.candidate),
-    contract: freezeContract(value.contract),
+    contract: freezeAcceptanceContract(value.contract),
     riskAssessment: freezeRisk(value.riskAssessment),
     checkResults: freezeChecks(value.checkResults),
     acceptedClaimIds: Object.freeze([...value.acceptedClaimIds]),
@@ -409,6 +477,30 @@ function assertUniqueStrings(values: readonly string[], label: string, required 
 
 function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every(value => right.includes(value));
+}
+
+export function assertPinnedAcceptanceContract(
+  actual: WorkroomAcceptanceContract,
+  pinned: WorkroomAcceptanceContract,
+): void {
+  const matches = actual.id === pinned.id
+    && actual.revision === pinned.revision
+    && actual.digest === pinned.digest
+    && actual.taskKey === pinned.taskKey
+    && actual.taskRevision === pinned.taskRevision
+    && actual.kind === pinned.kind
+    && actual.policy.id === pinned.policy.id
+    && actual.policy.revision === pinned.policy.revision
+    && actual.policy.digest === pinned.policy.digest
+    && JSON.stringify(actual.criteria) === JSON.stringify(pinned.criteria)
+    && JSON.stringify(actual.requiredEvidence) === JSON.stringify(pinned.requiredEvidence);
+  if (!matches) {
+    throw new Error('Acceptance Decision does not match the pinned Contract and Policy snapshot');
+  }
+}
+
+function failUnpinnedContract(taskKey: string): never {
+  throw new Error(`Task ${taskKey} Acceptance Contract is not pinned`);
 }
 
 function expectRecord(value: unknown): Record<string, unknown> {

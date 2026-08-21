@@ -6,6 +6,7 @@ import type {
   WorkroomRunState,
   WorkroomTaskState,
 } from './kernel-contracts.js';
+import { assertAcceptanceContract, assertPinnedAcceptanceContract } from './acceptance-policy.js';
 
 const TERMINAL_TASKS = new Set(['accepted', 'failed', 'cancelled']);
 const ACTIVE_ASSIGNMENTS = new Set(['leased', 'running', 'cancel_requested']);
@@ -63,6 +64,7 @@ export function decideWorkroom(
     }
     case 'claim_task': {
       const task = requireTask(state, command.taskKey, ['ready']);
+      if (!task.acceptanceContract) throw new Error(`Task ${task.key} Acceptance Contract is not pinned`);
       if (state.assignments[command.assignmentId]) throw new Error('Assignment already exists');
       return [event('assignment.claimed', {
         ...command,
@@ -201,11 +203,26 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
     }
     case 'task.accepted': {
       const task = requireTask(state, String(payload.taskKey));
+      const record = payload.record as NonNullable<WorkroomTaskState['acceptanceRecord']>;
+      if (!task.acceptanceContract) throw new Error(`Task ${task.key} Acceptance Contract is not pinned`);
+      assertPinnedAcceptanceContract(record.contract, task.acceptanceContract);
       tasks = replaceTask(tasks, task.key, {
         ...task,
         status: 'accepted',
-        acceptanceRecord: payload.record as WorkroomTaskState['acceptanceRecord'],
+        acceptanceRecord: record,
         acceptanceBlockReason: undefined,
+      });
+      break;
+    }
+    case 'task.acceptance_pinned': {
+      const task = requireTask(state, String(payload.taskKey));
+      if (task.status !== 'ready') throw new Error(`Task ${task.key} is ${task.status}`);
+      if (task.acceptanceContract) throw new Error(`Task ${task.key} Acceptance Contract is already pinned`);
+      const contract = payload.contract as NonNullable<WorkroomTaskState['acceptanceContract']>;
+      assertAcceptanceContract(contract, task.key, task.revision);
+      tasks = replaceTask(tasks, task.key, {
+        ...task,
+        acceptanceContract: contract,
       });
       break;
     }
@@ -226,6 +243,7 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
         attempt: 0,
         currentAssignmentId: undefined,
         reportRef: undefined,
+        acceptanceContract: undefined,
         acceptanceRecord: undefined,
         acceptanceBlockReason: undefined,
         terminalReason: String(payload.reason),
@@ -243,6 +261,7 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
         maxAttempts: Number(payload.maxAttempts),
         currentAssignmentId: undefined,
         reportRef: undefined,
+        acceptanceContract: undefined,
         acceptanceRecord: undefined,
         acceptanceBlockReason: undefined,
         terminalReason: String(payload.reason),

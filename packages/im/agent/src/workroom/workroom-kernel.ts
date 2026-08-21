@@ -8,6 +8,9 @@ import type {
 import type { WorkroomJournal } from './journal.js';
 import {
   createAcceptanceDecisionInput,
+  createAcceptanceContractPinInput,
+  assertAcceptanceContract,
+  freezeAcceptanceContract,
   decideTaskAcceptance,
   type WorkroomAcceptancePolicyDecisionPort,
 } from './acceptance-policy.js';
@@ -82,6 +85,30 @@ export class WorkroomKernel {
     const input = createAcceptanceDecisionInput(state, taskKey);
     const decision = await policy.decide(input);
     const drafts = decideTaskAcceptance(input, decision, (type, payload) => this.#event(type, payload));
+    await this.#journal.append(runId, input.expectedSequence, drafts);
+    return this.read(scopedProjectId, runId);
+  }
+
+  async pinTaskAcceptance(
+    projectId: string,
+    runId: string,
+    taskKey: string,
+  ): Promise<WorkroomRunState> {
+    assertProjectId(projectId);
+    const scopedProjectId = projectId.trim();
+    assertRunId(runId);
+    const policy = this.#acceptancePolicy;
+    if (!policy) throw new Error('Acceptance Policy Decision Port is not installed');
+    const state = await this.#readUnscoped(runId);
+    assertProject(state, scopedProjectId);
+    const input = createAcceptanceContractPinInput(state, taskKey);
+    const contract = await policy.pinContract(input);
+    assertAcceptanceContract(contract, input.task.key, input.task.revision);
+    const pinnedContract = freezeAcceptanceContract(contract);
+    const drafts = [this.#event('task.acceptance_pinned', {
+      taskKey: input.task.key,
+      contract: pinnedContract,
+    })];
     await this.#journal.append(runId, input.expectedSequence, drafts);
     return this.read(scopedProjectId, runId);
   }

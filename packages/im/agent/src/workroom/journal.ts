@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { link, mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { WorkroomEvent, WorkroomEventDraft } from './kernel-contracts.js';
-import { assertPersistedAcceptanceRecord } from './acceptance-policy.js';
+import { assertAcceptanceContract, assertPersistedAcceptanceRecord } from './acceptance-policy.js';
 
 export class WorkroomSequenceConflictError extends Error {
   constructor(
@@ -364,7 +364,7 @@ const WORKROOM_EVENT_TYPES = new Set<WorkroomEvent['type']>([
   'run.created', 'run.cancel_requested', 'run.cancelled',
   'task.planned', 'task.blocked', 'task.blocker_resolved',
   'task.cancel_requested', 'task.cancelled', 'task.failed',
-  'task.accepted', 'task.acceptance_blocked', 'task.rework_requested', 'task.revised',
+  'task.accepted', 'task.acceptance_pinned', 'task.acceptance_blocked', 'task.rework_requested', 'task.revised',
   'assignment.claimed', 'assignment.started', 'assignment.heartbeat',
   'assignment.execution_completed', 'assignment.cancel_requested',
   'assignment.cancelled', 'assignment.lease_expired', 'clock.advanced',
@@ -407,6 +407,16 @@ function validatePayload(
         String(payload.reportRef),
         sequence,
       ); return;
+    case 'task.acceptance_pinned': {
+      requirePayloadString(payload, 'taskKey');
+      const contract = requirePayloadRecord(payload, 'contract');
+      assertAcceptanceContract(
+        contract as unknown as import('./acceptance-policy.js').WorkroomAcceptanceContract,
+        String(payload.taskKey),
+        Number(contract.taskRevision),
+      );
+      return;
+    }
     case 'task.acceptance_blocked':
       requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'reportRef');
       requirePayloadString(payload, 'reason'); requirePayloadRecord(payload, 'evaluation'); return;
@@ -461,8 +471,9 @@ function requirePayloadNumber(payload: Readonly<Record<string, unknown>>, key: s
   if (!isFiniteNumber(payload[key])) throw new Error(`Invalid Workroom event payload: ${key}`);
 }
 
-function requirePayloadRecord(payload: Readonly<Record<string, unknown>>, key: string): void {
+function requirePayloadRecord(payload: Readonly<Record<string, unknown>>, key: string): Record<string, unknown> {
   if (!isRecord(payload[key])) throw new Error(`Invalid Workroom event payload: ${key}`);
+  return payload[key];
 }
 
 function requirePayloadPositiveInteger(payload: Readonly<Record<string, unknown>>, key: string): void {

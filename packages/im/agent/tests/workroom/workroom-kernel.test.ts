@@ -10,6 +10,7 @@ import {
   WorkroomSequenceConflictError,
 } from '../../src/workroom/journal.js';
 import type {
+  WorkroomAcceptanceContractPinInput,
   WorkroomAcceptanceDecision,
   WorkroomAcceptanceDecisionInput,
   WorkroomAcceptancePolicyDecisionPort,
@@ -17,7 +18,9 @@ import type {
 import type { WorkroomCommand } from '../../src/workroom/kernel-contracts.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 
-function fixture(acceptancePolicy?: WorkroomAcceptancePolicyDecisionPort) {
+function fixture(
+  acceptancePolicy: WorkroomAcceptancePolicyDecisionPort | null = pinnedAcceptancePolicy(),
+) {
   let now = 100;
   let id = 0;
   const journal = new MemoryWorkroomJournal();
@@ -25,15 +28,43 @@ function fixture(acceptancePolicy?: WorkroomAcceptancePolicyDecisionPort) {
     journal,
     now: () => now,
     createId: () => `id-${++id}`,
-    acceptancePolicy,
+    acceptancePolicy: acceptancePolicy ?? undefined,
   });
   return { journal, kernel, setNow: (value: number) => { now = value; } };
 }
 
 describe('WorkroomKernel', () => {
+  it('requires a pinned Acceptance Contract before an Executor can claim a Task', async () => {
+    const { journal, kernel } = fixture(pinnedAcceptancePolicy());
+    await kernel.createRun({ runId: 'run-1', projectId: 'project-1', title: 'Pinned acceptance' });
+    await kernel.execute('project-1', 'run-1', {
+      type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 1,
+    });
+
+    await expect(kernel.execute('project-1', 'run-1', {
+      type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
+      owner: 'builder', role: 'executor', leaseExpiresAt: 200,
+    })).rejects.toThrow('Acceptance Contract is not pinned');
+
+    const pinned = await kernel.pinTaskAcceptance('project-1', 'run-1', 'build');
+    expect(pinned.tasks.build?.acceptanceContract).toMatchObject({
+      id: 'contract:build:1',
+      taskKey: 'build',
+      taskRevision: 1,
+      policy: { id: 'policy-1', revision: 1, digest: 'sha256:policy-1' },
+    });
+    expect((await journal.read('run-1')).at(-1)?.type).toBe('task.acceptance_pinned');
+
+    await expect(kernel.execute('project-1', 'run-1', {
+      type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
+      owner: 'builder', role: 'executor', leaseExpiresAt: 200,
+    })).resolves.toMatchObject({ tasks: { build: { status: 'executing' } } });
+  });
+
   it('lets only the trusted policy port accept a low-risk mechanical candidate', async () => {
     let evaluated: WorkroomAcceptanceDecisionInput | undefined;
     const acceptancePolicy: WorkroomAcceptancePolicyDecisionPort = {
+      ...pinnedAcceptancePolicy(),
       decide(input) {
         evaluated = input;
         return lowRiskAcceptance(input);
@@ -44,6 +75,7 @@ describe('WorkroomKernel', () => {
     await kernel.execute('project-1', 'run-1', {
       type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 2,
     });
+    await kernel.pinTaskAcceptance('project-1', 'run-1', 'build');
     await kernel.execute('project-1', 'run-1', {
       type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
       owner: 'builder', role: 'executor', leaseExpiresAt: 200,
@@ -62,7 +94,7 @@ describe('WorkroomKernel', () => {
     expect(evaluated).toMatchObject({
       projectId: 'project-1',
       runId: 'run-1',
-      expectedSequence: 4,
+      expectedSequence: 5,
       task: { key: 'build', revision: 1, reportRef: 'report://1' },
       assignment: { id: 'assignment-1', owner: 'builder', reportRef: 'report://1' },
     });
@@ -73,8 +105,8 @@ describe('WorkroomKernel', () => {
         reportRef: 'report://1',
         record: {
           candidateHash: 'sha256:candidate-1',
-          sourceSequence: 4,
-          acceptanceSequence: 5,
+          sourceSequence: 5,
+          acceptanceSequence: 6,
           policy: { id: 'policy-1', revision: 1, digest: 'sha256:policy-1' },
           acceptedClaimIds: ['claim-1'],
           decidedBy: 'acceptance-policy:policy-1',
@@ -84,27 +116,19 @@ describe('WorkroomKernel', () => {
   });
 
   it('fails closed when no trusted acceptance policy is installed', async () => {
-    const { kernel } = fixture();
+    const { kernel } = fixture(null);
     await kernel.createRun({ runId: 'run-1', projectId: 'project-1', title: 'Ship release' });
     await kernel.execute('project-1', 'run-1', {
       type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 1,
     });
-    await kernel.execute('project-1', 'run-1', {
-      type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
-      owner: 'builder', role: 'executor', leaseExpiresAt: 200,
-    });
-    await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
-    await kernel.execute('project-1', 'run-1', {
-      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
-    });
-
-    await expect(kernel.evaluateTaskAcceptance('project-1', 'run-1', 'build'))
+    await expect(kernel.pinTaskAcceptance('project-1', 'run-1', 'build'))
       .rejects.toThrow('Acceptance Policy Decision Port is not installed');
-    expect((await kernel.read('project-1', 'run-1')).tasks.build?.status).toBe('awaiting_acceptance');
+    expect((await kernel.read('project-1', 'run-1')).tasks.build?.status).toBe('ready');
   });
 
   it('rejects an unsafe automatic-acceptance recommendation from the policy port', async () => {
     const acceptancePolicy: WorkroomAcceptancePolicyDecisionPort = {
+      ...pinnedAcceptancePolicy(),
       decide(input) {
         const baseline = lowRiskAcceptance(input);
         return {
@@ -118,6 +142,7 @@ describe('WorkroomKernel', () => {
     await kernel.execute('project-1', 'run-1', {
       type: 'plan_task', taskKey: 'deploy', title: 'Deploy', required: true, maxAttempts: 1,
     });
+    await kernel.pinTaskAcceptance('project-1', 'run-1', 'deploy');
     await kernel.execute('project-1', 'run-1', {
       type: 'claim_task', taskKey: 'deploy', assignmentId: 'assignment-1',
       owner: 'deployer', role: 'executor', leaseExpiresAt: 200,
@@ -133,11 +158,47 @@ describe('WorkroomKernel', () => {
     expect((await kernel.read('project-1', 'run-1')).tasks.deploy?.status).toBe('awaiting_acceptance');
   });
 
+  it('rejects a decision made against a different Contract or Policy snapshot', async () => {
+    const acceptancePolicy: WorkroomAcceptancePolicyDecisionPort = {
+      ...pinnedAcceptancePolicy(),
+      decide(input) {
+        const baseline = lowRiskAcceptance(input);
+        return {
+          ...baseline,
+          contract: {
+            ...baseline.contract,
+            policy: { ...baseline.contract.policy, revision: 2, digest: 'sha256:policy-2' },
+          },
+        };
+      },
+    };
+    const { journal, kernel } = fixture(acceptancePolicy);
+    await kernel.createRun({ runId: 'run-1', projectId: 'project-1', title: 'Pinned policy' });
+    await kernel.execute('project-1', 'run-1', {
+      type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 1,
+    });
+    await kernel.pinTaskAcceptance('project-1', 'run-1', 'build');
+    await kernel.execute('project-1', 'run-1', {
+      type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
+      owner: 'builder', role: 'executor', leaseExpiresAt: 200,
+    });
+    await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
+    await kernel.execute('project-1', 'run-1', {
+      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
+    });
+
+    await expect(kernel.evaluateTaskAcceptance('project-1', 'run-1', 'build'))
+      .rejects.toThrow('does not match the pinned Contract and Policy snapshot');
+    expect((await journal.read('run-1')).map(event => event.type)).not.toContain('task.accepted');
+    expect((await kernel.read('project-1', 'run-1')).tasks.build?.status).toBe('awaiting_acceptance');
+  });
+
   it('uses the Journal sequence as the acceptance decision CAS fence', async () => {
     let waiting = 0;
     let release!: () => void;
     const bothEvaluating = new Promise<void>(resolve => { release = resolve; });
     const acceptancePolicy: WorkroomAcceptancePolicyDecisionPort = {
+      ...pinnedAcceptancePolicy(),
       async decide(input) {
         waiting += 1;
         if (waiting === 2) release();
@@ -159,6 +220,7 @@ describe('WorkroomKernel', () => {
     await first.execute('project-1', 'run-1', {
       type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 1,
     });
+    await first.pinTaskAcceptance('project-1', 'run-1', 'build');
     await first.execute('project-1', 'run-1', {
       type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
       owner: 'builder', role: 'executor', leaseExpiresAt: 200,
@@ -191,6 +253,7 @@ describe('WorkroomKernel', () => {
     await kernel.execute('project-1', 'run-1', {
       type: 'plan_task', taskKey: 'draft', title: 'Draft', required: true, maxAttempts: 1,
     });
+    await kernel.pinTaskAcceptance('project-1', 'run-1', 'draft');
     await kernel.execute('project-1', 'run-1', {
       type: 'claim_task', taskKey: 'draft', assignmentId: 'assignment-1',
       owner: 'writer', role: 'executor', leaseExpiresAt: 200,
@@ -204,6 +267,11 @@ describe('WorkroomKernel', () => {
       type: 'request_rework', taskKey: 'draft', reason: 'missing evidence',
     });
     expect(rework.tasks.draft).toMatchObject({ status: 'ready', revision: 2, attempt: 0 });
+    expect(rework.tasks.draft?.acceptanceContract).toBeUndefined();
+    await expect(kernel.execute('project-1', 'run-1', {
+      type: 'claim_task', taskKey: 'draft', assignmentId: 'assignment-2',
+      owner: 'writer', role: 'executor', leaseExpiresAt: 300,
+    })).rejects.toThrow('Acceptance Contract is not pinned');
   });
 
   it('recovers an expired lease without accepting its result', async () => {
@@ -212,6 +280,7 @@ describe('WorkroomKernel', () => {
     await kernel.execute('project-1', 'run-1', {
       type: 'plan_task', taskKey: 'research', title: 'Research', required: true, maxAttempts: 2,
     });
+    await kernel.pinTaskAcceptance('project-1', 'run-1', 'research');
     await kernel.execute('project-1', 'run-1', {
       type: 'claim_task', taskKey: 'research', assignmentId: 'assignment-1',
       owner: 'researcher', role: 'executor', leaseExpiresAt: 120,
@@ -230,6 +299,7 @@ describe('WorkroomKernel', () => {
     await kernel.execute('project-1', 'run-1', {
       type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 1,
     });
+    await kernel.pinTaskAcceptance('project-1', 'run-1', 'build');
     await kernel.execute('project-1', 'run-1', {
       type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
       owner: 'builder', role: 'executor', leaseExpiresAt: 120,
@@ -260,6 +330,7 @@ describe('WorkroomKernel', () => {
     await kernel.execute('project-1', 'run-1', {
       type: 'plan_task', taskKey: 'write', title: 'Write', required: true, maxAttempts: 2,
     });
+    await kernel.pinTaskAcceptance('project-1', 'run-1', 'write');
     await kernel.execute('project-1', 'run-1', {
       type: 'claim_task', taskKey: 'write', assignmentId: 'assignment-1',
       owner: 'writer', role: 'executor', leaseExpiresAt: 200,
@@ -442,19 +513,7 @@ function lowRiskAcceptance(input: WorkroomAcceptanceDecisionInput): WorkroomAcce
       claimIds: Object.freeze(['claim-1']),
       evidenceRefs: Object.freeze(['evidence://1']),
     }),
-    contract: Object.freeze({
-      id: 'contract-1',
-      revision: 1,
-      digest: 'sha256:contract-1',
-      taskKey: input.task.key,
-      taskRevision: input.task.revision,
-      kind: 'task_result',
-      policy: Object.freeze({ id: 'policy-1', revision: 1, digest: 'sha256:policy-1' }),
-      criteria: Object.freeze([{
-        id: 'criterion-build', kind: 'deterministic', description: 'Build succeeds',
-      }]),
-      requiredEvidence: Object.freeze(['evidence://1']),
-    }),
+    contract: input.contract,
     riskAssessment: Object.freeze({
       id: 'risk-1',
       candidateHash: 'sha256:candidate-1',
@@ -476,4 +535,27 @@ function lowRiskAcceptance(input: WorkroomAcceptanceDecisionInput): WorkroomAcce
     rejectedClaimIds: Object.freeze([]),
     decidedBy: 'acceptance-policy:policy-1',
   });
+}
+
+function pinnedAcceptancePolicy() {
+  return {
+    pinContract(input: WorkroomAcceptanceContractPinInput) {
+      return Object.freeze({
+        id: `contract:${input.task.key}:${input.task.revision}`,
+        revision: input.task.revision,
+        digest: `sha256:contract-${input.task.key}-${input.task.revision}`,
+        taskKey: input.task.key,
+        taskRevision: input.task.revision,
+        kind: 'task_result' as const,
+        policy: Object.freeze({ id: 'policy-1', revision: 1, digest: 'sha256:policy-1' }),
+        criteria: Object.freeze([{
+          id: 'criterion-build', kind: 'deterministic' as const, description: 'Build succeeds',
+        }]),
+        requiredEvidence: Object.freeze(['evidence://1']),
+      });
+    },
+    decide(input: WorkroomAcceptanceDecisionInput) {
+      return lowRiskAcceptance(input);
+    },
+  };
 }

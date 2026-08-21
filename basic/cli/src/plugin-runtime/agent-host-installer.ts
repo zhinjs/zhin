@@ -93,6 +93,8 @@ import {
   type ToolCapability,
   turnIntentResolverToken,
   type TurnIntentResolver,
+  createGenerationWorkroomAcceptancePolicyPort,
+  workroomAcceptancePolicyDecisionToken,
 } from '@zhin.js/agent/runtime';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
@@ -264,7 +266,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       : null;
     if (semanticMemory) lifecycle.add(() => semanticMemory.dispose());
     const workroomJournal = new ActivatableWorkroomJournal();
-    const workroomKernel = new WorkroomKernel({ journal: workroomJournal });
+    const workroomKernel = new WorkroomKernel({
+      journal: workroomJournal,
+      acceptancePolicy: createGenerationWorkroomAcceptancePolicyPort(() =>
+        resources.has(workroomAcceptancePolicyDecisionToken)
+          ? resources.use(workroomAcceptancePolicyDecisionToken)
+          : undefined),
+    });
     const activateFileWorkroomJournal = () => {
       if (!workroomJournal.active) {
         workroomJournal.activate(new FileWorkroomJournal(join(options.projectRoot, '.zhin', 'workroom-journal')));

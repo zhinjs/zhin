@@ -1,4 +1,4 @@
-import type { WorkroomAcceptanceRecord } from './acceptance-policy.js';
+import type { WorkroomAcceptanceContract, WorkroomAcceptanceRecord } from './acceptance-policy.js';
 
 export type WorkroomRunStatus =
   | 'active'
@@ -49,6 +49,7 @@ export interface WorkroomTaskState {
   readonly blockers: readonly WorkroomBlocker[];
   readonly currentAssignmentId?: string;
   readonly reportRef?: string;
+  readonly acceptanceContract?: WorkroomAcceptanceContract;
   readonly acceptanceRecord?: WorkroomAcceptanceRecord;
   readonly acceptanceBlockReason?: string;
   readonly terminalReason?: string;
@@ -92,6 +93,7 @@ export type WorkroomEventType =
   | 'task.cancelled'
   | 'task.failed'
   | 'task.accepted'
+  | 'task.acceptance_pinned'
   | 'task.acceptance_blocked'
   | 'task.rework_requested'
   | 'task.revised'
