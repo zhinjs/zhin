@@ -6,10 +6,10 @@
  * 每个输入媒体必须产生 accepted / derived / unsupported / rejected / failed
  * 之一；失败不得伪装成已经被模型识别的媒体占位。
  */
-import { isMediaBlockRef, type MediaContentBlock, type MediaBlockRef } from '@zhin.js/ai';
+import { isMediaBlockRef, type MediaContentBlock, type MediaBlockRef, type ModelInputModality } from '@zhin.js/ai';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
-  readLocalFileAsBase64,
+  normalizeMediaRefsToPayloads,
 } from '../media/media-normalize.js';
 import type { MediaBinaryPayload } from '../media/media-types.js';
 import { transcribeAudioPayload } from '../media/media-router.js';
@@ -70,6 +70,7 @@ export async function resolveTurnMediaInjection(
   turnMedia: readonly TurnMedia[] | undefined,
   references?: ReferencePort,
   signal: AbortSignal = new AbortController().signal,
+  providerInput?: readonly ModelInputModality[],
 ): Promise<InboundMediaInjection> {
   const refs = (turnMedia ?? []).map((entry) => ({
     entry,
@@ -84,6 +85,7 @@ export async function resolveTurnMediaInjection(
   if (refs.length === 0) return EMPTY_INJECTION;
 
   const config = resolveMultimodalConfig();
+  const supportedInput = new Set<ModelInputModality>(providerInput ?? ['text']);
   const blocks: MediaContentBlock[] = [];
   const textAppends: string[] = [];
   const outcomes: InboundMediaOutcome[] = [];
@@ -109,33 +111,23 @@ export async function resolveTurnMediaInjection(
       }
       media = resolution.content;
     }
-    if (type === 'image') {
-      if (media.kind === 'url' || media.kind === 'base64') {
-        blocks.push({ type: 'image', data: { media } });
-        outcomes.push({ kind: type, status: 'accepted', code: 'ready' });
-        continue;
-      }
-      if (media.kind === 'path') {
-        const payload = await readLocalFileAsBase64(media.value, config.maxFileBytes);
-        if (payload) {
-          blocks.push(toBase64Block('image', payload));
-          outcomes.push({ kind: type, status: 'accepted', code: 'materialized' });
-        } else {
-          logger.warn(formatCompact({ op: 'inbound_media_dropped', type, reason: 'path_read_failed' }));
-          textAppends.push(failureText(type, 'failed:path_read_failed', media));
-          outcomes.push({ kind: type, status: 'failed', code: 'path_read_failed' });
-        }
-        continue;
-      }
-      // A resolved opaque reference must materialize to url/base64/path.
-      textAppends.push(failureText(type, 'unsupported:unresolved_platform_reference', media));
-      outcomes.push({ kind: type, status: 'unsupported', code: 'unresolved_platform_reference' });
+    signal.throwIfAborted();
+    const payload = (await normalizeMediaRefsToPayloads(
+      [{ type, media: media as never }],
+      config.maxFileBytes,
+      signal,
+    ))[0];
+    signal.throwIfAborted();
+    if (!payload) {
+      const code = media.kind === 'file' ? 'unmaterialized_platform_reference' : 'media_validation_failed';
+      logger.warn(formatCompact({ op: 'inbound_media_rejected', type, reason: code }));
+      textAppends.push(failureText(type, `rejected:${code}`, media));
+      outcomes.push({ kind: type, status: 'rejected', code });
       continue;
     }
 
     if (type === 'audio') {
-      const payload = await resolveAudioPayload(media, config.maxFileBytes);
-      if (payload && config.audio.strategy === 'transcribe') {
+      if (config.audio.strategy === 'transcribe') {
         try {
           const text = await transcribeAudioPayload(payload, {
             getConfig: getPrimaryAppConfig,
@@ -153,47 +145,27 @@ export async function resolveTurnMediaInjection(
           }));
         }
       }
-      if (media.kind === 'url' || media.kind === 'base64') {
-        blocks.push({ type: 'audio', data: { media } });
-        outcomes.push({ kind: type, status: 'accepted', code: 'native_provider_input' });
-      } else {
-        textAppends.push(failureText(type, 'unsupported:unmaterialized', media));
-        outcomes.push({ kind: type, status: 'unsupported', code: 'unmaterialized' });
+      if (!supportedInput.has('audio')) {
+        textAppends.push(failureText(type, 'unsupported:provider_input', media));
+        outcomes.push({ kind: type, status: 'unsupported', code: 'provider_input' });
+        continue;
       }
+      blocks.push(toBase64Block('audio', payload));
+      outcomes.push({ kind: type, status: 'accepted', code: 'validated_provider_input' });
       continue;
     }
 
-    if (media.kind === 'url' || media.kind === 'base64') {
-      blocks.push({ type, data: { media } });
-      outcomes.push({ kind: type, status: 'accepted', code: 'native_provider_input' });
-    } else {
-      textAppends.push(failureText(type, 'unsupported:unmaterialized', media));
-      outcomes.push({ kind: type, status: 'unsupported', code: 'unmaterialized' });
+    if (!supportedInput.has(type)) {
+      textAppends.push(failureText(type, 'unsupported:provider_input', media));
+      outcomes.push({ kind: type, status: 'unsupported', code: 'provider_input' });
+      continue;
     }
+    blocks.push(toBase64Block(type, payload));
+    outcomes.push({ kind: type, status: 'accepted', code: 'validated_provider_input' });
   }
 
   if (blocks.length === 0 && textAppends.length === 0 && outcomes.length === 0) return EMPTY_INJECTION;
   return { blocks, textAppends, outcomes };
-}
-
-async function resolveAudioPayload(
-  media: MediaBlockRef,
-  maxFileBytes: number,
-): Promise<MediaBinaryPayload | null> {
-  if (media.kind === 'base64') {
-    return {
-      kind: 'audio',
-      base64: media.value.replace(/^base64:\/\//, ''),
-      mimeType: media.mime_type ?? 'audio/mpeg',
-      ...(media.file_name ? { fileName: media.file_name } : {}),
-    };
-  }
-  if (media.kind === 'path') {
-    const payload = await readLocalFileAsBase64(media.value, maxFileBytes);
-    return payload ? { ...payload, kind: 'audio' } : null;
-  }
-  // url 音频需下载，暂不走物化（占位）；file 引用同二期钩子
-  return null;
 }
 
 /**

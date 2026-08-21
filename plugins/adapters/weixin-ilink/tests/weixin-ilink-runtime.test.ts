@@ -14,6 +14,7 @@ import { saveSyncBuf } from '../src/credentials.js';
 import { MessageItemType, MessageState, MessageType } from '../src/ilink-types.js';
 import {
   formatInboundContent,
+  weixinInboundSegments,
   formatOutboundSegments,
   resolveWeixinIlinkConfig,
   type ResolvedWeixinIlinkConfig,
@@ -88,7 +89,7 @@ describe('weixin-ilink protocol helpers', () => {
     expect(resolved.baseUrl).toContain('ilinkai.weixin.qq.com');
   });
 
-  it('formats inbound text and media placeholders', () => {
+  it('keeps inbound text and media as separate canonical facts', () => {
     expect(formatInboundContent({
       from_user_id: 'u1',
       to_user_id: 'bot',
@@ -98,7 +99,7 @@ describe('weixin-ilink protocol helpers', () => {
       item_list: [{ type: MessageItemType.TEXT, text_item: { text: 'hello' } }],
     })).toBe('hello');
 
-    expect(formatInboundContent({
+    const mediaMessage = {
       from_user_id: 'u1',
       to_user_id: 'bot',
       client_id: 'c1',
@@ -106,7 +107,12 @@ describe('weixin-ilink protocol helpers', () => {
       message_state: MessageState.FINISH,
       item_list: [{ type: MessageItemType.TEXT, text_item: { text: 'hi' } }],
       _media: { decryptedPicPath: '/tmp/a.png' },
-    })).toContain('[image: /tmp/a.png]');
+    } as const;
+    expect(formatInboundContent(mediaMessage)).toBe('hi');
+    expect(weixinInboundSegments(mediaMessage)).toEqual([
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'image', data: { media: { kind: 'path', value: '/tmp/a.png' } } },
+    ]);
   });
 
   it('formats outbound string and segment payloads', () => {

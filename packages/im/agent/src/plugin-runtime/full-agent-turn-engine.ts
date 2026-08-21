@@ -104,20 +104,33 @@ async function* runInteractiveTurn(
   const pendingContext = context.turn.ports.conversationContext
     ? await context.turn.ports.conversationContext.readPending(context.turn.signal)
     : undefined;
-  const media = await resolveTurnMediaInjection(
-    context.turn.input.media,
-    context.turn.ports.references,
-    context.turn.signal,
-  );
   const prompt = await contextSystem.buildTextTurnContext({
     host,
     turn: context.turn,
     content: prep.turnUser.rawContent,
     turnUser: prep.turnUser,
     deferredStats: plan.deferredStats,
-    mode: media.blocks.length > 0 ? 'vision' : undefined,
+    mode: context.turn.input.media?.some((item) => item.kind === 'image') ? 'vision' : undefined,
     activeSkillsContext,
   });
+  const providerInput = context.turn.input.media?.length
+    ? prompt.modelInput
+    : undefined;
+  const media = await resolveTurnMediaInjection(
+    context.turn.input.media,
+    context.turn.ports.references,
+    context.turn.signal,
+    providerInput,
+  );
+  for (const [index, outcome] of media.outcomes.entries()) {
+    yield Object.freeze({
+      type: 'media_resolution' as const,
+      index,
+      mediaKind: outcome.kind,
+      status: outcome.status,
+      code: outcome.code,
+    });
+  }
   const contextText = pendingContext?.blocks.length
     ? renderContextMessage({
         role: 'user-context',
@@ -237,7 +250,11 @@ async function* runInteractiveTurn(
           await completion.result.projectConversation?.();
         }
         await sessionSystem.touchAfterTurn(host, prep.sessionId);
-        if (pendingContext && context.turn.ports.conversationContext) {
+        if (
+          completion.terminal.type === 'turn_end'
+          && pendingContext
+          && context.turn.ports.conversationContext
+        ) {
           await context.turn.ports.conversationContext.commit(pendingContext.cursor);
         }
         await host.finalizeActiveTurn({

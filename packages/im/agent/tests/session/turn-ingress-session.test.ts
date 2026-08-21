@@ -3,7 +3,6 @@ import { createMemoryContextRepository } from '@zhin.js/ai';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 import {
   buildTurnSessionCreateInput,
-  buildTurnTranscriptQuery,
   beginIngressTurnSession,
   resolveIngressUserMessage,
 } from '../../src/session/turn-ingress-session.js';
@@ -99,18 +98,13 @@ describe('TurnIngress session projection', () => {
     expect(text?.type === 'text' && text.text).toContain('hello');
   });
 
-  it('projects session and transcript identities from the typed origin', () => {
+  it('projects the origin-neutral Agent session identity', () => {
     expect(buildTurnSessionCreateInput(turn())).toEqual({
       session_key: 'im:qq:bot-1:group:group-9',
     });
-    expect(buildTurnTranscriptQuery(turn())).toEqual({
-      platform: 'qq',
-      endpointKey: 'bot-1',
-      sceneId: 'group-9',
-    });
   });
 
-  it('opens origin-neutral Agent sessions while keeping transcript projection IM-only', () => {
+  it('opens origin-neutral Agent sessions without an IM transcript projection', () => {
     const http = createTurnIngress({
     intent: { kind: 'new' },
       ...turn(),
@@ -120,7 +114,6 @@ describe('TurnIngress session projection', () => {
       input: { text: 'hello' },
     });
     expect(buildTurnSessionCreateInput(http)).toEqual({ session_key: 'http:http-1' });
-    expect(() => buildTurnTranscriptQuery(http)).toThrow('IM origin');
   });
 
   it('opens the active session from TurnIngress without a Message adapter', async () => {

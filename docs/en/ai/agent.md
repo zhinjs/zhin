@@ -25,7 +25,7 @@ sequenceDiagram
     Z->>L: Continue (until no tool_call or maxIterations reached)
     L-->>Z: Final text
     Z-->>H: OutputElement[]
-    H-->>U: IM reply (written to im_transcripts)
+    H-->>U: IM reply (appended as a ConversationEvent)
 ```
 
 A few facts worth remembering. ZhinAgent, sub-agents, background workers, and `AIService.runAgent` all go through the **same agentLoop**, so behavior can be consistently expected. Messages in the same session queue up per `ai.agent.inboundQueue` (`groupMode: supersede | fifo`), and concurrent turns do not overwrite each other. When the preferred model fails, it falls back along a candidate chain to other available models from the same provider. `maxIterations` defaults to 15 (`DEFAULT_CONFIG.maxIterations`) and can be overridden per provider/model via the model harness (see below). Timeouts have three layers: the trigger-side single turn is bounded by `ai.trigger.timeout` (default 60000ms), the overall Agent turn defaults to 120000ms (`DEFAULT_CONFIG.timeout`), and tool pre-execution has a separate 15000ms cap (`preExecTimeout`).
@@ -143,13 +143,14 @@ Orchestration runs can be viewed on the Console's Orchestration page (`GET /api/
 
 ## Session persistence and session tree
 
-When a database is available, Agent Host persists three tables (automatically falls back to in-memory mode without a database):
+When a database is available, Agent Host persists canonical conversation and Agent-session tables (with an in-memory implementation when no database is installed):
 
 | Table | Contents |
 |-------|----------|
 | `agent_sessions` | Agent session metadata (including session tree `parent_id` / `active_leaf`) |
 | `agent_messages` | Agent turn messages (context store) |
-| `im_transcripts` | IM inbound/outbound ledger (data source for the `chat_history` tool) |
+| `conversation_events` | Canonical IM messages, reference relations, and notice facts (idempotent append) |
+| `conversation_event_cursors` | Unread conversation-event cursor per Agent session |
 
 Set `ai.sessions.useDatabase: false` to force in-memory mode.
 
@@ -204,7 +205,7 @@ ai:
 | Network | `web_search`, `web_fetch` |
 | Interaction | `ask_user` |
 | Task | `spawn_task`, `todo_read`, `todo_write`, `orchestration_*` |
-| Memory/Retrieval | `memory_search`, `memory_upsert`, `knowledge_search`, `chat_history` |
+| Memory/Retrieval | `memory_search`, `memory_upsert`, `knowledge_search`, `inspect_conversation_reference` |
 | Media | `generate_image`, `analyze_media` |
 | Meta | `discover`, `load_tool`, `load_skill`, `install_skill` |
 | Scheduling | `schedule_list`, `schedule_add`, `schedule_remove`, `schedule_pause`, `schedule_resume`, `schedule_preview` |

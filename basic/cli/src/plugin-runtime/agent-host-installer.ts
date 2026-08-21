@@ -1292,11 +1292,19 @@ export function createRuntimeTurnRequest(
           if (!reference) return Object.freeze({ status: 'forbidden' as const, code: 'reference_not_in_turn' });
           const result = await input.resolveReference!(reference, options, signal);
           if (result.status !== 'resolved') return result;
-          return Object.freeze({ status: 'resolved' as const, content: result.value });
+          const bounded = boundReferenceContent(result.value, options);
+          return Object.freeze({
+            status: 'resolved' as const,
+            content: bounded.content,
+            ...(bounded.truncated ? { truncated: true } : {}),
+          });
         },
       })
     : undefined;
-  const contextConsumer = `agent:${access.principal.subjectId}`;
+  // Conversation events belong to the Agent session, not to whichever principal
+  // happened to trigger the next turn in a shared room.
+  const sessionKey = runtimeImSessionKey(access);
+  const contextConsumer = `agent-session:${sessionKey}`;
   const conversationContext = input.readConversationContext && input.commitConversationContext
     ? Object.freeze({
         readPending: (signal: AbortSignal) => input.readConversationContext!(contextConsumer, signal),
@@ -1316,7 +1324,7 @@ export function createRuntimeTurnRequest(
       metadata: Object.freeze({ ...message.metadata }),
     }),
     session: Object.freeze({
-      key: runtimeImSessionKey(access),
+      key: sessionKey,
     }),
     policy: Object.freeze({
       ...access.policy,
@@ -1334,6 +1342,64 @@ export function createRuntimeTurnRequest(
       ...(conversationContext ? { conversationContext } : {}),
     }),
   });
+}
+
+function boundReferenceContent(
+  input: unknown,
+  options: Readonly<{ depth: number; maxEntries: number; maxChars: number }>,
+): Readonly<{ content: unknown; truncated: boolean }> {
+  if (
+    input && typeof input === 'object'
+    && ['url', 'path', 'base64', 'file'].includes(String((input as { kind?: unknown }).kind ?? ''))
+    && typeof (input as { value?: unknown }).value === 'string'
+  ) {
+    return Object.freeze({ content: input, truncated: false });
+  }
+  let remainingChars = Math.max(0, options.maxChars);
+  let remainingEntries = Math.max(0, options.maxEntries);
+  let truncated = false;
+  const seen = new WeakSet<object>();
+
+  const visit = (value: unknown, depth: number, key?: string): unknown => {
+    if (typeof value === 'string') {
+      if (remainingChars <= 0) {
+        truncated = true;
+        return '';
+      }
+      if (value.length <= remainingChars) {
+        remainingChars -= value.length;
+        return value;
+      }
+      const result = value.slice(0, remainingChars);
+      remainingChars = 0;
+      truncated = true;
+      return `${result}…[truncated]`;
+    }
+    if (value == null || typeof value !== 'object') return value;
+    if (seen.has(value)) {
+      truncated = true;
+      return '[cycle omitted]';
+    }
+    seen.add(value);
+    if (Array.isArray(value)) {
+      const isForwardEntries = key === 'entries' || (key === undefined && depth === 0);
+      if (isForwardEntries && depth > options.depth) {
+        truncated = true;
+        return [];
+      }
+      const take = isForwardEntries ? Math.min(value.length, remainingEntries) : value.length;
+      if (isForwardEntries) remainingEntries -= take;
+      if (isForwardEntries && take < value.length) truncated = true;
+      return Object.freeze(value.slice(0, take).map((item) => visit(item, isForwardEntries ? depth + 1 : depth)));
+    }
+    const output: Record<string, unknown> = {};
+    for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
+      output[childKey] = visit(childValue, depth, childKey);
+    }
+    return Object.freeze(output);
+  };
+
+  return Object.freeze({ content: visit(input, 0), truncated });
 }
 
 /**

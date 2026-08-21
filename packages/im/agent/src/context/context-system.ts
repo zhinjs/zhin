@@ -1,4 +1,4 @@
-import { type AgentMessage, createUserMessage, getLlmTransportModel } from '@zhin.js/ai';
+import { type AgentMessage, type ModelInputModality, createUserMessage, getLlmTransportModel } from '@zhin.js/ai';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { createDefaultContextBuilders } from './default-builders.js';
 import type { BuildContext, ContextBuilder, ContextInjector, ContextSystemConfig, InjectContext } from './contracts.js';
@@ -139,6 +139,7 @@ export class ContextSystem {
       modelCandidates,
       modelId,
       providerAlias,
+      modelInput: Object.freeze(Array.isArray(llmModel.input) ? [...llmModel.input] : ['text']),
       turnEnvelope,
     };
   }
@@ -166,6 +167,7 @@ export interface TextTurnContextOutput {
   modelCandidates: string[];
   modelId: string;
   providerAlias: string;
+  modelInput: readonly ModelInputModality[];
   turnEnvelope: string | null;
 }
 

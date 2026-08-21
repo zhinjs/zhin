@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createUserMessage } from '@zhin.js/ai';
 import {
   applyInboundMediaInjection,
@@ -12,10 +12,22 @@ let root: string;
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'inbound-media-'));
+  vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
+    const url = String(input);
+    const bytes = url.endsWith('.mp4')
+      ? Buffer.from([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d])
+      : url.endsWith('.zip')
+        ? Buffer.from([0x50, 0x4b, 0x03, 0x04])
+        : url.endsWith('.jpg')
+          ? Buffer.from([0xff, 0xd8, 0xff, 0xe0])
+          : Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    return new Response(bytes, { status: 200 });
+  }));
 });
 
 afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
+  vi.unstubAllGlobals();
 });
 
 describe('resolveTurnMediaInjection', () => {
@@ -26,57 +38,60 @@ describe('resolveTurnMediaInjection', () => {
     expect(injection.outcomes).toEqual([]);
   });
 
-  it('image：url / base64 MediaRef 直挂为媒体块', async () => {
+  it('image：URL / base64 均先物化并校验真实内容', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64');
     const injection = await resolveTurnMediaInjection([
       { kind: 'image', source: { kind: 'url', value: 'https://cdn.example/a.jpg' }, mimeType: 'image/jpeg' },
-      { kind: 'image', source: { kind: 'base64', value: 'QUJD' }, mimeType: 'image/png' },
-    ]);
-    expect(injection.blocks).toEqual([
-      { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example/a.jpg', mime_type: 'image/jpeg' } } },
-      { type: 'image', data: { media: { kind: 'base64', value: 'QUJD', mime_type: 'image/png' } } },
+      { kind: 'image', source: { kind: 'base64', value: png }, mimeType: 'application/pdf' },
+    ], undefined, new AbortController().signal, ['text', 'image']);
+    expect(injection.blocks.map((block) => block.data.media)).toEqual([
+      { kind: 'base64', value: '/9j/4A==', mime_type: 'image/jpeg' },
+      { kind: 'base64', value: png, mime_type: 'image/png' },
     ]);
     expect(injection.textAppends).toEqual([]);
     expect(injection.outcomes).toEqual([
-      { kind: 'image', status: 'accepted', code: 'ready' },
-      { kind: 'image', status: 'accepted', code: 'ready' },
+      { kind: 'image', status: 'accepted', code: 'validated_provider_input' },
+      { kind: 'image', status: 'accepted', code: 'validated_provider_input' },
     ]);
   });
 
   it('image：path 经 media pipeline 物化为 base64 块', async () => {
     const file = path.join(root, 'pic.png');
-    fs.writeFileSync(file, Buffer.from('fake-png'));
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    fs.writeFileSync(file, png);
     const injection = await resolveTurnMediaInjection([
       { kind: 'image', source: { kind: 'path', value: file } },
-    ]);
+    ], undefined, new AbortController().signal, ['text', 'image']);
     expect(injection.blocks).toHaveLength(1);
     const block = injection.blocks[0]!;
     expect(block.type).toBe('image');
     expect(block.data.media.kind).toBe('base64');
     expect(block.data.media.mime_type).toBe('image/png');
-    expect(Buffer.from(block.data.media.value, 'base64').toString()).toBe('fake-png');
+    expect(Buffer.from(block.data.media.value, 'base64')).toEqual(png);
   });
 
-  it('image：path 读盘失败 → 明确 failed 终态', async () => {
+  it('image：path 读盘失败 → 明确 rejected 终态', async () => {
     const injection = await resolveTurnMediaInjection([
       { kind: 'image', source: { kind: 'path', value: path.join(root, 'missing.png') } },
     ]);
     expect(injection.blocks).toEqual([]);
-    expect(injection.textAppends).toEqual(['[Media failed:path_read_failed: image]']);
-    expect(injection.outcomes).toEqual([{ kind: 'image', status: 'failed', code: 'path_read_failed' }]);
+    expect(injection.textAppends).toEqual(['[Media rejected:media_validation_failed: image]']);
+    expect(injection.outcomes).toEqual([{ kind: 'image', status: 'rejected', code: 'media_validation_failed' }]);
   });
 
   it('audio / video / file 保留给显式支持相应输入的 provider', async () => {
+    const mp3 = Buffer.from([0x49, 0x44, 0x33, 0x04, 0x00, 0x00]).toString('base64');
     const injection = await resolveTurnMediaInjection([
-      { kind: 'audio', source: { kind: 'base64', value: 'QUJD' }, mimeType: 'audio/mpeg' },
+      { kind: 'audio', source: { kind: 'base64', value: mp3 }, mimeType: 'audio/mpeg' },
       { kind: 'video', source: { kind: 'url', value: 'https://cdn.example/v.mp4' } },
       { kind: 'file', source: { kind: 'url', value: 'https://cdn.example/f.zip' }, name: 'f.zip' },
-    ]);
+    ], undefined, new AbortController().signal, ['text', 'audio', 'video', 'file']);
     expect(injection.blocks.map((block) => block.type)).toEqual(['audio', 'video', 'file']);
     expect(injection.textAppends).toEqual([]);
     expect(injection.outcomes).toEqual([
-      { kind: 'audio', status: 'accepted', code: 'native_provider_input' },
-      { kind: 'video', status: 'accepted', code: 'native_provider_input' },
-      { kind: 'file', status: 'accepted', code: 'native_provider_input' },
+      { kind: 'audio', status: 'accepted', code: 'validated_provider_input' },
+      { kind: 'video', status: 'accepted', code: 'validated_provider_input' },
+      { kind: 'file', status: 'accepted', code: 'validated_provider_input' },
     ]);
   });
 
@@ -89,6 +104,19 @@ describe('resolveTurnMediaInjection', () => {
     expect(injection.outcomes).toEqual([
       { kind: 'image', status: 'unsupported', code: 'unresolved_platform_reference' },
     ]);
+  });
+
+  it('Provider 省略输入能力声明时按 text-only 处理并产生 unsupported 终态', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64');
+    const injection = await resolveTurnMediaInjection([
+      { kind: 'image', source: { kind: 'base64', value: png }, mimeType: 'image/png' },
+    ]);
+
+    expect(injection.blocks).toEqual([]);
+    expect(injection.outcomes).toEqual([
+      { kind: 'image', status: 'unsupported', code: 'provider_input' },
+    ]);
+    expect(injection.textAppends).toEqual(['[Media unsupported:provider_input: image]']);
   });
 
   it('通过当前 turn 的 ReferencePort 物化 platform_ref', async () => {
@@ -104,12 +132,12 @@ describe('resolveTurnMediaInjection', () => {
           content: { kind: 'url', value: 'https://cdn.example/resolved.png', mime_type: 'image/png' },
         };
       },
-    });
-    expect(injection.blocks).toEqual([{
+    }, new AbortController().signal, ['text', 'image']);
+    expect(injection.blocks[0]).toMatchObject({
       type: 'image',
-      data: { media: { kind: 'url', value: 'https://cdn.example/resolved.png', mime_type: 'image/png' } },
-    }]);
-    expect(injection.outcomes).toEqual([{ kind: 'image', status: 'accepted', code: 'ready' }]);
+      data: { media: { kind: 'base64', mime_type: 'image/png' } },
+    });
+    expect(injection.outcomes).toEqual([{ kind: 'image', status: 'accepted', code: 'validated_provider_input' }]);
   });
 });
 

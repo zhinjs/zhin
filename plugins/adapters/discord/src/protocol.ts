@@ -230,19 +230,7 @@ export function senderDisplayName(msg: DiscordInboundMessage): string {
 /** Build inbound text for MessageGateway.receive (gateway owns reply routing). */
 export function formatInboundContent(msg: DiscordInboundMessage): string {
   const parts: string[] = [];
-  if (msg.replyToId) parts.push(`[reply:${msg.replyToId}]`);
   if (msg.content?.trim()) parts.push(msg.content.trim());
-  for (const attachment of msg.attachments ?? []) {
-    const kind = attachment.contentType?.startsWith('image/')
-      ? 'image'
-      : attachment.contentType?.startsWith('audio/')
-        ? 'audio'
-        : attachment.contentType?.startsWith('video/')
-          ? 'video'
-          : 'file';
-    const name = attachment.name || attachment.url || 'attachment';
-    parts.push(`[${kind}: ${name}]`);
-  }
   for (const title of msg.embedTitles ?? []) {
     parts.push(`[embed: ${title}]`);
   }
@@ -250,7 +238,7 @@ export function formatInboundContent(msg: DiscordInboundMessage): string {
     parts.push(`[sticker: ${name}]`);
   }
   const text = parts.join('\n').trim();
-  return text || '(Empty message)';
+  return text;
 }
 
 export function formatButtonContent(interaction: DiscordButtonInbound): string {
@@ -265,7 +253,7 @@ function attachmentMediaKind(contentType: string | undefined): 'image' | 'audio'
 }
 
 /**
- * 入站消息 → canonical Segment[]（与 formatInboundContent 纯文本视图同源双轨）。
+ * 入站消息 → canonical Segment[]；引用与附件不重复编码进文本视图。
  * 附件 url 是 Discord CDN 真实 http(s) 地址，MediaRef kind=url；
  * embeds / stickers 仅留在纯文本视图，不进段（最小侵入）。
  */

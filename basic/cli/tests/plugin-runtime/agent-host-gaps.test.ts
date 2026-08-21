@@ -136,7 +136,7 @@ describe('canonical IM TurnRequest ingress', () => {
     expect(resolveSnapshotTurnIntentResolver(snapshot, requester)).toBe(resolver);
   });
 
-  it('maps runtime identity, scene, media, policy, and session without classic Message fields', () => {
+  it('maps runtime identity, scene, media, policy, and session without classic Message fields', async () => {
     const message = makeMessage({
       content: 'look',
       target: 'group:100',
@@ -149,6 +149,8 @@ describe('canonical IM TurnRequest ingress', () => {
       ],
     });
     const signal = new AbortController().signal;
+    const readConversationContext = vi.fn(async () => ({ blocks: [], cursor: 0 }));
+    const commitConversationContext = vi.fn(async () => undefined);
     const request = createRuntimeTurnRequest(message, 'look closer', {
       isMaster: false,
       isTrusted: true,
@@ -159,7 +161,18 @@ describe('canonical IM TurnRequest ingress', () => {
       workspaceRoot: '/workspace',
       network: { enabled: true, httpsOnly: true, allowedDomains: ['example.com'] },
       ports: {},
-      resolveReference: async () => ({ status: 'unsupported', code: 'test' }),
+      resolveReference: async (reference) => reference.kind === 'forward'
+        ? ({
+            status: 'resolved',
+            reference,
+            value: Array.from({ length: 4 }, (_, index) => ({
+              actor: { id: `user-${index}` },
+              segments: [{ type: 'text', data: { text: `entry-${index}-long` } }],
+            })),
+          } as const)
+        : ({ status: 'unsupported', code: 'test' } as const),
+      readConversationContext,
+      commitConversationContext,
     });
 
     expect(request).toMatchObject({
@@ -194,6 +207,24 @@ describe('canonical IM TurnRequest ingress', () => {
       },
     });
     expect(request.signal).toBe(signal);
+    await request.ports.conversationContext?.readPending(signal);
+    await request.ports.conversationContext?.commit(3);
+    expect(readConversationContext).toHaveBeenCalledWith('agent-session:icqq:10001:group:100', signal);
+    expect(commitConversationContext).toHaveBeenCalledWith('agent-session:icqq:10001:group:100', 3);
+    await expect(request.ports.references?.resolve('ref-2', {
+      depth: 2,
+      maxEntries: 2,
+      maxChars: 10,
+    }, signal)).resolves.toMatchObject({
+      status: 'resolved',
+      truncated: true,
+      content: expect.any(Array),
+    });
+    expect((await request.ports.references?.resolve('ref-2', {
+      depth: 2,
+      maxEntries: 2,
+      maxChars: 10,
+    }, signal) as { content: unknown[] }).content).toHaveLength(2);
   });
 
   it('fails closed when authenticated sender or endpoint identity is absent', () => {
@@ -418,7 +449,7 @@ function makeAgentStub() {
       passive.push(observation);
     },
   };
-});
+}
 
 describe('缺口 2：群聊旁听（recordPassiveGroupContext）', () => {
   it('群聊未触发消息写入 Passive Group Context', async () => {

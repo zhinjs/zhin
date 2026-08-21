@@ -68,6 +68,37 @@ describe('ImRuntime side-event handlers', () => {
     await expect(captured?.$approve()).rejects.toThrow('action port expired');
   });
 
+  it('normalizes member targets and reaction operations at the adapter boundary', async () => {
+    const receiveNotice = vi.fn(async () => undefined);
+    const gateway = {
+      receiveNotice,
+      receiveSystem: vi.fn(async () => undefined),
+      receiveRequest: vi.fn(async () => undefined),
+    };
+    await receiveOneBotLikeSideEvent(gateway, {
+      adapter: 'onebot11',
+      endpointKey: 'bot',
+      raw: { post_type: 'notice', notice_type: 'group_increase', group_id: 1, user_id: 2, time: 3 },
+    });
+    await receiveOneBotLikeSideEvent(gateway, {
+      adapter: 'onebot11',
+      endpointKey: 'bot',
+      platform: 'slack',
+      raw: { post_type: 'notice', notice_type: 'reaction_removed', group_id: 1, user_id: 2, message_id: 4, code: 'x', time: 5 },
+    });
+
+    expect(receiveNotice.mock.calls[0]?.[0]).toMatchObject({
+      $sub_type: 'member_increase',
+      $actor: undefined,
+      $target: { id: '2' },
+    });
+    expect(receiveNotice.mock.calls[1]?.[0]).toMatchObject({
+      $sub_type: 'emoji_reaction',
+      $operation: 'removed',
+      $message_id: '4',
+    });
+  });
+
   async function createFixture(onRequest?: (request: Request) => void) {
     const noticed: unknown[] = [];
     const systems: unknown[] = [];

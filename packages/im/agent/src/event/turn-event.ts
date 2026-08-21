@@ -15,6 +15,7 @@ export type TurnEvent =
   | TurnStartEvent
   | ChunkEvent
   | CapabilityResolutionEvent
+  | MediaResolutionEvent
   | IterationStartEvent
   | ToolCallEvent
   | ToolResultEvent
@@ -60,6 +61,15 @@ export interface CapabilityResolutionEvent {
   skills: string[];
   missingTools: string[];
   missingSkills: string[];
+}
+
+/** Durable terminal fact for one inbound media item. */
+export interface MediaResolutionEvent {
+  type: 'media_resolution';
+  index: number;
+  mediaKind: 'image' | 'audio' | 'video' | 'file';
+  status: 'accepted' | 'derived' | 'unsupported' | 'rejected' | 'failed';
+  code: string;
 }
 
 export interface ToolCallEvent {

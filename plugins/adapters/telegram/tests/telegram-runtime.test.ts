@@ -144,11 +144,11 @@ describe('telegram protocol helpers', () => {
     expect(formatInboundContent(textMessage({
       text: undefined,
       photo: [{ file_id: 'p1' }],
-    }))).toBe('[image]');
+    }))).toBe('');
     expect(formatInboundContent(textMessage({
       text: undefined,
       document: { file_id: 'd1', file_name: 'a.pdf' },
-    }))).toBe('[file: a.pdf]');
+    }))).toBe('');
     expect(formatCallbackContent({
       id: 'cq1',
       from: { id: 1, first_name: 'A' },

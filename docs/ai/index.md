@@ -70,7 +70,7 @@ metadata 不能自行声明授权。工具继续受 active turn 的 authority �
 | `google` | `@ai-sdk/google` | `apiKey`，可选 `baseUrl`（自动补 `/v1beta`） |
 | `ollama` | `@ai-sdk/openai-compatible`（内部走 OpenAI 兼容接口） | `host`（默认 `http://127.0.0.1:11434`，自动补 `/v1`），无需 `apiKey` |
 
-通用字段：`models`（显式模型白名单）、`contextWindow`、`imageGeneration`（文生图默认值）。
+通用字段：`models`（显式模型白名单）、`contextWindow`、`imageGeneration`（文生图默认值）、`input`（模型可接收的显式模态列表：`text | image | audio | video | file`）。`input` 缺省时按 `['text']` fail-closed，不会根据模型名或厂商猜测视觉/音视频能力。
 
 不写 `models` 时，启动后由 `ModelRegistry` 后台调用 `/v1/models` 自动填充可用模型列表（先恢复上次缓存，再异步刷新）；写了 `models` 则以 YAML 白名单为准。`agents.<name>.model` 只需出现在发现列表或白名单中，无需逐个手写。
 

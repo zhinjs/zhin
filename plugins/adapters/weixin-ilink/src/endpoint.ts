@@ -45,6 +45,8 @@ import { getExtensionFromMime, sniffMimeFromBuffer } from './mime.js';
 import type { WeixinInboundMediaOpts } from './weixin-inbound.js';
 import {
   formatInboundContent,
+  weixinInboundSegments,
+  weixinReplyTo,
   formatOutboundSegments,
   inboundMessageId,
   segmentLocalPath,
@@ -298,10 +300,13 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
       setContextToken(this.#options.config.id, userId, msg.context_token);
     }
     const conversation = weixinIlinkInboundConversation(String(this.#options.id), userId);
+    const replyTo = weixinReplyTo(msg);
     void this.#options.gateway.receive({
       conversation,
       message: { conversation, id: inboundMessageId(msg) },
       content: formatInboundContent(msg),
+      segments: weixinInboundSegments(msg),
+      ...(replyTo ? { replyTo } : {}),
       sender: { id: userId },
       endpointId: this.#options.config.id,
       metadata: Object.freeze({

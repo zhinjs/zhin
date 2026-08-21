@@ -15,11 +15,16 @@ import type {
   EndpointPendingRequest,
   EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { EndpointContentPort } from '@zhin.js/adapter';
+import type { EndpointContentPort, EndpointContentResolveContext } from '@zhin.js/adapter';
 import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
-import { receiveOneBotLikeSideEvent, SystemEvent, type LoginAssist } from '@zhin.js/core';
-import type { ConversationMessage, MessageRef } from '@zhin.js/im-contract';
-import { toCanonicalSegments } from '@zhin.js/core';
+import { receiveOneBotLikeSideEvent, SystemEvent, toCanonicalSegments, type LoginAssist } from '@zhin.js/core';
+import type {
+  ConversationMessage,
+  ConversationReference,
+  ForwardEntry,
+  MessageRef,
+  Segment,
+} from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { registerIcqqAgentEndpoint } from './icqq-agent-deps.js';
@@ -30,7 +35,7 @@ import {
   isIcqqBotMentioned,
   isIcqqMessagePostType,
   normalizeIcqqInboundMessage,
-  quotedPayloadFromIcqqSource,
+  messageLookupFromIcqqSource,
   resolveIcqqQuoteIdFromEvent,
   resolveIcqqInboundMedia,
   shouldSkipSelfInboundMessage,
@@ -104,7 +109,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   readonly #messageContent = new Map<string, ConversationMessage>();
 
   readonly content: EndpointContentPort = Object.freeze({
-    resolve: async (reference, context) => {
+    resolve: async (reference: ConversationReference, context: EndpointContentResolveContext) => {
       context.signal.throwIfAborted();
       if (reference.kind === 'message') {
         const cached = this.#messageContent.get(reference.message.id);
@@ -114,8 +119,12 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       }
       if (reference.kind === 'forward') {
         try {
-          const raw = await raceAbort(this.getForwardMsg(reference.forwardId), context.signal);
-          const entries = normalizeForwardMsgResponse(raw).slice(0, context.maxEntries);
+          const entries = await this.#resolveForwardEntries(
+            reference.forwardId,
+            context,
+            { remainingEntries: context.maxEntries, path: new Set<string>() },
+            0,
+          );
           if (entries.length === 0) return Object.freeze({ status: 'not_found' as const, code: 'icqq_forward_not_found' });
           return Object.freeze({ status: 'resolved' as const, reference, value: Object.freeze(entries) });
         } catch (error) {
@@ -133,6 +142,51 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       return Object.freeze({ status: 'unsupported' as const, code: 'icqq_media_reference_unsupported' });
     },
   });
+
+  async #resolveForwardEntries(
+    forwardId: string,
+    context: EndpointContentResolveContext,
+    state: { remainingEntries: number; readonly path: Set<string> },
+    depth: number,
+  ): Promise<readonly ForwardEntry[]> {
+    context.signal.throwIfAborted();
+    if (state.remainingEntries <= 0 || state.path.has(forwardId)) return Object.freeze([]);
+    state.path.add(forwardId);
+    try {
+      // ICQQ does not expose a cancellable getForwardMsg API. Keep the caller's
+      // generation lease until the native operation actually settles, then honor
+      // cancellation before publishing any resolved content.
+      const raw = await this.getForwardMsg(forwardId);
+      context.signal.throwIfAborted();
+      const entries = normalizeForwardMsgResponse(raw).slice(0, state.remainingEntries);
+      state.remainingEntries -= entries.length;
+      const expanded: ForwardEntry[] = [];
+      for (const entry of entries) {
+        context.signal.throwIfAborted();
+        const segments: Segment[] = [];
+        for (const segment of entry.segments) {
+          if (segment.type !== 'forward' || depth >= context.maxDepth) {
+            segments.push(segment);
+            continue;
+          }
+          const nestedId = String((segment.data as { forward_id?: unknown }).forward_id ?? '').trim();
+          if (!nestedId || state.path.has(nestedId) || state.remainingEntries <= 0) {
+            segments.push(segment);
+            continue;
+          }
+          const nested = await this.#resolveForwardEntries(nestedId, context, state, depth + 1);
+          segments.push(Object.freeze({
+            ...segment,
+            data: Object.freeze({ ...segment.data, ...(nested.length > 0 ? { entries: nested } : {}) }),
+          }));
+        }
+        expanded.push(Object.freeze({ ...entry, segments: Object.freeze(segments) }));
+      }
+      return Object.freeze(expanded);
+    } finally {
+      state.path.delete(forwardId);
+    }
+  }
 
   readonly management: EndpointManagement = Object.freeze<EndpointManagement>({
     listFriends: async () =>
@@ -590,7 +644,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       channelParentGroupId: normalized.channelParentGroupId,
     });
     const quoteId = resolveIcqqQuoteIdFromEvent(data);
-    const quoted = quotedPayloadFromIcqqSource(findIcqqNestedMessageSource(data));
+    const quoted = messageLookupFromIcqqSource(findIcqqNestedMessageSource(data));
     if (quoteId && quoted) {
       this.#messageContent.set(quoteId, Object.freeze({
         ref: Object.freeze({ conversation, id: quoteId }),

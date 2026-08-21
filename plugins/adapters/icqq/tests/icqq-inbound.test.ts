@@ -13,7 +13,7 @@ import {
   findIcqqNestedMessageSource,
   resolveQuoteIdFromIcqqSource,
   resolveIcqqInboundMedia,
-  quotedPayloadFromIcqqSource,
+  messageLookupFromIcqqSource,
   shouldSkipSelfInboundMessage,
   unwrapIcqqEventPayload,
 } from "../src/icqq-inbound.js";
@@ -115,7 +115,7 @@ describe("IcqqMessageEvent.source", () => {
       message: "抱歉，我无法查看您发送的图片。",
     };
     expect(resolveQuoteIdFromIcqqSource(source)).toBe("6127:1260414771");
-    const p = quotedPayloadFromIcqqSource(source);
+    const p = messageLookupFromIcqqSource(source);
     expect(p?.messageId).toBe("6127:1260414771");
     expect(p?.content).toEqual([
       { type: "text", data: { text: "抱歉，我无法查看您发送的图片。" } },
@@ -132,8 +132,8 @@ describe("IcqqMessageEvent.source", () => {
     ).toBe("6127:1260414771");
   });
 
-  it("quotedPayloadFromIcqqSource 解析正文", () => {
-    const p = quotedPayloadFromIcqqSource({
+  it("messageLookupFromIcqqSource 解析正文", () => {
+    const p = messageLookupFromIcqqSource({
       message_id: "q1",
       raw_message: "被引用的文字",
       sender: { user_id: 2, nickname: "Alice" },

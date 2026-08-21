@@ -228,13 +228,14 @@ export function onebot12InboundConversation(endpointKey: string, ev: OneBot12Eve
 
 /** Build inbound text for MessageGateway.receive */
 export function formatInboundContent(ev: OneBot12Event): string {
-  if (typeof ev.alt_message === 'string' && ev.alt_message) return ev.alt_message;
   if (Array.isArray(ev.message)) {
     return ev.message
       .map((seg) => (seg.type === 'text' ? String(seg.data?.text ?? '') : ''))
       .join('');
   }
-  return '';
+  return typeof ev.alt_message === 'string'
+    ? ev.alt_message.replace(/\[[^\]]*(?:image|audio|video|file)[^\]]*\]/gi, '').trim()
+    : '';
 }
 
 /**

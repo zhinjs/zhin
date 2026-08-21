@@ -20,7 +20,7 @@
 - **Speech Host**：顶层 `speech:` → `voice_stt` / `voice_tts`（TTS 需 edge-tts；STT 需本机 Ollama whisper）；入站可 STT 后再进 ZhinAgent。
 - **项目 tools**：`tools/*.ts` 用 `defineAgentTool` + zod；与命令共享 `lib/`。
 
-会话 **DB 持久化已接**（DatabaseHost → `agent_*` / `im_transcripts`）。legacy `src/plugins/*`（AOP enrich/出站润色样例）已随 `zhin dev` 旧路径一并移除。
+会话 **DB 持久化已接**（DatabaseHost → `agent_*` / `conversation_events` / `conversation_event_cursors`）。legacy `src/plugins/*`（AOP enrich/出站润色样例）已随 `zhin dev` 旧路径一并移除。
 
 ## 启动
 

@@ -29,8 +29,10 @@ The actual code locations for each step:
      readonly conversation: ConversationRef; // Structured conversation (endpoint/kind/id/parent/threadId)
      readonly message?: MessageRef;   // Platform message identity (native message id)
      readonly content: string;
-     readonly sender?: string;
-     readonly metadata?: Readonly<Record<string, unknown>>; // e.g., endpoint name
+     readonly segments?: readonly Segment[];
+     readonly sender?: { id: string; name?: string; roles?: readonly string[] };
+     readonly replyTo?: { id: string }; // Explicit platform reference; never guessed from metadata
+     readonly metadata?: Readonly<Record<string, unknown>>;
    }
    ```
 
@@ -77,7 +79,7 @@ All sending should go through this unified pipeline (`$reply` / `$replyFrom` / `
 
 ## Multimodal: bidirectional Segment uniformity
 
-The framework has exactly one media representation -- canonical `Segment` + `MediaRef` (`packages/im/core/src/built/segment-contract/types.ts`):
+The framework has exactly one media representation -- canonical `Segment` + `MediaRef` from `@zhin.js/im-contract`:
 
 ```ts
 interface MediaRef {
@@ -90,7 +92,13 @@ interface MediaRef {
 // image / audio / video / file segment data is always { media: MediaRef, alt?/duration?/name? }
 ```
 
-**Inbound**: adapters normalize platform payloads into `Segment[]` via `gateway.receive({ segments })` → the agent's inbound injection (`packages/im/agent/src/turn/inbound-media.ts`) attaches the current turn's media to `UserMessage.media` (the ai layer's Segment-isomorphic `MediaContentBlock`, **never persisted** -- history keeps only the text view). Policy via `ai.multimodal`: images pass through as URL or materialize from path to base64; audio defaults to STT (optional `@zhin.js/speech`, placeholder on failure); video/files default to placeholder text. The provider-edge serializer (`packages/im/ai/src/llm/convert/media-blocks.ts`) filters by a capability table (image-only by default, unsupported kinds degrade to placeholder text at the edge) -- no vendor API format ever appears inside the framework.
+**Inbound**: adapters normalize platform payloads into `Segment[]` via `gateway.receive({ segments })`. Opaque platform ids must be materialized through the current generation's `EndpointContentPort`; the snapshot lease remains held until resolution settles. URLs, paths, and base64 then share one pipeline: HTTPS/SSRF and redirect checks → byte limit → file-signature detection → declared/actual type validation → `UserMessage.media`. File extensions and adapter-declared MIME values are not trusted, and binary/base64 data is never persisted in the conversation fact store. Every media item reaches exactly one `accepted | derived | unsupported | rejected | failed` terminal state. Failures are explicit untrusted user-context data, never a placeholder pretending the model saw the media. Providers must explicitly declare `text/image/audio/video/file` input support; omission means text-only.
+
+## Conversation facts, references, and notices
+
+`ConversationEventStore` is the sole IM-context fact source. Inbound/outbound messages, recall tombstones, reactions, member joins/leaves, mute/unmute, and role changes are appended idempotently in conversation order. There is no parallel `im_transcripts` or text `chat_history` ledger. Merged-forward entries use neutral `actor` data and are never assigned model `user/assistant/system` roles.
+
+The current Turn registers `replyTo`, forward, and media values as scoped `TurnReference`s. The Agent exposes only `inspect_conversation_reference(reference, depth?)`: it checks local facts first, then resolves through the lease-bound Endpoint. Cross-conversation, cross-Endpoint, and expired-Turn access fails closed. Important unread notices are attached to the next user Turn as explicitly untrusted conversation data, never as system/developer instructions. The session cursor advances only after a successful Turn; failed Turns retain the events. High-frequency reactions/pokes are aggregated, while login, QR, disconnect, and other process events remain diagnostics only.
 
 **Outbound**: AI reply → `OutputElement[]` → canonical `Segment[]` (`publishOutboundElements`) → `$reply` (Segment is first-class `SendContent`) → `normalizeOutboundPayload` (html→image/text, keyboard, media negotiation) → endpoint. Negotiation is driven by the adapter definition's `segments.outboundMedia` declaration (`'url' | 'path' | 'base64' | 'upload'`): only `url-or-text` endpoints degrade non-URL media to text centrally; other adapters materialize along the platform-optimal path (URL pass-through / base64 / platform upload / disk read). Segments without `data.media` are dropped with a warning -- the legacy `data.url/file/base64` shapes no longer exist.
 

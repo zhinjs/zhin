@@ -355,13 +355,6 @@ export function senderDisplayName(user?: TelegramUser): string {
 export function formatInboundContent(msg: TelegramMessage): string {
   if (msg.text) return msg.text;
   if (msg.caption) return msg.caption;
-  if (msg.photo?.length) return '[image]';
-  if (msg.video) return '[video]';
-  if (msg.audio) return '[audio]';
-  if (msg.voice) return '[voice]';
-  if (msg.document) {
-    return msg.document.file_name ? `[file: ${msg.document.file_name}]` : '[file]';
-  }
   if (msg.sticker) {
     return msg.sticker.emoji ? `[sticker: ${msg.sticker.emoji}]` : '[sticker]';
   }
@@ -376,7 +369,7 @@ export function formatCallbackContent(query: TelegramCallbackQuery): string {
 }
 
 /**
- * 入站消息 → canonical Segment[]（与 formatInboundContent 纯文本视图同源双轨）。
+ * 入站消息 → canonical Segment[]；媒体只存在于 canonical 段，不重复写入文本。
  * Telegram 附件只有不透明 file_id（需 getFile 二次解析，非 URL），
  * 统一进 MediaRef kind=file；photo 取数组末尾（最大尺寸）。
  */

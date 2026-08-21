@@ -38,7 +38,12 @@ class FakeModel {
   }
   update(patch: Record<string, unknown>) {
     return { where: (query: Record<string, unknown>) => {
-      for (const row of this.rows) if (Object.entries(query).every(([key, value]) => row[key] === value)) Object.assign(row, patch);
+      for (const row of this.rows) if (Object.entries(query).every(([key, value]) => {
+        if (value && typeof value === 'object' && '$lte' in value) {
+          return Number(row[key]) <= Number((value as { $lte: number }).$lte);
+        }
+        return row[key] === value;
+      })) Object.assign(row, patch);
     } };
   }
 }
@@ -119,6 +124,8 @@ describe('@zhin.js/im-contract', () => {
     expect(await store.listAfter(conversation, 0, 10)).toEqual([{ sequence: 1, event }]);
     await store.commitCursor('agent:u1', conversation, 1);
     expect(await store.getCursor('agent:u1', conversation)).toBe(1);
+    await store.commitCursor('agent:u1', conversation, 2);
+    expect(await store.getCursor('agent:u1', conversation)).toBe(2);
     await expect(store.commitCursor('agent:u1', conversation, 0)).rejects.toThrow(/backwards/);
   });
 

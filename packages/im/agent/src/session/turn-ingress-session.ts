@@ -105,23 +105,6 @@ function buildSenderExtra(turn: TurnIngress): AgentMessageSenderExtra | undefine
   });
 }
 
-function sessionOriginAddress(turn: TurnIngress): {
-  platform: string;
-  endpoint: string;
-  sceneId: string;
-  scope: 'private' | 'group' | 'channel';
-} {
-  if (turn.origin.kind !== 'im') {
-    throw new TypeError(`IM session projection requires an IM origin, received ${turn.origin.kind}`);
-  }
-  return {
-    platform: turn.origin.platform,
-    endpoint: turn.origin.endpoint,
-    sceneId: turn.origin.sceneId,
-    scope: turn.origin.scope,
-  };
-}
-
 function sanitizeSenderAttribute(value: string): string {
   const trimmed = value.trim().replace(/[\]\s]+/g, '_');
   return trimmed.length > 0 ? trimmed.slice(0, 64) : 'unknown';

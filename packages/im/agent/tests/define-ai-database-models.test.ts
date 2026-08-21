@@ -9,7 +9,7 @@ describe('defineAiDatabaseModels', () => {
       expect(definition).toBeTruthy();
       expect(typeof definition).toBe('object');
     });
-    expect(count).toBe(9);
+    expect(count).toBe(8);
     expect(names).toEqual([
       'agent_sessions',
       'agent_messages',

@@ -39,7 +39,7 @@ speech:
 | `openai` | Calls `{host}/v1/audio/transcriptions` (OpenAI-compatible whisper interface); `model` defaults to `whisper-1`, `host` defaults to `https://api.openai.com`, language fixed to `zh`, timeout 60s |
 | `ollama` | **Currently unavailable**: Ollama does not have audio transcription models; calling it will produce an immediate error suggesting to switch to `openai` |
 
-`stt.enabled: false` can disable STT independently. Inbound voice messages (`[audio:url]` or adapter-annotated `audio_url`) are downloaded and transcribed by the Agent Host, with the result merged into the AI input text; on transcription failure, the original text is used to continue without blocking the turn.
+`stt.enabled: false` can disable STT independently. Inbound voice first passes through the shared media materialization and real MIME/size validation pipeline. With the `transcribe` strategy, Agent Host then adds the transcript as derived text for the current Turn. Download, validation, and transcription failures produce explicit media terminal states; they never pretend that the model successfully understood the audio.
 
 Audio format extension is inferred from MIME type (wav / mp3 / ogg / webm / amr / silk / m4a / flac); unrecognizable formats are treated as wav.
 

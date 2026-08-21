@@ -1,7 +1,7 @@
 /**
  * icqq 入站事件归一化（post_type / message_type / message 段）
  */
-import { Message, toCanonicalSegments, type MessageSegment, type QuotedMessagePayload } from "zhin.js";
+import { toCanonicalSegments, type MessageSegment } from "zhin.js";
 import { parseCqMessage, icqqMediaRefFromString } from "./cq-message.js";
 import { extractForwardResidFromJsonElement } from "./forward-msg.js";
 import type { GroupRole } from "./types.js";
@@ -64,6 +64,14 @@ export interface IcqqMessageSource {
     card?: string;
   };
   [key: string]: unknown;
+}
+
+interface IcqqMessageLookup {
+  readonly messageId: string;
+  readonly sender?: Readonly<{ id?: string; name?: string }>;
+  readonly content: readonly MessageSegment[] | string;
+  readonly raw?: string;
+  readonly time?: number;
 }
 
 export type IcqqMessageElement = {
@@ -641,10 +649,10 @@ function icqqSourceToContentSegments(
   return [];
 }
 
-/** 将 source 转为 QuotedMessagePayload（供 $getMsg 缓存，避免重复拉取） */
-export function quotedPayloadFromIcqqSource(
+/** Convert an ICQQ source into the adapter-local lookup payload. */
+export function messageLookupFromIcqqSource(
   source: unknown,
-): QuotedMessagePayload | null {
+): IcqqMessageLookup | null {
   if (!source || typeof source !== "object") return null;
   const s = source as IcqqMessageSource;
   const body = icqqSourceMessageBody(s);
@@ -707,9 +715,9 @@ function mergeReplyFromRawMessage(
   content: MessageSegment[],
   rawMessage: string,
 ): MessageSegment[] {
-  if (!rawMessage || Message.quoteIdFromContent(content)) return content;
+  if (!rawMessage || quoteIdFromSegments(content)) return content;
   const fromRaw = parseCqMessage(rawMessage);
-  const quoteFromRaw = Message.quoteIdFromContent(fromRaw);
+  const quoteFromRaw = quoteIdFromSegments(fromRaw);
   if (!quoteFromRaw) return content;
   return [
     { type: "reply", data: { message_id: quoteFromRaw } },
@@ -721,7 +729,7 @@ function mergeReplyFromSource(
   content: MessageSegment[],
   data: IcqqMessageEvent,
 ): MessageSegment[] {
-  if (Message.quoteIdFromContent(content)) return content;
+  if (quoteIdFromSegments(content)) return content;
   const quoteId =
     resolveQuoteIdFromIcqqSource(data.source) ??
     resolveQuoteIdFromIcqqSource(findIcqqNestedMessageSource(data));
@@ -730,6 +738,12 @@ function mergeReplyFromSource(
     { type: "reply", data: { message_id: quoteId } },
     ...content.filter((s) => s.type !== "reply"),
   ];
+}
+
+function quoteIdFromSegments(content: readonly MessageSegment[]): string | undefined {
+  const reply = content.find((item) => item.type === 'reply');
+  const value = reply?.data?.message_id ?? reply?.data?.id;
+  return value == null || !String(value).trim() ? undefined : String(value).trim();
 }
 
 export function resolveInboundContent(

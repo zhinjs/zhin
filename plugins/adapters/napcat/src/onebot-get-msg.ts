@@ -1,4 +1,4 @@
-export interface QuotedMessagePayload {
+export interface NapcatMessageLookup {
   messageId: string;
   sender?: { id: string; name: string };
   content: Array<{ type: string; data?: Record<string, unknown> }>;
@@ -9,18 +9,18 @@ export interface QuotedMessagePayload {
 export function parseOneBotGetMsgResponse(
   messageId: string,
   data: unknown,
-): QuotedMessagePayload {
+): NapcatMessageLookup {
   const record =
     data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
-  let content: QuotedMessagePayload['content'] = [];
+  let content: NapcatMessageLookup['content'] = [];
   if (Array.isArray(record.message)) {
-    content = record.message as QuotedMessagePayload['content'];
+    content = record.message as NapcatMessageLookup['content'];
   } else if (typeof record.raw_message === 'string' && record.raw_message) {
     content = [{ type: 'text', data: { text: record.raw_message } }];
   }
 
   const senderRaw = record.sender;
-  let sender: QuotedMessagePayload['sender'];
+  let sender: NapcatMessageLookup['sender'];
   if (senderRaw && typeof senderRaw === 'object') {
     const s = senderRaw as Record<string, unknown>;
     sender = {

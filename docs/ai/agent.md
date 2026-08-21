@@ -25,7 +25,7 @@ sequenceDiagram
     Z->>L: 继续（直到无 tool_call 或达 maxIterations）
     L-->>Z: 最终文本
     Z-->>H: OutputElement[]
-    H-->>U: IM 回复（写入 im_transcripts）
+    H-->>U: IM 回复（追加 ConversationEvent）
 ```
 
 几个值得记住的事实。ZhinAgent、子代理、后台 worker、`AIService.runAgent` 走的是**同一条 agentLoop**，行为可以一致地预期。同会话的消息按 `ai.agent.inboundQueue` 排队（`groupMode: supersede | fifo`），并发回合不会互相覆盖。首选模型失败时按候选链 fallback 到同 provider 的其他可用模型。`maxIterations` 默认 15（`DEFAULT_CONFIG.maxIterations`），可按 provider/model 经 model harness 覆盖（见下文）。超时有三层：触发侧单回合受 `ai.trigger.timeout` 约束（默认 60000ms），Agent 回合整体默认 120000ms（`DEFAULT_CONFIG.timeout`），工具预执行另有 15000ms 上限（`preExecTimeout`）。
@@ -143,13 +143,14 @@ ai:
 
 ## 会话持久化与会话树
 
-数据库可用时，Agent Host 落三张表（缺库时自动降级为内存模式）：
+数据库可用时，Agent Host 落 canonical 会话与 Agent session 表（缺库时使用内存实现）：
 
 | 表 | 内容 |
 |----|------|
 | `agent_sessions` | Agent 会话元数据（含会话树 `parent_id` / `active_leaf`） |
 | `agent_messages` | Agent 回合消息（上下文仓库） |
-| `im_transcripts` | IM 进出站流水（`chat_history` 工具的数据源） |
+| `conversation_events` | canonical IM 消息、引用关系与 notice 事实（幂等追加） |
+| `conversation_event_cursors` | 各 Agent session 的未读会话事件游标 |
 
 设 `ai.sessions.useDatabase: false` 可强制内存模式。
 
@@ -204,7 +205,7 @@ ai:
 | 网络 | `web_search`、`web_fetch` |
 | 交互 | `ask_user` |
 | 任务 | `spawn_task`、`todo_read`、`todo_write`、`orchestration_*` |
-| 记忆/检索 | `memory_search`、`memory_upsert`、`knowledge_search`、`chat_history` |
+| 记忆/检索 | `memory_search`、`memory_upsert`、`knowledge_search`、`inspect_conversation_reference` |
 | 媒体 | `generate_image`、`analyze_media` |
 | 元 | `discover`、`load_tool`、`load_skill`、`install_skill` |
 | 调度 | `schedule_list`、`schedule_add`、`schedule_remove`、`schedule_pause`、`schedule_resume`、`schedule_preview` |

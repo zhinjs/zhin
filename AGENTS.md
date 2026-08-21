@@ -126,7 +126,7 @@ basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp
 - AI 引擎、Session、Compaction、Provider、ModelRegistry、`getModel`：看 [packages/im/ai](packages/im/ai/README.md) 与 [docs/ai/index.md](docs/ai/index.md)。
 - AI 编排、工具发现、安全策略、MCP client：看 [packages/im/agent](packages/im/agent/README.md)。
 - **插件 AI 创作面**（`agent/tools`、`agent/skills`）：看 [docs/authoring/agent-tools.md](docs/authoring/agent-tools.md)。
-- 应用入口（IM 核心 + 可选 agent 子路径）：看 [packages/im/zhin](packages/im/zhin/README.md)（`im_transcripts` 落库需 `@zhin.js/agent`）。
+- 应用入口（IM 核心 + 可选 agent 子路径）：看 [packages/im/zhin](packages/im/zhin/README.md)（canonical `conversation_events` 由 CLI Database Host 装配）。
 - Host 运行时（http / mcp / a2a）：看 packages/host。
 - 可选服务插件：看 plugins/services。
 - 平台适配器：看 plugins/adapters。

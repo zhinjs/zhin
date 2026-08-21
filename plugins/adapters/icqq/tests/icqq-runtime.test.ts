@@ -271,6 +271,61 @@ describe('icqq plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
+  it('resolves nested forwards within depth and entry budgets without following cycles', async () => {
+    const endpoint = createEndpoint();
+    endpoint.getForwardMsg = vi.fn(async (id: string) => {
+      if (id === 'root') return [{
+        sender: { user_id: 1, nickname: 'root actor' },
+        message: [{ type: 'forward', id: 'nested' }],
+      }];
+      if (id === 'nested') return [{
+        sender: { user_id: 2, nickname: 'nested actor' },
+        message: [
+          { type: 'text', text: 'nested content' },
+          { type: 'forward', id: 'root' },
+        ],
+      }];
+      return [];
+    }) as typeof endpoint.getForwardMsg;
+
+    const conversation = {
+      endpoint: { adapter: 'icqq', id: endpoint.endpointName },
+      kind: 'group' as const,
+      id: '100',
+    };
+    const result = await endpoint.content.resolve({
+      kind: 'forward',
+      conversation,
+      forwardId: 'root',
+    }, {
+      signal: new AbortController().signal,
+      maxDepth: 2,
+      maxEntries: 2,
+      maxChars: 12_000,
+    });
+
+    expect(result).toMatchObject({
+      status: 'resolved',
+      value: [{
+        actor: { id: '1' },
+        segments: [{
+          type: 'forward',
+          data: {
+            forward_id: 'nested',
+            entries: [{
+              actor: { id: '2' },
+              segments: [
+                { type: 'text', data: { text: 'nested content' } },
+                { type: 'forward', data: { forward_id: 'root' } },
+              ],
+            }],
+          },
+        }],
+      }],
+    });
+    expect(endpoint.getForwardMsg).toHaveBeenCalledTimes(2);
+  });
+
   it('marks mentioned when group message @s the bot uin', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const endpoint = createEndpoint({ receive });

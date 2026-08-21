@@ -193,3 +193,23 @@ Endpoint 实例自身的生命周期钩子由 Adapter Index 驱动，与代际�
 | `send(request)` | 出站发送 |
 
 `NapCatWsEndpoint` 对应关系：`start()` 内 `lifecycle.start(...)` 建连；`open()` / `close()` 翻转 `#open` 旗标（`admit()` 只在 open 时收事件）；`stop()` 走基座 stop 加专有清理。
+
+## 引用、合并转发与媒体解析
+
+Endpoint 若能按平台原生 id 回查内容，应提供唯一的 `content: EndpointContentPort`，不要把 `$getMsg`、quote metadata 或 eager-forward 文本塞进消息：
+
+```ts
+interface EndpointContentPort {
+  resolve(
+    reference: ConversationReference, // message | forward | media
+    context: {
+      signal: AbortSignal;
+      maxDepth: number;
+      maxEntries: number;
+      maxChars: number;
+    },
+  ): Promise<ConversationResolution>;
+}
+```
+
+结果必须是 `resolved | not_found | unsupported | forbidden | expired | failed` 之一。无平台能力时返回 `unsupported`，不得返回空内容或猜测。`resolve()` 必须观察 `signal` 和深度/条数/字符预算；Core 会在整个异步调用期间持有当前 generation 的 snapshot lease。message/forward 中的作者只写中性 `actor` 数据，绝不能映射成模型 role。媒体可返回稳定 URL、经校验的 base64/path，或明确失败；不要把 token-bearing 下载 URL 暴露给 Agent。

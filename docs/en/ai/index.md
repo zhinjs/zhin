@@ -71,7 +71,7 @@ Each provider is named by alias; `sdk` determines which AI SDK adapter to use (c
 | `google` | `@ai-sdk/google` | `apiKey`, optional `baseUrl` (auto-appends `/v1beta`) |
 | `ollama` | `@ai-sdk/openai-compatible` (uses OpenAI-compatible interface internally) | `host` (default `http://127.0.0.1:11434`, auto-appends `/v1`), no `apiKey` needed |
 
-Common fields: `models` (explicit model allowlist), `contextWindow`, `imageGeneration` (text-to-image defaults).
+Common fields: `models` (explicit model allowlist), `contextWindow`, `imageGeneration` (text-to-image defaults), and `input` (the explicit accepted modalities: `text | image | audio | video | file`). When `input` is omitted it fails closed to `['text']`; model names and vendors are never used to guess vision/audio/video support.
 
 When `models` is not specified, `ModelRegistry` calls `/v1/models` in the background after startup to auto-populate the available model list (restoring the previous cache first, then refreshing asynchronously). When `models` is specified, the YAML allowlist takes precedence. `agents.<name>.model` only needs to appear in the discovered list or allowlist -- no need to list each one manually.
 

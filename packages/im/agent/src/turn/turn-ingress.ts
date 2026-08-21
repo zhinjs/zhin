@@ -174,9 +174,8 @@ export interface TurnIngress {
   readonly ports: Readonly<TurnPorts>;
 }
 
-export type TurnIngressInput = Omit<TurnIngress, 'execution' | 'intent'> & {
+export type TurnIngressInput = Omit<TurnIngress, 'execution'> & {
   readonly execution?: TurnExecutionProfile;
-  readonly intent?: TurnIntent;
 };
 
 export interface TurnRequest {
@@ -186,7 +185,7 @@ export interface TurnRequest {
   }>;
   readonly origin: TurnOrigin;
   readonly principal: Readonly<TurnPrincipal>;
-  readonly intent?: TurnIntent;
+  readonly intent: TurnIntent;
   readonly input: Readonly<TurnInput>;
   readonly session: Readonly<TurnSessionAddress>;
   readonly policy: Readonly<TurnPolicyContext>;
@@ -226,14 +225,16 @@ export function createTurnIngress(input: TurnIngressInput): TurnIngress {
   }
 
   const execution: TurnExecutionProfile = input.execution ?? Object.freeze({ kind: 'interactive' });
-  const intent: TurnIntent = input.intent ?? Object.freeze({ kind: 'supersede' });
-  validateTurnIntent(intent);
+  if (!input.intent) {
+    throw new TypeError('TurnIngress intent is required');
+  }
+  validateTurnIntent(input.intent);
   validateExecutionAuthority(input, execution);
   return Object.freeze({
     identity: freezeData(input.identity),
     origin: freezeData(input.origin),
     principal: freezeData(input.principal),
-    intent: freezeData(intent),
+    intent: freezeData(input.intent),
     input: freezeData(input.input),
     session: freezeData(input.session),
     policy: freezeData(input.policy),

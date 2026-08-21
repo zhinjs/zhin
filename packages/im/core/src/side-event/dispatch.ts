@@ -41,6 +41,16 @@ export async function receiveOneBotLikeSideEvent(
       is_group: raw.group_id != null,
     });
     const id = resolveSideEventDedupeKey(raw, 'notice');
+    const memberEvent = ['member_increase', 'member_decrease', 'ban', 'admin_change'].includes(parts.sub_type);
+    const actorId = raw.operator_id
+      ?? (!memberEvent ? raw.user_id : undefined);
+    const targetId = memberEvent
+      ? raw.user_id
+      : parts.sub_type === 'poke'
+        ? raw.target_id ?? raw.self_id
+        : raw.user_id != null && String(raw.user_id) !== String(raw.operator_id ?? '')
+          ? raw.user_id
+          : undefined;
     const notice = buildNotice(raw, {
       $id: id,
       $adapter: input.adapter as never,
@@ -49,19 +59,15 @@ export async function receiveOneBotLikeSideEvent(
       $scene_id: String(raw.group_id ?? raw.user_id ?? input.endpointKey),
       $scene_type: parts.scene_type,
       $sub_type: parts.sub_type,
-      $actor: senderFromId(raw.operator_id ?? raw.user_id),
-      $target: senderFromId(
-        raw.user_id != null && String(raw.user_id) !== String(raw.operator_id ?? '')
-          ? raw.user_id
-          : undefined,
-      ),
+      $actor: senderFromId(actorId),
+      $target: senderFromId(targetId),
       $timestamp: toMillis(raw.time),
       ...(raw.message_id != null ? { $message_id: String(raw.message_id) } : {}),
       ...(raw.emoji_id != null || raw.code != null
         ? { $reaction: String(raw.emoji_id ?? raw.code) }
         : {}),
       ...(parts.sub_type === 'emoji_reaction'
-        ? { $operation: String(raw.sub_type ?? '').includes('delete') ? 'removed' as const : 'added' as const }
+        ? { $operation: /delete|remove/i.test(String(raw.sub_type ?? noticeType)) ? 'removed' as const : 'added' as const }
         : {}),
       ...(raw.duration != null ? { $duration_seconds: Math.max(0, Number(raw.duration) || 0) } : {}),
       ...(parts.sub_type === 'admin_change'

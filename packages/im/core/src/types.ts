@@ -64,20 +64,6 @@ export type MaybeArray<T>=T|T[]
  */
 export type SendContent=MaybeArray<string|MessageElement>
 
-/** $getMsg 返回的被引用消息载荷 */
-export interface QuotedMessagePayload {
-  messageId: string;
-  sender?: { id?: string; name?: string };
-  content: MessageElement[] | string;
-  raw?: string;
-  time?: number;
-}
-
-/** 支持按 message_id 拉取历史消息的 Bot（可选实现） */
-export interface QuotableEndpoint {
-  $getMsg(messageId: string): Promise<QuotedMessagePayload>;
-}
-
 /** 可选：编辑已发送消息（交互式棋盘更新） */
 export interface EditMessageOptions {
   messageId: string;

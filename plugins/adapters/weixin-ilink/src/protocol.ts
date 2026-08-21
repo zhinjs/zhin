@@ -5,8 +5,8 @@
 
 import { pickCredential } from 'zhin.js/adapter';
 import { isMediaRef } from '@zhin.js/core';
-import type { ConversationRef } from '@zhin.js/im-contract';
-import { bodyFromItemList, isMediaItem } from './weixin-inbound.js';
+import type { ConversationRef, Segment } from '@zhin.js/im-contract';
+import { bodyFromItemList } from './weixin-inbound.js';
 import { DEFAULT_API_BASE_URL, DEFAULT_CDN_BASE_URL } from './ilink-meta.js';
 import type { WeixinMessage } from './ilink-types.js';
 
@@ -84,24 +84,32 @@ export function resolveWeixinIlinkConfig(
 
 /** Build inbound text for MessageGateway.receive (gateway owns reply routing). */
 export function formatInboundContent(msg: WeixinMessageWithMedia): string {
-  const parts: string[] = [];
-  const text = bodyFromItemList(msg.item_list);
-  if (text) parts.push(text);
+  return bodyFromItemList(msg.item_list).trim();
+}
 
+export function weixinInboundSegments(msg: WeixinMessageWithMedia): readonly Segment[] {
+  const segments: Segment[] = [];
+  const text = formatInboundContent(msg);
+  if (text) segments.push({ type: 'text', data: { text } });
   const media = msg._media;
   if (media?.decryptedPicPath) {
-    parts.push(`[image: ${media.decryptedPicPath}]`);
+    segments.push({ type: 'image', data: { media: { kind: 'path', value: media.decryptedPicPath } } });
   } else if (media?.decryptedVideoPath) {
-    parts.push(`[video: ${media.decryptedVideoPath}]`);
+    segments.push({ type: 'video', data: { media: { kind: 'path', value: media.decryptedVideoPath } } });
   } else if (media?.decryptedFilePath) {
-    parts.push(`[file: ${media.decryptedFilePath}]`);
+    segments.push({ type: 'file', data: { media: { kind: 'path', value: media.decryptedFilePath } } });
   } else if (media?.decryptedVoicePath) {
-    parts.push(`[record: ${media.decryptedVoicePath}]`);
-  } else if (!text && msg.item_list?.some((item) => isMediaItem(item))) {
-    parts.push('[媒体消息]');
+    segments.push({ type: 'audio', data: { media: { kind: 'path', value: media.decryptedVoicePath } } });
   }
+  return Object.freeze(segments);
+}
 
-  return parts.join('\n').trim() || '';
+export function weixinReplyTo(msg: WeixinMessageWithMedia): Readonly<{ id: string }> | undefined {
+  for (const item of msg.item_list ?? []) {
+    const id = item.ref_msg?.message_item?.msg_id;
+    if (id && String(id).trim()) return Object.freeze({ id: String(id).trim() });
+  }
+  return undefined;
 }
 
 export function inboundMessageId(msg: WeixinMessage): string {

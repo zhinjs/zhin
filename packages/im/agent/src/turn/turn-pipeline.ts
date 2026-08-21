@@ -147,7 +147,7 @@ export async function processTextTurn(
 
     logger.debug(formatCompact({ op: 'tools_resolved', count: resolvedTools.length }));
 
-    const inboundMedia = await resolveTurnMediaInjection(turnMediaFromMessage(commMessage));
+    const turnMedia = turnMediaFromMessage(commMessage);
     const turnContext = turnContextViewFromMessage(commMessage);
     const turnCtx = await requireContextSystem(host).buildTextTurnContext({
       host,
@@ -156,8 +156,14 @@ export async function processTextTurn(
       turnUser,
       deferredStats,
       prebuiltMessages: extras?.prebuiltMessages,
-      mode: inboundMedia.blocks.length > 0 ? 'vision' : undefined,
+      mode: turnMedia.some((item) => item.kind === 'image') ? 'vision' : undefined,
     });
+    const inboundMedia = await resolveTurnMediaInjection(
+      turnMedia,
+      undefined,
+      extras?.signal ?? new AbortController().signal,
+      turnCtx.modelInput,
+    );
     turnCtx.userMessages = applyInboundMediaInjection(turnCtx.userMessages, inboundMedia);
     const {
       userMessages,

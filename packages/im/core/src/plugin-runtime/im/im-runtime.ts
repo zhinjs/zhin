@@ -27,6 +27,8 @@ import {
 } from '@zhin.js/adapter';
 import {
   MemoryConversationEventStore,
+  conversationRefKey,
+  messageRefKey,
   type ConversationEventStore,
   type ConversationEvent,
   type ConversationContextBlock,
@@ -205,14 +207,7 @@ export class ImRuntime implements MessageGateway {
   ): Promise<Readonly<{ blocks: readonly ConversationContextBlock[]; cursor: number }>> {
     const cursor = await this.conversationEvents.getCursor(consumer, conversation);
     const events = await this.conversationEvents.listAfter(conversation, cursor, limit);
-    const blocks = events
-      .filter(({ event }) => event.type !== 'message.created')
-      .map(({ sequence, event }) => Object.freeze({
-        kind: 'conversation_event' as const,
-        sequence,
-        eventType: event.type,
-        text: describeConversationEvent(event),
-      }));
+    const blocks = aggregateConversationContext(events);
     return Object.freeze({
       blocks: Object.freeze(blocks),
       cursor: events.at(-1)?.sequence ?? cursor,
@@ -561,7 +556,7 @@ export class ImRuntime implements MessageGateway {
       );
       if (input.message?.id) {
         await this.conversationEvents.append(Object.freeze({
-          eventId: `message:${conversation.endpoint.id}:${input.message.id}`,
+          eventId: `message:${messageRefKey(input.message)}`,
           conversation,
           timestamp: Date.now(),
           type: 'message.created',
@@ -1033,7 +1028,7 @@ export class ImRuntime implements MessageGateway {
             if (receipt.message?.id) {
               const segments = conversationSegmentsFromContent(request.content);
               await this.conversationEvents.append(Object.freeze({
-                eventId: `message:${request.conversation.endpoint.id}:${receipt.message.id}`,
+                eventId: `message:${messageRefKey(receipt.message)}`,
                 conversation: request.conversation,
                 timestamp: Date.now(),
                 type: 'message.created',
@@ -1127,7 +1122,11 @@ function conversationEventFromNotice(notice: Notice): ConversationEvent | undefi
   const target = notice.$target?.id
     ? Object.freeze({ id: String(notice.$target.id), ...(notice.$target.name ? { displayName: notice.$target.name } : {}) })
     : undefined;
-  const base = Object.freeze({ eventId: String(notice.$id), conversation, timestamp: notice.$timestamp });
+  const base = Object.freeze({
+    eventId: `notice:${conversationRefKey(conversation)}:${String(notice.$id)}`,
+    conversation,
+    timestamp: notice.$timestamp,
+  });
   switch (notice.$sub_type) {
     case 'member_increase':
     case 'increase':
@@ -1151,6 +1150,8 @@ function conversationEventFromNotice(notice: Notice): ConversationEvent | undefi
       return notice.$message_id && notice.$reaction && notice.$operation
         ? Object.freeze({ ...base, type: 'message.reaction_changed', message: Object.freeze({ conversation, id: notice.$message_id }), ...(actor ? { actor } : {}), reaction: notice.$reaction, operation: notice.$operation })
         : undefined;
+    case 'poke':
+      return Object.freeze({ ...base, type: 'conversation.poked', ...(actor ? { actor } : {}), ...(target ? { target } : {}) });
     default:
       return undefined;
   }
@@ -1161,6 +1162,7 @@ function describeConversationEvent(event: ConversationEvent): string {
   switch (event.type) {
     case 'message.recalled': return `${actor ?? 'Someone'} recalled message ${event.message.id}.`;
     case 'message.reaction_changed': return `${actor ?? 'Someone'} ${event.operation} reaction ${event.reaction} on message ${event.message.id}.`;
+    case 'conversation.poked': return `${actor ?? 'Someone'} poked ${event.target ? `${event.target.displayName ?? event.target.id} (${event.target.id})` : 'someone'}.`;
     case 'member.joined': return `${event.member.displayName ?? event.member.id} (${event.member.id}) joined the conversation.`;
     case 'member.left': return `${event.member.displayName ?? event.member.id} (${event.member.id}) left the conversation (${event.reason ?? 'left'}).`;
     case 'member.muted': return `${event.member.displayName ?? event.member.id} (${event.member.id}) was muted for ${event.durationSeconds} seconds${actor ? ` by ${actor}` : ''}.`;
@@ -1168,6 +1170,40 @@ function describeConversationEvent(event: ConversationEvent): string {
     case 'member.role_changed': return `${event.member.displayName ?? event.member.id} (${event.member.id}) role ${event.role} was ${event.enabled ? 'enabled' : 'disabled'}${actor ? ` by ${actor}` : ''}.`;
     case 'message.created': return '';
   }
+}
+
+function aggregateConversationContext(
+  events: readonly import('@zhin.js/im-contract').SequencedConversationEvent[],
+): readonly ConversationContextBlock[] {
+  const ordinary: ConversationContextBlock[] = [];
+  const noisy = new Map<string, { sequence: number; event: ConversationEvent; count: number }>();
+  for (const { sequence, event } of events) {
+    if (event.type === 'message.created') continue;
+    if (event.type === 'message.reaction_changed' || event.type === 'conversation.poked') {
+      const key = event.type === 'message.reaction_changed'
+        ? `${event.type}:${event.message.id}:${event.actor?.id ?? ''}:${event.reaction}:${event.operation}`
+        : `${event.type}:${event.actor?.id ?? ''}:${event.target?.id ?? ''}`;
+      const previous = noisy.get(key);
+      noisy.set(key, { sequence, event, count: (previous?.count ?? 0) + 1 });
+      continue;
+    }
+    ordinary.push(Object.freeze({
+      kind: 'conversation_event',
+      sequence,
+      eventType: event.type,
+      text: describeConversationEvent(event),
+    }));
+  }
+  for (const { sequence, event, count } of noisy.values()) {
+    ordinary.push(Object.freeze({
+      kind: 'conversation_event',
+      sequence,
+      eventType: event.type,
+      text: `${describeConversationEvent(event)}${count > 1 ? ` (${count} similar events.)` : ''}`,
+    }));
+  }
+  ordinary.sort((left, right) => left.sequence - right.sequence);
+  return Object.freeze(ordinary);
 }
 
 function resolveIngressRoute(snapshot: RuntimeSnapshot): IngressRoute | undefined {

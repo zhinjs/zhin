@@ -256,7 +256,7 @@ describe('discord protocol helpers', () => {
     expect(formatInboundContent(textMessage({
       content: '',
       attachments: [{ contentType: 'image/png', name: 'a.png' }],
-    }))).toBe('[image: a.png]');
+    }))).toBe('');
     expect(formatInboundContent(textMessage({
       content: '',
       embedTitles: ['Title'],

@@ -71,6 +71,7 @@ export type {
   Context,
   Model,
   ModelApi,
+  ModelInputModality,
   ProviderInstanceConfig,
   AgentMessage,
   ConversationActor,

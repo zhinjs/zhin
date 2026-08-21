@@ -198,13 +198,14 @@ export function onebot11InboundConversation(endpointKey: string, ev: OneBot11Eve
 
 /** Build inbound text for MessageGateway.receive */
 export function formatInboundContent(ev: OneBot11Event): string {
-  if (typeof ev.raw_message === 'string' && ev.raw_message) return ev.raw_message;
   if (Array.isArray(ev.message)) {
     return ev.message
       .map((seg) => (seg.type === 'text' ? String(seg.data?.text ?? '') : ''))
       .join('');
   }
-  return '';
+  return typeof ev.raw_message === 'string'
+    ? ev.raw_message.replace(/\[CQ:[^\]]+\]/g, '').trim()
+    : '';
 }
 
 export function senderDisplayName(ev: OneBot11Event): string {

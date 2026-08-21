@@ -193,3 +193,23 @@ The lifecycle hooks of the Endpoint instance itself are driven by the Adapter In
 | `send(request)` | Outbound send |
 
 `NapCatWsEndpoint` correspondence: `start()` internally uses `lifecycle.start(...)` to establish connection; `open()` / `close()` toggle the `#open` flag (`admit()` only accepts events when open); `stop()` goes through the base stop plus specific cleanup.
+
+## References, merged forwards, and media resolution
+
+An Endpoint that can retrieve content by a native platform id should expose the single `content: EndpointContentPort`. Do not add `$getMsg`, quote metadata, or eager-forward text enrichment:
+
+```ts
+interface EndpointContentPort {
+  resolve(
+    reference: ConversationReference, // message | forward | media
+    context: {
+      signal: AbortSignal;
+      maxDepth: number;
+      maxEntries: number;
+      maxChars: number;
+    },
+  ): Promise<ConversationResolution>;
+}
+```
+
+The result must be one of `resolved | not_found | unsupported | forbidden | expired | failed`. Return `unsupported` when the platform has no such capability; never return guessed or empty content. `resolve()` must observe the signal and depth/entry/character budgets. Core holds the current generation's snapshot lease for the complete asynchronous call. Message/forward speakers are neutral `actor` data and must never become model roles. Media may resolve to a stable URL, validated base64/path, or an explicit failure; never expose token-bearing download URLs to the Agent.

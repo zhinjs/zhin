@@ -127,6 +127,7 @@ export type ConversationEvent =
   | (ConversationEventBase & Readonly<{ type: 'message.created'; message: ConversationMessage }>)
   | (ConversationEventBase & Readonly<{ type: 'message.recalled'; message: MessageRef; actor?: ActorRef; operator?: ActorRef }>)
   | (ConversationEventBase & Readonly<{ type: 'message.reaction_changed'; message: MessageRef; actor?: ActorRef; reaction: string; operation: 'added' | 'removed' }>)
+  | (ConversationEventBase & Readonly<{ type: 'conversation.poked'; actor?: ActorRef; target?: ActorRef }>)
   | (ConversationEventBase & Readonly<{ type: 'member.joined'; member: ActorRef; actor?: ActorRef }>)
   | (ConversationEventBase & Readonly<{ type: 'member.left'; member: ActorRef; actor?: ActorRef; reason?: 'left' | 'removed' }>)
   | (ConversationEventBase & Readonly<{ type: 'member.muted'; member: ActorRef; actor?: ActorRef; durationSeconds: number }>)
@@ -168,13 +169,13 @@ export class MemoryConversationEventStore implements ConversationEventStore {
     const stored = Object.freeze({ sequence, event: freezeConversationData(event) });
     this.#events.set(event.eventId, stored);
     if (event.type === 'message.created') {
-      this.#messages.set(messageKey(event.message.ref), event.message);
+      this.#messages.set(messageRefKey(event.message.ref), event.message);
     }
     return Object.freeze({ appended: true, sequence });
   }
 
   async getMessage(ref: MessageRef): Promise<ConversationMessage | undefined> {
-    return this.#messages.get(messageKey(ref));
+    return this.#messages.get(messageRefKey(ref));
   }
 
   async listAfter(conversation: ConversationRef, sequence: number, limit: number): Promise<readonly SequencedConversationEvent[]> {
@@ -238,8 +239,8 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
     try {
       await Promise.resolve(this.events.insert({
         event_id: event.eventId,
-        conversation_key: conversationKey(event.conversation),
-        message_key: event.type === 'message.created' ? messageKey(event.message.ref) : '',
+        conversation_key: conversationRefKey(event.conversation),
+        message_key: event.type === 'message.created' ? messageRefKey(event.message.ref) : '',
         event_json: JSON.stringify(event),
         time: event.timestamp,
       }));
@@ -255,7 +256,7 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
 
   async getMessage(ref: MessageRef): Promise<ConversationMessage | undefined> {
     const rows = await this.events.select('id', 'event_json')
-      .where({ message_key: messageKey(ref) })
+      .where({ message_key: messageRefKey(ref) })
       .orderBy?.('id', 'DESC')
       .limit?.(1) ?? [];
     const row = (await Promise.resolve(rows))[0];
@@ -266,7 +267,7 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
 
   async listAfter(conversation: ConversationRef, sequence: number, limit: number): Promise<readonly SequencedConversationEvent[]> {
     let selection = this.events.select('id', 'event_json')
-      .where({ conversation_key: conversationKey(conversation), id: { $gt: sequence } });
+      .where({ conversation_key: conversationRefKey(conversation), id: { $gt: sequence } });
     selection = selection.orderBy?.('id', 'ASC') ?? selection;
     selection = selection.limit?.(Math.max(0, Math.floor(limit))) ?? selection;
     const rows = await Promise.resolve(selection);
@@ -296,9 +297,13 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
         // A concurrent insert owns the key; update it below after rechecking.
       }
     }
-    const observed = await this.getCursor(consumer, conversation);
-    if (sequence < observed) throw new Error('Conversation cursor cannot move backwards');
-    await Promise.resolve(this.cursors.update({ sequence }).where({ cursor_key: key }));
+    // Keep the monotonic invariant in the database predicate itself. A
+    // read-then-update check can still regress when two successful turns commit
+    // the same session cursor concurrently from different processes.
+    await Promise.resolve(this.cursors.update({ sequence }).where({
+      cursor_key: key,
+      sequence: { $lte: sequence },
+    }));
   }
 
   async #eventById(eventId: string): Promise<Record<string, unknown> | undefined> {
@@ -318,19 +323,21 @@ function sameConversation(left: ConversationRef, right: ConversationRef): boolea
     && left.endpoint.adapter === right.endpoint.adapter
     && left.kind === right.kind
     && left.id === right.id
+    && left.parent?.kind === right.parent?.kind
+    && left.parent?.id === right.parent?.id
     && left.threadId === right.threadId;
 }
 
-function conversationKey(conversation: ConversationRef): string {
-  return `${conversation.endpoint.adapter}\0${conversation.endpoint.id}\0${conversation.kind}\0${conversation.id}\0${conversation.threadId ?? ''}`;
+export function conversationRefKey(conversation: ConversationRef): string {
+  return `${conversation.endpoint.adapter}\0${conversation.endpoint.id}\0${conversation.kind}\0${conversation.id}\0${conversation.parent?.kind ?? ''}\0${conversation.parent?.id ?? ''}\0${conversation.threadId ?? ''}`;
 }
 
-function messageKey(ref: MessageRef): string {
-  return `${conversationKey(ref.conversation)}\0${ref.id}`;
+export function messageRefKey(ref: MessageRef): string {
+  return `${conversationRefKey(ref.conversation)}\0${ref.id}`;
 }
 
 function cursorKey(consumer: string, conversation: ConversationRef): string {
-  return `${consumer}\0${conversationKey(conversation)}`;
+  return `${consumer}\0${conversationRefKey(conversation)}`;
 }
 
 function freezeConversationData<T>(value: T): T {

@@ -244,14 +244,15 @@ export function napcatOutboundTarget(conversation: ConversationRef): ParsedSendT
 }
 
 export function formatInboundContent(ev: NapCatEvent): string {
-  if (typeof ev.raw_message === 'string' && ev.raw_message) return ev.raw_message;
   if (Array.isArray(ev.message)) {
     return ev.message
       .map((seg) => (seg.type === 'text' ? String(seg.data?.text ?? '') : ''))
       .join('');
   }
-  if (typeof ev.message === 'string') return ev.message;
-  return '';
+  if (typeof ev.message === 'string') return ev.message.replace(/\[CQ:[^\]]+\]/g, '').trim();
+  return typeof ev.raw_message === 'string'
+    ? ev.raw_message.replace(/\[CQ:[^\]]+\]/g, '').trim()
+    : '';
 }
 
 /**

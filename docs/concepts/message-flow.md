@@ -29,8 +29,10 @@ flowchart LR
      readonly conversation: ConversationRef; // 结构化会话（endpoint/kind/id/parent/threadId）
      readonly message?: MessageRef;   // 平台消息身份（原生消息 id）
      readonly content: string;
-     readonly sender?: string;
-     readonly metadata?: Readonly<Record<string, unknown>>; // 如 endpoint 名
+     readonly segments?: readonly Segment[];
+     readonly sender?: { id: string; name?: string; roles?: readonly string[] };
+     readonly replyTo?: { id: string }; // 显式平台引用，不从 metadata 猜测
+     readonly metadata?: Readonly<Record<string, unknown>>;
    }
    ```
 
@@ -77,7 +79,7 @@ flowchart LR
 
 ## 多模态：双向 Segment 一贯制
 
-全框架只有一种媒体表达——canonical `Segment` + `MediaRef`（`packages/im/core/src/built/segment-contract/types.ts`）：
+全框架只有一种媒体表达——`@zhin.js/im-contract` 的 canonical `Segment` + `MediaRef`：
 
 ```ts
 interface MediaRef {
@@ -90,7 +92,13 @@ interface MediaRef {
 // image / audio / video / file 段的 data 一律为 { media: MediaRef, alt?/duration?/name? }
 ```
 
-**入站**：适配器把平台载荷归一为 `Segment[]` 随 `gateway.receive({ segments })` 上送 → Agent 的入站注入（`packages/im/agent/src/turn/inbound-media.ts`）把当前 turn 的媒体挂到 `UserMessage.media`（ai 层 Segment 同构的 `MediaContentBlock`，**不随 session 持久化**，历史中只存文本视图）。策略：`ai.multimodal`（`media/resolve-config.ts`）——图片 url 直挂 / path 物化 base64；音频默认 STT（`@zhin.js/speech` 可选，失败降级占位文本）；视频/文件默认占位文本。provider 边界的序列化器（`packages/im/ai/src/llm/convert/media-blocks.ts`）按能力表过滤：缺省 image-only，不支持的类型在边界降级为占位文本，框架内部永不出现任一厂商的 API 格式。
+**入站**：适配器把平台载荷归一为 `Segment[]` 随 `gateway.receive({ segments })` 上送。不透明平台 id 必须经当前 generation 的 `EndpointContentPort` 物化；引用解析期间快照租约一直持有。所有 URL、path 与 base64 随后进入同一条流水线：HTTPS/SSRF 与重定向检查 → 字节上限 → 文件魔数识别 → 声明 MIME/实际类型一致性检查 → `UserMessage.media`。框架不信任扩展名或 Adapter 声明的 MIME，也不把二进制/base64 写入会话事实源。每项媒体恰好产生 `accepted | derived | unsupported | rejected | failed` 终态；失败以明确的不可信 user-context 文本呈现，绝不伪装成“模型已看到图片”。Provider 必须显式声明 `text/image/audio/video/file` 输入能力，缺省仅 `text`；不支持的类型不会猜测放行。
+
+## 会话事实、引用与通知
+
+`ConversationEventStore` 是 IM 上下文的唯一事实源。入站/出站消息、撤回 tombstone、回应、成员加入/退出、禁言/解禁和角色变化按会话幂等追加；不再维护 `im_transcripts` 或文本型 `chat_history` 双轨。合并转发条目使用中性 `actor`，不映射成模型 `user/assistant/system` role。
+
+当前 Turn 把 `replyTo`、forward 与媒体注册为 scoped `TurnReference`。Agent 只暴露 `inspect_conversation_reference(reference, depth?)`：先查本地事实源，再通过持租约的 Endpoint 回源；跨会话、跨 Endpoint、过期 Turn 均 fail-closed。尚未消费的重要 notice 会作为明确标注的“不可信会话数据”附在下一次用户 Turn，永远不进入 system/developer prompt；只有 Turn 成功提交才推进 session cursor，失败会保留。高频 reaction/poke 会聚合，登录、二维码、断线等 process 事件只进入诊断日志。
 
 **出站**：AI 回复 → `OutputElement[]` → canonical `Segment[]`（`publishOutboundElements`）→ `$reply`（Segment 是一等 `SendContent`）→ `normalizeOutboundPayload`（html→image/文本、keyboard、媒体协商）→ endpoint。媒体协商按 adapter definition 的 `segments.outboundMedia` 声明驱动（`'url' | 'path' | 'base64' | 'upload'`）：仅 `url-or-text` 端点会在中央把非 URL 媒体降级为文本；其余由 adapter 按平台最优路径自物化（URL 直发 / base64 直发 / 平台上传 / 读盘），无 `data.media` 的段会被 warn 丢弃——legacy `data.url/file/base64` 形状已不存在。
 
