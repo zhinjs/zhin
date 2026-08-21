@@ -6,8 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { TaskState, Role } from '@a2a-js/sdk';
 
 import { MemoryOrchestrationRepository } from '../../src/orchestrator/orchestration-repository.js';
-import { provideTestOrchestrationService } from '../helpers/orchestration.js';
-import { getOrchestrationService } from '../../src/orchestrator/orchestration-service.js';
+import { createTestOrchestrationService } from '../helpers/orchestration.js';
 import type { AgentExecutor } from '../../src/orchestrator/orchestration-types.js';
 import {
   executeRemoteOrchestrationTask,
@@ -54,7 +53,7 @@ describe('Orchestration persistence contract', () => {
 
 describe('Executor contract — local', () => {
   it('success: result event → completed + result_summary', async () => {
-    const kernel = provideTestOrchestrationService(new MemoryOrchestrationRepository());
+    const kernel = createTestOrchestrationService(new MemoryOrchestrationRepository());
     const run = await kernel.startRun({ sessionKey: 'local-ok' });
     const dispatched = await kernel.dispatchTask({
       runId: run.run.id,
@@ -76,7 +75,7 @@ describe('Executor contract — local', () => {
   });
 
   it('fail: error event → failed', async () => {
-    const kernel = provideTestOrchestrationService(new MemoryOrchestrationRepository());
+    const kernel = createTestOrchestrationService(new MemoryOrchestrationRepository());
     const run = await kernel.startRun({ sessionKey: 'local-fail' });
     const dispatched = await kernel.dispatchTask({
       runId: run.run.id,
@@ -99,7 +98,7 @@ describe('Executor contract — local', () => {
 
   it('cancel: cancelTask on running → cancelled', async () => {
     const repo = new MemoryOrchestrationRepository();
-    const kernel = provideTestOrchestrationService(repo);
+    const kernel = createTestOrchestrationService(repo);
     const run = await kernel.startRun({ sessionKey: 'local-cancel' });
     const task = await kernel.addTask({ runId: run.run.id, name: 'work' });
     await repo.updateTaskStatus(task.id, 'running', { started_at: Date.now() });
@@ -149,7 +148,7 @@ describe('Executor contract — remote_mesh', () => {
 
   it('success: delegate → poll completed', async () => {
     const repo = new MemoryOrchestrationRepository();
-    provideTestOrchestrationService(repo);
+    const orchestration = createTestOrchestrationService(repo);
 
     const run = await repo.createRun({ session_key: 'remote-ok', title: 'r' });
     const task = await repo.createTask({
@@ -160,7 +159,7 @@ describe('Executor contract — remote_mesh', () => {
       remote_agent_id: 'local',
       status: 'running',
     });
-    getOrchestrationService()!.dispatcherHandle.syncTaskFromRecord(task);
+    orchestration.dispatcherHandle.syncTaskFromRecord(task);
 
     const remoteTaskId = 'rt-1';
     const registry = await provideRemoteAgentRegistry({ lifecycle }, {
@@ -195,8 +194,8 @@ describe('Executor contract — remote_mesh', () => {
       }),
     });
 
-    expect((await executeRemoteOrchestrationTask(task.id)).ok).toBe(true);
-    const poll = await pollRemoteTaskStatus(task.id);
+    expect((await executeRemoteOrchestrationTask(orchestration, task.id)).ok).toBe(true);
+    const poll = await pollRemoteTaskStatus(orchestration, task.id);
     expect(poll.done).toBe(true);
     expect(poll.status).toBe('completed');
 
@@ -207,7 +206,7 @@ describe('Executor contract — remote_mesh', () => {
 
   it('fail: delegate throws → failed (not waiting_result)', async () => {
     const repo = new MemoryOrchestrationRepository();
-    provideTestOrchestrationService(repo);
+    const orchestration = createTestOrchestrationService(repo);
 
     const run = await repo.createRun({ session_key: 'remote-fail', title: 'r' });
     const task = await repo.createTask({
@@ -218,7 +217,7 @@ describe('Executor contract — remote_mesh', () => {
       remote_agent_id: 'local',
       status: 'running',
     });
-    getOrchestrationService()!.dispatcherHandle.syncTaskFromRecord(task);
+    orchestration.dispatcherHandle.syncTaskFromRecord(task);
 
     const registry = await provideRemoteAgentRegistry({ lifecycle }, {
       remoteAgents: [{ id: 'local', cardUrl: 'http://127.0.0.1:8068/a2a/zhin/.well-known/agent-card.json', token: 't' }],
@@ -228,14 +227,14 @@ describe('Executor contract — remote_mesh', () => {
       getTask: vi.fn(),
     });
 
-    expect((await executeRemoteOrchestrationTask(task.id)).ok).toBe(false);
+    expect((await executeRemoteOrchestrationTask(orchestration, task.id)).ok).toBe(false);
     const updated = await repo.getTask(task.id);
     expect(updated?.status).toBe('failed');
   });
 
   it('cancel: remote cancelled status → cancelled terminal', async () => {
     const repo = new MemoryOrchestrationRepository();
-    provideTestOrchestrationService(repo);
+    const orchestration = createTestOrchestrationService(repo);
 
     const run = await repo.createRun({ session_key: 'remote-cancel', title: 'r' });
     const task = await repo.createTask({
@@ -248,7 +247,7 @@ describe('Executor contract — remote_mesh', () => {
     });
     await repo.updateTaskStatus(task.id, 'waiting_result', { remote_task_id: 'rt-cancel' });
     const synced = (await repo.getTask(task.id))!;
-    getOrchestrationService()!.dispatcherHandle.syncTaskFromRecord(synced);
+    orchestration.dispatcherHandle.syncTaskFromRecord(synced);
 
     const registry = await provideRemoteAgentRegistry({ lifecycle }, {
       remoteAgents: [{ id: 'local', cardUrl: 'http://127.0.0.1:8068/a2a/zhin/.well-known/agent-card.json', token: 't' }],
@@ -276,7 +275,7 @@ describe('Executor contract — remote_mesh', () => {
       }),
     });
 
-    const poll = await pollRemoteTaskStatus(task.id);
+    const poll = await pollRemoteTaskStatus(orchestration, task.id);
     expect(poll.done).toBe(true);
     expect(poll.status).toBe('cancelled');
 
@@ -287,7 +286,7 @@ describe('Executor contract — remote_mesh', () => {
 
 describe('Executor contract — snapshot API', () => {
   it('getSnapshot reflects kernel DB after completeTask', async () => {
-    const kernel = provideTestOrchestrationService(new MemoryOrchestrationRepository());
+    const kernel = createTestOrchestrationService(new MemoryOrchestrationRepository());
     const run = await kernel.startRun({ sessionKey: 'snap' });
     const task = await kernel.addTask({ runId: run.run.id, name: 't1' });
     await kernel.completeTask(task.id, 'snapshot body');

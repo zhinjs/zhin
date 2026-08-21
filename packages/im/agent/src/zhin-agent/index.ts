@@ -178,6 +178,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   declare skillRegistry: SkillRegistry | null;
   declare skillSystem: SkillSystem | null;
+  declare orchestrationService: import('../orchestrator/orchestration-service.js').OrchestrationService | null;
   declare orchestrator: AgentOrchestrator | null;
   declare agentCore: AgentCore | null;
   declare toolSystem: ToolSystem | null;
@@ -336,6 +337,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       emitter: this.emitter,
       createTools,
       onSubagentComplete: (payload) => this.continueAfterSubagent(payload),
+      orchestrationService: this.orchestrationService,
     });
   }
 

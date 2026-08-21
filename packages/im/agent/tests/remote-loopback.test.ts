@@ -4,8 +4,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TaskState } from '@a2a-js/sdk';
 import { MemoryOrchestrationRepository } from '../src/orchestrator/orchestration-repository.js';
-import { provideTestOrchestrationService } from './helpers/orchestration.js';
-import { getOrchestrationService } from '../src/orchestrator/orchestration-service.js';
+import { createTestOrchestrationService } from './helpers/orchestration.js';
+import type { OrchestrationService } from '../src/orchestrator/orchestration-service.js';
 import {
   RemoteAgentRegistry,
   provideRemoteAgentRegistry,
@@ -18,11 +18,12 @@ import {
 
 describe('Remote loopback A2A delegate flow', () => {
   let repo: MemoryOrchestrationRepository;
+  let orchestration: OrchestrationService;
   const lifecycle = new DisposeStack();
 
   beforeEach(() => {
     repo = new MemoryOrchestrationRepository();
-    provideTestOrchestrationService(repo);
+    orchestration = createTestOrchestrationService(repo);
   });
 
   it('delegate → poll completed via mocked A2A client', async () => {
@@ -34,7 +35,7 @@ describe('Remote loopback A2A delegate flow', () => {
       executor_kind: 'remote_mesh',
       remote_agent_id: 'local',
     });
-    getOrchestrationService()!.dispatcherHandle.syncTaskFromRecord(task);
+    orchestration.dispatcherHandle.syncTaskFromRecord(task);
 
     const remoteTaskId = 'rt-abc123';
     const sendMessage = vi.fn().mockResolvedValue({
@@ -107,17 +108,17 @@ describe('Remote loopback A2A delegate flow', () => {
       cancelTask: vi.fn(),
     } as never);
 
-    const delegate = await executeRemoteOrchestrationTask(task.id);
+    const delegate = await executeRemoteOrchestrationTask(orchestration, task.id);
     expect(delegate.ok).toBe(true);
 
     const updated = await repo.getTask(task.id);
     expect(updated?.remote_task_id).toBe(remoteTaskId);
-    getOrchestrationService()!.dispatcherHandle.syncTaskFromRecord(updated!);
+    orchestration.dispatcherHandle.syncTaskFromRecord(updated!);
 
-    const poll1 = await pollRemoteTaskStatus(task.id);
+    const poll1 = await pollRemoteTaskStatus(orchestration, task.id);
     expect(poll1.done).toBe(false);
 
-    const poll2 = await pollRemoteTaskStatus(task.id);
+    const poll2 = await pollRemoteTaskStatus(orchestration, task.id);
     expect(poll2.done).toBe(true);
     expect(poll2.status).toBe('completed');
     expect(sendMessage).toHaveBeenCalled();
@@ -134,7 +135,7 @@ describe('Remote loopback A2A delegate flow', () => {
       remote_agent_id: 'local',
       status: 'running',
     });
-    getOrchestrationService()!.dispatcherHandle.syncTaskFromRecord(task);
+    orchestration.dispatcherHandle.syncTaskFromRecord(task);
 
     const registry = await provideRemoteAgentRegistry({ lifecycle }, {
       remoteAgents: [{
@@ -164,7 +165,7 @@ describe('Remote loopback A2A delegate flow', () => {
       cancelTask: vi.fn(),
     });
 
-    const delegate = await executeRemoteOrchestrationTask(task.id);
+    const delegate = await executeRemoteOrchestrationTask(orchestration, task.id);
     expect(delegate.ok).toBe(false);
 
     const updated = await repo.getTask(task.id);

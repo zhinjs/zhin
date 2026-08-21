@@ -19,6 +19,7 @@ const logger = getLogger('ZhinAgent');
 export type ConfigureZhinAgentTarget = Pick<
   ZhinAgentPrivate,
   | 'config' | 'skillRegistry' | 'skillSystem' | 'orchestrator' | 'agentCore' | 'toolSystem'
+  | 'orchestrationService'
   | 'contextSystem' | 'sessionSystem'
   | 'imSessionStore' | 'agentSessionStore' | 'contextRepository'
   | 'modelRegistry' | 'subagentSystem' | 'emitter' | 'activeBinding'
@@ -46,6 +47,7 @@ export function applyZhinAgentConfigure(
     target.orchestrator = deps.orchestrator;
     logger.debug('AgentOrchestrator connected for MCP and resources');
   }
+  if (deps.orchestrationService !== undefined) target.orchestrationService = deps.orchestrationService;
   if (deps.agentCore !== undefined) target.agentCore = deps.agentCore;
   if (deps.toolSystem !== undefined) target.toolSystem = deps.toolSystem;
   if (deps.contextSystem !== undefined) target.contextSystem = deps.contextSystem;

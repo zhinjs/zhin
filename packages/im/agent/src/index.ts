@@ -314,10 +314,6 @@ export {
   createNotificationRouter,
   imNotifyToSendOptions,
   parseJobNotify,
-  provideAssistantRuntime,
-  getAssistantRuntime,
-  isAssistantEventsEndpointActive,
-  getAssistantEventsTokenFallback,
   SCHEDULE_JOBS_VERSION,
   ASSISTANT_JOBS_FILENAME,
   syncProfileRoutinesToStore,
@@ -351,7 +347,6 @@ export type {
   AssistantJobFile,
   AssistantEventRequest,
   AssistantEventResult,
-  AssistantRuntimeHandle,
 } from './assistant/index.js';
 export {
   loadAssistantProfileFile,
@@ -369,12 +364,6 @@ export {
   PROFILE_BEDTIME_CHECK_JOB_ID,
 } from './assistant/index.js';
 
-export {
-  provideSessionTreeRuntime,
-  getSessionTreeRuntime,
-  createSessionTreeRuntimeFromAgent,
-} from './session-tree-runtime-registry.js';
-export type { SessionTreeRuntimeHandle } from './session-tree-runtime-registry.js';
 /** Runtime Host（basic/cli）装配 session tree runtime 时的窄门面。 */
 export { asPrivate } from './internal/as-private.js';
 
@@ -382,17 +371,7 @@ export type { ApprovalPort, ApprovalRequestInput } from './session/approval-port
 export { beginIngressTurnSession } from './session/turn-ingress-session.js';
 
 export {
-  provideOrchestrationRuntime,
-  getOrchestrationRuntime,
-  createOrchestrationRuntimeFromService,
-} from './orchestration-runtime-registry.js';
-export type { OrchestrationRuntimeHandle } from './orchestration-runtime-registry.js';
-
-export {
-  getOrchestrationService,
-  getOrchestrationKernel,
   createOrchestrationService,
-  provideOrchestrationService,
   upgradeOrchestrationRepository,
   OrchestrationKernel,
   OrchestrationService,

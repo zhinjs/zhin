@@ -1,17 +1,18 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { provideTestOrchestrationService } from './helpers/orchestration.js';
-import { getOrchestrationService } from '../src/orchestrator/orchestration-service.js';
+import { createTestOrchestrationService } from './helpers/orchestration.js';
+import type { OrchestrationService } from '../src/orchestrator/orchestration-service.js';
 import { MemoryOrchestrationRepository } from '../src/orchestrator/orchestration-repository.js';
 
 
 describe('AgentDispatcher hard orchestration', () => {
+  let orchestration: OrchestrationService;
+
   beforeEach(() => {
-    const repo = new MemoryOrchestrationRepository();
-    provideTestOrchestrationService(repo);
+    orchestration = createTestOrchestrationService();
   });
 
   it('failed dependency blocks downstream', async () => {
-    const dispatcher = getOrchestrationService()!.dispatcherHandle;
+    const dispatcher = orchestration.dispatcherHandle;
     const repo = new MemoryOrchestrationRepository();
     dispatcher.setRepository(repo);
     const run = await repo.createRun({ session_key: 's' });
@@ -29,7 +30,7 @@ describe('AgentDispatcher hard orchestration', () => {
   });
 
   it('cancelled dependency unlocks downstream', async () => {
-    const dispatcher = getOrchestrationService()!.dispatcherHandle;
+    const dispatcher = orchestration.dispatcherHandle;
     const repo = new MemoryOrchestrationRepository();
     dispatcher.setRepository(repo);
     const run = await repo.createRun({ session_key: 's' });

@@ -55,11 +55,7 @@ export interface ConsoleAgentIntrospection {
 /** Session tree 门面 — 形状对齐 agent 包 SessionTreeRuntimeHandle。 */
 export interface ConsoleAgentSessionTree {
   resolveActiveSessionId(sessionKey: string): Promise<string | null>;
-  agentSessionStore: {
-    getBySessionId(sessionId: string): Promise<
-      { active_leaf_message_id?: number | null } | null | undefined
-    >;
-  };
+  getActiveLeafMessageId(sessionId: string): Promise<number | null>;
   listBranchPoints(sessionId: string): Promise<readonly unknown[]>;
   switchActiveLeaf(sessionId: string, messageId: number): Promise<boolean>;
   jumpToBranchIndex(
@@ -708,14 +704,14 @@ function registerAgentSessionRoutes(
         return;
       }
 
-      const session = await runtime.agentSessionStore.getBySessionId(sessionId);
+      const activeLeafMessageId = await runtime.getActiveLeafMessageId(sessionId);
       const points = await runtime.listBranchPoints(sessionId);
       writeJson(response, 200, {
         success: true,
         data: {
           sessionKey: parsed.sessionKey,
           sessionId,
-          activeLeafMessageId: session?.active_leaf_message_id ?? null,
+          activeLeafMessageId,
           points,
         },
       });
@@ -782,28 +778,28 @@ function registerAgentSessionRoutes(
 
       if (branchIndex !== undefined) {
         const result = await runtime.jumpToBranchIndex(sessionId, branchIndex);
-        const session = await runtime.agentSessionStore.getBySessionId(sessionId);
+        const activeLeafMessageId = await runtime.getActiveLeafMessageId(sessionId);
         writeJson(response, result.ok ? 200 : 400, {
           success: result.ok,
           message: result.message,
           data: {
             sessionKey: parsed.sessionKey,
             sessionId,
-            activeLeafMessageId: session?.active_leaf_message_id ?? null,
+            activeLeafMessageId,
           },
         });
         return;
       }
 
       const ok = await runtime.switchActiveLeaf(sessionId, messageId!);
-      const session = await runtime.agentSessionStore.getBySessionId(sessionId);
+      const activeLeafMessageId = await runtime.getActiveLeafMessageId(sessionId);
       writeJson(response, ok ? 200 : 400, {
         success: ok,
         message: ok ? `已切换 active leaf 至消息 #${messageId}` : '切换失败',
         data: {
           sessionKey: parsed.sessionKey,
           sessionId,
-          activeLeafMessageId: session?.active_leaf_message_id ?? null,
+          activeLeafMessageId,
         },
       });
     } finally {

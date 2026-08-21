@@ -5,7 +5,7 @@
  */
 import { getLogger } from '@zhin.js/logger';
 import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
-import { getOrchestrationService } from './orchestration-service.js';
+import type { OrchestrationService } from './orchestration-service.js';
 import { pollRemoteTaskStatus } from './remote-task-executor.js';
 
 const logger = getLogger('RemoteTaskPoller');
@@ -19,7 +19,10 @@ export class RemoteTaskPoller {
   private timer: ReturnType<typeof setInterval> | null = null;
   private polling = false;
 
-  constructor(private readonly config: RemoteTaskPollerConfig = {}) {}
+  constructor(
+    private readonly orchestration: OrchestrationService,
+    private readonly config: RemoteTaskPollerConfig = {},
+  ) {}
 
   start(): void {
     if (this.config.enabled === false) return;
@@ -45,15 +48,14 @@ export class RemoteTaskPoller {
     if (this.polling) return;
     this.polling = true;
     try {
-      const orch = getOrchestrationService();
-      if (!orch) return;
+      const orch = this.orchestration;
       const tasks = await orch.repositoryHandle.listActiveRemoteTasks();
       const dispatcher = orch.dispatcherHandle;
       for (const record of tasks) {
         dispatcher.syncTaskFromRecord(record);
         if (record.remote_task_id) {
           try {
-            await pollRemoteTaskStatus(record.id);
+            await pollRemoteTaskStatus(orch, record.id);
           } catch (err) {
             logger.debug(`poll failed for ${record.id}:`, err);
           }
@@ -73,11 +75,12 @@ export function getRemoteTaskPoller(): RemoteTaskPoller | null {
 
 export function provideRemoteTaskPoller(
   context: GenerationStoreContext,
+  orchestration: OrchestrationService,
   config?: RemoteTaskPollerConfig,
 ): RemoteTaskPoller {
   const prev = pollerStore.tryUse();
   if (prev) prev.stop();
-  const poller = new RemoteTaskPoller(config);
+  const poller = new RemoteTaskPoller(orchestration, config);
   pollerStore.provide(context, poller);
   context.lifecycle.add(() => poller.stop());
   poller.start();

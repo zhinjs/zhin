@@ -36,7 +36,6 @@ import {
   resolveAssistantConfig,
   resolveAssistantDefaultsConfig,
   parseJobNotify,
-  provideAssistantRuntime,
   AssistantEventIngress,
   loadAssistantProfileFile,
   validateAssistantProfile,
@@ -45,23 +44,15 @@ import {
   pruneStaleProfileCronJobs,
   bootstrapAssistantHome,
   OrchestrationService,
-  provideOrchestrationService,
   MemoryOrchestrationRepository,
   registerDefaultExecutors,
-  provideOrchestrationRuntime,
-  createOrchestrationRuntimeFromService,
-  provideSessionTreeRuntime,
-  createSessionTreeRuntimeFromAgent,
   asPrivate,
   handleRuntimeOwnerApproveCommand,
   handleRuntimeManagementCommand,
   publishOutboundElements,
   type ProactiveOutboundService,
   type AssistantConfig,
-  type AssistantRuntimeHandle,
   type BootstrapAssistantHomeResult,
-  type OrchestrationRuntimeHandle,
-  type SessionTreeRuntimeHandle,
   type ApprovalPort,
   type ApprovalRequestInput,
   type TurnRequestPorts,
@@ -91,7 +82,12 @@ import {
   createNativeInteractionToolFeatures,
   FileTodoStore,
   AgentRuntime,
+  createOrchestrationRuntimeFromService,
+  createSessionTreeRuntimeFromAgent,
   type AgentCapabilities,
+  type AssistantRuntimeHandle,
+  type OrchestrationRuntimeHandle,
+  type SessionTreeRuntimeHandle,
   type ToolCapability,
   turnIntentResolverToken,
   type TurnIntentResolver,
@@ -251,10 +247,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     let sessionTreeRuntime: SessionTreeRuntimeHandle;
     let schedule: ReturnType<typeof wireRuntimeSchedule>;
     try {
+      orchService = new OrchestrationService(new MemoryOrchestrationRepository());
+      lifecycle.add(() => orchService.dispose());
       const created = createRuntimeZhinAgent(
         service,
         options.im,
         options.projectRoot,
+        orchService,
         options.approvalPort,
       );
       zhinAgent = created.agent;
@@ -262,17 +261,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       lifecycle.add(() => created.agent.dispose());
       seedPresets = created.seedPresets;
 
-      orchService = new OrchestrationService(new MemoryOrchestrationRepository());
-      provideOrchestrationService({ lifecycle }, orchService);
       registerDefaultExecutors(orchService, {
         refs: { zhinAgent, aiService: service },
       });
-      // Console REST（/api/agent/orchestration/*、session tree）读取这两个
-      // generation-scoped 服务端口；此前 Runtime 路径漏接会令两个页面返回 503。
+      // Console REST resolves both projections from the current generation's AgentHostPort.
       orchestrationRuntime = createOrchestrationRuntimeFromService(orchService);
       sessionTreeRuntime = createSessionTreeRuntimeFromAgent(asPrivate(zhinAgent));
-      provideOrchestrationRuntime({ lifecycle }, orchestrationRuntime);
-      provideSessionTreeRuntime({ lifecycle }, sessionTreeRuntime);
       schedule = wireRuntimeSchedule(
         zhinAgent,
         service,
@@ -834,12 +828,18 @@ function wireRuntimeSchedule(
       eventsConfig: assistantCfg.events,
     });
     assistantRuntime = {
-      config: assistantCfg,
-      store,
-      engine: jobEngine,
-      ingress,
+      events: {
+        isEnabled: () => ingress.isEnabled(),
+        handle: (body) => ingress.handle(body),
+      },
+      jobs: {
+        list: () => jobEngine.listJobs(),
+        add: (job) => jobEngine.addJob(job),
+        remove: (id) => jobEngine.removeJob(id),
+        pause: (id) => jobEngine.pauseJob(id),
+        resume: (id) => jobEngine.resumeJob(id),
+      },
     };
-    provideAssistantRuntime({ lifecycle }, assistantRuntime);
     void (async () => {
       const profile = await loadAssistantProfileFile(projectRoot, assistantCfg.profile);
       if (profile) {
@@ -865,7 +865,6 @@ function wireRuntimeSchedule(
       profile: assistantCfg.profile?.enabled === true,
     }));
   } else {
-    provideAssistantRuntime({ lifecycle }, null);
     jobEngine.load();
   }
 
@@ -1021,6 +1020,7 @@ function createRuntimeZhinAgent(
   service: AIService,
   im: ImRuntime,
   projectRoot: string,
+  orchestrationService: OrchestrationService,
   approvalPort?: ApprovalPort,
 ): {
   agent: ZhinAgent;
@@ -1044,6 +1044,7 @@ function createRuntimeZhinAgent(
     sessionSystem: composed.sessionSystem,
     eventSystem: composed.eventSystem,
     orchestrator,
+    orchestrationService,
     providerResolver: (alias) => service.getProvider(alias),
     activeBinding: binding,
     deferredResultSender: composed.deliverOutbound,

@@ -480,9 +480,7 @@ function fakeSessionTree() {
   return {
     resolveActiveSessionId: (key: string) =>
       Promise.resolve(key === 'known' ? 'sid-1' : null),
-    agentSessionStore: {
-      getBySessionId: () => Promise.resolve({ active_leaf_message_id: 7 }),
-    },
+    getActiveLeafMessageId: () => Promise.resolve(7),
     listBranchPoints: () => Promise.resolve([{ messageId: 3, branchCount: 2 }]),
     switchActiveLeaf: (_id: string, messageId: number) => Promise.resolve(messageId === 9),
     jumpToBranchIndex: (_id: string, index: number) =>

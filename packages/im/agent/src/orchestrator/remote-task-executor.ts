@@ -3,7 +3,7 @@
  */
 import type { Task } from '@a2a-js/sdk';
 import { getRemoteAgentRegistry } from './remote-agent-registry.js';
-import { getOrchestrationService } from './orchestration-service.js';
+import type { OrchestrationKernel } from './orchestration-service.js';
 import { buildSendMessageRequest } from '../a2a/delegation-message.js';
 import {
   extractTaskResultText,
@@ -30,7 +30,7 @@ function extractRemoteTaskId(result: unknown): string | undefined {
 async function applyStreamToKernel(
   taskId: string,
   stream: AsyncGenerator<unknown, void, undefined>,
-  orch: NonNullable<ReturnType<typeof getOrchestrationService>>,
+  orch: OrchestrationKernel,
 ): Promise<{ remoteTaskId: string; terminal: boolean; resultText?: string }> {
   let remoteTaskId = taskId;
   let terminal = false;
@@ -62,10 +62,9 @@ async function applyStreamToKernel(
 }
 
 export async function executeRemoteOrchestrationTask(
+  orch: OrchestrationKernel,
   taskId: string,
 ): Promise<{ ok: boolean; message: string }> {
-  const orch = getOrchestrationService();
-  if (!orch) return { ok: false, message: '编排服务不可用（OrchestrationService 未注册）' };
   const dispatcher = orch.dispatcherHandle;
   const task = dispatcher.getTask(taskId);
   if (!task) {
@@ -169,10 +168,9 @@ export async function executeRemoteOrchestrationTask(
 }
 
 export async function pollRemoteTaskStatus(
+  orch: OrchestrationKernel,
   taskId: string,
 ): Promise<{ done: boolean; status: string; result?: string }> {
-  const orch = getOrchestrationService();
-  if (!orch) return { done: false, status: 'unknown' };
   const dispatcher = orch.dispatcherHandle;
   const task = dispatcher.getTask(taskId);
   if (!task?.remoteAgentId || !task.remoteTaskId) {

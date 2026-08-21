@@ -71,14 +71,6 @@ export {
 export type { AssistantEventRequest, AssistantEventResult, AssistantEventStatus } from './event-types.js';
 export { AssistantEventIngress } from './event-ingress.js';
 export type { AssistantEventIngressOptions } from './event-ingress.js';
-export {
-  provideAssistantRuntime,
-  getAssistantRuntime,
-  isAssistantEventsEndpointActive,
-  getAssistantEventsTokenFallback,
-} from './runtime-registry.js';
-export type { AssistantRuntimeHandle } from './runtime-registry.js';
-
 export type {
   ScheduleJob,
   ScheduleJobFile,

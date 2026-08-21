@@ -5,7 +5,7 @@ import { type Message, type Tool, type ToolParametersSchema, type ToolResult, re
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import type { AgentRole } from '../orchestrator/agent-dispatcher.js';
 import {
-  getOrchestrationService,
+  type OrchestrationService,
   type OrchestrationAddTaskInput,
 } from '../orchestrator/orchestration-service.js';
 import { orchestrationSourceFromMessage } from '../orchestrator/orchestration-source.js';
@@ -14,13 +14,7 @@ function sessionKeyFromContext(commMessage: Message<any>): string {
   return resolveIMSessionIdFromMessage(commMessage);
 }
 
-function requireService(): NonNullable<ReturnType<typeof getOrchestrationService>> {
-  const svc = getOrchestrationService();
-  if (!svc) throw new Error('OrchestrationService 未初始化');
-  return svc;
-}
-
-function formatRunStatus(runId: string, snapshot: Awaited<ReturnType<ReturnType<typeof requireService>['getStatus']>>): string {
+function formatRunStatus(runId: string, snapshot: Awaited<ReturnType<OrchestrationService['getStatus']>>): string {
   if (!snapshot) return `Run ${runId} 不存在`;
   const lines = [
     `# Run ${snapshot.run.id}`,
@@ -112,13 +106,16 @@ class OrchestrationStartTool extends BuiltinBaseTool {
   readonly description = 'Create an orchestration run.';
   readonly parameters = START_PARAMS;
 
-  constructor(private readonly sessionContext: Message<any>) {
+  constructor(
+    private readonly sessionContext: Message<any>,
+    private readonly service: OrchestrationService,
+  ) {
     super();
     this.tags.push('orchestration', 'director');
   }
 
   async run(args: Record<string, unknown>): Promise<ToolResult> {
-    const svc = requireService();
+    const svc = this.service;
     const sessionKey = sessionKeyFromContext(this.sessionContext);
     const title = typeof args.title === 'string' ? args.title : undefined;
     const snapshot = await svc.startRun({
@@ -140,13 +137,16 @@ class OrchestrationAddTaskTool extends BuiltinBaseTool {
   readonly description = 'Add a DAG node to a run and optionally execute it with a configured local Agent or remote A2A Agent.';
   readonly parameters = ADD_TASK_PARAMS;
 
-  constructor(private readonly sessionContext: Message<any>) {
+  constructor(
+    private readonly sessionContext: Message<any>,
+    private readonly service: OrchestrationService,
+  ) {
     super();
     this.tags.push('orchestration', 'director');
   }
 
   async run(args: Record<string, unknown>): Promise<ToolResult> {
-    const svc = requireService();
+    const svc = this.service;
     const runId = String(args.run_id ?? '');
     if (!runId) return '请提供 run_id';
 
@@ -201,8 +201,10 @@ class OrchestrationStatusTool extends BuiltinBaseTool {
   readonly description = 'Query run and DAG task status.';
   readonly parameters = RUN_ID_PARAMS;
 
+  constructor(private readonly service: OrchestrationService) { super(); }
+
   async run(args: Record<string, unknown>): Promise<ToolResult> {
-    const svc = requireService();
+    const svc = this.service;
     const runId = String(args.run_id ?? '');
     if (!runId) return '请提供 run_id';
     const snapshot = await svc.getStatus(runId);
@@ -215,8 +217,10 @@ class OrchestrationCompleteTool extends BuiltinBaseTool {
   readonly description = 'Close an orchestration run (by default requires no pending/running nodes).';
   readonly parameters = RUN_ID_PARAMS;
 
+  constructor(private readonly service: OrchestrationService) { super(); }
+
   async run(args: Record<string, unknown>): Promise<ToolResult> {
-    const svc = requireService();
+    const svc = this.service;
     const runId = String(args.run_id ?? '');
     if (!runId) return '请提供 run_id';
     const result = await svc.completeRun(runId, args.force === true);
@@ -233,8 +237,10 @@ class OrchestrationRetryTaskTool extends BuiltinBaseTool {
   readonly description = 'Reset a failed task to pending and unblock downstream nodes.';
   readonly parameters = TASK_ID_PARAMS;
 
+  constructor(private readonly service: OrchestrationService) { super(); }
+
   async run(args: Record<string, unknown>): Promise<ToolResult> {
-    const svc = requireService();
+    const svc = this.service;
     const taskId = String(args.task_id ?? '');
     if (!taskId) return '请提供 task_id';
     const result = await svc.retryTask(taskId);
@@ -247,8 +253,10 @@ class OrchestrationSkipTaskTool extends BuiltinBaseTool {
   readonly description = 'Skip a failed/pending task (records reason) and unblock downstream nodes.';
   readonly parameters = TASK_ID_PARAMS;
 
+  constructor(private readonly service: OrchestrationService) { super(); }
+
   async run(args: Record<string, unknown>): Promise<ToolResult> {
-    const svc = requireService();
+    const svc = this.service;
     const taskId = String(args.task_id ?? '');
     if (!taskId) return '请提供 task_id';
     const reason = typeof args.reason === 'string' ? args.reason : 'skipped by director';
@@ -257,14 +265,17 @@ class OrchestrationSkipTaskTool extends BuiltinBaseTool {
   }
 }
 
-export function createOrchestrationTools(commMessage: Message): Tool[] {
+export function createOrchestrationTools(
+  commMessage: Message,
+  service: OrchestrationService,
+): Tool[] {
   return [
-    new OrchestrationStartTool(commMessage).toTool(),
-    new OrchestrationAddTaskTool(commMessage).toTool(),
-    new OrchestrationStatusTool().toTool(),
-    new OrchestrationCompleteTool().toTool(),
-    new OrchestrationRetryTaskTool().toTool(),
-    new OrchestrationSkipTaskTool().toTool(),
+    new OrchestrationStartTool(commMessage, service).toTool(),
+    new OrchestrationAddTaskTool(commMessage, service).toTool(),
+    new OrchestrationStatusTool(service).toTool(),
+    new OrchestrationCompleteTool(service).toTool(),
+    new OrchestrationRetryTaskTool(service).toTool(),
+    new OrchestrationSkipTaskTool(service).toTool(),
   ];
 }
 

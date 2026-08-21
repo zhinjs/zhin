@@ -69,7 +69,7 @@ export function registerDefaultExecutors(
     kind: 'remote_mesh',
     async *execute({ task }) {
       yield { type: 'progress', text: `delegating to remote mesh ${task.remoteAgentId ?? task.assignedTo}` };
-      const res = await executeRemoteOrchestrationTask(task.id);
+      const res = await executeRemoteOrchestrationTask(kernel, task.id);
       if (!res.ok) {
         yield { type: 'error', error: res.message };
         return;

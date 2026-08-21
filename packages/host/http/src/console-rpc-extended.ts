@@ -41,7 +41,7 @@ export interface ConsoleRpcExtendedCtx {
   ) => Promise<T | null>;
   /** Plugin Runtime DatabaseHost 的 models 视图。 */
   databaseHost?: { models: { get(name: string): unknown } };
-  /** Agent Host 持久化调度引擎（@zhin.js/agent getAssistantRuntime().engine），未 init 时返回 null。 */
+  /** Narrow generation-bound persistent-job port; null when Assistant is disabled. */
   resolveScheduleEngine?: () => ConsoleScheduleEngine | null | undefined;
   /** LoginAssist list/submit/cancel（刷新后仍可消费扫码/滑块待办）。 */
   loginAssist?: {

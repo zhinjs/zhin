@@ -653,7 +653,17 @@ export function registerConsoleApiRoutes(
           databaseHost: databaseHost
             ? { models: databaseHost.models }
             : undefined,
-          resolveScheduleEngine: () => agentLease?.value?.assistant?.engine ?? null,
+          resolveScheduleEngine: () => {
+            const jobs = agentLease?.value?.assistant?.jobs;
+            if (!jobs) return null;
+            return {
+              listJobs: async () => [...await jobs.list()],
+              addJob: (job) => jobs.add(job as Parameters<typeof jobs.add>[0]),
+              removeJob: (id) => jobs.remove(id),
+              pauseJob: (id) => jobs.pause(id),
+              resumeJob: (id) => jobs.resume(id),
+            };
+          },
           loginAssist: im?.loginAssist,
         },
         listPluginKeys: () => listConsoleConfigKeys(projectRoot, primaryConfigDocument),
@@ -744,12 +754,12 @@ export function registerConsoleApiRoutes(
       return;
     }
     const handled = await withGenerationAgentConsole(snapshots, async ({ assistant: runtime }) => {
-      if (!runtime?.ingress.isEnabled()) {
+      if (!runtime?.events.isEnabled()) {
         writeJson(response, 404, { success: false, error: 'assistant.events is not enabled' });
         return;
       }
       try {
-        const result = await runtime.ingress.handle(body);
+        const result = await runtime.events.handle(body);
         if (!result.ok) {
           const status = result.error?.includes('rate limit') ? 429
             : result.error?.includes('not found') ? 404
@@ -775,15 +785,15 @@ export function registerConsoleApiRoutes(
 
   http.route('GET', `${base}/assistant/jobs`, async (_request, response) => {
     const handled = await withGenerationAgentConsole(snapshots, async ({ assistant: runtime }) => {
-      if (!runtime?.config.enabled) {
+      if (!runtime) {
         writeJson(response, 404, { success: false, error: 'assistant.enabled is false' });
         return;
       }
       try {
-        const jobs = await runtime.engine.listJobs();
+        const jobs = await runtime.jobs.list();
         writeJson(response, 200, {
           success: true,
-          data: { jobs, eventsActive: runtime.ingress.isEnabled() },
+          data: { jobs, eventsActive: runtime.events.isEnabled() },
         });
       } catch (error) {
         writeJson(response, 500, {
@@ -800,7 +810,7 @@ export function registerConsoleApiRoutes(
     tags: ['assistant'],
   });
 
-  // Orchestration REST — optional peer `@zhin.js/agent` via getOrchestrationRuntime().
+  // Orchestration REST — resolved from the request's generation-bound AgentHostPort.
   http.route('GET', `${base}/agent/orchestration/runs`, async (_request, response, url) => {
     const sessionKey = url.searchParams.get('sessionKey') ?? '';
     if (!sessionKey) {
@@ -1704,10 +1714,15 @@ type OrchestrationRuntime = {
 };
 
 type AssistantRuntime = {
-  readonly config: { readonly enabled?: boolean };
-  readonly ingress: {
+  readonly events: {
     isEnabled(): boolean;
     handle(body: unknown): Promise<{ ok: boolean; deduped?: boolean; error?: string }>;
   };
-  readonly engine: ConsoleScheduleEngine;
+  readonly jobs: {
+    list(): Promise<Record<string, unknown>[]>;
+    add(job: Record<string, unknown>): Promise<Record<string, unknown>>;
+    remove(id: string): Promise<boolean>;
+    pause(id: string): Promise<boolean>;
+    resume(id: string): Promise<boolean>;
+  };
 };

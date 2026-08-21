@@ -22,7 +22,7 @@ export async function activateAiDatabaseStorage(
   db: any,
   refs: AIServiceRefs,
   config: AIConfig,
-  orchestrationService?: OrchestrationService,
+  orchestrationService: OrchestrationService,
 ): Promise<void> {
   if (!refs.zhinAgent) return;
   if (config.sessions?.useDatabase === false) return;

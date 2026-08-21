@@ -13,11 +13,6 @@ import type {
 import type { Message } from '@zhin.js/core';
 import { type AgentRole, type AgentTask, AgentDispatcher } from './agent-dispatcher.js';
 import {
-  createGenerationStore,
-  type Dispose,
-  type GenerationStoreContext,
-} from '@zhin.js/plugin-runtime';
-import {
   type OrchestrationRepository,
   type OrchestrationRunWithTasks,
   taskRecordToAgentTaskShape,
@@ -638,50 +633,21 @@ export class OrchestrationKernel {
 
 export class OrchestrationService extends OrchestrationKernel {}
 
-const serviceStore = createGenerationStore<OrchestrationService>('zhin.agent.orchestration-service');
-
-/** 纯工厂：创建服务（dispatcher 由服务持有）。注册请走 provideOrchestrationService。 */
+/** Pure factory. Ownership and disposal belong to the composition root. */
 export function createOrchestrationService(repository: OrchestrationRepository): OrchestrationService {
   return new OrchestrationService(repository);
 }
 
 /**
- * Generation-owned registration：反注册与服务 dispose（含 dispatcher）随
- * `context.lifecycle` 自动执行，代际结束即摘除，杜绝跨热重载悬挂。
- */
-export function provideOrchestrationService(
-  context: GenerationStoreContext,
-  service: OrchestrationService,
-): Dispose {
-  context.lifecycle.add(() => { service.dispose(); });
-  return serviceStore.provide(context, service);
-}
-
-/**
- * Upgrade the active kernel's repository in-place, preserving registered
+ * Upgrade one explicitly owned kernel's repository in-place, preserving registered
  * executors and workflow strategies — used by the DB activation path to move
  * from the Memory placeholder to a Database repository without losing
- * bootstrap-time registrations. Throws when no generation has provided a
- * service (旧的静默创建全局服务兜底已删除）。
+ * bootstrap-time registrations.
  */
 export function upgradeOrchestrationRepository(
   repository: OrchestrationRepository,
-  target: OrchestrationService | null = getOrchestrationService(),
+  target: OrchestrationService,
 ): OrchestrationService {
-  const existing = target;
-  if (!existing) {
-    throw new Error(
-      'No live OrchestrationService — createOrchestrationService + provideOrchestrationService first',
-    );
-  }
-  existing.replaceRepository(repository);
-  return existing;
-}
-
-export function getOrchestrationService(): OrchestrationService | null {
-  return serviceStore.tryUse() ?? null;
-}
-
-export function getOrchestrationKernel(): OrchestrationKernel | null {
-  return getOrchestrationService();
+  target.replaceRepository(repository);
+  return target;
 }

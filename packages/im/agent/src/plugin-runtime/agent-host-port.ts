@@ -1,7 +1,7 @@
 import { createToken } from '@zhin.js/plugin-runtime';
-import type { AssistantRuntimeHandle } from '../assistant/runtime-registry.js';
-import type { OrchestrationRuntimeHandle } from '../orchestration-runtime-registry.js';
-import type { SessionTreeRuntimeHandle } from '../session-tree-runtime-registry.js';
+import type { AssistantRuntimeHandle } from '../assistant/runtime-contract.js';
+import type { OrchestrationRuntimeHandle } from '../orchestration-runtime.js';
+import type { SessionTreeRuntimeHandle } from '../session-tree-runtime.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { TurnOutcome, TurnRequest } from '../turn/turn-ingress.js';
 

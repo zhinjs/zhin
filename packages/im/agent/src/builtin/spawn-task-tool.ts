@@ -9,7 +9,7 @@ import {
 import { orchestrationSourceFromMessage } from '../orchestrator/orchestration-source.js';
 import type { SubagentSystem, SubagentOrigin } from '../subagent/index.js';
 import type { SubagentContextMode } from '../subagent-preset.js';
-import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
+import type { OrchestrationService } from '../orchestrator/orchestration-service.js';
 import { executeRemoteOrchestrationTask } from '../orchestrator/remote-task-executor.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { getActiveDeferredTurnController } from '../tool-catalog/deferred-turn-controller.js';
@@ -113,6 +113,7 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
   constructor(
     private readonly sessionCommMessage: Message,
     private readonly manager: SubagentSystem,
+    private readonly orchestrationService: OrchestrationService | null,
     options?: SpawnTaskToolOptions,
   ) {
     super();
@@ -143,7 +144,7 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
       return 'spawn_task 须同时提供 run_id 与 task_id';
     }
 
-    const svc = getOrchestrationService();
+    const svc = this.orchestrationService;
     let targetRunId = runId;
     let targetTaskId = orchestrationTaskId;
 
@@ -159,7 +160,7 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
       }
       const agentTask = dispatcher.getTask(targetTaskId);
       if (agentTask?.executorKind === 'remote_mesh') {
-        const remoteResult = await executeRemoteOrchestrationTask(targetTaskId);
+        const remoteResult = await executeRemoteOrchestrationTask(svc, targetTaskId);
         if (args.wait === true) {
           return remoteResult.message;
         }
@@ -265,7 +266,8 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
 export function createSpawnTaskTool(
   commMessage: Message,
   manager: SubagentSystem,
+  orchestrationService: OrchestrationService | null,
   options?: SpawnTaskToolOptions,
 ): AgentTool {
-  return new SpawnTaskBuiltinTool(commMessage, manager, options).toTool() as AgentTool;
+  return new SpawnTaskBuiltinTool(commMessage, manager, orchestrationService, options).toTool() as AgentTool;
 }

@@ -1,5 +1,14 @@
 export * from './agent-runtime.js';
 export * from './agent-host-port.js';
+export type { AssistantRuntimeHandle } from '../assistant/runtime-contract.js';
+export {
+  createOrchestrationRuntimeFromService,
+  type OrchestrationRuntimeHandle,
+} from '../orchestration-runtime.js';
+export {
+  createSessionTreeRuntimeFromAgent,
+  type SessionTreeRuntimeHandle,
+} from '../session-tree-runtime.js';
 export * from './turn-intent-resolver.js';
 export * from './capability-ingress.js';
 export * from './deferred-capability-plan.js';

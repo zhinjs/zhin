@@ -164,10 +164,7 @@ export { HookRegistry, createAIHookEvent } from './hook-registry.js';
 export {
   OrchestrationKernel,
   OrchestrationService,
-  getOrchestrationKernel,
-  getOrchestrationService,
   createOrchestrationService,
-  provideOrchestrationService,
   upgradeOrchestrationRepository,
 } from './orchestration-service.js';
 export type {
