@@ -55,6 +55,51 @@ export interface DataCategoryRegistrySnapshot {
   readonly categories: Readonly<Record<string, DataCategoryRule>>;
 }
 
+export type DataCategoryRegistrySnapshotInput = Omit<DataCategoryRegistrySnapshot, 'digest'>;
+
+export function createDataCategoryRegistrySnapshot(
+  input: DataCategoryRegistrySnapshotInput,
+): DataCategoryRegistrySnapshot {
+  if (!isNonEmpty(input.id) || !isNonEmpty(input.tenantId)
+    || !Number.isSafeInteger(input.revision) || input.revision < 1) {
+    throw new Error('Data Category Registry identity is invalid');
+  }
+  const kindFloors = Object.fromEntries(Object.entries(input.kindFloors)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([kind, floor]) => {
+      if (!isMember(kind, DATA_KINDS) || !isMember(floor, DISCLOSABLE_CONFIDENTIALITY_CLASSES)) {
+        throw new Error(`Data Category Registry kind floor is invalid: ${kind}`);
+      }
+      return [kind, floor];
+    }));
+  const categories = Object.fromEntries(Object.entries(input.categories)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([category, rule]) => {
+      if (!isNonEmpty(category) || !isRecord(rule)
+        || Object.keys(rule).some(key => key !== 'confidentialityFloor')
+        || !isMember(rule.confidentialityFloor, DISCLOSABLE_CONFIDENTIALITY_CLASSES)) {
+        throw new Error(`Data Category Registry category rule is invalid: ${category}`);
+      }
+      return [category, deepFreeze({ confidentialityFloor: rule.confidentialityFloor })];
+    }));
+  const projection = deepFreeze({
+    id: input.id.trim(),
+    revision: input.revision,
+    tenantId: input.tenantId.trim(),
+    kindFloors,
+    categories,
+  });
+  return deepFreeze({ ...projection, digest: hashStable(projection) });
+}
+
+export function assertDataCategoryRegistrySnapshot(value: DataCategoryRegistrySnapshot): void {
+  const { digest, ...input } = value;
+  const canonical = createDataCategoryRegistrySnapshot(input);
+  if (digest !== canonical.digest || stableSerialize(value) !== stableSerialize(canonical)) {
+    throw new Error('Data Category Registry digest does not match its content');
+  }
+}
+
 export interface DataDescriptorCandidate {
   readonly objectId: string;
   readonly payloadHash: string;
@@ -104,6 +149,50 @@ export interface DisclosureRecipientSnapshot {
   readonly clearance: Exclude<ConfidentialityClass, 'unknown'>;
 }
 
+export interface DisclosureRecipientSetSnapshot {
+  readonly revision: number;
+  readonly digest: string;
+  readonly recipients: readonly DisclosureRecipientSnapshot[];
+}
+
+export function createDisclosureRecipientSetSnapshot(input: Readonly<{
+  revision: number;
+  recipients: readonly DisclosureRecipientSnapshot[];
+}>): DisclosureRecipientSetSnapshot {
+  if (!Number.isSafeInteger(input.revision) || input.revision < 1 || !Array.isArray(input.recipients)
+    || input.recipients.length === 0) {
+    throw new Error('Disclosure recipient snapshot is invalid');
+  }
+  const recipients = input.recipients.map((recipient) => {
+    if (!isNonEmpty(recipient.principalId) || !isNonEmpty(recipient.tenantId)
+      || (recipient.projectId !== undefined && !isNonEmpty(recipient.projectId))
+      || !isMember(recipient.clearance, DISCLOSABLE_CONFIDENTIALITY_CLASSES)) {
+      throw new Error('Disclosure recipient is invalid');
+    }
+    return deepFreeze({
+      principalId: recipient.principalId.trim(),
+      tenantId: recipient.tenantId.trim(),
+      ...(recipient.projectId === undefined ? {} : { projectId: recipient.projectId.trim() }),
+      clearance: recipient.clearance,
+    });
+  }).sort((left, right) => left.principalId.localeCompare(right.principalId));
+  if (new Set(recipients.map(({ principalId }) => principalId)).size !== recipients.length) {
+    throw new Error('Disclosure recipient snapshot contains duplicate principal ids');
+  }
+  const projection = deepFreeze({ revision: input.revision, recipients });
+  return deepFreeze({ ...projection, digest: hashStable(projection) });
+}
+
+export function assertDisclosureRecipientSetSnapshot(value: DisclosureRecipientSetSnapshot): void {
+  const canonical = createDisclosureRecipientSetSnapshot({
+    revision: value.revision,
+    recipients: value.recipients,
+  });
+  if (value.digest !== canonical.digest || stableSerialize(value) !== stableSerialize(canonical)) {
+    throw new Error('Disclosure recipient snapshot digest does not match its content');
+  }
+}
+
 export interface ProcessingDestinationContract {
   readonly id: string;
   readonly contractDigest: string;
@@ -117,8 +206,37 @@ export interface ProcessingDestinationContract {
   readonly allowedCategories: readonly string[];
   readonly external: boolean;
   readonly noTraining: boolean;
+  readonly loggingMode: 'disabled' | 'metadata_only' | 'full';
+  readonly maximumRetentionSeconds: number;
+  readonly allowsRedisclosure: boolean;
+  readonly supportsDeletion: boolean;
   readonly recipientSnapshotRevision: number;
   readonly recipientSnapshotDigest: string;
+}
+
+export type ProcessingDestinationContractInput = Omit<
+ProcessingDestinationContract,
+'contractDigest'
+>;
+
+export function createProcessingDestinationContract(
+  input: ProcessingDestinationContractInput,
+): ProcessingDestinationContract {
+  const projection = canonicalDestination(input);
+  return deepFreeze({
+    ...projection,
+    contractDigest: hashStable(projection),
+  });
+}
+
+export function assertProcessingDestinationContract(
+  value: ProcessingDestinationContract,
+): void {
+  const { contractDigest, ...input } = value;
+  const canonical = createProcessingDestinationContract(input);
+  if (contractDigest !== canonical.contractDigest || stableSerialize(value) !== stableSerialize(canonical)) {
+    throw new Error('Processing Destination contract digest does not match its content');
+  }
 }
 
 export interface TrustedDisclosureTransform {
@@ -141,6 +259,73 @@ export interface DataGovernancePolicySnapshot {
   readonly externalApprovalFloor: Exclude<ConfidentialityClass, 'unknown'>;
 }
 
+export type DataGovernancePolicySnapshotInput = Omit<DataGovernancePolicySnapshot, 'digest'>;
+
+export function createDataGovernancePolicySnapshot(
+  input: DataGovernancePolicySnapshotInput,
+): DataGovernancePolicySnapshot {
+  const destinations = Object.fromEntries(Object.entries(input.destinations)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([id, destination]) => {
+      assertProcessingDestinationContract(destination);
+      if (id !== destination.id) throw new Error('Processing Destination catalog id mismatch');
+      return [id, destination];
+    }));
+  const transforms = Object.fromEntries(Object.entries(input.transforms)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([id, transform]) => {
+      if (id !== transform.id || !isNonEmpty(id)
+        || !Array.isArray(transform.inputCategoriesAny)
+        || transform.inputCategoriesAny.some(value => !isNonEmpty(value))
+        || !Array.isArray(transform.outputCategories)
+        || transform.outputCategories.some(value => !isNonEmpty(value))
+        || !isMember(transform.outputConfidentiality, DISCLOSABLE_CONFIDENTIALITY_CLASSES)
+        || !isMemberArray(transform.allowedChannels, DISCLOSURE_CHANNELS)) {
+        throw new Error(`Invalid trusted disclosure transform ${id}`);
+      }
+      return [id, deepFreeze({
+        id,
+        inputCategoriesAny: uniqueSorted(transform.inputCategoriesAny),
+        outputConfidentiality: transform.outputConfidentiality,
+        outputCategories: uniqueSorted(transform.outputCategories),
+        allowedChannels: uniqueSorted(transform.allowedChannels),
+      })];
+    }));
+  if (!isNonEmpty(input.id) || !isNonEmpty(input.tenantId) || !isNonEmpty(input.projectId)) {
+    throw new Error('Data Governance Policy identity must be non-empty');
+  }
+  if (!Number.isSafeInteger(input.revision) || input.revision < 1) {
+    throw new Error('Data Governance Policy revision must be a positive safe integer');
+  }
+  const ceilingKeys = Object.keys(input.channelCeilings);
+  if (ceilingKeys.length !== DISCLOSURE_CHANNELS.length
+    || ceilingKeys.some(key => !isMember(key, DISCLOSURE_CHANNELS))
+    || Object.values(input.channelCeilings)
+      .some(value => !isMember(value, DISCLOSABLE_CONFIDENTIALITY_CLASSES))
+    || !isMember(input.externalApprovalFloor, DISCLOSABLE_CONFIDENTIALITY_CLASSES)) {
+    throw new Error('Data Governance Policy disclosure ceilings are invalid');
+  }
+  const projection = deepFreeze({
+    id: input.id.trim(),
+    revision: input.revision,
+    tenantId: input.tenantId.trim(),
+    projectId: input.projectId.trim(),
+    destinations,
+    channelCeilings: { ...input.channelCeilings },
+    transforms,
+    externalApprovalFloor: input.externalApprovalFloor,
+  });
+  return deepFreeze({ ...projection, digest: hashStable(projection) });
+}
+
+export function assertDataGovernancePolicySnapshot(value: DataGovernancePolicySnapshot): void {
+  const { digest, ...input } = value;
+  const canonical = createDataGovernancePolicySnapshot(input);
+  if (digest !== canonical.digest || stableSerialize(value) !== stableSerialize(canonical)) {
+    throw new Error('Data Governance Policy digest does not match its content');
+  }
+}
+
 export interface DisclosurePrincipalSnapshot {
   readonly principalId: string;
   readonly tenantId: string;
@@ -158,11 +343,7 @@ export interface DisclosureContext {
   readonly policyRevision: number;
   readonly principal: DisclosurePrincipalSnapshot;
   readonly destination: ProcessingDestinationContract;
-  readonly recipients: Readonly<{
-    revision: number;
-    digest: string;
-    recipients: readonly DisclosureRecipientSnapshot[];
-  }>;
+  readonly recipients: DisclosureRecipientSetSnapshot;
 }
 
 export interface DisclosureApprovalSnapshot {
@@ -233,6 +414,7 @@ export interface DisclosureDecision {
   }>;
   readonly requiredTransformId?: string;
   readonly requiredApprovalRoles: readonly DisclosureApprovalSnapshot['role'][];
+  readonly approvalIds: readonly string[];
 }
 
 export interface DisclosureDecisionInput {
@@ -347,6 +529,62 @@ export function classifyDataDescriptor(
   });
 }
 
+/** Re-validates a registered Descriptor against the trusted generation registry used at ingress. */
+export function assertRegisteredDataDescriptor(
+  descriptor: DataDescriptor,
+  registry: DataCategoryRegistrySnapshot,
+): void {
+  assertDataCategoryRegistrySnapshot(registry);
+  if (!isRecord(descriptor)
+    || !isMember(descriptor.kind, DATA_KINDS)
+    || !isMember(descriptor.confidentiality, DISCLOSABLE_CONFIDENTIALITY_CLASSES)
+    || !isStringArray(descriptor.categories)
+    || !isMemberArray(descriptor.allowedPurposes, DISCLOSURE_PURPOSES)
+    || !isStringArray(descriptor.allowedRegions)
+    || !isStringArray(descriptor.subjectRefs)
+    || !isRecord(descriptor.retention)
+    || !isMember(descriptor.retention.class, RETENTION_CLASSES)
+    || !isRecord(descriptor.lineage)
+    || !isStringArray(descriptor.lineage.sourceObjectIds)
+    || (descriptor.lineage.transformRef !== undefined
+      && typeof descriptor.lineage.transformRef !== 'string')
+    || !isRecord(descriptor.classificationSource)) {
+    throw new Error('Data Descriptor registered snapshot is malformed or non-canonical');
+  }
+  if (descriptor.classificationSource.categoryRegistryId !== registry.id
+    || descriptor.classificationSource.categoryRegistryRevision !== registry.revision
+    || descriptor.classificationSource.categoryRegistryDigest !== registry.digest
+    || descriptor.tenantId !== registry.tenantId) {
+    throw new Error('Data Descriptor registry proof does not match the trusted registry');
+  }
+  const kindFloor = registry.kindFloors[descriptor.kind];
+  const categoryFloors = descriptor.categories.map(category => registry.categories[category]?.confidentialityFloor);
+  if (!kindFloor || categoryFloors.some(floor => floor === undefined)) {
+    throw new Error('Data Descriptor references an unknown trusted floor');
+  }
+  const trustedFloor = [kindFloor, ...categoryFloors.filter((floor): floor is Exclude<
+  ConfidentialityClass, 'unknown'> => floor !== undefined)]
+    .reduce(stricterConfidentiality, 'public');
+  if (CONFIDENTIALITY_LEVEL[descriptor.confidentiality] < CONFIDENTIALITY_LEVEL[trustedFloor]) {
+    throw new Error('Data Descriptor confidentiality is below its trusted floor');
+  }
+  if (!isNonEmpty(descriptor.objectId) || !/^sha256:[a-f\d]{64}$/u.test(descriptor.payloadHash)
+    || !isNonEmpty(descriptor.projectId)
+    || descriptor.allowedPurposes.length === 0 || descriptor.allowedRegions.length === 0
+    || stableSerialize(descriptor.categories) !== stableSerialize(uniqueSorted(descriptor.categories))
+    || stableSerialize(descriptor.allowedPurposes) !== stableSerialize(uniqueSorted(descriptor.allowedPurposes))
+    || stableSerialize(descriptor.allowedRegions) !== stableSerialize(uniqueSorted(descriptor.allowedRegions))
+    || stableSerialize(descriptor.subjectRefs) !== stableSerialize(uniqueSorted(descriptor.subjectRefs))
+    || stableSerialize(descriptor.lineage.sourceObjectIds)
+      !== stableSerialize(uniqueSorted(descriptor.lineage.sourceObjectIds))
+    || !Number.isSafeInteger(descriptor.retention.minimumRetainUntil)
+    || !Number.isSafeInteger(descriptor.retention.deleteAfter)
+    || descriptor.retention.minimumRetainUntil < 0
+    || descriptor.retention.minimumRetainUntil > descriptor.retention.deleteAfter) {
+    throw new Error('Data Descriptor registered snapshot is malformed or non-canonical');
+  }
+}
+
 const DATA_KINDS: readonly DataKind[] = [
   'source_message',
   'workroom_fact',
@@ -366,6 +604,13 @@ const CONFIDENTIALITY_CLASSES: readonly ConfidentialityClass[] = [
   'unknown',
 ];
 
+const DISCLOSABLE_CONFIDENTIALITY_CLASSES: readonly Exclude<ConfidentialityClass, 'unknown'>[] = [
+  'public',
+  'project_internal',
+  'confidential',
+  'restricted',
+];
+
 const DISCLOSURE_PURPOSES: readonly DisclosurePurpose[] = [
   'orchestration',
   'task_execution',
@@ -375,6 +620,16 @@ const DISCLOSURE_PURPOSES: readonly DisclosurePurpose[] = [
   'remote_execution',
   'audit',
   'reconciliation',
+];
+
+const DISCLOSURE_CHANNELS: readonly DisclosureChannel[] = [
+  'context_view',
+  'evidence_port',
+  'workroom_projection',
+  'sponsor_projection',
+  'console',
+  'model_provider',
+  'a2a',
 ];
 
 const RETENTION_CLASSES: readonly RetentionClass[] = [
@@ -431,6 +686,73 @@ function isMemberArray<T extends string>(value: unknown, members: readonly T[]):
 
 function uniqueSorted<T extends string>(values: readonly T[]): T[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
+function canonicalDestination(
+  input: ProcessingDestinationContractInput,
+): ProcessingDestinationContractInput {
+  const requiredStrings = [
+    input.id,
+    input.owner,
+    input.endpoint,
+    input.tenantId,
+    input.trustDomain,
+  ];
+  if (requiredStrings.some((value) => !isNonEmpty(value))) {
+    throw new Error('Processing Destination identity must be non-empty');
+  }
+  if (input.projectId !== undefined && !isNonEmpty(input.projectId)) {
+    throw new Error('Processing Destination project id must be non-empty when present');
+  }
+  if (!Array.isArray(input.processingRegions)
+    || input.processingRegions.length === 0
+    || input.processingRegions.some((value) => !isNonEmpty(value))) {
+    throw new Error('Processing Destination regions must be non-empty');
+  }
+  if (!Array.isArray(input.allowedCategories)
+    || input.allowedCategories.some((value) => !isNonEmpty(value))) {
+    throw new Error('Processing Destination categories must be non-empty');
+  }
+  if (!isMember(input.maxConfidentiality, DISCLOSABLE_CONFIDENTIALITY_CLASSES)
+    || !isMember(input.loggingMode, ['disabled', 'metadata_only', 'full'] as const)
+    || typeof input.external !== 'boolean'
+    || typeof input.noTraining !== 'boolean'
+    || typeof input.allowsRedisclosure !== 'boolean'
+    || typeof input.supportsDeletion !== 'boolean') {
+    throw new Error('Processing Destination policy fields are invalid');
+  }
+  if (!Number.isSafeInteger(input.maximumRetentionSeconds) || input.maximumRetentionSeconds < 1) {
+    throw new Error('Processing Destination maximum retention must be a positive safe integer');
+  }
+  if (!Number.isSafeInteger(input.recipientSnapshotRevision) || input.recipientSnapshotRevision < 1) {
+    throw new Error('Processing Destination recipient revision must be a positive safe integer');
+  }
+  if (!/^sha256:[a-f\d]{64}$/u.test(input.recipientSnapshotDigest)) {
+    throw new Error('Processing Destination recipient digest must be canonical SHA-256');
+  }
+  return deepFreeze({
+    id: input.id.trim(),
+    owner: input.owner.trim(),
+    endpoint: input.endpoint.trim(),
+    tenantId: input.tenantId.trim(),
+    ...(input.projectId === undefined ? {} : { projectId: input.projectId.trim() }),
+    trustDomain: input.trustDomain.trim(),
+    processingRegions: uniqueSorted(input.processingRegions.map((value) => value.trim())),
+    maxConfidentiality: input.maxConfidentiality,
+    allowedCategories: uniqueSorted(input.allowedCategories.map((value) => value.trim())),
+    external: input.external,
+    noTraining: input.noTraining,
+    loggingMode: input.loggingMode,
+    maximumRetentionSeconds: input.maximumRetentionSeconds,
+    allowsRedisclosure: input.allowsRedisclosure,
+    supportsDeletion: input.supportsDeletion,
+    recipientSnapshotRevision: input.recipientSnapshotRevision,
+    recipientSnapshotDigest: input.recipientSnapshotDigest,
+  });
+}
+
+function hashStable(value: unknown): string {
+  return `sha256:${createHash('sha256').update(stableSerialize(value)).digest('hex')}`;
 }
 
 export function decideDisclosure(input: DisclosureDecisionInput): DisclosureDecision {
@@ -588,7 +910,13 @@ export function decideDisclosure(input: DisclosureDecisionInput): DisclosureDeci
     );
   }
   if (input.context.requestedMode === 'metadata_only') {
-    return disclosureDecision(input, requestDigest, 'metadata_only', ['metadata_only_requested']);
+    return disclosureDecision(input, requestDigest, 'metadata_only', ['metadata_only_requested'], {
+      approvalIds: approvalRoles.map((role) => input.approvals.find((approval) => (
+        approval.requestDigest === requestDigest && approval.role === role
+        && approval.policyRevision === input.policy.revision && approval.decision === 'approved'
+        && approval.expiresAt > input.evaluatedAt
+      ))!.id),
+    });
   }
   return disclosureDecision(
     input,
@@ -597,6 +925,13 @@ export function decideDisclosure(input: DisclosureDecisionInput): DisclosureDeci
     [input.context.destination.external
       ? 'authorized_external_disclosure'
       : 'authorized_minimum_disclosure'],
+    {
+      approvalIds: approvalRoles.map((role) => input.approvals.find((approval) => (
+        approval.requestDigest === requestDigest && approval.role === role
+        && approval.policyRevision === input.policy.revision && approval.decision === 'approved'
+        && approval.expiresAt > input.evaluatedAt
+      ))!.id),
+    },
   );
 }
 
@@ -605,7 +940,8 @@ function disclosureDecision(
   requestDigest: string,
   disposition: DisclosureDisposition,
   reasonCodes: readonly DisclosureReasonCode[],
-  extra: Partial<Pick<DisclosureDecision, 'requiredTransformId' | 'requiredApprovalRoles'>> = {},
+  extra: Partial<Pick<DisclosureDecision,
+  'requiredTransformId' | 'requiredApprovalRoles' | 'approvalIds'>> = {},
 ): DisclosureDecision {
   return deepFreeze({
     disposition,
@@ -642,6 +978,7 @@ function disclosureDecision(
       },
     },
     requiredApprovalRoles: [],
+    approvalIds: [],
     ...extra,
   });
 }
@@ -677,8 +1014,8 @@ function stableSerialize(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function isNonEmpty(value: string): boolean {
-  return value.trim().length > 0;
+function isNonEmpty(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 const CONFIDENTIALITY_LEVEL: Readonly<Record<ConfidentialityClass, number>> = {

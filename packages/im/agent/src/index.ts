@@ -374,17 +374,22 @@ export * from './workroom/acceptance-policy.js';
 export * from './workroom/acceptance-control.js';
 export * from './workroom/accepted-source-projector.js';
 export * from './workroom/assignment-executor.js';
+export * from './workroom/local-assignment-executor.js';
 export * from './workroom/journal.js';
 export * from './workroom/journal-model.js';
 export * from './workroom/workroom-kernel.js';
 export * from './workroom/runtime.js';
 export * from './workroom/remote-dispatch.js';
 export * from './workroom/remote-dispatch-outbox.js';
+export * from './workroom/remote-dispatch-worker.js';
 export * from './workroom/profile-compiler.js';
 export * from './workroom/profile-registry.js';
+export * from './workroom/file-profile-journal.js';
 export * from './workroom/workflow-plan-builder.js';
 export * from './portfolio/portfolio-journal.js';
+export * from './portfolio/resource-bundle.js';
 export * from './data-governance/data-governance.js';
+export * from './data-governance/disclosure-manifest.js';
 
 export {
   introspectionRestBindings,

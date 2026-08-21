@@ -43,7 +43,7 @@ export function createGenerationWorkroomRemoteExecutorPort(
   ): Promise<WorkroomRemoteDispatchObservation> => {
     const current = resolve();
     if (!current) throw new Error('Workroom Remote Executor Port is not installed');
-    return normalizeObservation(await current.dispatch(item, signal));
+    return normalizeWorkroomRemoteDispatchObservation(await current.dispatch(item, signal));
   };
   return Object.freeze({
     dispatch,
@@ -54,7 +54,9 @@ export function createGenerationWorkroomRemoteExecutorPort(
   } satisfies GenerationWorkroomRemoteExecutorPort);
 }
 
-function normalizeObservation(value: WorkroomRemoteDispatchObservation): WorkroomRemoteDispatchObservation {
+export function normalizeWorkroomRemoteDispatchObservation(
+  value: WorkroomRemoteDispatchObservation,
+): WorkroomRemoteDispatchObservation {
   if (!['delivered', 'outcome_unknown', 'failed'].includes(value?.outcome)
     || typeof value?.receiptId !== 'string'
     || !value.receiptId.trim()

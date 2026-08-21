@@ -51,6 +51,10 @@ const consoleDestination = {
   allowedCategories: ['customer_content'],
   external: false,
   noTraining: true,
+  loggingMode: 'metadata_only',
+  maximumRetentionSeconds: 3_600,
+  allowsRedisclosure: false,
+  supportsDeletion: true,
   recipientSnapshotRevision: 5,
   recipientSnapshotDigest: 'sha256:members-5',
 } as const;
