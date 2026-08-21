@@ -25,17 +25,20 @@ describe('mapTurnEventToAgentStreamEvents', () => {
   });
 
   it('maps tool_call and tool_result', () => {
+    const causedBy = { subjectId: 'bob-id', displayName: 'Bob', roles: ['user'] };
     const call = mapTurnEventToAgentStreamEvents(
-      { type: 'tool_call', toolName: 'bash', args: { command: 'ls' }, toolUseId: 'c1' },
+      { type: 'tool_call', toolName: 'bash', args: { command: 'ls' }, toolUseId: 'c1', causedBy },
       ctx,
     );
     expect(call[0]?.type).toBe(AgentStreamEventType.ACTIONS_REQUESTED);
+    expect(call[0]?.data?.causedBy).toEqual(causedBy);
 
     const result = mapTurnEventToAgentStreamEvents(
-      { type: 'tool_result', toolName: 'bash', output: 'a.txt', durationMs: 12, toolUseId: 'c1' },
+      { type: 'tool_result', toolName: 'bash', output: 'a.txt', durationMs: 12, toolUseId: 'c1', causedBy },
       ctx,
     );
     expect(result[0]?.type).toBe(AgentStreamEventType.ACTION_RESULT);
+    expect(result[0]?.data?.causedBy).toEqual(causedBy);
   });
 
   it('maps turn_end to message.completed and turn.completed', () => {

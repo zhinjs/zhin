@@ -425,6 +425,11 @@ export interface AIConfig {
   }>;
   /** Agent 工具开关与执行安全 */
   agent?: {
+    /** Shared conversation arbitration policy. */
+    sharedSession?: {
+      /** Ordinary overlapping ingress defaults to supersede; new selects FIFO. */
+      overlapPolicy?: 'supersede' | 'new';
+    };
     /** bash 执行策略：deny=禁止执行，allowlist=仅允许列表内命令，full=不限制 */
     execSecurity?: 'deny' | 'allowlist' | 'full';
     /** 预设命令白名单模式：readonly / network / development / custom（默认 custom，使用自定义 execAllowlist） */

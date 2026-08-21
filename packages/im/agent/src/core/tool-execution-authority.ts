@@ -1,4 +1,4 @@
-import type { AgentTool } from '@zhin.js/ai';
+import type { AgentTool, ToolExecutionCause } from '@zhin.js/ai';
 
 export type AgentCoreToolExecutionOutcome =
   | Readonly<{ status: 'completed'; output: unknown; durationMs: number }>
@@ -12,5 +12,6 @@ export interface ToolExecutionAuthority {
     tool: AgentTool,
     input: Readonly<Record<string, unknown>>,
     toolUseId: string,
+    cause?: ToolExecutionCause,
   ): Promise<AgentCoreToolExecutionOutcome>;
 }

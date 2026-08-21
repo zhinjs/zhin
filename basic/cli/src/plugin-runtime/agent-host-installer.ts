@@ -614,7 +614,10 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               signal,
               workspaceRoot: options.projectRoot,
               network: interactiveNetworkPolicy(service.getAgentConfig()),
-              intent: resolveRuntimeTurnIntent(message),
+              intent: resolveRuntimeTurnIntent(
+                message,
+                service.getAgentConfig()?.sharedSession?.overlapPolicy,
+              ),
               ports: {
                 approval: options.approvalPort ?? createRuntimeApprovalPort({
                   isMaster: senderRoles.isMaster,
@@ -1255,9 +1258,12 @@ export function createRuntimeTurnRequest(
  * Trusted adapter metadata may select an active-turn coordination intent.
  * Unknown/malformed values fail closed instead of silently becoming supersede.
  */
-function resolveRuntimeTurnIntent(message: Message): TurnIntent {
+export function resolveRuntimeTurnIntent(
+  message: Message,
+  overlapPolicy: 'supersede' | 'new' = 'supersede',
+): TurnIntent {
   const raw = message.metadata?.turnIntent;
-  if (raw === undefined) return Object.freeze({ kind: 'new' });
+  if (raw === undefined) return Object.freeze({ kind: overlapPolicy });
   if (!raw || typeof raw !== 'object') {
     throw new TypeError('Runtime turnIntent metadata must be an object');
   }

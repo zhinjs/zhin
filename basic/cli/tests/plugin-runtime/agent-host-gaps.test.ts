@@ -11,6 +11,7 @@ import {
   createRuntimeApprovalPort,
   recordRuntimeTranscript,
   recordPassiveGroupContext,
+  resolveRuntimeTurnIntent,
   resolveRuntimeSenderRoles,
   resolveTriggerTimeoutMs,
   renderTriggerError,
@@ -68,6 +69,15 @@ describe('runtime reply delivery outcome bridge', () => {
 });
 
 describe('canonical IM TurnRequest ingress', () => {
+  it('defaults shared-session overlap to supersede and permits an explicit FIFO policy', () => {
+    const message = makeMessage({
+      content: 'next', sender: { id: 'u' }, metadata: { endpoint: 'bot' },
+    });
+
+    expect(resolveRuntimeTurnIntent(message)).toEqual({ kind: 'supersede' });
+    expect(resolveRuntimeTurnIntent(message, 'new')).toEqual({ kind: 'new' });
+  });
+
   it('maps runtime identity, scene, media, policy, and session without classic Message fields', () => {
     const message = makeMessage({
       content: 'look',

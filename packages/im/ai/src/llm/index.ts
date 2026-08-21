@@ -108,6 +108,7 @@ export type {
   BeforeToolCallContext,
   BeforeToolCallResult,
   AfterToolCallContext,
+  ToolExecutionCause,
 } from './agent-loop.js';
 
 export { assistantText } from './convert/openai-bridge.js';

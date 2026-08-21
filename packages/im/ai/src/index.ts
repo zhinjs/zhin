@@ -96,6 +96,7 @@ export type {
   BeforeToolCallContext,
   BeforeToolCallResult,
   AfterToolCallContext,
+  ToolExecutionCause,
   TokenUsage,
   SdkId,
 } from './llm/index.js';

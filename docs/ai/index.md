@@ -41,12 +41,18 @@ ai:
       provider: openrouter
       model: openrouter/free
   mcpServers: []    # MCP client 连接（可选）
-  agent: {}         # 执行安全与行为调参（可选）
+  agent:
+    sharedSession:
+      overlapPolicy: supersede # 默认；可设为 new，让普通重叠消息 FIFO
   trigger: {}       # 触发规则（可选）
   access: {}        # 访问门控（可选）
 ```
 
 启动时会对 `ai:` 做 **soft-prune**：凭据展开后为空的 provider 被剔除（仅记 debug 日志），绑定到被剔除 provider 的 agent 一并跳过；`zhin` 绑定缺失时 Agent Host 不装配，不影响 IM 启动。
+
+`ai.agent.sharedSession.overlapPolicy` 只决定没有显式 Turn Intent 的普通入站如何影响
+同 Session 的 active turn：`supersede` 保持兼容的抢占行为，`new` 按到达顺序等待。
+`steer`、`follow_up` 与 `observe` 仍由 adapter、command 或其他产品策略显式解析。
 
 ## ai.providers
 

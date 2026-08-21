@@ -205,14 +205,6 @@ export class PromptController {
     if (intent.kind === 'supersede') {
       const targets = [...this.activeTurns.values()]
         .filter((turn) => turn.sessionKey === request.sessionKey);
-      if (
-        request.principal
-        && targets.some((turn) => turn.principal
-          && turn.principal.subjectId !== request.principal?.subjectId)
-        && intent.authorizedBy !== 'product_policy'
-      ) {
-        throw new Error('supersede across principals requires product_policy authorization');
-      }
       for (const turn of targets) {
         turn.abortController.abort(new TurnSupersededError(request.sessionKey));
       }

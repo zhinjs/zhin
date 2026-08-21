@@ -18,6 +18,11 @@ export interface InboundQueueConfig {
   coalesceWindowMs?: number;
 }
 
+export interface SharedSessionConfig {
+  /** How an ordinary ingress affects an overlapping turn. Defaults to supersede. */
+  overlapPolicy?: 'supersede' | 'new';
+}
+
 /** ADR 0010 — session compaction config. */
 export interface CompactionConfig {
   enabled?: boolean;
@@ -59,6 +64,7 @@ export interface ZhinAgentConfig {
   maxHistoryShare?: number;
   compaction?: CompactionConfig;
   inboundQueue?: InboundQueueConfig;
+  sharedSession?: SharedSessionConfig;
   disabledTools?: string[];
   allowedTools?: string[];
   execSecurity?: 'deny' | 'allowlist' | 'full';

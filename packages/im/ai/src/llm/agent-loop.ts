@@ -1,5 +1,5 @@
 import type { Context } from './types/context.js';
-import { type AgentMessage, type AssistantMessage, type UserMessage, EMPTY_TOKEN_USAGE, isLlmAgentMessage } from './types/agent-message.js';
+import { type AgentMessage, type AssistantMessage, type ConversationActor, type UserMessage, EMPTY_TOKEN_USAGE, isLlmAgentMessage } from './types/agent-message.js';
 import type { AgentEvent, ThinkingLevel, ToolExecutionMode } from './types/agent-event.js';
 import type { Model } from './types/model.js';
 import type { LlmTool, ParsedToolCall } from './types/tool.js';
@@ -24,6 +24,11 @@ export interface AfterToolCallContext {
   result: AgentMessage;
 }
 
+/** Participant whose latest user message causally preceded a tool execution. */
+export interface ToolExecutionCause {
+  actor?: ConversationActor;
+}
+
 export interface AgentLoopConfig {
   model: Model;
   maxIterations?: number;
@@ -44,6 +49,7 @@ export interface AgentLoopConfig {
     toolCall: ParsedToolCall,
     tools: LlmTool[],
     signal?: AbortSignal,
+    cause?: ToolExecutionCause,
   ) => Promise<AgentMessage>;
   /** Refresh tool list after meta-tool load (discover/load_*). */
   refreshTools?: () => LlmTool[] | Promise<LlmTool[]>;
@@ -118,12 +124,13 @@ interface ExecuteToolCallsOptions {
   config: AgentLoopConfig;
   executeTool: NonNullable<AgentLoopConfig['executeTool']>;
   signal?: AbortSignal;
+  cause?: ToolExecutionCause;
   onResult: (result: AgentMessage) => void;
   onEvent: (event: AgentEvent) => void;
 }
 
 async function executeToolCallsInTurn(options: ExecuteToolCallsOptions): Promise<void> {
-  const { toolCalls, tools, config, executeTool, signal, onResult, onEvent } = options;
+  const { toolCalls, tools, config, executeTool, signal, cause, onResult, onEvent } = options;
   const mode = config.toolExecution ?? 'sequential';
 
   const runOne = async (
@@ -161,7 +168,7 @@ async function executeToolCallsInTurn(options: ExecuteToolCallsOptions): Promise
     }
 
     onEvent({ type: 'tool_execution_start', toolCallId: toolCall.id, toolCall });
-    const result = await executeTool(toolCall, tools, signal);
+    const result = await executeTool(toolCall, tools, signal, cause);
     emitResult(result);
     onEvent({ type: 'tool_execution_end', toolCallId: toolCall.id, result });
     if (config.afterToolCall) {
@@ -192,6 +199,15 @@ async function executeToolCallsInTurn(options: ExecuteToolCallsOptions): Promise
   for (const call of sequentialCalls) {
     await runOne(call);
   }
+}
+
+function latestToolExecutionCause(messages: readonly AgentMessage[]): ToolExecutionCause | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message || !isLlmAgentMessage(message) || message.role !== 'user') continue;
+    return message.actor ? { actor: message.actor } : undefined;
+  }
+  return undefined;
 }
 
 export async function* agentLoop(
@@ -299,6 +315,7 @@ export async function* agentLoop(
       config,
       executeTool,
       signal,
+      cause: latestToolExecutionCause(messages),
       onResult: (result) => {
         toolResults.push(result);
         messages.push(result);
@@ -339,6 +356,7 @@ export async function* agentLoop(
             config,
             executeTool,
             signal,
+            cause: latestToolExecutionCause(messages),
             onResult: (result) => {
               toolResults.push(result);
               messages.push(result);

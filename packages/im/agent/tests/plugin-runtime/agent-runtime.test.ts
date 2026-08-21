@@ -30,7 +30,10 @@ import {
   toolFeatureId,
 } from '@zhin.js/tool';
 import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
+import { createMemoryContextRepository } from '@zhin.js/ai';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
+import { resolveIngressUserMessage } from '../../src/session/turn-ingress-session.js';
+import { PromptController } from '../../src/turn/prompt-controller.js';
 import {
   AgentRuntime,
   AgentTurnCoordinator,
@@ -308,6 +311,107 @@ describe('Agent CapabilityIngress', () => {
       identity: { rootId: 'root', generation: 0, traceId: 'trace-1', turnId: 'turn-1' },
       capabilities: { tools: ['child__lookup', 'child__memory__search'], skills: ['research'] },
     });
+    await fixture.mcp.stop();
+    await store.close();
+  });
+
+  it('routes Alice and Bob through runtime ingress, control arbitration, persistence, and journals', async () => {
+    const fixture = await createFixture();
+    const { repository } = createMemoryContextRepository();
+    const controller = new PromptController('one-at-a-time', 'one-at-a-time');
+    let release!: () => void;
+    let activeStarted!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const started = new Promise<void>((resolve) => { activeStarted = resolve; });
+    const store = new SnapshotStore(stateWithEngine(fixture.snapshot, async function* (context) {
+      const ingressUser = resolveIngressUserMessage(context.turn);
+      const stream = controller.scheduleStream({
+        turnId: context.turn.identity.turnId,
+        intent: context.turn.intent,
+        principal: context.turn.principal,
+        onAdmitted: context.admit,
+        sessionKey: context.turn.session.key,
+        sessionId: 'shared-session',
+        userMessages: [ingressUser.llmMessage],
+        execute: async function* (initial, hooks) {
+          activeStarted();
+          await gate;
+          const steering = await hooks.getSteeringMessages();
+          await repository.appendMessages('shared-session', [...initial, ...steering], {
+            messageExtras: [ingressUser.extra, ...steering.map(() => undefined)],
+          });
+          yield terminalEvent();
+          return {
+            reply: '',
+            usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+            path: 'chat' as const,
+            iterations: 1,
+            model: 'fixture',
+            toolCalls: [],
+          };
+        },
+      });
+      while (true) {
+        const step = await stream.next();
+        if (step.done) return { project: async () => undefined };
+        yield step.value;
+      }
+    }));
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() });
+    runtime.attach(store);
+    const request = (
+      subjectId: string,
+      displayName: string,
+      text: string,
+      turnId: string,
+      intent: import('../../src/turn/turn-ingress.js').TurnIntent,
+    ) => ({
+      identity: { traceId: `trace-${turnId}`, turnId },
+      origin: {
+        kind: 'im' as const,
+        platform: 'sandbox',
+        endpoint: 'main',
+        scope: 'group' as const,
+        sceneId: 'team',
+        messageId: `message-${turnId}`,
+      },
+      principal: { subjectId, displayName, roles: ['user'] },
+      intent,
+      input: { text },
+      session: { key: 'im:sandbox:main:group:team' },
+      policy: { permissions: ['user'], unattended: false },
+      signal: new AbortController().signal,
+      ports: {},
+    });
+
+    const alice = runtime.execute(fixture.child, request(
+      'alice-id', 'Alice', '先不要改数据库', 'turn-alice', { kind: 'new' },
+    ), selection());
+    await started;
+    const bob = runtime.execute(fixture.child, request(
+      'bob-id', 'Bob', '记得不能使用 Kubernetes', 'turn-bob', {
+        kind: 'steer', targetTurnId: 'turn-alice', authorizedBy: 'product_policy',
+      },
+    ), selection());
+    await bob;
+    release();
+    await alice;
+
+    const restored = await repository.loadContext('shared-session');
+    expect(restored.messages).toMatchObject([
+      { role: 'user', actor: { subjectId: 'alice-id', displayName: 'Alice' } },
+      { role: 'user', actor: { subjectId: 'bob-id', displayName: 'Bob' } },
+    ]);
+    expect(fixture.journal.events.find((event) => (
+      event.run.turnId === 'turn-bob' && event.terminal === 'completed'
+    )))
+      .toMatchObject({
+        terminal: 'completed',
+        data: {
+          principal: { subjectId: 'bob-id' },
+          control: { intent: 'steer', targetTurnId: 'turn-alice' },
+        },
+      });
     await fixture.mcp.stop();
     await store.close();
   });

@@ -79,6 +79,7 @@ function mapTurnEvent(
           callId: event.toolUseId,
           toolName: event.toolName,
           input: event.args,
+          ...(event.causedBy ? { causedBy: event.causedBy } : {}),
         },
       }];
     case 'tool_result':
@@ -90,22 +91,26 @@ function mapTurnEvent(
           toolName: event.toolName,
           output: event.output,
           durationMs: event.durationMs,
+          ...(event.causedBy ? { causedBy: event.causedBy } : {}),
         },
       }];
     case 'tool_denied':
       return [{ ...base, type: AgentStreamEventType.ACTION_RESULT, data: {
         callId: event.toolUseId, toolName: event.toolName, status: 'denied',
         policy: event.policy, reason: event.reason,
+        ...(event.causedBy ? { causedBy: event.causedBy } : {}),
       } }];
     case 'tool_failed':
       return [{ ...base, type: AgentStreamEventType.ACTION_RESULT, data: {
         callId: event.toolUseId, toolName: event.toolName, status: 'failed',
         error: event.error, durationMs: event.durationMs,
+        ...(event.causedBy ? { causedBy: event.causedBy } : {}),
       } }];
     case 'tool_cancelled':
       return [{ ...base, type: AgentStreamEventType.ACTION_RESULT, data: {
         callId: event.toolUseId, toolName: event.toolName, status: 'cancelled',
         reason: event.reason, durationMs: event.durationMs,
+        ...(event.causedBy ? { causedBy: event.causedBy } : {}),
       } }];
     case 'turn_end': {
       const message = textFromOutput(event.output);

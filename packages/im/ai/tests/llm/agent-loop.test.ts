@@ -116,4 +116,36 @@ describe('agentLoop', () => {
     expect(events.filter((t) => t === 'tool_execution_end')).toHaveLength(1);
     expect(events).toContain('agent_end');
   });
+
+  it('attributes a tool execution to the latest participant message', async () => {
+    const model = getLlmTransportModel('test', 'mock');
+    let causedBy: unknown;
+    for await (const _event of runLoop(
+      createUserMessage('tool:ping', undefined, 1, {
+        subjectId: 'bob-id', displayName: 'Bob', roles: ['trusted'], scope: 'group',
+      }),
+      agentContextFrom({ systemPrompt: 'sys', messages: [], tools: [echoTool] }),
+      {
+        model,
+        maxIterations: 4,
+        executeTool: async (call, _tools, _signal, context) => {
+          causedBy = context?.actor;
+          return {
+            role: 'toolResult',
+            toolCallId: call.id,
+            toolName: call.name,
+            content: [{ type: 'text', text: 'ok' }],
+            isError: false,
+            timestamp: Date.now(),
+          };
+        },
+      },
+    )) {
+      // consume the authoritative stream
+    }
+
+    expect(causedBy).toEqual({
+      subjectId: 'bob-id', displayName: 'Bob', roles: ['trusted'], scope: 'group',
+    });
+  });
 });

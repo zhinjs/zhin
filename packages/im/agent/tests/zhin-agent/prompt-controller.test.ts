@@ -253,7 +253,7 @@ describe('PromptController', () => {
     expect(batches).toEqual(['deployment plan', 'add a migration checklist']);
   });
 
-  it('rejects cross-principal control without explicit product policy authorization', async () => {
+  it('rejects cross-principal steering without explicit product policy authorization', async () => {
     const controller = new PromptController('one-at-a-time', 'one-at-a-time');
     let release!: () => void;
     const active = controller.schedule({
@@ -279,17 +279,40 @@ describe('PromptController', () => {
       execute: async () => makeResult('unreachable'),
     })).toThrow('product_policy authorization');
 
-    expect(() => controller.schedule({
+    release!();
+    await active;
+  });
+
+  it('keeps cross-principal supersede as the compatible shared-session default', async () => {
+    const controller = new PromptController('one-at-a-time', 'one-at-a-time');
+    let admitted!: () => void;
+    const ready = new Promise<void>((resolve) => { admitted = resolve; });
+    const active = controller.schedule({
+      intent: { kind: 'new' },
+      turnId: 'turn-alice',
+      principal: { subjectId: 'alice', roles: ['owner'] },
+      sessionKey: 'shared',
+      sessionId: 'shared#1',
+      userMessages: [createUserMessage('deployment plan')],
+      execute: async (_messages, _hooks, signal) => {
+        admitted();
+        await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+        throw signal.reason;
+      },
+    });
+    await ready;
+
+    const replacement = controller.schedule({
       intent: { kind: 'supersede' },
       principal: { subjectId: 'bob', roles: ['user'] },
       sessionKey: 'shared',
       sessionId: 'shared#1',
       userMessages: [createUserMessage('replace alice')],
-      execute: async () => makeResult('unreachable'),
-    })).toThrow('product_policy authorization');
+      execute: async () => makeResult('replacement'),
+    });
 
-    release!();
-    await active;
+    await expect(active).rejects.toMatchObject({ name: 'TurnSupersededError' });
+    await expect(replacement).resolves.toMatchObject({ reply: 'replacement' });
   });
 
   it('waitForIdle resolves after all turns complete', async () => {

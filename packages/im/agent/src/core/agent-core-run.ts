@@ -4,7 +4,7 @@
 
 import { aiOutboundJsonSchema, buildAiOutboundPromptHint } from '@zhin.js/core';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, getLlmTransportModel, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage } from '@zhin.js/ai';
+import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, getLlmTransportModel, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
@@ -547,7 +547,7 @@ export async function* runAgentLoopTextTurnRun(
       }) : messages,
     getSteeringMessages: promptHooks?.getSteeringMessages,
     getFollowUpMessages: promptHooks?.getFollowUpMessages,
-    executeTool: async (toolCall: ParsedToolCall, _tools: typeof llmTools, toolSignal?: AbortSignal) => {
+    executeTool: async (toolCall: ParsedToolCall, _tools: typeof llmTools, toolSignal?: AbortSignal, cause?: ToolExecutionCause) => {
       const hookRegistry = host.orchestrator?.hooks;
       const currentAliases = input.toolAliases;
       const resolvedName = currentAliases?.[toolCall.name] ?? toolCall.name;
@@ -579,7 +579,7 @@ export async function* runAgentLoopTextTurnRun(
       }
 
       try {
-        const outcome = await input.toolExecution.execute(legacy, effectiveArgs, toolCall.id);
+        const outcome = await input.toolExecution.execute(legacy, effectiveArgs, toolCall.id, cause);
         if (outcome.status !== 'completed') {
           const reason = outcome.status === 'failed' ? outcome.error : outcome.reason;
           toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason });

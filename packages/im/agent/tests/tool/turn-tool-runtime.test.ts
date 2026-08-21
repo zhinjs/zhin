@@ -308,6 +308,27 @@ describe('TurnToolRuntime', () => {
       .rejects.toMatchObject({ name: 'TurnJournalCommitError', message: 'journal offline' });
     expect(execute).not.toHaveBeenCalled();
   });
+
+  it('records the participant whose control message caused a tool call', async () => {
+    const execute = vi.fn(async () => 'ok');
+    const { turn, events } = fixture();
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never')]);
+
+    await runtime.execute('danger', {}, 'call-bob', {
+      actor: { subjectId: 'bob-id', displayName: 'Bob', roles: ['trusted'], scope: 'group' },
+    });
+
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: 'tool_call',
+        causedBy: expect.objectContaining({ subjectId: 'bob-id', displayName: 'Bob' }),
+      }),
+      expect.objectContaining({
+        type: 'tool_result',
+        causedBy: expect.objectContaining({ subjectId: 'bob-id', displayName: 'Bob' }),
+      }),
+    ]);
+  });
 });
 
 function fixture(options: {
