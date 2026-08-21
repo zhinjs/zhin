@@ -185,10 +185,3 @@ export type {
 } from './orchestration-repository.js';
 export * from './types.js';
 export * from './agent-dispatcher.js';
-export { TaskQueue } from './task-queue.js';
-export type {
-  Task,
-  TaskPriority,
-  TaskQueueConfig,
-  TaskStatus as QueueTaskStatus,
-} from './task-queue.js';

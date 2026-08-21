@@ -772,7 +772,7 @@ function wireRuntimeSchedule(
   lifecycle: DisposeStack,
 ): {
   tools: ReturnType<typeof createScheduleTools>;
-  dispose: () => void;
+  dispose: () => Promise<void>;
   assistantEnabled: boolean;
   notificationRouter: ReturnType<typeof createNotificationRouter>;
   defaultNotify: ReturnType<typeof parseJobNotify> | undefined;
@@ -835,7 +835,6 @@ function wireRuntimeSchedule(
   const jobWorker = new JobWorker({
     executor,
     queue: assistantCfg.queue,
-    assistantEnabled: assistantCfg.enabled,
   });
   const jobEngine = new ScheduleJobEngine({
     store,
@@ -912,9 +911,9 @@ function wireRuntimeSchedule(
     bindCallHaService,
     assistantRuntime,
     // assistant / schedule-manager 注册随 generation lifecycle 反注册（provide 时挂接）
-    dispose: () => {
+    dispose: async () => {
       jobEngine.unload();
-      jobWorker.stop();
+      await jobWorker.stop();
     },
   };
 }

@@ -1,8 +1,8 @@
 /**
- * JobWorker — 执行 Agent 任务（TaskQueue：重试 / 并发 / 死信）
+ * JobWorker — 执行 Schedule Agent 任务（owned queue：重试 / 并发 / 死信）
  */
 import { getLogger } from '@zhin.js/core';
-import { getTaskQueue } from '../orchestrator/task-queue.js';
+import { ScheduleExecutionQueue } from '../schedule-domain/schedule-execution-queue.js';
 import type { TaskExecutionResult, TaskExecutor } from '../task-executor.js';
 import { type AssistantQueueConfig, resolveAssistantQueueConfig } from './config.js';
 import type { ScheduleJob } from './types.js';
@@ -12,36 +12,34 @@ const logger = getLogger('assistant-job-worker');
 export interface JobWorkerOptions {
   executor: TaskExecutor;
   queue?: AssistantQueueConfig;
-  assistantEnabled?: boolean;
 }
 
 export class JobWorker {
   private executor: TaskExecutor;
   private queueCfg: ReturnType<typeof resolveAssistantQueueConfig>;
+  private readonly queue: ScheduleExecutionQueue;
 
   constructor(options: JobWorkerOptions) {
     this.executor = options.executor;
-    this.queueCfg = resolveAssistantQueueConfig(options.queue, options.assistantEnabled === true);
+    this.queueCfg = resolveAssistantQueueConfig(options.queue);
+    this.queue = new ScheduleExecutionQueue({
+      maxConcurrency: this.queueCfg.maxConcurrency,
+      defaultMaxRetries: this.queueCfg.maxRetries,
+      defaultTimeoutMs: this.queueCfg.defaultTimeoutMs,
+    });
   }
 
   async run(
     job: ScheduleJob,
   ): Promise<TaskExecutionResult> {
-    if (!this.queueCfg.enabled) {
-      return this.executeDirect(job);
-    }
-
     const label = job.label || job.id;
     try {
-      return await getTaskQueue().enqueueAndWait({
+      return await this.queue.enqueueAndWait({
         name: label,
-        description: job.id,
-        priority: 'medium',
         maxRetries: this.queueCfg.maxRetries,
-        timeout: this.queueCfg.defaultTimeoutMs,
-        metadata: { assistantJobId: job.id },
-        execute: async () => {
-          const result = await this.executor.execute(job);
+        timeoutMs: this.queueCfg.defaultTimeoutMs,
+        execute: async signal => {
+          const result = await this.executor.execute(job, { signal });
           if (!result.success) {
             throw new Error(result.error || 'job failed');
           }
@@ -84,20 +82,7 @@ export class JobWorker {
     }
   }
 
-  private async executeDirect(
-    job: ScheduleJob,
-  ): Promise<TaskExecutionResult> {
-    const result = await this.executor.execute(job);
-    const label = job.label;
-    if (!result.success) {
-      logger.warn(`Job ${label || job.id} failed: ${result.error || 'unknown'}`);
-    }
-    return result;
-  }
-
-  stop(): void {
-    if (this.queueCfg.enabled) {
-      getTaskQueue().stop();
-    }
+  async stop(): Promise<void> {
+    await this.queue.dispose();
   }
 }

@@ -79,22 +79,9 @@ export interface ScheduleJobExecutionPlan {
   confirmed?: boolean;
 }
 
-/** @deprecated use ScheduleJob */
-export type AssistantJob = ScheduleJob;
-
-/** @deprecated */
-export type AssistantJobState = ScheduleJobState;
-/** @deprecated */
-export type AssistantJobFile = ScheduleJobFile;
-
 export interface ScheduleJobFile {
   version: number;
   jobs: ScheduleJob[];
 }
-
-/** @deprecated */
-export const ASSISTANT_JOBS_VERSION = SCHEDULE_JOBS_VERSION;
-/** @deprecated */
-export const ASSISTANT_JOBS_FILENAME = SCHEDULE_JOBS_FILENAME;
 
 export type { HolidayInput, ScatterInput, FestivalName };

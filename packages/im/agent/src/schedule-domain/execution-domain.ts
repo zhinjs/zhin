@@ -27,6 +27,7 @@ export interface ScheduleExecutionResult {
 
 export interface ScheduleExecutionOptions {
   preview?: boolean;
+  signal?: AbortSignal;
 }
 
 export interface ScheduleExecutionDomain {
@@ -93,6 +94,7 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
     job: ScheduleJob,
     options: ScheduleExecutionOptions = {},
   ): Promise<ScheduleExecutionResult> {
+    options.signal?.throwIfAborted();
     const startedAt = this.now();
     const executionId = randomUUID();
     const prompt = job.executionPlan?.prompt?.trim() || job.action.prompt.trim();
@@ -145,7 +147,8 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
             budget.onUsage(event.usage.promptTokens, event.usage.completionTokens);
           }
         },
-    }));
+    }), options.signal);
+    options.signal?.throwIfAborted();
     const outcome = guarded.value;
     const completedOutput = outcome?.status === 'completed' ? outcome.output : [];
     const raw = completedOutput.length > 0 ? textFromElements([...completedOutput]) : streamed;

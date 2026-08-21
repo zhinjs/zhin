@@ -85,6 +85,7 @@ describe('ScheduleJobEngine', () => {
           name: 'Owner',
         },
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     engine.unload();
   });
@@ -126,6 +127,7 @@ describe('ScheduleJobEngine', () => {
         },
         activityFeedback: true,
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     engine.unload();
   });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { registerJobSchedule, isRuntimeSchedulable } from '../../src/assistant/job-scheduler.js';
-import type { AssistantJob } from '../../src/assistant/types.js';
+import type { ScheduleJob } from '../../src/assistant/types.js';
 
 describe('assistant job-scheduler', () => {
   it('isRuntimeSchedulable 识别 every/at/cron', () => {
@@ -19,7 +19,7 @@ describe('assistant job-scheduler', () => {
   it('every 调度触发 onRun', async () => {
     vi.useFakeTimers();
     const onRun = vi.fn();
-    const job: AssistantJob = {
+    const job: ScheduleJob = {
       id: 'every1', enabled: true,
       schedule: { kind: 'every', everyMs: 1000 },
       action: { kind: 'agent', prompt: 'tick' },

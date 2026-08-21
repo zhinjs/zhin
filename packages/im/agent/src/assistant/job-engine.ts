@@ -18,9 +18,6 @@ export interface ScheduleJobEngineOptions {
   defaultNotify?: import('./types.js').JobNotify;
 }
 
-/** @deprecated */
-export type AssistantJobEngineOptions = ScheduleJobEngineOptions;
-
 export class ScheduleJobEngine {
   private store: ScheduleJobStore;
   private worker: JobWorker;
@@ -162,6 +159,3 @@ export class ScheduleJobEngine {
     this.disposes.clear();
   }
 }
-
-/** @deprecated */
-export const AssistantJobEngine = ScheduleJobEngine;

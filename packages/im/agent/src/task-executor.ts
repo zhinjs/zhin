@@ -37,6 +37,7 @@ export interface TaskExecutorDeps {
 
 export interface TaskExecutionOptions {
   previewSource?: ScheduleInvocationContext;
+  signal?: AbortSignal;
 }
 
 export interface ScheduleActivityEvent {
@@ -59,6 +60,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
   });
 
   async function execute(job: ScheduleJob, options: TaskExecutionOptions = {}): Promise<TaskExecutionResult> {
+    options.signal?.throwIfAborted();
     const previewSource = options.previewSource;
     const effectiveNotify = router.resolveEffectiveNotify(job.notify, deps.defaultNotify);
     const event = async (phase: ScheduleActivityEvent['phase']) => {
@@ -74,7 +76,9 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
     try {
       result = await sceneLocks.run(lockKey, () => domain.execute(job, {
         preview: Boolean(previewSource),
-      }));
+        signal: options.signal,
+      }), options.signal);
+      options.signal?.throwIfAborted();
     } catch (error) {
       await event('error');
       throw error;

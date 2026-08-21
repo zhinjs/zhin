@@ -106,7 +106,7 @@ assistant:
     notifyOnFailure: false         # Job 失败时是否通知，默认 false
 ```
 
-其余子键：`queue`（TaskQueue 并发/重试/超时）、`jobsFile`（自定义 JobStore 文件名，默认 `assistant-jobs.json`）。调度任务可用 [`zhin schedule`](../cli/index.md#schedule) 管理。
+其余子键：`queue`（Schedule execution 的并发/重试/超时）。任务事实固定持久化到 `schedule-jobs.json`，可用 [`zhin schedule`](../cli/index.md#schedule) 管理。
 
 ## mcp / a2a
 

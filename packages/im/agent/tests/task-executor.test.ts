@@ -74,4 +74,61 @@ describe('task executor outbound seam', () => {
     }));
     expect(publish).toHaveBeenNthCalledWith(2, expect.objectContaining({ phase: 'finish' }));
   });
+
+  it('cancels scene-lock admission without entering the domain', async () => {
+    let releaseFirst!: () => void;
+    const execute = vi.fn(async () => {
+      if (execute.mock.calls.length === 1) {
+        await new Promise<void>(resolve => {
+          releaseFirst = resolve;
+        });
+      }
+      return domainResult();
+    });
+    const executor = createTaskExecutor({
+      domain: { execute },
+      resolveAdapter: () => undefined,
+    });
+    const scheduled = job({ channel: 'silent' });
+
+    const first = executor.execute(scheduled);
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+    const owner = new AbortController();
+    const waiting = executor.execute(scheduled, { signal: owner.signal });
+    owner.abort(new Error('generation retired'));
+
+    await expect(waiting).rejects.toThrow('generation retired');
+    expect(execute).toHaveBeenCalledTimes(1);
+    releaseFirst();
+    await expect(first).resolves.toMatchObject({ success: true });
+  });
+
+  it('does not deliver output when a domain ignores cancellation and returns late', async () => {
+    let releaseDomain!: () => void;
+    const sendMessage = vi.fn(async () => 'unexpected');
+    const executor = createTaskExecutor({
+      domain: {
+        execute: vi.fn(async () => {
+          await new Promise<void>(resolve => {
+            releaseDomain = resolve;
+          });
+          return domainResult('late');
+        }),
+      },
+      resolveAdapter: () => ({ sendMessage }),
+    });
+    const owner = new AbortController();
+    const execution = executor.execute(job({
+      channel: 'im', target: { channel: 'im', scene: {
+        platform: 'qq', endpointKey: 'bot1', sceneId: 'group1', kind: 'group',
+      } },
+    }), { signal: owner.signal });
+    await vi.waitFor(() => expect(releaseDomain).toBeTypeOf('function'));
+
+    owner.abort(new Error('generation retired'));
+    releaseDomain();
+
+    await expect(execution).rejects.toThrow('generation retired');
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
 });

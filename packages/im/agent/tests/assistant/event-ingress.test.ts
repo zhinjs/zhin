@@ -3,21 +3,21 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { AssistantEventIngress } from '../../src/assistant/event-ingress.js';
-import { AssistantJobEngine } from '../../src/assistant/job-engine.js';
-import { AssistantJobStore } from '../../src/assistant/job-store.js';
+import { ScheduleJobEngine } from '../../src/assistant/job-engine.js';
+import { ScheduleJobStore } from '../../src/assistant/job-store.js';
 
 describe('AssistantEventIngress', () => {
   let dataDir: string;
-  let store: AssistantJobStore;
-  let engine: AssistantJobEngine;
+  let store: ScheduleJobStore;
+  let engine: ScheduleJobEngine;
   let ingress: AssistantEventIngress;
 
   beforeEach(async () => {
     dataDir = await mkdtemp(join(tmpdir(), 'zhin-event-ingress-'));
-    store = new AssistantJobStore({ dataDir, legacyDualWrite: false });
+    store = new ScheduleJobStore({ dataDir });
     engine = {
       runJobNow: vi.fn(async () => {}),
-    } as unknown as AssistantJobEngine;
+    } as unknown as ScheduleJobEngine;
     ingress = new AssistantEventIngress({
       store,
       engine,

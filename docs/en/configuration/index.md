@@ -106,7 +106,7 @@ assistant:
     notifyOnFailure: false         # Whether to notify on Job failure, default false
 ```
 
-Other sub-keys: `queue` (TaskQueue concurrency/retry/timeout), `jobsFile` (custom JobStore filename, default `assistant-jobs.json`). Scheduled tasks can be managed with [`zhin schedule`](../cli/index.md#schedule).
+The remaining sub-key is `queue` (Schedule execution concurrency/retry/timeout). Schedule facts are always persisted to `schedule-jobs.json`; manage them with [`zhin schedule`](../cli/index.md#schedule).
 
 ## mcp / a2a
 

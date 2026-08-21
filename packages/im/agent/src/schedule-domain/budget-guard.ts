@@ -23,7 +23,10 @@ export interface BudgetRunResult<T> {
 export class BudgetGuard {
   constructor(readonly budget: ScheduleExecutionBudget) {}
 
-  async run<T>(operation: (context: BudgetRunContext) => Promise<T>): Promise<BudgetRunResult<T>> {
+  async run<T>(
+    operation: (context: BudgetRunContext) => Promise<T>,
+    externalSignal?: AbortSignal,
+  ): Promise<BudgetRunResult<T>> {
     const controller = new AbortController();
     let terminatedBy: ScheduleBudgetTermination | undefined;
     let tokenUsage = { input: 0, output: 0 };
@@ -35,8 +38,12 @@ export class BudgetGuard {
     };
     const timeout = setTimeout(() => terminate('timeout'), this.budget.timeoutMs);
     timeout.unref?.();
+    const abortFromOwner = () => controller.abort(externalSignal?.reason);
+    if (externalSignal?.aborted) abortFromOwner();
+    else externalSignal?.addEventListener('abort', abortFromOwner, { once: true });
 
     try {
+      externalSignal?.throwIfAborted();
       const value = await operation({
         signal: controller.signal,
         onUsage: (input, output) => {
@@ -48,6 +55,7 @@ export class BudgetGuard {
           if (toolCalls.length > this.budget.maxToolCalls) terminate('tool_limit');
         },
       });
+      externalSignal?.throwIfAborted();
       return { value, terminatedBy, tokenUsage, toolCalls };
     } catch (error) {
       return {
@@ -58,6 +66,7 @@ export class BudgetGuard {
       };
     } finally {
       clearTimeout(timeout);
+      externalSignal?.removeEventListener('abort', abortFromOwner);
     }
   }
 }

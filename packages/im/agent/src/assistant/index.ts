@@ -59,7 +59,6 @@ export type { ScheduleDispose } from './job-scheduler.js';
 export { checkHomeToolAccess, toHomeOwnerSignal, toHomeDenyError } from './home-policy.js';
 
 export {
-  DEFAULT_ASSISTANT_CONFIG,
   DEFAULT_EVENTS_CONFIG,
   resolveAssistantConfig,
   resolveAssistantDefaultsConfig,
@@ -77,9 +76,6 @@ export type {
   ScheduleJobState,
   ScheduleJobCreator,
   ScheduleJobExecutionPlan,
-  AssistantJob,
-  AssistantJobFile,
-  AssistantJobState,
   JobAction,
   JobNotify,
   JobSchedule,
@@ -87,8 +83,6 @@ export type {
 export {
   SCHEDULE_JOBS_FILENAME,
   SCHEDULE_JOBS_VERSION,
-  ASSISTANT_JOBS_FILENAME,
-  ASSISTANT_JOBS_VERSION,
 } from './types.js';
 
 export { jobPrompt } from './job-utils.js';
@@ -115,19 +109,16 @@ export type { ScheduleAddInput, ScheduleInvocationContext } from './schedule-job
 
 export {
   ScheduleJobStore,
-  AssistantJobStore,
   createScheduleJobStoreFromConfig,
   getScheduleJobsPath,
-  getAssistantJobsPath,
 } from './job-store.js';
-export { createScheduleJobStoreFromConfig as createAssistantJobStore } from './job-store.js';
 export type { ScheduleJobStoreOptions } from './job-store.js';
 
 export { JobWorker } from './job-worker.js';
 export type { JobWorkerOptions } from './job-worker.js';
 
-export { ScheduleJobEngine, AssistantJobEngine } from './job-engine.js';
-export type { ScheduleJobEngineOptions, AssistantJobEngineOptions } from './job-engine.js';
+export { ScheduleJobEngine } from './job-engine.js';
+export type { ScheduleJobEngineOptions } from './job-engine.js';
 
 export {
   createNotificationRouter,

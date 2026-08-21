@@ -9,7 +9,7 @@ import {
   pruneStaleProfileCronJobs,
   validateAssistantProfile,
 } from '../../src/assistant/profile-loader.js';
-import { AssistantJobStore } from '../../src/assistant/job-store.js';
+import { ScheduleJobStore } from '../../src/assistant/job-store.js';
 import {
   PROFILE_HEARTBEAT_JOB_ID,
   PROFILE_MORNING_BRIEF_JOB_ID,
@@ -46,7 +46,7 @@ agents: |
   it('syncProfileHeartbeatToStore 写入 every 调度 Job', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'zhin-profile-hb-'));
     try {
-      const store = new AssistantJobStore({ dataDir: dir });
+      const store = new ScheduleJobStore({ dataDir: dir });
       const ok = await syncProfileHeartbeatToStore(store, {
         version: 1,
         routines: { heartbeat: { enabled: true, everyMs: 60_000 } },
@@ -63,7 +63,7 @@ agents: |
   it('syncProfileCronRoutinesToStore 写入早报与睡前巡检', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'zhin-profile-cron-'));
     try {
-      const store = new AssistantJobStore({ dataDir: dir });
+      const store = new ScheduleJobStore({ dataDir: dir });
       const imDefaults = {
         channel: 'im' as const,
         target: {
@@ -97,7 +97,7 @@ agents: |
   it('syncProfileCronRoutinesToStore 同步 weatherReport 等扩展 routine', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'zhin-profile-weather-'));
     try {
-      const store = new AssistantJobStore({ dataDir: dir });
+      const store = new ScheduleJobStore({ dataDir: dir });
       const imDefaults = {
         channel: 'im' as const,
         target: {
@@ -135,7 +135,7 @@ agents: |
   it('pruneStaleProfileCronJobs 移除 profile 中已删的 cron job', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'zhin-profile-prune-'));
     try {
-      const store = new AssistantJobStore({ dataDir: dir });
+      const store = new ScheduleJobStore({ dataDir: dir });
       await store.upsertJob({
         id: PROFILE_MORNING_BRIEF_JOB_ID,
         enabled: true,

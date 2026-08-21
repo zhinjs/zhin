@@ -25,8 +25,7 @@ export interface AssistantEventsConfig {
 }
 
 export interface AssistantQueueConfig {
-  /** 启用 TaskQueue 执行 Job（默认 assistant.enabled 时为 true） */
-  enabled?: boolean;
+  /** Schedule execution 并发上限 */
   maxConcurrency?: number;
   maxRetries?: number;
   defaultTimeoutMs?: number;
@@ -35,24 +34,13 @@ export interface AssistantQueueConfig {
 export interface AssistantConfig {
   /** 启用统一 JobStore（默认 false，Stable 行为不变） */
   enabled?: boolean;
-  /** JobWorker → TaskQueue（重试 / 并发 / 死信） */
+  /** Schedule execution queue（重试 / 并发 / 死信） */
   queue?: AssistantQueueConfig;
-  /**
-   * 写入 assistant-jobs.json 后是否双写 legacy cron-jobs.json（默认 false）。
-   * 迁移期可设 true 便于旧 CLI 只读 cron-jobs.json。
-   */
-  legacyDualWrite?: boolean;
-  /** 自定义 JobStore 文件名（默认 assistant-jobs.json） */
-  jobsFile?: string;
   defaults?: AssistantDefaultsConfig;
   profile?: import('./profile-types.js').AssistantProfileConfig;
   home?: AssistantHomeConfig;
   events?: AssistantEventsConfig;
 }
-
-export const DEFAULT_ASSISTANT_CONFIG: Required<Pick<AssistantConfig, 'legacyDualWrite'>> = {
-  legacyDualWrite: false,
-};
 
 export const DEFAULT_EVENTS_CONFIG: Required<Pick<AssistantEventsConfig, 'rateLimitPerMinute'>> = {
   rateLimitPerMinute: 60,
@@ -60,11 +48,8 @@ export const DEFAULT_EVENTS_CONFIG: Required<Pick<AssistantEventsConfig, 'rateLi
 
 export function resolveAssistantQueueConfig(
   raw?: AssistantQueueConfig,
-  assistantEnabled = false,
-): AssistantQueueConfig & { enabled: boolean; maxConcurrency: number; maxRetries: number; defaultTimeoutMs: number } {
-  const enabled = raw?.enabled ?? assistantEnabled;
+): Required<AssistantQueueConfig> {
   return {
-    enabled,
     maxConcurrency: raw?.maxConcurrency ?? 3,
     maxRetries: raw?.maxRetries ?? 2,
     defaultTimeoutMs: raw?.defaultTimeoutMs ?? 120_000,
@@ -74,8 +59,6 @@ export function resolveAssistantQueueConfig(
 export function resolveAssistantConfig(raw?: AssistantConfig): AssistantConfig & { enabled: boolean } {
   return {
     enabled: raw?.enabled === true,
-    legacyDualWrite: raw?.legacyDualWrite ?? DEFAULT_ASSISTANT_CONFIG.legacyDualWrite,
-    jobsFile: raw?.jobsFile,
     queue: raw?.queue,
     defaults: raw?.defaults,
     profile: raw?.profile,

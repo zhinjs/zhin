@@ -10,23 +10,14 @@ import { parseScheduleJobExecutionPlan } from './schedule-execution.js';
 import { parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
 const logger = getLogger('schedule-job-store');
 
-export type AssistantJobStore = ScheduleJobStore;
-export type AssistantJob = ScheduleJob;
-
 export interface ScheduleJobStoreOptions {
   dataDir: string;
-  jobsFile?: string;
   /** 读盘时合并 `{ channel: im }` 等缺 target 的 notify（与 resolveEffectiveNotify 一致） */
   defaultNotify?: JobNotify;
 }
 
-export function getScheduleJobsPath(dataDir: string, jobsFile = SCHEDULE_JOBS_FILENAME): string {
-  return path.join(dataDir, jobsFile);
-}
-
-/** @deprecated */
-export function getAssistantJobsPath(dataDir: string, jobsFile?: string): string {
-  return getScheduleJobsPath(dataDir, jobsFile);
+export function getScheduleJobsPath(dataDir: string): string {
+  return path.join(dataDir, SCHEDULE_JOBS_FILENAME);
 }
 
 export class ScheduleJobStore {
@@ -37,7 +28,7 @@ export class ScheduleJobStore {
 
   constructor(options: ScheduleJobStoreOptions) {
     this.dataDir = options.dataDir;
-    this.filePath = getScheduleJobsPath(options.dataDir, options.jobsFile);
+    this.filePath = getScheduleJobsPath(options.dataDir);
     this.defaultNotify = options.defaultNotify;
   }
 
@@ -230,6 +221,3 @@ export function createScheduleJobStoreFromConfig(
 ): ScheduleJobStore {
   return new ScheduleJobStore({ dataDir, defaultNotify: options?.defaultNotify });
 }
-
-/** @deprecated */
-export const AssistantJobStore = ScheduleJobStore;
