@@ -156,8 +156,7 @@ export {
   formatAgentPromptSectionsMarkdown,
 } from './agent-prompt/index.js';
 export type { ResolveAgentPromptOptions } from './agent-prompt/index.js';
-export { createImTranscriptHistoryTool, createUserProfileTool } from './tool/context-tools.js';
-export type { ImTranscriptWriteInput, ImTranscriptStore } from '@zhin.js/ai';
+export { createUserProfileTool } from './tool/context-tools.js';
 export { createSpawnTaskTool } from './builtin/spawn-task-tool.js';
 export * from './interaction/index.js';
 

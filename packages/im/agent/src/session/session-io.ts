@@ -1,5 +1,5 @@
 import { type MemoryAgentSessionStore, type AgentSessionStore, type ContextRepository, type CreateAgentSessionInput, type AgentMessage, createUserMessage, renderUserMessageForLlm, type AgentMessageExtra, type AgentMessageSenderExtra, type UserMessage } from '@zhin.js/ai';
-import { type AgentTurnMessage, type Message, formatSenderRolesForLabel, QUOTE_CONTEXT_BLOCK_EXTRA_KEY, resolveSceneFieldsFromMessage, senderRolesFromMessage, stripUserSpoofedSenderPrefix } from '@zhin.js/core';
+import { type AgentTurnMessage, type Message, formatSenderRolesForLabel, resolveSceneFieldsFromMessage, senderRolesFromMessage, stripUserSpoofedSenderPrefix } from '@zhin.js/core';
 import { CURRENT_MESSAGE_MARKER } from '../config/index.js';
 export interface SessionIODeps {
   agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
@@ -78,16 +78,12 @@ export function resolveTurnUserMessage(
   options?: { passiveBlock?: string | null },
 ): { content: string; extra?: AgentMessageExtra; llmMessage: UserMessage } {
   const { content, extra: senderExtra } = prepareUserContentForSession(commMessage, rawContent);
-  const quoteBlock = (commMessage as import('@zhin.js/core').AgentTurnMessage).extra?.[QUOTE_CONTEXT_BLOCK_EXTRA_KEY];
-  const quoteText = typeof quoteBlock === 'string' && quoteBlock.trim() ? quoteBlock.trim() : undefined;
   const extra: AgentMessageExtra = {
     ...senderExtra,
-    ...(quoteText ? { quote: { block: quoteText, messageId: commMessage.$quote_id } } : {}),
   };
   const hasExtra = !!(extra.sender || extra.quote);
   const layered = layerInboundUserTurnBody(content, {
     passiveBlock: options?.passiveBlock,
-    quoteBlock: quoteText,
   });
   const inlinedContext = layered !== content;
   const llmMessage = renderUserMessageForLlm(
@@ -114,17 +110,6 @@ export function buildAgentSessionCreateInput(
   sessionKey: string,
 ): CreateAgentSessionInput {
   return { session_key: sessionKey };
-}
-
-export function buildImTranscriptQuery(
-  commMessage: Message,
-): import('@zhin.js/ai').ImTranscriptQuery {
-  const { platform, endpointKey, sceneId } = resolveSceneFieldsFromMessage(commMessage);
-  return {
-    platform,
-    endpointKey,
-    sceneId,
-  };
 }
 
 export async function buildHistoryMessagesFromContext(

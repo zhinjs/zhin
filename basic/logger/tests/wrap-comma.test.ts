@@ -8,7 +8,7 @@ describe('wrapCommaSeparated', () => {
 
   it('wraps long comma lists', () => {
     const lines = wrapCommaSeparated(
-      'unified_inbox_message, unified_inbox_request, unified_inbox_notice, im_transcripts',
+      'unified_inbox_message, unified_inbox_request, unified_inbox_notice, conversation_events',
       40,
     );
     expect(lines.length).toBeGreaterThan(1);

@@ -11,7 +11,6 @@ describe('defineAiDatabaseModels', () => {
     });
     expect(count).toBe(9);
     expect(names).toEqual([
-      'im_transcripts',
       'agent_sessions',
       'agent_messages',
       'agent_summaries',

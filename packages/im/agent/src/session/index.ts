@@ -26,7 +26,6 @@ export {
   resolveTurnUserMessage,
   formatUserContentForSession,
   buildAgentSessionCreateInput,
-  buildImTranscriptQuery,
   buildHistoryMessagesFromContext,
   resolveSessionIsNewBeforeCreate,
   beginTurnSession,
@@ -67,7 +66,6 @@ export type { BranchSummarizationOptions } from './branch-summarization-runtime.
 export {
   beginIngressTurnSession,
   buildTurnSessionCreateInput,
-  buildTurnTranscriptQuery,
   layerIngressUserBody,
   resolveIngressUserMessage,
 } from './turn-ingress-session.js';

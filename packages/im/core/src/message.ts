@@ -1,11 +1,6 @@
 import type {MessageElement, MessageSender, SendContent} from "./types.js";
 import { Component } from "./component.js";
 import { Adapters } from "./adapter.js";
-import {
-  alignReplySegments as alignReplySegmentsImpl,
-  quoteIdFromContent as quoteIdFromContentImpl,
-  syncQuoteId as syncQuoteIdImpl,
-} from "./message-quote.js";
 import { isActionMessage as isActionMessageImpl } from "./built/interactive-segments/action.js";
 /**
  * 消息组件类型：用于自定义消息结构
@@ -48,8 +43,6 @@ export interface MessageBase {
     $channel: MessageChannel;
     $timestamp: number;
     $raw: string;
-    /** 本条消息引用的上游 message_id（平台原样字符串） */
-    $quote_id?: string;
 }
 /**
  * 完整消息类型，支持扩展
@@ -61,18 +54,6 @@ export namespace Message{
      */
     export function from<T extends object>(input:T,format:MessageBase):Message<T>{
         return Object.assign({},input,format)
-    }
-
-    export function quoteIdFromContent(content: MessageElement[]): string | undefined {
-        return quoteIdFromContentImpl(content);
-    }
-
-    export function syncQuoteId(message: Message<any>): void {
-        syncQuoteIdImpl(message);
-    }
-
-    export function alignReplySegments(content: MessageElement[], quoteId?: string): void {
-        alignReplySegmentsImpl(content, quoteId);
     }
 
     export function actionPayload(message: Message<any>): string | undefined {

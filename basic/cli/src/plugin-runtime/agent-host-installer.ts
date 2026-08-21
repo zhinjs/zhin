@@ -62,7 +62,6 @@ import {
   type BootstrapAssistantHomeResult,
   type OrchestrationRuntimeHandle,
   type SessionTreeRuntimeHandle,
-  type ImTranscriptWriteInput,
   type ApprovalPort,
   type ApprovalRequestInput,
   type TurnRequestPorts,
@@ -506,20 +505,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       // use Endpoint liveName so the OutboundHost resolve() succeeds.
       const effectiveAdapter = capabilityLocalName(String(message.conversation.endpoint.id));
       const effectiveEndpoint = adapterLiveEndpointId(message);
-      // 入站流水 → im_transcripts（等待 projection settle，不能逃出 generation lease）。
-      await recordRuntimeTranscript(zhinAgent, turnAccess, {
-        direction: 'inbound',
-        body: message.content,
-        messageId: message.id,
-        senderId: resolveStableSenderId(message),
-        senderName: message.sender?.name ?? message.sender?.id ?? '',
-        senderRole: senderRoles.isMaster ? 'master' : senderRoles.isTrusted ? 'trusted' : 'user',
-      });
-
-      /** 回复并记录出站流水（assistant 角色，对齐 legacy message.send 收集）。 */
-      const replyAndRecord = async (
+      const reply = async (
         content: SendContent,
-        transcriptBody = sendContentToText(content),
       ): Promise<Awaited<ReturnType<Message['$reply']>>> => {
         const receipt = await message.$reply(content);
         logger.debug(formatCompact({
@@ -528,12 +515,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           code: receipt.failure?.code,
           messageId: receipt.message?.id,
         }));
-        if (receipt.status !== 'sent') return receipt;
-        await recordRuntimeTranscript(zhinAgent, turnAccess, {
-          direction: 'outbound',
-          body: transcriptBody,
-          senderRole: 'assistant',
-        });
         return receipt;
       };
 
@@ -546,7 +527,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         senderRoles,
       });
       if (managementReply != null) {
-        await replyAndRecord(managementReply);
+        await reply(managementReply);
         logger.info(formatCompact({ op: 'agent_host_management', handled: true }));
         return true;
       }
@@ -564,7 +545,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           )
         : null;
       if (approveReply != null) {
-        await replyAndRecord(approveReply);
+        await reply(approveReply);
         logger.info(formatCompact({ op: 'agent_host_approve', handled: true }));
         return true;
       }
@@ -577,7 +558,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 
       if (isClearCommand(matched.content)) {
         await zhinAgent.archiveSession(sessionKey);
-        await replyAndRecord('已清空本会话的 AI 多轮上下文。');
+        await reply('已清空本会话的 AI 多轮上下文。');
         return true;
       }
 
@@ -607,11 +588,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               error: error instanceof Error ? error.message : String(error),
             }));
           });
-          await recordRuntimeTranscript(zhinAgent, turnAccess, {
-            direction: 'outbound',
-            body: sendContentToText(trigger.thinkingMessage as SendContent),
-            senderRole: 'assistant',
-          });
         }
 
         const outcome = await withTriggerTimeout(
@@ -635,6 +611,15 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                   maxEntries: limits.maxEntries,
                   maxChars: limits.maxChars,
                 }),
+              readConversationContext: async (consumer, contextSignal) => {
+                contextSignal.throwIfAborted();
+                if (!lease.active) throw new Error('Conversation context generation lease expired');
+                return options.im.readConversationContext(message.conversation, consumer);
+              },
+              commitConversationContext: async (consumer, cursor) => {
+                if (!lease.active) throw new Error('Conversation context generation lease expired');
+                await options.im.commitConversationContext(message.conversation, consumer, cursor);
+              },
               ports: {
                 approval: options.approvalPort ?? createRuntimeApprovalPort({
                   isMaster: senderRoles.isMaster,
@@ -657,7 +642,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                     }));
                     if (content.length === 0) return { status: 'suppressed' as const };
                     const outcome = deliveryOutcomeFromReceipt(
-                      await replyAndRecord(content, flattenOutputElements(output).trim()),
+                      await reply(content),
                     );
                     logger.debug(formatCompact({
                       op: 'replychain_delivery_outcome',
@@ -684,8 +669,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           resolveTriggerTimeoutMs(trigger),
         );
         const elements = completedOutput(outcome);
-        const transcriptBody = flattenOutputElements(elements).trim();
-        if (!transcriptBody) {
+        const outputText = flattenOutputElements(elements).trim();
+        if (!outputText) {
           // spawn_task 等委派回合 finalReply 为空：用户可见文案由 subagent auto-continue
           // + proactive 出站；勿把 '(empty AI response)' 当成正文发给用户。
           logger.debug(formatCompact({
@@ -709,7 +694,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         const detail = error instanceof Error ? error.message : String(error);
         logger.warn(formatCompact({ op: 'agent_host_turn_fail', error: detail }));
         try {
-          await replyAndRecord(renderTriggerError(trigger, detail));
+          await reply(renderTriggerError(trigger, detail));
         } catch {
           /* ignore reply failure */
         }
@@ -1224,6 +1209,11 @@ export function createRuntimeTurnRequest(
       options: Readonly<{ depth: number; maxEntries: number; maxChars: number }>,
       signal: AbortSignal,
     ) => Promise<ConversationResolution>;
+    readConversationContext?: (consumer: string, signal: AbortSignal) => Promise<Readonly<{
+      blocks: readonly import('@zhin.js/im-contract').ConversationContextBlock[];
+      cursor: number;
+    }>>;
+    commitConversationContext?: (consumer: string, cursor: number) => Promise<void>;
   }>,
 ): TurnRequest {
   const access = createRuntimeTurnAccess(message, roles);
@@ -1306,6 +1296,13 @@ export function createRuntimeTurnRequest(
         },
       })
     : undefined;
+  const contextConsumer = `agent:${access.principal.subjectId}`;
+  const conversationContext = input.readConversationContext && input.commitConversationContext
+    ? Object.freeze({
+        readPending: (signal: AbortSignal) => input.readConversationContext!(contextConsumer, signal),
+        commit: (cursor: number) => input.commitConversationContext!(contextConsumer, cursor),
+      })
+    : undefined;
 
   return Object.freeze({
     identity: Object.freeze({ traceId: input.traceId, turnId: input.turnId }),
@@ -1331,7 +1328,11 @@ export function createRuntimeTurnRequest(
       }) } : {}),
     }),
     signal: input.signal,
-    ports: Object.freeze({ ...input.ports, ...(referencePort ? { references: referencePort } : {}) }),
+    ports: Object.freeze({
+      ...input.ports,
+      ...(referencePort ? { references: referencePort } : {}),
+      ...(conversationContext ? { conversationContext } : {}),
+    }),
   });
 }
 
@@ -1582,54 +1583,6 @@ function resolveTrustedForRuntimeMessage(
   );
   const merged = [...resolve(localName, endpointKey), ...resolve(endpointKey, endpointKey)];
   return [...new Set(merged.map((id) => String(id).trim()).filter(Boolean))];
-}
-
-interface RuntimeTranscriptDraft {
-  readonly direction: 'inbound' | 'outbound';
-  readonly body: string;
-  readonly messageId?: string;
-  readonly senderId?: string;
-  readonly senderName?: string;
-  readonly senderRole?: string;
-}
-
-/**
- * im_transcripts 落库（缺口 1，对齐 legacy register-chat-message-store）。
- * 地址直接来自 canonical TurnAccess，与会话和权限使用同一事实源。
- */
-export function recordRuntimeTranscript(
-  agent: Pick<ZhinAgent, 'recordImTranscript'>,
-  access: TurnAccessContext,
-  draft: RuntimeTranscriptDraft,
-): Promise<void> {
-  const body = draft.body ?? '';
-  if (!body.trim()) return Promise.resolve();
-  const origin = access.origin;
-  if (origin.kind !== 'im') {
-    return Promise.reject(new TypeError('IM transcript requires an IM Turn origin'));
-  }
-  const input: ImTranscriptWriteInput = {
-    message_id: draft.messageId ?? '',
-    platform: origin.platform,
-    endpoint_id: origin.endpoint,
-    scene_id: origin.sceneId,
-    scene_type: origin.scope,
-    sender_id: draft.senderId ?? (draft.direction === 'outbound' ? origin.endpoint : access.principal.subjectId),
-    sender_name: draft.senderName ?? (draft.direction === 'outbound'
-      ? origin.endpoint
-      : access.principal.displayName ?? access.principal.subjectId),
-    sender_role: draft.senderRole ?? 'user',
-    direction: draft.direction,
-    body,
-    time: Date.now(),
-  };
-  return agent.recordImTranscript(input).catch((error) => {
-    logger.debug(formatCompact({
-      op: 'agent_host_transcript_fail',
-      direction: draft.direction,
-      error: error instanceof Error ? error.message : String(error),
-    }));
-  });
 }
 
 /**
@@ -2040,17 +1993,6 @@ function flattenOutputElements(elements: readonly OutputElementLike[]): string {
     }
   }
   return parts.join('\n');
-}
-
-function sendContentToText(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content.map((item) => sendContentToText(item)).filter(Boolean).join('\n');
-  }
-  if (content && typeof content === 'object' && 'type' in content) {
-    return flattenOutputElements([content as OutputElementLike]);
-  }
-  return content == null ? '' : String(content);
 }
 
 function truncate(value: string, max: number): string {

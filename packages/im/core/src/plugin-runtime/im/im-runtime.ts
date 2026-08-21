@@ -29,6 +29,7 @@ import {
   MemoryConversationEventStore,
   type ConversationEventStore,
   type ConversationEvent,
+  type ConversationContextBlock,
   type ConversationReference,
   type ConversationResolution,
   type ConversationRef,
@@ -157,7 +158,7 @@ export class ImRuntime implements MessageGateway {
   #snapshots?: SnapshotReader;
   readonly #inboundClaim?: ImRuntimeOptions['inboundClaim'];
   readonly #enrichSender?: ImRuntimeOptions['enrichSender'];
-  readonly conversationEvents: ConversationEventStore;
+  conversationEvents: ConversationEventStore;
 
   constructor(options: ImRuntimeOptions = {}) {
     this.#dispatcher = new MessageDispatcher(
@@ -169,6 +170,11 @@ export class ImRuntime implements MessageGateway {
     this.conversationEvents = options.conversationEvents ?? new MemoryConversationEventStore();
     this.#inboundClaim = options.inboundClaim;
     this.#enrichSender = options.enrichSender;
+  }
+
+  /** Process composition replaces the bootstrap memory store after required DB activation. */
+  replaceConversationEventStore(store: ConversationEventStore): void {
+    this.conversationEvents = store;
   }
 
   async resolveConversationReference(
@@ -190,6 +196,35 @@ export class ImRuntime implements MessageGateway {
       reference,
       context,
     );
+  }
+
+  async readConversationContext(
+    conversation: ConversationRef,
+    consumer: string,
+    limit = 50,
+  ): Promise<Readonly<{ blocks: readonly ConversationContextBlock[]; cursor: number }>> {
+    const cursor = await this.conversationEvents.getCursor(consumer, conversation);
+    const events = await this.conversationEvents.listAfter(conversation, cursor, limit);
+    const blocks = events
+      .filter(({ event }) => event.type !== 'message.created')
+      .map(({ sequence, event }) => Object.freeze({
+        kind: 'conversation_event' as const,
+        sequence,
+        eventType: event.type,
+        text: describeConversationEvent(event),
+      }));
+    return Object.freeze({
+      blocks: Object.freeze(blocks),
+      cursor: events.at(-1)?.sequence ?? cursor,
+    });
+  }
+
+  async commitConversationContext(
+    conversation: ConversationRef,
+    consumer: string,
+    cursor: number,
+  ): Promise<void> {
+    await this.conversationEvents.commitCursor(consumer, conversation, cursor);
   }
 
   attach(snapshots: SnapshotReader): void {
@@ -995,6 +1030,20 @@ export class ImRuntime implements MessageGateway {
           }
 
           if (receipt?.status === 'sent') {
+            if (receipt.message?.id) {
+              const segments = conversationSegmentsFromContent(request.content);
+              await this.conversationEvents.append(Object.freeze({
+                eventId: `message:${request.conversation.endpoint.id}:${receipt.message.id}`,
+                conversation: request.conversation,
+                timestamp: Date.now(),
+                type: 'message.created',
+                message: Object.freeze({
+                  ref: receipt.message,
+                  segments,
+                  timestamp: Date.now(),
+                }),
+              }));
+            }
             this.#emitMessage({
               direction: 'outbound',
               conversation: request.conversation,
@@ -1104,6 +1153,20 @@ function conversationEventFromNotice(notice: Notice): ConversationEvent | undefi
         : undefined;
     default:
       return undefined;
+  }
+}
+
+function describeConversationEvent(event: ConversationEvent): string {
+  const actor = 'actor' in event && event.actor ? `${event.actor.displayName ?? event.actor.id} (${event.actor.id})` : undefined;
+  switch (event.type) {
+    case 'message.recalled': return `${actor ?? 'Someone'} recalled message ${event.message.id}.`;
+    case 'message.reaction_changed': return `${actor ?? 'Someone'} ${event.operation} reaction ${event.reaction} on message ${event.message.id}.`;
+    case 'member.joined': return `${event.member.displayName ?? event.member.id} (${event.member.id}) joined the conversation.`;
+    case 'member.left': return `${event.member.displayName ?? event.member.id} (${event.member.id}) left the conversation (${event.reason ?? 'left'}).`;
+    case 'member.muted': return `${event.member.displayName ?? event.member.id} (${event.member.id}) was muted for ${event.durationSeconds} seconds${actor ? ` by ${actor}` : ''}.`;
+    case 'member.unmuted': return `${event.member.displayName ?? event.member.id} (${event.member.id}) was unmuted${actor ? ` by ${actor}` : ''}.`;
+    case 'member.role_changed': return `${event.member.displayName ?? event.member.id} (${event.member.id}) role ${event.role} was ${event.enabled ? 'enabled' : 'disabled'}${actor ? ` by ${actor}` : ''}.`;
+    case 'message.created': return '';
   }
 }
 
@@ -1290,6 +1353,18 @@ function flattenContent(content: unknown): string {
     }
   }
   return String(content);
+}
+
+function conversationSegmentsFromContent(content: unknown): readonly import('@zhin.js/im-contract').Segment[] {
+  if (Array.isArray(content)) {
+    try {
+      assertCanonicalSegments(content);
+      return Object.freeze([...content]);
+    } catch {
+      // Fall through to a truthful text projection of non-canonical output.
+    }
+  }
+  return Object.freeze([{ type: 'text', data: Object.freeze({ text: flattenContent(content) }) }]);
 }
 
 function abortError(signal: AbortSignal | undefined, fallback: string): Error {

@@ -76,7 +76,6 @@ export async function prepareTurnTools(
     skillRegistry: host.skillRegistry,
     externalTools: opts.externalTools,
     externalRegistered: host.externalTools,
-    imTranscriptStore: host.imTranscriptStore,
     userProfiles: host.userProfiles,
     mcpTools,
     spawnableAgentNames: host.subagentSystem ? listSpawnableAgentNames(host) : undefined,

@@ -1,4 +1,4 @@
-import { createUserMessage, type AgentMessage, type Usage } from '@zhin.js/ai';
+import { createUserMessage, renderContextMessage, type AgentMessage, type ContextMessage, type Usage } from '@zhin.js/ai';
 import type { AgentDescriptor } from '@zhin.js/agent-feature';
 import type { SkillDescriptor } from '@zhin.js/skill';
 import { activityFeedbackAiBus } from '../activity-feedback/ai-bus.js';
@@ -101,6 +101,9 @@ async function* runInteractiveTurn(
     persistSnapshot: (next) => host.contextRepository.setDeferredToolSnapshot(prep.sessionId, next),
   });
   const activeSkillsContext = plan.controller.loadedSkillInstructions().join('\n\n');
+  const pendingContext = context.turn.ports.conversationContext
+    ? await context.turn.ports.conversationContext.readPending(context.turn.signal)
+    : undefined;
   const media = await resolveTurnMediaInjection(
     context.turn.input.media,
     context.turn.ports.references,
@@ -115,7 +118,20 @@ async function* runInteractiveTurn(
     mode: media.blocks.length > 0 ? 'vision' : undefined,
     activeSkillsContext,
   });
-  const userMessages = applyInboundMediaInjection(prompt.userMessages, media);
+  const contextText = pendingContext?.blocks.length
+    ? renderContextMessage({
+        role: 'user-context',
+        blocks: pendingContext.blocks.map((block) => ({
+          type: 'untrusted_conversation_event',
+          eventType: block.eventType,
+          text: block.text,
+        })),
+      } satisfies ContextMessage)
+    : '';
+  const userMessages = applyInboundMediaInjection(
+    contextText ? [createUserMessage(contextText), ...prompt.userMessages] : prompt.userMessages,
+    media,
+  );
   const toolRuntime = new TurnToolRuntime(context.turn, plan.capabilities);
   const promptRuntime = Object.freeze({
     bootstrapContext: buildCapabilityBootstrap(
@@ -221,6 +237,9 @@ async function* runInteractiveTurn(
           await completion.result.projectConversation?.();
         }
         await sessionSystem.touchAfterTurn(host, prep.sessionId);
+        if (pendingContext && context.turn.ports.conversationContext) {
+          await context.turn.ports.conversationContext.commit(pendingContext.cursor);
+        }
         await host.finalizeActiveTurn({
           usage: completion.result.usage,
           path: completion.result.path,

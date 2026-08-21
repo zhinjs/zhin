@@ -1,7 +1,7 @@
 /**
- * Wire agent_* / im_transcripts stores into ZhinAgent (ADR 0009).
+ * Wire agent session stores into ZhinAgent.
  */
-import { type AIConfig, AgentSessionStore, DatabaseContextRepository, DatabaseImTranscriptStore, DatabaseMemoryEntryRepository, InMemoryMemoryEntryRepository } from '@zhin.js/ai';
+import { type AIConfig, AgentSessionStore, DatabaseContextRepository, DatabaseMemoryEntryRepository, InMemoryMemoryEntryRepository } from '@zhin.js/ai';
 import { DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT } from '../context/context-tail-limit.js';
 import { setMemoryEntryRepository } from '../memory-entry-registry.js';
 import {
@@ -32,7 +32,6 @@ export async function activateAiDatabaseStorage(
   const agentSessionModel = db.models?.get('agent_sessions');
   const agentMessageModel = db.models?.get('agent_messages');
   const agentSummaryModel = db.models?.get('agent_summaries');
-  const imTranscriptModel = db.models?.get('im_transcripts');
 
   let agentSessionStore: AgentSessionStore | undefined;
   if (agentSessionModel) {
@@ -50,16 +49,9 @@ export async function activateAiDatabaseStorage(
       )
     : undefined;
 
-  const imTranscriptStore = imTranscriptModel
-    ? new DatabaseImTranscriptStore(imTranscriptModel, {
-      searchMaxAgeMs: config.sessions?.coldStartMaxAgeMs,
-    })
-    : undefined;
-
   refs.zhinAgent.configure({
     agentSessionStore,
     contextRepository,
-    imTranscriptStore,
   });
 
   const profileModel = db.models?.get('ai_user_profiles');

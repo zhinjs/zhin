@@ -73,17 +73,6 @@ export function buildTurnSessionCreateInput(
   return { session_key: turn.session.key };
 }
 
-export function buildTurnTranscriptQuery(
-  turn: TurnIngress,
-): import('@zhin.js/ai').ImTranscriptQuery {
-  const address = sessionOriginAddress(turn);
-  return {
-    platform: address.platform,
-    endpointKey: address.endpoint,
-    sceneId: address.sceneId,
-  };
-}
-
 export async function beginIngressTurnSession(
   deps: { agentSessionStore: AgentSessionStore | MemoryAgentSessionStore },
   turn: TurnIngress,

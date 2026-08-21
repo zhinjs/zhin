@@ -75,6 +75,8 @@ export type {
   AgentMessage,
   ConversationActor,
   ConversationTurnCause,
+  ContextBlock,
+  ContextMessage,
   UserMessage,
   AssistantMessage,
   ToolResultMessage,
@@ -101,6 +103,7 @@ export type {
   TokenUsage,
   SdkId,
 } from './llm/index.js';
+export { renderContextMessage } from './llm/index.js';
 
 // ── Core AI Types ──
 export type {
@@ -292,9 +295,8 @@ export {
 } from './memory/conversation-memory.js';
 export type { ConversationMemoryConfig, SaveRoundMeta } from './memory/conversation-memory.js';
 
-// ── ADR 0009 persistence (agent_* + im_transcripts) ──
+// ── Agent session persistence ──
 export {
-  IM_TRANSCRIPT_MODEL,
   AGENT_SESSION_MODEL,
   AGENT_MESSAGE_MODEL,
   AGENT_SUMMARY_MODEL,
@@ -303,9 +305,6 @@ export {
   agentMessageRowToLlm,
 } from './memory/agent-db-models.js';
 export type {
-  ImTranscriptRecord,
-  ImTranscriptWriteInput,
-  ImTranscriptDirection,
   AgentSessionRecord,
   AgentSessionStatus,
   CreateAgentSessionInput,
@@ -406,18 +405,6 @@ export {
   buildActivePathRows,
   listUserBranchPoints,
 } from './memory/session-tree.js';
-
-export {
-  DatabaseImTranscriptStore,
-  MemoryImTranscriptStore,
-} from './memory/im-transcript-store.js';
-export type {
-  ImTranscriptStore,
-  ImTranscriptQuery,
-  ImTranscriptSearchHit,
-  ImTranscriptSearchResult,
-  ImTranscriptStoreConfig,
-} from './memory/im-transcript-store.js';
 
 // ── Output Parsing ──
 export { parseOutput, renderToPlainText, renderToSatori } from './output.js';

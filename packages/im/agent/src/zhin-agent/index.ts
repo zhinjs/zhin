@@ -16,13 +16,10 @@ import {
   type AgentSessionStore,
   type ContextRepository,
   type IMSessionStore,
-  type ImTranscriptStore,
-  type ImTranscriptWriteInput,
   type MemoryAgentSessionStore,
   MemoryIMSessionStore,
   ConversationMemory,
   createMemoryContextRepository,
-  MemoryImTranscriptStore,
   RateLimiter,
 } from '@zhin.js/ai';
 import type { Tool, Message } from '../orchestrator/types.js';
@@ -154,7 +151,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   readonly imSessionStore: IMSessionStore | MemoryIMSessionStore = new MemoryIMSessionStore();
   agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
   contextRepository: ContextRepository;
-  imTranscriptStore: ImTranscriptStore;
   memory: ConversationMemory;
   readonly externalTools: Map<string, RegisteredAgentTool> = new Map();
   userProfiles: UserProfileStore;
@@ -247,7 +243,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     });
     this.agentSessionStore = memoryStack.sessionStore;
     this.contextRepository = memoryStack.repository;
-    this.imTranscriptStore = new MemoryImTranscriptStore();
     this.turnContextState.alwaysSkillsBaseline = this.alwaysSkillsBaseline;
     this.runtimeModules = createZhinAgentRuntimeModules(asPrivate(this));
     bindModuleProperties(this, this.runtimeModules);
@@ -315,7 +310,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       imSessionStore: this.imSessionStore,
       agentSessionStore: this.agentSessionStore,
       contextRepository: this.contextRepository,
-      imTranscriptStore: this.imTranscriptStore,
     });
     if (this.requireSessionSystem().isPersistenceReady()) {
       target.markMemoryPersistenceReady();
@@ -324,19 +318,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   upgradeProfilesToDatabase(model: Parameters<UserProfileStore['upgradeToDatabase']>[0]): void {
     this.userProfiles.upgradeToDatabase(model);
-  }
-
-  /** 当前 im_transcripts store（activateAiDatabaseStorage 后切换为 Database 实现）。 */
-  getImTranscriptStore(): ImTranscriptStore {
-    return this.imTranscriptStore;
-  }
-
-  /**
-   * 写入一条 IM 流水（im_transcripts，ADR 0009 D4）。
-   * Plugin Runtime Agent Host 在入站/回复出站处调用；调用方负责 fire-and-forget。
-   */
-  async recordImTranscript(input: ImTranscriptWriteInput): Promise<void> {
-    await this.imTranscriptStore.record(input);
   }
 
   /**

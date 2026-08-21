@@ -138,6 +138,14 @@ export interface SequencedConversationEvent {
   readonly event: ConversationEvent;
 }
 
+/** AI-neutral, explicitly untrusted projection of conversation facts. */
+export interface ConversationContextBlock {
+  readonly kind: 'conversation_event';
+  readonly sequence: number;
+  readonly eventType: ConversationEvent['type'];
+  readonly text: string;
+}
+
 export interface ConversationEventStore {
   append(event: ConversationEvent): Promise<Readonly<{ appended: boolean; sequence: number }>>;
   getMessage(ref: MessageRef): Promise<ConversationMessage | undefined>;
@@ -188,6 +196,121 @@ export class MemoryConversationEventStore implements ConversationEventStore {
     if (sequence < current) throw new Error('Conversation cursor cannot move backwards');
     this.#cursors.set(key, sequence);
   }
+}
+
+export const CONVERSATION_EVENT_MODEL = Object.freeze({
+  id: { type: 'integer' as const, primary: true, autoIncrement: true },
+  event_id: { type: 'text' as const, nullable: false, unique: true },
+  conversation_key: { type: 'text' as const, nullable: false },
+  message_key: { type: 'text' as const, default: '' },
+  event_json: { type: 'text' as const, nullable: false },
+  time: { type: 'integer' as const, nullable: false },
+});
+
+export const CONVERSATION_CURSOR_MODEL = Object.freeze({
+  id: { type: 'integer' as const, primary: true, autoIncrement: true },
+  cursor_key: { type: 'text' as const, nullable: false, unique: true },
+  sequence: { type: 'integer' as const, nullable: false },
+});
+
+type ConversationDbSelection = PromiseLike<Record<string, unknown>[]> & {
+  where(query: Record<string, unknown>): ConversationDbSelection;
+  orderBy?(field: string, direction?: 'ASC' | 'DESC'): ConversationDbSelection;
+  limit?(count: number): ConversationDbSelection;
+};
+
+export interface ConversationDbModel {
+  select(...fields: string[]): ConversationDbSelection;
+  insert(row: Record<string, unknown>): unknown;
+  update(patch: Record<string, unknown>): { where(query: Record<string, unknown>): unknown };
+}
+
+/** Durable implementation; composition roots supply DatabaseHost models. */
+export class DatabaseConversationEventStore implements ConversationEventStore {
+  constructor(
+    private readonly events: ConversationDbModel,
+    private readonly cursors: ConversationDbModel,
+  ) {}
+
+  async append(event: ConversationEvent): Promise<Readonly<{ appended: boolean; sequence: number }>> {
+    const existing = await this.#eventById(event.eventId);
+    if (existing) return Object.freeze({ appended: false, sequence: Number(existing.id) });
+    try {
+      await Promise.resolve(this.events.insert({
+        event_id: event.eventId,
+        conversation_key: conversationKey(event.conversation),
+        message_key: event.type === 'message.created' ? messageKey(event.message.ref) : '',
+        event_json: JSON.stringify(event),
+        time: event.timestamp,
+      }));
+    } catch (error) {
+      const raced = await this.#eventById(event.eventId);
+      if (!raced) throw error;
+      return Object.freeze({ appended: false, sequence: Number(raced.id) });
+    }
+    const inserted = await this.#eventById(event.eventId);
+    if (!inserted) throw new Error('Conversation event insert did not become visible');
+    return Object.freeze({ appended: true, sequence: Number(inserted.id) });
+  }
+
+  async getMessage(ref: MessageRef): Promise<ConversationMessage | undefined> {
+    const rows = await this.events.select('id', 'event_json')
+      .where({ message_key: messageKey(ref) })
+      .orderBy?.('id', 'DESC')
+      .limit?.(1) ?? [];
+    const row = (await Promise.resolve(rows))[0];
+    if (!row) return undefined;
+    const event = parseConversationEvent(row.event_json);
+    return event.type === 'message.created' ? event.message : undefined;
+  }
+
+  async listAfter(conversation: ConversationRef, sequence: number, limit: number): Promise<readonly SequencedConversationEvent[]> {
+    let selection = this.events.select('id', 'event_json')
+      .where({ conversation_key: conversationKey(conversation), id: { $gt: sequence } });
+    selection = selection.orderBy?.('id', 'ASC') ?? selection;
+    selection = selection.limit?.(Math.max(0, Math.floor(limit))) ?? selection;
+    const rows = await Promise.resolve(selection);
+    return Object.freeze(rows.map((row) => Object.freeze({
+      sequence: Number(row.id),
+      event: freezeConversationData(parseConversationEvent(row.event_json)),
+    })));
+  }
+
+  async getCursor(consumer: string, conversation: ConversationRef): Promise<number> {
+    const rows = await this.cursors.select('sequence')
+      .where({ cursor_key: cursorKey(consumer, conversation) })
+      .limit?.(1) ?? [];
+    return Number((await Promise.resolve(rows))[0]?.sequence ?? 0);
+  }
+
+  async commitCursor(consumer: string, conversation: ConversationRef, sequence: number): Promise<void> {
+    if (!Number.isSafeInteger(sequence) || sequence < 0) throw new TypeError('Conversation cursor must be a non-negative integer');
+    const key = cursorKey(consumer, conversation);
+    const current = await this.getCursor(consumer, conversation);
+    if (sequence < current) throw new Error('Conversation cursor cannot move backwards');
+    if (current === 0) {
+      try {
+        await Promise.resolve(this.cursors.insert({ cursor_key: key, sequence }));
+        return;
+      } catch {
+        // A concurrent insert owns the key; update it below after rechecking.
+      }
+    }
+    const observed = await this.getCursor(consumer, conversation);
+    if (sequence < observed) throw new Error('Conversation cursor cannot move backwards');
+    await Promise.resolve(this.cursors.update({ sequence }).where({ cursor_key: key }));
+  }
+
+  async #eventById(eventId: string): Promise<Record<string, unknown> | undefined> {
+    const selected = this.events.select('id', 'event_json').where({ event_id: eventId });
+    const limited = selected.limit?.(1) ?? selected;
+    return (await Promise.resolve(limited))[0];
+  }
+}
+
+function parseConversationEvent(value: unknown): ConversationEvent {
+  if (typeof value !== 'string') throw new TypeError('Conversation event row has invalid JSON');
+  return JSON.parse(value) as ConversationEvent;
 }
 
 function sameConversation(left: ConversationRef, right: ConversationRef): boolean {

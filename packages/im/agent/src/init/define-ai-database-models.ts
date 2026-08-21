@@ -6,7 +6,6 @@ import {
   AGENT_SESSION_MODEL,
   AGENT_MESSAGE_MODEL,
   AGENT_SUMMARY_MODEL,
-  IM_TRANSCRIPT_MODEL,
   ORCHESTRATION_RUN_MODEL,
   ORCHESTRATION_TASK_MODEL,
   ORCHESTRATION_EVENT_MODEL,
@@ -20,7 +19,6 @@ export type AiDatabaseModelDefiner = (
 ) => void;
 
 const AI_DATABASE_MODELS: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
-  ['im_transcripts', IM_TRANSCRIPT_MODEL],
   ['agent_sessions', AGENT_SESSION_MODEL],
   ['agent_messages', AGENT_MESSAGE_MODEL],
   ['agent_summaries', AGENT_SUMMARY_MODEL],

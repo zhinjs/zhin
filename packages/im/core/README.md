@@ -198,7 +198,7 @@ Core **不包含** ZhinAgent 实现。IM 侧的 AI 对话、工具收集、执�
 |------|----------|
 | Provider | `AIProvider` 接口、`createSdkProviderAdapter`（AI SDK 传输） |
 | Agent 原语 | `ModelRegistry`、`agentLoop` |
-| 会话 / 上下文 | `ContextRepository`、`ImTranscriptStore`、`ContextManager`、`ConversationMemory` |
+| 会话 / 上下文 | `ConversationEventStore`（IM 事实）与 Agent 的 `ContextRepository`（模型会话） |
 | 压缩 / 限流 / 输出 | `compactSession`、`RateLimiter`、`parseOutput`、`CostTracker` |
 
 完整 Agent 能力与配置见 [`@zhin.js/agent`](../agent/README.md) 与 [AI 模块](https://zhin.js.org/advanced/ai)。

@@ -23,6 +23,8 @@ export type {
   AgentMessage,
   ConversationActor,
   ConversationTurnCause,
+  ContextBlock,
+  ContextMessage,
   UserMessage,
   AssistantMessage,
   ToolResultMessage,
@@ -34,6 +36,7 @@ export {
   EMPTY_TOKEN_USAGE,
   isLlmAgentMessage,
   createUserMessage,
+  renderContextMessage,
 } from './types/agent-message.js';
 export { repairAgentMessagesForLlm } from './repair-agent-messages.js';
 

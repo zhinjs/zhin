@@ -28,7 +28,6 @@ import type {
 } from '../internal/agent-host.js';
 import type { Message } from '@zhin.js/core';
 import {
-  resolveQuoteSystemHint,
   turnMediaFromMessage,
   turnContextViewFromMessage,
 } from '../context/im-turn-context-adapter.js';
@@ -156,7 +155,6 @@ export async function processTextTurn(
       content,
       turnUser,
       deferredStats,
-      quoteSystemHint: resolveQuoteSystemHint(commMessage),
       prebuiltMessages: extras?.prebuiltMessages,
       mode: inboundMedia.blocks.length > 0 ? 'vision' : undefined,
     });

@@ -1,5 +1,5 @@
 /**
- * ADR 0009 D4 — new persistence models (agent_* + im_transcripts).
+ * Agent session persistence models.
  */
 
 import type { AgentMessage, UserMessage } from '../llm/types/agent-message.js';
@@ -9,56 +9,6 @@ import {
   renderUserMessageForLlm,
   type AgentMessageExtra,
 } from './sender-extra.js';
-
-// ── im_transcripts ──
-
-export const IM_TRANSCRIPT_MODEL = {
-  message_id: { type: 'text' as const, default: '' },
-  platform: { type: 'text' as const, nullable: false },
-  endpoint_id: { type: 'text' as const, nullable: false },
-  scene_id: { type: 'text' as const, nullable: false },
-  scene_type: { type: 'text' as const, nullable: false },
-  sender_id: { type: 'text' as const, nullable: false },
-  sender_name: { type: 'text' as const, default: '' },
-  sender_role: { type: 'text' as const, default: 'user' },
-  direction: { type: 'text' as const, nullable: false },
-  body: { type: 'text' as const, default: '' },
-  media_json: { type: 'text' as const, default: '' },
-  time: { type: 'integer' as const, nullable: false },
-};
-
-export type ImTranscriptDirection = 'inbound' | 'outbound';
-
-export interface ImTranscriptRecord {
-  id?: number;
-  message_id?: string;
-  platform: string;
-  endpoint_id: string;
-  scene_id: string;
-  scene_type: string;
-  sender_id: string;
-  sender_name: string;
-  sender_role: string;
-  direction: ImTranscriptDirection;
-  body: string;
-  media_json: string;
-  time: number;
-}
-
-export interface ImTranscriptWriteInput {
-  message_id?: string;
-  platform: string;
-  endpoint_id: string;
-  scene_id: string;
-  scene_type: string;
-  sender_id: string;
-  sender_name?: string;
-  sender_role?: string;
-  direction: ImTranscriptDirection;
-  body: string;
-  media_json?: string;
-  time?: number;
-}
 
 // ── agent_sessions ──
 

@@ -66,9 +66,6 @@ export interface AITriggerConfig {
   /** 全局 trusted（trigger 级） */
   trusted?: string[];
 
-  /** 是否在 AI 入参前拉取 $quote_id 对应消息正文（默认 true） */
-  resolveQuotedMessages?: boolean;
-
 }
 
 /**
@@ -107,7 +104,6 @@ export const DEFAULT_AI_TRIGGER_CONFIG: Required<AITriggerConfig> = {
   errorTemplate: '❌ AI 处理失败: {error}',
   masters: [],
   trusted: [],
-  resolveQuotedMessages: true,
 };
 
 // ============================================================================

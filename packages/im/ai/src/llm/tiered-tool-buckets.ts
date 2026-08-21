@@ -15,7 +15,6 @@ export const TIERED_PARALLEL_TOOL_NAMES = new Set([
   'discover',
   'load_tool',
   'load_skill',
-  'chat_history',
   'user_profile',
   'knowledge_search',
   'memory_search',

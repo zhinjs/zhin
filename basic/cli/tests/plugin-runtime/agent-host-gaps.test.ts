@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Message } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { AITriggerConfig } from '@zhin.js/core';
-import { InteractionRouter, type ImTranscriptWriteInput } from '@zhin.js/agent';
+import { InteractionRouter } from '@zhin.js/agent';
 import { turnIntentResolverToken } from '@zhin.js/agent/runtime';
 import {
   createRuntimeTurnAccess,
@@ -10,7 +10,6 @@ import {
   createRuntimeQuestionPort,
   consumeRuntimeInteraction,
   createRuntimeApprovalPort,
-  recordRuntimeTranscript,
   recordPassiveGroupContext,
   resolveRuntimeTurnIntent,
   resolveProductTurnIntent,
@@ -407,7 +406,6 @@ function runtimeAccess(message: Message) {
 }
 
 function makeAgentStub() {
-  const transcripts: ImTranscriptWriteInput[] = [];
   const passive: Array<{
     sessionKey: string;
     senderId: string;
@@ -415,99 +413,11 @@ function makeAgentStub() {
     text: string;
   }> = [];
   return {
-    transcripts,
     passive,
-    async recordImTranscript(input: ImTranscriptWriteInput) {
-      transcripts.push(input);
-    },
     async recordPassiveGroupObservation(observation: typeof passive[number]) {
       passive.push(observation);
     },
   };
-}
-
-describe('缺口 1：im_transcripts 流水写入（recordRuntimeTranscript）', () => {
-  it('入站：scene 字段与 chat_history 查询 SSOT 对齐（group）', () => {
-    const agent = makeAgentStub();
-    const message = groupMessage('在吗');
-    recordRuntimeTranscript(agent, runtimeAccess(message), {
-      direction: 'inbound',
-      body: message.content,
-      messageId: message.id,
-      senderId: message.sender?.id ?? '',
-      senderName: message.sender?.name ?? message.sender?.id ?? '',
-      senderRole: 'user',
-    });
-    expect(agent.transcripts).toHaveLength(1);
-    expect(agent.transcripts[0]).toMatchObject({
-      message_id: 'm1',
-      platform: 'icqq',
-      endpoint_id: '10001',
-      scene_id: '100',
-      scene_type: 'group',
-      sender_id: 'user-1',
-      sender_name: 'user-1',
-      sender_role: 'user',
-      direction: 'inbound',
-      body: '在吗',
-    });
-  });
-
-  it('入站：私聊 scene_id 取 senderId（与 resolveSceneFieldsFromMessage 一致）', () => {
-    const agent = makeAgentStub();
-    const message = privateMessage('你好');
-    recordRuntimeTranscript(agent, runtimeAccess(message), {
-      direction: 'inbound',
-      body: message.content,
-      senderId: 'user-1',
-      senderRole: 'user',
-    });
-    expect(agent.transcripts[0]).toMatchObject({
-      scene_id: 'user-1',
-      scene_type: 'private',
-      direction: 'inbound',
-    });
-  });
-
-  it('出站：assistant 角色，sender_id 回退为 endpointKey', () => {
-    const agent = makeAgentStub();
-    const message = groupMessage('在吗');
-    recordRuntimeTranscript(agent, runtimeAccess(message), {
-      direction: 'outbound',
-      body: 'AI 回复',
-      senderRole: 'assistant',
-    });
-    expect(agent.transcripts[0]).toMatchObject({
-      platform: 'icqq',
-      endpoint_id: '10001',
-      scene_id: '100',
-      sender_id: '10001',
-      sender_role: 'assistant',
-      direction: 'outbound',
-      body: 'AI 回复',
-    });
-  });
-
-  it('空 body 不落库', () => {
-    const agent = makeAgentStub();
-    const message = groupMessage('x');
-    recordRuntimeTranscript(agent, runtimeAccess(message), { direction: 'inbound', body: '   ' });
-    expect(agent.transcripts).toHaveLength(0);
-  });
-
-  it('record 抛错时仅降级 debug，不向调用方抛出', async () => {
-    const failing = {
-      async recordImTranscript() {
-        throw new Error('db down');
-      },
-    };
-    const message = groupMessage('在吗');
-    expect(() => recordRuntimeTranscript(failing, runtimeAccess(message), {
-      direction: 'inbound',
-      body: '在吗',
-      senderId: 'user-1',
-    })).not.toThrow();
-  });
 });
 
 describe('缺口 2：群聊旁听（recordPassiveGroupContext）', () => {

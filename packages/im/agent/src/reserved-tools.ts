@@ -21,7 +21,6 @@ export const RESERVED_TOOL_NAMES = [
   'ask_user',
   'tool_search',
   'run_deferred_task',
-  'chat_history',
   'user_profile',
   'spawn_task',
   'schedule_list',

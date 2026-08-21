@@ -20,7 +20,7 @@ export type ConfigureZhinAgentTarget = Pick<
   ZhinAgentPrivate,
   | 'config' | 'skillRegistry' | 'skillSystem' | 'orchestrator' | 'agentCore' | 'toolSystem'
   | 'contextSystem' | 'sessionSystem'
-  | 'imSessionStore' | 'agentSessionStore' | 'contextRepository' | 'imTranscriptStore'
+  | 'imSessionStore' | 'agentSessionStore' | 'contextRepository'
   | 'modelRegistry' | 'subagentSystem' | 'emitter' | 'activeBinding'
   | 'bootstrapContext' | 'globalContext' | 'skillsSummaryXML' | 'deferred'
 > & {
@@ -55,7 +55,6 @@ export function applyZhinAgentConfigure(
   if (deps.imSessionStore !== undefined) target.imSessionStore = deps.imSessionStore;
   if (deps.agentSessionStore !== undefined) target.agentSessionStore = deps.agentSessionStore;
   if (deps.contextRepository !== undefined) target.contextRepository = deps.contextRepository;
-  if (deps.imTranscriptStore !== undefined) target.imTranscriptStore = deps.imTranscriptStore;
   if (deps.modelRegistry !== undefined) {
     target.modelRegistry = deps.modelRegistry;
     target.subagentSystem?.setModelRegistry(deps.modelRegistry);

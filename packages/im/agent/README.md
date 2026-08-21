@@ -90,7 +90,7 @@ turn 会跨代执行。
 ## 功能特性
 
 - 🤖 **agentLoop 统一路径**：ZhinAgent、Subagent、Deferred Worker、AIService 均经 `agentLoop`（legacy `Agent.run` 仅保留在 `@zhin.js/ai` 供单测）
-- 📝 **会话持久化**：`AgentSessionStore` + `ContextRepository` + `ImTranscriptStore`（ADR 0009）
+- 📝 **会话持久化**：`AgentSessionStore` + `ContextRepository`；IM 事实由 `ConversationEventStore` 独占
 - 🧠 **ZhinAgent**：与 Zhin 消息流集成的智能体（SOUL/TOOLS/AGENTS、工具收集、执行策略）
 - 🔍 **模型自动发现**：`ModelRegistry` 调用 `listModels()`；结果写入 `provider.models` 并供 `getLlmTransportModel()` 校验
 - 🔄 **模型自动降级**：首选模型失败时按 `resolveModelCandidates` 候选链 fallback（文本 / 多模态 / standalone 均走 agentLoop）
@@ -99,9 +99,9 @@ turn 会跨代执行。
 - 📋 **精简系统提示词**：`PromptBuilder` 组装 Context、Style、Tools、Safety，并按需注入 Platform、Skills、Memory、Bootstrap
 - 🧩 **提示词注册表**：`PromptAssemblyRegistry` 先注册默认系统提示分段，再按 `priority` 合并插件扩展/覆盖，并在 `systemPromptMaxChars` 预算下统一截断
 - 🔌 **框架挂载**：Plugin Runtime (basic/cli) 装配 Agent 服务，通过 Scope+Token 提供
-- 📦 **上下文与记忆**：`ContextRepository`（`agent_messages`）、`AgentSessionStore`、`ImTranscriptStore`（`im_transcripts` + `chat_history`）；辅助：`ContextManager`、`ConversationMemory`、`UserProfileStore`
+- 📦 **上下文与记忆**：`ContextRepository`（`agent_messages`）、`AgentSessionStore`；聊天事件从 `ConversationEventStore` 游标消费
 - ⏰ **跟进与定时**：`FollowUpManager`、`PersistentCronEngine`、cron 工具
-- 🔧 **内置工具**：bash、read_file、write_file、ask_user、web_search、`chat_history`（按关键词/最近条数查 `im_transcripts`）等
+- 🔧 **内置工具**：bash、read_file、write_file、ask_user、web_search、`inspect_conversation_reference` 等
 - 📐 **Compaction（ADR 0010）**：生产 `agentLoop` 接线 L1 micro + L2 LLM；IM `/compact`；yaml `ai.agent.compaction`
 - 🌳 **会话树**：`parent_id` + `active_leaf`；IM `/tree`、`/reset`；branch summarization；Console `GET/POST /api/agent/sessions/...`
 - 🪝 **Hook 系统**：`registerAIHook`、`triggerAIHook` 等
@@ -210,11 +210,11 @@ useContext('ai', async (ai) => {
 | 初始化 | Plugin Runtime composition root 自动装配 |
 | Agent | `ServiceAgent`、`CreateServiceAgentOptions`（`AIService.createAgent`）；legacy `Agent` / `createAgent` re-export 自 `@zhin.js/ai` |
 | Model harness | `MODEL_HARNESS_DEFAULTS`, `resolveModelHarness`, `mergeModelHarnessValues` |
-| 服务与会话 | `AIService`；会话/context 类型见 `@zhin.js/ai`（`ContextRepository`、`AgentSessionStore`、`ImTranscriptStore`） |
+| 服务与会话 | `AIService`；会话/context 类型见 `@zhin.js/ai`（`ContextRepository`、`AgentSessionStore`） |
 | ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / `@zhin.js/agent/tool` / prompt / builtin-tools 等 |
 | 安全策略 | `checkExecPolicy`, `applyExecPolicyToTools`, `isDangerousCommand`, `stripEnvVarPrefix`, `stripSafeWrappers`, `splitCompoundCommand`, `extractCommandName`, `ExecPolicyResult`, `checkFileAccess`, `classifyBashCommand`, `isBlockedDevicePath` |
 | 提示词构建 | `buildRichSystemPrompt`, `buildEnhancedPersona`, `buildUserMessageWithHistory`, `buildContextHint` |
-| 上下文与记忆 | `ContextRepository`, `AgentSessionStore`, `ImTranscriptStore`（`@zhin.js/ai`）；`ContextManager`, `ConversationMemory`, `UserProfileStore` |
+| 上下文与记忆 | `ContextRepository`, `AgentSessionStore`（`@zhin.js/ai`）；`ConversationEventStore`（`@zhin.js/im-contract`） |
 | 跟进与定时 | `FollowUpManager`, `PersistentCronEngine`, `createCronTools`, `setCronManager`, `getCronManager` |
 | 压缩与 Bootstrap | `compactSession`, `estimateTokens`, `loadBootstrapFiles`, `loadSoulPersona`, `loadToolsGuide`, `loadAgentsMemory` |
 | Hook | `registerAIHook`, `unregisterAIHook`, `triggerAIHook`, `createAIHookEvent` |

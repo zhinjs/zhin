@@ -34,7 +34,6 @@ function getDispatcher(plugin?: Plugin | null): MessageDispatcherService | undef
  */
 export async function runInboundMessage(options: RunInboundMessageOptions): Promise<InboundRunResult> {
   const { plugin, message, emitAdapterObservers } = options;
-  Message.syncQuoteId(message);
   const dispatcher = getDispatcher(plugin);
   const root = plugin?.root;
 
@@ -50,4 +49,3 @@ export async function runInboundMessage(options: RunInboundMessageOptions): Prom
   emitAdapterObservers();
   return { dispatched: !!dispatcher };
 }
-

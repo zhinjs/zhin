@@ -1,16 +1,12 @@
-import { isReservedToolName, type AgentTool, type ImTranscriptStore, type MemoryImTranscriptStore } from '@zhin.js/ai';
+import { isReservedToolName, type AgentTool } from '@zhin.js/ai';
 import { canAccessTool, getLogger, type Tool as CoreTool } from '@zhin.js/core';
 import type { PermissionHost } from '@zhin.js/permission';
 import type { Tool, Message } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
 import { KEYWORD_TRIGGERS } from '../config/keyword-triggers.js';
-import {
-  createImTranscriptHistoryTool,
-  createUserProfileTool,
-} from '../tool/context-tools.js';
+import { createUserProfileTool } from '../tool/context-tools.js';
 import type { UserProfileStore } from '../user-profile.js';
-import { buildImTranscriptQuery } from '../session/session-io.js';
 import { sharedToolSelection } from '../orchestrator/tool-selection.js';
 import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
 import type { RegisteredAgentTool, ToolFilter, ToolSource } from './contracts.js';
@@ -25,7 +21,6 @@ export interface CollectToolsContext {
   skillRegistry: SkillRegistry | null;
   externalTools: Tool[];
   externalRegistered: Map<string, RegisteredAgentTool>;
-  imTranscriptStore: ImTranscriptStore | MemoryImTranscriptStore;
   userProfiles: UserProfileStore;
   mcpTools?: AgentTool[];
   /** PermissionHost（permit 声明的工具经其判定；缺省 fail-closed）。 */
@@ -90,14 +85,6 @@ export class BuiltinToolSource implements ToolSource {
 
   collectTools(context: CollectToolsContext): AgentTool[] {
     const tools: AgentTool[] = [];
-    if (KEYWORD_TRIGGERS.chatHistory.test(context.content)) {
-      tools.push(
-        createImTranscriptHistoryTool(
-          context.imTranscriptStore,
-          buildImTranscriptQuery(context.message),
-        ),
-      );
-    }
     if (KEYWORD_TRIGGERS.userProfile.test(context.content)) {
       tools.push(createUserProfileTool(context.userId, context.userProfiles));
     }

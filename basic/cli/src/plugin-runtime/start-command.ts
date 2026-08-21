@@ -7,6 +7,12 @@ import { parse as parseDotenv } from 'dotenv';
 import open from 'open';
 import { YamlConfigDocument } from '@zhin.js/config-yaml';
 import { ImRuntime, type Message } from '@zhin.js/core/runtime';
+import {
+  CONVERSATION_CURSOR_MODEL,
+  CONVERSATION_EVENT_MODEL,
+  DatabaseConversationEventStore,
+  type ConversationDbModel,
+} from '@zhin.js/im-contract';
 import { createConsoleEventHub, createHttpHost } from '@zhin.js/host-http';
 import { defineInboxTables } from '@zhin.js/plugin-runtime';
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
@@ -117,6 +123,8 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     enrichSender: senderEnricher,
   });
   const databaseHost = createDatabaseHost(databaseConfig);
+  databaseHost.define('conversation_events', CONVERSATION_EVENT_MODEL);
+  databaseHost.define('conversation_event_cursors', CONVERSATION_CURSOR_MODEL);
   // console endpoint-detail 收件箱三张表（unified_inbox_message/request/notice）；
   // 必须在 installResources（host.start）之前 define，写入订阅在 console-api-installer 挂载。
   defineInboxTables(databaseHost);
@@ -145,6 +153,21 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
       im.install(context.resources);
       installHttpHost(httpHost)(context);
       installDatabaseHost(databaseHost)(context);
+      context.handoff.add({
+        activateNext: async (signal) => {
+          signal.throwIfAborted();
+          const events = databaseHost.models.get('conversation_events');
+          const cursors = databaseHost.models.get('conversation_event_cursors');
+          if (!events || !cursors) {
+            throw new Error('Conversation event database models are unavailable after DatabaseHost activation');
+          }
+          im.replaceConversationEventStore(new DatabaseConversationEventStore(
+            events as unknown as ConversationDbModel,
+            cursors as unknown as ConversationDbModel,
+          ));
+          signal.throwIfAborted();
+        },
+      });
       installOutboundHost(im)(context);
       installScheduleHost(scheduleHost)(context);
       installComponentHost()(context);

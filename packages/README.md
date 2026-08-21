@@ -58,7 +58,7 @@ Plugin 主链：`plugin-runtime` → `feature-kit` → 领域 Feature → `core`
 | [`im/feature-kit`](im/feature-kit/README.md) | Feature provider、约定发现、owner-aware projection |
 | [`im/adapter`](im/adapter/README.md) · [`command`](im/command/README.md) · [`component`](im/component/README.md) · [`middleware`](im/middleware/README.md) | IM 领域 Feature npm 包 |
 | [`im/tool`](im/tool/README.md) · [`skill`](im/skill/README.md) · [`agent-feature`](im/agent-feature/README.md) · [`mcp-feature`](im/mcp-feature/README.md) | Agent 领域 Feature npm 包 |
-| [`im/ai`](im/ai/README.md) | Provider、`agentLoop`、`ModelRegistry` + `getModel` 白名单、`ContextRepository` / `im_transcripts` |
+| [`im/ai`](im/ai/README.md) | Provider、`agentLoop`、`ModelRegistry` + `getModel` 白名单、`ContextRepository` |
 | [`im/core`](im/core/README.md) | Plugin、Adapter、MessageDispatcher、出站 `before.sendMessage` 链 |
 | [`im/agent`](im/agent/README.md) | ZhinAgent、`AIService`、工具与安全策略、模型 `/v1/models` 发现 |
 | [`im/runtime`](im/runtime/README.md) | Root control plane、Plugin graph、配置、发现、generation transaction 与 HMR |

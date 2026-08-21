@@ -3,6 +3,7 @@ import type { ApprovalPort } from '../session/approval-port.js';
 import type { PermissionSubject } from '@zhin.js/permission';
 import type { ToolInvocationOrigin, ToolQuestionPort } from '@zhin.js/tool';
 import type { ScheduleJobCreator, ScheduleJobExecutionPlan } from '../assistant/types.js';
+import type { ConversationContextBlock } from '@zhin.js/im-contract';
 
 export type TurnScope = 'private' | 'group' | 'channel';
 
@@ -60,6 +61,14 @@ export interface ReferencePort {
     options: Readonly<{ depth: number; maxEntries: number; maxChars: number }>,
     signal: AbortSignal,
   ): Promise<TurnReferenceResolution>;
+}
+
+export interface ConversationContextPort {
+  readPending(signal: AbortSignal): Promise<Readonly<{
+    blocks: readonly ConversationContextBlock[];
+    cursor: number;
+  }>>;
+  commit(cursor: number): Promise<void>;
 }
 
 export interface TurnInput {
@@ -145,6 +154,7 @@ export interface TurnPorts {
   readonly delivery?: DeliveryPort;
   readonly question?: ToolQuestionPort;
   readonly references?: ReferencePort;
+  readonly conversationContext?: ConversationContextPort;
 }
 
 /** Ports supplied by an ingress adapter; Journal authority is injected by AgentRuntime. */

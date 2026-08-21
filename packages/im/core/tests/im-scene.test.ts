@@ -135,7 +135,6 @@ describe('IM scene contract', () => {
       $endpoint: 'bot1',
       $channel: { type: 'channel', id: 'ch1' },
       $sender: { id: 'u1' },
-      $quote_id: 'q1',
     })).toEqual({
       channel: 'im',
       scene: {
@@ -145,7 +144,6 @@ describe('IM scene contract', () => {
         kind: 'channel',
         senderId: 'u1',
       },
-      quoteId: 'q1',
     });
   });
 });

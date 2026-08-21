@@ -72,7 +72,6 @@ export class InboundMessagePipeline {
       recv: `${message.$channel.type}(${message.$channel.id})`,
       endpoint: message.$endpoint,
       preview: truncatePreview(segment.raw(message.$content)),
-      ...(message.$quote_id ? { quote_id: message.$quote_id } : {}),
     }));
   }
 }

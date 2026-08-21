@@ -122,11 +122,10 @@ const candidates = registry.selectModels(provider.name, 'chat', 5)
 
 ### 持久化与上下文（ADR 0009）
 
-IM 主路径数据模型（见 [docs/advanced/ai.md](../../docs/advanced/ai.md)）：
+Agent 会话数据模型（IM conversation facts 由 `@zhin.js/im-contract` 的 `ConversationEventStore` 拥有）：
 
 | 模块 | 表 / 存储 | 用途 |
 |------|-----------|------|
-| `ImTranscriptStore` | `im_transcripts` | 入站/出站 IM 扁平静态行；`chat_history` 工具按需查询 |
 | `ContextRepository` | `agent_messages` | epoch 内 LLM `AgentMessage[]`（含 tool 轮） |
 | `AgentSessionStore` | `agent_sessions` | origin-neutral `session_key` → 活跃 `session_id`；`/reset` 归档；不保存 IM platform / endpoint / scene |
 
@@ -139,13 +138,10 @@ IM 主路径数据模型（见 [docs/advanced/ai.md](../../docs/advanced/ai.md)�
 ```typescript
 import {
   createMemoryContextRepository,
-  MemoryImTranscriptStore,
   type ContextRepository,
-  type ImTranscriptStore,
 } from '@zhin.js/ai'
 
 const { repository, sessionStore } = createMemoryContextRepository({ tailMessageLimit: 200 })
-const transcripts = new MemoryImTranscriptStore()
 ```
 
 ### ContextManager / ConversationMemory（辅助）
@@ -288,7 +284,7 @@ const tools = cache.filter('天气查询', allTools, { maxTools: 10 })
 | `agentLoop` / `agentContextFrom` / `getLlmTransportModel` | LLM 统一回合引擎（推荐） |
 | `agentToolsToLlmTools` | Plugin/AgentTool → LlmTool 桥接（agentLoop transport） |
 | `registerLlmApiFromProviders` / `ModelRegistry` | ApiRegistry 注册 + `/v1/models` 发现与白名单 |
-| `ContextRepository` / `AgentSessionStore` / `ImTranscriptStore` | ADR 0009 持久化原语 |
+| `ContextRepository` / `AgentSessionStore` | Agent 会话持久化原语 |
 | `createSdkProviderAdapter` / `AIProvider` | LLM 提供者（AI SDK 传输，ADR 0018） |
 | `ContextManager` / `ConversationMemory` | 场景摘要 / 话题记忆（辅助） |
 | `compactSession` / `pruneHistoryForContext` / `microCompactMessages` | 上下文压缩库 API；IM 生产路径经 `@zhin.js/agent` 的 `transformContext`（ADR 0010） |

@@ -7,7 +7,7 @@ import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 export type DisposeZhinAgentTarget = Pick<
   ZhinAgentPrivate,
   | 'externalTools' | 'userProfiles' | 'rateLimiter' | 'subagentSystem' | 'promptController'
-  | 'imSessionStore' | 'agentSessionStore' | 'contextRepository' | 'imTranscriptStore'
+  | 'imSessionStore' | 'agentSessionStore' | 'contextRepository'
   | 'deferred'
 > & {
   /** 接口外的门面内部资源 */
@@ -35,7 +35,6 @@ export function disposeZhinAgentResources(target: DisposeZhinAgentTarget): void 
   tryDispose(target.imSessionStore);
   tryDispose(target.agentSessionStore);
   tryDispose(target.contextRepository);
-  tryDispose(target.imTranscriptStore);
   target.deferred.clear();
   target.lastTurnMetrics = null;
 }

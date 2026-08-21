@@ -1,4 +1,4 @@
-import type { AgentTool, ImTranscriptStore, MemoryImTranscriptStore } from '@zhin.js/ai';
+import type { AgentTool } from '@zhin.js/ai';
 import type { Tool, Message } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
@@ -20,7 +20,6 @@ export interface CollectRuntimeToolsOptions {
   externalRegistered: Map<string, RegisteredAgentTool>;
   sessionId: string;
   userId: string;
-  imTranscriptStore: ImTranscriptStore | MemoryImTranscriptStore;
   userProfiles: UserProfileStore;
   mcpTools?: AgentTool[];
   toolSystem?: ToolSystem;
@@ -37,7 +36,6 @@ export async function collectRuntimeTools(options: CollectRuntimeToolsOptions): 
     skillRegistry: options.skillRegistry,
     externalTools: options.externalTools,
     externalRegistered: options.externalRegistered,
-    imTranscriptStore: options.imTranscriptStore,
     userProfiles: options.userProfiles,
     mcpTools: options.mcpTools,
   };

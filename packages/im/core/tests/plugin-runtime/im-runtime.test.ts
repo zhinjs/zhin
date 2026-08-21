@@ -78,6 +78,25 @@ describe('IM Runtime', () => {
       actor: { id: 'admin', displayName: 'Admin' },
       durationSeconds: 60,
     });
+    const pending = await fixture.im.readConversationContext({
+      endpoint: { adapter: 'test', id: String(fixture.adapter.id) },
+      kind: 'group',
+      id: 'room-1',
+    }, 'agent:alice');
+    expect(pending.blocks).toEqual([expect.objectContaining({
+      eventType: 'member.muted',
+      text: expect.stringContaining('Member (member) was muted'),
+    })]);
+    await fixture.im.commitConversationContext({
+      endpoint: { adapter: 'test', id: String(fixture.adapter.id) },
+      kind: 'group',
+      id: 'room-1',
+    }, 'agent:alice', pending.cursor);
+    await expect(fixture.im.readConversationContext({
+      endpoint: { adapter: 'test', id: String(fixture.adapter.id) },
+      kind: 'group',
+      id: 'room-1',
+    }, 'agent:alice')).resolves.toMatchObject({ blocks: [] });
     await fixture.adapters.stop();
     await fixture.store.close();
   });

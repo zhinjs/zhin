@@ -106,10 +106,8 @@ export function resolveIMSceneSessionId(scene: IMSceneRef): string {
 export function messageToIMDeliveryTarget(message: Partial<Message<any>>): IMDeliveryTarget | undefined {
   const scene = sceneRefFromMessage(message);
   if (!scene) return undefined;
-  const quoteId = nonEmptyString(message.$quote_id);
   return {
     channel: 'im',
     scene,
-    ...(quoteId ? { quoteId } : {}),
   };
 }

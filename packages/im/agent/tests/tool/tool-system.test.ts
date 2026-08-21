@@ -44,7 +44,6 @@ describe('ToolSystem', () => {
       skillRegistry: null,
       externalTools: [],
       externalRegistered: new Map(),
-      imTranscriptStore: {} as any,
       userProfiles: {} as any,
     };
     const host = {
@@ -76,7 +75,6 @@ describe('ToolSystem', () => {
       config: {} as never,
       skillRegistry: null,
       externalRegistered: new Map(),
-      imTranscriptStore: {} as never,
       userProfiles: {} as never,
       permissionHost: createPermissionHost(),
     };
@@ -105,7 +103,6 @@ describe('ToolSystem', () => {
       config: {} as never,
       skillRegistry: null,
       externalTools: [],
-      imTranscriptStore: {} as never,
       userProfiles: {} as never,
       permissionHost: createPermissionHost(),
     };

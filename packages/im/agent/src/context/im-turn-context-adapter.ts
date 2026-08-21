@@ -1,8 +1,6 @@
 import {
-  QUOTE_CONTEXT_SYSTEM_EXTRA_KEY,
   resolveIMSessionIdFromMessage,
   senderRolesFromMessage,
-  type AgentTurnMessage,
   type Message,
 } from '@zhin.js/core';
 import type { TurnContextView } from './turn-envelope.js';
@@ -38,11 +36,6 @@ export function turnContextViewFromMessage(message: Message): TurnContextView {
     }),
     session: Object.freeze({ key: resolveIMSessionIdFromMessage(message) }),
   });
-}
-
-export function resolveQuoteSystemHint(message?: AgentTurnMessage): string | undefined {
-  const hint = message?.extra?.[QUOTE_CONTEXT_SYSTEM_EXTRA_KEY];
-  return typeof hint === 'string' && hint.trim() ? hint.trim() : undefined;
 }
 
 /** IM ingress-only projection into the canonical Turn media contract. */

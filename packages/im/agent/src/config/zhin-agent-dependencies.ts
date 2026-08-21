@@ -3,7 +3,6 @@ import type {
   AgentSessionStore,
   ContextRepository,
   IMSessionStore,
-  ImTranscriptStore,
   MemoryAgentSessionStore,
   MemoryIMSessionStore,
   ModelRegistry,
@@ -33,7 +32,6 @@ export interface ZhinAgentDependencies {
   imSessionStore: IMSessionStore | MemoryIMSessionStore;
   agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
   contextRepository: ContextRepository;
-  imTranscriptStore: ImTranscriptStore;
   modelRegistry: ModelRegistry;
   hostPlugin: Plugin;
   providerResolver: (alias: string) => AIProvider;

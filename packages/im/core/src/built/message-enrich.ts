@@ -51,7 +51,6 @@ export interface SyntheticMessageInput {
   };
   channel: MessageChannel;
   id?: string;
-  quote_id?: string;
   reply?: (content: SendContent, quote?: boolean | string) => Promise<string>;
   extra?: Record<string, unknown>;
 }
@@ -73,7 +72,6 @@ export function createSyntheticMessage(input: SyntheticMessageInput): AgentTurnM
       $channel: input.channel,
       $timestamp: Date.now(),
       $raw: '',
-      $quote_id: input.quote_id,
     },
   );
 }
