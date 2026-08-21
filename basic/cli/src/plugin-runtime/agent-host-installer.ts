@@ -45,6 +45,7 @@ import {
   bootstrapAssistantHome,
   OrchestrationService,
   MemoryOrchestrationRepository,
+  createRemoteAgentRegistry,
   registerDefaultExecutors,
   asPrivate,
   handleRuntimeOwnerApproveCommand,
@@ -66,6 +67,7 @@ import {
   demoteScheduleCreator,
   type ScheduleActivityEvent,
   type ScheduleTurnExecutionRequest,
+  type RemoteAgentRegistry,
 } from '@zhin.js/agent';
 import {
   agentHostToken,
@@ -212,7 +214,7 @@ export interface InstallAgentHostOptions {
  * - Subagent/main-turn `bash` (sandbox + safety) + Owner `/approve` 命令面
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
-  return async ({ resources, lifecycle, handoff, config: primaryConfig, addFeature }) => {
+  return async ({ signal, admission, resources, lifecycle, handoff, config: primaryConfig, addFeature }) => {
     const configuredAi = options.ai ?? primaryConfig.get<AIConfig>('ai');
     const aiConfig = configuredAi;
     const assistantConfig = options.assistant
@@ -243,17 +245,21 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     let homeTools: BootstrapAssistantHomeResult['tools'] = [];
     let assistantEnabled = false;
     let orchService: OrchestrationService;
+    let remoteAgents: RemoteAgentRegistry;
     let orchestrationRuntime: OrchestrationRuntimeHandle;
     let sessionTreeRuntime: SessionTreeRuntimeHandle;
     let schedule: ReturnType<typeof wireRuntimeSchedule>;
     try {
       orchService = new OrchestrationService(new MemoryOrchestrationRepository());
       lifecycle.add(() => orchService.dispose());
+      remoteAgents = await createRemoteAgentRegistry(aiConfig, signal);
+      lifecycle.add(() => remoteAgents.dispose());
       const created = createRuntimeZhinAgent(
         service,
         options.im,
         options.projectRoot,
         orchService,
+        remoteAgents,
         options.approvalPort,
       );
       zhinAgent = created.agent;
@@ -261,9 +267,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       lifecycle.add(() => created.agent.dispose());
       seedPresets = created.seedPresets;
 
-      registerDefaultExecutors(orchService, {
+      lifecycle.add(registerDefaultExecutors(orchService, {
         refs: { zhinAgent, aiService: service },
-      });
+        remoteAgents,
+        admission,
+      }));
       // Console REST resolves both projections from the current generation's AgentHostPort.
       orchestrationRuntime = createOrchestrationRuntimeFromService(orchService);
       sessionTreeRuntime = createSessionTreeRuntimeFromAgent(asPrivate(zhinAgent));
@@ -1021,6 +1029,7 @@ function createRuntimeZhinAgent(
   im: ImRuntime,
   projectRoot: string,
   orchestrationService: OrchestrationService,
+  remoteAgentRegistry: RemoteAgentRegistry,
   approvalPort?: ApprovalPort,
 ): {
   agent: ZhinAgent;
@@ -1045,6 +1054,7 @@ function createRuntimeZhinAgent(
     eventSystem: composed.eventSystem,
     orchestrator,
     orchestrationService,
+    remoteAgentRegistry,
     providerResolver: (alias) => service.getProvider(alias),
     activeBinding: binding,
     deferredResultSender: composed.deliverOutbound,

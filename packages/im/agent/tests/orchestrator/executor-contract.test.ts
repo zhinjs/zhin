@@ -13,10 +13,8 @@ import {
   pollRemoteTaskStatus,
 } from '../../src/orchestrator/remote-task-executor.js';
 import {
-  provideRemoteAgentRegistry,
-  type RemoteAgentRegistry,
+  RemoteAgentRegistry,
 } from '../../src/orchestrator/remote-agent-registry.js';
-import { DisposeStack } from '@zhin.js/plugin-runtime';
 import {
   normalizeExecutorKind,
   normalizeRunSource,
@@ -110,10 +108,9 @@ describe('Executor contract — local', () => {
 });
 
 describe('Executor contract — remote_mesh', () => {
-  const lifecycle = new DisposeStack();
-
   function stubA2aClient(registry: RemoteAgentRegistry, client: {
     sendMessage: ReturnType<typeof vi.fn>;
+    sendMessageStream?: ReturnType<typeof vi.fn>;
     getTask: ReturnType<typeof vi.fn>;
   }) {
     const entry = registry.list()[0];
@@ -122,8 +119,13 @@ describe('Executor contract — remote_mesh', () => {
         name: 'local',
         description: 'test',
         version: '1.0.0',
-        supportedInterfaces: [],
-        capabilities: { streaming: false, extensions: [] },
+        supportedInterfaces: [{
+          url: 'https://remote.example/rpc',
+          protocolBinding: 'JSONRPC',
+          protocolVersion: '1.0',
+          tenant: '',
+        }],
+        capabilities: { streaming: client.sendMessageStream !== undefined, extensions: [] },
         securitySchemes: {},
         securityRequirements: [],
         defaultInputModes: ['text/plain'],
@@ -134,17 +136,11 @@ describe('Executor contract — remote_mesh', () => {
     }
     vi.spyOn(registry, 'getA2aClient').mockResolvedValue({
       sendMessage: client.sendMessage,
-      sendMessageStream: vi.fn(),
+      sendMessageStream: client.sendMessageStream ?? vi.fn(),
       getTask: client.getTask,
       cancelTask: vi.fn(),
     });
   }
-
-  beforeEach(() => {
-    void provideRemoteAgentRegistry({ lifecycle }, {
-      remoteAgents: [{ id: 'local', cardUrl: 'http://127.0.0.1:8068/a2a/zhin/.well-known/agent-card.json', token: 't' }],
-    });
-  });
 
   it('success: delegate → poll completed', async () => {
     const repo = new MemoryOrchestrationRepository();
@@ -162,7 +158,8 @@ describe('Executor contract — remote_mesh', () => {
     orchestration.dispatcherHandle.syncTaskFromRecord(task);
 
     const remoteTaskId = 'rt-1';
-    const registry = await provideRemoteAgentRegistry({ lifecycle }, {
+    const registry = new RemoteAgentRegistry();
+    registry.loadFromConfig({
       remoteAgents: [{ id: 'local', cardUrl: 'http://127.0.0.1:8068/a2a/zhin/.well-known/agent-card.json', token: 't' }],
     });
     stubA2aClient(registry, {
@@ -194,14 +191,59 @@ describe('Executor contract — remote_mesh', () => {
       }),
     });
 
-    expect((await executeRemoteOrchestrationTask(orchestration, task.id)).ok).toBe(true);
-    const poll = await pollRemoteTaskStatus(orchestration, task.id);
+    expect((await executeRemoteOrchestrationTask(orchestration, registry, task.id)).ok).toBe(true);
+    const poll = await pollRemoteTaskStatus(orchestration, registry, task.id);
     expect(poll.done).toBe(true);
     expect(poll.status).toBe('completed');
 
     const updated = await repo.getTask(task.id);
     expect(updated?.status).toBe('completed');
     expect(updated?.result_summary).toContain('remote result');
+  });
+
+  it('treats an A2A Message without taskId as a synchronous terminal result', async () => {
+    const repo = new MemoryOrchestrationRepository();
+    const orchestration = createTestOrchestrationService(repo);
+    const run = await repo.createRun({ session_key: 'remote-message', title: 'r' });
+    const task = await repo.createTask({
+      run_id: run.id,
+      name: 'Remote',
+      role: 'subtask',
+      executor_kind: 'remote_mesh',
+      remote_agent_id: 'local',
+      status: 'running',
+    });
+    orchestration.dispatcherHandle.syncTaskFromRecord(task);
+
+    const registry = new RemoteAgentRegistry();
+    registry.loadFromConfig({
+      remoteAgents: [{ id: 'local', cardUrl: 'https://remote.example/card' }],
+    });
+    const getTask = vi.fn();
+    stubA2aClient(registry, {
+      sendMessage: vi.fn().mockResolvedValue({
+        messageId: 'message-only',
+        contextId: 'ctx',
+        taskId: '',
+        role: Role.ROLE_AGENT,
+        parts: [{
+          content: { $case: 'text', value: 'direct remote result' },
+          metadata: undefined,
+          filename: '',
+          mediaType: 'text/plain',
+        }],
+        metadata: undefined,
+        extensions: [],
+        referenceTaskIds: [],
+      }),
+      getTask,
+    });
+
+    expect((await executeRemoteOrchestrationTask(orchestration, registry, task.id)).ok).toBe(true);
+    const updated = await repo.getTask(task.id);
+    expect(updated?.status).toBe('completed');
+    expect(updated?.result_summary).toContain('direct remote result');
+    expect(getTask).not.toHaveBeenCalled();
   });
 
   it('fail: delegate throws → failed (not waiting_result)', async () => {
@@ -219,7 +261,8 @@ describe('Executor contract — remote_mesh', () => {
     });
     orchestration.dispatcherHandle.syncTaskFromRecord(task);
 
-    const registry = await provideRemoteAgentRegistry({ lifecycle }, {
+    const registry = new RemoteAgentRegistry();
+    registry.loadFromConfig({
       remoteAgents: [{ id: 'local', cardUrl: 'http://127.0.0.1:8068/a2a/zhin/.well-known/agent-card.json', token: 't' }],
     });
     stubA2aClient(registry, {
@@ -227,9 +270,107 @@ describe('Executor contract — remote_mesh', () => {
       getTask: vi.fn(),
     });
 
-    expect((await executeRemoteOrchestrationTask(orchestration, task.id)).ok).toBe(false);
+    expect((await executeRemoteOrchestrationTask(orchestration, registry, task.id)).ok).toBe(false);
     const updated = await repo.getTask(task.id);
     expect(updated?.status).toBe('failed');
+  });
+
+  it('fails closed when an SSE delegation ends without a remote task id', async () => {
+    const repo = new MemoryOrchestrationRepository();
+    const orchestration = createTestOrchestrationService(repo);
+    const run = await repo.createRun({ session_key: 'remote-empty-stream', title: 'r' });
+    const task = await repo.createTask({
+      run_id: run.id,
+      name: 'Remote',
+      role: 'subtask',
+      executor_kind: 'remote_mesh',
+      remote_agent_id: 'local',
+      status: 'running',
+    });
+    orchestration.dispatcherHandle.syncTaskFromRecord(task);
+
+    const registry = new RemoteAgentRegistry();
+    registry.loadFromConfig({
+      remoteAgents: [{ id: 'local', cardUrl: 'https://remote.example/card' }],
+    });
+    registry.list()[0]!.card = {
+      name: 'local',
+      description: 'test',
+      version: '1.0.0',
+      supportedInterfaces: [{
+        url: 'https://remote.example/rpc',
+        protocolBinding: 'JSONRPC',
+        protocolVersion: '1.0',
+        tenant: '',
+      }],
+      capabilities: { streaming: true, extensions: [] },
+      securitySchemes: {},
+      securityRequirements: [],
+      defaultInputModes: ['text/plain'],
+      defaultOutputModes: ['text/plain'],
+      skills: [],
+      signatures: [],
+    };
+    stubA2aClient(registry, {
+      sendMessage: vi.fn(),
+      sendMessageStream: vi.fn().mockReturnValue((async function* () {
+        yield { message: 'non-task event' };
+      })()),
+      getTask: vi.fn(),
+    });
+
+    expect((await executeRemoteOrchestrationTask(orchestration, registry, task.id)).ok).toBe(true);
+    await vi.waitFor(async () => {
+      expect((await repo.getTask(task.id))?.status).toBe('failed');
+    });
+    expect((await repo.getTask(task.id))?.error).toContain('before publishing a remote task id');
+  });
+
+  it('treats an SSE Message without taskId as a synchronous terminal result', async () => {
+    const repo = new MemoryOrchestrationRepository();
+    const orchestration = createTestOrchestrationService(repo);
+    const run = await repo.createRun({ session_key: 'remote-stream-message', title: 'r' });
+    const task = await repo.createTask({
+      run_id: run.id,
+      name: 'Remote',
+      role: 'subtask',
+      executor_kind: 'remote_mesh',
+      remote_agent_id: 'local',
+      status: 'running',
+    });
+    orchestration.dispatcherHandle.syncTaskFromRecord(task);
+
+    const registry = new RemoteAgentRegistry();
+    registry.loadFromConfig({
+      remoteAgents: [{ id: 'local', cardUrl: 'https://remote.example/card' }],
+    });
+    stubA2aClient(registry, {
+      sendMessage: vi.fn(),
+      sendMessageStream: vi.fn().mockReturnValue((async function* () {
+        yield {
+          messageId: 'stream-message-only',
+          contextId: 'ctx',
+          taskId: '',
+          role: Role.ROLE_AGENT,
+          parts: [{
+            content: { $case: 'text', value: 'direct streamed result' },
+            metadata: undefined,
+            filename: '',
+            mediaType: 'text/plain',
+          }],
+          metadata: undefined,
+          extensions: [],
+          referenceTaskIds: [],
+        };
+      })()),
+      getTask: vi.fn(),
+    });
+
+    expect((await executeRemoteOrchestrationTask(orchestration, registry, task.id)).ok).toBe(true);
+    await vi.waitFor(async () => {
+      expect((await repo.getTask(task.id))?.status).toBe('completed');
+    });
+    expect((await repo.getTask(task.id))?.result_summary).toContain('direct streamed result');
   });
 
   it('cancel: remote cancelled status → cancelled terminal', async () => {
@@ -249,7 +390,8 @@ describe('Executor contract — remote_mesh', () => {
     const synced = (await repo.getTask(task.id))!;
     orchestration.dispatcherHandle.syncTaskFromRecord(synced);
 
-    const registry = await provideRemoteAgentRegistry({ lifecycle }, {
+    const registry = new RemoteAgentRegistry();
+    registry.loadFromConfig({
       remoteAgents: [{ id: 'local', cardUrl: 'http://127.0.0.1:8068/a2a/zhin/.well-known/agent-card.json', token: 't' }],
     });
     stubA2aClient(registry, {
@@ -275,7 +417,7 @@ describe('Executor contract — remote_mesh', () => {
       }),
     });
 
-    const poll = await pollRemoteTaskStatus(orchestration, task.id);
+    const poll = await pollRemoteTaskStatus(orchestration, registry, task.id);
     expect(poll.done).toBe(true);
     expect(poll.status).toBe('cancelled');
 

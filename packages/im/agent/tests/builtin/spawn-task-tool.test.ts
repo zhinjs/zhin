@@ -35,7 +35,7 @@ describe('SpawnTaskBuiltinTool / createSpawnTaskTool', () => {
 
     const commMessage = mockMessage();
 
-    const tool = createSpawnTaskTool(commMessage, system, null);
+    const tool = createSpawnTaskTool(commMessage, system, null, null);
     expect(tool.name).toBe('spawn_task');
     expect(tool.source).toBe('builtin:context');
 
@@ -57,7 +57,7 @@ describe('SpawnTaskBuiltinTool / createSpawnTaskTool', () => {
     const spawn = vi.fn();
     const system = { spawn, spawnSync } as unknown as SubagentSystem;
     const commMessage = mockMessage({ $adapter: 'sandbox' });
-    const tool = createSpawnTaskTool(commMessage, system, null);
+    const tool = createSpawnTaskTool(commMessage, system, null, null);
     const out = await tool.execute({
       task: '设计 wi-1',
       agent: 'architect',
@@ -73,7 +73,7 @@ describe('SpawnTaskBuiltinTool / createSpawnTaskTool', () => {
   it('run rejects empty task without calling spawn', async () => {
     const spawn = vi.fn();
     const system = { spawn } as unknown as SubagentSystem;
-    const inst = new SpawnTaskBuiltinTool({} as Message<any>, system, null);
+    const inst = new SpawnTaskBuiltinTool({} as Message<any>, system, null, null);
     const out = await inst.run({ task: '' });
     expect(out).toBe('请提供任务描述');
     expect(spawn).not.toHaveBeenCalled();
@@ -83,7 +83,7 @@ describe('SpawnTaskBuiltinTool / createSpawnTaskTool', () => {
     const spawn = vi.fn();
     const system = { spawn } as unknown as SubagentSystem;
     const commMessage = mockMessage();
-    const tool = createSpawnTaskTool(commMessage, system, null, {
+    const tool = createSpawnTaskTool(commMessage, system, null, null, {
       allowedAgents: ['pm'],
       permissionTaskRules: { '*': 'deny', pm: 'allow' },
     });
@@ -93,9 +93,15 @@ describe('SpawnTaskBuiltinTool / createSpawnTaskTool', () => {
   });
 
   it('description lists allowed agents when provided', () => {
-    const tool = createSpawnTaskTool(mockMessage(), { spawn: vi.fn() } as unknown as SubagentSystem, null, {
-      allowedAgents: ['pm', 'dev'],
-    });
+    const tool = createSpawnTaskTool(
+      mockMessage(),
+      { spawn: vi.fn() } as unknown as SubagentSystem,
+      null,
+      null,
+      {
+        allowedAgents: ['pm', 'dev'],
+      },
+    );
     expect(tool.description).toContain('pm, dev');
     expect(tool.description).toContain('parallel');
   });

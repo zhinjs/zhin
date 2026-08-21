@@ -79,10 +79,16 @@ export class ToolSystem {
 
     if (host.subagentSystem && spawnableAgentNames) {
       const permissionTask = host.activeBinding?.permission?.task;
-      tools.push(createSpawnTaskTool(ctx.message, host.subagentSystem, host.orchestrationService, {
-        allowedAgents: filterAgentsForSpawnDescription(spawnableAgentNames, permissionTask),
-        permissionTaskRules: permissionTask,
-      }));
+      tools.push(createSpawnTaskTool(
+        ctx.message,
+        host.subagentSystem,
+        host.orchestrationService,
+        host.remoteAgentRegistry,
+        {
+          allowedAgents: filterAgentsForSpawnDescription(spawnableAgentNames, permissionTask),
+          permissionTaskRules: permissionTask,
+        },
+      ));
     }
 
     return tools;

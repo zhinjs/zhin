@@ -3,24 +3,24 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TaskState } from '@a2a-js/sdk';
+import {
+  createGenerationAdmissionGate,
+  replaceGenerationAdmissions,
+} from '../../plugin-runtime/src/admission.js';
 import { MemoryOrchestrationRepository } from '../src/orchestrator/orchestration-repository.js';
 import { createTestOrchestrationService } from './helpers/orchestration.js';
 import type { OrchestrationService } from '../src/orchestrator/orchestration-service.js';
 import {
   RemoteAgentRegistry,
-  provideRemoteAgentRegistry,
 } from '../src/orchestrator/remote-agent-registry.js';
-import { DisposeStack } from '@zhin.js/plugin-runtime';
 import {
   executeRemoteOrchestrationTask,
-  pollRemoteTaskStatus,
+  startRemoteTaskRecovery,
 } from '../src/orchestrator/remote-task-executor.js';
 
 describe('Remote loopback A2A delegate flow', () => {
   let repo: MemoryOrchestrationRepository;
   let orchestration: OrchestrationService;
-  const lifecycle = new DisposeStack();
-
   beforeEach(() => {
     repo = new MemoryOrchestrationRepository();
     orchestration = createTestOrchestrationService(repo);
@@ -46,14 +46,7 @@ describe('Remote loopback A2A delegate flow', () => {
       history: [],
     });
     const getTask = vi.fn()
-      .mockResolvedValueOnce({
-        id: remoteTaskId,
-        contextId: 'ctx-1',
-        status: { state: TaskState.TASK_STATE_WORKING },
-        artifacts: [],
-        history: [],
-      })
-      .mockResolvedValueOnce({
+      .mockResolvedValue({
         id: remoteTaskId,
         contextId: 'ctx-1',
         status: {
@@ -80,7 +73,8 @@ describe('Remote loopback A2A delegate flow', () => {
         history: [],
       });
 
-    const registry = await provideRemoteAgentRegistry({ lifecycle }, {
+    const registry = new RemoteAgentRegistry();
+    registry.loadFromConfig({
       remoteAgents: [{
         id: 'local',
         cardUrl: 'http://127.0.0.1:8069/a2a/zhin/.well-known/agent-card.json',
@@ -91,7 +85,12 @@ describe('Remote loopback A2A delegate flow', () => {
       name: 'local',
       description: 'test',
       version: '1.0.0',
-      supportedInterfaces: [],
+      supportedInterfaces: [{
+        url: 'https://remote.example/rpc',
+        protocolBinding: 'JSONRPC',
+        protocolVersion: '1.0',
+        tenant: '',
+      }],
       capabilities: { streaming: false, extensions: [] },
       securitySchemes: {},
       securityRequirements: [],
@@ -108,19 +107,12 @@ describe('Remote loopback A2A delegate flow', () => {
       cancelTask: vi.fn(),
     } as never);
 
-    const delegate = await executeRemoteOrchestrationTask(orchestration, task.id);
+    const delegate = await executeRemoteOrchestrationTask(orchestration, registry, task.id);
     expect(delegate.ok).toBe(true);
 
-    const updated = await repo.getTask(task.id);
-    expect(updated?.remote_task_id).toBe(remoteTaskId);
-    orchestration.dispatcherHandle.syncTaskFromRecord(updated!);
-
-    const poll1 = await pollRemoteTaskStatus(orchestration, task.id);
-    expect(poll1.done).toBe(false);
-
-    const poll2 = await pollRemoteTaskStatus(orchestration, task.id);
-    expect(poll2.done).toBe(true);
-    expect(poll2.status).toBe('completed');
+    await vi.waitFor(async () => {
+      expect((await repo.getTask(task.id))?.status).toBe('completed');
+    });
     expect(sendMessage).toHaveBeenCalled();
     expect(getTask).toHaveBeenCalledWith({ id: remoteTaskId, tenant: '' });
   });
@@ -137,7 +129,8 @@ describe('Remote loopback A2A delegate flow', () => {
     });
     orchestration.dispatcherHandle.syncTaskFromRecord(task);
 
-    const registry = await provideRemoteAgentRegistry({ lifecycle }, {
+    const registry = new RemoteAgentRegistry();
+    registry.loadFromConfig({
       remoteAgents: [{
         id: 'local',
         cardUrl: 'http://127.0.0.1:8069/a2a/zhin/.well-known/agent-card.json',
@@ -148,7 +141,12 @@ describe('Remote loopback A2A delegate flow', () => {
       name: 'local',
       description: 'test',
       version: '1.0.0',
-      supportedInterfaces: [],
+      supportedInterfaces: [{
+        url: 'https://remote.example/rpc',
+        protocolBinding: 'JSONRPC',
+        protocolVersion: '1.0',
+        tenant: '',
+      }],
       capabilities: { streaming: false, extensions: [] },
       securitySchemes: {},
       securityRequirements: [],
@@ -165,11 +163,73 @@ describe('Remote loopback A2A delegate flow', () => {
       cancelTask: vi.fn(),
     });
 
-    const delegate = await executeRemoteOrchestrationTask(orchestration, task.id);
+    const delegate = await executeRemoteOrchestrationTask(orchestration, registry, task.id);
     expect(delegate.ok).toBe(false);
 
     const updated = await repo.getTask(task.id);
     expect(updated?.status).toBe('failed');
     expect(updated?.error).toContain('A2A unavailable');
+  });
+
+  it('recovers a persisted remote task only after its generation is admitted', async () => {
+    const run = await repo.createRun({ session_key: 'recovery', title: 'remote recovery' });
+    const task = await repo.createTask({
+      run_id: run.id,
+      name: 'Recover remote work',
+      role: 'zhin',
+      executor_kind: 'remote_mesh',
+      remote_agent_id: 'local',
+      status: 'waiting_result',
+    });
+    await repo.updateTaskStatus(task.id, 'waiting_result', { remote_task_id: 'rt-recovery' });
+
+    const registry = new RemoteAgentRegistry();
+    registry.loadFromConfig({
+      remoteAgents: [{ id: 'local', cardUrl: 'https://remote.example/card' }],
+    });
+    registry.list()[0]!.card = {
+      name: 'local',
+      description: 'test',
+      version: '1.0.0',
+      supportedInterfaces: [{
+        url: 'https://remote.example/rpc',
+        protocolBinding: 'JSONRPC',
+        protocolVersion: '1.0',
+        tenant: '',
+      }],
+      capabilities: { streaming: false, extensions: [] },
+      securitySchemes: {},
+      securityRequirements: [],
+      defaultInputModes: ['text/plain'],
+      defaultOutputModes: ['text/plain'],
+      skills: [],
+      signatures: [],
+    };
+    vi.spyOn(registry, 'getA2aClient').mockResolvedValue({
+      sendMessage: vi.fn(),
+      sendMessageStream: vi.fn(),
+      getTask: vi.fn().mockResolvedValue({
+        id: 'rt-recovery',
+        contextId: 'ctx',
+        status: { state: TaskState.TASK_STATE_COMPLETED },
+        artifacts: [],
+        history: [],
+      }),
+      cancelTask: vi.fn(),
+    } as never);
+
+    const admission = createGenerationAdmissionGate();
+    const owner = {};
+    replaceGenerationAdmissions(new Set(), new Set([admission]), owner, () => () => undefined);
+    const stop = startRemoteTaskRecovery(orchestration, registry, admission);
+    try {
+      await vi.waitFor(async () => {
+        expect((await repo.getTask(task.id))?.status).toBe('completed');
+      });
+    } finally {
+      stop();
+      replaceGenerationAdmissions(new Set([admission]), new Set(), owner);
+      await registry.dispose();
+    }
   });
 });

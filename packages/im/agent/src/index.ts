@@ -413,14 +413,9 @@ export type {
 } from './orchestrator/agent-dispatcher.js';
 
 export {
-  getRemoteAgentRegistry,
-  provideRemoteAgentRegistry,
+  createRemoteAgentRegistry,
 } from './orchestrator/remote-agent-registry.js';
-
-export {
-  getRemoteTaskPoller,
-  provideRemoteTaskPoller,
-} from './orchestrator/remote-task-poller.js';
+export type { RemoteAgentRegistry } from './orchestrator/remote-agent-registry.js';
 
 export {
   introspectionRestBindings,

@@ -4,13 +4,17 @@
  * OrchestrationKernel owns execution: configured local Agents or remote A2A peers.
  */
 import type { AgentExecutor } from './orchestration-types.js';
+import type { GenerationAdmissionGate } from '@zhin.js/plugin-runtime';
 import type { OrchestrationKernel } from './orchestration-service.js';
 import type { AIServiceRefs } from '../internal/ai-service-refs.js';
 import { readInboundMediaRefs } from '../media/inbound-refs.js';
 import { buildSubagentInboundTask } from '../media/index.js';
-import { executeRemoteOrchestrationTask } from './remote-task-executor.js';
+import { executeRemoteOrchestrationTask, startRemoteTaskRecovery } from './remote-task-executor.js';
+import type { RemoteAgentRegistry } from './remote-agent-registry.js';
 export interface RegisterExecutorsDeps {
   refs: AIServiceRefs;
+  remoteAgents: RemoteAgentRegistry;
+  admission: GenerationAdmissionGate;
 }
 
 export function registerDefaultExecutors(
@@ -69,8 +73,9 @@ export function registerDefaultExecutors(
     kind: 'remote_mesh',
     async *execute({ task }) {
       yield { type: 'progress', text: `delegating to remote mesh ${task.remoteAgentId ?? task.assignedTo}` };
-      const res = await executeRemoteOrchestrationTask(kernel, task.id);
+      const res = await executeRemoteOrchestrationTask(kernel, deps.remoteAgents, task.id);
       if (!res.ok) {
+        if ('cancelled' in res && res.cancelled) return;
         yield { type: 'error', error: res.message };
         return;
       }
@@ -81,6 +86,7 @@ export function registerDefaultExecutors(
   const cleanups = [
     kernel.registerExecutor(localExecutor),
     kernel.registerExecutor(remoteMeshExecutor),
+    startRemoteTaskRecovery(kernel, deps.remoteAgents, deps.admission),
     // five-agent WorkflowStrategy is opt-in: kernel.registerWorkflowStrategy(createFiveAgentWorkflowStrategy())
   ];
   return () => {

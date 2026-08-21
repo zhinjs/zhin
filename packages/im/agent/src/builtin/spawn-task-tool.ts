@@ -10,6 +10,7 @@ import { orchestrationSourceFromMessage } from '../orchestrator/orchestration-so
 import type { SubagentSystem, SubagentOrigin } from '../subagent/index.js';
 import type { SubagentContextMode } from '../subagent-preset.js';
 import type { OrchestrationService } from '../orchestrator/orchestration-service.js';
+import type { RemoteAgentRegistry } from '../orchestrator/remote-agent-registry.js';
 import { executeRemoteOrchestrationTask } from '../orchestrator/remote-task-executor.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { getActiveDeferredTurnController } from '../tool-catalog/deferred-turn-controller.js';
@@ -114,6 +115,7 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
     private readonly sessionCommMessage: Message,
     private readonly manager: SubagentSystem,
     private readonly orchestrationService: OrchestrationService | null,
+    private readonly remoteAgents: RemoteAgentRegistry | null,
     options?: SpawnTaskToolOptions,
   ) {
     super();
@@ -160,7 +162,8 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
       }
       const agentTask = dispatcher.getTask(targetTaskId);
       if (agentTask?.executorKind === 'remote_mesh') {
-        const remoteResult = await executeRemoteOrchestrationTask(svc, targetTaskId);
+        if (!this.remoteAgents) return '远程 Agent 注册表不可用';
+        const remoteResult = await executeRemoteOrchestrationTask(svc, this.remoteAgents, targetTaskId);
         if (args.wait === true) {
           return remoteResult.message;
         }
@@ -267,7 +270,14 @@ export function createSpawnTaskTool(
   commMessage: Message,
   manager: SubagentSystem,
   orchestrationService: OrchestrationService | null,
+  remoteAgents: RemoteAgentRegistry | null,
   options?: SpawnTaskToolOptions,
 ): AgentTool {
-  return new SpawnTaskBuiltinTool(commMessage, manager, orchestrationService, options).toTool() as AgentTool;
+  return new SpawnTaskBuiltinTool(
+    commMessage,
+    manager,
+    orchestrationService,
+    remoteAgents,
+    options,
+  ).toTool() as AgentTool;
 }

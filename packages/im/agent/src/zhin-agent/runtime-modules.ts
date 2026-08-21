@@ -5,6 +5,7 @@ import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { SkillSystem } from '../skill/skill-system.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 import type { OrchestrationService } from '../orchestrator/orchestration-service.js';
+import type { RemoteAgentRegistry } from '../orchestrator/remote-agent-registry.js';
 import type { AgentCore } from '../core/agent-core.js';
 import type { ToolSystem } from '../tool/tool-system.js';
 import { type ContextSystem, createContextSystemForHost } from '../context/context-system.js';
@@ -17,6 +18,7 @@ export interface ZhinAgentRuntimeModules {
   skillSystem: SkillSystem | null;
   orchestrator: AgentOrchestrator | null;
   orchestrationService: OrchestrationService | null;
+  remoteAgentRegistry: RemoteAgentRegistry | null;
   agentCore: AgentCore | null;
   toolSystem: ToolSystem | null;
   contextSystem: ContextSystem | null;
@@ -31,6 +33,7 @@ export function createZhinAgentRuntimeModules(host: ZhinAgentPrivate): ZhinAgent
     skillSystem: null,
     orchestrator: null,
     orchestrationService: null,
+    remoteAgentRegistry: null,
     agentCore: null,
     toolSystem: null,
     memorySystem: null,
@@ -41,7 +44,7 @@ export function createZhinAgentRuntimeModules(host: ZhinAgentPrivate): ZhinAgent
 }
 
 const MODULE_KEYS: ReadonlyArray<keyof ZhinAgentRuntimeModules> = [
-  'skillRegistry', 'skillSystem', 'orchestrator', 'orchestrationService', 'agentCore',
+  'skillRegistry', 'skillSystem', 'orchestrator', 'orchestrationService', 'remoteAgentRegistry', 'agentCore',
   'toolSystem', 'contextSystem', 'memorySystem', 'sessionSystem', 'eventSystem',
 ];
 
@@ -65,6 +68,7 @@ export function clearZhinAgentRuntimeModules(modules: ZhinAgentRuntimeModules): 
   modules.skillSystem = null;
   modules.orchestrator = null;
   modules.orchestrationService = null;
+  modules.remoteAgentRegistry = null;
   modules.agentCore = null;
   modules.toolSystem = null;
   modules.contextSystem = null;
