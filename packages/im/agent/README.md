@@ -140,7 +140,7 @@ packages/im/agent/src/
   init/          Plugin Runtime 组合、数据库激活与 ZhinAgent dispose 生命周期
 ```
 
-普通 `spawn_task` 只执行当前聊天的非 Workroom 子任务，不创建或修改 Run/Task facts。Workroom command adapter 必须持有认证后的 Project capability；Scheduler、Executor 与完整 Reviewer/Sponsor Gate 尚未接入前，不发布模型可写的通用 transition 工具。验收不再是 `WorkroomCommand`：Task 必须先由 generation-owned `workroomAcceptancePolicyDecisionToken` 固定 immutable Contract/Policy snapshot，未 pin 不得 claim；`WorkroomKernel.evaluateTaskAcceptance()` 随后只调用同一可信端口，并用 Journal CAS 写入结构化 Acceptance Record。当前生产 baseline 只允许 low-risk、全机械检查且证据与 claims 完整的候选自动通过；更高风险建议会被 Kernel 拒绝，等待后续 Gate 接线。
+普通 `spawn_task` 只执行当前聊天的非 Workroom 子任务，不创建或修改 Run/Task facts。Workroom command adapter 必须持有认证后的 Project capability；Scheduler、Executor 与完整 Reviewer/Sponsor 决策端口尚未接入前，不发布模型可写的通用 transition 工具。验收不再是 `WorkroomCommand`：Task 必须先由 generation-owned `workroomAcceptancePolicyDecisionToken` 固定 immutable Contract/Policy snapshot，未 pin 不得 claim；`WorkroomKernel.evaluateTaskAcceptance()` 随后只调用同一可信端口，并用 Journal CAS 写入结构化 Acceptance Record。当前生产 baseline 只允许 low-risk、全机械检查且证据与 claims 完整的候选自动通过；medium/judgment 与 high/critical 路由分别持久化 Reviewer Assignment / Sponsor Gate，固定 candidate hash、Contract/Policy、owner、deadline 与恢复动作，超时后可重新求值、返工或取消。Reviewer verdict 与 Sponsor decision 的可信 ingress 仍保持 fail closed，等待后续生产切片接入。
 
 **Agent Core**：`AgentCore.runText()` / `runVision()` 为 `AsyncGenerator<TurnEvent>` SSOT；`runTextTurn` 为 collector。组合层经 `composeZhinAgentRuntime` 注入 8 模块 + `createAgentCoreDepsForCompose`。
 

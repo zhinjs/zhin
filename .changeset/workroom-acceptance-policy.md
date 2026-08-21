@@ -7,3 +7,5 @@ Remove the unconstrained `accept_task` Workroom command. Task acceptance now ent
 Pre-policy `task.accepted` journal entries do not satisfy the new record schema and must be exported for audit and replanned instead of being silently promoted to accepted Project state.
 
 Task revisions must now pin an immutable Acceptance Contract and Policy snapshot before an Executor can claim them. The standard Agent Host resolves the provider through the generation-owned `workroomAcceptancePolicyDecisionToken`, so hot reload cannot replace the contract already recorded in a Run.
+
+Policy routes that require judgment or high-risk authority now append durable, candidate-hash-bound Reviewer Assignment or Sponsor Gate facts. Each wait records its pinned Contract/Policy, owner, deadline and recovery actions; expiry is replayable and can be reopened by a fresh policy evaluation, replanned or cancelled without waiting for an Agent response.

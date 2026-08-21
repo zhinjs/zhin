@@ -1,4 +1,11 @@
-import type { WorkroomAcceptanceContract, WorkroomAcceptanceRecord } from './acceptance-policy.js';
+import type {
+  WorkroomAcceptanceContract,
+  WorkroomAcceptancePolicySnapshot,
+  WorkroomAcceptanceRecord,
+  WorkroomAcceptanceRoute,
+  WorkroomRiskTier,
+  WorkroomAcceptanceWaitAction,
+} from './acceptance-policy.js';
 
 export type WorkroomRunStatus =
   | 'active'
@@ -51,9 +58,37 @@ export interface WorkroomTaskState {
   readonly reportRef?: string;
   readonly acceptanceContract?: WorkroomAcceptanceContract;
   readonly acceptanceRecord?: WorkroomAcceptanceRecord;
+  readonly currentReviewerAssignmentId?: string;
+  readonly currentSponsorGateId?: string;
   readonly acceptanceBlockReason?: string;
   readonly terminalReason?: string;
 }
+
+export type WorkroomAcceptanceWaitStatus = 'open' | 'expired' | 'cancelled' | 'satisfied' | 'stale';
+
+export interface WorkroomAcceptanceWaitState {
+  readonly id: string;
+  readonly taskKey: string;
+  readonly taskRevision: number;
+  readonly candidateHash: string;
+  readonly riskTier: WorkroomRiskTier;
+  readonly route: Extract<
+    WorkroomAcceptanceRoute,
+    'reviewer_required' | 'sponsor_required' | 'reviewer_then_sponsor'
+  >;
+  readonly contractId: string;
+  readonly policy: WorkroomAcceptancePolicySnapshot;
+  readonly owner: string;
+  readonly deadline: number;
+  readonly allowedActions: readonly WorkroomAcceptanceWaitAction[];
+  readonly status: WorkroomAcceptanceWaitStatus;
+}
+
+export interface WorkroomReviewerAssignmentState extends WorkroomAcceptanceWaitState {
+  readonly producerPrincipalId: string;
+}
+
+export interface WorkroomSponsorGateState extends WorkroomAcceptanceWaitState {}
 
 export interface WorkroomAssignmentState {
   readonly id: string;
@@ -80,6 +115,8 @@ export interface WorkroomRunState {
   readonly cancelRequested: boolean;
   readonly tasks: Readonly<Record<string, WorkroomTaskState>>;
   readonly assignments: Readonly<Record<string, WorkroomAssignmentState>>;
+  readonly reviewerAssignments: Readonly<Record<string, WorkroomReviewerAssignmentState>>;
+  readonly sponsorGates: Readonly<Record<string, WorkroomSponsorGateState>>;
 }
 
 export type WorkroomEventType =
@@ -95,6 +132,10 @@ export type WorkroomEventType =
   | 'task.accepted'
   | 'task.acceptance_pinned'
   | 'task.acceptance_blocked'
+  | 'reviewer.assigned'
+  | 'reviewer.expired'
+  | 'sponsor_gate.opened'
+  | 'sponsor_gate.expired'
   | 'task.rework_requested'
   | 'task.revised'
   | 'assignment.claimed'

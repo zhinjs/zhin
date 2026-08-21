@@ -4,6 +4,8 @@ import type {
   WorkroomEvent,
   WorkroomEventDraft,
   WorkroomRunState,
+  WorkroomReviewerAssignmentState,
+  WorkroomSponsorGateState,
   WorkroomTaskState,
 } from './kernel-contracts.js';
 import { assertAcceptanceContract, assertPinnedAcceptanceContract } from './acceptance-policy.js';
@@ -26,6 +28,8 @@ export function replayWorkroom(events: readonly WorkroomEvent[]): WorkroomRunSta
     cancelRequested: false,
     tasks: {},
     assignments: {},
+    reviewerAssignments: {},
+    sponsorGates: {},
   };
   for (const event of events) {
     if (event.runId !== state.runId) throw new Error('Workroom journal contains another run');
@@ -123,6 +127,8 @@ export function decideWorkroom(
 export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): WorkroomRunState {
   let tasks = state.tasks;
   let assignments = state.assignments;
+  let reviewerAssignments = state.reviewerAssignments;
+  let sponsorGates = state.sponsorGates;
   let cancelRequested = state.cancelRequested;
   let status = state.status;
   const payload = event.payload;
@@ -206,10 +212,15 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
       const record = payload.record as NonNullable<WorkroomTaskState['acceptanceRecord']>;
       if (!task.acceptanceContract) throw new Error(`Task ${task.key} Acceptance Contract is not pinned`);
       assertPinnedAcceptanceContract(record.contract, task.acceptanceContract);
+      ({ reviewerAssignments, sponsorGates } = settleAcceptanceWaits(
+        task, reviewerAssignments, sponsorGates, 'satisfied',
+      ));
       tasks = replaceTask(tasks, task.key, {
         ...task,
         status: 'accepted',
         acceptanceRecord: record,
+        currentReviewerAssignmentId: undefined,
+        currentSponsorGateId: undefined,
         acceptanceBlockReason: undefined,
       });
       break;
@@ -234,8 +245,69 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
       });
       break;
     }
+    case 'reviewer.assigned': {
+      const task = requireTask(state, String(payload.taskKey), ['awaiting_acceptance']);
+      const assignment = payload.assignment as WorkroomReviewerAssignmentState;
+      if (reviewerAssignments[assignment.id]) throw new Error(`Reviewer Assignment ${assignment.id} already exists`);
+      if (assignment.owner === assignment.producerPrincipalId) {
+        throw new Error('Producer and Reviewer Assignment owner must be different principals');
+      }
+      assertAcceptanceWaitBinding(task, assignment);
+      assertNoOpenAcceptanceWait(state, task);
+      reviewerAssignments = { ...reviewerAssignments, [assignment.id]: assignment };
+      tasks = replaceTask(tasks, task.key, {
+        ...task,
+        currentReviewerAssignmentId: assignment.id,
+        currentSponsorGateId: undefined,
+        acceptanceBlockReason: String(payload.reason),
+      });
+      break;
+    }
+    case 'reviewer.expired': {
+      const assignment = requireReviewerAssignment(state, String(payload.assignmentId), ['open']);
+      if (payload.taskKey !== assignment.taskKey) throw new Error('Reviewer expiry targets another Task');
+      reviewerAssignments = {
+        ...reviewerAssignments,
+        [assignment.id]: { ...assignment, status: 'expired' },
+      };
+      const task = requireTask(state, assignment.taskKey, ['awaiting_acceptance']);
+      tasks = replaceTask(tasks, task.key, {
+        ...task,
+        acceptanceBlockReason: 'Reviewer deadline expired; reassign, replan or cancel',
+      });
+      break;
+    }
+    case 'sponsor_gate.opened': {
+      const task = requireTask(state, String(payload.taskKey), ['awaiting_acceptance']);
+      const gate = payload.gate as WorkroomSponsorGateState;
+      if (sponsorGates[gate.id]) throw new Error(`Sponsor Gate ${gate.id} already exists`);
+      assertAcceptanceWaitBinding(task, gate);
+      assertNoOpenAcceptanceWait(state, task);
+      sponsorGates = { ...sponsorGates, [gate.id]: gate };
+      tasks = replaceTask(tasks, task.key, {
+        ...task,
+        currentReviewerAssignmentId: undefined,
+        currentSponsorGateId: gate.id,
+        acceptanceBlockReason: String(payload.reason),
+      });
+      break;
+    }
+    case 'sponsor_gate.expired': {
+      const gate = requireSponsorGate(state, String(payload.gateId), ['open']);
+      if (payload.taskKey !== gate.taskKey) throw new Error('Sponsor Gate expiry targets another Task');
+      sponsorGates = { ...sponsorGates, [gate.id]: { ...gate, status: 'expired' } };
+      const task = requireTask(state, gate.taskKey, ['awaiting_acceptance']);
+      tasks = replaceTask(tasks, task.key, {
+        ...task,
+        acceptanceBlockReason: 'Sponsor Gate expired; reopen, rebase, replan or cancel',
+      });
+      break;
+    }
     case 'task.rework_requested': {
       const task = requireTask(state, String(payload.taskKey));
+      ({ reviewerAssignments, sponsorGates } = settleAcceptanceWaits(
+        task, reviewerAssignments, sponsorGates, 'cancelled',
+      ));
       tasks = replaceTask(tasks, task.key, {
         ...task,
         status: 'ready',
@@ -245,6 +317,8 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
         reportRef: undefined,
         acceptanceContract: undefined,
         acceptanceRecord: undefined,
+        currentReviewerAssignmentId: undefined,
+        currentSponsorGateId: undefined,
         acceptanceBlockReason: undefined,
         terminalReason: String(payload.reason),
       });
@@ -263,6 +337,8 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
         reportRef: undefined,
         acceptanceContract: undefined,
         acceptanceRecord: undefined,
+        currentReviewerAssignmentId: undefined,
+        currentSponsorGateId: undefined,
         acceptanceBlockReason: undefined,
         terminalReason: String(payload.reason),
       });
@@ -276,6 +352,9 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
     case 'task.cancelled':
     case 'task.failed': {
       const task = requireTask(state, String(payload.taskKey));
+      ({ reviewerAssignments, sponsorGates } = settleAcceptanceWaits(
+        task, reviewerAssignments, sponsorGates, 'cancelled',
+      ));
       tasks = replaceTask(tasks, task.key, {
         ...task,
         status: event.type === 'task.cancelled' ? 'cancelled' : 'failed',
@@ -294,6 +373,8 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
     cancelRequested,
     tasks,
     assignments,
+    reviewerAssignments,
+    sponsorGates,
   });
 }
 
@@ -317,6 +398,19 @@ function decideClock(
         events.push(event('task.failed', { taskKey: task.key, reason: 'assignment attempts exhausted' }));
         newlyTerminal.add(task.key);
       }
+    }
+  }
+  for (const assignment of Object.values(state.reviewerAssignments)) {
+    if (assignment.status === 'open' && assignment.deadline <= now) {
+      events.push(event('reviewer.expired', {
+        taskKey: assignment.taskKey,
+        assignmentId: assignment.id,
+      }));
+    }
+  }
+  for (const gate of Object.values(state.sponsorGates)) {
+    if (gate.status === 'open' && gate.deadline <= now) {
+      events.push(event('sponsor_gate.expired', { taskKey: gate.taskKey, gateId: gate.id }));
     }
   }
   if (state.cancelRequested && Object.values(state.tasks).every(task =>
@@ -381,6 +475,13 @@ function deriveRunStatus(state: WorkroomRunState): WorkroomRunState {
   if (tasks.some(task => task.required && (task.status === 'failed' || task.status === 'cancelled'))) {
     return { ...state, status: 'needs_replan' };
   }
+  if (tasks.some(task =>
+    (task.currentReviewerAssignmentId
+      && state.reviewerAssignments[task.currentReviewerAssignmentId]?.status === 'expired')
+    || (task.currentSponsorGateId
+      && state.sponsorGates[task.currentSponsorGateId]?.status === 'expired'))) {
+    return { ...state, status: 'blocked' };
+  }
   if (tasks.some(task => task.status === 'blocked')) return { ...state, status: 'blocked' };
   return { ...state, status: 'active' };
 }
@@ -413,4 +514,74 @@ function requireAssignment(
   if (!assignment) throw new Error(`Assignment ${id} not found`);
   if (statuses && !statuses.includes(assignment.status)) throw new Error(`Assignment ${id} is ${assignment.status}`);
   return assignment;
+}
+
+function requireReviewerAssignment(
+  state: WorkroomRunState,
+  id: string,
+  statuses?: readonly WorkroomReviewerAssignmentState['status'][],
+): WorkroomReviewerAssignmentState {
+  const assignment = state.reviewerAssignments[id];
+  if (!assignment) throw new Error(`Reviewer Assignment ${id} not found`);
+  if (statuses && !statuses.includes(assignment.status)) {
+    throw new Error(`Reviewer Assignment ${id} is ${assignment.status}`);
+  }
+  return assignment;
+}
+
+function requireSponsorGate(
+  state: WorkroomRunState,
+  id: string,
+  statuses?: readonly WorkroomSponsorGateState['status'][],
+): WorkroomSponsorGateState {
+  const gate = state.sponsorGates[id];
+  if (!gate) throw new Error(`Sponsor Gate ${id} not found`);
+  if (statuses && !statuses.includes(gate.status)) throw new Error(`Sponsor Gate ${id} is ${gate.status}`);
+  return gate;
+}
+
+function assertAcceptanceWaitBinding(
+  task: WorkroomTaskState,
+  wait: WorkroomReviewerAssignmentState | WorkroomSponsorGateState,
+): void {
+  const contract = task.acceptanceContract;
+  if (!contract
+    || wait.taskKey !== task.key
+    || wait.taskRevision !== task.revision
+    || wait.contractId !== contract.id
+    || wait.policy.id !== contract.policy.id
+    || wait.policy.revision !== contract.policy.revision
+    || wait.policy.digest !== contract.policy.digest) {
+    throw new Error('Acceptance wait does not match the pinned Task, Contract and Policy snapshot');
+  }
+}
+
+function assertNoOpenAcceptanceWait(state: WorkroomRunState, task: WorkroomTaskState): void {
+  const review = task.currentReviewerAssignmentId
+    ? state.reviewerAssignments[task.currentReviewerAssignmentId]
+    : undefined;
+  const gate = task.currentSponsorGateId ? state.sponsorGates[task.currentSponsorGateId] : undefined;
+  if (review?.status === 'open' || gate?.status === 'open') {
+    throw new Error(`Task ${task.key} already has an open Acceptance wait`);
+  }
+}
+
+function settleAcceptanceWaits(
+  task: WorkroomTaskState,
+  reviewerAssignments: WorkroomRunState['reviewerAssignments'],
+  sponsorGates: WorkroomRunState['sponsorGates'],
+  status: WorkroomReviewerAssignmentState['status'],
+): Pick<WorkroomRunState, 'reviewerAssignments' | 'sponsorGates'> {
+  const reviewId = task.currentReviewerAssignmentId;
+  const review = reviewId ? reviewerAssignments[reviewId] : undefined;
+  const gateId = task.currentSponsorGateId;
+  const gate = gateId ? sponsorGates[gateId] : undefined;
+  return {
+    reviewerAssignments: review?.status === 'open'
+      ? { ...reviewerAssignments, [review.id]: { ...review, status } }
+      : reviewerAssignments,
+    sponsorGates: gate?.status === 'open'
+      ? { ...sponsorGates, [gate.id]: { ...gate, status } }
+      : sponsorGates,
+  };
 }

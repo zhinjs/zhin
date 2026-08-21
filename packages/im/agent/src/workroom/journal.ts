@@ -365,6 +365,7 @@ const WORKROOM_EVENT_TYPES = new Set<WorkroomEvent['type']>([
   'task.planned', 'task.blocked', 'task.blocker_resolved',
   'task.cancel_requested', 'task.cancelled', 'task.failed',
   'task.accepted', 'task.acceptance_pinned', 'task.acceptance_blocked', 'task.rework_requested', 'task.revised',
+  'reviewer.assigned', 'reviewer.expired', 'sponsor_gate.opened', 'sponsor_gate.expired',
   'assignment.claimed', 'assignment.started', 'assignment.heartbeat',
   'assignment.execution_completed', 'assignment.cancel_requested',
   'assignment.cancelled', 'assignment.lease_expired', 'clock.advanced',
@@ -420,6 +421,18 @@ function validatePayload(
     case 'task.acceptance_blocked':
       requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'reportRef');
       requirePayloadString(payload, 'reason'); requirePayloadRecord(payload, 'evaluation'); return;
+    case 'reviewer.assigned':
+      requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'reason');
+      requirePayloadRecord(payload, 'evaluation');
+      validateAcceptanceWait(requirePayloadRecord(payload, 'assignment'), String(payload.taskKey), true); return;
+    case 'reviewer.expired':
+      requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'assignmentId'); return;
+    case 'sponsor_gate.opened':
+      requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'reason');
+      requirePayloadRecord(payload, 'evaluation');
+      validateAcceptanceWait(requirePayloadRecord(payload, 'gate'), String(payload.taskKey), false); return;
+    case 'sponsor_gate.expired':
+      requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'gateId'); return;
     case 'task.rework_requested':
       requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'reason'); return;
     case 'task.revised':
@@ -446,6 +459,32 @@ function validatePayload(
       requirePayloadNumber(payload, 'now'); return;
   }
 }
+
+function validateAcceptanceWait(value: Record<string, unknown>, taskKey: string, reviewer: boolean): void {
+  for (const key of ['id', 'taskKey', 'candidateHash', 'contractId', 'owner']) {
+    requirePayloadString(value, key);
+  }
+  requirePayloadPositiveInteger(value, 'taskRevision');
+  requirePayloadEnum(value, 'riskTier', ['low', 'medium', 'high', 'critical']);
+  requirePayloadEnum(value, 'route', ['reviewer_required', 'sponsor_required', 'reviewer_then_sponsor']);
+  if (value.taskKey !== taskKey) throw new Error('Invalid Workroom event payload: wait taskKey');
+  requirePayloadNumber(value, 'deadline');
+  requirePayloadEnum(value, 'status', ['open']);
+  const policy = requirePayloadRecord(value, 'policy');
+  requirePayloadString(policy, 'id'); requirePayloadString(policy, 'digest');
+  requirePayloadPositiveInteger(policy, 'revision');
+  if (reviewer) requirePayloadString(value, 'producerPrincipalId');
+  if (!Array.isArray(value.allowedActions) || value.allowedActions.length === 0
+    || value.allowedActions.some(action => !isNonEmptyString(action)
+      || !ACCEPTANCE_WAIT_ACTIONS.has(action))) {
+    throw new Error('Invalid Workroom event payload: allowedActions');
+  }
+}
+
+const ACCEPTANCE_WAIT_ACTIONS = new Set([
+  'claim', 'submit_verdict', 'approve', 'reject', 'request_changes',
+  'reassign', 'reopen', 'rebase', 'replan', 'cancel',
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);

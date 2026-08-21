@@ -69,12 +69,35 @@ export interface WorkroomAcceptanceCheckResult {
   readonly evidenceRefs: readonly string[];
 }
 
+export type WorkroomAcceptanceWaitAction =
+  | 'claim'
+  | 'submit_verdict'
+  | 'approve'
+  | 'reject'
+  | 'request_changes'
+  | 'reassign'
+  | 'reopen'
+  | 'rebase'
+  | 'replan'
+  | 'cancel';
+
+export interface WorkroomAcceptanceWaitRequest {
+  readonly owner: string;
+  readonly deadline: number;
+  readonly allowedActions: readonly WorkroomAcceptanceWaitAction[];
+}
+
 export interface WorkroomAcceptanceDecisionInput {
   readonly projectId: string;
   readonly runId: string;
   readonly expectedSequence: number;
   readonly now: number;
   readonly contract: WorkroomAcceptanceContract;
+  readonly priorExpiredWait?: Readonly<{
+    candidateHash: string;
+    riskTier: WorkroomRiskTier;
+    route: Extract<WorkroomAcceptanceRoute, 'reviewer_required' | 'sponsor_required' | 'reviewer_then_sponsor'>;
+  }>;
   readonly task: Readonly<{
     key: WorkroomTaskState['key'];
     revision: WorkroomTaskState['revision'];
@@ -111,6 +134,7 @@ export interface WorkroomAcceptanceDecision {
   readonly rejectedClaimIds: readonly string[];
   readonly decidedBy: string;
   readonly reason?: string;
+  readonly wait?: WorkroomAcceptanceWaitRequest;
 }
 
 export interface WorkroomAcceptanceRecord extends WorkroomAcceptanceDecision {
@@ -191,6 +215,16 @@ export function createAcceptanceDecisionInput(
   const task = state.tasks[taskKey];
   if (!task) throw new Error(`Task ${taskKey} not found`);
   if (task.status !== 'awaiting_acceptance') throw new Error(`Task ${taskKey} is ${task.status}`);
+  const review = task.currentReviewerAssignmentId
+    ? state.reviewerAssignments[task.currentReviewerAssignmentId]
+    : undefined;
+  const sponsorGate = task.currentSponsorGateId
+    ? state.sponsorGates[task.currentSponsorGateId]
+    : undefined;
+  if (review?.status === 'open' || sponsorGate?.status === 'open') {
+    throw new Error(`Task ${taskKey} already has an open Acceptance wait`);
+  }
+  const expiredWait = review?.status === 'expired' ? review : sponsorGate?.status === 'expired' ? sponsorGate : undefined;
   if (!task.reportRef || !task.currentAssignmentId) {
     throw new Error(`Task ${taskKey} has no completed execution candidate`);
   }
@@ -204,6 +238,13 @@ export function createAcceptanceDecisionInput(
     expectedSequence: state.sequence,
     now: state.now,
     contract: freezeAcceptanceContract(task.acceptanceContract ?? failUnpinnedContract(taskKey)),
+    ...(expiredWait ? {
+      priorExpiredWait: Object.freeze({
+        candidateHash: expiredWait.candidateHash,
+        riskTier: expiredWait.riskTier,
+        route: expiredWait.route,
+      }),
+    } : {}),
     task: Object.freeze({ key: task.key, revision: task.revision, reportRef: task.reportRef }),
     assignment: Object.freeze({ id: assignment.id, owner: assignment.owner, reportRef: assignment.reportRef }),
   });
@@ -215,7 +256,9 @@ export function decideTaskAcceptance(
   event: (type: WorkroomEventDraft['type'], payload: Record<string, unknown>) => WorkroomEventDraft,
 ): readonly WorkroomEventDraft[] {
   assertDecisionBindings(input, decision);
+  assertExpiredWaitContinuity(input, decision);
   if (decision.disposition === 'accepted') {
+    if (decision.wait) throw new Error('Accepted decisions cannot retain an Acceptance wait');
     assertSafeAutoAcceptance(decision);
     const record = createAcceptanceRecord(input, decision);
     return [event('task.accepted', {
@@ -226,6 +269,7 @@ export function decideTaskAcceptance(
   }
   const reason = requireString(decision.reason, 'acceptance decision reason');
   if (decision.disposition === 'rework') {
+    if (decision.wait) throw new Error('Rework decisions cannot retain an Acceptance wait');
     if (decision.route !== 'rework') throw new Error('Rework disposition requires the rework route');
     if (!decision.checkResults.some(result => result.status !== 'passed')) {
       throw new Error('Rework requires a non-passing trusted check');
@@ -239,12 +283,140 @@ export function decideTaskAcceptance(
   if (decision.route === 'auto_accept' || decision.route === 'rework') {
     throw new Error('Policy-blocked disposition requires a gated or blocked route');
   }
+  if (decision.route === 'reviewer_required' || decision.route === 'reviewer_then_sponsor') {
+    assertGatedRouteFloor(decision);
+    const wait = requireAcceptanceWait(input, decision);
+    return [event('reviewer.assigned', {
+      taskKey: input.task.key,
+      reason,
+      evaluation: freezeDecision(decision),
+      assignment: Object.freeze({
+        id: `review:${decision.candidate.id}:${input.expectedSequence + 1}`,
+        taskKey: input.task.key,
+        taskRevision: input.task.revision,
+        candidateHash: decision.candidate.hash,
+        riskTier: decision.riskAssessment.tier,
+        route: decision.route,
+        contractId: decision.contract.id,
+        policy: Object.freeze({ ...decision.contract.policy }),
+        producerPrincipalId: decision.candidate.producerPrincipalId,
+        owner: wait.owner,
+        deadline: wait.deadline,
+        allowedActions: Object.freeze([...wait.allowedActions]),
+        status: 'open' as const,
+      }),
+    })];
+  }
+  if (decision.route === 'sponsor_required') {
+    assertGatedRouteFloor(decision);
+    const wait = requireAcceptanceWait(input, decision);
+    return [event('sponsor_gate.opened', {
+      taskKey: input.task.key,
+      reason,
+      evaluation: freezeDecision(decision),
+      gate: Object.freeze({
+        id: `sponsor:${decision.candidate.id}:${input.expectedSequence + 1}`,
+        taskKey: input.task.key,
+        taskRevision: input.task.revision,
+        candidateHash: decision.candidate.hash,
+        riskTier: decision.riskAssessment.tier,
+        route: decision.route,
+        contractId: decision.contract.id,
+        policy: Object.freeze({ ...decision.contract.policy }),
+        owner: wait.owner,
+        deadline: wait.deadline,
+        allowedActions: Object.freeze([...wait.allowedActions]),
+        status: 'open' as const,
+      }),
+    })];
+  }
+  if (decision.wait) throw new Error('Policy-blocked decisions cannot retain an unused Acceptance wait');
   return [event('task.acceptance_blocked', {
     taskKey: input.task.key,
     reportRef: input.task.reportRef,
     reason,
     evaluation: freezeDecision(decision),
   })];
+}
+
+function assertExpiredWaitContinuity(
+  input: WorkroomAcceptanceDecisionInput,
+  decision: WorkroomAcceptanceDecision,
+): void {
+  const prior = input.priorExpiredWait;
+  if (!prior) return;
+  if (decision.candidate.hash !== prior.candidateHash) {
+    throw new Error('Fresh evaluation does not match the expired Acceptance wait candidate');
+  }
+  if (decision.disposition === 'accepted') {
+    throw new Error('Fresh evaluation cannot bypass an expired Acceptance wait');
+  }
+  if (decision.disposition === 'rework' || decision.route === 'policy_blocked') return;
+  if (RISK_RANK[decision.riskAssessment.tier] < RISK_RANK[prior.riskTier]) {
+    throw new Error('Fresh evaluation cannot lower the expired Acceptance wait risk tier');
+  }
+  const nextHasReviewer = decision.route === 'reviewer_required'
+    || decision.route === 'reviewer_then_sponsor';
+  const nextHasSponsor = decision.route === 'sponsor_required'
+    || decision.route === 'reviewer_then_sponsor';
+  const priorNeedsReviewer = prior.route === 'reviewer_required'
+    || prior.route === 'reviewer_then_sponsor';
+  const priorNeedsSponsor = prior.route === 'sponsor_required'
+    || prior.route === 'reviewer_then_sponsor';
+  if ((priorNeedsReviewer && !nextHasReviewer) || (priorNeedsSponsor && !nextHasSponsor)) {
+    throw new Error('Fresh evaluation cannot weaken an expired Acceptance route');
+  }
+}
+
+const RISK_RANK: Readonly<Record<WorkroomRiskTier, number>> = Object.freeze({
+  low: 0,
+  medium: 1,
+  high: 2,
+  critical: 3,
+});
+
+function requireAcceptanceWait(
+  input: WorkroomAcceptanceDecisionInput,
+  decision: WorkroomAcceptanceDecision,
+): WorkroomAcceptanceWaitRequest {
+  const wait = decision.wait;
+  if (!wait) throw new Error('Gated acceptance requires an owner, deadline and allowed actions');
+  requireStrings([wait.owner]);
+  if (!Number.isFinite(wait.deadline) || wait.deadline <= input.now) {
+    throw new Error('Acceptance wait deadline must be in the future');
+  }
+  assertUniqueStrings(wait.allowedActions, 'acceptance wait actions', true);
+  const allowed = new Set<WorkroomAcceptanceWaitAction>([
+    'claim', 'submit_verdict', 'approve', 'reject', 'request_changes',
+    'reassign', 'reopen', 'rebase', 'replan', 'cancel',
+  ]);
+  if (wait.allowedActions.some(action => !allowed.has(action))) {
+    throw new Error('Acceptance wait contains an unsupported action');
+  }
+  const required = decision.route === 'sponsor_required'
+    ? ['approve', 'reject', 'request_changes', 'reopen', 'rebase', 'replan', 'cancel'] as const
+    : ['claim', 'submit_verdict', 'reassign', 'replan', 'cancel'] as const;
+  if (required.some(action => !wait.allowedActions.includes(action))) {
+    throw new Error('Acceptance wait is missing required recovery actions');
+  }
+  return wait;
+}
+
+function assertGatedRouteFloor(decision: WorkroomAcceptanceDecision): void {
+  const hasReviewer = decision.route === 'reviewer_required'
+    || decision.route === 'reviewer_then_sponsor';
+  const hasSponsor = decision.route === 'sponsor_required'
+    || decision.route === 'reviewer_then_sponsor';
+  const requiresReviewer = decision.riskAssessment.tier === 'medium'
+    || decision.contract.criteria.some(criterion => criterion.kind === 'judgment');
+  const requiresSponsor = decision.riskAssessment.tier === 'high'
+    || decision.riskAssessment.tier === 'critical';
+  if (requiresReviewer && !hasReviewer) {
+    throw new Error('Acceptance route cannot remove the baseline Reviewer requirement');
+  }
+  if (requiresSponsor && !hasSponsor) {
+    throw new Error('Acceptance route cannot remove the baseline Sponsor requirement');
+  }
 }
 
 function createAcceptanceRecord(
@@ -455,6 +627,12 @@ function freezeDecision(value: WorkroomAcceptanceDecision): WorkroomAcceptanceDe
     checkResults: freezeChecks(value.checkResults),
     acceptedClaimIds: Object.freeze([...value.acceptedClaimIds]),
     rejectedClaimIds: Object.freeze([...value.rejectedClaimIds]),
+    ...(value.wait ? {
+      wait: Object.freeze({
+        ...value.wait,
+        allowedActions: Object.freeze([...value.wait.allowedActions]),
+      }),
+    } : {}),
   });
 }
 
