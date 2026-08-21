@@ -16,6 +16,7 @@ import type {
   WorkroomAcceptancePolicyDecisionPort,
 } from '../../src/workroom/acceptance-policy.js';
 import type { WorkroomCommand } from '../../src/workroom/kernel-contracts.js';
+import type { WorkroomAcceptanceAuthorizationDecision } from '../../src/workroom/acceptance-control.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 
 function fixture(
@@ -260,6 +261,7 @@ describe('WorkroomKernel', () => {
 
   it('accepts a medium-risk Task only after an independently authorized Reviewer verdict', async () => {
     const journal = new MemoryWorkroomJournal();
+    let lastAuthorityDecision: Record<string, unknown> | undefined;
     const kernel = new WorkroomKernel({
       journal,
       now: () => 100,
@@ -281,7 +283,7 @@ describe('WorkroomKernel', () => {
           };
         },
       },
-      acceptanceAuthority: allowingAcceptanceAuthority(),
+      acceptanceAuthority: allowingAcceptanceAuthority((decision) => { lastAuthorityDecision = decision; }),
     });
     await kernel.createRun({ runId: 'run-1', projectId: 'project-1', title: 'Reviewed result' });
     await kernel.execute('project-1', 'run-1', {
@@ -306,6 +308,10 @@ describe('WorkroomKernel', () => {
       'project-1', 'run-1', reviewId, 'builder',
     )).rejects.toThrow('Producer cannot review its own Candidate');
     await kernel.claimReviewerAssignment('project-1', 'run-1', reviewId, 'reviewer-bob');
+    lastAuthorityDecision!.projectId = 'forged-after-return';
+    await expect(kernel.read('project-1', 'run-1')).resolves.toMatchObject({
+      reviewerAssignments: { [reviewId]: { status: 'claimed' } },
+    });
     const accepted = await kernel.submitReviewerVerdict(
       'project-1', 'run-1', reviewId, 'reviewer-bob', {
         candidateHash: 'sha256:candidate-1',
@@ -874,7 +880,9 @@ function pinnedAcceptancePolicy() {
   };
 }
 
-function allowingAcceptanceAuthority() {
+function allowingAcceptanceAuthority(
+  capture?: (decision: Record<string, unknown>) => void,
+) {
   return {
     authorize(input: {
       action: 'claim_review' | 'submit_review' | 'decide_sponsor';
@@ -894,12 +902,14 @@ function allowingAcceptanceAuthority() {
           reason: 'principal is not a Project Reviewer or Sponsor',
         });
       }
-      return Object.freeze({
+      const decision: Record<string, unknown> = {
         ...input,
         authorized: true as const,
         role: input.requiredRole,
         authorizedBy: 'project-membership:v1',
-      });
+      };
+      capture?.(decision);
+      return decision as unknown as WorkroomAcceptanceAuthorizationDecision;
     },
   };
 }

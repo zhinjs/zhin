@@ -112,7 +112,9 @@ export function decideReviewerClaim(
 ): readonly WorkroomEventDraft[] {
   const assignment = requireCurrentReviewer(state, input.assignmentId, ['open']);
   assertWaitBinding(state, assignment);
-  assertAuthorized(state, assignment.taskKey, assignment.id, input.principalId, 'reviewer', 'claim_review', input.authorization);
+  const authorization = requireAuthorized(
+    state, assignment.taskKey, assignment.id, input.principalId, 'reviewer', 'claim_review', input.authorization,
+  );
   if (assignment.producerPrincipalId === input.principalId) {
     throw new Error('Producer cannot review its own Candidate');
   }
@@ -120,8 +122,8 @@ export function decideReviewerClaim(
     taskKey: assignment.taskKey,
     assignmentId: assignment.id,
     reviewerPrincipalId: input.principalId,
-    authorizedBy: authorizedBy(input.authorization),
-    authorization: input.authorization,
+    authorizedBy: authorization.authorizedBy,
+    authorization,
   })]);
 }
 
@@ -132,7 +134,9 @@ export function decideReviewerVerdict(
 ): readonly WorkroomEventDraft[] {
   const assignment = requireCurrentReviewer(state, input.assignmentId, ['claimed']);
   assertWaitBinding(state, assignment);
-  assertAuthorized(state, assignment.taskKey, assignment.id, input.principalId, 'reviewer', 'submit_review', input.authorization);
+  const authorization = requireAuthorized(
+    state, assignment.taskKey, assignment.id, input.principalId, 'reviewer', 'submit_review', input.authorization,
+  );
   if (assignment.reviewerPrincipalId !== input.principalId) {
     throw new Error('Reviewer verdict principal does not match the Reviewer claim');
   }
@@ -144,8 +148,8 @@ export function decideReviewerVerdict(
     taskKey: assignment.taskKey,
     assignmentId: assignment.id,
     reviewerPrincipalId: input.principalId,
-    authorizedBy: authorizedBy(input.authorization),
-    authorization: input.authorization,
+    authorizedBy: authorization.authorizedBy,
+    authorization,
     outcome: requiresReviewerRework(verdict) ? 'rework' : 'passed',
     verdict,
   });
@@ -207,7 +211,9 @@ export function decideSponsorGate(
 ): readonly WorkroomEventDraft[] {
   const gate = requireCurrentSponsorGate(state, input.gateId);
   assertWaitBinding(state, gate);
-  assertAuthorized(state, gate.taskKey, gate.id, input.principalId, 'sponsor', 'decide_sponsor', input.authorization);
+  const authorization = requireAuthorized(
+    state, gate.taskKey, gate.id, input.principalId, 'sponsor', 'decide_sponsor', input.authorization,
+  );
   if (gate.candidateHash !== input.candidateHash) {
     throw new Error('Sponsor decision is stale for the current Candidate hash');
   }
@@ -220,8 +226,8 @@ export function decideSponsorGate(
     taskKey: gate.taskKey,
     gateId: gate.id,
     sponsorPrincipalId: input.principalId,
-    authorizedBy: authorizedBy(input.authorization),
-    authorization: input.authorization,
+    authorizedBy: authorization.authorizedBy,
+    authorization,
     decision: input.decision,
     reason,
     candidateHash: input.candidateHash,
@@ -265,7 +271,7 @@ export function decideSponsorGate(
   })]);
 }
 
-function assertAuthorized(
+function requireAuthorized(
   state: WorkroomRunState,
   taskKey: string,
   targetId: string,
@@ -273,7 +279,7 @@ function assertAuthorized(
   role: WorkroomAcceptanceControlRole,
   action: WorkroomAcceptanceControlAction,
   decision: WorkroomAcceptanceAuthorizationDecision,
-): void {
+): Extract<WorkroomAcceptanceAuthorizationDecision, { readonly authorized: true }> {
   const expected = {
     action, principalId, role, projectId: state.projectId, runId: state.runId,
     taskKey, targetId, expectedSequence: state.sequence,
@@ -282,12 +288,11 @@ function assertAuthorized(
     if (decision[key] !== expected[key]) throw new Error(`Acceptance authorization is stale for ${key}`);
   }
   if (!decision.authorized) throw new Error(`Acceptance authority denied: ${requireText(decision.reason, 'deny reason')}`);
-  requireText(decision.authorizedBy, 'authorizedBy');
-}
-
-function authorizedBy(decision: WorkroomAcceptanceAuthorizationDecision): string {
-  if (!decision.authorized) throw new Error(`Acceptance authority denied: ${decision.reason}`);
-  return requireText(decision.authorizedBy, 'authorizedBy');
+  return Object.freeze({
+    ...expected,
+    authorized: true,
+    authorizedBy: requireText(decision.authorizedBy, 'authorizedBy'),
+  });
 }
 
 function assertWaitBinding(
