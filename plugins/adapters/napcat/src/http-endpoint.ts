@@ -29,6 +29,7 @@ import {
   type NapCatHttpConfig,
 } from './protocol.js';
 import { receiveNapCatSideEvent } from './side-event-dispatch.js';
+import { createNapCatContentPort } from './onebot-get-msg.js';
 import { readRequestBody } from './webhook.js';
 import { NapCatWsEndpoint } from './ws-endpoint.js';
 import { verifyNapCatAccessToken } from './wss-auth.js';
@@ -48,6 +49,7 @@ export class NapCatHttpEndpoint implements EndpointInstance {
   readonly #options: NapCatHttpEndpointOptions;
   readonly #inboundDeduper = new InboundMessageDeduper();
   readonly management: EndpointManagement = createNapCatEndpointManagement(this);
+  readonly content = createNapCatContentPort((action, params) => this.callApi(action, params));
   readonly #callHttpAction: typeof callNapCatHttpAction;
   #routeReleases: HttpRouteRegistration[] = [];
   #open = false;

@@ -28,6 +28,7 @@ import {
   type NapCatWssConfig,
 } from './protocol.js';
 import { receiveNapCatSideEvent } from './side-event-dispatch.js';
+import { createNapCatContentPort } from './onebot-get-msg.js';
 import {
   callNapCatWsAction,
   handleNapCatWsMessage,
@@ -55,6 +56,7 @@ export class NapCatWssEndpoint implements EndpointInstance {
   readonly #options: NapCatWssEndpointOptions;
   readonly #inboundDeduper = new InboundMessageDeduper();
   readonly management: EndpointManagement = createNapCatEndpointManagement(this);
+  readonly content = createNapCatContentPort((action, params) => this.callApi(action, params));
   #ws?: NapCatWsSocket;
   #wsRelease?: () => void;
   #heartbeatTimer?: NodeJS.Timeout;

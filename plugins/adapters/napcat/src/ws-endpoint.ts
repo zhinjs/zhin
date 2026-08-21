@@ -45,6 +45,7 @@ import {
   type NapCatWsCreateOptions,
   type NapCatWsSocket,
 } from './ws-types.js';
+import { createNapCatContentPort } from './onebot-get-msg.js';
 
 export interface NapCatWsEndpointOptions {
   readonly id: CapabilityId;
@@ -63,6 +64,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
   readonly #options: NapCatWsEndpointOptions;
   readonly #inboundDeduper = new InboundMessageDeduper();
   readonly management: EndpointManagement = createNapCatEndpointManagement(this);
+  readonly content = createNapCatContentPort((action, params) => this.callApi(action, params));
   readonly #lifecycle: EndpointLifecycle;
   #ws?: NapCatWsSocket;
   #requestId = { value: 0 };
