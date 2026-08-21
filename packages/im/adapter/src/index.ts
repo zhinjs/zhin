@@ -7,5 +7,6 @@ export * from './endpoint-commands.js';
 export * from './endpoint-lifecycle.js';
 export * from './endpoint-management.js';
 export * from './endpoint-control.js';
+export * from './endpoint-content.js';
 export * from './provider.js';
 export { default } from './provider.js';

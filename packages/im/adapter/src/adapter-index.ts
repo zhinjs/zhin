@@ -22,6 +22,8 @@ import {
   type EndpointManagementCapability,
 } from './endpoint-management.js';
 import { assertDeclaredEndpointOperations } from './endpoint-control.js';
+import { endpointContentOf, type EndpointContentResolveContext } from './endpoint-content.js';
+import type { ConversationReference, ConversationResolution } from '@zhin.js/im-contract';
 
 export interface AdapterDescriptor {
   readonly id: CapabilityId;
@@ -265,6 +267,22 @@ export class AdapterIndex {
       throw new TypeError(`Adapter Endpoint send() must return a non-empty platform message id: ${id}`);
     }
     return messageId;
+  }
+
+  async resolveContent(
+    id: CapabilityId,
+    reference: ConversationReference,
+    context: EndpointContentResolveContext,
+  ): Promise<ConversationResolution> {
+    const record = this.#records.get(id);
+    if (!record) return Object.freeze({ status: 'not_found', code: 'endpoint_not_found' });
+    if (!record.started || record.stopped) {
+      return Object.freeze({ status: 'failed', code: 'endpoint_not_active' });
+    }
+    const content = endpointContentOf(record.endpoint);
+    if (!content) return Object.freeze({ status: 'unsupported', code: 'content_resolution_unsupported' });
+    context.signal.throwIfAborted();
+    return content.resolve(reference, context);
   }
 }
 

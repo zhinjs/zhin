@@ -23,8 +23,13 @@ import {
   type EndpointManagement,
   type EndpointManagementCapability,
   type AdapterEndpointPhase,
+  type EndpointContentResolveContext,
 } from '@zhin.js/adapter';
 import {
+  MemoryConversationEventStore,
+  type ConversationEventStore,
+  type ConversationReference,
+  type ConversationResolution,
   type ConversationRef,
   type DeliveryReceipt,
   type MessageRef,
@@ -112,6 +117,7 @@ export interface ImRuntimeOptions {
    */
   readonly commandPrefix?: string;
   readonly renderer?: OutboundRenderer;
+  readonly conversationEvents?: ConversationEventStore;
   /** Process-root ingress claim (pending interaction, authentication challenge, etc.). */
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
   /**
@@ -150,6 +156,7 @@ export class ImRuntime implements MessageGateway {
   #snapshots?: SnapshotReader;
   readonly #inboundClaim?: ImRuntimeOptions['inboundClaim'];
   readonly #enrichSender?: ImRuntimeOptions['enrichSender'];
+  readonly conversationEvents: ConversationEventStore;
 
   constructor(options: ImRuntimeOptions = {}) {
     this.#dispatcher = new MessageDispatcher(
@@ -158,8 +165,30 @@ export class ImRuntime implements MessageGateway {
         : () => options.commandPrefix ?? '',
     );
     this.#renderer = options.renderer ?? new OutboundRenderer();
+    this.conversationEvents = options.conversationEvents ?? new MemoryConversationEventStore();
     this.#inboundClaim = options.inboundClaim;
     this.#enrichSender = options.enrichSender;
+  }
+
+  async resolveConversationReference(
+    lease: SnapshotLease,
+    reference: ConversationReference,
+    context: EndpointContentResolveContext,
+  ): Promise<ConversationResolution> {
+    if (!this.#snapshots?.owns(lease) || !lease.active) {
+      return Object.freeze({ status: 'expired', code: 'generation_lease_expired' });
+    }
+    if (reference.kind === 'message') {
+      const local = await this.conversationEvents.getMessage(reference.message);
+      if (local) return Object.freeze({ status: 'resolved', reference, value: local });
+    }
+    context.signal.throwIfAborted();
+    const conversation = reference.kind === 'message' ? reference.message.conversation : reference.conversation;
+    return requireAdapters(lease.value).resolveContent(
+      conversation.endpoint.id as CapabilityId,
+      reference,
+      context,
+    );
   }
 
   attach(snapshots: SnapshotReader): void {
@@ -494,6 +523,26 @@ export class ImRuntime implements MessageGateway {
         input.mentioned,
         input.replyTo,
       );
+      if (input.message?.id) {
+        await this.conversationEvents.append(Object.freeze({
+          eventId: `message:${conversation.endpoint.id}:${input.message.id}`,
+          conversation,
+          timestamp: Date.now(),
+          type: 'message.created',
+          message: Object.freeze({
+            ref: input.message,
+            ...(enrichedSender ? { actor: Object.freeze({
+              id: enrichedSender.id,
+              ...(enrichedSender.name ? { displayName: enrichedSender.name } : {}),
+            }) } : {}),
+            segments: Object.freeze(input.segments?.length
+              ? [...input.segments]
+              : [{ type: 'text', data: { text: input.content } }]),
+            timestamp: Date.now(),
+            ...(input.replyTo ? { replyTo: Object.freeze({ conversation, id: input.replyTo.id }) } : {}),
+          }),
+        }));
+      }
       await this.#runHandlers(lease.value, 'message.receive', [message]);
       let result: MessageDispatchResult = Object.freeze({ matched: false });
       const claimed = await this.#inboundClaim?.(message) === true;

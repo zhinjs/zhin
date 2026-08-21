@@ -7,6 +7,7 @@ import type {
 } from '@zhin.js/im-contract';
 import type { EndpointManagement } from './endpoint-management.js';
 import type { EndpointControl } from './endpoint-control.js';
+import type { EndpointContentPort } from './endpoint-content.js';
 
 const adapterBrand = 'zhin.adapter/1' as const;
 
@@ -32,6 +33,8 @@ export interface EndpointInstance {
   readonly management?: EndpointManagement;
   /** Optional platform-neutral control surface for existing messages. */
   readonly control?: EndpointControl;
+  /** Optional canonical resolver for message, merged-forward and media references. */
+  readonly content?: EndpointContentPort;
   /** Required readiness; must observe abort and settle before rollback returns. */
   start?(signal: AbortSignal): void | Promise<void>;
   /** Opens Endpoint-local flow behind the candidate generation admission gate. */

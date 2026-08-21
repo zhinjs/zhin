@@ -49,6 +49,37 @@ import {
 import { resetKeyboardFallbackStoreForTests } from '../../src/built/interactive-segments/index.js';
 
 describe('IM Runtime', () => {
+  it('records canonical inbound messages and resolves references from the held generation', async () => {
+    const fixture = await createFixture([], []);
+    const conversation = {
+      endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+      kind: 'group' as const,
+      id: 'room-1',
+    };
+    await fixture.im.receive({
+      conversation,
+      message: { conversation, id: 'm-1' },
+      content: 'quoted body',
+      segments: [{ type: 'text', data: { text: 'quoted body' } }],
+      sender: { id: 'alice', name: 'Alice' },
+    });
+    const lease = fixture.store.acquire();
+    await expect(fixture.im.resolveConversationReference(
+      lease,
+      { kind: 'message', message: { conversation, id: 'm-1' } },
+      { signal: new AbortController().signal, maxDepth: 2, maxEntries: 50, maxChars: 12_000 },
+    )).resolves.toEqual(expect.objectContaining({
+      status: 'resolved',
+      value: expect.objectContaining({
+        actor: { id: 'alice', displayName: 'Alice' },
+        segments: [{ type: 'text', data: { text: 'quoted body' } }],
+      }),
+    }));
+    lease.release();
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
   it('fails every generation-bound MessageGateway operation closed outside admission', async () => {
     const gate = createGenerationAdmissionGate();
     const im = new ImRuntime();

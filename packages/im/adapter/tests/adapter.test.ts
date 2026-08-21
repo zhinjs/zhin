@@ -24,6 +24,7 @@ import adapterFeature, {
   isAdapterIndex,
   parseAdapterDefinition,
   endpointControlOf,
+  endpointContentOf,
   resolveEndpointManagement,
   type AdapterSegmentPolicy,
 } from '../src/index.js';
@@ -66,6 +67,48 @@ describe('Adapter Feature', () => {
 
     expect(control?.recall).toBe(explicitRecall);
     expect(endpointControlOf({ recallMessage: async () => undefined })).toBeUndefined();
+  });
+
+  it('resolves conversation references only through the explicit content port', async () => {
+    const root = rootPluginId();
+    const conversation = {
+      endpoint: { id: 'memory', adapter: 'memory' },
+      kind: 'group' as const,
+      id: 'room-1',
+    };
+    const reference = { kind: 'message' as const, message: { conversation, id: 'm-1' } };
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'memory',
+      source: '/adapters/memory.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound'],
+        create: () => ({
+          content: {
+            resolve: async (received) => ({
+              status: 'resolved' as const,
+              reference: received,
+              value: {
+                ref: reference.message,
+                segments: [{ type: 'text', data: { text: 'resolved' } }],
+                timestamp: 1,
+              },
+            }),
+          },
+        }),
+      }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    await index.activate(new AbortController().signal);
+    await expect(index.resolveContent(slot.id, reference, {
+      signal: new AbortController().signal,
+      maxDepth: 2,
+      maxEntries: 50,
+      maxChars: 12_000,
+    })).resolves.toEqual(expect.objectContaining({ status: 'resolved' }));
+    expect(endpointContentOf({ getMessage: async () => undefined })).toBeUndefined();
+    await index.stop();
   });
 
   it('requires declared operations to exist on an explicit control port', async () => {
