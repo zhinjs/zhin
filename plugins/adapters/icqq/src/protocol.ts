@@ -302,6 +302,7 @@ export interface IcqqInboundMessage {
   readonly sender: { readonly id: string; readonly name?: string };
   readonly channelType: 'private' | 'group' | 'channel';
   readonly metadata?: Record<string, unknown>;
+  readonly replyTo?: { readonly id: string };
 }
 
 export type ParsedIcqqSendTarget =

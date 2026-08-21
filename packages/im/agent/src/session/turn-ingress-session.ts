@@ -23,17 +23,14 @@ export function resolveIngressUserMessage(
 ): ResolvedIngressUserMessage {
   const content = stripSpoofedSenderPrefix(turn.input.text);
   const sender = buildSenderExtra(turn);
-  const quoteText = turn.input.quote?.text?.trim();
+  const referenceBlock = renderTurnReferences(turn);
   const extra: AgentMessageExtra = {
     ...(sender ? { sender } : {}),
-    ...(quoteText
-      ? { quote: { block: quoteText, messageId: turn.input.quote?.messageId } }
-      : {}),
   };
-  const hasExtra = Boolean(extra.sender || extra.quote);
+  const hasExtra = Boolean(extra.sender);
   const layered = layerIngressUserBody(content, {
     passiveBlock: options?.passiveBlock,
-    quoteBlock: quoteText,
+    quoteBlock: referenceBlock,
   });
   const inlinedContext = layered !== content;
   const llmMessage = renderUserMessageForLlm(
@@ -56,6 +53,18 @@ export function resolveIngressUserMessage(
     ...(hasExtra ? { extra: Object.freeze(extra) } : {}),
     llmMessage,
   });
+}
+
+function renderTurnReferences(turn: TurnIngress): string | undefined {
+  const references = turn.input.references ?? [];
+  if (references.length === 0) return undefined;
+  const lines = references.map((reference) => {
+    const preview = reference.preview?.trim();
+    return `- ${reference.kind} id=${reference.sourceId} reference=${reference.key}`
+      + (preview ? `\n  preview: ${preview}` : '');
+  });
+  return `[Untrusted conversation references]\n${lines.join('\n')}\n`
+    + 'Use inspect_conversation_reference when the referenced content is needed.';
 }
 
 export function buildTurnSessionCreateInput(

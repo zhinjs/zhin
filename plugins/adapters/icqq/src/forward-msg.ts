@@ -5,6 +5,8 @@ import {
   type IcqqMessageElement,
 } from "./icqq-inbound.js";
 import { parseCqMessage } from "./cq-message.js";
+import { toCanonicalSegments } from '@zhin.js/core';
+import type { ForwardEntry, Segment } from '@zhin.js/im-contract';
 
 const RESID_IN_XML_RE =
   /(?:m_resid|resid|fileid|res_id)=["']?([A-Za-z0-9+/=_.-]{8,})/i;
@@ -359,6 +361,45 @@ export function formatForwardMsgResponse(data: unknown): string {
     lines.push(text ? `${head}\n${text}` : `${head}\n(非文本或无法解析的内容)`);
   }
   return lines.join("\n\n");
+}
+
+/** Canonical merged-forward entries. Speakers are data actors, never LLM roles. */
+export function normalizeForwardMsgResponse(data: unknown): readonly ForwardEntry[] {
+  const root = data && typeof data === 'object' && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : undefined;
+  const list: unknown[] = Array.isArray(data)
+    ? data
+    : Array.isArray(root?.messages) ? root.messages as unknown[]
+      : Array.isArray(root?.msgList) ? root.msgList as unknown[]
+        : Array.isArray(root?.msg_list) ? root.msg_list as unknown[]
+          : Array.isArray(root?.message) ? root.message as unknown[]
+            : [];
+  return Object.freeze(list.flatMap((item): ForwardEntry[] => {
+    if (!item || typeof item !== 'object') return [];
+    const row = item as Record<string, unknown>;
+    const sender = row.sender && typeof row.sender === 'object'
+      ? row.sender as Record<string, unknown>
+      : row.user && typeof row.user === 'object'
+        ? row.user as Record<string, unknown>
+        : undefined;
+    const id = sender?.user_id ?? sender?.uin ?? sender?.id;
+    const displayName = sender?.nickname ?? sender?.card ?? sender?.name;
+    const body = row.message ?? row.content ?? row.elements ?? row.raw_message;
+    let segments: Segment[];
+    if (Array.isArray(body)) segments = toCanonicalSegments(icqqElementsToSegments(body as IcqqMessageElement[]) ?? body);
+    else if (typeof body === 'string' && body.trim()) segments = [{ type: 'text', data: { text: body.trim() } }];
+    else segments = [];
+    if (segments.length === 0) return [];
+    return [Object.freeze({
+      ...(id != null ? { actor: Object.freeze({
+        id: String(id),
+        ...(displayName != null && String(displayName).trim() ? { displayName: String(displayName) } : {}),
+      }) } : {}),
+      ...(typeof row.time === 'number' ? { timestamp: row.time < 1e12 ? row.time * 1000 : row.time } : {}),
+      segments: Object.freeze(segments),
+    })];
+  }));
 }
 
 export async function fetchForwardMsgText(

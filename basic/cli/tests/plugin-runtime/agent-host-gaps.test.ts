@@ -142,11 +142,12 @@ describe('canonical IM TurnRequest ingress', () => {
       content: 'look',
       target: 'group:100',
       sender: { id: 'user-1', name: 'Alice' },
-      metadata: { endpoint: '10001', quote_id: 'quoted-1', quote_text: 'quoted body' },
-      segments: [{
-        type: 'image',
-        data: { media: { kind: 'url', value: 'https://example.com/a.png', mime_type: 'image/png' } },
-      }],
+      metadata: { endpoint: '10001' },
+      replyTo: { id: 'quoted-1' },
+      segments: [
+        { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png', mime_type: 'image/png' } } },
+        { type: 'forward', data: { forward_id: 'forward-1' } },
+      ],
     });
     const signal = new AbortController().signal;
     const request = createRuntimeTurnRequest(message, 'look closer', {
@@ -159,6 +160,7 @@ describe('canonical IM TurnRequest ingress', () => {
       workspaceRoot: '/workspace',
       network: { enabled: true, httpsOnly: true, allowedDomains: ['example.com'] },
       ports: {},
+      resolveReference: async () => ({ status: 'unsupported', code: 'test' }),
     });
 
     expect(request).toMatchObject({
@@ -179,7 +181,10 @@ describe('canonical IM TurnRequest ingress', () => {
           source: { kind: 'url', value: 'https://example.com/a.png' },
           mimeType: 'image/png',
         }],
-        quote: { messageId: 'quoted-1', text: 'quoted body' },
+        references: [
+          { key: 'ref-1', kind: 'message', sourceId: 'quoted-1' },
+          { key: 'ref-2', kind: 'forward', sourceId: 'forward-1' },
+        ],
       },
       session: { key: 'icqq:10001:group:100' },
       policy: {
@@ -339,6 +344,7 @@ function makeMessage(input: {
   sender?: string | { id: string; name?: string; roles?: readonly string[] } | null;
   metadata?: Record<string, unknown>;
   segments?: ConstructorParameters<typeof Message>[6];
+  replyTo?: { readonly id: string };
 }): Message {
   const conversation = conversationFromTarget(input.target ?? 'group:100');
   const senderRef = input.sender === null
@@ -356,6 +362,8 @@ function makeMessage(input: {
     input.segments,
     { conversation, id: 'm1' },
     typeof input.metadata?.endpoint === 'string' ? input.metadata.endpoint : undefined,
+    undefined,
+    input.replyTo,
   );
 }
 

@@ -31,6 +31,7 @@
     "@zhin.js/core": "workspace:*",
     "@zhin.js/database": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/pagemanager": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",

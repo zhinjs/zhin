@@ -41,10 +41,29 @@ export interface TurnMedia {
   readonly name?: string;
 }
 
+export interface TurnReference {
+  readonly key: string;
+  readonly kind: 'message' | 'forward' | 'media';
+  readonly sourceId: string;
+  readonly preview?: string;
+}
+
+export type TurnReferenceResolution =
+  | Readonly<{ status: 'resolved'; content: unknown; truncated?: boolean }>
+  | Readonly<{ status: 'not_found' | 'unsupported' | 'forbidden' | 'expired' | 'failed'; code: string; message?: string }>;
+
+export interface ReferencePort {
+  resolve(
+    key: string,
+    options: Readonly<{ depth: number; maxEntries: number; maxChars: number }>,
+    signal: AbortSignal,
+  ): Promise<TurnReferenceResolution>;
+}
+
 export interface TurnInput {
   readonly text: string;
   readonly media?: readonly TurnMedia[];
-  readonly quote?: Readonly<{ messageId?: string; text?: string }>;
+  readonly references?: readonly TurnReference[];
   readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
@@ -123,6 +142,7 @@ export interface TurnPorts {
   readonly activity?: ActivityPort;
   readonly delivery?: DeliveryPort;
   readonly question?: ToolQuestionPort;
+  readonly references?: ReferencePort;
 }
 
 /** Ports supplied by an ingress adapter; Journal authority is injected by AgentRuntime. */
@@ -188,6 +208,9 @@ export function createTurnIngress(input: TurnIngressInput): TurnIngress {
   }
   if (!(input.signal instanceof AbortSignal)) {
     throw new TypeError('TurnIngress signal must be an AbortSignal');
+  }
+  if (input.input.references?.length && !input.ports.references) {
+    throw new TypeError('TurnIngress with references requires a ReferencePort');
   }
 
   const execution: TurnExecutionProfile = input.execution ?? Object.freeze({ kind: 'interactive' });

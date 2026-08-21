@@ -4,6 +4,7 @@ import {
   extractForwardResidFromGetMsg,
   extractForwardResidFromJsonElement,
   formatForwardMsgResponse,
+  normalizeForwardMsgResponse,
   isForwardPlaceholderPayload,
 } from "../src/forward-msg.js";
 
@@ -41,6 +42,22 @@ describe("forward-msg", () => {
     expect(text).toContain("第一条");
     expect(text).toContain("第二条纯文本");
     expect(text).toContain("1751271104");
+  });
+
+  it('normalizes merged-forward speakers as neutral actors without model roles', () => {
+    const entries = normalizeForwardMsgResponse({
+      messages: [{
+        sender: { nickname: 'Alice', user_id: 111 },
+        time: 1780306187,
+        message: [{ type: 'text', text: '第一条' }],
+      }],
+    });
+    expect(entries).toEqual([{
+      actor: { id: '111', displayName: 'Alice' },
+      timestamp: 1780306187000,
+      segments: [{ type: 'text', data: { text: '第一条' } }],
+    }]);
+    expect(entries[0]).not.toHaveProperty('role');
   });
 
   it("isForwardPlaceholderPayload detects chat record placeholder", () => {

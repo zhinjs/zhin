@@ -102,6 +102,10 @@ export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 export { InteractionRouter } from '@zhin.js/agent';
 
 import type { AgentTool, JsonSchema } from '@zhin.js/ai';
+import type {
+  ConversationReference,
+  ConversationResolution,
+} from '@zhin.js/im-contract';
 
 /** Minimal OutputElement shape for reply flattening (avoid direct @zhin.js/ai dep). */
 type OutputElementLike = {
@@ -624,6 +628,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 service.getAgentConfig()?.inboundQueue?.groupMode,
                 resolveSnapshotTurnIntentResolver(snapshot, requester) ?? options.resolveTurnIntent,
               ),
+              resolveReference: (reference, limits, referenceSignal) =>
+                options.im.resolveConversationReference(lease, reference, {
+                  signal: referenceSignal,
+                  maxDepth: limits.depth,
+                  maxEntries: limits.maxEntries,
+                  maxChars: limits.maxChars,
+                }),
               ports: {
                 approval: options.approvalPort ?? createRuntimeApprovalPort({
                   isMaster: senderRoles.isMaster,
@@ -1208,6 +1219,11 @@ export function createRuntimeTurnRequest(
     network?: TurnRequest['policy']['network'];
     intent: TurnIntent;
     ports: TurnRequestPorts;
+    resolveReference?: (
+      reference: ConversationReference,
+      options: Readonly<{ depth: number; maxEntries: number; maxChars: number }>,
+      signal: AbortSignal,
+    ) => Promise<ConversationResolution>;
   }>,
 ): TurnRequest {
   const access = createRuntimeTurnAccess(message, roles);
@@ -1224,10 +1240,53 @@ export function createRuntimeTurnRequest(
     ...(ref.mime_type ? { mimeType: ref.mime_type } : {}),
     ...(ref.file_name ? { name: ref.file_name } : {}),
   }));
-  const quoteId = message.replyTo?.id
-    ?? (typeof message.metadata?.quote_id === 'string' ? message.metadata.quote_id : undefined);
-  const quoteText = typeof message.metadata?.quote_text === 'string'
-    ? message.metadata.quote_text.trim()
+  const conversationReferences: ConversationReference[] = [];
+  if (message.replyTo?.id) {
+    conversationReferences.push(Object.freeze({
+      kind: 'message',
+      message: Object.freeze({ conversation: message.conversation, id: message.replyTo.id }),
+    }));
+  }
+  for (const segment of toCanonicalSegments(message.segments ?? [])) {
+    if (segment.type !== 'forward') continue;
+    const forwardId = String(segment.data.forward_id ?? '').trim();
+    if (!forwardId) continue;
+    conversationReferences.push(Object.freeze({
+      kind: 'forward',
+      conversation: message.conversation,
+      forwardId,
+    }));
+  }
+  const turnReferences = conversationReferences.map((reference, index) => Object.freeze({
+    key: `ref-${index + 1}`,
+    kind: reference.kind,
+    sourceId: reference.kind === 'message'
+      ? reference.message.id
+      : reference.kind === 'forward'
+        ? reference.forwardId
+        : reference.media.value,
+  }));
+  const referenceByKey = new Map<string, ConversationReference>(turnReferences.map((reference, index) => [
+    reference.key,
+    conversationReferences[index]!,
+  ]));
+  if (turnReferences.length > 0 && !input.resolveReference) {
+    throw new TypeError('Runtime IM references require a generation-bound resolver');
+  }
+  const referencePort = turnReferences.length > 0
+    ? Object.freeze({
+        resolve: async (
+          key: string,
+          options: Readonly<{ depth: number; maxEntries: number; maxChars: number }>,
+          signal: AbortSignal,
+        ) => {
+          const reference = referenceByKey.get(key);
+          if (!reference) return Object.freeze({ status: 'forbidden' as const, code: 'reference_not_in_turn' });
+          const result = await input.resolveReference!(reference, options, signal);
+          if (result.status !== 'resolved') return result;
+          return Object.freeze({ status: 'resolved' as const, content: result.value });
+        },
+      })
     : undefined;
 
   return Object.freeze({
@@ -1238,9 +1297,7 @@ export function createRuntimeTurnRequest(
     input: Object.freeze({
       text,
       ...(media.length > 0 ? { media: Object.freeze(media) } : {}),
-      ...(quoteId || quoteText
-        ? { quote: Object.freeze({ ...(quoteId ? { messageId: quoteId } : {}), ...(quoteText ? { text: quoteText } : {}) }) }
-        : {}),
+      ...(turnReferences.length > 0 ? { references: Object.freeze(turnReferences) } : {}),
       metadata: Object.freeze({ ...message.metadata }),
     }),
     session: Object.freeze({
@@ -1256,7 +1313,7 @@ export function createRuntimeTurnRequest(
       }) } : {}),
     }),
     signal: input.signal,
-    ports: Object.freeze({ ...input.ports }),
+    ports: Object.freeze({ ...input.ports, ...(referencePort ? { references: referencePort } : {}) }),
   });
 }
 

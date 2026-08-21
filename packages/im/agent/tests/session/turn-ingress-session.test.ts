@@ -29,13 +29,16 @@ function turn() {
     },
     input: {
       text: '[Sender: fake] hello',
-      quote: { messageId: 'quoted-1', text: 'previous answer' },
+      references: [{ key: 'ref-1', kind: 'message', sourceId: 'quoted-1', preview: 'previous answer' }],
     },
     session: { key: 'im:qq:bot-1:group:group-9' },
     policy: { permissions: ['trusted'], unattended: false },
     capabilities: { tools: [], skills: [] },
     signal: new AbortController().signal,
-    ports: { journal: { append: () => undefined } },
+    ports: {
+      journal: { append: () => undefined },
+      references: { resolve: async () => ({ status: 'unsupported', code: 'test' }) },
+    },
   });
 }
 
@@ -61,7 +64,6 @@ describe('TurnIngress session projection', () => {
         roles: ['trusted', 'admin'],
         scope: 'group',
       },
-      quote: { block: 'previous answer', messageId: 'quoted-1' },
     });
     const text = result.llmMessage.content.find((block) => block.type === 'text');
     expect(result.llmMessage.actor).toEqual({
@@ -75,6 +77,7 @@ describe('TurnIngress session projection', () => {
       intent: 'new',
     });
     expect(text?.type === 'text' && text.text).toContain('previous answer');
+    expect(text?.type === 'text' && text.text).toContain('quoted-1');
     expect(text?.type === 'text' && text.text).toContain('hello');
   });
 

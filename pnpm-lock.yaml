@@ -120,6 +120,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../packages/host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../logger

@@ -50,8 +50,34 @@ import { ZhinAgent } from '../../src/zhin-agent/index.js';
 import { asPrivate } from '../../src/internal/as-private.js';
 import { AgentCore } from '../../src/core/agent-core.js';
 import { DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps } from '../../src/core/compose-deps.js';
+import { createConversationReferenceCapability } from '../../src/tool/conversation-reference-tool.js';
 
 describe('Agent CapabilityIngress', () => {
+  it('exposes one scoped reference tool and rejects references outside the current turn', async () => {
+    const calls: string[] = [];
+    const request = {
+      ...externalRequest('reference'),
+      input: {
+        text: 'inspect it',
+        references: [{ key: 'ref-1', kind: 'message' as const, sourceId: 'm-1' }],
+      },
+      ports: {
+        references: {
+          resolve: async (key: string) => {
+            calls.push(key);
+            return { status: 'resolved' as const, content: { id: 'm-1', text: 'quoted' } };
+          },
+        },
+      },
+    };
+    const capability = createConversationReferenceCapability(rootPluginId(), request);
+    await expect(capability?.execute({ reference: 'ref-1', depth: 9 }, invocation()))
+      .resolves.toEqual({ status: 'resolved', content: { id: 'm-1', text: 'quoted' } });
+    await expect(capability?.execute({ reference: 'ref-other' }, invocation()))
+      .resolves.toEqual({ status: 'forbidden', code: 'reference_not_in_turn' });
+    expect(calls).toEqual(['ref-1']);
+  });
+
   it('admits supersede in arrival order and aborts the active operation before replacement starts', async () => {
     const coordinator = new AgentTurnCoordinator();
     const callerSignal = new AbortController().signal;

@@ -15,9 +15,11 @@ import type {
   EndpointPendingRequest,
   EndpointSendRequest,
 } from 'zhin.js/adapter';
+import type { EndpointContentPort } from '@zhin.js/adapter';
 import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import { receiveOneBotLikeSideEvent, SystemEvent, type LoginAssist } from '@zhin.js/core';
-import type { MessageRef } from '@zhin.js/im-contract';
+import type { ConversationMessage, MessageRef } from '@zhin.js/im-contract';
+import { toCanonicalSegments } from '@zhin.js/core';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { registerIcqqAgentEndpoint } from './icqq-agent-deps.js';
@@ -55,6 +57,7 @@ import {
   type ResolvedIcqqConfig,
 } from './protocol.js';
 import type { SystemMessage as IcqqSystemMessage } from './types.js';
+import { normalizeForwardMsgResponse } from './forward-msg.js';
 
 export interface IcqqEndpointOptions {
   readonly id: CapabilityId;
@@ -98,6 +101,38 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   #heldInbound: IcqqInboundMessage[] = [];
   #unregisterAgent?: () => void;
   readonly #inflightInbound = new Set<Promise<void>>();
+  readonly #messageContent = new Map<string, ConversationMessage>();
+
+  readonly content: EndpointContentPort = Object.freeze({
+    resolve: async (reference, context) => {
+      context.signal.throwIfAborted();
+      if (reference.kind === 'message') {
+        const cached = this.#messageContent.get(reference.message.id);
+        return cached
+          ? Object.freeze({ status: 'resolved' as const, reference, value: cached })
+          : Object.freeze({ status: 'not_found' as const, code: 'icqq_message_not_observed' });
+      }
+      if (reference.kind === 'forward') {
+        try {
+          const raw = await raceAbort(this.getForwardMsg(reference.forwardId), context.signal);
+          const entries = normalizeForwardMsgResponse(raw).slice(0, context.maxEntries);
+          if (entries.length === 0) return Object.freeze({ status: 'not_found' as const, code: 'icqq_forward_not_found' });
+          return Object.freeze({ status: 'resolved' as const, reference, value: Object.freeze(entries) });
+        } catch (error) {
+          if (context.signal.aborted) throw error;
+          return Object.freeze({
+            status: 'failed' as const,
+            code: 'icqq_forward_fetch_failed',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+      if (reference.media.kind === 'url' || reference.media.kind === 'base64' || reference.media.kind === 'path') {
+        return Object.freeze({ status: 'resolved' as const, reference, value: reference.media });
+      }
+      return Object.freeze({ status: 'unsupported' as const, code: 'icqq_media_reference_unsupported' });
+    },
+  });
 
   readonly management: EndpointManagement = Object.freeze<EndpointManagement>({
     listFriends: async () =>
@@ -356,8 +391,6 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       + (mentioned ? ' (mentioned)' : '')
       + ` | ${truncatePreview(msg.content, 80)}`,
     );
-    const quoteId = msg.metadata?.quote_id;
-    const { quote_id: _dropQuoteId, ...restMetadata } = msg.metadata ?? {};
     void this.#options.gateway.receive({
       conversation,
       message: { conversation, id: msg.id },
@@ -366,10 +399,10 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       sender: msg.sender,
       endpointId: this.endpointName,
       ...(mentioned ? { mentioned: true } : {}),
-      ...(quoteId ? { replyTo: { id: String(quoteId) } } : {}),
+      ...(msg.replyTo ? { replyTo: msg.replyTo } : {}),
       metadata: Object.freeze({
         channelType: msg.channelType,
-        ...restMetadata,
+        ...(msg.metadata ?? {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -551,13 +584,31 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       }));
       return;
     }
+    const conversation = icqqInboundConversation(String(this.#options.id), {
+      channelType: normalized.channelType,
+      channelId: normalized.channelId,
+      channelParentGroupId: normalized.channelParentGroupId,
+    });
+    const quoteId = resolveIcqqQuoteIdFromEvent(data);
+    const quoted = quotedPayloadFromIcqqSource(findIcqqNestedMessageSource(data));
+    if (quoteId && quoted) {
+      this.#messageContent.set(quoteId, Object.freeze({
+        ref: Object.freeze({ conversation, id: quoteId }),
+        ...(quoted.sender?.id ? { actor: Object.freeze({
+          id: quoted.sender.id,
+          ...(quoted.sender.name ? { displayName: quoted.sender.name } : {}),
+        }) } : {}),
+        segments: Object.freeze(toCanonicalSegments(
+          Array.isArray(quoted.content)
+            ? quoted.content
+            : [{ type: 'text', data: { text: quoted.content } }],
+        )),
+        timestamp: quoted.time ? quoted.time * (quoted.time < 1e12 ? 1000 : 1) : Date.now(),
+      }));
+    }
     this.admit({
       id: normalized.messageId,
-      conversation: icqqInboundConversation(String(this.#options.id), {
-        channelType: normalized.channelType,
-        channelId: normalized.channelId,
-        channelParentGroupId: normalized.channelParentGroupId,
-      }),
+      conversation,
       content: formatInboundContent(normalized.rawMessage),
       segments: normalized.content,
       sender: {
@@ -566,10 +617,11 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
         ...(normalized.senderRole ? { roles: [normalized.senderRole] } : {}),
       },
       channelType: normalized.channelType,
-      metadata: buildIcqqQuoteMetadata(data, {
+      ...(quoteId ? { replyTo: { id: quoteId } } : {}),
+      metadata: {
         nickname: normalized.nickname,
         senderRole: normalized.senderRole,
-      }),
+      },
     }, admittedBeforeRetire);
   }
 
@@ -837,32 +889,6 @@ function resolveNativeClientConfig(config: ResolvedIcqqConfig): NativeIcqqClient
     ...(config.ntLogin != null ? { NTLogin: config.ntLogin } : {}),
     reconn_interval: config.autoReconnect ? 5 : 0,
   };
-}
-
-function buildIcqqQuoteMetadata(
-  data: IcqqMessageEvent,
-  base: Record<string, unknown>,
-): Record<string, unknown> {
-  const metadata: Record<string, unknown> = { ...base };
-  const quoteId = resolveIcqqQuoteIdFromEvent(data);
-  if (quoteId) metadata.quote_id = quoteId;
-  const quoted = quotedPayloadFromIcqqSource(findIcqqNestedMessageSource(data));
-  if (quoted?.sender?.id) metadata.quote_sender_id = quoted.sender.id;
-  if (quoted?.sender?.name) metadata.quote_sender_name = quoted.sender.name;
-  const quoteText = quoted
-    ? (typeof quoted.content === 'string'
-        ? quoted.content
-        : quoted.content
-            .map((seg) =>
-              seg && typeof seg === 'object' && seg.type === 'text'
-                ? String((seg.data as { text?: unknown } | undefined)?.text ?? '')
-                : '',
-            )
-            .join('')
-      ).trim() || quoted.raw || ''
-    : '';
-  if (quoteText) metadata.quote_content = quoteText;
-  return metadata;
 }
 
 function serializeIcqqEvent(event: unknown): Record<string, unknown> | null {

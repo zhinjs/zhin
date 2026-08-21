@@ -200,7 +200,7 @@ describe('icqq plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('passes quote metadata to gateway when event carries a source', async () => {
+  it('passes a canonical reply reference and resolves its observed content through EndpointContentPort', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const endpoint = createEndpoint({ receive });
     await endpoint.start(new AbortController().signal);
@@ -228,16 +228,27 @@ describe('icqq plugin runtime adapter', () => {
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       message: expect.objectContaining({ id: 'm-quote' }),
       replyTo: { id: 'quoted-1' },
-      metadata: expect.objectContaining({
-        quote_sender_id: '3',
-        quote_sender_name: 'alice',
-        quote_content: '原文内容',
-      }),
     }));
+    const conversation = receive.mock.calls[0]?.[0]?.conversation;
+    await expect(endpoint.content.resolve({
+      kind: 'message',
+      message: { conversation, id: 'quoted-1' },
+    }, {
+      signal: new AbortController().signal,
+      maxDepth: 2,
+      maxEntries: 50,
+      maxChars: 12_000,
+    })).resolves.toMatchObject({
+      status: 'resolved',
+      value: {
+        actor: { id: '3', displayName: 'alice' },
+        segments: [{ type: 'text', data: { text: '原文内容' } }],
+      },
+    });
     await endpoint.stop();
   });
 
-  it('omits quote metadata when event has no quote source', async () => {
+  it('omits reply references when event has no quote source', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const endpoint = createEndpoint({ receive });
     await endpoint.start(new AbortController().signal);
@@ -257,9 +268,6 @@ describe('icqq plugin runtime adapter', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     const input = receive.mock.calls[0]?.[0];
     expect(input?.replyTo).toBeUndefined();
-    const metadata = input?.metadata as Record<string, unknown>;
-    expect(metadata?.quote_sender_id).toBeUndefined();
-    expect(metadata?.quote_content).toBeUndefined();
     await endpoint.stop();
   });
 

@@ -17,6 +17,7 @@ import type { ToolDescriptor } from '@zhin.js/tool';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import { runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 import { TurnSupersededError } from '../turn/prompt-controller.js';
+import { createConversationReferenceCapability } from '../tool/conversation-reference-tool.js';
 
 abstract class SnapshotAttachedRuntime {
   protected snapshots?: SnapshotReader;
@@ -260,7 +261,8 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     const snapshots = this.requireSnapshots();
     if (!snapshots.owns(lease)) throw new Error('AgentRuntime rejected a lease owned by another Root');
     if (!lease.active) throw new Error('AgentRuntime requires an active generation lease');
-    const intent = request.intent ?? { kind: 'supersede' as const };
+    if (!request.intent) throw new TypeError('AgentRuntime requires an explicit Turn intent');
+    const intent = request.intent;
     return this.options.coordinator.runIntent(
       request.session.key,
       request.signal,
@@ -289,10 +291,12 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     try {
       if (!active) throw new Error('Agent generation operation is not active');
       const discovered = await this.#ingress.read(lease.value, owner, () => active && lease.active, request);
+      const referenceCapability = createConversationReferenceCapability(owner, request);
       const capabilities = Object.freeze({
         ...discovered,
         tools: Object.freeze([
           ...discovered.tools,
+          ...(referenceCapability ? [referenceCapability] : []),
           ...await expandMcpTools(discovered, selection.mcpServers),
         ]),
       });
