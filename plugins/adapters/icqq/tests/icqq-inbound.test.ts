@@ -304,7 +304,7 @@ describe("icqqElementsToSegments", () => {
       file: "protobuf://opaque",
       url: "https://cdn.example/voice.silk",
     }])).toEqual([{
-      type: "record",
+      type: "audio",
       data: { media: { kind: "url", value: "https://cdn.example/voice.silk" } },
     }]);
   });

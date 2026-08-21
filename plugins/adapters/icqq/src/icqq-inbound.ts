@@ -459,7 +459,7 @@ export function icqqElementsToSegments(
         const value = String(el.url ?? el.file ?? "");
         if (!value) break;
         out.push({
-          type: "record",
+          type: "audio",
           data: {
             media: icqqMediaRefFromElement(value, el),
             ...(typeof el.seconds === "number" ? { duration: el.seconds } : {}),

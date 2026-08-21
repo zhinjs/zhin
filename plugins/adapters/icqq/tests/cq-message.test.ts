@@ -28,7 +28,7 @@ describe("parseCqMessage media", () => {
   it("[record:base64://...] 解析为 base64 MediaRef", () => {
     const segs = parseCqMessage("[record:base64://QUJD]");
     expect(segs[0]).toEqual({
-      type: "record",
+      type: "audio",
       data: { media: { kind: "base64", value: "QUJD" } },
     });
   });

@@ -59,7 +59,7 @@ function pushCqSegment(segments: MessageSegment[], type: string, arg: string): v
       break;
     case "record":
     case "audio":
-      segments.push({ type: "record", data: { media: icqqMediaRefFromString(arg) } });
+      segments.push({ type: "audio", data: { media: icqqMediaRefFromString(arg) } });
       break;
     case "video":
       segments.push({ type: "video", data: { media: icqqMediaRefFromString(arg) } });

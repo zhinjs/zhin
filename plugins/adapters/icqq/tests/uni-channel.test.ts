@@ -73,7 +73,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
     };
     expect(inbound.content).toBe('hi[at:3][face:14]');
     expect(inbound.segments).toBeDefined();
-    const [text, mention, face, image, record] = inbound.segments;
+    const [text, mention, face, image, audio] = inbound.segments;
     expect(text).toEqual({ type: 'text', data: { text: 'hi' } });
     expect(mention).toEqual({ type: 'mention', data: { target: '3' } });
     expect(face).toMatchObject({ type: 'face', data: { id: 14 } });
@@ -81,8 +81,8 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
       type: 'image',
       data: { media: { kind: 'url', value: 'https://x/a.jpg' } },
     });
-    expect(record).toMatchObject({
-      type: 'record',
+    expect(audio).toMatchObject({
+      type: 'audio',
       data: { media: { kind: 'url', value: 'https://x/a.amr' } },
     });
     await endpoint.stop();
@@ -118,7 +118,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
       segments: Array<{ type: string; data: Record<string, unknown> }>;
     };
     expect(inbound.segments).toMatchObject([
-      { type: 'record', data: { media: { kind: 'url', value: 'https://cdn.example/voice.silk' } } },
+      { type: 'audio', data: { media: { kind: 'url', value: 'https://cdn.example/voice.silk' } } },
       { type: 'video', data: { media: { kind: 'url', value: 'https://cdn.example/video.mp4' } } },
     ]);
     await endpoint.stop();
@@ -159,7 +159,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive.mock.calls[0]?.[0]).toMatchObject({
       segments: [{
-        type: 'record',
+        type: 'audio',
         data: { media: { kind: 'url', value: 'https://cdn.example/voice.silk' } },
       }],
     });
