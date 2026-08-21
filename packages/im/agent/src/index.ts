@@ -363,52 +363,17 @@ export { asPrivate } from './internal/as-private.js';
 export type { ApprovalPort, ApprovalRequestInput } from './session/approval-port.js';
 export { beginIngressTurnSession } from './session/turn-ingress-session.js';
 
-export {
-  createOrchestrationService,
-  upgradeOrchestrationRepository,
-  OrchestrationKernel,
-  OrchestrationService,
-} from './orchestrator/orchestration-service.js';
-export {
-  MemoryOrchestrationRepository,
-  DatabaseOrchestrationRepository,
-} from './orchestrator/orchestration-repository.js';
-export { registerDefaultExecutors } from './orchestrator/bootstrap-executors.js';
-export type { RegisterExecutorsDeps } from './orchestrator/bootstrap-executors.js';
-export type {
-  OrchestrationStartInput,
-  OrchestrationAddTaskInput,
-  DispatchTaskInput,
-  HandleUserMessageInput,
-} from './orchestrator/orchestration-service.js';
-export type {
-  RunStatus,
-  TaskStatus,
-  ExecutorKind,
-  OrchestrationRun,
-  OrchestrationTask,
-  RunEvent,
-  RunSnapshot,
-  AgentExecutionEvent,
-  AgentExecutorInput,
-  AgentExecutor,
-  WorkflowStrategyInput,
-  WorkflowTaskSpec,
-  WorkflowStrategy,
-} from './orchestrator/orchestration-types.js';
-
-export {
-} from './orchestrator/agent-dispatcher.js';
 export type {
   AgentRole,
-  AgentTask,
-  AgentResult as DispatcherAgentResult,
-} from './orchestrator/agent-dispatcher.js';
+  AgentRoleConfig,
+} from './orchestrator/role-configs.js';
+export { AGENT_ROLE_CONFIGS } from './orchestrator/role-configs.js';
 
-export {
-  createRemoteAgentRegistry,
-} from './orchestrator/remote-agent-registry.js';
-export type { RemoteAgentRegistry } from './orchestrator/remote-agent-registry.js';
+export * from './workroom/kernel-contracts.js';
+export * from './workroom/journal.js';
+export * from './workroom/journal-model.js';
+export * from './workroom/workroom-kernel.js';
+export * from './workroom/runtime.js';
 
 export {
   introspectionRestBindings,
@@ -646,8 +611,6 @@ export type {
 } from './orchestrator/index.js';
 
 export {
-  FIVE_AGENT_WORKFLOW_STRATEGY_NAME,
-  createFiveAgentWorkflowStrategy,
   FIVE_AGENT_ROLES,
   isFiveAgentRole,
   asFiveAgentRole,

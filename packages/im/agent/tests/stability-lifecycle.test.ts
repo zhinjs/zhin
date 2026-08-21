@@ -9,7 +9,6 @@ import {
   getCompactionStateCount,
   clearCompactionStates,
 } from '../src/memory/compaction-runtime.js';
-import { MemoryOrchestrationRepository } from '../src/orchestrator/orchestration-repository.js';
 
 import { collectStabilityMetrics, startStabilityMonitor } from '../src/stability/memory-pressure.js';
 import { Adapter } from '@zhin.js/core';
@@ -38,23 +37,6 @@ describe('stability lifecycle (ADR 0014 P2-2)', () => {
       agent.dispose();
 
       expect(getCompactionStateCount()).toBe(0);
-    });
-
-    it('MemoryOrchestrationRepository.dispose 清空 runs/tasks', async () => {
-      const repo = new MemoryOrchestrationRepository();
-      const run = await repo.createRun({ session_key: 'k1' });
-      await repo.createTask({
-        run_id: run.id,
-        name: 't1',
-        description: 'task',
-      });
-      expect(repo.runCount()).toBeGreaterThan(0);
-      expect(repo.taskCount()).toBeGreaterThan(0);
-
-      repo.dispose();
-
-      expect(repo.runCount()).toBe(0);
-      expect(repo.taskCount()).toBe(0);
     });
 
     it('MemoryAgentSessionStore.dispose 清空 sessions', async () => {

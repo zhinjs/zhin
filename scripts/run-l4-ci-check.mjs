@@ -50,7 +50,7 @@ execSync(`pnpm vitest run ${l4CiTestFiles.map((f) => JSON.stringify(f)).join(' '
   env: { ...process.env, L4_SKIP_PLATFORM: process.env.L4_SKIP_PLATFORM },
 });
 
-execSync('pnpm check:orchestration-ssot', {
+execSync('pnpm check:workroom-ssot', {
   cwd: repoRoot,
   stdio: 'inherit',
   env: { ...process.env, L4_SKIP_PLATFORM: process.env.L4_SKIP_PLATFORM },

@@ -1120,9 +1120,6 @@ importers:
 
   packages/im/agent:
     dependencies:
-      '@a2a-js/sdk':
-        specifier: 1.0.0-beta.0
-        version: 1.0.0-beta.0(express@5.2.1)
       '@zhin.js/agent-feature':
         specifier: workspace:*
         version: link:../agent-feature

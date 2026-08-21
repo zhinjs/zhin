@@ -20,6 +20,8 @@ import {
   runtimeApprovalPolicy,
   withTriggerTimeout,
   deliveryOutcomeFromReceipt,
+  assertFixedWorkroomStorageMode,
+  resolveWorkroomStorageMode,
 } from '../../src/plugin-runtime/agent-host-installer.js';
 import { createEndpointRoleResolver } from '../../src/plugin-runtime/start-command.js';
 
@@ -38,6 +40,21 @@ describe('Plugin Runtime Tool policy bridge', () => {
     };
     await expect(createDeterministicApprovalPort().requestApproval(input)).resolves.toBe(false);
     await expect(createDeterministicApprovalPort('approve').requestApproval(input)).resolves.toBe(true);
+  });
+});
+
+describe('process-fixed Workroom storage identity', () => {
+  it('derives one backend from the initial process configuration', () => {
+    expect(resolveWorkroomStorageMode(undefined)).toBe('database');
+    expect(resolveWorkroomStorageMode({ sessions: { useDatabase: false } } as never)).toBe('file');
+  });
+
+  it('rejects a generation that tries to switch the Workroom authority', () => {
+    expect(() => assertFixedWorkroomStorageMode('database', 'file'))
+      .toThrow('process restart required');
+    expect(() => assertFixedWorkroomStorageMode('file', 'database'))
+      .toThrow('process restart required');
+    expect(() => assertFixedWorkroomStorageMode('database', 'database')).not.toThrow();
   });
 });
 

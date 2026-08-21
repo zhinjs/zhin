@@ -352,6 +352,8 @@ async function loadConfiguredAgentHost(
   const document = isConfigDocumentPort(config) ? (await config.read()).document : config;
   if (!hasAgentConfiguration(document)) return undefined;
   const module = await import('./agent-host-installer.js');
+  const initialAi = await module.resolveAiConfig(document);
+  const workroomStorageMode = module.resolveWorkroomStorageMode(initialAi);
   const runtime = new module.AgentRuntime({ coordinator: new module.AgentTurnCoordinator() });
   const interactions = new module.InteractionRouter();
   const configured: ConfiguredAgentHost = {
@@ -362,6 +364,7 @@ async function loadConfiguredAgentHost(
       ...options,
       runtime,
       interactions,
+      workroomStorageMode,
       extraTools: options.extraTools as Parameters<typeof module.installAgentHost>[0]['extraTools'],
     }),
   };

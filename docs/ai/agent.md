@@ -117,29 +117,11 @@ ai:
 
 行为上有几条约束：同一回合可发起多个 `spawn_task`，独立子任务建议并行；`tiered` 模式下只读工具与 spawn 并行、写/bash 顺序执行。子代理默认使用受限工具集（`read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` + deferred meta），不自动继承主会话全部工具，要用 `ai.agent.subagentTools` 显式追加。主 Agent 可见的子代理类型受 `ai.agents.<name>.permission.task`（glob → allow/deny）约束。异步完成后结果**先交还主 Agent**（写入主会话并 auto-continue），用户可见回复由主 Agent 整理发出。另外，子代理预设可用 `agents/<name>.agent.md`（YAML frontmatter + 说明）文件化声明，启动时自动发现注册。
 
-## 编排（Orchestration）
+## Workroom Kernel
 
-`OrchestrationService`（Kernel）维护 **Run / Task** 状态机：一个用户请求可拆成有依赖关系（`dependsOn`）的多任务，按 executor（local / remote）分派执行。内置编排工具：
+`WorkroomKernel` 只接受显式 Project-scoped command，并以 versioned append-only Journal 作为 Run / Task / Assignment 的唯一事实源。普通聊天与 `spawn_task` 不会隐式创建 Workroom，也不会发布允许模型伪造 execution/acceptance 的通用 transition 工具。command adapter 必须持有认证后的 Project capability，并分别接入 Scheduler、Executor 与 Acceptance port。
 
-| 工具 | 作用 |
-|------|------|
-| `orchestration_start` | 开启一个编排 Run |
-| `orchestration_add_task` | 向 Run 添加任务（role / goal / dependsOn / priority） |
-| `orchestration_status` | 查询 Run / Task 状态 |
-| `orchestration_complete` | 结束 Run |
-| `orchestration_retry_task` / `orchestration_skip_task` | 失败任务重试 / 跳过 |
-
-Run 状态：`open` → `running` / `waiting` → 完成。配置 `ai.remoteAgents`（`id` + `cardUrl` + `token`）后可将任务派给远程 A2A agent 执行：
-
-```yaml
-ai:
-  remoteAgents:
-    - id: local
-      cardUrl: http://127.0.0.1:8069/a2a/zhin/.well-known/agent-card.json
-      token: ${HTTP_TOKEN}
-```
-
-编排运行可在 Console 的 Orchestration 页查看（`GET /api/agent/orchestration/runs`），见 [Console](../console/index.md)。
+Workroom 的 Journal 后端在进程启动时固定：`ai.sessions.useDatabase !== false` 使用 `workroom_events`，Database Root Host 未就绪会使候选 generation 发布失败；显式设为 `false` 时使用 `.zhin/workroom-journal` 的原子文件事件流。热重载不能切换后端，修改该选择必须重启进程，避免旧代 lease 与新代写入两个无 CAS 关系的事实源。Console 只暴露 Project-scoped 只读投影（`GET /api/agent/workroom/runs?projectId=...`）。远程 A2A Executor 将按相同 Assignment lease/event 契约另行接入，不保留旧 `ai.remoteAgents` poller。
 
 ## 会话持久化与会话树
 
@@ -204,7 +186,7 @@ ai:
 | 文件 | `read_file`、`write_file`、`edit_file`、`list_dir`、`glob`、`grep` |
 | 网络 | `web_search`、`web_fetch` |
 | 交互 | `ask_user` |
-| 任务 | `spawn_task`、`todo_read`、`todo_write`、`orchestration_*` |
+| 任务 | `spawn_task`、`todo_read`、`todo_write` |
 | 记忆/检索 | `memory_search`、`memory_upsert`、`knowledge_search`、`inspect_conversation_reference` |
 | 媒体 | `generate_image`、`analyze_media` |
 | 元 | `discover`、`load_tool`、`load_skill`、`install_skill` |

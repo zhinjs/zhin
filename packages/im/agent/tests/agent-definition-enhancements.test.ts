@@ -18,7 +18,6 @@ const baseParams = {
   task: 'test task',
   role: 'subtask' as const,
   config: DEFAULT_CONFIG as Required<typeof DEFAULT_CONFIG>,
-  agentDispatcher: null,
 };
 
 describe('disallowedTools filtering', () => {

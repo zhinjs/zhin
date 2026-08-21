@@ -34,8 +34,8 @@
     "export type{AssistantRuntimeHandle}from '../assistant/runtime-contract.js';",
     "export{FileJournalStore}from '../journal/file-journal-store.js';",
     "export{capabilityToTool,toolInvocationFromTurn,toolsFromCapabilities,type GenerationStampedTool,}from './capability-tools.js';",
-    "export{createOrchestrationRuntimeFromService,type OrchestrationRuntimeHandle,}from '../orchestration-runtime.js';",
-    "export{createSessionTreeRuntimeFromAgent,type SessionTreeRuntimeHandle,}from '../session-tree-runtime.js';"
+    "export{createSessionTreeRuntimeFromAgent,type SessionTreeRuntimeHandle,}from '../session-tree-runtime.js';",
+    "export{createWorkroomRuntime,type WorkroomRuntimeHandle,}from '../workroom/runtime.js';"
   ],
   "cli/runtime": [
     "export * from './migrate/index.js';",

@@ -308,13 +308,6 @@ export type {
   SenderScope,
 } from './memory/agent-db-models.js';
 export {
-  ORCHESTRATION_RUN_MODEL,
-  ORCHESTRATION_TASK_MODEL,
-  ORCHESTRATION_EVENT_MODEL,
-  parseDependsOn,
-  serializeDependsOn,
-} from './memory/orchestration-db-models.js';
-export {
   MEMORY_ENTRY_MODEL,
   parseMemoryTags,
   serializeMemoryTags,
@@ -330,23 +323,6 @@ export {
   DatabaseMemoryEntryRepository,
 } from './memory/memory-entry-repository.js';
 export type { MemoryEntryRepository } from './memory/memory-entry-repository.js';
-export type {
-  OrchestrationAgentRole,
-  OrchestrationTaskPhase,
-  OrchestrationRunStatus,
-  OrchestrationTaskStatus,
-  OrchestrationExecutorKind,
-  OrchestrationRunSource,
-  OrchestrationSceneKind,
-  OrchestrationSceneRef,
-  OrchestrationRunEventType,
-  OrchestrationRunRecord,
-  OrchestrationTaskRecord,
-  OrchestrationEventRecord,
-  CreateOrchestrationRunInput,
-  CreateOrchestrationTaskInput,
-  CreateOrchestrationEventInput,
-} from './memory/orchestration-db-models.js';
 export {
   buildSenderPrefix,
   parseAgentMessageExtra,

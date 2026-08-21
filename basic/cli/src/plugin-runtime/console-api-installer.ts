@@ -226,7 +226,7 @@ export function resolveGenerationAgentIntrospection(
 
 type AgentConsolePort = {
   readonly sessionTree: ConsoleAgentRuntime['sessionTree'];
-  readonly orchestration: OrchestrationRuntime;
+  readonly workroom: WorkroomRuntime;
   readonly assistant: AssistantRuntime | null;
 };
 
@@ -810,30 +810,30 @@ export function registerConsoleApiRoutes(
     tags: ['assistant'],
   });
 
-  // Orchestration REST — resolved from the request's generation-bound AgentHostPort.
-  http.route('GET', `${base}/agent/orchestration/runs`, async (_request, response, url) => {
-    const sessionKey = url.searchParams.get('sessionKey') ?? '';
-    if (!sessionKey) {
-      writeJson(response, 400, { success: false, error: '请提供 sessionKey 查询参数' });
+  // Workroom REST — read-only replay projection from the request generation.
+  http.route('GET', `${base}/agent/workroom/runs`, async (_request, response, url) => {
+    const projectId = url.searchParams.get('projectId') ?? '';
+    if (!projectId) {
+      writeJson(response, 400, { success: false, error: '请提供 projectId 查询参数' });
       return;
     }
-    const handled = await withGenerationAgentConsole(snapshots, async ({ orchestration }) => {
-      const runs = await orchestration.listRuns(sessionKey);
-      writeJson(response, 200, { success: true, data: { sessionKey, runs } });
+    const handled = await withGenerationAgentConsole(snapshots, async ({ workroom }) => {
+      const runs = await workroom.listRuns(projectId);
+      writeJson(response, 200, { success: true, data: { projectId, runs } });
     });
     if (!handled) {
       writeJson(response, 503, {
         success: false,
-        error: 'Orchestration runtime 未就绪（未安装或未初始化 @zhin.js/agent）',
+        error: 'Workroom runtime 未就绪（未安装或未初始化 @zhin.js/agent）',
       });
     }
   }, {
-    summary: 'List orchestration runs',
-    tags: ['agent', 'orchestration'],
+    summary: 'List Workroom runs',
+    tags: ['agent', 'workroom'],
   });
 
-  http.route('GET', `${base}/agent/orchestration/runs/*`, async (_request, response, url) => {
-    const prefix = `${base}/agent/orchestration/runs/`;
+  http.route('GET', `${base}/agent/workroom/runs/*`, async (_request, response, url) => {
+    const prefix = `${base}/agent/workroom/runs/`;
     const runId = url.pathname.startsWith(prefix)
       ? url.pathname.slice(prefix.length).replace(/\/+$/u, '')
       : '';
@@ -841,8 +841,13 @@ export function registerConsoleApiRoutes(
       writeJson(response, 404, { success: false, error: 'Run not found' });
       return;
     }
-    const handled = await withGenerationAgentConsole(snapshots, async ({ orchestration }) => {
-      const runSnapshot = await orchestration.getRun(runId);
+    const handled = await withGenerationAgentConsole(snapshots, async ({ workroom }) => {
+      const projectId = url.searchParams.get('projectId') ?? '';
+      if (!projectId) {
+        writeJson(response, 400, { success: false, error: '请提供 projectId 查询参数' });
+        return;
+      }
+      const runSnapshot = await workroom.getRun(projectId, runId);
       if (!runSnapshot) {
         writeJson(response, 404, { success: false, error: `Run ${runId} 不存在` });
         return;
@@ -852,12 +857,12 @@ export function registerConsoleApiRoutes(
     if (!handled) {
       writeJson(response, 503, {
         success: false,
-        error: 'Orchestration runtime 未就绪（未安装或未初始化 @zhin.js/agent）',
+        error: 'Workroom runtime 未就绪（未安装或未初始化 @zhin.js/agent）',
       });
     }
   }, {
-    summary: 'Get orchestration run',
-    tags: ['agent', 'orchestration'],
+    summary: 'Get Workroom run',
+    tags: ['agent', 'workroom'],
   });
 }
 
@@ -1708,9 +1713,9 @@ function normalizeBase(value: string): string {
   return value.replace(/\/+$/u, '') || '/api';
 }
 
-type OrchestrationRuntime = {
-  listRuns(sessionKey?: string): Promise<unknown[]>;
-  getRun(runId: string): Promise<unknown | null>;
+type WorkroomRuntime = {
+  listRuns(projectId: string): Promise<readonly unknown[]>;
+  getRun(projectId: string, runId: string): Promise<unknown | null>;
 };
 
 type AssistantRuntime = {

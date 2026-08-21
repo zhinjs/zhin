@@ -9,54 +9,50 @@
 pnpm check:l4
 ```
 
-覆盖：编排 E2E、语义记忆、MCP 鉴权、full-bot 配置契约、NapCat/KOOK L4 契约（实机项 `L4_SKIP_PLATFORM=1` 时 skip）；`pnpm check:orchestration-ssot` 纳入 Executor 契约与 IM 终态测试。
+覆盖：Workroom Kernel、语义记忆、MCP 鉴权、full-bot 配置契约、NapCat/KOOK L4 契约（实机项 `L4_SKIP_PLATFORM=1` 时 skip）；`pnpm check:workroom-ssot` 验证 Journal/CAS 唯一权威。
 
-## Orchestration SSOT v1（手工项）
+## Workroom SSOT v1（手工项）
 
-与 [ADR 0027](https://github.com/zhinjs/zhin/blob/main/docs/adr/0027-agent-run-orchestration-kernel.md) 对齐；自动化见 `pnpm check:orchestration-ssot` / `pnpm check:l4`。
+与 [ADR 0027](https://github.com/zhinjs/zhin/blob/main/docs/adr/0027-agent-run-orchestration-kernel.md) 对齐；自动化见 `pnpm check:workroom-ssot` / `pnpm check:l4`。
 
-### A. 终态权威（Kernel-only）
+### A. 状态权威（Kernel-only）
 
-- [ ] `local` / `remote_mesh` 成功、失败、取消均落在 Kernel `completed` / `failed` / `cancelled`
-- [x] `pnpm check:orchestration-ssot` 通过
+- [ ] local Assignment 的 progress、执行完成、失败与取消均成为 Workroom Journal event；`execution_completed` 不等于 `accepted`
+- [x] `pnpm check:workroom-ssot` 通过
 
 ### B. IM 终态反馈（观众 #1）
 
 - [ ] **私聊 spawn_task**（路由到非 `zhin` Agent）：Sandbox 发 `ai: <触发 vision 路由的文本>`，应收到子 Agent 文本结果
 - [ ] **空 summary**：子 Agent 返回空文本时，IM 应收到固定 fallback：`任务已完成，但没有可展示的文本结果。`
 - [ ] **失败**：子 Agent 抛错时，IM 应收到 `trigger.errorTemplate` 错误回复（非仅日志）
-- [ ] **remote_mesh**：`executor: remote:local` 任务委托后轮询至 `completed` 或失败终态（见下文 §3）
+- [ ] **Remote A2A**：尚未进入生产路径；接入后必须复用相同 Assignment lease/fence/report 契约，不恢复旧 poller
 
 ### C. API / Console 投影（v1 = API；v1.1 = UI）
 
-- [ ] `GET /api/agent/orchestration/runs?sessionKey=` 与 DB 一致
-- [ ] `GET /api/agent/orchestration/runs/:runId` 含 tasks + events
-- [ ] Remote Console「编排」页可查看 Run / Task / Event（`pages/orchestration.tsx`）
+- [ ] `GET /api/agent/workroom/runs?projectId=` 与 Journal replay 一致
+- [ ] `GET /api/agent/workroom/runs/:runId` 含 tasks + assignments
+- [ ] Remote Console「Workroom」页可查看 Run / Task / Assignment（`pages/workroom.tsx`）
 
 ## 手工验收
 
-### 1. Sandbox + Mission 编排
+### 1. Sandbox + Workroom boundary
 
 1. `cd examples/full-bot && cp .env.example .env && pnpm dev`
-2. Remote Console 连接 Host（端口默认 `8069`），沙盒发 `ai: 启动 Mission 编排测试`
-3. 主 Agent 应 `orchestration_start`；MissionRunner 自动推进 Plan 任务
-4. 手动 `spawn_task` 指向 missions run 应被拒绝
-5. `orchestration_status` 应显示 Mission State（phase、spec_paths）
+2. Remote Console 连接 Host（端口默认 `8069`），确认 Workroom 查询必须提供显式 `projectId`
+3. 普通 Agent 工具目录不得出现通用 Workroom transition 工具
+4. 普通 `spawn_task` 不应创建或修改 Workroom Run
+5. 未配置 Database Host 时文件 Journal 回归通过；显式数据库激活失败时候选 generation 必须失败
 
 ### 2. 语义记忆
 
 在 AI 回合中（或工具直调）：
 
-- `memory_upsert(key=capability:hard_orchestration_v1, content=shipped)`
-- `memory_search(query=hard_orchestration_v1)` 应召回 `shipped`
+- `memory_upsert(key=capability:workroom_kernel_v1, content=shipped)`
+- `memory_search(query=workroom_kernel_v1)` 应召回 `shipped`
 
 或激活 `memory-consolidate` skill 后让 Agent 写入。
 
-### 3. loopback remoteAgents
-
-配置已含 `remoteAgents[].id: local`，`cardUrl` 指向本机 A2A Agent Card（`/a2a/zhin/.well-known/agent-card.json`）。添加 `executor: remote:local` 任务后，应通过 A2A 委托成功并由 `RemoteTaskPoller`（或 SSE）同步至 completed（需 `@zhin.js/a2a` 与主 Agent 就绪）。
-
-### 4. MCP 与 A2A 鉴权
+### 3. MCP 与 A2A 鉴权
 
 MCP 工具（非 Agent Mesh）：
 
@@ -77,7 +73,7 @@ curl -s http://127.0.0.1:8069/a2a/zhin/.well-known/agent-card.json \
 
 无 Bearer → **401**（配置了 `http.token` 时）。
 
-### 5.（可选实机）NapCat 或 KOOK
+### 4.（可选实机）NapCat 或 KOOK
 
 1. 填写 `.env` 中 `ONEBOT11_*` 或 `KOOK_TOKEN`
 2. 取消 `zhin.config.yml` 对应 `endpoints` 注释
@@ -87,5 +83,5 @@ CI 不依赖实机；本地验证不设 `L4_SKIP_PLATFORM` 时可跑适配器 op
 
 ## 可观测
 
-- REST：`GET /api/agent/orchestration/runs?sessionKey=`
-- Console：编排 / 会话树（与 `orchestration_status` 同源）
+- REST：`GET /api/agent/workroom/runs?projectId=`
+- Console：Workroom Journal 只读投影 / 会话树

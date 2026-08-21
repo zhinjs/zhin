@@ -117,29 +117,11 @@ Key `spawn_task` parameters:
 
 Several behavioral constraints apply: multiple `spawn_task` calls can be initiated in a single turn -- independent sub-tasks should run in parallel. In `tiered` mode, read-only tools and spawns run in parallel while write/bash operations execute sequentially. Sub-agents use a restricted tool set by default (`read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` + deferred meta) and do not automatically inherit all tools from the main session; use `ai.agent.subagentTools` to explicitly add more. The sub-agent types visible to the main Agent are constrained by `ai.agents.<name>.permission.task` (glob -> allow/deny). After async completion, results are **returned to the main Agent first** (written to the main session and auto-continued); the user-visible reply is composed and sent by the main Agent. Additionally, sub-agent presets can be declared as files using `agents/<name>.agent.md` (YAML frontmatter + description), auto-discovered and registered at startup.
 
-## Orchestration
+## Workroom Kernel
 
-`OrchestrationService` (Kernel) maintains a **Run / Task** state machine: a single user request can be split into multiple tasks with dependency relationships (`dependsOn`), dispatched for execution by executor (local / remote). Built-in orchestration tools:
+`WorkroomKernel` accepts only explicit Project-scoped commands and uses a versioned append-only Journal as the sole source of truth for Runs, Tasks, and Assignments. Ordinary chat and `spawn_task` never create a Workroom implicitly, and no generic model-writable transition tool can fabricate execution or acceptance facts. A command adapter must hold an authenticated Project capability and connect dedicated Scheduler, Executor, and Acceptance ports.
 
-| Tool | Purpose |
-|------|---------|
-| `orchestration_start` | Start an orchestration Run |
-| `orchestration_add_task` | Add a task to a Run (role / goal / dependsOn / priority) |
-| `orchestration_status` | Query Run / Task status |
-| `orchestration_complete` | End a Run |
-| `orchestration_retry_task` / `orchestration_skip_task` | Retry / skip failed tasks |
-
-Run states: `open` -> `running` / `waiting` -> completed. After configuring `ai.remoteAgents` (`id` + `cardUrl` + `token`), tasks can be dispatched to remote A2A agents for execution:
-
-```yaml
-ai:
-  remoteAgents:
-    - id: local
-      cardUrl: http://127.0.0.1:8069/a2a/zhin/.well-known/agent-card.json
-      token: ${HTTP_TOKEN}
-```
-
-Orchestration runs can be viewed on the Console's Orchestration page (`GET /api/agent/orchestration/runs`); see [Console](../console/index.md).
+The Workroom Journal backend is fixed when the process starts: `ai.sessions.useDatabase !== false` selects `workroom_events`, and an unready Database Root Host rejects the candidate generation; explicitly setting it to `false` selects the atomic file event stream at `.zhin/workroom-journal`. Hot reload cannot switch this backend. Changing the selection requires a process restart so retired-generation leases and the new generation cannot write to unrelated authorities without shared CAS. Console reads a Project-scoped narrow projection at `GET /api/agent/workroom/runs?projectId=...`. A remote A2A Executor will be integrated later through the same Assignment lease/event contract; the old `ai.remoteAgents` poller is not retained.
 
 ## Session persistence and session tree
 
@@ -204,7 +186,7 @@ ai:
 | File | `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep` |
 | Network | `web_search`, `web_fetch` |
 | Interaction | `ask_user` |
-| Task | `spawn_task`, `todo_read`, `todo_write`, `orchestration_*` |
+| Task | `spawn_task`, `todo_read`, `todo_write` |
 | Memory/Retrieval | `memory_search`, `memory_upsert`, `knowledge_search`, `inspect_conversation_reference` |
 | Media | `generate_image`, `analyze_media` |
 | Meta | `discover`, `load_tool`, `load_skill`, `install_skill` |

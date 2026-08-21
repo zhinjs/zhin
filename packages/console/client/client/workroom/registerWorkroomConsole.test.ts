@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { registerOrchestrationConsole } from './registerOrchestrationConsole.js';
+import { registerWorkroomConsole } from './registerWorkroomConsole.js';
 
-describe('registerOrchestrationConsole', () => {
-  it('registers orchestration route and tool', () => {
+describe('registerWorkroomConsole', () => {
+  it('registers Workroom route and tool', () => {
     const addRoute = vi.fn();
     const addTool = vi.fn();
     const React = { createElement: vi.fn((type) => ({ type })) };
 
-    registerOrchestrationConsole({
+    registerWorkroomConsole({
       React: React as never,
       addRoute,
       addPage: addRoute,
@@ -15,12 +15,12 @@ describe('registerOrchestrationConsole', () => {
     });
 
     expect(addRoute).toHaveBeenCalledWith(expect.objectContaining({
-      path: '/console/orchestration',
-      name: '编排',
+      path: '/console/workroom',
+      name: 'Workroom',
     }));
     expect(addTool).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'orchestration',
-      path: '/console/orchestration',
+      id: 'workroom',
+      path: '/console/workroom',
     }));
   });
 });

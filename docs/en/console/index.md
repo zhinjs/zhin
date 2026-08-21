@@ -15,7 +15,7 @@ flowchart LR
     H --> R2[RPC /api/console/request]
     H --> R3[SSE /api/events]
     H --> R4[WS /sandbox]
-    R1 --> P[Plugin / Endpoint / Session / Orchestration data]
+    R1 --> P[Plugin / Endpoint / Session / Workroom projection]
 ```
 
 ## Deployment and Configuration
@@ -51,7 +51,7 @@ A few points relevant in actual deployment. Authentication: with a token configu
 | Files | RPC `files:tree` / `files:read` / `files:save`, `env:list` / `env:save` | Project file tree and `.env` management |
 | Introspection | `GET /api/introspection/{commands,tools,endpoints,bindings,mcp}` | Paginated introspection: commands, tools, endpoints, bindings, MCP |
 | Agent Sessions | `GET/POST /api/agent/sessions/*` | AI session tree viewing and branch switching |
-| Orchestration | `GET /api/agent/orchestration/runs[/*]` | Orchestration Run / Task status tracking |
+| Workroom | `GET /api/agent/workroom/runs[/*]` | Query replayed Run / Task / Assignment state by explicit Project |
 | Marketplace | `GET /pub/marketplace/search`, `/pub/marketplace/detail/*`, `GET /api/marketplace/updates` | Plugin marketplace (plugins.json + npmmirror) and update checks |
 | Sandbox | WS `/sandbox` | Built-in sandbox chat, direct conversation without platform integration |
 

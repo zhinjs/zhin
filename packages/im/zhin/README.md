@@ -20,7 +20,7 @@ AI / Agent 能力在 **`@zhin.js/agent`**（及 `@zhin.js/ai`），须显式安�
 | 子路径 | 内容 |
 |--------|------|
 | `zhin.js` | **仅** `@zhin.js/core` + `@zhin.js/logger` |
-| `zhin.js/agent` | `@zhin.js/agent` + 多 Agent 编排（`runPipeline` / `runParallel` / `route`） |
+| `zhin.js/agent` | `@zhin.js/agent` 的 Agent、chat subagent 与 Workroom Kernel 能力 |
 | `zhin.js/ai` | `@zhin.js/ai` 引擎 API |
 | `zhin.js/runtime` | `@zhin.js/runtime` optional-peer facade；不进入默认 IM 闭包 |
 | `zhin.js/jsx*` | Satori JSX 运行时 |
@@ -165,7 +165,7 @@ export default defineAgentTool({
 
 ## 多 Agent 编排
 
-安装 agent 栈后，从 **`zhin.js/agent`** 使用 `runPipeline` / `runParallel` / `route` 等（见 [AI 模块文档](https://zhin.js.org/advanced/ai)）。
+安装 agent 栈后，从 **`zhin.js/agent`** 使用 Agent 与 Workroom API（见 [AI 模块文档](https://zhin.js.org/advanced/ai)）。旧的执行型 `runPipeline` / `runParallel` / `route` 已删除；普通一次性调用使用 `AIService.runAgent`，Project 级协作进入 Workroom。
 
 ## 常用命令
 

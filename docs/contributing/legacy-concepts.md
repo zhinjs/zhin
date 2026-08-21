@@ -63,6 +63,20 @@ export default defineAdapter<MyConfig>({
   - 交互式 TTY：stdin 一行确认（对齐 icqq 官方示例）
 - 带外路径仍可用：`icqq login <uin>` 守护进程扫码后再启动 zhin；`zhin setup` 配置向导。
 
+## 旧多 Agent 执行 API → chat subagent / Workroom
+
+旧编排栈同时存在 mutable Repository、`AgentDispatcher`、执行型 workflow helper 与 `remote_mesh` 状态，无法可靠表达验收、租约恢复、抢占和 Project Memory，因此采用 major breaking replacement，不提供双写兼容层。
+
+| 旧表面 | 迁移方式 |
+| --- | --- |
+| `zhin.js/agent` 的 `runPipeline` / `runParallel` / `route` | 普通一次性模型调用改用 `AIService.runAgent`（需要并行时由调用方显式组合 Promise）；需要 durable 多 Agent 协作时提交 Workroom Inbox/Plan proposal。未来的 workflow builder 只构造 Plan，不直接执行 Agent。 |
+| `spawn_task(run_id, task_id, ...)` | 普通 chat 只保留不带 Workroom identity 的临时 `spawn_task`；Project 工作必须由 Workroom Kernel 创建 Task/Assignment，不能把 subtask id 当 Task id。 |
+| `OrchestrationService` / `OrchestrationKernel` / repositories / `AgentDispatcher` | 无兼容替代对象。状态读取转向 Workroom Journal replay/projection；写入必须使用受 principal/role 约束的 Workroom command port。 |
+| `ai.remoteAgents` / `remote_mesh` / Remote Agent poller | 不再支持。Remote A2A 将作为标准 `AssignmentExecutorPort` adapter 接入，复用 local Assignment 的 lease/fence/report/acceptance；在正式发布前不得用旧配置模拟。 |
+| `/api/agent/orchestration/runs` / `/console/orchestration` | 改为 Project-scoped `/api/agent/workroom/runs?projectId=...` 与 Workroom Console 页面；它们都是只读 projection。 |
+
+旧 Run 不自动恢复或升级成新状态。特别是旧 `completed` 没有 claim-level Acceptance Record，不能当成 `accepted` Project State；历史数据只可离线导出审计，或以带 `legacy_import` provenance 的 untrusted Inbox/Evidence 候选重新规划和验收。已落地的权威边界见 [Agent CONTEXT](../../packages/im/agent/CONTEXT.md)。
+
 ## 相关阅读
 
 - [插件模型](../concepts/plugin-model.md)：Plugin Runtime 的概念总览

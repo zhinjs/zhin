@@ -63,6 +63,20 @@ export default defineAdapter<MyConfig>({
   - Interactive TTY: one-line stdin confirm (aligned with the official icqq example)
 - Out-of-band path still works: `icqq login <uin>` daemon QR scan, then start zhin; `zhin setup` wizard.
 
+## Legacy Multi-Agent Execution APIs -> chat subagent / Workroom
+
+The old orchestration stack combined mutable repositories, `AgentDispatcher`, immediate-execution workflow helpers, and `remote_mesh` state. It could not reliably represent acceptance, lease recovery, preemption, or Project Memory, so it is replaced in a major release without a dual-write compatibility layer.
+
+| Legacy surface | Migration |
+| --- | --- |
+| `runPipeline` / `runParallel` / `route` from `zhin.js/agent` | Use `AIService.runAgent` for an ordinary one-shot model call (compose Promises explicitly when needed). Durable multi-Agent collaboration enters a Workroom Inbox/Plan proposal. A future workflow builder will only construct Plans; it will not execute Agents. |
+| `spawn_task(run_id, task_id, ...)` | Ordinary chat keeps only temporary `spawn_task` without Workroom identity. Project work must be created as a Workroom Task/Assignment; a subtask id is never a Task id. |
+| `OrchestrationService` / `OrchestrationKernel` / repositories / `AgentDispatcher` | There is no compatibility object. Read state from Workroom Journal replay/projections; write only through principal- and role-scoped Workroom command ports. |
+| `ai.remoteAgents` / `remote_mesh` / Remote Agent poller | No longer supported. Remote A2A will attach as a standard `AssignmentExecutorPort` adapter using the same lease/fence/report/acceptance contract as local execution. Do not emulate it with legacy configuration before that adapter ships. |
+| `/api/agent/orchestration/runs` / `/console/orchestration` | Use the Project-scoped `/api/agent/workroom/runs?projectId=...` endpoint and Workroom Console page. Both are read-only projections. |
+
+Legacy Runs are not automatically resumed or promoted. In particular, an old `completed` record has no claim-level Acceptance Record and cannot become accepted Project State. Historical data may only be exported for offline audit, or reintroduced as an untrusted Inbox/Evidence candidate with `legacy_import` provenance for explicit replanning and acceptance. See the [Agent CONTEXT](../../../packages/im/agent/CONTEXT.md) for the implemented authority boundary.
+
 ## Related Reading
 
 - [Plugin Model](../concepts/plugin-model.md): Conceptual overview of the Plugin Runtime

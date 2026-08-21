@@ -4,14 +4,7 @@
 import { type AIConfig, AgentSessionStore, DatabaseContextRepository, DatabaseMemoryEntryRepository } from '@zhin.js/ai';
 import { DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT } from '../context/context-tail-limit.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
-import {
-  DatabaseOrchestrationRepository,
-  MemoryOrchestrationRepository,
-} from '../orchestrator/orchestration-repository.js';
-import {
-  upgradeOrchestrationRepository,
-  type OrchestrationService,
-} from '../orchestrator/orchestration-service.js';
+import { ActivatableWorkroomJournal, DatabaseWorkroomJournal } from '../workroom/journal.js';
 import type { AIServiceRefs } from '../internal/ai-service-refs.js';
 import {
   upgradeAgentSessionTreeData,
@@ -22,10 +15,10 @@ export async function activateAiDatabaseStorage(
   db: any,
   refs: AIServiceRefs,
   config: AIConfig,
-  orchestrationService: OrchestrationService,
+  workroomJournal: ActivatableWorkroomJournal,
   semanticMemory: SemanticMemoryRuntime | null,
 ): Promise<void> {
-  if (!refs.zhinAgent) return;
+  if (!refs.zhinAgent) throw new Error('Agent database activation requires a ZhinAgent instance');
   if (config.sessions?.useDatabase === false) return;
 
   await upgradeAgentSessionTreeData(db as AgentDbQueryable);
@@ -60,18 +53,6 @@ export async function activateAiDatabaseStorage(
     refs.zhinAgent.upgradeProfilesToDatabase(profileModel);
   }
 
-  const runModel = db.models?.get('orchestration_runs');
-  const taskModel = db.models?.get('orchestration_tasks');
-  const eventModel = db.models?.get('orchestration_events');
-  const orchRepo = runModel && taskModel
-    ? new DatabaseOrchestrationRepository(runModel, taskModel, eventModel)
-    : new MemoryOrchestrationRepository();
-  // Upgrade the existing kernel's repository in-place. The kernel was already
-  // initialised with a Memory placeholder during create-zhinAgent; this swaps
-  // it to the Database repository while preserving registered executors and
-  // workflow strategies (ADR 0027 — single state-transition authority).
-  upgradeOrchestrationRepository(orchRepo, orchestrationService);
-
   const semanticEnabled = config.memory?.semantic?.enabled === true;
   if (semanticEnabled) {
     if (!semanticMemory) throw new Error('Semantic memory runtime was not prepared');
@@ -81,4 +62,8 @@ export async function activateAiDatabaseStorage(
       memoryModel as ConstructorParameters<typeof DatabaseMemoryEntryRepository>[0],
     ));
   }
+
+  const workroomEventModel = db.models?.get('workroom_events');
+  if (!workroomEventModel) throw new Error('Workroom requires the workroom_events database model');
+  workroomJournal.activate(new DatabaseWorkroomJournal(db, workroomEventModel));
 }

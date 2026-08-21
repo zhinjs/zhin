@@ -1,4 +1,4 @@
-import { AGENT_ROLE_CONFIGS, type AgentRole } from '../../orchestrator/agent-dispatcher.js';
+import { AGENT_ROLE_CONFIGS, type AgentRole } from '../../orchestrator/role-configs.js';
 import { isFiveAgentRole, type FiveAgentRole } from './roles.js';
 
 export function isToolAllowedForRole(toolName: string, role: AgentRole): boolean {

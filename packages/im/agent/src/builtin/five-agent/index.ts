@@ -7,10 +7,6 @@ import { type FiveAgentRole, isFiveAgentRole } from './roles.js';
 import { FIVE_AGENT_ROLE_LABELS } from '../../config/resolve-five-agent-binding.js';
 import { renderFiveAgentPrompt } from './prompts.js';
 export { FIVE_AGENT_PROMPTS, renderFiveAgentPrompt } from './prompts.js';
-export {
-  FIVE_AGENT_WORKFLOW_STRATEGY_NAME,
-  createFiveAgentWorkflowStrategy,
-} from './strategy.js';
 
 export interface FiveAgentPromptInput {
   role: FiveAgentRole;

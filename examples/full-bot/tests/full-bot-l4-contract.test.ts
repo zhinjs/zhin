@@ -45,7 +45,7 @@ describe('full-bot L4 配置契约', () => {
       'commands/card.ts',
       'components/status-card.ts',
       'tools/runtime-status.ts',
-      'pages/orchestration.tsx',
+      'pages/workroom.tsx',
     ]) {
       expect(fs.existsSync(path.join(botRoot, source)), source).toBe(true);
     }
@@ -73,13 +73,6 @@ describe('full-bot L4 配置契约', () => {
     expect(configText).not.toContain('@zhin.js/host-api');
     expect(configText).not.toContain('@zhin.js/mcp');
     expect(configText).not.toContain('@zhin.js/a2a');
-  });
-
-  it('loopback remoteAgents 指向本机 A2A Agent Card', () => {
-    expect(configText).toMatch(/remoteAgents:/);
-    expect(configText).toMatch(/id:\s*local/);
-    expect(configText).toMatch(/cardUrl:/);
-    expect(configText).toMatch(/\/a2a\/zhin\/.well-known\/agent-card\.json/);
   });
 
   it('MEMORY 纲领与 memory-consolidate skill 存在', () => {

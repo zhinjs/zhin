@@ -1,7 +1,6 @@
 /**
  * 子 agent system prompt 净化：剥离父级编排指令（spawn_task / tool_search 等）
  */
-import type { AgentDispatcher, AgentRole, AgentTask } from './orchestrator/agent-dispatcher.js';
 
 export function sanitizeSubagentSystemPrompt(prompt: string): string {
   const withoutSections = removePromptSections(prompt, ['orchestration', '主编排']);
@@ -36,12 +35,4 @@ function redactOrchestrationTerms(text: string): string {
     .replaceAll('spawn_task', '[orchestration-redacted]')
     .replaceAll('tool_search', '[orchestration-redacted]')
     .replaceAll('run_deferred_task', '[orchestration-redacted]');
-}
-
-export function buildSubagentRolePrompt(
-  dispatcher: AgentDispatcher,
-  role: AgentRole,
-  task: AgentTask,
-): string {
-  return sanitizeSubagentSystemPrompt(dispatcher.buildRolePrompt(role, task));
 }

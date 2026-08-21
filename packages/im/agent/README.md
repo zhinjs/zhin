@@ -119,7 +119,7 @@ turn 会跨代执行。
 
 ## 模块化架构（理想蓝图 8 模块）
 
-`src/` 按职责拆分为 8 个理想模块 + Orchestration（单包，可选 subpath export）：
+`src/` 按职责拆分为 8 个理想模块 + Workroom Kernel（单包，可选 subpath export）：
 
 ```
 packages/im/agent/src/
@@ -134,17 +134,15 @@ packages/im/agent/src/
   prompt/        系统提示词、assembly、workspace 模板
   turn/          Turn pipeline、inbound 队列、auto-continue、metrics
   config/        ZhinAgent 配置 SSOT、model harness
-  orchestrator/  Orchestration Kernel（ADR 0027 SSOT）
+  orchestrator/  Tool / Skill capability orchestration（不拥有 Workroom facts）
+  workroom/      Workroom Kernel — versioned Journal + pure replay/decision
   zhin-agent/    ZhinAgent 门面类（单文件 index.ts）
   init/          Plugin Runtime 组合、数据库激活与 ZhinAgent dispose 生命周期
 ```
 
-Agent 间通信只经过 OrchestrationKernel：`local` executor 选择配置好的 Agent
-binding，`remote_mesh` 通过 A2A 调用真正的远程 Agent。IM 仅承载用户输入和结果投递。
+普通 `spawn_task` 只执行当前聊天的非 Workroom 子任务，不创建或修改 Run/Task facts。Workroom command adapter 必须持有认证后的 Project capability；Scheduler、Executor 与 Acceptance port 尚未接入前，不发布模型可写的通用 transition 工具。
 
 **Agent Core**：`AgentCore.runText()` / `runVision()` 为 `AsyncGenerator<TurnEvent>` SSOT；`runTextTurn` 为 collector。组合层经 `composeZhinAgentRuntime` 注入 8 模块 + `createAgentCoreDepsForCompose`。
-
-Port 边界见 [orchestrator/PORTS.md](./src/orchestrator/PORTS.md)。
 
 可选 subpath（`package.json` `exports`）：
 
@@ -155,7 +153,7 @@ import { SessionSystem } from '@zhin.js/agent/session'
 // …/event、/skill、/memory、/subagent、/context、/prompt、/turn、/config
 ```
 
-词汇与 Port 边界见 [CONTEXT.md](./CONTEXT.md)、[orchestrator/PORTS.md](./src/orchestrator/PORTS.md)。
+词汇与边界见 [CONTEXT.md](./CONTEXT.md)。
 
 ## 安装
 
@@ -342,9 +340,9 @@ useContext('ai', async (ai) => {
 })
 ```
 
-### 4. 多 Agent 协作/编排（由 zhin.js 层实现）
+### 4. 多 Agent 协作与普通 chat 委派
 
-本包只提供基础能力：`ZhinAgent`、`ai.createAgent`（`ServiceAgent`）、`ai.runAgent` 等。**多 Agent 串联/并联编排**（例如 A 的输出作为 B 的输入、按条件路由到不同专业 Agent）在 **zhin.js 主包** `runPipeline` / `runParallel` / `route` 实现；插件侧通过 zhin.js 暴露的 API 使用即可。
+普通 chat 可用 `spawn_task` 临时委派子代理；它没有 durable Run/Task、验收或 Project Memory 语义。Project 级多 Agent 协作由 Workroom Kernel 的 versioned Plan、Assignment、Acceptance 与投影承载。旧 `zhin.js/agent` `runPipeline` / `runParallel` / `route` 会立即调用模型且没有可靠状态边界，已在 breaking cutover 中删除；后续构图便利 API 只会生成 Plan proposal，不直接执行 Agent。
 
 ## 工具命名策略
 

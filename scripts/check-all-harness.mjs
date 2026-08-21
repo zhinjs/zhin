@@ -215,9 +215,9 @@ const checks = [
     description: '已知 LLM 网关 sdk/contextWindow 预设与 OpenCode 等契约',
   },
   {
-    name: 'Orchestration SSOT',
-    command: 'pnpm check:orchestration-ssot',
-    description: '编排任务状态须经 OrchestrationKernel，禁止 repositoryHandle 直写',
+    name: 'Workroom SSOT',
+    command: 'pnpm check:workroom-ssot',
+    description: 'Workroom 状态须经 Journal + CAS Kernel，禁止并行可变权威',
   },
   {
     name: 'A2A Mesh',

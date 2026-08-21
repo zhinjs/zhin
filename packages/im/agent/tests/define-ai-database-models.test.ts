@@ -9,15 +9,13 @@ describe('defineAiDatabaseModels', () => {
       expect(definition).toBeTruthy();
       expect(typeof definition).toBe('object');
     });
-    expect(count).toBe(8);
+    expect(count).toBe(6);
     expect(names).toEqual([
       'agent_sessions',
       'agent_messages',
       'agent_summaries',
       'ai_user_profiles',
-      'orchestration_runs',
-      'orchestration_tasks',
-      'orchestration_events',
+      'workroom_events',
       'memory_entries',
     ]);
   });

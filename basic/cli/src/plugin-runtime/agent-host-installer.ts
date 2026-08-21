@@ -43,10 +43,9 @@ import {
   syncProfileRoutinesToStore,
   pruneStaleProfileCronJobs,
   bootstrapAssistantHome,
-  OrchestrationService,
-  MemoryOrchestrationRepository,
-  createRemoteAgentRegistry,
-  registerDefaultExecutors,
+  ActivatableWorkroomJournal,
+  FileWorkroomJournal,
+  WorkroomKernel,
   asPrivate,
   handleRuntimeOwnerApproveCommand,
   handleRuntimeManagementCommand,
@@ -67,7 +66,6 @@ import {
   demoteScheduleCreator,
   type ScheduleActivityEvent,
   type ScheduleTurnExecutionRequest,
-  type RemoteAgentRegistry,
 } from '@zhin.js/agent';
 import {
   agentHostToken,
@@ -86,11 +84,11 @@ import {
   SemanticMemoryRuntime,
   FileTodoStore,
   AgentRuntime,
-  createOrchestrationRuntimeFromService,
+  createWorkroomRuntime,
   createSessionTreeRuntimeFromAgent,
   type AgentCapabilities,
   type AssistantRuntimeHandle,
-  type OrchestrationRuntimeHandle,
+  type WorkroomRuntimeHandle,
   type SessionTreeRuntimeHandle,
   type ToolCapability,
   turnIntentResolverToken,
@@ -118,6 +116,7 @@ type OutputElementLike = {
 };
 
 type AIConfig = NonNullable<ConstructorParameters<typeof AIService>[0]>;
+export type WorkroomStorageMode = 'database' | 'file';
 type McpServerConfig = NonNullable<AIConfig['mcpServers']>[number];
 
 interface AgentToolLike {
@@ -163,6 +162,18 @@ export async function resolveAiConfig(
   return expandEnvironmentValue(ai, (key) => process.env[key]) as AIConfig;
 }
 
+export function resolveWorkroomStorageMode(ai: AIConfig | undefined): WorkroomStorageMode {
+  return ai?.sessions?.useDatabase === false ? 'file' : 'database';
+}
+
+export function assertFixedWorkroomStorageMode(
+  fixed: WorkroomStorageMode,
+  requested: WorkroomStorageMode,
+): void {
+  if (requested === fixed) return;
+  throw new Error(`Workroom storage mode changed from ${fixed} to ${requested}; process restart required`);
+}
+
 export async function resolveAssistantConfigDocument(
   config: RuntimeConfigDocument | ConfigDocumentPort,
 ): Promise<AssistantConfig | undefined> {
@@ -176,6 +187,8 @@ export async function resolveAssistantConfigDocument(
 export interface InstallAgentHostOptions {
   /** Process-owned execution authority attached to exactly one Root. */
   readonly runtime: AgentRuntime;
+  /** Process-fixed Workroom storage identity. Changing it requires restart. */
+  readonly workroomStorageMode: WorkroomStorageMode;
   /** Root-owned authority shared by every Agent generation. */
   readonly interactions: InteractionRouter;
   /** @deprecated Prefer the generation-owned Primary Config. Test overrides only. */
@@ -216,7 +229,7 @@ export interface InstallAgentHostOptions {
  * - Subagent/main-turn `bash` (sandbox + safety) + Owner `/approve` 命令面
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
-  return async ({ signal, admission, resources, lifecycle, handoff, config: primaryConfig, addFeature }) => {
+  return async ({ resources, lifecycle, handoff, config: primaryConfig, addFeature }) => {
     const configuredAi = options.ai ?? primaryConfig.get<AIConfig>('ai');
     const aiConfig = configuredAi;
     const assistantConfig = options.assistant
@@ -250,22 +263,21 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       ? new SemanticMemoryRuntime()
       : null;
     if (semanticMemory) lifecycle.add(() => semanticMemory.dispose());
-    let orchService: OrchestrationService;
-    let remoteAgents: RemoteAgentRegistry;
-    let orchestrationRuntime: OrchestrationRuntimeHandle;
+    const workroomJournal = new ActivatableWorkroomJournal();
+    const workroomKernel = new WorkroomKernel({ journal: workroomJournal });
+    const activateFileWorkroomJournal = () => {
+      if (!workroomJournal.active) {
+        workroomJournal.activate(new FileWorkroomJournal(join(options.projectRoot, '.zhin', 'workroom-journal')));
+      }
+    };
+    let workroomRuntime: WorkroomRuntimeHandle;
     let sessionTreeRuntime: SessionTreeRuntimeHandle;
     let schedule: ReturnType<typeof wireRuntimeSchedule>;
     try {
-      orchService = new OrchestrationService(new MemoryOrchestrationRepository());
-      lifecycle.add(() => orchService.dispose());
-      remoteAgents = await createRemoteAgentRegistry(aiConfig, signal);
-      lifecycle.add(() => remoteAgents.dispose());
       const created = createRuntimeZhinAgent(
         service,
         options.im,
         options.projectRoot,
-        orchService,
-        remoteAgents,
         options.approvalPort,
       );
       zhinAgent = created.agent;
@@ -273,13 +285,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       lifecycle.add(() => created.agent.dispose());
       seedPresets = created.seedPresets;
 
-      lifecycle.add(registerDefaultExecutors(orchService, {
-        refs: { zhinAgent, aiService: service },
-        remoteAgents,
-        admission,
-      }));
-      // Console REST resolves both projections from the current generation's AgentHostPort.
-      orchestrationRuntime = createOrchestrationRuntimeFromService(orchService);
+      // Console reads the same replayed facts as tools; it never receives the
+      // command authority or a mutable repository.
+      workroomRuntime = createWorkroomRuntime(workroomKernel);
       sessionTreeRuntime = createSessionTreeRuntimeFromAgent(asPrivate(zhinAgent));
       schedule = wireRuntimeSchedule(
         zhinAgent,
@@ -317,8 +325,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     if (!zhinAgent || !composedRuntime) throw new Error('Agent Host candidate did not create a complete Agent runtime');
 
     const useDatabase = aiConfig.sessions?.useDatabase !== false;
+    const requestedWorkroomStorageMode = resolveWorkroomStorageMode(aiConfig);
+    assertFixedWorkroomStorageMode(options.workroomStorageMode, requestedWorkroomStorageMode);
     let persistencePendingActivate = false;
-    if (useDatabase && resources.has(databaseRootHostToken)) {
+    if (useDatabase) {
+      if (!resources.has(databaseRootHostToken)) {
+        throw new Error('Process-fixed Workroom database storage requires the Database Root Host');
+      }
       const database = resources.use(databaseRootHostToken);
       try {
         const tableCount = defineAiDatabaseModels((name, definition) => {
@@ -331,21 +344,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
             try {
               const raw = database.getRawDatabase();
               if (!raw) {
-                if (semanticMemory) {
-                  throw new Error('Semantic memory requires an active database connection');
-                }
-                logger.warn(formatCompact({
-                  op: 'agent_host_persistence',
-                  mode: 'memory',
-                  reason: 'database_not_started',
-                }));
-                return;
+                throw new Error('Agent persistence requires an active database connection');
               }
               await activateAiDatabaseStorage(
                 raw,
                 { aiService: service, zhinAgent },
                 aiConfig,
-                orchService,
+                workroomJournal,
                 semanticMemory,
               );
               signal.throwIfAborted();
@@ -355,31 +360,19 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 tables: tableCount,
               }));
             } catch (error) {
-              if (semanticMemory) throw error;
-              logger.warn(formatCompact({
-                op: 'agent_host_persistence',
-                mode: 'memory',
-                reason: 'activate_failed',
-                error: error instanceof Error ? error.message : String(error),
-              }));
+              throw new Error('Agent database persistence activation failed', { cause: error });
             } finally {
               zhinAgent.markMemoryPersistenceReady();
             }
           },
         });
       } catch (error) {
-        if (semanticMemory) throw error;
-        logger.warn(formatCompact({
-          op: 'agent_host_persistence',
-          mode: 'memory',
-          reason: 'define_failed',
-          error: error instanceof Error ? error.message : String(error),
-        }));
-        zhinAgent.markMemoryPersistenceReady();
+        throw new Error('Agent database model registration failed', { cause: error });
       }
     } else if (semanticMemory) {
       throw new Error('ai.memory.semantic.enabled requires the Database Root Host');
     } else {
+      activateFileWorkroomJournal();
       zhinAgent.markMemoryPersistenceReady();
     }
 
@@ -400,8 +393,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     // extraTools (e.g. voice_stt / voice_tts) join the candidate ToolFeature.
     // Native builtin file tools are projected via createNativeFileToolFeatures
     // below — they are the SSOT and own the security context (workspaceRoot
-    // + execPreset). bash stays a Tool projection here for back-compat with
-    // subagent createRuntimeSubagentAgentTools consumers that read it as a Tool.
+    // + execPreset). bash remains an explicit Tool projection consumed by
+    // subagent createRuntimeSubagentAgentTools.
     for (const tool of [
       ...(options.extraTools ?? []),
       bashTool,
@@ -486,7 +479,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       }),
       console: Object.freeze({
         sessionTree: sessionTreeRuntime,
-        orchestration: orchestrationRuntime,
+        workroom: workroomRuntime,
         assistant: schedule.assistantRuntime,
       }),
     }));
@@ -748,7 +741,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       + ` | presets: ${presetCount}`
       + ` | mcp: ${mcpEntries.map((entry) => entry.name).join(',') || '-'}`
       + ` | ${features}`
-      + ` | persistence: ${persistencePendingActivate ? 'pending_activate' : 'memory'}`,
+      + ` | persistence: ${persistencePendingActivate ? 'pending_activate' : 'file'}`,
     );
     logger.debug(
       `ready detail | providers: ${providers.join(',')}`
@@ -1053,8 +1046,6 @@ function createRuntimeZhinAgent(
   service: AIService,
   im: ImRuntime,
   projectRoot: string,
-  orchestrationService: OrchestrationService,
-  remoteAgentRegistry: RemoteAgentRegistry,
   approvalPort?: ApprovalPort,
 ): {
   agent: ZhinAgent;
@@ -1078,8 +1069,6 @@ function createRuntimeZhinAgent(
     sessionSystem: composed.sessionSystem,
     eventSystem: composed.eventSystem,
     orchestrator,
-    orchestrationService,
-    remoteAgentRegistry,
     providerResolver: (alias) => service.getProvider(alias),
     activeBinding: binding,
     deferredResultSender: composed.deliverOutbound,

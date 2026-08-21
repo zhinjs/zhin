@@ -52,7 +52,7 @@ flowchart LR
 | `skills/` | 子目录名即 localName，目录内必须含 `SKILL.md` | `skills/memory-consolidate/SKILL.md` → `memory-consolidate` |
 | `agents/` | 文件名去掉 `.agent.md` 后缀 | `agents/planner.agent.md` → `planner` |
 | `mcp/` | 文件名去扩展名（不递归） | `mcp/my-server.ts` → `my-server` |
-| `pages/` | 文件名去扩展名；`$nav.tsx` / `$footer.tsx` 是布局槽（同 slot 同时有 `.ts` 和 `.tsx` 时以 `.tsx` 为准） | `pages/orchestration.tsx` → `orchestration`；`pages/$nav.tsx` → `nav` |
+| `pages/` | 文件名去扩展名；`$nav.tsx` / `$footer.tsx` 是布局槽（同 slot 同时有 `.ts` 和 `.tsx` 时以 `.tsx` 为准） | `pages/workroom.tsx` → `workroom`；`pages/$nav.tsx` → `nav` |
 
 命令动态参数文件的方括号语法写错会抛 `CommandPathSyntaxError`，提示 `expected [name].ts(x), [[name]].ts(x), [...name].ts(x) or [[...name]].ts(x)`；有默认值时文件名必须用双方括号，且 `params` 中必须声明对应参数，否则同样报错。
 
@@ -204,8 +204,8 @@ tools:
 
 ### pages/ — Console 页面
 
-`pages/*.tsx` 编译为浏览器产物，挂进 Remote Console；`examples/full-bot/pages/orchestration.tsx` 是现成例子。`$nav.tsx` / `$footer.tsx` 由 `@zhin.js/layout` 消费，注入导航与页脚。
+`pages/*.tsx` 编译为浏览器产物，挂进 Remote Console；`examples/full-bot/pages/workroom.tsx` 是现成例子。`$nav.tsx` / `$footer.tsx` 由 `@zhin.js/layout` 消费，注入导航与页脚。
 
 ## 仓库实例
 
-想找生产级参照时，直接翻这些目录：`commands` 看 `plugins/utils/lottery/commands/`（含动态参数 `lottery/[[game]].ts`）；`middlewares` 看 `plugins/utils/group-suite/middlewares/` 和 `plugins/games/*/middlewares/`；`handlers` 用 `handlers/message/receive.ts` + `defineHandler`（见上文最小形态；仓库内示例可按需自加）；`components` 看 `plugins/utils/music/components/share-music.ts`；`adapters` 看 `plugins/adapters/napcat/adapters/napcat.ts`；`tools` 看 `plugins/utils/music/tools/` 与 `plugins/utils/group-suite/tools/`；`skills` 看 `examples/full-bot/skills/memory-consolidate/`；`agents` 看 `examples/multi-agent-room/agents/`；`pages` 看 `examples/full-bot/pages/orchestration.tsx`。
+想找生产级参照时，直接翻这些目录：`commands` 看 `plugins/utils/lottery/commands/`（含动态参数 `lottery/[[game]].ts`）；`middlewares` 看 `plugins/utils/group-suite/middlewares/` 和 `plugins/games/*/middlewares/`；`handlers` 用 `handlers/message/receive.ts` + `defineHandler`（见上文最小形态；仓库内示例可按需自加）；`components` 看 `plugins/utils/music/components/share-music.ts`；`adapters` 看 `plugins/adapters/napcat/adapters/napcat.ts`；`tools` 看 `plugins/utils/music/tools/` 与 `plugins/utils/group-suite/tools/`；`skills` 看 `examples/full-bot/skills/memory-consolidate/`；`agents` 看 `examples/multi-agent-room/agents/`；`pages` 看 `examples/full-bot/pages/workroom.tsx`。

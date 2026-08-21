@@ -2,9 +2,9 @@ export * from './agent-runtime.js';
 export * from './agent-host-port.js';
 export type { AssistantRuntimeHandle } from '../assistant/runtime-contract.js';
 export {
-  createOrchestrationRuntimeFromService,
-  type OrchestrationRuntimeHandle,
-} from '../orchestration-runtime.js';
+  createWorkroomRuntime,
+  type WorkroomRuntimeHandle,
+} from '../workroom/runtime.js';
 export {
   createSessionTreeRuntimeFromAgent,
   type SessionTreeRuntimeHandle,

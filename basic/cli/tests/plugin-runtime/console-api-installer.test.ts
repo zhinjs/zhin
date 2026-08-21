@@ -357,7 +357,7 @@ describe('generation-owned Agent introspection', () => {
     const token = { id: tokenId('zhin.host.agent') };
     const consolePort = {
       sessionTree: {},
-      orchestration: {},
+      workroom: {},
       assistant: null,
     };
     const snapshot = {

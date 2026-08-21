@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
 import { wireMockLlmApi, assistantTextReply, type MockLlmApi } from '../helpers/mock-llm-api.js';
 import { SubagentRuntime, type SubagentOrigin, type SpawnOptions } from '@zhin.js/agent';
+import { DEFAULT_CONFIG } from '../../src/config/index.js';
 import type { ZhinAgentEventEmitter } from '../../src/event/event-emitter.js';
 
 import type { AgentTool } from '@zhin.js/core';
@@ -176,7 +177,7 @@ describe('SubagentRuntime', () => {
       expect(toolNames).not.toContain('discover');
     });
 
-    it('子 agent 经 toolSearch 按任务 TF-IDF 载入工具', async () => {
+    it('子 agent 仅从显式授权集合中按任务 TF-IDF 载入工具', async () => {
       const extraTool = {
         name: 'todo_write',
         description: 'todo list',
@@ -189,6 +190,7 @@ describe('SubagentRuntime', () => {
         provider: provider as any,
         workspace: '/tmp/test-workspace',
         createTools: () => [...mockTools, extraTool],
+        execPolicyConfig: { ...DEFAULT_CONFIG, subagentTools: ['todo_write'] },
         onSubagentComplete: onComplete,
       });
 

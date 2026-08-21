@@ -2,7 +2,7 @@
  * Sub-agent 预设解析：role / contextMode（对齐 pi-subagents frontmatter 与默认映射）
  */
 import type { AgentMeta } from './discovery/agents.js';
-import type { AgentRole } from './orchestrator/agent-dispatcher.js';
+import type { AgentRole } from './orchestrator/role-configs.js';
 
 export type SubagentContextMode = 'fork' | 'fresh';
 

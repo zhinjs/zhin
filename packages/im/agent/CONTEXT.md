@@ -106,12 +106,12 @@ _避免使用_：preload、setup action、preflight
 
 ## 编排（Orchestration）
 
-**OrchestrationKernel**:
-Run 与 Task 持久化状态迁移的唯一权威；Executor 只产出 execution event，由 Kernel 写入终态。
+**WorkroomKernel**:
+以 versioned append-only Journal 为唯一事实源，使用 `append(runId, expectedSequence, events)` 提交 Run、Task、Assignment 与 Blocker 状态迁移。执行完成与验收是两个独立事实；Console、Scheduler 与 IM 都只能投影 replay 结果。
 _避免使用_：orchestrator service、mission runner、dispatcher SSOT
 
 **Run**:
-用户可见的一单元工作，常源于 IM session、HTTP、A2A 或 Schedule turn。
+Project 内一次版本化协作执行；必须携带显式 `projectId`，不得从 IM session、HTTP 调用或消息 metadata 猜测 Project。
 _避免使用_：mission、job、pipeline run（非 Kernel 语境时）
 
 **Task**:
@@ -147,7 +147,7 @@ Executor/Reviewer 在执行中发现 Assignment Capability Snapshot 不足时提
 _避免使用_：load_tool 即授权、模型自行安装永久能力、一次批准扩大所有后续 Task
 
 **Workflow Plan**:
-Orchestrator 针对一个 **Run** 动态提出、由 Kernel 版本化持久化的 Task DAG，包含目标、required/optional、active Task revision、依赖、预算与 approval gate。依赖默认只由 `accepted` 满足；固定 `runPipeline` / `runParallel` / `route` 只能作为 Plan proposal 的构图便利 API，不能成为另一套执行或状态权威。
+Orchestrator 针对一个 **Run** 动态提出、由 Kernel 版本化持久化的 Task DAG，包含目标、required/optional、active Task revision、依赖、预算与 approval gate。依赖默认只由 `accepted` 满足；串行、并行、条件分支只能作为纯 Plan builder primitive，旧执行型 `runPipeline` / `runParallel` / `route` 已删除，不能成为另一套执行或状态权威。
 _避免使用_：固定 pipeline 即 SSOT、只存在 prompt 中的计划、绕过 Kernel 直接 spawn
 
 **Workroom Inbox**:
@@ -223,7 +223,7 @@ _避免使用_：log line、debug 输出
 _避免使用_：dispatcher 内存缓存、recordResult
 
 **Agent Workroom**:
-与一个 **Project** 一一对应、把其多个 **Run** 的协作活动投影给人类参与者的可观察工作空间；可以绑定到真实 IM group/channel，也可以由 Console 展示。它同时是项目记忆、artifact namespace、队列、预算与 policy 的隔离边界，呈现具名 Agent 的当前任务、进度、交接、结论与失败，但不是 Agent 间通信或编排状态的事实源；所有事实仍来自 **OrchestrationKernel RunEvent** 与 Runtime Journal。
+与一个 **Project** 一一对应、把其多个 **Run** 的协作活动投影给人类参与者的可观察工作空间；可以绑定到真实 IM group/channel，也可以由 Console 展示。它同时是项目记忆、artifact namespace、队列、预算与 policy 的隔离边界，呈现具名 Agent 的当前任务、进度、交接、结论与失败，但不是 Agent 间通信或编排状态的事实源；所有事实仍来自 **WorkroomKernel RunEvent** 与 Runtime Journal。
 _避免使用_：Agent 群聊、用 IM 消息驱动 Task 状态、把原始模型 token/tool trace 全量刷进群
 
 **Interaction Space**:
@@ -269,10 +269,6 @@ _避免使用_：老板（契约字段）、session owner、默认继承 master 
 **Workroom Intent**:
 人类消息希望如何影响 **Agent Workroom** 的显式意图：普通 discussion 只贡献上下文；`steer_task`、任务创建、重规划、暂停、取消与批准必须指向具体 Run/Task，并经过 principal policy。普通参与者默认只能讨论和补充信息，只有 **Run Sponsor** 或明确授权角色能改变目标或执行状态；所有结果记录 `principal → intent → run/task → action`。
 _避免使用_：把群内每条消息都当指令、按自然语言暗中提升 authority、直接修改 Dispatcher 内存状态
-
-**AgentDispatcher**:
-内存中的 Task 投影与依赖调度缓存；从 Kernel 仓库 `syncTaskFromRecord`，不拥有持久化终态。
-_避免使用_：SSOT、source of truth、终态写入方
 
 ## 调度（Schedule）
 
@@ -353,7 +349,7 @@ Session lifecycle 写权威只有 `ContextRepository`；archive 不得再代理�
 - “tool” 过去同时指 Zhin 运行时工具和 Provider 工具。已决议：**Tool** 是面向 Zhin 的契约；**AgentTool** 是 `@zhin.js/ai` 的契约。
 - “maxTokens” 过去混用了生成预算和上下文容量。已决议：**Context Budget** 表示历史/模型窗口；生成限制仍属于模型或 Provider 选项。
 - **MCP Client vs Server**：Client（`mcp-client/`）消费外部 MCP 工具；`packages/host/mcp` 为 MCP **Server**（向外暴露 Zhin 工具）。SDK 为可选 peer；已配置 server 激活失败会使候选 generation 整体失败，旧代继续服务。
-- **Kernel vs Dispatcher**：编排 Task 的 `completed` / `failed` / `cancelled` 仅由 **OrchestrationKernel** 写库；**AgentDispatcher** `recordResult` 不得作为编排终态权威（ADR 0027）。Port 契约见 [`src/orchestrator/PORTS.md`](src/orchestrator/PORTS.md)。
+- **Kernel 唯一权威**：旧 `OrchestrationService`、mutable Repository、`AgentDispatcher`、remote mesh poller 与 Session→Run 隐式创建均已删除。普通 `spawn_task` 只是非 Workroom 子任务；它不能创建或修改 Workroom facts。Workroom 只能由显式 Project-scoped command 驱动。
 
 ## 模块化重构（理想蓝图映射）
 
@@ -379,7 +375,7 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 | Memory System | `src/memory/` | agent → port → ai | `MemoryStore` 适配 `ContextRepository`；压缩委托 ai compaction |
 | Subagent System | `src/subagent/` | agent | `SubagentSystem` spawn/cancel；`ResultSink` 对接 outbound |
 | Context System | `src/context/` | agent | 只读 canonical Turn 的 prompt-assembly / turn-user-message builder 链；IM `Message` 投影仅存在于外层 ingress adapter |
-| Orchestration（图内） | `src/orchestrator/` | agent | Kernel SSOT（ADR 0027）；不并入 Subagent |
+| Workroom Kernel | `src/workroom/` | agent | versioned Journal + pure replay/decision；不并入 Subagent |
 | IM 装配 | `basic/cli` Plugin Runtime | composition root | canonical Turn ingress / reply Delivery；不承担 Agent 间通信 |
 
 ### 现状 → 理想模块映射
@@ -397,7 +393,7 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 | Prompt | `src/prompt/` | `@zhin.js/agent/prompt` |
 | Turn | `src/turn/`（`turn-pipeline`、`turn-complete`） | `@zhin.js/agent/turn` |
 | Config | `src/config/` | `@zhin.js/agent/config` |
-| Orchestration | `src/orchestrator/` | 包根 export + [PORTS.md](src/orchestrator/PORTS.md) |
+| Workroom Kernel | `src/workroom/` | 包根 export；Journal / command / read projection 分权 |
 | IM 组合 | `src/init/`、`zhin-agent/`（门面） | 包根 export；IM ingress / delivery 在 `basic/cli` |
 | Host 契约（包内） | `src/internal/agent-host.ts`、`as-private.ts` | 不对外 export |
 
@@ -409,7 +405,7 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 |------|------|
 | **EventSystem**（蓝图，`src/event/`） | Agent turn：`turn_start`、`tool_call`、`chunk`、`turn_end` |
 | **ZhinAgentEventEmitter** | 现有 IM 活动反馈订阅方；composition-root adapter 只投影已解析的 Schedule activity address |
-| **OrchestrationKernel RunEvent** | Run/Task 持久化事件流；**不合并** |
+| **WorkroomKernel RunEvent** | Run/Task/Assignment 的 versioned Journal 事实流；**不合并** |
 | **Runtime Event Journal** | ingress / delivery / failure 的事实源；IM/Console/日志只做投影 |
 
 ### ADR 对齐确认（阶段 0）
@@ -418,7 +414,7 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 |-----|------|------------------|
 | [0009](../../../docs/adr/0009-pi-aligned-ai-agent-core.md) | 唯一 LLM 入口 `stream` / `agentLoop` | `AgentCore.runText()` AsyncGenerator + `runTextTurn` collector |
 | [0004](../../../docs/adr/0004-normalize-queue-outbound-fields-before-im-send.md) | 出站不得旁路统一 delivery pipeline | ReplyPort / DeliveryPort 是唯一入口；Agent 不直接依赖 Message / Adapter |
-| [0027](../../../docs/adr/0027-agent-run-orchestration-kernel.md) | Kernel 为 Run/Task 终态 SSOT | Orchestration 保持 `src/orchestrator/`；Dispatcher 仅投影 |
+| [0027](../../../docs/adr/0027-agent-run-orchestration-kernel.md) | Kernel 为 Run/Task/Assignment 事实 SSOT | 由 `src/workroom/` 的 Journal + replay state machine 实现；无 Dispatcher |
 | [0019](../../../docs/adr/0019-install-size-layering.md) | agent 可选 peer、依赖扁平 | 迁移期单包 + 子目录；阶段 5 前不拆 8 个 npm 包 |
 
 **公开 API**：`ZhinAgent` 实现 `config/agent-interfaces.ts` 四接口（`IAgentTurnProcessor` 等）；`@zhin.js/agent` 与 `@zhin.js/agent/config` 均可 import 类型。

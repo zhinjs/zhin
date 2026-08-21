@@ -8,8 +8,6 @@ import type { Tool, Message } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { SkillSystem } from '../skill/skill-system.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
-import type { OrchestrationService } from '../orchestrator/orchestration-service.js';
-import type { RemoteAgentRegistry } from '../orchestrator/remote-agent-registry.js';
 import type { SubagentSystem } from '../subagent/index.js';
 import type { UserProfileStore } from '../user-profile.js';
 import type { AgentCore } from '../core/agent-core.js';
@@ -96,8 +94,6 @@ export interface ZhinAgentPrivate
   skillRegistry: SkillRegistry | null;
   skillSystem: SkillSystem | null;
   orchestrator: AgentOrchestrator | null;
-  orchestrationService: OrchestrationService | null;
-  remoteAgentRegistry: RemoteAgentRegistry | null;
   agentCore: AgentCore | null;
   toolSystem: ToolSystem | null;
   /** Optional host-level fallback, for transports without an interactive approval surface. */

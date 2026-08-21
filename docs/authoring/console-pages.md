@@ -45,7 +45,7 @@ export default function SandboxPage() {
 | 文件 | 所属插件 | 路由 |
 | --- | --- | --- |
 | `pages/index.tsx` | `sandbox` | `/sandbox` |
-| `pages/orchestration.tsx` | root（应用） | `/p-orchestration` |
+| `pages/workroom.tsx` | root（应用） | `/p-workroom` |
 | `pages/index.tsx` | root（应用） | `/` |
 
 即：`index` 映射到插件路径本身（不带叶子段），其它文件映射为 `p-<name>` 叶子。路由冲突（两个页面算出同一路由）在启动期报错。

@@ -1,4 +1,4 @@
-import { OrchestrationRunsPage } from '@zhin.js/client';
+import { WorkroomRunsPage } from '@zhin.js/client';
 import { definePage } from '@zhin.js/console-contract';
 
 export const meta = definePage({
@@ -7,4 +7,4 @@ export const meta = definePage({
   order: 30,
 });
 
-export default OrchestrationRunsPage;
+export default WorkroomRunsPage;

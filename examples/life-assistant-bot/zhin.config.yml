@@ -17,8 +17,14 @@ http:
   port: 8086
   token: "${HTTP_TOKEN}"
 
+database:
+  dialect: sqlite
+  filename: .zhin/data.sqlite
+
 # --- AI 配置 ---
 ai:
+  sessions:
+    useDatabase: true
   providers:
     ollama:
       sdk: ollama

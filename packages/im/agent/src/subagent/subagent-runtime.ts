@@ -24,10 +24,7 @@ import { runAgentLoopStandaloneTurn } from '../core/agent-loop-standalone.js';
 import { DEFAULT_CONFIG, type ZhinAgentConfig } from '../config/index.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { resolveSubagentAgentTools } from '../orchestrator/resolve-subagent-tools.js';
-import {
-  AgentDispatcher,
-  type AgentRole,
-} from '../orchestrator/agent-dispatcher.js';
+import type { AgentRole } from '../orchestrator/role-configs.js';
 import { buildSubagentUserDelivery } from '../media/subagent-user-delivery.js';
 import { type AgentMeta, type AgentEffortLevel, loadAgentInstructionsBody } from '../discovery/agents.js';
 const EFFORT_MAX_ITERATIONS: Record<AgentEffortLevel, number> = {
@@ -42,7 +39,7 @@ import {
   type SubagentContextMode,
 } from '../subagent-preset.js';
 import { packageSubagentResult } from '../subagent-artifact.js';
-import { buildSubagentRolePrompt, sanitizeSubagentSystemPrompt } from '../subagent-prompt.js';
+import { sanitizeSubagentSystemPrompt } from '../subagent-prompt.js';
 import type { ToolCallRecord } from '../core/tool-calls-user-format.js';
 import {
   notifySubagentGoal,
@@ -93,8 +90,6 @@ export interface SpawnOptions {
   runInput?: AgentRunInput;
   /** 用于向用户发送「任务【id】:执行通道 => label」进度提示 */
   notifyContext?: Message;
-  /** 编排 Task ID（Kernel 持久化；Dispatcher 仅内存投影） */
-  orchestrationTaskId?: string;
   /** spawn_task 声明的子任务工具（与父会话 sessionLoaded 取交集作为初始池） */
   requestedTools?: string[];
   /** spawn_task 声明的技能名 */
@@ -165,8 +160,6 @@ export interface SubagentRuntimeOptions {
   onSubagentUsage?: (usage: Usage) => void;
   /** 注册子 agent 生命周期 Promise，供主会话在 turn 结束前可选等待 */
   registerSubagentTask?: (done: Promise<void>) => void;
-  /** Agent 调度器（可选，用于角色管理） */
-  agentDispatcher?: AgentDispatcher;
   /** 生命周期事件回调（供上层桥接到统一事件总线） */
   onEvent?: (event: SubagentLifecycleEvent) => void | Promise<void>;
   /** 异步子 agent 完成：结果交还主 agent（优先于 resultSender） */
@@ -199,7 +192,6 @@ export class SubagentRuntime {
   private resultSender: SubagentResultSender | null = null;
   private onSubagentUsage: ((usage: Usage) => void) | null;
   private registerSubagentTask: ((done: Promise<void>) => void) | null;
-  private agentDispatcher: AgentDispatcher | null;
   private onEvent: ((event: SubagentLifecycleEvent) => void | Promise<void>) | null;
   private onSubagentCompleteFn: ((payload: SubagentCompletePayload) => Promise<void>) | null;
   private eventEmitter: ZhinAgentEventEmitter | null;
@@ -220,7 +212,6 @@ export class SubagentRuntime {
     this.modelRegistry = options.modelRegistry ?? null;
     this.onSubagentUsage = options.onSubagentUsage ?? null;
     this.registerSubagentTask = options.registerSubagentTask ?? null;
-    this.agentDispatcher = options.agentDispatcher ?? null;
     this.onEvent = options.onEvent ?? null;
     this.onSubagentCompleteFn = options.onSubagentComplete ?? null;
     this.eventEmitter = options.eventEmitter ?? null;
@@ -317,7 +308,6 @@ export class SubagentRuntime {
           presetName: enriched.agent ?? enriched.label,
           keepTypingUntilUpstreamFinish: true,
           runInput: enriched.runInput,
-          orchestrationTaskId: enriched.orchestrationTaskId,
           agentMeta: enriched._agentMeta,
           requestedTools: enriched.requestedTools,
           requestedSkills: enriched.requestedSkills,
@@ -358,7 +348,6 @@ export class SubagentRuntime {
       systemPrompt: enriched.systemPrompt,
       contextPreamble: enriched.contextPreamble,
       presetName: enriched.agent ?? enriched.label,
-      orchestrationTaskId: enriched.orchestrationTaskId,
       agentMeta: enriched._agentMeta,
       requestedTools: enriched.requestedTools,
       requestedSkills: enriched.requestedSkills,
@@ -447,7 +436,6 @@ export class SubagentRuntime {
       keepTypingUntilUpstreamFinish?: boolean;
       runInput?: AgentRunInput;
       contextPreamble?: string;
-      orchestrationTaskId?: string;
       agentMeta?: AgentMeta;
       requestedTools?: string[];
       requestedSkills?: string[];
@@ -493,8 +481,6 @@ export class SubagentRuntime {
       agent: opts?.presetName,
     });
 
-    let dispatcherTaskId: string | undefined = opts?.orchestrationTaskId;
-    const isOrchestrationTask = !!opts?.orchestrationTaskId;
     const binding = opts?.binding ?? null;
     const provider = binding && this.getProviderFn
       ? this.getProviderFn(binding.providerAlias)
@@ -516,7 +502,6 @@ export class SubagentRuntime {
         task,
         role,
         config: (this.execPolicyConfig ?? DEFAULT_CONFIG) as Required<ZhinAgentConfig>,
-        agentDispatcher: this.agentDispatcher,
         agentMeta: opts?.agentMeta,
         requestedTools: opts?.requestedTools,
         parentSessionLoaded: opts?.parentSessionLoaded,
@@ -530,35 +515,9 @@ export class SubagentRuntime {
 
       let systemPrompt = opts?.systemPrompt;
       if (!systemPrompt) {
-        if (this.agentDispatcher && isOrchestrationTask && dispatcherTaskId) {
-          const taskDef = this.agentDispatcher.getTask(dispatcherTaskId);
-          if (taskDef) {
-            systemPrompt = buildSubagentRolePrompt(this.agentDispatcher, taskDef.role, taskDef);
-          }
-        }
-        if (!systemPrompt && this.agentDispatcher) {
-          const taskDef = this.agentDispatcher.createTask({
-            name: label,
-            description: task,
-            role,
-            goal: task,
-            priority: 'medium',
-            context,
-          });
-          if (!isOrchestrationTask) dispatcherTaskId = taskDef.id;
-          systemPrompt = buildSubagentRolePrompt(this.agentDispatcher, role, taskDef);
-        } else if (!systemPrompt) {
-          systemPrompt = this.buildSubagentPrompt(task);
-        }
+        systemPrompt = this.buildSubagentPrompt(task);
       } else {
         systemPrompt = sanitizeSubagentSystemPrompt(systemPrompt);
-      }
-
-      if (isOrchestrationTask && dispatcherTaskId && this.agentDispatcher) {
-        this.agentDispatcher.markRunning(
-          dispatcherTaskId,
-          new Promise(() => {}),
-        );
       }
       if (opts?.contextPreamble?.trim()) {
         systemPrompt = `${systemPrompt}\n\n## Parent session context (fork)\n${opts.contextPreamble.trim()}`;
@@ -661,13 +620,6 @@ export class SubagentRuntime {
         toolCalls: [],
         agent: opts?.presetName,
       });
-    } finally {
-      if (isOrchestrationTask && dispatcherTaskId && this.agentDispatcher) {
-        this.agentDispatcher.releaseRunning(dispatcherTaskId);
-      }
-      if (this.agentDispatcher && dispatcherTaskId && !isOrchestrationTask) {
-        this.agentDispatcher.releaseTask(dispatcherTaskId);
-      }
     }
     return;
   }

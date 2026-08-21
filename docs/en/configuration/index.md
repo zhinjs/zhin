@@ -212,7 +212,7 @@ ai:
   sessions:                # Session storage
     maxHistory: 200        # Default 200 in database mode, 100 in memory mode
     expireMs: 604800000    # Default 7 days in database mode, 24h in memory mode
-    useDatabase: true      # Default true
+    useDatabase: true      # Default true; uses Database Root Host (.zhin/data.sqlite when database is omitted)
   context:                 # Group chat context recording
     enabled: true
     maxRecentMessages: 100
@@ -246,7 +246,7 @@ ai:
     timeout: 60000
 ```
 
-`ai.remoteAgents` (A2A remote Agents: `id` + `cardUrl` + optional `token`), `ai.multimodal` (image/audio/video inbound and outbound strategies), `ai.knowledge.baseDir` (local knowledge base directory, default `knowledge`), etc., are configured as needed.
+`ai.multimodal` (image/audio/video inbound and outbound strategies), `ai.knowledge.baseDir` (local knowledge base directory, default `knowledge`), etc., are configured as needed. Remote Agents are no longer attached through an `ai.remoteAgents` side path; a future A2A Executor must follow Workroom Assignment leases and Journal events.
 
 ## plugin and plugins
 

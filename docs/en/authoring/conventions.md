@@ -52,7 +52,7 @@ Supplementary rules per directory:
 | `skills/` | Subdirectory name is the localName, directory must contain `SKILL.md` | `skills/memory-consolidate/SKILL.md` -> `memory-consolidate` |
 | `agents/` | File name with `.agent.md` suffix removed | `agents/planner.agent.md` -> `planner` |
 | `mcp/` | File name without extension (no recursion) | `mcp/my-server.ts` -> `my-server` |
-| `pages/` | File name without extension; `$nav.tsx` / `$footer.tsx` are layout slots (when both `.ts` and `.tsx` exist for the same slot, `.tsx` takes precedence) | `pages/orchestration.tsx` -> `orchestration`; `pages/$nav.tsx` -> `nav` |
+| `pages/` | File name without extension; `$nav.tsx` / `$footer.tsx` are layout slots (when both `.ts` and `.tsx` exist for the same slot, `.tsx` takes precedence) | `pages/workroom.tsx` -> `workroom`; `pages/$nav.tsx` -> `nav` |
 
 Malformed bracket syntax in command dynamic parameter files throws `CommandPathSyntaxError`, with the message `expected [name].ts(x), [[name]].ts(x), [...name].ts(x) or [[...name]].ts(x)`; a default value requires double brackets in the file name, and the parameter must be declared in `params`, otherwise the same error is thrown.
 
@@ -190,8 +190,8 @@ tools:
 
 ### pages/ -- Console Pages
 
-`pages/*.tsx` is compiled into browser artifacts and mounted in the Remote Console; `examples/full-bot/pages/orchestration.tsx` is a ready-made example. `$nav.tsx` / `$footer.tsx` are consumed by `@zhin.js/layout`, injecting navigation and footer.
+`pages/*.tsx` is compiled into browser artifacts and mounted in the Remote Console; `examples/full-bot/pages/workroom.tsx` is a ready-made example. `$nav.tsx` / `$footer.tsx` are consumed by `@zhin.js/layout`, injecting navigation and footer.
 
 ## Repository Examples
 
-When looking for production-grade references, browse these directories directly: `commands` -- see `plugins/utils/lottery/commands/` (including dynamic parameter `lottery/[[game]].ts`); `middlewares` -- see `plugins/utils/group-suite/middlewares/` and `plugins/games/*/middlewares/`; `handlers` -- use `handlers/message/receive.ts` + `defineHandler` (see the minimal form above; add in-repo examples as needed); `components` -- see `plugins/utils/music/components/share-music.ts`; `adapters` -- see `plugins/adapters/napcat/adapters/napcat.ts`; `tools` -- see `plugins/utils/music/tools/` and `plugins/utils/group-suite/tools/`; `skills` -- see `examples/full-bot/skills/memory-consolidate/`; `agents` -- see `examples/multi-agent-room/agents/`; `pages` -- see `examples/full-bot/pages/orchestration.tsx`.
+When looking for production-grade references, browse these directories directly: `commands` -- see `plugins/utils/lottery/commands/` (including dynamic parameter `lottery/[[game]].ts`); `middlewares` -- see `plugins/utils/group-suite/middlewares/` and `plugins/games/*/middlewares/`; `handlers` -- use `handlers/message/receive.ts` + `defineHandler` (see the minimal form above; add in-repo examples as needed); `components` -- see `plugins/utils/music/components/share-music.ts`; `adapters` -- see `plugins/adapters/napcat/adapters/napcat.ts`; `tools` -- see `plugins/utils/music/tools/` and `plugins/utils/group-suite/tools/`; `skills` -- see `examples/full-bot/skills/memory-consolidate/`; `agents` -- see `examples/multi-agent-room/agents/`; `pages` -- see `examples/full-bot/pages/workroom.tsx`.

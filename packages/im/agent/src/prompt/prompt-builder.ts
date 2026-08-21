@@ -9,7 +9,7 @@
  * - 角色一致性保证
  */
 
-import type { AgentRole } from '../orchestrator/agent-dispatcher.js';
+import type { AgentRole } from '../orchestrator/role-configs.js';
 
 // ── 提示词层级定义 ────────────────────────────────────────────────────
 

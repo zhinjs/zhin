@@ -2,7 +2,7 @@
  * 统一的能力接缝集成器
  *
  * 管理 Tool / Skill 两类能力的 Provider Registry，并提供便利方法。
- * 在 ZhinAgent 的作用域中提供，供 Consumer（AgentDispatcher、PromptAssemblyRegistry）使用。
+ * 在 ZhinAgent 的作用域中提供，供 capability projector 与 PromptAssemblyRegistry 使用。
  */
 
 import { SeamProviderRegistry, type SeamScope } from './seam-provider.js';

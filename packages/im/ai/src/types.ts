@@ -416,16 +416,6 @@ export interface AIConfig {
     env?: Record<string, string>;
     headers?: Record<string, string>;
   }>;
-  /** Agent Mesh — 远程 Agent（A2A Agent Card URL） */
-  remoteAgents?: Array<{
-    id: string;
-    name?: string;
-    /** A2A Agent Card URL（如 https://host/a2a/pm/.well-known/agent-card.json） */
-    cardUrl: string;
-    token?: string;
-    roles?: string[];
-    description?: string;
-  }>;
   /** Agent 工具开关与执行安全 */
   agent?: {
     /** Existing same-session ingress queue policy, reused by canonical Turn Intent resolution. */

@@ -2,7 +2,7 @@
   "name": "multi-agent-room",
   "private": true,
   "version": "0.0.24",
-  "description": "单 Bot 多 Agent 编排示例（OrchestrationKernel + Agent bindings）",
+  "description": "单 Bot 多 Agent 协作示例（Workroom Kernel + Agent bindings）",
   "type": "module",
   "scripts": {
     "dev": "zhin runtime start",

@@ -1,6 +1,6 @@
 # full-bot（L4 全维度参考）
 
-在 [`minimal-bot`](../minimal-bot/)（Stable）之上叠加 L4 能力：**硬编排**、**语义记忆**、**MCP Agent Mesh**、**Sandbox + NapCat + KOOK** 三适配器。
+在 [`minimal-bot`](../minimal-bot/)（Stable）之上叠加 L4 能力：**Workroom Kernel**、**语义记忆**、**MCP Agent Mesh**、**Sandbox + NapCat + KOOK** 三适配器。
 
 维护者厨房水槽仍见 [`../test-bot`](../test-bot/)。
 
@@ -44,12 +44,11 @@ pnpm dev
 
 ## L4 配置要点
 
-- Missions 硬编排内置（无 `ai.orchestration` 配置项）
+- Workroom Kernel 使用显式 Project-scoped command 与 append-only Journal
 - `ai.memory.semantic.enabled: true`（`autoConsolidate: false`，由 skill 触发）
-- `ai.remoteAgents` loopback `cardUrl` 指向本机 A2A Agent Card（`/a2a/zhin/...`）
 - Runtime Host 按配置动态加载 `@zhin.js/a2a` / `@zhin.js/mcp`，统一 Bearer 鉴权
 - `package.json#zhin` 声明三 Adapter 子插件及 Command/Component/Skill/Tool/Page Feature
-- `pages/orchestration.tsx` 由轻量 TypeScript Client Builder 构建，不依赖 Vite
+- `pages/workroom.tsx` 由轻量 TypeScript Client Builder 构建，不依赖 Vite
 
 详见 [`zhin.config.yml`](./zhin.config.yml) 与 [`ACCEPTANCE.md`](./ACCEPTANCE.md)。
 

@@ -79,7 +79,7 @@ pnpm --filter @zhin.js/scaffold-wizard build   # 或 pnpm prepare:cli
 | IM Session SSOT（`pnpm check:im-session-ssot`） | IM 场景/session 身份解析走 core SSOT |
 | usePlugin Top-Level（`pnpm check:use-plugin-top-level`） | 禁止调用已移除的 `usePlugin()`（throwing stub） |
 | getPlugin Runtime（`pnpm check:get-plugin-runtime`） | 禁止调用已移除的 `getPlugin()`（含运行时回调；throwing stub） |
-| Orchestration SSOT（`pnpm check:orchestration-ssot`） | 编排任务状态须经 OrchestrationKernel |
+| Workroom SSOT（`pnpm check:workroom-ssot`） | Workroom 状态只经 Journal + CAS Kernel；禁止恢复并行可变权威 |
 
 **AI 层**
 

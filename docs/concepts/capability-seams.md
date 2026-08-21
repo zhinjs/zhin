@@ -25,17 +25,17 @@
 
 ### 1. LLM Service
 - **定义**：大语言模型适配（`AIProvider` in `@zhin.js/ai`）
-- **消费方**：`AgentDispatcher`
+- **消费方**：Agent Definition / Assignment capability snapshot projector
 - **示例**：DeepSeek API、OpenAI API
 
 ### 2. Tool Service（`ToolService`）
 - **定义**：原子操作（读文件、调 API 等）
-- **消费方**：`AgentDispatcher`（工具执行）、`PromptAssemblyRegistry`（schema 注入）
+- **消费方**：Assignment capability snapshot projector（工具执行）、`PromptAssemblyRegistry`（schema 注入）
 - **示例**：内置工具（`BuiltinToolService`）、平台工具、插件工具
 
 ### 3. Skill Service（`SkillService`）
 - **定义**：复合能力（通常由多个 Tool 组合而成）
-- **消费方**：`AgentDispatcher`
+- **消费方**：Workroom Scheduler / Assignment projector
 - **示例**：GitHub Skill、数据分析 Skill
 
 ## 核心组件

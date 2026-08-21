@@ -15,7 +15,7 @@ flowchart LR
     H --> R2[RPC /api/console/request]
     H --> R3[SSE /api/events]
     H --> R4[WS /sandbox]
-    R1 --> P[插件 / Endpoint / 会话 / 编排数据]
+    R1 --> P[插件 / Endpoint / 会话 / Workroom 投影]
 ```
 
 ## 部署与配置
@@ -51,7 +51,7 @@ http:
 | Files | RPC `files:tree` / `files:read` / `files:save`、`env:list` / `env:save` | 项目文件树与 `.env` 管理 |
 | Introspection | `GET /api/introspection/{commands,tools,endpoints,bindings,mcp}` | 分页内省：命令、工具、端点、绑定、MCP |
 | Agent Sessions | `GET/POST /api/agent/sessions/*` | AI 会话树查看与分支切换 |
-| Orchestration | `GET /api/agent/orchestration/runs[/*]` | 编排 Run / Task 状态追踪 |
+| Workroom | `GET /api/agent/workroom/runs[/*]` | 按显式 Project 查询 replayed Run / Task / Assignment 状态 |
 | Marketplace | `GET /pub/marketplace/search`、`/pub/marketplace/detail/*`、`GET /api/marketplace/updates` | 插件市场（plugins.json + npmmirror）与更新检查 |
 | Sandbox | WS `/sandbox` | 内置沙箱聊天，免平台联调直接对话 |
 

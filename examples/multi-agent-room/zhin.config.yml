@@ -14,8 +14,14 @@ http:
   token: ${HTTP_TOKEN:-multi-agent-room-dev-token}
   port: 8788
 
+database:
+  dialect: sqlite
+  filename: .zhin/data.sqlite
+
 ai:
   enabled: true
+  sessions:
+    useDatabase: true
   providers:
     ollama:
       sdk: ollama

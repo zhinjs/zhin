@@ -1,17 +1,10 @@
 /**
  * spawn_task — 主会话将耗时任务派给后台子 agent（与 issue #396 对齐）
  */
-import { type Message, type Tool, type ToolParametersSchema, type ToolResult, resolveIMSessionIdFromMessage } from '@zhin.js/core';
-import {
-  type AgentTool,
-  type OrchestrationRunSource,
-} from '@zhin.js/ai';
-import { orchestrationSourceFromMessage } from '../orchestrator/orchestration-source.js';
+import { type Message, type Tool, type ToolParametersSchema, type ToolResult } from '@zhin.js/core';
+import type { AgentTool } from '@zhin.js/ai';
 import type { SubagentSystem, SubagentOrigin } from '../subagent/index.js';
 import type { SubagentContextMode } from '../subagent-preset.js';
-import type { OrchestrationService } from '../orchestrator/orchestration-service.js';
-import type { RemoteAgentRegistry } from '../orchestrator/remote-agent-registry.js';
-import { executeRemoteOrchestrationTask } from '../orchestrator/remote-task-executor.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { getActiveDeferredTurnController } from '../tool-catalog/deferred-turn-controller.js';
 import {
@@ -26,7 +19,7 @@ export interface SpawnTaskToolOptions {
 
 function buildSpawnTaskDescription(allowedAgents?: string[]): string {
   const lines = [
-    'Delegate complex or long-running work to a sub-agent. By default creates a Kernel task, runs asynchronously, and returns its task ID; set wait=true to block until completion.',
+    'Delegate complex or long-running work to a temporary chat sub-agent. This does not create or update a durable Workroom Task. It runs asynchronously and returns an ephemeral subtask ID; set wait=true to block until completion.',
     'You may issue multiple spawn_task calls in one assistant turn when subtasks are independent (prefer parallel spawn for independent work).',
     'Use draw for text-to-image and vision for image understanding. Image results log preview as {image}; when wait=true, do not tell the user to wait.',
   ];
@@ -73,28 +66,12 @@ export const SPAWN_TASK_PARAMETERS: ToolParametersSchema = {
       items: { type: 'string' },
       description: 'Skill names the subtask needs (recommended).',
     },
-    run_id: {
-      type: 'string',
-      description: 'Hard orchestration run ID (use with task_id).',
-    },
-    task_id: {
-      type: 'string',
-      description: 'Hard orchestration task ID (must exist via orchestration_add_task or template).',
-    },
   },
   required: ['task'],
 };
 
 export function originFromMessage(message: Message): SubagentOrigin {
   return { message };
-}
-
-function runTitle(label: string | undefined, task: string): string {
-  return label ?? (task.slice(0, 80) || 'spawn_task');
-}
-
-function sourceFromMessage(message: Message): OrchestrationRunSource {
-  return orchestrationSourceFromMessage(message);
 }
 
 function parseStringArray(value: unknown): string[] | undefined {
@@ -114,8 +91,6 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
   constructor(
     private readonly sessionCommMessage: Message,
     private readonly manager: SubagentSystem,
-    private readonly orchestrationService: OrchestrationService | null,
-    private readonly remoteAgents: RemoteAgentRegistry | null,
     options?: SpawnTaskToolOptions,
   ) {
     super();
@@ -139,38 +114,6 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
       return '请提供任务描述';
     }
 
-    const runId = typeof args.run_id === 'string' ? args.run_id.trim() : '';
-    const orchestrationTaskId = typeof args.task_id === 'string' ? args.task_id.trim() : '';
-
-    if (runId && !orchestrationTaskId) {
-      return 'spawn_task 须同时提供 run_id 与 task_id';
-    }
-
-    const svc = this.orchestrationService;
-    let targetRunId = runId;
-    let targetTaskId = orchestrationTaskId;
-
-    if (targetTaskId) {
-      const dispatcher = svc?.dispatcherHandle;
-      if (!dispatcher) return '编排服务不可用（OrchestrationService 未注册）';
-      if (runId) {
-        await dispatcher.hydrateRun(runId);
-      }
-      const gate = dispatcher.canExecute(targetTaskId);
-      if (!gate.canExecute) {
-        return `无法执行 task ${targetTaskId}：${gate.reason ?? '门禁未通过'}`;
-      }
-      const agentTask = dispatcher.getTask(targetTaskId);
-      if (agentTask?.executorKind === 'remote_mesh') {
-        if (!this.remoteAgents) return '远程 Agent 注册表不可用';
-        const remoteResult = await executeRemoteOrchestrationTask(svc, this.remoteAgents, targetTaskId);
-        if (args.wait === true) {
-          return remoteResult.message;
-        }
-        return remoteResult.message;
-      }
-    }
-
     const origin = originFromMessage(this.sessionCommMessage);
     const labelStr = typeof label === 'string' ? label : undefined;
     const agentOpt = typeof agentName === 'string' && agentName.trim() ? agentName.trim() : undefined;
@@ -178,51 +121,19 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
     if (permissionError) return permissionError;
     const contextMode: SubagentContextMode | undefined =
       args.context === 'fork' || args.context === 'fresh' ? args.context : undefined;
-    const orchestrationRole = targetTaskId
-      ? svc?.dispatcherHandle.getTask(targetTaskId)?.role
-      : undefined;
     const requestedTools = parseStringArray(args.tools);
     const requestedSkills = parseStringArray(args.skills);
     const deferredController = getActiveDeferredTurnController();
     const parentSessionLoaded = deferredController?.loadedToolNames();
     const parentLoadedSkills = deferredController?.snapshot().loadedSkills;
 
-    if (svc && !targetTaskId) {
-      const sessionKey = resolveIMSessionIdFromMessage(this.sessionCommMessage);
-      const run = await svc.findOrCreateRun({
-        sessionKey,
-        title: runTitle(labelStr, task),
-        source: sourceFromMessage(this.sessionCommMessage),
-      });
-      const dispatched = await svc.dispatchTask({
-        runId: run.id,
-        name: runTitle(labelStr, task),
-        description: task,
-        role: orchestrationRole ?? 'subtask',
-        goal: task,
-        executorKind: 'local',
-        assignedTo: agentOpt,
-        context: {
-          tool: 'spawn_task',
-          agent: agentOpt ?? null,
-          contextMode: contextMode ?? null,
-        },
-        message: this.sessionCommMessage,
-        autoStart: false,
-      });
-      targetRunId = dispatched.run.id;
-      targetTaskId = dispatched.task.id;
-    }
-
     const opts = {
       task,
       label: labelStr,
       origin,
       agent: agentOpt,
-      role: orchestrationRole,
       notifyContext: this.sessionCommMessage,
       contextMode,
-      orchestrationTaskId: targetTaskId || undefined,
       requestedTools,
       requestedSkills,
       parentSessionLoaded,
@@ -233,51 +144,24 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
       if (typeof this.manager.spawnSync !== 'function') {
         return this.manager.spawn(opts);
       }
-      if (!svc || !targetTaskId) {
-        const result = await this.manager.spawnSync(opts);
-        return (
-          `子任务${labelStr ? `「${labelStr}」` : ''}已完成（同步等待）。\n\n${result}\n\n`
-          + '请根据以上结果继续后续步骤。'
-        );
-      }
-      const resultTask = await svc.runTaskWithResult(targetTaskId, this.manager.spawnSync(opts));
-      if (resultTask.status === 'failed') {
-        return `子任务 #${targetTaskId} 执行失败：${resultTask.error ?? 'unknown error'}`;
-      }
+      const result = await this.manager.spawnSync(opts);
       return (
-        `子任务 #${targetTaskId}${labelStr ? `「${labelStr}」` : ''}已完成（同步等待）。\n\n${resultTask.resultSummary ?? ''}\n\n`
+        `子任务${labelStr ? `「${labelStr}」` : ''}已完成（同步等待）。\n\n${result}\n\n`
         + '请根据以上结果继续后续步骤。'
       );
     }
-
-    if (!svc || !targetTaskId || typeof this.manager.spawnSync !== 'function') {
-      return this.manager.spawn(opts);
-    }
-
-    void svc.runTaskWithResult(targetTaskId, this.manager.spawnSync(opts)).catch((err) => {
-      void svc.safeFailTask(targetTaskId, err instanceof Error ? err.message : String(err));
-    });
-
-    return (
-      `任务已创建：#${targetTaskId}${targetRunId ? ` (run ${targetRunId})` : ''}\n`
-      + `status: assigned\n`
-      + '结果会回写到 OrchestrationKernel，可用 orchestration_status 或 Console 查看。'
-    );
+    return this.manager.spawn(opts);
   }
 }
 
 export function createSpawnTaskTool(
   commMessage: Message,
   manager: SubagentSystem,
-  orchestrationService: OrchestrationService | null,
-  remoteAgents: RemoteAgentRegistry | null,
   options?: SpawnTaskToolOptions,
 ): AgentTool {
   return new SpawnTaskBuiltinTool(
     commMessage,
     manager,
-    orchestrationService,
-    remoteAgents,
     options,
   ).toTool() as AgentTool;
 }

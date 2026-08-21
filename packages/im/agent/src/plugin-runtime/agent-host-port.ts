@@ -1,6 +1,6 @@
 import { createToken } from '@zhin.js/plugin-runtime';
 import type { AssistantRuntimeHandle } from '../assistant/runtime-contract.js';
-import type { OrchestrationRuntimeHandle } from '../orchestration-runtime.js';
+import type { WorkroomRuntimeHandle } from '../workroom/runtime.js';
 import type { SessionTreeRuntimeHandle } from '../session-tree-runtime.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { TurnOutcome, TurnRequest } from '../turn/turn-ingress.js';
@@ -45,7 +45,7 @@ export interface AgentHostIntrospectionPort {
 
 export interface AgentHostConsolePort {
   readonly sessionTree: SessionTreeRuntimeHandle;
-  readonly orchestration: OrchestrationRuntimeHandle;
+  readonly workroom: WorkroomRuntimeHandle;
   readonly assistant: AssistantRuntimeHandle | null;
 }
 

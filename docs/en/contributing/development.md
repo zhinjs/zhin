@@ -79,7 +79,7 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 | IM Session SSOT (`pnpm check:im-session-ssot`) | IM scene/session identity resolution uses core SSOT |
 | usePlugin Top-Level (`pnpm check:use-plugin-top-level`) | `usePlugin()` must be at module top level |
 | getPlugin Runtime (`pnpm check:get-plugin-runtime`) | `getPlugin()` is forbidden inside runtime callbacks |
-| Orchestration SSOT (`pnpm check:orchestration-ssot`) | Orchestration task state must go through OrchestrationKernel |
+| Workroom SSOT (`pnpm check:workroom-ssot`) | Workroom state must go through the Journal + CAS Kernel; parallel mutable authorities are forbidden |
 
 **AI Layer**
 

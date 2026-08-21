@@ -18,15 +18,11 @@ import type { AgentOrchestrator } from '../orchestrator/index.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { SubagentResultSender } from '../subagent/index.js';
 import type { ResolvedAgentBinding } from './types.js';
-import type { OrchestrationService } from '../orchestrator/orchestration-service.js';
-import type { RemoteAgentRegistry } from '../orchestrator/remote-agent-registry.js';
 
 /** ZhinAgent 运行依赖（通过 configure() 注入） */
 export interface ZhinAgentDependencies {
   skillRegistry: SkillRegistry;
   orchestrator: AgentOrchestrator;
-  orchestrationService: OrchestrationService;
-  remoteAgentRegistry: RemoteAgentRegistry;
   agentCore?: AgentCore;
   toolSystem?: ToolSystem;
   contextSystem?: ContextSystem;

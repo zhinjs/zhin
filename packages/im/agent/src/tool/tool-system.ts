@@ -82,8 +82,6 @@ export class ToolSystem {
       tools.push(createSpawnTaskTool(
         ctx.message,
         host.subagentSystem,
-        host.orchestrationService,
-        host.remoteAgentRegistry,
         {
           allowedAgents: filterAgentsForSpawnDescription(spawnableAgentNames, permissionTask),
           permissionTaskRules: permissionTask,

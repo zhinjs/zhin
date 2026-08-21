@@ -45,7 +45,7 @@ Route = plugin path + page name (`pageRoute`, `packages/console/plugin-contract/
 | File | Plugin | Route |
 | --- | --- | --- |
 | `pages/index.tsx` | `sandbox` | `/sandbox` |
-| `pages/orchestration.tsx` | root (application) | `/p-orchestration` |
+| `pages/workroom.tsx` | root (application) | `/p-workroom` |
 | `pages/index.tsx` | root (application) | `/` |
 
 That is: `index` maps to the plugin path itself (no leaf segment), while other files map to `p-<name>` leaf segments. Route conflicts (two pages computing the same route) report errors at startup.

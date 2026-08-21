@@ -26,8 +26,8 @@ describe('role ACL', () => {
 
   it('planner cannot write deliverables but can orchestrate', () => {
     expect(isToolAllowedForRole('write_file', 'planner')).toBe(false);
-    expect(isToolAllowedForRole('orchestration_start', 'planner')).toBe(true);
-    expect(isToolAllowedForRole('orchestration_add_task', 'planner')).toBe(true);
+    expect(isToolAllowedForRole('workroom_create_run', 'planner')).toBe(false);
+    expect(isToolAllowedForRole('workroom_transition', 'planner')).toBe(false);
     expect(isToolAllowedForRole('spawn_task', 'planner')).toBe(true);
     expect(isToolAllowedForRole('group_delegate', 'planner')).toBe(false);
   });

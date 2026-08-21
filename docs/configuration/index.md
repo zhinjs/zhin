@@ -212,7 +212,7 @@ ai:
   sessions:                # 会话存储
     maxHistory: 200        # 数据库模式默认 200，内存模式默认 100
     expireMs: 604800000    # 数据库模式默认 7 天，内存模式默认 24h
-    useDatabase: true      # 默认 true
+    useDatabase: true      # 默认 true；使用 Database Root Host（未写 database 时为 .zhin/data.sqlite）
   context:                 # 群聊上下文记录
     enabled: true
     maxRecentMessages: 100
@@ -246,7 +246,7 @@ ai:
     timeout: 60000
 ```
 
-`ai.remoteAgents`（A2A 远程 Agent：`id` + `cardUrl` + 可选 `token`）、`ai.multimodal`（图片/音频/视频入出站策略）、`ai.knowledge.baseDir`（本地知识库目录，默认 `knowledge`）等按需配置。
+`ai.multimodal`（图片/音频/视频入出站策略）、`ai.knowledge.baseDir`（本地知识库目录，默认 `knowledge`）等按需配置。远程 Agent 不再通过 `ai.remoteAgents` 旁路接入；未来的 A2A Executor 必须服从 Workroom Assignment lease 与 Journal 事件契约。
 
 ## plugin 与 plugins
 

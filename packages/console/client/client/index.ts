@@ -67,8 +67,8 @@ export {
   type LoadConsoleEntriesOptions,
 } from "./bootstrap/loadConsoleEntries.js";
 
-export { registerOrchestrationConsole } from "./orchestration/registerOrchestrationConsole.js";
-export { default as OrchestrationRunsPage } from "./orchestration/OrchestrationRunsPage.js";
+export { registerWorkroomConsole } from "./workroom/registerWorkroomConsole.js";
+export { default as WorkroomRunsPage } from "./workroom/WorkroomRunsPage.js";
 
 export {
   startAgentSession,

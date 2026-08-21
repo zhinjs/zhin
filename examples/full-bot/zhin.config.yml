@@ -28,10 +28,6 @@ ai:
     semantic:
       enabled: true
       autoConsolidate: false
-  remoteAgents:
-    - id: local
-      cardUrl: http://127.0.0.1:8069/a2a/zhin/.well-known/agent-card.json
-      token: ${HTTP_TOKEN:-full-bot-dev-token}
   providers:
     ollama:
       sdk: ollama
