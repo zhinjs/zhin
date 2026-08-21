@@ -77,6 +77,8 @@ command 或产品策略解析，Agent Runtime 不推断多人共识。跨 princi
 active turn 的工具 authority。
 该标记只能由 Host 的 `resolveTurnIntent` 回调产生；入站消息 metadata 自行声明会被拒绝。
 授权表示产品策略明确允许控制 active turn，工具仍按 active turn 的 authority 执行。
+Endpoint-owning plugin 也可通过 `turnIntentResolverToken` 注册按 adapter / scene 生效的可信
+resolver；Host 从当前 generation snapshot 读取它，因而热重载与 capability ownership 保持一致。
 Tool Journal 同时记录 active-turn `principal` 与最近参与者消息的 `causedBy`，用于区分
 “谁拥有该 Turn 的执行 authority”和“哪个参与者 Turn 导致了该工具调用”。
 

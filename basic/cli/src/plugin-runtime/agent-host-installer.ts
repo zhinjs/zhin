@@ -94,6 +94,8 @@ import {
   AgentRuntime,
   type AgentCapabilities,
   type ToolCapability,
+  turnIntentResolverToken,
+  type TurnIntentResolver,
 } from '@zhin.js/agent/runtime';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
@@ -196,11 +198,7 @@ export interface InstallAgentHostOptions {
   /** Optional host approval override; IM turns otherwise use createRuntimeApprovalPort. */
   readonly approvalPort?: ApprovalPort;
   /** Trusted product-policy seam for explicit steer/follow-up/observe intent and authorization. */
-  readonly resolveTurnIntent?: (input: Readonly<{
-    message: Message;
-    senderRoles: Readonly<RuntimeSenderRoles>;
-    defaultIntent: Readonly<TurnIntent>;
-  }>) => TurnIntent | Promise<TurnIntent>;
+  readonly resolveTurnIntent?: TurnIntentResolver;
 }
 
 /**
@@ -624,7 +622,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 message,
                 senderRoles,
                 service.getAgentConfig()?.inboundQueue?.groupMode,
-                options.resolveTurnIntent,
+                resolveSnapshotTurnIntentResolver(snapshot, requester) ?? options.resolveTurnIntent,
               ),
               ports: {
                 approval: options.approvalPort ?? createRuntimeApprovalPort({
@@ -1272,7 +1270,9 @@ export function resolveRuntimeTurnIntent(
 ): TurnIntent {
   const raw = message.metadata?.turnIntent;
   if (raw === undefined) {
-    return Object.freeze({ kind: groupMode === 'fifo' ? 'new' : 'supersede' });
+    return Object.freeze({
+      kind: groupMode === 'fifo' && isGroupOrChannelRuntimeMessage(message) ? 'new' : 'supersede',
+    });
   }
   if (!raw || typeof raw !== 'object') {
     throw new TypeError('Runtime turnIntent metadata must be an object');
@@ -1294,6 +1294,18 @@ export function resolveRuntimeTurnIntent(
     kind: kind as TurnIntent['kind'],
     ...(targetTurnId ? { targetTurnId } : {}),
   });
+}
+
+function isGroupOrChannelRuntimeMessage(message: Message): boolean {
+  return message.conversation.kind === 'group' || message.conversation.kind === 'channel';
+}
+
+export function resolveSnapshotTurnIntentResolver(
+  snapshot: Pick<RuntimeSnapshot, 'resources'>,
+  requester: PluginId,
+): TurnIntentResolver | undefined {
+  const candidate = snapshot.resources.get(requester)?.get(turnIntentResolverToken.id);
+  return typeof candidate === 'function' ? candidate as TurnIntentResolver : undefined;
 }
 
 export async function resolveProductTurnIntent(

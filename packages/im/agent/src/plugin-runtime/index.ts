@@ -1,5 +1,6 @@
 export * from './agent-runtime.js';
 export * from './agent-host-port.js';
+export * from './turn-intent-resolver.js';
 export * from './capability-ingress.js';
 export * from './deferred-capability-plan.js';
 export * from './full-agent-turn-engine.js';

@@ -3,6 +3,7 @@ import { Message } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { AITriggerConfig } from '@zhin.js/core';
 import { InteractionRouter, type ImTranscriptWriteInput } from '@zhin.js/agent';
+import { turnIntentResolverToken } from '@zhin.js/agent/runtime';
 import {
   createRuntimeTurnAccess,
   createRuntimeTurnRequest,
@@ -13,6 +14,7 @@ import {
   recordPassiveGroupContext,
   resolveRuntimeTurnIntent,
   resolveProductTurnIntent,
+  resolveSnapshotTurnIntentResolver,
   resolveRuntimeSenderRoles,
   resolveTriggerTimeoutMs,
   renderTriggerError,
@@ -77,6 +79,12 @@ describe('canonical IM TurnRequest ingress', () => {
 
     expect(resolveRuntimeTurnIntent(message)).toEqual({ kind: 'supersede' });
     expect(resolveRuntimeTurnIntent(message, 'fifo')).toEqual({ kind: 'new' });
+    expect(resolveRuntimeTurnIntent(makeMessage({
+      content: 'private next',
+      target: 'private:u',
+      sender: { id: 'u' },
+      metadata: { endpoint: 'bot' },
+    }), 'fifo')).toEqual({ kind: 'supersede' });
   });
 
   it('rejects product-policy authorization asserted by message metadata', () => {
@@ -115,6 +123,18 @@ describe('canonical IM TurnRequest ingress', () => {
       senderRoles: { isMaster: false, isTrusted: true },
       defaultIntent: { kind: 'supersede' },
     }));
+  });
+
+  it('loads the endpoint-owning plugin intent policy from the fixed snapshot', () => {
+    const requester = rootPluginId();
+    const resolver = vi.fn(() => ({ kind: 'observe' as const }));
+    const snapshot = {
+      resources: new Map([[requester, new Map([
+        [turnIntentResolverToken.id, resolver],
+      ])]]),
+    };
+
+    expect(resolveSnapshotTurnIntentResolver(snapshot, requester)).toBe(resolver);
   });
 
   it('maps runtime identity, scene, media, policy, and session without classic Message fields', () => {

@@ -29,6 +29,7 @@ In the Plugin Runtime, plugins consume Host capabilities by token: `context.use(
 | Token | Yields | Key methods |
 | --- | --- | --- |
 | `agentHostToken` (`@zhin.js/agent/runtime`) | Agent Host port | Enumerate Agent bindings, submit canonical `TurnRequest`s, and read Console/diagnostic projections; concrete ZhinAgent / AIService instances are not exposed |
+| `turnIntentResolverToken` (`@zhin.js/agent/runtime`) | Trusted intent resolver provided by the endpoint owner | Resolve messages by adapter/scene to `supersede`, `new`, `steer`, `follow_up`, or `observe`; only this resolver may issue `authorizedBy: 'product_policy'` for cross-participant control |
 
 ## Rendering & HTTP
 

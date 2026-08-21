@@ -29,6 +29,7 @@ Plugin Runtime 里，插件通过 `context.use(token)`（setup 期）或命令/�
 | Token | 注入后得到 | 关键方法 |
 | --- | --- | --- |
 | `agentHostToken`（`@zhin.js/agent/runtime`） | Agent Host 端口 | 列举 Agent binding、提交 canonical `TurnRequest`，以及读取 Console/诊断投影；不暴露 ZhinAgent / AIService 实例 |
+| `turnIntentResolverToken`（`@zhin.js/agent/runtime`） | Endpoint owner 提供的可信 intent resolver | 按 adapter / scene 将消息解析为 `supersede`、`new`、`steer`、`follow_up` 或 `observe`；只有该 resolver 能为跨参与者控制签发 `authorizedBy: 'product_policy'` |
 
 ## 渲染与 HTTP
 
