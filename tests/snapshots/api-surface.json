@@ -136,7 +136,7 @@
     "export{createToolRuntime,registerPolicyExtractor,type ToolRuntime,type ToolRuntimeTurnContext,type ToolRuntimeJournalPort,type ToolCallContext,type ToolExecutionOutcome,type ToolPolicyInputExtractor,}from './tool/tool-runtime.js';",
     "export{createTurnIngress,resolveTurnContextValue,turnPermissionSubject,}from './turn/turn-ingress.js';",
     "export{createUserProfileTool}from './tool/context-tools.js';",
-    "export{defineAgent,defineAgentTool,defineSkill,defineSchedule,defineConnection,defineHook,defineEval,disableTool,normalizeToolDenylist,defineState,defineDynamic,namespaceAuthoringName,slotNameFromFile,slotNameFromDir,}from './authoring/index.js';",
+    "export{defineAgent,defineAgentTool,defineSkill,defineSchedule,defineConnection,defineHook,defineEval,disableTool,normalizeToolDenylist,defineDynamic,namespaceAuthoringName,slotNameFromFile,slotNameFromDir,}from './authoring/index.js';",
     "export{defineAgentPromptSection,}from './prompt/define-agent-prompt-section.js';",
     "export{defineAiDatabaseModels}from './init/define-ai-database-models.js';",
     "export{deliverScheduleToAdapter}from './assistant/deliver-schedule-to-adapter.js';",
@@ -147,7 +147,6 @@
     "export{ensureMcpConnections,ensureMcpConnectionsForBinding,getMcpToolsForBinding}from './orchestrator/mcp-lifecycle.js';",
     "export{executeAgentTurn}from './turn/execute-agent-turn.js';",
     "export{filterImDeliveryContent}from './segment/filter-im-delivery.js';",
-    "export{getAgentState,updateAgentState,clearAgentStateSession,registerAuthoringStateFromDefinition,listRegisteredAuthoringStates,}from './state/agent-state-store.js';",
     "export{getFileMemoryContext,getMemoryDir}from './memory-layers.js';",
     "export{handleRuntimeManagementCommand,}from './init/runtime-management-commands.js';",
     "export{introspectionRestBindings,introspectionRestEndpoints,introspectionRestCommands,introspectionRestMcp,introspectionRestTools,}from './init/introspection-rest.js';",
@@ -164,11 +163,9 @@
     "export{registerBuiltinPolicyExtractors}from './tool/builtin-policy-extractors.js';",
     "export{registerDefaultExecutors}from './orchestrator/bootstrap-executors.js';",
     "export{registerEndpointKeyColumnMigrationHook}from './init/upgrade-endpoint-id-schema.js';",
-    "export{requestConnectionAuthorization,completeConnectionAuthorization,buildAuthorizationRequiredEvent,buildAuthorizationCompletedEvent,}from './connection/authorization-flow.js';",
     "export{resolveWorkspacePrompt,clearWorkspacePromptCache,}from './prompt/workspace-prompt.js';",
     "export{seamIntegrationToken}from './seam/index.js';",
     "export{stampToolGeneration}from './tool/tool-system.js';",
-    "export{waitForAgentBootstrap}from './init/bootstrap-gate.js';",
     "export{}from './orchestrator/agent-dispatcher.js';"
   ],
   "@zhin.js/core": [

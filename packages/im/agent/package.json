@@ -106,11 +106,6 @@
       "development": "./src/security/index.ts",
       "import": "./lib/security/index.js"
     },
-    "./connection": {
-      "types": "./lib/connection/index.d.ts",
-      "development": "./src/connection/index.ts",
-      "import": "./lib/connection/index.js"
-    },
     "./runtime": {
       "types": "./lib/plugin-runtime/index.d.ts",
       "development": "./src/plugin-runtime/index.ts",

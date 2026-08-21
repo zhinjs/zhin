@@ -13,7 +13,6 @@ import {
   type AuthoringEvalDefinition,
   type AuthoringHookDefinition,
   type AuthoringDynamicDefinition,
-  type AuthoringStateDefinition,
   type AuthoringScheduleDefinition,
   type AuthoringSkillDefinition,
   type AuthoringToolDefinition,
@@ -21,7 +20,6 @@ import {
   type DiscoveredAuthoringDynamic,
   type DiscoveredAuthoringEval,
   type DiscoveredAuthoringHook,
-  type DiscoveredAuthoringState,
   type DiscoveredAuthoringSchedule,
   type DiscoveredAuthoringSkill,
   type DiscoveredAuthoringTool,
@@ -269,26 +267,6 @@ async function loadHookFile(
   };
 }
 
-async function loadStateFile(
-  filePath: string,
-  pluginName: string,
-  bareNames: boolean,
-  packageRoot?: string,
-): Promise<DiscoveredAuthoringState | null> {
-  const slotName = slotNameFromFile(filePath);
-  const exported = await importAuthoringModule(filePath, packageRoot);
-  if (!isAuthoringDefinition(exported, 'state')) return null;
-  const definition = exported as AuthoringStateDefinition;
-  const stateName = definition.name?.trim() || slotName;
-  return {
-    runtimeName: namespaceAuthoringName(pluginName, stateName, bareNames),
-    slotName: stateName,
-    pluginName,
-    filePath,
-    definition,
-  };
-}
-
 async function loadEvalFile(
   filePath: string,
   pluginName: string,
@@ -317,7 +295,6 @@ async function scanAgentDir(
   const schedules: DiscoveredAuthoringSchedule[] = [];
   const connections: DiscoveredAuthoringConnection[] = [];
   const hooks: DiscoveredAuthoringHook[] = [];
-  const states: DiscoveredAuthoringState[] = [];
   let dynamic: DiscoveredAuthoringDynamic | undefined;
   const subagents: DiscoveredPluginAgentSurface[] = [];
 
@@ -355,10 +332,6 @@ async function scanAgentDir(
   for (const file of listTsFiles(path.join(agentDir, 'hooks'))) {
     const item = await loadHookFile(file, pluginName, bareNames, packageRoot);
     if (item) hooks.push(item);
-  }
-  for (const file of listTsFiles(path.join(agentDir, 'state'))) {
-    const item = await loadStateFile(file, pluginName, bareNames, packageRoot);
-    if (item) states.push(item);
   }
   const dynamicTs = path.join(agentDir, 'dynamic.ts');
   const dynamicJs = path.join(agentDir, 'dynamic.js');
@@ -403,7 +376,6 @@ async function scanAgentDir(
     schedules,
     connections,
     hooks,
-    states,
     dynamic,
     subagents,
   };
@@ -422,7 +394,6 @@ export async function discoverPluginAgentSurface(
           schedules: [],
           connections: [],
           hooks: [],
-          states: [],
           dynamic: undefined,
           subagents: [],
         };

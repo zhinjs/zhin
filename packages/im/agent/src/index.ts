@@ -427,7 +427,6 @@ export {
 export type { IntrospectionJsonResponse } from './init/introspection-rest.js';
 export { collectIntrospectionBindings, collectIntrospectionAgentTools, collectIntrospectionSkills, collectIntrospectionMcpLabels, collectIntrospectionMcpWithConfigFallback } from './init/introspection-collectors.js';
 export { ensureMcpConnections, ensureMcpConnectionsForBinding, getMcpToolsForBinding } from './orchestrator/mcp-lifecycle.js';
-export { waitForAgentBootstrap } from './init/bootstrap-gate.js';
 export { composeZhinAgentRuntime } from './init/compose-zhin-agent-runtime.js';
 export type { ComposedZhinAgentRuntime } from './init/compose-zhin-agent-runtime.js';
 export { activateAiDatabaseStorage } from './init/activate-ai-database-storage.js';
@@ -576,12 +575,6 @@ export type {
 } from './schedule-domain/execution-domain.js';
 export { demoteScheduleCreator } from './schedule-domain/security-harness.js';
 export {
-  requestConnectionAuthorization,
-  completeConnectionAuthorization,
-  buildAuthorizationRequiredEvent,
-  buildAuthorizationCompletedEvent,
-} from './connection/authorization-flow.js';
-export {
   SKILL_DISCLOSURE_TOOLS,
   SKILL_DISCLOSURE_STEPS,
   SKILL_DISCLOSURE_PROMPT_HINT,
@@ -681,7 +674,6 @@ export {
   defineEval,
   disableTool,
   normalizeToolDenylist,
-  defineState,
   defineDynamic,
   namespaceAuthoringName,
   slotNameFromFile,
@@ -718,13 +710,6 @@ export type {
   AgentSurfacePluginInfo,
   AgentSurfaceWorkspaceAgentInfo,
 } from './discovery/agent-surface-info.js';
-export {
-  getAgentState,
-  updateAgentState,
-  clearAgentStateSession,
-  registerAuthoringStateFromDefinition,
-  listRegisteredAuthoringStates,
-} from './state/agent-state-store.js';
 export {
   applyDynamicTurnOverrides,
   registerDynamicResolver,

@@ -26,9 +26,6 @@
       "@zhin.js/agent/config": [
         "./packages/im/agent/src/config/index.ts"
       ],
-      "@zhin.js/agent/connection": [
-        "./packages/im/agent/src/connection/index.ts"
-      ],
       "@zhin.js/agent/connections": [
         "./packages/im/agent/src/authoring/entries/connections.ts"
       ],

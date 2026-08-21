@@ -15,7 +15,6 @@ export interface AgentSurfacePluginInfo {
   schedules: string[];
   connections: string[];
   hooks: string[];
-  states: string[];
   subagents: string[];
   evals: string[];
   hasInstructions: boolean;
@@ -135,8 +134,6 @@ function scanPluginSurface(packageRoot: string): AgentSurfacePluginInfo | null {
     .map((f) => namespaceAuthoringName(pluginName, slotNameFromFile(f)));
   const hooks = listFiles(path.join(agentDir, 'hooks'), /\.(ts|js)$/i)
     .map((f) => namespaceAuthoringName(pluginName, slotNameFromFile(f)));
-  const states = listFiles(path.join(agentDir, 'state'), /\.(ts|js)$/i)
-    .map((f) => namespaceAuthoringName(pluginName, slotNameFromFile(f)));
   const subagents = listSubdirs(path.join(agentDir, 'subagents'))
     .map((d) => namespaceAuthoringName(pluginName, slotNameFromDir(d), true));
   const evals = listFiles(evalsDir, /\.eval\.(ts|js)$/i)
@@ -151,7 +148,6 @@ function scanPluginSurface(packageRoot: string): AgentSurfacePluginInfo | null {
     schedules,
     connections,
     hooks,
-    states,
     subagents,
     evals,
     hasInstructions: fs.existsSync(path.join(agentDir, 'instructions.md')),
