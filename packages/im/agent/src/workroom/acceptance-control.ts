@@ -141,7 +141,7 @@ export function decideReviewerVerdict(
     throw new Error('Reviewer verdict principal does not match the Reviewer claim');
   }
   const evaluation = requireEvaluation(assignment);
-  assertVerdictBindings(evaluation, input.verdict);
+  assertReviewerVerdictBindings(evaluation, input.verdict);
 
   const verdict = freezeVerdict(input.verdict);
   const verdictEvent = event('reviewer.verdict_recorded', {
@@ -150,10 +150,10 @@ export function decideReviewerVerdict(
     reviewerPrincipalId: input.principalId,
     authorizedBy: authorization.authorizedBy,
     authorization,
-    outcome: requiresReviewerRework(verdict) ? 'rework' : 'passed',
+    outcome: reviewerVerdictRequiresRework(verdict) ? 'rework' : 'passed',
     verdict,
   });
-  const requiresRework = requiresReviewerRework(verdict);
+  const requiresRework = reviewerVerdictRequiresRework(verdict);
   if (requiresRework) {
     return Object.freeze([verdictEvent, event('task.rework_requested', {
       taskKey: assignment.taskKey,
@@ -370,7 +370,12 @@ function requireEvaluation(
   return wait.evaluation;
 }
 
-function assertVerdictBindings(decision: WorkroomAcceptanceDecision, verdict: ReviewerVerdict): void {
+export function assertReviewerVerdictBindings(
+  decision: WorkroomAcceptanceDecision,
+  value: unknown,
+): asserts value is ReviewerVerdict {
+  assertReviewerVerdictShape(value);
+  const verdict = value;
   if (verdict.candidateHash !== decision.candidate.hash) {
     throw new Error('Reviewer verdict is stale for the current Candidate hash');
   }
@@ -432,8 +437,39 @@ function reviewerFailureReason(verdict: ReviewerVerdict): string {
   return `Reviewer requested rework for criteria: ${failed.join(', ')}`;
 }
 
-function requiresReviewerRework(verdict: ReviewerVerdict): boolean {
+export function reviewerVerdictRequiresRework(verdict: ReviewerVerdict): boolean {
   return verdict.criteria.some(item => item.status !== 'passed');
+}
+
+function assertReviewerVerdictShape(value: unknown): asserts value is ReviewerVerdict {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Reviewer verdict must be a typed object');
+  }
+  const verdict = value as Partial<ReviewerVerdict>;
+  requireText(verdict.candidateHash, 'Reviewer verdict candidate hash');
+  if (!Array.isArray(verdict.criteria)
+    || !Array.isArray(verdict.acceptedClaimIds)
+    || !Array.isArray(verdict.rejectedClaimIds)
+    || !Array.isArray(verdict.evidenceRefs)) {
+    throw new Error('Reviewer verdict is missing typed criteria, claims or evidence');
+  }
+  if (verdict.reason !== undefined) requireText(verdict.reason, 'Reviewer verdict reason');
+  assertUniqueText(verdict.acceptedClaimIds, 'Reviewer accepted claims');
+  assertUniqueText(verdict.rejectedClaimIds, 'Reviewer rejected claims');
+  assertUniqueText(verdict.evidenceRefs, 'Reviewer verdict evidence');
+  for (const criterion of verdict.criteria) {
+    if (!criterion || typeof criterion !== 'object' || Array.isArray(criterion)) {
+      throw new Error('Reviewer criterion verdict must be a typed object');
+    }
+    requireText(criterion.criterionId, 'Reviewer criterion id');
+    if (!['passed', 'failed', 'needs_evidence'].includes(criterion.status)) {
+      throw new Error(`Reviewer criterion ${criterion.criterionId} has an invalid status`);
+    }
+    if (!Array.isArray(criterion.evidenceRefs)) {
+      throw new Error(`Reviewer criterion ${criterion.criterionId} is missing evidence refs`);
+    }
+    if (criterion.reason !== undefined) requireText(criterion.reason, 'Reviewer criterion reason');
+  }
 }
 
 function samePolicy(left: WorkroomAcceptancePolicySnapshot, right: WorkroomAcceptancePolicySnapshot): boolean {

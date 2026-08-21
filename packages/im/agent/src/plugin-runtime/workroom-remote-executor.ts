@@ -57,14 +57,21 @@ export function createGenerationWorkroomRemoteExecutorPort(
 function normalizeObservation(value: WorkroomRemoteDispatchObservation): WorkroomRemoteDispatchObservation {
   if (!['delivered', 'outcome_unknown', 'failed'].includes(value?.outcome)
     || typeof value?.receiptId !== 'string'
-    || !value.receiptId.trim()) {
+    || !value.receiptId.trim()
+    || !isOptionalNonEmptyString(value.remoteTaskId)
+    || !isOptionalNonEmptyString(value.remoteContextId)
+    || !isOptionalNonEmptyString(value.reason)) {
     throw new Error('Workroom Remote Executor returned an invalid transport observation');
   }
   return Object.freeze({
     outcome: value.outcome,
     receiptId: value.receiptId,
-    ...(value.remoteTaskId ? { remoteTaskId: value.remoteTaskId } : {}),
-    ...(value.remoteContextId ? { remoteContextId: value.remoteContextId } : {}),
-    ...(value.reason ? { reason: value.reason } : {}),
+    ...(value.remoteTaskId === undefined ? {} : { remoteTaskId: value.remoteTaskId }),
+    ...(value.remoteContextId === undefined ? {} : { remoteContextId: value.remoteContextId }),
+    ...(value.reason === undefined ? {} : { reason: value.reason }),
   });
+}
+
+function isOptionalNonEmptyString(value: unknown): value is string | undefined {
+  return value === undefined || (typeof value === 'string' && value.trim().length > 0);
 }

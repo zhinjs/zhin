@@ -18,6 +18,7 @@ import type {
 import type { WorkroomCommand } from '../../src/workroom/kernel-contracts.js';
 import type { WorkroomAcceptanceAuthorizationDecision } from '../../src/workroom/acceptance-control.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
+import { replayWorkroom } from '../../src/workroom/kernel-state.js';
 
 function fixture(
   acceptancePolicy: WorkroomAcceptancePolicyDecisionPort | null = pinnedAcceptancePolicy(),
@@ -308,6 +309,8 @@ describe('WorkroomKernel', () => {
       'project-1', 'run-1', reviewId, 'builder',
     )).rejects.toThrow('Producer cannot review its own Candidate');
     await kernel.claimReviewerAssignment('project-1', 'run-1', reviewId, 'reviewer-bob');
+    await expect(kernel.evaluateTaskAcceptance('project-1', 'run-1', 'build'))
+      .rejects.toThrow('already has an open Acceptance wait');
     lastAuthorityDecision!.projectId = 'forged-after-return';
     await expect(kernel.read('project-1', 'run-1')).resolves.toMatchObject({
       reviewerAssignments: { [reviewId]: { status: 'claimed' } },
@@ -331,6 +334,28 @@ describe('WorkroomKernel', () => {
       route: 'reviewer_required', reviewerAssignmentId: reviewId,
       acceptedClaimIds: ['claim-1'], rejectedClaimIds: [],
     });
+    const events = await journal.read('run-1');
+    const forgedVerdict = events.map((entry) => entry.type === 'reviewer.verdict_recorded'
+      ? {
+          ...entry,
+          payload: {
+            ...entry.payload,
+            verdict: { ...(entry.payload.verdict as object), candidateHash: 'sha256:forged' },
+          },
+        }
+      : entry);
+    expect(() => replayWorkroom(forgedVerdict)).toThrow('stale for the current Candidate hash');
+    const forgedSelfReview = events.map((entry) => entry.type === 'reviewer.claimed'
+      ? {
+          ...entry,
+          payload: {
+            ...entry.payload,
+            reviewerPrincipalId: 'builder',
+            authorization: { ...(entry.payload.authorization as object), principalId: 'builder' },
+          },
+        }
+      : entry);
+    expect(() => replayWorkroom(forgedSelfReview)).toThrow('Producer cannot review its own Candidate');
   });
 
   it('opens a hash-bound Sponsor Gate for high-risk mechanical work without Reviewer cost', async () => {
@@ -473,6 +498,10 @@ describe('WorkroomKernel', () => {
       acceptedClaimIds: ['claim-1'],
       rejectedClaimIds: ['claim-2'],
     });
+    const forgedSponsorHash = (await journal.read('run-1')).map((entry) => entry.type === 'sponsor_gate.decided'
+      ? { ...entry, payload: { ...entry.payload, candidateHash: 'sha256:forged' } }
+      : entry);
+    expect(() => replayWorkroom(forgedSponsorHash)).toThrow('stale for the current Candidate hash');
   });
 
   it('rejects a policy route that removes the baseline Sponsor requirement', async () => {

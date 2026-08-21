@@ -101,6 +101,9 @@ function normalizeTask(input: WorkflowPlanTaskInput): WorkflowPlanTaskProposal {
   if (!Number.isSafeInteger(input.maxAttempts) || input.maxAttempts < 1) {
     throw new Error('Workflow Plan Task maxAttempts must be a positive integer');
   }
+  if (typeof input.required !== 'boolean') {
+    throw new Error('Workflow Plan Task required must be a boolean');
+  }
   const dependsOn = normalizeNames(input.dependsOn, 'task.dependsOn');
   if (dependsOn.includes(input.key)) throw new Error(`Workflow Plan Task ${input.key} cannot depend on itself`);
   return deepFreeze({

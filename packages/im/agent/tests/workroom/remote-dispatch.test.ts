@@ -31,6 +31,34 @@ describe('Workroom remote dispatch outbox boundary', () => {
     } as typeof persisted;
     expect(() => assertWorkroomRemoteDispatchRetry(persisted, drifted)).toThrow('digest');
   });
+
+  it.each([
+    'refs/heads/',
+    'refs/heads/feature//nested',
+    'refs/heads/feature/./nested',
+    'refs/heads/feature/../nested',
+    'refs/heads/.hidden',
+    'refs/heads/feature..nested',
+    'refs/heads/feature@{upstream}',
+    'refs/heads/feature.lock',
+    'refs/heads/feature/nested.lock',
+    'refs/heads/feature.',
+    'refs/heads/feature/',
+    'refs/heads/feature name',
+    'refs/heads/feature~1',
+    'refs/heads/feature^2',
+    'refs/heads/feature:part',
+    'refs/heads/feature?part',
+    'refs/heads/feature*part',
+    'refs/heads/feature[part',
+    'refs/heads/feature\\part',
+    'refs/heads/feature\u0000part',
+    'refs/heads/feature\u007fpart',
+  ])('rejects non-canonical Git branch ref %j', (branchRef) => {
+    expect(() => createWorkroomRemoteDispatchOutboxItem(input({
+      workspace: { ...input().workspace, branchRef },
+    }))).toThrow('canonical');
+  });
 });
 
 function input(overrides: Partial<WorkroomRemoteDispatchInput> = {}): WorkroomRemoteDispatchInput {

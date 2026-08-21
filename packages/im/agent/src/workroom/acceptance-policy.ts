@@ -226,7 +226,7 @@ export function createAcceptanceDecisionInput(
   const sponsorGate = task.currentSponsorGateId
     ? state.sponsorGates[task.currentSponsorGateId]
     : undefined;
-  if (review?.status === 'open' || sponsorGate?.status === 'open') {
+  if (review?.status === 'open' || review?.status === 'claimed' || sponsorGate?.status === 'open') {
     throw new Error(`Task ${taskKey} already has an open Acceptance wait`);
   }
   const expiredWait = review?.status === 'expired' ? review : sponsorGate?.status === 'expired' ? sponsorGate : undefined;

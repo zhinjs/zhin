@@ -380,6 +380,7 @@ export * from './workroom/remote-dispatch.js';
 export * from './workroom/profile-compiler.js';
 export * from './workroom/workflow-plan-builder.js';
 export * from './portfolio/portfolio-journal.js';
+export * from './data-governance/data-governance.js';
 
 export {
   introspectionRestBindings,

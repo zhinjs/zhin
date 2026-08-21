@@ -40,6 +40,26 @@ describe('generation Workroom remote executor', () => {
     const drifted = { ...item, envelopeDigest: 'sha256:other' };
     await expect(proxy.retry(item, drifted, signal)).rejects.toThrow('digest');
   });
+
+  it.each([
+    { remoteTaskId: '' },
+    { remoteTaskId: { forged: true } },
+    { remoteContextId: '   ' },
+    { remoteContextId: 42 },
+    { reason: '' },
+    { reason: ['not', 'text'] },
+  ])('rejects malformed optional transport observation fields: %j', async (optional) => {
+    const proxy = createGenerationWorkroomRemoteExecutorPort(() => ({
+      dispatch: async () => ({
+        outcome: 'delivered',
+        receiptId: 'receipt:1',
+        ...optional,
+      } as never),
+    }));
+
+    await expect(proxy.dispatch(dispatchItem(), new AbortController().signal))
+      .rejects.toThrow('invalid transport observation');
+  });
 });
 
 function dispatchItem(): WorkroomRemoteDispatchOutboxItem {

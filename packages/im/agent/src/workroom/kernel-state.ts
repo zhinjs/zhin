@@ -10,6 +10,11 @@ import type {
   WorkroomTaskState,
 } from './kernel-contracts.js';
 import { assertAcceptanceContract, assertPinnedAcceptanceContract } from './acceptance-policy.js';
+import {
+  assertReviewerVerdictBindings,
+  reviewerVerdictRequiresRework,
+  type ReviewerVerdict,
+} from './acceptance-control.js';
 
 const TERMINAL_TASKS = new Set(['accepted', 'failed', 'cancelled']);
 const ACTIVE_ASSIGNMENTS = new Set(['leased', 'running', 'cancel_requested']);
@@ -285,6 +290,9 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
       assertPersistedAcceptanceAuthorization(state, payload, {
         action: 'claim_review', role: 'reviewer', principalKey: 'reviewerPrincipalId', targetId: assignment.id,
       });
+      if (payload.reviewerPrincipalId === assignment.producerPrincipalId) {
+        throw new Error('Producer cannot review its own Candidate');
+      }
       reviewerAssignments = {
         ...reviewerAssignments,
         [assignment.id]: {
@@ -305,12 +313,18 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
       if (payload.reviewerPrincipalId !== assignment.reviewerPrincipalId) {
         throw new Error('Reviewer verdict principal does not match the claimed Assignment');
       }
+      assertReviewerVerdictBindings(assignment.evaluation, payload.verdict);
+      const verdict = payload.verdict as ReviewerVerdict;
+      const expectedOutcome = reviewerVerdictRequiresRework(verdict) ? 'rework' : 'passed';
+      if (payload.outcome !== expectedOutcome) {
+        throw new Error('Reviewer verdict outcome does not match its criterion disposition');
+      }
       reviewerAssignments = {
         ...reviewerAssignments,
         [assignment.id]: {
           ...assignment,
           status: payload.outcome === 'passed' ? 'passed' : 'rework',
-          verdict: payload.verdict as Readonly<Record<string, unknown>>,
+          verdict: verdict as unknown as Readonly<Record<string, unknown>>,
         },
       };
       break;
@@ -347,6 +361,9 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
       assertPersistedAcceptanceAuthorization(state, payload, {
         action: 'decide_sponsor', role: 'sponsor', principalKey: 'sponsorPrincipalId', targetId: gate.id,
       });
+      if (payload.candidateHash !== gate.candidateHash) {
+        throw new Error('Sponsor decision is stale for the current Candidate hash');
+      }
       const decision = payload.decision as 'approve' | 'reject' | 'request_changes' | 'cancel';
       sponsorGates = {
         ...sponsorGates,
@@ -622,7 +639,7 @@ function assertNoOpenAcceptanceWait(state: WorkroomRunState, task: WorkroomTaskS
     ? state.reviewerAssignments[task.currentReviewerAssignmentId]
     : undefined;
   const gate = task.currentSponsorGateId ? state.sponsorGates[task.currentSponsorGateId] : undefined;
-  if (review?.status === 'open' || gate?.status === 'open') {
+  if (review?.status === 'open' || review?.status === 'claimed' || gate?.status === 'open') {
     throw new Error(`Task ${task.key} already has an open Acceptance wait`);
   }
 }

@@ -8,6 +8,7 @@
     "export * from '@zhin.js/agent';"
   ],
   "@zhin.js/agent": [
+    "export * from './data-governance/data-governance.js';",
     "export * from './interaction/index.js';",
     "export * from './portfolio/portfolio-journal.js';",
     "export * from './schedule-domain/index.js';",

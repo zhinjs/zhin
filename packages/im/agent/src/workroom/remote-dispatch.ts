@@ -143,8 +143,8 @@ function validateInput(input: WorkroomRemoteDispatchInput): void {
   }
   requireSha(input.workspace.baseSha, 'baseSha');
   if (input.workspace.checkpointSha) requireSha(input.workspace.checkpointSha, 'checkpointSha');
-  if (!input.workspace.targetRef.startsWith('refs/heads/')
-    || !input.workspace.branchRef.startsWith('refs/heads/')
+  if (!isCanonicalGitBranchRef(input.workspace.targetRef)
+    || !isCanonicalGitBranchRef(input.workspace.branchRef)
     || input.workspace.targetRef === input.workspace.branchRef) {
     throw new Error('Remote dispatch Workspace requires distinct canonical target and attempt branch refs');
   }
@@ -208,4 +208,27 @@ function isCanonicalRelativePath(value: string): boolean {
   if (!value.trim() || value.startsWith('/') || value.includes('\\') || value.includes('\0')) return false;
   const segments = value.split('/');
   return segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+}
+
+function isCanonicalGitBranchRef(value: string): boolean {
+  const prefix = 'refs/heads/';
+  if (!value.startsWith(prefix) || value.length === prefix.length
+    || value.endsWith('/') || value.endsWith('.')
+    || value.includes('..') || value.includes('@{')) {
+    return false;
+  }
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    if (codePoint <= 0x20 || codePoint === 0x7f
+      || ['~', '^', ':', '?', '*', '[', '\\'].includes(character)) {
+      return false;
+    }
+  }
+  return value.slice(prefix.length).split('/').every((segment) =>
+    segment !== ''
+    && segment !== '.'
+    && segment !== '..'
+    && !segment.startsWith('.')
+    && !segment.endsWith('.')
+    && !segment.endsWith('.lock'));
 }

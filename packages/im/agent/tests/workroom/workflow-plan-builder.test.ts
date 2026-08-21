@@ -71,4 +71,23 @@ describe('WorkflowPlanBuilder', () => {
       dependsOn: [], requires: { authorities: [''] },
     })).toThrow('non-empty');
   });
+
+  it('rejects a non-boolean required flag at the public runtime boundary', () => {
+    const builder = WorkflowPlanBuilder.create({
+      proposalId: 'proposal-runtime-validation',
+      projectId: 'project-1',
+      strategy: { id: 'strategy:runtime', version: '1.0.0', digest: 'sha256:strategy' },
+      parameterDigest: 'sha256:parameters',
+    });
+
+    expect(() => builder.addTask({
+      key: 'optional',
+      title: 'Optional task',
+      role: 'worker',
+      required: 'false' as unknown as boolean,
+      maxAttempts: 1,
+      dependsOn: [],
+      requires: {},
+    })).toThrow('required must be a boolean');
+  });
 });

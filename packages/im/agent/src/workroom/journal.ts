@@ -443,7 +443,7 @@ function validatePayload(
     case 'sponsor_gate.decided':
       requirePayloadString(payload, 'taskKey'); requirePayloadString(payload, 'gateId');
       requirePayloadString(payload, 'sponsorPrincipalId'); requirePayloadString(payload, 'authorizedBy');
-      requirePayloadString(payload, 'reason');
+      requirePayloadString(payload, 'reason'); requirePayloadString(payload, 'candidateHash');
       requirePayloadEnum(payload, 'decision', ['approve', 'reject', 'request_changes', 'cancel']);
       requirePayloadRecord(payload, 'authorization'); return;
     case 'task.rework_requested':
