@@ -46,18 +46,26 @@ export function resolveIcqqOutboundMediaMode(
 /**
  * file 模式：将 canonical MediaRef（`data.media`，kind=base64）物化为本机路径，
  * 并把 media 改写为 path 引用（icqq 客户端直接读盘）。
- * base64 模式：不改动（由 toCqString/formatOutboundBody 生成 base64://）。
+ * base64 模式：不改动（由 native Sendable projection 生成 base64:// file）。
  */
-export function materializeOutboundBase64(
+export interface PreparedIcqqOutboundMedia {
+  readonly content: SendContent;
+  dispose(): void;
+}
+
+export function prepareIcqqOutboundMedia(
   content: SendContent,
   mode: IcqqOutboundMediaMode = "file",
-): SendContent {
-  if (mode === "base64") return content;
+): PreparedIcqqOutboundMedia {
+  if (mode === "base64") return { content, dispose() {} };
 
+  const createdFiles: string[] = [];
+  const inputWasArray = Array.isArray(content);
   const segments = Array.isArray(content) ? content : [content];
-  return segments.map((seg) => {
+  const materialized = segments.map((seg) => {
     if (typeof seg === "string") return seg;
     const { type, data } = seg as MessageSegment;
+    if (!data || typeof data !== "object") return seg;
     const d = data as Record<string, unknown>;
     const media = d.media;
     if (!isMediaRef(media) || media.kind !== "base64") return seg;
@@ -73,6 +81,7 @@ export function materializeOutboundBase64(
       mime || (type === "image" ? "image/jpeg" : type === "video" ? "video/mp4" : "audio/mpeg"),
       type === "record" || type === "audio" ? "audio" : type,
     );
+    createdFiles.push(filePath);
     return {
       type,
       data: {
@@ -85,4 +94,10 @@ export function materializeOutboundBase64(
       },
     } as MessageSegment;
   });
+  return {
+    content: inputWasArray ? materialized : materialized[0]!,
+    dispose() {
+      for (const filePath of createdFiles) fs.rmSync(filePath, { force: true });
+    },
+  };
 }

@@ -5,8 +5,8 @@ ICQQ Plugin Runtime 适配器 — 进程内直接使用 [@icqqjs/icqq](https://g
 ## 功能特性
 
 - 群聊 / 私聊 / 群临时会话 / QQ 频道消息
-- 入站：`messageGatewayToken`，归一为 `gateway.receive({ conversation, message, content, ... })`
-- 出站：`send({ conversation, payload })` → `sendGroupMsg` / `sendPrivateMsg` / …（conversation kind/id/parent 路由）
+- 入站：`messageGatewayToken`，文本与图片 / 语音 / 视频 / 文件统一归一为 canonical `Segment` + `MediaRef`
+- 出站：canonical Segment 直接投影为 ICQQ 原生 `Sendable`，再由 `sendGroupMsg` / `sendPrivateMsg` / …发送
 - 群聊 reaction：`control.addReaction` / `removeReaction`（协议 ACK 失败不阻塞后续发送）
 - Agent 工具：包根 `tools/`（`@zhin.js/tool` Feature；模型侧名为 `icqq__send_user_like` 等）
 - Console Endpoint 管理：`src/endpoint.ts` 显式实现 `EndpointManagement`（好友/群/群成员列表、请求审批、删好友、踢人、禁言、设管理）
@@ -76,7 +76,9 @@ plugins:
 
 - 不再经过 `@icqqjs/cli` IPC 守护进程；登录态与协议栈都在本进程。
 - `autoReconnect`：Client 断线后按配置自动重连（`stop()` 为主动断开，不触发重连）。
-- `outboundMedia: file | base64`：`file` 把 segment base64 落盘后发本地路径；`base64` 发 CQ `base64://` 内联。
+- `outboundMedia: file | base64`：`file` 在发送期间把 segment base64 物化为临时文件并于发送结束清理；`base64` 使用 ICQQ 原生支持的 `base64://` file 参数。
+- ICQQ 的语音、视频、文件是独立消息元素；它们与其他段混发时适配器会明确拒绝，避免协议栈静默丢段。
+- 入站语音 / 视频在 Endpoint 持有原生 Client 时解析可下载 URL；解析失败则保留真实平台引用，不伪造或丢弃媒体。
 - **Console 社交/群管 RPC 已接线**：endpoint 把好友/群/群成员列表、请求审批和群管操作归一化为冻结的 `EndpointManagement`。Host 只消费该语义端口。
 - 好友/入群请求与通知：经 `sideEventGatewayToken` 分发到 `handlers`（`notice.receive` / `request.receive`）；审批走 `Request.$approve` / `EndpointManagement.approveRequest`。Console `request.list` 优先读 `management.listRequests()`（`getSystemMsg`），不再写入 `unified_inbox_request/notice`。
 - `system.*`（登录扫码等）分发到 `system.receive`。

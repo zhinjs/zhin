@@ -1,7 +1,8 @@
 import { pickCredential } from 'zhin.js/adapter';
+import type { MessageElem, Sendable } from '@icqqjs/icqq';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import type { MessageSegment } from "zhin.js";
-import { resolveCqMediaArg } from "./cq-message.js";
+import { resolveIcqqMediaFile } from "./cq-message.js";
 
 export type ActionResult = {
   id: string;
@@ -404,7 +405,20 @@ export function icqqOutboundTarget(conversation: ConversationRef): ParsedIcqqSen
   return { kind: 'channel', guildId, channelId: conversation.id };
 }
 
-export function formatOutboundBody(payload: unknown): string {
+const ICQQ_STANDALONE_ELEMENTS = new Set([
+  'record',
+  'video',
+  'file',
+  'json',
+  'long_msg',
+] as const);
+
+/**
+ * Project canonical Zhin segments directly into the native ICQQ Sendable
+ * algebra. ICQQ's direct client does not parse Zhin's historical `[image:x]`
+ * notation; passing that notation would send it as literal text.
+ */
+export function formatOutboundBody(payload: unknown): Sendable {
   if (typeof payload === 'string') {
     const text = payload.trim();
     return text || '\u200b';
@@ -422,39 +436,84 @@ export function formatOutboundBody(payload: unknown): string {
     const text = String(payload).trim();
     return text || '\u200b';
   }
-  const joined = payload.map((seg) => {
+  const elements = payload.flatMap<string | MessageElem>((seg) => {
     if (typeof seg === 'string') return seg;
     const item = seg as IcqqWireSegment;
     switch (item.type) {
       case 'text':
         return String(item.data?.text ?? '');
       case 'at':
-      case 'mention':
-        return `[at:${item.data?.qq ?? item.data?.id ?? item.data?.target ?? ''}]`;
-      case 'image': {
-        const arg = resolveCqMediaArg('image', item.data);
-        return arg ? `[image:${arg}]` : '';
+      case 'mention': {
+        const target = item.data?.qq ?? item.data?.id ?? item.data?.target;
+        if (target === 'all') return { type: 'at', qq: 'all' };
+        const qq = Number(target);
+        if (!Number.isSafeInteger(qq) || qq <= 0) {
+          throw new TypeError(`Invalid ICQQ mention target: ${String(target ?? '')}`);
+        }
+        return { type: 'at', qq };
       }
-      case 'face':
-        return `[face:${item.data?.id ?? ''}]`;
-      case 'reply':
-        return `[reply:${item.data?.message_id ?? item.data?.id ?? ''}]`;
+      case 'image': {
+        const arg = resolveIcqqMediaFile(item.data);
+        if (!arg) throw new TypeError('ICQQ image segment requires canonical data.media');
+        return { type: 'image', file: arg };
+      }
+      case 'face': {
+        const id = Number(item.data?.id);
+        if (!Number.isSafeInteger(id) || id < 0) {
+          throw new TypeError(`Invalid ICQQ face id: ${String(item.data?.id ?? '')}`);
+        }
+        return { type: 'face', id };
+      }
+      case 'reply': {
+        const id = String(item.data?.message_id ?? item.data?.id ?? '').trim();
+        if (!id) throw new TypeError('ICQQ reply segment requires message_id');
+        return { type: 'reply', id };
+      }
       case 'record':
       case 'audio': {
-        const arg = resolveCqMediaArg('record', item.data);
-        return arg ? `[record:${arg}]` : '';
+        const arg = resolveIcqqMediaFile(item.data);
+        if (!arg) throw new TypeError('ICQQ audio segment requires canonical data.media');
+        return { type: 'record', file: arg };
       }
       case 'video': {
-        const arg = resolveCqMediaArg('video', item.data);
-        return arg ? `[video:${arg}]` : '';
+        const arg = resolveIcqqMediaFile(item.data);
+        if (!arg) throw new TypeError('ICQQ video segment requires canonical data.media');
+        return { type: 'video', file: arg };
+      }
+      case 'file': {
+        const arg = resolveIcqqMediaFile(item.data);
+        if (!arg) throw new TypeError('ICQQ file segment requires canonical data.media');
+        const name = String(item.data?.name ?? '').trim();
+        return { type: 'file', file: arg, ...(name ? { name } : {}) };
+      }
+      case 'dice':
+        return { type: 'dice' };
+      case 'rps':
+        return { type: 'rps' };
+      case 'forward': {
+        const resid = String(item.data?.forward_id ?? item.data?.resid ?? item.data?.id ?? '').trim();
+        if (!resid) throw new TypeError('ICQQ forward segment requires forward_id');
+        return { type: 'long_msg', resid };
       }
       case 'share':
         return formatMusicShareJson(item.data);
-      default:
-        return String(item.data?.text ?? '');
+      default: {
+        const text = item.data?.text;
+        if (typeof text === 'string' && text) return text;
+        throw new TypeError(`Unsupported ICQQ outbound segment: ${item.type}`);
+      }
     }
-  }).join('').trim();
-  return joined || '\u200b';
+  }).filter((element) => typeof element !== 'string' || element.length > 0);
+
+  if (elements.length === 0) return '\u200b';
+  const standalone = elements.find(
+    (element): element is MessageElem =>
+      typeof element !== 'string' && ICQQ_STANDALONE_ELEMENTS.has(element.type as never),
+  );
+  if (standalone && elements.length !== 1) {
+    throw new TypeError(`ICQQ ${standalone.type} element must be sent as a standalone message`);
+  }
+  return elements.length === 1 ? elements[0]! : elements;
 }
 
 export function formatInboundContent(rawMessage: string): string {
@@ -468,8 +527,8 @@ function isWireSegment(value: unknown): value is IcqqWireSegment {
     && typeof (value as { type?: unknown }).type === 'string';
 }
 
-function formatMusicShareJson(data: Record<string, unknown> | undefined): string {
-  if (!data) return '';
+function formatMusicShareJson(data: Record<string, unknown> | undefined): MessageElem {
+  if (!data) throw new TypeError('ICQQ share segment requires data');
   const config = data.config as {
     appid?: number;
     package?: string;
@@ -511,5 +570,5 @@ function formatMusicShareJson(data: Record<string, unknown> | undefined): string
       },
     },
   };
-  return `[json:${JSON.stringify(json)}]`;
+  return { type: 'json', data: json };
 }

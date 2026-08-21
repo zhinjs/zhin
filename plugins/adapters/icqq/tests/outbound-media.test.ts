@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import * as fs from "node:fs";
 import {
-  materializeOutboundBase64,
+  prepareIcqqOutboundMedia,
   resolveIcqqOutboundMediaMode,
 } from "../src/outbound-media.js";
 
@@ -22,8 +22,10 @@ describe("materializeOutboundBase64", () => {
       type: "image" as const,
       data: { media: { kind: "base64", value: "YQ==" } },
     };
-    const out = materializeOutboundBase64([seg], "base64");
+    const prepared = prepareIcqqOutboundMedia([seg], "base64");
+    const out = prepared.content as typeof seg[];
     expect(out[0]).toBe(seg);
+    prepared.dispose();
   });
 
   it("file 模式把 canonical MediaRef base64 落盘并改写为 path 引用", () => {
@@ -31,7 +33,8 @@ describe("materializeOutboundBase64", () => {
       type: "image" as const,
       data: { media: { kind: "base64", value: "YQ==", mime_type: "image/png" } },
     };
-    const out = materializeOutboundBase64([seg], "file");
+    const prepared = prepareIcqqOutboundMedia([seg], "file");
+    const out = prepared.content as typeof seg[];
     const data = (out[0] as typeof seg).data as Record<string, unknown>;
     const media = data.media as { kind: string; value: string };
     expect(media.kind).toBe("path");
@@ -39,12 +42,15 @@ describe("materializeOutboundBase64", () => {
     expect(data.file).toBeUndefined();
     expect(data.url).toBeUndefined();
     expect(fs.existsSync(media.value)).toBe(true);
-    fs.rmSync(media.value, { force: true });
+    prepared.dispose();
+    expect(fs.existsSync(media.value)).toBe(false);
   });
 
   it("file 模式无 canonical MediaRef 的段不物化（原样保留，由 CQ 序列化丢弃）", () => {
     const seg = { type: "image" as const, data: { base64: "YQ==" } };
-    const out = materializeOutboundBase64([seg], "file");
+    const prepared = prepareIcqqOutboundMedia([seg], "file");
+    const out = prepared.content as typeof seg[];
     expect(out[0]).toBe(seg);
+    prepared.dispose();
   });
 });

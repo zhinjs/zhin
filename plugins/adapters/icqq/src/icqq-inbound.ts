@@ -74,8 +74,44 @@ export type IcqqMessageElement = {
   id?: string | number;
   url?: string;
   file?: string;
+  fid?: string;
+  name?: string;
+  size?: number;
+  seconds?: number;
   [key: string]: unknown;
 };
+
+export interface IcqqInboundMediaResolver {
+  getPttUrl(element: IcqqMessageElement): Promise<string | null | undefined>;
+  getVideoUrl(element: IcqqMessageElement): Promise<string | null | undefined>;
+}
+
+/**
+ * Resolve ICQQ's opaque protobuf media references while the endpoint-owned
+ * native client is still available. Resolution failure preserves the opaque
+ * reference, so canonical ingress stays truthful and can report unsupported
+ * media instead of inventing a URL.
+ */
+export async function resolveIcqqInboundMedia(
+  elements: IcqqMessageElement[] | undefined,
+  resolver: IcqqInboundMediaResolver,
+): Promise<void> {
+  if (!elements?.length) return;
+  await Promise.all(elements.map(async (element) => {
+    if (!element || typeof element !== "object") return;
+    if (typeof element.url === "string" && element.url) return;
+    try {
+      const url = element.type === "record" || element.type === "audio"
+        ? await resolver.getPttUrl(element)
+        : element.type === "video"
+          ? await resolver.getVideoUrl(element)
+          : undefined;
+      if (typeof url === "string" && url) element.url = url;
+    } catch {
+      // The original platform reference remains the canonical fallback.
+    }
+  }));
+}
 
 /** 归一化后供适配器使用的入站消息 */
 export interface NormalizedIcqqInbound {
@@ -343,9 +379,19 @@ export function icqqElementsToSegments(
         break;
       case "image": {
         const value = String(el.url ?? el.file ?? "");
+        if (!value) break;
         out.push({
           type: "image",
-          data: { media: icqqMediaRefFromString(value) },
+          data: { media: icqqMediaRefFromElement(value, el) },
+        });
+        break;
+      }
+      case "flash": {
+        const value = String(el.url ?? el.file ?? "");
+        if (!value) break;
+        out.push({
+          type: "image",
+          data: { media: icqqMediaRefFromElement(value, el), flash: true },
         });
         break;
       }
@@ -410,18 +456,39 @@ export function icqqElementsToSegments(
       }
       case "record":
       case "audio": {
-        const value = String(el.file ?? el.url ?? "");
+        const value = String(el.url ?? el.file ?? "");
+        if (!value) break;
         out.push({
           type: "record",
-          data: { media: icqqMediaRefFromString(value) },
+          data: {
+            media: icqqMediaRefFromElement(value, el),
+            ...(typeof el.seconds === "number" ? { duration: el.seconds } : {}),
+          },
         });
         break;
       }
       case "video": {
-        const value = String(el.file ?? el.url ?? "");
+        const value = String(el.url ?? el.file ?? "");
+        if (!value) break;
         out.push({
           type: "video",
-          data: { media: icqqMediaRefFromString(value) },
+          data: {
+            media: icqqMediaRefFromElement(value, el),
+            ...(typeof el.seconds === "number" ? { duration: el.seconds } : {}),
+          },
+        });
+        break;
+      }
+      case "file": {
+        const value = String(el.url ?? el.file ?? el.fid ?? "");
+        if (!value) break;
+        const name = typeof el.name === "string" && el.name ? el.name : undefined;
+        out.push({
+          type: "file",
+          data: {
+            media: icqqMediaRefFromElement(value, el),
+            ...(name ? { name } : {}),
+          },
         });
         break;
       }
@@ -433,6 +500,24 @@ export function icqqElementsToSegments(
     }
   }
   return out.length ? out : null;
+}
+
+function icqqMediaRefFromElement(
+  value: string,
+  element: IcqqMessageElement,
+): ReturnType<typeof icqqMediaRefFromString> {
+  const media = icqqMediaRefFromString(value);
+  const fileName = typeof element.name === "string" && element.name
+    ? element.name
+    : undefined;
+  const size = typeof element.size === "number" && Number.isFinite(element.size)
+    ? element.size
+    : undefined;
+  return {
+    ...media,
+    ...(fileName ? { file_name: fileName } : {}),
+    ...(size != null ? { size } : {}),
+  };
 }
 
 function resolveReplyIdFromJsonElement(el: IcqqMessageElement): string | undefined {

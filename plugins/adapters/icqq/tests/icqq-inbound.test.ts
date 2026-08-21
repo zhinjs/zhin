@@ -12,6 +12,7 @@ import {
   resolveIcqqQuoteIdFromEvent,
   findIcqqNestedMessageSource,
   resolveQuoteIdFromIcqqSource,
+  resolveIcqqInboundMedia,
   quotedPayloadFromIcqqSource,
   shouldSkipSelfInboundMessage,
   unwrapIcqqEventPayload,
@@ -295,6 +296,65 @@ describe("icqqElementsToSegments", () => {
     expect(
       icqqElementsToSegments([{ type: "at", qq: "8596238" }]),
     ).toEqual([{ type: "at", data: { qq: "8596238", user_id: "8596238", id: "8596238" } }]);
+  });
+
+  it("语音优先使用可下载 URL，而不是 protobuf 私有引用", () => {
+    expect(icqqElementsToSegments([{
+      type: "record",
+      file: "protobuf://opaque",
+      url: "https://cdn.example/voice.silk",
+    }])).toEqual([{
+      type: "record",
+      data: { media: { kind: "url", value: "https://cdn.example/voice.silk" } },
+    }]);
+  });
+
+  it("保留视频和文件的平台引用及元数据", () => {
+    expect(icqqElementsToSegments([
+      { type: "video", file: "protobuf://video", name: "clip.mp4", size: 12 },
+      { type: "file", fid: "fid-1", name: "report.pdf", size: 34 },
+    ])).toEqual([
+      {
+        type: "video",
+        data: {
+          media: { kind: "file", value: "protobuf://video", file_name: "clip.mp4", size: 12 },
+        },
+      },
+      {
+        type: "file",
+        data: {
+          media: { kind: "file", value: "fid-1", file_name: "report.pdf", size: 34 },
+          name: "report.pdf",
+        },
+      },
+    ]);
+  });
+});
+
+describe("resolveIcqqInboundMedia", () => {
+  it("在 canonical 映射前解析 ICQQ 私有语音与视频引用", async () => {
+    const getPttUrl = vi.fn(async () => "https://cdn.example/voice.silk");
+    const getVideoUrl = vi.fn(async () => "https://cdn.example/video.mp4");
+    const elements = [
+      { type: "record", file: "protobuf://voice", fid: "ptt-1" },
+      { type: "video", file: "protobuf://video", fid: "video-1", md5: "abcd" },
+    ];
+
+    await resolveIcqqInboundMedia(elements, { getPttUrl, getVideoUrl });
+
+    expect(elements).toEqual([
+      { type: "record", file: "protobuf://voice", fid: "ptt-1", url: "https://cdn.example/voice.silk" },
+      { type: "video", file: "protobuf://video", fid: "video-1", md5: "abcd", url: "https://cdn.example/video.mp4" },
+    ]);
+  });
+
+  it("解析失败时保留真实平台引用，不伪造 URL", async () => {
+    const elements = [{ type: "record", file: "protobuf://voice" }];
+    await resolveIcqqInboundMedia(elements, {
+      getPttUrl: async () => { throw new Error("offline"); },
+      getVideoUrl: async () => null,
+    });
+    expect(elements).toEqual([{ type: "record", file: "protobuf://voice" }]);
   });
 });
 

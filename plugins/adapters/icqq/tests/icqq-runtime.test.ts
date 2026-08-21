@@ -94,12 +94,12 @@ describe('icqq protocol helpers', () => {
     })).toMatchObject({ kind: 'channel', id: 'c1', parent: { kind: 'channel', id: 'g1' } });
   });
 
-  it('formats outbound CQ-ish body', () => {
+  it('formats outbound ICQQ Sendable', () => {
     expect(formatOutboundBody('hi')).toBe('hi');
     expect(formatOutboundBody([
       { type: 'text', data: { text: 'hi' } },
       { type: 'at', data: { qq: '2' } },
-    ])).toBe('hi[at:2]');
+    ])).toEqual(['hi', { type: 'at', qq: 2 }]);
   });
 
   it('treats a single segment object (non-array) as a one-element array', () => {
@@ -107,10 +107,10 @@ describe('icqq protocol helpers', () => {
     expect(formatOutboundBody({
       type: 'image',
       data: { media: { kind: 'base64', value: 'YQ==' } },
-    })).toBe('[image:base64://YQ==]');
-    expect(formatOutboundBody({ type: 'image', data: {} })).toBe('​');
-    expect(formatOutboundBody({ type: 'html', data: { html: '<b>x</b>' } }))
-      .toBe('​');
+    })).toEqual({ type: 'image', file: 'base64://YQ==' });
+    expect(() => formatOutboundBody({ type: 'image', data: {} })).toThrow(/media/i);
+    expect(() => formatOutboundBody({ type: 'html', data: { html: '<b>x<\/b>' } }))
+      .toThrow(/unsupported/i);
     expect(formatOutboundBody({ text: 'legacy' })).toBe('legacy');
   });
 });

@@ -1,26 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  buildIcqqMessage,
   parseCqMessage,
-  toCqString,
 } from "../src/cq-message.js";
-
-describe("buildIcqqMessage", () => {
-  it("reply + 正文编码为 [reply:id] 前缀字符串", () => {
-    expect(
-      buildIcqqMessage([
-        { type: "reply", data: { id: "M0zHrrS7mJ0AC8rBcOxj/moZcDUB" } },
-        { type: "text", data: { text: "hello" } },
-      ]),
-    ).toBe("[reply:M0zHrrS7mJ0AC8rBcOxj/moZcDUB]hello");
-  });
-
-  it("仅 reply 段时仍为非空字符串", () => {
-    expect(
-      buildIcqqMessage([{ type: "reply", data: { id: "abc" } }]),
-    ).toBe("[reply:abc]");
-  });
-});
 
 describe("parseCqMessage reply with slash", () => {
   it("解析含 / 的 reply id", () => {
@@ -32,47 +13,6 @@ describe("parseCqMessage reply with slash", () => {
       data: { message_id: "M0zHrrS7mJ0AC8rBcOxj/moZcDUB" },
     });
     expect(segs[1]).toEqual({ type: "text", data: { text: "正文" } });
-  });
-});
-
-describe("toCqString", () => {
-  it("仍可用于 CQ 序列化", () => {
-    expect(
-      toCqString([
-        { type: "reply", data: { id: "x/y" } },
-        { type: "text", data: { text: "hi" } },
-      ]),
-    ).toBe("[reply:x/y]hi");
-  });
-
-  it("image canonical base64 MediaRef 编码为 base64://", () => {
-    expect(
-      toCqString([
-        { type: "image", data: { media: { kind: "base64", value: "aGVsbG8=" } } },
-      ]),
-    ).toBe("[image:base64://aGVsbG8=]");
-  });
-
-  it("image canonical url MediaRef 直发 URL", () => {
-    expect(
-      toCqString([
-        { type: "image", data: { media: { kind: "url", value: "https://x/a.jpg" } } },
-      ]),
-    ).toBe("[image:https://x/a.jpg]");
-  });
-
-  it("媒体段无 canonical MediaRef 时丢弃", () => {
-    expect(toCqString([{ type: "image", data: {} }])).toBe("");
-    expect(toCqString([{ type: "video", data: { file: "/legacy.mp4" } }])).toBe("");
-  });
-
-  it("canonical mention 编码为 [at:target]", () => {
-    expect(
-      toCqString([
-        { type: "mention", data: { target: "8596238", name: "Bot" } },
-        { type: "text", data: { text: " hi" } },
-      ]),
-    ).toBe("[at:8596238] hi");
   });
 });
 

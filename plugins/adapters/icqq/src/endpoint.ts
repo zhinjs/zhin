@@ -2,7 +2,10 @@ import {
   Client,
   parseGroupMessageId,
   type Config as NativeIcqqClientConfig,
+  type FileElem,
+  type PttElem,
   type Sendable,
+  type VideoElem,
 } from '@icqqjs/icqq';
 import { inspect } from 'node:util';
 import type {
@@ -27,6 +30,7 @@ import {
   normalizeIcqqInboundMessage,
   quotedPayloadFromIcqqSource,
   resolveIcqqQuoteIdFromEvent,
+  resolveIcqqInboundMedia,
   shouldSkipSelfInboundMessage,
   type IcqqMessageEvent,
 } from './icqq-inbound.js';
@@ -39,7 +43,7 @@ import {
   normalizeIcqqGuildInboundMessage,
 } from './icqq-guild.js';
 import {
-  materializeOutboundBase64,
+  prepareIcqqOutboundMedia,
   resolveIcqqOutboundMediaMode,
 } from './outbound-media.js';
 import {
@@ -88,10 +92,12 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   readonly #sideEventDeduper = new InboundMessageDeduper();
   readonly #loginAssistOwner = Object.freeze({});
   #open = false;
+  #retiring = false;
   #started = false;
   #resolveStartOnline?: () => void;
   #heldInbound: IcqqInboundMessage[] = [];
   #unregisterAgent?: () => void;
+  readonly #inflightInbound = new Set<Promise<void>>();
 
   readonly management: EndpointManagement = Object.freeze<EndpointManagement>({
     listFriends: async () =>
@@ -217,17 +223,22 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   }
 
   open(): void {
+    this.#retiring = false;
     this.#open = true;
     const held = this.#heldInbound.splice(0);
     for (const msg of held) this.admit(msg);
   }
 
-  close(): void {
+  async close(): Promise<void> {
+    this.#retiring = true;
     this.#open = false;
+    await Promise.allSettled([...this.#inflightInbound]);
   }
 
   async stop(): Promise<void> {
+    this.#retiring = true;
     this.#open = false;
+    await Promise.allSettled([...this.#inflightInbound]);
     this.#resolveStartOnline?.();
     this.#options.loginAssist.cancelOwned(this.#loginAssistOwner, 'endpoint_stopped');
     this.#heldInbound.length = 0;
@@ -250,46 +261,70 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     if (!this.#started) throw new Error('icqq endpoint 未连接');
     const mediaMode = resolveIcqqOutboundMediaMode(this.#options.config);
-    const content = Array.isArray(payload)
-      ? materializeOutboundBase64(payload, mediaMode)
-      : payload;
-    const message = formatOutboundBody(content);
-    const parsed = icqqOutboundTarget(conversation);
-    let result: { message_id?: unknown };
+    const prepared = isIcqqSegmentPayload(payload)
+      ? prepareIcqqOutboundMedia(payload, mediaMode)
+      : { content: payload, dispose() {} };
     try {
-      switch (parsed.kind) {
-        case 'private':
-          result = await this.sendPrivateMsg(parsed.userId, message as Sendable);
-          break;
-        case 'group':
-          result = await this.sendGroupMsg(parsed.groupId, message as Sendable);
-          break;
-        case 'temp':
-          result = await this.sendTempMsg(parsed.groupId, parsed.userId, message as Sendable);
-          break;
-        case 'channel':
-          result = await this.sendGuildMsg(parsed.guildId, parsed.channelId, message as Sendable) as unknown as { message_id?: unknown };
-          break;
+      const message = formatOutboundBody(prepared.content);
+      const preview = formatIcqqSendablePreview(message);
+      const parsed = icqqOutboundTarget(conversation);
+      let result: { message_id?: unknown };
+      try {
+        result = await this.#sendNative(parsed, message);
+      } catch (error) {
+        this.#logger.warn(formatCompact({
+          op: 'icqq_send_failed',
+          target: `${conversation.kind}:${conversation.id}`,
+          error: describeUnknownError(error),
+          preview: truncatePreview(preview, 120),
+        }));
+        throw error;
       }
-    } catch (error) {
-      this.#logger.warn(formatCompact({
-        op: 'icqq_send_failed',
-        target: `${conversation.kind}:${conversation.id}`,
-        error: describeUnknownError(error),
-        preview: truncatePreview(typeof message === 'string' ? message : String(message), 120),
-      }));
-      throw error;
+      const messageId = String(result?.message_id ?? `sent_${Date.now()}`);
+      this.#logger.info(
+        `send ${conversation.kind}:${conversation.id} | id: ${messageId} | ${truncatePreview(preview, 80)}`,
+      );
+      return messageId;
+    } finally {
+      prepared.dispose();
     }
-    const messageId = String(result?.message_id ?? `sent_${Date.now()}`);
-    this.#logger.info(
-      `send ${conversation.kind}:${conversation.id} | id: ${messageId} | ${truncatePreview(typeof message === 'string' ? message : String(message), 80)}`,
-    );
-    return messageId;
   }
 
-  admit(msg: IcqqInboundMessage): void {
+  async #sendNative(
+    target: ReturnType<typeof icqqOutboundTarget>,
+    message: Sendable,
+  ): Promise<{ message_id?: unknown }> {
+    if (isIcqqFileElement(message)) {
+      switch (target.kind) {
+        case 'private': {
+          const id = await this.pickFriend(target.userId).sendFile(message.file, message.name);
+          return { message_id: id };
+        }
+        case 'group': {
+          const stat = await this.pickGroup(target.groupId).sendFile(message.file, '/', message.name);
+          return { message_id: stat.fid };
+        }
+        case 'temp':
+        case 'channel':
+          throw new TypeError(`ICQQ ${target.kind} conversation does not support file delivery`);
+      }
+    }
+    switch (target.kind) {
+      case 'private':
+        return this.sendPrivateMsg(target.userId, message);
+      case 'group':
+        return this.sendGroupMsg(target.groupId, message);
+      case 'temp':
+        return this.sendTempMsg(target.groupId, target.userId, message);
+      case 'channel':
+        return this.sendGuildMsg(target.guildId, target.channelId, message) as unknown as { message_id?: unknown };
+    }
+  }
+
+  admit(msg: IcqqInboundMessage, admittedBeforeRetire = false): void {
     const conversation = msg.conversation;
-    if (!this.#open) {
+    if (!this.#open && !admittedBeforeRetire) {
+      if (this.#retiring) return;
       if (this.#heldInbound.length >= INBOUND_HOLD_LIMIT) {
         const dropped = this.#heldInbound.shift();
         this.#logger.warn(formatCompact({
@@ -360,8 +395,8 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
         }));
       }
     };
-    this.on('message.private', (event) => safe('message.private', () => this.#handleMessageEvent('message.private', event)));
-    this.on('message.group', (event) => safe('message.group', () => this.#handleMessageEvent('message.group', event)));
+    this.on('message.private', (event) => this.#startMessageEvent('message.private', event));
+    this.on('message.group', (event) => this.#startMessageEvent('message.group', event));
     this.on('message.guild', (event) => safe('message.guild', () => this.#handleGuildEvent(event)));
     this.on('request.friend', (event) => safe('request.friend', () => this.#onRequestEvent(serializeIcqqEvent(event))));
     this.on('request.group', (event) => safe('request.group', () => this.#onRequestEvent(serializeIcqqEvent(event))));
@@ -464,7 +499,9 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     });
   }
 
-  #handleMessageEvent(eventName: 'message.private' | 'message.group', event: unknown): void {
+  async #handleMessageEvent(eventName: 'message.private' | 'message.group', event: unknown): Promise<void> {
+    if (this.#retiring) return;
+    const admittedBeforeRetire = this.#open;
     const payload = serializeIcqqEvent(event);
     if (!payload || !isIcqqMessagePostType(payload)) {
       this.#logger.debug(formatCompact({
@@ -485,6 +522,14 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
         self_id: data.self_id,
       }));
       return;
+    }
+    const contact = this.#resolveInboundContact(data);
+    if (contact) {
+      await resolveIcqqInboundMedia(data.message, {
+        getPttUrl: (element) => contact.getPttUrl(element as PttElem),
+        getVideoUrl: (element) => contact.getVideoUrl(element as VideoElem),
+      });
+      if (!this.#started) return;
     }
     const normalized = normalizeIcqqInboundMessage(data);
     if (!normalized) {
@@ -525,7 +570,40 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
         nickname: normalized.nickname,
         senderRole: normalized.senderRole,
       }),
+    }, admittedBeforeRetire);
+  }
+
+  #startMessageEvent(eventName: 'message.private' | 'message.group', event: unknown): void {
+    const operation = this.#handleMessageEvent(eventName, event);
+    this.#inflightInbound.add(operation);
+    void operation.catch((error) => {
+      this.#logInboundHandlerFailure(eventName, error);
+    }).finally(() => {
+      this.#inflightInbound.delete(operation);
     });
+  }
+
+  #resolveInboundContact(data: IcqqMessageEvent) {
+    const userId = Number(data.user_id ?? data.from_id);
+    if (!Number.isFinite(userId) || userId <= 0) return null;
+    if (data.message_type === 'group' || data.group_id != null) {
+      const groupId = Number(data.group_id);
+      return Number.isFinite(groupId) && groupId > 0 ? this.pickGroup(groupId) : null;
+    }
+    const sourceGroupId = Number(data.sender?.group_id);
+    if (Number.isFinite(sourceGroupId) && sourceGroupId > 0) {
+      return this.pickMember(sourceGroupId, userId);
+    }
+    return this.pickFriend(userId);
+  }
+
+  #logInboundHandlerFailure(event: string, error: unknown): void {
+    this.#logger.warn(formatCompact({
+      op: 'icqq_inbound_handler_failed',
+      endpoint: this.endpointName,
+      event,
+      error: describeUnknownError(error),
+    }));
   }
 
   #handleGuildEvent(event: unknown): void {
@@ -677,6 +755,28 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       await this.setGroupAddRequest(target.flag, false, reason);
     }
   }
+}
+
+function formatIcqqSendablePreview(message: Sendable): string {
+  if (typeof message === 'string') return message;
+  try {
+    return JSON.stringify(message, (_key, value) => Buffer.isBuffer(value) ? '<buffer>' : value);
+  } catch {
+    return '[ICQQ Sendable]';
+  }
+}
+
+function isIcqqSegmentPayload(payload: unknown): payload is import('zhin.js').SendContent {
+  if (Array.isArray(payload)) return true;
+  return typeof payload === 'object'
+    && payload !== null
+    && typeof (payload as { type?: unknown }).type === 'string';
+}
+
+function isIcqqFileElement(message: Sendable): message is FileElem {
+  return !Array.isArray(message)
+    && typeof message !== 'string'
+    && message.type === 'file';
 }
 
 async function raceAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {

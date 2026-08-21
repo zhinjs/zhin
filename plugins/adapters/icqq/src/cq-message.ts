@@ -1,13 +1,6 @@
-/**
- * CQ 码与 MessageSegment 互转。
- * 出站：@icqqjs/cli 要求 message 为非空字符串；引用段编码为 [reply:id]（需 cli parse-message 支持 reply，见 scripts/patch-icqq-cli-reply.mjs）。
- * 媒体段双向均为 canonical MediaRef（`data.media`），无 legacy url/file/base64 字段。
- */
+/** ICQQ 历史文本视图 → canonical MessageSegment。出站只使用原生 Sendable。 */
 import { isMediaRef, type MediaRef } from "@zhin.js/core";
-import { formatCompact, getLogger } from "@zhin.js/logger";
-import { MessageSegment, segment, SendContent } from "zhin.js";
-
-const logger = getLogger("icqq");
+import type { MessageSegment } from "zhin.js";
 
 const MAX_CQ_PARSE_LEN = 256_000;
 
@@ -29,23 +22,14 @@ export function icqqMediaRefFromString(value: string): MediaRef {
 }
 
 /**
- * canonical MediaRef（`data.media`，唯一媒体来源）→ CQ 媒体参数：
- * base64 → `base64://` 前缀（守护进程解码）；url/path/file 原样直出。
- * 无 canonical 媒体引用时 warn 并返回 undefined（调用方丢弃该段）。
+ * canonical MediaRef（`data.media`，唯一媒体来源）→ ICQQ native
+ * element 的 file 参数。base64 使用 ICQQ 原生支持的 `base64://` 前缀。
  */
-export function resolveCqMediaArg(
-  type: string,
+export function resolveIcqqMediaFile(
   data: Record<string, unknown> | undefined,
 ): string | undefined {
   const media = data?.media;
-  if (!isMediaRef(media)) {
-    logger.warn(formatCompact({
-      op: "icqq_outbound_media_dropped",
-      type,
-      reason: "missing_media_ref",
-    }));
-    return undefined;
-  }
+  if (!isMediaRef(media)) return undefined;
   if (media.kind === "base64") {
     return media.value.startsWith("base64://") ? media.value : `base64://${media.value}`;
   }
@@ -126,55 +110,4 @@ export function parseCqMessage(raw: string): MessageSegment[] {
   }
 
   return segments.length ? segments : [{ type: "text", data: { text: raw } }];
-}
-
-/** 构建 icqq send_*_msg 的 message 字符串（非空） */
-export function buildIcqqMessage(content: SendContent): string {
-  let message = toCqString(content).trim();
-  if (!message) message = "\u200b";
-  return message;
-}
-
-export function toCqString(content: SendContent): string {
-  if (!Array.isArray(content)) content = [content];
-  return content
-    .map((seg) => {
-      if (typeof seg === "string") return seg;
-      const { type, data } = seg as MessageSegment;
-      switch (type) {
-        case "text":
-          return data.text ?? "";
-        case "face":
-          return `[face:${data.id}]`;
-        case "image": {
-          const arg = resolveCqMediaArg("image", data);
-          return arg ? `[image:${arg}]` : "";
-        }
-        case "at":
-        case "mention": {
-          const target = data.target ?? data.qq ?? data.id ?? data.user_id;
-          return `[at:${target}]`;
-        }
-        case "dice":
-          return "[dice]";
-        case "rps":
-          return "[rps]";
-        case "record":
-        case "audio": {
-          const arg = resolveCqMediaArg("record", data);
-          return arg ? `[record:${arg}]` : "";
-        }
-        case "video": {
-          const arg = resolveCqMediaArg("video", data);
-          return arg ? `[video:${arg}]` : "";
-        }
-        case "reply":
-          return `[reply:${data.message_id ?? data.id}]`;
-        case "json":
-          return `[json:${data.text ?? ''}]`;
-        default:
-          return segment.toString(seg);
-      }
-    })
-    .join("");
 }

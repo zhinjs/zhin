@@ -88,6 +88,84 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
     await endpoint.stop();
   });
 
+  it('在 endpoint lease 内解析 ICQQ 私有语音/视频引用后再进入 Gateway', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true }));
+    const endpoint = createEndpoint(receive);
+    vi.mocked(endpoint.pickGroup).mockReturnValue({
+      getPttUrl: vi.fn(async () => 'https://cdn.example/voice.silk'),
+      getVideoUrl: vi.fn(async () => 'https://cdn.example/video.mp4'),
+    } as never);
+    await endpoint.start(new AbortController().signal);
+    endpoint.open();
+
+    (endpoint as any).emit('message.group.normal', {
+      post_type: 'message',
+      message_type: 'group',
+      group_id: 100,
+      user_id: 2,
+      message_id: 'm-native-media',
+      time: 1_700_000_000,
+      sender: { user_id: 2, nickname: 'bob', role: 'member' },
+      raw_message: '[语音][视频]',
+      message: [
+        { type: 'record', file: 'protobuf://voice', fid: 'ptt-1' },
+        { type: 'video', file: 'protobuf://video', fid: 'video-1', md5: 'abcd' },
+      ],
+    });
+
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    const inbound = receive.mock.calls[0]?.[0] as {
+      segments: Array<{ type: string; data: Record<string, unknown> }>;
+    };
+    expect(inbound.segments).toMatchObject([
+      { type: 'record', data: { media: { kind: 'url', value: 'https://cdn.example/voice.silk' } } },
+      { type: 'video', data: { media: { kind: 'url', value: 'https://cdn.example/video.mp4' } } },
+    ]);
+    await endpoint.stop();
+  });
+
+  it('generation close 等待已经接纳的媒体解析，不丢失旧代入站', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true }));
+    const endpoint = createEndpoint(receive);
+    let resolvePtt!: (url: string) => void;
+    const pttUrl = new Promise<string>((resolve) => { resolvePtt = resolve; });
+    vi.mocked(endpoint.pickGroup).mockReturnValue({
+      getPttUrl: vi.fn(() => pttUrl),
+      getVideoUrl: vi.fn(async () => null),
+    } as never);
+    await endpoint.start(new AbortController().signal);
+    endpoint.open();
+
+    (endpoint as any).emit('message.group.normal', {
+      post_type: 'message',
+      message_type: 'group',
+      group_id: 100,
+      user_id: 2,
+      message_id: 'm-media-during-close',
+      time: 1_700_000_000,
+      sender: { user_id: 2, nickname: 'bob', role: 'member' },
+      raw_message: '[语音]',
+      message: [{ type: 'record', file: 'protobuf://voice' }],
+    });
+
+    let closeSettled = false;
+    const closing = endpoint.close().then(() => { closeSettled = true; });
+    await Promise.resolve();
+    expect(closeSettled).toBe(false);
+    expect(receive).not.toHaveBeenCalled();
+
+    resolvePtt('https://cdn.example/voice.silk');
+    await closing;
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive.mock.calls[0]?.[0]).toMatchObject({
+      segments: [{
+        type: 'record',
+        data: { media: { kind: 'url', value: 'https://cdn.example/voice.silk' } },
+      }],
+    });
+    await endpoint.stop();
+  });
+
   it('quote 元数据（oicq source）归一为 reply 段置于段首', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
     const endpoint = createEndpoint(receive);
@@ -156,8 +234,8 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
   });
 });
 
-describe('UNI-Channel 出站：canonical segments → CQ 串', () => {
-  it('mention/face/reply/text 映射为 CQ 段', async () => {
+describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
+  it('mention/face/reply/text 映射为 ICQQ 原生元素', async () => {
     const endpoint = createEndpoint(vi.fn(), base64MediaConfig);
     await endpoint.start(new AbortController().signal);
     endpoint.open();
@@ -176,11 +254,16 @@ describe('UNI-Channel 出站：canonical segments → CQ 串', () => {
       ],
     });
 
-    expect(endpoint.sendGroupMsg).toHaveBeenCalledWith(100, '[reply:m1][at:2]hi[face:14]');
+    expect(endpoint.sendGroupMsg).toHaveBeenCalledWith(100, [
+      { type: 'reply', id: 'm1' },
+      { type: 'at', qq: 2 },
+      'hi',
+      { type: 'face', id: 14 },
+    ]);
     await endpoint.stop();
   });
 
-  it('image/record/video 的 canonical MediaRef（url/base64/path）映射为 CQ 媒体值', async () => {
+  it('image 的 canonical MediaRef（url/base64）映射为 ICQQ 原生图片元素', async () => {
     const endpoint = createEndpoint(vi.fn(), base64MediaConfig);
     await endpoint.start(new AbortController().signal);
     endpoint.open();
@@ -194,15 +277,62 @@ describe('UNI-Channel 出站：canonical segments → CQ 串', () => {
       payload: [
         { type: 'image', data: { media: { kind: 'url', value: 'https://x/a.jpg' } } },
         { type: 'image', data: { media: { kind: 'base64', value: 'QUJD' } } },
-        { type: 'record', data: { media: { kind: 'base64', value: 'UkVD' } } },
-        { type: 'video', data: { media: { kind: 'path', value: '/tmp/v.mp4' } } },
       ],
     });
 
     expect(endpoint.sendGroupMsg).toHaveBeenCalledWith(
       100,
-      '[image:https://x/a.jpg][image:base64://QUJD][record:base64://UkVD][video:/tmp/v.mp4]',
+      [
+        { type: 'image', file: 'https://x/a.jpg' },
+        { type: 'image', file: 'base64://QUJD' },
+      ],
     );
+    await endpoint.stop();
+  });
+
+  it.each([
+    ['record', { kind: 'base64', value: 'UkVD' }, { type: 'record', file: 'base64://UkVD' }],
+    ['video', { kind: 'path', value: '/tmp/v.mp4' }, { type: 'video', file: '/tmp/v.mp4' }],
+  ] as const)('%s 映射为 ICQQ 原生独立媒体元素', async (type, media, expected) => {
+    const endpoint = createEndpoint(vi.fn(), base64MediaConfig);
+    await endpoint.start(new AbortController().signal);
+    endpoint.open();
+
+    await endpoint.send({
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: '100',
+      },
+      payload: [{ type, data: { media } }],
+    });
+
+    expect(endpoint.sendGroupMsg).toHaveBeenCalledWith(100, expected);
+    await endpoint.stop();
+  });
+
+  it('file 使用 ICQQ 文件 API，不经过 sendGroupMsg 的空消息路径', async () => {
+    const endpoint = createEndpoint(vi.fn(), base64MediaConfig);
+    const sendFile = vi.fn(async () => ({ fid: 'group-file-1' }));
+    vi.mocked(endpoint.pickGroup).mockReturnValue({ sendFile } as never);
+    await endpoint.start(new AbortController().signal);
+    endpoint.open();
+
+    const messageId = await endpoint.send({
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: '100',
+      },
+      payload: [{
+        type: 'file',
+        data: { media: { kind: 'path', value: '/tmp/report.pdf' }, name: 'report.pdf' },
+      }],
+    });
+
+    expect(sendFile).toHaveBeenCalledWith('/tmp/report.pdf', '/', 'report.pdf');
+    expect(endpoint.sendGroupMsg).not.toHaveBeenCalled();
+    expect(messageId).toBe('group-file-1');
     await endpoint.stop();
   });
 
@@ -222,9 +352,13 @@ describe('UNI-Channel 出站：canonical segments → CQ 串', () => {
       ],
     });
 
-    const message = String(vi.mocked(endpoint.sendGroupMsg).mock.calls[0]?.[1]);
-    expect(message).toMatch(/^\[image:\/.*zhin-icqq-outbound.*\]$/u);
-    fs.rmSync(message.slice('[image:'.length, -1), { force: true });
+    const message = vi.mocked(endpoint.sendGroupMsg).mock.calls[0]?.[1] as {
+      type: string;
+      file: string;
+    };
+    expect(message).toMatchObject({ type: 'image' });
+    expect(message.file).toMatch(/^\/.*zhin-icqq-outbound.*/u);
+    expect(fs.existsSync(message.file)).toBe(false);
     await endpoint.stop();
   });
 });
