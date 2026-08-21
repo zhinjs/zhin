@@ -9,9 +9,15 @@ import {
   MemoryWorkroomJournal,
   WorkroomSequenceConflictError,
 } from '../../src/workroom/journal.js';
+import type {
+  WorkroomAcceptanceDecision,
+  WorkroomAcceptanceDecisionInput,
+  WorkroomAcceptancePolicyDecisionPort,
+} from '../../src/workroom/acceptance-policy.js';
+import type { WorkroomCommand } from '../../src/workroom/kernel-contracts.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 
-function fixture() {
+function fixture(acceptancePolicy?: WorkroomAcceptancePolicyDecisionPort) {
   let now = 100;
   let id = 0;
   const journal = new MemoryWorkroomJournal();
@@ -19,13 +25,21 @@ function fixture() {
     journal,
     now: () => now,
     createId: () => `id-${++id}`,
+    acceptancePolicy,
   });
   return { journal, kernel, setNow: (value: number) => { now = value; } };
 }
 
 describe('WorkroomKernel', () => {
-  it('keeps execution completion separate from acceptance', async () => {
-    const { kernel } = fixture();
+  it('lets only the trusted policy port accept a low-risk mechanical candidate', async () => {
+    let evaluated: WorkroomAcceptanceDecisionInput | undefined;
+    const acceptancePolicy: WorkroomAcceptancePolicyDecisionPort = {
+      decide(input) {
+        evaluated = input;
+        return lowRiskAcceptance(input);
+      },
+    };
+    const { journal, kernel } = fixture(acceptancePolicy);
     await kernel.createRun({ runId: 'run-1', projectId: 'project-1', title: 'Ship release' });
     await kernel.execute('project-1', 'run-1', {
       type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 2,
@@ -42,11 +56,133 @@ describe('WorkroomKernel', () => {
     expect(awaiting.status).toBe('active');
     expect(awaiting.tasks.build?.status).toBe('awaiting_acceptance');
 
-    const accepted = await kernel.execute('project-1', 'run-1', {
-      type: 'accept_task', taskKey: 'build', reportRef: 'report://1',
-    });
+    const accepted = await kernel.evaluateTaskAcceptance('project-1', 'run-1', 'build');
     expect(accepted.tasks.build?.status).toBe('accepted');
     expect(accepted.status).toBe('completed');
+    expect(evaluated).toMatchObject({
+      projectId: 'project-1',
+      runId: 'run-1',
+      expectedSequence: 4,
+      task: { key: 'build', revision: 1, reportRef: 'report://1' },
+      assignment: { id: 'assignment-1', owner: 'builder', reportRef: 'report://1' },
+    });
+    expect((await journal.read('run-1')).at(-1)).toMatchObject({
+      type: 'task.accepted',
+      payload: {
+        taskKey: 'build',
+        reportRef: 'report://1',
+        record: {
+          candidateHash: 'sha256:candidate-1',
+          sourceSequence: 4,
+          acceptanceSequence: 5,
+          policy: { id: 'policy-1', revision: 1, digest: 'sha256:policy-1' },
+          acceptedClaimIds: ['claim-1'],
+          decidedBy: 'acceptance-policy:policy-1',
+        },
+      },
+    });
+  });
+
+  it('fails closed when no trusted acceptance policy is installed', async () => {
+    const { kernel } = fixture();
+    await kernel.createRun({ runId: 'run-1', projectId: 'project-1', title: 'Ship release' });
+    await kernel.execute('project-1', 'run-1', {
+      type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 1,
+    });
+    await kernel.execute('project-1', 'run-1', {
+      type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
+      owner: 'builder', role: 'executor', leaseExpiresAt: 200,
+    });
+    await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
+    await kernel.execute('project-1', 'run-1', {
+      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
+    });
+
+    await expect(kernel.evaluateTaskAcceptance('project-1', 'run-1', 'build'))
+      .rejects.toThrow('Acceptance Policy Decision Port is not installed');
+    expect((await kernel.read('project-1', 'run-1')).tasks.build?.status).toBe('awaiting_acceptance');
+  });
+
+  it('rejects an unsafe automatic-acceptance recommendation from the policy port', async () => {
+    const acceptancePolicy: WorkroomAcceptancePolicyDecisionPort = {
+      decide(input) {
+        const baseline = lowRiskAcceptance(input);
+        return {
+          ...baseline,
+          riskAssessment: { ...baseline.riskAssessment, tier: 'high' },
+        };
+      },
+    };
+    const { journal, kernel } = fixture(acceptancePolicy);
+    await kernel.createRun({ runId: 'run-1', projectId: 'project-1', title: 'Deploy' });
+    await kernel.execute('project-1', 'run-1', {
+      type: 'plan_task', taskKey: 'deploy', title: 'Deploy', required: true, maxAttempts: 1,
+    });
+    await kernel.execute('project-1', 'run-1', {
+      type: 'claim_task', taskKey: 'deploy', assignmentId: 'assignment-1',
+      owner: 'deployer', role: 'executor', leaseExpiresAt: 200,
+    });
+    await kernel.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
+    await kernel.execute('project-1', 'run-1', {
+      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
+    });
+
+    await expect(kernel.evaluateTaskAcceptance('project-1', 'run-1', 'deploy'))
+      .rejects.toThrow('Only low-risk candidates may use automatic acceptance');
+    expect((await journal.read('run-1')).map(event => event.type)).not.toContain('task.accepted');
+    expect((await kernel.read('project-1', 'run-1')).tasks.deploy?.status).toBe('awaiting_acceptance');
+  });
+
+  it('uses the Journal sequence as the acceptance decision CAS fence', async () => {
+    let waiting = 0;
+    let release!: () => void;
+    const bothEvaluating = new Promise<void>(resolve => { release = resolve; });
+    const acceptancePolicy: WorkroomAcceptancePolicyDecisionPort = {
+      async decide(input) {
+        waiting += 1;
+        if (waiting === 2) release();
+        await bothEvaluating;
+        return lowRiskAcceptance(input);
+      },
+    };
+    const journal = new MemoryWorkroomJournal();
+    let id = 0;
+    const options = {
+      journal,
+      now: () => 100,
+      createId: () => `cas-${++id}`,
+      acceptancePolicy,
+    };
+    const first = new WorkroomKernel(options);
+    const second = new WorkroomKernel(options);
+    await first.createRun({ runId: 'run-1', projectId: 'project-1', title: 'CAS acceptance' });
+    await first.execute('project-1', 'run-1', {
+      type: 'plan_task', taskKey: 'build', title: 'Build', required: true, maxAttempts: 1,
+    });
+    await first.execute('project-1', 'run-1', {
+      type: 'claim_task', taskKey: 'build', assignmentId: 'assignment-1',
+      owner: 'builder', role: 'executor', leaseExpiresAt: 200,
+    });
+    await first.execute('project-1', 'run-1', { type: 'start_assignment', assignmentId: 'assignment-1' });
+    await first.execute('project-1', 'run-1', {
+      type: 'complete_execution', assignmentId: 'assignment-1', reportRef: 'report://1',
+    });
+
+    const settled = await Promise.allSettled([
+      first.evaluateTaskAcceptance('project-1', 'run-1', 'build'),
+      second.evaluateTaskAcceptance('project-1', 'run-1', 'build'),
+    ]);
+
+    expect(settled.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    expect(settled.find(result => result.status === 'rejected'))
+      .toMatchObject({ reason: expect.any(WorkroomSequenceConflictError) });
+    expect((await journal.read('run-1')).filter(event => event.type === 'task.accepted')).toHaveLength(1);
+  });
+
+  it('does not expose a command that directly accepts a task', () => {
+    // @ts-expect-error Acceptance is a Kernel-owned policy decision, not a public command.
+    const forged: WorkroomCommand = { type: 'accept_task', taskKey: 'build', reportRef: 'report://1' };
+    expect(forged.type).toBe('accept_task');
   });
 
   it('creates a new task revision after rejected execution', async () => {
@@ -162,6 +298,26 @@ describe('WorkroomKernel', () => {
     await expect(journal.read('run-bad')).rejects.toThrow('Invalid Workroom event payload envelope');
   });
 
+  it('rejects a persisted acceptance event without a valid policy record', async () => {
+    const rows = [{
+      run_id: 'run-bad-acceptance', sequence: 0, version: 1, type: 'task.accepted',
+      payload_json: JSON.stringify({
+        eventId: 'bad-acceptance',
+        payload: { taskKey: 'build', reportRef: 'report://1', record: {} },
+      }),
+      occurred_at: 100,
+    }];
+    const journal = new DatabaseWorkroomJournal({
+      transaction: async (operation: (transaction: any) => Promise<unknown>) => operation({
+        select: () => ({ where: async () => rows }),
+        insertMany: async () => undefined,
+      }),
+    }, { select: () => ({ where: async () => rows }) });
+
+    await expect(journal.read('run-bad-acceptance'))
+      .rejects.toThrow('Invalid Workroom Acceptance Record');
+  });
+
   it('persists a contiguous journal in one serializable transaction', async () => {
     const rows: Record<string, unknown>[] = [];
     const where = async ({ run_id }: Record<string, unknown>) =>
@@ -269,3 +425,55 @@ describe('WorkroomKernel', () => {
   });
 
 });
+
+function lowRiskAcceptance(input: WorkroomAcceptanceDecisionInput): WorkroomAcceptanceDecision {
+  return Object.freeze({
+    version: 1,
+    disposition: 'accepted',
+    route: 'auto_accept',
+    candidate: Object.freeze({
+      id: 'candidate-1',
+      taskKey: input.task.key,
+      taskRevision: input.task.revision,
+      producerAssignmentId: input.assignment.id,
+      producerPrincipalId: input.assignment.owner,
+      reportRef: input.task.reportRef,
+      hash: 'sha256:candidate-1',
+      claimIds: Object.freeze(['claim-1']),
+      evidenceRefs: Object.freeze(['evidence://1']),
+    }),
+    contract: Object.freeze({
+      id: 'contract-1',
+      revision: 1,
+      digest: 'sha256:contract-1',
+      taskKey: input.task.key,
+      taskRevision: input.task.revision,
+      kind: 'task_result',
+      policy: Object.freeze({ id: 'policy-1', revision: 1, digest: 'sha256:policy-1' }),
+      criteria: Object.freeze([{
+        id: 'criterion-build', kind: 'deterministic', description: 'Build succeeds',
+      }]),
+      requiredEvidence: Object.freeze(['evidence://1']),
+    }),
+    riskAssessment: Object.freeze({
+      id: 'risk-1',
+      candidateHash: 'sha256:candidate-1',
+      tier: 'low',
+      factsHash: 'sha256:risk-facts-1',
+      assessor: 'kernel-risk-engine',
+      sourceRefs: Object.freeze(['plan://build', 'capability://read-only']),
+    }),
+    checkResults: Object.freeze([{
+      id: 'check-1',
+      criterionId: 'criterion-build',
+      status: 'passed',
+      candidateHash: 'sha256:candidate-1',
+      runner: 'ci',
+      runnerVersion: 'ci@1',
+      evidenceRefs: Object.freeze(['evidence://1']),
+    }]),
+    acceptedClaimIds: Object.freeze(['claim-1']),
+    rejectedClaimIds: Object.freeze([]),
+    decidedBy: 'acceptance-policy:policy-1',
+  });
+}

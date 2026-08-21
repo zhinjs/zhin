@@ -79,11 +79,6 @@ export function decideWorkroom(
     case 'complete_execution':
       requireAssignment(state, command.assignmentId, ['running']);
       return [event('assignment.execution_completed', { ...command })];
-    case 'accept_task': {
-      const task = requireTask(state, command.taskKey, ['awaiting_acceptance']);
-      if (task.reportRef !== command.reportRef) throw new Error('Acceptance report does not match execution report');
-      return [event('task.accepted', { ...command })];
-    }
     case 'request_rework':
       requireTask(state, command.taskKey, ['awaiting_acceptance']);
       return [event('task.rework_requested', { ...command })];
@@ -206,7 +201,20 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
     }
     case 'task.accepted': {
       const task = requireTask(state, String(payload.taskKey));
-      tasks = replaceTask(tasks, task.key, { ...task, status: 'accepted' });
+      tasks = replaceTask(tasks, task.key, {
+        ...task,
+        status: 'accepted',
+        acceptanceRecord: payload.record as WorkroomTaskState['acceptanceRecord'],
+        acceptanceBlockReason: undefined,
+      });
+      break;
+    }
+    case 'task.acceptance_blocked': {
+      const task = requireTask(state, String(payload.taskKey));
+      tasks = replaceTask(tasks, task.key, {
+        ...task,
+        acceptanceBlockReason: String(payload.reason),
+      });
       break;
     }
     case 'task.rework_requested': {
@@ -218,6 +226,8 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
         attempt: 0,
         currentAssignmentId: undefined,
         reportRef: undefined,
+        acceptanceRecord: undefined,
+        acceptanceBlockReason: undefined,
         terminalReason: String(payload.reason),
       });
       break;
@@ -233,6 +243,8 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
         maxAttempts: Number(payload.maxAttempts),
         currentAssignmentId: undefined,
         reportRef: undefined,
+        acceptanceRecord: undefined,
+        acceptanceBlockReason: undefined,
         terminalReason: String(payload.reason),
       });
       break;

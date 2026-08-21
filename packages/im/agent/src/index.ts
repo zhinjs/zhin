@@ -370,6 +370,7 @@ export type {
 export { AGENT_ROLE_CONFIGS } from './orchestrator/role-configs.js';
 
 export * from './workroom/kernel-contracts.js';
+export * from './workroom/acceptance-policy.js';
 export * from './workroom/journal.js';
 export * from './workroom/journal-model.js';
 export * from './workroom/workroom-kernel.js';

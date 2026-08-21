@@ -6,6 +6,11 @@ import type {
   WorkroomRunState,
 } from './kernel-contracts.js';
 import type { WorkroomJournal } from './journal.js';
+import {
+  createAcceptanceDecisionInput,
+  decideTaskAcceptance,
+  type WorkroomAcceptancePolicyDecisionPort,
+} from './acceptance-policy.js';
 import { decideWorkroom, replayWorkroom } from './kernel-state.js';
 
 export interface CreateWorkroomRunInput {
@@ -18,6 +23,7 @@ export interface WorkroomKernelOptions {
   readonly journal: WorkroomJournal;
   readonly now?: () => number;
   readonly createId?: () => string;
+  readonly acceptancePolicy?: WorkroomAcceptancePolicyDecisionPort;
 }
 
 /** The sole command and state-transition authority for Workroom Run facts. */
@@ -25,11 +31,13 @@ export class WorkroomKernel {
   readonly #journal: WorkroomJournal;
   readonly #now: () => number;
   readonly #createId: () => string;
+  readonly #acceptancePolicy?: WorkroomAcceptancePolicyDecisionPort;
 
   constructor(options: WorkroomKernelOptions) {
     this.#journal = options.journal;
     this.#now = options.now ?? Date.now;
     this.#createId = options.createId ?? (() => randomUUID());
+    this.#acceptancePolicy = options.acceptancePolicy;
   }
 
   async createRun(input: CreateWorkroomRunInput): Promise<WorkroomRunState> {
@@ -57,6 +65,25 @@ export class WorkroomKernel {
     const drafts = decideWorkroom(state, command, (type, payload) => this.#event(type, payload));
     await this.#journal.append(runId, state.sequence, drafts);
     return drafts.length === 0 ? state : this.read(scopedProjectId, runId);
+  }
+
+  async evaluateTaskAcceptance(
+    projectId: string,
+    runId: string,
+    taskKey: string,
+  ): Promise<WorkroomRunState> {
+    assertProjectId(projectId);
+    const scopedProjectId = projectId.trim();
+    assertRunId(runId);
+    const policy = this.#acceptancePolicy;
+    if (!policy) throw new Error('Acceptance Policy Decision Port is not installed');
+    const state = await this.#readUnscoped(runId);
+    assertProject(state, scopedProjectId);
+    const input = createAcceptanceDecisionInput(state, taskKey);
+    const decision = await policy.decide(input);
+    const drafts = decideTaskAcceptance(input, decision, (type, payload) => this.#event(type, payload));
+    await this.#journal.append(runId, input.expectedSequence, drafts);
+    return this.read(scopedProjectId, runId);
   }
 
   async read(projectId: string, runId: string): Promise<WorkroomRunState> {

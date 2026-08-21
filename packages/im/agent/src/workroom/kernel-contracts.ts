@@ -1,3 +1,5 @@
+import type { WorkroomAcceptanceRecord } from './acceptance-policy.js';
+
 export type WorkroomRunStatus =
   | 'active'
   | 'blocked'
@@ -47,6 +49,8 @@ export interface WorkroomTaskState {
   readonly blockers: readonly WorkroomBlocker[];
   readonly currentAssignmentId?: string;
   readonly reportRef?: string;
+  readonly acceptanceRecord?: WorkroomAcceptanceRecord;
+  readonly acceptanceBlockReason?: string;
   readonly terminalReason?: string;
 }
 
@@ -88,6 +92,7 @@ export type WorkroomEventType =
   | 'task.cancelled'
   | 'task.failed'
   | 'task.accepted'
+  | 'task.acceptance_blocked'
   | 'task.rework_requested'
   | 'task.revised'
   | 'assignment.claimed'
@@ -119,7 +124,6 @@ export type WorkroomCommand =
   | Readonly<{ type: 'start_assignment'; assignmentId: string }>
   | Readonly<{ type: 'heartbeat'; assignmentId: string; leaseExpiresAt: number }>
   | Readonly<{ type: 'complete_execution'; assignmentId: string; reportRef: string }>
-  | Readonly<{ type: 'accept_task'; taskKey: string; reportRef: string }>
   | Readonly<{ type: 'request_rework'; taskKey: string; reason: string }>
   | Readonly<{ type: 'revise_task'; taskKey: string; title: string; reason: string; maxAttempts: number }>
   | Readonly<{ type: 'cancel_run'; reason: string; controlDeadline: number }>
