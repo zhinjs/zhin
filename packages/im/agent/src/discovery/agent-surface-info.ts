@@ -19,7 +19,6 @@ export interface AgentSurfacePluginInfo {
   evals: string[];
   hasInstructions: boolean;
   hasAgentTs: boolean;
-  hasDynamic?: boolean;
   disallowedTools?: string[];
 }
 
@@ -153,8 +152,6 @@ function scanPluginSurface(packageRoot: string): AgentSurfacePluginInfo | null {
     hasInstructions: fs.existsSync(path.join(agentDir, 'instructions.md')),
     hasAgentTs: fs.existsSync(path.join(agentDir, 'agent.ts'))
       || fs.existsSync(path.join(agentDir, 'agent.js')),
-    hasDynamic: fs.existsSync(path.join(agentDir, 'dynamic.ts'))
-      || fs.existsSync(path.join(agentDir, 'dynamic.js')),
   };
 }
 

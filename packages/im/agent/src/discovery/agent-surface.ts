@@ -12,12 +12,10 @@ import {
   type AuthoringConnectionDefinition,
   type AuthoringEvalDefinition,
   type AuthoringHookDefinition,
-  type AuthoringDynamicDefinition,
   type AuthoringScheduleDefinition,
   type AuthoringSkillDefinition,
   type AuthoringToolDefinition,
   type DiscoveredAuthoringConnection,
-  type DiscoveredAuthoringDynamic,
   type DiscoveredAuthoringEval,
   type DiscoveredAuthoringHook,
   type DiscoveredAuthoringSchedule,
@@ -295,7 +293,6 @@ async function scanAgentDir(
   const schedules: DiscoveredAuthoringSchedule[] = [];
   const connections: DiscoveredAuthoringConnection[] = [];
   const hooks: DiscoveredAuthoringHook[] = [];
-  let dynamic: DiscoveredAuthoringDynamic | undefined;
   const subagents: DiscoveredPluginAgentSurface[] = [];
 
   let agentDefinition: AuthoringAgentDefinition | undefined;
@@ -333,20 +330,6 @@ async function scanAgentDir(
     const item = await loadHookFile(file, pluginName, bareNames, packageRoot);
     if (item) hooks.push(item);
   }
-  const dynamicTs = path.join(agentDir, 'dynamic.ts');
-  const dynamicJs = path.join(agentDir, 'dynamic.js');
-  const dynamicFile = fs.existsSync(dynamicTs) ? dynamicTs : (fs.existsSync(dynamicJs) ? dynamicJs : undefined);
-  if (dynamicFile) {
-    const exported = await importAuthoringModule(dynamicFile, packageRoot);
-    if (isAuthoringDefinition(exported, 'dynamic')) {
-      dynamic = {
-        pluginName,
-        filePath: dynamicFile,
-        definition: exported as AuthoringDynamicDefinition,
-      };
-    }
-  }
-
   for (const subDir of listSubagentDirs(path.join(agentDir, 'subagents'))) {
     const subName = slotNameFromDir(subDir);
     const subSurface = await scanAgentDir(subDir, pluginName, bareNames, packageRoot);
@@ -376,7 +359,6 @@ async function scanAgentDir(
     schedules,
     connections,
     hooks,
-    dynamic,
     subagents,
   };
 }
@@ -394,7 +376,6 @@ export async function discoverPluginAgentSurface(
           schedules: [],
           connections: [],
           hooks: [],
-          dynamic: undefined,
           subagents: [],
         };
 

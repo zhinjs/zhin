@@ -9,7 +9,6 @@ import { captureDeferredSnapshotBefore, cloneDeferredSnapshot } from '../interna
 import { attachWebSearchLocale } from './web-search-locale-attach.js';
 import type { ZhinAgentPrivate, Tool } from '../internal/agent-host.js';
 import { defaultToolSystem } from '../tool/tool-system.js';
-import { applyDynamicTurnOverrides } from '../dynamic/dynamic-registry.js';
 import type { ResolvedToolsForTurn } from './deferred-resolution.js';
 
 function listSpawnableAgentNames(host: ZhinAgentPrivate): string[] {
@@ -39,7 +38,6 @@ export async function prepareTurnTools(
   },
 ): Promise<TurnToolsPrep> {
   const userId = opts.userId;
-  host.turnDynamicInstructions = undefined;
   const contextForTools = await attachWebSearchLocale(opts.commMessage, userId, host.userProfiles);
 
   if (host.orchestrator && opts.mcpServerNames.length > 0) {
@@ -66,7 +64,7 @@ export async function prepareTurnTools(
     : [];
 
   const toolSystem = host.toolSystem ?? defaultToolSystem;
-  let allTools = await toolSystem.collectForTurn({
+  const allTools = await toolSystem.collectForTurn({
     host,
     message: contextForTools,
     content: opts.content,
@@ -80,19 +78,6 @@ export async function prepareTurnTools(
     mcpTools,
     spawnableAgentNames: host.subagentSystem ? listSpawnableAgentNames(host) : undefined,
   });
-
-  const dynamicApplied = await applyDynamicTurnOverrides({
-    tools: allTools,
-    ctx: {
-      sessionId: opts.sessionId,
-      userId,
-      adapter: String(contextForTools.$adapter),
-      commMessage: contextForTools,
-      agentId: host.activeBinding?.name,
-    },
-  });
-  allTools = dynamicApplied.tools;
-  host.turnDynamicInstructions = dynamicApplied.additionalInstructions;
 
   const resolved = await toolSystem.resolveForTurn(
     host,

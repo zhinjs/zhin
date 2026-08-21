@@ -161,8 +161,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   readonly promptAssemblyRegistry = new PromptAssemblyRegistry();
   /** 无交互审批面传输的 host 级回退。 */
   approvalPort?: ApprovalPort;
-  /** Per-turn instructions from defineDynamic resolvers (ADR 0039 P2)。 */
-  turnDynamicInstructions?: string;
   lastTurnMetrics: ZhinAgentTurnMetrics | null = null;
   private readonly inboundQueueConfig: ResolvedInboundQueueConfig;
   readonly inboundTurnQueue: InboundTurnQueue;

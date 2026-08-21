@@ -20,8 +20,6 @@ export { defineHook } from './define-hook.js';
 export type { DefineHookInput } from './define-hook.js';
 export { defineEval } from './define-eval.js';
 export type { DefineEvalInput, AuthoringEvalContext } from './define-eval.js';
-export { defineDynamic } from './define-dynamic.js';
-export type { DefineDynamicInput } from './define-dynamic.js';
 export * from './types.js';
 export {
   namespaceAuthoringName,

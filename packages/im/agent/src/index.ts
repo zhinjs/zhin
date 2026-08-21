@@ -674,7 +674,6 @@ export {
   defineEval,
   disableTool,
   normalizeToolDenylist,
-  defineDynamic,
   namespaceAuthoringName,
   slotNameFromFile,
   slotNameFromDir,
@@ -710,15 +709,6 @@ export type {
   AgentSurfacePluginInfo,
   AgentSurfaceWorkspaceAgentInfo,
 } from './discovery/agent-surface-info.js';
-export {
-  applyDynamicTurnOverrides,
-  registerDynamicResolver,
-  listDynamicResolvers,
-} from './dynamic/dynamic-registry.js';
-export type {
-  DynamicResolveContext,
-  DynamicResolveResult,
-} from './dynamic/dynamic-registry.js';
 export {
   AgentFeature,
   MCPFeature,

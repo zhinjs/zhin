@@ -153,10 +153,7 @@ export async function buildAgentPathSystemPrompt(
   };
   const richPrompt = buildRichSystemPrompt(promptCtx);
 
-  const dynamicBlock = agent.turnDynamicInstructions?.trim();
-  const dynamicSuffix = dynamicBlock ? `\n\n# Dynamic context\n${dynamicBlock}` : '';
-
-  return `${richPrompt}${dynamicSuffix}${preData ? `\n\nPre-fetched data:\n${preData}` : ''}`;
+  return `${richPrompt}${preData ? `\n\nPre-fetched data:\n${preData}` : ''}`;
 }
 
 export interface PromptRuntimeOverrides {

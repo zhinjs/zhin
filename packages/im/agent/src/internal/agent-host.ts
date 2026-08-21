@@ -65,8 +65,6 @@ export interface AgentContextHost {
   getTurnActiveSkills(): string;
   getAlwaysSkillsBaseline(): string;
   appendActiveSkillsContext(fragment: string): void;
-  /** Per-turn instructions from defineDynamic resolvers (ADR 0039 P2). */
-  turnDynamicInstructions?: string;
   buildDisciplinedPrompt(basePrompt: string): string;
 }
 

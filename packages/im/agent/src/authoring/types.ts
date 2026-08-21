@@ -16,8 +16,7 @@ export type AuthoringKind =
   | 'schedule'
   | 'connection'
   | 'hook'
-  | 'eval'
-  | 'dynamic';
+  | 'eval';
 
 export interface AuthoringMarker {
   [AUTHORING_KIND]: AuthoringKind;
@@ -117,31 +116,6 @@ export interface AuthoringEvalDefinition extends AuthoringMarker {
   test: (t: AuthoringEvalContext) => void | Promise<void>;
 }
 
-export interface DynamicResolveContext {
-  sessionId: string;
-  userId: string;
-  adapter: string;
-  commMessage: Message;
-  agentId?: string;
-}
-
-export interface DynamicResolveResult {
-  additionalInstructions?: string;
-  allowedToolNames?: string[];
-  deniedToolNames?: string[];
-}
-
-export interface AuthoringDynamicDefinition extends AuthoringMarker {
-  [AUTHORING_KIND]: 'dynamic';
-  resolve: (ctx: DynamicResolveContext) => DynamicResolveResult | void | Promise<DynamicResolveResult | void>;
-}
-
-export interface DiscoveredAuthoringDynamic {
-  pluginName: string;
-  filePath: string;
-  definition: AuthoringDynamicDefinition;
-}
-
 export interface DiscoveredAuthoringTool {
   runtimeName: string;
   slotName: string;
@@ -201,7 +175,6 @@ export interface DiscoveredPluginAgentSurface {
   schedules: DiscoveredAuthoringSchedule[];
   connections: DiscoveredAuthoringConnection[];
   hooks: DiscoveredAuthoringHook[];
-  dynamic?: DiscoveredAuthoringDynamic;
   evals: DiscoveredAuthoringEval[];
   subagents: DiscoveredPluginAgentSurface[];
 }
