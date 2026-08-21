@@ -28,6 +28,7 @@ import {
 import {
   MemoryConversationEventStore,
   type ConversationEventStore,
+  type ConversationEvent,
   type ConversationReference,
   type ConversationResolution,
   type ConversationRef,
@@ -602,6 +603,8 @@ export class ImRuntime implements MessageGateway {
   }
 
   async receiveNotice(notice: Notice): Promise<void> {
+    const event = conversationEventFromNotice(notice);
+    if (event) await this.conversationEvents.append(event);
     await this.#receiveSideEvent('notice.receive', notice);
   }
 
@@ -1054,6 +1057,53 @@ export class ImRuntime implements MessageGateway {
     return handled
       ? Object.freeze({ matched: true, command: 'interactive', owner: requester })
       : undefined;
+  }
+}
+
+function conversationEventFromNotice(notice: Notice): ConversationEvent | undefined {
+  const sceneType = notice.$scene_type;
+  const kind = sceneType === 'group' ? 'group' as const
+    : sceneType === 'channel' ? 'channel' as const
+      : sceneType === 'friend' || sceneType === 'private' ? 'private' as const
+        : undefined;
+  if (!kind || !notice.$scene_id || !notice.$id) return undefined;
+  const conversation = Object.freeze({
+    endpoint: Object.freeze({ adapter: String(notice.$adapter), id: String(notice.$endpoint) }),
+    kind,
+    id: String(notice.$scene_id),
+  });
+  const actor = notice.$actor?.id
+    ? Object.freeze({ id: String(notice.$actor.id), ...(notice.$actor.name ? { displayName: notice.$actor.name } : {}) })
+    : undefined;
+  const target = notice.$target?.id
+    ? Object.freeze({ id: String(notice.$target.id), ...(notice.$target.name ? { displayName: notice.$target.name } : {}) })
+    : undefined;
+  const base = Object.freeze({ eventId: String(notice.$id), conversation, timestamp: notice.$timestamp });
+  switch (notice.$sub_type) {
+    case 'member_increase':
+    case 'increase':
+      return target ? Object.freeze({ ...base, type: 'member.joined', member: target, ...(actor ? { actor } : {}) }) : undefined;
+    case 'member_decrease':
+      return target ? Object.freeze({ ...base, type: 'member.left', member: target, ...(actor ? { actor } : {}), reason: actor ? 'removed' : 'left' }) : undefined;
+    case 'ban':
+      if (!target) return undefined;
+      return notice.$duration_seconds === 0
+        ? Object.freeze({ ...base, type: 'member.unmuted', member: target, ...(actor ? { actor } : {}) })
+        : Object.freeze({ ...base, type: 'member.muted', member: target, ...(actor ? { actor } : {}), durationSeconds: notice.$duration_seconds ?? 0 });
+    case 'admin_change':
+      return target && notice.$role && typeof notice.$enabled === 'boolean'
+        ? Object.freeze({ ...base, type: 'member.role_changed', member: target, ...(actor ? { actor } : {}), role: notice.$role, enabled: notice.$enabled })
+        : undefined;
+    case 'recall':
+      return notice.$message_id
+        ? Object.freeze({ ...base, type: 'message.recalled', message: Object.freeze({ conversation, id: notice.$message_id }), ...(actor ? { actor } : {}) })
+        : undefined;
+    case 'emoji_reaction':
+      return notice.$message_id && notice.$reaction && notice.$operation
+        ? Object.freeze({ ...base, type: 'message.reaction_changed', message: Object.freeze({ conversation, id: notice.$message_id }), ...(actor ? { actor } : {}), reaction: notice.$reaction, operation: notice.$operation })
+        : undefined;
+    default:
+      return undefined;
   }
 }
 

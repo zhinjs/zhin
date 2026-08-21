@@ -4,6 +4,7 @@ import {
   TOOL_CALL_REASONING_PLACEHOLDER,
   usesAnthropicReasoningProtocol,
 } from '../../src/llm/bridge/ai-sdk-messages.js';
+import { createUserMessage } from '../../src/llm/types/agent-message.js';
 import type { AssistantMessage } from '../../src/llm/types/agent-message.js';
 import { EMPTY_TOKEN_USAGE } from '../../src/llm/types/agent-message.js';
 
@@ -126,5 +127,30 @@ describe('agentMessagesToAiSdk tool-call reasoning', () => {
       text: 'signed cot',
       providerOptions: { anthropic: { signature: 'sig_abc' } },
     });
+  });
+});
+
+describe('agentMessagesToAiSdk media capabilities', () => {
+  const media = [
+    { type: 'image' as const, data: { media: { kind: 'url' as const, value: 'https://cdn.test/a.png', mime_type: 'image/png' } } },
+    { type: 'audio' as const, data: { media: { kind: 'base64' as const, value: 'YQ==', mime_type: 'audio/mpeg' } } },
+    { type: 'video' as const, data: { media: { kind: 'url' as const, value: 'https://cdn.test/v.mp4', mime_type: 'video/mp4' } } },
+    { type: 'file' as const, data: { media: { kind: 'base64' as const, value: 'Yg==', mime_type: 'application/pdf', file_name: 'a.pdf' } } },
+  ];
+
+  it('is text-only when provider capabilities are absent', () => {
+    const message = createUserMessage('inspect', media);
+    const converted = agentMessagesToAiSdk([message]);
+    const user = converted[0];
+    expect(user?.role).toBe('user');
+    expect(Array.isArray(user?.content) && user.content.every((part) => part.type === 'text')).toBe(true);
+  });
+
+  it('serializes only explicitly declared media modalities', () => {
+    const message = createUserMessage('inspect', media);
+    const converted = agentMessagesToAiSdk([message], ['image', 'audio', 'video', 'file']);
+    const user = converted[0];
+    if (user?.role !== 'user' || !Array.isArray(user.content)) throw new Error('expected user parts');
+    expect(user.content.map((part) => part.type)).toEqual(['text', 'image', 'file', 'file', 'file']);
   });
 });

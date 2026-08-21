@@ -41,7 +41,7 @@ describe('standalone loop 延迟加载', () => {
       },
     });
     const provider = Object.assign(llm.provider, {
-      capabilities: { vision: false, streaming: false, toolCalling: true },
+      capabilities: { input: ['text'], streaming: false, toolCalling: true },
     }) as unknown as AIProvider;
 
     const parentSnapshot = { loadedTools: {} as Record<string, number> };

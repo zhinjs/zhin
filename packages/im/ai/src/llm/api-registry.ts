@@ -112,7 +112,7 @@ export function getLlmTransportModel(providerAlias: string, modelId: string): Mo
     baseUrl: config.baseUrl,
     compat: config.compat,
     reasoning: inferModelReasoning(modelId),
-    input: ['text'],
+    input: config.input?.length ? [...config.input] : ['text'],
     contextWindow: resolveTransportContextWindow(config, modelId),
     maxTokens: 8_192,
   };

@@ -1229,7 +1229,7 @@ export function createRuntimeTurnRequest(
   const access = createRuntimeTurnAccess(message, roles);
   const origin = access.origin;
   if (origin.kind !== 'im') throw new Error('Runtime IM ingress must produce an IM origin');
-  const media = collectSegmentMedia(
+  const mediaEntries = collectSegmentMedia(
     message.segments ? toCanonicalSegments(message.segments) : undefined,
   ).map(({ type, media: ref }) => Object.freeze({
     kind: type as 'image' | 'audio' | 'video' | 'file',
@@ -1257,6 +1257,19 @@ export function createRuntimeTurnRequest(
       forwardId,
     }));
   }
+  for (const entry of mediaEntries) {
+    if (entry.source.kind !== 'platform_ref') continue;
+    conversationReferences.push(Object.freeze({
+      kind: 'media',
+      conversation: message.conversation,
+      media: Object.freeze({
+        kind: 'file',
+        value: entry.source.value,
+        ...(entry.mimeType ? { mime_type: entry.mimeType } : {}),
+        ...(entry.name ? { file_name: entry.name } : {}),
+      }),
+    }));
+  }
   const turnReferences = conversationReferences.map((reference, index) => Object.freeze({
     key: `ref-${index + 1}`,
     kind: reference.kind,
@@ -1270,6 +1283,11 @@ export function createRuntimeTurnRequest(
     reference.key,
     conversationReferences[index]!,
   ]));
+  const media = mediaEntries.map((entry) => {
+    if (entry.source.kind !== 'platform_ref') return entry;
+    const reference = turnReferences.find((candidate) => candidate.kind === 'media' && candidate.sourceId === entry.source.value);
+    return Object.freeze({ ...entry, ...(reference ? { referenceKey: reference.key } : {}) });
+  });
   if (turnReferences.length > 0 && !input.resolveReference) {
     throw new TypeError('Runtime IM references require a generation-bound resolver');
   }

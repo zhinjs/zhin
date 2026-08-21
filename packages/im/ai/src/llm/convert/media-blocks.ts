@@ -4,7 +4,7 @@
  * 内部媒体表达是 canonical MediaRef 同构块（MediaContentBlock）；
  * 各家 LLM API 格式只在这里映射。物化（下载/读盘）发生在 agent 的 media
  * pipeline——序列化器只消费 url / base64（含 data URI）两种已就绪形式，
- * 其余（path / 平台不透明 file 引用）按能力降级为占位文本。
+ * 其余（path / 平台不透明 file 引用）明确拒绝为不可发送媒体。
  */
 import {
   isMediaContentBlock,
@@ -15,8 +15,8 @@ import {
 
 export type ProviderMediaKind = 'image' | 'audio' | 'video' | 'file';
 
-/** provider 未声明媒体能力时的保守缺省：仅图片。 */
-export const DEFAULT_PROVIDER_MEDIA: readonly ProviderMediaKind[] = Object.freeze(['image']);
+/** Provider 未声明媒体能力时严格按纯文本处理，不猜测图片能力。 */
+export const DEFAULT_PROVIDER_MEDIA: readonly ProviderMediaKind[] = Object.freeze([]);
 
 const BASE64_PREFIX = 'base64://';
 const DATA_URI_RE = /^data:([^;]+);base64,(.+)$/i;
@@ -56,7 +56,7 @@ function defaultMimeFor(ref: MediaBlockRef): string {
   return 'application/octet-stream';
 }
 
-/** 不支持/未物化媒体块的占位文本（保留 alt / file_name；非法块兜底为类型占位）。 */
+/** 不支持/未物化媒体块的显式失败文本；不得伪装成成功识别的媒体占位。 */
 export function mediaBlockPlaceholder(block: MediaContentBlock): string {
   const data = block?.data as { alt?: unknown; media?: unknown } | undefined;
   const alt = typeof data?.alt === 'string' && data.alt ? data.alt : undefined;
@@ -67,7 +67,7 @@ export function mediaBlockPlaceholder(block: MediaContentBlock): string {
     ?? fileName
     ?? ({ image: '图片', audio: '音频', video: '视频', file: '文件' } as const)[block.type]
     ?? '媒体';
-  return `[${label}]`;
+  return `[Media unavailable: ${block.type}; ${label}]`;
 }
 
 export interface SerializedMedia {

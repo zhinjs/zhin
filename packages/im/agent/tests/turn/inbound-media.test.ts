@@ -23,6 +23,7 @@ describe('resolveTurnMediaInjection', () => {
     const injection = await resolveTurnMediaInjection([]);
     expect(injection.blocks).toEqual([]);
     expect(injection.textAppends).toEqual([]);
+    expect(injection.outcomes).toEqual([]);
   });
 
   it('image：url / base64 MediaRef 直挂为媒体块', async () => {
@@ -35,6 +36,10 @@ describe('resolveTurnMediaInjection', () => {
       { type: 'image', data: { media: { kind: 'base64', value: 'QUJD', mime_type: 'image/png' } } },
     ]);
     expect(injection.textAppends).toEqual([]);
+    expect(injection.outcomes).toEqual([
+      { kind: 'image', status: 'accepted', code: 'ready' },
+      { kind: 'image', status: 'accepted', code: 'ready' },
+    ]);
   });
 
   it('image：path 经 media pipeline 物化为 base64 块', async () => {
@@ -51,30 +56,60 @@ describe('resolveTurnMediaInjection', () => {
     expect(Buffer.from(block.data.media.value, 'base64').toString()).toBe('fake-png');
   });
 
-  it('image：path 读盘失败 → 占位文本', async () => {
+  it('image：path 读盘失败 → 明确 failed 终态', async () => {
     const injection = await resolveTurnMediaInjection([
       { kind: 'image', source: { kind: 'path', value: path.join(root, 'missing.png') } },
     ]);
     expect(injection.blocks).toEqual([]);
-    expect(injection.textAppends).toEqual(['[图片]']);
+    expect(injection.textAppends).toEqual(['[Media failed:path_read_failed: image]']);
+    expect(injection.outcomes).toEqual([{ kind: 'image', status: 'failed', code: 'path_read_failed' }]);
   });
 
-  it('audio：无 STT 管线时降级占位；video / file → 占位文本', async () => {
+  it('audio / video / file 保留给显式支持相应输入的 provider', async () => {
     const injection = await resolveTurnMediaInjection([
       { kind: 'audio', source: { kind: 'base64', value: 'QUJD' }, mimeType: 'audio/mpeg' },
       { kind: 'video', source: { kind: 'url', value: 'https://cdn.example/v.mp4' } },
       { kind: 'file', source: { kind: 'url', value: 'https://cdn.example/f.zip' }, name: 'f.zip' },
     ]);
-    expect(injection.blocks).toEqual([]);
-    expect(injection.textAppends).toEqual(['[音频]', '[视频]', '[f.zip]']);
+    expect(injection.blocks.map((block) => block.type)).toEqual(['audio', 'video', 'file']);
+    expect(injection.textAppends).toEqual([]);
+    expect(injection.outcomes).toEqual([
+      { kind: 'audio', status: 'accepted', code: 'native_provider_input' },
+      { kind: 'video', status: 'accepted', code: 'native_provider_input' },
+      { kind: 'file', status: 'accepted', code: 'native_provider_input' },
+    ]);
   });
 
-  it('platform_ref 降级为占位文本', async () => {
+  it('platform_ref 未物化时明确 unsupported', async () => {
     const injection = await resolveTurnMediaInjection([
       { kind: 'image', source: { kind: 'platform_ref', value: 'opaque-image-id' } },
     ]);
     expect(injection.blocks).toEqual([]);
-    expect(injection.textAppends).toEqual(['[图片]']);
+    expect(injection.textAppends).toEqual(['[Media unsupported:unresolved_platform_reference: image]']);
+    expect(injection.outcomes).toEqual([
+      { kind: 'image', status: 'unsupported', code: 'unresolved_platform_reference' },
+    ]);
+  });
+
+  it('通过当前 turn 的 ReferencePort 物化 platform_ref', async () => {
+    const injection = await resolveTurnMediaInjection([{
+      kind: 'image',
+      source: { kind: 'platform_ref', value: 'opaque-image-id' },
+      referenceKey: 'ref-1',
+    }], {
+      async resolve(key) {
+        expect(key).toBe('ref-1');
+        return {
+          status: 'resolved',
+          content: { kind: 'url', value: 'https://cdn.example/resolved.png', mime_type: 'image/png' },
+        };
+      },
+    });
+    expect(injection.blocks).toEqual([{
+      type: 'image',
+      data: { media: { kind: 'url', value: 'https://cdn.example/resolved.png', mime_type: 'image/png' } },
+    }]);
+    expect(injection.outcomes).toEqual([{ kind: 'image', status: 'accepted', code: 'ready' }]);
   });
 });
 
@@ -88,6 +123,7 @@ describe('applyInboundMediaInjection', () => {
         data: { media: { kind: 'url', value: 'https://cdn.example/a.jpg' } },
       }],
       textAppends: ['[语音转写] 你好'],
+      outcomes: [],
     });
     expect(out).toHaveLength(2);
     expect(out[0]).toBe(history);
@@ -101,7 +137,7 @@ describe('applyInboundMediaInjection', () => {
 
   it('空注入原样返回', () => {
     const messages = [createUserMessage('hi')];
-    const out = applyInboundMediaInjection(messages, { blocks: [], textAppends: [] });
+    const out = applyInboundMediaInjection(messages, { blocks: [], textAppends: [], outcomes: [] });
     expect(out[0]).toBe(messages[0]);
   });
 });

@@ -3,13 +3,10 @@
  * `UserMessage.media`（MediaContentBlock，不随 session 持久化）。
  *
  * 策略（`ai.multimodal`）：
- * - image：url / base64 直挂；path 经 media pipeline 物化为 base64；
- *   平台不透明 file 引用暂不可解 → 占位文本。
- * - audio：默认 transcribe（@zhin.js/speech 可选）→ 转写文本；未装/失败或
- *   text-only 策略 → 占位文本；mcp 策略 → 占位 + 落盘提示（暂同 text-only）。
- * - video / file：占位文本（video 抽帧为既有配置面，不在此默认开启）。
+ * 每个输入媒体必须产生 accepted / derived / unsupported / rejected / failed
+ * 之一；失败不得伪装成已经被模型识别的媒体占位。
  */
-import { type MediaContentBlock, type MediaBlockRef } from '@zhin.js/ai';
+import { isMediaBlockRef, type MediaContentBlock, type MediaBlockRef } from '@zhin.js/ai';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   readLocalFileAsBase64,
@@ -20,7 +17,7 @@ import {
   getPrimaryAppConfig,
   resolveMultimodalConfig,
 } from '../media/resolve-config.js';
-import type { TurnMedia } from './turn-ingress.js';
+import type { ReferencePort, TurnMedia } from './turn-ingress.js';
 
 const logger = getLogger('ZhinAgent');
 
@@ -29,16 +26,25 @@ export interface InboundMediaInjection {
   readonly blocks: MediaContentBlock[];
   /** 需要拼进用户消息文本的补充（STT 转写 / 占位） */
   readonly textAppends: string[];
+  /** 与输入媒体一一对应的终态。 */
+  readonly outcomes: InboundMediaOutcome[];
+}
+
+export interface InboundMediaOutcome {
+  readonly kind: TurnMedia['kind'];
+  readonly status: 'accepted' | 'derived' | 'unsupported' | 'rejected' | 'failed';
+  readonly code: string;
 }
 
 const EMPTY_INJECTION: InboundMediaInjection = Object.freeze({
   blocks: Object.freeze([]) as unknown as MediaContentBlock[],
   textAppends: Object.freeze([]) as unknown as string[],
+  outcomes: Object.freeze([]) as unknown as InboundMediaOutcome[],
 });
 
-function placeholderOf(type: string, ref: MediaBlockRef): string {
-  const label = ref.file_name ?? ({ image: '图片', audio: '音频', video: '视频', file: '文件' } as Record<string, string>)[type] ?? '媒体';
-  return `[${label}]`;
+function failureText(type: string, code: string, ref: MediaBlockRef): string {
+  const label = ref.file_name ? `; ${ref.file_name}` : '';
+  return `[Media ${code}: ${type}${label}]`;
 }
 
 function toBase64Block(
@@ -62,8 +68,11 @@ function toBase64Block(
 
 export async function resolveTurnMediaInjection(
   turnMedia: readonly TurnMedia[] | undefined,
+  references?: ReferencePort,
+  signal: AbortSignal = new AbortController().signal,
 ): Promise<InboundMediaInjection> {
   const refs = (turnMedia ?? []).map((entry) => ({
+    entry,
     type: entry.kind,
     media: {
       kind: entry.source.kind === 'platform_ref' ? 'file' as const : entry.source.kind,
@@ -77,25 +86,50 @@ export async function resolveTurnMediaInjection(
   const config = resolveMultimodalConfig();
   const blocks: MediaContentBlock[] = [];
   const textAppends: string[] = [];
+  const outcomes: InboundMediaOutcome[] = [];
 
-  for (const { type, media } of refs) {
+  for (const { entry, type, media: initialMedia } of refs) {
+    let media = initialMedia;
+    if (entry.source.kind === 'platform_ref') {
+      if (!entry.referenceKey || !references) {
+        textAppends.push(failureText(type, 'unsupported:unresolved_platform_reference', media));
+        outcomes.push({ kind: type, status: 'unsupported', code: 'unresolved_platform_reference' });
+        continue;
+      }
+      const resolution = await references.resolve(entry.referenceKey, {
+        depth: 0,
+        maxEntries: 1,
+        maxChars: 0,
+      }, signal);
+      if (resolution.status !== 'resolved' || !isMediaBlockRef(resolution.content)) {
+        const code = resolution.status === 'resolved' ? 'invalid_platform_media' : resolution.code;
+        textAppends.push(failureText(type, `failed:${code}`, media));
+        outcomes.push({ kind: type, status: resolution.status === 'forbidden' ? 'rejected' : 'failed', code });
+        continue;
+      }
+      media = resolution.content;
+    }
     if (type === 'image') {
       if (media.kind === 'url' || media.kind === 'base64') {
         blocks.push({ type: 'image', data: { media } });
+        outcomes.push({ kind: type, status: 'accepted', code: 'ready' });
         continue;
       }
       if (media.kind === 'path') {
         const payload = await readLocalFileAsBase64(media.value, config.maxFileBytes);
         if (payload) {
           blocks.push(toBase64Block('image', payload));
+          outcomes.push({ kind: type, status: 'accepted', code: 'materialized' });
         } else {
           logger.warn(formatCompact({ op: 'inbound_media_dropped', type, reason: 'path_read_failed' }));
-          textAppends.push(placeholderOf(type, media));
+          textAppends.push(failureText(type, 'failed:path_read_failed', media));
+          outcomes.push({ kind: type, status: 'failed', code: 'path_read_failed' });
         }
         continue;
       }
-      // kind=file：平台不透明引用（留 adapter 解析钩子，二期）
-      textAppends.push(placeholderOf(type, media));
+      // A resolved opaque reference must materialize to url/base64/path.
+      textAppends.push(failureText(type, 'unsupported:unresolved_platform_reference', media));
+      outcomes.push({ kind: type, status: 'unsupported', code: 'unresolved_platform_reference' });
       continue;
     }
 
@@ -109,6 +143,7 @@ export async function resolveTurnMediaInjection(
           });
           if (text?.trim()) {
             textAppends.push(`[语音转写] ${text.trim()}`);
+            outcomes.push({ kind: type, status: 'derived', code: 'speech_transcription' });
             continue;
           }
         } catch (error) {
@@ -118,15 +153,27 @@ export async function resolveTurnMediaInjection(
           }));
         }
       }
-      textAppends.push(placeholderOf('audio', media));
+      if (media.kind === 'url' || media.kind === 'base64') {
+        blocks.push({ type: 'audio', data: { media } });
+        outcomes.push({ kind: type, status: 'accepted', code: 'native_provider_input' });
+      } else {
+        textAppends.push(failureText(type, 'unsupported:unmaterialized', media));
+        outcomes.push({ kind: type, status: 'unsupported', code: 'unmaterialized' });
+      }
       continue;
     }
 
-    textAppends.push(placeholderOf(type === 'video' ? 'video' : 'file', media));
+    if (media.kind === 'url' || media.kind === 'base64') {
+      blocks.push({ type, data: { media } });
+      outcomes.push({ kind: type, status: 'accepted', code: 'native_provider_input' });
+    } else {
+      textAppends.push(failureText(type, 'unsupported:unmaterialized', media));
+      outcomes.push({ kind: type, status: 'unsupported', code: 'unmaterialized' });
+    }
   }
 
-  if (blocks.length === 0 && textAppends.length === 0) return EMPTY_INJECTION;
-  return { blocks, textAppends };
+  if (blocks.length === 0 && textAppends.length === 0 && outcomes.length === 0) return EMPTY_INJECTION;
+  return { blocks, textAppends, outcomes };
 }
 
 async function resolveAudioPayload(

@@ -19,7 +19,7 @@ const provider = createSdkProviderAdapter('main', {
   baseUrl: 'https://api.openai.com/v1',
   contextWindow: 128000,
   // models 可省略 — ModelRegistry 自动发现
-  capabilities: { vision: true, streaming: true, toolCalling: true },
+  capabilities: { input: ['text', 'image'], streaming: true, toolCalling: true },
 })
 
 const response = await provider.chat({

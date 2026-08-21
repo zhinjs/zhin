@@ -8,7 +8,7 @@ import type { SdkId } from '../sdk-registry.js';
  */
 export type ModelApi = 'ai-sdk' | (string & {});
 
-export type ModelInputModality = 'text' | 'image';
+export type ModelInputModality = 'text' | 'image' | 'audio' | 'video' | 'file';
 
 export interface ModelCostRates {
   input: number;
@@ -47,6 +47,8 @@ export interface ProviderInstanceConfig {
   headers?: Record<string, string>;
   timeout?: number;
   maxRetries?: number;
+  /** Explicit model input modalities. Absence is text-only (fail closed). */
+  input?: readonly ModelInputModality[];
   /** Cloudflare Workers AI */
   accountId?: string;
   /** Ollama */

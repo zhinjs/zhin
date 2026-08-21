@@ -39,6 +39,8 @@ export interface TurnMedia {
   }>;
   readonly mimeType?: string;
   readonly name?: string;
+  /** Current-turn scoped key used to materialize an opaque platform reference. */
+  readonly referenceKey?: string;
 }
 
 export interface TurnReference {

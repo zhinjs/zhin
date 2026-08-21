@@ -101,7 +101,11 @@ async function* runInteractiveTurn(
     persistSnapshot: (next) => host.contextRepository.setDeferredToolSnapshot(prep.sessionId, next),
   });
   const activeSkillsContext = plan.controller.loadedSkillInstructions().join('\n\n');
-  const media = await resolveTurnMediaInjection(context.turn.input.media);
+  const media = await resolveTurnMediaInjection(
+    context.turn.input.media,
+    context.turn.ports.references,
+    context.turn.signal,
+  );
   const prompt = await contextSystem.buildTextTurnContext({
     host,
     turn: context.turn,

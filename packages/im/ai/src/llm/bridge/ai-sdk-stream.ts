@@ -255,10 +255,14 @@ export function createAiSdkStreamFn(): StreamFn {
         model.sdk,
         options,
       );
-      const { system: systemText, messages } = contextToAiSdkPrompt(context, undefined, {
+      const { system: systemText, messages } = contextToAiSdkPrompt(
+        context,
+        model.input.filter((kind): kind is 'image' | 'audio' | 'video' | 'file' => kind !== 'text'),
+        {
         ensureToolCallReasoning: shouldEnsureToolCallReasoning(model),
         sdk: model.sdk,
-      });
+        },
+      );
       const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
       const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
       const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
@@ -400,10 +404,14 @@ export async function generateTextViaAiSdk(
     model.sdk,
     options,
   );
-  const { system: systemText, messages } = contextToAiSdkPrompt(context, undefined, {
+  const { system: systemText, messages } = contextToAiSdkPrompt(
+    context,
+    model.input.filter((kind): kind is 'image' | 'audio' | 'video' | 'file' => kind !== 'text'),
+    {
     ensureToolCallReasoning: shouldEnsureToolCallReasoning(model),
     sdk: model.sdk,
-  });
+    },
+  );
   const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
   const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
   const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;

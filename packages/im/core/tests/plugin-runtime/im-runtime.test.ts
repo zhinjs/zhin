@@ -49,6 +49,39 @@ import {
 import { resetKeyboardFallbackStoreForTests } from '../../src/built/interactive-segments/index.js';
 
 describe('IM Runtime', () => {
+  it('writes normalized notices once before handler projection', async () => {
+    const fixture = await createFixture([], []);
+    const notice = {
+      $id: 'notice-1',
+      $adapter: 'test',
+      $endpoint: String(fixture.adapter.id),
+      $type: 'notice' as const,
+      $scene_id: 'room-1',
+      $scene_type: 'group',
+      $sub_type: 'ban',
+      $actor: { id: 'admin', name: 'Admin' },
+      $target: { id: 'member', name: 'Member' },
+      $duration_seconds: 60,
+      $timestamp: 123,
+    };
+    await fixture.im.receiveNotice(notice as never);
+    await fixture.im.receiveNotice(notice as never);
+    const events = await fixture.im.conversationEvents.listAfter({
+      endpoint: { adapter: 'test', id: String(fixture.adapter.id) },
+      kind: 'group',
+      id: 'room-1',
+    }, 0, 10);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.event).toMatchObject({
+      type: 'member.muted',
+      member: { id: 'member', displayName: 'Member' },
+      actor: { id: 'admin', displayName: 'Admin' },
+      durationSeconds: 60,
+    });
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
   it('records canonical inbound messages and resolves references from the held generation', async () => {
     const fixture = await createFixture([], []);
     const conversation = {

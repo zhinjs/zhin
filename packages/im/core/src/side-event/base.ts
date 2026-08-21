@@ -26,6 +26,13 @@ export interface SideEventBase {
   $target?: MessageSender;
   /** 毫秒时间戳 */
   $timestamp: number;
+  /** Canonical relation fields populated by the Adapter boundary. */
+  $message_id?: string;
+  $reaction?: string;
+  $operation?: 'added' | 'removed';
+  $duration_seconds?: number;
+  $role?: string;
+  $enabled?: boolean;
 }
 
 /** 组合 Side Event 完整类型名 */

@@ -56,6 +56,17 @@ export async function receiveOneBotLikeSideEvent(
           : undefined,
       ),
       $timestamp: toMillis(raw.time),
+      ...(raw.message_id != null ? { $message_id: String(raw.message_id) } : {}),
+      ...(raw.emoji_id != null || raw.code != null
+        ? { $reaction: String(raw.emoji_id ?? raw.code) }
+        : {}),
+      ...(parts.sub_type === 'emoji_reaction'
+        ? { $operation: String(raw.sub_type ?? '').includes('delete') ? 'removed' as const : 'added' as const }
+        : {}),
+      ...(raw.duration != null ? { $duration_seconds: Math.max(0, Number(raw.duration) || 0) } : {}),
+      ...(parts.sub_type === 'admin_change'
+        ? { $role: 'admin', $enabled: String(raw.sub_type ?? '') === 'set' }
+        : {}),
     });
     await gateway.receiveNotice(notice);
     return 'notice';

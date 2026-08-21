@@ -58,7 +58,8 @@ export interface Usage {
 
 /** Provider 能力声明 */
 export interface ProviderCapabilities {
-  vision?: boolean;
+  /** Explicit model input modalities. Absence is text-only (fail closed). */
+  input?: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[];
   streaming?: boolean;
   toolCalling?: boolean;
   thinking?: boolean;
@@ -81,6 +82,8 @@ export interface ProviderConfig {
   contextWindow?: number;
   /** Provider 能力声明 */
   capabilities?: ProviderCapabilities;
+  /** Explicit model input modalities. Prefer this over inferred provider identity. */
+  input?: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[];
   /** 文生图默认（zhipu / cloudflare 等支持 generateImage 的 driver） */
   imageGeneration?: import('./image-generation.js').ImageGenerationDefaults;
 }

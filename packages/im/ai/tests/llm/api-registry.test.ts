@@ -67,6 +67,18 @@ describe('llm api-registry', () => {
     expect(model.provider).toBe('openai');
     expect(model.api).toBe('ai-sdk');
     expect(model.id).toBe('gpt-test');
+    expect(model.input).toEqual(['text']);
+  });
+
+  it('preserves explicitly declared provider input modalities', () => {
+    registerProviderInstance('multimodal', {
+      sdk: 'openai',
+      input: ['text', 'image', 'audio', 'video', 'file'],
+    }, ['omni']);
+
+    expect(getLlmTransportModel('multimodal', 'omni').input).toEqual([
+      'text', 'image', 'audio', 'video', 'file',
+    ]);
   });
 
   it('getLlmTransportModel uses provider contextWindow override', () => {

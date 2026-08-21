@@ -36,7 +36,7 @@ describe('buildSubagentInboundTask', () => {
     const provider = {
       name: 'mock-vision',
       models: ['m'],
-      capabilities: { vision: true },
+      capabilities: { input: ['text', 'image'] },
       chat: async () => {
         throw new Error('not used');
       },
