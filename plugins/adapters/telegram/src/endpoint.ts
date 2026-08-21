@@ -2,11 +2,13 @@
  * TelegramEndpoint — lifecycle, outbound, admit, Bot API helpers for agent tools.
  */
 import { readFile } from 'node:fs/promises';
-import type { EndpointControl, EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
+import type { EndpointContentPort, EndpointContentResolveContext, EndpointControl, EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
 import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
   type ConversationRef,
+  type ConversationReference,
+  type ConversationResolution,
   type MessageRef,
 } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
@@ -56,6 +58,8 @@ export type TelegramFetch = (
   readonly status: number;
   text(): Promise<string>;
   json(): Promise<unknown>;
+  arrayBuffer?(): Promise<ArrayBuffer>;
+  readonly headers?: { get(name: string): string | null };
 }>;
 
 export interface TelegramEndpointOptions {
@@ -100,6 +104,9 @@ export class TelegramEndpoint implements EndpointInstance {
   readonly #chatMemberCache = new Map<string, ChatMemberPermit>();
   readonly control: EndpointControl = Object.freeze({
     recall: (message: MessageRef) => this.recallMessage(message),
+  });
+  readonly content: EndpointContentPort = Object.freeze({
+    resolve: (reference: ConversationReference, context: EndpointContentResolveContext) => this.#resolveContent(reference, context.signal),
   });
 
   constructor(options: TelegramEndpointOptions) {
@@ -228,6 +235,50 @@ export class TelegramEndpoint implements EndpointInstance {
       chat_id: message.conversation.id,
       message_id: Number(message.id),
     });
+  }
+
+  async #resolveContent(
+    reference: Parameters<EndpointContentPort['resolve']>[0],
+    signal: AbortSignal,
+  ): Promise<ConversationResolution> {
+    if (reference.kind !== 'media') {
+      return Object.freeze({ status: 'unsupported', code: 'telegram_message_lookup_unavailable' });
+    }
+    if (reference.media.kind !== 'file') {
+      return Object.freeze({ status: 'resolved', reference, value: reference.media });
+    }
+    try {
+      signal.throwIfAborted();
+      const file = await this.callApi<{ file_path?: string; file_size?: number }>('getFile', {
+        file_id: reference.media.value,
+      });
+      if (!file.file_path) return Object.freeze({ status: 'not_found', code: 'telegram_file_not_found' });
+      if ((file.file_size ?? 0) > 26_214_400) return Object.freeze({ status: 'forbidden', code: 'media_size_limit' });
+      const response = await this.#fetch(
+        `${this.#options.config.apiBaseUrl}/file/bot${this.#options.config.token}/${file.file_path}`,
+        { signal },
+      );
+      if (!response.ok) return Object.freeze({ status: 'failed', code: 'telegram_file_download_failed' });
+      if (!response.arrayBuffer) return Object.freeze({ status: 'failed', code: 'telegram_binary_transport_unavailable' });
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (bytes.byteLength > 26_214_400) return Object.freeze({ status: 'forbidden', code: 'media_size_limit' });
+      return Object.freeze({
+        status: 'resolved',
+        reference,
+        value: Object.freeze({
+          kind: 'base64',
+          value: bytes.toString('base64'),
+          ...(response.headers?.get('content-type')?.split(';')[0] || reference.media.mime_type
+            ? { mime_type: response.headers?.get('content-type')?.split(';')[0] ?? reference.media.mime_type }
+            : {}),
+          ...(reference.media.file_name ? { file_name: reference.media.file_name } : {}),
+          size: bytes.byteLength,
+        }),
+      });
+    } catch (error) {
+      if (signal.aborted) return Object.freeze({ status: 'expired', code: 'turn_aborted' });
+      return Object.freeze({ status: 'failed', code: 'telegram_file_resolution_failed', message: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   /**

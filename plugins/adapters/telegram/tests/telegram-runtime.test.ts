@@ -337,6 +337,49 @@ describe('telegram protocol helpers', () => {
   });
 });
 
+describe('telegram conversation content port', () => {
+  it('materializes a turn-scoped Telegram file reference without leaking the bot token URL', async () => {
+    const fetch: TelegramFetch = async (url) => {
+      if (url.includes('/getFile')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ ok: true, result: { file_path: 'photos/a.jpg', file_size: 3 } }),
+          json: async () => ({ ok: true, result: { file_path: 'photos/a.jpg', file_size: 3 } }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => 'abc',
+        json: async () => ({}),
+        arrayBuffer: async () => Uint8Array.from([97, 98, 99]).buffer,
+        headers: { get: (name) => name.toLowerCase() === 'content-type' ? 'image/jpeg' : null },
+      };
+    };
+    const endpoint = new TelegramEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'telegram') as never,
+      gateway: { receive: vi.fn() } as never,
+      config: baseConfig,
+      fetch,
+    });
+    const conversation = testConversation('private', '1001');
+    await expect(endpoint.content.resolve({
+      kind: 'media',
+      conversation,
+      media: { kind: 'file', value: 'telegram-file-id', file_name: 'a.jpg' },
+    }, {
+      signal: new AbortController().signal,
+      maxDepth: 0,
+      maxEntries: 1,
+      maxChars: 0,
+    })).resolves.toMatchObject({
+      status: 'resolved',
+      value: { kind: 'base64', value: 'YWJj', mime_type: 'image/jpeg', file_name: 'a.jpg', size: 3 },
+    });
+  });
+});
+
 describe('telegram plugin runtime adapter', () => {
   it('routes admitted messages through MessageGateway when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
