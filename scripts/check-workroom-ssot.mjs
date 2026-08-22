@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gitGrepSource } from './lib/git-grep-source.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const forbidden = [
@@ -32,57 +33,44 @@ const legacyDataSurfaceNames = [
 ];
 
 let failed = false;
+const authoritySourcePaths = [
+  'packages/im/agent/src',
+  'basic/cli/src/plugin-runtime',
+];
+
+function findAuthorityMatches(pattern, excludeGlobs = []) {
+  return gitGrepSource({
+    repoRoot,
+    pattern,
+    paths: authoritySourcePaths,
+    excludeGlobs: ['**/lib/**', ...excludeGlobs],
+  });
+}
+
 for (const pattern of forbidden) {
-  try {
-    const output = execFileSync('rg', [
-      '-n', pattern,
-      'packages/im/agent/src',
-      'basic/cli/src/plugin-runtime',
-      '--glob', '!**/lib/**',
-    ], { cwd: repoRoot, encoding: 'utf8' }).trim();
-    if (output) {
-      console.error(`[check:workroom-ssot] forbidden parallel authority "${pattern}":\n${output}`);
-      failed = true;
-    }
-  } catch (error) {
-    if (error?.status !== 1) throw error;
+  const output = findAuthorityMatches(pattern);
+  if (output) {
+    console.error(`[check:workroom-ssot] forbidden parallel authority "${pattern}":\n${output}`);
+    failed = true;
   }
 }
 
 for (const pattern of forbiddenModelControlNames) {
-  try {
-    const output = execFileSync('rg', [
-      '-n', pattern,
-      'packages/im/agent/src',
-      'basic/cli/src/plugin-runtime',
-      '--glob', '!**/lib/**',
-      // This module owns the fail-closed namespace filter; it never registers a writer.
-      '--glob', '!**/deferred-capability-plan.ts',
-    ], { cwd: repoRoot, encoding: 'utf8' }).trim();
-    if (output) {
-      console.error(`[check:workroom-ssot] forbidden model control "${pattern}":\n${output}`);
-      failed = true;
-    }
-  } catch (error) {
-    if (error?.status !== 1) throw error;
+  const output = findAuthorityMatches(pattern, [
+    // This module owns the fail-closed namespace filter; it never registers a writer.
+    '**/deferred-capability-plan.ts',
+  ]);
+  if (output) {
+    console.error(`[check:workroom-ssot] forbidden model control "${pattern}":\n${output}`);
+    failed = true;
   }
 }
 
 for (const pattern of legacyDataSurfaceNames) {
-  try {
-    const output = execFileSync('rg', [
-      '-n', pattern,
-      'packages/im/agent/src',
-      'basic/cli/src/plugin-runtime',
-      '--glob', '!**/lib/**',
-      '--glob', '!**/legacy-run-offline-migration.ts',
-    ], { cwd: repoRoot, encoding: 'utf8' }).trim();
-    if (output) {
-      console.error(`[check:workroom-ssot] legacy data surface escaped offline reader "${pattern}":\n${output}`);
-      failed = true;
-    }
-  } catch (error) {
-    if (error?.status !== 1) throw error;
+  const output = findAuthorityMatches(pattern, ['**/legacy-run-offline-migration.ts']);
+  if (output) {
+    console.error(`[check:workroom-ssot] legacy data surface escaped offline reader "${pattern}":\n${output}`);
+    failed = true;
   }
 }
 
