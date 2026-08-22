@@ -71,7 +71,14 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24 && github.head_ref != 'changeset-release/main' && !startsWith(github.head_ref, 'dependabot/') && !startsWith(github.head_ref, 'chore/deps-')
         run: pnpm changeset status
 
+      # Large Windows/Node 26 builds can fail to initialize a child process with
+      # STATUS_DLL_INIT_FAILED when Turbo fans out at its default concurrency.
+      - name: build packages (Windows)
+        if: runner.os == 'Windows'
+        run: pnpm build --concurrency=4
+
       - name: build packages
+        if: runner.os != 'Windows'
         run: pnpm build
 
       - name: verify packed Console publish contract
