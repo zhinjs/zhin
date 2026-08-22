@@ -361,13 +361,18 @@ describe('P7 standard Acceptance production composition', () => {
     const effects = new MemoryWorkroomEffectJournal();
     const intent = createWorkroomEffectIntent(effectIntent());
     await new WorkroomEffectLedger(effects).recordIntent('project-1', intent);
-    const authorize = vi.fn(async input => ({
-      approved: true as const,
-      policy: input.acceptancePolicy,
-      expiresAt: 10_000,
-      policyDecisionRef: 'effect-policy-decision:restart',
-      policyDecisionDigest: SHA('9'),
-    }));
+    let releaseAuthorization!: () => void;
+    const authorizationGate = new Promise<void>(resolve => { releaseAuthorization = resolve; });
+    const authorize = vi.fn(async input => {
+      await authorizationGate;
+      return {
+        approved: true as const,
+        policy: input.acceptancePolicy,
+        expiresAt: 10_000,
+        policyDecisionRef: 'effect-policy-decision:restart',
+        policyDecisionDigest: SHA('9'),
+      };
+    });
     const sponsorAuthority = { authorize: async (input: { digest: string }) => ({
       authorized: true as const, authorizedBy: 'catalog:revision-1:project-digest',
       catalogRevision: 'c'.repeat(64), projectDigest: SHA('c'),
@@ -398,7 +403,13 @@ describe('P7 standard Acceptance production composition', () => {
     });
     first.start();
     await vi.waitFor(() => expect(authorize).toHaveBeenCalledTimes(1));
-    first.dispose();
+    let disposalCompleted = false;
+    const firstDisposal = first.dispose().then(() => { disposalCompleted = true; });
+    await Promise.resolve();
+    expect(disposalCompleted).toBe(false);
+    releaseAuthorization();
+    await firstDisposal;
+    expect(disposalCompleted).toBe(true);
 
     const restartedProjector = new SponsorDecisionWorkroomEffectAuthorizationProjector({
       directory, effectJournal: effects, sponsorAuthority, policy: { authorize },
@@ -410,9 +421,43 @@ describe('P7 standard Acceptance production composition', () => {
       intervalMs: 5,
     });
     restarted.start();
-    await new Promise(resolve => setTimeout(resolve, 20));
-    restarted.dispose();
+    await restarted.drain();
+    await restarted.dispose();
     expect(authorize).toHaveBeenCalledTimes(1);
+  });
+
+  it('settles disposal when generation retirement aborts an in-flight Project scan', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-effect-projector-abort-'));
+    let releaseScan!: () => void;
+    const scanGate = new Promise<void>(resolve => { releaseScan = resolve; });
+    const listProjectIds = vi.fn(async () => {
+      await scanGate;
+      return ['project-1'];
+    });
+    const controller = new AbortController();
+    const runtime = new WorkroomEffectAuthorizationProjectionRuntime({
+      signal: controller.signal,
+      projects: { listProjectIds },
+      projector: new SponsorDecisionWorkroomEffectAuthorizationProjector({
+        directory: join(root, 'facts'),
+        effectJournal: new MemoryWorkroomEffectJournal(),
+        sponsorAuthority: {
+          authorize: async input => ({
+            authorized: false as const,
+            requestDigest: input.digest,
+            reason: 'not reached',
+          }),
+        },
+        policy: { authorize: async () => null },
+      }),
+      intervalMs: 5,
+    });
+    runtime.start();
+    await vi.waitFor(() => expect(listProjectIds).toHaveBeenCalledTimes(1));
+    controller.abort();
+    const disposal = runtime.dispose();
+    releaseScan();
+    await expect(disposal).resolves.toBeUndefined();
   });
 });
 
