@@ -1,6 +1,6 @@
 ---
-"@zhin.js/plugin-runtime": major
-"@zhin.js/runtime": major
+"@zhin.js/plugin-runtime": patch
+"@zhin.js/runtime": patch
 "@zhin.js/cli": patch
 ---
 

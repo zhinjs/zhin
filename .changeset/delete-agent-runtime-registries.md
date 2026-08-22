@@ -1,7 +1,7 @@
 ---
-'@zhin.js/agent': major
+'@zhin.js/agent': patch
 '@zhin.js/cli': patch
-'@zhin.js/host-http': major
+'@zhin.js/host-http': patch
 ---
 
 Remove the process-global Assistant, legacy orchestration, and session-tree registries. Host and Console operations resolve narrow projections exclusively from the request's generation-owned `AgentHostPort`; the Workroom major changeset removes `OrchestrationService` itself rather than retaining another mutable command authority. Shadow generations can no longer publish operational state before commit, retired generations cannot leak back into service, and Console no longer receives concrete mutable repositories, engines, ingress objects, or orchestration services.

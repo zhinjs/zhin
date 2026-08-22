@@ -1,5 +1,5 @@
 ---
-'@zhin.js/agent': major
+'@zhin.js/agent': patch
 ---
 
 Advance the production Workroom boundary with four fail-closed contracts:

@@ -1,11 +1,11 @@
 ---
-'@zhin.js/agent': major
-'@zhin.js/a2a': minor
-'@zhin.js/runtime': minor
-'@zhin.js/host-http': minor
-'@zhin.js/console-protocol': minor
-'@zhin.js/client': minor
-'@zhin.js/cli': major
+'@zhin.js/agent': patch
+'@zhin.js/a2a': patch
+'@zhin.js/runtime': patch
+'@zhin.js/host-http': patch
+'@zhin.js/console-protocol': patch
+'@zhin.js/client': patch
+'@zhin.js/cli': patch
 ---
 
 Remove `ai.workrooms` as a restart-bound configuration surface. Workroom definitions now live in the persistent Workroom Catalog, are validated against the exact active Plugin Runtime generation, and can be managed through the Console without rewriting process configuration.

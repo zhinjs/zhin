@@ -1,5 +1,5 @@
 ---
-"@zhin.js/adapter-telegram": minor
+"@zhin.js/adapter-telegram": patch
 ---
 
 Add the canonical conversation content port for scoped Telegram media references.

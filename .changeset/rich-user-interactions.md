@@ -1,22 +1,22 @@
 ---
-"@zhin.js/command": major
-"@zhin.js/handler": major
-"@zhin.js/core": major
-"@zhin.js/interaction": minor
-"@zhin.js/adapter": minor
+"@zhin.js/command": patch
+"@zhin.js/handler": patch
+"@zhin.js/core": patch
+"@zhin.js/interaction": patch
+"@zhin.js/adapter": patch
 "@zhin.js/agent": patch
-"@zhin.js/adapter-qq": minor
-"@zhin.js/adapter-kook": minor
-"@zhin.js/adapter-discord": minor
-"@zhin.js/adapter-telegram": minor
-"@zhin.js/adapter-dingtalk": minor
-"@zhin.js/adapter-lark": minor
-"@zhin.js/adapter-sandbox": minor
-"@zhin.js/host-http": minor
-"@zhin.js/client": minor
-"@zhin.js/console-protocol": minor
+"@zhin.js/adapter-qq": patch
+"@zhin.js/adapter-kook": patch
+"@zhin.js/adapter-discord": patch
+"@zhin.js/adapter-telegram": patch
+"@zhin.js/adapter-dingtalk": patch
+"@zhin.js/adapter-lark": patch
+"@zhin.js/adapter-sandbox": patch
+"@zhin.js/host-http": patch
+"@zhin.js/client": patch
+"@zhin.js/console-protocol": patch
 "@zhin.js/cli": patch
-"zhin.js": major
+"zhin.js": patch
 ---
 
 Replace the user-facing `Prompt` vocabulary with the `UserInteraction` authoring surface for input, confirmation, and selection. Commands and handlers now expose `interaction`; IM Runtime exposes `createInteraction`; schema-driven endpoint collection is named `SchemaInteraction`. The old prompt-named interaction types and properties are removed rather than aliased. User interactions render through one canonical Markdown and keyboard/list presentation module shared by commands and Agent `ask_user` turns.
