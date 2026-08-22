@@ -2,7 +2,7 @@
  * SandboxWsEndpoint — WebSocket lifecycle and MessageGateway bridge for /sandbox.
  */
 import { randomUUID } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import type { EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
 import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
@@ -67,6 +67,39 @@ interface SandboxConnection {
   readonly placeholder?: boolean;
 }
 
+type ShellIsolationStatus = Readonly<{
+  available: boolean;
+  provider: 'docker';
+  message: string;
+}>;
+
+type ShellIsolationProbe = () => Promise<ShellIsolationStatus>;
+
+/**
+ * Share an in-flight readiness probe across reconnects while still allowing a
+ * later connection to refresh the informational status after it settles.
+ * Kept internal to this module's package surface; tests import it directly.
+ */
+export function createSandboxReadinessGate(probe: ShellIsolationProbe): Readonly<{
+  afterProbe: (deliver: (status: ShellIsolationStatus) => void) => void;
+}> {
+  let inFlight: Promise<ShellIsolationStatus> | undefined;
+  const acquire = (): Promise<ShellIsolationStatus> => {
+    if (inFlight) return inFlight;
+    const pending = probe();
+    const shared = pending.finally(() => {
+      if (inFlight === shared) inFlight = undefined;
+    });
+    inFlight = shared;
+    return shared;
+  };
+  return Object.freeze({
+    afterProbe: (deliver) => {
+      void acquire().then(deliver);
+    },
+  });
+}
+
 export interface SandboxEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
@@ -84,6 +117,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
 
   readonly #options: SandboxEndpointOptions;
   readonly #connections = new Map<string, SandboxConnection>();
+  readonly #readiness = createSandboxReadinessGate(probeShellIsolation);
   #wsHandleRelease?: () => void;
   #wsPathRelease?: () => void;
   #wsPath = '/sandbox';
@@ -282,26 +316,30 @@ export class SandboxWsEndpoint implements EndpointInstance {
     });
     this.#connections.set(target, { target, owner, socket, release });
     this.#logger.debug(formatCompact({ op: 'sandbox_ws_connected', target, owner }));
-    const readyPayload = JSON.stringify({
-      type: 'ready',
-      id: owner,
-      endpoint: target,
-      workingDirectory: process.cwd(),
-      canExecute,
-      shellIsolation: probeShellIsolation(),
-      content: [{
-        type: 'text',
-        data: {
-          text: [
-            `已连接 Sandbox「${target}」`,
-            `与 Node Host 控制台沙盒协议一致（${this.#wsPath}）`,
-            'Agent 试验台会话已启用持久化运行配置。',
-          ].join('\n'),
-        },
-      }],
-      timestamp: Date.now(),
+    this.#readiness.afterProbe((shellIsolation) => {
+      const current = this.#connections.get(target);
+      if (!current || current.socket !== socket) return;
+      const readyPayload = JSON.stringify({
+        type: 'ready',
+        id: owner,
+        endpoint: target,
+        workingDirectory: process.cwd(),
+        canExecute,
+        shellIsolation,
+        content: [{
+          type: 'text',
+          data: {
+            text: [
+              `已连接 Sandbox「${target}」`,
+              `与 Node Host 控制台沙盒协议一致（${this.#wsPath}）`,
+              'Agent 试验台会话已启用持久化运行配置。',
+            ].join('\n'),
+          },
+        }],
+        timestamp: Date.now(),
+      });
+      whenWsOpen(socket, () => socket.send(readyPayload));
     });
-    whenWsOpen(socket, () => socket.send(readyPayload));
   }
 
   #ensurePlaceholder(name: string, owner: string): void {
@@ -316,29 +354,32 @@ export class SandboxWsEndpoint implements EndpointInstance {
   }
 }
 
-function probeShellIsolation(): Readonly<{ available: boolean; provider: 'docker'; message: string }> {
-  try {
-    const result = spawnSync('docker', ['info', '--format', '{{.ServerVersion}}'], {
+function probeShellIsolation(): Promise<ShellIsolationStatus> {
+  return new Promise<ShellIsolationStatus>((resolve) => {
+    execFile('docker', ['info', '--format', '{{.ServerVersion}}'], {
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 500,
-    });
-    if (result.status === 0) {
-      const version = result.stdout.trim();
-      return Object.freeze({
-        available: true,
+    }, (error, stdout) => {
+      if (!error) {
+        const version = stdout.trim();
+        resolve(Object.freeze({
+          available: true,
+          provider: 'docker',
+          message: version ? `Docker ${version}` : 'Docker ready',
+        }));
+        return;
+      }
+      resolve(Object.freeze({
+        available: false,
         provider: 'docker',
-        message: version ? `Docker ${version}` : 'Docker ready',
-      });
-    }
-    return Object.freeze({ available: false, provider: 'docker', message: 'Docker daemon is unavailable' });
-  } catch (error) {
-    return Object.freeze({
-      available: false,
-      provider: 'docker',
-      message: error instanceof Error && error.name === 'ETIMEDOUT'
-        ? 'Docker readiness check timed out'
-        : 'Docker is unavailable',
+        message: error.killed || error.code === 'ETIMEDOUT'
+          ? 'Docker readiness check timed out'
+          : 'Docker daemon is unavailable',
+      }));
     });
-  }
+  }).catch(() => Object.freeze({
+    available: false,
+    provider: 'docker' as const,
+    message: 'Docker is unavailable',
+  }));
 }

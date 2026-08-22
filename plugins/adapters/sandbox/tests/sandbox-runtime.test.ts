@@ -7,7 +7,7 @@ import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost } from '@zhin.js/host-http';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
-import { SandboxWsEndpoint } from '../src/endpoint.js';
+import { createSandboxReadinessGate, SandboxWsEndpoint } from '../src/endpoint.js';
 import {
   formatSandboxOutbound,
   parseSandboxWsPayload,
@@ -31,6 +31,40 @@ afterEach(async () => {
 });
 
 describe('sandbox plugin runtime adapter', () => {
+  it('shares a delayed readiness probe and lets callers suppress stale delivery', async () => {
+    let resolveProbe: ((status: {
+      available: boolean;
+      provider: 'docker';
+      message: string;
+    }) => void) | undefined;
+    const probe = vi.fn(() => new Promise<{
+      available: boolean;
+      provider: 'docker';
+      message: string;
+    }>((resolve) => {
+      resolveProbe = resolve;
+    }));
+    const gate = createSandboxReadinessGate(probe);
+    const staleDelivery = vi.fn();
+    const currentDelivery = vi.fn();
+    let firstConnectionIsCurrent = true;
+
+    gate.afterProbe(() => undefined);
+    gate.afterProbe((status) => {
+      if (firstConnectionIsCurrent) staleDelivery(status);
+    });
+    gate.afterProbe(currentDelivery);
+
+    expect(probe).toHaveBeenCalledTimes(1);
+    firstConnectionIsCurrent = false;
+    resolveProbe?.({ available: true, provider: 'docker', message: 'Docker test' });
+    await vi.waitFor(() => expect(currentDelivery).toHaveBeenCalledTimes(1));
+    expect(staleDelivery).not.toHaveBeenCalled();
+
+    gate.afterProbe(() => undefined);
+    expect(probe).toHaveBeenCalledTimes(2);
+  });
+
   it('routes websocket messages through MessageGateway', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
