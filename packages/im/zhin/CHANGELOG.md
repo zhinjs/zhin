@@ -1,5 +1,55 @@
 # zhin.js
 
+## 6.0.12
+
+### Patch Changes
+
+- 974772e: Replace the user-facing `Prompt` vocabulary with the `UserInteraction` authoring surface for input, confirmation, and selection. Commands and handlers now expose `interaction`; IM Runtime exposes `createInteraction`; schema-driven endpoint collection is named `SchemaInteraction`. The old prompt-named interaction types and properties are removed rather than aliased. User interactions render through one canonical Markdown and keyboard/list presentation module shared by commands and Agent `ask_user` turns.
+
+  Extract the transport-neutral interaction contract into `@zhin.js/interaction`. A discriminated `ask()` API supports text, number, confirmation, single-select, multi-select, and typed lists with structured `title`, `description`, and `tip` content. Typed `sequence()` interactions return one result object keyed by step id, render progress, and retry invalid replies without leaking invalid values to callers.
+
+  Preserve AI Markdown and card command actions through outbound publishing. QQ delivers Markdown with native command buttons; KOOK, Discord, Telegram, DingTalk, and Lark/Feishu now declare and encode their native Markdown dialects while retaining each adapter's interaction policy. Correct QQ callback button action encoding and button style mapping.
+
+- 1312ca0: Replace the legacy mutable orchestration stack with the event-sourced Workroom Kernel.
+
+  - `@zhin.js/agent` now exposes versioned Workroom events, pure replay/decision state transitions, CAS journals, and a read-only runtime projection. The public `OrchestrationService`, mutable repositories, `AgentDispatcher`, executor/workflow APIs, remote Agent registry/poller, old orchestration tools/constants, and five-agent workflow strategy are removed.
+  - `zhin.js/agent` no longer exports the immediate-execution `runPipeline`, `runParallel`, or `route` helpers. Use `AIService.runAgent` for an ordinary one-shot model call; durable multi-Agent collaboration must enter a Workroom Plan and Assignment lifecycle.
+  - `spawn_task` is now only an ordinary chat subtask facility. It no longer accepts Run/Task identifiers, creates Runs from IM sessions, dispatches remote tasks, or writes Workroom state.
+  - `@zhin.js/ai` no longer owns IM Agent orchestration database models or the unused `ai.remoteAgents` configuration. Workroom persistence belongs to `@zhin.js/agent` as `workroom_events` or an atomic file journal.
+  - The Workroom journal backend is fixed for the process lifetime. Changing `ai.sessions.useDatabase` requires a process restart; an unavailable selected database rejects generation activation instead of falling back to another authority.
+  - The CLI exposes the read-only Project-scoped Console API at `/api/agent/workroom/runs`; the old `/api/agent/orchestration/runs` route is removed. No model-writable Workroom compatibility tools are published: future command adapters must hold an authenticated Project capability and dedicated Scheduler/Executor/Acceptance ports.
+  - The Console client now queries Workroom Runs by `projectId` and renders the replayed Task revision/attempt state. `registerOrchestrationConsole`, `OrchestrationRunsPage`, and `/console/orchestration` are removed in favor of the Workroom-named surface.
+
+  Execution completion and acceptance are separate durable facts. All writes use `append(runId, expectedSequence, events)`; no mutable Task projection can act as a second authority.
+
+- Updated dependencies [67ef8c4]
+- Updated dependencies [5969c5b]
+- Updated dependencies [d336a3f]
+- Updated dependencies [0c82a7e]
+- Updated dependencies [b9217e4]
+- Updated dependencies [5969c5b]
+- Updated dependencies [974772e]
+- Updated dependencies [5969c5b]
+- Updated dependencies [5969c5b]
+- Updated dependencies [2f786bd]
+- Updated dependencies [63d89f9]
+- Updated dependencies [71c7cdd]
+- Updated dependencies [3cca0ea]
+- Updated dependencies [1312ca0]
+- Updated dependencies [985fa22]
+- Updated dependencies [04b861d]
+- Updated dependencies [a23d544]
+- Updated dependencies [8cddabf]
+- Updated dependencies [dbe5081]
+  - @zhin.js/plugin-runtime@1.1.7
+  - @zhin.js/runtime@1.0.13
+  - @zhin.js/core@1.5.12
+  - @zhin.js/agent@1.1.14
+  - @zhin.js/ai@1.5.6
+  - @zhin.js/permission@1.0.3
+  - @zhin.js/html-renderer@3.0.12
+  - @zhin.js/speech@3.0.12
+
 ## 6.0.11
 
 ### Patch Changes

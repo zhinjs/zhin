@@ -1,5 +1,12 @@
 # @zhin.js/permission
 
+## 1.0.3
+
+### Patch Changes
+
+- Updated dependencies [67ef8c4]
+  - @zhin.js/plugin-runtime@1.1.7
+
 ## 1.0.2
 
 ### Patch Changes

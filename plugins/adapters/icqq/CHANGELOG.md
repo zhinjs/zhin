@@ -1,5 +1,52 @@
 # @zhin.js/adapter-icqq
 
+## 8.0.14
+
+### Patch Changes
+
+- 5969c5b: Remove legacy compound-string message targets and Endpoint control probing. Endpoint control and outbound Host operations now carry structured `MessageRef` identities. Endpoint send has one exact result contract (a platform message id), which IM Runtime projects into `DeliveryReceipt.message`; arbitrary result guessing is removed.
+- 5969c5b: Drop ICQQ unified_inbox dual-write for request/notice; Console request.list prefers EndpointManagement.listRequests, and approval stays on $approve / management.
+- 5969c5b: Wire ICQQ login challenges (QR / slider / SMS / auth) through LoginAssist so pending tasks survive Console refresh; add login.list/submit/cancel RPC and TTY stdin consumer.
+- 7cd8b34: Send canonical outbound segments as native ICQQ `Sendable` elements instead of literal CQ-like text. Resolve inbound voice and video URLs while the endpoint client is active, preserve file metadata and opaque platform references, and reject unsupported mixed standalone media messages instead of silently dropping segments.
+- 5969c5b: Add SideEventGateway so adapters forward notice/request/system into HandlerIndex. HandlerContext now exposes only generation-safe capabilities and prompt ports; live Endpoint escape hatches are removed.
+- 2f786bd: Replace text-only IM context and metadata-based quote handling with canonical
+  conversation events, scoped reference resolution, explicit Endpoint content
+  ports, and typed multimedia outcomes. Conversation notices are projected as
+  untrusted context data rather than model-authority system instructions.
+  The process-global passive-group buffer is removed: prior inbound conversation messages
+  are now consumed from the same event store and cursor, with the current Turn
+  message excluded from its own context projection.
+  The unused `ConversationMemory` topic-memory runtime, its timers, legacy tables,
+  and topic-window configuration are removed; `ContextRepository` is the only
+  Agent conversation-history authority.
+- Updated dependencies [5969c5b]
+- Updated dependencies [d336a3f]
+- Updated dependencies [0c82a7e]
+- Updated dependencies [b9217e4]
+- Updated dependencies [5969c5b]
+- Updated dependencies [5969c5b]
+- Updated dependencies [974772e]
+- Updated dependencies [5969c5b]
+- Updated dependencies [5969c5b]
+- Updated dependencies [2f786bd]
+- Updated dependencies [63d89f9]
+- Updated dependencies [71c7cdd]
+- Updated dependencies [3cca0ea]
+- Updated dependencies [1312ca0]
+- Updated dependencies [985fa22]
+- Updated dependencies [04b861d]
+- Updated dependencies [a23d544]
+- Updated dependencies [8cddabf]
+- Updated dependencies [dbe5081]
+  - @zhin.js/im-contract@1.0.4
+  - @zhin.js/core@1.5.12
+  - @zhin.js/adapter@1.1.11
+  - @zhin.js/agent@1.1.14
+  - @zhin.js/command@1.0.15
+  - zhin.js@6.0.12
+  - @zhin.js/permission@1.0.3
+  - @zhin.js/tool@1.0.12
+
 ## 8.0.13
 
 ### Patch Changes

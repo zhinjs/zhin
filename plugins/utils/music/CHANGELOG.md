@@ -1,5 +1,25 @@
 # @zhin.js/plugin-music
 
+## 7.0.14
+
+### Patch Changes
+
+- Updated dependencies [5969c5b]
+- Updated dependencies [5969c5b]
+- Updated dependencies [5969c5b]
+- Updated dependencies [7cd8b34]
+- Updated dependencies [974772e]
+- Updated dependencies [5969c5b]
+- Updated dependencies [2f786bd]
+- Updated dependencies [1312ca0]
+  - @zhin.js/core@1.5.12
+  - @zhin.js/adapter-icqq@8.0.14
+  - @zhin.js/command@1.0.15
+  - zhin.js@6.0.12
+  - @zhin.js/component@1.0.12
+  - @zhin.js/middleware@1.0.12
+  - @zhin.js/tool@1.0.12
+
 ## 7.0.13
 
 ### Patch Changes

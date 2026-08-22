@@ -1,5 +1,45 @@
 # @zhin.js/adapter-qq
 
+## 7.0.14
+
+### Patch Changes
+
+- 974772e: Replace the user-facing `Prompt` vocabulary with the `UserInteraction` authoring surface for input, confirmation, and selection. Commands and handlers now expose `interaction`; IM Runtime exposes `createInteraction`; schema-driven endpoint collection is named `SchemaInteraction`. The old prompt-named interaction types and properties are removed rather than aliased. User interactions render through one canonical Markdown and keyboard/list presentation module shared by commands and Agent `ask_user` turns.
+
+  Extract the transport-neutral interaction contract into `@zhin.js/interaction`. A discriminated `ask()` API supports text, number, confirmation, single-select, multi-select, and typed lists with structured `title`, `description`, and `tip` content. Typed `sequence()` interactions return one result object keyed by step id, render progress, and retry invalid replies without leaking invalid values to callers.
+
+  Preserve AI Markdown and card command actions through outbound publishing. QQ delivers Markdown with native command buttons; KOOK, Discord, Telegram, DingTalk, and Lark/Feishu now declare and encode their native Markdown dialects while retaining each adapter's interaction policy. Correct QQ callback button action encoding and button style mapping.
+
+- 5969c5b: Add SideEventGateway so adapters forward notice/request/system into HandlerIndex. HandlerContext now exposes only generation-safe capabilities and prompt ports; live Endpoint escape hatches are removed.
+- Updated dependencies [5969c5b]
+- Updated dependencies [d336a3f]
+- Updated dependencies [0c82a7e]
+- Updated dependencies [b9217e4]
+- Updated dependencies [5969c5b]
+- Updated dependencies [5969c5b]
+- Updated dependencies [974772e]
+- Updated dependencies [5969c5b]
+- Updated dependencies [5969c5b]
+- Updated dependencies [2f786bd]
+- Updated dependencies [63d89f9]
+- Updated dependencies [71c7cdd]
+- Updated dependencies [3cca0ea]
+- Updated dependencies [1312ca0]
+- Updated dependencies [985fa22]
+- Updated dependencies [04b861d]
+- Updated dependencies [a23d544]
+- Updated dependencies [8cddabf]
+- Updated dependencies [dbe5081]
+  - @zhin.js/im-contract@1.0.4
+  - @zhin.js/core@1.5.12
+  - @zhin.js/adapter@1.1.11
+  - @zhin.js/agent@1.1.14
+  - @zhin.js/host-http@1.0.11
+  - @zhin.js/command@1.0.15
+  - zhin.js@6.0.12
+  - @zhin.js/middleware@1.0.12
+  - @zhin.js/permission@1.0.3
+
 ## 7.0.13
 
 ### Patch Changes
