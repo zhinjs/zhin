@@ -1,5 +1,6 @@
 import {
   canonicalWorkroomJson,
+  compareCanonicalWorkroomText,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue,
 } from './canonical-value.js';
@@ -316,7 +317,7 @@ export function decideWorkroomSchedule(
     }).sort((left, right) => {
       const laneOrder = LANE_ORDER[right.task.sponsorLane] - LANE_ORDER[left.task.sponsorLane];
       if (laneOrder !== 0) return laneOrder;
-      return left.task.key.localeCompare(right.task.key);
+      return compareCanonicalWorkroomText(left.task.key, right.task.key);
     });
     const victim = victims[0];
     if (!victim) return null;
@@ -706,7 +707,7 @@ function compareTasks(
   if (left.enqueueSequence !== right.enqueueSequence) {
     return left.enqueueSequence - right.enqueueSequence;
   }
-  return left.key.localeCompare(right.key);
+  return compareCanonicalWorkroomText(left.key, right.key);
 }
 
 function effectiveRank(state: SchedulerProjection, task: ScheduledTaskProjection): number {

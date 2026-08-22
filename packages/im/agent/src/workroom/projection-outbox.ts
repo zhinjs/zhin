@@ -4,6 +4,7 @@ import type { WorkroomEvent, WorkroomExecutionRole } from './kernel-contracts.js
 import type { WorkroomJournal } from './journal.js';
 import { DurableFileStore } from './durable-file-store.js';
 import {
+  compareCanonicalWorkroomText,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
 } from './canonical-value.js';
@@ -14,6 +15,7 @@ import type {
 } from '../plugin-runtime/workroom-data-governance-runtime.js';
 import type { MaterializedDisclosureManifest } from '../data-governance/disclosure-manifest.js';
 import { createWorkroomGovernedDispatchReason } from '../plugin-runtime/workroom-governed-dispatch-reasons.js';
+import type { PortfolioSponsorProjection } from '../portfolio/sponsor-projection.js';
 
 export interface WorkroomProjectionConversation {
   readonly endpoint: Readonly<{ id: string; adapter: string }>;
@@ -32,6 +34,8 @@ export interface WorkroomProjectionAgentIdentity {
 
 export interface WorkroomProjectionBinding {
   readonly version: 1;
+  /** Missing only on legacy v1 Workroom bindings. */
+  readonly audience?: 'workroom' | 'sponsor_room';
   readonly projectId: string;
   readonly catalogBindingDigest: string;
   readonly bindingRevision: number;
@@ -59,16 +63,21 @@ export interface WorkroomProjectionDeliveryState {
   readonly leaseExpiresAt?: number;
   readonly failureCode?: string;
   readonly retryable?: boolean;
+  readonly nextAttemptAt?: number;
   readonly message?: WorkroomProjectionMessageRef;
 }
 
 export interface WorkroomProjectionOutboxItem {
   readonly version: 1;
+  /** Missing only on legacy v1 Workroom items. */
+  readonly audience?: 'workroom' | 'sponsor_room';
   readonly id: string;
   readonly idempotencyKey: string;
   readonly digest: string;
   readonly projectId: string;
   readonly runId: string;
+  /** Binding-generation cursor; absent only on pre-migration durable items. */
+  readonly cursorId?: string;
   readonly sourceEventIds: readonly string[];
   readonly sourceSequence: number;
   readonly bindingRevision: number;
@@ -168,6 +177,7 @@ export interface WorkroomProjectionRepository {
     workerId: string,
     fence: number,
     result: WorkroomProjectionDeliveryResult,
+    settledAt: number,
   ): Promise<WorkroomProjectionState>;
 }
 
@@ -201,6 +211,25 @@ export interface WorkroomProjectionGovernancePort {
     }>,
     signal: AbortSignal,
   ): Promise<GovernedDisclosureRevalidationResult>;
+}
+
+export interface WorkroomLifecycleHoldOverdueSnapshot {
+  readonly version: 1;
+  readonly projectId: string;
+  readonly clockRevision: number;
+  readonly observedAt: number;
+  readonly overdue: readonly Readonly<{
+    objectId: string;
+    stateSequence: number;
+    stateDigest: string;
+    holdId: string;
+    ownerPrincipalId: string;
+    reasonCode: 'legal_hold' | 'investigation' | 'regulatory_preservation';
+    placedAt: number;
+    reviewAt: number;
+    overdueBy: number;
+  }>[];
+  readonly digest: string;
 }
 
 export class WorkroomProjectionRevisionConflictError extends Error {
@@ -251,9 +280,10 @@ export class MemoryWorkroomProjectionRepository implements WorkroomProjectionRep
     workerId: string,
     fence: number,
     result: WorkroomProjectionDeliveryResult,
+    settledAt: number,
   ) {
     this.#assertRevision(expectedRevision);
-    this.#state = applySettlement(this.#state, itemId, workerId, fence, result);
+    this.#state = applySettlement(this.#state, itemId, workerId, fence, result, settledAt);
     return this.#state;
   }
 
@@ -343,6 +373,7 @@ export class FileWorkroomProjectionRepository implements WorkroomProjectionRepos
     workerId: string,
     fence: number,
     result: WorkroomProjectionDeliveryResult,
+    settledAt: number,
   ): Promise<WorkroomProjectionState> {
     const current = await this.read();
     if (current.revision !== expectedRevision) {
@@ -350,7 +381,7 @@ export class FileWorkroomProjectionRepository implements WorkroomProjectionRepos
     }
     return await this.#publish(
       expectedRevision,
-      applySettlement(current, itemId, workerId, fence, result),
+      applySettlement(current, itemId, workerId, fence, result, settledAt),
     );
   }
 
@@ -384,6 +415,11 @@ export interface WorkroomProjectionDeliveryWorkerOptions {
   readonly workerId: string;
   readonly leaseMs: number;
   readonly governance?: WorkroomProjectionGovernancePort;
+  readonly authority?: Readonly<{
+    authorize(item: WorkroomProjectionOutboxItem): Promise<boolean>;
+  }>;
+  /** Completion clock; production defaults to wall time, tests may inject a deterministic clock. */
+  readonly now?: () => number;
 }
 
 /** At-least-once delivery worker; Projection receipts never mutate Kernel facts. */
@@ -393,6 +429,8 @@ export class WorkroomProjectionDeliveryWorker {
   readonly #workerId: string;
   readonly #leaseMs: number;
   readonly #governance?: WorkroomProjectionGovernancePort;
+  readonly #authority?: WorkroomProjectionDeliveryWorkerOptions['authority'];
+  readonly #now: () => number;
 
   constructor(options: WorkroomProjectionDeliveryWorkerOptions) {
     requireText(options.workerId, 'workerId');
@@ -402,6 +440,8 @@ export class WorkroomProjectionDeliveryWorker {
     this.#workerId = options.workerId;
     this.#leaseMs = options.leaseMs;
     this.#governance = options.governance;
+    this.#authority = options.authority;
+    this.#now = options.now ?? Date.now;
   }
 
   async runOnce(
@@ -414,7 +454,12 @@ export class WorkroomProjectionDeliveryWorker {
     if (!claimed) return Object.freeze({ status: 'idle' });
     let result: WorkroomProjectionDeliveryResult;
     try {
-      if (!this.#governance) {
+      const authorized = this.#authority ? await this.#authority.authorize(claimed) : true;
+      if (!authorized) {
+        result = Object.freeze({
+          status: 'failed', code: 'catalog_binding_stale', retryable: false,
+        });
+      } else if (!this.#governance) {
         result = Object.freeze({
           status: 'failed', code: 'project_authority_unavailable', retryable: false,
         });
@@ -435,7 +480,9 @@ export class WorkroomProjectionDeliveryWorker {
     }
     // Once send returned a receipt the external effect already happened;
     // cancellation must not discard it and cause a blind duplicate retry.
-    await this.#settle(claimed, result);
+    const settledAt = this.#now();
+    requireFiniteNumber(settledAt, 'delivery completion time');
+    await this.#settle(claimed, result, settledAt);
     return result;
   }
 
@@ -459,6 +506,7 @@ export class WorkroomProjectionDeliveryWorker {
   async #settle(
     item: WorkroomProjectionOutboxItem,
     result: WorkroomProjectionDeliveryResult,
+    settledAt: number,
   ): Promise<void> {
     for (let conflict = 0; conflict < 8; conflict += 1) {
       const state = await this.#repository.read();
@@ -469,6 +517,7 @@ export class WorkroomProjectionDeliveryWorker {
           this.#workerId,
           item.delivery.fence,
           result,
+          settledAt,
         );
         return;
       } catch (error) {
@@ -510,10 +559,32 @@ export class WorkroomProjectionTracer {
     }
     for (let conflict = 0; conflict < 8; conflict += 1) {
       const current = await this.#repository.read();
-      const cursor = current.cursors[runId] ?? -1;
+      const cursorId = projectionBindingCursorKey(runId, binding);
+      const storedCursor = current.cursors[cursorId];
+      const legacyCursor = storedCursor === undefined
+        ? exactLegacyBindingCursor(current, runId, binding)
+        : undefined;
+      const cursor = storedCursor ?? legacyCursor ?? -1;
+      const expectedCursor = storedCursor ?? -1;
       const sourceSequence = events.at(-1)?.sequence ?? -1;
-      if (cursor >= sourceSequence) return current;
-      const projected = projectEvents(events, cursor, binding);
+      if (cursor > sourceSequence) {
+        throw new Error('Workroom Projection legacy cursor exceeds the authoritative Journal');
+      }
+      if (cursor >= sourceSequence) {
+        return legacyCursor === undefined
+          ? current
+          : await this.#repository.capture(current.revision, {
+              runId: cursorId,
+              expectedCursor,
+              cursor,
+              items: [],
+            });
+      }
+      const rawProjection = projectEvents(events, cursor, binding);
+      const projected = deepFreeze({
+        cursor: rawProjection.cursor,
+        items: rawProjection.items.map(item => deepFreeze({ ...item, cursorId })),
+      });
       if (projected.cursor <= cursor) return current;
       if (!this.#governance && projected.items.length > 0) {
         throw new Error('Workroom Projection governance authority is unavailable');
@@ -533,8 +604,8 @@ export class WorkroomProjectionTracer {
       }));
       try {
         return await this.#repository.capture(current.revision, {
-          runId,
-          expectedCursor: cursor,
+          runId: cursorId,
+          expectedCursor,
           cursor: projected.cursor,
           items: governedItems,
         });
@@ -543,6 +614,167 @@ export class WorkroomProjectionTracer {
       }
     }
     throw new Error('Workroom Projection capture CAS retries exhausted');
+  }
+
+  /** Capture content-free P12 Hold review facts into the same governed IM outbox. */
+  async captureLifecycleOverdue(
+    bindingValue: WorkroomProjectionBinding,
+    snapshotValue: WorkroomLifecycleHoldOverdueSnapshot,
+    signal: AbortSignal = new AbortController().signal,
+  ): Promise<WorkroomProjectionState> {
+    const binding = freezeAndValidateBinding(bindingValue);
+    const snapshot = validateLifecycleOverdueSnapshot(snapshotValue);
+    if (snapshot.projectId !== binding.projectId) {
+      throw new Error('Workroom Lifecycle Projection binding targets another Project');
+    }
+    const byObject = new Map<string, typeof snapshot.overdue>();
+    for (const item of snapshot.overdue) {
+      byObject.set(item.objectId, [...(byObject.get(item.objectId) ?? []), item]);
+    }
+    let state = await this.#repository.read();
+    for (const objectId of [...byObject.keys()].sort(compareCanonicalWorkroomText)) {
+      signal.throwIfAborted();
+      state = await this.#captureLifecycleObject(
+        binding, objectId, byObject.get(objectId)!, signal,
+      );
+    }
+    return state;
+  }
+
+  /** Publishes one Project-scoped card from a content-free Portfolio projection. */
+  async capturePortfolioSponsor(
+    bindingValue: WorkroomProjectionBinding,
+    projectionValue: PortfolioSponsorProjection,
+    signal: AbortSignal = new AbortController().signal,
+  ): Promise<WorkroomProjectionState> {
+    signal.throwIfAborted();
+    const binding = freezeAndValidateBinding(bindingValue);
+    if (projectionAudience(binding) !== 'sponsor_room') {
+      throw new Error('Portfolio Sponsor projection requires a Sponsor Room binding');
+    }
+    const { digest: suppliedDigest, ...projectionBody } = projectionValue;
+    if (suppliedDigest !== digest(projectionBody)) {
+      throw new Error('Portfolio Sponsor projection digest mismatch');
+    }
+    const project = projectionValue.projects[binding.projectId];
+    if (!project || project.projectId !== binding.projectId) {
+      throw new Error('Portfolio Sponsor projection does not contain the binding Project');
+    }
+    const runId = workroomPortfolioProjectionCursorKey(
+      projectionValue.portfolioId, binding.projectId,
+    );
+    const cursorId = projectionBindingCursorKey(runId, binding);
+    for (let conflict = 0; conflict < 8; conflict += 1) {
+      const current = await this.#repository.read();
+      const storedCursor = current.cursors[cursorId];
+      const legacyCursor = storedCursor === undefined
+        ? exactLegacyBindingCursor(current, runId, binding)
+        : undefined;
+      const cursor = storedCursor ?? legacyCursor ?? -1;
+      const expectedCursor = storedCursor ?? -1;
+      if (cursor > projectionValue.sourceSequence) {
+        throw new Error('Portfolio Sponsor legacy cursor exceeds the authoritative projection');
+      }
+      if (cursor >= projectionValue.sourceSequence) {
+        return legacyCursor === undefined
+          ? current
+          : await this.#repository.capture(current.revision, {
+              runId: cursorId,
+              expectedCursor,
+              cursor,
+              items: [],
+            });
+      }
+      const draft = deepFreeze({
+        ...portfolioSponsorDraft(binding, projectionValue, runId),
+        cursorId,
+      });
+      if (!this.#governance) {
+        throw new Error('Workroom Projection governance authority is unavailable');
+      }
+      const governed = await this.#governance.prepareProjection({
+        operationId: `projection:${draft.sourceEventIds[0]}`,
+        projectId: binding.projectId,
+        sinkRuleId: 'projection:sponsor-room',
+        body: draft.content,
+        sourceEventIds: draft.sourceEventIds,
+      }, signal);
+      if (governed.status === 'blocked') {
+        throw new Error(`Workroom Projection disclosure blocked: ${governed.reason}`);
+      }
+      try {
+        return await this.#repository.capture(current.revision, {
+          runId: cursorId,
+          expectedCursor,
+          cursor: projectionValue.sourceSequence,
+          items: [materializeProjectionItem(draft, governed)],
+        });
+      } catch (error) {
+        if (!(error instanceof WorkroomProjectionRevisionConflictError) || conflict === 7) throw error;
+      }
+    }
+    throw new Error('Portfolio Sponsor projection capture retries exhausted');
+  }
+
+  async #captureLifecycleObject(
+    binding: WorkroomProjectionBinding,
+    objectId: string,
+    values: WorkroomLifecycleHoldOverdueSnapshot['overdue'],
+    signal: AbortSignal,
+  ): Promise<WorkroomProjectionState> {
+    const stateSequences = new Set(values.map(value => value.stateSequence));
+    const stateDigests = new Set(values.map(value => value.stateDigest));
+    if (stateSequences.size !== 1 || stateDigests.size !== 1) {
+      throw new Error('Workroom Lifecycle Projection object state binding is inconsistent');
+    }
+    const runId = workroomLifecycleProjectionCursorKey(binding.projectId, objectId);
+    const cursorId = projectionBindingCursorKey(runId, binding);
+    for (let conflict = 0; conflict < 8; conflict += 1) {
+      const current = await this.#repository.read();
+      const cursor = current.cursors[cursorId] ?? -1;
+      const existingSources = new Set(Object.values(current.items)
+        .filter(item => item.projectId === binding.projectId
+          && item.bindingRevision === binding.bindingRevision)
+        .flatMap(item => item.sourceEventIds));
+      const pending = values
+        .filter(value => !existingSources.has(lifecycleOverdueSourceEventId(binding.projectId, value)))
+        .sort((left, right) => compareCanonicalWorkroomText(
+          lifecycleOverdueSourceEventId(binding.projectId, left),
+          lifecycleOverdueSourceEventId(binding.projectId, right),
+        ));
+      if (pending.length === 0) return current;
+      const drafts = pending.map((value, index) => deepFreeze({
+        ...lifecycleOverdueDraft(binding, runId, value, cursor + index + 1),
+        cursorId,
+      }));
+      if (!this.#governance && drafts.length > 0) {
+        throw new Error('Workroom Projection governance authority is unavailable');
+      }
+      const governedItems = await Promise.all(drafts.map(async draft => {
+        const governed = await this.#governance!.prepareProjection({
+          operationId: `projection:${draft.sourceEventIds[0]}`,
+          projectId: binding.projectId,
+          sinkRuleId: 'projection:sponsor-room',
+          body: draft.content,
+          sourceEventIds: draft.sourceEventIds,
+        }, signal);
+        if (governed.status === 'blocked') {
+          throw new Error(`Workroom Projection disclosure blocked: ${governed.reason}`);
+        }
+        return materializeProjectionItem(draft, governed);
+      }));
+      try {
+        return await this.#repository.capture(current.revision, {
+          runId: cursorId,
+          expectedCursor: cursor,
+          cursor: cursor + drafts.length,
+          items: governedItems,
+        });
+      } catch (error) {
+        if (!(error instanceof WorkroomProjectionRevisionConflictError)) throw error;
+      }
+    }
+    throw new Error('Workroom Lifecycle Projection capture CAS retries exhausted');
   }
 }
 
@@ -573,9 +805,9 @@ function parseProjectionState(value: unknown, expectedRevision: number): Workroo
   const cursors = requireRecord(state.cursors, 'snapshot.cursors');
   const items = requireRecord(state.items, 'snapshot.items');
   const messageIndex = requireRecord(state.messageIndex, 'snapshot.messageIndex');
-  for (const [projectId, bindingValue] of Object.entries(bindings)) {
+  for (const [bindingKey, bindingValue] of Object.entries(bindings)) {
     const binding = freezeAndValidateBinding(bindingValue as WorkroomProjectionBinding);
-    if (binding.projectId !== projectId) {
+    if (workroomProjectionBindingKey(binding.projectId, projectionAudience(binding)) !== bindingKey) {
       throw new Error('Workroom Projection binding key mismatch');
     }
   }
@@ -586,9 +818,11 @@ function parseProjectionState(value: unknown, expectedRevision: number): Workroo
   for (const [itemId, itemValue] of Object.entries(items)) {
     const item = itemValue as WorkroomProjectionOutboxItem;
     if (item?.id !== itemId) throw new Error('Workroom Projection snapshot item key mismatch');
-    assertProjectionItem(item, item.runId, -1, Number.MAX_SAFE_INTEGER);
+    const cursorId = item.cursorId ?? item.runId;
+    assertProjectionItem(item, cursorId, -1, Number.MAX_SAFE_INTEGER);
     assertDeliveryState(item.delivery, item.conversation);
-    if (Number(cursors[item.runId]) < item.sourceSequence) {
+    const cursor = cursors[cursorId];
+    if (typeof cursor !== 'number' || cursor < item.sourceSequence) {
       throw new Error('Workroom Projection snapshot item exceeds durable cursor');
     }
   }
@@ -621,16 +855,26 @@ function applyBinding(
   value: WorkroomProjectionBinding,
 ): WorkroomProjectionState {
   const binding = freezeAndValidateBinding(value);
-  const current = state.bindings[binding.projectId];
-  if (current && digest(current) === digest(binding)) return state;
+  const key = workroomProjectionBindingKey(binding.projectId, projectionAudience(binding));
+  const current = state.bindings[key];
+  if (current && digest(normalizeLegacyBindingAudience(current))
+    === digest(normalizeLegacyBindingAudience(binding))) return state;
   if (current && binding.bindingRevision <= current.bindingRevision) {
     throw new Error('Workroom Projection binding revision must advance');
   }
   return deepFreeze({
     ...state,
     revision: state.revision + 1,
-    bindings: { ...state.bindings, [binding.projectId]: binding },
+    bindings: { ...state.bindings, [key]: binding },
   });
+}
+
+function normalizeLegacyBindingAudience(
+  binding: WorkroomProjectionBinding,
+): WorkroomProjectionBinding {
+  return binding.audience === undefined
+    ? deepFreeze({ ...binding, audience: 'workroom' as const })
+    : binding;
 }
 
 function applyClaim(
@@ -644,10 +888,11 @@ function applyClaim(
   requirePositiveInteger(leaseMs, 'claim.leaseMs');
   const current = Object.values(state.items)
     .filter(item => item.delivery.status === 'pending'
-      || (item.delivery.status === 'failed' && item.delivery.retryable === true)
+      || (item.delivery.status === 'failed' && item.delivery.retryable === true
+        && (item.delivery.nextAttemptAt === undefined || item.delivery.nextAttemptAt <= now))
       || (item.delivery.status === 'leased'
         && Number(item.delivery.leaseExpiresAt) <= now))
-    .sort((left, right) => left.sourceSequence - right.sourceSequence || left.id.localeCompare(right.id))[0];
+    .sort((left, right) => left.sourceSequence - right.sourceSequence || compareCanonicalWorkroomText(left.id, right.id))[0];
   if (!current) return undefined;
   const item = deepFreeze({
     ...current,
@@ -675,7 +920,9 @@ function applySettlement(
   workerId: string,
   fence: number,
   resultValue: WorkroomProjectionDeliveryResult,
+  settledAt: number,
 ): WorkroomProjectionState {
+  requireFiniteNumber(settledAt, 'delivery settledAt');
   const current = state.items[itemId];
   if (!current
     || current.delivery.status !== 'leased'
@@ -697,6 +944,7 @@ function applySettlement(
         fence: current.delivery.fence,
         failureCode: result.code,
         retryable: result.retryable,
+        ...(result.retryable ? { nextAttemptAt: settledAt + retryDelay(current.delivery.attempts) } : {}),
       };
   const item = deepFreeze({ ...current, delivery });
   let messageIndex = state.messageIndex;
@@ -770,12 +1018,19 @@ function assertDeliveryState(
   if (delivery.status === 'failed') {
     assertExactRecordKeys(
       delivery,
-      ['status', 'attempts', 'fence', 'failureCode', 'retryable'],
+      ['status', 'attempts', 'fence', 'failureCode', 'retryable',
+        ...(delivery.nextAttemptAt !== undefined ? ['nextAttemptAt'] : [])],
       'failed delivery',
     );
     requireText(delivery.failureCode, 'delivery.failureCode');
     if (typeof delivery.retryable !== 'boolean') {
       throw new Error('Workroom Projection failed delivery retryable is invalid');
+    }
+    if (delivery.nextAttemptAt !== undefined) {
+      if (delivery.retryable !== true) {
+        throw new Error('Workroom Projection non-retryable delivery cannot have nextAttemptAt');
+      }
+      requireFiniteNumber(delivery.nextAttemptAt, 'delivery.nextAttemptAt');
     }
     return;
   }
@@ -794,6 +1049,10 @@ function assertDeliveryState(
       throw new Error('Workroom Projection persisted receipt targets another conversation');
     }
   }
+}
+
+function retryDelay(attempts: number): number {
+  return Math.min(60_000, 1_000 * 2 ** Math.min(6, Math.max(0, attempts - 1)));
 }
 
 export function workroomProjectionMessageKey(value: WorkroomProjectionMessageRef): string {
@@ -1031,6 +1290,7 @@ function projectEvent(
   });
   const immutableProjection = {
     version: 1 as const,
+    audience: 'workroom' as const,
     projectId: binding.projectId,
     runId: event.runId,
     sourceEventIds: sourceEvents.map(sourceEvent => sourceEvent.eventId),
@@ -1052,6 +1312,199 @@ function projectEvent(
     digest: itemDigest,
     delivery: { status: 'pending' as const, attempts: 0, fence: 0 },
   });
+}
+
+export function workroomLifecycleProjectionCursorKey(projectId: string, objectId: string): string {
+  requireText(projectId, 'Lifecycle Projection projectId');
+  requireText(objectId, 'Lifecycle Projection objectId');
+  return `payload-lifecycle:${digest({ version: 1, projectId, objectId }).slice('sha256:'.length)}`;
+}
+
+function projectionBindingCursorKey(
+  sourceKey: string,
+  binding: WorkroomProjectionBinding,
+): string {
+  requireText(sourceKey, 'Projection cursor source key');
+  return `binding-cursor:${digest({
+    version: 1,
+    sourceKey,
+    projectId: binding.projectId,
+    audience: projectionAudience(binding),
+    bindingRevision: binding.bindingRevision,
+    catalogBindingDigest: binding.catalogBindingDigest,
+    conversation: binding.conversation,
+  }).slice('sha256:'.length)}`;
+}
+
+function exactLegacyBindingCursor(
+  state: WorkroomProjectionState,
+  sourceKey: string,
+  binding: WorkroomProjectionBinding,
+): number | undefined {
+  const cursor = state.cursors[sourceKey];
+  if (cursor === undefined) return undefined;
+  const legacyItems = Object.values(state.items).filter(item =>
+    item.cursorId === undefined && item.runId === sourceKey,
+  );
+  if (legacyItems.length === 0) return undefined;
+  const audience = projectionAudience(binding);
+  return legacyItems.every(item =>
+    item.projectId === binding.projectId
+      && (item.audience ?? 'workroom') === audience
+      && item.bindingRevision === binding.bindingRevision
+      && item.projectionPolicyRevision === binding.projectionPolicyRevision
+      && digest(item.conversation) === digest(binding.conversation),
+  ) ? cursor : undefined;
+}
+
+export function workroomPortfolioProjectionCursorKey(portfolioId: string, projectId: string): string {
+  requireText(portfolioId, 'Portfolio Projection portfolioId');
+  requireText(projectId, 'Portfolio Projection projectId');
+  return `portfolio-sponsor:${digest({ version: 1, portfolioId, projectId }).slice('sha256:'.length)}`;
+}
+
+function portfolioSponsorDraft(
+  binding: WorkroomProjectionBinding,
+  projection: PortfolioSponsorProjection,
+  runId: string,
+): WorkroomProjectionDraft {
+  const project = projection.projects[binding.projectId]!;
+  const speaker = binding.orchestrator;
+  const sourceEventIds = [`portfolio-sponsor:${digest({
+    version: 1,
+    portfolioId: projection.portfolioId,
+    projectId: binding.projectId,
+    sourceSequence: projection.sourceSequence,
+    projectionDigest: projection.digest,
+  }).slice('sha256:'.length)}`];
+  const queue = project.queueHead
+    ? `queue=${boundedProjectionText(project.queueHead.opaqueHeadId, 'opaque')} `
+      + `starvationAt=${project.queueHead.starvationAt}`
+    : 'queue=empty';
+  const rate = Object.entries(project.rate)
+    .sort(([left], [right]) => compareCanonicalWorkroomText(left, right))
+    .map(([poolId, window]) => `${boundedProjectionText(poolId, 'pool')}:`
+      + `${window.usedUnits}/${window.limitUnits}@${window.windowStart}-${window.windowEnd}`)
+    .join(',') || 'none';
+  const immutableProjection = {
+    version: 1 as const,
+    audience: 'sponsor_room' as const,
+    projectId: binding.projectId,
+    runId,
+    sourceEventIds,
+    sourceSequence: projection.sourceSequence,
+    bindingRevision: binding.bindingRevision,
+    projectionPolicyRevision: binding.projectionPolicyRevision,
+    conversation: binding.conversation,
+    speaker,
+    kind: (project.blockers.length > 0 ? 'attention' : 'status') as WorkroomProjectionOutboxItem['kind'],
+    content: `[${speaker.displayName} · ${speaker.role}] Portfolio ${boundedProjectionText(projection.portfolioId, 'portfolio')} / Project ${boundedProjectionText(binding.projectId, 'project')}：`
+      + `lane=${project.lane} status=${project.status} ${queue} `
+      + `grants=${project.grants.length} reclaims=${project.reclaims.length} `
+      + `budget=${project.budget.availableMicros}/${project.budget.limitMicros} `
+      + `rate=${rate} fairness=${project.fairness.weightedService} `
+      + `blockers=${project.blockers.join(',') || 'none'}`,
+    target: deepFreeze({
+      projectId: binding.projectId,
+      runId,
+      agentDefinitionId: speaker.agentDefinitionId,
+    }),
+  };
+  const itemDigest = digest(immutableProjection);
+  const id = `projection:${itemDigest.slice('sha256:'.length)}`;
+  return deepFreeze({
+    ...immutableProjection,
+    id,
+    idempotencyKey: id,
+    digest: itemDigest,
+    delivery: { status: 'pending' as const, attempts: 0, fence: 0 },
+  });
+}
+
+function lifecycleOverdueSourceEventId(
+  projectId: string,
+  value: WorkroomLifecycleHoldOverdueSnapshot['overdue'][number],
+): string {
+  return `payload-hold-overdue:${digest({
+    version: 1,
+    projectId,
+    objectId: value.objectId,
+    holdId: value.holdId,
+    reasonCode: value.reasonCode,
+    placedAt: value.placedAt,
+    reviewAt: value.reviewAt,
+  }).slice('sha256:'.length)}`;
+}
+
+function lifecycleOverdueDraft(
+  binding: WorkroomProjectionBinding,
+  runId: string,
+  value: WorkroomLifecycleHoldOverdueSnapshot['overdue'][number],
+  sourceSequence: number,
+): WorkroomProjectionDraft {
+  const speaker = binding.orchestrator;
+  const sourceEventIds = [lifecycleOverdueSourceEventId(binding.projectId, value)];
+  const immutableProjection = {
+    version: 1 as const,
+    audience: 'sponsor_room' as const,
+    projectId: binding.projectId,
+    runId,
+    sourceEventIds,
+    sourceSequence,
+    bindingRevision: binding.bindingRevision,
+    projectionPolicyRevision: binding.projectionPolicyRevision,
+    conversation: binding.conversation,
+    speaker,
+    kind: 'attention' as const,
+    content: `[${speaker.displayName} · ${speaker.role}] Retention Hold review overdue：`
+      + `object ${boundedProjectionText(value.objectId, 'unknown')}；`
+      + `hold ${boundedProjectionText(value.holdId, 'unknown')}；reviewAt ${value.reviewAt}`,
+    target: deepFreeze({
+      projectId: binding.projectId,
+      runId,
+      agentDefinitionId: speaker.agentDefinitionId,
+    }),
+  };
+  const itemDigest = digest(immutableProjection);
+  const id = `projection:${itemDigest.slice('sha256:'.length)}`;
+  return deepFreeze({
+    ...immutableProjection,
+    id,
+    idempotencyKey: id,
+    digest: itemDigest,
+    delivery: { status: 'pending' as const, attempts: 0, fence: 0 },
+  });
+}
+
+function validateLifecycleOverdueSnapshot(
+  value: WorkroomLifecycleHoldOverdueSnapshot,
+): WorkroomLifecycleHoldOverdueSnapshot {
+  if (!value || value.version !== 1 || !Array.isArray(value.overdue)
+    || !Number.isSafeInteger(value.clockRevision) || value.clockRevision < 0
+    || !Number.isSafeInteger(value.observedAt) || value.observedAt < 0) {
+    throw new Error('Workroom Lifecycle overdue projection is invalid');
+  }
+  requireText(value.projectId, 'Lifecycle overdue Project');
+  const identities = new Set<string>();
+  for (const item of value.overdue) {
+    requireText(item.objectId, 'Lifecycle overdue object');
+    requireText(item.holdId, 'Lifecycle overdue Hold');
+    requireText(item.ownerPrincipalId, 'Lifecycle overdue owner');
+    if (!Number.isSafeInteger(item.stateSequence) || item.stateSequence < 0
+      || !/^sha256:[a-f0-9]{64}$/u.test(item.stateDigest)
+      || !['legal_hold', 'investigation', 'regulatory_preservation'].includes(item.reasonCode)
+      || !Number.isSafeInteger(item.placedAt) || item.placedAt < 0
+      || !Number.isSafeInteger(item.reviewAt) || item.reviewAt <= item.placedAt
+      || !Number.isSafeInteger(item.overdueBy) || item.overdueBy < 0) {
+      throw new Error('Workroom Lifecycle overdue Hold is invalid');
+    }
+    const identity = lifecycleOverdueSourceEventId(value.projectId, item);
+    if (identities.has(identity)) throw new Error('Workroom Lifecycle overdue projection contains duplicates');
+    identities.add(identity);
+  }
+  const { digest: supplied, ...body } = value;
+  if (supplied !== digest(body)) throw new Error('Workroom Lifecycle overdue projection digest mismatch');
+  return deepFreeze(structuredClone(value));
 }
 
 function materializeProjectionItem(
@@ -1226,6 +1679,7 @@ function requireAgentIdentity(
 
 function freezeAndValidateBinding(value: WorkroomProjectionBinding): WorkroomProjectionBinding {
   if (value.version !== 1) throw new Error('Workroom Projection binding version is unsupported');
+  projectionAudience(value);
   requireText(value.projectId, 'binding.projectId');
   if (!/^sha256:[a-f0-9]{64}$/u.test(value.catalogBindingDigest)) {
     throw new Error('Workroom Projection binding.catalogBindingDigest is invalid');
@@ -1241,27 +1695,49 @@ function freezeAndValidateBinding(value: WorkroomProjectionBinding): WorkroomPro
   return deepFreeze(value);
 }
 
+export function workroomProjectionBindingKey(
+  projectId: string,
+  audience: 'workroom' | 'sponsor_room',
+): string {
+  requireText(projectId, 'binding key projectId');
+  return audience === 'workroom' ? projectId : `${projectId}:sponsor-room`;
+}
+
+export function projectionAudience(
+  value: Pick<WorkroomProjectionBinding | WorkroomProjectionOutboxItem, 'audience'>,
+): 'workroom' | 'sponsor_room' {
+  if (value.audience === undefined) return 'workroom';
+  if (value.audience !== 'workroom' && value.audience !== 'sponsor_room') {
+    throw new Error('Workroom Projection audience is invalid');
+  }
+  return value.audience;
+}
+
 function assertProjectionItem(
   item: WorkroomProjectionOutboxItem,
   runId: string,
   after: number,
   through: number,
 ): void {
+  projectionAudience(item);
   if ('content' in item) {
     throw new Error(
       'Legacy plaintext Workroom Projection snapshot is unsupported; use offline export then purge it',
     );
   }
-  if (item.version !== 1 || item.runId !== runId
+  if (item.version !== 1 || (item.cursorId ?? item.runId) !== runId
     || item.sourceSequence <= after || item.sourceSequence > through
     || item.id !== item.idempotencyKey || !/^projection:[a-f0-9]{64}$/u.test(item.id)
     || !/^sha256:[a-f0-9]{64}$/u.test(item.digest)) {
     throw new Error('Invalid Workroom Projection outbox item');
   }
+  const expectedChannel = projectionAudience(item) === 'sponsor_room'
+    ? 'sponsor_projection'
+    : 'workroom_projection';
   if (!item.disclosure?.request || !item.disclosure.manifest
     || item.disclosure.request.projectId !== item.projectId
     || item.disclosure.manifest.source.payloadHash !== item.disclosure.request.sourceDigest
-    || item.disclosure.manifest.channel !== 'workroom_projection') {
+    || item.disclosure.manifest.channel !== expectedChannel) {
     throw new Error('Invalid Workroom Projection Disclosure Manifest');
   }
   const {

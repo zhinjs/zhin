@@ -12,6 +12,7 @@ import {
 import type { WorkroomAcceptanceRecord } from '../workroom/acceptance-policy.js';
 import type { WorkroomProjectMemorySchemaSnapshot } from '../workroom/accepted-source-projector.js';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -316,9 +317,9 @@ async function acceptedSources(journal: Pick<WorkroomJournal, 'listRunIds' | 're
     }
   }
   return Object.freeze(result.sort((left, right) =>
-    left.projectId.localeCompare(right.projectId)
+    compareCanonicalWorkroomText(left.projectId, right.projectId)
     || left.event.occurredAt - right.event.occurredAt
-    || left.runId.localeCompare(right.runId)
+    || compareCanonicalWorkroomText(left.runId, right.runId)
     || left.event.sequence - right.event.sequence));
 }
 

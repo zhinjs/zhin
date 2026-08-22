@@ -1,6 +1,7 @@
 import type { PayloadVaultObjectHandle } from './disclosure-manifest.js';
 import {
   canonicalWorkroomJson,
+  compareCanonicalWorkroomText,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
 } from '../workroom/canonical-value.js';
@@ -57,7 +58,7 @@ export function createPayloadLocationManifest(
     }
     requiredDigest(location.authorityDigest, 'Payload location authority digest');
     return deepFreeze(structuredClone(location));
-  }).sort((left, right) => left.id.localeCompare(right.id));
+  }).sort((left, right) => compareCanonicalWorkroomText(left.id, right.id));
   if (new Set(locations.map(location => location.id)).size !== locations.length) {
     throw new Error('Payload Location Manifest contains duplicate locations');
   }
@@ -620,9 +621,11 @@ export function replayPayloadLifecycle(
     objectId,
     sequence,
     ...(authority ? { authority } : {}),
-    holds: Object.fromEntries(Object.entries(holds).sort(([left], [right]) => left.localeCompare(right))),
+    holds: Object.fromEntries(Object.entries(holds).sort(([left], [right]) =>
+      compareCanonicalWorkroomText(left, right))),
     erasures,
-    purges: Object.fromEntries(Object.entries(purges).sort(([left], [right]) => left.localeCompare(right))),
+    purges: Object.fromEntries(Object.entries(purges).sort(([left], [right]) =>
+      compareCanonicalWorkroomText(left, right))),
     ...(cryptoErased ? { cryptoErased } : {}),
     ...(purgeComplete ? { purgeComplete } : {}),
   });
@@ -999,7 +1002,10 @@ export class PayloadLifecycleRuntime {
     let state = await this.#registered(projectId, objectId);
     const pending = Object.values(state.purges)
       .filter(value => !value.receipt)
-      .sort((left, right) => left.dispatch.location.id.localeCompare(right.dispatch.location.id));
+      .sort((left, right) => compareCanonicalWorkroomText(
+        left.dispatch.location.id,
+        right.dispatch.location.id,
+      ));
     for (const item of pending) {
       const receipt = await this.options.deletion.purge(item.dispatch, signal);
       assertReceipt(receipt, item.dispatch);

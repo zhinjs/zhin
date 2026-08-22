@@ -75,6 +75,7 @@ describe('runtime console RPC', () => {
     expect(isDemoHttpAllowed('GET', '/api/plugins', '/api')).toBe(true);
     expect(isDemoHttpAllowed('GET', '/api/plugins/icqq', '/api')).toBe(true);
     expect(isDemoHttpAllowed('GET', '/api/plugins/%40zhin.js%2Fadapter-icqq', '/api')).toBe(true);
+    expect(isDemoHttpAllowed('GET', '/api/agent/workroom/portfolio', '/api')).toBe(false);
     expect(isDemoHttpAllowed('POST', '/api/system/status', '/api')).toBe(false);
     expect(isDemoHttpAllowed('POST', '/api/plugins', '/api')).toBe(false);
     expect(isDemoHttpAllowed('DELETE', '/api/plugins/icqq', '/api')).toBe(false);

@@ -19,6 +19,7 @@ import {
 import type { PayloadVaultObjectHandle } from './disclosure-manifest.js';
 import {
   canonicalWorkroomJson,
+  compareCanonicalWorkroomText,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
 } from '../workroom/canonical-value.js';
@@ -127,7 +128,7 @@ export function createProjectDataGovernanceAuthority(
       },
     },
     remote: Object.fromEntries(Object.entries(input.remote)
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareCanonicalWorkroomText(left, right))
       .map(([destinationId, rule]) => [destinationId, {
         ...structuredClone(rule),
         principal: {
@@ -136,7 +137,7 @@ export function createProjectDataGovernanceAuthority(
         },
       }])),
     sinks: Object.fromEntries(Object.entries(input.sinks)
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareCanonicalWorkroomText(left, right))
       .map(([ruleId, rule]) => [ruleId, {
         ...structuredClone(rule),
         principal: {
@@ -145,7 +146,7 @@ export function createProjectDataGovernanceAuthority(
         },
       }])),
     derivedPayloads: Object.fromEntries(Object.entries(input.derivedPayloads)
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareCanonicalWorkroomText(left, right))
       .map(([kind, rule]) => [kind, {
         ...structuredClone(rule),
         categories: unique(rule.categories),
@@ -153,7 +154,7 @@ export function createProjectDataGovernanceAuthority(
         allowedRegions: unique(rule.allowedRegions),
       }])),
     approvals: [...input.approvals]
-      .sort((left, right) => left.id.localeCompare(right.id))
+      .sort((left, right) => compareCanonicalWorkroomText(left.id, right.id))
       .map(value => structuredClone(value)),
   });
   return deepFreeze({ ...body, digest: digest(body) });
@@ -407,7 +408,7 @@ export class FileDataGovernanceAuthorityRepository implements DataGovernanceAuth
       values.push(blocker);
     }
     return deepFreeze(values.sort((left, right) => left.createdAt - right.createdAt
-      || left.digest.localeCompare(right.digest)));
+      || compareCanonicalWorkroomText(left.digest, right.digest)));
   }
 
   #sourcePath(projectId: string, sourceRef: string, sourceDigest: string): string {

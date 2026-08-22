@@ -1,4 +1,4 @@
-import { createToken } from '@zhin.js/plugin-runtime';
+import { createRootPrivateToken } from '@zhin.js/plugin-runtime';
 import {
   PortfolioAdmissionApplication,
   type PortfolioAdmissionState,
@@ -15,8 +15,19 @@ import {
   createPortfolioSponsorProjection,
   type PortfolioSponsorProjection,
 } from '../portfolio/sponsor-projection.js';
-import { digestCanonicalWorkroomValue as digest } from '../workroom/canonical-value.js';
+export type { PortfolioSponsorProjection } from '../portfolio/sponsor-projection.js';
+import {
+  compareCanonicalWorkroomText,
+  deepFreezeWorkroomValue as deepFreeze,
+  digestCanonicalWorkroomValue as digest,
+} from '../workroom/canonical-value.js';
 import type { WorkroomCatalog } from '../workroom/catalog.js';
+import type { WorkroomProjectionReadAuthorityPort } from '../workroom/runtime.js';
+import type {
+  HumanIngressTypedControlDecision,
+  HumanIngressTypedControlInput,
+  HumanIngressTypedControlPort,
+} from '../workroom/human-ingress-orchestrator.js';
 
 export interface PortfolioSponsorAuthenticatedPrincipal {
   readonly principalId: string;
@@ -64,15 +75,108 @@ export interface PortfolioSponsorCommandPort {
   read(portfolioId: string): Promise<PortfolioSponsorProjection>;
 }
 
-export const portfolioSponsorCommandAuthorityToken = createToken<PortfolioSponsorCommandAuthorityPort>(
+export type PortfolioSponsorProjectionReadResult =
+  | Readonly<{ status: 'ready'; projection: PortfolioSponsorProjection }>
+  | Readonly<{ status: 'forbidden' }>;
+
+/** Authenticated, per-request Portfolio projection; raw Portfolio reads stay Root-internal. */
+export interface PortfolioSponsorProjectionReadPort {
+  read(
+    portfolioId: string,
+    authenticatedPrincipal: PortfolioSponsorAuthenticatedPrincipal,
+  ): Promise<PortfolioSponsorProjectionReadResult>;
+}
+
+/**
+ * Joins the exact Portfolio Project set to the current Catalog/P12 Console authority.
+ * A principal must remain authorized for every Project because the aggregate budget and
+ * fairness fields disclose cross-Project state even though the payload is content-free.
+ */
+export function createGovernedPortfolioSponsorProjectionReader(options: Readonly<{
+  source: Pick<PortfolioSponsorCommandPort, 'read'>;
+  authority: WorkroomProjectionReadAuthorityPort;
+}>): PortfolioSponsorProjectionReadPort {
+  return Object.freeze({
+    async read(
+      portfolioId: string,
+      authenticatedPrincipal: PortfolioSponsorAuthenticatedPrincipal,
+    ): Promise<PortfolioSponsorProjectionReadResult> {
+      const principalId = authenticatedPrincipal?.principalId?.trim();
+      if (!principalId || principalId !== authenticatedPrincipal.principalId) {
+        return Object.freeze({ status: 'forbidden' as const });
+      }
+      const projection = await options.source.read(portfolioId);
+      const projectIds = Object.keys(projection.projects).sort();
+      if (projectIds.length === 0) return Object.freeze({ status: 'forbidden' as const });
+      for (const projectId of projectIds) {
+        const authorization = await options.authority.authorize({
+          destination: 'console',
+          projectId,
+          recipientPrincipalId: principalId,
+          requestedMode: 'metadata_only',
+        });
+        if (!authorization) return Object.freeze({ status: 'forbidden' as const });
+      }
+      return Object.freeze({ status: 'ready' as const, projection });
+    },
+  });
+}
+
+export const portfolioSponsorCommandAuthorityToken = createRootPrivateToken<PortfolioSponsorCommandAuthorityPort>(
   'zhin.agent.portfolio-sponsor-command-authority',
   'Authenticated exact Sponsor authority for typed Portfolio policy commands',
 );
 
-export const portfolioSponsorCommandToken = createToken<PortfolioSponsorCommandPort>(
+export const portfolioSponsorCommandToken = createRootPrivateToken<PortfolioSponsorCommandPort>(
   'zhin.agent.portfolio-sponsor-command',
   'Generation-owned typed Portfolio Sponsor command application',
 );
+
+/** Strict Sponsor Room adapter; Portfolio/Project/principal come from authenticated ingress. */
+export function createPortfolioSponsorHumanIngressControlPort(options: Readonly<{
+  resolve: () => PortfolioSponsorCommandPort | undefined;
+  generationSignal: AbortSignal;
+  fallback?: HumanIngressTypedControlPort;
+}>): HumanIngressTypedControlPort {
+  return Object.freeze({
+    async apply(input: HumanIngressTypedControlInput): Promise<HumanIngressTypedControlDecision> {
+      options.generationSignal.throwIfAborted();
+      if (!/^\/control\s+portfolio(?:\s|$)/iu.test(input.text.trim())) {
+        return options.fallback
+          ? await options.fallback.apply(input)
+          : controlClarification('missing_control_target');
+      }
+      if (input.authorityRequirement !== 'typed_sponsor_control') {
+        return controlClarification('unauthorized_control');
+      }
+      const parsed = parsePortfolioHumanIngressCommand(input);
+      if (!parsed) return controlClarification('missing_control_target');
+      const port = options.resolve();
+      if (!port) return controlClarification('unauthorized_control');
+      const projection = await port.execute(parsed.portfolioId, parsed.command, {
+        principalId: required(input.principalId, 'authenticatedPrincipal.principalId'),
+      });
+      options.generationSignal.throwIfAborted();
+      const receiptRef = `portfolio-sponsor:${digest({
+        operationId: input.operationId,
+        commandId: parsed.command.commandId,
+      })}`;
+      return deepFreeze({
+        status: 'authorized' as const,
+        receiptRef,
+        receiptDigest: digest({
+          version: 1,
+          kind: 'portfolio_sponsor_control',
+          operationDigest: digest({ operationId: input.operationId }),
+          portfolioId: parsed.portfolioId,
+          projectId: input.projectId,
+          commandDigest: digest(parsed.command),
+          projectionDigest: projection.digest,
+        }),
+      });
+    },
+  });
+}
 
 export class WorkroomPortfolioSponsorRuntime implements PortfolioSponsorCommandPort {
   readonly #applications = new Map<string, PortfolioAdmissionApplication>();
@@ -202,6 +306,66 @@ function parseCommand(value: PortfolioSponsorCommand): PortfolioSponsorCommand {
   throw new Error('Portfolio Sponsor command exact schema is invalid');
 }
 
+function parsePortfolioHumanIngressCommand(input: HumanIngressTypedControlInput): Readonly<{
+  portfolioId: string;
+  command: PortfolioSponsorCommand;
+}> | undefined {
+  const prefix = /^\/control\s+portfolio\s+(\S+)\s+(.+)$/iu.exec(input.text.trim());
+  if (!prefix) return undefined;
+  const portfolioId = required(prefix[1], 'portfolioId');
+  let commandText = required(prefix[2], 'Portfolio command');
+  const scoped = /^project\s+(\S+)\s+(.+)$/iu.exec(commandText);
+  if (scoped) {
+    if (scoped[1] !== input.projectId) return undefined;
+    commandText = required(scoped[2], 'Portfolio command');
+  } else if (input.projectionReply?.projectId !== input.projectId) {
+    return undefined;
+  }
+  let match = /^lane\s+(\d+)\s+(urgent|high|normal|low)\s+(\S+)$/iu.exec(commandText);
+  if (match) {
+    return deepFreeze({
+      portfolioId,
+      command: {
+        kind: 'set_lane', commandId: required(match[3], 'commandId'),
+        projectId: required(input.projectId, 'projectId'),
+        expectedProjectRevision: positive(Number(match[1]), 'expectedProjectRevision'),
+        lane: match[2]!.toLowerCase() as PortfolioLane,
+      },
+    });
+  }
+  match = /^status\s+(\d+)\s+(active|paused|reclaim_checkpointable)\s+(\S+)$/iu.exec(commandText);
+  if (match) {
+    return deepFreeze({
+      portfolioId,
+      command: {
+        kind: 'set_status', commandId: required(match[3], 'commandId'),
+        projectId: required(input.projectId, 'projectId'),
+        expectedProjectRevision: positive(Number(match[1]), 'expectedProjectRevision'),
+        status: match[2]!.toLowerCase() as PortfolioProjectStatus,
+      },
+    });
+  }
+  match = /^transfer-budget\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\S+)$/iu.exec(commandText);
+  if (!match) return undefined;
+  return deepFreeze({
+    portfolioId,
+    command: {
+      kind: 'transfer_budget', commandId: required(match[5], 'commandId'),
+      fromProjectId: required(input.projectId, 'fromProjectId'),
+      toProjectId: required(match[1], 'toProjectId'),
+      amountMicros: positive(Number(match[2]), 'amountMicros'),
+      expectedFromRevision: positive(Number(match[3]), 'expectedFromRevision'),
+      expectedToRevision: positive(Number(match[4]), 'expectedToRevision'),
+    },
+  });
+}
+
+function controlClarification(
+  reason: 'missing_control_target' | 'unauthorized_control',
+): HumanIngressTypedControlDecision {
+  return deepFreeze({ status: 'clarification_required' as const, reason, candidateRefs: [] });
+}
+
 function commandCandidates(
   state: PortfolioAdmissionState,
   command: PortfolioSponsorCommand,
@@ -228,7 +392,7 @@ function commandCandidates(
       hardBudgetMicros: from.hardBudgetMicros - command.amountMicros }),
     parsePortfolioProjectPolicy({ ...to, revision: to.revision + 1,
       hardBudgetMicros: to.hardBudgetMicros + command.amountMicros }),
-  ].sort((left, right) => left.projectId.localeCompare(right.projectId)));
+  ].sort((left, right) => compareCanonicalWorkroomText(left.projectId, right.projectId)));
 }
 
 function assertAuthorization(

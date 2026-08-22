@@ -10,6 +10,7 @@ import {
 } from '../workroom/accepted-source-projector.js';
 import type { WorkroomAcceptanceRecord } from '../workroom/acceptance-policy.js';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -107,7 +108,7 @@ export function createWorkroomGovernedAcceptanceProjection(
       reviewerTimeoutMs: positive(task.reviewerTimeoutMs, 'Reviewer timeout'),
       sponsorTimeoutMs: positive(task.sponsorTimeoutMs, 'Sponsor timeout'),
     });
-  }).sort((left, right) => left.taskKey.localeCompare(right.taskKey));
+  }).sort((left, right) => compareCanonicalWorkroomText(left.taskKey, right.taskKey));
   unique(tasks.map(task => task.taskKey), 'Acceptance Task policies');
   const schema = createWorkroomProjectMemorySchemaSnapshot(input.memorySchema);
   const body = deepFreeze({
@@ -680,7 +681,7 @@ function maximum<T extends string>(values: readonly T[], order: readonly T[]): T
 }
 
 function byId(left: Readonly<{ id: string }>, right: Readonly<{ id: string }>): number {
-  return left.id.localeCompare(right.id);
+  return compareCanonicalWorkroomText(left.id, right.id);
 }
 
 function unique(values: readonly string[], label: string): readonly string[] {

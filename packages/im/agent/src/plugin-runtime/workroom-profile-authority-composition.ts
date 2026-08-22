@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { RuntimeSnapshot, Scope, SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { WorkroomCatalog } from '../workroom/catalog.js';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -311,7 +312,7 @@ function canonicalDefinitions(
       throw new Error(`Workroom Profile generation capability ${id} digest is invalid`);
     }
     return { id, digest: value.digest };
-  }).sort((left, right) => left.id.localeCompare(right.id)));
+  }).sort((left, right) => compareCanonicalWorkroomText(left.id, right.id)));
 }
 
 function isNodeError(error: unknown, code: string): error is NodeJS.ErrnoException {

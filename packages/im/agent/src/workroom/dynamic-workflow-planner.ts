@@ -1,4 +1,5 @@
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
 } from './canonical-value.js';
@@ -327,7 +328,7 @@ function canonicalRequirements(
 function canonicalNames(value: unknown, label: string, requireCanonical = true): readonly string[] {
   if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
   for (const item of value) text(item, label);
-  const names = [...new Set(value as string[])].sort((left, right) => left.localeCompare(right));
+  const names = [...new Set(value as string[])].sort((left, right) => compareCanonicalWorkroomText(left, right));
   if (requireCanonical && canonicalWorkroomJson(value) !== canonicalWorkroomJson(names)) {
     throw new Error(`${label} must be sorted and unique`);
   }

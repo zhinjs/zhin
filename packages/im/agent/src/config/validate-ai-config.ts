@@ -87,7 +87,10 @@ export function validateWorkroomDefinitions(
   }
   const workrooms = rawWorkrooms as Record<string, WorkroomDefinition>;
   const agents = new Set(agentNames);
-  const enabledConversationOwners = new Map<string, string>();
+  const enabledConversationOwners = new Map<string, Readonly<{
+    kind: 'workroom' | 'sponsor_room';
+    projectIds: readonly string[];
+  }>>();
   for (const [projectId, workroom] of Object.entries(workrooms)) {
     const path = `workroomCatalog.${projectId}`;
     if (!/^[a-z0-9][a-z0-9_-]{0,63}$/u.test(projectId)) {
@@ -143,6 +146,18 @@ export function validateWorkroomDefinitions(
       if (!WORKROOM_ROLES.has(member.role)) {
         errors.push(`${memberPath}.role: invalid Workroom role "${String(member.role)}"`);
       }
+      if (member.assignmentRoute !== undefined) {
+        const route = member.assignmentRoute;
+        if (!route || typeof route !== 'object' || Array.isArray(route)
+          || (route.kind !== 'local' && route.kind !== 'remote')) {
+          errors.push(`${memberPath}.assignmentRoute: route must be local or remote`);
+        } else if (route.kind === 'remote'
+          && (typeof route.endpointId !== 'string'
+            || !route.endpointId.trim()
+            || route.endpointId !== route.endpointId.trim())) {
+          errors.push(`${memberPath}.assignmentRoute.endpointId: endpoint id is required`);
+        }
+      }
       if (member.role === 'orchestrator') orchestrators += 1;
       const key = `${member.agent}:${member.role}`;
       if (memberKeys.has(key)) errors.push(`${memberPath}: duplicate Agent role membership "${key}"`);
@@ -155,51 +170,93 @@ export function validateWorkroomDefinitions(
     const conversation = workroom.conversation;
     if (workroom.enabled !== false && !conversation) {
       errors.push(`${path}.conversation: enabled Workroom requires a collaboration space binding`);
-      continue;
     }
-    if (!conversation) continue;
-    const conversationPath = `${path}.conversation`;
-    if (!conversation || typeof conversation !== 'object' || Array.isArray(conversation)) {
-      errors.push(`${conversationPath}: conversation binding must be an object`);
-      continue;
+    for (const [field, binding] of [
+      ['conversation', conversation],
+      ['sponsorConversation', workroom.sponsorConversation],
+    ] as const) {
+      if (!binding) continue;
+      validateConversationBinding({
+        binding, field, path, projectId, workroom, memberAgents,
+        enabledConversationOwners, endpointKeys, errors,
+      });
     }
-    if (typeof conversation.adapter !== 'string' || !conversation.adapter.trim()) {
-      errors.push(`${conversationPath}.adapter: adapter is required`);
-    }
-    if (typeof conversation.endpoint !== 'string' || !conversation.endpoint.trim()) {
-      errors.push(`${conversationPath}.endpoint: endpoint is required`);
-    }
-    if (conversation.kind !== 'group' && conversation.kind !== 'channel' && conversation.kind !== 'repository') {
-      errors.push(`${conversationPath}.kind: kind must be group, channel, or repository`);
-    }
-    if (typeof conversation.id !== 'string' || !conversation.id.trim()) {
-      errors.push(`${conversationPath}.id: collaboration space id is required`);
-    } else if (conversation.kind === 'repository'
-      && !/^[^/\s]+\/[^/\s]+$/u.test(conversation.id.trim())) {
-      errors.push(`${conversationPath}.id: repository id must be owner/repo`);
-    }
-    if (typeof conversation.agent !== 'string' || !memberAgents.has(conversation.agent)) {
-      errors.push(`${conversationPath}.agent: Agent must be a Workroom member`);
-    } else if (!workroom.members.some(member =>
-      member.agent === conversation.agent && member.role === 'orchestrator')) {
-      errors.push(`${conversationPath}.agent: Project Inbox Agent must have the orchestrator role`);
-    }
-    const endpointKey = `${conversation.adapter}:${conversation.endpoint}`;
-    if (endpointKeys && !endpointKeys.has(endpointKey)) {
-      errors.push(`${conversationPath}: unknown configured Bot Endpoint "${endpointKey}"`);
-    }
-    if (workroom.enabled !== false) {
-      const canonicalId = conversation.kind === 'repository'
-        ? conversation.id.toLowerCase()
-        : conversation.id;
-      const address = `${endpointKey}:${conversation.kind}:${canonicalId}`;
-      const owner = enabledConversationOwners.get(address);
-      if (owner) {
-        errors.push(`${conversationPath}: conversation "${address}" is already owned by enabled Workroom "${owner}"`);
-      } else {
-        enabledConversationOwners.set(address, projectId);
-      }
+  }
+  for (const [address, owner] of enabledConversationOwners) {
+    if (owner.kind !== 'sponsor_room' || owner.projectIds.length < 2) continue;
+    const audiences = owner.projectIds.map(projectId => ({
+      projectId,
+      sponsors: JSON.stringify([...(workrooms[projectId]?.sponsors ?? [])].sort()),
+    }));
+    if (audiences.some(audience => audience.sponsors === '[]')
+      || new Set(audiences.map(audience => audience.sponsors)).size !== 1) {
+      errors.push(`portfolio Sponsor Room "${address}" requires the same non-empty Sponsor audience for Projects "${owner.projectIds.join(',')}"`);
     }
   }
   return errors;
+}
+
+function validateConversationBinding(input: Readonly<{
+  binding: NonNullable<WorkroomDefinition['conversation']>;
+  field: 'conversation' | 'sponsorConversation';
+  path: string;
+  projectId: string;
+  workroom: WorkroomDefinition;
+  memberAgents: ReadonlySet<string>;
+  enabledConversationOwners: Map<string, Readonly<{
+    kind: 'workroom' | 'sponsor_room';
+    projectIds: readonly string[];
+  }>>;
+  endpointKeys?: ReadonlySet<string>;
+  errors: string[];
+}>): void {
+  const { binding, field, path, projectId, workroom, memberAgents, enabledConversationOwners, endpointKeys, errors } = input;
+  const conversationPath = `${path}.${field}`;
+  if (!binding || typeof binding !== 'object' || Array.isArray(binding)) {
+    errors.push(`${conversationPath}: conversation binding must be an object`);
+    return;
+  }
+  if (typeof binding.adapter !== 'string' || !binding.adapter.trim()) {
+    errors.push(`${conversationPath}.adapter: adapter is required`);
+  }
+  if (typeof binding.endpoint !== 'string' || !binding.endpoint.trim()) {
+    errors.push(`${conversationPath}.endpoint: endpoint is required`);
+  }
+  if (binding.kind !== 'group' && binding.kind !== 'channel' && binding.kind !== 'repository') {
+    errors.push(`${conversationPath}.kind: kind must be group, channel, or repository`);
+  }
+  if (field === 'sponsorConversation' && binding.kind === 'repository') {
+    errors.push(`${conversationPath}.kind: Sponsor Room must be a group or channel`);
+  }
+  if (typeof binding.id !== 'string' || !binding.id.trim()) {
+    errors.push(`${conversationPath}.id: collaboration space id is required`);
+  } else if (binding.kind === 'repository' && !/^[^/\s]+\/[^/\s]+$/u.test(binding.id.trim())) {
+    errors.push(`${conversationPath}.id: repository id must be owner/repo`);
+  }
+  if (typeof binding.agent !== 'string' || !memberAgents.has(binding.agent)) {
+    errors.push(`${conversationPath}.agent: Agent must be a Workroom member`);
+  } else if (!workroom.members.some(member =>
+    member.agent === binding.agent && member.role === 'orchestrator')) {
+    errors.push(`${conversationPath}.agent: Project Inbox Agent must have the orchestrator role`);
+  }
+  const endpointKey = `${binding.adapter}:${binding.endpoint}`;
+  if (endpointKeys && !endpointKeys.has(endpointKey)) {
+    errors.push(`${conversationPath}: unknown configured Bot Endpoint "${endpointKey}"`);
+  }
+  if (workroom.enabled !== false) {
+    const canonicalId = binding.kind === 'repository' ? binding.id.toLowerCase() : binding.id;
+    const address = `${endpointKey}:${binding.kind}:${canonicalId}`;
+    const owner = enabledConversationOwners.get(address);
+    const ownerKind = field === 'sponsorConversation' ? 'sponsor_room' : 'workroom';
+    if (owner && (owner.kind !== 'sponsor_room' || ownerKind !== 'sponsor_room')) {
+      const label = owner.kind === 'workroom' ? 'Workroom' : 'Sponsor Room';
+      errors.push(`${conversationPath}: conversation "${address}" is already owned by enabled ${label} "${owner.projectIds.join(',')}"`);
+    } else if (owner) {
+      enabledConversationOwners.set(address, {
+        kind: 'sponsor_room', projectIds: [...owner.projectIds, projectId],
+      });
+    } else {
+      enabledConversationOwners.set(address, { kind: ownerKind, projectIds: [projectId] });
+    }
+  }
 }

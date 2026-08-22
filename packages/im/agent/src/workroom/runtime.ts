@@ -146,6 +146,14 @@ export function createCatalogGovernedWorkroomProjectionAuthority(options: Readon
   catalog: Pick<WorkroomCatalog, 'read'>;
   governance: Pick<DataGovernanceAuthorityRepository, 'readProject'>;
 }>): WorkroomProjectionReadAuthorityPort {
+  return createCatalogGovernedConsoleDisclosureAuthority(options, { requireSponsor: true });
+}
+
+/** Current Catalog + P12 Console recipient join for root-authorized non-Sponsor control planes. */
+export function createCatalogGovernedConsoleDisclosureAuthority(options: Readonly<{
+  catalog: Pick<WorkroomCatalog, 'read'>;
+  governance: Pick<DataGovernanceAuthorityRepository, 'readProject'>;
+}>, policy: Readonly<{ requireSponsor: boolean }> = { requireSponsor: false }): WorkroomProjectionReadAuthorityPort {
   return Object.freeze({
     async authorize(input: WorkroomProjectionReadAuthorityInput) {
       if (input.destination !== 'console' || input.requestedMode !== 'metadata_only'
@@ -153,7 +161,7 @@ export function createCatalogGovernedWorkroomProjectionAuthority(options: Readon
       const catalog = await options.catalog.read();
       const definition = catalog.definitions[input.projectId];
       if (!definition || definition.enabled === false
-        || !definition.sponsors?.includes(input.recipientPrincipalId)) return null;
+        || policy.requireSponsor && !definition.sponsors?.includes(input.recipientPrincipalId)) return null;
       const projectDigest = digest(definition);
       const governance = await options.governance.readProject(input.projectId);
       if (!governance

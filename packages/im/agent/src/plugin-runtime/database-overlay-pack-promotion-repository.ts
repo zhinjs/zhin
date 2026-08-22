@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { canonicalWorkroomJson } from '../workroom/canonical-value.js';
+import { compareCanonicalWorkroomText, canonicalWorkroomJson } from '../workroom/canonical-value.js';
 import {
   canonicalOverlayPackPromotionRecord,
   preparedOverlayPackPromotionRecord,
@@ -112,7 +112,7 @@ export class DatabaseOverlayPackPromotionRepository implements OverlayPackPromot
       byPromotion.set(promotionId, [...(byPromotion.get(promotionId) ?? []), row]);
     }
     return Object.freeze([...byPromotion.values()].map(group => parseRows(group).at(-1)!)
-      .sort((left, right) => left.promotionId.localeCompare(right.promotionId)));
+      .sort((left, right) => compareCanonicalWorkroomText(left.promotionId, right.promotionId)));
   }
 
   async #insert(record: OverlayPackPromotionRecord, stage: 0 | 1): Promise<OverlayPackPromotionRecord> {

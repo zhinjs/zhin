@@ -35,6 +35,8 @@ describe('Workroom Local Assignment Runtime', () => {
     const runtime = new WorkroomLocalAssignmentRuntime({ kernel, executor, now: () => 101 });
 
     await expect(runtime.drain()).resolves.toEqual({ started: 1, recovered: 0 });
+    await waitUntil(async () => (await kernel.read('project-1', 'run-1'))
+      .assignments[issued.envelope.assignmentId]?.status === 'execution_completed');
     const state = await kernel.read('project-1', 'run-1');
     expect(state.assignments[issued.envelope.assignmentId]).toMatchObject({
       status: 'execution_completed',
@@ -63,6 +65,83 @@ describe('Workroom Local Assignment Runtime', () => {
     expect(execute).not.toHaveBeenCalled();
     expect((await kernel.read('project-1', 'run-1')).assignments[issued.envelope.assignmentId])
       .toMatchObject({ status: 'lost', outcome: 'outcome_unknown' });
+  });
+
+  it('keeps recovery scans independent from a long-running local Assignment', async () => {
+    let now = 100;
+    const { kernel } = await harness(() => now);
+    const long = await kernel.issueLocalAssignment(request());
+    const started: string[] = [];
+    const aborted = Promise.withResolvers<void>();
+    const runtime = new WorkroomLocalAssignmentRuntime({
+      kernel,
+      now: () => now,
+      onError: () => undefined,
+      executor: {
+        async *execute(envelope, signal) {
+          started.push(envelope.assignmentId);
+          if (envelope.runId === 'run-1') {
+            signal.addEventListener('abort', () => aborted.resolve(), { once: true });
+            await new Promise<void>(() => undefined);
+          }
+          yield {
+            version: 1, type: 'execution_completed', observationId: `complete:${envelope.assignmentId}`,
+            envelopeDigest: envelope.digest,
+            completion: {
+              report: { ref: `report:${envelope.assignmentId}`, digest: SHA_A },
+              candidate: { ref: `candidate:${envelope.assignmentId}`, hash: SHA_B },
+            },
+          };
+        },
+      },
+    });
+
+    await expect(settlesWithin(runtime.drain())).resolves.toEqual({ started: 1, recovered: 0 });
+    await waitUntil(() => started.includes(long.envelope.assignmentId));
+
+    await createRunnable(kernel, 'run-expired', 'expire');
+    const expired = await kernel.issueLocalAssignment(request('run-expired', 'expire', 'scheduler-expire'));
+    await kernel.execute('project-1', 'run-expired', {
+      type: 'start_assignment', assignmentId: expired.envelope.assignmentId,
+    });
+    await createRunnable(kernel, 'run-next', 'next');
+    const next = await kernel.issueLocalAssignment(request('run-next', 'next', 'scheduler-next'));
+    await kernel.execute('project-1', 'run-1', {
+      type: 'cancel_run', reason: 'Sponsor stopped the long Assignment', controlDeadline: 132,
+    });
+    now = 131;
+
+    await expect(settlesWithin(runtime.drain())).resolves.toEqual({ started: 1, recovered: 2 });
+    await expect(settlesWithin(aborted.promise)).resolves.toBeUndefined();
+    await waitUntil(async () => (await kernel.read('project-1', 'run-next'))
+      .assignments[next.envelope.assignmentId]?.status === 'execution_completed');
+    expect(started.filter(id => id === long.envelope.assignmentId)).toHaveLength(1);
+    expect((await kernel.read('project-1', 'run-expired')).assignments[expired.envelope.assignmentId])
+      .toMatchObject({ status: 'lost', outcome: 'outcome_unknown' });
+
+    await expect(runtime.dispose()).resolves.toBeUndefined();
+  });
+
+  it('coalesces concurrent execution requests for the same durable Assignment', async () => {
+    const { kernel } = await harness();
+    const issued = await kernel.issueLocalAssignment(request());
+    const execute = vi.fn<AssignmentExecutorPort['execute']>(async function* (envelope) {
+      yield {
+        version: 1, type: 'execution_completed', observationId: 'complete-once',
+        envelopeDigest: envelope.digest,
+        completion: {
+          report: { ref: 'report:once', digest: SHA_A },
+          candidate: { ref: 'candidate:once', hash: SHA_B },
+        },
+      };
+    });
+    const runtime = new WorkroomLocalAssignmentRuntime({ kernel, executor: { execute } });
+
+    await expect(Promise.all([
+      runtime.execute(issued.envelope),
+      runtime.execute(issued.envelope),
+    ])).resolves.toEqual([undefined, undefined]);
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a persisted request whose Envelope no longer matches the claimed fence', async () => {
@@ -100,11 +179,36 @@ async function harness(now: () => number = () => 100) {
   return { journal, kernel };
 }
 
-function request() {
+function request(runId = 'run-1', taskKey = 'build', operationId = 'scheduler-decision-1') {
   return {
-    operationId: 'scheduler-decision-1', projectId: 'project-1', runId: 'run-1',
-    taskKey: 'build', agentDefinitionId: 'developer',
+    operationId, projectId: 'project-1', runId,
+    taskKey, agentDefinitionId: 'developer',
   };
+}
+
+async function createRunnable(kernel: WorkroomKernel, runId: string, taskKey: string): Promise<void> {
+  await kernel.createRun({ runId, projectId: 'project-1', title: taskKey });
+  await kernel.execute('project-1', runId, {
+    type: 'plan_task', taskKey, title: taskKey, required: true, maxAttempts: 2,
+  });
+  await kernel.pinTaskAcceptance('project-1', runId, taskKey);
+}
+
+async function settlesWithin<T>(promise: Promise<T>, timeoutMs = 1_000): Promise<T> {
+  return await Promise.race([
+    promise,
+    new Promise<never>((_resolve, reject) => {
+      setTimeout(() => reject(new Error('operation did not settle within the recovery tick')), timeoutMs).unref?.();
+    }),
+  ]);
+}
+
+async function waitUntil(predicate: () => boolean | Promise<boolean>, timeoutMs = 1_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!(await predicate())) {
+    if (Date.now() >= deadline) throw new Error('condition did not become true');
+    await new Promise(resolve => setTimeout(resolve, 1));
+  }
 }
 
 function acceptancePolicy(): WorkroomAcceptancePolicyDecisionPort {

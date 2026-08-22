@@ -8,7 +8,10 @@ import type {
   HumanIngressOrchestratorProposalPort,
 } from './human-ingress-application.js';
 import type { CanonicalHumanIngressSource, HumanIngressSourceReaderPort } from './human-ingress-source-reader.js';
-import type { HumanIngressProposal } from './human-ingress.js';
+import type {
+  HumanIngressProjectionReplyProof,
+  HumanIngressProposal,
+} from './human-ingress.js';
 import type { WorkroomKernel, WorkroomPlanAdmissionReceipt } from './workroom-kernel.js';
 import { assertWorkflowPlanProposal, type WorkflowPlanProposal } from './workflow-plan-builder.js';
 import {
@@ -33,6 +36,7 @@ export interface HumanIngressPlanningInput {
   readonly orchestratorAuthorityDigest: string;
   readonly principalId: string;
   readonly source: CanonicalHumanIngressSource;
+  readonly projectionReply?: HumanIngressProjectionReplyProof;
 }
 
 export interface HumanIngressPlanningPort {
@@ -152,6 +156,9 @@ implements HumanIngressOrchestratorProposalPort {
       orchestratorAuthorityDigest: authority.orchestratorAuthorityDigest,
       principalId: request.proposal.principal.principalId,
       source,
+      ...(request.proposal.projectionReply
+        ? { projectionReply: request.proposal.projectionReply }
+        : {}),
     });
     if (request.kind === 'discussion') {
       const receipt = await (this.options.discussions ?? createContentFreeDiscussionProposalPort()).propose(deepFreeze({

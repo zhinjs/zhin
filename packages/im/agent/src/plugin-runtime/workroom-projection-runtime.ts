@@ -1,7 +1,11 @@
 import type { WorkroomCatalog, WorkroomCatalogSnapshot } from '../workroom/catalog.js';
 import type { WorkroomDefinition } from '../workroom/catalog-definition.js';
+import type { PortfolioSponsorProjection } from '../portfolio/sponsor-projection.js';
 import type { WorkroomJournal } from '../workroom/journal.js';
-import { digestCanonicalWorkroomValue as digest } from '../workroom/canonical-value.js';
+import {
+  compareCanonicalWorkroomText,
+  digestCanonicalWorkroomValue as digest,
+} from '../workroom/canonical-value.js';
 import type {
   HumanIngressIntent,
   HumanIngressTargetResolutionRequest,
@@ -9,14 +13,18 @@ import type {
 } from '../workroom/human-ingress.js';
 import {
   WorkroomProjectionDeliveryWorker,
+  WorkroomProjectionRevisionConflictError,
   WorkroomProjectionTracer,
+  projectionAudience,
   resolveProjectionReplyTarget,
+  workroomProjectionBindingKey,
   workroomProjectionMessageKey,
   type WorkroomProjectionBinding,
   type WorkroomProjectionDeliveryPort,
   type WorkroomProjectionRepository,
   type WorkroomProjectionMessageRef,
   type WorkroomProjectionGovernancePort,
+  type WorkroomLifecycleHoldOverdueSnapshot,
   type WorkroomProjectionReplyTargetDecision,
 } from '../workroom/projection-outbox.js';
 
@@ -37,6 +45,21 @@ export interface WorkroomProjectionRuntimeOptions {
   readonly maxRunsPerTick: number;
   readonly maxDeliveriesPerTick: number;
   readonly governance?: WorkroomProjectionGovernancePort;
+  /** Resolves a persistent Sponsor Room definition to the exact current Endpoint capability. */
+  readonly resolveSponsorConversation?: (
+    projectId: string,
+    definition: WorkroomDefinition,
+  ) => import('../workroom/projection-outbox.js').WorkroomProjectionConversation | undefined
+    | Promise<import('../workroom/projection-outbox.js').WorkroomProjectionConversation | undefined>;
+  /** Optional P12 content-free source; capture still uses the normal governed Projection outbox. */
+  readonly lifecycleOverdue?: Readonly<{
+    project(projectId: string, signal: AbortSignal): Promise<WorkroomLifecycleHoldOverdueSnapshot>;
+  }>;
+  readonly portfolioSponsor?: Readonly<{
+    listPortfolioIds(): Promise<readonly string[]>;
+    read(portfolioId: string): Promise<PortfolioSponsorProjection>;
+  }>;
+  readonly onCaptureError?: (error: unknown, projectId: string) => void;
 }
 
 /** Generation-owned bounded scanner; durable cursors/outbox remain the restart authority. */
@@ -44,6 +67,8 @@ export class WorkroomProjectionRuntime {
   readonly #tracer: WorkroomProjectionTracer;
   readonly #worker: WorkroomProjectionDeliveryWorker;
   #runOffset = 0;
+  #lifecycleProjectOffset = 0;
+  #portfolioOffset = 0;
 
   constructor(readonly options: WorkroomProjectionRuntimeOptions) {
     positive(options.maxRunsPerTick, 'maxRunsPerTick');
@@ -59,28 +84,112 @@ export class WorkroomProjectionRuntime {
       workerId: options.workerId,
       leaseMs: options.leaseMs,
       governance: options.governance,
+      authority: Object.freeze({ authorize: item => this.#authorizeDelivery(item) }),
     });
   }
 
   async runOnce(signal: AbortSignal): Promise<WorkroomProjectionTickResult> {
     signal.throwIfAborted();
     const catalog = await this.options.catalog.read();
+    if (this.options.lifecycleOverdue || this.options.portfolioSponsor) {
+      await this.#ensureSponsorRoomBindings(catalog, signal);
+    }
+    let deliveries = 0;
+    while (deliveries < this.options.maxDeliveriesPerTick) {
+      signal.throwIfAborted();
+      const result = await this.#worker.runOnce(Date.now(), signal);
+      if (result.status === 'idle') break;
+      deliveries += 1;
+      if (result.status === 'failed') break;
+    }
     const ids = [...await this.options.journal.listRunIds()].sort();
     const selected = rotate(ids, this.#runOffset, this.options.maxRunsPerTick);
     this.#runOffset = ids.length === 0 ? 0 : (this.#runOffset + selected.length) % ids.length;
     let capturedRuns = 0;
+    const captureErrors: unknown[] = [];
     for (const runId of selected) {
       signal.throwIfAborted();
-      const events = await this.options.journal.read(runId);
-      const projectId = String(events[0]?.payload.projectId ?? '');
-      const definition = catalog.definitions[projectId];
-      const binding = (await this.options.repository.read()).bindings[projectId];
-      if (!definition || definition.enabled === false || !binding) continue;
-      assertCatalogBinding(catalog, projectId, definition, binding);
-      await this.#tracer.capture(binding, runId, signal);
-      capturedRuns += 1;
+      let projectId = '';
+      try {
+        const events = await this.options.journal.read(runId);
+        projectId = String(events[0]?.payload.projectId ?? '');
+        const definition = catalog.definitions[projectId];
+        const binding = (await this.options.repository.read()).bindings[
+          workroomProjectionBindingKey(projectId, 'workroom')
+        ];
+        if (!definition || definition.enabled === false || !binding) continue;
+        assertCatalogBinding(catalog, projectId, definition, binding, 'workroom');
+        await this.#tracer.capture(binding, runId, signal);
+        capturedRuns += 1;
+      } catch (error) {
+        if (signal.aborted) throw signal.reason ?? error;
+        captureErrors.push(error);
+        this.options.onCaptureError?.(error, projectId);
+      }
     }
-    let deliveries = 0;
+    if (this.options.lifecycleOverdue) {
+      const projectIds = Object.keys(catalog.definitions).sort();
+      const selectedProjects = rotate(
+        projectIds, this.#lifecycleProjectOffset, this.options.maxRunsPerTick,
+      );
+      this.#lifecycleProjectOffset = projectIds.length === 0
+        ? 0
+        : (this.#lifecycleProjectOffset + selectedProjects.length) % projectIds.length;
+      for (const projectId of selectedProjects) {
+        signal.throwIfAborted();
+        try {
+          const definition = catalog.definitions[projectId];
+          const binding = (await this.options.repository.read()).bindings[
+            workroomProjectionBindingKey(projectId, 'sponsor_room')
+          ];
+          if (!definition || definition.enabled === false || !binding) continue;
+          assertCatalogBinding(catalog, projectId, definition, binding, 'sponsor_room');
+          const snapshot = await this.options.lifecycleOverdue.project(projectId, signal);
+          await this.#tracer.captureLifecycleOverdue(binding, snapshot, signal);
+        } catch (error) {
+          if (signal.aborted) throw signal.reason ?? error;
+          captureErrors.push(error);
+          this.options.onCaptureError?.(error, projectId);
+        }
+      }
+    }
+    if (this.options.portfolioSponsor) {
+      const portfolioIds = [...await this.options.portfolioSponsor.listPortfolioIds()]
+        .sort(compareCanonicalWorkroomText);
+      const selectedPortfolios = rotate(
+        portfolioIds, this.#portfolioOffset, this.options.maxRunsPerTick,
+      );
+      this.#portfolioOffset = portfolioIds.length === 0
+        ? 0
+        : (this.#portfolioOffset + selectedPortfolios.length) % portfolioIds.length;
+      for (const portfolioId of selectedPortfolios) {
+        signal.throwIfAborted();
+        let projection: PortfolioSponsorProjection;
+        try {
+          projection = await this.options.portfolioSponsor.read(portfolioId);
+        } catch (error) {
+          if (signal.aborted) throw signal.reason ?? error;
+          captureErrors.push(error);
+          this.options.onCaptureError?.(error, portfolioId);
+          continue;
+        }
+        for (const projectId of Object.keys(projection.projects).sort(compareCanonicalWorkroomText)) {
+          try {
+            const definition = catalog.definitions[projectId];
+            const binding = (await this.options.repository.read()).bindings[
+              workroomProjectionBindingKey(projectId, 'sponsor_room')
+            ];
+            if (!definition || definition.enabled === false || !binding) continue;
+            assertCatalogBinding(catalog, projectId, definition, binding, 'sponsor_room');
+            await this.#tracer.capturePortfolioSponsor(binding, projection, signal);
+          } catch (error) {
+            if (signal.aborted) throw signal.reason ?? error;
+            captureErrors.push(error);
+            this.options.onCaptureError?.(error, projectId);
+          }
+        }
+      }
+    }
     while (deliveries < this.options.maxDeliveriesPerTick) {
       signal.throwIfAborted();
       const result = await this.#worker.runOnce(Date.now(), signal);
@@ -92,12 +201,108 @@ export class WorkroomProjectionRuntime {
       .some(item => item.delivery.status === 'pending'
         || item.delivery.status === 'leased'
         || (item.delivery.status === 'failed' && item.delivery.retryable === true));
+    if (captureErrors.length > 0 && !this.options.onCaptureError) throw captureErrors[0];
     return Object.freeze({
       scannedRuns: selected.length,
       capturedRuns,
       deliveries,
       pending,
     });
+  }
+
+  async #authorizeDelivery(
+    item: import('../workroom/projection-outbox.js').WorkroomProjectionOutboxItem,
+  ): Promise<boolean> {
+    const audience = projectionAudience(item);
+    const catalog = await this.options.catalog.read();
+    const definition = catalog.definitions[item.projectId];
+    const state = await this.options.repository.read();
+    const binding = state.bindings[workroomProjectionBindingKey(item.projectId, audience)];
+    if (!definition || definition.enabled === false || !binding) return false;
+    try {
+      assertCatalogBinding(catalog, item.projectId, definition, binding, audience);
+    } catch {
+      return false;
+    }
+    if (audience === 'sponsor_room' && this.options.resolveSponsorConversation) {
+      const currentConversation = await this.options.resolveSponsorConversation(item.projectId, definition);
+      if (!currentConversation || digest(currentConversation) !== digest(binding.conversation)) return false;
+    }
+    return item.bindingRevision === binding.bindingRevision
+      && digest(item.conversation) === digest(binding.conversation)
+      && (item.speaker.agentDefinitionId === binding.orchestrator.agentDefinitionId
+        || binding.agents.some(agent => agent.agentDefinitionId === item.speaker.agentDefinitionId
+          && agent.role === item.speaker.role));
+  }
+
+  /**
+   * Sponsor Rooms are persistent Catalog delivery views, not bindings learned from
+   * the first inbound message. Materialize every enabled Project view at startup/tick
+   * so a portfolio room can receive its first alert without prior human traffic.
+   */
+  async #ensureSponsorRoomBindings(
+    catalog: WorkroomCatalogSnapshot,
+    signal: AbortSignal,
+  ): Promise<void> {
+    for (const projectId of Object.keys(catalog.definitions).sort()) {
+      signal.throwIfAborted();
+      const definition = catalog.definitions[projectId];
+      const configured = definition?.sponsorConversation;
+      if (!definition || definition.enabled === false || !configured) continue;
+      if (configured.kind === 'repository') {
+        throw new Error('Sponsor Room Projection requires a group or channel conversation');
+      }
+      const resolvedConversation = this.options.resolveSponsorConversation
+        ? await this.options.resolveSponsorConversation(projectId, definition)
+        : undefined;
+      if (this.options.resolveSponsorConversation && !resolvedConversation) continue;
+      for (let conflict = 0; conflict < 8; conflict += 1) {
+        const state = await this.options.repository.read();
+        const current = state.bindings[workroomProjectionBindingKey(projectId, 'sponsor_room')];
+        if (current) {
+          try {
+            assertCatalogBinding(catalog, projectId, definition, current, 'sponsor_room');
+            if (!resolvedConversation
+              || digest(current.conversation) === digest(resolvedConversation)) break;
+          } catch {
+            // A current Catalog change publishes a higher binding revision below.
+          }
+        }
+        const orchestrator = definition.members.find(member =>
+          member.agent === configured.agent && member.role === 'orchestrator');
+        if (!orchestrator) throw new Error(`Sponsor Room ${projectId} has no exact Orchestrator`);
+        const identity = (member: (typeof definition.members)[number]) => Object.freeze({
+          principalId: member.agent,
+          agentDefinitionId: member.agent,
+          displayName: member.agent,
+          role: member.role,
+        });
+        const exactConversation = resolvedConversation ?? Object.freeze({
+              endpoint: Object.freeze({ id: configured.endpoint, adapter: configured.adapter }),
+              kind: configured.kind,
+              id: configured.id,
+            });
+        const candidate: WorkroomProjectionBinding = Object.freeze({
+          version: 1,
+          audience: 'sponsor_room',
+          projectId,
+          catalogBindingDigest: workroomProjectionCatalogBindingDigest(definition),
+          bindingRevision: (current?.bindingRevision ?? 0) + 1,
+          projectionPolicyRevision: 1,
+          conversation: Object.freeze(structuredClone(exactConversation)),
+          orchestrator: identity(orchestrator) as WorkroomProjectionBinding['orchestrator'],
+          agents: Object.freeze(definition.members
+            .filter(member => member !== orchestrator)
+            .map(identity)) as WorkroomProjectionBinding['agents'],
+        });
+        try {
+          await this.options.repository.bind(state.revision, candidate);
+          break;
+        } catch (error) {
+          if (!(error instanceof WorkroomProjectionRevisionConflictError) || conflict === 7) throw error;
+        }
+      }
+    }
   }
 }
 
@@ -130,6 +335,11 @@ export class WorkroomProjectionReplyResolver {
   }>): Promise<WorkroomProjectionReplyTargetDecision> {
     const projection = await this.options.repository.read();
     const entry = projection.messageIndex[workroomProjectionMessageKey(input.replyTo)];
+    if (entry?.target.projectId === input.projectId
+      && (!entry.target.taskKey || !entry.target.taskRevision
+        || !entry.target.assignmentId || !entry.target.assignmentRevision)) {
+      return resolveProjectionReplyTarget(projection, { ...input, activeAssignments: [] });
+    }
     let activeAssignments: Array<{
       projectId: string;
       runId: string;
@@ -270,20 +480,24 @@ function assertCatalogBinding(
   projectId: string,
   definition: WorkroomDefinition,
   binding: WorkroomProjectionBinding,
+  audience: 'workroom' | 'sponsor_room',
 ): void {
-  if (binding.projectId !== projectId || !definition.conversation) {
+  const conversation = audience === 'workroom'
+    ? definition.conversation
+    : definition.sponsorConversation;
+  if (binding.projectId !== projectId || projectionAudience(binding) !== audience || !conversation) {
     throw new Error('Workroom Projection binding does not match persistent Catalog Project');
   }
   if (binding.catalogBindingDigest !== workroomProjectionCatalogBindingDigest(definition)) {
     throw new Error('Workroom Projection binding targets a stale Catalog revision');
   }
-  if (definition.conversation.kind === 'repository'
-    || binding.conversation.kind !== definition.conversation.kind
-    || binding.conversation.id !== definition.conversation.id) {
+  if (conversation.kind === 'repository'
+    || binding.conversation.kind !== conversation.kind
+    || binding.conversation.id !== conversation.id) {
     throw new Error('Workroom Projection binding does not match persistent Catalog conversation');
   }
   const members = new Map(definition.members.map(member => [member.agent, member.role]));
-  if (definition.conversation.agent !== binding.orchestrator.agentDefinitionId
+  if (conversation.agent !== binding.orchestrator.agentDefinitionId
     || members.get(binding.orchestrator.agentDefinitionId) !== 'orchestrator'
     || binding.agents.some(agent => members.get(agent.agentDefinitionId) !== agent.role)
     || definition.members.some(member => member.role !== 'orchestrator'

@@ -1,3 +1,4 @@
+import { compareCanonicalWorkroomText } from '../workroom/canonical-value.js';
 import { createToken } from '@zhin.js/plugin-runtime';
 import type { WorkroomEvent, WorkroomRunState } from '../workroom/kernel-contracts.js';
 import type { WorkroomJournal } from '../workroom/journal.js';
@@ -289,7 +290,7 @@ function pendingDispatches(events: readonly WorkroomEvent[]): readonly WorkroomD
       && (latestTerminal.get(decision.taskKey) ?? -1) <= event.sequence
       && (latestRevision.get(decision.taskKey) ?? -1) <= event.sequence)
     .map(({ decision }) => decision)
-    .sort((left, right) => left.decisionId.localeCompare(right.decisionId)));
+    .sort((left, right) => compareCanonicalWorkroomText(left.decisionId, right.decisionId)));
 }
 
 function positiveInteger(value: unknown, label: string): number {

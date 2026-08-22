@@ -150,6 +150,7 @@ async function startHost(options: {
       ? { token: 'full-token', tokens: [
           { token: 'demo-token', scope: 'demo' as const },
           { token: 'sponsor-token', scope: 'full' as const, principalId: 'human:alice' },
+          { token: 'other-token', scope: 'full' as const, principalId: 'human:bob' },
         ] }
       : {}),
   });
@@ -609,7 +610,13 @@ describe('console REST routes', () => {
     const root = rootPluginId();
     const projection = { version: 1, portfolioId: 'portfolio-main', sourceSequence: 4,
       clock: { now: 10, sequence: 4, digest: 'sha256:a' }, projects: {} };
-    const read = vi.fn(async () => projection);
+    let sponsorAuthorized = true;
+    const read = vi.fn(async (
+      _portfolioId: string,
+      principal: Readonly<{ principalId: string }>,
+    ) => sponsorAuthorized && principal.principalId === 'human:alice'
+      ? { status: 'ready' as const, projection }
+      : { status: 'forbidden' as const });
     const execute = vi.fn(async () => projection);
     const decideEffect = vi.fn(async command => ({ ...command, principalId: 'human:alice', digest: 'sha256:decision' }));
     const snapshot = {
@@ -628,12 +635,38 @@ describe('console REST routes', () => {
     } as unknown as SnapshotReader;
     const { port } = await startHost({ projectRoot, withTokens: true, snapshots });
 
-    const readResponse = await fetch(
+    const demoRead = await fetch(
       `http://127.0.0.1:${port}/api/agent/workroom/portfolio?portfolioId=portfolio-main`,
       { headers: { authorization: 'Bearer demo-token' } },
     );
+    expect(demoRead.status).toBe(401);
+
+    const unboundRead = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/portfolio?portfolioId=portfolio-main`,
+      { headers: { authorization: 'Bearer full-token' } },
+    );
+    expect(unboundRead.status).toBe(403);
+
+    const nonSponsorRead = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/portfolio?portfolioId=portfolio-main`,
+      { headers: { authorization: 'Bearer other-token' } },
+    );
+    expect(nonSponsorRead.status).toBe(403);
+
+    const readResponse = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/portfolio?portfolioId=portfolio-main`,
+      { headers: { authorization: 'Bearer sponsor-token' } },
+    );
     expect(readResponse.status).toBe(200);
     expect(JSON.stringify(await readResponse.json())).not.toContain('objective');
+    expect(read).toHaveBeenLastCalledWith('portfolio-main', { principalId: 'human:alice' });
+
+    sponsorAuthorized = false;
+    const revokedRead = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/portfolio?portfolioId=portfolio-main`,
+      { headers: { authorization: 'Bearer sponsor-token' } },
+    );
+    expect(revokedRead.status).toBe(403);
 
     const command = { kind: 'set_status', commandId: 'pause:1', projectId: 'alpha',
       expectedProjectRevision: 1, status: 'paused' };
@@ -660,9 +693,9 @@ describe('console REST routes', () => {
     expect(execute).toHaveBeenCalledTimes(1);
 
     const effectCommand = {
-      version: 1, operationId: 'effect-decision:1', projectId: 'alpha', runId: 'run-1',
+      version: 2, operationId: 'effect-decision:1', projectId: 'alpha', runId: 'run-1',
       effectIntentId: 'effect:1', effectIntentDigest: 'sha256:intent',
-      decision: 'approve', reason: 'ship', decidedAt: 10,
+      decision: 'approve', reasonCode: 'approved_as_requested', decidedAt: 10,
     };
     const effectResponse = await fetch(
       `http://127.0.0.1:${port}/api/agent/workroom/effects/sponsor-decisions`,
@@ -674,6 +707,15 @@ describe('console REST routes', () => {
     );
     expect(effectResponse.status).toBe(200);
     expect(decideEffect).toHaveBeenCalledWith(effectCommand, { principalId: 'human:alice' });
+    const legacyEffect = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/effects/sponsor-decisions`,
+      {
+        method: 'POST',
+        headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ ...effectCommand, version: 1, reason: 'free-form rationale' }),
+      },
+    );
+    expect(legacyEffect.status).toBe(400);
     const forgedEffect = await fetch(
       `http://127.0.0.1:${port}/api/agent/workroom/effects/sponsor-decisions`,
       {
@@ -684,6 +726,104 @@ describe('console REST routes', () => {
     );
     expect(forgedEffect.status).toBe(400);
     expect(decideEffect).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes only token-bound typed Data Lifecycle controls and content-free projections', async () => {
+    await import('@zhin.js/agent/runtime');
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const root = rootPluginId();
+    const projection = { version: 1, projectId: 'alpha', objectId: 'object-1', sequence: 3,
+      stateDigest: 'sha256:state', authorityDigest: 'sha256:authority', holds: [], erasures: [], purges: [],
+      cryptoErased: false, purgeComplete: false, digest: 'sha256:projection' };
+    const read = vi.fn(async (_input, principal: Readonly<{ principalId: string }>) =>
+      principal.principalId === 'human:alice'
+        ? { status: 'ready' as const, projection }
+        : { status: 'forbidden' as const });
+    const listOverdue = vi.fn(async () => ({ status: 'ready' as const, items: [] }));
+    const execute = vi.fn(async (command: { operationId?: string }, principal: Readonly<{ principalId: string }>) => {
+      if (principal.principalId !== 'human:alice') return { status: 'forbidden' as const };
+      if (command.operationId === 'export:stale') {
+        return { status: 'stale' as const, candidateDigest: 'sha256:candidate' };
+      }
+      if (command.operationId === 'export:no-audit') {
+        return { status: 'unavailable' as const, reason: 'subject_export_audit' as const };
+      }
+      return { status: 'ready' as const, projection };
+    });
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+        console: {
+          sessionTree: {}, workroom: {}, assistant: null,
+          trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
+          dataLifecycle: { read, listOverdue, execute },
+        },
+      }]])]]),
+    } as unknown as RuntimeSnapshot;
+    const snapshots = {
+      acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
+    } as unknown as SnapshotReader;
+    const { port } = await startHost({ projectRoot, withTokens: true, snapshots });
+
+    const demo = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle?projectId=alpha&objectId=object-1`, {
+      headers: { authorization: 'Bearer demo-token' },
+    });
+    expect(demo.status).toBe(401);
+    const unbound = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle?projectId=alpha&objectId=object-1`, {
+      headers: { authorization: 'Bearer full-token' },
+    });
+    expect(unbound.status).toBe(403);
+    const denied = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle?projectId=alpha&objectId=object-1`, {
+      headers: { authorization: 'Bearer other-token' },
+    });
+    expect(denied.status).toBe(403);
+    const ready = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle?projectId=alpha&objectId=object-1`, {
+      headers: { authorization: 'Bearer sponsor-token' },
+    });
+    expect(ready.status).toBe(200);
+    expect(JSON.stringify(await ready.json())).not.toMatch(/principal|decision|payload|content/iu);
+    expect(read).toHaveBeenCalledWith(
+      { projectId: 'alpha', objectId: 'object-1' }, { principalId: 'human:alice' },
+    );
+
+    const overdue = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle/overdue?operationId=overdue%3A1&projectId=alpha`, {
+      headers: { authorization: 'Bearer sponsor-token' },
+    });
+    expect(overdue.status).toBe(200);
+    expect(listOverdue).toHaveBeenCalledWith(
+      { operationId: 'overdue:1', projectId: 'alpha' }, { principalId: 'human:alice' },
+    );
+
+    const command = { kind: 'place_hold', operationId: 'hold:1', projectId: 'alpha', objectId: 'object-1',
+      holdId: 'hold-1', reasonCode: 'legal_hold', reviewAt: 20 };
+    const commandResponse = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle/commands`, {
+      method: 'POST', headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify(command),
+    });
+    expect(commandResponse.status).toBe(200);
+    expect(execute).toHaveBeenCalledWith(command, { principalId: 'human:alice' }, expect.any(AbortSignal));
+
+    const exportCommand = { kind: 'export_subject', operationId: 'export:stale', tenantId: 'tenant-1',
+      projectId: 'alpha', subjectRef: 'subject@example.test', deadline: 20 };
+    const staleExport = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle/commands`, {
+      method: 'POST', headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify(exportCommand),
+    });
+    expect(staleExport.status).toBe(409);
+    expect(JSON.stringify(await staleExport.json())).not.toContain('subject@example.test');
+
+    const unavailableExport = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle/commands`, {
+      method: 'POST', headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ ...exportCommand, operationId: 'export:no-audit' }),
+    });
+    expect(unavailableExport.status).toBe(503);
+
+    const forged = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle/commands`, {
+      method: 'POST', headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ ...command, role: 'data_steward', decisionProof: 'forged', content: 'secret' }),
+    });
+    expect(forged.status).toBe(400);
+    expect(execute).toHaveBeenCalledTimes(3);
   });
 
   it('serves GET /entries without a token (public path)', async () => {

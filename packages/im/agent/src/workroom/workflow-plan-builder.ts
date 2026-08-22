@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { compareCanonicalWorkroomText } from './canonical-value.js';
 import {
   assertWorkroomSchedulerPolicySnapshot,
   type WorkroomSchedulerPolicySnapshot,
@@ -160,7 +161,7 @@ export class WorkflowPlanBuilder {
 
   build(): WorkflowPlanProposal {
     if (this.#tasks.length === 0) throw new Error('Workflow Plan requires at least one Task');
-    const tasks = [...this.#tasks].sort((left, right) => left.key.localeCompare(right.key));
+    const tasks = [...this.#tasks].sort((left, right) => compareCanonicalWorkroomText(left.key, right.key));
     if (!tasks.some(task => task.required)) throw new Error('Workflow Plan requires at least one required Task');
     assertDependencyGraph(tasks);
     if (tasks.length > this.#metadata.budget.maxTasks) {
@@ -289,7 +290,7 @@ function assertDependencyGraph(tasks: readonly WorkflowPlanTaskProposal[]): void
 
 function normalizeNames(values: readonly string[], label: string): readonly string[] {
   for (const value of values) requireText(value, label);
-  return Object.freeze([...new Set(values)].sort((left, right) => left.localeCompare(right)));
+  return Object.freeze([...new Set(values)].sort(compareCanonicalWorkroomText));
 }
 
 function requireText(value: string, label: string): void {
@@ -318,7 +319,7 @@ function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
   if (value && typeof value === 'object') {
     return `{${Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareCanonicalWorkroomText(left, right))
       .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
       .join(',')}}`;
   }

@@ -4,6 +4,7 @@ export * from './agent-trace-runtime.js';
 export type { AssistantRuntimeHandle } from '../assistant/runtime-contract.js';
 export {
   createCatalogGovernedWorkroomProjectionAuthority,
+  createCatalogGovernedConsoleDisclosureAuthority,
   createWorkroomRuntime,
   type WorkroomProjectionReadAuthorityPort,
   type WorkroomRunDetail,
@@ -62,6 +63,8 @@ export * from './workroom-data-governance-storage.js';
 export * from './workroom-governed-dispatch-composition.js';
 export * from './workroom-governed-dispatch-reasons.js';
 export * from './workroom-data-lifecycle-composition.js';
+export * from './workroom-data-lifecycle-console.js';
+export * from './workroom-data-lifecycle-human-ingress.js';
 export * from './workroom-profile-authority-runtime.js';
 export * from './workroom-profile-authority-composition.js';
 export * from './workroom-run-profile-pin-authority.js';

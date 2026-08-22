@@ -1,3 +1,4 @@
+import { compareCanonicalWorkroomText } from './canonical-value.js';
 import { createHash } from 'node:crypto';
 import {
   parsePortfolioResourceBundle,
@@ -432,23 +433,23 @@ function packVersionKey(value: Pick<CapabilityPackRef, 'id' | 'version'>): strin
 }
 
 function comparePack(left: CapabilityPack, right: CapabilityPack): number {
-  return capabilityKey(left).localeCompare(capabilityKey(right));
+  return compareCanonicalWorkroomText(capabilityKey(left), capabilityKey(right));
 }
 
 function comparePackRef(left: CapabilityPackRef, right: CapabilityPackRef): number {
-  return capabilityKey(left).localeCompare(capabilityKey(right));
+  return compareCanonicalWorkroomText(capabilityKey(left), capabilityKey(right));
 }
 
 function compareDefinition(left: CapabilityDefinition, right: CapabilityDefinition): number {
-  return `${left.id}#${left.digest}`.localeCompare(`${right.id}#${right.digest}`);
+  return compareCanonicalWorkroomText(`${left.id}#${left.digest}`, `${right.id}#${right.digest}`);
 }
 
 function sortById<T extends { readonly id: string }>(values: readonly T[]): T[] {
-  return [...values].sort((left, right) => left.id.localeCompare(right.id));
+  return [...values].sort((left, right) => compareCanonicalWorkroomText(left.id, right.id));
 }
 
 function unique(values: readonly string[]): string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+  return [...new Set(values)].sort((left, right) => compareCanonicalWorkroomText(left, right));
 }
 
 function label(value: string): string {
@@ -483,7 +484,7 @@ function copyWorkflow(value: WorkflowStrategyDefinition): WorkflowStrategyDefini
     digest: value.digest,
     requiredByProfile: value.requiredByProfile,
     tasks: [...value.tasks]
-      .sort((left, right) => left.key.localeCompare(right.key))
+      .sort((left, right) => compareCanonicalWorkroomText(left.key, right.key))
       .map((task) => ({
         key: task.key,
         role: task.role,
@@ -514,12 +515,12 @@ function copyAcceptancePolicy(
     id: value.id,
     digest: value.digest,
     tasks: [...value.tasks]
-      .sort((left, right) => left.taskKey.localeCompare(right.taskKey))
+      .sort((left, right) => compareCanonicalWorkroomText(left.taskKey, right.taskKey))
       .map(task => ({
         taskKey: task.taskKey,
         kind: task.kind,
         criteria: [...task.criteria]
-          .sort((left, right) => left.id.localeCompare(right.id))
+          .sort((left, right) => compareCanonicalWorkroomText(left.id, right.id))
           .map(criterion => ({ ...criterion })),
         requiredEvidence: unique(task.requiredEvidence),
         minimumRoute: task.minimumRoute,
@@ -531,7 +532,7 @@ function copyAcceptancePolicy(
     memorySchema: {
       revision: value.memorySchema.revision,
       claimRules: [...value.memorySchema.claimRules]
-        .sort((left, right) => left.key.localeCompare(right.key))
+        .sort((left, right) => compareCanonicalWorkroomText(left.key, right.key))
         .map(rule => ({
           key: rule.key,
           valueType: rule.valueType,
@@ -546,7 +547,7 @@ function failed(diagnostics: readonly ProfileCompilerDiagnostic[]): CompileWorkr
   return deepFreeze({
     ok: false as const,
     diagnostics: [...diagnostics].sort((left, right) =>
-      `${left.path}\u0000${left.code}\u0000${left.message}`.localeCompare(`${right.path}\u0000${right.code}\u0000${right.message}`)),
+      compareCanonicalWorkroomText(`${left.path}\u0000${left.code}\u0000${left.message}`, `${right.path}\u0000${right.code}\u0000${right.message}`)),
   });
 }
 
@@ -558,7 +559,7 @@ function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
   if (value && typeof value === 'object') {
     return `{${Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareCanonicalWorkroomText(left, right))
       .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
       .join(',')}}`;
   }

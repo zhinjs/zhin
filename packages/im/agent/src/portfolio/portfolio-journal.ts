@@ -1,4 +1,4 @@
-import { digestCanonicalWorkroomValue as digest } from '../workroom/canonical-value.js';
+import { compareCanonicalWorkroomText, digestCanonicalWorkroomValue as digest } from '../workroom/canonical-value.js';
 
 export type PortfolioGrantPreemptibility = 'checkpointable' | 'atomic';
 
@@ -488,7 +488,7 @@ export function parsePortfolioResourceBundle(value: unknown): PortfolioResourceB
       rateUnits: positiveSafeInteger(demand.rateUnits, `${poolId}.rateUnits`),
       budgetUnits: nonNegativeSafeInteger(demand.budgetUnits, `${poolId}.budgetUnits`),
     };
-  }).sort((left, right) => left.poolId.localeCompare(right.poolId));
+  }).sort((left, right) => compareCanonicalWorkroomText(left.poolId, right.poolId));
   return deepFreeze({ demands });
 }
 
@@ -1172,7 +1172,7 @@ function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
   if (value && typeof value === 'object') {
     return `{${Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareCanonicalWorkroomText(left, right))
       .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
       .join(',')}}`;
   }

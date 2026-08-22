@@ -297,19 +297,22 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
                   generation,
                   resolve: async ({ decision, catalog }) => {
                     const definition = catalog.definitions[decision.projectId];
-                    const agents = [...new Set((definition?.members ?? [])
-                      .filter(member => member.role === decision.role)
-                      .map(member => member.agent))];
-                    const endpoints = [...new Set(remoteExecutors!.bindings
-                      .filter(binding => binding.enabled)
-                      .map(binding => binding.endpointId))];
-                    if (agents.length !== 1 || endpoints.length !== 1) return null;
-                    const endpointId = endpoints[0]!;
+                    const routes = (definition?.members ?? []).filter(member =>
+                      member.role === decision.role
+                      && member.assignmentRoute?.kind === 'remote');
+                    if (routes.length !== 1) return null;
+                    const route = routes[0]!;
+                    const assignmentRoute = route.assignmentRoute;
+                    if (!assignmentRoute || assignmentRoute.kind !== 'remote') return null;
+                    const endpointId = assignmentRoute.endpointId;
+                    const binding = remoteExecutors!.bindings.find(candidate =>
+                      candidate.enabled && candidate.endpointId === endpointId);
+                    if (!binding) return null;
                     const endpointAuthority = remoteTransport.resolve(endpointId);
                     if (!endpointAuthority || endpointAuthority.generation !== generation) return null;
                     return Object.freeze({
                       kind: 'remote' as const,
-                      agentDefinitionId: agents[0]!,
+                      agentDefinitionId: route.agent,
                       endpointId,
                       authorityRef: `generation:${generation}:remote-a2a:${endpointAuthority.transportBindingDigest}`,
                     });

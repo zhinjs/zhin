@@ -22,6 +22,7 @@ import {
   type PortfolioValidatedBundleAuthority,
 } from './portfolio-journal.js';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -108,7 +109,7 @@ export class PortfolioAdmissionApplication {
     governance: Readonly<Record<string, PortfolioGovernanceProof>>,
   ): Promise<void> {
     const canonical = policies.map(parsePortfolioProjectPolicy)
-      .sort((left, right) => left.projectId.localeCompare(right.projectId));
+      .sort((left, right) => compareCanonicalWorkroomText(left.projectId, right.projectId));
     if (canonical.length === 0 || new Set(canonical.map(policy => policy.projectId)).size !== canonical.length) {
       throw new Error('Portfolio Project Policy atomic batch is empty or duplicated');
     }
@@ -813,7 +814,7 @@ function projectHeads(state: PortfolioAdmissionState): PortfolioRequestState[] {
   return [...byProject.values()].map(entries => entries.sort((left, right) =>
     left.request.localOrder - right.request.localOrder
     || left.request.schedulerSequence - right.request.schedulerSequence
-    || left.request.requestId.localeCompare(right.request.requestId))[0]!);
+    || compareCanonicalWorkroomText(left.request.requestId, right.request.requestId))[0]!);
 }
 
 function compareRequests(state: PortfolioAdmissionState, left: PortfolioRequestState, right: PortfolioRequestState): number {
@@ -831,7 +832,7 @@ function compareRequests(state: PortfolioAdmissionState, left: PortfolioRequestS
     - (right.request.deadlineAt ?? Number.POSITIVE_INFINITY);
   if (deadline !== 0) return deadline;
   return left.request.schedulerSequence - right.request.schedulerSequence
-    || left.request.requestId.localeCompare(right.request.requestId);
+    || compareCanonicalWorkroomText(left.request.requestId, right.request.requestId);
 }
 
 function blockers(state: PortfolioAdmissionState, request: PortfolioRequestState): string[] {
@@ -904,7 +905,7 @@ function reclaimVictim(state: PortfolioAdmissionState, candidate: PortfolioReque
       && grant.resourceBundle.demands.some(item => pools.has(item.poolId))
       && (state.now >= candidate.request.starvationAt || candidateLane < LANE_ORDER[grant.lane]);
   }).sort((left, right) => LANE_ORDER[right.lane] - LANE_ORDER[left.lane]
-    || right.issuedAt - left.issuedAt || right.grantId.localeCompare(left.grantId))[0];
+    || right.issuedAt - left.issuedAt || compareCanonicalWorkroomText(right.grantId, left.grantId))[0];
 }
 
 function createReclaim(

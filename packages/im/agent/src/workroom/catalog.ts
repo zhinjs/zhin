@@ -7,6 +7,7 @@ import { dirname } from 'node:path';
 import type { WorkroomDefinition } from './catalog-definition.js';
 import { validateWorkroomDefinitions } from '../config/validate-ai-config.js';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
 } from './canonical-value.js';
@@ -299,7 +300,9 @@ function normalizeDefinitions(
     }
     const definition = value[projectId];
     if (!isRecord(definition)) throw new Error(`Invalid Workroom Catalog ${projectId} schema`);
-    exactKeys(definition, ['name', 'description', 'enabled', 'members', 'sponsors', 'conversation'], projectId);
+    exactKeys(definition, [
+      'name', 'description', 'enabled', 'members', 'sponsors', 'conversation', 'sponsorConversation',
+    ], projectId);
     text(definition.name, `${projectId}.name`);
     if (definition.description !== undefined && typeof definition.description !== 'string') {
       throw new Error(`Invalid Workroom Catalog ${projectId}.description`);
@@ -310,12 +313,32 @@ function normalizeDefinitions(
     if (!Array.isArray(definition.members)) throw new Error(`Invalid Workroom Catalog ${projectId}.members`);
     const members = definition.members.map((member, index) => {
       if (!isRecord(member)) throw new Error(`Invalid Workroom Catalog ${projectId}.members.${index}`);
-      exactKeys(member, ['agent', 'role'], `${projectId}.members.${index}`);
+      exactKeys(member, ['agent', 'role', 'assignmentRoute'], `${projectId}.members.${index}`);
       text(member.agent, `${projectId}.members.${index}.agent`);
       if (!['orchestrator', 'executor', 'reviewer', 'integration'].includes(String(member.role))) {
         throw new Error(`Invalid Workroom Catalog ${projectId}.members.${index}.role`);
       }
-      return { agent: member.agent, role: member.role } as WorkroomDefinition['members'][number];
+      let assignmentRoute: WorkroomDefinition['members'][number]['assignmentRoute'];
+      if (member.assignmentRoute !== undefined) {
+        if (!isRecord(member.assignmentRoute)) {
+          throw new Error(`Invalid Workroom Catalog ${projectId}.members.${index}.assignmentRoute`);
+        }
+        if (member.assignmentRoute.kind === 'local') {
+          exactKeys(member.assignmentRoute, ['kind'], `${projectId}.members.${index}.assignmentRoute`);
+          assignmentRoute = { kind: 'local' };
+        } else if (member.assignmentRoute.kind === 'remote') {
+          exactKeys(member.assignmentRoute, ['kind', 'endpointId'], `${projectId}.members.${index}.assignmentRoute`);
+          text(member.assignmentRoute.endpointId, `${projectId}.members.${index}.assignmentRoute.endpointId`);
+          assignmentRoute = { kind: 'remote', endpointId: member.assignmentRoute.endpointId };
+        } else {
+          throw new Error(`Invalid Workroom Catalog ${projectId}.members.${index}.assignmentRoute.kind`);
+        }
+      }
+      return {
+        agent: member.agent,
+        role: member.role,
+        ...(assignmentRoute ? { assignmentRoute } : {}),
+      } as WorkroomDefinition['members'][number];
     });
     let sponsors: string[] | undefined;
     if (definition.sponsors !== undefined) {
@@ -328,28 +351,12 @@ function normalizeDefinitions(
         }
         seenSponsors.add(principalId);
         return principalId;
-      }).sort((left, right) => left.localeCompare(right));
+      }).sort((left, right) => compareCanonicalWorkroomText(left, right));
     }
-    let conversation: WorkroomDefinition['conversation'];
-    if (definition.conversation !== undefined) {
-      const entry = definition.conversation;
-      if (!isRecord(entry)) throw new Error(`Invalid Workroom Catalog ${projectId}.conversation`);
-      exactKeys(entry, ['adapter', 'endpoint', 'kind', 'id', 'agent'], `${projectId}.conversation`);
-      text(entry.adapter, `${projectId}.conversation.adapter`);
-      text(entry.endpoint, `${projectId}.conversation.endpoint`);
-      text(entry.id, `${projectId}.conversation.id`);
-      text(entry.agent, `${projectId}.conversation.agent`);
-      if (!['group', 'channel', 'repository'].includes(String(entry.kind))) {
-        throw new Error(`Invalid Workroom Catalog ${projectId}.conversation.kind`);
-      }
-      conversation = {
-        adapter: entry.adapter,
-        endpoint: entry.endpoint,
-        kind: entry.kind,
-        id: entry.id,
-        agent: entry.agent,
-      } as WorkroomDefinition['conversation'];
-    }
+    const conversation = normalizeConversation(definition.conversation, projectId, 'conversation');
+    const sponsorConversation = normalizeConversation(
+      definition.sponsorConversation, projectId, 'sponsorConversation',
+    );
     result[projectId] = {
       name: definition.name,
       ...(definition.description?.trim() ? { description: definition.description } : {}),
@@ -357,6 +364,7 @@ function normalizeDefinitions(
       members,
       ...(sponsors === undefined ? {} : { sponsors }),
       ...(conversation === undefined ? {} : { conversation }),
+      ...(sponsorConversation === undefined ? {} : { sponsorConversation }),
     };
   }
   const intrinsicErrors = validateWorkroomDefinitions(
@@ -368,6 +376,30 @@ function normalizeDefinitions(
     throw new Error(`Invalid Workroom Catalog: ${intrinsicErrors.join('; ')}`);
   }
   return deepFreeze(result);
+}
+
+function normalizeConversation(
+  value: WorkroomDefinition['conversation'],
+  projectId: string,
+  field: 'conversation' | 'sponsorConversation',
+): WorkroomDefinition['conversation'] {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new Error(`Invalid Workroom Catalog ${projectId}.${field}`);
+  exactKeys(value, ['adapter', 'endpoint', 'kind', 'id', 'agent'], `${projectId}.${field}`);
+  text(value.adapter, `${projectId}.${field}.adapter`);
+  text(value.endpoint, `${projectId}.${field}.endpoint`);
+  text(value.id, `${projectId}.${field}.id`);
+  text(value.agent, `${projectId}.${field}.agent`);
+  if (!['group', 'channel', 'repository'].includes(String(value.kind))) {
+    throw new Error(`Invalid Workroom Catalog ${projectId}.${field}.kind`);
+  }
+  return {
+    adapter: value.adapter,
+    endpoint: value.endpoint,
+    kind: value.kind,
+    id: value.id,
+    agent: value.agent,
+  } as WorkroomDefinition['conversation'];
 }
 
 function exactKeys(value: Record<string, unknown>, allowed: readonly string[], field: string): void {

@@ -76,9 +76,11 @@ export class WorkroomLocalAssignmentRuntime {
     if (this.#stopped) throw new Error('Workroom Local Assignment Runtime is stopped');
     const existing = this.#active.get(envelope.assignmentId);
     if (existing) return await existing.promise;
-    await this.#assertLeased(envelope);
     const controller = new AbortController();
-    const promise = this.#execute(envelope, controller.signal);
+    const promise = (async () => {
+      await this.#assertLeased(envelope);
+      await this.#execute(envelope, controller.signal);
+    })();
     this.#active.set(envelope.assignmentId, Object.freeze({ controller, promise }));
     try {
       await promise;
@@ -98,11 +100,12 @@ export class WorkroomLocalAssignmentRuntime {
     this.#stopped = true;
     if (this.#timer) clearTimeout(this.#timer);
     this.#timer = undefined;
-    for (const { controller } of this.#active.values()) {
+    await this.#draining;
+    const active = [...this.#active.values()];
+    for (const { controller } of active) {
       controller.abort(new Error('Workroom Local Assignment generation disposed'));
     }
-    await Promise.allSettled([...this.#active.values()].map(({ promise }) => promise));
-    await this.#draining;
+    await Promise.allSettled(active.map(({ promise }) => promise));
   }
 
   async #drain(): Promise<WorkroomLocalAssignmentDrainResult> {
@@ -120,7 +123,7 @@ export class WorkroomLocalAssignmentRuntime {
       }
       if (assignment.status === 'leased') {
         started += 1;
-        await this.execute(issuance.envelope);
+        this.dispatch(issuance.envelope);
         continue;
       }
       if (assignment.status === 'cancel_requested') {

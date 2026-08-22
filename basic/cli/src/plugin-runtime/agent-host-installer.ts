@@ -71,17 +71,22 @@ import {
   type TurnAccessContext,
   type DeliveryOutcome,
   type WorkroomCatalog,
+  type WorkroomDefinition,
   FileJournalStore,
   demoteScheduleCreator,
   type ScheduleActivityEvent,
   type ScheduleTurnExecutionRequest,
   resolveWorkroomBotIdentity,
+  workroomProjectionMessageKey,
+  workroomProjectionBindingKey,
   validateWorkroomDefinitions,
   FileHumanIngressProposalRepository,
   FileHumanIngressApplicationRepository,
   HumanIngressApplicationService,
   type HumanIngressOrchestratorProposalPort,
   type HumanIngressPlanningPort,
+  type HumanIngressTargetResolverPort,
+  type HumanIngressTargetResolutionRequest,
   WorkroomPlanningClarificationError,
   type WorkroomPlanGateAuthorityPort,
   ConversationEventHumanIngressSourceReader,
@@ -137,6 +142,8 @@ import {
   AgentRuntime,
   createAgentTraceRuntime,
   createCatalogGovernedWorkroomProjectionAuthority,
+  createCatalogGovernedConsoleDisclosureAuthority,
+  createGovernedPortfolioSponsorProjectionReader,
   createWorkroomRuntime,
   createSessionTreeRuntimeFromAgent,
   type AgentCapabilities,
@@ -207,6 +214,7 @@ import {
   resolveWorkroomDataGovernanceRootAuthorities,
   createGenerationOwnedWorkroomDataGovernanceStorage,
   createFileWorkroomDataLifecycleRuntime,
+  createWorkroomDataLifecycleHumanIngressControlPort,
   createGenerationOwnedWorkroomJournalPayloadPort,
   createGenerationOwnedWorkroomGovernedOutboundComposition,
   installWorkroomProfileAuthorityResources,
@@ -219,6 +227,7 @@ import {
   type AgentHostWorkroomProfileControlPort,
   type AgentHostWorkroomKnowledgeControlPort,
   type AgentHostEffectSponsorControlPort,
+  type AgentHostPortfolioSponsorControlPort,
   createCatalogProjectKnowledgeSourceAuthority,
   createGenerationWorkroomEphemeralAssignmentContext,
   createP12WorkroomKnowledgeContentReader,
@@ -266,6 +275,7 @@ import {
   WorkroomPortfolioGrantAssignmentSaga,
   installWorkroomPortfolioControlWorker,
   createCatalogPortfolioSponsorCommandAuthority,
+  createPortfolioSponsorHumanIngressControlPort,
   portfolioJournalRepositoryToken,
   portfolioPolicyAuthorityToken,
   portfolioAtomicBundleAuthorityToken,
@@ -284,15 +294,18 @@ import {
   type WorkroomEffectClockPort,
   type WorkroomEffectBlockerPolicyPort,
   type WorkroomPayloadLifecycleIndexPort,
+  type WorkroomDataLifecycleConsoleControlPort,
+  type PortfolioSponsorProjection,
 } from '@zhin.js/agent/runtime';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 
 import type { AgentTool, JsonSchema } from '@zhin.js/ai';
-import type {
-  ConversationReference,
-  ConversationRef,
-  ConversationResolution,
+import {
+  conversationRefKey,
+  type ConversationReference,
+  type ConversationRef,
+  type ConversationResolution,
 } from '@zhin.js/im-contract';
 import { resolveSandboxTurnPolicy } from './sandbox-turn-policy.js';
 import {
@@ -397,17 +410,59 @@ export function createCatalogWorkroomProjectionBinding(
   conversation: ConversationRef,
   bindingRevision: number,
 ): WorkroomProjectionBinding {
+  return createCatalogProjectionBinding(catalog, projectId, conversation, bindingRevision, 'workroom');
+}
+
+export function createCatalogSponsorRoomProjectionBinding(
+  catalog: WorkroomCatalogSnapshot,
+  projectId: string,
+  conversation: ConversationRef,
+  bindingRevision: number,
+): WorkroomProjectionBinding {
+  return createCatalogProjectionBinding(catalog, projectId, conversation, bindingRevision, 'sponsor_room');
+}
+
+/** Resolves a persisted Sponsor Room to one exact current Endpoint capability. */
+export function resolveCatalogSponsorProjectionConversation(
+  definition: WorkroomDefinition,
+  endpoints: readonly Readonly<{
+    id: string; name: string; adapter: string; owner: string;
+  }>[],
+): WorkroomProjectionBinding['conversation'] | undefined {
+  const configured = definition.sponsorConversation;
+  if (!configured || configured.kind === 'repository') return undefined;
+  const matches = endpoints.filter(endpoint =>
+    endpoint.adapter === configured.adapter && endpoint.name === configured.endpoint);
+  if (matches.length !== 1) return undefined;
+  const endpoint = matches[0]!;
+  return Object.freeze({
+    endpoint: Object.freeze({ id: endpoint.id, adapter: endpoint.owner }),
+    kind: configured.kind,
+    id: configured.id,
+  });
+}
+
+function createCatalogProjectionBinding(
+  catalog: WorkroomCatalogSnapshot,
+  projectId: string,
+  conversation: ConversationRef,
+  bindingRevision: number,
+  audience: 'workroom' | 'sponsor_room',
+): WorkroomProjectionBinding {
   const definition = catalog.definitions[projectId];
-  if (!definition?.conversation || definition.enabled === false) {
+  const configured = audience === 'workroom'
+    ? definition?.conversation
+    : definition?.sponsorConversation;
+  if (!definition || !configured || definition.enabled === false) {
     throw new Error(`Workroom Projection requires an enabled Catalog binding for ${projectId}`);
   }
-  if (definition.conversation.kind === 'repository'
-    || definition.conversation.kind !== conversation.kind
-    || definition.conversation.id !== conversation.id) {
+  if (configured.kind === 'repository'
+    || configured.kind !== conversation.kind
+    || configured.id !== conversation.id) {
     throw new Error(`Workroom Projection canonical conversation does not match Catalog ${projectId}`);
   }
   const orchestratorMember = definition.members.find(member =>
-    member.agent === definition.conversation!.agent && member.role === 'orchestrator');
+    member.agent === configured.agent && member.role === 'orchestrator');
   if (!orchestratorMember) {
     throw new Error(`Workroom Projection Catalog ${projectId} has no exact Orchestrator`);
   }
@@ -419,6 +474,7 @@ export function createCatalogWorkroomProjectionBinding(
   });
   return Object.freeze({
     version: 1,
+    audience,
     projectId,
     catalogBindingDigest: workroomProjectionCatalogBindingDigest(definition),
     bindingRevision,
@@ -647,16 +703,14 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 
       // Console reads the same replayed facts as tools; it never receives the
       // command authority or a mutable repository.
-      workroomRuntime = createWorkroomRuntime(
-        workroomJournal,
-        createCatalogGovernedWorkroomProjectionAuthority({
-          catalog: workroomCatalog,
-          governance: Object.freeze({
-            readProject: async (projectId: string) =>
-              await dataGovernanceRuntimeRef.current?.options.repository.readProject(projectId),
-          }),
+      const consoleProjectionAuthority = createCatalogGovernedWorkroomProjectionAuthority({
+        catalog: workroomCatalog,
+        governance: Object.freeze({
+          readProject: async (projectId: string) =>
+            await dataGovernanceRuntimeRef.current?.options.repository.readProject(projectId),
         }),
-      );
+      });
+      workroomRuntime = createWorkroomRuntime(workroomJournal, consoleProjectionAuthority);
       sessionTreeRuntime = createSessionTreeRuntimeFromAgent(asPrivate(zhinAgent));
       schedule = wireRuntimeSchedule(
         zhinAgent,
@@ -928,10 +982,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     const workroomProfileConsoleControl: { current?: AgentHostWorkroomProfileControlPort } = {};
     const workroomKnowledgeConsoleControl: { current?: AgentHostWorkroomKnowledgeControlPort } = {};
     const portfolioSponsorConsoleControl: {
-      current?: WorkroomPortfolioSponsorRuntime;
+      current?: AgentHostPortfolioSponsorControlPort;
     } = {};
     const effectSponsorConsoleControl: {
       current?: AgentHostEffectSponsorControlPort;
+    } = {};
+    const dataLifecycleConsoleControl: {
+      current?: WorkroomDataLifecycleConsoleControlPort;
     } = {};
 
     // Protocol Hosts (MCP/A2A) and Console consume this generation-owned port.
@@ -974,6 +1031,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         get workroomKnowledge() { return workroomKnowledgeConsoleControl.current; },
         get portfolioSponsor() { return portfolioSponsorConsoleControl.current; },
         get effectSponsor() { return effectSponsorConsoleControl.current; },
+        get dataLifecycle() { return dataLifecycleConsoleControl.current; },
       }),
     }));
     resources.provide(
@@ -1030,8 +1088,21 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
             ) =>
               await dataGovernanceStorage?.vault.resolveLifecycleObject?.(handle, operationSignal),
           }),
+          ...(lifecycleAuthorities.console
+            ? {
+                consoleAuthority: lifecycleAuthorities.console,
+                consoleDisclosure: createCatalogGovernedConsoleDisclosureAuthority({
+                  catalog: workroomCatalog,
+                  governance: Object.freeze({
+                    readProject: async (projectId: string) =>
+                      await dataGovernanceRuntimeRef.current?.options.repository.readProject(projectId),
+                  }),
+                }),
+              }
+            : {}),
         })
       : undefined;
+    dataLifecycleConsoleControl.current = dataLifecycle?.console;
     const dataGovernanceRuntime = installWorkroomDataGovernanceResources({
       projectRoot: options.projectRoot,
       generation,
@@ -1661,8 +1732,29 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         authority: createCatalogPortfolioSponsorCommandAuthority(workroomCatalog),
       });
       resources.provide(portfolioSponsorCommandToken, portfolioSponsor);
-      portfolioSponsorConsoleControl.current = portfolioSponsor;
     }
+    const portfolioSponsor = resources.use(portfolioSponsorCommandToken);
+    const projectionReader = createGovernedPortfolioSponsorProjectionReader({
+      source: portfolioSponsor,
+      authority: createCatalogGovernedWorkroomProjectionAuthority({
+        catalog: workroomCatalog,
+        governance: Object.freeze({
+          readProject: async (projectId: string) =>
+            await dataGovernanceRuntimeRef.current?.options.repository.readProject(projectId),
+        }),
+      }),
+    });
+    portfolioSponsorConsoleControl.current = Object.freeze({
+      read: projectionReader.read,
+      execute: portfolioSponsor.execute.bind(portfolioSponsor),
+    });
+    const portfolioSponsorProjectionSource: Readonly<{
+      listPortfolioIds(): Promise<readonly string[]>;
+      read(portfolioId: string): Promise<PortfolioSponsorProjection>;
+    }> = Object.freeze({
+      listPortfolioIds: () => resources.use(portfolioJournalRepositoryToken).listPortfolioIds(),
+      read: (portfolioId: string) => portfolioSponsor.read(portfolioId),
+    });
     const portfolioCapacity = resources.has(portfolioCapacityRuntimeToken)
       ? resources.use(portfolioCapacityRuntimeToken)
       : new GenerationOwnedPortfolioCapacityRuntime({
@@ -1822,6 +1914,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       maxRunsPerTick: 64,
       maxDeliveriesPerTick: 32,
       governance: governedOutbound.projection,
+      resolveSponsorConversation: (_projectId, definition) =>
+        resolveCatalogSponsorProjectionConversation(definition, options.im.listEndpoints()),
+      ...(dataLifecycle ? { lifecycleOverdue: dataLifecycle.overdue } : {}),
+      ...(portfolioSponsorProjectionSource
+        ? { portfolioSponsor: portfolioSponsorProjectionSource }
+        : {}),
     });
     const projectionScheduler = new WorkroomProjectionScheduler({
       runtime: projectionRuntime,
@@ -2204,6 +2302,34 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         });
       },
       authorizeProjectSource: async ({ projectId, proposal, source }) => {
+        if (proposal.space === 'sponsor_room') {
+          const snapshot = await workroomCatalog.read();
+          const definition = snapshot.definitions[projectId];
+          const configured = definition?.sponsorConversation;
+          if (!definition || definition.enabled === false || !configured) return false;
+          const projectionState = await projectionRepository.read();
+          const binding = projectionState.bindings[
+            workroomProjectionBindingKey(projectId, 'sponsor_room')
+          ];
+          if (!binding) return false;
+          const replyEntry = proposal.projectionReply
+            ? projectionState.messageIndex[proposal.projectionReply.messageKey]
+            : undefined;
+          if (proposal.projectionReply && (!replyEntry
+            || replyEntry.projectionId !== proposal.projectionReply.projectionId
+            || replyEntry.target.projectId !== proposal.projectionReply.projectId
+            || replyEntry.bindingRevision !== proposal.projectionReply.bindingRevision
+            || digestInstallerValue(replyEntry.target) !== proposal.projectionReply.targetDigest)) {
+            return false;
+          }
+          return proposal.projectId === projectId
+            && proposal.bindingDigest === catalogSpaceSourceDigest(
+              projectId, 'sponsor_room', configured,
+            )
+            && proposal.bindingRevision === binding.bindingRevision
+            && binding.catalogBindingDigest === workroomProjectionCatalogBindingDigest(definition)
+            && conversationRefKey(source.event.conversation) === conversationRefKey(binding.conversation);
+        }
         const decision = await interactionSpaceRouter.resolve({
           conversation: source.event.conversation,
           conversationSequence: source.sequence,
@@ -2221,7 +2347,17 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               ? resources.use(workroomHumanIngressPlanningToken)
               : undefined)
         : undefined,
-      controls: createPlanGateHumanIngressControlPort(workroomKernel),
+      controls: createPortfolioSponsorHumanIngressControlPort({
+        resolve: () => resources.has(portfolioSponsorCommandToken)
+          ? resources.use(portfolioSponsorCommandToken)
+          : undefined,
+        generationSignal: signal,
+        fallback: createWorkroomDataLifecycleHumanIngressControlPort({
+          resolve: () => dataLifecycleConsoleControl.current,
+          generationSignal: signal,
+          fallback: createPlanGateHumanIngressControlPort(workroomKernel),
+        }),
+      }),
       afterPlanAdmission: input => profileRunPinWriter.afterPlanAdmission(input, signal),
     });
     const humanIngressApplication = new HumanIngressApplicationService({
@@ -2275,13 +2411,20 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       application: Object.freeze({ drain: drainHumanIngressProject }),
       sourceEvents: () => options.im.conversationEvents,
       resolveIntent: resolveWorkroomHumanIntent,
-      createTargetResolver: (message, intent) => createProjectionHumanIngressTargetResolver({
-        resolver: projectionReplyResolver,
-        ...(message.replyTo
-          ? { replyTo: { conversation: message.conversation, id: message.replyTo.id } }
-          : {}),
-        intent,
-      }),
+      createTargetResolver: (message, intent, decision) =>
+        decision.space === 'sponsor_room' && intent === 'control'
+          ? createSponsorProjectionControlTargetResolver({
+              projectionRepository,
+              message,
+              intent,
+            })
+          : createProjectionHumanIngressTargetResolver({
+              resolver: projectionReplyResolver,
+              ...(message.replyTo
+                ? { replyTo: { conversation: message.conversation, id: message.replyTo.id } }
+                : {}),
+              intent,
+            }),
       onWorkroomResolved: async (message, decision) => {
         const catalog = await workroomCatalog.read();
         const exact = createCatalogWorkroomProjectionBinding(
@@ -2315,31 +2458,68 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
             : null;
         if (!kind) return null;
         const catalogSnapshot = await workroomCatalog.read();
-        const identity = resolveWorkroomBotIdentity(catalogSnapshot.definitions, {
+        const explicitProjectId = sponsorRoomProjectId(message.content);
+        const projectionState = await projectionRepository.read();
+        const replyEntry = message.replyTo
+          ? projectionState.messageIndex[workroomProjectionMessageKey({
+              conversation: message.conversation,
+              id: message.replyTo.id,
+            })]
+          : undefined;
+        const repliedProjectId = replyEntry?.target.projectId;
+        if (explicitProjectId && repliedProjectId && explicitProjectId !== repliedProjectId) {
+          return Object.freeze({ status: 'rejected' as const, reason: 'project_conflict' as const });
+        }
+        let identity: ReturnType<typeof resolveWorkroomBotIdentity>;
+        try {
+          identity = resolveWorkroomBotIdentity(catalogSnapshot.definitions, {
           adapter,
           endpoint,
           kind,
           id: repository ?? message.conversation.id,
-        });
+          ...(explicitProjectId ?? repliedProjectId
+            ? { projectId: explicitProjectId ?? repliedProjectId }
+            : {}),
+          });
+        } catch (error) {
+          if (error instanceof Error && /explicit Project/u.test(error.message)) {
+            return Object.freeze({ status: 'rejected' as const, reason: 'project_required' as const });
+          }
+          throw error;
+        }
         if (!identity) return null;
         const definition = catalogSnapshot.definitions[identity.projectId];
-        if (!definition?.conversation) {
+        const configured = identity.space === 'workroom'
+          ? definition?.conversation
+          : definition?.sponsorConversation;
+        if (!definition || !configured) {
           throw new Error(`Workroom Catalog ${identity.projectId} has no collaboration space`);
         }
-        const sourceRef = `workroom-catalog:${encodeURIComponent(identity.projectId)}:conversation`;
+        const sponsorBinding = identity.space === 'sponsor_room'
+          ? projectionState.bindings[workroomProjectionBindingKey(
+              identity.projectId, 'sponsor_room',
+            )]
+          : undefined;
+        if (identity.space === 'sponsor_room') {
+          if (!sponsorBinding
+            || sponsorBinding.catalogBindingDigest !== workroomProjectionCatalogBindingDigest(definition)
+            || conversationRefKey(sponsorBinding.conversation) !== conversationRefKey(message.conversation)) {
+            return Object.freeze({ status: 'rejected' as const, reason: 'binding_unavailable' as const });
+          }
+          if (replyEntry && replyEntry.bindingRevision !== sponsorBinding.bindingRevision) {
+            return Object.freeze({ status: 'rejected' as const, reason: 'stale_binding' as const });
+          }
+        }
+        const sourceRef = `workroom-catalog:${encodeURIComponent(identity.projectId)}:${identity.space}`;
         return createCatalogWorkroomSpace({
           projectId: identity.projectId,
           agentDefinitionId: identity.agent,
-          space: 'workroom',
+          space: identity.space,
           sourceRef,
-          sourceDigest: `sha256:${createHash('sha256').update(JSON.stringify([
-            identity.projectId,
-            definition.conversation.adapter,
-            definition.conversation.endpoint,
-            definition.conversation.kind,
-            definition.conversation.id,
-            definition.conversation.agent,
-          ])).digest('hex')}`,
+          sourceDigest: catalogSpaceSourceDigest(identity.projectId, identity.space, configured),
+          ...(identity.space === 'sponsor_room'
+            ? { bindingRevision: sponsorBinding!.bindingRevision }
+            : {}),
         });
       },
     });
@@ -3696,6 +3876,116 @@ function adapterLiveEndpointId(message: Message): string {
   const live = String(message.metadata?.endpoint ?? message.metadata?.endpointKey ?? '');
   if (live) return live;
   return capabilityLocalName(String(message.conversation.endpoint.id));
+}
+
+/** Portfolio Sponsor Rooms require the Project to be explicit in typed control text. */
+function sponsorRoomProjectId(content: string): string | undefined {
+  const text = content.trim();
+  const lifecycle = /^\/control\s+data-lifecycle\s+project\s+([a-z0-9][a-z0-9_-]{0,63})(?:\s|$)/iu.exec(text);
+  if (lifecycle?.[1]) return lifecycle[1].toLowerCase();
+  const portfolio = /^\/control\s+portfolio\s+\S+\s+project\s+([a-z0-9][a-z0-9_-]{0,63})(?:\s|$)/iu.exec(text);
+  return portfolio?.[1]?.toLowerCase();
+}
+
+function catalogSpaceSourceDigest(
+  projectId: string,
+  space: 'workroom' | 'sponsor_room',
+  configured: Readonly<{
+    adapter: string;
+    endpoint: string;
+    kind: 'group' | 'channel' | 'repository';
+    id: string;
+    agent: string;
+  }>,
+): string {
+  const binding = [
+    projectId,
+    configured.adapter,
+    configured.endpoint,
+    configured.kind,
+    configured.id,
+    configured.agent,
+  ];
+  return `sha256:${createHash('sha256').update(JSON.stringify(
+    space === 'workroom' ? binding : [projectId, space, ...binding.slice(1)],
+  )).digest('hex')}`;
+}
+
+function createSponsorProjectionControlTargetResolver(options: Readonly<{
+  projectionRepository: Pick<FileWorkroomProjectionRepository, 'read'>;
+  message: Message;
+  intent: 'control';
+}>): HumanIngressTargetResolverPort {
+  return Object.freeze({
+    async resolve(request: HumanIngressTargetResolutionRequest) {
+      const resolverRef = 'sponsor-projection-message-index:v1';
+      if (!options.message.replyTo) {
+        return Object.freeze({
+          ...request,
+          status: 'unaddressed' as const,
+          intent: options.intent,
+          resolverRef,
+          resolverDigest: digestInstallerValue({
+            resolverRef,
+            intent: options.intent,
+            status: 'unaddressed',
+          }),
+        });
+      }
+      const messageKey = workroomProjectionMessageKey({
+        conversation: options.message.conversation,
+        id: options.message.replyTo.id,
+      });
+      const state = await options.projectionRepository.read();
+      const entry = state.messageIndex[messageKey];
+      if (!entry || entry.target.projectId !== request.decision.projectId
+        || entry.bindingRevision !== request.decision.bindingRevision) {
+        const candidateRefs = entry ? [entry.projectionId] : [];
+        return Object.freeze({
+          ...request,
+          status: 'clarification_required' as const,
+          intent: options.intent,
+          resolverRef,
+          resolverDigest: digestInstallerValue({
+            resolverRef,
+            intent: options.intent,
+            status: 'clarification_required',
+            messageKey,
+            candidateRefs,
+          }),
+          reason: entry && entry.target.projectId !== request.decision.projectId
+            ? 'cross_project_target' as const
+            : 'target_not_found' as const,
+          candidateRefs: Object.freeze(candidateRefs),
+        });
+      }
+      const projectionReply = Object.freeze({
+        version: 1 as const,
+        projectionId: entry.projectionId,
+        projectId: entry.target.projectId,
+        bindingRevision: entry.bindingRevision,
+        messageKey,
+        targetDigest: digestInstallerValue(entry.target),
+      });
+      return Object.freeze({
+        ...request,
+        status: 'unaddressed' as const,
+        intent: options.intent,
+        resolverRef,
+        resolverDigest: digestInstallerValue({
+          resolverRef,
+          intent: options.intent,
+          status: 'unaddressed',
+          projectionReply,
+        }),
+        projectionReply,
+      });
+    },
+  });
+}
+
+function digestInstallerValue(value: unknown): string {
+  return `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
 }
 
 function stringMetadata(metadata: Message['metadata'], key: string): string | undefined {

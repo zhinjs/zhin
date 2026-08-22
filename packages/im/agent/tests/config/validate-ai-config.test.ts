@@ -50,6 +50,53 @@ describe('validateAiRoutingConfig', () => {
     );
   });
 
+  it('treats the persisted Sponsor Room as a distinct exact conversation authority', () => {
+    const workrooms = {
+      project: {
+        name: 'Project', sponsors: ['root:alice'],
+        members: [{ agent: 'zhin', role: 'orchestrator' }],
+        conversation: { adapter: 'telegram', endpoint: 'bot', kind: 'group', id: 'work', agent: 'zhin' },
+        sponsorConversation: { adapter: 'telegram', endpoint: 'bot', kind: 'group', id: 'sponsors', agent: 'zhin' },
+      },
+    };
+    expect(validateWorkroomDefinitions(workrooms, ['zhin'])).toEqual([]);
+    workrooms.project.sponsorConversation.id = 'work';
+    expect(validateWorkroomDefinitions(workrooms, ['zhin'])).toContain(
+      'workroomCatalog.project.sponsorConversation: conversation "telegram:bot:group:work" is already owned by enabled Workroom "project"',
+    );
+  });
+
+  it('rejects repository conversations as Sponsor Rooms', () => {
+    const project = {
+      name: 'Project', sponsors: ['root:alice'],
+      members: [{ agent: 'zhin', role: 'orchestrator' }],
+      conversation: { adapter: 'telegram', endpoint: 'bot', kind: 'group', id: 'work', agent: 'zhin' },
+      sponsorConversation: {
+        adapter: 'github', endpoint: 'app', kind: 'repository', id: 'zhinjs/zhin', agent: 'zhin',
+      },
+    };
+    expect(validateWorkroomDefinitions({ project }, ['zhin'])).toContain(
+      'workroomCatalog.project.sponsorConversation.kind: Sponsor Room must be a group or channel',
+    );
+  });
+
+  it('allows one portfolio Sponsor Room to expose Project-scoped delivery views', () => {
+    const definition = (project: string) => ({
+      name: project, sponsors: ['root:alice'],
+      members: [{ agent: 'zhin', role: 'orchestrator' }],
+      conversation: { adapter: 'telegram', endpoint: 'bot', kind: 'group', id: `work-${project}`, agent: 'zhin' },
+      sponsorConversation: { adapter: 'telegram', endpoint: 'bot', kind: 'group', id: 'portfolio-sponsors', agent: 'zhin' },
+    });
+    expect(validateWorkroomDefinitions({ alpha: definition('alpha'), beta: definition('beta') }, ['zhin']))
+      .toEqual([]);
+    expect(validateWorkroomDefinitions({
+      alpha: definition('alpha'),
+      beta: { ...definition('beta'), sponsors: ['root:bob'] },
+    }, ['zhin'])).toContain(
+      'portfolio Sponsor Room "telegram:bot:group:portfolio-sponsors" requires the same non-empty Sponsor audience for Projects "alpha,beta"',
+    );
+  });
+
   it('接受 GitHub 仓库作为 Workroom 协作空间', () => {
     const workrooms = {
         zhin: {
@@ -59,6 +106,24 @@ describe('validateAiRoutingConfig', () => {
         },
     };
     expect(validateWorkroomDefinitions(workrooms, ['zhin'])).toEqual([]);
+  });
+
+  it('校验持久 Assignment locality 与远程 endpoint 绑定', () => {
+    const workrooms = {
+      routed: {
+        name: 'Routed',
+        members: [{
+          agent: 'zhin', role: 'orchestrator',
+          assignmentRoute: { kind: 'remote', endpointId: 'a2a-prod' },
+        }],
+        conversation: { adapter: 'telegram', endpoint: 'bot', kind: 'group', id: 'route', agent: 'zhin' },
+      },
+    };
+    expect(validateWorkroomDefinitions(workrooms, ['zhin'])).toEqual([]);
+    workrooms.routed.members[0]!.assignmentRoute.endpointId = '  ';
+    expect(validateWorkroomDefinitions(workrooms, ['zhin'])).toContain(
+      'workroomCatalog.routed.members.0.assignmentRoute.endpointId: endpoint id is required',
+    );
   });
 
   it('拒绝 agents.zhin 配置 priority/match', () => {

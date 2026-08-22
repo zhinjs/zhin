@@ -3,6 +3,7 @@ import {
   type WorkroomAcceptanceRecord,
 } from './acceptance-policy.js';
 import {
+  compareCanonicalWorkroomText,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
 } from './canonical-value.js';
@@ -334,7 +335,7 @@ function normalizeSchema(
   if (new Set(keys).size !== keys.length) {
     throw new Error('Project Memory schema contains duplicate claim keys');
   }
-  rules.sort((left, right) => left.key.localeCompare(right.key));
+  rules.sort((left, right) => compareCanonicalWorkroomText(left.key, right.key));
   const projection = deepFreeze({ revision, claimRules: Object.freeze(rules) });
   return deepFreeze({ ...projection, digest: digest(projection) });
 }

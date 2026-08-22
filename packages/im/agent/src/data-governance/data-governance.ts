@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { compareCanonicalWorkroomText } from '../workroom/canonical-value.js';
 
 export type ConfidentialityClass =
   | 'public'
@@ -65,7 +66,7 @@ export function createDataCategoryRegistrySnapshot(
     throw new Error('Data Category Registry identity is invalid');
   }
   const kindFloors = Object.fromEntries(Object.entries(input.kindFloors)
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => compareCanonicalWorkroomText(left, right))
     .map(([kind, floor]) => {
       if (!isMember(kind, DATA_KINDS) || !isMember(floor, DISCLOSABLE_CONFIDENTIALITY_CLASSES)) {
         throw new Error(`Data Category Registry kind floor is invalid: ${kind}`);
@@ -73,7 +74,7 @@ export function createDataCategoryRegistrySnapshot(
       return [kind, floor];
     }));
   const categories = Object.fromEntries(Object.entries(input.categories)
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => compareCanonicalWorkroomText(left, right))
     .map(([category, rule]) => {
       if (!isNonEmpty(category) || !isRecord(rule)
         || Object.keys(rule).some(key => key !== 'confidentialityFloor')
@@ -175,7 +176,7 @@ export function createDisclosureRecipientSetSnapshot(input: Readonly<{
       ...(recipient.projectId === undefined ? {} : { projectId: recipient.projectId.trim() }),
       clearance: recipient.clearance,
     });
-  }).sort((left, right) => left.principalId.localeCompare(right.principalId));
+  }).sort((left, right) => compareCanonicalWorkroomText(left.principalId, right.principalId));
   if (new Set(recipients.map(({ principalId }) => principalId)).size !== recipients.length) {
     throw new Error('Disclosure recipient snapshot contains duplicate principal ids');
   }
@@ -265,14 +266,14 @@ export function createDataGovernancePolicySnapshot(
   input: DataGovernancePolicySnapshotInput,
 ): DataGovernancePolicySnapshot {
   const destinations = Object.fromEntries(Object.entries(input.destinations)
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => compareCanonicalWorkroomText(left, right))
     .map(([id, destination]) => {
       assertProcessingDestinationContract(destination);
       if (id !== destination.id) throw new Error('Processing Destination catalog id mismatch');
       return [id, destination];
     }));
   const transforms = Object.fromEntries(Object.entries(input.transforms)
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => compareCanonicalWorkroomText(left, right))
     .map(([id, transform]) => {
       if (id !== transform.id || !isNonEmpty(id)
         || !Array.isArray(transform.inputCategoriesAny)
@@ -686,7 +687,7 @@ function isMemberArray<T extends string>(value: unknown, members: readonly T[]):
 }
 
 function uniqueSorted<T extends string>(values: readonly T[]): T[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+  return [...new Set(values)].sort(compareCanonicalWorkroomText);
 }
 
 function canonicalDestination(
@@ -856,7 +857,7 @@ export function decideDisclosure(input: DisclosureDecisionInput): DisclosureDeci
   ));
   if (classificationBlocked || categoriesBlocked) {
     const transform = Object.values(input.policy.transforms)
-      .sort((left, right) => left.id.localeCompare(right.id))
+      .sort((left, right) => compareCanonicalWorkroomText(left.id, right.id))
       .find((candidate) => (
         candidate.allowedChannels.includes(input.context.channel)
         && candidate.inputCategoriesAny.some((category) => input.descriptor.categories.includes(category))
@@ -1011,7 +1012,7 @@ function stableSerialize(value: unknown): string {
   if (value !== null && typeof value === 'object') {
     return `{${Object.entries(value)
       .filter(([, nested]) => nested !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareCanonicalWorkroomText(left, right))
       .map(([key, nested]) => `${JSON.stringify(key)}:${stableSerialize(nested)}`)
       .join(',')}}`;
   }

@@ -9,12 +9,15 @@ export interface WorkroomBotIdentityInput {
   readonly endpoint: string;
   readonly kind: WorkroomSpaceKind;
   readonly id: string;
+  /** Required when one portfolio-level Sponsor Room serves multiple Projects. */
+  readonly projectId?: string;
 }
 
 export interface ResolvedWorkroomBotIdentity {
   readonly projectId: string;
   readonly agent: string;
   readonly role: WorkroomMemberRole;
+  readonly space: 'workroom' | 'sponsor_room';
 }
 
 /**
@@ -28,25 +31,35 @@ export function resolveWorkroomBotIdentity(
 ): ResolvedWorkroomBotIdentity | null {
   const matches = Object.entries(workrooms)
     .filter(([, workroom]) => workroom.enabled !== false)
-    .flatMap(([projectId, workroom]) => {
-      const conversation = workroom.conversation;
-      if (!conversation
-        || conversation.adapter !== input.adapter
-        || conversation.endpoint !== input.endpoint
-        || conversation.kind !== input.kind
+    .flatMap(([projectId, workroom]) => ([
+      ['workroom', workroom.conversation],
+      ['sponsor_room', workroom.sponsorConversation],
+    ] as const).flatMap(([space, conversation]) => {
+      if (!conversation || conversation.adapter !== input.adapter
+        || conversation.endpoint !== input.endpoint || conversation.kind !== input.kind
         || !sameSpaceId(conversation.kind, conversation.id, input.id)) return [];
       return [(() => {
         const member = workroom.members.find((candidate) => candidate.agent === conversation.agent);
         if (!member) {
           throw new Error(`Workroom ${projectId} conversation has no member identity`);
         }
-        return { projectId, agent: conversation.agent, role: member.role };
+        return { projectId, agent: conversation.agent, role: member.role, space };
       })()];
-    });
-  if (matches.length > 1) {
+    }));
+  const selected = input.projectId && matches.every(match => match.space === 'sponsor_room')
+    ? matches.filter(match => match.projectId === input.projectId)
+    : matches;
+  if (input.projectId && matches.length > 0
+    && matches.every(match => match.space === 'sponsor_room') && selected.length === 0) {
+    throw new Error('Portfolio Sponsor Room explicit Project id is not a member of this room');
+  }
+  if (selected.length > 1 && selected.every(match => match.space === 'sponsor_room')) {
+    throw new Error('Portfolio Sponsor Room requires an explicit Project id');
+  }
+  if (selected.length > 1) {
     throw new Error(`Conversation ${input.adapter}:${input.endpoint}:${input.kind}:${input.id} belongs to multiple enabled Workrooms`);
   }
-  const match = matches[0];
+  const match = selected[0];
   return match ? Object.freeze(match) : null;
 }
 

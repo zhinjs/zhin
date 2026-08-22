@@ -13,6 +13,7 @@ import type {
   PayloadSubjectErasureResolverPort,
 } from '../data-governance/payload-lifecycle.js';
 import type { GovernedPayloadWritePurgePort } from '../data-governance/governed-payload-write-saga.js';
+import type { WorkroomDataLifecycleConsoleAuthorityPort } from './workroom-data-lifecycle-console.js';
 import {
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -34,6 +35,8 @@ export interface WorkroomDataLifecycleRootAuthorities {
   readonly deletion: PayloadLocationDeletionPort;
   readonly receipts: PayloadPurgeReceiptAuthorityPort;
   readonly orphanPurge: GovernedPayloadWritePurgePort;
+  /** Optional authenticated human role authority; absence disables the Console lifecycle plane. */
+  readonly console?: WorkroomDataLifecycleConsoleAuthorityPort;
 }
 
 export interface WorkroomDataGovernanceRootProviderResolution {
@@ -121,7 +124,11 @@ export async function resolveWorkroomDataGovernanceRootAuthorities(options: Read
     || typeof resolved.lifecycle.deletion?.purge !== 'function'
     || typeof resolved.lifecycle.receipts?.verify !== 'function'
     || typeof resolved.lifecycle.orphanPurge?.purge !== 'function'
-    || typeof resolved.lifecycle.orphanPurge?.reconcile !== 'function')) {
+    || typeof resolved.lifecycle.orphanPurge?.reconcile !== 'function'
+    || resolved.lifecycle.console !== undefined
+      && (typeof resolved.lifecycle.console.authorize !== 'function'
+        || resolved.lifecycle.console.persistSubjectExportAudit !== undefined
+          && typeof resolved.lifecycle.console.persistSubjectExportAudit !== 'function'))) {
     throw new Error('Workroom Data Governance Root lifecycle capability is invalid');
   }
   return Object.freeze(resolved);

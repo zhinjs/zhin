@@ -14,6 +14,29 @@ afterEach(async () => {
 });
 
 describe('FileWorkroomCatalog', () => {
+  it('persists an exact local or remote Assignment route as Catalog authority', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'workroom-catalog-route-'));
+    roots.push(root);
+    const localStore = new FileWorkroomCatalog(join(root, 'local.json'));
+    const local = await localStore.replace({ project: {
+      ...definition('local'),
+      members: [{ agent: 'zhin', role: 'orchestrator', assignmentRoute: { kind: 'local' } }],
+    } }, (await localStore.read()).revision);
+    expect(local.definitions.project.members[0]?.assignmentRoute).toEqual({ kind: 'local' });
+
+    const remoteStore = new FileWorkroomCatalog(join(root, 'remote.json'));
+    const remote = await remoteStore.replace({ project: {
+      ...definition('remote'),
+      members: [{
+        agent: 'zhin', role: 'orchestrator',
+        assignmentRoute: { kind: 'remote', endpointId: 'a2a-prod' },
+      }],
+    } }, (await remoteStore.read()).revision);
+    expect(remote.definitions.project.members[0]?.assignmentRoute).toEqual({
+      kind: 'remote', endpointId: 'a2a-prod',
+    });
+    expect(remote.revision).not.toBe(local.revision);
+  });
   it('persists across instances and revision-checks replacement', async () => {
     const root = await mkdtemp(join(tmpdir(), 'workroom-catalog-'));
     roots.push(root);
@@ -26,6 +49,7 @@ describe('FileWorkroomCatalog', () => {
         members: [{ agent: 'zhin', role: 'orchestrator' as const }],
         sponsors: ['control-plane:root'],
         conversation: { adapter: 'sandbox', endpoint: 'bot', kind: 'group' as const, id: 'a', agent: 'zhin' },
+        sponsorConversation: { adapter: 'sandbox', endpoint: 'bot', kind: 'group' as const, id: 'a-sponsors', agent: 'zhin' },
       },
     };
     const saved = await first.replace(definitions, empty.revision);

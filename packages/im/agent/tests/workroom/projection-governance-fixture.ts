@@ -47,8 +47,12 @@ export function createTestProjectionGovernance(): WorkroomProjectionGovernancePo
           handle,
         },
         output: { handle, payloadHash, mode: 'full' as const, subjectLinked: false },
-        channel: 'workroom_projection' as const,
-        purpose: 'workroom_awareness' as const,
+        channel: input.sinkRuleId === 'projection:sponsor-room'
+          ? 'sponsor_projection' as const
+          : 'workroom_projection' as const,
+        purpose: input.sinkRuleId === 'projection:sponsor-room'
+          ? 'portfolio_oversight' as const
+          : 'workroom_awareness' as const,
         principal: { principalId: request.principalId },
         destination: {
           id: 'destination:test-projection', contractDigest: digest({ destination: 'test-projection' }),

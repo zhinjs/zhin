@@ -5,6 +5,7 @@ import {
 } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson as stableJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -368,7 +369,7 @@ implements RemoteExecutionLinkRegistryRepository {
 
   async listRegistered(): Promise<readonly RemoteExecutionLinkRecord[]> {
     return Object.freeze(
-      [...this.#records.values()].sort((left, right) => left.id.localeCompare(right.id)),
+      [...this.#records.values()].sort((left, right) => compareCanonicalWorkroomText(left.id, right.id)),
     );
   }
 
@@ -519,7 +520,7 @@ implements RemoteExecutionLinkRegistryRepository {
     if (records.length > 0) {
       await this.#durable.syncLeafAndParent();
     }
-    return Object.freeze(records.sort((left, right) => left.id.localeCompare(right.id)));
+    return Object.freeze(records.sort((left, right) => compareCanonicalWorkroomText(left.id, right.id)));
   }
 
   async listReconcileRequired(
@@ -561,7 +562,7 @@ async function filterReconcileRequired(
   inboxRepository: Pick<RemoteCallbackInboxRepository, 'read'>,
 ): Promise<readonly RemoteExecutionLinkRecord[]> {
   const selected: RemoteExecutionLinkRecord[] = [];
-  for (const record of [...records].sort((left, right) => left.id.localeCompare(right.id))) {
+  for (const record of [...records].sort((left, right) => compareCanonicalWorkroomText(left.id, right.id))) {
     const projection = await inboxRepository.read(record.id);
     if (!projection) continue;
     if (stableJson(projection.link) !== stableJson(record.link)) {

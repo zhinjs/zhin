@@ -62,7 +62,7 @@ implements WorkroomDataGovernanceAuthorityControlPort {
       || digestWorkroomCatalogProjectBinding(definition) !== input.catalogBindingDigest) {
       throw new Error('Data Governance publication Catalog binding is stale');
     }
-    assertProjectionAuthority(input.candidate);
+    assertProjectionAuthority(input.candidate, definition);
     assertWorkroomJournalDataGovernanceAuthority(input.candidate);
     const current = await this.options.repository.readProject(input.candidate.projectId);
     if ((!current && input.candidate.revision !== 1)
@@ -138,19 +138,40 @@ export function createFileWorkroomDataGovernanceAuthorityControl(options: Readon
   });
 }
 
-function assertProjectionAuthority(candidate: ProjectDataGovernanceAuthorityCandidate): void {
+function assertProjectionAuthority(
+  candidate: ProjectDataGovernanceAuthorityCandidate,
+  definition: import('../workroom/catalog-definition.js').WorkroomDefinition,
+): void {
   const rule = candidate.derivedPayloads.projection;
   const sink = candidate.sinks['projection:workroom'];
+  const sponsorSink = candidate.sinks['projection:sponsor-room'];
   const servicePrincipal = `service:workroom-projection:${candidate.projectId}`;
+  const sponsorServicePrincipal = `service:workroom-sponsor-projection:${candidate.projectId}`;
+  const sponsorPrincipals = new Set(definition.sponsors ?? []);
+  const sponsorRecipients = sponsorSink?.recipients.recipients.map(recipient => recipient.principalId) ?? [];
+  const sponsorProjectionInvalid = definition.sponsorConversation !== undefined && (
+    !sponsorSink
+    || sponsorSink.channel !== 'sponsor_projection'
+    || sponsorSink.purpose !== 'portfolio_oversight'
+    || sponsorSink.fixedPrincipalId !== sponsorServicePrincipal
+    || sponsorSink.principal.role !== 'projector'
+    || !sponsorSink.principal.allowedPurposes.includes('portfolio_oversight')
+    || !candidate.policy.destinations[sponsorSink.destinationId]
+    || sponsorPrincipals.size === 0
+    || sponsorRecipients.length !== sponsorPrincipals.size
+    || sponsorRecipients.some(principalId => !sponsorPrincipals.has(principalId))
+  );
   if (!rule
     || !rule.allowedPurposes.includes('workroom_awareness')
+    || !rule.allowedPurposes.includes('portfolio_oversight')
     || !sink
     || sink.channel !== 'workroom_projection'
     || sink.purpose !== 'workroom_awareness'
     || sink.fixedPrincipalId !== servicePrincipal
     || sink.principal.role !== 'projector'
     || !sink.principal.allowedPurposes.includes('workroom_awareness')
-    || !candidate.policy.destinations[sink.destinationId]) {
+    || !candidate.policy.destinations[sink.destinationId]
+    || sponsorProjectionInvalid) {
     throw new Error('Project Data Governance authority lacks exact Projection derived/sink policy');
   }
 }

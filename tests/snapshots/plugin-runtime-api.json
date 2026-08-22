@@ -50,6 +50,8 @@
     "export * from './workroom-data-governance-runtime.js';",
     "export * from './workroom-data-governance-storage.js';",
     "export * from './workroom-data-lifecycle-composition.js';",
+    "export * from './workroom-data-lifecycle-console.js';",
+    "export * from './workroom-data-lifecycle-human-ingress.js';",
     "export * from './workroom-dynamic-planning-provider.js';",
     "export * from './workroom-dynamic-planning.js';",
     "export * from './workroom-effect-composition.js';",
@@ -93,7 +95,7 @@
     "export type{AssistantRuntimeHandle}from '../assistant/runtime-contract.js';",
     "export{FileJournalStore}from '../journal/file-journal-store.js';",
     "export{capabilityToTool,toolInvocationFromTurn,toolsFromCapabilities,type GenerationStampedTool,}from './capability-tools.js';",
-    "export{createCatalogGovernedWorkroomProjectionAuthority,createWorkroomRuntime,type WorkroomProjectionReadAuthorityPort,type WorkroomRunDetail,type WorkroomRunHeader,type WorkroomRuntimeHandle,}from '../workroom/runtime.js';",
+    "export{createCatalogGovernedWorkroomProjectionAuthority,createCatalogGovernedConsoleDisclosureAuthority,createWorkroomRuntime,type WorkroomProjectionReadAuthorityPort,type WorkroomRunDetail,type WorkroomRunHeader,type WorkroomRuntimeHandle,}from '../workroom/runtime.js';",
     "export{createSessionTreeRuntimeFromAgent,type SessionTreeRuntimeHandle,}from '../session-tree-runtime.js';"
   ],
   "cli/runtime": [

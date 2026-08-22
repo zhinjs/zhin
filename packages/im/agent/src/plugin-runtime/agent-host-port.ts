@@ -15,6 +15,7 @@ import type {
 } from './workroom-profile-authority-runtime.js';
 import type {
   PortfolioSponsorCommandPort,
+  PortfolioSponsorProjectionReadPort,
 } from './workroom-portfolio-sponsor.js';
 import type {
   WorkroomEffectSponsorDecisionCommand,
@@ -24,6 +25,7 @@ import type {
   ProjectKnowledgeEntry,
   ProjectKnowledgeSnapshot,
 } from '../workroom/project-knowledge-registry.js';
+import type { WorkroomDataLifecycleConsoleControlPort } from './workroom-data-lifecycle-console.js';
 
 /**
  * Stable Host boundary for protocols that expose Agent capabilities externally.
@@ -77,10 +79,15 @@ export interface AgentHostConsolePort {
   /** Content-free Knowledge registry; identity and Sponsor authority are Host-injected. */
   readonly workroomKnowledge?: AgentHostWorkroomKnowledgeControlPort;
   /** Content-free Sponsor projection and typed commands; HTTP injects the authenticated principal. */
-  readonly portfolioSponsor?: PortfolioSponsorCommandPort;
+  readonly portfolioSponsor?: AgentHostPortfolioSponsorControlPort;
   /** Root-private Effect approval plane; HTTP injects identity and discussion has no ingress. */
   readonly effectSponsor?: AgentHostEffectSponsorControlPort;
+  /** Root-role + current P12 authorized, content-free Payload Lifecycle plane. */
+  readonly dataLifecycle?: WorkroomDataLifecycleConsoleControlPort;
 }
+
+export interface AgentHostPortfolioSponsorControlPort
+  extends Pick<PortfolioSponsorCommandPort, 'execute'>, PortfolioSponsorProjectionReadPort {}
 
 export interface AgentHostEffectSponsorControlPort {
   decide(

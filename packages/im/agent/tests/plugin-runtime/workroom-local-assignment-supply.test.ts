@@ -41,6 +41,18 @@ describe('Local Workroom Scheduler supply', () => {
       kind: 'local', agentDefinitionId: 'developer',
       authorityRef: `profile:profile-1:${sha('a')}:catalog:catalog-1`,
     });
+    await expect(route.resolve({ decision, catalog: {
+      ...catalog,
+      definitions: {
+        'project-1': {
+          enabled: true,
+          members: [{
+            role: 'executor', agent: 'developer',
+            assignmentRoute: { kind: 'remote', endpointId: 'a2a-prod' },
+          }],
+        },
+      },
+    } as never })).resolves.toBeNull();
 
     const issueLocalAssignment = vi.fn(async () => ({ envelope: { assignmentId: 'assignment-1' } }));
     const dispatch = vi.fn();

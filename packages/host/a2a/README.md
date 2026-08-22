@@ -93,7 +93,10 @@ At generation activation the Host enumerates every durable registered Link and
 replays pending observations. When `workroomRemoteExecutors` is enabled, the
 same fixed-generation transport is installed for durable dispatch and typed
 poll recovery. Endpoint id, Agent Card digest, and auth binding must match the
-persisted dispatch exactly. The optional `authority` block is required before
+persisted dispatch exactly. The persistent Workroom Catalog member must also
+declare `assignmentRoute: { "kind": "remote", "endpointId": "remote-reviewer" }`;
+this selects one endpoint even when multiple transports are enabled, while a
+missing route retains the legacy local meaning. The optional `authority` block is required before
 that endpoint can claim a new Workroom Assignment; its extension URI digest
 must match `workroomCallbacks.bindings[].extensionDigest`. Omitting it keeps
 callback/poll recovery available but makes new claim issuance fail closed.

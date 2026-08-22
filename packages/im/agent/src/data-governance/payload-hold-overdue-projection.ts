@@ -4,6 +4,7 @@ import {
 } from './payload-lifecycle.js';
 import {
   canonicalWorkroomJson,
+  compareCanonicalWorkroomText,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
 } from '../workroom/canonical-value.js';
@@ -11,6 +12,7 @@ import {
 export interface PayloadRetentionHoldProjectionState {
   readonly projectId: string;
   readonly objectId: string;
+  readonly stateSequence: number;
   readonly stateDigest: string;
   readonly holds: Readonly<Record<string, Readonly<{
     id: string;
@@ -36,6 +38,7 @@ export interface PayloadRetentionHoldOverdueSnapshot {
   readonly observedAt: number;
   readonly overdue: readonly Readonly<{
     objectId: string;
+    stateSequence: number;
     stateDigest: string;
     holdId: string;
     ownerPrincipalId: string;
@@ -77,10 +80,12 @@ export class PayloadRetentionHoldOverdueProjection {
       signal.throwIfAborted();
       const state = await this.options.source.read(project, objectId);
       assertState(state, project, objectId);
-      for (const hold of Object.values(state.holds).sort((left, right) => left.id.localeCompare(right.id))) {
+      for (const hold of Object.values(state.holds).sort((left, right) =>
+        compareCanonicalWorkroomText(left.id, right.id))) {
         if (hold.release || hold.review || clock.now <= hold.reviewAt) continue;
         overdue.push(deepFreeze({
           objectId,
+          stateSequence: state.stateSequence,
           stateDigest: state.stateDigest,
           holdId: hold.id,
           ownerPrincipalId: hold.ownerPrincipalId,
@@ -108,6 +113,7 @@ function assertState(
   objectId: string,
 ): void {
   if (state.projectId !== projectId || state.objectId !== objectId
+    || !Number.isSafeInteger(state.stateSequence) || state.stateSequence < -1
     || !/^sha256:[a-f\d]{64}$/u.test(state.stateDigest)) {
     throw new Error('Payload Hold overdue trusted state binding drift');
   }

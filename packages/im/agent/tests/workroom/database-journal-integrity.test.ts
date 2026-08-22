@@ -139,24 +139,28 @@ async function databaseFixture() {
 
 function rewriteEnvelope(
   row: Record<string, unknown>,
-  mutate: (envelope: { eventId: string; payload: unknown }) => void,
+  mutate: (envelope: { eventId: string; control: Readonly<Record<string, unknown>>; payload: unknown }) => void,
 ): void {
-  const envelope = JSON.parse(String(row.payload_json)) as { eventId: string; payload: unknown };
+  const envelope = JSON.parse(String(row.payload_json)) as {
+    eventId: string; control: Readonly<Record<string, unknown>>; payload: unknown;
+  };
   mutate(envelope);
   row.payload_json = JSON.stringify(envelope);
 }
 
 function eventDigestForRow(row: Record<string, unknown>): string {
   const envelope = JSON.parse(String(row.payload_json)) as {
-    eventId: string; payload: Readonly<Record<string, unknown>>;
+    eventId: string; control: Readonly<Record<string, unknown>>;
+    payload: Readonly<Record<string, unknown>>;
   };
   return digestStoredWorkroomEvent({
-    version: 2,
+    version: 3,
     eventId: envelope.eventId,
     runId: String(row.run_id),
     sequence: Number(row.sequence),
     occurredAt: Number(row.occurred_at),
     type: row.type as never,
+    control: envelope.control,
     payload: envelope.payload,
   });
 }

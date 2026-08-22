@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -178,7 +179,7 @@ export class MemoryOverlayPackPromotionRepository implements OverlayPackPromotio
 
   async list(projectId: string): Promise<readonly OverlayPackPromotionRecord[]> {
     return deepFreeze([...this.#records.values()].filter(record => record.projectId === projectId)
-      .sort((left, right) => left.promotionId.localeCompare(right.promotionId)));
+      .sort((left, right) => compareCanonicalWorkroomText(left.promotionId, right.promotionId)));
   }
 }
 
@@ -290,7 +291,7 @@ export class FileOverlayPackPromotionRepository implements OverlayPackPromotionR
       return canonical;
     }));
     return deepFreeze(records.filter(record => record.projectId === projectId)
-      .sort((left, right) => left.promotionId.localeCompare(right.promotionId)));
+      .sort((left, right) => compareCanonicalWorkroomText(left.promotionId, right.promotionId)));
   }
 }
 
@@ -416,8 +417,8 @@ function canonicalCommand(value: PromoteOverlayPackCommand): PromoteOverlayPackC
   if (value.sources.length === 0) throw new Error('Overlay Pack promotion authoritative source is required');
   if (value.checks.length === 0) throw new Error('Overlay Pack promotion passed check is required');
   const pack = canonicalPack(value.pack);
-  const sources = value.sources.map(canonicalProjectKnowledgeSource).sort((left, right) => left.sourceId.localeCompare(right.sourceId));
-  const checks = value.checks.map(canonicalCheck).sort((left, right) => left.id.localeCompare(right.id));
+  const sources = value.sources.map(canonicalProjectKnowledgeSource).sort((left, right) => compareCanonicalWorkroomText(left.sourceId, right.sourceId));
+  const checks = value.checks.map(canonicalCheck).sort((left, right) => compareCanonicalWorkroomText(left.id, right.id));
   if (new Set(checks.map(check => check.id)).size !== checks.length) throw new Error('Overlay Pack promotion check id is duplicated');
   return deepFreeze({
     version: 1,

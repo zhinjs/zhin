@@ -3,6 +3,7 @@ import {
   type AssignmentExecutionEnvelope,
 } from './assignment-executor.js';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson as stableJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -417,13 +418,13 @@ function canonicalSupplyProjection(
     ...input,
     tools: [...input.tools]
       .map(tool => ({ ...tool }))
-      .sort((left, right) => left.name.localeCompare(right.name)),
+      .sort((left, right) => compareCanonicalWorkroomText(left.name, right.name)),
     skills: [...input.skills]
       .map(skill => ({
         ...skill,
         requiredTools: [...skill.requiredTools].sort(),
       }))
-      .sort((left, right) => left.name.localeCompare(right.name)),
+      .sort((left, right) => compareCanonicalWorkroomText(left.name, right.name)),
   };
 }
 
@@ -457,7 +458,7 @@ function intersectDescriptors<T extends { readonly name: string }>(
   const [first, ...rest] = supplies;
   return [...(first ?? [])]
     .filter(item => rest.every(supply => supply.some(candidate => candidate.name === item.name)))
-    .sort((left, right) => left.name.localeCompare(right.name));
+    .sort((left, right) => compareCanonicalWorkroomText(left.name, right.name));
 }
 
 function command(

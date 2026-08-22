@@ -1,6 +1,7 @@
 import { createToken } from '@zhin.js/plugin-runtime';
 import type { WorkroomCatalogSnapshot } from '../workroom/catalog.js';
 import type { ProjectProfileRegistry } from '../workroom/profile-registry.js';
+import { compareCanonicalWorkroomText } from '../workroom/canonical-value.js';
 import { parseWorkroomDispatchTaskDecision } from '../workroom/workroom-scheduler.js';
 import type {
   WorkroomSchedulerAssignmentRoute,
@@ -74,7 +75,7 @@ implements WorkroomSchedulerAssignmentRoutePort {
 
     const candidates: WorkroomSchedulerAssignmentRoute[] = [];
     for (const provider of [...this.#providers.values()]
-      .sort((left, right) => left.providerId.localeCompare(right.providerId))) {
+      .sort((left, right) => compareCanonicalWorkroomText(left.providerId, right.providerId))) {
       this.options.signal.throwIfAborted();
       let candidate: WorkroomSchedulerAssignmentRoute | null;
       try {
@@ -87,6 +88,7 @@ implements WorkroomSchedulerAssignmentRoutePort {
       const catalogMatches = definition.members.filter(member =>
         member.role === decision.role && member.agent === route.agentDefinitionId);
       if (catalogMatches.length !== 1 || !pinnedAgentIds.has(route.agentDefinitionId)) return null;
+      if (!matchesPersistedRoute(catalogMatches[0]!.assignmentRoute, route)) continue;
       candidates.push(route);
     }
     return candidates.length === 1 ? candidates[0]! : null;
@@ -107,6 +109,14 @@ implements WorkroomSchedulerAssignmentRoutePort {
       .map(agent => agent.id);
     return new Set(ids);
   }
+}
+
+function matchesPersistedRoute(
+  authority: WorkroomCatalogSnapshot['definitions'][string]['members'][number]['assignmentRoute'],
+  route: WorkroomSchedulerAssignmentRoute,
+): boolean {
+  if (!authority || authority.kind === 'local') return route.kind === 'local';
+  return route.kind === 'remote' && route.endpointId === authority.endpointId;
 }
 
 function parseRoute(value: WorkroomSchedulerAssignmentRoute): WorkroomSchedulerAssignmentRoute {

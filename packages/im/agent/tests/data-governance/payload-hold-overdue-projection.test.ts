@@ -23,7 +23,7 @@ describe('Payload Retention Hold overdue projection', () => {
     const snapshot = await projection.project('project-1', signal());
     expect(snapshot).toMatchObject({
       version: 1, projectId: 'project-1', clockRevision: 7,
-      overdue: [{ objectId: 'object:active', holdId: 'hold:active', reviewAt: 50 }],
+      overdue: [{ objectId: 'object:active', stateSequence: 4, holdId: 'hold:active', reviewAt: 50 }],
     });
     expect(JSON.stringify(snapshot)).not.toContain('payload body');
     const { digest: _digest, ...body } = snapshot;
@@ -55,7 +55,7 @@ function state(
     } } : {}),
   };
   return {
-    projectId: 'project-1', objectId, stateDigest: sha(objectId),
+    projectId: 'project-1', objectId, stateSequence: 4, stateDigest: sha(objectId),
     holds: { [input.holdId]: hold },
   };
 }

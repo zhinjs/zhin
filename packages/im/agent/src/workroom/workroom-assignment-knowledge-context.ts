@@ -1,4 +1,5 @@
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -110,7 +111,7 @@ export class WorkroomAssignmentKnowledgeContextProjector {
         throw new Error(`Assignment Knowledge ${kind} ${definition.id} is unavailable or stale`);
       }
       return knowledgeHandle(entry);
-    }).sort((left, right) => `${left.kind}:${left.knowledgeId}`.localeCompare(`${right.kind}:${right.knowledgeId}`));
+    }).sort((left, right) => compareCanonicalWorkroomText(`${left.kind}:${left.knowledgeId}`, `${right.kind}:${right.knowledgeId}`));
     const body = deepFreeze({
       version: 1 as const,
       projectId: request.projectId,

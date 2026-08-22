@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import {
   DisposeStack,
   GenerationHandoffStack,
@@ -19,7 +20,10 @@ import {
   workroomAssignmentAuthorityGrantRepositoryToken,
   workroomAssignmentGrantClaimPreviewToken,
 } from '@zhin.js/agent/runtime';
-import { MemoryAssignmentAuthorityGrantRepository } from '@zhin.js/agent';
+import {
+  MemoryAssignmentAuthorityGrantRepository,
+  WORKROOM_A2A_EXTENSION_URI,
+} from '@zhin.js/agent';
 import type { RootResourceContext } from '@zhin.js/runtime';
 import { installProtocolHosts } from '../../src/plugin-runtime/protocol-host-installer.js';
 
@@ -121,7 +125,7 @@ describe('Protocol Host composition', () => {
               cardDigest: digest('card'),
               authBindingId: 'auth-1',
               trustDomain: 'remote.example',
-              extensionDigest: digest('extension'),
+              extensionDigest: extensionDigest(),
               credentialId: 'credential-1',
               credential: { source: 'config', value: 'callback-secret' },
               enabled: true,
@@ -136,6 +140,12 @@ describe('Protocol Host composition', () => {
               dispatchUrl: 'https://remote.example/workroom-a2a/dispatch',
               pollUrl: 'https://remote.example/workroom-a2a/poll',
               credential: { source: 'config', value: 'remote-secret' },
+              authority: {
+                workroomExtension: WORKROOM_A2A_EXTENSION_URI,
+                idempotentDispatch: true,
+                typedCompletionEnvelope: true,
+                workspaceProviders: ['workspace://remote'],
+              },
               enabled: true,
             }],
           },
@@ -181,6 +191,21 @@ describe('Protocol Host composition', () => {
           },
         },
       })).resolves.toBeNull();
+      await expect(provider.resolve({
+        decision: { projectId: 'project-1', role: 'executor' },
+        catalog: {
+          definitions: {
+            'project-1': {
+              members: [{
+                agent: 'developer', role: 'executor',
+                assignmentRoute: { kind: 'remote', endpointId: 'endpoint-1' },
+              }],
+            },
+          },
+        },
+      })).resolves.toEqual(expect.objectContaining({
+        kind: 'remote', agentDefinitionId: 'developer', endpointId: 'endpoint-1',
+      }));
     }
     if (hasRemoteAuthority) {
       const request = {
@@ -210,4 +235,8 @@ describe('Protocol Host composition', () => {
 
 function digest(seed: string): string {
   return `sha256:${(seed === 'card' ? 'a' : 'b').repeat(64)}`;
+}
+
+function extensionDigest(): string {
+  return `sha256:${createHash('sha256').update(WORKROOM_A2A_EXTENSION_URI).digest('hex')}`;
 }

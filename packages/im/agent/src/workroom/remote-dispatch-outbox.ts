@@ -9,6 +9,7 @@ import {
 } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson as stableJson,
   deepFreezeWorkroomValue as deepFreeze,
 } from './canonical-value.js';
@@ -259,7 +260,7 @@ implements WorkroomRemoteDispatchOutboxRepository {
       .map(events => project(events))
       .filter((entry): entry is WorkroomRemoteDispatchOutboxProjection =>
         entry !== undefined && isRunnable(entry, trustedNow))
-      .sort((left, right) => left.dispatchId.localeCompare(right.dispatchId)));
+      .sort((left, right) => compareCanonicalWorkroomText(left.dispatchId, right.dispatchId)));
   }
 
   async listGovernanceBlocked(input: Readonly<{
@@ -373,7 +374,7 @@ implements WorkroomRemoteDispatchOutboxRepository {
       }
     }
     return [...byDispatch.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareCanonicalWorkroomText(left, right))
       .map(([, events]) => project(events.sort((left, right) => left.sequence - right.sequence)))
       .filter((entry): entry is WorkroomRemoteDispatchOutboxProjection => entry !== undefined);
   }
@@ -930,7 +931,7 @@ function compareBlockedDispatch(
 ): number {
   return right.item.envelope.attempt - left.item.envelope.attempt
     || right.item.envelope.fence - left.item.envelope.fence
-    || left.dispatchId.localeCompare(right.dispatchId);
+    || compareCanonicalWorkroomText(left.dispatchId, right.dispatchId);
 }
 
 function assertDeterministicEventId(event: WorkroomRemoteDispatchOutboxEvent): void {

@@ -21,6 +21,7 @@ import {
 import { FilePayloadLifecycleRepository } from '../data-governance/file-payload-lifecycle-repository.js';
 import { join } from 'node:path';
 import {
+  compareCanonicalWorkroomText,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
 } from '../workroom/canonical-value.js';
@@ -237,7 +238,7 @@ async function lifecycleStreams(
     }
   }
   return deepFreeze(streams.sort((left, right) =>
-    left.projectId.localeCompare(right.projectId) || left.objectId.localeCompare(right.objectId)));
+    compareCanonicalWorkroomText(left.projectId, right.projectId) || compareCanonicalWorkroomText(left.objectId, right.objectId)));
 }
 
 function required(value: string, field: string): string {

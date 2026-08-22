@@ -45,6 +45,11 @@ describe('generation-owned Workroom Assignment authority provider', () => {
     await expect(fixture.provider.resolve(fixture.input)).rejects.toThrow('generation Agent');
   });
 
+  it('fails closed when the requested endpoint differs from the persisted Catalog route', async () => {
+    const fixture = await createFixture({ catalogEndpointId: 'remote-other' });
+    await expect(fixture.provider.resolve(fixture.input)).rejects.toThrow('persisted Catalog route');
+  });
+
   it.each([
     ['grant', { omitGrant: true }, 'issuance grant'],
     ['endpoint', { omitEndpoint: true }, 'endpoint authority'],
@@ -63,6 +68,7 @@ interface FixtureOptions {
   omitEndpoint?: boolean;
   omitDisclosure?: boolean;
   omitWorkspace?: boolean;
+  catalogEndpointId?: string;
 }
 
 async function createFixture(options: FixtureOptions = {}) {
@@ -128,7 +134,13 @@ async function createFixture(options: FixtureOptions = {}) {
         name: 'Project One', enabled: true,
         members: Object.freeze([
           Object.freeze({ agent: 'orchestrator', role: 'orchestrator' as const }),
-          Object.freeze({ agent: 'developer', role: 'executor' as const }),
+          Object.freeze({
+            agent: 'developer', role: 'executor' as const,
+            assignmentRoute: Object.freeze({
+              kind: 'remote' as const,
+              endpointId: options.catalogEndpointId ?? 'remote-dev',
+            }),
+          }),
         ]),
         conversation: Object.freeze({
           adapter: 'github', endpoint: 'github-main', kind: 'repository' as const,

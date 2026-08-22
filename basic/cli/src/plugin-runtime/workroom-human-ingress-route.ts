@@ -29,9 +29,14 @@ export interface CatalogWorkroomSpaceInput {
   readonly space: Exclude<InteractionSpace, 'chat'>;
   readonly sourceRef: string;
   readonly sourceDigest: string;
+  readonly bindingRevision?: number;
 }
 
 export type CatalogWorkroomSpace = Readonly<CatalogWorkroomSpaceInput>;
+export type CatalogWorkroomSpaceResolution = CatalogWorkroomSpace | Readonly<{
+  status: 'rejected';
+  reason: 'project_required' | 'project_conflict' | 'binding_unavailable' | 'stale_binding';
+}> | null;
 
 export interface WorkroomHumanIngressPreRouteOptions {
   readonly bindings: InteractionSpaceBindingRepository;
@@ -40,12 +45,13 @@ export interface WorkroomHumanIngressPreRouteOptions {
   readonly application: Pick<HumanIngressApplicationService, 'drain'>;
   /** Required by production composition; omitted only by isolated contract embedders. */
   readonly sourceEvents?: ConversationEventStore | (() => ConversationEventStore);
-  readonly resolveCatalogSpace: (message: Message) => CatalogWorkroomSpace | null | Promise<CatalogWorkroomSpace | null>;
+  readonly resolveCatalogSpace: (message: Message) => CatalogWorkroomSpaceResolution | Promise<CatalogWorkroomSpaceResolution>;
   readonly resolveIntent?: (message: Message) => HumanIngressIntent;
   readonly createTargetResolver?: (
     message: Message,
     intent: HumanIngressIntent,
-  ) => HumanIngressTargetResolverPort;
+    decision: HumanIngressSpaceDecision,
+  ) => HumanIngressTargetResolverPort | undefined;
   readonly onWorkroomResolved?: (
     message: Message,
     decision: HumanIngressSpaceDecision & Readonly<{ space: 'workroom' }>,
@@ -64,8 +70,35 @@ export class WorkroomHumanIngressPreRoute {
   constructor(readonly options: WorkroomHumanIngressPreRouteOptions) {}
 
   async preRoute(message: Message, conversationSequence: number | undefined): Promise<boolean> {
-    const configured = await this.options.resolveCatalogSpace(message);
+    const resolution = await this.options.resolveCatalogSpace(message);
+    if (resolution && 'status' in resolution) {
+      await message.$reply(resolution.reason === 'project_conflict'
+        ? 'Sponsor Room 的显式 Project 与回复卡片不一致；请确认目标 Project 后重试。'
+        : resolution.reason === 'stale_binding'
+          ? '这张 Sponsor Room 卡片已经过期；请回复当前 Project 卡片后重试。'
+          : resolution.reason === 'binding_unavailable'
+            ? 'Sponsor Room 当前 Endpoint 尚不可用；请稍后重试。'
+            : '这个 Sponsor Room 服务多个 Project；请显式指定 Project，或回复对应 Project 卡片。');
+      return true;
+    }
+    const configured = resolution;
     const conversationKey = conversationRefKey(message.conversation);
+    if (configured?.space === 'sponsor_room') {
+      if (!Number.isSafeInteger(conversationSequence) || (conversationSequence as number) <= 0) {
+        throw new Error('Workroom human ingress requires a durable conversation sequence');
+      }
+      const sequence = conversationSequence as number;
+      return await this.#propose(message, sequence, Object.freeze({
+        status: 'resolved' as const,
+        conversationKey,
+        conversationSequence: sequence,
+        source: 'binding' as const,
+        space: 'sponsor_room' as const,
+        bindingRevision: configured.bindingRevision ?? 1,
+        bindingDigest: configured.sourceDigest,
+        projectId: configured.projectId,
+      }), configured);
+    }
     const history = await this.options.bindings.read(conversationKey);
     const active = history.at(-1);
     if (!configured && !active) return false;
@@ -103,6 +136,17 @@ export class WorkroomHumanIngressPreRoute {
         Object.freeze({ ...decision, space: boundSpace, projectId: decision.projectId }),
       );
     }
+    return await this.#propose(message, sequence, Object.freeze({
+      ...decision, space: boundSpace, projectId: decision.projectId,
+    }), configured);
+  }
+
+  async #propose(
+    message: Message,
+    sequence: number,
+    decision: HumanIngressSpaceDecision,
+    configured: CatalogWorkroomSpace | null,
+  ): Promise<boolean> {
     if (!message.message || !message.sender?.id) {
       throw new Error('Workroom human ingress requires durable message and human principal identity');
     }
@@ -125,7 +169,7 @@ export class WorkroomHumanIngressPreRoute {
     }
 
     const input = Object.freeze({
-      decision: Object.freeze({ ...decision, space: boundSpace, projectId: decision.projectId }),
+      decision,
       sourceEvent: Object.freeze({
         version: 1 as const,
         ref: humanIngressConversationEventRef(sourceEvent.event),
@@ -144,7 +188,7 @@ export class WorkroomHumanIngressPreRoute {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const service = new HumanIngressProposalService(
         this.options.proposals,
-        this.options.createTargetResolver?.(message, intent) ?? {
+        this.options.createTargetResolver?.(message, intent, decision) ?? {
         resolve: request => Object.freeze({
           ...request,
           status: 'unaddressed' as const,

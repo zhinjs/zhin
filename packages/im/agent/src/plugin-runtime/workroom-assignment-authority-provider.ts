@@ -6,6 +6,7 @@ import type { GovernedDisclosureManifestSnapshot } from '../data-governance/disc
 import type { WorkroomCatalog, WorkroomCatalogSnapshot } from '../workroom/catalog.js';
 import type { WorkroomDefinition } from '../workroom/catalog-definition.js';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -292,6 +293,14 @@ implements WorkroomRemoteAssignmentAuthorityPort, WorkroomLocalAssignmentAuthori
     if (!member || (member.role !== 'executor' && member.role !== 'integration')) {
       throw new Error('Remote Assignment Agent role is not authorized by the Project Catalog');
     }
+    if (requestedEndpointId === undefined) {
+      if (member.assignmentRoute?.kind === 'remote') {
+        throw new Error('Local Assignment conflicts with the persisted remote Catalog route');
+      }
+    } else if (member.assignmentRoute?.kind !== 'remote'
+      || member.assignmentRoute.endpointId !== requestedEndpointId) {
+      throw new Error('Remote Assignment endpoint conflicts with the persisted Catalog route');
+    }
     const profileAgent = revision.compiledProfile.agents.find(
       item => item.id === input.requestedAgentDefinitionId,
     );
@@ -427,7 +436,7 @@ export function createWorkroomGenerationAuthoritySnapshotFromRuntime(
         name: binding.name,
         providerAlias: binding.providerAlias,
         model: binding.model,
-        mcpServers: [...binding.mcpServers].sort((left, right) => left.localeCompare(right)),
+        mcpServers: [...binding.mcpServers].sort((left, right) => compareCanonicalWorkroomText(left, right)),
         ...(binding.nickname === undefined ? {} : { nickname: binding.nickname }),
         ...(binding.permission === undefined ? {} : { permission: binding.permission }),
       }),
@@ -728,7 +737,7 @@ function canonicalTools(value: readonly WorkroomRoleToolDescriptor[], label: str
   const result = value.map(item => {
     text(item.name, `${label}.name`); sha(item.digest, `${label}.${item.name}.digest`);
     return { name: item.name, digest: item.digest, ...(item.deferred === undefined ? {} : { deferred: item.deferred }) };
-  }).sort((left, right) => left.name.localeCompare(right.name));
+  }).sort((left, right) => compareCanonicalWorkroomText(left.name, right.name));
   uniqueNames(result, label);
   return Object.freeze(result);
 }
@@ -742,7 +751,7 @@ function canonicalSkills(value: readonly WorkroomRoleSkillDescriptor[], label: s
       name: item.name, digest: item.digest, requiredTools,
       ...(item.deferred === undefined ? {} : { deferred: item.deferred }),
     };
-  }).sort((left, right) => left.name.localeCompare(right.name));
+  }).sort((left, right) => compareCanonicalWorkroomText(left.name, right.name));
   uniqueNames(result, label);
   return Object.freeze(result);
 }
@@ -755,7 +764,7 @@ function canonicalGenerationSkills(
   const result = value.map(item => {
     text(item.name, `${label}.name`); sha(item.digest, `${label}.${item.name}.digest`);
     return { name: item.name, digest: item.digest };
-  }).sort((left, right) => left.name.localeCompare(right.name));
+  }).sort((left, right) => compareCanonicalWorkroomText(left.name, right.name));
   uniqueNames(result, label);
   return Object.freeze(result);
 }
@@ -805,7 +814,7 @@ function canonicalAgents(value: readonly WorkroomGenerationAgentAuthority[]) {
   const result = value.map(item => {
     text(item.id, 'generation agent id'); sha(item.digest, `generation agent ${item.id} digest`);
     return { id: item.id, digest: item.digest };
-  }).sort((left, right) => left.id.localeCompare(right.id));
+  }).sort((left, right) => compareCanonicalWorkroomText(left.id, right.id));
   const names = result.map(item => ({ name: item.id }));
   uniqueNames(names, 'generation agents');
   return Object.freeze(result);
@@ -814,7 +823,7 @@ function canonicalAgents(value: readonly WorkroomGenerationAgentAuthority[]) {
 function canonicalNames(value: readonly string[], label: string): readonly string[] {
   if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
   value.forEach(item => text(item, label));
-  const names = [...new Set(value)].sort((left, right) => left.localeCompare(right));
+  const names = [...new Set(value)].sort((left, right) => compareCanonicalWorkroomText(left, right));
   if (names.length !== value.length) throw new Error(`${label} contains duplicate values`);
   return Object.freeze(names);
 }

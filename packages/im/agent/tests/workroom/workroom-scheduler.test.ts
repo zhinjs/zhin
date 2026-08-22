@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createWorkroomSchedulerPolicySnapshot,
   decideWorkroomSchedule,
@@ -56,6 +56,23 @@ describe('Workroom Scheduler', () => {
       task('ranked', 3, { sponsorLane: 'normal', localRank: 20, enqueuedAt: 200 }),
     ]);
     expect(decideWorkroomSchedule(events)).toMatchObject({ taskKey: 'ranked' });
+  });
+
+  it('selects the same Unicode preemption victim under different host locales', () => {
+    const events = journal(schedulerPolicy({ capacity: 2 }), [
+      task('zeta', 2, { sponsorLane: 'low' }),
+      task('äther', 3, { sponsorLane: 'low' }),
+      task('urgent', 4, { sponsorLane: 'urgent' }),
+      assignmentClaimed(5, 'zeta', 'assignment-zeta'),
+      event(6, 'assignment.started', { assignmentId: 'assignment-zeta' }),
+      assignmentClaimed(7, 'äther', 'assignment-unicode'),
+      event(8, 'assignment.started', { assignmentId: 'assignment-unicode' }),
+    ]);
+    const codeUnitLocale = decideWithLocale(events, (left, right) => left < right ? -1 : left > right ? 1 : 0);
+    const reverseLocale = decideWithLocale(events, (left, right) => left < right ? 1 : left > right ? -1 : 0);
+
+    expect(codeUnitLocale).toMatchObject({ type: 'prepare_preemption', victimTaskKey: 'zeta' });
+    expect(reverseLocale).toEqual(codeUnitLocale);
   });
 
   it('automatically advances a dependent Task only after the dependency is accepted', () => {
@@ -130,6 +147,21 @@ describe('Workroom Scheduler', () => {
     })).toMatchObject({ requestedLane: 'normal', localRank: 51, authority: 'orchestrator' });
   });
 });
+
+function decideWithLocale(
+  events: readonly WorkroomEvent[],
+  compare: (left: string, right: string) => number,
+) {
+  const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
+    .mockImplementation(function (this: string, right: string) {
+      return compare(String(this), right);
+    });
+  try {
+    return decideWorkroomSchedule(events);
+  } finally {
+    localeCompare.mockRestore();
+  }
+}
 
 function schedulerPolicy(
   override: Partial<Omit<Parameters<typeof createWorkroomSchedulerPolicySnapshot>[0], 'policyRef' | 'revision' | 'pinnedAtSequence'>> = {},

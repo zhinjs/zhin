@@ -1,12 +1,18 @@
 import { createHash } from 'node:crypto';
 
+/** Locale-independent UTF-16 code-unit order for authoritative identities. */
+export function compareCanonicalWorkroomText(left: string, right: string): number {
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
+
 /** Canonical representation used by immutable Workroom domain records. */
 export function canonicalWorkroomJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalWorkroomJson).join(',')}]`;
   if (value && typeof value === 'object') {
     const record = value as Record<string, unknown>;
     return `{${Object.keys(record)
-      .sort()
+      .sort(compareCanonicalWorkroomText)
       .map((key) => `${JSON.stringify(key)}:${canonicalWorkroomJson(record[key])}`)
       .join(',')}}`;
   }

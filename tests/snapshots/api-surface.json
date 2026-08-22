@@ -140,7 +140,7 @@
     "export type{TurnEvent,TurnUsage,TurnStartEvent,ChunkEvent,CapabilityResolutionEvent,IterationStartEvent,ToolCallEvent as TurnToolCallEvent,ToolResultEvent,ThinkingEvent,TurnEndEvent,TurnErrorEvent,TurnBudgetExceededEvent,SubagentStartEvent,SubagentProgressEvent,SubagentEndEvent,McpConnectEvent,McpToolCallEvent,}from './event/turn-event.js';",
     "export type{TurnEventObserver,TurnEventSource}from './turn/execute-agent-turn.js';",
     "export type{TypingIndicatorType,TypingIndicatorConfig,TypingIndicatorOptions,TypingIndicator,TypingIndicatorAdapter,}from './typing-indicator/index.js';",
-    "export type{WorkroomMemberRole,WorkroomSpaceKind,WorkroomAgentMemberDefinition,WorkroomConversationBindingDefinition,WorkroomDefinition,WorkroomAgentMemberConfig,WorkroomConversationBindingConfig,WorkroomDefinitionConfig,}from './workroom/catalog-definition.js';",
+    "export type{WorkroomMemberRole,WorkroomAssignmentRouteDefinition,WorkroomSpaceKind,WorkroomAgentMemberDefinition,WorkroomConversationBindingDefinition,WorkroomDefinition,WorkroomAgentMemberConfig,WorkroomConversationBindingConfig,WorkroomDefinitionConfig,}from './workroom/catalog-definition.js';",
     "export type{WorkspacePromptRole}from './prompt/workspace-prompt.js';",
     "export type{ZhinAgentConfig,OnChunkCallback,}from './config/index.js';",
     "export{AGENT_ROLE_CONFIGS}from './resource-hub/role-configs.js';",

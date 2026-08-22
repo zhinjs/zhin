@@ -797,6 +797,7 @@ export class ImRuntime implements MessageGateway {
 
   /** Console `endpoint.list` — empty until Adapter Feature projection is ready. */
   listEndpoints(): readonly {
+    readonly id: string;
     readonly name: string;
     readonly adapter: string;
     readonly owner: string;
@@ -809,6 +810,7 @@ export class ImRuntime implements MessageGateway {
       const lease = this.#acquire();
       try {
         return requireAdapters(lease.value).describe().map((row) => Object.freeze({
+          id: String(row.id),
           name: row.name,
           // adapter 列显示平台类型（owner 包名去 scope/adapter- 前缀），不是 slot localName
           adapter: adapterTypeName(lease.value.tree.get(row.owner)?.packageName) ?? row.name,

@@ -18,6 +18,11 @@ describe('trusted Project Data Governance authority writer', () => {
     const definition = {
       name: 'Software', enabled: true,
       members: [{ agent: 'orchestrator', role: 'orchestrator' as const }],
+      sponsors: ['principal:sponsor'],
+      sponsorConversation: {
+        adapter: 'slack', endpoint: 'main', kind: 'channel' as const,
+        id: 'project-1-sponsors', agent: 'orchestrator',
+      },
     };
     const candidate = projectionCandidate();
     let stored: ProjectDataGovernanceAuthority | undefined;
@@ -43,6 +48,22 @@ describe('trusted Project Data Governance authority writer', () => {
       decisions: { authorize },
     });
 
+    await expect(writer.publish({
+      catalogRevision: 'catalog:1',
+      catalogBindingDigest: digestWorkroomCatalogProjectBinding(definition),
+      candidate: {
+        ...candidate,
+        sinks: {
+          ...candidate.sinks,
+          'projection:sponsor-room': {
+            ...candidate.sinks['projection:sponsor-room']!,
+            channel: 'workroom_projection',
+          },
+        },
+      },
+    }, new AbortController().signal)).rejects.toThrow('Projection derived/sink');
+    expect(authorize).not.toHaveBeenCalled();
+
     const result = await writer.publish({
       catalogRevision: 'catalog:1',
       catalogBindingDigest: digestWorkroomCatalogProjectBinding(definition),
@@ -53,13 +74,18 @@ describe('trusted Project Data Governance authority writer', () => {
       channel: 'workroom_projection', purpose: 'workroom_awareness',
       fixedPrincipalId: 'service:workroom-projection:project-1',
     });
+    expect(result.sinks['projection:sponsor-room']).toMatchObject({
+      channel: 'sponsor_projection', purpose: 'portfolio_oversight',
+      fixedPrincipalId: 'service:workroom-sponsor-projection:project-1',
+      recipients: { recipients: [{ principalId: 'principal:sponsor' }] },
+    });
     expect(authorize).toHaveBeenCalledWith(expect.objectContaining({
       candidateDigest: digest(candidate), catalogRevision: 'catalog:1',
     }), expect.any(AbortSignal));
   });
 
   it('rejects stale Catalog binding, missing Projection authority and forged decision echo', async () => {
-    const definition = { name: 'Software', members: [{ agent: 'o', role: 'orchestrator' as const }] };
+    const definition = { name: 'Software', members: [{ agent: 'o', role: 'orchestrator' as const }], sponsors: ['principal:sponsor'] };
     const authorize = vi.fn(async () => null);
     const writer = new WorkroomDataGovernanceAuthorityWriter({
       catalog: { read: async () => ({ revision: 'catalog:1', definitions: { 'project-1': definition } }) },
@@ -97,7 +123,7 @@ describe('trusted Project Data Governance authority writer', () => {
   });
 
   it('rejects a trusted decision whose persisted Catalog authority echo is forged', async () => {
-    const definition = { name: 'Software', members: [{ agent: 'o', role: 'orchestrator' as const }] };
+    const definition = { name: 'Software', members: [{ agent: 'o', role: 'orchestrator' as const }], sponsors: ['principal:sponsor'] };
     const writer = new WorkroomDataGovernanceAuthorityWriter({
       catalog: { read: async () => ({ revision: 'catalog:1', definitions: { 'project-1': definition } }) },
       repository: {
@@ -135,6 +161,10 @@ function projectionCandidate(): ProjectDataGovernanceAuthorityCandidate {
         principalId: 'service:workroom-kernel:project-1', tenantId: 'tenant-1', projectId: 'project-1',
         clearance: 'confidential',
       },
+      {
+        principalId: 'principal:sponsor', tenantId: 'tenant-1', projectId: 'project-1',
+        clearance: 'confidential',
+      },
     ],
   });
   const destination = createProcessingDestinationContract({
@@ -146,6 +176,23 @@ function projectionCandidate(): ProjectDataGovernanceAuthorityCandidate {
     allowsRedisclosure: false, supportsDeletion: true,
     recipientSnapshotRevision: recipients.revision, recipientSnapshotDigest: recipients.digest,
   });
+  const sponsorRecipients = createDisclosureRecipientSetSnapshot({
+    revision: 1,
+    recipients: [{
+      principalId: 'principal:sponsor', tenantId: 'tenant-1', projectId: 'project-1',
+      clearance: 'confidential',
+    }],
+  });
+  const sponsorDestination = createProcessingDestinationContract({
+    id: 'destination:sponsor-room', owner: 'owner:workroom', endpoint: 'im://project-1/sponsors',
+    tenantId: 'tenant-1', projectId: 'project-1', trustDomain: 'trust:workroom',
+    processingRegions: ['ap-southeast-1'], maxConfidentiality: 'confidential',
+    allowedCategories: ['customer_content'], external: false, noTraining: true,
+    loggingMode: 'metadata_only', maximumRetentionSeconds: 86_400,
+    allowsRedisclosure: false, supportsDeletion: true,
+    recipientSnapshotRevision: sponsorRecipients.revision,
+    recipientSnapshotDigest: sponsorRecipients.digest,
+  });
   const categoryRegistry = createDataCategoryRegistrySnapshot({
     id: 'registry:tenant-1', revision: 1, tenantId: 'tenant-1',
     kindFloors: {
@@ -156,7 +203,7 @@ function projectionCandidate(): ProjectDataGovernanceAuthorityCandidate {
   });
   const policy = createDataGovernancePolicySnapshot({
     id: 'policy:project-1', revision: 1, tenantId: 'tenant-1', projectId: 'project-1',
-    destinations: { [destination.id]: destination },
+    destinations: { [destination.id]: destination, [sponsorDestination.id]: sponsorDestination },
     channelCeilings: {
       context_view: 'confidential', evidence_port: 'confidential',
       workroom_projection: 'confidential', sponsor_projection: 'confidential',
@@ -166,7 +213,9 @@ function projectionCandidate(): ProjectDataGovernanceAuthorityCandidate {
   });
   const derivedRule = {
     proposedConfidentiality: 'confidential' as const,
-    categories: ['customer_content'], allowedPurposes: ['workroom_awareness' as const],
+    categories: ['customer_content'], allowedPurposes: [
+      'workroom_awareness' as const, 'portfolio_oversight' as const,
+    ],
     allowedRegions: ['ap-southeast-1'], retentionClass: 'operational' as const,
     minimumRetentionMs: 0, maximumRetentionMs: 86_400_000,
   };
@@ -187,6 +236,14 @@ function projectionCandidate(): ProjectDataGovernanceAuthorityCandidate {
         fixedPrincipalId: 'service:workroom-projection:project-1', recipients,
         principal: {
           role: 'projector', clearance: 'confidential', allowedPurposes: ['workroom_awareness'],
+        },
+        requestedMode: 'full',
+      },
+      'projection:sponsor-room': {
+        destinationId: sponsorDestination.id, channel: 'sponsor_projection', purpose: 'portfolio_oversight',
+        fixedPrincipalId: 'service:workroom-sponsor-projection:project-1', recipients: sponsorRecipients,
+        principal: {
+          role: 'projector', clearance: 'confidential', allowedPurposes: ['portfolio_oversight'],
         },
         requestedMode: 'full',
       },

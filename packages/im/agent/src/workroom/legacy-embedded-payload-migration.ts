@@ -2,6 +2,7 @@ import type { Dirent } from 'node:fs';
 import { lstat, readFile, readdir } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import {
+  compareCanonicalWorkroomText,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
 } from './canonical-value.js';
@@ -278,7 +279,7 @@ function detect(value: unknown, sourceKind: LegacyEmbeddedPayloadSourceKind): Re
 function isLegacyJournalSchema(value: unknown): boolean {
   return Array.isArray(value)
     || (!!value && typeof value === 'object' && !Array.isArray(value)
-      && (value as Record<string, unknown>).version === 1);
+      && (value as Record<string, unknown>).version !== 3);
 }
 
 function isGovernedJournalReference(value: unknown): boolean {
@@ -361,8 +362,10 @@ async function directoryFiles(
 function canonicalRecords(
   values: readonly LegacyEmbeddedPayloadRecord[],
 ): readonly LegacyEmbeddedPayloadRecord[] {
-  const records = [...values].sort((left, right) => `${left.sourceKind}:${left.recordRef}`
-    .localeCompare(`${right.sourceKind}:${right.recordRef}`));
+  const records = [...values].sort((left, right) => compareCanonicalWorkroomText(
+    `${left.sourceKind}:${left.recordRef}`,
+    `${right.sourceKind}:${right.recordRef}`,
+  ));
   const identities = records.map(record => `${record.storage}:${record.sourceKind}:${record.recordRef}`);
   if (new Set(identities).size !== identities.length) {
     throw new Error('Legacy embedded payload adapter contains duplicate record identity');
@@ -371,7 +374,10 @@ function canonicalRecords(
 }
 
 function compareFindings(left: LegacyEmbeddedPayloadFinding, right: LegacyEmbeddedPayloadFinding): number {
-  return `${left.sourceKind}:${left.recordRef}`.localeCompare(`${right.sourceKind}:${right.recordRef}`);
+  return compareCanonicalWorkroomText(
+    `${left.sourceKind}:${left.recordRef}`,
+    `${right.sourceKind}:${right.recordRef}`,
+  );
 }
 
 function sourceKind(value: unknown): LegacyEmbeddedPayloadSourceKind {

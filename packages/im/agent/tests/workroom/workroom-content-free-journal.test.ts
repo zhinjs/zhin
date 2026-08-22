@@ -7,6 +7,7 @@ import {
   createWorkroomJournalPayloadObjectId,
   DatabaseWorkroomJournal,
   FileWorkroomJournal,
+  MemoryWorkroomJournal,
   type WorkroomJournalPayloadPort,
 } from '../../src/workroom/journal.js';
 import {
@@ -37,6 +38,124 @@ const CANDIDATE_HASH = `sha256:${'c'.repeat(64)}`;
 const REPORT_DIGEST = `sha256:${'d'.repeat(64)}`;
 
 describe('content-free Workroom Journal', () => {
+  it('governs model-controlled identifiers at every Journal seam and replays them exactly', async () => {
+    const secret = {
+      taskKey: 'task-customer-555-0188-credential',
+      dependencyKey: 'dependency-customer-555-0188-secret',
+      owner: 'owner-customer-555-0188-private',
+      sourceEventRef: 'conversation://customer-555-0188/private-credential',
+      claimId: 'claim-customer-555-0188-private',
+    };
+    const exercise = async (
+      journal: FileWorkroomJournal | DatabaseWorkroomJournal | MemoryWorkroomJournal,
+    ) => {
+      const kernel = new WorkroomKernel({
+        journal,
+        now: () => 100,
+        createId: (() => { let id = 0; return () => `model-controlled-${++id}`; })(),
+        acceptancePolicy: acceptancePolicy('Private criterion', 'Private acceptance', secret.claimId),
+      });
+      const plan = planBuilder('plan-model-controlled')
+        .addTask(planTask(secret.dependencyKey, 'Private dependency'))
+        .addTask(planTask(secret.taskKey, 'Private task', [secret.dependencyKey]))
+        .build();
+      const admitted = await kernel.admitWorkflowPlan({
+        operationId: 'operation-model-controlled',
+        projectId: 'project-support',
+        title: 'Private run',
+        sourceEventRef: secret.sourceEventRef,
+        sourceEventDigest: SHA,
+        orchestratorAgentDefinitionId: 'orchestrator-support',
+        plan,
+      });
+      await kernel.execute('project-support', admitted.runId, {
+        type: 'block_task', taskKey: secret.taskKey, blockerId: 'private-blocker',
+        kind: 'human_input', owner: secret.owner, reason: 'Private reason', deadline: 1_000,
+      });
+      await kernel.pinTaskAcceptance('project-support', admitted.runId, secret.dependencyKey);
+      const envelope = await claimAndStart(kernel, admitted.runId, secret.dependencyKey);
+      const state = await kernel.read('project-support', admitted.runId);
+      await new AssignmentObservationIngress({ kernel }).apply(envelope, {
+        version: 1,
+        type: 'execution_completed',
+        observationId: 'completed-model-controlled',
+        envelopeDigest: envelope.digest,
+        completion: {
+          report: { ref: 'report://content-free', digest: REPORT_DIGEST },
+          candidate: { ref: 'candidate://content-free', hash: CANDIDATE_HASH },
+        },
+      }, state.sequence);
+      await kernel.evaluateTaskAcceptance('project-support', admitted.runId, secret.dependencyKey);
+      const headers = await journal.readStoredHeaders(admitted.runId);
+      expect(JSON.stringify(headers)).not.toContain(secret.taskKey);
+      expect(headers?.events.find(event => event.type === 'task.planned')?.control.taskKey)
+        .toMatch(/^workroom-task:/u);
+      const replayed = await journal.read(admitted.runId);
+      expect(replayed.find(event => event.type === 'plan.admitted')?.payload.sourceEventRef)
+        .toBe(secret.sourceEventRef);
+      expect(replayed.filter(event => event.type === 'task.planned').map(event => event.payload.taskKey))
+        .toEqual([secret.dependencyKey, secret.taskKey]);
+      expect(replayed.find(event => event.type === 'task.blocked')?.payload.owner).toBe(secret.owner);
+      expect((replayed.find(event => event.type === 'task.accepted')?.payload.record as {
+        acceptedClaimIds?: readonly string[];
+      }).acceptedClaimIds).toEqual([secret.claimId]);
+    };
+
+    const memoryPayloads = new TestGovernedJournalPayloadPort();
+    const memory = new MemoryWorkroomJournal(memoryPayloads);
+    await exercise(memory);
+    for (const value of Object.values(secret)) {
+      expect(JSON.stringify(memoryPayloads.writtenValues)).toContain(value);
+    }
+
+    const fileRoot = await mkdtemp(join(tmpdir(), 'zhin-content-free-identifiers-'));
+    const fileDirectory = join(fileRoot, 'journal');
+    await mkdir(fileDirectory);
+    const filePayloads = new TestGovernedJournalPayloadPort();
+    try {
+      await exercise(new FileWorkroomJournal(fileDirectory, filePayloads));
+      const raw = (await Promise.all((await readdir(fileDirectory))
+        .filter(name => name.endsWith('.json'))
+        .map(name => readFile(join(fileDirectory, name), 'utf8')))).join('\n');
+      for (const value of Object.values(secret)) expect(raw).not.toContain(value);
+    } finally {
+      await rm(fileRoot, { recursive: true, force: true });
+    }
+
+    const rows: Record<string, unknown>[] = [];
+    const where = async ({ run_id: runId }: Record<string, unknown>) =>
+      runId === undefined ? rows : rows.filter(row => row.run_id === runId);
+    const database = {
+      transaction: async <T>(operation: (transaction: {
+        select(table: string): { where(condition: Record<string, unknown>): Promise<Record<string, unknown>[]> };
+        insertMany(table: string, inserted: Record<string, unknown>[]): Promise<void>;
+      }) => Promise<T>) => await operation({
+        select: () => ({ where }),
+        insertMany: async (_table: string, inserted: Record<string, unknown>[]) => { rows.push(...inserted); },
+      }),
+    };
+    await exercise(new DatabaseWorkroomJournal(database, { select: () => ({ where }) },
+      new TestGovernedJournalPayloadPort()));
+    for (const value of Object.values(secret)) expect(JSON.stringify(rows)).not.toContain(value);
+  });
+
+  it('rejects unknown event payload fields instead of guessing whether they contain content', async () => {
+    const journal = new FileWorkroomJournal(
+      await mkdtemp(join(tmpdir(), 'zhin-content-free-unknown-field-')),
+      new TestGovernedJournalPayloadPort(),
+    );
+    await expect(journal.append('run-unknown-field', -1, [{
+      eventId: 'unknown-field-event',
+      occurredAt: 100,
+      type: 'run.created',
+      payload: {
+        projectId: 'project-support',
+        title: 'Private run',
+        futureModelText: 'credential that a field-name blacklist cannot recognize',
+      },
+    }])).rejects.toThrow('payload keys');
+  });
+
   it('persists only a governed title reference and reauthorizes it after restart', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-content-free-journal-'));
     const directory = join(root, 'journal');
@@ -61,8 +180,8 @@ describe('content-free Workroom Journal', () => {
       expect(raw).not.toContain(secretTitle);
       expect(raw).toContain('governed_workroom_journal_payload');
       expect(JSON.parse(raw)).toMatchObject({
-        version: 2,
-        events: [{ version: 2, type: 'run.created' }],
+        version: 3,
+        events: [{ version: 3, type: 'run.created' }],
       });
 
       const readsBeforeRestart = payloads.readCount;
@@ -111,7 +230,7 @@ describe('content-free Workroom Journal', () => {
     expect(raw).not.toContain(secretTitle);
     expect(raw).not.toContain(secretTask);
     expect(rows).toHaveLength(2);
-    expect(rows.every(row => row.version === 2)).toBe(true);
+    expect(rows.every(row => row.version === 3)).toBe(true);
     expect(raw).toContain('governed_workroom_journal_payload');
 
     const readsBeforeRestart = payloads.readCount;
@@ -321,9 +440,11 @@ describe('content-free Workroom Journal', () => {
 
 class TestGovernedJournalPayloadPort implements WorkroomJournalPayloadPort {
   readonly #values = new Map<string, unknown>();
+  readonly writtenValues: unknown[] = [];
   readCount = 0;
 
   async write(input: Parameters<WorkroomJournalPayloadPort['write']>[0]) {
+    this.writtenValues.push(structuredClone(input.value));
     const payloadHash = digest(input.value);
     const vaultObjectId = `vault:${digest({
       runId: input.runId,
@@ -401,7 +522,7 @@ function planTask(key: string, title: string, dependsOn: readonly string[] = [])
   };
 }
 
-function acceptancePolicy(description: string, decisionReason: string) {
+function acceptancePolicy(description: string, decisionReason: string, claimId = 'claim-1') {
   return {
     pinContract(input: WorkroomAcceptanceContractPinInput) {
       return Object.freeze({
@@ -427,7 +548,7 @@ function acceptancePolicy(description: string, decisionReason: string) {
           id: 'candidate://content-free', taskKey: input.task.key, taskRevision: input.task.revision,
           producerAssignmentId: input.assignment.id, producerPrincipalId: input.assignment.owner,
           reportRef: input.task.reportRef, hash: CANDIDATE_HASH,
-          claimIds: Object.freeze(['claim-1']), evidenceRefs: Object.freeze(['evidence://1']),
+          claimIds: Object.freeze([claimId]), evidenceRefs: Object.freeze(['evidence://1']),
         }),
         contract: input.contract,
         riskAssessment: Object.freeze({
@@ -439,7 +560,7 @@ function acceptancePolicy(description: string, decisionReason: string) {
           candidateHash: CANDIDATE_HASH, runner: 'ci', runnerVersion: 'ci@1',
           evidenceRefs: Object.freeze(['evidence://1']),
         }]),
-        acceptedClaimIds: Object.freeze(['claim-1']), rejectedClaimIds: Object.freeze([]),
+        acceptedClaimIds: Object.freeze([claimId]), rejectedClaimIds: Object.freeze([]),
         decidedBy: 'acceptance-policy:policy-1', reason: decisionReason,
       });
     },

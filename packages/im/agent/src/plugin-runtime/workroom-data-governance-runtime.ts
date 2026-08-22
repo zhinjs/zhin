@@ -1157,7 +1157,10 @@ export class WorkroomDataGovernanceRuntime {
     try {
       const authority = await this.options.repository.readProject(input.projectId);
       const sink = authority?.sinks[input.sinkRuleId];
-      if (!authority || !sink || sink.channel !== 'workroom_projection' || !sink.fixedPrincipalId
+      const expectedChannel = input.sinkRuleId === 'projection:sponsor-room'
+        ? 'sponsor_projection'
+        : 'workroom_projection';
+      if (!authority || !sink || sink.channel !== expectedChannel || !sink.fixedPrincipalId
         || !authority.derivedPayloads.projection) {
         const reason = authority ? 'disclosure_denied' : 'project_authority_unavailable';
         await this.#block(input.operationId, input.projectId, reason, undefined, authority?.digest);

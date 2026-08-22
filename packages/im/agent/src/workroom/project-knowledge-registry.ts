@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -496,7 +497,7 @@ function unique(values: readonly string[], label: string): readonly string[] {
 }
 
 function byKnowledgeId(left: ProjectKnowledgeEntry, right: ProjectKnowledgeEntry): number {
-  return left.knowledgeId.localeCompare(right.knowledgeId);
+  return compareCanonicalWorkroomText(left.knowledgeId, right.knowledgeId);
 }
 
 function projectPrefix(projectId: string): string {

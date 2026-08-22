@@ -5,6 +5,7 @@ import type { WorkroomEvent, WorkroomEventDraft } from './kernel-contracts.js';
 import { assertAcceptanceContract, assertPersistedAcceptanceRecord } from './acceptance-policy.js';
 import {
   canonicalWorkroomJson,
+  compareCanonicalWorkroomText,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue,
 } from './canonical-value.js';
@@ -105,7 +106,9 @@ interface GovernedWorkroomJournalPayloadReference {
 }
 
 interface StoredWorkroomEvent extends Omit<WorkroomEvent, 'version' | 'payload'> {
-  readonly version: 2;
+  readonly version: 3;
+  /** Content-free control projection derived before payload protection. */
+  readonly control: WorkroomStoredEventControl;
   readonly payload: Readonly<Record<string, unknown>>;
 }
 
@@ -189,7 +192,7 @@ export interface WorkroomStoredRunHeaders {
 }
 
 interface FileWorkroomJournalSegmentPayload {
-  readonly version: 2;
+  readonly version: 3;
   readonly runId: string;
   readonly expectedSequence: number;
   readonly events: readonly StoredWorkroomEvent[];
@@ -213,7 +216,7 @@ export class MemoryWorkroomJournal implements WorkroomJournal {
 
   async scanStoredHeaders(): Promise<readonly WorkroomStoredRunHeaders[]> {
     return Object.freeze([...this.#runs.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareCanonicalWorkroomText(left, right))
       .map(([runId, events]) => storedRunHeaders(runId, events)));
   }
 
@@ -368,7 +371,7 @@ export class FileWorkroomJournal implements WorkroomJournal {
     }
     if (groups.size > 0) await this.#store.syncLeaf();
     return Object.freeze([...groups.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareCanonicalWorkroomText(left, right))
       .map(([runId, events]) => storedRunHeaders(runId, events)));
   }
 
@@ -440,7 +443,7 @@ export class FileWorkroomJournal implements WorkroomJournal {
     const protectedEvents = await protectEvents(result, projectId, this.#requirePayloads());
     const segment = this.#segmentPath(runId, expectedSequence + 1);
     const payload: FileWorkroomJournalSegmentPayload = Object.freeze({
-      version: 2,
+      version: 3,
       runId,
       expectedSequence,
       events: protectedEvents,
@@ -526,8 +529,10 @@ export class FileWorkroomJournal implements WorkroomJournal {
       if (Array.isArray(parsed)) {
         throw legacyJournalPayloadError();
       }
-      if (isRecord(parsed) && parsed.version === 1) throw legacyJournalPayloadError();
-      if (!isRecord(parsed) || parsed.version !== 2 || !isNonEmptyString(parsed.runId)
+      if (isRecord(parsed) && (parsed.version === 1 || parsed.version === 2)) {
+        throw legacyJournalPayloadError();
+      }
+      if (!isRecord(parsed) || parsed.version !== 3 || !isNonEmptyString(parsed.runId)
         || !Number.isSafeInteger(parsed.expectedSequence)
         || !Array.isArray(parsed.events) || typeof parsed.payloadDigest !== 'string') {
         throw new Error('Invalid Workroom journal segment envelope');
@@ -537,7 +542,7 @@ export class FileWorkroomJournal implements WorkroomJournal {
       }
       const events = parseStoredEvents(parsed.events);
       const payload: FileWorkroomJournalSegmentPayload = Object.freeze({
-        version: 2,
+        version: 3,
         runId: parsed.runId,
         expectedSequence: parsed.expectedSequence,
         events,
@@ -827,23 +832,28 @@ function parseStoredEvents(values: readonly unknown[]): readonly StoredWorkroomE
       throw new Error('Invalid Workroom journal event');
     }
     const raw = value as Record<string, unknown>;
-    if (raw.version === 1) throw legacyJournalPayloadError();
+    if (raw.version === 1 || raw.version === 2) throw legacyJournalPayloadError();
+    assertExactRecordKeys(raw, [
+      'version', 'eventId', 'runId', 'sequence', 'occurredAt', 'type', 'control', 'payload',
+    ], 'Stored Workroom event');
     const event = value as Partial<StoredWorkroomEvent>;
-    if (event.version !== 2 || !isNonEmptyString(event.eventId) || !isNonEmptyString(event.runId)
+    if (event.version !== 3 || !isNonEmptyString(event.eventId) || !isNonEmptyString(event.runId)
       || !isSequence(event.sequence) || !isFiniteNumber(event.occurredAt)
-      || !isWorkroomEventType(event.type) || !isRecord(event.payload)) {
+      || !isWorkroomEventType(event.type) || !isRecord(event.control) || !isRecord(event.payload)) {
       throw new Error('Invalid Workroom journal event');
     }
-    validateProtectedPayload(event.payload);
+    validateStoredEventControl(event.type, event.control);
+    validateProtectedPayload(event.type, event.payload);
     const sequence = Number(event.sequence);
     return Object.freeze({
       ...event,
-      version: 2,
+      version: 3,
       eventId: event.eventId,
       runId: event.runId,
       sequence,
       occurredAt: event.occurredAt,
       type: event.type,
+      control: deepFreeze({ ...event.control }),
       payload: Object.freeze({ ...event.payload }),
     });
   });
@@ -880,7 +890,11 @@ function toRow(event: StoredWorkroomEvent): Record<string, unknown> {
     sequence: event.sequence,
     version: event.version,
     type: event.type,
-    payload_json: canonicalWorkroomJson({ eventId: event.eventId, payload: event.payload }),
+    payload_json: canonicalWorkroomJson({
+      eventId: event.eventId,
+      control: event.control,
+      payload: event.payload,
+    }),
     occurred_at: event.occurredAt,
     stored_event_digest: storedEventDigest,
   };
@@ -889,35 +903,39 @@ function toRow(event: StoredWorkroomEvent): Record<string, unknown> {
 
 function parseStoredRows(runId: string, rows: readonly Record<string, unknown>[]): readonly StoredWorkroomEvent[] {
   const events = rows.map(row => {
-    if (row.version === 1) throw legacyJournalPayloadError();
+    if (row.version === 1 || row.version === 2) throw legacyJournalPayloadError();
     if (!isDigest(row.stored_event_digest) || !isDigest(row.row_binding_digest)) {
       throw legacyJournalPayloadError();
     }
-    if (row.version !== 2) throw new Error(`Unsupported Workroom event version: ${String(row.version)}`);
-    let envelope: { eventId?: unknown; payload?: unknown };
+    if (row.version !== 3) throw new Error(`Unsupported Workroom event version: ${String(row.version)}`);
+    let envelope: { eventId?: unknown; control?: unknown; payload?: unknown };
     try {
       envelope = JSON.parse(String(row.payload_json)) as typeof envelope;
     } catch {
       throw new Error('Invalid Workroom event payload JSON');
     }
-    if (!envelope || !isNonEmptyString(envelope.eventId) || !isRecord(envelope.payload)
+    if (!envelope || !isNonEmptyString(envelope.eventId) || !isRecord(envelope.control)
+      || !isRecord(envelope.payload)
       || !isSequence(row.sequence) || !isFiniteNumber(row.occurred_at)
       || !isWorkroomEventType(row.type)) {
       throw new Error('Invalid Workroom event payload envelope');
     }
+    assertExactRecordKeys(envelope, ['eventId', 'control', 'payload'], 'Workroom event payload envelope');
     const expectedId = `${runId}:${Number(row.sequence)}`;
     if (row.id !== expectedId) throw new Error('Workroom event row id binding is invalid');
     if (String(row.payload_json) !== canonicalWorkroomJson(envelope)) {
       throw new Error('Workroom event payload JSON is not canonical');
     }
-    validateProtectedPayload(envelope.payload);
+    validateStoredEventControl(row.type, envelope.control);
+    validateProtectedPayload(row.type, envelope.payload);
     const event = Object.freeze<StoredWorkroomEvent>({
-      version: 2 as const,
+      version: 3 as const,
       eventId: envelope.eventId,
       runId,
       sequence: row.sequence,
       occurredAt: row.occurred_at,
       type: row.type,
+      control: deepFreeze({ ...envelope.control }),
       payload: Object.freeze({ ...envelope.payload }),
     });
     if (row.stored_event_digest !== digestStoredWorkroomEvent(event)) {
@@ -943,17 +961,18 @@ function parseStoredRowGroups(
     rowGroups.set(runId, [...(rowGroups.get(runId) ?? []), row]);
   }
   return new Map([...rowGroups.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => compareCanonicalWorkroomText(left, right))
     .map(([runId, runRows]) => [runId, parseStoredRows(runId, runRows)] as const));
 }
 
 export function digestStoredWorkroomEvent(event: Readonly<{
-  version: 2;
+  version: 3;
   eventId: string;
   runId: string;
   sequence: number;
   occurredAt: number;
   type: WorkroomEvent['type'];
+  control: WorkroomStoredEventControl;
   payload: Readonly<Record<string, unknown>>;
 }>): string {
   return digestCanonicalWorkroomValue({
@@ -963,6 +982,7 @@ export function digestStoredWorkroomEvent(event: Readonly<{
     sequence: event.sequence,
     occurredAt: event.occurredAt,
     type: event.type,
+    control: event.control,
     payload: event.payload,
   });
 }
@@ -1001,7 +1021,7 @@ function storedRunHeaders(
       sequence: event.sequence,
       occurredAt: event.occurredAt,
       type: event.type,
-      control: storedEventControl(event),
+      control: event.control,
       protectedPayloadDigest,
       protectedReceipts: storedProtectedReceiptHeaders(event.payload),
     });
@@ -1011,7 +1031,7 @@ function storedRunHeaders(
   return deepFreeze({ ...body, digest: digestCanonicalWorkroomValue(body) });
 }
 
-function storedEventControl(event: StoredWorkroomEvent): WorkroomStoredEventControl {
+function deriveStoredEventControl(event: WorkroomEvent): WorkroomStoredEventControl {
   const payload = event.payload;
   const taskKey = (): string => opaqueStoredRef('task', event.runId, storedHeaderText(payload, 'taskKey'));
   const assignmentId = (): string =>
@@ -1101,6 +1121,87 @@ function storedEventControl(event: StoredWorkroomEvent): WorkroomStoredEventCont
   }
 }
 
+const WORKROOM_EVENT_CONTROL_KEYS: Readonly<Record<WorkroomEvent['type'], readonly string[]>> = Object.freeze({
+  'run.created': ['projectId'],
+  'task.planned': ['taskKey', 'required', 'maxAttempts'],
+  'task.blocked': ['taskKey', 'blockerId'],
+  'task.blocker_resolved': ['taskKey', 'blockerId'],
+  'assignment.claimed': [
+    'taskKey', 'assignmentId', 'role', 'attempt', 'assignmentRevision', 'fence',
+  ],
+  'assignment.started': ['assignmentId'],
+  'assignment.progress': ['assignmentId'],
+  'assignment.heartbeat': ['assignmentId'],
+  'assignment.checkpointed': ['assignmentId'],
+  'assignment.checkpoint_requested': ['assignmentId'],
+  'assignment.preempted': ['assignmentId'],
+  'assignment.execution_completed': ['assignmentId'],
+  'assignment.cancel_requested': ['assignmentId'],
+  'assignment.cancelled': ['assignmentId', 'outcome'],
+  'assignment.lease_expired': ['assignmentId'],
+  'task.accepted': ['taskKey'],
+  'task.acceptance_pinned': ['taskKey'],
+  'task.acceptance_blocked': ['taskKey'],
+  'task.cancel_requested': ['taskKey'],
+  'task.cancelled': ['taskKey'],
+  'task.failed': ['taskKey'],
+  'task.rework_requested': ['taskKey'],
+  'task.revised': ['taskKey', 'maxAttempts'],
+  'task.plan_revised': ['taskKey', 'required', 'maxAttempts', 'newTaskRevision'],
+  'reviewer.assigned': ['taskKey', 'waitId', 'waitStatus'],
+  'reviewer.claimed': ['taskKey', 'waitId'],
+  'reviewer.verdict_recorded': ['taskKey', 'waitId', 'verdictOutcome'],
+  'reviewer.expired': ['taskKey', 'waitId'],
+  'sponsor_gate.opened': ['taskKey', 'waitId', 'waitStatus'],
+  'sponsor_gate.decided': ['taskKey', 'waitId', 'decision'],
+  'sponsor_gate.expired': ['taskKey', 'waitId'],
+  'plan.admitted': [],
+  'plan.revision_applied': [],
+  'plan_gate.decided': [],
+  'run.cancel_requested': [],
+  'run.cancelled': [],
+  'scheduler.dispatch_requested': [],
+  'scheduler.priority_changed': [],
+  'scheduler.preemption_requested': [],
+  'scheduler.preemption_checkpoint_acknowledged': [],
+  'scheduler.preemption_timed_out': [],
+  'local_execution.requested': [],
+  'remote_dispatch.requested': [],
+  'clock.advanced': [],
+});
+
+function validateStoredEventControl(
+  type: WorkroomEvent['type'],
+  control: Readonly<Record<string, unknown>>,
+): void {
+  assertExactRecordKeys(control, WORKROOM_EVENT_CONTROL_KEYS[type], 'Stored Workroom control');
+  if (control.projectId !== undefined) storedHeaderText(control, 'projectId');
+  for (const key of ['taskKey', 'assignmentId', 'blockerId', 'waitId'] as const) {
+    if (control[key] !== undefined && (typeof control[key] !== 'string'
+      || !/^workroom-[a-z-]+:[a-f0-9]{64}$/u.test(control[key]))) {
+      throw new Error(`Stored Workroom control ${key} is invalid`);
+    }
+  }
+  for (const key of ['maxAttempts', 'attempt', 'assignmentRevision', 'fence', 'newTaskRevision'] as const) {
+    if (control[key] !== undefined) storedHeaderPositiveInteger(control, key);
+  }
+  if (control.required !== undefined && typeof control.required !== 'boolean') {
+    throw new Error('Stored Workroom control required is invalid');
+  }
+  if (control.role !== undefined) storedHeaderRole(control.role);
+  if (control.outcome !== undefined) storedHeaderOutcome(control.outcome);
+  if (control.decision !== undefined) storedHeaderDecision(control.decision);
+  if (control.verdictOutcome !== undefined
+    && control.verdictOutcome !== 'passed' && control.verdictOutcome !== 'rework') {
+    throw new Error('Stored Workroom control verdict outcome is invalid');
+  }
+  if (control.waitStatus !== undefined && ![
+    'open', 'claimed', 'passed', 'rework', 'expired', 'cancelled', 'satisfied', 'stale',
+  ].includes(String(control.waitStatus))) {
+    throw new Error('Stored Workroom control wait status is invalid');
+  }
+}
+
 function storedProtectedReceiptHeaders(
   value: Readonly<Record<string, unknown>>,
 ): readonly WorkroomStoredProtectedReceiptHeader[] {
@@ -1123,7 +1224,8 @@ function storedProtectedReceiptHeaders(
     if (isRecord(candidate)) for (const item of Object.values(candidate)) visit(item);
   };
   visit(value);
-  return deepFreeze(headers.sort((left, right) => left.fieldPath.localeCompare(right.fieldPath)));
+  return deepFreeze(headers.sort((left, right) =>
+    compareCanonicalWorkroomText(left.fieldPath, right.fieldPath)));
 }
 
 function opaqueStoredRef(kind: string, runId: string, rawId: string): string {
@@ -1181,7 +1283,8 @@ async function protectEvents(
 ): Promise<readonly StoredWorkroomEvent[]> {
   return Object.freeze(await Promise.all(events.map(async event => Object.freeze({
     ...event,
-    version: 2 as const,
+    version: 3 as const,
+    control: deriveStoredEventControl(event),
     payload: await protectValue(event.payload, '$.payload', event, projectId, payloads) as Readonly<Record<string, unknown>>,
   }))));
 }
@@ -1201,7 +1304,7 @@ async function protectValue(
   const entries: Array<readonly [string, unknown]> = [];
   for (const [key, child] of Object.entries(value)) {
     const path = `${fieldPath}.${key}`;
-    if (isGovernedJournalField(key) && containsGovernedValue(child)) {
+    if (!isContentFreeJournalValue(event.type, path, child) && containsGovernedValue(child)) {
       const contentHash = digestCanonicalWorkroomValue(child);
       const source = journalPayloadSource(event, path, contentHash);
       const receipt = await payloads.write({
@@ -1251,8 +1354,13 @@ async function materializeStoredEvents(
     const payload = await materializeValue(event.payload, '$.payload', event, projectId, payloads);
     if (!isRecord(payload)) throw new Error('Materialized Workroom Journal payload is invalid');
     validatePayload(event.type, payload, event.sequence);
+    if (canonicalWorkroomJson(event.control)
+      !== canonicalWorkroomJson(deriveStoredEventControl({ ...event, version: 1, payload }))) {
+      throw new Error('Stored Workroom control projection does not match the governed payload');
+    }
+    const { control: _control, ...eventHeader } = event;
     return Object.freeze<WorkroomEvent>({
-      ...event,
+      ...eventHeader,
       version: 1,
       payload: Object.freeze({ ...payload }),
     });
@@ -1285,6 +1393,7 @@ function journalPublicationDigest(
       eventId: event.eventId,
       sequence: event.sequence,
       type: event.type,
+      control: event.control,
       payload: event.payload,
     })),
   });
@@ -1513,7 +1622,11 @@ function isGovernedJournalPayloadReference(value: unknown): value is GovernedWor
     && ['contentHash', 'fieldPath', 'kind', 'receipt', 'version'].every((key, index) => keys[index] === key);
 }
 
-function validateProtectedPayload(payload: Readonly<Record<string, unknown>>): void {
+function validateProtectedPayload(
+  type: WorkroomEvent['type'],
+  payload: Readonly<Record<string, unknown>>,
+): void {
+  assertAllowedPayloadKeys(type, payload);
   const visit = (value: unknown, fieldPath: string): void => {
     if (isGovernedJournalPayloadReference(value)) {
       if (value.fieldPath !== fieldPath) throw new Error('Governed Workroom Journal payload path is invalid');
@@ -1525,7 +1638,7 @@ function validateProtectedPayload(payload: Readonly<Record<string, unknown>>): v
     }
     if (!isRecord(value)) return;
     for (const [key, child] of Object.entries(value)) {
-      if (isGovernedJournalField(key) && containsGovernedValue(child)
+      if (!isContentFreeJournalValue(type, `${fieldPath}.${key}`, child) && containsGovernedValue(child)
         && !isGovernedJournalPayloadReference(child)) {
         throw legacyJournalPayloadError();
       }
@@ -1535,15 +1648,16 @@ function validateProtectedPayload(payload: Readonly<Record<string, unknown>>): v
   visit(payload, '$.payload');
 }
 
-const GOVERNED_JOURNAL_FIELDS = new Set([
-  'acceptancecontract', 'arguments', 'body', 'candidate', 'checkresults', 'content',
-  'contract', 'criteria', 'description', 'message', 'metadata', 'output', 'parameters',
-  'plaintext', 'plan', 'progress', 'prompt', 'raw', 'reason', 'record', 'result',
-  'resultsummary', 'riskassessment', 'summary', 'text', 'title', 'toolargs', 'transcript',
-]);
-
-function isGovernedJournalField(value: string): boolean {
-  return GOVERNED_JOURNAL_FIELDS.has(value.normalize('NFKC').toLowerCase().replace(/[^a-z0-9]/gu, ''));
+function isContentFreeJournalValue(
+  type: WorkroomEvent['type'],
+  fieldPath: string,
+  value: unknown,
+): boolean {
+  if (value === undefined || value === null || value === '') return true;
+  if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) return true;
+  if (typeof value !== 'string') return false;
+  if (type === 'run.created' && fieldPath === '$.payload.projectId') return true;
+  return isDigest(value);
 }
 
 function containsGovernedValue(value: unknown): boolean {
@@ -1586,11 +1700,139 @@ function isWorkroomEventType(value: unknown): value is WorkroomEvent['type'] {
   return typeof value === 'string' && WORKROOM_EVENT_TYPES.has(value as WorkroomEvent['type']);
 }
 
+/**
+ * Closed top-level schema for every persisted Kernel fact. Values not listed
+ * here are rejected before either the Journal header or Payload Vault is
+ * written, so adding a future field requires an explicit governance choice.
+ */
+const WORKROOM_EVENT_PAYLOAD_KEYS: Readonly<Record<WorkroomEvent['type'], readonly string[]>> = Object.freeze({
+  'run.created': ['projectId', 'title'],
+  'run.cancel_requested': ['reason'],
+  'run.cancelled': ['reason'],
+  'plan.admitted': [
+    'operationId', 'sourceEventRef', 'sourceEventDigest', 'orchestratorAgentDefinitionId',
+    'plan', 'schedulerPolicy',
+  ],
+  'plan.revision_applied': ['candidate', 'planRevision', 'recomputedDiffDigest'],
+  'plan_gate.decided': [
+    'operationId', 'requestDigest', 'taskKey', 'taskRevision', 'gateId', 'planDigest',
+    'policyRevisionId', 'policyDigest', 'decision', 'sponsorPrincipalId', 'authorizedBy',
+    'reasonDigest',
+  ],
+  'task.planned': [
+    'type', 'taskKey', 'title', 'required', 'maxAttempts', 'role', 'dependsOn', 'requires',
+    'sponsorLane', 'localRank', 'deadline', 'enqueuedAt', 'preemptibility', 'approvalGate',
+  ],
+  'task.blocked': [
+    'type', 'taskKey', 'blockerId', 'kind', 'owner', 'reason', 'deadline', 'allowedActions',
+  ],
+  'task.blocker_resolved': ['type', 'taskKey', 'blockerId'],
+  'task.cancel_requested': ['taskKey', 'reason'],
+  'task.cancelled': ['taskKey', 'reason'],
+  'task.failed': ['taskKey', 'reason'],
+  'task.accepted': ['taskKey', 'reportRef', 'record'],
+  'task.acceptance_pinned': ['taskKey', 'contract'],
+  'task.acceptance_blocked': ['taskKey', 'reportRef', 'reason', 'evaluation'],
+  'task.rework_requested': ['type', 'taskKey', 'reason', 'evaluation'],
+  'task.revised': ['type', 'taskKey', 'title', 'reason', 'maxAttempts'],
+  'task.plan_revised': [
+    'taskKey', 'title', 'required', 'maxAttempts', 'role', 'dependsOn', 'requires',
+    'sponsorLane', 'localRank', 'deadline', 'enqueuedAt', 'preemptibility', 'approvalGate',
+    'expectedTaskRevision', 'newTaskRevision', 'reason',
+  ],
+  'reviewer.assigned': ['taskKey', 'reason', 'assignment'],
+  'reviewer.claimed': [
+    'taskKey', 'assignmentId', 'reviewerPrincipalId', 'authorizedBy', 'authorization',
+  ],
+  'reviewer.verdict_recorded': [
+    'taskKey', 'assignmentId', 'reviewerPrincipalId', 'authorizedBy', 'outcome',
+    'verdict', 'authorization',
+  ],
+  'reviewer.expired': ['taskKey', 'assignmentId'],
+  'sponsor_gate.opened': ['taskKey', 'reason', 'gate'],
+  'sponsor_gate.decided': [
+    'taskKey', 'gateId', 'sponsorPrincipalId', 'authorizedBy', 'reason', 'candidateHash',
+    'decision', 'authorization',
+  ],
+  'sponsor_gate.expired': ['taskKey', 'gateId'],
+  'assignment.claimed': [
+    'type', 'taskKey', 'assignmentId', 'owner', 'role', 'taskRevision', 'attempt',
+    'assignmentRevision', 'fence', 'envelopeDigest', 'leaseExpiresAt',
+  ],
+  'assignment.started': ['assignmentId'],
+  'assignment.progress': [
+    'assignmentId', 'observationId', 'observationDigest', 'envelopeDigest', 'progress',
+  ],
+  'assignment.heartbeat': [
+    'assignmentId', 'observationId', 'observationDigest', 'envelopeDigest', 'leaseExpiresAt',
+  ],
+  'assignment.checkpointed': [
+    'assignmentId', 'observationId', 'observationDigest', 'envelopeDigest',
+    'checkpointRef', 'checkpointDigest',
+  ],
+  'assignment.checkpoint_requested': [
+    'decisionId', 'assignmentId', 'envelopeDigest', 'reservedTaskKey', 'requestedAt',
+    'deadline', 'takeoverFence', 'owner', 'allowedSuccessors',
+  ],
+  'assignment.preempted': [
+    'decisionId', 'assignmentId', 'checkpointRef', 'checkpointDigest', 'outcome',
+  ],
+  'assignment.execution_completed': [
+    'assignmentId', 'observationId', 'observationDigest', 'envelopeDigest', 'reportRef',
+    'reportDigest', 'candidateRef', 'candidateHash', 'completionReceiptDigest',
+  ],
+  'assignment.cancel_requested': ['assignmentId', 'controlDeadline'],
+  'assignment.cancelled': ['assignmentId', 'outcome'],
+  'assignment.lease_expired': ['assignmentId'],
+  'scheduler.dispatch_requested': [
+    'version', 'type', 'decisionId', 'digest', 'projectId', 'runId', 'expectedSequence',
+    'taskKey', 'taskRevision', 'role', 'sponsorLane', 'reason', 'policy',
+  ],
+  'scheduler.priority_changed': [
+    'version', 'type', 'proposalId', 'digest', 'projectId', 'runId', 'taskKey',
+    'taskRevision', 'expectedSequence', 'currentLane', 'requestedLane', 'localRank',
+    'principalId', 'authority', 'authorityRef', 'deadline', 'owner', 'allowedSuccessors',
+    'authorizedBy',
+  ],
+  'scheduler.preemption_requested': [
+    'version', 'type', 'decisionId', 'digest', 'projectId', 'runId', 'expectedSequence',
+    'victimTaskKey', 'victimTaskRevision', 'reservedTaskKey', 'reservedTaskRevision',
+    'assignmentId', 'assignmentAttempt', 'assignmentFence', 'assignmentEnvelopeDigest',
+    'owner', 'requestedAt', 'deadline', 'takeoverFence', 'reason', 'allowedSuccessors', 'policy',
+  ],
+  'scheduler.preemption_checkpoint_acknowledged': [
+    'decisionId', 'assignmentId', 'envelopeDigest', 'observationId', 'observationDigest',
+    'checkpointRef', 'checkpointDigest', 'assignmentAttempt', 'assignmentFence', 'takeoverFence',
+  ],
+  'scheduler.preemption_timed_out': [
+    'decisionId', 'assignmentId', 'reservedTaskKey', 'blockerId', 'owner', 'deadline',
+    'allowedSuccessors', 'reason',
+  ],
+  'local_execution.requested': [
+    'operationId', 'requestDigest', 'agentDefinitionId', 'issuedAt', 'envelope',
+  ],
+  'remote_dispatch.requested': [
+    'operationId', 'requestDigest', 'issuedAt', 'reconcileDeadline', 'envelope', 'dispatchItem',
+  ],
+  'clock.advanced': ['now'],
+});
+
+function assertAllowedPayloadKeys(
+  type: WorkroomEvent['type'],
+  payload: Readonly<Record<string, unknown>>,
+): void {
+  const allowed = WORKROOM_EVENT_PAYLOAD_KEYS[type];
+  if (Object.keys(payload).some(key => !allowed.includes(key))) {
+    throw new Error(`Invalid Workroom event payload keys: ${type}`);
+  }
+}
+
 function validatePayload(
   type: WorkroomEvent['type'],
   payload: Readonly<Record<string, unknown>>,
   sequence: number,
 ): void {
+  assertAllowedPayloadKeys(type, payload);
   switch (type) {
     case 'run.created':
       requirePayloadString(payload, 'projectId'); requirePayloadString(payload, 'title'); return;
@@ -1920,6 +2162,18 @@ function assertExactPayloadKeys(
   const canonical = [...expected].sort();
   if (actual.length !== canonical.length || actual.some((key, index) => key !== canonical[index])) {
     throw new Error(`Invalid Workroom event payload keys: ${type}`);
+  }
+}
+
+function assertExactRecordKeys(
+  value: Readonly<Record<string, unknown>>,
+  expected: readonly string[],
+  label: string,
+): void {
+  const actual = Object.keys(value).sort();
+  const canonical = [...expected].sort();
+  if (actual.length !== canonical.length || actual.some((key, index) => key !== canonical[index])) {
+    throw new Error(`${label} keys are invalid`);
   }
 }
 

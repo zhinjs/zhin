@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createCatalogGovernedWorkroomProjectionAuthority,
+  createCatalogGovernedConsoleDisclosureAuthority,
   createWorkroomRuntime,
 } from '../../src/workroom/runtime.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
@@ -169,5 +170,30 @@ describe('Workroom Console runtime projection', () => {
       destination: 'console', projectId: 'finance', recipientPrincipalId: 'human:alice',
       requestedMode: 'metadata_only',
     })).resolves.toBeNull();
+
+    const roleGovernedAuthority = createCatalogGovernedConsoleDisclosureAuthority({
+      catalog: { read: async () => ({ definitions: { support: project }, revision: catalogRevision }) },
+      governance: {
+        readProject: async () => ({
+          projectId: 'support', digest: governanceDigest,
+          governanceDecision: { catalogRevision, catalogBindingDigest: projectDigest },
+          policy: { destinations: { console: {
+            recipientSnapshotRevision: 1, recipientSnapshotDigest: recipientDigest,
+          } } },
+          sinks: { status: {
+            channel: 'console', destinationId: 'console', purpose: 'orchestration',
+            requestedMode: 'metadata_only', principal: { allowedPurposes: ['orchestration'] },
+            recipients: { revision: 1, digest: recipientDigest, recipients: [{
+              principalId: 'human:privacy', tenantId: 'tenant-1', projectId: 'support',
+              clearance: 'project_internal',
+            }] },
+          } },
+        } as never),
+      },
+    });
+    await expect(roleGovernedAuthority.authorize({
+      destination: 'console', projectId: 'support', recipientPrincipalId: 'human:privacy',
+      requestedMode: 'metadata_only',
+    })).resolves.toMatchObject({ catalogRevision, projectDigest, governanceDigest });
   });
 });

@@ -1,4 +1,5 @@
 import {
+  compareCanonicalWorkroomText,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
 } from '../workroom/canonical-value.js';
@@ -365,7 +366,7 @@ export function validateAtomicResourceBundle(input: Readonly<{
     },
     rateReservations: resolved
       .map((item) => ({ poolId: item.pool.poolId, units: item.demand.rateUnits }))
-      .sort((left, right) => left.poolId.localeCompare(right.poolId)),
+      .sort((left, right) => compareCanonicalWorkroomText(left.poolId, right.poolId)),
     totalWorstCaseCostMicros,
   });
 }
@@ -388,7 +389,7 @@ function normalizeCatalogBody(value: Record<string, unknown>): Omit<ResourcePool
   }
   const tenantId = identifier(value.tenantId, 'catalog tenantId');
   const pools = value.pools.map((pool, index) => normalizePool(pool, index, tenantId))
-    .sort((left, right) => left.poolId.localeCompare(right.poolId));
+    .sort((left, right) => compareCanonicalWorkroomText(left.poolId, right.poolId));
   assertUnique(pools.map((pool) => pool.poolId), 'Resource Pool catalog poolId');
   return deepFreeze({
     version: 1 as const,
@@ -499,7 +500,7 @@ function normalizeProfileCeilingBody(
     throw new Error('Project Profile ceiling requires pool limits');
   }
   const allowedPoolIds = record.allowedPoolIds.map((item, index) => identifier(item, `allowedPoolIds[${index}]`))
-    .sort((left, right) => left.localeCompare(right));
+    .sort((left, right) => compareCanonicalWorkroomText(left, right));
   assertUnique(allowedPoolIds, 'Project Profile allowed pool');
   const poolLimits = record.poolLimits.map((item, index): ResourcePoolProfileLimit => {
     const limit = exactRecord(item, POOL_LIMIT_KEYS, `Project Profile pool limit ${index}`);
@@ -509,7 +510,7 @@ function normalizeProfileCeilingBody(
       maxRateUnits: nonNegativeSafeInteger(limit.maxRateUnits, `poolLimits[${index}].maxRateUnits`),
       maxUsageUnits: nonNegativeSafeInteger(limit.maxUsageUnits, `poolLimits[${index}].maxUsageUnits`),
     };
-  }).sort((left, right) => left.poolId.localeCompare(right.poolId));
+  }).sort((left, right) => compareCanonicalWorkroomText(left.poolId, right.poolId));
   assertUnique(poolLimits.map((limit) => limit.poolId), 'Project Profile pool limit');
   for (const limit of poolLimits) {
     if (!allowedPoolIds.includes(limit.poolId)) {

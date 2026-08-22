@@ -13,6 +13,7 @@ import {
   type WorkroomContextReleaseConsumerPort,
 } from './workroom-acceptance-provider-composition.js';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -521,7 +522,7 @@ export class FileWorkroomEphemeralContextDisposer implements WorkroomContextRele
     const identities = options.providers.map(provider => canonicalWorkroomJson(normalizeProviderIdentity(provider.identity)));
     if (new Set(identities).size !== identities.length) throw new Error('Context provider identity is duplicated');
     this.#providers = Object.freeze([...options.providers].sort((left, right) =>
-      canonicalWorkroomJson(left.identity).localeCompare(canonicalWorkroomJson(right.identity))));
+      compareCanonicalWorkroomText(canonicalWorkroomJson(left.identity), canonicalWorkroomJson(right.identity))));
     this.#store = new DurableFileStore(options.directory);
   }
 
@@ -667,7 +668,7 @@ function parseRiskRecord(value: unknown): StoredRiskHeader {
 }
 
 function compareRiskRecord(left: StoredRiskHeader, right: StoredRiskHeader): number {
-  return left.sourceType.localeCompare(right.sourceType) || left.sourceRef.localeCompare(right.sourceRef);
+  return compareCanonicalWorkroomText(left.sourceType, right.sourceType) || compareCanonicalWorkroomText(left.sourceRef, right.sourceRef);
 }
 
 function normalizeProviderIdentity(identity: WorkroomEphemeralContextProviderIdentity) {

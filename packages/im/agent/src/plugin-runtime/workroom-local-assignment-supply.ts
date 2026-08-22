@@ -35,7 +35,8 @@ implements WorkroomSchedulerAssignmentRoutePort {
       return null;
     }
     const catalogAgents = new Set(definition.members
-      .filter(member => member.role === decision.role)
+      .filter(member => member.role === decision.role
+        && (!member.assignmentRoute || member.assignmentRoute.kind === 'local'))
       .map(member => member.agent));
     const exact = revision.compiledProfile.agents.filter(agent =>
       agent.role === decision.role && catalogAgents.has(agent.id));

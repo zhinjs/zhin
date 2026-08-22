@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import {
   PortfolioAdmissionApplication,
   portfolioCapacityRequestDigest,
@@ -41,6 +42,21 @@ describe('PortfolioAdmissionApplication', () => {
     expect(portfolioRequestStatus(await application.read(), 'request-1')).toBe('pending');
     expect(portfolioProjectBudget(await application.read(), 'project-a').reservedMicros).toBe(0);
     expect((await application.decideAdmission())?.fence).toBe(2);
+  });
+
+  it('selects the same Unicode Capacity Request under different host locales', async () => {
+    const first = await createApplication();
+    const second = await createApplication();
+    for (const application of [first, second]) {
+      await submit(application, { ...request('äther', 'project-a', 1), opaqueHeadId: 'head:unicode' });
+      await submit(application, { ...request('zeta', 'project-a', 1), opaqueHeadId: 'head:ascii' });
+    }
+
+    const codeUnitLocale = await decideWithLocale(first, (left, right) => left < right ? -1 : left > right ? 1 : 0);
+    const reverseLocale = await decideWithLocale(second, (left, right) => left < right ? 1 : left > right ? -1 : 0);
+
+    expect(codeUnitLocale).toMatchObject({ requestId: 'zeta' });
+    expect(reverseLocale).toEqual(codeUnitLocale);
   });
 
   it('keeps lost usage reserved, settles a late overrun honestly, and never reclaims atomic work', async () => {
@@ -227,6 +243,21 @@ async function createApplication() {
   const snapshot = policy();
   await application.pinPolicy(snapshot, governance(snapshot.digest, 0));
   return application;
+}
+
+async function decideWithLocale(
+  application: PortfolioAdmissionApplication,
+  compare: (left: string, right: string) => number,
+) {
+  const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
+    .mockImplementation(function (this: string, right: string) {
+      return compare(String(this), right);
+    });
+  try {
+    return await application.decideAdmission();
+  } finally {
+    localeCompare.mockRestore();
+  }
 }
 
 function kernelCommand(

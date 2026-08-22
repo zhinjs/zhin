@@ -38,7 +38,7 @@ describe('generation-owned Workroom Scheduler Assignment route registry', () => 
       .resolves.toBeNull();
   });
 
-  it('fails closed when local and remote providers both claim the exact Task route', async () => {
+  it('treats a legacy member without assignmentRoute as an exact local route', async () => {
     const registry = new GenerationOwnedWorkroomSchedulerAssignmentRouteRegistry({
       generation: 7,
       signal: new AbortController().signal,
@@ -59,7 +59,68 @@ describe('generation-owned Workroom Scheduler Assignment route registry', () => 
     });
 
     await expect(registry.resolve({ decision: decision(), catalog: catalog() }))
-      .resolves.toBeNull();
+      .resolves.toEqual({
+        kind: 'local', agentDefinitionId: 'developer', authorityRef: 'local:7',
+      });
+  });
+
+  it('selects only the Catalog-pinned local route when both local and remote providers are installed', async () => {
+    const registry = new GenerationOwnedWorkroomSchedulerAssignmentRouteRegistry({
+      generation: 7,
+      signal: new AbortController().signal,
+      profiles: pinnedProfiles(),
+    });
+    registry.register({
+      providerId: 'local-agent-bindings', generation: 7,
+      resolve: async () => ({
+        kind: 'local', agentDefinitionId: 'developer', authorityRef: 'local:7',
+      }),
+    });
+    registry.register({
+      providerId: 'remote-a2a-bindings', generation: 7,
+      resolve: async () => ({
+        kind: 'remote', agentDefinitionId: 'developer', endpointId: 'remote-1',
+        authorityRef: 'remote:7',
+      }),
+    });
+
+    await expect(registry.resolve({
+      decision: decision(),
+      catalog: catalog({ kind: 'local' }),
+    })).resolves.toEqual({
+      kind: 'local', agentDefinitionId: 'developer', authorityRef: 'local:7',
+    });
+  });
+
+  it('selects the exact Catalog-pinned remote endpoint among multiple installed endpoints', async () => {
+    const registry = new GenerationOwnedWorkroomSchedulerAssignmentRouteRegistry({
+      generation: 7,
+      signal: new AbortController().signal,
+      profiles: pinnedProfiles(),
+    });
+    registry.register({
+      providerId: 'local-agent-bindings', generation: 7,
+      resolve: async () => ({
+        kind: 'local', agentDefinitionId: 'developer', authorityRef: 'local:7',
+      }),
+    });
+    for (const endpointId of ['remote-1', 'remote-2']) {
+      registry.register({
+        providerId: `remote-a2a-bindings:${endpointId}`, generation: 7,
+        resolve: async () => ({
+          kind: 'remote', agentDefinitionId: 'developer', endpointId,
+          authorityRef: `remote:7:${endpointId}`,
+        }),
+      });
+    }
+
+    await expect(registry.resolve({
+      decision: decision(),
+      catalog: catalog({ kind: 'remote', endpointId: 'remote-2' }),
+    })).resolves.toEqual({
+      kind: 'remote', agentDefinitionId: 'developer', endpointId: 'remote-2',
+      authorityRef: 'remote:7:remote-2',
+    });
   });
 
   it('rejects stale-generation and non-Profile route producers', async () => {
@@ -110,14 +171,14 @@ function pinnedProfiles() {
   };
 }
 
-function catalog() {
+function catalog(assignmentRoute?: { kind: 'local' } | { kind: 'remote'; endpointId: string }) {
   return {
     revision: sha('c'),
     definitions: {
       'project-1': {
         enabled: true,
         members: [
-          { role: 'executor', agent: 'developer' },
+          { role: 'executor', agent: 'developer', ...(assignmentRoute ? { assignmentRoute } : {}) },
           { role: 'reviewer', agent: 'reviewer' },
         ],
       },

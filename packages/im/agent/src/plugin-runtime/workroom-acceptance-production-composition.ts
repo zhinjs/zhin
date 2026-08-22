@@ -67,8 +67,15 @@ export interface WorkroomEffectSponsorDecisionBinding {
   readonly deadline: number;
 }
 
+export type WorkroomEffectSponsorDecisionReasonCode =
+  | 'approved_as_requested'
+  | 'rejected_policy'
+  | 'rejected_scope'
+  | 'rejected_risk'
+  | 'rejected_by_sponsor';
+
 export interface WorkroomEffectSponsorDecisionCommand {
-  readonly version: 1;
+  readonly version: 2;
   readonly operationId: string;
   readonly projectId: string;
   readonly runId: string;
@@ -76,7 +83,8 @@ export interface WorkroomEffectSponsorDecisionCommand {
   readonly effectIntentDigest: string;
   readonly principalId: string;
   readonly decision: 'approve' | 'reject';
-  readonly reason: string;
+  /** Closed, content-free code. Human rationale belongs in a governed payload, never this repository. */
+  readonly reasonCode: WorkroomEffectSponsorDecisionReasonCode;
   readonly decidedAt: number;
 }
 
@@ -118,6 +126,23 @@ export interface WorkroomEffectSponsorDecisionRecord extends WorkroomEffectSpons
   readonly requestDigest: string;
   readonly digest: string;
 }
+
+interface WorkroomEffectSponsorLegacyDecisionQuarantineReceipt {
+  readonly version: 1;
+  readonly kind: 'workroom_effect_sponsor_legacy_decision_quarantine';
+  readonly effectIntentRef: string;
+  readonly status: 'quarantined';
+  readonly disposition: 'superseded_by_v2';
+  readonly legacyDecisionDigest: string;
+  readonly successorDecisionDigest: string;
+  readonly digest: string;
+}
+
+type WorkroomEffectSponsorLegacyDecisionSlot =
+  | Readonly<{ kind: 'absent' }>
+  | Readonly<{ kind: 'v1'; digest: string }>
+  | Readonly<{ kind: 'quarantined'; receipt: WorkroomEffectSponsorLegacyDecisionQuarantineReceipt }>
+  | Readonly<{ kind: 'v2'; decision: WorkroomEffectSponsorDecisionRecord }>;
 
 export interface WorkroomEffectAuthorizationPolicyPort {
   authorize(input: Readonly<{
@@ -258,8 +283,9 @@ implements WorkroomPersistedEffectAuthorizationFactsPort {
     const authority = await this.options.sponsorAuthority.authorize(request);
     if (!authority.authorized) throw new Error(`Effect Sponsor decision unauthorized: ${authority.reason}`);
     assertSponsorAuthority(authority, request, state.intent);
+    const { digest: requestDigest, ...requestBody } = request;
     const body = deepFreeze({
-      ...command,
+      ...requestBody,
       binding: authority.binding,
       authorizedBy: authority.authorizedBy,
       catalogRevision: authority.catalogRevision,
@@ -267,24 +293,93 @@ implements WorkroomPersistedEffectAuthorizationFactsPort {
       profileRef: authority.profileRef,
       profileDigest: authority.profileDigest,
       profileRevision: authority.profileRevision,
-      requestDigest: request.digest,
+      requestDigest,
     });
     const record = deepFreeze({ ...body, digest: digest(body) });
     await this.#store.ensureDurableLeaf('Workroom Effect Sponsor decision repository');
-    const target = this.#decisionTarget(record.effectIntentId);
+    const existingV2 = await this.#readV2Decision(record.effectIntentId);
+    if (existingV2) {
+      const verified = await this.#readDecision(record.effectIntentId);
+      if (!verified || canonicalWorkroomJson(verified) !== canonicalWorkroomJson(record)) {
+        throw new Error('Workroom Effect Sponsor decision CAS conflict');
+      }
+      return verified;
+    }
+    const legacy = await this.#readLegacyDecisionSlot(record.effectIntentId);
+    const existingReceipt = await this.#readLegacyQuarantineReceipt(record.effectIntentId);
+    if (legacy.kind === 'v2') {
+      if (existingReceipt || canonicalWorkroomJson(legacy.decision) !== canonicalWorkroomJson(record)) {
+        throw new Error('Workroom Effect Sponsor decision CAS conflict');
+      }
+      return legacy.decision;
+    }
+    if (legacy.kind === 'v1') {
+      const receipt = createLegacyDecisionQuarantineReceipt(
+        record.effectIntentId,
+        legacy.digest,
+        record.digest,
+      );
+      await this.#publishLegacyQuarantineReceipt(record.effectIntentId, receipt);
+      await this.#assertLegacyDecisionSupersession(record.effectIntentId, record, receipt);
+      await this.#store.removeIfExists(this.#legacyDecisionTarget(record.effectIntentId), true);
+      await this.#store.publishCreateOnly({
+        target: this.#legacyDecisionTarget(record.effectIntentId),
+        content: canonicalWorkroomJson(receipt),
+        createdValue: receipt,
+        onConflict: async () => {
+          const slot = await this.#readLegacyDecisionSlot(record.effectIntentId);
+          if (slot.kind !== 'quarantined'
+            || canonicalWorkroomJson(slot.receipt) !== canonicalWorkroomJson(receipt)) {
+            throw new Error('Workroom Effect Sponsor legacy plaintext tombstone conflict');
+          }
+          return slot.receipt;
+        },
+      });
+      if ((await this.#readLegacyDecisionSlot(record.effectIntentId)).kind !== 'quarantined') {
+        throw new Error('Workroom Effect Sponsor legacy plaintext decision purge failed');
+      }
+    } else if (legacy.kind === 'quarantined') {
+      if (!existingReceipt
+        || canonicalWorkroomJson(legacy.receipt) !== canonicalWorkroomJson(existingReceipt)
+        || existingReceipt.successorDecisionDigest !== record.digest) {
+        throw new Error('Workroom Effect Sponsor legacy decision quarantine receipt is orphaned');
+      }
+    } else if (existingReceipt) {
+      if (existingReceipt.successorDecisionDigest !== record.digest) {
+        throw new Error('Workroom Effect Sponsor legacy decision quarantine receipt is orphaned');
+      }
+      await this.#store.publishCreateOnly({
+        target: this.#legacyDecisionTarget(record.effectIntentId),
+        content: canonicalWorkroomJson(existingReceipt),
+        createdValue: existingReceipt,
+        onConflict: async () => {
+          const slot = await this.#readLegacyDecisionSlot(record.effectIntentId);
+          if (slot.kind !== 'quarantined'
+            || canonicalWorkroomJson(slot.receipt) !== canonicalWorkroomJson(existingReceipt)) {
+            throw new Error('Workroom Effect Sponsor legacy plaintext tombstone conflict');
+          }
+          return slot.receipt;
+        },
+      });
+    }
+    const target = this.#v2DecisionTarget(record.effectIntentId);
     const publication = await this.#store.publishCreateOnly({
       target,
       content: canonicalWorkroomJson(record),
       createdValue: record,
       onConflict: async () => {
-        const existing = await this.#readDecision(record.effectIntentId);
+        const existing = await this.#readV2Decision(record.effectIntentId);
         if (!existing || canonicalWorkroomJson(existing) !== canonicalWorkroomJson(record)) {
           throw new Error('Workroom Effect Sponsor decision CAS conflict');
         }
         return existing;
       },
     });
-    return publication.value;
+    const verified = await this.#readDecision(record.effectIntentId);
+    if (!verified || canonicalWorkroomJson(verified) !== canonicalWorkroomJson(publication.value)) {
+      throw new Error('Workroom Effect Sponsor decision publication is incomplete');
+    }
+    return verified;
   }
 
   async #publishFact(fact: WorkroomPersistedEffectAuthorizationFacts): Promise<void> {
@@ -305,7 +400,103 @@ implements WorkroomPersistedEffectAuthorizationFactsPort {
   }
 
   async #readDecision(effectIntentId: string): Promise<WorkroomEffectSponsorDecisionRecord | undefined> {
-    return await readOptional(this.#decisionTarget(effectIntentId), parseDecision);
+    const v2 = await this.#readV2Decision(effectIntentId);
+    const legacy = await this.#readLegacyDecisionSlot(effectIntentId);
+    const receipt = await this.#readLegacyQuarantineReceipt(effectIntentId);
+    if (!v2) {
+      if (receipt) {
+        throw new Error('Workroom Effect Sponsor legacy decision migration is incomplete');
+      }
+      if (legacy.kind === 'v2') return legacy.decision;
+      if (legacy.kind === 'v1') throw legacyDecisionQuarantineError();
+      return undefined;
+    }
+    if (legacy.kind === 'absent') {
+      if (receipt && receipt.successorDecisionDigest !== v2.digest) {
+        throw new Error('Workroom Effect Sponsor legacy decision quarantine receipt is orphaned');
+      }
+      return v2;
+    }
+    if (legacy.kind === 'v2') {
+      if (receipt || canonicalWorkroomJson(legacy.decision) !== canonicalWorkroomJson(v2)) {
+        throw new Error('Workroom Effect Sponsor v2 decision slots conflict');
+      }
+      return v2;
+    }
+    if (legacy.kind === 'quarantined') {
+      if (!receipt || canonicalWorkroomJson(legacy.receipt) !== canonicalWorkroomJson(receipt)
+        || receipt.successorDecisionDigest !== v2.digest) {
+        throw new Error('Workroom Effect Sponsor legacy decision supersession receipt is missing');
+      }
+      return v2;
+    }
+    if (!receipt) {
+      throw new Error('Workroom Effect Sponsor legacy decision supersession receipt is missing');
+    }
+    await this.#assertLegacyDecisionSupersession(effectIntentId, v2, receipt);
+    return v2;
+  }
+
+  async #readV2Decision(effectIntentId: string): Promise<WorkroomEffectSponsorDecisionRecord | undefined> {
+    return await readOptional(this.#v2DecisionTarget(effectIntentId), parseDecision);
+  }
+
+  async #readLegacyDecisionSlot(effectIntentId: string): Promise<WorkroomEffectSponsorLegacyDecisionSlot> {
+    const value = await readOptional(this.#legacyDecisionTarget(effectIntentId), candidate => candidate);
+    if (value === undefined) return Object.freeze({ kind: 'absent' });
+    if ((value as { kind?: unknown }).kind === 'workroom_effect_sponsor_legacy_decision_quarantine') {
+      return Object.freeze({
+        kind: 'quarantined',
+        receipt: parseLegacyDecisionQuarantineReceipt(value, effectIntentId),
+      });
+    }
+    if (isLegacyDecisionV1(value)) {
+      return Object.freeze({ kind: 'v1', digest: digest(value) });
+    }
+    return Object.freeze({ kind: 'v2', decision: parseDecision(value) });
+  }
+
+  async #readLegacyQuarantineReceipt(
+    effectIntentId: string,
+  ): Promise<WorkroomEffectSponsorLegacyDecisionQuarantineReceipt | undefined> {
+    return await readOptional(
+      this.#legacyQuarantineReceiptTarget(effectIntentId),
+      value => parseLegacyDecisionQuarantineReceipt(value, effectIntentId),
+    );
+  }
+
+  async #publishLegacyQuarantineReceipt(
+    effectIntentId: string,
+    receipt: WorkroomEffectSponsorLegacyDecisionQuarantineReceipt,
+  ): Promise<void> {
+    await this.#store.publishCreateOnly({
+      target: this.#legacyQuarantineReceiptTarget(effectIntentId),
+      content: canonicalWorkroomJson(receipt),
+      createdValue: receipt,
+      onConflict: async () => {
+        const existing = await this.#readLegacyQuarantineReceipt(effectIntentId);
+        if (!existing || canonicalWorkroomJson(existing) !== canonicalWorkroomJson(receipt)) {
+          throw new Error('Workroom Effect Sponsor legacy decision quarantine receipt CAS conflict');
+        }
+        return existing;
+      },
+    });
+  }
+
+  async #assertLegacyDecisionSupersession(
+    effectIntentId: string,
+    successor: WorkroomEffectSponsorDecisionRecord,
+    receipt: WorkroomEffectSponsorLegacyDecisionQuarantineReceipt,
+  ): Promise<void> {
+    const legacy = await this.#readLegacyDecisionSlot(effectIntentId);
+    if ((legacy.kind !== 'v1' && legacy.kind !== 'quarantined')
+      || receipt.effectIntentRef !== legacyEffectIntentRef(effectIntentId)
+      || (legacy.kind === 'v1' && receipt.legacyDecisionDigest !== legacy.digest)
+      || (legacy.kind === 'quarantined'
+        && canonicalWorkroomJson(legacy.receipt) !== canonicalWorkroomJson(receipt))
+      || receipt.successorDecisionDigest !== successor.digest) {
+      throw new Error('Workroom Effect Sponsor legacy decision supersession drift');
+    }
   }
 
   async #readFact(effectIntentId: string): Promise<WorkroomPersistedEffectAuthorizationFacts | undefined> {
@@ -318,8 +509,16 @@ implements WorkroomPersistedEffectAuthorizationFactsPort {
     });
   }
 
-  #decisionTarget(effectIntentId: string): string {
+  #legacyDecisionTarget(effectIntentId: string): string {
     return join(this.options.directory, `${key(effectIntentId)}.decision.json`);
+  }
+
+  #v2DecisionTarget(effectIntentId: string): string {
+    return join(this.options.directory, `${key(effectIntentId)}.decision.v2.json`);
+  }
+
+  #legacyQuarantineReceiptTarget(effectIntentId: string): string {
+    return join(this.options.directory, `${key(effectIntentId)}.decision-v1-quarantine.json`);
   }
 
   #factTarget(effectIntentId: string): string {
@@ -624,17 +823,35 @@ class FileWorkroomAcceptanceProviderBlockerRepository {
 }
 
 function createDecisionRequest(command: WorkroomEffectSponsorDecisionCommand): WorkroomEffectSponsorDecisionRequest {
-  if (command.version !== 1) throw new Error('Effect Sponsor decision version is invalid');
+  if (!command || typeof command !== 'object' || Array.isArray(command)) {
+    throw new Error('Effect Sponsor decision shape is invalid');
+  }
+  if ((command as { version?: unknown }).version === 1) {
+    throw new Error('Legacy Effect Sponsor decision v1 is quarantined; submit a v2 closed reason code');
+  }
+  assertExactKeys(command as unknown as Readonly<Record<string, unknown>>, [
+    'version', 'operationId', 'projectId', 'runId', 'effectIntentId', 'effectIntentDigest',
+    'principalId', 'decision', 'reasonCode', 'decidedAt',
+  ], 'Effect Sponsor decision');
+  if (command.version !== 2) throw new Error('Effect Sponsor decision version is invalid');
+  const decision = enumValue(command.decision, ['approve', 'reject'], 'Effect Sponsor decision');
+  const reasonCode = enumValue(command.reasonCode, [
+    'approved_as_requested', 'rejected_policy', 'rejected_scope', 'rejected_risk',
+    'rejected_by_sponsor',
+  ], 'Effect Sponsor reason code');
+  if ((decision === 'approve') !== (reasonCode === 'approved_as_requested')) {
+    throw new Error('Effect Sponsor reason code does not match the decision');
+  }
   const body = deepFreeze({
-    version: 1 as const,
+    version: 2 as const,
     operationId: required(command.operationId, 'Effect Sponsor operation id'),
     projectId: required(command.projectId, 'Effect Sponsor Project id'),
     runId: required(command.runId, 'Effect Sponsor Run id'),
     effectIntentId: required(command.effectIntentId, 'Effect Sponsor Intent id'),
     effectIntentDigest: requiredDigest(command.effectIntentDigest, 'Effect Sponsor Intent digest'),
     principalId: required(command.principalId, 'Effect Sponsor principal'),
-    decision: enumValue(command.decision, ['approve', 'reject'], 'Effect Sponsor decision'),
-    reason: required(command.reason, 'Effect Sponsor reason'),
+    decision,
+    reasonCode,
     decidedAt: positive(command.decidedAt, 'Effect Sponsor decidedAt'),
   });
   return deepFreeze({ ...body, digest: digest(body) });
@@ -687,14 +904,107 @@ function assertDecisionIntentBinding(
   }
 }
 
+function createLegacyDecisionQuarantineReceipt(
+  effectIntentId: string,
+  legacyDecisionDigest: string,
+  successorDecisionDigest: string,
+): WorkroomEffectSponsorLegacyDecisionQuarantineReceipt {
+  const body = deepFreeze({
+    version: 1 as const,
+    kind: 'workroom_effect_sponsor_legacy_decision_quarantine' as const,
+    effectIntentRef: legacyEffectIntentRef(effectIntentId),
+    status: 'quarantined' as const,
+    disposition: 'superseded_by_v2' as const,
+    legacyDecisionDigest: requiredDigest(legacyDecisionDigest, 'Legacy Effect Sponsor decision digest'),
+    successorDecisionDigest: requiredDigest(successorDecisionDigest, 'Successor Effect Sponsor decision digest'),
+  });
+  return deepFreeze({ ...body, digest: digest(body) });
+}
+
+function parseLegacyDecisionQuarantineReceipt(
+  value: unknown,
+  effectIntentId: string,
+): WorkroomEffectSponsorLegacyDecisionQuarantineReceipt {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Persisted Effect Sponsor legacy decision quarantine receipt is malformed');
+  }
+  const receipt = value as WorkroomEffectSponsorLegacyDecisionQuarantineReceipt;
+  assertExactKeys(receipt as unknown as Readonly<Record<string, unknown>>, [
+    'version', 'kind', 'effectIntentRef', 'status', 'disposition', 'legacyDecisionDigest',
+    'successorDecisionDigest', 'digest',
+  ], 'Persisted Effect Sponsor legacy decision quarantine receipt');
+  if (receipt.version !== 1
+    || receipt.kind !== 'workroom_effect_sponsor_legacy_decision_quarantine'
+    || receipt.effectIntentRef !== legacyEffectIntentRef(effectIntentId)
+    || receipt.status !== 'quarantined'
+    || receipt.disposition !== 'superseded_by_v2') {
+    throw new Error('Persisted Effect Sponsor legacy decision quarantine receipt is malformed');
+  }
+  requiredDigest(receipt.legacyDecisionDigest, 'Legacy Effect Sponsor decision digest');
+  requiredDigest(receipt.successorDecisionDigest, 'Successor Effect Sponsor decision digest');
+  const { digest: supplied, ...body } = receipt;
+  if (supplied !== digest(body)) {
+    throw new Error('Persisted Effect Sponsor legacy decision quarantine receipt digest drift');
+  }
+  return deepFreeze(receipt);
+}
+
+function legacyEffectIntentRef(effectIntentId: string): string {
+  return `effect-intent:${key(effectIntentId)}`;
+}
+
+function isLegacyDecisionV1(value: unknown): boolean {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value)
+    && (value as { version?: unknown }).version === 1);
+}
+
+function legacyDecisionQuarantineError(): Error {
+  return new Error('Legacy Effect Sponsor decision v1 is quarantined; submit a v2 closed reason code');
+}
+
 function parseDecision(value: unknown): WorkroomEffectSponsorDecisionRecord {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Persisted Effect Sponsor decision is malformed');
+  }
+  if ((value as { version?: unknown }).version === 1) {
+    throw legacyDecisionQuarantineError();
+  }
   const record = value as WorkroomEffectSponsorDecisionRecord;
-  const request = createDecisionRequest(record);
+  assertExactKeys(record as unknown as Readonly<Record<string, unknown>>, [
+    'version', 'operationId', 'projectId', 'runId', 'effectIntentId', 'effectIntentDigest',
+    'principalId', 'decision', 'reasonCode', 'decidedAt', 'binding', 'authorizedBy',
+    'catalogRevision', 'projectDigest', 'profileRef', 'profileDigest', 'profileRevision',
+    'requestDigest', 'digest',
+  ], 'Persisted Effect Sponsor decision');
+  const request = createDecisionRequest({
+    version: record.version,
+    operationId: record.operationId,
+    projectId: record.projectId,
+    runId: record.runId,
+    effectIntentId: record.effectIntentId,
+    effectIntentDigest: record.effectIntentDigest,
+    principalId: record.principalId,
+    decision: record.decision,
+    reasonCode: record.reasonCode,
+    decidedAt: record.decidedAt,
+  });
   const { digest: supplied, ...body } = record;
   if (record.requestDigest !== request.digest || supplied !== digest(body)) {
     throw new Error('Persisted Effect Sponsor decision digest drift');
   }
   return deepFreeze(record);
+}
+
+function assertExactKeys(
+  value: Readonly<Record<string, unknown>>,
+  expected: readonly string[],
+  label: string,
+): void {
+  const actual = Object.keys(value).sort();
+  const canonical = [...expected].sort();
+  if (actual.length !== canonical.length || actual.some((key, index) => key !== canonical[index])) {
+    throw new Error(`${label} keys are invalid`);
+  }
 }
 
 async function readOptional<T>(target: string, parse: (value: unknown) => T): Promise<T | undefined> {

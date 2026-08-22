@@ -13,6 +13,7 @@ import {
   type AssignmentExecutionObservation,
 } from './assignment-executor.js';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson,
   digestCanonicalWorkroomValue,
 } from './canonical-value.js';
@@ -1240,7 +1241,7 @@ export class WorkroomKernel {
       }
     }
     return Object.freeze(receipts.sort((left, right) =>
-      left.operationId.localeCompare(right.operationId)));
+      compareCanonicalWorkroomText(left.operationId, right.operationId)));
   }
 
   /** Durable remote dispatch intents used by the generation recovery projector. */
@@ -1261,7 +1262,7 @@ export class WorkroomKernel {
       }
     }
     return Object.freeze(receipts.sort((left, right) =>
-      left.operationId.localeCompare(right.operationId)));
+      compareCanonicalWorkroomText(left.operationId, right.operationId)));
   }
 
   async #readUnscoped(runId: string): Promise<WorkroomRunState> {

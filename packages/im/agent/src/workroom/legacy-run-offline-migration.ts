@@ -1,4 +1,5 @@
 import {
+  compareCanonicalWorkroomText,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
 } from './canonical-value.js';
@@ -167,7 +168,7 @@ export function buildLegacyRunOfflineReport(input: unknown): LegacyRunOfflineRep
   assertReferences(normalized);
   const runs = normalized.runs
     .map(run => auditRun(normalized, run))
-    .sort((left, right) => left.legacyRunId.localeCompare(right.legacyRunId));
+    .sort((left, right) => compareCanonicalWorkroomText(left.legacyRunId, right.legacyRunId));
   const body = deepFreeze({
     version: 1 as const,
     kind: 'legacy_run_offline_audit' as const,
@@ -222,7 +223,7 @@ function auditRun(
   run: LegacyRunRecord,
 ): LegacyRunOfflineAudit {
   const tasks = input.tasks.filter(task => task.runId === run.id)
-    .sort((left, right) => left.id.localeCompare(right.id));
+    .sort((left, right) => compareCanonicalWorkroomText(left.id, right.id));
   const events = input.events.filter(event => event.runId === run.id)
     .sort((left, right) => left.seq - right.seq);
   const recordDigest = digest({ run, tasks, events });

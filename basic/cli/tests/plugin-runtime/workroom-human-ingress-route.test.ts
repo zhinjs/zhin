@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import { Message } from '@zhin.js/core/runtime';
+import { conversationRefKey } from '@zhin.js/im-contract';
 import {
   InteractionSpaceRouter,
   HumanIngressApplicationService,
@@ -237,6 +238,80 @@ describe('WorkroomHumanIngressPreRoute', () => {
       target: { assignmentId: 'assignment:1', status: 'active' },
     });
   });
+
+  it('routes a shared Sponsor Room per message without mutating a global Project binding', async () => {
+    const repositories = repositoriesFixture();
+    let configured = createCatalogWorkroomSpace({
+      projectId: 'alpha', agentDefinitionId: 'support', space: 'sponsor_room',
+      sourceRef: 'workroom-catalog:alpha:sponsor_room',
+      sourceDigest: `sha256:${'e'.repeat(64)}`, bindingRevision: 3,
+    });
+    const route = fixture(() => configured, repositories);
+
+    await route.preRoute(message('m-alpha-1', '/control data-lifecycle project alpha export subject-1 200'), 1);
+    configured = createCatalogWorkroomSpace({
+      projectId: 'beta', agentDefinitionId: 'support', space: 'sponsor_room',
+      sourceRef: 'workroom-catalog:beta:sponsor_room',
+      sourceDigest: `sha256:${'f'.repeat(64)}`, bindingRevision: 7,
+    });
+    await route.preRoute(message('m-beta', '/control data-lifecycle project beta export subject-2 200'), 2);
+    configured = createCatalogWorkroomSpace({
+      projectId: 'alpha', agentDefinitionId: 'support', space: 'sponsor_room',
+      sourceRef: 'workroom-catalog:alpha:sponsor_room',
+      sourceDigest: `sha256:${'e'.repeat(64)}`, bindingRevision: 3,
+    });
+    await route.preRoute(message('m-alpha-2', '/control data-lifecycle project alpha export subject-1 201'), 3);
+
+    await expect(repositories.bindings.read(conversationRefKey(conversation)))
+      .resolves.toEqual([]);
+    expect((await repositories.proposals.read('alpha')).map(record => record.proposal))
+      .toEqual([
+        expect.objectContaining({ projectId: 'alpha', bindingRevision: 3,
+          sourceEvent: expect.objectContaining({ sequence: 1 }) }),
+        expect.objectContaining({ projectId: 'alpha', bindingRevision: 3,
+          sourceEvent: expect.objectContaining({ sequence: 3 }) }),
+      ]);
+    expect((await repositories.proposals.read('beta')).at(-1)?.proposal).toMatchObject({
+      projectId: 'beta', bindingRevision: 7,
+      kind: 'project_inbox', intent: 'control',
+      authorityRequirement: 'typed_sponsor_control', space: 'sponsor_room',
+    });
+  });
+
+  it('turns an ambiguous or conflicting shared Sponsor Room target into clarification', async () => {
+    const repositories = repositoriesFixture();
+    const replies: unknown[] = [];
+    const route = fixture(() => ({ status: 'rejected', reason: 'project_conflict' }), repositories);
+
+    await expect(route.preRoute(message('m-conflict', '/control portfolio p project alpha lane 1 high c', replies), 1))
+      .resolves.toBe(true);
+
+    expect(replies).toEqual([expect.stringContaining('不一致')]);
+    await expect(repositories.proposals.read('alpha')).resolves.toEqual([]);
+  });
+
+  it('uses a Sponsor card reply only as the trusted Project selector for typed control', async () => {
+    const repositories = repositoriesFixture();
+    const configured = createCatalogWorkroomSpace({
+      projectId: 'alpha', agentDefinitionId: 'support', space: 'sponsor_room',
+      sourceRef: 'workroom-catalog:alpha:sponsor_room',
+      sourceDigest: `sha256:${'e'.repeat(64)}`, bindingRevision: 9,
+    });
+    const createTargetResolver = vi.fn(() => undefined);
+    const route = fixture(() => configured, repositories, undefined, { createTargetResolver });
+
+    await route.preRoute(message('m-reply-control',
+      '/control portfolio portfolio-main status 1 paused command-1', undefined, 'card-alpha'), 1);
+
+    expect(createTargetResolver).toHaveBeenCalledWith(
+      expect.objectContaining({ replyTo: { id: 'card-alpha' } }),
+      'control',
+      expect.objectContaining({ space: 'sponsor_room', projectId: 'alpha', bindingRevision: 9 }),
+    );
+    expect((await repositories.proposals.read('alpha')).at(-1)?.proposal).toMatchObject({
+      kind: 'project_inbox', authorityRequirement: 'typed_sponsor_control', bindingRevision: 9,
+    });
+  });
 });
 
 function repositoriesFixture() {
@@ -248,7 +323,7 @@ function repositoriesFixture() {
 }
 
 function fixture(
-  resolveCatalogSpace: (message: Message) => ReturnType<typeof createCatalogWorkroomSpace> | null,
+  resolveCatalogSpace: ConstructorParameters<typeof WorkroomHumanIngressPreRoute>[0]['resolveCatalogSpace'],
   repositories = repositoriesFixture(),
   port: ConstructorParameters<typeof HumanIngressApplicationService>[0]['port'] = {
     apply: request => Object.freeze({

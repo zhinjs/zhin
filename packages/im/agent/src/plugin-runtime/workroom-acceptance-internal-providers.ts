@@ -12,6 +12,7 @@ import type {
   WorkroomRunProfilePin,
 } from '../workroom/profile-registry.js';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -99,7 +100,7 @@ WorkroomAcceptanceProjectionSourceAuthorityPort {
     ]);
     const pins = Object.values(profile.runPins)
       .filter(pin => pin.projectId === projectId)
-      .sort((left, right) => left.runId.localeCompare(right.runId));
+      .sort((left, right) => compareCanonicalWorkroomText(left.runId, right.runId));
     const byRevision = new Map<string, WorkroomAcceptanceProjectionCandidate>();
     for (const pin of pins) {
       const candidate = candidateForPin(profile, catalog, pin);
@@ -111,7 +112,7 @@ WorkroomAcceptanceProjectionSourceAuthorityPort {
       byRevision.set(key, candidate);
     }
     return Object.freeze([...byRevision.values()].sort((left, right) =>
-      left.projection.profileRevisionId.localeCompare(right.projection.profileRevisionId)));
+      compareCanonicalWorkroomText(left.projection.profileRevisionId, right.projection.profileRevisionId)));
   }
 }
 
@@ -244,7 +245,7 @@ implements WorkroomRiskHeaderProducerAuthorityPort {
       providerId: effect.receipt!.provider.id,
       providerDigest: effect.receipt!.provider.digest,
       authenticatedBy: effect.receipt!.authenticatedBy,
-    })).sort((left, right) => left.intentRef.localeCompare(right.intentRef));
+    })).sort((left, right) => compareCanonicalWorkroomText(left.intentRef, right.intentRef));
     const issuerDigest = digest({
       generation: this.options.generation,
       issuer: this.#issuer,

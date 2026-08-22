@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -81,7 +82,7 @@ export function createCapabilityPackManifest(input: CapabilityPackManifestInput)
           ...(task.requires.tools ? { tools: unique(task.requires.tools, 'Workflow Tool requirement') } : {}),
           ...(task.requires.skills ? { skills: unique(task.requires.skills, 'Workflow Skill requirement') } : {}),
         },
-      })).sort((left, right) => left.key.localeCompare(right.key)),
+      })).sort((left, right) => compareCanonicalWorkroomText(left.key, right.key)),
     })).sort(byId) } : {}),
     ...(input.memories ? { memories: sortKnowledgeDefinitions(input.memories, 'Memory') } : {}),
     ...(input.glossaries ? { glossaries: sortKnowledgeDefinitions(input.glossaries, 'Glossary') } : {}),
@@ -1338,8 +1339,7 @@ function sortPackRefs(values: readonly CapabilityPackRef[]): readonly Capability
   return deepFreeze(values.map(value => {
     assertPackRef(value);
     return { id: value.id, version: value.version, digest: value.digest };
-  }).sort((left, right) => `${left.id}@${left.version}#${left.digest}`
-    .localeCompare(`${right.id}@${right.version}#${right.digest}`)));
+  }).sort((left, right) => compareCanonicalWorkroomText(`${left.id}@${left.version}#${left.digest}`, `${right.id}@${right.version}#${right.digest}`)));
 }
 
 function assertPackRef(value: CapabilityPackRef): void {
@@ -1412,7 +1412,7 @@ function canonicalAcceptancePolicy(
       reviewerTimeoutMs: positive(task.reviewerTimeoutMs, 'Acceptance Reviewer timeout'),
       sponsorTimeoutMs: positive(task.sponsorTimeoutMs, 'Acceptance Sponsor timeout'),
     };
-  }).sort((left, right) => left.taskKey.localeCompare(right.taskKey));
+  }).sort((left, right) => compareCanonicalWorkroomText(left.taskKey, right.taskKey));
   if (new Set(tasks.map(task => task.taskKey)).size !== tasks.length) {
     throw new Error('Acceptance Policy Task keys contain duplicates');
   }
@@ -1434,7 +1434,7 @@ function canonicalAcceptancePolicy(
       allowedStatuses: allowedStatuses as readonly ('verified' | 'assumed')[],
       allowSupersedes: rule.allowSupersedes,
     };
-  }).sort((left, right) => left.key.localeCompare(right.key));
+  }).sort((left, right) => compareCanonicalWorkroomText(left.key, right.key));
   if (new Set(claimRules.map(rule => rule.key)).size !== claimRules.length) {
     throw new Error('Acceptance Memory claim keys contain duplicates');
   }
@@ -1455,7 +1455,7 @@ function unique(values: readonly string[], label: string): readonly string[] {
 }
 
 function byId(left: Readonly<{ id: string }>, right: Readonly<{ id: string }>): number {
-  return left.id.localeCompare(right.id);
+  return compareCanonicalWorkroomText(left.id, right.id);
 }
 
 function assertKeys(value: object, allowed: readonly string[], label: string): void {

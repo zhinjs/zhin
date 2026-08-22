@@ -13,6 +13,7 @@ describe('resolveWorkroomBotIdentity', () => {
       projectId: 'support',
       agent: 'support',
       role: 'executor',
+      space: 'workroom',
     });
   });
 
@@ -35,5 +36,35 @@ describe('resolveWorkroomBotIdentity', () => {
         conversation: { adapter: 'github', endpoint: 'app', kind: 'repository', id: 'zhinjs/zhin', agent: 'zhin' },
       },
     }, { adapter: 'github', endpoint: 'app', kind: 'repository', id: 'ZHINJS/Zhin' })?.projectId).toBe('repo');
+  });
+
+  it('resolves an exact persisted Sponsor Room separately from the Workroom conversation', () => {
+    expect(resolveWorkroomBotIdentity({
+      support: {
+        name: 'Support', sponsors: ['root:alice'],
+        members: [{ agent: 'zhin', role: 'orchestrator' }],
+        conversation: { adapter: 'telegram', endpoint: 'bot', kind: 'group', id: 'work', agent: 'zhin' },
+        sponsorConversation: { adapter: 'telegram', endpoint: 'bot', kind: 'group', id: 'sponsors', agent: 'zhin' },
+      },
+    }, { adapter: 'telegram', endpoint: 'bot', kind: 'group', id: 'sponsors' })).toMatchObject({
+      projectId: 'support', agent: 'zhin', role: 'orchestrator', space: 'sponsor_room',
+    });
+  });
+
+  it('requires an explicit Project when one portfolio Sponsor Room serves several Projects', () => {
+    const definition = (projectId: string) => ({
+      name: projectId,
+      members: [{ agent: 'zhin', role: 'orchestrator' as const }],
+      conversation: { adapter: 'telegram', endpoint: 'bot', kind: 'group' as const, id: `work-${projectId}`, agent: 'zhin' },
+      sponsorConversation: { adapter: 'telegram', endpoint: 'bot', kind: 'group' as const, id: 'portfolio', agent: 'zhin' },
+    });
+    const definitions = { alpha: definition('alpha'), beta: definition('beta') };
+    const input = { adapter: 'telegram', endpoint: 'bot', kind: 'group' as const, id: 'portfolio' };
+    expect(() => resolveWorkroomBotIdentity(definitions, input)).toThrow(/explicit Project/u);
+    expect(resolveWorkroomBotIdentity(definitions, { ...input, projectId: 'beta' })).toMatchObject({
+      projectId: 'beta', space: 'sponsor_room',
+    });
+    expect(() => resolveWorkroomBotIdentity(definitions, { ...input, projectId: 'missing' }))
+      .toThrow(/explicit Project id is not a member/u);
   });
 });

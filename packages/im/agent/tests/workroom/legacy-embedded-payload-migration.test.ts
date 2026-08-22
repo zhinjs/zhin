@@ -77,7 +77,7 @@ describe('legacy embedded Workroom payload migration scanner', () => {
     });
   });
 
-  it('does not quarantine a current content-free Journal reference as legacy text', async () => {
+  it('quarantines the blacklist-era v2 Journal even when its known fields used governed references', async () => {
     const current = {
       version: 2,
       events: [{
@@ -108,7 +108,20 @@ describe('legacy embedded Workroom payload migration scanner', () => {
         storage: 'file', sourceKind: 'journal', recordRef: 'journal:v2', value: current,
       }],
     });
-    expect(report.findings).toEqual([]);
+    expect(report.findings).toEqual([
+      expect.objectContaining({
+        storage: 'file', sourceKind: 'journal', recordRef: 'journal:v2',
+        categories: ['embedded_body'], fieldPaths: ['$.<legacy-journal-schema>'],
+      }),
+    ]);
+
+    const currentV3 = { ...current, version: 3, events: current.events.map(event => ({ ...event, version: 3 })) };
+    const v3Report = await scanLegacyEmbeddedPayloads({
+      read: async () => [{
+        storage: 'file', sourceKind: 'journal', recordRef: 'journal:v3', value: currentV3,
+      }],
+    });
+    expect(v3Report.findings).toEqual([]);
   });
 
   it('fails closed on corrupt/unknown input without echoing source bytes', async () => {

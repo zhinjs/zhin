@@ -13,6 +13,7 @@ import {
 } from '../data-governance/disclosure-manifest.js';
 import type { WorkroomCatalog } from '../workroom/catalog.js';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -411,7 +412,7 @@ async function resolvePlanningAuthority(
     id: workflow.id,
     version: active.revisionId,
     digest: workflow.digest,
-  })).sort((left, right) => left.id.localeCompare(right.id)));
+  })).sort((left, right) => compareCanonicalWorkroomText(left.id, right.id)));
   const profileAuthority = deepFreeze<DynamicWorkflowPlanningProfileSnapshot>({
     revisionId: active.revisionId,
     digest: active.compiledDigest,
@@ -504,5 +505,5 @@ function assertPlanningDisclosure(
 }
 
 function sortedUnique(values: readonly string[]): readonly string[] {
-  return Object.freeze([...new Set(values)].sort((left, right) => left.localeCompare(right)));
+  return Object.freeze([...new Set(values)].sort((left, right) => compareCanonicalWorkroomText(left, right)));
 }

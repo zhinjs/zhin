@@ -1,4 +1,4 @@
-import { mkdtemp, readdir } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -43,6 +43,184 @@ import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canon
 const SHA = (value: string): string => `sha256:${value.repeat(64).slice(0, 64)}`;
 
 describe('P7 standard Acceptance production composition', () => {
+  it('rejects arbitrary Effect Sponsor reason text before the durable decision boundary', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-effect-sponsor-reason-'));
+    const effects = new MemoryWorkroomEffectJournal();
+    const intent = createWorkroomEffectIntent(effectIntent());
+    await new WorkroomEffectLedger(effects).recordIntent('project-1', intent);
+    const projector = new SponsorDecisionWorkroomEffectAuthorizationProjector({
+      directory: root,
+      effectJournal: effects,
+      sponsorAuthority: { authorize: async input => ({
+        authorized: true, authorizedBy: 'catalog:revision-1:project-digest',
+        catalogRevision: 'c'.repeat(64), projectDigest: SHA('c'),
+        profileRef: 'profile:project-1:profile-1', profileDigest: SHA('d'), profileRevision: 1,
+        binding: {
+          effectIntentId: intent.id, effectIntentDigest: intent.digest,
+          candidateHash: intent.candidateHash, assignmentAttempt: 1, workspaceFence: 4,
+          workspaceRef: intent.target.ref, workspaceDigest: intent.target.digest,
+          preconditionsDigest: digest(intent.preconditions), risk: intent.risk,
+          policy: { id: 'effect-policy', revision: 1, digest: SHA('7') }, deadline: 10_000,
+        },
+        requestDigest: input.digest,
+      }) },
+      policy: { authorize: async () => null },
+    });
+    const secret = 'customer credential 555-0144 must never reach decision JSON';
+    await expect(projector.control.decide({
+      version: 2, operationId: 'effect-sponsor-decision:plaintext', projectId: 'project-1',
+      runId: 'run-1', effectIntentId: intent.id, effectIntentDigest: intent.digest,
+      principalId: 'human:sponsor-1', decision: 'approve', reason: secret,
+      reasonCode: 'approved_as_requested', decidedAt: 2,
+    } as never)).rejects.toThrow('keys');
+    expect(await readdir(root)).toEqual([]);
+  });
+
+  it('quarantines a legacy v1 decision without echoing its plaintext reason', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-effect-sponsor-v1-'));
+    const effects = new MemoryWorkroomEffectJournal();
+    const intent = createWorkroomEffectIntent(effectIntent());
+    await new WorkroomEffectLedger(effects).recordIntent('project-1', intent);
+    const secret = 'legacy sponsor reason includes customer credential 555-0166';
+    const target = join(root, `${digest(intent.id).slice('sha256:'.length)}.decision.json`);
+    await writeFile(target, JSON.stringify({ version: 1, reason: secret }));
+    const projector = new SponsorDecisionWorkroomEffectAuthorizationProjector({
+      directory: root, effectJournal: effects,
+      sponsorAuthority: { authorize: async () => ({ authorized: false, requestDigest: SHA('1'), reason: 'deny' }) },
+      policy: { authorize: async () => null },
+    });
+    let failure: unknown;
+    try {
+      await projector.drainProject('project-1');
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toContain('v1 is quarantined');
+    expect((failure as Error).message).not.toContain(secret);
+  });
+
+  it('supersedes a quarantined legacy v1 slot with an exact content-free v2 decision', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-effect-sponsor-v1-supersede-'));
+    const effects = new MemoryWorkroomEffectJournal();
+    const intent = createWorkroomEffectIntent(effectIntent());
+    await new WorkroomEffectLedger(effects).recordIntent('project-1', intent);
+    const secret = 'legacy sponsor reason includes customer credential 555-0199';
+    const legacyName = `${digest(intent.id).slice('sha256:'.length)}.decision.json`;
+    const legacyTarget = join(root, legacyName);
+    await writeFile(legacyTarget, JSON.stringify({ version: 1, reason: secret }));
+    const projector = new SponsorDecisionWorkroomEffectAuthorizationProjector({
+      directory: root, effectJournal: effects,
+      sponsorAuthority: { authorize: async input => ({
+        authorized: true, authorizedBy: 'catalog:revision-1:project-digest',
+        catalogRevision: 'c'.repeat(64), projectDigest: SHA('c'),
+        profileRef: 'profile:project-1:profile-1', profileDigest: SHA('d'), profileRevision: 1,
+        binding: {
+          effectIntentId: intent.id, effectIntentDigest: intent.digest,
+          candidateHash: intent.candidateHash, assignmentAttempt: 1, workspaceFence: 4,
+          workspaceRef: intent.target.ref, workspaceDigest: intent.target.digest,
+          preconditionsDigest: digest(intent.preconditions), risk: intent.risk,
+          policy: { id: 'effect-policy', revision: 1, digest: SHA('7') }, deadline: 10_000,
+        },
+        requestDigest: input.digest,
+      }) },
+      policy: { authorize: async () => null },
+    });
+
+    const command = {
+      version: 2, operationId: 'effect-sponsor-decision:v1-supersede', projectId: 'project-1',
+      runId: 'run-1', effectIntentId: intent.id, effectIntentDigest: intent.digest,
+      principalId: 'human:sponsor-1', decision: 'approve',
+      reasonCode: 'approved_as_requested', decidedAt: 2,
+    } as const;
+    await expect(projector.control.decide(command))
+      .resolves.toMatchObject({ version: 2, reasonCode: 'approved_as_requested' });
+    const durable = await Promise.all((await readdir(root)).map(async name => ({
+      name, content: await readFile(join(root, name), 'utf8'),
+    })));
+    const v2 = durable.find(entry => entry.name.endsWith('.decision.v2.json'));
+    const receipt = durable.find(entry => entry.name.endsWith('.decision-v1-quarantine.json'));
+    expect(v2).toBeDefined();
+    expect(receipt).toBeDefined();
+    expect(JSON.parse(receipt!.content)).toEqual({
+      version: 1,
+      kind: 'workroom_effect_sponsor_legacy_decision_quarantine',
+      effectIntentRef: expect.stringMatching(/^effect-intent:[a-f0-9]{64}$/u),
+      status: 'quarantined',
+      disposition: 'superseded_by_v2',
+      legacyDecisionDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+      successorDecisionDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+      digest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+    });
+    expect(durable.every(entry => !entry.content.includes(secret))).toBe(true);
+    expect(JSON.parse((durable.find(entry => entry.name === legacyName))!.content)).toMatchObject({
+      kind: 'workroom_effect_sponsor_legacy_decision_quarantine',
+      disposition: 'superseded_by_v2',
+    });
+
+    await expect(projector.control.decide({ ...command, decidedAt: 3 }))
+      .rejects.toThrow('CAS conflict');
+
+    await unlink(join(root, v2!.name));
+    await unlink(legacyTarget);
+    const restarted = new SponsorDecisionWorkroomEffectAuthorizationProjector({
+      ...projector.options,
+    });
+    await expect(restarted.drainProject('project-1')).rejects.toThrow('migration is incomplete');
+    await expect(restarted.control.decide(command)).resolves.toMatchObject({ digest: expect.any(String) });
+    expect(JSON.parse(await readFile(legacyTarget, 'utf8'))).toMatchObject({
+      kind: 'workroom_effect_sponsor_legacy_decision_quarantine',
+    });
+
+    await unlink(join(root, receipt!.name));
+    const missingReceipt = new SponsorDecisionWorkroomEffectAuthorizationProjector({
+      ...projector.options,
+    });
+    await expect(missingReceipt.drainProject('project-1'))
+      .rejects.toThrow('supersession receipt is missing');
+  });
+
+  it('replays v2 decisions from the former decision slot without creating a competing slot', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-effect-sponsor-old-v2-slot-'));
+    const effects = new MemoryWorkroomEffectJournal();
+    const intent = createWorkroomEffectIntent(effectIntent());
+    await new WorkroomEffectLedger(effects).recordIntent('project-1', intent);
+    const sponsorAuthority = { authorize: async (input: { digest: string }) => ({
+      authorized: true as const, authorizedBy: 'catalog:revision-1:project-digest',
+      catalogRevision: 'c'.repeat(64), projectDigest: SHA('c'),
+      profileRef: 'profile:project-1:profile-1', profileDigest: SHA('d'), profileRevision: 1,
+      binding: {
+        effectIntentId: intent.id, effectIntentDigest: intent.digest,
+        candidateHash: intent.candidateHash, assignmentAttempt: 1, workspaceFence: 4,
+        workspaceRef: intent.target.ref, workspaceDigest: intent.target.digest,
+        preconditionsDigest: digest(intent.preconditions), risk: intent.risk,
+        policy: { id: 'effect-policy', revision: 1, digest: SHA('7') }, deadline: 10_000,
+      },
+      requestDigest: input.digest,
+    }) };
+    const command = {
+      version: 2, operationId: 'effect-sponsor-decision:old-v2-slot', projectId: 'project-1',
+      runId: 'run-1', effectIntentId: intent.id, effectIntentDigest: intent.digest,
+      principalId: 'human:sponsor-1', decision: 'approve',
+      reasonCode: 'approved_as_requested', decidedAt: 2,
+    } as const;
+    const first = new SponsorDecisionWorkroomEffectAuthorizationProjector({
+      directory: root, effectJournal: effects, sponsorAuthority,
+      policy: { authorize: async () => null },
+    });
+    const record = await first.control.decide(command);
+    const opaque = digest(intent.id).slice('sha256:'.length);
+    await unlink(join(root, `${opaque}.decision.v2.json`));
+    await writeFile(join(root, `${opaque}.decision.json`), JSON.stringify(record));
+
+    const restarted = new SponsorDecisionWorkroomEffectAuthorizationProjector({
+      directory: root, effectJournal: effects, sponsorAuthority,
+      policy: { authorize: async () => null },
+    });
+    await expect(restarted.control.decide(command)).resolves.toEqual(record);
+    expect(await readdir(root)).toEqual([`${opaque}.decision.json`]);
+  });
+
   it('publishes generation-owned resources and durably blocks missing Check/Context providers', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-acceptance-composition-'));
     const stateRoot = join(root, '.zhin');
@@ -139,10 +317,19 @@ describe('P7 standard Acceptance production composition', () => {
     });
 
     await projector.control.decide({
-      version: 1, operationId: 'effect-sponsor-decision:1', projectId: 'project-1',
+      version: 2, operationId: 'effect-sponsor-decision:1', projectId: 'project-1',
       runId: 'run-1', effectIntentId: intent.id, effectIntentDigest: intent.digest,
-      principalId: 'human:sponsor-1', decision: 'approve', reason: 'ship', decidedAt: 2,
+      principalId: 'human:sponsor-1', decision: 'approve',
+      reasonCode: 'approved_as_requested', decidedAt: 2,
     });
+    const [decisionFile] = (await readdir(join(stateRoot, 'workroom-effect-authorization-facts')))
+      .filter(name => name.endsWith('.decision.v2.json'));
+    const decisionJson = await readFile(
+      join(stateRoot, 'workroom-effect-authorization-facts', decisionFile!),
+      'utf8',
+    );
+    expect(decisionJson).toContain('"reasonCode":"approved_as_requested"');
+    expect(decisionJson).not.toContain('"reason":');
     expect(await projector.drainProject('project-1')).toBe(1);
     const authority = new GenerationOwnedP7EffectAuthorization(() => projector);
     await expect(authority.authorize({
@@ -198,9 +385,10 @@ describe('P7 standard Acceptance production composition', () => {
       directory, effectJournal: effects, sponsorAuthority, policy: { authorize },
     });
     await firstProjector.control.decide({
-      version: 1, operationId: 'effect-sponsor-decision:restart', projectId: 'project-1',
+      version: 2, operationId: 'effect-sponsor-decision:restart', projectId: 'project-1',
       runId: 'run-1', effectIntentId: intent.id, effectIntentDigest: intent.digest,
-      principalId: 'human:sponsor-1', decision: 'approve', reason: 'ship', decidedAt: 2,
+      principalId: 'human:sponsor-1', decision: 'approve',
+      reasonCode: 'approved_as_requested', decidedAt: 2,
     });
     const first = new WorkroomEffectAuthorizationProjectionRuntime({
       signal: new AbortController().signal,

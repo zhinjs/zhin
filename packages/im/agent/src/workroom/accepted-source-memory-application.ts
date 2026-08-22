@@ -11,6 +11,7 @@ import {
   type WorkroomStructuredTaskReport,
 } from './accepted-source-projector.js';
 import {
+  compareCanonicalWorkroomText,
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -330,7 +331,7 @@ export function replayProjectMemoryApplication(
     projectId: id,
     stateRevision,
     sourceSequencesByRun,
-    facts: [...facts.values()].sort((left, right) => left.factId.localeCompare(right.factId)),
+    facts: [...facts.values()].sort((left, right) => compareCanonicalWorkroomText(left.factId, right.factId)),
     taskMemories: [...taskMemories],
     receipts: [...receipts],
   });

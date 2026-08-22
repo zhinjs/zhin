@@ -19,6 +19,7 @@ import {
   workroomProjectionMessageKey,
   type WorkroomProjectionDeliveryPort,
   type WorkroomProjectionBinding,
+  type WorkroomProjectionOutboxItem,
 } from '../../src/workroom/projection-outbox.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 import type { WorkroomEvent } from '../../src/workroom/kernel-contracts.js';
@@ -34,11 +35,41 @@ const DIGEST_F = `sha256:${'f'.repeat(64)}`;
 const temporaryRoots: string[] = [];
 const governance = createTestProjectionGovernance();
 
+function lifecycleOverdue(stateSequence: number, includeSecond = false) {
+  const body = {
+    version: 1 as const,
+    projectId: 'project-1',
+    clockRevision: 7,
+    observedAt: 100,
+    overdue: [{
+      objectId: 'object-1', stateSequence, stateDigest: DIGEST_A,
+      holdId: 'hold-1', ownerPrincipalId: 'steward-1', reasonCode: 'legal_hold' as const,
+      placedAt: 1, reviewAt: 50, overdueBy: 50,
+    }, ...(includeSecond ? [{
+      objectId: 'object-1', stateSequence, stateDigest: DIGEST_A,
+      holdId: 'hold-2', ownerPrincipalId: 'steward-2', reasonCode: 'investigation' as const,
+      placedAt: 2, reviewAt: 75, overdueBy: 25,
+    }] : [])],
+  };
+  return { ...body, digest: digest(body) };
+}
+
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map(root => rm(root, { recursive: true, force: true })));
 });
 
 describe('Workroom Projection Outbox', () => {
+  it('accepts an exact HEAD binding with the legacy implicit Workroom audience', async () => {
+    const repository = new MemoryWorkroomProjectionRepository();
+    const { audience: _audience, ...legacyBinding } = binding();
+    const legacy = await repository.bind(0, legacyBinding);
+
+    const rebound = await repository.bind(legacy.revision, binding());
+
+    expect(rebound).toBe(legacy);
+    expect(rebound.revision).toBe(1);
+  });
+
   it('captures committed Kernel observations as named Agent work/progress projections exactly once', async () => {
     const fixture = await runningAssignment();
     const state = await fixture.kernel.read('project-1', 'run-1');
@@ -97,7 +128,7 @@ describe('Workroom Projection Outbox', () => {
       },
       delivery: { status: 'pending', attempts: 0, fence: 0 },
     });
-    expect(captured.cursors['run-1']).toBe(completed.sequence);
+    expect(Object.values(captured.cursors)).toContain(completed.sequence);
     expect(replayed.revision).toBe(captured.revision);
     expect(Object.keys(replayed.items)).toHaveLength(Object.keys(captured.items).length);
     expect(Object.isFrozen(agentItems.at(-1)?.target)).toBe(true);
@@ -144,6 +175,114 @@ describe('Workroom Projection Outbox', () => {
       .toBe(captured.revision + 1);
   });
 
+  it('migrates an exact legacy Run cursor without replaying historical projections', async () => {
+    const fixture = await runningAssignment();
+    const source = new MemoryWorkroomProjectionRepository();
+    const captured = await new WorkroomProjectionTracer({
+      journal: fixture.journal,
+      repository: source,
+      governance,
+    }).capture(binding(), 'run-1');
+    const legacyItems = Object.values(captured.items).map(item => {
+      const {
+        cursorId: _cursorId,
+        id: _id,
+        idempotencyKey: _idempotencyKey,
+        digest: _digest,
+        delivery,
+        ...projection
+      } = item;
+      const legacyDigest = digest(projection);
+      const id = `projection:${legacyDigest.slice('sha256:'.length)}`;
+      return {
+        ...projection,
+        id,
+        idempotencyKey: id,
+        digest: legacyDigest,
+        delivery,
+      } satisfies WorkroomProjectionOutboxItem;
+    });
+    const repository = new MemoryWorkroomProjectionRepository();
+    const bound = await repository.bind(0, binding());
+    const legacy = await repository.capture(bound.revision, {
+      runId: 'run-1',
+      expectedCursor: -1,
+      cursor: captured.cursors[Object.keys(captured.cursors)[0]!]!,
+      items: legacyItems,
+    });
+
+    const migrated = await new WorkroomProjectionTracer({
+      journal: fixture.journal,
+      repository,
+      governance,
+    }).capture(binding(), 'run-1');
+
+    expect(Object.keys(migrated.items)).toEqual(Object.keys(legacy.items));
+    expect(Object.keys(migrated.cursors)).toHaveLength(2);
+    expect(migrated.cursors['run-1']).toBeDefined();
+    expect(migrated.revision).toBe(legacy.revision + 1);
+  });
+
+  it('captures overdue lifecycle state through the governed durable outbox without duplicate restart sends', async () => {
+    const root = join(tmpdir(), `workroom-lifecycle-projection-${crypto.randomUUID()}`);
+    temporaryRoots.push(root);
+    await mkdir(root);
+    const directory = join(root, 'projection');
+    const repository = new FileWorkroomProjectionRepository(directory);
+    await repository.bind(0, binding('sponsor_room'));
+    const tracer = new WorkroomProjectionTracer({
+      journal: new MemoryWorkroomJournal(), repository, governance,
+    });
+    const snapshot = lifecycleOverdue(4);
+
+    const captured = await tracer.captureLifecycleOverdue(binding('sponsor_room'), snapshot);
+    const restarted = new WorkroomProjectionTracer({
+      journal: new MemoryWorkroomJournal(),
+      repository: new FileWorkroomProjectionRepository(directory),
+      governance,
+    });
+    const replayed = await restarted.captureLifecycleOverdue(binding('sponsor_room'), snapshot);
+    const secondHold = await restarted.captureLifecycleOverdue(
+      binding('sponsor_room'), lifecycleOverdue(4, true),
+    );
+    const advanced = await restarted.captureLifecycleOverdue(
+      binding('sponsor_room'), lifecycleOverdue(5, true),
+    );
+
+    expect(Object.values(captured.cursors)).toContain(0);
+    expect(replayed.revision).toBe(captured.revision);
+    expect(Object.keys(replayed.items)).toHaveLength(1);
+    expect(Object.keys(secondHold.items)).toHaveLength(2);
+    expect(Object.keys(advanced.items)).toHaveLength(2);
+    expect(Object.values(advanced.cursors)).toContain(1);
+    const item = Object.values(advanced.items)[0]!;
+    expect(item).toMatchObject({
+      kind: 'attention', projectId: 'project-1', sourceSequence: 0, audience: 'sponsor_room',
+      target: { projectId: 'project-1', agentDefinitionId: 'software.orchestrator' },
+      disclosure: { request: { sinkRuleId: 'projection:sponsor-room' } },
+    });
+    expect(item.target).not.toHaveProperty('taskKey');
+    expect(governance.body(item)).toContain('Retention Hold review overdue');
+    const persisted = await readFile(join(directory,
+      (await readdir(directory)).filter(name => name.startsWith('projection.')).sort().at(-1)!), 'utf8');
+    expect(persisted).not.toMatch(/object-1|hold-1|Retention Hold review overdue/u);
+
+    let sends = 0;
+    const revokedGovernance = {
+      prepareProjection: governance.prepareProjection.bind(governance),
+      revalidate: async () => ({ status: 'blocked' as const, reason: 'disclosure_recipient_revoked' as const }),
+    };
+    const worker = new WorkroomProjectionDeliveryWorker({
+      repository: new FileWorkroomProjectionRepository(directory),
+      outbound: { send: async () => { sends += 1; return { status: 'sent' }; } },
+      workerId: 'lifecycle-worker', leaseMs: 1_000, governance: revokedGovernance,
+    });
+    await expect(worker.runOnce(1_000, new AbortController().signal)).resolves.toEqual({
+      status: 'failed', code: 'disclosure_recipient_revoked', retryable: false,
+    });
+    expect(sends).toBe(0);
+  });
+
   it('retries failed unified delivery with the same idempotency key and durably indexes the receipt', async () => {
     const fixture = await runningAssignment();
     const root = join(tmpdir(), `workroom-projection-worker-${crypto.randomUUID()}`);
@@ -162,30 +301,37 @@ describe('Workroom Projection Outbox', () => {
         }
         return {
           status: 'sent',
-          message: { conversation: item.conversation, id: 'platform-message-1' },
+          message: { conversation: item.conversation, id: `platform-message-${calls.length}` },
         };
       },
     };
+    let completionNow = 10_000;
     const worker = new WorkroomProjectionDeliveryWorker({
       repository,
       outbound,
       workerId: 'projection-worker-1',
       leaseMs: 1_000,
       governance,
+      // Simulate a slow external send: retry delay starts at completion, not claim time.
+      now: () => completionNow,
     });
     const kernelSequence = (await fixture.kernel.read('project-1', 'run-1')).sequence;
 
     expect(await worker.runOnce(1_000, new AbortController().signal))
       .toMatchObject({ status: 'failed', code: 'rate_limited' });
-    expect(await worker.runOnce(1_001, new AbortController().signal))
-      .toMatchObject({ status: 'sent', message: { id: 'platform-message-1' } });
+    expect(await worker.runOnce(2_000, new AbortController().signal))
+      .toMatchObject({ status: 'sent', message: { id: 'platform-message-2' } });
+    completionNow = 12_000;
+    expect(await worker.runOnce(11_000, new AbortController().signal))
+      .toMatchObject({ status: 'sent', message: { id: 'platform-message-3' } });
 
-    expect(calls).toHaveLength(2);
-    expect(calls[1]).toEqual(calls[0]);
+    expect(calls).toHaveLength(3);
+    expect(calls[1]).not.toEqual(calls[0]);
+    expect(calls[2]).toEqual(calls[0]);
     const restarted = await new FileWorkroomProjectionRepository(directory).read();
     const indexed = restarted.messageIndex[workroomProjectionMessageKey({
       conversation: binding().conversation,
-      id: 'platform-message-1',
+      id: 'platform-message-3',
     })];
     expect(indexed).toMatchObject({
       projectionId: calls[0]?.idempotencyKey,
@@ -379,7 +525,7 @@ describe('Workroom Projection Outbox', () => {
     const second = await new WorkroomProjectionTracer({ journal: fixture.journal, repository, governance })
       .capture(binding(), 'run-1');
     expect(Object.values(second.items).filter(item => item.kind === 'progress')).toHaveLength(0);
-    expect(second.cursors['run-1']).toBe(first.cursors['run-1']);
+    expect(second.cursors).toEqual(first.cursors);
 
     await progress('progress-window-3', '第三段');
     const restartedTracer = new WorkroomProjectionTracer({ journal: fixture.journal, repository, governance });
@@ -462,6 +608,7 @@ describe('Workroom Projection Outbox', () => {
       'worker-1',
       first!.delivery.fence,
       { status: 'sent' },
+      112,
     )).rejects.toThrow('stale or not owned');
     await expect(repository.settle(
       (await repository.read()).revision,
@@ -469,6 +616,7 @@ describe('Workroom Projection Outbox', () => {
       'worker-2',
       takeover!.delivery.fence,
       { status: 'sent' },
+      112,
     )).resolves.toMatchObject({
       items: { [takeover!.id]: { delivery: { status: 'sent' } } },
     });
@@ -491,9 +639,10 @@ function workroomEvent(
   };
 }
 
-function binding(): WorkroomProjectionBinding {
+function binding(audience: 'workroom' | 'sponsor_room' = 'workroom'): WorkroomProjectionBinding {
   return {
     version: 1,
+    audience,
     projectId: 'project-1',
     catalogBindingDigest: `sha256:${'a'.repeat(64)}`,
     bindingRevision: 3,
@@ -501,7 +650,7 @@ function binding(): WorkroomProjectionBinding {
     conversation: {
       endpoint: { id: 'slack-main', adapter: '@zhin.js/adapter-slack' },
       kind: 'channel',
-      id: 'project-1-room',
+      id: audience === 'workroom' ? 'project-1-room' : 'project-1-sponsors',
       parent: { kind: 'channel', id: 'workspace-1' },
     },
     orchestrator: {

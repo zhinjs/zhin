@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { WorkflowPlanBuilder } from '../../src/workroom/workflow-plan-builder.js';
 import { createWorkroomSchedulerPolicySnapshot } from '../../src/workroom/workroom-scheduler.js';
 
@@ -67,6 +67,24 @@ describe('WorkflowPlanBuilder', () => {
     expect(Object.isFrozen(complete.build().tasks[0]?.requires.tools)).toBe(true);
   });
 
+  it('keeps Unicode Task ordering and the Plan digest independent from the host locale', () => {
+    const builder = WorkflowPlanBuilder.create(metadata('proposal-unicode', 'strategy:unicode'))
+      .addTask({
+        key: 'äther', title: 'Unicode task', role: 'developer', required: true, maxAttempts: 1,
+        dependsOn: [], requires: { tools: ['tool:ä', 'tool:z'] }, scheduler: scheduler(),
+      })
+      .addTask({
+        key: 'zeta', title: 'ASCII task', role: 'developer', required: true, maxAttempts: 1,
+        dependsOn: [], requires: { tools: ['tool:z', 'tool:ä'] }, scheduler: scheduler(),
+      });
+    const codeUnitLocale = buildWithLocale(builder, (left, right) => left < right ? -1 : left > right ? 1 : 0);
+    const reverseLocale = buildWithLocale(builder, (left, right) => left < right ? 1 : left > right ? -1 : 0);
+
+    expect(codeUnitLocale.tasks.map(task => task.key)).toEqual(['zeta', 'äther']);
+    expect(reverseLocale.tasks.map(task => task.key)).toEqual(['zeta', 'äther']);
+    expect(reverseLocale.digest).toBe(codeUnitLocale.digest);
+  });
+
   it('rejects cycles, duplicate task identity and malformed typed requirements', () => {
     const builder = WorkflowPlanBuilder.create(metadata('proposal-1', 'strategy:content'))
       .addTask({
@@ -119,3 +137,18 @@ describe('WorkflowPlanBuilder', () => {
     expect(() => builder.build()).toThrow('at least one required Task');
   });
 });
+
+function buildWithLocale(
+  builder: WorkflowPlanBuilder,
+  compare: (left: string, right: string) => number,
+) {
+  const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
+    .mockImplementation(function (this: string, right: string) {
+      return compare(String(this), right);
+    });
+  try {
+    return builder.build();
+  } finally {
+    localeCompare.mockRestore();
+  }
+}

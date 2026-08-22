@@ -21,6 +21,8 @@ import {
   assertFixedWorkroomStorageMode,
   assertWorkroomCatalogMatchesGeneration,
   createCatalogWorkroomProjectionBinding,
+  createCatalogSponsorRoomProjectionBinding,
+  resolveCatalogSponsorProjectionConversation,
   resolveWorkroomStorageMode,
 } from '../../src/plugin-runtime/agent-host-installer.js';
 import { createEndpointRoleResolver } from '../../src/plugin-runtime/start-command.js';
@@ -67,6 +69,7 @@ describe('process-fixed Workroom storage identity', () => {
       },
     }, 'engineering', conversation, 4)).toEqual({
       version: 1,
+      audience: 'workroom',
       projectId: 'engineering',
       catalogBindingDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
       bindingRevision: 4,
@@ -81,6 +84,41 @@ describe('process-fixed Workroom storage identity', () => {
         displayName: 'developer', role: 'executor',
       }],
     });
+  });
+
+  it('constructs a distinct persistent Sponsor Room projection binding', () => {
+    const conversation = {
+      endpoint: { id: 'root\0zhin.adapter\0slack~main', adapter: 'adapter-owner' },
+      kind: 'channel' as const, id: 'engineering-sponsors',
+    };
+    expect(createCatalogSponsorRoomProjectionBinding({
+      revision: 'b'.repeat(64),
+      definitions: { engineering: {
+        name: 'Engineering', sponsors: ['root:alice'],
+        members: [{ agent: 'orchestrator', role: 'orchestrator' }],
+        conversation: { adapter: 'slack', endpoint: 'main', kind: 'channel', id: 'engineering', agent: 'orchestrator' },
+        sponsorConversation: { adapter: 'slack', endpoint: 'main', kind: 'channel', id: 'engineering-sponsors', agent: 'orchestrator' },
+      } },
+    }, 'engineering', conversation, 7)).toMatchObject({
+      version: 1, audience: 'sponsor_room', projectId: 'engineering',
+      bindingRevision: 7, conversation,
+      orchestrator: { agentDefinitionId: 'orchestrator', role: 'orchestrator' },
+    });
+  });
+
+  it('resolves first-outbound Sponsor delivery to the exact current Endpoint capability', () => {
+    const definition = {
+      name: 'Engineering', members: [{ agent: 'orchestrator', role: 'orchestrator' as const }],
+      conversation: { adapter: 'slack', endpoint: 'main', kind: 'channel' as const, id: 'engineering', agent: 'orchestrator' },
+      sponsorConversation: { adapter: 'slack', endpoint: 'main', kind: 'channel' as const, id: 'portfolio-sponsors', agent: 'orchestrator' },
+    };
+    expect(resolveCatalogSponsorProjectionConversation(definition, [{
+      id: 'root\0zhin.adapter\0slack~main', name: 'main', adapter: 'slack', owner: 'adapter-owner',
+    }])).toEqual({
+      endpoint: { id: 'root\0zhin.adapter\0slack~main', adapter: 'adapter-owner' },
+      kind: 'channel', id: 'portfolio-sponsors',
+    });
+    expect(resolveCatalogSponsorProjectionConversation(definition, [])).toBeUndefined();
   });
 
   it('derives one backend from the initial process configuration', () => {

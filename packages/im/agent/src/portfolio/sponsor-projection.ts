@@ -12,6 +12,7 @@ import type {
   PortfolioProjectStatus,
 } from './portfolio-journal.js';
 import {
+  compareCanonicalWorkroomText,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
 } from '../workroom/canonical-value.js';
@@ -77,11 +78,11 @@ export function createPortfolioSponsorProjection(state: PortfolioAdmissionState)
       ...(queueHead ? { queueHead: projectQueueProjection(queueHead) } : {}),
       grants: Object.values(state.grants)
         .filter(grant => grant.projectId === projectId)
-        .sort((left, right) => left.grantId.localeCompare(right.grantId))
+        .sort((left, right) => compareCanonicalWorkroomText(left.grantId, right.grantId))
         .map(grantProjection),
       reclaims: Object.values(state.reclaims)
         .filter(reclaim => reclaim.projectId === projectId)
-        .sort((left, right) => left.reclaimId.localeCompare(right.reclaimId))
+        .sort((left, right) => compareCanonicalWorkroomText(left.reclaimId, right.reclaimId))
         .map(reclaimProjection),
       budget: {
         limitMicros: project.hardBudgetMicros,
@@ -130,7 +131,7 @@ function projectQueueHead(state: PortfolioAdmissionState, projectId: string): Po
       && portfolioRequestStatus(state, request.requestId) === 'pending')
     .sort((left, right) => left.localOrder - right.localOrder
       || left.schedulerSequence - right.schedulerSequence
-      || left.requestId.localeCompare(right.requestId))[0];
+      || compareCanonicalWorkroomText(left.requestId, right.requestId))[0];
 }
 
 function projectQueueProjection(request: PortfolioCapacityRequest) {
@@ -167,7 +168,7 @@ function rateProjection(state: PortfolioAdmissionState, projectId: string) {
   const result: Record<string, Readonly<{
     windowStart: number; windowEnd: number; usedUnits: number; limitUnits: number;
   }>> = {};
-  for (const [poolId, pool] of Object.entries(state.policy!.pools).sort(([left], [right]) => left.localeCompare(right))) {
+  for (const [poolId, pool] of Object.entries(state.policy!.pools).sort(([left], [right]) => compareCanonicalWorkroomText(left, right))) {
     const windowStart = Math.floor(state.now / pool.rateWindowTicks) * pool.rateWindowTicks;
     const usedUnits = Object.values(state.grants)
       .filter(grant => grant.projectId === projectId

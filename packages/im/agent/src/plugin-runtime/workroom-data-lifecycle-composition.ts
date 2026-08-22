@@ -12,6 +12,13 @@ import {
   type PayloadPurgeReceiptAuthorityPort,
   type PayloadSubjectErasureResolverPort,
 } from '../data-governance/payload-lifecycle.js';
+import type { WorkroomProjectionReadAuthorityPort } from '../workroom/runtime.js';
+import { PayloadRetentionHoldOverdueProjection } from '../data-governance/payload-hold-overdue-projection.js';
+import {
+  createWorkroomDataLifecycleConsoleControl,
+  type WorkroomDataLifecycleConsoleAuthorityPort,
+  type WorkroomDataLifecycleConsoleControlPort,
+} from './workroom-data-lifecycle-console.js';
 
 export interface CreateFileWorkroomDataLifecycleRuntimeOptions {
   /** Existing `.zhin` data root. No policy is read from `ai.workrooms` or config. */
@@ -26,6 +33,9 @@ export interface CreateFileWorkroomDataLifecycleRuntimeOptions {
   readonly receipts: PayloadPurgeReceiptAuthorityPort;
   /** Root-private activation latch used by the Database handoff. */
   readonly journal?: PayloadLifecycleJournal;
+  /** Root-private role authority plus current Catalog/P12 disclosure; both are required. */
+  readonly consoleAuthority?: WorkroomDataLifecycleConsoleAuthorityPort;
+  readonly consoleDisclosure?: WorkroomProjectionReadAuthorityPort;
 }
 
 export interface WorkroomDataLifecycleComposition {
@@ -33,6 +43,10 @@ export interface WorkroomDataLifecycleComposition {
   readonly control: PayloadLifecycleControlPort;
   /** Private outbox worker surface. It publishes no raw Vault or crypto capability. */
   readonly worker: PayloadLifecycleWorkerPort;
+  /** Content-free P12 source for the existing governed Workroom Projection outbox. */
+  readonly overdue: Pick<PayloadRetentionHoldOverdueProjection, 'project'>;
+  /** Narrow Host projection/control; absent when its root-private provider is unavailable. */
+  readonly console?: WorkroomDataLifecycleConsoleControlPort;
 }
 
 /**
@@ -46,19 +60,64 @@ export function createFileWorkroomDataLifecycleRuntime(
     throw new Error('Workroom Data Lifecycle generation is invalid');
   }
   options.signal.throwIfAborted();
+  const journal = options.journal
+    ?? new FilePayloadLifecycleRepository(join(options.stateRoot, 'workroom-payload-lifecycle'));
+  const clock = operationGuard(options.signal, options.clock);
   const runtime = new PayloadLifecycleRuntime({
-    journal: options.journal
-      ?? new FilePayloadLifecycleRepository(join(options.stateRoot, 'workroom-payload-lifecycle')),
-    clock: operationGuard(options.signal, options.clock),
+    journal,
+    clock,
     authority: options.authority,
     objects: options.objects,
     subjects: options.subjects,
     deletion: options.deletion,
     receipts: options.receipts,
   });
+  const overdue = new PayloadRetentionHoldOverdueProjection({
+    source: Object.freeze({
+      listObjectIds: (projectId: string) => journal.listObjectIds(projectId),
+      read: async (projectId: string, objectId: string) => {
+        const state = await runtime.read(projectId, objectId);
+        return Object.freeze({
+          projectId: state.projectId,
+          objectId: state.objectId,
+          stateSequence: state.sequence,
+          stateDigest: state.digest,
+          holds: state.holds,
+        });
+      },
+    }),
+    clock,
+  });
+  const console = options.consoleAuthority && options.consoleDisclosure
+    ? createWorkroomDataLifecycleConsoleControl({
+        generation: options.generation,
+        control: abortGuard(options.signal, runtime.control),
+        read: (projectId, objectId) => runtime.read(projectId, objectId),
+        listObjectIds: projectId => journal.listObjectIds(projectId),
+        clock,
+        subjects: options.subjects,
+        authority: options.consoleAuthority,
+        disclosure: options.consoleDisclosure,
+        overdueProjection: overdue,
+      })
+    : undefined;
   return Object.freeze({
     control: abortGuard(options.signal, runtime.control),
     worker: abortWorkerGuard(options.signal, runtime.worker),
+    overdue: abortOverdueGuard(options.signal, overdue),
+    ...(console ? { console } : {}),
+  });
+}
+
+function abortOverdueGuard(
+  generationSignal: AbortSignal,
+  overdue: Pick<PayloadRetentionHoldOverdueProjection, 'project'>,
+): Pick<PayloadRetentionHoldOverdueProjection, 'project'> {
+  return Object.freeze({
+    project: async (projectId: string, signal: AbortSignal) => {
+      generationSignal.throwIfAborted();
+      return await overdue.project(projectId, combinedSignal(generationSignal, signal));
+    },
   });
 }
 

@@ -32,6 +32,7 @@ export type {
 } from './config/index.js';
 export type {
   WorkroomMemberRole,
+  WorkroomAssignmentRouteDefinition,
   WorkroomSpaceKind,
   WorkroomAgentMemberDefinition,
   WorkroomConversationBindingDefinition,

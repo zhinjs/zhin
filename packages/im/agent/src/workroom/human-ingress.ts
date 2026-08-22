@@ -55,6 +55,16 @@ export interface HumanIngressTaskTarget {
   readonly status: 'active' | 'historical';
 }
 
+/** Durable proof that a Sponsor control replied to a governed single-Project projection. */
+export interface HumanIngressProjectionReplyProof {
+  readonly version: 1;
+  readonly projectionId: string;
+  readonly projectId: string;
+  readonly bindingRevision: number;
+  readonly messageKey: string;
+  readonly targetDigest: string;
+}
+
 interface HumanIngressTargetResolutionEcho extends HumanIngressTargetResolutionRequest {
   readonly intent: HumanIngressIntent;
   readonly resolverRef: string;
@@ -64,6 +74,7 @@ interface HumanIngressTargetResolutionEcho extends HumanIngressTargetResolutionR
 export type HumanIngressTargetResolution =
   | Readonly<HumanIngressTargetResolutionEcho & {
       readonly status: 'unaddressed';
+      readonly projectionReply?: HumanIngressProjectionReplyProof;
     }>
   | Readonly<HumanIngressTargetResolutionEcho & {
       readonly status: 'task_target';
@@ -117,6 +128,7 @@ interface HumanIngressProposalBase {
   readonly resolverRef: string;
   readonly resolverDigest: string;
   readonly authorityRequirement: HumanIngressAuthorityRequirement;
+  readonly projectionReply?: HumanIngressProjectionReplyProof;
 }
 
 export interface ProjectInboxProposal extends HumanIngressProposalBase {
@@ -372,7 +384,7 @@ function normalizeResolution(
     throw new Error('Human ingress target resolution status is invalid');
   }
   const additional = snapshot.status === 'unaddressed'
-    ? []
+    ? ['projectionReply']
     : snapshot.status === 'task_target'
       ? ['via', 'target']
       : ['reason', 'candidateRefs'];
@@ -389,6 +401,9 @@ function normalizeResolution(
   }
   canonicalText(snapshot.resolverRef, 'targetResolution.resolverRef');
   sha256(snapshot.resolverDigest, 'targetResolution.resolverDigest');
+  if (snapshot.status === 'unaddressed' && snapshot.projectionReply !== undefined) {
+    normalizeProjectionReplyProof(snapshot.projectionReply, request.decision.projectId);
+  }
   if (snapshot.status === 'task_target') normalizeTaskTarget(snapshot.target, request.decision.projectId);
   if (snapshot.status === 'clarification_required') {
     if (!['target_not_found', 'ambiguous_target', 'cross_project_target'].includes(snapshot.reason)
@@ -434,6 +449,12 @@ function createProposal(
     resolverRef: resolution.resolverRef,
     resolverDigest: resolution.resolverDigest,
     authorityRequirement: authorityRequirement(request.decision.space, resolution.intent),
+    ...(resolution.status === 'unaddressed' && resolution.projectionReply
+      ? { projectionReply: normalizeProjectionReplyProof(
+          resolution.projectionReply,
+          request.decision.projectId,
+        ) }
+      : {}),
   };
   if (resolution.status === 'unaddressed') {
     const content = deepFreeze({
@@ -589,7 +610,7 @@ function normalizeProposal(value: HumanIngressProposal, projectId: string): Huma
   assertExactKeys(proposal, [
     'version', 'id', 'digest', 'status', 'projectId', 'space', 'bindingRevision',
     'bindingDigest', 'sourceEvent', 'principal', 'intent', 'resolverRef',
-    'resolverDigest', 'authorityRequirement', 'kind', ...kindKeys,
+    'resolverDigest', 'authorityRequirement', 'projectionReply', 'kind', ...kindKeys,
   ], 'proposal');
   if (proposal.version !== 1 || proposal.status !== 'proposed' || proposal.projectId !== projectId) {
     throw new Error('Human ingress proposal scope or schema is invalid');
@@ -624,6 +645,13 @@ function normalizeProposal(value: HumanIngressProposal, projectId: string): Huma
   if (proposal.authorityRequirement !== authorityRequirement(proposal.space, proposal.intent)) {
     throw new Error('Human ingress proposal authority requirement is invalid');
   }
+  if (proposal.projectionReply !== undefined) {
+    if (proposal.kind !== 'project_inbox' || proposal.space !== 'sponsor_room'
+      || proposal.intent !== 'control') {
+      throw new Error('Human ingress Projection reply proof is outside Sponsor control scope');
+    }
+    normalizeProjectionReplyProof(proposal.projectionReply, projectId);
+  }
   if (proposal.id !== proposalId(projectId, proposal.sourceEvent.ref)) {
     throw new Error('Human ingress proposal id does not bind the source event');
   }
@@ -651,6 +679,24 @@ function normalizeProposal(value: HumanIngressProposal, projectId: string): Huma
   const { digest: actualDigest, ...content } = proposal;
   if (actualDigest !== digest(content)) throw new Error('Human ingress proposal digest is corrupt');
   return deepFreeze(structuredClone(proposal));
+}
+
+function normalizeProjectionReplyProof(
+  value: HumanIngressProjectionReplyProof,
+  projectId: string,
+): HumanIngressProjectionReplyProof {
+  assertObject(value, 'Projection reply proof');
+  assertExactKeys(value, [
+    'version', 'projectionId', 'projectId', 'bindingRevision', 'messageKey', 'targetDigest',
+  ], 'Projection reply proof');
+  if (value.version !== 1 || value.projectId !== projectId) {
+    throw new Error('Human ingress Projection reply proof crosses Project scope');
+  }
+  canonicalText(value.projectionId, 'projectionReply.projectionId');
+  positiveInteger(value.bindingRevision, 'projectionReply.bindingRevision');
+  canonicalText(value.messageKey, 'projectionReply.messageKey');
+  sha256(value.targetDigest, 'projectionReply.targetDigest');
+  return deepFreeze(structuredClone(value));
 }
 
 function projectEvents(

@@ -1,10 +1,19 @@
 export type WorkroomMemberRole = 'orchestrator' | 'executor' | 'reviewer' | 'integration';
 
+/**
+ * Persisted Assignment locality authority. An omitted route is the legacy
+ * canonical local route; remote execution always requires an exact endpoint.
+ */
+export type WorkroomAssignmentRouteDefinition =
+  | { readonly kind: 'local' }
+  | { readonly kind: 'remote'; readonly endpointId: string };
+
 /** One named Agent participating in a Project-scoped Workroom. */
 export interface WorkroomAgentMemberDefinition {
   /** References ai.agents.<name>. */
   agent: string;
   role: WorkroomMemberRole;
+  assignmentRoute?: WorkroomAssignmentRouteDefinition;
 }
 
 export type WorkroomSpaceKind = 'group' | 'channel' | 'repository';
@@ -30,6 +39,8 @@ export interface WorkroomDefinition {
   sponsors?: string[];
   /** One Workroom owns one collaboration space; an Endpoint may serve many Workrooms. */
   conversation?: WorkroomConversationBindingDefinition;
+  /** Optional distinct collaboration space for authenticated Sponsor controls and projections. */
+  sponsorConversation?: WorkroomConversationBindingDefinition;
 }
 
 /** @deprecated Use WorkroomAgentMemberDefinition. */
