@@ -58,14 +58,9 @@ jobs:
         if: github.event_name == 'pull_request'
         run: git fetch origin main:main
 
-      - name: configure github packages auth
-        if: env.NPM_TOKEN != ''
-        run: echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc
-
       - name: install dependencies
         run: pnpm install
         env:
-          NPM_TOKEN: ${{ env.PERSONAL_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: audit dependencies
