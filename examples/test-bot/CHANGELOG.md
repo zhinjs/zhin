@@ -1,5 +1,12 @@
 # test-bot
 
+## 0.1.140
+
+### Patch Changes
+
+- Updated dependencies [9e609f4]
+  - @zhin.js/adapter-sandbox@7.0.14
+
 ## 0.1.139
 
 ### Patch Changes

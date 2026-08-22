@@ -1,5 +1,11 @@
 # @zhin.js/adapter-process
 
+## 7.0.14
+
+### Patch Changes
+
+- 9e609f4: Stabilize Sandbox WebSocket regressions by waiting for the server-side connection registration and verifying the demo-scope gate independently from the informational ready frame.
+
 ## 7.0.13
 
 ### Patch Changes
