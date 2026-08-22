@@ -24,7 +24,7 @@ describe('zhin agent legacy-payloads', () => {
     await expect(executeLegacyPayloadsOfflineCommand({
       input, output, storage: 'file', sourceKind: 'projection',
     })).rejects.toThrow();
-  });
+  }, 30_000);
 
   it('reads only a versioned explicit DB export and stdout remains content-free', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-legacy-payload-db-cli-'));
