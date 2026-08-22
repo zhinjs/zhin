@@ -1,5 +1,37 @@
 # @zhin.js/adapter-milky
 
+## 6.0.14
+
+### Patch Changes
+
+- 5969c5b: Add SideEventGateway so adapters forward notice/request/system into HandlerIndex. HandlerContext now exposes only generation-safe capabilities and prompt ports; live Endpoint escape hatches are removed.
+- Updated dependencies [5969c5b]
+- Updated dependencies [d336a3f]
+- Updated dependencies [0c82a7e]
+- Updated dependencies [b9217e4]
+- Updated dependencies [5969c5b]
+- Updated dependencies [5969c5b]
+- Updated dependencies [974772e]
+- Updated dependencies [5969c5b]
+- Updated dependencies [5969c5b]
+- Updated dependencies [2f786bd]
+- Updated dependencies [63d89f9]
+- Updated dependencies [71c7cdd]
+- Updated dependencies [3cca0ea]
+- Updated dependencies [1312ca0]
+- Updated dependencies [985fa22]
+- Updated dependencies [04b861d]
+- Updated dependencies [a23d544]
+- Updated dependencies [8cddabf]
+- Updated dependencies [dbe5081]
+  - @zhin.js/im-contract@1.0.4
+  - @zhin.js/core@1.5.12
+  - @zhin.js/adapter@1.1.11
+  - @zhin.js/agent@1.1.14
+  - @zhin.js/host-http@1.0.11
+  - @zhin.js/command@1.0.15
+  - zhin.js@6.0.12
+
 ## 6.0.13
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @zhin.js/mcp-feature
 
+## 1.0.12
+
+### Patch Changes
+
+- Updated dependencies [67ef8c4]
+  - @zhin.js/plugin-runtime@1.1.7
+  - @zhin.js/feature-kit@1.0.12
+
 ## 1.0.11
 
 ### Patch Changes

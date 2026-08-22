@@ -1,5 +1,21 @@
 # @zhin.js/im-contract
 
+## 1.0.4
+
+### Patch Changes
+
+- 5969c5b: Remove legacy compound-string message targets and Endpoint control probing. Endpoint control and outbound Host operations now carry structured `MessageRef` identities. Endpoint send has one exact result contract (a platform message id), which IM Runtime projects into `DeliveryReceipt.message`; arbitrary result guessing is removed.
+- 2f786bd: Replace text-only IM context and metadata-based quote handling with canonical
+  conversation events, scoped reference resolution, explicit Endpoint content
+  ports, and typed multimedia outcomes. Conversation notices are projected as
+  untrusted context data rather than model-authority system instructions.
+  The process-global passive-group buffer is removed: prior inbound conversation messages
+  are now consumed from the same event store and cursor, with the current Turn
+  message excluded from its own context projection.
+  The unused `ConversationMemory` topic-memory runtime, its timers, legacy tables,
+  and topic-window configuration are removed; `ContextRepository` is the only
+  Agent conversation-history authority.
+
 ## 1.0.3
 
 ### Patch Changes

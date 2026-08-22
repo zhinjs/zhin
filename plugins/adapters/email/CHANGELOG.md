@@ -1,5 +1,22 @@
 # @zhin.js/adapter-email
 
+## 5.0.12
+
+### Patch Changes
+
+- 5969c5b: Add SideEventGateway so adapters forward notice/request/system into HandlerIndex. HandlerContext now exposes only generation-safe capabilities and prompt ports; live Endpoint escape hatches are removed.
+- Updated dependencies [5969c5b]
+- Updated dependencies [5969c5b]
+- Updated dependencies [5969c5b]
+- Updated dependencies [974772e]
+- Updated dependencies [5969c5b]
+- Updated dependencies [2f786bd]
+- Updated dependencies [1312ca0]
+  - @zhin.js/im-contract@1.0.4
+  - @zhin.js/core@1.5.12
+  - @zhin.js/adapter@1.1.11
+  - zhin.js@6.0.12
+
 ## 5.0.11
 
 ### Patch Changes

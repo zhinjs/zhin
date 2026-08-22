@@ -1,5 +1,44 @@
 # @zhin.js/core
 
+## 1.5.12
+
+### Patch Changes
+
+- 5969c5b: Remove legacy compound-string message targets and Endpoint control probing. Endpoint control and outbound Host operations now carry structured `MessageRef` identities. Endpoint send has one exact result contract (a platform message id), which IM Runtime projects into `DeliveryReceipt.message`; arbitrary result guessing is removed.
+- 5969c5b: Wire ICQQ login challenges (QR / slider / SMS / auth) through LoginAssist so pending tasks survive Console refresh; add login.list/submit/cancel RPC and TTY stdin consumer.
+- 974772e: Replace the user-facing `Prompt` vocabulary with the `UserInteraction` authoring surface for input, confirmation, and selection. Commands and handlers now expose `interaction`; IM Runtime exposes `createInteraction`; schema-driven endpoint collection is named `SchemaInteraction`. The old prompt-named interaction types and properties are removed rather than aliased. User interactions render through one canonical Markdown and keyboard/list presentation module shared by commands and Agent `ask_user` turns.
+
+  Extract the transport-neutral interaction contract into `@zhin.js/interaction`. A discriminated `ask()` API supports text, number, confirmation, single-select, multi-select, and typed lists with structured `title`, `description`, and `tip` content. Typed `sequence()` interactions return one result object keyed by step id, render progress, and retry invalid replies without leaking invalid values to callers.
+
+  Preserve AI Markdown and card command actions through outbound publishing. QQ delivers Markdown with native command buttons; KOOK, Discord, Telegram, DingTalk, and Lark/Feishu now declare and encode their native Markdown dialects while retaining each adapter's interaction policy. Correct QQ callback button action encoding and button style mapping.
+
+- 5969c5b: Add SideEventGateway so adapters forward notice/request/system into HandlerIndex. HandlerContext now exposes only generation-safe capabilities and prompt ports; live Endpoint escape hatches are removed.
+- 2f786bd: Replace text-only IM context and metadata-based quote handling with canonical
+  conversation events, scoped reference resolution, explicit Endpoint content
+  ports, and typed multimedia outcomes. Conversation notices are projected as
+  untrusted context data rather than model-authority system instructions.
+  The process-global passive-group buffer is removed: prior inbound conversation messages
+  are now consumed from the same event store and cursor, with the current Turn
+  message excluded from its own context projection.
+  The unused `ConversationMemory` topic-memory runtime, its timers, legacy tables,
+  and topic-window configuration are removed; `ContextRepository` is the only
+  Agent conversation-history authority.
+- Updated dependencies [67ef8c4]
+- Updated dependencies [5969c5b]
+- Updated dependencies [5969c5b]
+- Updated dependencies [974772e]
+- Updated dependencies [5969c5b]
+- Updated dependencies [2f786bd]
+  - @zhin.js/plugin-runtime@1.1.7
+  - @zhin.js/im-contract@1.0.4
+  - @zhin.js/adapter@1.1.11
+  - @zhin.js/command@1.0.15
+  - @zhin.js/handler@1.0.3
+  - @zhin.js/interaction@1.0.1
+  - @zhin.js/component@1.0.12
+  - @zhin.js/middleware@1.0.12
+  - @zhin.js/permission@1.0.3
+
 ## 1.5.11
 
 ### Patch Changes
