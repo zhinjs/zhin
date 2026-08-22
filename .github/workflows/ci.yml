@@ -97,7 +97,7 @@ jobs:
         run: pnpm vitest run --reporter=verbose --coverage
 
       - name: run tests (other matrix combinations)
-        if: !(matrix.os == 'ubuntu-latest' && matrix.node-version == 24)
+        if: ${{ !(matrix.os == 'ubuntu-latest' && matrix.node-version == 24) }}
         run: pnpm vitest run
 
       - name: Upload coverage reports to Codecov
