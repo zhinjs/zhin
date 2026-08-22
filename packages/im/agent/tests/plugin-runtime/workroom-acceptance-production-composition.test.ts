@@ -361,13 +361,18 @@ describe('P7 standard Acceptance production composition', () => {
     const effects = new MemoryWorkroomEffectJournal();
     const intent = createWorkroomEffectIntent(effectIntent());
     await new WorkroomEffectLedger(effects).recordIntent('project-1', intent);
-    const authorize = vi.fn(async input => ({
-      approved: true as const,
-      policy: input.acceptancePolicy,
-      expiresAt: 10_000,
-      policyDecisionRef: 'effect-policy-decision:restart',
-      policyDecisionDigest: SHA('9'),
-    }));
+    let releaseAuthorization!: () => void;
+    const authorizationGate = new Promise<void>(resolve => { releaseAuthorization = resolve; });
+    const authorize = vi.fn(async input => {
+      await authorizationGate;
+      return {
+        approved: true as const,
+        policy: input.acceptancePolicy,
+        expiresAt: 10_000,
+        policyDecisionRef: 'effect-policy-decision:restart',
+        policyDecisionDigest: SHA('9'),
+      };
+    });
     const sponsorAuthority = { authorize: async (input: { digest: string }) => ({
       authorized: true as const, authorizedBy: 'catalog:revision-1:project-digest',
       catalogRevision: 'c'.repeat(64), projectDigest: SHA('c'),
@@ -398,7 +403,10 @@ describe('P7 standard Acceptance production composition', () => {
     });
     first.start();
     await vi.waitFor(() => expect(authorize).toHaveBeenCalledTimes(1));
-    first.dispose();
+    const firstDisposal = first.dispose();
+    releaseAuthorization();
+    expect(firstDisposal).toBeInstanceOf(Promise);
+    await firstDisposal;
 
     const restartedProjector = new SponsorDecisionWorkroomEffectAuthorizationProjector({
       directory, effectJournal: effects, sponsorAuthority, policy: { authorize },
@@ -411,7 +419,7 @@ describe('P7 standard Acceptance production composition', () => {
     });
     restarted.start();
     await new Promise(resolve => setTimeout(resolve, 20));
-    restarted.dispose();
+    await restarted.dispose();
     expect(authorize).toHaveBeenCalledTimes(1);
   });
 });

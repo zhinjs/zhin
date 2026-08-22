@@ -591,9 +591,10 @@ export class WorkroomEffectAuthorizationProjectionRuntime {
     }
   }
 
-  dispose(): void {
+  async dispose(): Promise<void> {
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = undefined;
+    await this.#draining;
   }
 
   async #drainProjects(): Promise<number> {
