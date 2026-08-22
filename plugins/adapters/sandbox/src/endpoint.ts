@@ -73,6 +73,33 @@ type ShellIsolationStatus = Readonly<{
   message: string;
 }>;
 
+type ShellIsolationProbe = () => Promise<ShellIsolationStatus>;
+
+/**
+ * Share an in-flight readiness probe across reconnects while still allowing a
+ * later connection to refresh the informational status after it settles.
+ * Kept internal to this module's package surface; tests import it directly.
+ */
+export function createSandboxReadinessGate(probe: ShellIsolationProbe): Readonly<{
+  afterProbe: (deliver: (status: ShellIsolationStatus) => void) => void;
+}> {
+  let inFlight: Promise<ShellIsolationStatus> | undefined;
+  const acquire = (): Promise<ShellIsolationStatus> => {
+    if (inFlight) return inFlight;
+    const pending = probe();
+    const shared = pending.finally(() => {
+      if (inFlight === shared) inFlight = undefined;
+    });
+    inFlight = shared;
+    return shared;
+  };
+  return Object.freeze({
+    afterProbe: (deliver) => {
+      void acquire().then(deliver);
+    },
+  });
+}
+
 export interface SandboxEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
@@ -90,6 +117,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
 
   readonly #options: SandboxEndpointOptions;
   readonly #connections = new Map<string, SandboxConnection>();
+  readonly #readiness = createSandboxReadinessGate(probeShellIsolation);
   #wsHandleRelease?: () => void;
   #wsPathRelease?: () => void;
   #wsPath = '/sandbox';
@@ -288,7 +316,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
     });
     this.#connections.set(target, { target, owner, socket, release });
     this.#logger.debug(formatCompact({ op: 'sandbox_ws_connected', target, owner }));
-    void probeShellIsolation().then((shellIsolation) => {
+    this.#readiness.afterProbe((shellIsolation) => {
       const current = this.#connections.get(target);
       if (!current || current.socket !== socket) return;
       const readyPayload = JSON.stringify({
@@ -349,11 +377,9 @@ function probeShellIsolation(): Promise<ShellIsolationStatus> {
           : 'Docker daemon is unavailable',
       }));
     });
-  }).catch((error: unknown) => Object.freeze({
+  }).catch(() => Object.freeze({
     available: false,
     provider: 'docker' as const,
-    message: error instanceof Error && error.name === 'ETIMEDOUT'
-      ? 'Docker readiness check timed out'
-      : 'Docker is unavailable',
+    message: 'Docker is unavailable',
   }));
 }
