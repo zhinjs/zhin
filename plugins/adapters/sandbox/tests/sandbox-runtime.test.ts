@@ -194,19 +194,23 @@ describe('sandbox plugin runtime adapter', () => {
     const errorText = await new Promise<string>((resolve, reject) => {
       const client = new WebSocket(`ws://127.0.0.1:${port}/sandbox?token=demo-token`);
       const timer = setTimeout(() => reject(new Error('timeout waiting for read-only error')), 3000);
+      // The permission gate is independent of the informational `ready` frame,
+      // whose shell-isolation probe may be delayed on a loaded CI runner.
+      client.once('open', () => {
+        client.send(JSON.stringify({ text: 'run outside workspace' }));
+      });
       client.on('message', (raw) => {
         const payload = JSON.parse(String(raw)) as { type?: string; content?: Array<{ data?: { text?: string } }> };
-        if (payload.type === 'ready') {
-          client.send(JSON.stringify({ text: 'run outside workspace' }));
-          return;
-        }
         if (payload.type === 'error') {
           clearTimeout(timer);
           client.close();
           resolve(payload.content?.[0]?.data?.text ?? '');
         }
       });
-      client.once('error', reject);
+      client.once('error', (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
     });
 
     expect(errorText).toContain('只读演示权限');
