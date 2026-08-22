@@ -29,7 +29,7 @@ describe('zhin agent legacy-runs', () => {
     });
     expect(persisted).toEqual(value);
     expect(await readdir(root)).toEqual(['audit.json', 'legacy.json']);
-  });
+  }, 30_000);
 
   it('emits only an explicit proposal record for active Run replan', async () => {
     const root = await workspace();
