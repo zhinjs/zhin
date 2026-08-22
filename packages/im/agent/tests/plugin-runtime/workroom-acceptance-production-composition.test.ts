@@ -418,7 +418,7 @@ describe('P7 standard Acceptance production composition', () => {
       intervalMs: 5,
     });
     restarted.start();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await restarted.drain();
     await restarted.dispose();
     expect(authorize).toHaveBeenCalledTimes(1);
   });
