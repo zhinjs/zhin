@@ -1,5 +1,11 @@
 # @zhin.js/adapter-process
 
+## 7.0.15
+
+### Patch Changes
+
+- bcc4c87: Probe Docker readiness asynchronously so Sandbox WebSocket permissions and messages are never blocked by the informational ready frame.
+
 ## 7.0.14
 
 ### Patch Changes
