@@ -56,6 +56,69 @@ describe('dispatchExtendedConsoleRpc', () => {
     ).resolves.toBeUndefined();
   });
 
+  describe('Workroom Profile authority control', () => {
+    it('routes one full-scope typed command without caller-carried identity or approval', async () => {
+      const publishProfile = vi.fn(async (command) => ({ saved: command.projectId }));
+      const ctx = makeCtx({
+        authenticatedPrincipal: { principalId: 'sponsor:alpha' },
+        workroomProfileControl: {
+          publishPack: vi.fn(), publishProfile, publishRollback: vi.fn(), publishPlanningPolicy: vi.fn(),
+        },
+      });
+      await expect(dispatchExtendedConsoleRpc('workroom.profile.publish', {
+        operationId: 'console:profile:1', projectId: 'alpha', expectedRegistryRevision: -1,
+        overlay: { version: 1 }, activate: true,
+      }, ctx)).resolves.toEqual({ data: { saved: 'alpha' } });
+      expect(publishProfile).toHaveBeenCalledWith({
+        operationId: 'console:profile:1', projectId: 'alpha', expectedRegistryRevision: -1,
+        overlay: { version: 1 }, activate: true,
+      }, { principalId: 'sponsor:alpha' });
+    });
+
+    it('rejects demo writes and caller-carried principal/authority facts before control invocation', async () => {
+      const publishPack = vi.fn();
+      const control = {
+        publishPack, publishProfile: vi.fn(), publishRollback: vi.fn(), publishPlanningPolicy: vi.fn(),
+      };
+      await expect(dispatchExtendedConsoleRpc('workroom.profile.pack.publish', {
+        operationId: 'console:pack:1', pack: {}, authenticatedPrincipalId: 'sponsor:forged',
+      }, makeCtx({ workroomProfileControl: control }))).resolves.toEqual({
+        error: 'Console Workroom Profile request cannot carry authenticatedPrincipalId',
+      });
+      expect(publishPack).not.toHaveBeenCalled();
+      await expect(dispatchExtendedConsoleRpc('workroom.profile.pack.publish', {
+        operationId: 'console:pack:1', pack: {},
+      }, makeCtx({ fullScope: false, workroomProfileControl: control }))).resolves.toEqual({
+        error: 'Demo scope: RPC "workroom.profile.pack.publish" is forbidden',
+      });
+      expect(publishPack).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Workroom Knowledge control', () => {
+    it('injects the authenticated principal and rejects body/authority claims', async () => {
+      const publish = vi.fn(async () => ({ revision: 0 }));
+      const control = { read: vi.fn(), publish, rollback: vi.fn() };
+      const ctx = makeCtx({
+        authenticatedPrincipal: { principalId: 'sponsor:alpha' },
+        workroomKnowledgeControl: control,
+      });
+      const entries = [{ version: 1, projectId: 'alpha', knowledgeId: 'memory:1' }];
+      await expect(dispatchExtendedConsoleRpc('workroom.knowledge.publish', {
+        operationId: 'knowledge:1', projectId: 'alpha', expectedRevision: -1, entries,
+      }, ctx)).resolves.toEqual({ data: { revision: 0 } });
+      expect(publish).toHaveBeenCalledWith({
+        operationId: 'knowledge:1', projectId: 'alpha', expectedRevision: -1, entries,
+      }, { principalId: 'sponsor:alpha' });
+      await expect(dispatchExtendedConsoleRpc('workroom.knowledge.publish', {
+        operationId: 'knowledge:2', projectId: 'alpha', expectedRevision: 0, entries, body: 'secret',
+      }, ctx)).resolves.toEqual({
+        error: 'Console Workroom Knowledge request cannot carry body',
+      });
+      expect(publish).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('cron / schedule', () => {
     it('reports 未配置 when scheduleHost is missing', async () => {
       await expect(

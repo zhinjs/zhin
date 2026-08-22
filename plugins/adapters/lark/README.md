@@ -8,6 +8,7 @@ Zhin.js 飞书 / Lark 适配器（Plugin Runtime），通过 Runtime Host HTTP W
 - URL 验证挑战（`url_verification`）
 - Tenant Access Token 自动刷新
 - 支持飞书与 Lark 国际版 API 基址
+- canonical `markdown` 段编码为 `interactive` 卡片中的 `lark_md`
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 
 ## 安装
@@ -70,6 +71,7 @@ plugins:
 | 飞书类型 | 入站 content（文本摘要） | 出站 wire |
 |----------|--------------------------|-----------|
 | text | 原文 | text |
+| markdown | 原文 | interactive（`lark_md`） |
 | image | `[image]` | image（需 `file_key`） |
 | file | `[file: name]` | file |
 | audio / video / sticker | `[audio]` / `[video]` / `[sticker]` | — |

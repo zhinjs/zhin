@@ -14,15 +14,15 @@ import type { ContextSystem } from '../context/context-system.js';
 import type { MemorySystem } from '../memory/memory-system.js';
 import type { SessionSystem } from '../session/session-system.js';
 import type { EventSystem } from '../event/event-system.js';
-import type { AgentOrchestrator } from '../orchestrator/index.js';
-import type { SkillRegistry } from '../orchestrator/skill-registry.js';
+import type { AgentResourceHub } from '../resource-hub/index.js';
+import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { SubagentResultSender } from '../subagent/index.js';
 import type { ResolvedAgentBinding } from './types.js';
 
 /** ZhinAgent 运行依赖（通过 configure() 注入） */
 export interface ZhinAgentDependencies {
   skillRegistry: SkillRegistry;
-  orchestrator: AgentOrchestrator;
+  resourceHub: AgentResourceHub;
   agentCore?: AgentCore;
   toolSystem?: ToolSystem;
   contextSystem?: ContextSystem;

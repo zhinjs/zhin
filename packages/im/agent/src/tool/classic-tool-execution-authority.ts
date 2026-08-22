@@ -60,14 +60,14 @@ export function createClassicToolExecutionAuthority(
           commMessage: options.message,
           policy: tool.approval,
           plugin: options.plugin,
-          bus: options.host.orchestrator?.agentStreamBus,
+          bus: options.host.resourceHub?.agentStreamBus,
           port: isApprovalPortAvailable(options.host.approvalPort)
             ? options.host.approvalPort
             : undefined,
           publishCtx: {
             sessionId: options.sessionId,
           },
-          onceStore: options.host.orchestrator?.approvalOnce,
+          onceStore: options.host.resourceHub?.approvalOnce,
           journal: options.journal,
           signal: options.signal,
         });

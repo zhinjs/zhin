@@ -17,6 +17,7 @@ import {
   TokenRegistry,
   extractBearerToken,
   isDemoWebSocketPath,
+  type AuthenticatedTokenPrincipal,
   type AuthScope,
   type ScopedTokenConfig,
   type TokenRegistryConfig,
@@ -73,6 +74,7 @@ export type HttpHandler = (
   response: ServerResponse,
   url: URL,
   authScope: AuthScope,
+  authenticatedPrincipal?: AuthenticatedTokenPrincipal,
 ) => void | Promise<void>;
 
 export interface HttpRouteRegistration {
@@ -323,7 +325,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
         return;
       }
       if (!release) {
-        await route.handler(request, response, url, auth.scope);
+        await route.handler(request, response, url, auth.scope, auth.principal);
         return;
       }
       let released = false;
@@ -336,7 +338,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
       };
       response.once('finish', releaseResponse);
       response.once('close', releaseResponse);
-      await route.handler(request, response, url, auth.scope);
+      await route.handler(request, response, url, auth.scope, auth.principal);
       if (response.writableFinished || response.destroyed) releaseResponse();
     } catch (err) {
       // 统一把请求体错误（400/413）映射回对应状态码，
@@ -363,7 +365,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
     request: IncomingMessage,
     url: URL,
     pathname: string,
-  ): { ok: true; scope: AuthScope } | { ok: false } {
+  ): { ok: true; scope: AuthScope; principal?: AuthenticatedTokenPrincipal } | { ok: false } {
     if (!requiresHttpAuth(pathname, apiBase, authExempt)) {
       return { ok: true, scope: 'full' };
     }
@@ -380,7 +382,8 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
       const method = (request.method ?? 'GET').toUpperCase();
       if (!isDemoHttpAllowed(method, pathname, apiBase)) return { ok: false };
     }
-    return { ok: true, scope };
+    const principal = tokenRegistry.resolvePrincipal(token);
+    return { ok: true, scope, ...(principal ? { principal } : {}) };
   }
 
   function listListedRoutes(): readonly ListedRoute[] {

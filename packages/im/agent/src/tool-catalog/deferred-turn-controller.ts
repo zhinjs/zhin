@@ -8,7 +8,7 @@ import {
 } from '@zhin.js/ai';
 import type { Tool, ToolResult } from '@zhin.js/core';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { SkillRegistry } from '../orchestrator/skill-registry.js';
+import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import { readSkillInstructions, type LoadSkillToolOptions } from '../builtin/load-skill-tool.js';
 import { catalogToolByName, discoverInCatalog, type DiscoverKind } from './tool-catalog.js';
 import type { ToolCatalogItem } from './types.js';

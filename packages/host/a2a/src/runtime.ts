@@ -10,12 +10,32 @@ import { buildAgentCardForBinding } from './card-builder.js';
 import { ZhinA2AExecutor } from './agent-executor.js';
 import { handleAgentCard, handleJsonRpc, handleRest } from './http-handlers.js';
 import { verifyA2aBearer } from './auth.js';
+import type { WorkroomA2aAuthBindingInput } from './workroom-auth-registry.js';
+import type { WorkroomA2aRemoteTransportBindingInput } from './workroom-remote-transport.js';
+
+export interface RuntimeWorkroomCallbackConfig {
+  readonly enabled?: boolean;
+  /** Must remain outside the ordinary `/a2a/{agent}/*` route tree. */
+  readonly path?: string;
+  readonly maxBodyBytes?: number;
+  readonly maxSequenceGap?: number;
+  readonly bindings: readonly WorkroomA2aAuthBindingInput[];
+}
+
+export interface RuntimeWorkroomRemoteExecutorsConfig {
+  readonly enabled?: boolean;
+  readonly maxResponseBytes?: number;
+  readonly bindings: readonly WorkroomA2aRemoteTransportBindingInput[];
+}
 
 export interface RuntimeA2aConfig {
   readonly enabled?: boolean;
   readonly path?: string;
   readonly token?: string;
   readonly publicUrl?: string;
+  readonly workroomCallbacks?: RuntimeWorkroomCallbackConfig;
+  /** Transport endpoints only. Project/Workroom topology remains in the persistent Catalog. */
+  readonly workroomRemoteExecutors?: RuntimeWorkroomRemoteExecutorsConfig;
 }
 
 export interface InstallRuntimeA2aOptions {
@@ -139,3 +159,25 @@ function normalizePath(path: string): string {
   const leading = path.startsWith('/') ? path : `/${path}`;
   return trimTrailingSlashes(leading) || '/a2a';
 }
+
+export {
+  installRuntimeWorkroomCallbacks,
+  type InstallRuntimeWorkroomCallbacksOptions,
+  type RuntimeWorkroomCallbackDependencies,
+  type RuntimeWorkroomCallbackInstallation,
+  type RuntimeWorkroomCallbackRecoverySummary,
+} from './workroom-callback-runtime.js';
+export {
+  WorkroomA2aAuthRegistry,
+  WorkroomA2aAuthenticationError,
+  type WorkroomA2aAuthRegistryOptions,
+  type WorkroomA2aEndpointAuthoritySnapshot,
+} from './workroom-auth-registry.js';
+export {
+  WorkroomA2aHttpRemoteTransport,
+  type WorkroomA2aHttpRemoteTransportOptions,
+  type WorkroomA2aPinnedNetworkPort,
+  type WorkroomA2aPinnedRequest,
+  type WorkroomA2aResolvedAddress,
+  type WorkroomA2aRemoteTransportBindingInput,
+} from './workroom-remote-transport.js';

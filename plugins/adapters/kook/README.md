@@ -8,6 +8,7 @@ Zhin.js KOOK（开黑啦）适配器（Plugin Runtime），默认通过 **WebSoc
 - Webhook 入站（`connection: webhook` + `httpHostToken` + `verify_token`）
 - 解析频道与私聊文本消息
 - 出站 `send({ conversation, payload })` → KOOK KMarkdown（`kind: 'channel' | 'private'`）
+- canonical `markdown` 段原生保留为 [KMarkdown](https://developer.kookapp.cn/doc/kmarkdown-desc)
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 
 ## 安装
@@ -96,7 +97,7 @@ platform permit checker 由 `plugin.ts` 的 generation 生命周期注册；Capa
 
 ## 迁移后出站能力变化
 
-迁移到 Plugin Runtime 后，出站统一经 `messageGatewayToken` 渲染为文本后发送（`sendChannelMsg` / `sendPrivateMsg`，KMarkdown 文本）。旧 Adapter 的富媒体出站能力（图片 / 卡片消息 / 附件等多模态 segment 直发）暂未迁移，当前出站等价于纯文本（KMarkdown）。如需发送卡片或附件，可直接使用 endpoint 上的 KOOK OpenAPI 封装（`getRoleList` 等同款 client）作为逃生舱。
+迁移到 Plugin Runtime 后，出站统一经 `messageGatewayToken` 渲染并由 endpoint 编码为 KMarkdown（`sendChannelMsg` / `sendPrivateMsg`）。canonical `markdown` 保留格式；图片、视频、音频和文件仅有远程 URL 时可表示为 KMarkdown 链接。卡片消息与附件上传仍未接入统一出站通道。
 
 ## 许可证
 

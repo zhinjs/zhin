@@ -123,9 +123,15 @@ importers:
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../../packages/im/im-contract
+      '@zhin.js/interaction':
+        specifier: workspace:*
+        version: link:../../packages/im/interaction
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../logger
+      '@zhin.js/middleware':
+        specifier: workspace:*
+        version: link:../../packages/im/middleware
       '@zhin.js/pagemanager':
         specifier: workspace:*
         version: link:../../packages/console/pagemanager
@@ -1249,6 +1255,9 @@ importers:
       '@zhin.js/feature-kit':
         specifier: workspace:*
         version: link:../feature-kit
+      '@zhin.js/interaction':
+        specifier: workspace:*
+        version: link:../interaction
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../permission
@@ -1321,6 +1330,9 @@ importers:
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../im-contract
+      '@zhin.js/interaction':
+        specifier: workspace:*
+        version: link:../interaction
       '@zhin.js/kernel':
         specifier: workspace:*
         version: link:../kernel
@@ -1389,6 +1401,9 @@ importers:
       '@zhin.js/feature-kit':
         specifier: workspace:*
         version: link:../feature-kit
+      '@zhin.js/interaction':
+        specifier: workspace:*
+        version: link:../interaction
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
@@ -1401,6 +1416,15 @@ importers:
         version: 6.0.3
 
   packages/im/im-contract:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/im/interaction:
     devDependencies:
       '@types/node':
         specifier: ^26.1.2

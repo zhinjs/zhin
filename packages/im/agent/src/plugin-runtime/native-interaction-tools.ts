@@ -19,7 +19,7 @@ export function createNativeInteractionToolFeatures(): readonly NativeInteractio
     feature: toolFeatureId,
     name: 'ask_user',
     definition: defineAgentTool({
-      description: 'Ask the authenticated user a text, number, confirmation, or multiple-choice question and wait for the canonical reply.',
+      description: 'Ask the authenticated user a text, number, confirmation, or multiple-choice question and wait for the canonical reply. Use confirm/pick instead of asking in prose when the user must approve or choose; supported IM adapters render native buttons.',
       inputSchema: Object.freeze({
         type: 'object',
         properties: Object.freeze({

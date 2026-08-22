@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ToolRegistry, defineTool } from '../src/orchestrator/tool-registry.js';
+import { ToolRegistry, defineTool } from '../src/resource-hub/tool-registry.js';
 
 function makeTool(name: string, source?: string, result: string = name) {
   return defineTool({

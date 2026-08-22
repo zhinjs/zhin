@@ -1,7 +1,7 @@
 import type { AgentTool } from '@zhin.js/ai';
-import { sharedToolSelection } from '../orchestrator/tool-selection.js';
-import type { Skill as OrchestratorSkill } from '../orchestrator/types.js';
-import { SkillRegistry } from '../orchestrator/skill-registry.js';
+import { sharedToolSelection } from '../resource-hub/tool-selection.js';
+import type { Skill as ResourceHubSkill } from '../resource-hub/types.js';
+import { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type {
   Skill,
   SkillSearchOptions,
@@ -10,7 +10,7 @@ import type {
   TurnContext,
 } from './contracts.js';
 
-function toBlueprintSkill(skill: OrchestratorSkill): Skill {
+function toBlueprintSkill(skill: ResourceHubSkill): Skill {
   return {
     name: skill.name,
     description: skill.description,
@@ -35,7 +35,7 @@ export class SkillSystem {
     return this.registry;
   }
 
-  addSkill(skill: OrchestratorSkill, scope?: import('../orchestrator/types.js').ResourceScope, source?: string): () => void {
+  addSkill(skill: ResourceHubSkill, scope?: import('../resource-hub/types.js').ResourceScope, source?: string): () => void {
     return this.registry.add(skill, scope, source);
   }
 
@@ -56,7 +56,7 @@ export class SkillSystem {
     return tools.map((tool) => sharedToolSelection.normalize(tool, context.message));
   }
 
-  getAlwaysSkills(agentId?: string): OrchestratorSkill[] {
+  getAlwaysSkills(agentId?: string): ResourceHubSkill[] {
     if (typeof this.registry.getAlwaysSkills !== 'function') return [];
     return this.registry.getAlwaysSkills(agentId);
   }

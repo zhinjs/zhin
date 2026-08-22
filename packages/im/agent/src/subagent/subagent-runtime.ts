@@ -18,13 +18,13 @@ import type { ResolvedAgentBinding } from '../config/types.js';
 import {
   ensureMcpConnectionsForBinding,
   getMcpToolsForBinding,
-} from '../orchestrator/mcp-lifecycle.js';
-import type { McpRegistry } from '../orchestrator/mcp-registry.js';
+} from '../resource-hub/mcp-lifecycle.js';
+import type { McpRegistry } from '../resource-hub/mcp-registry.js';
 import { runAgentLoopStandaloneTurn } from '../core/agent-loop-standalone.js';
 import { DEFAULT_CONFIG, type ZhinAgentConfig } from '../config/index.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
-import { resolveSubagentAgentTools } from '../orchestrator/resolve-subagent-tools.js';
-import type { AgentRole } from '../orchestrator/role-configs.js';
+import { resolveSubagentAgentTools } from '../resource-hub/resolve-subagent-tools.js';
+import type { AgentRole } from '../resource-hub/role-configs.js';
 import { buildSubagentUserDelivery } from '../media/subagent-user-delivery.js';
 import { type AgentMeta, type AgentEffortLevel, loadAgentInstructionsBody } from '../discovery/agents.js';
 const EFFORT_MAX_ITERATIONS: Record<AgentEffortLevel, number> = {

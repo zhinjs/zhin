@@ -1,5 +1,5 @@
 import type { Message } from '@zhin.js/core';
-import type { Skill, Tool, McpServerEntry } from '../orchestrator/types.js';
+import type { Skill, Tool, McpServerEntry } from '../resource-hub/types.js';
 import {
   type AuthoringSkillDefinition,
   type AuthoringConnectionDefinition,

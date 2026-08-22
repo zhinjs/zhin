@@ -268,6 +268,7 @@ export function formatOutboundBody(payload: unknown): DingTalkSendBody {
   const textParts: string[] = [];
   const atUserIds: string[] = [];
   let media: DingTalkSendBody | null = null;
+  let markdownTitle: string | undefined;
 
   for (const item of items) {
     if (typeof item === 'string') {
@@ -315,15 +316,8 @@ export function formatOutboundBody(payload: unknown): DingTalkSendBody {
         }));
         break;
       case 'markdown':
-        if (!media) {
-          media = {
-            msgtype: 'markdown',
-            markdown: {
-              title: String(data.title || '消息'),
-              text: String(data.content ?? data.text ?? ''),
-            },
-          };
-        }
+        markdownTitle ??= String(data.title || '消息');
+        textParts.push(String(data.content ?? data.text ?? ''));
         break;
       case 'link':
         if (!media) {
@@ -344,6 +338,13 @@ export function formatOutboundBody(payload: unknown): DingTalkSendBody {
   }
 
   if (media) return media;
+  if (markdownTitle !== undefined) {
+    return {
+      msgtype: 'markdown',
+      markdown: { title: markdownTitle, text: textParts.join('') },
+      ...(atUserIds.length > 0 ? { at: { atUserIds, isAtAll: false } } : {}),
+    };
+  }
 
   const result: DingTalkSendBody = {
     msgtype: 'text',

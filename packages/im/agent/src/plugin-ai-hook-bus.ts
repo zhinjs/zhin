@@ -1,5 +1,5 @@
 import type { Plugin } from '@zhin.js/core';
-import type { AIHookEvent } from './orchestrator/types.js';
+import type { AIHookEvent } from './resource-hub/types.js';
 import { createAIHookBusPayload } from './ai-event-bus.js';
 import { aiHookRuntimeBus } from './ai-hook-runtime-bus.js';
 import { runModuleAIHookHandlers } from './ai-hook-handlers.js';

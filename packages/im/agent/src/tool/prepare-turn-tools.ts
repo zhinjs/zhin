@@ -3,7 +3,7 @@ import type { Message } from '@zhin.js/core';
 import {
   ensureMcpConnectionsForBinding,
   getMcpToolsForBinding,
-} from '../orchestrator/mcp-lifecycle.js';
+} from '../resource-hub/mcp-lifecycle.js';
 import { rehydrateTurnActiveSkills } from '../assistant/schedule-skills.js';
 import { captureDeferredSnapshotBefore, cloneDeferredSnapshot } from '../internal/turn-context.js';
 import { attachWebSearchLocale } from './web-search-locale-attach.js';
@@ -12,7 +12,7 @@ import { defaultToolSystem } from '../tool/tool-system.js';
 import type { ResolvedToolsForTurn } from './deferred-resolution.js';
 
 function listSpawnableAgentNames(host: ZhinAgentPrivate): string[] {
-  const presets = host.orchestrator?.subagents.getAllPresets().map((p) => p.name) ?? [];
+  const presets = host.resourceHub?.subagents.getAllPresets().map((p) => p.name) ?? [];
   return [...new Set(presets.filter(Boolean))].sort();
 }
 
@@ -40,8 +40,8 @@ export async function prepareTurnTools(
   const userId = opts.userId;
   const contextForTools = await attachWebSearchLocale(opts.commMessage, userId, host.userProfiles);
 
-  if (host.orchestrator && opts.mcpServerNames.length > 0) {
-    await ensureMcpConnectionsForBinding(host.orchestrator.mcps, opts.mcpServerNames, (event) => {
+  if (host.resourceHub && opts.mcpServerNames.length > 0) {
+    await ensureMcpConnectionsForBinding(host.resourceHub.mcps, opts.mcpServerNames, (event) => {
       const payload = host.emitter.createPayload(opts.sessionId, contextForTools, 'text', {
         path: 'agent',
         serverName: event.serverName,
@@ -59,8 +59,8 @@ export async function prepareTurnTools(
     });
   }
 
-  const mcpTools = host.orchestrator && opts.mcpServerNames.length > 0
-    ? getMcpToolsForBinding(host.orchestrator.mcps, opts.mcpServerNames)
+  const mcpTools = host.resourceHub && opts.mcpServerNames.length > 0
+    ? getMcpToolsForBinding(host.resourceHub.mcps, opts.mcpServerNames)
     : [];
 
   const toolSystem = host.toolSystem ?? defaultToolSystem;

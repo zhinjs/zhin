@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { HtmlRendererHost, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   applyOutboundInteractivePolicy,
+  applyOutboundMarkdownPolicy,
   normalizeOutboundPayload,
   resolveOutboundInteractivePolicy,
+  resolveOutboundMarkdownPolicy,
   resolveOutboundMediaPolicy,
   type OutboundMediaPolicy,
 } from '../../src/plugin-runtime/im/outbound-segments.js';
@@ -434,5 +436,22 @@ describe('applyOutboundInteractivePolicy', () => {
   it('非数组 payload 原样透传', () => {
     expect(applyOutboundInteractivePolicy('plain', 'text')).toBe('plain');
     expect(applyOutboundInteractivePolicy(null, 'text')).toBeNull();
+  });
+});
+
+describe('outbound Markdown policy', () => {
+  it('requires an explicit native declaration', () => {
+    const native = mockSnapshot({ definition: { segments: { markdown: 'native' } } });
+    const fallback = mockSnapshot({ definition: { segments: {} } });
+    expect(resolveOutboundMarkdownPolicy('adapter:test' as never, native)).toBe('native');
+    expect(resolveOutboundMarkdownPolicy('adapter:test' as never, fallback)).toBe('text');
+  });
+
+  it('preserves native Markdown and otherwise degrades to text', () => {
+    const input = [{ type: 'markdown', data: { content: '**完成**' } }];
+    expect(applyOutboundMarkdownPolicy(input, 'native')).toBe(input);
+    expect(applyOutboundMarkdownPolicy(input, 'text')).toEqual([
+      { type: 'text', data: { text: '完成' } },
+    ]);
   });
 });

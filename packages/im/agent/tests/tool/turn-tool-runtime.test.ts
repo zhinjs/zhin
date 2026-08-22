@@ -6,6 +6,7 @@ import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { TurnEvent } from '../../src/event/turn-event.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
+import { readTurnSandboxAuthority } from '../../src/security/turn-sandbox-authority.js';
 import { createTurnIngress, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import { NetworkAccessDeniedError } from '../../src/security/network-policy.js';
 
@@ -132,7 +133,7 @@ describe('TurnToolRuntime', () => {
 
   it('denies canonical Bash mutations for a regular user', async () => {
     const execute = vi.fn(async () => 'deleted');
-    const { turn, events } = fixture();
+    const { turn, events } = fixture({ workspaceRoot: process.cwd() });
     const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'bash')]);
 
     await expect(runtime.execute('bash', { command: 'rm /tmp/output.txt' }, 'call-bash')).resolves.toMatchObject({
@@ -145,7 +146,7 @@ describe('TurnToolRuntime', () => {
 
   it('denies canonical Bash reads of sensitive paths for a regular user', async () => {
     const execute = vi.fn(async () => 'sensitive contents');
-    const { turn, events } = fixture();
+    const { turn, events } = fixture({ workspaceRoot: process.cwd() });
     const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'bash')]);
 
     await expect(runtime.execute('bash', { command: 'cat /etc/passwd' }, 'call-bash-read')).resolves.toMatchObject({
@@ -229,7 +230,7 @@ describe('TurnToolRuntime', () => {
 
   it('enforces the unattended Shell preset before executing Bash', async () => {
     const execute = vi.fn(async () => 'ran');
-    const { turn } = fixture({ shell: { preset: 'readonly' } });
+    const { turn } = fixture({ shell: { preset: 'readonly' }, workspaceRoot: process.cwd() });
     const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'bash')]);
 
     await expect(runtime.execute('bash', { command: 'git status' }, 'call-shell-preset'))
@@ -239,7 +240,98 @@ describe('TurnToolRuntime', () => {
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
-  it('passes the turn signal and waits for real settlement before cancelling', async () => {
+  it('denies file and shell writes for an owner in a read-only workspace', async () => {
+    const executeFile = vi.fn(async () => 'wrote');
+    const executeBash = vi.fn(async () => 'wrote');
+    const { turn } = fixture({
+      roles: ['master'],
+      filesystem: { workspaceRoot: process.cwd(), workingDirectory: process.cwd(), access: 'read-only' },
+    });
+    const runtime = new TurnToolRuntime(turn, [
+      tool(executeFile, 'never', 'write_file'),
+      tool(executeBash, 'never', 'bash'),
+    ]);
+
+    await expect(runtime.execute('write_file', { file_path: 'output.txt', content: 'x' }, 'file-ro'))
+      .resolves.toMatchObject({ status: 'denied', policy: 'workspace-access' });
+    await expect(runtime.execute('bash', { command: 'touch output.txt' }, 'bash-ro'))
+      .resolves.toMatchObject({ status: 'denied', policy: 'workspace-access' });
+    expect(executeFile).not.toHaveBeenCalled();
+    expect(executeBash).not.toHaveBeenCalled();
+  });
+
+  it('injects the configured working directory into Bash execution', async () => {
+    const execute = vi.fn(async () => 'pwd');
+    const { turn } = fixture({
+      roles: ['master'],
+      filesystem: { workspaceRoot: process.cwd(), workingDirectory: join(process.cwd(), 'packages'), access: 'workspace-write' },
+    });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'bash')]);
+
+    await expect(runtime.execute('bash', { command: 'pwd' }, 'bash-cwd'))
+      .resolves.toMatchObject({ status: 'completed' });
+    expect(execute).toHaveBeenCalledWith(
+      { command: 'pwd', cwd: join(process.cwd(), 'packages') },
+      expect.any(Object),
+    );
+  });
+
+  it('injects a fail-closed isolation contract for workspace shell execution', async () => {
+    const execute = vi.fn(async () => 'ok');
+    const workspace = join(process.cwd(), 'packages');
+    const { turn } = fixture({
+      roles: ['master'],
+      filesystem: { workspaceRoot: workspace, workingDirectory: workspace, access: 'workspace-write' },
+      shell: {
+        security: 'allowlist',
+        execPreset: 'development',
+        approvalMode: 'deny',
+        isolation: 'required',
+      },
+    });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'bash')]);
+
+    await expect(runtime.execute('bash', { command: 'node -e "console.log(1)"' }, 'isolated'))
+      .resolves.toMatchObject({ status: 'completed' });
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ cwd: workspace }), expect.any(Object));
+    const authorizedInput = execute.mock.calls[0]?.[0];
+    expect(readTurnSandboxAuthority(authorizedInput)).toEqual({
+      workingDirectory: workspace,
+      access: 'workspace-write',
+      networkAccess: false,
+    });
+    expect(JSON.stringify(authorizedInput)).not.toContain('workspace-write');
+  });
+
+  it('routes per-turn shell ask decisions through ApprovalPort', async () => {
+    const execute = vi.fn(async () => 'ok');
+    const requestApproval = vi.fn(async () => true);
+    const { turn } = fixture({
+      roles: ['master'],
+      approval: { available: true, requestApproval },
+      filesystem: { workspaceRoot: process.cwd(), workingDirectory: process.cwd(), access: 'workspace-write' },
+      shell: {
+        security: 'allowlist',
+        execPreset: 'development',
+        approvalMode: 'ask',
+        isolation: 'required',
+      },
+    });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'bash')]);
+
+    await expect(runtime.execute('bash', { command: 'cargo test' }, 'approval'))
+      .resolves.toMatchObject({ status: 'completed' });
+    expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({
+      toolName: 'bash',
+      scopeKey: expect.stringContaining('cargo test'),
+      question: expect.stringContaining('cargo'),
+    }));
+    expect(requestApproval.mock.calls[0]?.[0].scopeKey).toContain(process.cwd());
+    expect(requestApproval.mock.calls[0]?.[0].question).toContain(`工作目录：${process.cwd()}`);
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('records real settlement but returns cancellation when a tool ignores the signal', async () => {
     const controller = new AbortController();
     let release!: () => void;
     let markEntered!: () => void;
@@ -269,7 +361,7 @@ describe('TurnToolRuntime', () => {
       status: 'cancelled',
       reason: 'cancelled by caller',
     });
-    expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_cancelled']);
+    expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_result']);
   });
 
   it('cancels an in-flight approval and never starts the tool', async () => {
@@ -346,6 +438,7 @@ function fixture(options: {
   journalError?: Error;
   roles?: readonly string[];
   workspaceRoot?: string;
+  filesystem?: TurnPolicyContext['filesystem'];
 } = {}) {
   const events: TurnEvent[] = [];
   const turn = createTurnIngress({
@@ -360,7 +453,9 @@ function fixture(options: {
       unattended: false,
       ...(options.network ? { network: options.network } : {}),
       ...(options.shell ? { shell: options.shell } : {}),
-      ...(options.workspaceRoot ? { filesystem: { workspaceRoot: options.workspaceRoot } } : {}),
+      ...(options.filesystem
+        ? { filesystem: options.filesystem }
+        : options.workspaceRoot ? { filesystem: { workspaceRoot: options.workspaceRoot } } : {}),
     },
     capabilities: { tools: ['danger'], skills: [] },
     signal: options.signal ?? new AbortController().signal,

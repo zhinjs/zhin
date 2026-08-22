@@ -9,7 +9,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Plugin, Message } from '@zhin.js/core';
 import { createWriteFileTool, WriteFileBuiltinTool } from '../../src/builtin/write-file-tool.js';
-import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
+import { normalizeTool } from '../../src/resource-hub/tool-selection.js';
 
 describe('WriteFileBuiltinTool', () => {
   let tmpDir: string;

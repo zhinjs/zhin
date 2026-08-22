@@ -4,7 +4,7 @@
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { type AgentTool, type AIProvider, type Usage, type MediaContentBlock, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, getLlmTransportModel, agentToolsToLlmTools, registerLlmApiFromProviders, sdkEntryFromProvider, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
 import { runWithCommMessage, runWithDirectAgentExecution } from '../security/comm-message-context.js';
-import type { Message } from '../orchestrator/types.js';
+import type { Message } from '../resource-hub/types.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from '../core/text-sanitize.js';
 import { type ToolCallRecord, formatToolCallsForUser } from '../core/tool-calls-user-format.js';
 import type { AgentRunInput } from '../media/media-types.js';
@@ -118,6 +118,7 @@ export async function runAgentLoopStandaloneTurn(
     signal,
     directExecution = true,
   } = input;
+  signal?.throwIfAborted();
 
   ensureLlmApi(provider, input.resolveProvider);
 
@@ -281,11 +282,10 @@ export async function runAgentLoopStandaloneTurn(
   };
 
   // 独立 controller 下驱动 loop：load_tool 变更不污染父 turn。
-  if (childDeferred) {
-    await runWithDeferredTurnController(childDeferred, drive);
-  } else {
-    await drive();
-  }
+  const pending = childDeferred
+    ? runWithDeferredTurnController(childDeferred, drive)
+    : drive();
+  await (signal ? raceAbort(pending, signal) : pending);
 
   const content = sanitizeAssistantReply(lastAssistantText, {
     toolSummary: formatToolCallsForUser(toolCalls),
@@ -305,4 +305,15 @@ export async function runAgentLoopStandaloneTurn(
     model,
     toolCalls,
   };
+}
+
+async function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted();
+  return await new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => reject(
+      signal.reason ?? new DOMException('Standalone Agent cancelled', 'AbortError'),
+    );
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
 }

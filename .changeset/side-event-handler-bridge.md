@@ -1,6 +1,6 @@
 ---
-"@zhin.js/core": minor
-"@zhin.js/handler": major
+"@zhin.js/core": patch
+"@zhin.js/handler": patch
 "@zhin.js/cli": patch
 "@zhin.js/adapter-icqq": patch
 "@zhin.js/adapter-napcat": patch

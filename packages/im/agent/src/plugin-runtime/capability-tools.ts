@@ -69,10 +69,10 @@ export function toolInvocationFromTurn(turn: TurnIngress | TurnRequest): ToolInv
         allowedDomains: Object.freeze([...(turn.policy.network?.allowedDomains ?? [])]),
       }),
       ...(turn.policy.shell
-        ? { shell: Object.freeze({ preset: turn.policy.shell.preset }) }
+        ? { shell: Object.freeze({ ...turn.policy.shell }) }
         : {}),
       ...(turn.policy.filesystem
-        ? { filesystem: Object.freeze({ workspaceRoot: turn.policy.filesystem.workspaceRoot }) }
+        ? { filesystem: Object.freeze({ ...turn.policy.filesystem }) }
         : {}),
     }),
     ...(turn.ports.question ? { question: turn.ports.question } : {}),

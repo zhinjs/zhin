@@ -1,13 +1,13 @@
 import { isReservedToolName, type AgentTool } from '@zhin.js/ai';
 import { canAccessTool, getLogger, type Tool as CoreTool } from '@zhin.js/core';
 import type { PermissionHost } from '@zhin.js/permission';
-import type { Tool, Message } from '../orchestrator/types.js';
-import type { SkillRegistry } from '../orchestrator/skill-registry.js';
+import type { Tool, Message } from '../resource-hub/types.js';
+import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
 import { KEYWORD_TRIGGERS } from '../config/keyword-triggers.js';
 import { createUserProfileTool } from '../tool/context-tools.js';
 import type { UserProfileStore } from '../user-profile.js';
-import { sharedToolSelection } from '../orchestrator/tool-selection.js';
+import { sharedToolSelection } from '../resource-hub/tool-selection.js';
 import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
 import type { RegisteredAgentTool, ToolFilter, ToolSource } from './contracts.js';
 const logger = getLogger('ToolSystem');

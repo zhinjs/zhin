@@ -3,7 +3,7 @@
  * Identity comes from the path; definitions do not carry name/id fields.
  */
 
-import type { ToolParametersSchema } from '../orchestrator/types.js';
+import type { ToolParametersSchema } from '../resource-hub/types.js';
 import type { Message } from '@zhin.js/core';
 import type { ToolApprovalPolicy, ToolToModelOutputFn } from '@zhin.js/ai/tool-policy';
 
@@ -100,7 +100,7 @@ export interface AuthoringConnectionDefinition extends AuthoringMarker {
 export interface AuthoringHookDefinition extends AuthoringMarker {
   [AUTHORING_KIND]: 'hook';
   event: string;
-  handler: (event: import('../orchestrator/types.js').AIHookEvent) => void | Promise<void>;
+  handler: (event: import('../resource-hub/types.js').AIHookEvent) => void | Promise<void>;
 }
 
 export interface AuthoringEvalContext {

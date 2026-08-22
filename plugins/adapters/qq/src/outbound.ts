@@ -31,6 +31,7 @@ interface QqOutboundButtonSpec {
   readonly label?: string;
   readonly payload?: string;
   readonly disabled?: boolean;
+  readonly style?: 'primary' | 'danger' | 'secondary';
   readonly mode?: string;
   readonly command?: { readonly enter?: boolean; readonly reply?: boolean };
 }
@@ -103,7 +104,7 @@ function normalizeMarkdownSegment(seg: QqWireSegment): QqOutboundElem | null {
 function coreButtonToQq(btn: QqOutboundButtonSpec): Record<string, unknown> {
   const isCommand = btn.mode === 'command';
   const action: Record<string, unknown> = {
-    type: isCommand ? 2 : 1,
+    type: isCommand ? 2 : 0,
     permission: { type: 2 },
     data: btn.payload ?? '',
     click_limit: btn.disabled ? 0 : 10,
@@ -118,7 +119,7 @@ function coreButtonToQq(btn: QqOutboundButtonSpec): Record<string, unknown> {
     render_data: {
       label: btn.label ?? '',
       visited_label: btn.label ?? '',
-      style: 0,
+      style: btn.style === 'primary' ? 1 : btn.style === 'danger' ? 2 : 0,
     },
     action,
   };

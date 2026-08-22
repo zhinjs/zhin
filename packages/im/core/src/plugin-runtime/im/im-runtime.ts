@@ -42,7 +42,7 @@ import {
 import { segmentsToPlainText } from '../../built/segment-contract/text.js';
 import { MiddlewareIndex, isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/handler.js';
-import type { HandlerDispatchOptions, HandlerPrompt } from '@zhin.js/handler';
+import type { HandlerDispatchOptions } from '@zhin.js/handler';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import {
   Message,
@@ -66,17 +66,34 @@ import type { Notice } from '../../notice.js';
 import type { Request } from '../../request.js';
 import type { SystemEvent } from '../../system-event.js';
 import { sideEventSendChannel } from '../../side-event/base.js';
-import type { CommandPrompt } from '@zhin.js/command';
+import type {
+  UserInteraction,
+  UserInteractionRequest,
+  UserInteractionSequence,
+  UserInteractionSequenceResult,
+  UserInteractionStep,
+  UserInteractionValue,
+} from '@zhin.js/interaction';
 import { defaultCommandPrefixResolver, MessageDispatcher } from './message-dispatcher.js';
 import { OutboundRenderer } from './outbound-renderer.js';
 import {
   applyOutboundInteractivePolicy,
+  applyOutboundMarkdownPolicy,
   normalizeOutboundPayload,
   resolveOutboundInteractivePolicy,
+  resolveOutboundMarkdownPolicy,
   resolveOutboundMediaPolicy,
 } from './outbound-segments.js';
 import { assertCanonicalSegments } from '../../built/segment-contract/assert.js';
 import { keyboardFallbackStore } from '../../built/interactive-segments/fallback-store.js';
+import {
+  assertUserInteractionRequest,
+  parseUserInteractionAnswer,
+  projectUserInteraction,
+  renderUserInteraction,
+  type UserInteractionProgress,
+  type UserInteractionView,
+} from '../../built/user-interaction.js';
 import {
   findRuntimeInteractiveHandler,
   resolveRuntimeInteractivePayload,
@@ -89,8 +106,14 @@ const logger = getLogger('im');
 
 export const messageGatewayToken = createToken<MessageGateway>('zhin.im.message-gateway');
 
-/** Generation-owned terminal route after interactive/command routing misses. */
+/** Generation-owned ingress hooks before ordinary dispatch and after it misses. */
 export interface IngressRoute {
+  preRoute?(
+    message: Message,
+    lease: SnapshotLease,
+    requester: PluginId,
+    conversationSequence: number | undefined,
+  ): Promise<boolean>;
   route(
     message: Message,
     lease: SnapshotLease,
@@ -140,16 +163,37 @@ export interface ImRuntimeOptions {
   ) => MessageSenderRef | undefined;
 }
 
-interface PromptClaim {
+interface UserInteractionClaim {
   readonly resolve: (raw: string) => void;
   readonly reject: (error: Error) => void;
   readonly timer: ReturnType<typeof setTimeout>;
 }
 
-interface PromptSource {
+interface UserInteractionSource {
   readonly conversation: ConversationRef;
   readonly sender?: MessageSenderRef;
   readonly $reply: (content: SendContent) => Promise<DeliveryReceipt>;
+}
+
+class UserInteractionTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UserInteractionTimeoutError';
+  }
+}
+
+class UserInteractionSupersededError extends Error {
+  constructor() {
+    super('User interaction superseded');
+    this.name = 'UserInteractionSupersededError';
+  }
+}
+
+class UserInteractionDeliveryError extends Error {
+  constructor(receipt: DeliveryReceipt) {
+    super(`User interaction delivery failed: ${receipt.failure?.code ?? receipt.status}`);
+    this.name = 'UserInteractionDeliveryError';
+  }
 }
 
 export class ImRuntime implements MessageGateway {
@@ -159,7 +203,7 @@ export class ImRuntime implements MessageGateway {
   readonly #interactiveHandlers: Array<RegisteredRuntimeInteractiveHandler & {
     readonly admission?: GenerationAdmissionGate;
   }> = [];
-  readonly #promptClaims = new Map<string, PromptClaim>();
+  readonly #interactionClaims = new Map<string, UserInteractionClaim>();
   #snapshots?: SnapshotReader;
   readonly #inboundClaim?: ImRuntimeOptions['inboundClaim'];
   readonly #enrichSender?: ImRuntimeOptions['enrichSender'];
@@ -315,24 +359,23 @@ export class ImRuntime implements MessageGateway {
   }
 
   // ==========================================================================
-  // Prompt claim — 命令对话式交互
+  // User interaction claim — 命令/Agent 对话式交互
   // ==========================================================================
 
-  #promptConversationKey(message: PromptSource, subjectId = message.sender?.id ?? ''): string {
-    const conv = message.conversation;
-    return `${conv.endpoint.adapter}:${conv.endpoint.id}:${conv.kind}:${conv.id}:${subjectId}`;
+  #interactionConversationKey(message: UserInteractionSource, subjectId = message.sender?.id ?? ''): string {
+    return `${conversationRefKey(message.conversation)}:${subjectId}`;
   }
 
-  #resolvePromptClaim(message: Message): boolean {
-    const key = this.#promptConversationKey(message);
-    const claim = this.#promptClaims.get(key);
+  #resolveInteractionClaim(message: Message): boolean {
+    const key = this.#interactionConversationKey(message);
+    const claim = this.#interactionClaims.get(key);
     if (!claim) return false;
-    claim.resolve(message.content);
+    claim.resolve(resolveRuntimeInteractivePayload(message) ?? message.content);
     return true;
   }
 
   #claimNextMessage(
-    message: PromptSource,
+    message: UserInteractionSource,
     timeout: number,
     timeoutText: string,
     signal?: AbortSignal,
@@ -343,154 +386,127 @@ export class ImRuntime implements MessageGateway {
         reject(abortError(signal, timeoutText));
         return;
       }
-      const key = this.#promptConversationKey(message, subjectId);
-      const existing = this.#promptClaims.get(key);
+      const key = this.#interactionConversationKey(message, subjectId);
+      const existing = this.#interactionClaims.get(key);
       if (existing) {
         clearTimeout(existing.timer);
-        existing.reject(new Error('Prompt superseded'));
+        existing.reject(new UserInteractionSupersededError());
       }
       const timer = setTimeout(() => {
-        settle(undefined, new Error(timeoutText));
+        settle(undefined, new UserInteractionTimeoutError(timeoutText));
       }, timeout);
       const onAbort = () => settle(undefined, abortError(signal, timeoutText));
       signal?.addEventListener('abort', onAbort, { once: true });
       const settle = (value?: string, error?: Error) => {
-        if (this.#promptClaims.get(key) !== claim) return;
-        this.#promptClaims.delete(key);
+        if (this.#interactionClaims.get(key) !== claim) return;
+        this.#interactionClaims.delete(key);
         clearTimeout(timer);
         signal?.removeEventListener('abort', onAbort);
         if (value !== undefined) resolve(value);
-        else reject(error ?? new Error(timeoutText));
+        else reject(error ?? new UserInteractionTimeoutError(timeoutText));
       };
-      const claim: PromptClaim = {
+      const claim: UserInteractionClaim = {
         resolve: (raw) => settle(raw),
         reject: (error) => settle(undefined, error),
         timer,
       };
-      this.#promptClaims.set(key, claim);
+      this.#interactionClaims.set(key, claim);
     });
   }
 
-  #buildCommandPrompt(message: PromptSource, subjectId?: string): CommandPrompt {
+  #buildUserInteraction(message: UserInteractionSource, subjectId?: string): UserInteraction {
     const DEFAULT_TIMEOUT = 3 * 60 * 1000;
     const DEFAULT_TIMEOUT_TEXT = '输入超时';
     const claim = (timeout: number, timeoutText: string, signal?: AbortSignal) =>
       this.#claimNextMessage(message, timeout, timeoutText, signal, subjectId);
-    const reply = (content: string) => message.$reply(content);
-
-    return {
-      async text(tips, options) {
-        await reply(tips);
-        try {
-          return await claim(
-            options?.timeout ?? DEFAULT_TIMEOUT,
-            options?.timeoutText ?? DEFAULT_TIMEOUT_TEXT,
-            options?.signal,
-          );
-        } catch (e) {
-          if (options?.default !== undefined) return options.default;
-          await reply((e as Error).message);
-          throw e;
-        }
-      },
-      async number(tips, options) {
-        await reply(tips);
-        try {
-          const raw = await claim(
-            options?.timeout ?? DEFAULT_TIMEOUT,
-            options?.timeoutText ?? DEFAULT_TIMEOUT_TEXT,
-            options?.signal,
-          );
-          return +raw;
-        } catch (e) {
-          if (options?.default !== undefined) return options.default;
-          await reply((e as Error).message);
-          throw e;
-        }
-      },
-      async confirm(tips, options) {
-        const condition = options?.condition ?? 'yes';
-        await reply(`${tips}\n输入"${condition}"以确认`);
-        try {
-          const raw = await claim(
-            options?.timeout ?? DEFAULT_TIMEOUT,
-            options?.timeoutText ?? DEFAULT_TIMEOUT_TEXT,
-            options?.signal,
-          );
-          return raw === condition;
-        } catch (e) {
-          if (options?.default !== undefined) return options.default;
-          await reply((e as Error).message);
-          throw e;
-        }
-      },
-      async list(tips, options) {
-        const separator = options?.separator ?? ',';
-        await reply(`${tips}\n值之间使用"${separator}"分隔`);
-        try {
-          const raw = await claim(
-            options?.timeout ?? DEFAULT_TIMEOUT,
-            options?.timeoutText ?? DEFAULT_TIMEOUT_TEXT,
-            options?.signal,
-          );
-          const type = options?.type ?? 'text';
-          return raw.split(separator).map((v) => {
-            if (type === 'number') return +v;
-            if (type === 'boolean') return v === 'true';
-            return v;
-          });
-        } catch (e) {
-          if (options?.default !== undefined) return options.default;
-          await reply((e as Error).message);
-          throw e;
-        }
-      },
-      async pick(tips, options) {
-        const items = options.options.map((o, i) => `${i + 1}.${o.label}`);
-        const separator = options.separator ?? ',';
-        if (options.multiple) items.push(`多选请用"${separator}"分隔`);
-        await reply(`${tips}\n${items.join('\n')}`);
-        try {
-          const raw = await claim(
-            options.timeout ?? DEFAULT_TIMEOUT,
-            options.timeoutText ?? DEFAULT_TIMEOUT_TEXT,
-            options.signal,
-          );
-          if (!options.multiple) {
-            return options.options.find((_, i) => i + 1 === +raw)?.value as never;
-          }
-          const indices = raw.split(separator).map(Number);
-          return options.options
-            .filter((_, i) => indices.includes(i + 1))
-            .map((o) => o.value) as never;
-        } catch (e) {
-          if (options.default !== undefined) return options.default as never;
-          await reply((e as Error).message);
-          throw e;
-        }
-      },
+    const reply = async (view: UserInteractionView): Promise<void> => {
+      const receipt = await message.$reply(renderUserInteraction(view));
+      if (receipt.status !== 'sent') throw new UserInteractionDeliveryError(receipt);
     };
+    const ask = async <Request extends UserInteractionRequest>(
+      request: Request,
+      progress?: UserInteractionProgress,
+    ): Promise<UserInteractionValue<Request>> => {
+      assertUserInteractionRequest(request);
+      const timeout = request.timeout ?? DEFAULT_TIMEOUT;
+      const timeoutText = request.timeoutText ?? DEFAULT_TIMEOUT_TEXT;
+      const deadline = Date.now() + timeout;
+      const view = projectUserInteraction(request, progress);
+      await reply(view);
+      while (true) {
+        try {
+          const raw = await claim(Math.max(1, deadline - Date.now()), timeoutText, request.signal);
+          const result = parseUserInteractionAnswer(request, raw);
+          if (result.ok) return result.value as UserInteractionValue<Request>;
+          await reply({
+            ...view,
+            tip: [request.invalidText ?? result.message, view.tip].filter(Boolean).join('\n'),
+          });
+        } catch (error) {
+          if (error instanceof UserInteractionTimeoutError && 'default' in request && request.default !== undefined) {
+            return request.default as UserInteractionValue<Request>;
+          }
+          if (error instanceof UserInteractionTimeoutError) {
+            await reply({ title: '交互已结束', description: error.message });
+          }
+          throw error;
+        }
+      }
+    };
+
+    const sequence = async <Steps extends readonly UserInteractionStep[]>(
+      definition: UserInteractionSequence<Steps>,
+    ): Promise<UserInteractionSequenceResult<Steps>> => {
+      if (!definition.title.trim()) throw new TypeError('User interaction sequence title must not be empty');
+      const ids = new Set<string>();
+      for (const step of definition.steps) {
+        if (!step.id.trim()) throw new TypeError('User interaction sequence step id must not be empty');
+        if (ids.has(step.id)) throw new TypeError(`Duplicate user interaction sequence step id: ${step.id}`);
+        ids.add(step.id);
+      }
+      const result: Record<string, unknown> = {};
+      for (let index = 0; index < definition.steps.length; index += 1) {
+        const step = definition.steps[index]!;
+        const request = {
+          ...step,
+          timeout: step.timeout ?? definition.timeout,
+          timeoutText: step.timeoutText ?? definition.timeoutText,
+          invalidText: step.invalidText ?? definition.invalidText,
+          signal: step.signal ?? definition.signal,
+        } as UserInteractionRequest;
+        result[step.id] = await ask(request, {
+          title: definition.title,
+          description: definition.description,
+          tip: definition.tip,
+          index: index + 1,
+          total: definition.steps.length,
+        });
+      }
+      return Object.freeze(result) as UserInteractionSequenceResult<Steps>;
+    };
+
+    return Object.freeze({ ask, sequence });
   }
 
   /**
-   * Bound Prompt for this conversation.
+   * User interaction bound to this conversation.
    * `bind.subjectId` waits for that user (e.g. master) instead of the message sender.
    */
-  createPrompt(
+  createInteraction(
     message: Message,
     bind?: { readonly subjectId: string },
-  ): CommandPrompt | undefined {
+  ): UserInteraction | undefined {
     const subjectId = bind?.subjectId?.trim();
     if (bind && !subjectId) return undefined;
     if (typeof message.$reply !== 'function' || !message.conversation) return undefined;
-    return this.#buildCommandPrompt(message, subjectId);
+    return this.#buildUserInteraction(message, subjectId);
   }
 
-  #createPromptForSource(source: unknown): CommandPrompt | undefined {
+  #createInteractionForSource(source: unknown): UserInteraction | undefined {
     if (!source || typeof source !== 'object') return undefined;
     const msg = source as Message;
     if (typeof msg.$reply !== 'function' || !msg.conversation) return undefined;
-    return this.#buildCommandPrompt(msg);
+    return this.#buildUserInteraction(msg);
   }
 
   /**
@@ -589,22 +605,32 @@ export class ImRuntime implements MessageGateway {
         }));
         conversationSequence = appended.sequence;
       }
-      await this.#runHandlers(lease.value, 'message.receive', [message]);
       let result: MessageDispatchResult = Object.freeze({ matched: false });
       const claimed = await this.#inboundClaim?.(message) === true;
       if (claimed) {
         result = Object.freeze({ matched: true, command: 'interaction', owner: requester });
-      } else if (this.#resolvePromptClaim(message)) {
-        result = Object.freeze({ matched: true, command: 'prompt', owner: requester });
+      } else if (this.#resolveInteractionClaim(message)) {
+        result = Object.freeze({ matched: true, command: 'interaction', owner: requester });
       } else {
-        const promptFactory = (source: unknown) => this.#createPromptForSource(source);
+        const interactionFactory = (source: unknown) => this.#createInteractionForSource(source);
         await runMiddleware(
           lease.value,
           message,
           async () => {
-            result = await this.#dispatchInteractive(message, requester, admission)
-              ?? await this.#dispatcher.dispatch(message, lease.value, promptFactory);
             const ingressRoute = resolveIngressRoute(lease.value);
+            const preRouted = await ingressRoute?.preRoute?.(
+              message,
+              lease,
+              requester,
+              conversationSequence,
+            ) === true;
+            if (preRouted) {
+              result = Object.freeze({ matched: true, command: 'pre-route', owner: requester });
+              return;
+            }
+            await this.#runHandlers(lease.value, 'message.receive', [message]);
+            result = await this.#dispatchInteractive(message, requester, admission)
+              ?? await this.#dispatcher.dispatch(message, lease.value, interactionFactory);
             if (!result.matched && ingressRoute) {
               logger.debug(formatCompact({ op: 'unmatched', conv: formatConversationLog(conversation) }));
               const handled = await ingressRoute.route(
@@ -709,13 +735,13 @@ export class ImRuntime implements MessageGateway {
   }
 
   /**
-   * Prompt bound to a side-event scene (private/group channel derived from
+   * User interaction bound to a side-event scene (private/group channel derived from
    * `$scene_type` / `$scene_id`). Returns undefined when outbound is unavailable.
    */
-  #createPromptForSideEvent(
+  #createInteractionForSideEvent(
     payload: Notice | Request | SystemEvent,
     snapshot: RuntimeSnapshot,
-  ): HandlerPrompt | undefined {
+  ): UserInteraction | undefined {
     const adapter = String(payload.$adapter);
     const endpointKey = String(payload.$endpoint);
     if (!adapter || !endpointKey) return undefined;
@@ -726,7 +752,7 @@ export class ImRuntime implements MessageGateway {
       id: channel.id || endpointKey,
     });
     const requester = snapshot.root;
-    const source: PromptSource = Object.freeze({
+    const source: UserInteractionSource = Object.freeze({
       conversation,
       ...(payload.$actor?.id
         ? { sender: Object.freeze({ id: payload.$actor.id }) }
@@ -737,7 +763,7 @@ export class ImRuntime implements MessageGateway {
         content,
       }, snapshot),
     });
-    return this.#buildCommandPrompt(source) as HandlerPrompt;
+    return this.#buildUserInteraction(source);
   }
 
   async #runHandlers(
@@ -748,17 +774,17 @@ export class ImRuntime implements MessageGateway {
     const index = handlers(snapshot);
     if (!index) return;
     const options: HandlerDispatchOptions = {
-      resolvePrompt: (name, promptArgs) => {
-        const payload = promptArgs[0];
+      resolveInteraction: (name, interactionArgs) => {
+        const payload = interactionArgs[0];
         if (name === 'message.receive' && payload instanceof Message) {
-          return this.createPrompt(payload) as HandlerPrompt | undefined;
+          return this.createInteraction(payload);
         }
         if (
           name === 'notice.receive'
           || name === 'request.receive'
           || name === 'system.receive'
         ) {
-          return this.#createPromptForSideEvent(
+          return this.#createInteractionForSideEvent(
             payload as Notice | Request | SystemEvent,
             snapshot,
           );
@@ -771,6 +797,7 @@ export class ImRuntime implements MessageGateway {
 
   /** Console `endpoint.list` — empty until Adapter Feature projection is ready. */
   listEndpoints(): readonly {
+    readonly id: string;
     readonly name: string;
     readonly adapter: string;
     readonly owner: string;
@@ -783,6 +810,7 @@ export class ImRuntime implements MessageGateway {
       const lease = this.#acquire();
       try {
         return requireAdapters(lease.value).describe().map((row) => Object.freeze({
+          id: String(row.id),
           name: row.name,
           // adapter 列显示平台类型（owner 包名去 scope/adapter- 前缀），不是 slot localName
           adapter: adapterTypeName(lease.value.tree.get(row.owner)?.packageName) ?? row.name,
@@ -1295,9 +1323,13 @@ async function prepareOutboundPayload(
 ): Promise<unknown> {
   const adapter = conversation.endpoint.id as CapabilityId;
   const directHtml = isDirectHtmlConsumer(snapshot, adapter);
+  const markdownResolved = applyOutboundMarkdownPolicy(
+    rendered,
+    resolveOutboundMarkdownPolicy(adapter, snapshot),
+  );
   let payload = directHtml
-    ? rendered
-    : await normalizeOutboundPayload(rendered, resolveHtmlRenderer(snapshot), {
+    ? markdownResolved
+    : await normalizeOutboundPayload(markdownResolved, resolveHtmlRenderer(snapshot), {
       mediaPolicy: resolveOutboundMediaPolicy(adapter, snapshot),
     });
   if (finalizeInteractive) {

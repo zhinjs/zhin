@@ -67,6 +67,7 @@ export class SubtreeGenerationPreparer {
       this.configResolver,
       this.environment,
       this.primaryConfigDocument,
+      current.generation + 1,
       this.installResources,
       this.environmentLayers,
       {

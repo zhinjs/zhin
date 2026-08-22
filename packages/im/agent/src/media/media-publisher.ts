@@ -242,6 +242,53 @@ function elementToTextSegment(el: OutputElement): Segment {
   return { type: 'text', data: { text: renderToPlainText([el]) } };
 }
 
+function textElementToSegment(el: Extract<OutputElement, { type: 'text' }>): Segment {
+  return el.format === 'plain'
+    ? { type: 'text', data: { text: el.content } }
+    : { type: 'markdown', data: { content: el.content } };
+}
+
+function cardToSegments(el: Extract<OutputElement, { type: 'card' }>): Segment[] {
+  const lines = [`## ${el.title}`];
+  if (el.description) lines.push('', el.description);
+  if (el.fields?.length) {
+    lines.push('', ...el.fields.map((field) => `- **${field.label}**: ${field.value}`));
+  }
+
+  const links = el.buttons?.filter((button) => button.url);
+  if (links?.length) {
+    lines.push('', links.map((button) => `[${button.text}](${button.url})`).join(' · '));
+  }
+
+  const segments: Segment[] = [{ type: 'markdown', data: { content: lines.join('\n') } }];
+  const commands = el.buttons?.filter((button) => button.command);
+  if (commands?.length) {
+    const buttons = commands.map((button, index) => ({
+      id: `card-${index + 1}`,
+      label: button.text,
+      payload: button.command!,
+      mode: 'command' as const,
+      command: { enter: true, reply: false },
+      style: 'primary' as const,
+    }));
+    const rows = Array.from(
+      { length: Math.ceil(buttons.length / 5) },
+      (_, index) => buttons.slice(index * 5, index * 5 + 5),
+    );
+    segments.push({
+      type: 'keyboard',
+      data: {
+        rows,
+        fallback: {
+          hint: '也可以直接发送对应指令。',
+          map: Object.fromEntries(buttons.map((button, index) => [String(index + 1), button.payload])),
+        },
+      },
+    });
+  }
+  return segments;
+}
+
 /**
  * OutputElement[] → canonical Segment[]; platform codecs own their wire conversion.
  */
@@ -254,9 +301,13 @@ export async function publishOutboundElements(
   const segments: Segment[] = [];
 
   for (const el of elements) {
-    if (el.type === 'text' || el.type === 'card') {
-      if (el.type === 'text' && !el.content?.trim()) continue;
-      segments.push(elementToTextSegment(el));
+    if (el.type === 'text') {
+      if (!el.content?.trim()) continue;
+      segments.push(textElementToSegment(el));
+      continue;
+    }
+    if (el.type === 'card') {
+      segments.push(...cardToSegments(el));
       continue;
     }
 

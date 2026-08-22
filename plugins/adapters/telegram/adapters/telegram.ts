@@ -22,6 +22,7 @@ export default defineAdapter<TelegramAdapterConfig>({
   segments: {
     outboundMedia: ['url', 'upload'],
     interactive: 'native',
+    markdown: 'native',
   },
   create(context) {
     const config = resolveTelegramConfig(context.config);

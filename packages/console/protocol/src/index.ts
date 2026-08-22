@@ -252,6 +252,7 @@ export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
   'config:get-yaml',
   'schema:get',
   'schema:get-all',
+  'workrooms:get',
   'schedule:list',
   'cron:list',
   ENDPOINT_RPC.LIST,

@@ -2,7 +2,7 @@
  * 内省数据源（IM 命令与 Host REST 共用）
  */
 import { Adapter, type MessageCommand, type Plugin } from '@zhin.js/core';
-import type { AgentOrchestrator } from '../orchestrator/index.js';
+import type { AgentResourceHub } from '../resource-hub/index.js';
 import type { AIService } from '../service.js';
 import {
   commandRowsFromService,
@@ -65,31 +65,31 @@ export function collectIntrospectionAgentTools(root: Plugin): string[] {
   if (!('error' in fromFeature)) {
     for (const t of fromFeature) names.add(t.name);
   }
-  const orchestrator = root.inject('agent') as AgentOrchestrator | undefined;
-  if (orchestrator) {
-    for (const t of orchestrator.tools.getAll()) {
+  const resourceHub = root.inject('agent') as AgentResourceHub | undefined;
+  if (resourceHub) {
+    for (const t of resourceHub.tools.getAll()) {
       if (!(t as { hidden?: boolean }).hidden) names.add(t.name);
     }
   }
   return [...names].sort((a, b) => a.localeCompare(b));
 }
 
-/** Agent 编排器已注册的技能名（启动摘要 / 内省） */
+/** Agent resource hub 已注册的技能名（启动摘要 / 内省） */
 export function collectIntrospectionSkills(root: Plugin): string[] {
-  const orchestrator = root.inject('agent') as AgentOrchestrator | undefined;
-  if (!orchestrator) return [];
-  return orchestrator.skills.getAll()
+  const resourceHub = root.inject('agent') as AgentResourceHub | undefined;
+  if (!resourceHub) return [];
+  return resourceHub.skills.getAll()
     .map((s) => s.name)
     .sort((a, b) => a.localeCompare(b));
 }
 
 export function collectIntrospectionMcp(root: Plugin): McpServerRow[] {
-  const orchestrator = root.inject('agent') as AgentOrchestrator | undefined;
-  if (!orchestrator) return [];
-  return orchestrator.mcps.getAll().map((entry) => ({
+  const resourceHub = root.inject('agent') as AgentResourceHub | undefined;
+  if (!resourceHub) return [];
+  return resourceHub.mcps.getAll().map((entry) => ({
     name: entry.name,
-    connected: orchestrator.mcps.isConnected(entry.name),
-    toolCount: orchestrator.mcps.getToolsFromServer(entry.name).length,
+    connected: resourceHub.mcps.isConnected(entry.name),
+    toolCount: resourceHub.mcps.getToolsFromServer(entry.name).length,
   }));
 }
 
@@ -97,14 +97,13 @@ export function collectIntrospectionMcpWithConfigFallback(root: Plugin): {
   rows: McpServerRow[];
   note?: string;
 } {
-  const orchestrator = root.inject('agent') as AgentOrchestrator | undefined;
   const configServers = (root.inject('config') as { getPrimary?: () => { ai?: { mcpServers?: { name: string }[] } } } | undefined)
     ?.getPrimary?.()?.ai?.mcpServers?.map((s) => s.name) ?? [];
   const rows = collectIntrospectionMcp(root);
   if (rows.length === 0 && configServers.length > 0) {
     return {
       rows: configServers.map((name) => ({ name, connected: false, toolCount: 0 })),
-      note: '配置已加载，Orchestrator 尚未注册 — 等待 AI 初始化',
+      note: '配置已加载，AgentResourceHub 尚未注册 — 等待 AI 初始化',
     };
   }
   return { rows };

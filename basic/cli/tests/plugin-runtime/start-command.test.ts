@@ -34,6 +34,15 @@ describe('native TypeScript relaunch respawn (exit 75)', () => {
     expect(hasAgentConfiguration({ assistant: {} })).toBe(true);
   });
 
+  it.each(['workrooms', 'remoteAgents', 'remote_mesh', 'remoteMesh'])(
+    'rejects removed ai.%s before the disabled-Agent short circuit',
+    (legacyKey) => {
+      expect(() => hasAgentConfiguration({
+        ai: { enabled: false, [legacyKey]: {} },
+      })).toThrow(`ai.${legacyKey}`);
+    },
+  );
+
   it('respawns on exit 75 in non-once mode and records the attempt', () => {
     const now = Date.now();
     const plan = planRespawn(processRestartExitCode, false, false, [], now);

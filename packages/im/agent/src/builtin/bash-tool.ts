@@ -7,9 +7,10 @@ import { type Plugin, type Tool, type Message, type ToolParametersSchema, type T
 import {
   classifyBashCommand,
 } from '../security/file-policy.js';
-import { getSandbox } from '../security/sandbox.js';
+import { getSandbox, Sandbox } from '../security/sandbox.js';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
+import { readTurnSandboxAuthority } from '../security/turn-sandbox-authority.js';
 
 const defaultExecAsync = promisify(exec);
 
@@ -65,7 +66,19 @@ export class BashBuiltinTool extends BuiltinBaseTool {
 
       if (this.useSandbox) {
         // 使用沙箱执行命令
-        const sandbox = getSandbox();
+        const turnSandbox = readTurnSandboxAuthority(args);
+        const sandbox = turnSandbox?.access === 'danger-full-access'
+          ? new Sandbox({ ...getSandbox().getConfig(), enabled: false })
+          : turnSandbox
+            ? new Sandbox({
+              ...getSandbox().getConfig(),
+              enabled: true,
+              workingDirectory: turnSandbox.workingDirectory,
+              enableNetwork: turnSandbox.networkAccess,
+              filesystemAccess: turnSandbox.access,
+              useDocker: 'always',
+            })
+            : getSandbox();
         const sandboxResult = await sandbox.execute(cmd, {
           cwd,
           timeout,

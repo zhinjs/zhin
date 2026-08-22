@@ -13,6 +13,7 @@ import {
   rootPluginId,
   tokenId,
   type RuntimeSnapshot,
+  type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
 import {
   buildConsoleEntriesBody,
@@ -139,13 +140,18 @@ async function startHost(options: {
   withTokens?: boolean;
   projectRoot: string;
   snapshot?: () => RuntimeSnapshot;
+  snapshots?: SnapshotReader;
   primaryConfigDocument?: Readonly<Record<string, unknown>>;
 }): Promise<{ port: number }> {
   const host = createHttpHost({
     host: '127.0.0.1',
     port: 0,
     ...(options.withTokens
-      ? { token: 'full-token', tokens: [{ token: 'demo-token', scope: 'demo' as const }] }
+      ? { token: 'full-token', tokens: [
+          { token: 'demo-token', scope: 'demo' as const },
+          { token: 'sponsor-token', scope: 'full' as const, principalId: 'human:alice' },
+          { token: 'other-token', scope: 'full' as const, principalId: 'human:bob' },
+        ] }
       : {}),
   });
   hosts.push(host);
@@ -161,6 +167,7 @@ async function startHost(options: {
     undefined,
     undefined,
     options.primaryConfigDocument,
+    options.snapshots,
   );
   return host.listen();
 }
@@ -359,6 +366,7 @@ describe('generation-owned Agent introspection', () => {
       sessionTree: {},
       workroom: {},
       assistant: null,
+      trace: {},
     };
     const snapshot = {
       root,
@@ -376,6 +384,446 @@ describe('console REST routes', () => {
   beforeEach(async () => {
     packageRoot = await makePackageRoot();
     projectRoot = tempRoots[tempRoots.length - 1];
+  });
+
+  it('serves the bounded generation-owned Agent Trace projection', async () => {
+    await import('@zhin.js/agent/runtime');
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const root = rootPluginId();
+    const traceSnapshot = {
+      sessionKey: 'discord:bot:group:room',
+      events: [{ sequence: 4, type: 'tool_result', data: { toolName: 'lookup' } }],
+      latestSequence: 4,
+      activeTurnIds: ['turn-1'],
+    };
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+        console: {
+          sessionTree: {},
+          workroom: {},
+          assistant: null,
+          trace: { list: () => traceSnapshot },
+        },
+      }]])]]),
+    } as unknown as RuntimeSnapshot;
+    const snapshots = {
+      acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
+    } as unknown as SnapshotReader;
+    const { port } = await startHost({ projectRoot, withTokens: true, snapshots });
+
+    const response = await fetch(
+      `http://127.0.0.1:${port}/api/agent/traces?sessionKey=discord%3Abot%3Agroup%3Aroom`,
+      { headers: { authorization: 'Bearer full-token' } },
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ success: true, data: traceSnapshot });
+
+    const demoResponse = await fetch(
+      `http://127.0.0.1:${port}/api/agent/traces?sessionKey=discord%3Abot%3Agroup%3Aroom`,
+      { headers: { authorization: 'Bearer demo-token' } },
+    );
+    expect(demoResponse.status).toBe(401);
+  });
+
+  it('binds Workroom run reads to a full-scope token principal and never accepts caller identity', async () => {
+    await import('@zhin.js/agent/runtime');
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const root = rootPluginId();
+    const safeRun = {
+      version: 1, projectId: 'engineering', runId: 'run-1', status: 'active', sequence: 4,
+      cancelRequested: false,
+      counts: { tasks: 1, assignments: 1, reviewerAssignments: 0, sponsorGates: 0 },
+      authorityDigest: 'sha256:authority', digest: 'sha256:run',
+    };
+    const listRuns = vi.fn(async (input: { projectId: string }) => input.projectId === 'engineering'
+      ? { status: 'ready' as const, runs: [safeRun] }
+      : { status: 'forbidden' as const });
+    const getRun = vi.fn(async (input: { projectId: string; runId: string }) =>
+      input.projectId === 'engineering' && input.runId === 'run-1'
+        ? { status: 'ready' as const, run: { ...safeRun, tasks: [], assignments: [] } }
+        : { status: 'forbidden' as const });
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+        console: {
+          sessionTree: {}, workroom: { listRuns, getRun }, assistant: null,
+          trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
+        },
+      }]])]]),
+    } as unknown as RuntimeSnapshot;
+    const snapshots = {
+      acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
+    } as unknown as SnapshotReader;
+    const { port } = await startHost({ projectRoot, withTokens: true, snapshots });
+
+    const authorized = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/runs?projectId=engineering`,
+      { headers: { authorization: 'Bearer sponsor-token' } },
+    );
+    expect(authorized.status).toBe(200);
+    expect(listRuns).toHaveBeenCalledWith({
+      projectId: 'engineering', authenticatedPrincipal: { principalId: 'human:alice' },
+    });
+    const encoded = JSON.stringify(await authorized.json());
+    expect(encoded).not.toMatch(/title|plan|reason|progress|objective/u);
+
+    const unbound = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/runs?projectId=engineering`,
+      { headers: { authorization: 'Bearer full-token' } },
+    );
+    expect(unbound.status).toBe(403);
+    const crossProject = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/runs?projectId=finance`,
+      { headers: { authorization: 'Bearer sponsor-token' } },
+    );
+    expect(crossProject.status).toBe(403);
+    const forged = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/runs?projectId=engineering&principalId=human%3Amallory`,
+      { headers: { authorization: 'Bearer sponsor-token' } },
+    );
+    expect(forged.status).toBe(400);
+    expect(listRuns).toHaveBeenCalledTimes(2);
+
+    const detail = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/runs/run-1?projectId=engineering`,
+      { headers: { authorization: 'Bearer sponsor-token' } },
+    );
+    expect(detail.status).toBe(200);
+    expect(getRun).toHaveBeenCalledWith({
+      projectId: 'engineering', runId: 'run-1',
+      authenticatedPrincipal: { principalId: 'human:alice' },
+    });
+  });
+
+  it('cancels an active Agent task through the generation-owned console port', async () => {
+    await import('@zhin.js/agent/runtime');
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const root = rootPluginId();
+    const cancelSession = vi.fn(() => true);
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+        console: {
+          sessionTree: {}, workroom: {}, assistant: null,
+          trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
+          cancelSession,
+        },
+      }]])]]),
+    } as unknown as RuntimeSnapshot;
+    const snapshots = {
+      acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
+    } as unknown as SnapshotReader;
+    const { port } = await startHost({ projectRoot, withTokens: true, snapshots });
+
+    const response = await fetch(`http://127.0.0.1:${port}/api/agent/tasks/cancel`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer full-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionKey: 'sandbox:sandbox-bot:private:sandbox-user' }),
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ success: true, data: { cancelled: true } });
+    expect(cancelSession).toHaveBeenCalledWith('sandbox:sandbox-bot:private:sandbox-user');
+  });
+
+  it('routes authenticated Workroom Profile writes through the generation-owned narrow port', async () => {
+    await import('@zhin.js/agent/runtime');
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const root = rootPluginId();
+    const publishPack = vi.fn(async (command) => ({ pack: command.pack }));
+    const publishKnowledge = vi.fn(async () => ({ projectId: 'engineering', revision: 0 }));
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+        console: {
+          sessionTree: {}, workroom: {}, assistant: null,
+          trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
+          workroomProfiles: {
+            publishPack,
+            publishProfile: vi.fn(),
+            publishRollback: vi.fn(),
+            publishPlanningPolicy: vi.fn(),
+          },
+          workroomKnowledge: {
+            read: vi.fn(), publish: publishKnowledge, rollback: vi.fn(),
+          },
+        },
+      }]])]]),
+    } as unknown as RuntimeSnapshot;
+    const snapshots = {
+      acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
+    } as unknown as SnapshotReader;
+    const { port } = await startHost({ projectRoot, withTokens: true, snapshots });
+    const response = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'workroom.profile.pack.publish', requestId: 21,
+        operationId: 'console:pack:21', pack: { id: 'pack:engineering' },
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(publishPack).toHaveBeenCalledWith({
+      operationId: 'console:pack:21', pack: { id: 'pack:engineering' },
+    }, { principalId: 'human:alice' });
+
+    const demo = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer demo-token', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'workroom.profile.pack.publish', requestId: 22,
+        operationId: 'console:pack:22', pack: { id: 'pack:engineering' },
+      }),
+    });
+    expect(demo.status).toBe(400);
+    expect(publishPack).toHaveBeenCalledTimes(1);
+
+    const knowledge = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'workroom.knowledge.publish', requestId: 23,
+        operationId: 'console:knowledge:23', projectId: 'engineering', expectedRevision: -1,
+        entries: [],
+      }),
+    });
+    expect(knowledge.status).toBe(200);
+    expect(publishKnowledge).toHaveBeenCalledWith({
+      operationId: 'console:knowledge:23', projectId: 'engineering', expectedRevision: -1, entries: [],
+    }, { principalId: 'human:alice' });
+    const forgedBody = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'workroom.knowledge.publish', requestId: 24,
+        operationId: 'console:knowledge:24', projectId: 'engineering', expectedRevision: -1,
+        entries: [], body: 'must-not-enter-control-plane',
+      }),
+    });
+    expect(forgedBody.status).toBe(400);
+    expect(publishKnowledge).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Sponsor controls typed and injects the token principal without accepting forged identity', async () => {
+    await import('@zhin.js/agent/runtime');
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const root = rootPluginId();
+    const projection = { version: 1, portfolioId: 'portfolio-main', sourceSequence: 4,
+      clock: { now: 10, sequence: 4, digest: 'sha256:a' }, projects: {} };
+    let sponsorAuthorized = true;
+    const read = vi.fn(async (
+      _portfolioId: string,
+      principal: Readonly<{ principalId: string }>,
+    ) => sponsorAuthorized && principal.principalId === 'human:alice'
+      ? { status: 'ready' as const, projection }
+      : { status: 'forbidden' as const });
+    const execute = vi.fn(async () => projection);
+    const decideEffect = vi.fn(async command => ({ ...command, principalId: 'human:alice', digest: 'sha256:decision' }));
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+        console: {
+          sessionTree: {}, workroom: {}, assistant: null,
+          trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
+          portfolioSponsor: { read, execute },
+          effectSponsor: { decide: decideEffect },
+        },
+      }]])]]),
+    } as unknown as RuntimeSnapshot;
+    const snapshots = {
+      acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
+    } as unknown as SnapshotReader;
+    const { port } = await startHost({ projectRoot, withTokens: true, snapshots });
+
+    const demoRead = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/portfolio?portfolioId=portfolio-main`,
+      { headers: { authorization: 'Bearer demo-token' } },
+    );
+    expect(demoRead.status).toBe(401);
+
+    const unboundRead = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/portfolio?portfolioId=portfolio-main`,
+      { headers: { authorization: 'Bearer full-token' } },
+    );
+    expect(unboundRead.status).toBe(403);
+
+    const nonSponsorRead = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/portfolio?portfolioId=portfolio-main`,
+      { headers: { authorization: 'Bearer other-token' } },
+    );
+    expect(nonSponsorRead.status).toBe(403);
+
+    const readResponse = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/portfolio?portfolioId=portfolio-main`,
+      { headers: { authorization: 'Bearer sponsor-token' } },
+    );
+    expect(readResponse.status).toBe(200);
+    expect(JSON.stringify(await readResponse.json())).not.toContain('objective');
+    expect(read).toHaveBeenLastCalledWith('portfolio-main', { principalId: 'human:alice' });
+
+    sponsorAuthorized = false;
+    const revokedRead = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/portfolio?portfolioId=portfolio-main`,
+      { headers: { authorization: 'Bearer sponsor-token' } },
+    );
+    expect(revokedRead.status).toBe(403);
+
+    const command = { kind: 'set_status', commandId: 'pause:1', projectId: 'alpha',
+      expectedProjectRevision: 1, status: 'paused' };
+    const commandResponse = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/portfolio/commands`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ portfolioId: 'portfolio-main', command }),
+    });
+    expect(commandResponse.status).toBe(200);
+    expect(execute).toHaveBeenCalledWith('portfolio-main', command, { principalId: 'human:alice' });
+
+    const unbound = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/portfolio/commands`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer full-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ portfolioId: 'portfolio-main', command }),
+    });
+    expect(unbound.status).toBe(403);
+    const forged = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/portfolio/commands`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ portfolioId: 'portfolio-main', command, principalId: 'human:mallory' }),
+    });
+    expect(forged.status).toBe(400);
+    expect(execute).toHaveBeenCalledTimes(1);
+
+    const effectCommand = {
+      version: 2, operationId: 'effect-decision:1', projectId: 'alpha', runId: 'run-1',
+      effectIntentId: 'effect:1', effectIntentDigest: 'sha256:intent',
+      decision: 'approve', reasonCode: 'approved_as_requested', decidedAt: 10,
+    };
+    const effectResponse = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/effects/sponsor-decisions`,
+      {
+        method: 'POST',
+        headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+        body: JSON.stringify(effectCommand),
+      },
+    );
+    expect(effectResponse.status).toBe(200);
+    expect(decideEffect).toHaveBeenCalledWith(effectCommand, { principalId: 'human:alice' });
+    const legacyEffect = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/effects/sponsor-decisions`,
+      {
+        method: 'POST',
+        headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ ...effectCommand, version: 1, reason: 'free-form rationale' }),
+      },
+    );
+    expect(legacyEffect.status).toBe(400);
+    const forgedEffect = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/effects/sponsor-decisions`,
+      {
+        method: 'POST',
+        headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+        body: JSON.stringify({ ...effectCommand, principalId: 'human:mallory' }),
+      },
+    );
+    expect(forgedEffect.status).toBe(400);
+    expect(decideEffect).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes only token-bound typed Data Lifecycle controls and content-free projections', async () => {
+    await import('@zhin.js/agent/runtime');
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const root = rootPluginId();
+    const projection = { version: 1, projectId: 'alpha', objectId: 'object-1', sequence: 3,
+      stateDigest: 'sha256:state', authorityDigest: 'sha256:authority', holds: [], erasures: [], purges: [],
+      cryptoErased: false, purgeComplete: false, digest: 'sha256:projection' };
+    const read = vi.fn(async (_input, principal: Readonly<{ principalId: string }>) =>
+      principal.principalId === 'human:alice'
+        ? { status: 'ready' as const, projection }
+        : { status: 'forbidden' as const });
+    const listOverdue = vi.fn(async () => ({ status: 'ready' as const, items: [] }));
+    const execute = vi.fn(async (command: { operationId?: string }, principal: Readonly<{ principalId: string }>) => {
+      if (principal.principalId !== 'human:alice') return { status: 'forbidden' as const };
+      if (command.operationId === 'export:stale') {
+        return { status: 'stale' as const, candidateDigest: 'sha256:candidate' };
+      }
+      if (command.operationId === 'export:no-audit') {
+        return { status: 'unavailable' as const, reason: 'subject_export_audit' as const };
+      }
+      return { status: 'ready' as const, projection };
+    });
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+        console: {
+          sessionTree: {}, workroom: {}, assistant: null,
+          trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
+          dataLifecycle: { read, listOverdue, execute },
+        },
+      }]])]]),
+    } as unknown as RuntimeSnapshot;
+    const snapshots = {
+      acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
+    } as unknown as SnapshotReader;
+    const { port } = await startHost({ projectRoot, withTokens: true, snapshots });
+
+    const demo = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle?projectId=alpha&objectId=object-1`, {
+      headers: { authorization: 'Bearer demo-token' },
+    });
+    expect(demo.status).toBe(401);
+    const unbound = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle?projectId=alpha&objectId=object-1`, {
+      headers: { authorization: 'Bearer full-token' },
+    });
+    expect(unbound.status).toBe(403);
+    const denied = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle?projectId=alpha&objectId=object-1`, {
+      headers: { authorization: 'Bearer other-token' },
+    });
+    expect(denied.status).toBe(403);
+    const ready = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle?projectId=alpha&objectId=object-1`, {
+      headers: { authorization: 'Bearer sponsor-token' },
+    });
+    expect(ready.status).toBe(200);
+    expect(JSON.stringify(await ready.json())).not.toMatch(/principal|decision|payload|content/iu);
+    expect(read).toHaveBeenCalledWith(
+      { projectId: 'alpha', objectId: 'object-1' }, { principalId: 'human:alice' },
+    );
+
+    const overdue = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle/overdue?operationId=overdue%3A1&projectId=alpha`, {
+      headers: { authorization: 'Bearer sponsor-token' },
+    });
+    expect(overdue.status).toBe(200);
+    expect(listOverdue).toHaveBeenCalledWith(
+      { operationId: 'overdue:1', projectId: 'alpha' }, { principalId: 'human:alice' },
+    );
+
+    const command = { kind: 'place_hold', operationId: 'hold:1', projectId: 'alpha', objectId: 'object-1',
+      holdId: 'hold-1', reasonCode: 'legal_hold', reviewAt: 20 };
+    const commandResponse = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle/commands`, {
+      method: 'POST', headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify(command),
+    });
+    expect(commandResponse.status).toBe(200);
+    expect(execute).toHaveBeenCalledWith(command, { principalId: 'human:alice' }, expect.any(AbortSignal));
+
+    const exportCommand = { kind: 'export_subject', operationId: 'export:stale', tenantId: 'tenant-1',
+      projectId: 'alpha', subjectRef: 'subject@example.test', deadline: 20 };
+    const staleExport = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle/commands`, {
+      method: 'POST', headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify(exportCommand),
+    });
+    expect(staleExport.status).toBe(409);
+    expect(JSON.stringify(await staleExport.json())).not.toContain('subject@example.test');
+
+    const unavailableExport = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle/commands`, {
+      method: 'POST', headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ ...exportCommand, operationId: 'export:no-audit' }),
+    });
+    expect(unavailableExport.status).toBe(503);
+
+    const forged = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle/commands`, {
+      method: 'POST', headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ ...command, role: 'data_steward', decisionProof: 'forged', content: 'secret' }),
+    });
+    expect(forged.status).toBe(400);
+    expect(execute).toHaveBeenCalledTimes(3);
   });
 
   it('serves GET /entries without a token (public path)', async () => {
@@ -846,6 +1294,7 @@ describe('config document flatten / write namespace', () => {
     };
     expect(after.plugins.d).toEqual({ ok: true });
   });
+
 });
 
 describe('jsonSchemaToConsoleSchema', () => {

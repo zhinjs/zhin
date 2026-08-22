@@ -4,10 +4,10 @@
  */
 import type { AIProvider, Usage, OutputElement, AgentSessionStore, ContextRepository, IMSessionStore, MemoryAgentSessionStore, MemoryIMSessionStore, RateLimiter, ModelRegistry } from '@zhin.js/ai';
 import type { Plugin } from '@zhin.js/core';
-import type { Tool, Message } from '../orchestrator/types.js';
-import type { SkillRegistry } from '../orchestrator/skill-registry.js';
+import type { Tool, Message } from '../resource-hub/types.js';
+import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { SkillSystem } from '../skill/skill-system.js';
-import type { AgentOrchestrator } from '../orchestrator/index.js';
+import type { AgentResourceHub } from '../resource-hub/index.js';
 import type { SubagentSystem } from '../subagent/index.js';
 import type { UserProfileStore } from '../user-profile.js';
 import type { AgentCore } from '../core/agent-core.js';
@@ -93,7 +93,7 @@ export interface ZhinAgentPrivate
   getTurnProvider(): AIProvider;
   skillRegistry: SkillRegistry | null;
   skillSystem: SkillSystem | null;
-  orchestrator: AgentOrchestrator | null;
+  resourceHub: AgentResourceHub | null;
   agentCore: AgentCore | null;
   toolSystem: ToolSystem | null;
   /** Optional host-level fallback, for transports without an interactive approval surface. */

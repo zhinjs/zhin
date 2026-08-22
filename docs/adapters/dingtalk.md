@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/dingtalk/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/dingtalk/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=b5cedbf2b6b0ad28 -->
+<!-- sync-adapter-docs:sha256=6eef5f40a069dfa5 -->
 
 # @zhin.js/adapter-dingtalk
 
@@ -19,6 +19,7 @@ Zhin.js 钉钉适配器（Plugin Runtime），通过 Runtime Host HTTP Webhook �
 - Webhook 事件接收（`httpHostToken` POST + HMAC-SHA256 签名验证）
 - Access Token 自动刷新
 - Session Webhook 优先回复 / `/robot/send` 主动发送
+- canonical `markdown` 段编码为钉钉原生 `msgtype: markdown`
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 
 ## 安装

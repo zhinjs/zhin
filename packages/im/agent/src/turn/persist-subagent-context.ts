@@ -8,7 +8,7 @@ import {
 import { resolveAgentTurnSessionKey } from '../session/session-key.js';
 import type { SubagentCompletePayload } from '../subagent/index.js';
 import { packageSubagentResult } from '../subagent-artifact.js';
-import type { Message } from '../orchestrator/types.js';
+import type { Message } from '../resource-hub/types.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 
 export async function persistSubagentResultToContext(

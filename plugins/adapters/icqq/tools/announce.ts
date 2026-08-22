@@ -9,7 +9,7 @@ export default defineAgentTool<{ endpoint_id: string; group_id: number; content:
     content: z.string().describe('公告内容'),
   }),
   platforms: ['icqq'],
-  permissions: ['platform(icqq,scene_admin)'],
+  permissions: ['role(master,admin,trusted,owner)'],
   async execute({ endpoint_id, group_id, content }: { endpoint_id: string; group_id: number; content: string }) {
     const endpoint = getIcqqAgentDeps().getEndpoint(endpoint_id);
     await endpoint.sendGroupNotice(group_id, content);

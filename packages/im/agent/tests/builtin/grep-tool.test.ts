@@ -9,7 +9,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { createGrepTool, GrepBuiltinTool, type GrepExecAsync } from '../../src/builtin/grep-tool.js';
 
-import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
+import { normalizeTool } from '../../src/resource-hub/tool-selection.js';
 import type { Message } from '@zhin.js/core';
 
 describe('GrepBuiltinTool', () => {

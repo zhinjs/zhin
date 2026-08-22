@@ -585,6 +585,7 @@ class GenerationAssembler {
       configResolver,
       environment,
       primaryConfigDocument,
+      generation,
       installResources,
       environmentLayers,
       undefined,

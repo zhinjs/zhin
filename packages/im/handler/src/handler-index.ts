@@ -8,8 +8,6 @@ import type {
 
 export type {
   HandlerContext,
-  HandlerPrompt,
-  HandlerPromptOptions,
   HandlerDispatchOptions,
 } from './context.js';
 
@@ -100,10 +98,10 @@ export class HandlerIndex {
     if (!records) return;
     for (const record of records) {
       const base = createCapabilityContext(this.#snapshot, record.owner);
-      const prompt = options?.resolvePrompt?.(event, args);
+      const interaction = options?.resolveInteraction?.(event, args);
       const context: HandlerContext = Object.freeze({
         ...base,
-        ...(prompt !== undefined ? { prompt } : {}),
+        ...(interaction !== undefined ? { interaction } : {}),
       });
       await record.slot.definition.handle.call(context, ...args);
     }

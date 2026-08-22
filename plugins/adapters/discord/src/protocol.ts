@@ -344,6 +344,9 @@ export function formatOutboundBody(payload: unknown): DiscordOutboundBody {
       case 'text':
         content += String(data.text ?? data.content ?? '');
         break;
+      case 'markdown':
+        content += String(data.content ?? data.text ?? '');
+        break;
       case 'at':
         content += `<@${String(data.id ?? '')}>`;
         break;

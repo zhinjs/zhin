@@ -86,6 +86,8 @@ export function planRespawn(
 export interface StartCommandOptions {
   readonly root: string;
   readonly args: readonly string[];
+  /** Trusted process composition only; never sourced from project config. */
+  readonly installTrustedResources?: RootResourceInstaller;
   writeOutput(value: string): void;
   writeError(value: string): void;
 }
@@ -118,10 +120,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     stop: async () => { throw new Error('RootHost stop is not bound'); },
   };
   const senderEnricher = await createSenderEnricher(config, endpointRoles);
-  const im = new ImRuntime({
-    ...(agentHost ? { inboundClaim: agentHost.claimInbound } : {}),
-    enrichSender: senderEnricher,
-  });
+  const im = new ImRuntime({ enrichSender: senderEnricher });
   const databaseHost = createDatabaseHost(databaseConfig);
   databaseHost.define('conversation_events', CONVERSATION_EVENT_MODEL);
   databaseHost.define('conversation_event_cursors', CONVERSATION_CURSOR_MODEL);
@@ -150,6 +149,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     },
     environmentVariables,
     installResources: async (context) => {
+      await options.installTrustedResources?.(context);
       im.install(context.resources);
       installHttpHost(httpHost)(context);
       installDatabaseHost(databaseHost)(context);
@@ -193,6 +193,12 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
         snapshots: host.runtime.snapshots,
         production: parsed.mode === 'production',
         projectRoot: options.root,
+        secureCredentialProvider: {
+          resolve(secretRef) {
+            const match = /^env:\/\/([A-Z_][A-Z0-9_]*)$/u.exec(secretRef);
+            return match ? process.env[match[1]!] : undefined;
+          },
+        },
       })(context);
       installConsoleHttp({
         console: consoleHost.console,
@@ -243,9 +249,6 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   agentHost?.attach(host.runtime.snapshots);
   consoleHost.console.attach(host.runtime.snapshots);
   control.stop = async () => {
-    // Stop interaction admission first. Pending questions hold Agent turns and
-    // therefore generation leases; cancelling them is required before drain.
-    agentHost?.close();
     try {
       // Process ingress owns WebSocket operation leases. Close it before Root
       // drain so long-lived connections release those leases instead of
@@ -334,8 +337,6 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
 
 interface ConfiguredAgentHost {
   attach(snapshots: import('@zhin.js/plugin-runtime').SnapshotReader): void;
-  readonly claimInbound: (message: Message) => Promise<boolean>;
-  close(): void;
   install(options: {
     readonly im: ImRuntime;
     readonly projectRoot: string;
@@ -355,29 +356,59 @@ async function loadConfiguredAgentHost(
   const initialAi = await module.resolveAiConfig(document);
   const workroomStorageMode = module.resolveWorkroomStorageMode(initialAi);
   const runtime = new module.AgentRuntime({ coordinator: new module.AgentTurnCoordinator() });
-  const interactions = new module.InteractionRouter();
+  let snapshotReader: import('@zhin.js/plugin-runtime').SnapshotReader | undefined;
   const configured: ConfiguredAgentHost = {
-    attach: (snapshots) => runtime.attach(snapshots),
-    claimInbound: (message) => module.consumeRuntimeInteraction(interactions, message),
-    close: () => interactions.close(),
-    install: (options) => module.installAgentHost({
-      ...options,
-      runtime,
-      interactions,
-      workroomStorageMode,
-      extraTools: options.extraTools as Parameters<typeof module.installAgentHost>[0]['extraTools'],
-    }),
+    attach: (snapshots) => {
+      snapshotReader = snapshots;
+      runtime.attach(snapshots);
+    },
+    install: (options) => {
+      if (!snapshotReader) throw new Error('Agent Host Snapshot reader is not attached');
+      return module.installAgentHost({
+        ...options,
+        runtime,
+        snapshots: snapshotReader,
+        workroomStorageMode,
+        extraTools: options.extraTools as Parameters<typeof module.installAgentHost>[0]['extraTools'],
+      });
+    },
   };
   return Object.freeze(configured);
 }
 
 export function hasAgentConfiguration(document: RuntimeConfigDocument): boolean {
   const value = document as Record<string, unknown>;
+  assertNoRemovedAgentConfiguration(value.ai);
   return ['ai', 'assistant'].some((key) => {
     const section = value[key];
     if (section == null || typeof section !== 'object' || Array.isArray(section)) return false;
     return (section as { enabled?: unknown }).enabled !== false;
   });
+}
+
+function assertNoRemovedAgentConfiguration(section: unknown): void {
+  if (section == null || typeof section !== 'object' || Array.isArray(section)) return;
+  const ai = section as Record<string, unknown>;
+  if (Object.hasOwn(ai, 'workrooms')) {
+    throw new Error(
+      'ai.workrooms removed; manage the persistent Workroom Catalog through Console or its repository API',
+    );
+  }
+  if (Object.hasOwn(ai, 'remoteAgents')) {
+    throw new Error(
+      'ai.remoteAgents removed; register a governed Workroom A2A Executor through the persistent Catalog and generation resources',
+    );
+  }
+  if (Object.hasOwn(ai, 'remote_mesh')) {
+    throw new Error(
+      'ai.remote_mesh removed; use the fenced Workroom Assignment A2A transport instead of a parallel remote Task state machine',
+    );
+  }
+  if (Object.hasOwn(ai, 'remoteMesh')) {
+    throw new Error(
+      'ai.remoteMesh removed; use the fenced Workroom Assignment A2A transport instead of a parallel remote Task state machine',
+    );
+  }
 }
 
 function isConfigDocumentPort(value: unknown): value is ConfigDocumentPort {

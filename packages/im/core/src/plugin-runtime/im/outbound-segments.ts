@@ -16,6 +16,7 @@ import {
   type KeyboardSegmentData,
 } from '../../built/interactive-segments/types.js';
 import { isMediaRef, type Segment } from '../../built/segment-contract/index.js';
+import { markdownToPlainText } from '../../built/rich-segments/markdown-to-text.js';
 
 /**
  * Outbound payload normalization for the Plugin Runtime IM pipeline.
@@ -55,6 +56,7 @@ export type OutboundMediaPolicy = 'base64' | 'url-or-text' | 'passthrough';
 export interface OutboundSegmentsPolicy {
   readonly outboundMedia: readonly ('url' | 'path' | 'base64' | 'upload')[];
   readonly interactive?: InteractivePolicy;
+  readonly markdown?: 'native' | 'text';
 }
 
 export interface NormalizeOutboundOptions {
@@ -125,6 +127,34 @@ export function resolveOutboundInteractivePolicy(
   const adapterType = adapterTypeName(packageName);
   return (adapterType ? OUTBOUND_INTERACTIVE_POLICY_BY_ADAPTER[adapterType] : undefined)
     ?? DEFAULT_INTERACTIVE_POLICY;
+}
+
+/** Preserve semantic Markdown only when the endpoint explicitly declares native consumption. */
+export function resolveOutboundMarkdownPolicy(
+  adapter: CapabilityId,
+  snapshot: RuntimeSnapshot,
+): 'native' | 'text' {
+  const slot = snapshot.capabilities.get(adapter)
+    ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
+  if (!slot?.definition || typeof slot.definition !== 'object') return 'text';
+  const segments = (slot.definition as { segments?: unknown }).segments;
+  if (!segments || typeof segments !== 'object') return 'text';
+  return (segments as OutboundSegmentsPolicy).markdown === 'native' ? 'native' : 'text';
+}
+
+export function applyOutboundMarkdownPolicy(
+  payload: unknown,
+  policy: 'native' | 'text',
+): unknown {
+  if (policy === 'native') return payload;
+  const convert = (item: unknown): unknown => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+    const segment = item as { type?: unknown; data?: Record<string, unknown> };
+    if (segment.type !== 'markdown') return item;
+    const content = String(segment.data?.content ?? segment.data?.text ?? '');
+    return { type: 'text', data: { text: markdownToPlainText(content) } };
+  };
+  return Array.isArray(payload) ? payload.map(convert) : convert(payload);
 }
 
 function readDeclaredInteractivePolicy(definition: unknown): InteractivePolicy | undefined {

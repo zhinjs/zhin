@@ -8,20 +8,22 @@ import type {
   PluginId,
   RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
+import type { UserInteractionFactory } from '@zhin.js/interaction';
+import {
+  permissionHostToken,
+  toPermissionSubject,
+  type PermissionHost,
+} from '@zhin.js/permission';
 import {
   createCommandContext,
   resolveCommandSession,
   type CommandDefinition,
   type CommandParameterDefinition,
   type CommandParameterType,
-  type CommandParameterValue,
   type CommandSegment,
   type CommandDynamicValue,
-  type CommandPromptFactory,
   resolveDynamicParams,
 } from './definition.js';
-import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
-import { toPermissionSubject } from '@zhin.js/permission';
 
 export interface CommandParameterDescriptor extends CommandParameterDefinition {
   readonly required: boolean;
@@ -221,7 +223,7 @@ export class CommandIndex {
   async dispatch(
     input: CommandMatchInput,
     source: unknown = undefined,
-    promptFactory?: CommandPromptFactory,
+    interactionFactory?: UserInteractionFactory,
     commandPrefix = '',
   ): Promise<CommandDispatchResult> {
     if (this.#menu) {
@@ -235,7 +237,7 @@ export class CommandIndex {
         });
       }
     }
-    const prompt = promptFactory?.(source);
+    const interaction = interactionFactory?.(source);
     const shortcut = this.#matchShortcut(input);
     if (shortcut) {
       if (!(await this.#permitAllows(shortcut.record, source))) {
@@ -249,7 +251,7 @@ export class CommandIndex {
           resolveDynamicParams(shortcut.params, source),
           source,
           Object.freeze([]),
-          prompt,
+          interaction,
         ),
       );
       return Object.freeze({
@@ -274,7 +276,7 @@ export class CommandIndex {
         resolveDynamicParams(match.params, source),
         source,
         match.remaining,
-        prompt,
+        interaction,
       ),
     );
     return Object.freeze({

@@ -2,6 +2,7 @@
  * SandboxWsEndpoint — WebSocket lifecycle and MessageGateway bridge for /sandbox.
  */
 import { randomUUID } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import type { EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
 import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
@@ -194,6 +195,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
       ? `sandbox-${randomUUID().slice(0, 8)}`
       : this.#options.defaults.id;
     const owner = this.#options.defaults.owner;
+    const canExecute = connection.authScope === 'full';
     const socket = connection.socket as SandboxWsSocket;
     // Fixed-name mode reuses `target`; dropping the prior entry without
     // closing its socket leaves a zombie browser tab that still looks
@@ -212,26 +214,37 @@ export class SandboxWsEndpoint implements EndpointInstance {
     }
     const release = bindSandboxWsSocket(socket, {
       onMessage: (raw) => {
+        if (!canExecute) {
+          socket.send(JSON.stringify({
+            type: 'error',
+            id: owner,
+            endpoint: target,
+            content: [{ type: 'text', data: { text: '当前连接是只读演示权限，不能运行 Agent 任务。' } }],
+            timestamp: Date.now(),
+          }));
+          return;
+        }
         const parsed = parseSandboxWsPayload(raw);
-        const sender = parsed.id || owner;
+        const sceneId = parsed.id || owner;
         const conversation = sandboxInboundConversation(String(this.#options.id), {
           type: parsed.type,
-          id: sender,
+          id: sceneId,
         });
         this.#logger.debug(formatCompact({
           op: 'sandbox_recv',
           target,
-          sender,
+          sender: owner,
           channelType: parsed.type,
-          channelId: sender,
+          channelId: sceneId,
           text: parsed.text.slice(0, 80),
         }));
         // Don't gate on #open — inbound must always reach the gateway so
         // Command/AI dispatch and outbound replies work.
         void this.#options.gateway.receive({
           conversation,
+          ...(parsed.messageId ? { message: { conversation, id: parsed.messageId } } : {}),
           content: parsed.text,
-          sender: { id: sender },
+          sender: { id: owner },
           endpointId: target,
           metadata: Object.freeze({
             type: parsed.type,
@@ -240,6 +253,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
             elements: parsed.content,
             timestamp: parsed.timestamp,
             ...(parsed.action ? { action: parsed.action } : {}),
+            ...(parsed.agentRun ? { sandboxAgentRun: parsed.agentRun } : {}),
           }),
         }).catch((err) => {
           this.#logger.warn(formatCompact({
@@ -268,25 +282,26 @@ export class SandboxWsEndpoint implements EndpointInstance {
     });
     this.#connections.set(target, { target, owner, socket, release });
     this.#logger.debug(formatCompact({ op: 'sandbox_ws_connected', target, owner }));
-    if (!this.#options.defaults.randomNamePerConnection) {
-      const readyPayload = JSON.stringify({
-        type: 'ready',
-        id: owner,
-        endpoint: target,
-        content: [{
-          type: 'text',
-          data: {
-            text: [
-              `已连接 Sandbox「${target}」`,
-              `与 Node Host 控制台沙盒协议一致（${this.#wsPath}）`,
-              '命令: help · ping · zt · status',
-            ].join('\n'),
-          },
-        }],
-        timestamp: Date.now(),
-      });
-      whenWsOpen(socket, () => socket.send(readyPayload));
-    }
+    const readyPayload = JSON.stringify({
+      type: 'ready',
+      id: owner,
+      endpoint: target,
+      workingDirectory: process.cwd(),
+      canExecute,
+      shellIsolation: probeShellIsolation(),
+      content: [{
+        type: 'text',
+        data: {
+          text: [
+            `已连接 Sandbox「${target}」`,
+            `与 Node Host 控制台沙盒协议一致（${this.#wsPath}）`,
+            'Agent 试验台会话已启用持久化运行配置。',
+          ].join('\n'),
+        },
+      }],
+      timestamp: Date.now(),
+    });
+    whenWsOpen(socket, () => socket.send(readyPayload));
   }
 
   #ensurePlaceholder(name: string, owner: string): void {
@@ -297,6 +312,33 @@ export class SandboxWsEndpoint implements EndpointInstance {
       socket: { send: () => undefined, close: () => undefined },
       release: () => undefined,
       placeholder: true,
+    });
+  }
+}
+
+function probeShellIsolation(): Readonly<{ available: boolean; provider: 'docker'; message: string }> {
+  try {
+    const result = spawnSync('docker', ['info', '--format', '{{.ServerVersion}}'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 500,
+    });
+    if (result.status === 0) {
+      const version = result.stdout.trim();
+      return Object.freeze({
+        available: true,
+        provider: 'docker',
+        message: version ? `Docker ${version}` : 'Docker ready',
+      });
+    }
+    return Object.freeze({ available: false, provider: 'docker', message: 'Docker daemon is unavailable' });
+  } catch (error) {
+    return Object.freeze({
+      available: false,
+      provider: 'docker',
+      message: error instanceof Error && error.name === 'ETIMEDOUT'
+        ? 'Docker readiness check timed out'
+        : 'Docker is unavailable',
     });
   }
 }

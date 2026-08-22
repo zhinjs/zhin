@@ -12,7 +12,6 @@ export {
   type HandlerDefinition,
   type HandlerDescriptor,
   type HandlerContext,
-  type HandlerPrompt,
   type HandlerDispatchOptions,
 } from '@zhin.js/handler';
 

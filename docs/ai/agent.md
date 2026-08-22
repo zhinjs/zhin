@@ -121,7 +121,57 @@ ai:
 
 `WorkroomKernel` 只接受显式 Project-scoped command，并以 versioned append-only Journal 作为 Run / Task / Assignment 的唯一事实源。普通聊天与 `spawn_task` 不会隐式创建 Workroom，也不会发布允许模型伪造 execution/acceptance 的通用 transition 工具。command adapter 必须持有认证后的 Project capability，并分别接入 Scheduler、Executor 与 Acceptance port。
 
-Workroom 的 Journal 后端在进程启动时固定：`ai.sessions.useDatabase !== false` 使用 `workroom_events`，Database Root Host 未就绪会使候选 generation 发布失败；显式设为 `false` 时使用 `.zhin/workroom-journal` 的原子文件事件流。热重载不能切换后端，修改该选择必须重启进程，避免旧代 lease 与新代写入两个无 CAS 关系的事实源。Console 只暴露 Project-scoped 只读投影（`GET /api/agent/workroom/runs?projectId=...`）。远程 A2A Executor 将按相同 Assignment lease/event 契约另行接入，不保留旧 `ai.remoteAgents` poller。
+Console 的 **Workrooms** 菜单用于声明 Project 边界、Agent 成员/角色，以及群、频道或 GitHub 仓库的协作空间。一个 Workroom 绑定一个完整协作空间地址；同一个 Bot/App Endpoint 可以服务多个 Workroom。人类入站先由 Space Router 按完整地址进入 content-free Project Inbox，再由 Orchestrator 仲裁任务；`conversation.agent` 标识该 Inbox 所属的 Orchestrator，但绝不能绕过仲裁把消息直接执行成 Task 状态。Workroom 定义写入持久化运行时 Catalog，而不是 `ai` 配置文件；保存立即生效，无需重启 Host。旧 `ai.workrooms` 会明确拒绝并提示迁移。记录键就是 Workroom Kernel 使用的 `projectId`：
+
+```json
+{
+  "projectId": "support",
+  "name": "客户支持",
+  "enabled": true,
+  "members": [
+    { "agent": "zhin", "role": "orchestrator" },
+    { "agent": "support", "role": "executor" },
+    { "agent": "reviewer", "role": "reviewer" }
+  ],
+  "conversation": {
+    "adapter": "telegram",
+    "endpoint": "support-bot",
+    "kind": "group",
+    "id": "10001",
+    "agent": "support"
+  }
+}
+```
+
+`members[].agent` 必须引用 `ai.agents`；角色闭表为 `orchestrator | executor | reviewer | integration`。成员可用 `assignmentRoute: { "kind": "local" }` 固定本地执行，或用 `assignmentRoute: { "kind": "remote", "endpointId": "..." }` 固定唯一 A2A endpoint；未声明时按兼容语义视为本地，远程执行绝不从多个 endpoint 猜测。该路由随 Catalog revision/digest 持久化并在 claim 前复验。`sponsors[]` 保存可执行 typed Project Sponsor control 的 authenticated principal id（例如 `owner:<platform-user-id>`），属于持久 Catalog authority，不读取消息 metadata 自报身份。`conversation` 引用普通 Workroom 空间；可选 `sponsorConversation` 引用独立的 `group | channel` Sponsor Room，承载 typed Sponsor ingress、受治理的 lifecycle/overdue 通知，以及 Project-scoped Portfolio lane/queue/grant/budget/fairness 卡片。多个 Project 可以声明同一个 Sponsor Room 地址，形成 portfolio 级聚合房间，但每条投影仍是独立的 Project delivery view；聚合房间的治理命令可写成 `/control data-lifecycle project <projectId> ...`，Portfolio 命令可写成 `/control portfolio <portfolioId> project <projectId> ...`，或在回复当前单 Project 卡片时省略 Project 段。房间地址本身不暗含 Project authority；显式 Project 与回复卡片不一致、卡片 revision 过期或 Endpoint 代级漂移时只会得到澄清，不会执行命令。两者的 `agent` 都必须是承担 `orchestrator` 角色的 Workroom 成员。启用的 Workroom 至少需要一个 Orchestrator 和普通协作空间；普通 Workroom 地址不可复用，也不能与 Sponsor Room 冲突，Endpoint 本身可以复用。Host 会从持久 Catalog 与当前 Endpoint capability 在启动/扫描时建立 Sponsor delivery binding，因此首次纯出站告警不依赖房间先收到入站消息。
+
+GitHub 适配器会用 Webhook 的稳定 `repo` 元数据（`owner/repo`）匹配 `repository` Workroom，因此同一仓库下的 Issue/PR 评论通道都归入同一个 Workroom：
+
+```json
+{
+  "projectId": "zhin-repo",
+  "name": "Zhin Repository",
+  "enabled": true,
+  "members": [{ "agent": "zhin", "role": "orchestrator" }],
+  "conversation": {
+    "adapter": "github",
+    "endpoint": "my-github-bot",
+    "kind": "repository",
+    "id": "zhinjs/zhin",
+    "agent": "zhin"
+  }
+}
+```
+
+GitHub Project Item 是 Task 的外部投影/同步目标，不是 Workroom 身份的一部分。当前 Console 的 Task 页仍只读 Journal + Kernel 事实；Project V2 同步需要独立的 Integration Port、幂等 task-key ↔ item-id 映射和冲突策略，不能由 Console 直接改 Task 状态。
+
+Catalog 与 Run Journal 使用相同的持久化选择：数据库模式写入 `workroom_catalog`，`ai.sessions.useDatabase: false` 时回退到 `.zhin/workroom-catalog.json`。Catalog 保存采用 revision CAS；成员引用仍以当前 generation 的 `ai.agents` 为准，失效引用会被拒绝。已有 Run 的 Journal 事实不会被 Catalog 编辑覆盖。
+
+`/work` 不会回退成固定单 Task。生产入口只有在 composition root 安装受治理的 `HumanIngressPlanningPort` 后才会创建 Run；否则持久化请求并返回 `planning_unavailable` 澄清。推荐使用 `DynamicWorkflowPlanningPort`：模型或 Strategy 只返回不可信的结构化 DAG candidate，Project/Catalog、Profile、Orchestrator、planning policy、预算和 Sponsor Gate authority 全由可信端口注入；候选经过 `WorkflowPlanBuilder` 重新校验 Profile capability ceiling、required/optional、依赖/cycle、Task/attempt budget 与 approval gate 后，只有 `WorkroomKernel.admitWorkflowPlan()` 可以原子写入 Plan/Task facts。Plan Gate 会先物化为 `approval` Blocker，普通 Orchestrator `resolve_blocker` 无法解除；安装 `WorkroomPlanGateAuthorityPort` 后，人类 Sponsor 可用 `/control plan-gate <approve|reject|request-changes|cancel> <runId> <taskKey> <gateId> [reason]` 提交 exact、可重放的 typed decision。
+
+Workroom 的 Journal 后端在进程启动时固定：`ai.sessions.useDatabase !== false` 使用 `workroom_events`，Database Root Host 未就绪会使候选 generation 发布失败；显式设为 `false` 时使用 `.zhin/workroom-journal` 的原子文件事件流。热重载不能切换后端，修改该选择必须重启进程，避免旧代 lease 与新代写入两个无 CAS 关系的事实源。Console 的 Run 列表与详情仍是 Project-scoped 只读投影（例如 `GET /api/agent/workroom/runs?projectId=...`），不能直接修改 Task/Assignment。认证 Console 另有彼此隔离的 typed 控制面：Profile 与 Project Knowledge 通过 `workroom.profile.*` / `workroom.knowledge.*` RPC 发布或回滚，Portfolio Sponsor 通过 `POST /api/agent/workroom/portfolio/commands` 提交 exact command，Effect Sponsor 通过 `POST /api/agent/workroom/effects/sponsor-decisions` 只决定绑定 exact Intent 的授权；该命令只接受闭集 `reasonCode`，不持久化任意解释文本。Data Steward/Privacy/Compliance 使用 `/api/agent/workroom/data-lifecycle`、`/overdue` 与 `/commands` 查询 content-free lifecycle projection，并执行 Hold、subject erasure/export、retention purge/reconcile；这些入口只有在 Root-private role authority、当前 Catalog Project 与 P12 Console recipient 同时匹配时发布。它们都从认证 token 重新派生 principal，并重验当前 Catalog/Profile/governance revision；请求体自报身份、approval 或 discussion 不能取得状态写权限。可选 Remote A2A Executor 复用同一 Assignment lease/fence/event 契约；只有持久 Profile、Authority Grant、Workspace、Disclosure 与 endpoint Card/auth/transport 快照全部精确匹配时才允许新 claim，缺项会持久阻塞，旧 `ai.remoteAgents` poller 不再存在。
+
+升级旧数据时，`zhin agent legacy-runs <input>` 只读审计 legacy Run export，`zhin agent legacy-payloads <input> --kind <kind>` 只读扫描遗留内嵌正文；两者只生成 create-only audit/proposal，不会自动写新 Journal、接受旧结果、删除 payload 或执行迁移。详见[旧概念兼容说明](../contributing/legacy-concepts.md)。
 
 ## 会话持久化与会话树
 

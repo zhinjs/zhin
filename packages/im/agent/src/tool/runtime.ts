@@ -1,6 +1,6 @@
 import type { AgentTool } from '@zhin.js/ai';
-import type { Tool, Message } from '../orchestrator/types.js';
-import type { SkillRegistry } from '../orchestrator/skill-registry.js';
+import type { Tool, Message } from '../resource-hub/types.js';
+import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
 import type { UserProfileStore } from '../user-profile.js';
 import type { RegisteredAgentTool } from './contracts.js';

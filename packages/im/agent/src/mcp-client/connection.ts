@@ -6,7 +6,7 @@
  */
 
 import type { AgentTool } from '@zhin.js/ai';
-import type { McpServerEntry, McpResource, McpPrompt } from '../orchestrator/types.js';
+import type { McpServerEntry, McpResource, McpPrompt } from '../resource-hub/types.js';
 import { mcpToolToAgentTool, mcpResourceToInfo, mcpPromptToInfo } from './bridge.js';
 
 // ── MCP 环境清理 ─────────────────────────────────────────────────────

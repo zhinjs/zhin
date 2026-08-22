@@ -54,7 +54,9 @@ export class ComponentIndex {
     requesterId: PluginId,
     name: string,
     props: TProps,
+    options: Readonly<{ signal?: AbortSignal }> = {},
   ): Promise<TResult> {
+    options.signal?.throwIfAborted();
     const requester = this.snapshot.tree.get(requesterId);
     if (!requester) throw new Error(`Unknown Component requester: ${requesterId}`);
     const record = this.#resolve(requesterId, name);
@@ -62,8 +64,11 @@ export class ComponentIndex {
     const context: ComponentContext = Object.freeze({
       ...createCapabilityContext(this.snapshot, record.owner),
       requester,
+      ...(options.signal ? { signal: options.signal } : {}),
     });
-    return record.slot.definition.render(props, context) as TResult | Promise<TResult>;
+    const result = await record.slot.definition.render(props, context) as TResult;
+    options.signal?.throwIfAborted();
+    return result;
   }
 
   #resolve(requester: PluginId, name: string): ComponentRecord | undefined {

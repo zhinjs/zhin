@@ -4,7 +4,8 @@ import type { TurnRequest } from '../turn/turn-ingress.js';
 export const TURN_CONTEXT_BEGIN = '[Turn context]';
 export const TURN_CONTEXT_END = '[/Turn context]';
 
-export type TurnContextView = Pick<TurnRequest, 'origin' | 'principal' | 'session'>;
+export type TurnContextView = Pick<TurnRequest, 'origin' | 'principal' | 'session'>
+  & Partial<Pick<TurnRequest, 'policy'>>;
 
 export interface TurnContextEnvelopeInput {
   turn?: TurnContextView;
@@ -50,6 +51,10 @@ export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): strin
   if (input.turn) {
     lines.push(formatSessionContextLine(input.turn));
     lines.push(formatSenderContextLine(input.turn));
+    if (input.turn.policy?.filesystem) {
+      const filesystem = input.turn.policy.filesystem;
+      lines.push(`Workspace: ${filesystem.workingDirectory ?? filesystem.workspaceRoot} | access:${filesystem.access ?? 'workspace-write'}`);
+    }
     if (input.turn.origin.kind === 'im') {
       const platform = input.turn.origin.platform;
       const sessionKey = input.turn.session.key;

@@ -104,6 +104,22 @@ interface MediaRef {
 
 **出站**：AI 回复 → `OutputElement[]` → canonical `Segment[]`（`publishOutboundElements`）→ `$reply`（Segment 是一等 `SendContent`）→ `normalizeOutboundPayload`（html→image/文本、keyboard、媒体协商）→ endpoint。媒体协商按 adapter definition 的 `segments.outboundMedia` 声明驱动（`'url' | 'path' | 'base64' | 'upload'`）：仅 `url-or-text` 端点会在中央把非 URL 媒体降级为文本；其余由 adapter 按平台最优路径自物化（URL 直发 / base64 直发 / 平台上传 / 读盘），无 `data.media` 的段会被 warn 丢弃——legacy `data.url/file/base64` 形状已不存在。
 
+## 用户交互：确认、选择与输入
+
+用户交互与 LLM prompt assembly 是两个不同概念。命令创作面使用 `context.interaction`
+（`UserInteraction`），通过 `ask()` 的 `type` 表达 `text` / `number` / `confirm` /
+`select` / `multiselect` / `list`，通过 `sequence()` 声明连续交互。
+
+每个请求都可以声明 `title`、`description` 与 `tip`。`UserInteraction` 隐藏呈现和回复解析：
+确认与小规模单选先转换为平台无关的
+`UserInteractionView`，再统一渲染为 `markdown` + canonical `keyboard`。声明
+`segments.interactive: native` 的 Adapter（如 QQ）编码为原生按钮；其他 Adapter 在 Core
+中降级为编号列表，点击按钮和手动回复最终进入同一文本解析入口。多选和过多选项直接使用
+列表，避免平台按钮数量限制。
+
+AI 工具 `ask_user` 也复用这一模块，因此工具审批、命令向导和 AI 追问不会各自维护一套
+平台按钮逻辑。
+
 ## Endpoint 1:N 展开
 
 一个适配器插件实例配置里声明 `endpoints: [{name, ...}]` 时，`AdapterIndex` 把它展开成 N 条独立 endpoint 记录（配置合并规则见 [配置即数据](./config-as-data.md)）：

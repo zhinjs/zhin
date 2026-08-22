@@ -738,15 +738,16 @@ describe('defineAdapter segments policy', () => {
     expect(parseAdapterDefinition(definition).segments).toBeUndefined();
   });
 
-  it('accepts outboundMedia / interactive declarations, deduped and frozen', () => {
+  it('accepts outboundMedia / interactive / markdown declarations, deduped and frozen', () => {
     const definition = defineAdapter({
       capabilities: ['outbound'],
-      segments: { outboundMedia: ['url', 'base64', 'url'], interactive: 'text' },
+      segments: { outboundMedia: ['url', 'base64', 'url'], interactive: 'text', markdown: 'native' },
       create,
     });
     expect(definition.segments).toEqual({
       outboundMedia: ['url', 'base64'],
       interactive: 'text',
+      markdown: 'native',
     });
     expect(Object.isFrozen(definition.segments)).toBe(true);
     expect(Object.isFrozen(definition.segments?.outboundMedia)).toBe(true);
@@ -764,6 +765,7 @@ describe('defineAdapter segments policy', () => {
     expect(defineWithSegments({ outboundMedia: 'base64' })).toThrow('outboundMedia');
     expect(defineWithSegments({ outboundMedia: ['ftp'] })).toThrow('outboundMedia');
     expect(defineWithSegments({ interactive: 'button' })).toThrow('interactive');
+    expect(defineWithSegments({ markdown: 'html' })).toThrow('markdown');
   });
 
   it('parseAdapterDefinition rejects invalid segments on hand-built definitions', () => {
@@ -776,6 +778,10 @@ describe('defineAdapter segments policy', () => {
       ...definition,
       segments: { interactive: 'fancy' },
     })).toThrow('interactive');
+    expect(() => parseAdapterDefinition({
+      ...definition,
+      segments: { markdown: 'rich' },
+    })).toThrow('markdown');
   });
 });
 

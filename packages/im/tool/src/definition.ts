@@ -13,9 +13,17 @@ export interface ToolInvocationPolicy {
     readonly httpsOnly?: boolean;
     readonly allowedDomains?: readonly string[];
   }>;
-  readonly shell?: Readonly<{ preset: 'readonly' | 'network' }>;
+  readonly shell?: Readonly<{
+    readonly preset?: 'readonly' | 'network';
+    readonly security?: 'deny' | 'allowlist' | 'full';
+    readonly execPreset?: 'readonly' | 'network' | 'development' | 'custom';
+    readonly approvalMode?: 'ask' | 'allow' | 'deny';
+    readonly isolation?: 'required' | 'none';
+  }>;
   readonly filesystem?: Readonly<{
     readonly workspaceRoot: string;
+    readonly workingDirectory?: string;
+    readonly access?: 'read-only' | 'workspace-write' | 'danger-full-access';
   }>;
 }
 

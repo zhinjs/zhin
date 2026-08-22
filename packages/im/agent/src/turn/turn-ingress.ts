@@ -92,10 +92,21 @@ export interface TurnPolicyContext {
     readonly allowedDomains?: readonly string[];
   }>;
   /** Explicit shell command authority; absence disables canonical Shell execution. */
-  readonly shell?: Readonly<{ preset: 'readonly' | 'network' }>;
+  readonly shell?: Readonly<{
+    /** Optional strict command preset. When present it can only narrow execution. */
+    readonly preset?: 'readonly' | 'network';
+    /** Per-turn shell policy resolved by a trusted product ingress. */
+    readonly security?: 'deny' | 'allowlist' | 'full';
+    readonly execPreset?: 'readonly' | 'network' | 'development' | 'custom';
+    readonly approvalMode?: 'ask' | 'allow' | 'deny';
+    /** Require an OS/container boundary for Shell execution. */
+    readonly isolation?: 'required' | 'none';
+  }>;
   /** Explicit filesystem authority; absence denies every file capability. */
   readonly filesystem?: Readonly<{
     readonly workspaceRoot: string;
+    readonly workingDirectory?: string;
+    readonly access?: 'read-only' | 'workspace-write' | 'danger-full-access';
   }>;
 }
 

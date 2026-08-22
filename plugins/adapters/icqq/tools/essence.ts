@@ -9,7 +9,7 @@ export default defineAgentTool<{ endpoint_id: string; message_id: string; action
     action: z.enum(['add', 'remove']).describe('add=设为精华, remove=移除精华'),
   }),
   platforms: ['icqq'],
-  permissions: ['platform(icqq,scene_admin)'],
+  approval: 'always',
   async execute({ endpoint_id, message_id, action }: { endpoint_id: string; message_id: string; action: 'add' | 'remove' }) {
     const endpoint = getIcqqAgentDeps().getEndpoint(endpoint_id);
     if (action === 'add') {

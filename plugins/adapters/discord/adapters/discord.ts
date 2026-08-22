@@ -32,6 +32,7 @@ export default defineAdapter<DiscordAdapterConfig>({
   segments: {
     outboundMedia: ['url', 'upload'],
     interactive: 'native',
+    markdown: 'native',
   },
   create(context) {
     const config = resolveDiscordConfig(context.config);

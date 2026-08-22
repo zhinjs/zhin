@@ -230,6 +230,7 @@ describe('telegram protocol helpers', () => {
   });
 
   it('formats outbound string and segment payloads', () => {
+    expect(defineTelegramAdapter.segments?.markdown).toBe('native');
     expect(formatOutboundActions('1001', 'pong')).toEqual([{
       method: 'sendMessage',
       params: { chat_id: 1001, text: 'pong' },
@@ -245,6 +246,30 @@ describe('telegram protocol helpers', () => {
         caption: 'see',
       },
     }]);
+  });
+
+  it('converts canonical Markdown to safe Bot API HTML', () => {
+    const actions = formatOutboundActions(1001, [
+      { type: 'text', data: { text: 'raw <value>\n' } },
+      {
+        type: 'markdown',
+        data: {
+          content: '# Title\n**important** & [docs](https://example.com?a=1&b=2)\n```ts\nconst ok = 1 < 2;\n```',
+        },
+      },
+    ]);
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({
+      method: 'sendMessage',
+      params: { chat_id: 1001, parse_mode: 'HTML' },
+    });
+    const text = String(actions[0]?.params.text);
+    expect(text).toContain('raw &lt;value&gt;');
+    expect(text).toContain('<b>Title</b>');
+    expect(text).toContain('<b>important</b>');
+    expect(text).toContain('<a href="https://example.com?a=1&amp;b=2">docs</a>');
+    expect(text).toContain('<pre><code class="language-ts">const ok = 1 &lt; 2;</code></pre>');
   });
 
   it('formats keyboard outbound as sendMessage reply_markup', () => {

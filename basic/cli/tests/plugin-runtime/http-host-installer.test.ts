@@ -14,12 +14,12 @@ describe('Plugin Runtime HTTP Host config', () => {
     await expect(resolveHttpConfig({
       http: {
         token: '${ZHIN_TEST_HTTP_TOKEN}',
-        tokens: [{ token: '${MISSING_DEMO_TOKEN:-demo-default}', scope: 'demo' }],
+        tokens: [{ token: '${MISSING_DEMO_TOKEN:-demo-default}', scope: 'demo', principalId: 'human:alice' }],
         corsOrigins: ['${MISSING_CONSOLE_ORIGIN:-https://console.example.com}'],
       },
     })).resolves.toMatchObject({
       token: 'secret-from-env',
-      tokens: [{ token: 'demo-default', scope: 'demo' }],
+      tokens: [{ token: 'demo-default', scope: 'demo', principalId: 'human:alice' }],
       corsOrigins: ['https://console.example.com'],
     });
   });

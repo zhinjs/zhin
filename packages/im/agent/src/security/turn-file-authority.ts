@@ -7,6 +7,7 @@ export type AuthorizedFileInput =
   | Readonly<{ allowed: false; reason: string }>;
 
 const FILE_PATH_ARGUMENTS: Readonly<Record<string, string>> = Object.freeze({
+  bash: 'cwd',
   read_file: 'file_path',
   write_file: 'file_path',
   edit_file: 'file_path',
@@ -25,6 +26,7 @@ export async function authorizeTurnFileInput(
   toolName: string,
   input: Readonly<Record<string, unknown>>,
   workspaceRoot: string | undefined,
+  workingDirectory?: string,
 ): Promise<AuthorizedFileInput> {
   const argument = FILE_PATH_ARGUMENTS[toolName];
   if (!argument) return Object.freeze({ allowed: true, input });
@@ -33,7 +35,7 @@ export async function authorizeTurnFileInput(
   }
 
   const rawValue = input[argument];
-  const defaultToWorkspace = (toolName === 'glob' || toolName === 'grep') && rawValue === undefined;
+  const defaultToWorkspace = (toolName === 'bash' || toolName === 'glob' || toolName === 'grep') && rawValue === undefined;
   if (!defaultToWorkspace && (typeof rawValue !== 'string' || !rawValue.trim())) {
     return deny(`${argument} is required`);
   }
@@ -44,9 +46,15 @@ export async function authorizeTurnFileInput(
 
   try {
     const canonicalRoot = await realpath(path.resolve(workspaceRoot));
+    const baseDirectory = workingDirectory?.trim()
+      ? await realpath(path.resolve(workingDirectory))
+      : canonicalRoot;
+    if (!isWithin(canonicalRoot, baseDirectory)) {
+      return deny('Working directory is outside the authorized workspace');
+    }
     const requested = path.isAbsolute(rawPath)
       ? path.resolve(rawPath)
-      : path.resolve(canonicalRoot, rawPath);
+      : path.resolve(baseDirectory, rawPath);
     const canonicalTarget = await canonicalizeTarget(requested);
     if (!isWithin(canonicalRoot, canonicalTarget)) {
       return deny(`Path is outside the authorized workspace: ${rawPath}`);

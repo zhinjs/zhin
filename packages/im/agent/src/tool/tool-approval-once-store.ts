@@ -1,5 +1,5 @@
 /**
- * Per-orchestrator store for policy: 'once' tool approvals (ADR 0039 P1).
+ * Per-resource-hub store for policy: 'once' tool approvals (ADR 0039 P1).
  */
 export class ToolApprovalOnceStore {
   private readonly keys = new Set<string>();

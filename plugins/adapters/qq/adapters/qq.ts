@@ -35,6 +35,8 @@ export default defineAdapter<QqAdapterConfig>({
   // 媒体 url 直发，base64/path 由 SDK formatMediaData 物化走 /files 上传；
   // markdown/keyboard 原生按钮承载交互段。
   segments: {
+    supported: ['text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'markdown', 'keyboard'],
+    markdown: 'native',
     outboundMedia: ['url', 'upload'],
     interactive: 'native',
   },

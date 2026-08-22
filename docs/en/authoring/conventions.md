@@ -103,7 +103,7 @@ Plugins that depend on `zhin.js` / `@zhin.js/core` get `@zhin.js/handler` via `p
 
 Handler `this` is `HandlerContext`:
 
-- `this.prompt` — interactive Q&A (same machinery as command `CommandPrompt`)
+- `this.interaction` — user input, confirmation, and selection (same `UserInteraction` machinery as commands)
 
 The event `$endpoint` field is immutable identity. Handlers never receive an escapable live
 Endpoint; delivery, approval, and interaction use generation-bound ports.
@@ -117,7 +117,7 @@ import { defineHandler } from 'zhin.js/handler';
 export default defineHandler({
   event: 'message.receive',
   async handle(message) {
-    await this.prompt?.text('Continue?');
+    await this.interaction?.ask({ type: 'text', title: 'Continue?' });
   },
 });
 ```
@@ -129,7 +129,7 @@ import { defineHandler } from 'zhin.js/handler';
 export default defineHandler({
   event: 'request.receive',
   async handle(req) {
-    if (await this.prompt?.confirm('Approve?')) await req.$approve();
+    if (await this.interaction?.ask({ type: 'confirm', title: 'Approve?' })) await req.$approve();
   },
 });
 ```

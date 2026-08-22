@@ -384,6 +384,15 @@ export async function* runAgentLoopTextTurnRun(
 
   const preData = toolRun.preExecution.data;
   const outputSchema = resolveAgentOutputSchema(host.config.outputSchema);
+  const turnShellPolicy = input.turnContext.policy?.shell;
+  const execPolicyConfig = turnShellPolicy
+    ? {
+        ...host.config,
+        ...(turnShellPolicy.security ? { execSecurity: turnShellPolicy.security } : {}),
+        ...(turnShellPolicy.execPreset ? { execPreset: turnShellPolicy.execPreset } : {}),
+        ...(turnShellPolicy.approvalMode ? { execApprovalMode: turnShellPolicy.approvalMode } : {}),
+      }
+    : host.config;
   let systemPrompt = hasTools
     ? await buildAgentPathSystemPrompt(host, {
         profile: input.promptProfile,
@@ -402,8 +411,10 @@ export async function* runAgentLoopTextTurnRun(
   }
 
   const agentTools = hasTools
-    ? applyExecPolicyToTools(host.config, resolvedTools, {
-        approvalMode: host.config.execApprovalMode,
+    ? turnShellPolicy
+      ? resolvedTools
+      : applyExecPolicyToTools(execPolicyConfig, resolvedTools, {
+        approvalMode: execPolicyConfig.execApprovalMode,
       })
     : [];
 
@@ -490,9 +501,12 @@ export async function* runAgentLoopTextTurnRun(
   });
 
   const rebuildLlmTools = () => {
-    const nextAgentTools = applyExecPolicyToTools(host.config, refreshResolvedTools(), {
-      approvalMode: host.config.execApprovalMode,
-    });
+    const refreshed = refreshResolvedTools();
+    const nextAgentTools = turnShellPolicy
+      ? refreshed
+      : applyExecPolicyToTools(execPolicyConfig, refreshed, {
+          approvalMode: execPolicyConfig.execApprovalMode,
+        });
     legacyByName.clear();
     for (const t of nextAgentTools) legacyByName.set(t.name, t);
     llmTools = directTools
@@ -548,7 +562,7 @@ export async function* runAgentLoopTextTurnRun(
     getSteeringMessages: promptHooks?.getSteeringMessages,
     getFollowUpMessages: promptHooks?.getFollowUpMessages,
     executeTool: async (toolCall: ParsedToolCall, _tools: typeof llmTools, toolSignal?: AbortSignal, cause?: ToolExecutionCause) => {
-      const hookRegistry = host.orchestrator?.hooks;
+      const hookRegistry = host.resourceHub?.hooks;
       const currentAliases = input.toolAliases;
       const resolvedName = currentAliases?.[toolCall.name] ?? toolCall.name;
       let effectiveArgs = toolCall.arguments;
@@ -580,6 +594,12 @@ export async function* runAgentLoopTextTurnRun(
 
       try {
         const outcome = await input.toolExecution.execute(legacy, effectiveArgs, toolCall.id, cause);
+        if (outcome.status === 'cancelled') {
+          const cancellation = signal?.reason instanceof Error
+            ? signal.reason
+            : new DOMException(outcome.reason, 'AbortError');
+          throw cancellation;
+        }
         if (outcome.status !== 'completed') {
           const reason = outcome.status === 'failed' ? outcome.error : outcome.reason;
           toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason });
@@ -615,8 +635,12 @@ export async function* runAgentLoopTextTurnRun(
         return toolResultToAgentMessage(toolCall, finalText, false);
       } catch (err) {
         if (err instanceof TurnJournalCommitError) throw err;
-        if (signal?.aborted) {
-          throw signal.reason instanceof Error ? signal.reason : new Error('Tool execution cancelled');
+        if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
+          throw signal?.reason instanceof Error
+            ? signal.reason
+            : err instanceof Error
+              ? err
+              : new Error('Tool execution cancelled');
         }
         const message = err instanceof Error ? err.message : String(err);
         const failure = `工具「${resolvedName}」执行失败：${message}`;

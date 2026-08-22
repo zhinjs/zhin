@@ -6,7 +6,7 @@
  */
 
 import type { AgentMessage, AgentEvent, MediaContentBlock, OutputElement } from '@zhin.js/ai';
-import type { Message, Tool } from '../orchestrator/types.js';
+import type { Message, Tool } from '../resource-hub/types.js';
 import type { SubagentSystem } from '../subagent/index.js';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import type { ZhinAgentTurnMetrics } from '../turn/turn-metrics.js';
@@ -47,6 +47,7 @@ export interface IAgentTurnProcessor {
 export interface IAgentSessionManager {
   compactSession(sessionKey: string): Promise<{ ok: boolean; message: string }>;
   archiveSession(sessionKey: string): Promise<boolean>;
+  cancelSession(sessionKey: string): boolean;
   getLastTurnMetrics(): ZhinAgentTurnMetrics | null;
   upgradeProfilesToDatabase(model: any): void;
 }

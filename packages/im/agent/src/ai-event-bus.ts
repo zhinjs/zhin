@@ -1,5 +1,5 @@
 import { type Message, type Plugin, commMessageFromHookContext, resolveIMSessionId, resolveIMSessionIdFromMessage } from '@zhin.js/core';
-import type { AIHookEvent } from './orchestrator/types.js';
+import type { AIHookEvent } from './resource-hub/types.js';
 export type AIEventPayload = Plugin.AIEventPayload;
 
 export interface AISessionNewPayload extends Plugin.AIEventPayload {

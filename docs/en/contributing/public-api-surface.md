@@ -54,6 +54,12 @@ Three tiers:
 | `messageGatewayToken` | `stable` | `@zhin.js/core` (`zhin.js/core/runtime`) | Inbound message delivery gateway (used by adapters) |
 | `httpHostToken` | `stable` | `@zhin.js/host-http` | HTTP/WS Host capability (used by Console, Webhooks) |
 
+### Agent Capability Resources
+
+| API | Stability | Source Package | One-liner |
+|-----|-----------|----------------|-----------|
+| `ctx.agent` / `AgentResourceHub` | `experimental` | `@zhin.js/agent` | Generation-scoped Tool/Skill/SubAgent/MCP/Hook capability registration; owns no Workroom Run/Task/Assignment state |
+
 ### Removed Legacy Hooks
 
 | API | Stability | Source Package | One-liner |
@@ -84,6 +90,8 @@ Three tiers:
 | `zhin runtime start` | `stable` | `@zhin.js/cli` | Plugin Runtime entry point (composition root) |
 | `zhin setup` | `stable` | `@zhin.js/cli` | Incremental configuration wizard for existing projects |
 | `zhin doctor` | `stable` | `@zhin.js/cli` | Environment/config health check |
+| `zhin agent legacy-runs <input>` | `experimental` | `@zhin.js/cli` | Read-only audit of removed legacy Run exports; file output is create-only and never writes a new Workroom Journal |
+| `zhin agent legacy-payloads <input> --kind <kind>` | `experimental` | `@zhin.js/cli` | Read-only scan of embedded legacy Workroom payloads; emits content-free quarantine audit/proposal data and never deletes or migrates automatically |
 | `pnpm create zhin-app` | `stable` | `create-zhin-app` | New project scaffold |
 
 ## Internal (Readable but No Stability Guarantee)
@@ -98,6 +106,7 @@ Three tiers:
 | `ToolIndex` / `SkillIndex` / `McpIndex` / `PageIndex` / `LayoutIndex`, etc. | `internal` | Various feature packages | Other projections, all internal mechanisms |
 | `defineFeatureProvider` (Feature Provider protocol) | `internal` | `@zhin.js/feature-kit` | Protocol for adding new feature types, aimed at framework extenders, not plugin authors |
 | `MessageDispatcher` | `internal` | `@zhin.js/core` | Message dispatcher (`createMessageDispatcher` for assembly, routing strategy is configurable) |
+| `@zhin.js/agent/runtime` Workroom tokens / composition ports | `internal` | `@zhin.js/agent` | Generation-owned Host assembly mechanisms, not plugin-author APIs for obtaining Run state-writing authority |
 | `basic/cli/src/plugin-runtime/*-installer.ts` | `internal` | `@zhin.js/cli` | Root Host installers (database / schedule / outbound / inbox / http / console / agent / speech / html-renderer / protocol); assembly details may change at any time |
 
 ## Deprecated / Migrated
@@ -107,6 +116,7 @@ Three tiers:
 | Legacy `usePlugin()` plugin system | `deprecated` | Kept for compatibility, runtime still supports it | New code uses convention-based approach (`plugin.ts` + convention directories); deletion countdown begins after dual-track migration is complete |
 | `MessageCommand` / classic `CommandFeature` | `deprecated` | Still used by Agent init / game-kit hub | Will be removed after migration to `defineCommand` + Runtime `CommandIndex` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | No longer exported | Use `zhin runtime start` |
+| `AgentOrchestrator` / `ResourceHub` | `removed` | Compatibility names are no longer exported | Use `AgentResourceHub` for capability registration; Workroom orchestration uses the Kernel and dedicated typed ports |
 | "Host plugin" narrative | `deprecated` | Documentation has been consolidated | Host capabilities are now token-based (see Host Token table above), no longer a plugin concept |
 | `examples/test-bot` as a user path | `deprecated` | Maintainer kitchen sink | User paths are minimal-bot (Stable) -> full-bot (L4); do not use test-bot config as a template |
 | `plugin.yml` plugin manifest | `deprecated` | Legacy `Plugin` and `zhin build` still read it (`packages/im/core/src/plugin.ts`, `basic/cli/src/libs/plugin-package-build.ts`) | Part of the legacy system, will be retired along with it; convention-based plugins use `package.json` as the source of truth |

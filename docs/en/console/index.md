@@ -49,9 +49,9 @@ A few points relevant in actual deployment. Authentication: with a token configu
 | Cron | RPC `cron:*` | In-memory tasks registered by plugins (list); with Agent installed, can add/delete/pause persistent tasks |
 | Database | RPC `db:info` / `db:tables` / `db:select` / `db:insert` / `db:update` / `db:delete` / `db:kv:*` | Database browsing and editing, KV storage |
 | Files | RPC `files:tree` / `files:read` / `files:save`, `env:list` / `env:save` | Project file tree and `.env` management |
-| Introspection | `GET /api/introspection/{commands,tools,endpoints,bindings,mcp}` | Paginated introspection: commands, tools, endpoints, bindings, MCP |
+| Runtime Capabilities | `GET /api/introspection/{commands,middlewares,components,tools,endpoints,bindings,mcp}`, `POST /api/introspection/components/render` | Current-generation command contracts, middleware order, component catalog and full-scope rendering lab, plus Agent tools |
 | Agent Sessions | `GET/POST /api/agent/sessions/*` | AI session tree viewing and branch switching |
-| Workroom | `GET /api/agent/workroom/runs[/*]` | Query replayed Run / Task / Assignment state by explicit Project |
+| Workrooms | `config:get/set(ai)` + `GET /api/agent/workroom/runs[/*]` | Configure Projects, Agent roles, and Bot-to-Agent topology; inspect replayed Run / Task / Assignment / Reviewer / Sponsor Gate state for the selected Project |
 | Marketplace | `GET /pub/marketplace/search`, `/pub/marketplace/detail/*`, `GET /api/marketplace/updates` | Plugin marketplace (plugins.json + npmmirror) and update checks |
 | Sandbox | WS `/sandbox` | Built-in sandbox chat, direct conversation without platform integration |
 

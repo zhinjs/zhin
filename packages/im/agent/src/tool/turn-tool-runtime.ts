@@ -51,7 +51,8 @@ export class TurnToolRuntime {
       const approved = await this.turn.ports.approval.requestApproval({
         requestId: `${this.turn.identity.turnId}:${toolUseId}`,
         toolName: name,
-        question: `工具「${name}」需要确认后执行。是否继续？`,
+        scopeKey: approvalScopeKey(name, decision.input),
+        question: formatApprovalQuestion(name, decision.reason, decision.input),
         signal: this.turn.signal,
       });
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
@@ -62,8 +63,10 @@ export class TurnToolRuntime {
     try {
       const output = await tool.execute(decision.input, toolInvocationFromTurn(this.turn));
       const durationMs = Date.now() - startedAt;
-      if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, durationMs, causedBy);
+      // A tool that ignores cancellation may already have committed side effects.
+      // Record its real settlement so the audit trail never invites an unsafe retry.
       await this.#append({ type: 'tool_result', toolName: name, output, durationMs, toolUseId }, causedBy);
+      if (this.turn.signal.aborted) return this.#cancelledOutcome();
       return Object.freeze({ status: 'completed', output, durationMs });
     } catch (error) {
       if (error instanceof TurnJournalCommitError) throw error;
@@ -84,10 +87,15 @@ export class TurnToolRuntime {
   }
 
   async #cancel(toolName: string, toolUseId: string, durationMs: number, causedBy?: ToolExecutionCause): Promise<TurnToolOutcome> {
+    const outcome = this.#cancelledOutcome();
+    await this.#append({ type: 'tool_cancelled', toolName, toolUseId, reason: outcome.reason, durationMs }, causedBy);
+    return outcome;
+  }
+
+  #cancelledOutcome(): Extract<TurnToolOutcome, { status: 'cancelled' }> {
     const reason = this.turn.signal.reason instanceof Error
       ? this.turn.signal.reason.message
       : String(this.turn.signal.reason ?? 'turn cancelled');
-    await this.#append({ type: 'tool_cancelled', toolName, toolUseId, reason, durationMs }, causedBy);
     return Object.freeze({ status: 'cancelled', reason });
   }
 
@@ -98,6 +106,40 @@ export class TurnToolRuntime {
       throw new TurnJournalCommitError(error);
     }
   }
+}
+
+function formatApprovalQuestion(
+  toolName: string,
+  reason: string,
+  input: Readonly<Record<string, unknown>>,
+): string {
+  const command = typeof input.command === 'string' ? input.command.trim() : '';
+  const cwd = typeof input.cwd === 'string' ? input.cwd.trim() : '';
+  const path = ['file_path', 'path'].map((key) => input[key]).find((value) => typeof value === 'string') as string | undefined;
+  return [
+    `工具「${toolName}」需要确认后执行。`,
+    command ? `命令：${command}` : undefined,
+    cwd ? `工作目录：${cwd}` : undefined,
+    path ? `目标文件：${path}` : undefined,
+    `风险：${reason}`,
+    '是否继续？',
+  ].filter((line): line is string => Boolean(line)).join('\n');
+}
+
+function approvalScopeKey(toolName: string, input: Readonly<Record<string, unknown>>): string {
+  return `${toolName}:${stableApprovalValue(input)}`;
+}
+
+function stableApprovalValue(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableApprovalValue).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableApprovalValue(entry)}`)
+      .join(',')}}`;
+  }
+  if (typeof value === 'undefined') return 'undefined';
+  try { return JSON.stringify(value); } catch { return String(value); }
 }
 
 /** Adapts canonical capability execution to the full AgentCore seam. */

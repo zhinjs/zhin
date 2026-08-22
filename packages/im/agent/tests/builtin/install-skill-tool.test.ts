@@ -11,7 +11,7 @@ import {
   InstallSkillBuiltinTool,
   createInstallSkillTool,
 } from '../../src/builtin/install-skill-tool.js';
-import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
+import { normalizeTool } from '../../src/resource-hub/tool-selection.js';
 import type { Message } from '@zhin.js/core';
 
 const VALID_SKILL = `---

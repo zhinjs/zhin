@@ -1,5 +1,5 @@
 import { type AgentTool, filterTools } from '@zhin.js/ai';
-import type { SkillRegistry } from '../orchestrator/skill-registry.js';
+import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import { type DiscoverKind, type DiscoverResultItem, type ToolCatalogItem, type ToolCatalogSource, DEFERRED_META_TOOL_NAMES } from './types.js';
 export interface BuildToolCatalogOptions {
   tools: AgentTool[];

@@ -1,4 +1,4 @@
-import type { Message } from '../orchestrator/types.js';
+import type { Message } from '../resource-hub/types.js';
 
 import type { InboundQueueConfig, InboundGroupQueueMode } from '../config/zhin-agent-config.js';
 

@@ -16,6 +16,7 @@ const indexPath = path.join(repoRoot, 'docs/adapters/index.md');
 const errors = [];
 const endpointManagementCapabilities = new Set([
   'listFriends', 'listGroups', 'listChannels', 'listGroupMembers',
+  'listRequests',
   'approveRequest', 'rejectRequest', 'kickGroupMember', 'muteGroupMember',
   'setGroupAdmin', 'deleteFriend',
 ]);

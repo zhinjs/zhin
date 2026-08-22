@@ -1,4 +1,4 @@
-import type { Message } from '../orchestrator/types.js';
+import type { Message } from '../resource-hub/types.js';
 import type { ResolvedInboundQueueConfig } from './inbound-queue-config.js';
 
 export class InboundTurnExpiredError extends Error {

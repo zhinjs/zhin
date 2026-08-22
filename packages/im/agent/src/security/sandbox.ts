@@ -17,6 +17,7 @@ import * as os from 'node:os';
 import * as fs from 'node:fs';
 import { matchHardBlockedCommand } from './exec-policy.js';
 import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
+import { executeInDocker, isDockerAvailable } from './sandbox-docker.js';
 
 // ── 资源限制包装 ────────────────────────────────────────────────────
 
@@ -115,6 +116,8 @@ export interface SandboxConfig {
   useDocker?: 'auto' | 'always' | 'never';
   /** Docker 镜像（默认 node:20-alpine） */
   dockerImage?: string;
+  /** Host workspace mount access when a container boundary is required. */
+  filesystemAccess?: 'read-only' | 'workspace-write';
 }
 
 const DEFAULT_CONFIG: SandboxConfig = {
@@ -358,7 +361,6 @@ export class Sandbox {
     // auto 模式：检测 Docker 是否可用
     if (this._dockerAvailable === null) {
       try {
-        const { isDockerAvailable } = require('./sandbox-docker.js');
         this._dockerAvailable = isDockerAvailable();
       } catch {
         this._dockerAvailable = false;
@@ -396,17 +398,29 @@ export class Sandbox {
       };
     }
 
-    // 优先使用 Docker 容器隔离
+    // 优先使用 Docker 容器隔离. `always` is fail-closed: callers that
+    // promised an isolation boundary must never fall back to the soft runner.
     if (this.shouldUseDocker()) {
       try {
-        const { executeInDocker } = require('./sandbox-docker.js');
         return executeInDocker(command, {
           ...this.config,
           workingDirectory: options?.cwd || this.config.workingDirectory,
           timeout: options?.timeout || this.config.timeout,
         });
       } catch (e) {
-        // Docker 执行失败，降级到软沙箱
+        if (this.config.useDocker === 'always') {
+          const reason = e instanceof Error ? e.message : String(e);
+          return {
+            success: false,
+            stdout: '',
+            stderr: reason,
+            exitCode: 1,
+            duration: Date.now() - startTime,
+            timedOut: false,
+            blocked: true,
+            blockReason: `隔离执行环境不可用：${reason}`,
+          };
+        }
       }
     }
 

@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@zhin.js/feature-kit": "workspace:*",
+    "@zhin.js/interaction": "workspace:*",
     "@zhin.js/permission": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "segment-matcher": "^1.0.5"

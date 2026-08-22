@@ -10,8 +10,9 @@ const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const configText = fs.readFileSync(path.join(botRoot, 'zhin.config.yml'), 'utf8');
 
 describe('multi-agent-room 编排契约', () => {
-  it('不启用数据库', () => {
-    expect(configText).not.toMatch(/^database:/m);
+  it('使用数据库持久化 Workroom 状态与 Catalog', () => {
+    expect(configText).toMatch(/^database:/m);
+    expect(configText).toMatch(/useDatabase:\s*true/m);
   });
 
   it('只暴露一个 Sandbox Endpoint', () => {
@@ -28,10 +29,11 @@ describe('multi-agent-room 编排契约', () => {
     ]);
   });
 
-  it('README 说明 local Agent binding 委派', () => {
+  it('README 区分普通聊天子任务与持久化 Workroom', () => {
     const readme = fs.readFileSync(path.join(botRoot, 'README.md'), 'utf8');
-    expect(readme).toContain('executor="local"');
-    expect(readme).toContain('assigned_to="researcher"');
+    expect(readme).toContain('Workroom Catalog');
+    expect(readme).toContain('不写入 `ai.workrooms`');
+    expect(readme).toContain('`spawn_task`');
     expect(readme).not.toContain('internal_room');
   });
 });

@@ -1,7 +1,7 @@
 ---
-"@zhin.js/im-contract": major
-"@zhin.js/core": major
-"@zhin.js/adapter": major
+"@zhin.js/im-contract": patch
+"@zhin.js/core": patch
+"@zhin.js/adapter": patch
 "@zhin.js/cli": patch
 "@zhin.js/service-activity-feedback": patch
 "@zhin.js/adapter-telegram": patch

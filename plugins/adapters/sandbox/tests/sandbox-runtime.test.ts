@@ -53,7 +53,18 @@ describe('sandbox plugin runtime adapter', () => {
       const client = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
       const timer = setTimeout(() => reject(new Error('timeout waiting for gateway.receive')), 3000);
       client.once('open', () => {
-        client.send(JSON.stringify({ text: 'hello sandbox' }));
+        client.send(JSON.stringify({
+          type: 'group',
+          id: 'workspace-room',
+          messageId: 'msg-client-1',
+          text: 'hello sandbox',
+          agentRun: {
+            workingDirectory: '/workspace/app',
+            safetyMode: 'read-only',
+            approvalMode: 'deny',
+            networkAccess: false,
+          },
+        }));
       });
       const interval = setInterval(() => {
         if (receive.mock.calls.length > 0) {
@@ -67,9 +78,18 @@ describe('sandbox plugin runtime adapter', () => {
     });
 
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      conversation: sandboxConversation('sandbox-user'),
+      conversation: sandboxConversation('workspace-room', 'group'),
+      message: { conversation: sandboxConversation('workspace-room', 'group'), id: 'msg-client-1' },
       content: 'hello sandbox',
       sender: expect.objectContaining({ id: 'sandbox-user' }),
+      metadata: expect.objectContaining({
+        sandboxAgentRun: {
+          workingDirectory: '/workspace/app',
+          safetyMode: 'read-only',
+          approvalMode: 'deny',
+          networkAccess: false,
+        },
+      }),
     }));
   });
 
@@ -118,9 +138,17 @@ describe('sandbox plugin runtime adapter', () => {
   });
 
   it('keeps sandbox payload parsing stable', () => {
-    const parsed = parseSandboxWsPayload(JSON.stringify({ text: 'ping' }));
+    const parsed = parseSandboxWsPayload(JSON.stringify({ text: 'ping', messageId: 'msg-client-1' }));
     expect(parsed.text).toBe('ping');
     expect(parsed.type).toBe('private');
+    expect(parsed.messageId).toBe('msg-client-1');
+    expect(parseSandboxWsPayload(JSON.stringify({ text: 'ping', messageId: '../bad id' })))
+      .not.toHaveProperty('messageId');
+  });
+
+  it('drops malformed run policies instead of forwarding arbitrary metadata', () => {
+    expect(parseSandboxWsPayload(JSON.stringify({ text: 'ping', agentRun: 'root please' })))
+      .not.toHaveProperty('agentRun');
   });
 
   it('prefers top-level id/owner over legacy endpoints[] entries', () => {
@@ -133,6 +161,52 @@ describe('sandbox plugin runtime adapter', () => {
     expect(resolved.id).toBe('expanded-bot');
     expect(resolved.owner).toBe('expanded-user');
     expect(resolved.randomNamePerConnection).toBe(false);
+  });
+
+  it('keeps the default endpoint id stable across reconnects', () => {
+    const resolved = resolveSandboxEndpoint({});
+    expect(resolved.id).toBe('sandbox-bot');
+    expect(resolved.randomNamePerConnection).toBe(false);
+  });
+
+  it('does not let a demo-scope websocket run Agent tasks', async () => {
+    const http = createHttpHost({
+      host: '127.0.0.1',
+      port: 0,
+      tokens: [{ token: 'demo-token', scope: 'demo' }],
+    });
+    hosts.push(http);
+    const receive = vi.fn(async () => Object.freeze({ matched: true }));
+    const endpoint = new SandboxWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      http,
+      defaults: resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' }),
+    });
+    endpoint.start();
+    endpoint.open();
+    const { port } = await http.listen();
+
+    const errorText = await new Promise<string>((resolve, reject) => {
+      const client = new WebSocket(`ws://127.0.0.1:${port}/sandbox?token=demo-token`);
+      const timer = setTimeout(() => reject(new Error('timeout waiting for read-only error')), 3000);
+      client.on('message', (raw) => {
+        const payload = JSON.parse(String(raw)) as { type?: string; content?: Array<{ data?: { text?: string } }> };
+        if (payload.type === 'ready') {
+          client.send(JSON.stringify({ text: 'run outside workspace' }));
+          return;
+        }
+        if (payload.type === 'error') {
+          clearTimeout(timer);
+          client.close();
+          resolve(payload.content?.[0]?.data?.text ?? '');
+        }
+      });
+      client.once('error', reject);
+    });
+
+    expect(errorText).toContain('只读演示权限');
+    expect(receive).not.toHaveBeenCalled();
   });
 
   it('isolates multiple endpoints on separate websocket paths', async () => {

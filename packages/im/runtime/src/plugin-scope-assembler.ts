@@ -51,6 +51,8 @@ import type { RuntimeConfigDocument } from './config-composer.js';
 export type PluginConfigResolver = (node: PluginGraphNode) => unknown;
 
 export interface RootResourceContext {
+  /** Exact shadow generation being assembled; never inferred from a latest snapshot. */
+  readonly generation: number;
   readonly signal: AbortSignal;
   readonly resources: Scope;
   readonly lifecycle: DisposeStack;
@@ -99,6 +101,7 @@ export class PluginScopeAssembler {
     private readonly configResolver: PluginConfigResolver,
     private readonly environment: RuntimeEnvironment,
     private readonly primaryConfigDocument: RuntimeConfigDocument,
+    private readonly generation: number,
     private readonly installResources?: RootResourceInstaller,
     environmentLayers: EnvironmentLayers = {},
     seed?: PluginAssemblySeed,
@@ -150,6 +153,7 @@ export class PluginScopeAssembler {
       const config = createPrimaryConfig(this.primaryConfigDocument, environment);
       scope.provide(primaryConfigToken, config);
       await this.installResources?.({
+        generation: this.generation,
         signal,
         resources: scope,
         lifecycle: scope.disposers,

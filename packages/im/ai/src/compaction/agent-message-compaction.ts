@@ -32,9 +32,9 @@ const SUMMARY_USER_PREFIX = '[Previous conversation summary]\n';
 
 const SUMMARY_SYSTEM = `You are a conversation summarization assistant. Compress the following conversation into a concise summary. Keep:
 - Key decisions and conclusions
-- Unfinished TODOs and open questions
+- Unfinished action items and open questions
 - Important user preferences and constraints
-- Which participant made each request, decision, constraint, or TODO
+- Which participant made each request, decision, constraint, or action item
 - Conflicting opinions and whether they remain unresolved
 - The source of authority-sensitive decisions
 - Core topics discussed

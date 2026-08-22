@@ -6,7 +6,7 @@
  */
 
 import type { SeamProvider, SeamScope } from './seam-provider.js';
-import type { SkillMetadata } from '../orchestrator/types.js';
+import type { SkillMetadata } from '../resource-hub/types.js';
 
 export type { SkillMetadata };
 

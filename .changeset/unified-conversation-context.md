@@ -1,11 +1,11 @@
 ---
-"@zhin.js/im-contract": major
-"@zhin.js/adapter": major
-"@zhin.js/core": major
-"@zhin.js/agent": major
-"@zhin.js/ai": major
-"@zhin.js/cli": minor
-"@zhin.js/adapter-icqq": minor
+"@zhin.js/im-contract": patch
+"@zhin.js/adapter": patch
+"@zhin.js/core": patch
+"@zhin.js/agent": patch
+"@zhin.js/ai": patch
+"@zhin.js/cli": patch
+"@zhin.js/adapter-icqq": patch
 ---
 
 Replace text-only IM context and metadata-based quote handling with canonical

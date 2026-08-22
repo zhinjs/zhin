@@ -3,7 +3,7 @@
  * （修复前：load_tool 只写 snapshot，executor 报 "Unknown tool"），
  * 且子 loop 的加载不污染父会话 snapshot。
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { AgentTool, AIProvider } from '@zhin.js/ai';
 import { runAgentLoopStandaloneTurn } from '../../src/core/agent-loop-standalone.js';
 import {
@@ -75,5 +75,28 @@ describe('standalone loop 延迟加载', () => {
     expect(result.toolCalls.find((t) => t.tool === 'bash')?.result).toContain('bash-ok');
     // 关键断言 2：父会话 snapshot 未被子 loop 写入
     expect(parentSnapshot.loadedTools).toEqual({});
+  });
+
+  it('releases an aborted caller even when the model provider never settles', async () => {
+    const llm = wireMockLlmApi({ name: 'planning-cancel', models: ['mock'] });
+    llm.hang();
+    const provider = Object.assign(llm.provider, {
+      capabilities: { input: ['text'], streaming: false, toolCalling: true },
+    }) as unknown as AIProvider;
+    const controller = new AbortController();
+    const pending = runAgentLoopStandaloneTurn({
+      provider,
+      model: 'mock',
+      systemPrompt: '',
+      tools: [],
+      userInput: 'plan this',
+      maxIterations: 1,
+      signal: controller.signal,
+    });
+    await vi.waitFor(() => expect(llm.calls).toHaveLength(1));
+
+    controller.abort(new DOMException('planning generation retired', 'AbortError'));
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   });
 });

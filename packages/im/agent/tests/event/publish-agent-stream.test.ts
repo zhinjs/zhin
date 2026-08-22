@@ -5,7 +5,7 @@ import { publishTurnStreamEvents } from '../../src/event/publish-agent-stream.js
 describe('publishTurnStreamEvents', () => {
   it('publishes journalled events in sequence and keeps the first terminal only', () => {
     const publish = vi.fn(async () => {});
-    const host = { orchestrator: { agentStreamBus: { publish } } } as any;
+    const host = { resourceHub: { agentStreamBus: { publish } } } as any;
     const context = { sessionId: 's1', turnId: 't1' };
     const journal = new AgentRunJournal(context);
 

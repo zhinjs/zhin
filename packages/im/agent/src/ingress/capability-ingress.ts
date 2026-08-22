@@ -1,5 +1,5 @@
 /**
- * Capability Ingress — Feature → Agent Orchestrator (ADR 0042)
+ * Capability Ingress — Feature → Agent Resource Hub (ADR 0042)
  *
  * Load filters reuse platforms / scopes / permissions via `canAccessTool`
  * (same vocabulary as Tool Selection). Cache keys use the same message
@@ -28,8 +28,8 @@ import {
 } from '@zhin.js/core';
 import type { PermissionHost } from '@zhin.js/permission';
 import { isBuiltinToolSource } from '@zhin.js/ai';
-import type { AgentOrchestrator } from '../orchestrator/index.js';
-import type { Skill, Tool, AgentPreset, McpServerEntry } from '../orchestrator/types.js';
+import type { AgentResourceHub } from '../resource-hub/index.js';
+import type { Skill, Tool, AgentPreset, McpServerEntry } from '../resource-hub/types.js';
 import type { AgentFeature } from '../features/agent-feature.js';
 import type { MCPFeature } from '../features/mcp-feature.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
@@ -54,15 +54,15 @@ interface IngressOwned {
   mcps: Set<string>;
 }
 
-function toolToOrchestrator(tool: CoreTool): Tool {
+function toolToResourceHub(tool: CoreTool): Tool {
   return tool as unknown as Tool;
 }
 
-function skillToOrchestrator(skill: CoreSkill): Skill {
+function skillToResourceHub(skill: CoreSkill): Skill {
   return {
     name: skill.name,
     description: skill.description,
-    tools: (skill.tools ?? []).map(toolToOrchestrator),
+    tools: (skill.tools ?? []).map(toolToResourceHub),
     platforms: skill.platforms,
     keywords: skill.keywords,
     tags: skill.tags,
@@ -136,23 +136,23 @@ function emptyOwned(): IngressOwned {
 }
 
 function purgeOwned(
-  orchestrator: AgentOrchestrator,
+  resourceHub: AgentResourceHub,
   owned: IngressOwned,
   retained: IngressOwned = emptyOwned(),
 ): void {
   for (const name of owned.tools) {
-    if (!retained.tools.has(name)) orchestrator.removeTool(name);
+    if (!retained.tools.has(name)) resourceHub.removeTool(name);
   }
   for (const name of owned.skills) {
-    if (!retained.skills.has(name)) orchestrator.removeSkill(name);
+    if (!retained.skills.has(name)) resourceHub.removeSkill(name);
   }
   for (const name of owned.agents) {
     if (retained.agents.has(name)) continue;
     // removePreset also drops the SubAgentDef resource
-    orchestrator.subagents.removePreset(name);
+    resourceHub.subagents.removePreset(name);
   }
   for (const name of owned.mcps) {
-    if (!retained.mcps.has(name)) orchestrator.removeMcp(name);
+    if (!retained.mcps.has(name)) resourceHub.removeMcp(name);
   }
 }
 
@@ -200,11 +200,11 @@ export class FeatureCapabilityIngress {
   }
 
   /**
-   * Boot / refresh: load reserved/builtin tools from ToolFeature into Orchestrator.
+   * Boot / refresh: load reserved/builtin tools from ToolFeature into Agent Resource Hub.
    * Returns count of newly tracked builtins (net adds this call).
    */
   ensureCore(
-    orchestrator: AgentOrchestrator,
+    resourceHub: AgentResourceHub,
     features: CapabilityFeatureBundle,
   ): { tools: number } {
     let added = 0;
@@ -213,13 +213,13 @@ export class FeatureCapabilityIngress {
       if (!isBuiltinToolSource(tool.source)) continue;
       seen.add(tool.name);
       const isNew = !this.coreToolNames.has(tool.name);
-      orchestrator.addTool(toolToOrchestrator(tool), undefined, tool.source ?? 'builtin');
+      resourceHub.addTool(toolToResourceHub(tool), undefined, tool.source ?? 'builtin');
       this.coreToolNames.add(tool.name);
       if (isNew) added++;
     }
     for (const name of [...this.coreToolNames]) {
       if (seen.has(name)) continue;
-      orchestrator.removeTool(name);
+      resourceHub.removeTool(name);
       this.coreToolNames.delete(name);
     }
     return { tools: added };
@@ -236,7 +236,7 @@ export class FeatureCapabilityIngress {
    * holding that projection releases its lease.
    */
   async ensureForTurn(
-    orchestrator: AgentOrchestrator,
+    resourceHub: AgentResourceHub,
     features: CapabilityFeatureBundle,
     ctx: IngressTurnContext,
   ): Promise<IngressTurnLease> {
@@ -251,7 +251,7 @@ export class FeatureCapabilityIngress {
         agents: 0,
         mcps: 0,
         cacheHit: true,
-        release: () => this.#releaseTurn(orchestrator, projection),
+        release: () => this.#releaseTurn(resourceHub, projection),
       };
     }
 
@@ -262,7 +262,7 @@ export class FeatureCapabilityIngress {
         this.live.retired = true;
         this.retired.add(this.live);
       } else {
-        purgeOwned(orchestrator, this.live.owned);
+        purgeOwned(resourceHub, this.live.owned);
       }
     }
     const projection: Projection = { key, owned: emptyOwned(), inFlight: 1, retired: false };
@@ -280,28 +280,28 @@ export class FeatureCapabilityIngress {
     for (const tool of features.tools?.getAll() ?? []) {
       if (isBuiltinToolSource(tool.source)) continue;
       if (!(await canAccessTool(tool, ctx.message, ctx.host))) continue;
-      orchestrator.addTool(toolToOrchestrator(tool), undefined, tool.source ?? 'feature');
+      resourceHub.addTool(toolToResourceHub(tool), undefined, tool.source ?? 'feature');
       projection.owned.tools.add(tool.name);
       tools++;
     }
 
     for (const skill of features.skills?.getAll() ?? []) {
       if (!(await canAccessSkill(skill, ctx.message, ctx.host))) continue;
-      const orchSkill = skillToOrchestrator(skill);
+      const resourceHubSkill = skillToResourceHub(skill);
       const toolAccessResults = await Promise.all(
-        orchSkill.tools.map(async (t) => ({
+        resourceHubSkill.tools.map(async (t) => ({
           tool: t,
           allowed: await canAccessTool(t as unknown as CoreTool, ctx.message, ctx.host),
         })),
       );
-      orchSkill.tools = toolAccessResults.filter((r) => r.allowed).map((r) => r.tool);
-      orchestrator.addSkill(orchSkill, undefined, skill.pluginName);
+      resourceHubSkill.tools = toolAccessResults.filter((r) => r.allowed).map((r) => r.tool);
+      resourceHub.addSkill(resourceHubSkill, undefined, skill.pluginName);
       projection.owned.skills.add(skill.name);
       skills++;
     }
 
     for (const preset of features.agents?.getAll() ?? []) {
-      orchestrator.addAgentPreset(
+      resourceHub.addAgentPreset(
         preset as AgentPreset,
         undefined,
         preset.pluginName ?? 'feature',
@@ -313,7 +313,7 @@ export class FeatureCapabilityIngress {
     for (const entry of features.mcps?.getAll() ?? []) {
       if (!allowedMcp.has(entry.name)) continue;
       const { pluginName: _p, ...mcp } = entry;
-      orchestrator.addMcp(mcp as McpServerEntry, undefined, entry.pluginName ?? 'feature');
+      resourceHub.addMcp(mcp as McpServerEntry, undefined, entry.pluginName ?? 'feature');
       projection.owned.mcps.add(entry.name);
       mcps++;
     }
@@ -324,11 +324,11 @@ export class FeatureCapabilityIngress {
       agents,
       mcps,
       cacheHit: false,
-      release: () => this.#releaseTurn(orchestrator, projection),
+      release: () => this.#releaseTurn(resourceHub, projection),
     };
   }
 
-  #releaseTurn(orchestrator: AgentOrchestrator, projection: Projection): void {
+  #releaseTurn(resourceHub: AgentResourceHub, projection: Projection): void {
     if (!projection.retired) {
       // Live projection: keep the cache even when no turn is in flight.
       projection.inFlight = Math.max(0, projection.inFlight - 1);
@@ -345,7 +345,7 @@ export class FeatureCapabilityIngress {
     for (const other of this.retired) {
       if (other.inFlight > 0) mergeOwned(retained, other.owned);
     }
-    purgeOwned(orchestrator, projection.owned, retained);
+    purgeOwned(resourceHub, projection.owned, retained);
   }
 }
 

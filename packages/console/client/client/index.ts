@@ -19,6 +19,23 @@ export {
 // Media URL resolution
 export { resolveMediaSrc, pickMediaRawUrl, type MediaKind } from "./mediaSrc";
 
+// Safe rich message rendering (Markdown + code blocks; no raw HTML execution)
+export {
+  MarkdownContent,
+  CodeBlock,
+  type MarkdownContentProps,
+} from "./message-content/MarkdownContent.js";
+export {
+  parseMarkdown,
+  parseMarkdownInline,
+  highlightCodeLine,
+  isSafeMarkdownHref,
+  type MarkdownBlock,
+  type MarkdownInline,
+  type CodeToken,
+  type CodeTokenKind,
+} from "./message-content/markdown.js";
+
 // Segment IM visibility (inbox vs agent panel)
 export { segmentsForImDelivery, segmentsForAgentPanel } from "./segments.js";
 

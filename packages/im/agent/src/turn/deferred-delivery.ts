@@ -2,7 +2,7 @@ import type { OutputElement } from '@zhin.js/ai';
 import { truncatePreview } from '@zhin.js/logger';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 import { originFromMessage } from '../builtin/spawn-task-tool.js';
-import type { Message } from '../orchestrator/types.js';
+import type { Message } from '../resource-hub/types.js';
 import { buildSubagentUserDelivery } from '../media/subagent-user-delivery.js';
 import type { SubagentResultSender } from '../subagent/index.js';
 import { resolveSubagentDisplayLabel } from '../subagent-goal-notify.js';

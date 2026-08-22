@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=1215f48d500c7966 -->
+<!-- sync-adapter-docs:sha256=698e1500983ad34d -->
 
 # @zhin.js/adapter-qq
 
@@ -147,9 +147,14 @@ master 可执行；未配置则放行（首个扫码绑定者会写入该 endpoi
 
 platform permit checker 由 `plugin.ts` 的 generation 生命周期注册；`@zhin.js/tool` descriptor 保留 `platforms` / `scopes` / `permissions`，CapabilityIngress 与 ToolSystem 统一经 Core `canAccessTool()` 执行门禁。
 
-## 迁移后出站能力变化
+## Markdown 与交互输出
 
-迁移到 Plugin Runtime 后，出站统一经 `messageGatewayToken` 渲染为文本后发送（`sendPrivateMessage` / `sendGroupMessage` / `sendGuildMessage`）。旧 Adapter 的富媒体出站能力（图片 / 语音 / 视频、keyboard 按钮、markdown 模板等）暂未迁移，当前出站等价于纯文本。如需富媒体，可通过 endpoint 的 QQ API 封装或直接调用 QQ HTTP API 作为逃生舱。
+QQ Endpoint 声明原生 `markdown` / `keyboard` 能力。普通 AI Markdown 会保留为 QQ Markdown
+消息；命令或 Agent 通过 `UserInteraction.ask()` 发起 `confirm` / `select` 时，会生成
+Markdown + 指令按钮组。按钮值与手动输入共用同一解析入口，不维护 QQ 专用交互状态。
+
+不支持原生按钮的 Adapter 会在 Core 中把同一 keyboard 语义降级为编号列表，并保存数字到
+payload 的回跳映射。图片、音频、视频和文件仍沿 canonical `MediaRef` 出站链投递。
 
 ## 许可证
 

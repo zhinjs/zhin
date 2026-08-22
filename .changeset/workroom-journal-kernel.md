@@ -1,9 +1,9 @@
 ---
-'@zhin.js/agent': major
-'@zhin.js/ai': major
-'@zhin.js/cli': major
-'@zhin.js/client': major
-'zhin.js': major
+'@zhin.js/agent': patch
+'@zhin.js/ai': patch
+'@zhin.js/cli': patch
+'@zhin.js/client': patch
+'zhin.js': patch
 ---
 
 Replace the legacy mutable orchestration stack with the event-sourced Workroom Kernel.

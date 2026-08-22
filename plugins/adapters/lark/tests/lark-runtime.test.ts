@@ -13,6 +13,7 @@ import {
   type LarkMessage,
 } from '../src/protocol.js';
 import { getLarkAgentDeps, setLarkAgentDeps } from '../src/lark-agent-deps.js';
+import defineLarkAdapter from '../adapters/lark.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
@@ -139,6 +140,7 @@ describe('lark protocol helpers', () => {
   });
 
   it('formats outbound string and segment payloads', () => {
+    expect(defineLarkAdapter.segments?.markdown).toBe('native');
     expect(formatOutboundBody('pong')).toEqual({
       msg_type: 'text',
       content: JSON.stringify({ text: 'pong' }),
@@ -169,6 +171,18 @@ describe('lark protocol helpers', () => {
     ])).toEqual({
       msg_type: 'file',
       content: JSON.stringify({ file_key: 'file_k' }),
+    });
+    expect(formatOutboundBody([
+      { type: 'markdown', data: { content: '# 标题\n\n**重点**' } },
+      { type: 'text', data: { text: '\n1. 确认\n2. 取消' } },
+    ])).toEqual({
+      msg_type: 'interactive',
+      content: JSON.stringify({
+        elements: [{
+          tag: 'div',
+          text: { tag: 'lark_md', content: '# 标题\n\n**重点**\n1. 确认\n2. 取消' },
+        }],
+      }),
     });
     // 无 canonical MediaRef 的媒体段 warn + 丢弃（legacy 字段不再读取）
     expect(formatOutboundBody([

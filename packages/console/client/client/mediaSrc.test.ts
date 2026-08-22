@@ -31,4 +31,19 @@ describe('pickMediaRawUrl', () => {
     expect(pickMediaRawUrl(undefined)).toBeUndefined();
     expect(pickMediaRawUrl({})).toBeUndefined();
   });
+
+  it('rejects executable data URLs, credentials, and malformed base64', () => {
+    expect(resolveMediaSrc('data:text/html;base64,PHNjcmlwdD4=', 'image')).toBeUndefined();
+    expect(resolveMediaSrc('data:image/svg+xml;base64,PHN2Zz4=', 'image')).toBeUndefined();
+    expect(resolveMediaSrc('https://user:secret@example.com/a.png', 'image')).toBeUndefined();
+    expect(resolveMediaSrc('base64://not:base64', 'image')).toBeUndefined();
+  });
+
+  it('accepts only data MIME types matching the rendered media kind', () => {
+    expect(resolveMediaSrc('data:image/png;base64,aGVsbG8=', 'image')).toBe(
+      'data:image/png;base64,aGVsbG8=',
+    );
+    expect(resolveMediaSrc('data:image/png;base64,aGVsbG8=', 'video')).toBeUndefined();
+    expect(resolveMediaSrc('javascript:alert(1)', 'image')).toBeUndefined();
+  });
 });

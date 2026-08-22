@@ -388,6 +388,11 @@ function fakeAgentRuntime(overrides: Partial<ConsoleAgentRuntime> = {}): Console
         { pattern: 'foo', desc: 'foo cmd', plugin: 'core' },
         { pattern: 'bar', desc: 'bar cmd', plugin: 'game' },
       ],
+      middlewares: () => [{ name: 'audit', owner: 'root', phase: 'before-dispatch', target: 'inbound', order: 10 }],
+      components: () => [{ name: 'status-card', owner: 'root', source: './components/status-card.ts' }],
+      renderComponent: async ({ requester, name, props }) => ({
+        type: 'text', data: { text: `${requester}:${name}:${JSON.stringify(props)}` },
+      }),
       bindings: () => [{ name: 'main', provider: 'openai', model: 'gpt-x' }],
       tools: () => [{ name: 'search', source: 'builtin', description: 'web search' }],
       mcp: () => ({ rows: [{ name: 'fs', connected: true, toolCount: 3 }] }),
@@ -445,6 +450,82 @@ describe('console-rest-pages introspection', () => {
     });
   });
 
+  it('exposes middleware/component catalogs and renders a full-scope preview', async () => {
+    const base = await startHost(baseCtx({ acquireAgentRuntime: () => lease(fakeAgentRuntime()) }));
+    const middlewares = await json(await fetch(`${base}/api/introspection/middlewares`));
+    expect((middlewares.data as { items: unknown[] }).items[0]).toMatchObject({
+      name: 'audit', phase: 'before-dispatch', target: 'inbound', order: 10,
+    });
+    const components = await json(await fetch(`${base}/api/introspection/components`));
+    expect((components.data as { items: unknown[] }).items[0]).toMatchObject({
+      name: 'status-card', owner: 'root',
+    });
+    const rendered = await json(await fetch(`${base}/api/introspection/components/render`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ requester: 'root', name: 'status-card', props: { online: true } }),
+    }));
+    expect(rendered).toMatchObject({
+      success: true,
+      data: { output: { type: 'text', data: { text: 'root:status-card:{"online":true}' } } },
+    });
+
+    const demo = await startHost(baseCtx({
+      fullScope: false,
+      acquireAgentRuntime: () => lease(fakeAgentRuntime()),
+    }), { apiBase: '/demo-api' });
+    const denied = await fetch(`${demo}/demo-api/introspection/components/render`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ requester: 'root', name: 'status-card', props: {} }),
+    });
+    expect(denied.status).toBe(403);
+  });
+
+  it('bounds Component preview time and serialized output', async () => {
+    let released = 0;
+    const stalled = new Promise<never>(() => {});
+    const timeoutBase = await startHost(baseCtx({
+      acquireAgentRuntime: () => ({
+        value: fakeAgentRuntime({
+          introspection: {
+            ...fakeAgentRuntime().introspection,
+            renderComponent: async () => stalled,
+          },
+        }),
+        release: () => { released += 1; },
+      }),
+    }), { componentPreviewTimeoutMs: 15, componentPreviewMaxConcurrent: 1 });
+    const timedOut = await fetch(`${timeoutBase}/api/introspection/components/render`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ requester: 'root', name: 'status-card', props: {} }),
+    });
+    expect(timedOut.status).toBe(408);
+    expect(released).toBe(0);
+    const saturated = await fetch(`${timeoutBase}/api/introspection/components/render`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ requester: 'root', name: 'status-card', props: {} }),
+    });
+    expect(saturated.status).toBe(503);
+
+    const oversizedBase = await startHost(baseCtx({
+      acquireAgentRuntime: () => lease(fakeAgentRuntime({
+        introspection: {
+          ...fakeAgentRuntime().introspection,
+          renderComponent: async () => ({ type: 'text', data: { text: 'x'.repeat(512) } }),
+        },
+      })),
+    }), { componentPreviewMaxBytes: 128 });
+    const oversized = await fetch(`${oversizedBase}/api/introspection/components/render`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ requester: 'root', name: 'status-card', props: {} }),
+    });
+    expect(oversized.status).toBe(413);
+  });
+
   it('未接线 acquireAgentRuntime 时降级为空列表 + note（200）', async () => {
     const base = await startHost(baseCtx());
     const body = await json(await fetch(`${base}/api/introspection/tools`));
@@ -469,6 +550,26 @@ describe('console-rest-pages introspection', () => {
       success: false,
       error: 'CommandFeature 不可用',
     });
+  });
+
+  it('holds the generation lease until a catalog collector completes', async () => {
+    let released = false;
+    const base = await startHost(baseCtx({
+      acquireAgentRuntime: () => ({
+        value: {
+          introspection: {
+            components: () => {
+              expect(released).toBe(false);
+              return [{ name: 'card', owner: 'root', source: './card.ts' }];
+            },
+          },
+        },
+        release: () => { released = true; },
+      }),
+    }));
+    const response = await fetch(`${base}/api/introspection/components`);
+    expect(response.status).toBe(200);
+    expect(released).toBe(true);
   });
 });
 

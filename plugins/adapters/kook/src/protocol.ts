@@ -279,6 +279,8 @@ export function formatOutboundKmarkdown(payload: unknown): string {
       switch (item.type) {
         case 'text':
           return String(data.text ?? data.content ?? '');
+        case 'markdown':
+          return String(data.content ?? data.text ?? '');
         case 'at': {
           const id = String(data.user_id ?? data.qq ?? data.id ?? '');
           return id === 'all' ? '(met)all(met)' : `(met)${id}(met)`;

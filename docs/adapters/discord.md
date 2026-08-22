@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/discord/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/discord/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=ed98ed0f525ec331 -->
+<!-- sync-adapter-docs:sha256=eaf43de80cd4c528 -->
 
 # @zhin.js/adapter-discord
 
@@ -19,7 +19,7 @@ Zhin.js Discord 适配器（Plugin Runtime），默认通过 **Gateway WebSocket
 - Gateway WebSocket 入站（默认；无需公网 HTTPS / host）
 - 解析 text / mention / attachment / embed / sticker / button
 - 支持私聊、群组与服务器频道
-- 出站 `send({ conversation, payload })` → Discord channel message（text / media / embed / keyboard）
+- 出站 `send({ conversation, payload })` → Discord channel message（Markdown content / media / embed / keyboard）
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - Interactions HTTP webhook 延期（需 `httpHostToken`）；配置 `connection: interactions` 会明确报错
 

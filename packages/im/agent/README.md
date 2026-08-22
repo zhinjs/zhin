@@ -134,13 +134,17 @@ packages/im/agent/src/
   prompt/        系统提示词、assembly、workspace 模板
   turn/          Turn pipeline、inbound 队列、auto-continue、metrics
   config/        ZhinAgent 配置 SSOT、model harness
-  orchestrator/  Tool / Skill capability orchestration（不拥有 Workroom facts）
+  resource-hub/  Tool / Skill capability orchestration（不拥有 Workroom facts）
   workroom/      Workroom Kernel — versioned Journal + pure replay/decision
   zhin-agent/    ZhinAgent 门面类（单文件 index.ts）
   init/          Plugin Runtime 组合、数据库激活与 ZhinAgent dispose 生命周期
 ```
 
-普通 `spawn_task` 只执行当前聊天的非 Workroom 子任务，不创建或修改 Run/Task facts。Workroom command adapter 必须持有认证后的 Project capability；Scheduler、Executor 与 Acceptance port 尚未接入前，不发布模型可写的通用 transition 工具。
+普通 `spawn_task` 只执行当前聊天的非 Workroom 子任务，不创建或修改 Run/Task facts。Workroom command adapter 必须持有认证后的 Project capability；标准 Host 已装配 generation-owned Scheduler、Executor、Reviewer authority/view 与 Sponsor typed control，但不会发布模型可写的通用 transition 工具。验收不再是 `WorkroomCommand`：Task 必须先由 generation-owned `workroomAcceptancePolicyDecisionToken` 固定 immutable Contract/Policy snapshot，未 pin 不得 claim；`WorkroomKernel.evaluateTaskAcceptance()` 随后只调用同一可信端口，并用 Journal CAS 写入结构化 Acceptance Record。生产 baseline 只允许 low-risk、全机械检查且证据与 claims 完整的候选自动通过；medium/judgment 与 high/critical 路由分别持久化 Reviewer Assignment / Sponsor Gate，固定 candidate hash、Contract/Policy、owner、deadline 与恢复动作。Reviewer verdict 只能由独立 claimed Reviewer Assignment 的认证提交产生；Sponsor decision 只能经 Catalog/Profile 绑定的认证 typed control 进入，普通 discussion 不能改变状态。缺少受治理 Acceptance Projection source、可信 Risk Header、typed Check、Artifact/Effect facts 或 Context provider 时会形成可恢复的持久 blocker，而不是降级验收。
+
+`AgentResourceHub` 是 4.x 的能力资源入口，替代已删除的 `AgentOrchestrator` / `ResourceHub` 兼容名称。它只注册 Tool、Skill、SubAgent、MCP 与 Hook，不拥有 Workroom Run/Task/Assignment 状态；持久编排只能通过 Workroom Kernel 与专用 typed ports。
+
+升级前的 legacy Run export 可用 `zhin agent legacy-runs <input>` 离线审计，遗留内嵌 payload 可用 `zhin agent legacy-payloads <input> --kind <kind>` 离线扫描。两条命令都只读输入并 create-only 输出 audit/proposal，不会自动写入新 Journal、接受旧结果、删除正文或执行迁移。
 
 **Agent Core**：`AgentCore.runText()` / `runVision()` 为 `AsyncGenerator<TurnEvent>` SSOT；`runTextTurn` 为 collector。组合层经 `composeZhinAgentRuntime` 注入 8 模块 + `createAgentCoreDepsForCompose`。
 
@@ -219,7 +223,7 @@ useContext('ai', async (ai) => {
 | IM 内置工具工厂 | `createBuiltinTools`、`BuiltinBaseTool`；具体工具见 `src/builtin/*` |
 | 输出与检测 | `parseOutput`, `renderToPlainText`, `renderToSatori`, `detectTone` |
 | 子代理 | `SubagentSystem` |
-| 编排 | `AgentOrchestrator`、`ToolRegistry`、`SkillRegistry`、`SubAgentRegistry`、`McpRegistry`、`HookRegistry` |
+| 能力资源 | `AgentResourceHub`、`ToolRegistry`、`SkillRegistry`、`SubAgentRegistry`、`McpRegistry`、`HookRegistry` |
 | MCP 客户端 | `McpClientManager`、`McpClientConnection`、`mcpToolToAgentTool`、`ensureMcpConnections`（见下方「MCP」） |
 | 限流 | `RateLimiter` |
 | 存储抽象 | `StorageBackend`, `MemoryStorageBackend`, `DatabaseStorageBackend`, `createSwappableBackend` |
@@ -235,7 +239,7 @@ declare module '@zhin.js/core' {
   namespace Plugin {
     interface Contexts {
       ai: AIService              // 会话、Provider、ZhinAgent、runAgent 等
-      agent: AgentOrchestrator   // 工具/技能/子代理/MCP 条目/Hook 注册表
+      agent: AgentResourceHub    // 工具/技能/子代理/MCP 条目/Hook 注册表
     }
   }
 }
@@ -244,7 +248,7 @@ declare module '@zhin.js/core' {
 | Context | 用途 |
 |---------|------|
 | `ctx.ai` | 业务侧 AI 服务：会话、`createAgent`（→ `ServiceAgent`）/ `runAgent`、全局 ZhinAgent |
-| `ctx.agent` | 扩展编排资源：`orchestrator.addTool`、`addSkill`、`addMcp` 等；内置注册走 `root.inject('agent')` |
+| `ctx.agent` | `AgentResourceHub` 能力注册：`ctx.agent.addTool(...)`、`addSkill(...)`、`addSubAgent(...)`、`addMcp(...)`、`addHook(...)`；内置注册走 `root.inject('agent')`，不承担 Workroom 状态编排 |
 
 主包 `zhin.js` 的 `Plugin.Contexts` 类型已包含上述两项。
 
@@ -464,8 +468,8 @@ src/
 ├── turn/                            # Turn pipeline、inbound 队列、auto-continue
 ├── config/                          # ZhinAgent 配置 SSOT、model harness
 │
-├── orchestrator/                    # ★ 编排中枢（Kernel SSOT，ADR 0027）
-│   ├── index.ts                     # AgentOrchestrator class
+├── resource-hub/                    # 能力资源 registry 内部模块
+│   ├── index.ts                     # AgentResourceHub class
 │   ├── types.ts                     # ResourceScope, Skill, SubAgentDef, AIHook…
 │   ├── resource-registry.ts
 │   ├── tool-registry.ts

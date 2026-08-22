@@ -9,7 +9,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Message, Plugin } from '@zhin.js/core';
 import { createEditFileTool, EditFileBuiltinTool } from '../../src/builtin/edit-file-tool.js';
-import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
+import { normalizeTool } from '../../src/resource-hub/tool-selection.js';
 
 describe('EditFileBuiltinTool', () => {
   let tmpDir: string;

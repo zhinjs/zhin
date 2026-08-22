@@ -15,6 +15,7 @@ export {
   TokenRegistry,
   extractBearerToken,
   isDemoWebSocketPath,
+  type AuthenticatedTokenPrincipal,
   type AuthScope,
   type ScopedTokenConfig,
   type TokenRegistryConfig,
@@ -70,5 +71,7 @@ export {
   dispatchExtendedConsoleRpc,
   type ConsoleRpcExtendedCtx,
   type ConsoleScheduleEngine,
+  type ConsoleWorkroomProfileControlPort,
+  type ConsoleWorkroomKnowledgeControlPort,
   type ExtendedRpcResult,
 } from './console-rpc-extended.js';
