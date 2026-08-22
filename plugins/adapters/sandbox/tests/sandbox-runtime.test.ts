@@ -34,7 +34,14 @@ describe('sandbox plugin runtime adapter', () => {
   it('routes websocket messages through MessageGateway', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'pong' }));
+    let markReceived: () => void = () => {};
+    const received = new Promise<void>((resolve) => {
+      markReceived = resolve;
+    });
+    const receive = vi.fn(async () => {
+      markReceived();
+      return Object.freeze({ matched: true, value: 'pong' });
+    });
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
     const defaults = resolveSandboxEndpoint({
       endpoints: [{ context: 'sandbox', id: 'demo-bot', owner: 'sandbox-user' }],
@@ -49,33 +56,30 @@ describe('sandbox plugin runtime adapter', () => {
     endpoint.open();
     const { port } = await http.listen();
 
-    await new Promise<void>((resolve, reject) => {
-      const client = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
-      const timer = setTimeout(() => reject(new Error('timeout waiting for gateway.receive')), 3000);
-      client.once('open', () => {
-        client.send(JSON.stringify({
-          type: 'group',
-          id: 'workspace-room',
-          messageId: 'msg-client-1',
-          text: 'hello sandbox',
-          agentRun: {
-            workingDirectory: '/workspace/app',
-            safetyMode: 'read-only',
-            approvalMode: 'deny',
-            networkAccess: false,
-          },
-        }));
-      });
-      const interval = setInterval(() => {
-        if (receive.mock.calls.length > 0) {
-          clearInterval(interval);
-          clearTimeout(timer);
-          client.close();
+    const client = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        client.once('open', () => {
+          client.send(JSON.stringify({
+            type: 'group',
+            id: 'workspace-room',
+            messageId: 'msg-client-1',
+            text: 'hello sandbox',
+            agentRun: {
+              workingDirectory: '/workspace/app',
+              safetyMode: 'read-only',
+              approvalMode: 'deny',
+              networkAccess: false,
+            },
+          }));
           resolve();
-        }
-      }, 20);
-      client.once('error', reject);
-    });
+        });
+        client.once('error', reject);
+      });
+      await received;
+    } finally {
+      client.close();
+    }
 
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: sandboxConversation('workspace-room', 'group'),
@@ -455,7 +459,14 @@ describe('sandbox plugin runtime adapter', () => {
   it('routes action-only websocket payload through MessageGateway', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'pong' }));
+    let markReceived: () => void = () => {};
+    const received = new Promise<void>((resolve) => {
+      markReceived = resolve;
+    });
+    const receive = vi.fn(async () => {
+      markReceived();
+      return Object.freeze({ matched: true, value: 'pong' });
+    });
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
     const defaults = resolveSandboxEndpoint({
       endpoints: [{ context: 'sandbox', id: 'demo-bot', owner: 'sandbox-user' }],
@@ -470,24 +481,21 @@ describe('sandbox plugin runtime adapter', () => {
     endpoint.open();
     const { port } = await http.listen();
 
-    await new Promise<void>((resolve, reject) => {
-      const client = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
-      const timer = setTimeout(() => reject(new Error('timeout waiting for gateway.receive')), 3000);
-      client.once('open', () => {
-        client.send(JSON.stringify({
-          content: [{ type: 'action', data: { id: 'btn-1', payload: 'pick:yes' } }],
-        }));
-      });
-      const interval = setInterval(() => {
-        if (receive.mock.calls.length > 0) {
-          clearInterval(interval);
-          clearTimeout(timer);
-          client.close();
+    const client = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        client.once('open', () => {
+          client.send(JSON.stringify({
+            content: [{ type: 'action', data: { id: 'btn-1', payload: 'pick:yes' } }],
+          }));
           resolve();
-        }
-      }, 20);
-      client.once('error', reject);
-    });
+        });
+        client.once('error', reject);
+      });
+      await received;
+    } finally {
+      client.close();
+    }
 
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: sandboxConversation('sandbox-user'),

@@ -2,12 +2,12 @@
 /**
  * Fail if legacy MCP Agent Mesh tools are re-introduced.
  */
-import { execSync } from 'node:child_process';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gitGrepSource } from './lib/git-grep-source.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const patterns = [
+const patterns = [
   'registerAgentMeshTools',
   'register-agent-mesh-mcp',
   'mcp-mesh-registrar',
@@ -15,17 +15,15 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 
 let failed = false;
 for (const pattern of patterns) {
-  try {
-    const out = execSync(
-      `rg -l "${pattern}" packages/im packages/host --glob '!**/node_modules/**' --glob '!**/lib/**' || true`,
-      { cwd: repoRoot, encoding: 'utf8' },
-    ).trim();
-    if (out) {
-      console.error(`[check:a2a-mesh] Forbidden pattern "${pattern}" found in:\n${out}`);
-      failed = true;
-    }
-  } catch {
-    // rg not found or no matches
+  const output = gitGrepSource({
+    repoRoot,
+    pattern,
+    paths: ['packages/im', 'packages/host'],
+    excludeGlobs: ['**/node_modules/**', '**/lib/**'],
+  });
+  if (output) {
+    console.error(`[check:a2a-mesh] Forbidden pattern "${pattern}" found in:\n${output}`);
+    failed = true;
   }
 }
 

@@ -58,14 +58,9 @@ jobs:
         if: github.event_name == 'pull_request'
         run: git fetch origin main:main
 
-      - name: configure github packages auth
-        if: env.NPM_TOKEN != ''
-        run: echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc
-
       - name: install dependencies
         run: pnpm install
         env:
-          NPM_TOKEN: ${{ env.PERSONAL_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: audit dependencies
@@ -76,7 +71,14 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24 && github.head_ref != 'changeset-release/main' && !startsWith(github.head_ref, 'dependabot/') && !startsWith(github.head_ref, 'chore/deps-')
         run: pnpm changeset status
 
+      # Large Windows builds can fail to initialize a child process with
+      # STATUS_DLL_INIT_FAILED when Turbo fans out multiple nested tsc/tsup processes.
+      - name: build packages (Windows)
+        if: runner.os == 'Windows'
+        run: pnpm build --concurrency=1
+
       - name: build packages
+        if: runner.os != 'Windows'
         run: pnpm build
 
       - name: verify packed Console publish contract
@@ -96,8 +98,11 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
         run: pnpm vitest run --reporter=verbose --coverage
 
-      - name: run tests (other matrix combinations)
-        if: !(matrix.os == 'ubuntu-latest' && matrix.node-version == 24)
+      # The full suite exercises POSIX durability contracts such as directory
+      # fsync. Windows remains an install/build compatibility gate; runtime
+      # semantics are covered across every supported Node version on Linux.
+      - name: run tests (other supported runtimes)
+        if: ${{ runner.os != 'Windows' && !(matrix.os == 'ubuntu-latest' && matrix.node-version == 24) }}
         run: pnpm vitest run
 
       - name: Upload coverage reports to Codecov
