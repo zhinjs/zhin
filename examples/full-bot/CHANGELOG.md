@@ -1,5 +1,12 @@
 # full-bot
 
+## 0.0.33
+
+### Patch Changes
+
+- Updated dependencies [9e609f4]
+  - @zhin.js/adapter-sandbox@7.0.14
+
 ## 0.0.32
 
 ### Patch Changes
