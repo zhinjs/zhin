@@ -120,8 +120,21 @@ describe('sandbox plugin runtime adapter', () => {
     const payload = await new Promise<string>((resolve, reject) => {
       const client = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
       const timer = setTimeout(() => reject(new Error('timeout waiting for websocket reply')), 3000);
+      let retry: ReturnType<typeof setTimeout> | undefined;
       client.once('open', () => {
-        endpoint.send({ conversation: sandboxConversation('sandbox-user'), payload: 'pong' });
+        const sendWhenAccepted = () => {
+          try {
+            endpoint.send({ conversation: sandboxConversation('sandbox-user'), payload: 'pong' });
+          } catch (error) {
+            if (!(error instanceof Error) || error.message !== 'Sandbox Endpoint has no live connection') {
+              clearTimeout(timer);
+              reject(error);
+              return;
+            }
+            retry = setTimeout(sendWhenAccepted, 10);
+          }
+        };
+        sendWhenAccepted();
       });
       client.on('message', (data) => {
         const parsed = JSON.parse(String(data)) as {
@@ -130,10 +143,15 @@ describe('sandbox plugin runtime adapter', () => {
         const text = parsed.content?.[0]?.data?.text;
         if (text !== 'pong') return;
         clearTimeout(timer);
+        if (retry) clearTimeout(retry);
         client.close();
         resolve(String(data));
       });
-      client.once('error', reject);
+      client.once('error', (error) => {
+        clearTimeout(timer);
+        if (retry) clearTimeout(retry);
+        reject(error);
+      });
     });
 
     expect(JSON.parse(payload).content).toEqual([
@@ -194,19 +212,23 @@ describe('sandbox plugin runtime adapter', () => {
     const errorText = await new Promise<string>((resolve, reject) => {
       const client = new WebSocket(`ws://127.0.0.1:${port}/sandbox?token=demo-token`);
       const timer = setTimeout(() => reject(new Error('timeout waiting for read-only error')), 3000);
+      // The permission gate is independent of the informational `ready` frame,
+      // whose shell-isolation probe may be delayed on a loaded CI runner.
+      client.once('open', () => {
+        client.send(JSON.stringify({ text: 'run outside workspace' }));
+      });
       client.on('message', (raw) => {
         const payload = JSON.parse(String(raw)) as { type?: string; content?: Array<{ data?: { text?: string } }> };
-        if (payload.type === 'ready') {
-          client.send(JSON.stringify({ text: 'run outside workspace' }));
-          return;
-        }
         if (payload.type === 'error') {
           clearTimeout(timer);
           client.close();
           resolve(payload.content?.[0]?.data?.text ?? '');
         }
       });
-      client.once('error', reject);
+      client.once('error', (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
     });
 
     expect(errorText).toContain('只读演示权限');
