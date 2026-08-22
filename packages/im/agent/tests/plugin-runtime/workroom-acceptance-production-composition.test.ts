@@ -403,10 +403,13 @@ describe('P7 standard Acceptance production composition', () => {
     });
     first.start();
     await vi.waitFor(() => expect(authorize).toHaveBeenCalledTimes(1));
-    const firstDisposal = first.dispose();
+    let disposalCompleted = false;
+    const firstDisposal = first.dispose().then(() => { disposalCompleted = true; });
+    await Promise.resolve();
+    expect(disposalCompleted).toBe(false);
     releaseAuthorization();
-    expect(firstDisposal).toBeInstanceOf(Promise);
     await firstDisposal;
+    expect(disposalCompleted).toBe(true);
 
     const restartedProjector = new SponsorDecisionWorkroomEffectAuthorizationProjector({
       directory, effectJournal: effects, sponsorAuthority, policy: { authorize },
@@ -421,6 +424,40 @@ describe('P7 standard Acceptance production composition', () => {
     await restarted.drain();
     await restarted.dispose();
     expect(authorize).toHaveBeenCalledTimes(1);
+  });
+
+  it('settles disposal when generation retirement aborts an in-flight Project scan', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-effect-projector-abort-'));
+    let releaseScan!: () => void;
+    const scanGate = new Promise<void>(resolve => { releaseScan = resolve; });
+    const listProjectIds = vi.fn(async () => {
+      await scanGate;
+      return ['project-1'];
+    });
+    const controller = new AbortController();
+    const runtime = new WorkroomEffectAuthorizationProjectionRuntime({
+      signal: controller.signal,
+      projects: { listProjectIds },
+      projector: new SponsorDecisionWorkroomEffectAuthorizationProjector({
+        directory: join(root, 'facts'),
+        effectJournal: new MemoryWorkroomEffectJournal(),
+        sponsorAuthority: {
+          authorize: async input => ({
+            authorized: false as const,
+            requestDigest: input.digest,
+            reason: 'not reached',
+          }),
+        },
+        policy: { authorize: async () => null },
+      }),
+      intervalMs: 5,
+    });
+    runtime.start();
+    await vi.waitFor(() => expect(listProjectIds).toHaveBeenCalledTimes(1));
+    controller.abort();
+    const disposal = runtime.dispose();
+    releaseScan();
+    await expect(disposal).resolves.toBeUndefined();
   });
 });
 

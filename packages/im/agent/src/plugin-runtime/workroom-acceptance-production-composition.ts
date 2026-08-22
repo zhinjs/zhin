@@ -594,7 +594,12 @@ export class WorkroomEffectAuthorizationProjectionRuntime {
   async dispose(): Promise<void> {
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = undefined;
-    await this.#draining;
+    try {
+      await this.#draining;
+    } catch {
+      // The scheduled drain owns error reporting. Disposal is a lifecycle
+      // barrier and must still settle when generation retirement aborts it.
+    }
   }
 
   async #drainProjects(): Promise<number> {
