@@ -2,7 +2,7 @@
  * SandboxWsEndpoint — WebSocket lifecycle and MessageGateway bridge for /sandbox.
  */
 import { randomUUID } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import type { EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
 import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
@@ -66,6 +66,12 @@ interface SandboxConnection {
   /** true = 占位连接（尚无真实 WS 客户端），send 命中时按 miss 处理。 */
   readonly placeholder?: boolean;
 }
+
+type ShellIsolationStatus = Readonly<{
+  available: boolean;
+  provider: 'docker';
+  message: string;
+}>;
 
 export interface SandboxEndpointOptions {
   readonly id: CapabilityId;
@@ -282,26 +288,30 @@ export class SandboxWsEndpoint implements EndpointInstance {
     });
     this.#connections.set(target, { target, owner, socket, release });
     this.#logger.debug(formatCompact({ op: 'sandbox_ws_connected', target, owner }));
-    const readyPayload = JSON.stringify({
-      type: 'ready',
-      id: owner,
-      endpoint: target,
-      workingDirectory: process.cwd(),
-      canExecute,
-      shellIsolation: probeShellIsolation(),
-      content: [{
-        type: 'text',
-        data: {
-          text: [
-            `已连接 Sandbox「${target}」`,
-            `与 Node Host 控制台沙盒协议一致（${this.#wsPath}）`,
-            'Agent 试验台会话已启用持久化运行配置。',
-          ].join('\n'),
-        },
-      }],
-      timestamp: Date.now(),
+    void probeShellIsolation().then((shellIsolation) => {
+      const current = this.#connections.get(target);
+      if (!current || current.socket !== socket) return;
+      const readyPayload = JSON.stringify({
+        type: 'ready',
+        id: owner,
+        endpoint: target,
+        workingDirectory: process.cwd(),
+        canExecute,
+        shellIsolation,
+        content: [{
+          type: 'text',
+          data: {
+            text: [
+              `已连接 Sandbox「${target}」`,
+              `与 Node Host 控制台沙盒协议一致（${this.#wsPath}）`,
+              'Agent 试验台会话已启用持久化运行配置。',
+            ].join('\n'),
+          },
+        }],
+        timestamp: Date.now(),
+      });
+      whenWsOpen(socket, () => socket.send(readyPayload));
     });
-    whenWsOpen(socket, () => socket.send(readyPayload));
   }
 
   #ensurePlaceholder(name: string, owner: string): void {
@@ -316,29 +326,34 @@ export class SandboxWsEndpoint implements EndpointInstance {
   }
 }
 
-function probeShellIsolation(): Readonly<{ available: boolean; provider: 'docker'; message: string }> {
-  try {
-    const result = spawnSync('docker', ['info', '--format', '{{.ServerVersion}}'], {
+function probeShellIsolation(): Promise<ShellIsolationStatus> {
+  return new Promise<ShellIsolationStatus>((resolve) => {
+    execFile('docker', ['info', '--format', '{{.ServerVersion}}'], {
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 500,
-    });
-    if (result.status === 0) {
-      const version = result.stdout.trim();
-      return Object.freeze({
-        available: true,
+    }, (error, stdout) => {
+      if (!error) {
+        const version = stdout.trim();
+        resolve(Object.freeze({
+          available: true,
+          provider: 'docker',
+          message: version ? `Docker ${version}` : 'Docker ready',
+        }));
+        return;
+      }
+      resolve(Object.freeze({
+        available: false,
         provider: 'docker',
-        message: version ? `Docker ${version}` : 'Docker ready',
-      });
-    }
-    return Object.freeze({ available: false, provider: 'docker', message: 'Docker daemon is unavailable' });
-  } catch (error) {
-    return Object.freeze({
-      available: false,
-      provider: 'docker',
-      message: error instanceof Error && error.name === 'ETIMEDOUT'
-        ? 'Docker readiness check timed out'
-        : 'Docker is unavailable',
+        message: error.killed || error.code === 'ETIMEDOUT'
+          ? 'Docker readiness check timed out'
+          : 'Docker daemon is unavailable',
+      }));
     });
-  }
+  }).catch((error: unknown) => Object.freeze({
+    available: false,
+    provider: 'docker' as const,
+    message: error instanceof Error && error.name === 'ETIMEDOUT'
+      ? 'Docker readiness check timed out'
+      : 'Docker is unavailable',
+  }));
 }
