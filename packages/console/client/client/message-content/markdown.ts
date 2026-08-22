@@ -18,7 +18,9 @@ export interface CodeToken {
   readonly value: string;
 }
 
-const INLINE_PATTERN = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*|__[^_\n]+__)|(~~[^~\n]+~~)|(\*[^*\n]+\*|_[^_\n]+_)|(\[[^\]\n]+\]\([^\s)]+(?:\s+"[^"]*")?\))|(https?:\/\/[^\s<>()]+)/g;
+// Excluding another opening bracket from link labels prevents the regexp
+// engine from rescanning an attacker-controlled run of `[` characters.
+const INLINE_PATTERN = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*|__[^_\n]+__)|(~~[^~\n]+~~)|(\*[^*\n]+\*|_[^_\n]+_)|(\[[^\[\]\n]+\]\([^\s()]+(?:\s+"[^"\n]*")?\))|(https?:\/\/[^\s<>()]+)/g;
 const TABLE_DIVIDER = /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/;
 
 export function isSafeMarkdownHref(href: string): boolean {
@@ -46,7 +48,7 @@ export function parseMarkdownInline(value: string): MarkdownInline[] {
     } else if (match[4]) {
       tokens.push({ type: 'emphasis', value: raw.slice(1, -1) });
     } else if (match[5]) {
-      const parsed = raw.match(/^\[([^\]]+)\]\(([^\s)]+)(?:\s+"[^"]*")?\)$/);
+      const parsed = raw.match(/^\[([^\[\]]+)\]\(([^\s()]+)(?:\s+"[^"\n]*")?\)$/);
       if (parsed && isSafeMarkdownHref(parsed[2])) {
         tokens.push({ type: 'link', value: parsed[1], href: parsed[2] });
       } else {
@@ -106,7 +108,7 @@ export function parseMarkdown(value: string): MarkdownBlock[] {
       let closed = false;
       index += 1;
       while (index < lines.length) {
-        if (new RegExp(`^\\s*${marker}\\s*$`).test(lines[index])) {
+        if (lines[index].trim() === marker) {
           closed = true;
           index += 1;
           break;

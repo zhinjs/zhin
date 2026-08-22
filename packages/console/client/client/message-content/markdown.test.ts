@@ -29,6 +29,11 @@ describe('message markdown', () => {
     ]);
   });
 
+  it('treats repeated unmatched link openers as plain text', () => {
+    const value = '['.repeat(20_000);
+    expect(parseMarkdownInline(value)).toEqual([{ type: 'text', value }]);
+  });
+
   it('tokenizes common code without producing html', () => {
     expect(highlightCodeLine('const answer = "<safe>" // note', 'ts')).toEqual([
       { kind: 'keyword', value: 'const' },

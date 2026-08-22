@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import plugin from '../plugin.ts';
 import lotteryCommand from '../commands/lottery/[[game]].ts';
@@ -70,12 +70,17 @@ describe('@zhin.js/plugin-lottery runtime', () => {
   });
 
   it('lottery pipeline no longer reports db not ready', async () => {
-    const result = await lotteryCommand.execute({
-      ...emptyCtx,
-      params: { game: 'ssq' },
-    });
-    // Sync may err without network, but memory store means no「数据库未就绪」.
-    expect(String(result)).not.toContain('数据库未就绪');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline test'));
+    try {
+      const result = await lotteryCommand.execute({
+        ...emptyCtx,
+        params: { game: 'ssq' },
+      });
+      // Sync may err without network, but memory store means no「数据库未就绪」.
+      expect(String(result)).not.toContain('数据库未就绪');
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });
 

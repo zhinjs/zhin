@@ -220,6 +220,22 @@ describe('Runtime Workroom Callback Host', () => {
     })).rejects.toThrow('outside ordinary A2A inbound');
     expect(http.listRoutes().some(route => route.pattern === '/mesh/workroom-callback')).toBe(false);
   });
+
+  it('normalizes a long trailing slash run in linear time', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const trailing = '/'.repeat(20_000);
+
+    const installed = await installRuntimeWorkroomCallbacks({
+      http,
+      path: `/workroom-a2a/callback${trailing}`,
+      dependencies: callbackDependencies(),
+      maxBodyBytes: 1_024,
+    });
+
+    expect(http.listRoutes().some(route => route.pattern === '/workroom-a2a/callback')).toBe(true);
+    installed.dispose();
+  });
 });
 
 interface CallbackDependencyOverrides {

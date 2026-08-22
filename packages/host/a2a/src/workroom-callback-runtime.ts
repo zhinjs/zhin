@@ -260,7 +260,9 @@ function normalizeExactPath(value: string): string {
     throw new Error('Workroom callback path is required');
   }
   const leading = value.startsWith('/') ? value : `/${value}`;
-  const normalized = leading.replace(/\/+$/u, '') || '/';
+  let end = leading.length;
+  while (end > 1 && leading.charCodeAt(end - 1) === 47) end -= 1;
+  const normalized = leading.slice(0, end);
   if (normalized.includes('*')) throw new Error('Workroom callback path must be exact');
   return normalized;
 }

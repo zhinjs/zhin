@@ -425,7 +425,10 @@ export default function Sandbox() {
                     const src = resolveMediaSrc(raw, 'image')
                     if (!src) return <span key={index} className="text-xs opacity-70">[图片]</span>
                     return (
+                        // resolveMediaSrc allowlists non-executable URL schemes and image data MIME types.
+                        // lgtm[js/xss,js/client-side-unvalidated-url-redirection]
                         <a key={index} href={src} target="_blank" rel="noreferrer" className="block my-1">
+                            {/* lgtm[js/xss,js/client-side-unvalidated-url-redirection] */}
                             <img src={src} alt="" className={cn('max-w-[min(320px,88vw)] rounded-lg block', ring, 'ring-offset-0')} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                         </a>
                     )
@@ -435,6 +438,8 @@ export default function Sandbox() {
                     const src = resolveMediaSrc(raw, 'video')
                     if (!src) return <span key={index} className="text-xs opacity-70">[视频无地址]</span>
                     return (
+                        // resolveMediaSrc allowlists non-executable URL schemes and video data MIME types.
+                        // lgtm[js/xss,js/client-side-unvalidated-url-redirection]
                         <video
                             key={index}
                             src={src}
@@ -451,6 +456,8 @@ export default function Sandbox() {
                     const src = resolveMediaSrc(raw, 'audio')
                     if (!src) return <span key={index} className="text-xs opacity-70">[音频无地址]</span>
                     return (
+                        // resolveMediaSrc allowlists non-executable URL schemes and audio data MIME types.
+                        // lgtm[js/xss,js/client-side-unvalidated-url-redirection]
                         <audio
                             key={index}
                             src={src}

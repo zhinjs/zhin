@@ -3,10 +3,54 @@ export type MediaKind = 'image' | 'video' | 'audio'
 
 const BASE64_PROTO = 'base64://'
 
-const SAFE_URL_SCHEMES = ['data:', 'blob:', 'http://', 'https://']
+const SAFE_DATA_MIME: Readonly<Record<MediaKind, ReadonlySet<string>>> = Object.freeze({
+  image: new Set(['image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/webp']),
+  video: new Set(['video/mp4', 'video/ogg', 'video/webm']),
+  audio: new Set(['audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/webm']),
+})
 
-function isSafeUrl(url: string): boolean {
-  return SAFE_URL_SCHEMES.some((scheme) => url.startsWith(scheme))
+function resolveSafeRemoteUrl(value: string): string | undefined {
+  try {
+    const parsed = new URL(value)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:' && parsed.protocol !== 'blob:') {
+      return undefined
+    }
+    if (parsed.username || parsed.password) return undefined
+    return parsed.href
+  } catch {
+    return undefined
+  }
+}
+
+function resolveSafeDataUrl(value: string, kind: MediaKind): string | undefined {
+  if (!value.startsWith('data:')) return undefined
+  const separator = value.indexOf(',')
+  if (separator < 0) return undefined
+  const header = value.slice('data:'.length, separator).toLowerCase()
+  if (!header.endsWith(';base64')) return undefined
+  const mime = header.slice(0, -';base64'.length)
+  if (!SAFE_DATA_MIME[kind].has(mime)) return undefined
+  const payload = compactBase64(value.slice(separator + 1))
+  return payload ? `data:${mime};base64,${payload}` : undefined
+}
+
+function compactBase64(value: string): string | undefined {
+  let compact = ''
+  for (const character of value) {
+    if (character === ' ' || character === '\n' || character === '\r' || character === '\t') continue
+    const code = character.charCodeAt(0)
+    const allowed = (code >= 48 && code <= 57)
+      || (code >= 65 && code <= 90)
+      || (code >= 97 && code <= 122)
+      || character === '+' || character === '/' || character === '='
+    if (!allowed) return undefined
+    compact += character
+  }
+  const padding = compact.indexOf('=')
+  if (padding >= 0 && (compact.length - padding > 2 || compact.slice(padding).replace(/=/g, '') !== '')) {
+    return undefined
+  }
+  return compact || undefined
 }
 
 /**
@@ -27,26 +71,29 @@ export function resolveMediaSrc(
   const s = raw.trim()
   if (!s) return undefined
 
-  if (isSafeUrl(s)) {
-    return s
-  }
+  const dataUrl = resolveSafeDataUrl(s, kind)
+  if (dataUrl) return dataUrl
+
+  const remoteUrl = resolveSafeRemoteUrl(s)
+  if (remoteUrl) return remoteUrl
 
   if (!s.startsWith(BASE64_PROTO)) {
-    return isSafeUrl(s) ? s : undefined
+    return undefined
   }
 
-  const payload = s.slice(BASE64_PROTO.length).replace(/^\s+/, '')
+  const payload = s.slice(BASE64_PROTO.length).trimStart()
   if (!payload) return undefined
 
   // 已是 type/subtype;base64, 片段（不含 data: 前缀）
-  if (/^[\w+.-]+\/[\w+.-]+;base64,/i.test(payload)) {
-    return `data:${payload}`
+  const declared = resolveSafeDataUrl(`data:${payload}`, kind)
+  if (declared) {
+    return declared
   }
 
   const defaultMime =
     kind === 'image' ? 'image/png' : kind === 'video' ? 'video/mp4' : 'audio/mpeg'
-  const b64 = payload.replace(/\s/g, '')
-  return `data:${defaultMime};base64,${b64}`
+  const b64 = compactBase64(payload)
+  return b64 ? `data:${defaultMime};base64,${b64}` : undefined
 }
 
 /** 从 segment.data 取常见媒体字段（优先 canonical MediaRef） */
