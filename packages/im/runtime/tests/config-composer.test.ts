@@ -105,6 +105,23 @@ describe('hierarchical Plugin config', () => {
     expect(config.views.get(graph.root.children[0]!.id)).toEqual({ retries: 3 });
   });
 
+  it('keeps the canonical Host Schema immutable across compositions', async () => {
+    const root = await configProject({ rootSchema: {}, childSchema: {} });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const first = await new ConfigComposer().compose(graph, {});
+    const firstProperties = first.effectiveSchema.properties as Record<string, Record<string, unknown>>;
+
+    expect(Object.isFrozen(firstProperties.http)).toBe(true);
+    expect(() => {
+      firstProperties.http!.type = 'string';
+    }).toThrow(TypeError);
+
+    await expect(new ConfigComposer().compose(graph, { http: 'invalid' })).rejects.toBeInstanceOf(
+      ConfigValidationError,
+    );
+  });
+
   it('returns structured validation issues', async () => {
     const root = await configProject({
       rootSchema: {

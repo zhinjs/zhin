@@ -15,6 +15,8 @@ At startup, `zhin runtime start` checks these project-root candidates in order. 
 
 It is recommended to use `zhin.config.yml` consistently. All examples in this document use it.
 
+For field-by-field types, required fields, defaults, and plugin schemas, use the [generated configuration field reference](./generated). It is generated from Runtime source and plugin `schema.json` files, with drift blocked in CI.
+
 ## How to use this reference
 
 Run `npx zhin setup` to generate a bootable configuration, then change fields with this page. Run `npx zhin doctor` before committing. After startup, trust the generation shown in Console rather than treating a disk file as applied state.

@@ -12,6 +12,8 @@ import ZhinFeatureGrid from './components/ZhinFeatureGrid.vue'
 import ZhinDuo from './components/ZhinDuo.vue'
 import ZhinSidebarFoot from './components/ZhinSidebarFoot.vue'
 import ZhinRolePaths from './components/ZhinRolePaths.vue'
+import DocsInsightsConsent from './components/DocsInsightsConsent.vue'
+import { installDocsInsights } from './docs-insights.js'
 import './custom.css'
 
 export default {
@@ -19,6 +21,7 @@ export default {
   Layout: () => {
     return h(DefaultTheme.Layout, null, {
       'sidebar-nav-after': () => h(ZhinSidebarFoot),
+      'layout-bottom': () => h(DocsInsightsConsent),
     })
   },
   enhanceApp({ app, router, siteData }) {
@@ -34,5 +37,13 @@ export default {
     app.component('ZhinDuo', ZhinDuo)
     app.component('ZhinSidebarFoot', ZhinSidebarFoot)
     app.component('ZhinRolePaths', ZhinRolePaths)
+    app.component('DocsInsightsConsent', DocsInsightsConsent)
+    if (!import.meta.env.SSR) {
+      const disposeInsights = installDocsInsights(router, {
+        endpoint: import.meta.env.VITE_DOCS_INSIGHTS_ENDPOINT ?? '',
+        siteId: import.meta.env.VITE_DOCS_INSIGHTS_SITE_ID ?? 'zhin-docs',
+      })
+      app.onUnmount(disposeInsights)
+    }
   }
 } satisfies Theme

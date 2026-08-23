@@ -47,7 +47,7 @@ import {
   type SnapshotReader,
   type TokenId,
 } from '@zhin.js/plugin-runtime';
-import type { RootResourceInstaller, RuntimeConfigDocument } from '@zhin.js/runtime';
+import { HOST_CONFIG_KEYS, type RootResourceInstaller, type RuntimeConfigDocument } from '@zhin.js/runtime';
 import { installInboxMessageRecorder } from './inbox-installer.js';
 import {
   parseWorkroomRunControlCommand,
@@ -1905,19 +1905,6 @@ async function readProjectConfigDocument(projectRoot: string): Promise<Record<st
  * Host 级配置键（与 ConfigComposer 对齐）。
  * 这些键在文档顶层；插件配置在 `plugins.<instanceKey>`。
  */
-export const HOST_CONFIG_KEYS = Object.freeze([
-  'http',
-  'database',
-  'ai',
-  'mcp',
-  'a2a',
-  'speech',
-  'htmlRenderer',
-  'assistant',
-  'log_level',
-  'plugin',
-] as const);
-
 const HOST_CONFIG_KEY_SET = new Set<string>(HOST_CONFIG_KEYS);
 
 const consoleApiLogger = getLogger('ConsoleApi');

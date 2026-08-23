@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "http": { "type": "object", "additionalProperties": true, "description": "HTTP, Console, REST/RPC/SSE, and Webhook Host.", "x-descriptionZh": "HTTP、Console、REST/RPC/SSE 与 Webhook Host。" },
+    "database": { "type": "object", "additionalProperties": true, "description": "Database Host and dialect connection options.", "x-descriptionZh": "Database Host 与方言连接参数。" },
+    "ai": { "type": "object", "additionalProperties": true, "description": "Providers, Agents, sessions, memory, tools, and execution security.", "x-descriptionZh": "Provider、Agent、会话、记忆、工具与执行安全策略。" },
+    "mcp": { "type": "object", "additionalProperties": true, "description": "Expose Bot tools through an MCP Server.", "x-descriptionZh": "把 Bot 工具公开为 MCP Server。" },
+    "a2a": { "type": "object", "additionalProperties": true, "description": "A2A Agent Card, remote execution, and Workroom callbacks.", "x-descriptionZh": "A2A Agent Card、远程执行与 Workroom 回调。" },
+    "speech": { "type": "object", "additionalProperties": true, "description": "Speech-to-text and text-to-speech Host.", "x-descriptionZh": "语音识别与语音合成 Host。" },
+    "htmlRenderer": { "type": "object", "additionalProperties": true, "description": "HTML and image rendering options.", "x-descriptionZh": "HTML/图片渲染参数。" },
+    "assistant": { "type": "object", "additionalProperties": true, "description": "Scheduled jobs, event ingress, and failure notifications.", "x-descriptionZh": "调度任务、事件入口和失败通知。" },
+    "log_level": { "type": ["string", "number"], "description": "Runtime log level.", "x-descriptionZh": "Runtime 日志级别。" },
+    "plugin": { "type": "object", "description": "Root Plugin configuration; replaced by its project schema during composition.", "x-descriptionZh": "Root Plugin 配置；组合时由项目 Schema 替换。" }
+  }
+}

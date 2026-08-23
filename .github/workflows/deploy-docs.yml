@@ -61,14 +61,23 @@ jobs:
       - name: Build packages
         run: pnpm build
 
-      - name: Build docs
+      - name: Build docs for browser journeys
         run: pnpm docs:build
+        env:
+          VITE_DOCS_INSIGHTS_ENDPOINT: /__docs-insights
+          VITE_DOCS_INSIGHTS_SITE_ID: zhin-docs-test
 
       - name: Install docs browser
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Test docs journeys
         run: pnpm test:docs:e2e:run
+
+      - name: Build deployable docs
+        run: pnpm --filter @zhin.js/docs build
+        env:
+          VITE_DOCS_INSIGHTS_ENDPOINT: ${{ vars.DOCS_INSIGHTS_ENDPOINT }}
+          VITE_DOCS_INSIGHTS_SITE_ID: ${{ vars.DOCS_INSIGHTS_SITE_ID }}
       
       - name: Upload artifact
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0

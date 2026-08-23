@@ -1,6 +1,41 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('documentation site journeys', () => {
+  test('collects consented search, 404, and exit insights without URL secrets', async ({ page }) => {
+    const insights: Array<Record<string, unknown>> = [];
+    await page.route('**/__docs-insights', async (route) => {
+      const payload = route.request().postDataJSON() as Record<string, unknown>;
+      insights.push(payload);
+      await route.fulfill({ status: 204 });
+    });
+
+    await page.goto('/operations/docs-insights?private=secret#verify');
+    await expect(page.getByRole('complementary', { name: '帮助改进 Zhin 文档' })).toBeVisible();
+    expect(insights).toHaveLength(0);
+
+    await page.getByRole('button', { name: '同意匿名统计' }).click();
+    await expect.poll(() => insights.some((event) => event.event === 'page_view')).toBe(true);
+
+    await page.keyboard.press('/');
+    const search = page.locator('#localsearch-input');
+    await expect(search).toBeVisible();
+    await search.fill('qzxwvkjhgfds');
+    await expect.poll(() => insights.some((event) => event.event === 'search_no_results')).toBe(true);
+
+    await page.goto('/definitely-missing-zhin-document');
+    await expect.poll(() => insights.some((event) => event.event === 'not_found')).toBe(true);
+    await expect.poll(() => insights.some((event) => event.event === 'page_exit')).toBe(true);
+    expect(insights.every((event) => !String(event.path).includes('?') && !String(event.path).includes('#'))).toBe(true);
+    expect(JSON.stringify(insights)).not.toContain('private=secret');
+
+    await page.getByRole('button', { name: '文档隐私设置' }).click();
+    await page.getByRole('button', { name: '暂不参与' }).click();
+    const eventCountAfterOptOut = insights.length;
+    await page.goto('/');
+    await page.waitForTimeout(600);
+    expect(insights).toHaveLength(eventCountAfterOptOut);
+  });
+
   test('serves every deployment template as a direct download', async ({ request }) => {
     const paths = [
       'Dockerfile',

@@ -108,6 +108,8 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 | ADR Manifest (`pnpm check:adr-manifest`) | ADR README and sidebar cover all ADRs |
 | README Exports (`pnpm check:readme-exports`) | README imports match package exports |
 | Config Docs (`pnpm check:config-docs`) | Config documentation aligns with DEFAULT_CONFIG key fields |
+| Generated Config Reference (`pnpm check:config-reference`) | Generated configuration fields stay aligned with Runtime source and plugin JSON Schema |
+| Troubleshooting Center (`pnpm check:troubleshooting`) | The incident catalog stays aligned with bilingual Symptom → Cause → Action → Verification pages |
 | Install Tiers SSOT (`pnpm check:install-tiers-ssot`) | Chinese `README.zh-CN.md` Install tiers table matches `docs/snippets/install-tiers.md` |
 | Adapter Docs Sync (`pnpm check:adapter-docs`) | Platform adapter docs sync with `plugins/adapters/*/README.md` (fix with `pnpm sync:adapter-docs`) |
 | Platform Tiers SSOT (`pnpm check:platform-tiers-ssot`) | Capability tiers/adapter index matches `scripts/adapter-meta.mjs` |

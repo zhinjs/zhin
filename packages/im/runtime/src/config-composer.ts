@@ -3,6 +3,20 @@ import { join } from 'node:path';
 import Ajv2020, { type ErrorObject } from 'ajv/dist/2020.js';
 import type { PluginId } from '@zhin.js/plugin-runtime';
 import type { PluginGraphNode, ProjectGraph } from './project-graph.js';
+import hostConfigSchema from './host-config-schema.json' with { type: 'json' };
+
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    for (const nested of Object.values(value)) deepFreeze(nested);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+const HOST_CONFIG_SCHEMA = deepFreeze(hostConfigSchema);
+
+/** Host configuration keys consumed by Runtime composition and Host installers. */
+export const HOST_CONFIG_KEYS = Object.freeze(Object.keys(HOST_CONFIG_SCHEMA.properties));
 
 export type JsonSchema = Readonly<Record<string, unknown>>;
 export type RuntimeConfigDocument = Readonly<Record<string, unknown>>;
@@ -56,6 +70,7 @@ export class ConfigComposer {
       type: 'object',
       additionalProperties: false,
       properties: {
+        ...HOST_CONFIG_SCHEMA.properties,
         plugin: withDefault(rootOwn),
         plugins: {
           type: 'object',
@@ -65,46 +80,11 @@ export class ConfigComposer {
             childSchemas.map(([key, schema]) => [key, withDefault(schema)]),
           ),
         },
-        http: Object.freeze({
-          type: 'object',
-          additionalProperties: true,
-        }),
-        database: Object.freeze({
-          type: 'object',
-          additionalProperties: true,
-        }),
-        ai: Object.freeze({
-          type: 'object',
-          additionalProperties: true,
-        }),
-        mcp: Object.freeze({
-          type: 'object',
-          additionalProperties: true,
-        }),
-        a2a: Object.freeze({
-          type: 'object',
-          additionalProperties: true,
-        }),
-        speech: Object.freeze({
-          type: 'object',
-          additionalProperties: true,
-        }),
-        htmlRenderer: Object.freeze({
-          type: 'object',
-          additionalProperties: true,
-        }),
-        assistant: Object.freeze({
-          type: 'object',
-          additionalProperties: true,
-        }),
-        log_level: Object.freeze({
-          type: ['string', 'number'],
-        }),
       },
     });
 
     const document = structuredClone(input) as Record<string, unknown>;
-    const validate = new Ajv2020({
+    const ajv = new Ajv2020({
       allErrors: true,
       useDefaults: true,
       strict: true,
@@ -112,7 +92,9 @@ export class ConfigComposer {
       // 不触发 allowUnionTypes）；保留此项是面向未来插件 schema 可能出现的
       // anyOf/oneOf 标量 union，避免届时 Ajv strict 模式直接报错。
       allowUnionTypes: true,
-    }).compile(effectiveSchema);
+    });
+    ajv.addKeyword({ keyword: 'x-descriptionZh', schemaType: 'string' });
+    const validate = ajv.compile(effectiveSchema);
     if (!validate(document)) {
       throw new ConfigValidationError(formatErrors(validate.errors ?? []), source);
     }

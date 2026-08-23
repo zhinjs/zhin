@@ -135,6 +135,16 @@ const checks = [
     description: '检查公开入口、源码注释链接与 API Reference 生成契约',
   },
   {
+    name: 'Generated Config Reference',
+    command: 'pnpm check:config-reference',
+    description: '检查配置字段参考与 Runtime 源码、插件 JSON Schema 无漂移',
+  },
+  {
+    name: 'Troubleshooting Center',
+    command: 'pnpm check:troubleshooting',
+    description: '检查结构化故障目录与中英文排查页面无漂移',
+  },
+  {
     name: 'Deployment Templates',
     command: 'pnpm check:deployment-templates',
     description: '校验 Compose、systemd、Kubernetes 模板与中英文下载入口',

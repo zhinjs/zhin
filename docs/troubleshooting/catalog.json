@@ -1,0 +1,149 @@
+{
+  "$schema": "./catalog.schema.json",
+  "entries": [
+    {
+      "id": "console-cannot-connect",
+      "title": { "zh": "Console 无法连接 Runtime", "en": "Console cannot connect to the Runtime" },
+      "symptom": { "zh": "Console 持续显示离线或重连中，页面数据不再更新。", "en": "Console remains offline or reconnecting and page data stops updating." },
+      "causes": [
+        { "zh": "Runtime 未启动，或 Console 访问的 host、port、base 与 Runtime 不一致。", "en": "The Runtime is stopped, or Console uses a different host, port, or base path." },
+        { "zh": "反向代理没有转发 SSE，或缓存/缓冲了事件流。", "en": "The reverse proxy does not forward SSE or buffers the event stream." }
+      ],
+      "actions": [
+        { "zh": "运行 `npx zhin doctor`，再检查启动日志中的 HTTP 监听地址。", "en": "Run `npx zhin doctor`, then inspect the HTTP listen address in startup logs." },
+        { "zh": "确认代理对 `/api/events` 禁用缓冲并保持长连接。", "en": "Ensure the proxy disables buffering and keeps `/api/events` connections open." }
+      ],
+      "verification": [
+        { "zh": "执行 `curl -i http://127.0.0.1:8086/pub/health` 应返回成功状态；Console 顶栏应恢复为“已连接”。", "en": "`curl -i http://127.0.0.1:8086/pub/health` should succeed, and the Console header should return to Connected." }
+      ]
+    },
+    {
+      "id": "console-auth-failed",
+      "title": { "zh": "Console 返回 401 或 403", "en": "Console returns 401 or 403" },
+      "symptom": { "zh": "登录后请求仍被拒绝，或部分写操作显示无权限。", "en": "Requests remain rejected after login, or write actions report insufficient permissions." },
+      "causes": [
+        { "zh": "Console Token 与当前 generation 的 `http.token` 不一致。", "en": "The Console token differs from the active generation's `http.token`." },
+        { "zh": "当前是只读 Demo 会话，或 Token 没有该操作需要的 scope。", "en": "The session is read-only Demo mode, or its token lacks the required scope." }
+      ],
+      "actions": [
+        { "zh": "重新从部署环境读取 `HTTP_TOKEN`，不要从浏览器历史或旧配置复制。", "en": "Reload `HTTP_TOKEN` from the deployment environment rather than browser history or stale config." },
+        { "zh": "生产环境修改 Token 后发布新 generation，并重新登录。", "en": "After changing the production token, publish a new generation and sign in again." }
+      ],
+      "verification": [
+        { "zh": "使用 `curl -H \"Authorization: Bearer $HTTP_TOKEN\" http://127.0.0.1:8086/api/system/stats` 验证同一 Token。", "en": "Verify the same token with `curl -H \"Authorization: Bearer $HTTP_TOKEN\" http://127.0.0.1:8086/api/system/stats`." }
+      ]
+    },
+    {
+      "id": "endpoint-offline",
+      "title": { "zh": "Endpoint 一直离线", "en": "Endpoint remains offline" },
+      "symptom": { "zh": "适配器已经安装，但 Endpoint 页面显示离线且无法收发消息。", "en": "The adapter is installed, but its Endpoint is offline and cannot receive or send messages." },
+      "causes": [
+        { "zh": "实例配置未通过对应插件 Schema，或凭据为空。", "en": "The instance configuration fails its plugin Schema or credentials are empty." },
+        { "zh": "平台网络不可达、Webhook 地址错误，或账号被平台拒绝。", "en": "The platform is unreachable, the webhook URL is wrong, or the account is rejected." }
+      ],
+      "actions": [
+        { "zh": "在 Console Endpoint 详情查看最近错误，再对照[自动生成配置字段参考](/configuration/generated)。", "en": "Inspect the latest error in Endpoint details, then compare it with the [generated configuration fields](/en/configuration/generated)." },
+        { "zh": "按平台文档重新验证凭据、回调地址与网络出口。", "en": "Revalidate credentials, callback URLs, and network egress against the platform guide." }
+      ],
+      "verification": [
+        { "zh": "重载后 Endpoint 状态应变为 online，并用真实私聊发送一条探针消息确认收发双向成立。", "en": "After reload, the Endpoint should become online; send a real direct-message probe to verify both directions." }
+      ]
+    },
+    {
+      "id": "messages-missing-after-refresh",
+      "title": { "zh": "刷新后消息或通知缺失", "en": "Messages or notices are missing after refresh" },
+      "symptom": { "zh": "实时消息可见，但刷新、断网重连或 SSE 恢复后历史不完整。", "en": "Live messages appear, but history is incomplete after refresh, reconnect, or SSE recovery." },
+      "causes": [
+        { "zh": "当前 Endpoint/Channel 选择与消息所属空间不一致。", "en": "The selected Endpoint or Channel differs from the message's interaction space." },
+        { "zh": "服务端事件 Journal 出现 gap，客户端需要通过权威 HTTP API 重建投影。", "en": "The server event journal has a gap and the client must rebuild from authoritative HTTP APIs." }
+      ],
+      "actions": [
+        { "zh": "重新选择目标 Endpoint 与 Channel，并等待恢复提示完成。", "en": "Reselect the target Endpoint and Channel and wait for recovery to finish." },
+        { "zh": "确认数据库持久化目录可写，且反向代理没有缓存历史 API。", "en": "Confirm the database persistence directory is writable and the proxy does not cache history APIs." }
+      ],
+      "verification": [
+        { "zh": "发送一条带唯一文本的消息，刷新页面并重启 Runtime；该消息仍应由 HTTP 历史接口恢复。", "en": "Send a uniquely worded message, refresh, and restart the Runtime; the HTTP history API should restore it." }
+      ]
+    },
+    {
+      "id": "configuration-rejected",
+      "title": { "zh": "配置启动时被拒绝", "en": "Configuration is rejected at startup" },
+      "symptom": { "zh": "启动报 `Invalid Plugin config`、未知顶层字段或环境变量展开错误。", "en": "Startup reports `Invalid Plugin config`, an unknown top-level field, or environment expansion failure." },
+      "causes": [
+        { "zh": "字段名、类型或枚举值与当前安装版本的 Schema 不一致。", "en": "A field name, type, or enum value differs from the installed version's Schema." },
+        { "zh": "`${VAR}` 未设置，展开为空后触发校验失败。", "en": "`${VAR}` is unset and expands to an empty value that fails validation." }
+      ],
+      "actions": [
+        { "zh": "运行 `npx zhin doctor`，根据错误路径修正字段。", "en": "Run `npx zhin doctor` and fix the field at the reported path." },
+        { "zh": "使用[自动生成配置字段参考](/configuration/generated)核对当前源码与 Schema。", "en": "Check the current source and Schema in the [generated configuration fields](/en/configuration/generated)." }
+      ],
+      "verification": [
+        { "zh": "`npx zhin doctor` 应通过，随后 `npx zhin runtime start` 不再出现配置校验错误。", "en": "`npx zhin doctor` should pass, followed by `npx zhin runtime start` without validation errors." }
+      ]
+    },
+    {
+      "id": "agent-provider-unavailable",
+      "title": { "zh": "Agent 无模型或 Provider 不可用", "en": "Agent has no available model or provider" },
+      "symptom": { "zh": "Agent 工作台无法开始回合，提示 Provider、模型或 API Key 不可用。", "en": "Agent Studio cannot start a turn and reports an unavailable provider, model, or API key." },
+      "causes": [
+        { "zh": "Provider 的环境变量为空，被 Runtime soft-prune。", "en": "The provider environment variable is empty and the Runtime soft-prunes it." },
+        { "zh": "Agent 绑定的模型名不属于当前 generation 发布的 Provider。", "en": "The Agent's model is not published by any provider in the active generation." }
+      ],
+      "actions": [
+        { "zh": "在 Console 能力目录确认 Provider 与模型已发布，再核对部署环境的 API Key。", "en": "Confirm the provider and model are published in Console, then check the deployment API key." },
+        { "zh": "修正 Agent binding 后发布新 generation，不要只修改磁盘配置。", "en": "Fix the Agent binding and publish a new generation instead of only editing disk config." }
+      ],
+      "verification": [
+        { "zh": "在实验台发起最小文本回合，Trace 应依次出现 turn start、model response 与 completed。", "en": "Run a minimal text turn in the playground; Trace should show turn start, model response, and completed." }
+      ]
+    },
+    {
+      "id": "tool-approval-stuck",
+      "title": { "zh": "工具等待审批或被策略拒绝", "en": "Tool is awaiting approval or denied by policy" },
+      "symptom": { "zh": "Agent 回合停在工具步骤，显示待审批、拒绝或取消。", "en": "An Agent turn stops at a tool step marked pending approval, denied, or cancelled." },
+      "causes": [
+        { "zh": "工作目录或工具不在当前安全策略允许范围。", "en": "The working directory or tool is outside the active security policy." },
+        { "zh": "审批请求没有处理，或取消信号已经终止回合。", "en": "The approval was not handled, or a cancellation signal already ended the turn." }
+      ],
+      "actions": [
+        { "zh": "在 Agent 工作台检查 cwd、安全策略与审批详情，只批准明确理解的副作用。", "en": "Inspect cwd, security policy, and approval details in Agent Studio; approve only understood side effects." },
+        { "zh": "取消后的任务创建新回合，不要重放可能已经产生副作用的工具调用。", "en": "After cancellation, start a new turn rather than replaying a tool call that may have produced side effects." }
+      ],
+      "verification": [
+        { "zh": "用只读工具执行探针任务；Trace 中工具终态与回合终态应一致，且审批记录可追溯。", "en": "Run a read-only probe; the tool and turn terminal states should agree and the approval record should be traceable." }
+      ]
+    },
+    {
+      "id": "workroom-not-routing",
+      "title": { "zh": "群、频道或仓库没有路由到 Workroom", "en": "A chat, channel, or repository does not route to a Workroom" },
+      "symptom": { "zh": "消息进入普通聊天，或任务没有出现在预期 Workroom 看板。", "en": "A message falls back to normal chat, or a task does not appear on the expected Workroom board." },
+      "causes": [
+        { "zh": "Catalog 中缺少该 interaction space 的精确绑定，或绑定仍指向旧 Agent。", "en": "The Catalog lacks an exact interaction-space binding or still points to an old Agent." },
+        { "zh": "同一 Bot 可服务多个 Workroom，但群/频道/仓库标识填写错误或发生冲突。", "en": "One Bot may serve multiple Workrooms, but the chat, channel, or repository identity is wrong or conflicting." }
+      ],
+      "actions": [
+        { "zh": "在 Console Workroom 配置中核对 Bot、Endpoint、空间 ID、成员角色与 Agent binding。", "en": "Check Bot, Endpoint, space ID, member roles, and Agent binding in Console Workroom configuration." },
+        { "zh": "保存 Catalog 后发送一条新消息；历史消息不会被重新解释。", "en": "After saving the Catalog, send a new message; historical messages are not reinterpreted." }
+      ],
+      "verification": [
+        { "zh": "新消息应在对应 Workroom 创建 task/run，并在详情中显示命中的空间与 Agent。", "en": "A new message should create a task/run in the target Workroom and show the matched space and Agent in details." }
+      ]
+    },
+    {
+      "id": "container-not-healthy",
+      "title": { "zh": "容器反复重启或健康检查失败", "en": "Container restarts or health checks fail" },
+      "symptom": { "zh": "Compose/Kubernetes 报 unhealthy、CrashLoopBackOff 或持久目录权限错误。", "en": "Compose or Kubernetes reports unhealthy, CrashLoopBackOff, or persistence permission errors." },
+      "causes": [
+        { "zh": "`.zhin`、`data` 挂载点不可由 node 用户写入。", "en": "The node user cannot write the `.zhin` or `data` mount." },
+        { "zh": "必需 Secret、项目配置或镜像 Tag 未正确发布。", "en": "A required Secret, project config, or image tag was not deployed correctly." }
+      ],
+      "actions": [
+        { "zh": "检查 `docker compose logs zhin` 或 `kubectl logs deploy/zhin` 的首个错误。", "en": "Inspect the first error from `docker compose logs zhin` or `kubectl logs deploy/zhin`." },
+        { "zh": "按[生产部署](/operations/production)确认目录属主、Secret 与不可变镜像 Tag。", "en": "Follow [Production Deployment](/en/operations/production) to verify ownership, Secrets, and immutable image tags." }
+      ],
+      "verification": [
+        { "zh": "`docker compose ps` 或 `kubectl rollout status deploy/zhin` 应稳定成功，并通过健康接口。", "en": "`docker compose ps` or `kubectl rollout status deploy/zhin` should remain successful and the health endpoint should pass." }
+      ]
+    }
+  ]
+}
