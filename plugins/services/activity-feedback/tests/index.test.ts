@@ -192,6 +192,36 @@ describe('ActivityFeedbackOrchestrator', () => {
     );
   });
 
+  it('dispose 清理同一会话中每条尚未处理消息的 phase', async () => {
+    const executor = {
+      start: vi.fn(),
+      stop: vi.fn(),
+      updateText: vi.fn(),
+      updateThinkingText: vi.fn(),
+    } satisfies ActivityFeedbackExecutor;
+    const orchestrator = new ActivityFeedbackOrchestrator(
+      new ActivityFeedbackPolicy(loadActivityFeedbackServiceConfig({})),
+      executor,
+      { debug: vi.fn(), error: vi.fn() },
+    );
+    const base = {
+      platform: 'discord',
+      endpointKey: 'bot',
+      sessionId: 'discord:bot:group:g1',
+      sceneId: 'g1',
+      userId: 'u1',
+      scope: 'group',
+      hookContext: { activityFeedbackEligible: true },
+    } as AIEventPayload;
+
+    await orchestrator.startPhase({ ...base, messageId: 'm1' }, 'queued', 'test');
+    await orchestrator.startPhase({ ...base, messageId: 'm2' }, 'queued', 'test');
+    await orchestrator.dispose();
+
+    expect(executor.stop).toHaveBeenCalledTimes(2);
+    expect(executor.stop.mock.calls.map(([ctx]) => ctx.messageId)).toEqual(['m1', 'm2']);
+  });
+
   it('tracks delimiter-containing endpoint tuples without phase-key collisions', async () => {
     const executor = {
       start: vi.fn(),
@@ -231,5 +261,45 @@ describe('ActivityFeedbackOrchestrator', () => {
       expect.objectContaining({ platform: 'a', endpointKey: 'b', sessionId: 'c:d' }),
       'active',
     );
+  });
+
+  it('dispose waits for transient cleanup already started by its timer', async () => {
+    vi.useFakeTimers();
+    let releaseStop!: () => void;
+    const stopPending = new Promise<void>((resolve) => { releaseStop = resolve; });
+    const executor = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn(() => stopPending),
+      updateText: vi.fn(),
+      updateThinkingText: vi.fn(),
+    } satisfies ActivityFeedbackExecutor;
+    const orchestrator = new ActivityFeedbackOrchestrator(
+      new ActivityFeedbackPolicy(loadActivityFeedbackServiceConfig({
+        schedule: {
+          phases: {
+            finish: { group: { type: 'reaction', removeDelay: 10 } },
+          },
+        },
+      })),
+      executor,
+      { debug: vi.fn(), error: vi.fn() },
+    );
+    const payload = {
+      platform: 'icqq', endpointKey: 'bot', sessionId: 'schedule:cleanup',
+      sceneId: 'group:1', groupId: '1', scope: 'group',
+      hookContext: { scheduleActivityFeedback: true, scheduleJobId: 'cleanup' },
+    } as AIEventPayload;
+
+    await orchestrator.showTransientPhase(payload, 'schedule_finish', 'test');
+    await vi.advanceTimersByTimeAsync(10);
+    let disposed = false;
+    const disposal = orchestrator.dispose().then(() => { disposed = true; });
+    await Promise.resolve();
+    expect(disposed).toBe(false);
+
+    releaseStop();
+    await disposal;
+    expect(disposed).toBe(true);
+    vi.useRealTimers();
   });
 });

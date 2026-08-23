@@ -254,6 +254,30 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
     );
   });
 
+  it('subagent finish independently clears thinking and active phases', async () => {
+    const orchestrator = {
+      stopPhase: vi.fn().mockResolvedValue(undefined),
+    };
+    const handlers = createActivityFeedbackAIEventHandlers(orchestrator as never);
+    const payload = {
+      sessionId: 'subagent:thinking-only',
+      source: 'subagent',
+      agentId: 'researcher',
+      hookContext: {
+        activityFeedbackEligible: true,
+      },
+    } as never;
+
+    await handlers.onSubagentFinish?.(payload);
+
+    expect(orchestrator.stopPhase).toHaveBeenCalledWith(
+      payload, 'thinking', 'subagent.finish',
+    );
+    expect(orchestrator.stopPhase).toHaveBeenCalledWith(
+      payload, 'active', 'subagent.finish',
+    );
+  });
+
   it('serializes start/finish handlers inside one plugin generation', async () => {
     const order: string[] = [];
     let finished!: () => void;

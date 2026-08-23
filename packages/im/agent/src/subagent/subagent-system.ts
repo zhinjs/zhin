@@ -18,6 +18,7 @@ export class SubagentSystem {
   private readonly senders: SubagentResultSender[] = [];
   private readonly definitions = new Map<string, SubagentDefinition>();
   private runtime: SubagentRuntime | null = null;
+  private disposal?: Promise<void>;
 
   constructor(private readonly _config: SubagentSystemConfig = {}) {}
 
@@ -107,11 +108,16 @@ export class SubagentSystem {
     return this.runtime?.getRunningCount() ?? 0;
   }
 
-  dispose(): void {
-    this.runtime?.dispose();
+  dispose(): Promise<void> {
+    if (this.disposal) return this.disposal;
+    const runtime = this.runtime;
     this.runtime = null;
-    this.resultSinks.length = 0;
-    this.senders.length = 0;
+    this.disposal = (async () => {
+      await runtime?.dispose();
+      this.resultSinks.length = 0;
+      this.senders.length = 0;
+    })();
+    return this.disposal;
   }
 }
 

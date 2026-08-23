@@ -2980,6 +2980,7 @@ function wireRuntimeSchedule(
     dispose: async () => {
       jobEngine.unload();
       await jobWorker.stop();
+      await executor.dispose();
     },
   };
 }

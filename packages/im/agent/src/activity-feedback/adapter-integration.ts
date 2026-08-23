@@ -20,7 +20,6 @@ import {
   PLATFORM_FEATURES,
   buildTypingSendContent,
   type PlatformFeatures,
-  type BotWithEditing,
 } from '../typing-indicator/adapter-integration.js';
 import { ActivityFeedbackManager } from './manager.js';
 import type { ActivityFeedbackPhase, ResolvedActivityFeedbackPhaseConfig } from './types.js';
@@ -194,10 +193,8 @@ class EndpointActivityFeedbackAdapter implements TypingIndicatorAdapter {
           if (message) await this.endpoint.control!.recall!(message);
         },
         async (messageId, content) => {
-          const editBot = this.endpoint as BotWithEditing;
           const message = this.messages.get(messageId);
           if (message && this.endpoint.control?.edit) await this.endpoint.control.edit(message, content);
-          else if (typeof editBot.$updateMessage === 'function') await editBot.$updateMessage(messageId, content);
         },
       );
     }

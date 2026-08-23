@@ -24,7 +24,12 @@ import {
  * 首个占用 `/sandbox`（保持 Console 默认兼容），其余退到 `/sandbox/<name>`。
  * 认领记录按 HttpHost 隔离，endpoint stop() 时必须 release。
  */
-const claimedWsPaths = new WeakMap<HttpHost, Map<string, string>>();
+interface SandboxWsPathClaim {
+  readonly name: string;
+  readonly owners: Set<symbol>;
+}
+
+const claimedWsPaths = new WeakMap<HttpHost, Map<string, SandboxWsPathClaim>>();
 
 function claimSandboxWsPath(
   http: HttpHost,
@@ -37,7 +42,7 @@ function claimSandboxWsPath(
   }
   const candidates = ['/sandbox', `/sandbox/${encodeURIComponent(name)}`];
   let path = candidates.find(
-    (candidate) => !claims!.has(candidate) || claims!.get(candidate) === name,
+    (candidate) => !claims!.has(candidate) || claims!.get(candidate)?.name === name,
   );
   if (!path) {
     let index = 2;
@@ -47,13 +52,19 @@ function claimSandboxWsPath(
       path = `/sandbox/${encodeURIComponent(name)}-${index}`;
     }
   }
-  claims.set(path, name);
+  const owner = Symbol(name);
+  const claim = claims.get(path) ?? { name, owners: new Set<symbol>() };
+  claim.owners.add(owner);
+  claims.set(path, claim);
   const claimed = path;
   const registry = claims;
   return {
     path: claimed,
     release: () => {
-      if (registry.get(claimed) === name) registry.delete(claimed);
+      claim.owners.delete(owner);
+      if (claim.owners.size === 0 && registry.get(claimed) === claim) {
+        registry.delete(claimed);
+      }
     },
   };
 }

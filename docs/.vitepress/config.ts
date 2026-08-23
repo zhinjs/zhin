@@ -20,6 +20,7 @@ const USE_DOC_PREFIXES = [
   '/configuration/',
   '/cli/',
   '/ai/',
+  '/advanced/',
   '/console/',
   '/examples/',
   '/paths/',
@@ -86,6 +87,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   sidebarGroup('AI 模块', [
     { text: '总览', link: '/ai/' },
     { text: 'Agent 深入', link: '/ai/agent' },
+    { text: '执行状态反馈', link: '/advanced/activity-feedback' },
     { text: '语音', link: '/ai/speech' },
     { text: '智能家居（HA）', link: '/advanced/assistant-home-setup' },
   ]),
@@ -271,10 +273,11 @@ export default withMermaid(defineConfig({
           },
           {
             text: 'AI 模块',
-            activeMatch: '^/ai/',
+            activeMatch: '^/(ai|advanced)/',
             items: [
               { text: '总览', link: '/ai/' },
               { text: 'Agent 深入', link: '/ai/agent' },
+              { text: '执行状态反馈', link: '/advanced/activity-feedback' },
               { text: '语音', link: '/ai/speech' },
             ],
           },

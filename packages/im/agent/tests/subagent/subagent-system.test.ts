@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SubagentSystem } from '../../src/subagent/subagent-system.js';
 import { ImResultSink } from '../../src/subagent/im-result-sink.js';
 
@@ -30,5 +30,25 @@ describe('SubagentSystem', () => {
       { text: 'done', taskId: 'task-42', status: 'error' },
     );
     expect(delivered).toEqual([{ taskId: 'task-42', status: 'failed', result: 'done' }]);
+  });
+
+  it('shares concurrent disposal completion', async () => {
+    let release!: () => void;
+    const runtimeDispose = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
+    const system = new SubagentSystem({});
+    (system as unknown as { runtime: { dispose(): Promise<void> } }).runtime = {
+      dispose: runtimeDispose,
+    };
+
+    const first = system.dispose();
+    let secondSettled = false;
+    const repeated = system.dispose();
+    expect(repeated).toBe(first);
+    const second = repeated.then(() => { secondSettled = true; });
+    await Promise.resolve();
+    expect(secondSettled).toBe(false);
+    expect(runtimeDispose).toHaveBeenCalledTimes(1);
+    release();
+    await Promise.all([first, second]);
   });
 });

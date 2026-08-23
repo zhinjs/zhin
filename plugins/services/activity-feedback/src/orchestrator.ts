@@ -21,6 +21,7 @@ export class ActivityFeedbackOrchestrator {
     ctx: NonNullable<ReturnType<typeof toActivityFeedbackEventContext>>;
     phase: ActivityFeedbackPhase;
   }>();
+  private readonly pendingCleanup = new Set<Promise<void>>();
 
   constructor(
     private readonly policy: ActivityFeedbackPolicy,
@@ -115,9 +116,14 @@ export class ActivityFeedbackOrchestrator {
     const timer = setTimeout(() => {
       this.transient.delete(key);
       this.active.delete(key);
-      void this.executor.stop(ctx, phase).catch((error) => {
-        this.log.error(`[ActivityFeedback] transient ${phase} cleanup failed:`, error);
-      });
+      const cleanup = this.executor.stop(ctx, phase)
+        .catch((error) => {
+          this.log.error(`[ActivityFeedback] transient ${phase} cleanup failed:`, error);
+        })
+        .finally(() => {
+          this.pendingCleanup.delete(cleanup);
+        });
+      this.pendingCleanup.add(cleanup);
     }, Math.max(0, delay));
     timer.unref?.();
     this.transient.set(key, { timer, ctx, phase });
@@ -129,14 +135,17 @@ export class ActivityFeedbackOrchestrator {
     this.active.clear();
     this.transient.clear();
     for (const item of timers) clearTimeout(item.timer);
-    await Promise.allSettled(pending.map((item) => this.executor.stop(item.ctx, item.phase)));
+    await Promise.allSettled([
+      ...pending.map((item) => this.executor.stop(item.ctx, item.phase)),
+      ...this.pendingCleanup,
+    ]);
   }
 
   private phaseKey(
     ctx: NonNullable<ReturnType<typeof toActivityFeedbackEventContext>>,
     phase: ActivityFeedbackPhase,
   ): string {
-    return JSON.stringify([ctx.platform, ctx.endpointKey, ctx.sessionId, phase]);
+    return JSON.stringify([ctx.platform, ctx.endpointKey, ctx.sessionId, phase, ctx.messageId]);
   }
 
   private clearTransient(key: string): void {

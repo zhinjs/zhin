@@ -99,9 +99,12 @@ export function createActivityFeedbackAIEventHandlers(
     },
 
     onSubagentFinish: async (payload) => {
-      if (!isActivityFeedbackEnabled(payload, 'active')) return;
-      await orchestrator.stopPhase(payload, 'thinking', 'subagent.finish');
-      await orchestrator.stopPhase(payload, 'active', 'subagent.finish');
+      if (isActivityFeedbackEnabled(payload, 'thinking')) {
+        await orchestrator.stopPhase(payload, 'thinking', 'subagent.finish');
+      }
+      if (isActivityFeedbackEnabled(payload, 'active')) {
+        await orchestrator.stopPhase(payload, 'active', 'subagent.finish');
+      }
     },
 
     onScheduleStart: (payload) => orchestrator.startPhase(payload, 'schedule_start', 'schedule.start'),
@@ -126,7 +129,6 @@ export function bindActivityFeedbackToAIEventBus(
   runWithView: <T>(operation: () => Promise<T>) => Promise<T>,
 ): () => Promise<void> {
   let stopWatchingRetirement: (() => void) | undefined;
-  let close!: () => Promise<void>;
   const watchRetirement = () => {
     if (stopWatchingRetirement) return;
     stopWatchingRetirement = admission.onDeactivate(() => {
@@ -144,7 +146,7 @@ export function bindActivityFeedbackToAIEventBus(
     createActivityFeedbackAIEventHandlers(orchestrator),
   );
   let shutdown: Promise<void> | undefined;
-  close = (): Promise<void> => {
+  function close(): Promise<void> {
     if (shutdown) return shutdown;
     // Retirement is published before SnapshotStore changes its current pointer.
     // Enter the IM view synchronously here so timers, native-typing keepalives,
@@ -155,7 +157,7 @@ export function bindActivityFeedbackToAIEventBus(
       await orchestrator.dispose();
     });
     return shutdown;
-  };
+  }
   return async () => {
     stopWatchingRetirement?.();
     await close();

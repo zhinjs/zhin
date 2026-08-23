@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # ADR 0034：Activity Feedback 服务插件
 
 状态：Accepted

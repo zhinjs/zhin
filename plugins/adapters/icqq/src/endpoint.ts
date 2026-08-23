@@ -8,6 +8,7 @@ import {
   type VideoElem,
 } from '@icqqjs/icqq';
 import { inspect } from 'node:util';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type {
   EndpointControl,
   EndpointInstance,
@@ -102,10 +103,13 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   #open = false;
   #retiring = false;
   #started = false;
+  #retirementEpoch = 0;
+  #retirementArmed = false;
   #resolveStartOnline?: () => void;
   #heldInbound: IcqqInboundMessage[] = [];
   #unregisterAgent?: () => void;
   readonly #inflightInbound = new Set<Promise<void>>();
+  readonly #inboundOwner = new AsyncLocalStorage<symbol>();
   readonly #messageContent = new Map<string, ConversationMessage>();
 
   readonly content: EndpointContentPort = Object.freeze({
@@ -282,6 +286,12 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   async start(signal: AbortSignal): Promise<void> {
     if (this.#started) return;
     signal.throwIfAborted();
+    // Invalidate a guard left by a prior lifecycle epoch before admitting a
+    // new login attempt on this endpoint instance.
+    this.#retirementEpoch += 1;
+    this.#retirementArmed = false;
+    this.#retiring = false;
+    this.off('system.online');
     this.#started = true;
     let resolveOnline!: () => void;
     const onlineReady = new Promise<void>((resolve) => {
@@ -312,31 +322,47 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   }
 
   open(): void {
+    if (this.#retirementArmed) {
+      this.#retirementEpoch += 1;
+      this.#retirementArmed = false;
+      this.off('system.online');
+      this.#bindSystemOnlineEvent();
+    }
     this.#retiring = false;
     this.#open = true;
     const held = this.#heldInbound.splice(0);
-    for (const msg of held) this.admit(msg);
+    for (const msg of held) {
+      void this.admit(msg).catch((error) => {
+        this.#logInboundHandlerFailure('held', error);
+      });
+    }
   }
 
   async close(): Promise<void> {
-    this.#retiring = true;
-    this.#open = false;
+    this.#assertExternalLifecycle('close');
+    this.#armRetirementFence();
     await Promise.allSettled([...this.#inflightInbound]);
   }
 
   async stop(): Promise<void> {
-    this.#retiring = true;
-    this.#open = false;
+    this.#assertExternalLifecycle('stop');
+    this.#armRetirementFence();
     await Promise.allSettled([...this.#inflightInbound]);
     this.#resolveStartOnline?.();
     this.#options.loginAssist.cancelOwned(this.#loginAssistOwner, 'endpoint_stopped');
     this.#heldInbound.length = 0;
     this.#unregisterAgent?.();
     this.#unregisterAgent = undefined;
-    for (const event of BOUND_EVENTS) this.off(event);
-    try {
-      await this.logout?.();
-    } catch { /* ignore */ }
+    for (const event of BOUND_EVENTS) {
+      // The retirement guard owns this matcher until a late login handshake
+      // has finished. start()/open() replace it with the normal listener.
+      if (event !== 'system.online') this.off(event);
+    }
+    // `Client.logout()` sends an account-level unregister packet before it
+    // closes this transport. During config HMR the replacement endpoint for
+    // the same UIN is already online, so unregistering the retiring generation
+    // also closes the replacement session. Endpoint ownership is transport
+    // scoped: retire only this Client's TCP connection.
     try {
       this.terminate();
     } catch { /* ignore */ }
@@ -345,6 +371,31 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     this.#guildCatalog.clear();
     this.#started = false;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
+  }
+
+  #armRetirementFence(): void {
+    this.#retiring = true;
+    this.#open = false;
+    if (this.#retirementArmed) return;
+    this.#retirementArmed = true;
+    const retirementEpoch = ++this.#retirementEpoch;
+    // ICQQ owns reconnect through this per-Client timer. Clear it before any
+    // asynchronous drain so a queued callback cannot enter while close waits.
+    if (this.login_timer) {
+      clearTimeout(this.login_timer);
+      this.login_timer = null;
+    }
+    // A login callback may already be inside the SDK handshake, which has no
+    // abort API. Replace the normal online listener with an epoch-owned guard
+    // before draining inbound work. Transport termination is account-local;
+    // logout would also unregister an HMR replacement using the same UIN.
+    this.off('system.online');
+    this.on('system.online', () => {
+      if (this.#retirementEpoch !== retirementEpoch || !this.#retiring) return;
+      try {
+        this.terminate();
+      } catch { /* already closed */ }
+    });
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -410,7 +461,37 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     }
   }
 
-  admit(msg: IcqqInboundMessage, admittedBeforeRetire = false): void {
+  admit(msg: IcqqInboundMessage): Promise<void> {
+    return this.#trackInbound(() => this.#deliverInbound(msg));
+  }
+
+  #trackInbound(run: () => Promise<void>): Promise<void> {
+    const owner = Symbol('icqq-inbound');
+    let settle!: () => void;
+    const settlement = new Promise<void>((resolve) => { settle = resolve; });
+    this.#inflightInbound.add(settlement);
+    let operation: Promise<void>;
+    try {
+      operation = this.#inboundOwner.run(owner, run);
+    } catch (error) {
+      this.#inflightInbound.delete(settlement);
+      settle();
+      return Promise.reject(error);
+    }
+    return operation.finally(() => {
+      this.#inflightInbound.delete(settlement);
+      settle();
+    });
+  }
+
+  #assertExternalLifecycle(operation: 'close' | 'stop'): void {
+    if (!this.#inboundOwner.getStore()) return;
+    throw new Error(
+      `ICQQ endpoint ${operation} cannot run inside its own inbound receive; invoke it from the owning lifecycle`,
+    );
+  }
+
+  async #deliverInbound(msg: IcqqInboundMessage, admittedBeforeRetire = false): Promise<void> {
     const conversation = msg.conversation;
     if (!this.#open && !admittedBeforeRetire) {
       if (this.#retiring) return;
@@ -445,7 +526,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       + (mentioned ? ' (mentioned)' : '')
       + ` | ${truncatePreview(msg.content, 80)}`,
     );
-    void this.#options.gateway.receive({
+    await this.#options.gateway.receive({
       conversation,
       message: { conversation, id: msg.id },
       content: msg.content,
@@ -484,16 +565,16 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     };
     this.on('message.private', (event) => this.#startMessageEvent('message.private', event));
     this.on('message.group', (event) => this.#startMessageEvent('message.group', event));
-    this.on('message.guild', (event) => safe('message.guild', () => this.#handleGuildEvent(event)));
+    this.on('message.guild', (event) => {
+      void this.#handleGuildEvent(event).catch((error) => {
+        this.#logInboundHandlerFailure('message.guild', error);
+      });
+    });
     this.on('request.friend', (event) => safe('request.friend', () => this.#onRequestEvent(serializeIcqqEvent(event))));
     this.on('request.group', (event) => safe('request.group', () => this.#onRequestEvent(serializeIcqqEvent(event))));
     this.on('notice.friend', (event) => safe('notice.friend', () => this.#onNoticeEvent(serializeIcqqEvent(event))));
     this.on('notice.group', (event) => safe('notice.group', () => this.#onNoticeEvent(serializeIcqqEvent(event))));
-    this.on('system.online', (event) => safe('system.online', () => {
-      this.#resolveStartOnline?.();
-      this.#options.loginAssist.cancelOwned(this.#loginAssistOwner, 'online');
-      this.#logSystemEvent('online', event);
-    }));
+    this.#bindSystemOnlineEvent();
     this.on('system.offline', (event) => this.#logSystemEvent('offline', event));
     this.on('system.offline.network', (event) => this.#logSystemEvent('offline.network', event));
     this.on('system.offline.kickoff', (event) => this.#logSystemEvent('offline.kickoff', event));
@@ -508,6 +589,24 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       this.#logSystemEvent('login.error', event);
     });
     this.on('system.login.auth', (event) => this.#handleLoginChallenge('auth', event));
+  }
+
+  #bindSystemOnlineEvent(): void {
+    this.on('system.online', (event) => {
+      if (this.#retiring) return;
+      try {
+        this.#resolveStartOnline?.();
+        this.#options.loginAssist.cancelOwned(this.#loginAssistOwner, 'online');
+        this.#logSystemEvent('online', event);
+      } catch (error) {
+        this.#logger.warn(formatCompact({
+          op: 'icqq_event_handler',
+          endpoint: this.endpointName,
+          event: 'system.online',
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      }
+    });
   }
 
   #handleLoginChallenge(
@@ -660,7 +759,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
         timestamp: quoted.time ? quoted.time * (quoted.time < 1e12 ? 1000 : 1) : Date.now(),
       }));
     }
-    this.admit({
+    await this.#deliverInbound({
       id: normalized.messageId,
       conversation,
       content: formatInboundContent(normalized.rawMessage),
@@ -680,12 +779,9 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   }
 
   #startMessageEvent(eventName: 'message.private' | 'message.group', event: unknown): void {
-    const operation = this.#handleMessageEvent(eventName, event);
-    this.#inflightInbound.add(operation);
+    const operation = this.#trackInbound(() => this.#handleMessageEvent(eventName, event));
     void operation.catch((error) => {
       this.#logInboundHandlerFailure(eventName, error);
-    }).finally(() => {
-      this.#inflightInbound.delete(operation);
     });
   }
 
@@ -712,7 +808,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     }));
   }
 
-  #handleGuildEvent(event: unknown): void {
+  async #handleGuildEvent(event: unknown): Promise<void> {
     const payload = serializeIcqqEvent(event);
     if (!payload || typeof payload !== 'object') return;
     const normalized = normalizeIcqqGuildInboundMessage(
@@ -736,7 +832,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       }));
       return;
     }
-    this.admit({
+    await this.admit({
       id: normalized.messageId,
       conversation: icqqInboundConversation(String(this.#options.id), {
         channelType: 'channel',

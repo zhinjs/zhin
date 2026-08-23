@@ -31,12 +31,24 @@ export class KeyedMutex {
     return this.chains.size;
   }
 
-  async drain(timeoutMs: number): Promise<void> {
-    const deadline = Date.now() + timeoutMs;
-    while (this.chains.size > 0 && Date.now() < deadline) {
-      await Promise.allSettled([...this.chains.values()]);
+  async drain(timeoutMs?: number): Promise<void> {
+    const pending = Promise.allSettled([...this.chains.values()]).then(() => undefined);
+    if (timeoutMs === undefined) {
+      await pending;
+      return;
     }
-    this.chains.clear();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        pending,
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, Math.max(0, timeoutMs));
+          timer.unref?.();
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 }
 

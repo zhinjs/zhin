@@ -103,11 +103,58 @@ describe('SubagentRuntime', () => {
     });
   });
 
-  afterEach(() => {
-    manager.dispose();
+  afterEach(async () => {
+    await manager.dispose();
   });
 
   describe('spawn', () => {
+    it('dispose during async enrichment must fail closed before starting work', async () => {
+      let releaseMeta!: () => void;
+      const enrichment = new Promise<void>((resolve) => { releaseMeta = resolve; });
+      const guarded = new SubagentRuntime({
+        provider: provider as any,
+        workspace: '/tmp/test-workspace',
+        createTools: () => mockTools,
+        resolveAgentMeta: async () => {
+          await enrichment;
+          return null;
+        },
+      });
+
+      const spawning = guarded.spawn({ task: 'late', agent: 'worker', origin: baseOrigin });
+      await Promise.resolve();
+      const disposal = guarded.dispose();
+      releaseMeta();
+
+      await disposal;
+      await expect(spawning).rejects.toThrow(/disposed|retired|aborted/i);
+      expect(llm.calls).toHaveLength(0);
+    });
+
+    it('dispose during spawn observer must abort before entering agent loop', async () => {
+      let releaseSpawn!: () => void;
+      let spawnObserved!: () => void;
+      const observed = new Promise<void>((resolve) => { spawnObserved = resolve; });
+      const guarded = new SubagentRuntime({
+        provider: provider as any,
+        workspace: '/tmp/test-workspace',
+        createTools: () => mockTools,
+        onEvent: async (event) => {
+          if (event.phase !== 'spawn') return;
+          spawnObserved();
+          await new Promise<void>((resolve) => { releaseSpawn = resolve; });
+        },
+      });
+
+      const spawning = guarded.spawn({ task: 'late', origin: baseOrigin });
+      await observed;
+      const disposal = guarded.dispose();
+      releaseSpawn();
+
+      await disposal;
+      await expect(spawning).rejects.toThrow(/disposed|retired|aborted/i);
+      expect(llm.calls).toHaveLength(0);
+    });
     it('应返回确认文本并包含任务标签', async () => {
       const result = await manager.spawn({
         task: '分析项目结构',
@@ -158,6 +205,7 @@ describe('SubagentRuntime', () => {
       expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'spawn', label: 'README分析' }));
       expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'start', label: 'README分析' }));
       expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'finish', label: 'README分析', status: 'ok' }));
+      expect(onEvent.mock.calls.map(([event]) => event.phase)).toEqual(['spawn', 'start', 'finish']);
 
       eventManager.dispose();
     });
@@ -304,12 +352,149 @@ describe('SubagentRuntime', () => {
 
       expect(manager.getRunningCount()).toBe(0);
     });
+
+    it('cancel 应中断挂起的 agent loop 并产生错误终态', async () => {
+      llm.hang();
+      const dispatched: string[] = [];
+      const emitted: string[] = [];
+      const emitter = {
+        createPayload: (_sid: string, _ctx: unknown, _mode: string, extra: Record<string, unknown> = {}) => ({
+          sessionId: 'test-session', messageId: 'msg-1', ...extra,
+        }),
+        dispatch: vi.fn(async (name: string) => { dispatched.push(name); }),
+        emit: vi.fn((name: string) => { emitted.push(name); }),
+      } as unknown as ZhinAgentEventEmitter;
+      manager.setEventEmitter(emitter);
+
+      const confirmation = await manager.spawn({ task: '挂起任务', origin: baseOrigin });
+      const taskId = confirmation.match(/id: ([^)]+)/)?.[1];
+      expect(taskId).toBeTruthy();
+      await vi.waitFor(() => expect(llm.calls).toHaveLength(1));
+      expect(manager.cancel(taskId!)).toBe(true);
+
+      await vi.waitFor(() => expect(onSubagentComplete).toHaveBeenCalledTimes(1));
+      expect(onSubagentComplete.mock.calls[0]![0].status).toBe('error');
+      expect(dispatched).toContain('ai.processing.error');
+      expect(emitted).toContain('ai.typing.stop');
+      expect(manager.getRunningCount()).toBe(0);
+    });
   });
 
   describe('dispose', () => {
     it('应清空 runningTasks', () => {
       manager.dispose();
       expect(manager.getRunningCount()).toBe(0);
+    });
+
+    it('dispose 中断子任务时只发终态清理，不再投递旧 generation 结果', async () => {
+      llm.hang();
+      const dispatched: string[] = [];
+      const emitter = {
+        createPayload: (_sid: string, _ctx: unknown, _mode: string, extra: Record<string, unknown> = {}) => ({
+          sessionId: 'test-session', messageId: 'msg-1', ...extra,
+        }),
+        dispatch: vi.fn(async (name: string) => { dispatched.push(name); }),
+        emit: vi.fn(),
+      } as unknown as ZhinAgentEventEmitter;
+      manager.setEventEmitter(emitter);
+      await manager.spawn({ task: '退役时挂起', origin: baseOrigin });
+      await vi.waitFor(() => expect(llm.calls).toHaveLength(1));
+
+      manager.dispose();
+      await vi.waitFor(() => expect(dispatched).toContain('ai.processing.error'));
+
+      expect(onSubagentComplete).not.toHaveBeenCalled();
+      expect(manager.getRunningCount()).toBe(0);
+    });
+
+    it('dispose 应等待已跟踪任务的 terminal observer 完成', async () => {
+      llm.hang();
+      let finishEntered!: () => void;
+      let releaseFinish!: () => void;
+      const entered = new Promise<void>((resolve) => { finishEntered = resolve; });
+      const guarded = new SubagentRuntime({
+        provider: provider as any,
+        workspace: '/tmp/test-workspace',
+        createTools: () => mockTools,
+        onEvent: async (event) => {
+          if (event.phase !== 'finish') return;
+          finishEntered();
+          await new Promise<void>((resolve) => { releaseFinish = resolve; });
+        },
+      });
+      await guarded.spawn({ task: 'tracked', origin: baseOrigin });
+      await vi.waitFor(() => expect(llm.calls).toHaveLength(1));
+
+      let settled = false;
+      const disposal = Promise.resolve(guarded.dispose()).then(() => { settled = true; });
+      await entered;
+      expect(settled).toBe(false);
+      releaseFinish();
+      await disposal;
+      expect(settled).toBe(true);
+    });
+
+    it('processingStart observer 内 dispose 不 self-wait，但外部 dispose 仍等 terminal', async () => {
+      const holder: { current?: SubagentRuntime } = {};
+      let finishEntered!: () => void;
+      let releaseFinish!: () => void;
+      const entered = new Promise<void>((resolve) => { finishEntered = resolve; });
+      let observerDisposeReturned = false;
+      const emitter = {
+        createPayload: (_sid: string, _ctx: unknown, _mode: string, extra: Record<string, unknown> = {}) => ({
+          sessionId: 'test-session', messageId: 'msg-1', ...extra,
+        }),
+        dispatch: vi.fn(async (name: string) => {
+          if (name === 'ai.processing.start') {
+            await holder.current!.dispose();
+            observerDisposeReturned = true;
+          }
+        }),
+        emit: vi.fn(),
+      } as unknown as ZhinAgentEventEmitter;
+      const guarded = new SubagentRuntime({
+        provider: provider as any,
+        workspace: '/tmp/test-workspace',
+        createTools: () => mockTools,
+        eventEmitter: emitter,
+        onEvent: async (event) => {
+          if (event.phase !== 'finish') return;
+          finishEntered();
+          await new Promise<void>((resolve) => { releaseFinish = resolve; });
+        },
+      });
+      holder.current = guarded;
+
+      await guarded.spawn({ task: 'dispose-from-processing-start', origin: baseOrigin });
+      await entered;
+      expect(observerDisposeReturned).toBe(true);
+      let externalSettled = false;
+      const external = guarded.dispose().then(() => { externalSettled = true; });
+      await Promise.resolve();
+      expect(externalSettled).toBe(false);
+      releaseFinish();
+      await external;
+    });
+
+    it('finish observer 内 dispose 排除当前 task，不与自身 settlement 死锁', async () => {
+      const holder: { current?: SubagentRuntime } = {};
+      let finishDisposeReturned = false;
+      const guarded = new SubagentRuntime({
+        provider: provider as any,
+        workspace: '/tmp/test-workspace',
+        createTools: () => mockTools,
+        onEvent: async (event) => {
+          if (event.phase !== 'finish') return;
+          await holder.current!.dispose();
+          finishDisposeReturned = true;
+        },
+      });
+      holder.current = guarded;
+
+      await guarded.spawn({ task: 'dispose-from-finish', origin: baseOrigin });
+      await vi.waitFor(() => expect(finishDisposeReturned).toBe(true));
+      await guarded.dispose();
+      expect(guarded.getRunningCount()).toBe(0);
     });
 
     it('应上报与主 agent 同类的 AI 处理事件（source=subagent）', async () => {

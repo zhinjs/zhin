@@ -246,4 +246,51 @@ describe('createOutboundEndpointAccess', () => {
 
     expect(removeReaction).toHaveBeenCalledOnce();
   });
+
+  it('adds queued reaction for each new inbound message in the same busy group session', async () => {
+    const addReaction = vi.fn(async (input: { message: { id: string } }) => input.message.id);
+    const removeReaction = vi.fn().mockResolvedValue(undefined);
+    const access = createOutboundEndpointAccess({
+      capabilities: vi.fn(() => ({ operations: ['reaction'] })),
+      send: vi.fn(),
+      addReaction,
+      removeReaction,
+    });
+    const executor = new ActivityFeedbackExecutor(access);
+    const base = createCtx();
+    const first = {
+      ...base,
+      sceneType: 'group' as const,
+      groupId: 'group-1',
+      messageId: 'inbound-1',
+      options: {
+        ...base.options,
+        sceneType: 'group' as const,
+        groupId: 'group-1',
+        messageId: 'inbound-1',
+      },
+    };
+    const second = {
+      ...first,
+      messageId: 'inbound-2',
+      options: { ...first.options, messageId: 'inbound-2' },
+    };
+    const config = { type: 'reaction' as const, emoji: '⏳', autoRemove: true };
+
+    await executor.start(first, 'queued', config);
+    await executor.start(second, 'queued', config);
+
+    expect(addReaction).toHaveBeenCalledTimes(2);
+    expect(addReaction.mock.calls.map(([input]) => input.message.id)).toEqual([
+      'inbound-1',
+      'inbound-2',
+    ]);
+
+    await executor.stop(first, 'queued');
+    expect(removeReaction).toHaveBeenCalledOnce();
+    expect(removeReaction.mock.calls[0]![0].message.id).toBe('inbound-1');
+    await executor.stop(second, 'queued');
+    expect(removeReaction).toHaveBeenCalledTimes(2);
+    expect(removeReaction.mock.calls[1]![0].message.id).toBe('inbound-2');
+  });
 });

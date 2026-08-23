@@ -75,6 +75,127 @@ describe('task executor outbound seam', () => {
     expect(publish).toHaveBeenNthCalledWith(2, expect.objectContaining({ phase: 'finish' }));
   });
 
+  it('serializes schedule activity terminals with execution for the same scene', async () => {
+    let releaseFirst!: () => void;
+    const phases: string[] = [];
+    const execute = vi.fn(async () => {
+      if (execute.mock.calls.length === 1) {
+        await new Promise<void>((resolve) => { releaseFirst = resolve; });
+      }
+      return domainResult();
+    });
+    const scheduled = { ...job({ channel: 'silent' }), activityFeedback: true };
+    const executor = createTaskExecutor({
+      activity: { publish: (event) => { phases.push(event.phase); } },
+      domain: { execute },
+      resolveAdapter: () => undefined,
+    });
+
+    const first = executor.execute(scheduled);
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+    const second = executor.execute(scheduled);
+    await Promise.resolve();
+    expect(phases).toEqual(['start']);
+    releaseFirst();
+    await Promise.all([first, second]);
+
+    expect(phases).toEqual(['start', 'finish', 'start', 'finish']);
+  });
+
+  it('does not serialize independent executor generations through module state', async () => {
+    let releaseFirst!: () => void;
+    const firstDomain = vi.fn(async () => {
+      await new Promise<void>((resolve) => { releaseFirst = resolve; });
+      return domainResult('first');
+    });
+    const secondDomain = vi.fn(async () => domainResult('second'));
+    const notify = { channel: 'silent' as const };
+    const firstExecutor = createTaskExecutor({ domain: { execute: firstDomain }, resolveAdapter: () => undefined });
+    const secondExecutor = createTaskExecutor({ domain: { execute: secondDomain }, resolveAdapter: () => undefined });
+
+    const first = firstExecutor.execute(job(notify));
+    await vi.waitFor(() => expect(firstDomain).toHaveBeenCalledTimes(1));
+    const second = secondExecutor.execute(job(notify));
+    await vi.waitFor(() => expect(secondDomain).toHaveBeenCalledTimes(1));
+    await expect(second).resolves.toMatchObject({ responseText: 'second' });
+    releaseFirst();
+    await first;
+  });
+
+  it('dispose waits for admitted execution and rejects new work', async () => {
+    let release!: () => void;
+    const executor = createTaskExecutor({
+      domain: { execute: vi.fn(async () => {
+        await new Promise<void>((resolve) => { release = resolve; });
+        return domainResult();
+      }) },
+      resolveAdapter: () => undefined,
+    });
+    const running = executor.execute(job({ channel: 'silent' }));
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    let settled = false;
+    const disposal = executor.dispose().then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    await expect(executor.execute(job({ channel: 'silent' }))).rejects.toThrow(/disposed/i);
+    release();
+    await running;
+    await disposal;
+  });
+
+  it('concurrent dispose callers share completion instead of returning early', async () => {
+    let release!: () => void;
+    const executor = createTaskExecutor({
+      domain: { execute: vi.fn(async () => {
+        await new Promise<void>((resolve) => { release = resolve; });
+        return domainResult();
+      }) },
+      resolveAdapter: () => undefined,
+    });
+    const running = executor.execute(job({ channel: 'silent' }));
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+
+    const first = executor.dispose();
+    let secondSettled = false;
+    const repeated = executor.dispose();
+    expect(repeated).toBe(first);
+    const second = repeated.then(() => { secondSettled = true; });
+    await Promise.resolve();
+    expect(secondSettled).toBe(false);
+    release();
+    await Promise.all([running, first, second]);
+  });
+
+  it('legacy global drain fails explicitly instead of reporting a false successful drain', async () => {
+    const { drainTaskExecutorLocks } = await import('../src/task-executor.js');
+    await expect(drainTaskExecutorLocks(10)).rejects.toThrow(/executor\.dispose/i);
+  });
+
+  it('fails fast when an injected execution callback awaits its own executor disposal', async () => {
+    const holder: { executor?: ReturnType<typeof createTaskExecutor> } = {};
+    const executor = createTaskExecutor({
+      domain: {
+        execute: vi.fn(async () => {
+          await holder.executor!.dispose();
+          return domainResult();
+        }),
+      },
+      resolveAdapter: () => undefined,
+    });
+    holder.executor = executor;
+
+    const verdict = Promise.race([
+      executor.execute(job({ channel: 'silent' })),
+      new Promise<never>((_resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('self-dispose timed out')), 100);
+        timer.unref?.();
+      }),
+    ]);
+
+    await expect(verdict).rejects.toThrow(/cannot dispose.*inside|execution callback/i);
+    await executor.dispose();
+  });
+
   it('cancels scene-lock admission without entering the domain', async () => {
     let releaseFirst!: () => void;
     const execute = vi.fn(async () => {

@@ -36,11 +36,33 @@ describe('ActivityFeedbackManager', () => {
     await manager.start('active', base, { type: 'reaction', emoji: '60' });
 
     expect(created).toHaveLength(2);
-    expect(created[0]!.sessionId).toBe('group:123:456::phase:queued');
-    expect(created[1]!.sessionId).toBe('group:123:456::phase:active');
+    expect(created[0]!.sessionId).toBe('group:123:456::phase:queued::message:msg1');
+    expect(created[1]!.sessionId).toBe('group:123:456::phase:active::message:msg1');
 
     expect(manager.getActiveIndicator('queued', base)).toBeDefined();
     expect(manager.getActiveIndicator('active', base)).toBeDefined();
+  });
+
+  it('keys reactions by message while leaving message feedback session-scoped', async () => {
+    const created: TypingIndicatorOptions[] = [];
+    const manager = new ActivityFeedbackManager();
+    manager.registerAdapter(mockAdapter((options) => created.push({ ...options })));
+    const base = {
+      platform: 'test',
+      endpointKey: 'ep1',
+      sessionId: 'group:123:456',
+      sceneType: 'group' as const,
+    };
+
+    await manager.start('queued', { ...base, messageId: 'msg1' }, { type: 'reaction' });
+    await manager.start('queued', { ...base, messageId: 'msg2' }, { type: 'reaction' });
+    await manager.start('thinking', { ...base, messageId: 'msg1' }, { type: 'message' });
+
+    expect(created.map((options) => options.sessionId)).toEqual([
+      'group:123:456::phase:queued::message:msg1',
+      'group:123:456::phase:queued::message:msg2',
+      'group:123:456::phase:thinking',
+    ]);
   });
 
   it('stops only the requested phase', async () => {
