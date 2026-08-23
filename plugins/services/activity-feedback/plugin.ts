@@ -1,4 +1,10 @@
-import { definePlugin, outboundHostToken } from 'zhin.js';
+import {
+  createGenerationAdmissionGate,
+  createToken,
+  definePlugin,
+  outboundHostToken,
+  type GenerationAdmissionGate,
+} from 'zhin.js';
 import { getLogger } from '@zhin.js/logger';
 import {
   loadActivityFeedbackServiceConfig,
@@ -9,11 +15,13 @@ import {
   createActivityFeedbackOrchestratorForRuntime,
 } from './src/ai-event-binder.js';
 import {
-  createNoopEndpointAccess,
   createOutboundEndpointAccess,
 } from './src/executor.js';
 
 const logger = getLogger('activity-feedback');
+const activityFeedbackAdmissionToken = createToken<GenerationAdmissionGate>(
+  'zhin.activity-feedback.generation-admission',
+);
 
 /**
  * Activity Feedback service — Plugin Runtime entry.
@@ -33,20 +41,32 @@ export default definePlugin<ActivityFeedbackServiceConfig>({
       return;
     }
 
-    const access = context.resources.has(outboundHostToken)
-      ? createOutboundEndpointAccess(context.resources.use(outboundHostToken), logger)
-      : createNoopEndpointAccess();
+    const outbound = context.resources.has(outboundHostToken)
+      ? context.resources.use(outboundHostToken)
+      : undefined;
+    if (!outbound || typeof outbound.runWithView !== 'function') {
+      logger.debug(
+        '[ActivityFeedback] disabled: OutboundHost with generation-bound runWithView is required',
+      );
+      return;
+    }
+    const access = createOutboundEndpointAccess(outbound, logger);
 
     const orchestrator = createActivityFeedbackOrchestratorForRuntime(
       serviceConfig,
       logger,
       access,
     );
-    const dispose = bindActivityFeedbackToAIEventBus(orchestrator);
+    const admission = createGenerationAdmissionGate();
+    context.resources.provide(activityFeedbackAdmissionToken, admission);
+    const dispose = bindActivityFeedbackToAIEventBus(
+      orchestrator,
+      admission,
+      outbound.runWithView.bind(outbound),
+    );
     context.lifecycle.add(async () => {
       logger.debug('[ActivityFeedback] Disposing Runtime AI event binder');
       await dispose();
-      await orchestrator.dispose();
     });
   },
 });

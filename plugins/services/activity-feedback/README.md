@@ -26,7 +26,7 @@ activityFeedbackAiBus ──► ai-event-binder（薄） ──► ActivityFeedb
 
 同一 IM 会话的异步状态事件按产生顺序串行投影，主 Agent、工具迭代、子 Agent
 以及 Schedule 的开始/完成/失败不会互相抢写。Endpoint 未声明某项操作时会按实际
-能力降级为状态消息，不按平台名称猜测隐藏方法。
+能力降级为可安全清理的 reaction、typing、message 或 none，不按平台名称猜测隐藏方法。
 
 ## 安装
 

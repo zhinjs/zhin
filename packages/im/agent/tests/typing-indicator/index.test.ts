@@ -335,7 +335,7 @@ describe('ReactionTypingIndicator', () => {
     expect(indicator.isActive()).toBe(false);
   });
 
-  it('stop 不等待 removeReaction 完成', async () => {
+  it('stop 等待 removeReaction 完成', async () => {
     const addReaction = vi.fn().mockResolvedValue('reaction-123');
     let resolveRemove!: () => void;
     const removeReaction = vi.fn().mockImplementation(
@@ -355,10 +355,15 @@ describe('ReactionTypingIndicator', () => {
     );
 
     await indicator.start();
-    await expect(indicator.stop()).resolves.toBeUndefined();
+    let settled = false;
+    const stopping = indicator.stop().then(() => { settled = true; });
+    await Promise.resolve();
     expect(removeReaction).toHaveBeenCalledTimes(1);
     expect(indicator.isActive()).toBe(false);
+    expect(settled).toBe(false);
     resolveRemove();
+    await stopping;
+    expect(settled).toBe(true);
   });
 
   it('并发 stop 只应 remove 一次', async () => {

@@ -191,4 +191,45 @@ describe('ActivityFeedbackOrchestrator', () => {
       'thinking',
     );
   });
+
+  it('tracks delimiter-containing endpoint tuples without phase-key collisions', async () => {
+    const executor = {
+      start: vi.fn(),
+      stop: vi.fn(),
+      updateText: vi.fn(),
+      updateThinkingText: vi.fn(),
+    } satisfies ActivityFeedbackExecutor;
+    const orchestrator = new ActivityFeedbackOrchestrator(
+      new ActivityFeedbackPolicy(loadActivityFeedbackServiceConfig({})),
+      executor,
+      { debug: vi.fn(), error: vi.fn() },
+    );
+    const base = {
+      source: 'zhin-agent',
+      sceneId: 'u1',
+      userId: 'u1',
+      scope: 'private',
+      hookContext: { activityFeedbackEligible: true },
+    } as const;
+    const first = {
+      ...base,
+      platform: 'a:b', endpointKey: 'c', sessionId: 'd',
+    } as AIEventPayload;
+    const second = {
+      ...base,
+      platform: 'a', endpointKey: 'b', sessionId: 'c:d',
+    } as AIEventPayload;
+
+    await orchestrator.startPhase(first, 'active', 'test');
+    await orchestrator.startPhase(second, 'active', 'test');
+    await orchestrator.stopPhase(first, 'active', 'test');
+    executor.stop.mockClear();
+    await orchestrator.dispose();
+
+    expect(executor.stop).toHaveBeenCalledOnce();
+    expect(executor.stop).toHaveBeenCalledWith(
+      expect.objectContaining({ platform: 'a', endpointKey: 'b', sessionId: 'c:d' }),
+      'active',
+    );
+  });
 });

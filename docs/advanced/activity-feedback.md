@@ -21,8 +21,14 @@ pnpm add @zhin.js/service-activity-feedback @zhin.js/agent
 
 ```json
 {
-  "package": "@zhin.js/service-activity-feedback",
-  "instanceKey": "activity-feedback"
+  "zhin": {
+    "plugins": [
+      {
+        "package": "@zhin.js/service-activity-feedback",
+        "instanceKey": "activity-feedback"
+      }
+    ]
+  }
 }
 ```
 
@@ -59,10 +65,10 @@ plugins:
 
 - `reaction`：在触发消息上添加回应，停止时移除。
 - `typing`：使用平台原生输入状态，并定时续期。
-- `message`：发送状态消息；支持 edit 时会原位更新，支持 recall 时会在结束时撤回。
+- `message`：仅在 Endpoint 声明 recall 时发送可清理的临时状态消息；若同时支持 edit，会原位更新。
 - `none`：关闭该 phase。
 
-实际执行以 Endpoint 的 `operations` 声明为准。配置请求了平台不支持的类型时，插件会降级到该 Endpoint 可用的 typing、message 或 none，不会调用未声明的隐藏能力。
+实际执行以 Endpoint 的 `operations` 声明为准。配置请求了平台不支持的类型时，插件会降级到该 Endpoint 可安全清理的 reaction、typing、message 或 none，不会调用未声明的隐藏能力，也不会伪造平台 message id。
 
 ## Schedule
 

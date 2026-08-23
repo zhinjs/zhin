@@ -26,12 +26,13 @@ import type {
   OutputElement,
   Tool,
 } from '../internal/agent-host.js';
-import type { Message } from '@zhin.js/core';
+import { resolveIMSessionIdFromMessage, type Message } from '@zhin.js/core';
 import {
   turnMediaFromMessage,
   turnContextViewFromMessage,
 } from '../context/im-turn-context-adapter.js';
 import { createClassicToolExecutionAuthority } from '../tool/classic-tool-execution-authority.js';
+import { createTurnActivityProjector } from '../activity-feedback/turn-event-projector.js';
 
 function requireSessionSystem(host: ZhinAgentPrivate): SessionSystem {
   if (!host.sessionSystem) {
@@ -75,6 +76,36 @@ export async function processTextTurn(
   onChunk?: OnChunkCallback,
   extras?: ProcessTextTurnOptions,
 ): Promise<OutputElement[]> {
+  try {
+    return await processTextTurnInner(host, content, commMessage, externalTools, onChunk, extras);
+  } catch (error) {
+    const sessionId = resolveIMSessionIdFromMessage(commMessage);
+    const payload = host.emitter.createPayload(sessionId, commMessage, 'text', {
+      content,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    try {
+      await host.emitter.dispatch('ai.processing.error', payload);
+    } catch {
+      // Activity observers cannot replace the original turn failure.
+    }
+    try {
+      await host.emitter.dispatch('ai.typing.stop', { ...payload, reason: 'processing_error' });
+    } catch {
+      // Activity observers cannot replace the original turn failure.
+    }
+    throw error;
+  }
+}
+
+async function processTextTurnInner(
+  host: ZhinAgentPrivate,
+  content: string,
+  commMessage: Message,
+  externalTools: Tool[] = [],
+  onChunk?: OnChunkCallback,
+  extras?: ProcessTextTurnOptions,
+): Promise<OutputElement[]> {
     const t0 = now();
     const sessionSystem = requireSessionSystem(host);
     const prep = await sessionSystem.prepareTextTurn(host, commMessage, content, {
@@ -89,9 +120,16 @@ export async function processTextTurn(
       }, { sessionId });
     }
 
-    await host.emitter.dispatch('ai.processing.start', host.emitter.createPayload(sessionId, commMessage, 'text', {
+    const activityPayload = host.emitter.createPayload(sessionId, commMessage, 'text', {
       content,
-    }));
+    });
+    await host.emitter.dispatch('ai.processing.start', activityPayload);
+    const projectActivity = createTurnActivityProjector({
+      payload: activityPayload,
+      publish: (event, payload) => host.emitter.emit(event, payload),
+      thinkingPreview: host.config.thinkingPreview === true,
+      thinkingMaxLength: host.config.thinkingPreviewMaxLength ?? 200,
+    });
     logPhase(host.phaseConfig, 'turn.start', sessionId, {
       mode: 'text',
       provider: host.getTurnProvider().name,
@@ -218,7 +256,10 @@ export async function processTextTurn(
           toolCatalog: toolsPrep.catalog,
           toolLoading: toolsPrep.resolved.deferred ? 'deferred' : 'direct',
           conversationPersistence: 'session',
-          onTurnEvent: extras?.onTurnEvent,
+          onTurnEvent: (event) => {
+            extras?.onTurnEvent?.(event);
+            projectActivity(event);
+          },
           journal: extras?.journal,
           generation: extras?.generation,
           });

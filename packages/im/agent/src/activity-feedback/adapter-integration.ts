@@ -238,7 +238,7 @@ export class AdapterActivityFeedbackManager {
     platform: string,
     outbound?: OutboundAdapter,
   ): ActivityFeedbackManager {
-    const botKey = `${platform}:${endpoint.$id}`;
+    const botKey = JSON.stringify([platform, endpoint.$id]);
     if (this.managers.has(botKey)) {
       return this.managers.get(botKey)!;
     }
@@ -250,11 +250,11 @@ export class AdapterActivityFeedbackManager {
   }
 
   getManager(platform: string, endpointKey: string): ActivityFeedbackManager | undefined {
-    return this.managers.get(`${platform}:${endpointKey}`);
+    return this.managers.get(JSON.stringify([platform, endpointKey]));
   }
 
   async stopAll(platform: string, endpointKey: string): Promise<void> {
-    await this.managers.get(`${platform}:${endpointKey}`)?.stopAll();
+    await this.managers.get(JSON.stringify([platform, endpointKey]))?.stopAll();
   }
 
   clearAll(): void {

@@ -11,6 +11,7 @@ const logger = getLogger('OutboundHost');
 
 export function createOutboundHost(im: ImRuntime): OutboundHost {
   return {
+    runWithView: (operation) => im.runWithSnapshotView(operation),
     capabilities(input) {
       const capabilities = im.endpointCapabilities(input);
       const operations = capabilities?.operations;

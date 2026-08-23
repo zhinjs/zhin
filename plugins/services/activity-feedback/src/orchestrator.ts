@@ -136,7 +136,7 @@ export class ActivityFeedbackOrchestrator {
     ctx: NonNullable<ReturnType<typeof toActivityFeedbackEventContext>>,
     phase: ActivityFeedbackPhase,
   ): string {
-    return `${ctx.platform}:${ctx.endpointKey}:${ctx.sessionId}:${phase}`;
+    return JSON.stringify([ctx.platform, ctx.endpointKey, ctx.sessionId, phase]);
   }
 
   private clearTransient(key: string): void {

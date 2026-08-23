@@ -10,6 +10,8 @@ Agent、子 Agent、工具迭代与 Schedule 只发布传输无关的生命周�
 
 同一 IM 会话的事件必须串行投影；不同会话可以并行。终态反馈必须自动清理，插件卸载时必须撤销订阅、定时器和仍存活的临时状态。
 
+Runtime 候选代通过插件自有的 generation admission Resource fail closed，只有已提交代可接收 AI 状态事件。事件入口同时固定 IM Runtime snapshot view；generation 退役信号会在 snapshot 指针切换前关闭入口、停掉 keepalive/timer，并在同一旧代 view 内完成全部清理。临时消息只接受平台返回的真实 message id；reaction 与消息清理必须可等待完成。缺少 generation-bound outbound view 的 Host 必须禁用本服务，不能静默降级为 current/latest snapshot。
+
 ## 结果
 
 - 不支持原生 typing 的平台可降级为状态消息。

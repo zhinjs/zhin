@@ -80,6 +80,8 @@ export interface OutboundMessage {
 }
 
 export interface OutboundHost {
+  /** Runs related operations against one IM Runtime snapshot captured at ingress. */
+  runWithView?<T>(operation: () => Promise<T>): Promise<T>;
   /** Exact operations declared by one live Endpoint. */
   capabilities?(input: OutboundEndpointInput): OutboundEndpointCapabilities | undefined;
   /** Returns platform message id when available (activity-feedback needs it). */

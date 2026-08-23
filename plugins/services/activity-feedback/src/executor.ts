@@ -53,7 +53,7 @@ export function createOutboundEndpointAccess(
   const cache = new Map<string, { endpoint: EndpointWithActivityFeedback; adapter: Adapter }>();
   return {
     resolve(platform, endpointKey) {
-      const key = `${platform}:${endpointKey}`;
+      const key = JSON.stringify([platform, endpointKey]);
       const cached = cache.get(key);
       if (cached) return cached;
       const declared = outbound.capabilities?.({ adapter: platform, endpointKey })?.operations;
@@ -124,14 +124,14 @@ export function createOutboundEndpointAccess(
               message: Parameters<typeof removeReaction>[0]['message'],
               reactionId: string,
             ) => {
-              void Promise.resolve(
-                removeReaction({ adapter: platform, endpointKey, message, reactionId }),
-              ).catch((error) => {
+              try {
+                await removeReaction({ adapter: platform, endpointKey, message, reactionId });
+              } catch (error) {
                 logger?.debug(
                   `[ActivityFeedback] outbound removeReaction failed (${key}):`,
                   error instanceof Error ? error.message : String(error),
                 );
-              });
+              }
             },
           } : {}),
           ...(typing && supports('typing') ? {
@@ -169,9 +169,7 @@ export function createOutboundEndpointAccess(
               },
               content: text,
             });
-            // Prefer real id; fall back to a sentinel so MessageTypingIndicator
-            // keeps the phase active until stop (recall is a no-op here).
-            return messageId || `outbound:${Date.now()}`;
+            return messageId || null;
           } catch (error) {
             logger?.debug(
               `[ActivityFeedback] outbound send failed (${key}):`,

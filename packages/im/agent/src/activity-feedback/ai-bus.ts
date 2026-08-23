@@ -46,13 +46,17 @@ export class ActivityFeedbackAIBus {
     // generation handler is still settling. A live Set iterator would then
     // leak this in-flight event into the newly registered generation.
     const listeners = [...set];
-    for (const listener of listeners) {
+    const pending = listeners.map((listener) => {
       try {
-        await listener(payload);
+        // Invoke every snapshot listener before awaiting. Generation admission
+        // must be sampled at dispatch ingress, not after an earlier listener settles.
+        return Promise.resolve(listener(payload)).catch(() => undefined);
       } catch {
         // Listener errors must not break the Agent emit path.
+        return Promise.resolve();
       }
-    }
+    });
+    await Promise.all(pending);
   }
 
   /** Test helper — clears all listeners. */

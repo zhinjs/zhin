@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { DisposeStack } from 'zhin.js';
+import { DisposeStack, type GenerationAdmissionGate } from 'zhin.js';
 import { activityFeedbackAiBus } from '@zhin.js/agent';
 import plugin from '../plugin.ts';
 import { loadActivityFeedbackServiceConfig } from '../src/config.js';
@@ -8,6 +8,36 @@ import {
   createActivityFeedbackAIEventHandlers,
   createActivityFeedbackOrchestratorForRuntime,
 } from '../src/ai-event-binder.js';
+
+function mutableAdmission(initial: boolean): {
+  gate: GenerationAdmissionGate;
+  setActive(active: boolean): void;
+} {
+  let active = initial;
+  const deactivationListeners = new Set<() => void>();
+  return {
+    gate: {
+      acquire: () => active ? () => undefined : undefined,
+      onDeactivate(listener: () => void) {
+        if (!active) {
+          listener();
+          return () => undefined;
+        }
+        deactivationListeners.add(listener);
+        return () => { deactivationListeners.delete(listener); };
+      },
+    } as GenerationAdmissionGate,
+    setActive(next) {
+      const wasActive = active;
+      active = next;
+      if (wasActive && !next) {
+        for (const listener of [...deactivationListeners]) listener();
+      }
+    },
+  };
+}
+
+const runWithView = <T>(operation: () => Promise<T>): Promise<T> => operation();
 
 describe('@zhin.js/service-activity-feedback runtime', () => {
   beforeEach(() => {
@@ -31,6 +61,7 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
     const lifecycle = new DisposeStack();
     const resources = {
       has: () => false,
+      provide: vi.fn(),
       use: () => {
         throw new Error('missing resource');
       },
@@ -86,6 +117,7 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
       config: { get: () => ({ enabled: false }) },
       resources: {
         has: () => false,
+        provide: vi.fn(),
         use: () => {
           throw new Error('missing resource');
         },
@@ -103,7 +135,8 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
       startPhase,
       stopPhase: vi.fn(),
       updateThinkingText: vi.fn(),
-    } as never);
+      dispose: vi.fn().mockResolvedValue(undefined),
+    } as never, mutableAdmission(true).gate, runWithView);
 
     dispose();
 
@@ -198,6 +231,29 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
     );
   });
 
+  it('typing.stop clears both active and thinking states', async () => {
+    const orchestrator = {
+      stopPhase: vi.fn().mockResolvedValue(undefined),
+    };
+    const handlers = createActivityFeedbackAIEventHandlers(orchestrator as never);
+    const payload = {
+      sessionId: 'cancelled',
+      source: 'zhin-agent',
+      platform: 'sandbox',
+      endpointKey: 'bot',
+      hookContext: { activityFeedbackEligible: true },
+    } as never;
+
+    await handlers.onTypingStop?.(payload);
+
+    expect(orchestrator.stopPhase).toHaveBeenNthCalledWith(
+      1, payload, 'thinking', 'typing.stop',
+    );
+    expect(orchestrator.stopPhase).toHaveBeenNthCalledWith(
+      2, payload, 'active', 'typing.stop',
+    );
+  });
+
   it('serializes start/finish handlers inside one plugin generation', async () => {
     const order: string[] = [];
     let finished!: () => void;
@@ -216,8 +272,13 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
       updatePhaseText: vi.fn(),
       updateThinkingText: vi.fn(),
       showTransientPhase: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
     };
-    const dispose = bindActivityFeedbackToAIEventBus(orchestrator as never);
+    const dispose = bindActivityFeedbackToAIEventBus(
+      orchestrator as never,
+      mutableAdmission(true).gate,
+      runWithView,
+    );
     const payload = {
       sessionId: 'ordered',
       source: 'zhin-agent',
@@ -232,5 +293,85 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
 
     expect(order).toEqual(['start', 'finish']);
     dispose();
+  });
+
+  it('admits an event only to the generation active when dispatch begins', async () => {
+    const previous = mutableAdmission(true);
+    const candidate = mutableAdmission(false);
+    let releasePrevious!: () => void;
+    const pendingPrevious = new Promise<void>((resolve) => { releasePrevious = resolve; });
+    const previousStart = vi.fn(() => pendingPrevious);
+    const candidateStart = vi.fn().mockResolvedValue(undefined);
+    const previousDispose = bindActivityFeedbackToAIEventBus({
+      startPhase: previousStart,
+      stopPhase: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    } as never, previous.gate, runWithView);
+    const candidateDispose = bindActivityFeedbackToAIEventBus({
+      startPhase: candidateStart,
+      stopPhase: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    } as never, candidate.gate, runWithView);
+    const payload = {
+      sessionId: 'hmr-event',
+      source: 'zhin-agent',
+      platform: 'sandbox',
+      endpointKey: 'bot',
+      hookContext: { activityFeedbackEligible: true },
+    } as never;
+
+    const dispatch = activityFeedbackAiBus.dispatch('ai.processing.start', payload);
+    await Promise.resolve();
+    previous.setActive(false);
+    candidate.setActive(true);
+    releasePrevious();
+    await dispatch;
+
+    expect(previousStart).toHaveBeenCalledOnce();
+    expect(candidateStart).not.toHaveBeenCalled();
+    await activityFeedbackAiBus.dispatch('ai.processing.start', payload);
+    expect(previousStart).toHaveBeenCalledOnce();
+    expect(candidateStart).toHaveBeenCalledOnce();
+    await previousDispose();
+    await candidateDispose();
+  });
+
+  it('starts full state cleanup in the retiring generation view', async () => {
+    const admission = mutableAdmission(true);
+    let currentView = 'old';
+    const enteredViews: string[] = [];
+    let releaseHandler!: () => void;
+    const handlerPending = new Promise<void>((resolve) => { releaseHandler = resolve; });
+    const orchestrator = {
+      startPhase: vi.fn(() => handlerPending),
+      stopPhase: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    };
+    const dispose = bindActivityFeedbackToAIEventBus(
+      orchestrator as never,
+      admission.gate,
+      async (operation) => {
+        enteredViews.push(currentView);
+        return operation();
+      },
+    );
+    const dispatch = activityFeedbackAiBus.dispatch('ai.processing.start', {
+      sessionId: 'retiring-state',
+      source: 'zhin-agent',
+      platform: 'sandbox',
+      endpointKey: 'bot',
+      hookContext: { activityFeedbackEligible: true },
+    } as never);
+    await Promise.resolve();
+
+    admission.setActive(false);
+    currentView = 'new';
+    expect(enteredViews).toEqual(['old', 'old']);
+    expect(orchestrator.dispose).not.toHaveBeenCalled();
+
+    releaseHandler();
+    await dispatch;
+    await dispose();
+    expect(orchestrator.dispose).toHaveBeenCalledOnce();
   });
 });

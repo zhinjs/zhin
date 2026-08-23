@@ -168,4 +168,82 @@ describe('createOutboundEndpointAccess', () => {
       content: '处理中 [2/15]…',
     }));
   });
+
+  it('does not invent a message id or recall when send returns null', async () => {
+    const recall = vi.fn().mockResolvedValue(undefined);
+    const access = createOutboundEndpointAccess({
+      capabilities: vi.fn(() => ({ operations: ['recall'] })),
+      send: vi.fn().mockResolvedValue(null),
+      recall,
+    });
+    const executor = new ActivityFeedbackExecutor(access);
+    const ctx = createCtx();
+
+    await executor.start(ctx, 'active', phaseConfig);
+    await executor.stop(ctx, 'active');
+
+    expect(recall).not.toHaveBeenCalled();
+  });
+
+  it('awaits reaction removal before reporting cleanup complete', async () => {
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const removeReaction = vi.fn(() => pending);
+    const access = createOutboundEndpointAccess({
+      capabilities: vi.fn(() => ({ operations: ['reaction'] })),
+      send: vi.fn(),
+      removeReaction,
+    });
+    const endpoint = access.resolve('sandbox', 'bot1')!.endpoint;
+    const message = {
+      conversation: {
+        endpoint: { id: 'bot1', adapter: 'sandbox' },
+        kind: 'private' as const,
+        id: 'u1',
+      },
+      id: 'mid-1',
+    };
+    let settled = false;
+
+    const cleanup = endpoint.control!.removeReaction!(message, 'rid-1').then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    release();
+    await cleanup;
+
+    expect(removeReaction).toHaveBeenCalledOnce();
+  });
+
+  it('awaits reaction cleanup through executor and activity manager', async () => {
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const removeReaction = vi.fn(() => pending);
+    const access = createOutboundEndpointAccess({
+      capabilities: vi.fn(() => ({ operations: ['reaction'] })),
+      send: vi.fn(),
+      addReaction: vi.fn().mockResolvedValue('rid-1'),
+      removeReaction,
+    });
+    const executor = new ActivityFeedbackExecutor(access);
+    const base = createCtx();
+    const ctx = {
+      ...base,
+      messageId: 'source-mid',
+      options: { ...base.options, messageId: 'source-mid' },
+    };
+    await executor.start(ctx, 'active', {
+      type: 'reaction', emoji: '⏳', autoRemove: true,
+    });
+    let settled = false;
+
+    const stopping = executor.stop(ctx, 'active').then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    release();
+    await stopping;
+
+    expect(removeReaction).toHaveBeenCalledOnce();
+  });
 });

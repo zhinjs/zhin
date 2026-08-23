@@ -145,9 +145,11 @@ export class ReactionTypingIndicator implements TypingIndicator {
     this.active = false;
     this.reactionId = null;
 
-    void Promise.resolve(this.removeReaction(messageId, reactionId)).catch((error) => {
+    try {
+      await this.removeReaction(messageId, reactionId);
+    } catch (error) {
       logger.warn('Failed to remove reaction:', error);
-    });
+    }
   }
 
   isActive(): boolean {
