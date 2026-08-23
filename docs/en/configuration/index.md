@@ -122,7 +122,7 @@ a2a:
   path: /a2a
 ```
 
-Both sections are mounted on the HTTP Host and enabled as needed; when not configured, the corresponding SDK is not loaded. Remote Workroom execution uses fixed-generation `a2a.workroomCallbacks` and `a2a.workroomRemoteExecutors` transport bindings. Project membership and conversation bindings remain in the persistent Workroom Catalog, not in process configuration. See the complete [`@zhin.js/a2a` example](../../packages/host/a2a/README.md#workroom-execution-callbacks).
+Both sections are mounted on the HTTP Host and enabled as needed; when not configured, the corresponding SDK is not loaded. Remote Workroom execution uses fixed-generation `a2a.workroomCallbacks` and `a2a.workroomRemoteExecutors` transport bindings. Project membership and conversation bindings remain in the persistent Workroom Catalog, not in process configuration. See the complete [`@zhin.js/a2a` example on GitHub](https://github.com/zhinjs/zhin/blob/main/packages/host/a2a/README.md#workroom-execution-callbacks).
 
 ## ai
 

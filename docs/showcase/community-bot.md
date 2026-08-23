@@ -1,6 +1,6 @@
 # 案例：多平台社区 Bot
 
-> 对应示例：[`examples/test-bot`](../../examples/test-bot/)（维护者厨房水槽，能力全集演示）
+> 对应示例：[`examples/test-bot`](https://github.com/zhinjs/zhin/tree/main/examples/test-bot)（维护者厨房水槽，能力全集演示）
 > 关键词：单实例多账号、一个进程五个 QQ 号、游戏插件、跨平台 AI
 
 ## 场景

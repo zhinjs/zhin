@@ -21,6 +21,7 @@
     "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/mcp": "workspace:*",
     "@zhin.js/page": "workspace:*",
+    "@zhin.js/prompt-section": "workspace:*",
     "@zhin.js/satori": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*",
@@ -50,6 +51,10 @@
       },
       {
         "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/prompt-section",
         "api": "^1.0.0"
       },
       {

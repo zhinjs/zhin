@@ -204,12 +204,14 @@ describe('createWorkspace', () => {
     expect(pkg.dependencies).not.toHaveProperty('@modelcontextprotocol/sdk')
     expect(pkg.dependencies['@ai-sdk/openai-compatible']).toBe('latest')
     expect(pkg.dependencies['@zhin.js/tool']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/prompt-section']).toBe('latest')
     expect(pkg.dependencies.zod).toBe('latest')
     expect(pkg.dependencies.ai).toBe('latest')
     expect(pkg.zhin.features).toEqual([
       { package: '@zhin.js/page', api: '^1.0.0' },
       { package: '@zhin.js/layout', api: '^1.0.0' },
       { package: '@zhin.js/tool', api: '^1.0.0' },
+      { package: '@zhin.js/prompt-section', api: '^1.0.0' },
     ])
     expect(await fs.pathExists(path.join(projectPath, 'tools', 'echo.ts'))).toBe(true)
     expect(await fs.pathExists(path.join(projectPath, 'SOUL.md'))).toBe(true)

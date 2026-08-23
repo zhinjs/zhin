@@ -75,7 +75,7 @@ export default defineAdapter<MyConfig>({
 | `ai.remoteAgents` / `remote_mesh` / Remote Agent poller | 不再支持。Remote A2A 已作为标准 `AssignmentExecutorPort` transport 接入，复用 local Assignment 的 lease/fence/report/acceptance，并且只接受持久 Catalog 与 generation-owned authority；不得用旧配置模拟或绕过 Grant。 |
 | `/api/agent/orchestration/runs` / `/console/orchestration` | 改为 Project-scoped `/api/agent/workroom/runs?projectId=...` 与 Workroom Console 页面；它们都是只读 projection。 |
 
-旧 Run 不自动恢复或升级成新状态。特别是旧 `completed` 没有 claim-level Acceptance Record，不能当成 `accepted` Project State；历史数据只可离线导出审计，或以带 `legacy_import` provenance 的 untrusted Inbox/Evidence 候选重新规划和验收。已落地的权威边界见 [Agent CONTEXT](../../packages/im/agent/CONTEXT.md)。
+旧 Run 不自动恢复或升级成新状态。特别是旧 `completed` 没有 claim-level Acceptance Record，不能当成 `accepted` Project State；历史数据只可离线导出审计，或以带 `legacy_import` provenance 的 untrusted Inbox/Evidence 候选重新规划和验收。已落地的权威边界见 GitHub 上的 [Agent CONTEXT](https://github.com/zhinjs/zhin/blob/main/packages/im/agent/CONTEXT.md)。
 
 离线工具只接受两种真实旧表面：包含 `orchestration_runs`、`orchestration_tasks`、`orchestration_events` 三个数组的旧 Repository 表导出，或旧只读 API 的单个 `{ run, tasks, events }` `RunSnapshot` JSON。字段、状态枚举、JSON 列、引用和 event sequence 任一损坏或未知都会拒绝，不做宽松修复：
 

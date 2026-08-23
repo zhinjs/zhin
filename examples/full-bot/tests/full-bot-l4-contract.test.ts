@@ -29,6 +29,7 @@ describe('full-bot L4 配置契约', () => {
     expect(packageJson.zhin?.features.map((feature) => feature.package)).toEqual([
       '@zhin.js/skill',
       '@zhin.js/tool',
+      '@zhin.js/prompt-section',
       '@zhin.js/page',
     ]);
     expect(packageJson.dependencies?.['zhin.js']).toBeDefined();

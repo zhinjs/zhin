@@ -1,7 +1,7 @@
 /**
  * DeferredWorkerRunner — 同步 Worker 子 Agent，在隔离上下文中执行 deferred 工具任务。
  */
-import { type AgentPromptBuildContext, resolveIMSessionIdFromMessage, type Message, getLogger } from '@zhin.js/core';
+import { resolveIMSessionIdFromMessage, type Message, getLogger } from '@zhin.js/core';
 import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 import { type AIProvider, type AgentTool, isOmittedToolSummary, sanitizeToolResult, stripHallucinatedToolCalls, getLlmTransportModel, type ModelRegistry } from '@zhin.js/ai';
 import { resolveMcpConnectionFromToolName } from '@zhin.js/ai/mcp-qualified-name';
@@ -9,10 +9,6 @@ import { stripThinkBlocks } from './core/text-sanitize.js';
 import { runAgentLoopStandaloneTurn } from './core/agent-loop-standalone.js';
 import type { ToolCallRecord } from './core/tool-calls-user-format.js';
 import { selectDeferredToolsForWorker } from './deferred-worker-tool-load.js';
-import {
-  resolveAgentPromptMarkdown,
-  resolveDeferredToolsForPlatform,
-} from './agent-prompt/index.js';
 import { resolveWorkerSlowToolTimeout, isPromptTraceEnabled, isPromptTraceVerbose, isPhaseTraceEnabled, buildAgentPromptCacheStreamOptions, type ZhinAgentConfig, type ExecApprovalMode, DEFAULT_ALWAYS_LOADED_TOOLS } from './config/index.js';
 import { applyExecPolicyToTools } from './security/exec-policy.js';
 import { logPromptComposition } from './internal/prompt-trace.js';
@@ -77,18 +73,11 @@ export class DeferredWorkerRunner {
     } = options;
 
     const query = (toolQuery?.trim() || goal).trim();
-    const promptCtx: AgentPromptBuildContext = {
-      slot: 'deferred_worker',
-      platform: String(origin.$adapter),
-      deferred: { goal, toolQuery: query },
-    };
-    const loaded = resolveDeferredToolsForPlatform(
-      promptCtx,
+    const loaded = selectDeferredToolsForWorker(
       query,
       goal,
       deferredCatalog,
       maxToolResults,
-      selectDeferredToolsForWorker,
     );
 
     const workerTools: AgentTool[] = [];
@@ -140,20 +129,12 @@ export class DeferredWorkerRunner {
     const model = provider.models[0];
     const llmModel = getLlmTransportModel(provider.name, model);
 
-    const platformBody = await resolveAgentPromptMarkdown({
-      ctx: promptCtx,
-      config: execPolicyConfig,
-    });
-    const platformBlock = platformBody.trim()
-      ? `\n\n## Platform\n${platformBody.trim()}`
-      : '';
-
     const workerBody = resolveWorkspacePrompt('deferred-worker', llmModel.sdk);
 
     const systemPrompt = `${workerBody.trim()}
 
 ## Task
-${goal}${platformBlock}`;
+${goal}`;
 
     const maxIterations = options.maxIterations ?? execPolicyConfig?.maxSubagentIterations ?? 15;
 

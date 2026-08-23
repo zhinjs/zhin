@@ -36,21 +36,5 @@ export default definePlugin({
       host.define('github_subscriptions', { ...GITHUB_SUBSCRIPTIONS_SCHEMA });
     }
 
-    // Agent prompt contributor (orchestrator/deferred-worker GitHub guidance).
-    // `zhin.js/agent` is an optional peer — skip silently on IM-only installs.
-    let cancelled = false;
-    let unregister: (() => void) | undefined;
-    void Promise.all([
-      import('zhin.js/agent'),
-      import('./src/agent-prompt.js'),
-    ]).then(([agent, prompt]) => {
-      if (cancelled) return;
-      agent.registerAgentPromptContributor(prompt.createGithubAgentPromptContributor());
-      unregister = () => agent.unregisterAgentPromptContributor('github');
-    }).catch(() => { /* optional peer not installed */ });
-    return () => {
-      cancelled = true;
-      unregister?.();
-    };
   },
 });

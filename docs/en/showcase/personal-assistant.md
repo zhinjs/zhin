@@ -1,6 +1,6 @@
 # Showcase: Personal Assistant
 
-> Corresponding example: [`examples/life-assistant-bot`](../../examples/life-assistant-bot/)
+> Corresponding example: [`examples/life-assistant-bot`](https://github.com/zhinjs/zhin/tree/main/examples/life-assistant-bot)
 > Keywords: local model, knowledge base, three-layer memory, scheduled tasks, zero cloud cost
 
 ## Scenario

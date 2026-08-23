@@ -16,6 +16,11 @@ import {
   type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
 import {
+  PromptSectionIndex,
+  defineAgentPromptSection,
+  promptSectionFeatureId,
+} from '@zhin.js/prompt-section';
+import {
   buildConsoleEntriesBody,
   buildConsoleStats,
   buildPluginDetail,
@@ -26,6 +31,7 @@ import {
   getSystemStatusData,
   jsonSchemaToConsoleSchema,
   listSnapshotPlugins,
+  listGenerationPromptSections,
   registerConsoleApiRoutes,
   resolveGenerationAgentIntrospection,
   resolveGenerationAgentConsole,
@@ -334,6 +340,44 @@ describe('displayConsolePath', () => {
 });
 
 describe('generation-owned Agent introspection', () => {
+  it('projects prompt section governance metadata without prompt content', () => {
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: promptSectionFeatureId,
+      localName: 'project-rules',
+      source: '/project/agent/prompt-sections/project-rules.ts',
+      definition: defineAgentPromptSection({
+        title: 'Project rules',
+        content: 'Keep internal policy private.',
+        retention: 'required',
+      }),
+    });
+    const base = {
+      generation: 12,
+      root,
+      tree: new Map(),
+      config: new Map(),
+      resources: new Map(),
+      capabilities: new Map([[slot.id, slot]]),
+      projections: new Map(),
+    } as unknown as RuntimeSnapshot;
+    const snapshot = {
+      ...base,
+      projections: new Map([[promptSectionFeatureId, new PromptSectionIndex([slot], base)]]),
+    } as unknown as RuntimeSnapshot;
+
+    expect(listGenerationPromptSections(snapshot, '/project')).toEqual([expect.objectContaining({
+      name: 'project-rules',
+      title: 'Project rules',
+      retention: 'required',
+      source: './agent/prompt-sections/project-rules.ts',
+      generation: 12,
+      contentChars: 29,
+    })]);
+    expect(listGenerationPromptSections(snapshot, '/project')[0]).not.toHaveProperty('content');
+  });
+
   it('resolves the read-only port only from the snapshot root resource', () => {
     const root = rootPluginId();
     const token = { id: tokenId('zhin.host.agent') };

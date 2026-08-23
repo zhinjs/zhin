@@ -15,7 +15,6 @@ describe('buildRichSystemPrompt section dedup', () => {
       activeSkillsContext: '',
       bootstrapContext: '',
       toolSearchDeferredStats: 'other(9), github(8)',
-      platformSections: '## icqq / QQ\n\nhint',
     });
     expect(countSection(prompt, 'Runtime')).toBe(1);
     expect(countSection(prompt, 'Security')).toBe(1);

@@ -54,8 +54,6 @@ export const DEFAULT_CONFIG = {
   deferredToolMaxResults: 8,
   deferredTools: { ...DEFAULT_DEFERRED_TOOLS_CONFIG },
   workerBaseTools: [...DEFAULT_WORKER_BASE_TOOLS],
-  platformPromptSectionMaxChars: 2048,
-  platformPromptMaxChars: 4096,
   steeringMode: DEFAULT_STEERING_MODE,
   followUpMode: DEFAULT_FOLLOW_UP_MODE,
   policyDenialStopAfter: 2,

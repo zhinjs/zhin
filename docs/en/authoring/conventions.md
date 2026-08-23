@@ -28,6 +28,7 @@ A few key points. The full capability id takes the form `owner\0feature\0localNa
 | `components/` | `.ts` / `.tsx` | Yes | server | `@zhin.js/component` | `zhin.component` | `defineComponent(...)` |
 | `adapters/` | `.ts` | Yes | server | `@zhin.js/adapter` | `zhin.adapter` | `defineAdapter(...)` |
 | `tools/` | `.ts` | No | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
+| `agent/prompt-sections/` | `.ts` | Yes | server | `@zhin.js/prompt-section` | `zhin.agent-prompt-section` | `defineAgentPromptSection(...)` |
 | `skills/` | Subdirectory + `SKILL.md` | One level | server | `@zhin.js/skill` | `zhin.skill` | Markdown text |
 | `agents/` | `*.agent.md` | No | server | `@zhin.js/agent-feature` | `zhin.agent` | Markdown text |
 | `mcp/` | `.ts` | No | server | `@zhin.js/mcp-feature` | `zhin.mcp` | `defineMcp(...)` |
@@ -49,6 +50,7 @@ Supplementary rules per directory:
 | `components/` | Relative path without extension, joined with `/` | `components/share-music.ts` -> `share-music` |
 | `adapters/` | Same as above | `adapters/napcat.ts` -> `napcat` |
 | `tools/` | File name without extension (no subdirectory recursion); ASCII kebab or snake | `tools/music-search.ts` -> `music-search`; `tools/send_user_like.ts` -> `send_user_like` |
+| `agent/prompt-sections/` | Relative path without extension, joined with `/` | `agent/prompt-sections/project/rules.ts` -> `project/rules` |
 | `skills/` | Subdirectory name is the localName, directory must contain `SKILL.md` | `skills/memory-consolidate/SKILL.md` -> `memory-consolidate` |
 | `agents/` | File name with `.agent.md` suffix removed | `agents/planner.agent.md` -> `planner` |
 | `mcp/` | File name without extension (no recursion) | `mcp/my-server.ts` -> `my-server` |

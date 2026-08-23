@@ -14,6 +14,7 @@ function sidebarGroup(
 
 const USE_DOC_PREFIXES = [
   '/getting-started/',
+  '/solutions/',
   '/concepts/',
   '/authoring/',
   '/adapters/',
@@ -27,13 +28,13 @@ const USE_DOC_PREFIXES = [
   '/showcase/',
 ]
 
-const DEV_DOC_PREFIXES = ['/contributing/']
+const DEV_DOC_PREFIXES = ['/contributing/', '/target-architecture']
 
 const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   { text: '快速开始', link: '/getting-started/' },
   { text: '第一个插件', link: '/getting-started/first-plugin' },
+  { text: '按场景选解决方案', link: '/solutions/' },
   sidebarGroup('核心概念', [
-    { text: '目标架构（SSOT）', link: '/target-architecture' },
     { text: '分层架构', link: '/concepts/architecture' },
     { text: '插件模型', link: '/concepts/plugin-model' },
     { text: '配置即数据', link: '/concepts/config-as-data' },
@@ -107,6 +108,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
 ]
 
 const zhDevDocsSidebar: DefaultTheme.SidebarItem[] = [
+  { text: '目标架构（SSOT）', link: '/target-architecture' },
   { text: '仓库结构', link: '/contributing/repo-structure' },
   { text: '开发流程与门禁', link: '/contributing/development' },
   { text: '代码约定', link: '/contributing/conventions' },
@@ -118,6 +120,7 @@ const zhDevDocsSidebar: DefaultTheme.SidebarItem[] = [
 
 const EN_USE_DOC_PREFIXES = [
   '/en/getting-started/',
+  '/en/solutions/',
   '/en/concepts/',
   '/en/authoring/',
   '/en/adapters/',
@@ -135,6 +138,7 @@ const EN_DEV_DOC_PREFIXES = ['/en/contributing/']
 const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   { text: 'Quick Start', link: '/en/getting-started/' },
   { text: 'First Plugin', link: '/en/getting-started/first-plugin' },
+  { text: 'Choose a Solution', link: '/en/solutions/' },
   sidebarGroup('Core Concepts', [
     { text: 'Layered Architecture', link: '/en/concepts/architecture' },
     { text: 'Plugin Model', link: '/en/concepts/plugin-model' },
@@ -224,8 +228,7 @@ export default withMermaid(defineConfig({
   title: 'Zhin.js',
   description: 'AI-native TypeScript bot framework',
 
-  // TODO: revert to strict dead-link checking once all English pages are translated
-  ignoreDeadLinks: true,
+  ignoreDeadLinks: false,
 
   srcExclude: ['**/snippets/**', 'README.md'],
 
@@ -239,13 +242,14 @@ export default withMermaid(defineConfig({
           { text: '首页', link: '/' },
           {
             text: '使用文档',
-            activeMatch: '^/(getting-started|concepts|authoring|examples|paths|showcase)/',
+            activeMatch: '^/(getting-started|solutions|concepts|authoring|examples|paths|showcase)/',
             items: [
               {
                 text: '入门',
                 items: [
                   { text: '快速开始', link: '/getting-started/' },
                   { text: '第一个插件', link: '/getting-started/first-plugin' },
+                  { text: '解决方案', link: '/solutions/' },
                   { text: '学习路径', link: '/paths/' },
                   { text: '示例项目', link: '/examples/' },
                   { text: '真实案例', link: '/showcase/' },
@@ -303,13 +307,14 @@ export default withMermaid(defineConfig({
           { text: 'Home', link: '/en/' },
           {
             text: 'Guide',
-            activeMatch: '^/en/(getting-started|concepts|authoring|examples|paths|showcase)/',
+            activeMatch: '^/en/(getting-started|solutions|concepts|authoring|examples|paths|showcase)/',
             items: [
               {
                 text: 'Getting Started',
                 items: [
                   { text: 'Quick Start', link: '/en/getting-started/' },
                   { text: 'First Plugin', link: '/en/getting-started/first-plugin' },
+                  { text: 'Solutions', link: '/en/solutions/' },
                   { text: 'Learning Paths', link: '/en/paths/' },
                   { text: 'Examples', link: '/en/examples/' },
                   { text: 'Showcase', link: '/en/showcase/' },

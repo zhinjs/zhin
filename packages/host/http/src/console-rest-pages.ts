@@ -51,6 +51,7 @@ export interface ConsoleAgentIntrospection {
   components?(): readonly unknown[];
   bindings?(): readonly unknown[];
   tools?(): readonly unknown[];
+  promptSections?(): readonly unknown[];
   mcp?(): { rows: readonly unknown[]; note?: string } | readonly unknown[];
   renderComponent?(input: Readonly<{
     requester: string;
@@ -122,6 +123,7 @@ const INTROSPECTION_PAGE_SIZES = {
   middlewares: 30,
   components: 30,
   tools: 15,
+  'prompt-sections': 20,
   endpoints: 30,
   bindings: 30,
   mcp: 30,
@@ -567,12 +569,12 @@ function registerIntrospectionRoutes(
 ): void {
   const collectors: Array<{
     kind: IntrospectionKind;
-    collect: () => { rows: readonly unknown[]; note?: string };
+    collect: (introspection: ConsoleAgentIntrospection | undefined) => { rows: readonly unknown[]; note?: string };
     fields: Array<(item: unknown) => string | undefined>;
   }> = [
     {
       kind: 'commands',
-      collect: () => ({ rows: withAgentIntrospection(ctx, (value) => value?.commands?.() ?? []) }),
+      collect: (value) => ({ rows: value?.commands?.() ?? [] }),
       fields: [
         (c) => stringProp(c, 'pattern'),
         (c) => stringProp(c, 'desc'),
@@ -581,7 +583,7 @@ function registerIntrospectionRoutes(
     },
     {
       kind: 'middlewares',
-      collect: () => ({ rows: withAgentIntrospection(ctx, (value) => value?.middlewares?.() ?? []) }),
+      collect: (value) => ({ rows: value?.middlewares?.() ?? [] }),
       fields: [
         (m) => stringProp(m, 'name'),
         (m) => stringProp(m, 'owner'),
@@ -592,7 +594,7 @@ function registerIntrospectionRoutes(
     },
     {
       kind: 'components',
-      collect: () => ({ rows: withAgentIntrospection(ctx, (value) => value?.components?.() ?? []) }),
+      collect: (value) => ({ rows: value?.components?.() ?? [] }),
       fields: [
         (c) => stringProp(c, 'name'),
         (c) => stringProp(c, 'owner'),
@@ -613,7 +615,7 @@ function registerIntrospectionRoutes(
     },
     {
       kind: 'bindings',
-      collect: () => ({ rows: withAgentIntrospection(ctx, (value) => value?.bindings?.() ?? []) }),
+      collect: (value) => ({ rows: value?.bindings?.() ?? [] }),
       fields: [
         (a) => stringProp(a, 'name'),
         (a) => stringProp(a, 'provider'),
@@ -622,7 +624,7 @@ function registerIntrospectionRoutes(
     },
     {
       kind: 'tools',
-      collect: () => ({ rows: withAgentIntrospection(ctx, (value) => value?.tools?.() ?? []) }),
+      collect: (value) => ({ rows: value?.tools?.() ?? [] }),
       fields: [
         (t) => stringProp(t, 'name'),
         (t) => stringProp(t, 'source'),
@@ -630,9 +632,22 @@ function registerIntrospectionRoutes(
       ],
     },
     {
+      kind: 'prompt-sections',
+      collect: (value) => ({ rows: value?.promptSections?.() ?? [] }),
+      fields: [
+        (section) => stringProp(section, 'name'),
+        (section) => stringProp(section, 'qualifiedName'),
+        (section) => stringProp(section, 'title'),
+        (section) => stringProp(section, 'owner'),
+        (section) => stringProp(section, 'layer'),
+        (section) => stringProp(section, 'retention'),
+        (section) => stringProp(section, 'source'),
+      ],
+    },
+    {
       kind: 'mcp',
-      collect: () => {
-        const result = withAgentIntrospection(ctx, (value) => value?.mcp?.());
+      collect: (value) => {
+        const result = value?.mcp?.();
         if (result == null) return { rows: [] as readonly unknown[] };
         // readonly 数组不能用 Array.isArray 收窄，按对象形状判断
         if (typeof result === 'object' && 'rows' in result) {
@@ -646,8 +661,10 @@ function registerIntrospectionRoutes(
 
   for (const { kind, collect, fields } of collectors) {
     route('GET', `${base}/introspection/${kind}`, async (_request, response, url) => {
+      const lease = kind === 'endpoints' ? null : ctx.acquireAgentRuntime?.() ?? null;
       try {
-        const { rows, note } = collect();
+        const introspection = lease?.value.introspection;
+        const { rows, note } = collect(introspection);
         const query = url.searchParams;
         const filter = query.get('filter')?.trim() || undefined;
         const filtered = filterByFields([...rows], filter, fields);
@@ -658,7 +675,7 @@ function registerIntrospectionRoutes(
         );
         const missing = kind === 'endpoints'
           ? !ctx.getEndpoints
-          : !hasAgentIntrospection(ctx);
+          : !introspection;
         const degradedNote = note ?? (missing
           ? kind === 'endpoints'
             ? 'Endpoints 数据源未接线（ctx.getEndpoints 缺失）'
@@ -674,6 +691,8 @@ function registerIntrospectionRoutes(
           data: { items: [], page: 1, pageSize: 0, total: 0, totalPages: 0 },
           error: err instanceof Error ? err.message : String(err),
         });
+      } finally {
+        lease?.release();
       }
     }, { summary: `Introspection: ${kind}`, tags: ['console', 'introspection'] });
   }
@@ -798,23 +817,6 @@ function assertPreviewOutput(output: unknown, maxBytes: number): void {
   if (Buffer.byteLength(serialized ?? '') > byteLimit) {
     throw new ComponentPreviewLimitError(`Component preview 超过 ${byteLimit} bytes`);
   }
-}
-
-function withAgentIntrospection<T>(
-  ctx: ConsoleRestCtx,
-  operation: (value: ConsoleAgentIntrospection | undefined) => T,
-): T {
-  const lease = ctx.acquireAgentRuntime?.();
-  if (!lease) return operation(undefined);
-  try {
-    return operation(lease.value.introspection);
-  } finally {
-    lease.release();
-  }
-}
-
-function hasAgentIntrospection(ctx: ConsoleRestCtx): boolean {
-  return withAgentIntrospection(ctx, (value) => value !== undefined);
 }
 
 // ---------------------------------------------------------------------------

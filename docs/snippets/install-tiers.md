@@ -11,7 +11,7 @@
 <!-- #region tiers-table -->
 | 档位 | 安装 | 约 production 体积 | 能力 |
 |------|------|-------------------|------|
-| **IM** | `pnpm add zhin.js` + 适配器（如 `@zhin.js/adapter-sandbox`）；dev：`@zhin.js/cli` | **<10MB**（库包） | Plugin Runtime、命令/组件/适配器约定目录（Stable Features 由 `@zhin.js/core` 的 `zhin.features` 继承；Host 为 optional peer + `zhin.plugins`，见 [ADR 0053](/adr/0053-platform-stable-features)） |
+| **IM** | `pnpm add zhin.js` + 适配器（如 `@zhin.js/adapter-sandbox`）；dev：`@zhin.js/cli` | **<10MB**（库包） | Plugin Runtime、命令/组件/适配器约定目录（Stable Features 由 `@zhin.js/core` 的 `zhin.features` 继承；Host 为 optional peer + `zhin.plugins`，见 [插件模型](/concepts/plugin-model)） |
 | **AI** | `+ @zhin.js/agent zod ai` | +~12–15MB | ZhinAgent、会话、工具、压缩 |
 | **Provider** | `+ @ai-sdk/openai` 等 | 按厂商 | 大模型调用 |
 | **MCP** | `+ @modelcontextprotocol/sdk` | +~数 MB | MCP Client |
@@ -31,11 +31,11 @@
 <!-- #endregion tiers-table-host -->
 
 <!-- #region breaking -->
-Breaking（4.x）：`import from 'zhin.js'` **不再**含 `ZhinAgent` / `AIService` / `ModelRegistry`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [ADR 0019](/adr/0019-install-size-layering)。
+Breaking（4.x）：`import from 'zhin.js'` **不再**含 `ZhinAgent` / `AIService` / `ModelRegistry`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [分层架构](/concepts/architecture)。
 <!-- #endregion breaking -->
 
 <!-- #region breaking-short -->
-Breaking（4.x）：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [ADR 0019](/adr/0019-install-size-layering)。
+Breaking（4.x）：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [分层架构](/concepts/architecture)。
 <!-- #endregion breaking-short -->
 
 <!-- #region imports -->
@@ -60,11 +60,11 @@ pnpm add @ai-sdk/openai   # 示例：按 provider 替换
 <!-- #endregion doctor -->
 
 <!-- #region scaffold-note -->
-`npm create zhin-app` / `zhin setup` 在启用 AI 时会自动写入 `package.json` 依赖。Plugin Runtime 骨架默认只直列 `zhin.js` + 适配器；Stable Features 由 `@zhin.js/core` 的 `package.json#zhin.features` 继承（经 `zhin.js` 间接依赖亦可，见 [ADR 0053](/adr/0053-platform-stable-features)）。
+`npm create zhin-app` / `zhin setup` 在启用 AI 时会自动写入 `package.json` 依赖。Plugin Runtime 骨架默认只直列 `zhin.js` + 适配器；Stable Features 由 `@zhin.js/core` 的 `package.json#zhin.features` 继承（经 `zhin.js` 间接依赖亦可，见 [插件模型](/concepts/plugin-model)）。
 
 仓库示例：[minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) 默认 **仅 IM**（`ai.enabled: false`）；[full-bot](https://github.com/zhinjs/zhin/tree/main/examples/full-bot) 含完整 AI 栈。
 <!-- #endregion scaffold-note -->
 
 <!-- #region callout-one-liner -->
-**zhin.js 4.x 安装分层**：库包 `pnpm add zhin.js`（IM 核心 &lt;10MB）；Plugin Runtime 项目再加适配器与 `@zhin.js/cli`；AI 另装 `@zhin.js/agent zod ai` 与所选 `@ai-sdk/*`。见 [ADR 0019](/adr/0019-install-size-layering)、[ADR 0053](/adr/0053-platform-stable-features) 与 [快速开始 — Install tiers](/getting-started/#install-tierszhinjs-4x)。
+**zhin.js 4.x 安装分层**：库包 `pnpm add zhin.js`（IM 核心 &lt;10MB）；Plugin Runtime 项目再加适配器与 `@zhin.js/cli`；AI 另装 `@zhin.js/agent zod ai` 与所选 `@ai-sdk/*`。见 [分层架构](/concepts/architecture)、[插件模型](/concepts/plugin-model) 与 [快速开始 — Install tiers](/getting-started/#install-tierszhinjs-4x)。
 <!-- #endregion callout-one-liner -->

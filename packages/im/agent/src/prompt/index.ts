@@ -13,7 +13,7 @@ export {
   buildUserMessageWithHistory,
   describePromptSectionsForDebug,
   buildRichSystemPrompt,
-  buildLiteSystemPromptWithPlatform,
+  buildLiteSystemPrompt,
   createDefaultPromptAssemblyRegistry,
   enforcePromptBudget,
 } from './system-prompt.js';
@@ -32,18 +32,18 @@ export type { AgentPromptProfile } from './turn-prompt-profile.js';
 
 export {
   defineAgentPromptSection,
-} from './define-agent-prompt-section.js';
-export type { AgentPromptSectionConfig } from './define-agent-prompt-section.js';
-
-export {
-  PromptSectionLoader,
-} from './prompt-section-loader.js';
-export type { PromptSectionLoaderOptions } from './prompt-section-loader.js';
-
-export {
-  discoverAndRegisterPromptSections,
-  bootstrapPromptSections,
-} from './discover-prompt-sections.js';
+  isPromptSectionIndex,
+  PromptSectionIndex,
+  promptSectionFeatureId,
+} from '@zhin.js/prompt-section';
+export type {
+  AgentPromptSectionDefinition,
+  AgentPromptSectionInput,
+  PromptProfile,
+  PromptSectionDescriptor,
+  PromptSectionLayer,
+  PromptSectionRetention,
+} from '@zhin.js/prompt-section';
 
 export {
   buildDisciplinedPrompt,

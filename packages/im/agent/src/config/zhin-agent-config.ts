@@ -96,8 +96,6 @@ export interface ZhinAgentConfig {
    * - 对象：自定义 JSON Schema 原样透传给模型。
    */
   outputSchema?: boolean | 'segments' | Record<string, unknown>;
-  platformPromptSectionMaxChars?: number;
-  platformPromptMaxChars?: number;
   steeringMode?: QueueMode;
   followUpMode?: QueueMode;
   policyDenialStopAfter?: number;
@@ -107,7 +105,7 @@ export interface ZhinAgentConfig {
   gitStatus?: boolean;
   /** 追加的上下文文件路径（支持 ~ 与相对路径；默认另加载 ~/.config/zhin/AGENTS.md 等全局路径） */
   contextPaths?: string[];
-  /** 系统提示词总字符上限，超出按牺牲顺序截断可截断段（skills → globalContext → bootstrap） */
+  /** 系统提示词总字符上限；按 retention/order 让出预算，required 内容放不下则失败。 */
   systemPromptMaxChars?: number;
   /** Activity feedback 展示 LLM 实际 thinking 内容（截断），而非静态 "思考中..."。 */
   thinkingPreview?: boolean;

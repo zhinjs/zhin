@@ -1,6 +1,6 @@
 # Showcase: Multi-Platform Community Bot
 
-> Corresponding example: [`examples/test-bot`](../../examples/test-bot/) (maintainer kitchen sink, full capability demonstration)
+> Corresponding example: [`examples/test-bot`](https://github.com/zhinjs/zhin/tree/main/examples/test-bot) (maintainer kitchen sink, full capability demonstration)
 > Keywords: single instance multi-account, one process five QQ accounts, game plugins, cross-platform AI
 
 ## Scenario

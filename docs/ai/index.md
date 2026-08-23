@@ -174,7 +174,7 @@ ai:
     execApprovalMode: ask         # ask（默认）| allow | deny
     gitStatus: true               # 默认 true：Runtime 段注入单行 git 状态摘要（非 git 仓库自动跳过）
     contextPaths: []              # 追加注入系统提示词的上下文文件（支持 ~ 与相对路径）
-    systemPromptMaxChars: 100000  # 系统提示词总字符上限，超出按牺牲顺序截断可截断段
+    systemPromptMaxChars: 100000  # 系统提示词总字符上限；优先移除 opportunistic，required 放不下则明确失败
 ```
 
 除 `contextPaths` 外，默认还会自动加载全局上下文文件 `~/.config/zhin/AGENTS.md` 与 `~/.config/zhin/ZHIN.md`（不存在则跳过），注入为 `# User Context` 段，置于项目 bootstrap 上下文之前；单文件上限 8KB、总量上限 16KB。

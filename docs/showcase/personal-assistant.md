@@ -1,6 +1,6 @@
 # 案例：个人生活助手
 
-> 对应示例：[`examples/life-assistant-bot`](../../examples/life-assistant-bot/)
+> 对应示例：[`examples/life-assistant-bot`](https://github.com/zhinjs/zhin/tree/main/examples/life-assistant-bot)
 > 关键词：本地模型、知识库、三层记忆、定时任务、零云成本
 
 ## 场景

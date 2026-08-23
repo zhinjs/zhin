@@ -175,49 +175,60 @@ export default defineAgentTool<{ url: string }>({
 });
 ```
 
-## Custom Prompt Sections
+## 让插件给 Agent 补充上下文
 
-Plugins can extend the Agent's system prompt by defining custom prompt sections in the `agent/prompt-sections/` convention directory.
+当插件需要 Agent 理解业务术语、输出规范或工具使用约束时，用 Prompt Section 声明这些上下文。它属于插件能力，会跟随 Runtime generation 原子发布：热更失败不会泄漏半成品，已开始的回合继续使用启动时的版本。
 
-### Defining a prompt section
+### 1. 挂载 Prompt Section Feature
 
-Create a TypeScript file that default-exports a `defineAgentPromptSection()` call:
+项目需同时声明依赖和 Feature：
 
-```typescript
-// agent/prompt-sections/my-context.ts
-import { defineAgentPromptSection } from '@zhin.js/agent';
+```json
+{
+  "dependencies": {
+    "@zhin.js/prompt-section": "latest"
+  },
+  "zhin": {
+    "features": [
+      { "package": "@zhin.js/prompt-section", "api": "^1.0.0" }
+    ]
+  }
+}
+```
+
+### 2. 声明一段上下文
+
+在插件根目录创建 `agent/prompt-sections/project-rules.ts`：
+
+```ts
+import { defineAgentPromptSection } from '@zhin.js/prompt-section';
 
 export default defineAgentPromptSection({
-  id: 'my-plugin:context',
-  title: 'My Plugin Context',
-  content: 'Rules and context for my plugin...',
-  priority: 75,
-  truncatable: true,
+  title: 'Project rules',
+  content: 'Answer with repository-local terminology and cite changed files.',
+  layer: 'context',
+  order: 70,
+  retention: 'preferred',
   maxChars: 1000,
+  profiles: ['interactive'],
 });
 ```
 
-| Field | Type | Default | Description |
-| --- | --- | --- | --- |
-| `id` | `string` | — | 唯一标识符（建议格式：`plugin-name:section-name`） |
-| `title` | `string` | — | 节点标题 |
-| `content` | `string` | — | 提示词内容 |
-| `priority` | `number` | `50` | 数字越大，排序越靠前 |
-| `truncatable` | `boolean` | `true` | 是否允许在预算不足时截断 |
-| `maxChars` | `number` | `undefined` | 单节点最大字符数 |
-| `layer` | `string` | `'plugin'` | 层级标记（仅用于分类） |
+文件相对路径是本地名称；Zhin 会与插件 owner 组合成全局唯一身份，不需要手写 `id`。`order` 只决定呈现顺序；`retention` 决定预算不足时的保留策略，两者不再混成一个“优先级”。
 
-### Auto-discovery
+| 字段 | 含义 |
+| --- | --- |
+| `layer` | 用于表达 `role` / `task` / `context` / `safety` 等语义分层 |
+| `order` | 数字越大，在同一层中越靠前 |
+| `retention` | `required` 不可静默丢失；`preferred` 优先保留；`opportunistic` 先让出预算 |
+| `maxChars` | 这一段可使用的字符上限 |
+| `profiles` | 选择 `interactive`、`schedule` 或两者 |
+| `platforms` | 可选；仅在指定 IM 平台的回合中注入，例如 `['github']` |
 
-The sections are discovered automatically when the Agent starts. No registration code is needed in your plugin — just place the file under `agent/prompt-sections/` and Zhin.js will pick it up.
+`required` 内容放不下时，回合会明确失败，而不是在未告知的情况下截断安全策略。总预算由 `ai.agent.systemPromptMaxChars` 控制。
 
-You can also call the discovery functions directly when integrating into a custom Agent setup:
+### 3. 验证已生效的版本
 
-```typescript
-import { bootstrapPromptSections, PromptAssemblyRegistry } from '@zhin.js/agent';
+启动后在 Console 的能力目录查看 **Prompt Sections**，可确认 owner、来源、generation、profile 和预算策略。目录不返回提示词正文，因为其中可能包含内部产品策略。可运行示例见 `examples/full-bot/agent/prompt-sections/custom.ts`。
 
-const registry = new PromptAssemblyRegistry();
-await bootstrapPromptSections(ctx, registry);
-```
-
-A real example is available at `examples/full-bot/agent/prompt-sections/custom.ts`.
+Prompt Section 只影响模型上下文，**不会授予工具、数据或审批权限**。权限仍必须由 Tool Feature、Runtime resource 和 Host 策略提供。

@@ -819,5 +819,6 @@ const DEMO_INTROSPECTION_PATHS: ReadonlySet<string> = new Set([
   '/introspection/endpoints',
   '/introspection/bindings',
   '/introspection/tools',
+  '/introspection/prompt-sections',
   '/introspection/mcp',
 ]);

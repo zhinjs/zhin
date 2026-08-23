@@ -36,6 +36,7 @@ describe('DeferredCapabilityPlan', () => {
       })]),
       agents: Object.freeze([]),
       mcp: Object.freeze([]),
+      promptSections: Object.freeze([]),
     });
     const plan = createDeferredCapabilityPlan({
       capabilities,
@@ -122,6 +123,7 @@ describe('DeferredCapabilityPlan', () => {
       ]),
       agents: Object.freeze([]),
       mcp: Object.freeze([]),
+      promptSections: Object.freeze([]),
     });
     const authority = workroomAuthority(capabilities, ['read_repo'], [{
       name: 'research', requiredTools: ['read_repo'],
@@ -181,6 +183,7 @@ describe('DeferredCapabilityPlan', () => {
       skills: Object.freeze([]),
       agents: Object.freeze([]),
       mcp: Object.freeze([]),
+      promptSections: Object.freeze([]),
     });
     const authority = workroomAuthority(capabilities, [command, qualifiedCommand], []);
     const workroom = createWorkroomDeferredCapabilityPlan({
@@ -266,6 +269,7 @@ describe('DeferredCapabilityPlan', () => {
       skills: Object.freeze([skill(owner, 'research', 'Use primary sources.')]),
       agents: Object.freeze([]),
       mcp: Object.freeze([]),
+      promptSections: Object.freeze([]),
     });
     const authority = workroomAuthority(capabilities, ['read_repo'], [{
       name: 'research', requiredTools: ['read_repo'],

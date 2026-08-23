@@ -19,7 +19,6 @@ import type { ResolvedAgentBinding } from '../config/types.js';
 import type { RegisteredAgentTool } from '../tool/contracts.js';
 import type { DeferredTurnState } from '../turn/deferred-turn-state.js';
 import type { SessionCompactInfo } from '../event/session-events.js';
-import type { PromptAssemblyRegistry } from '../prompt/prompt-assembly-registry.js';
 import type {
   HostEventEmitter,
   HostPhaseTraceConfig,
@@ -59,7 +58,6 @@ export interface AgentContextHost {
   bootstrapContext: string;
   globalContext: string;
   skillsSummaryXML: string;
-  promptAssemblyRegistry: PromptAssemblyRegistry;
   getTurnActiveSkills(): string;
   getAlwaysSkillsBaseline(): string;
   appendActiveSkillsContext(fragment: string): void;

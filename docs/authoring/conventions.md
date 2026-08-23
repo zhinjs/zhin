@@ -28,6 +28,7 @@ flowchart LR
 | `components/` | `.ts` / `.tsx` | 是 | server | `@zhin.js/component` | `zhin.component` | `defineComponent(...)` |
 | `adapters/` | `.ts` | 是 | server | `@zhin.js/adapter` | `zhin.adapter` | `defineAdapter(...)` |
 | `tools/` | `.ts` | 否 | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
+| `agent/prompt-sections/` | `.ts` | 是 | server | `@zhin.js/prompt-section` | `zhin.agent-prompt-section` | `defineAgentPromptSection(...)` |
 | `skills/` | 子目录 + `SKILL.md` | 一层 | server | `@zhin.js/skill` | `zhin.skill` | Markdown 文本 |
 | `agents/` | `*.agent.md` | 否 | server | `@zhin.js/agent-feature` | `zhin.agent` | Markdown 文本 |
 | `mcp/` | `.ts` | 否 | server | `@zhin.js/mcp-feature` | `zhin.mcp` | `defineMcp(...)` |
@@ -49,6 +50,7 @@ flowchart LR
 | `components/` | 相对路径去扩展名，`/` 拼接 | `components/share-music.ts` → `share-music` |
 | `adapters/` | 同上 | `adapters/napcat.ts` → `napcat` |
 | `tools/` | 文件名去扩展名（不递归子目录）；ASCII kebab 或 snake | `tools/music-search.ts` → `music-search`；`tools/send_user_like.ts` → `send_user_like` |
+| `agent/prompt-sections/` | 相对路径去扩展名，`/` 拼接 | `agent/prompt-sections/project/rules.ts` → `project/rules` |
 | `skills/` | 子目录名即 localName，目录内必须含 `SKILL.md` | `skills/memory-consolidate/SKILL.md` → `memory-consolidate` |
 | `agents/` | 文件名去掉 `.agent.md` 后缀 | `agents/planner.agent.md` → `planner` |
 | `mcp/` | 文件名去扩展名（不递归） | `mcp/my-server.ts` → `my-server` |

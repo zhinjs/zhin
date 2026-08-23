@@ -158,8 +158,11 @@ export function collectWizardDependencies(
   return {
     ...(options.adapters ? getAdapterDependencies(options.adapters) : {}),
     ...getAIDependencies(options.ai),
-    // tools/ 约定需要 @zhin.js/tool（与 create-zhin 路径对齐）
-    ...(options.ai?.enabled ? { '@zhin.js/tool': ZHIN_STACK_VERSIONS['@zhin.js/tool'] } : {}),
+    // AI authoring conventions（与 create-zhin 路径对齐）
+    ...(options.ai?.enabled ? {
+      '@zhin.js/tool': ZHIN_STACK_VERSIONS['@zhin.js/tool'],
+      '@zhin.js/prompt-section': ZHIN_STACK_VERSIONS['@zhin.js/prompt-section'],
+    } : {}),
   };
 }
 
@@ -167,7 +170,10 @@ export function collectWizardDependencies(
 export function collectWizardFeatures(
   options: Pick<InitOptions, 'ai'>,
 ): Array<{ package: string; api: string }> {
-  return options.ai?.enabled ? [{ package: '@zhin.js/tool', api: '^1.0.0' }] : [];
+  return options.ai?.enabled ? [
+    { package: '@zhin.js/tool', api: '^1.0.0' },
+    { package: '@zhin.js/prompt-section', api: '^1.0.0' },
+  ] : [];
 }
 
 /** 把 features 清单条目合并进项目 package.json 的 zhin.features（zhin setup 路径） */

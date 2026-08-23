@@ -82,7 +82,7 @@ Run `icqq login` first, then start Zhin.
 - `autoReconnect` has been re-implemented: after an unexpected IPC/RPC disconnect, the adapter automatically reconnects with exponential backoff (`stop()` is a deliberate disconnect and does not trigger reconnection).
 - `outboundMedia: file | base64` has been re-implemented: in `file` mode, segment base64 data is written to a temporary file before sending `[image:path]`; in `base64` mode (default when `rpc` is configured), `[image:base64://...]` is sent for the daemon to decode.
 - **Console social/group management RPC is now wired**: the endpoint within the Adapter normalizes ICQQ's `get_friend_list` / `get_group_list` / `get_group_member_list`, request approval, and group management operations into frozen `EndpointManagement` objects. The Host only consumes this semantic port and no longer probes for method aliases or reads `friends` / `groups` SDK caches.
-- **Notice / request inbound events have been removed**: the Plugin Runtime's `MessageGateway` only has a message channel and lacks `notice.receive` / `request.receive` event mechanisms. The old `icqq-side-events.ts` / `get-msg.ts` / `login-ipc-contract.ts` / `agent-prompt.ts` have been removed accordingly. Friend/join-group request handling will be restored once the runtime provides an event channel.
+- **Notice / request inbound events have been removed**: the Plugin Runtime's `MessageGateway` only has a message channel and lacks `notice.receive` / `request.receive` event mechanisms. The old `icqq-side-events.ts` / `get-msg.ts` / `login-ipc-contract.ts` paths have been removed accordingly. Friend/join-group request handling will be restored once the runtime provides an event channel.
 
 ## License
 

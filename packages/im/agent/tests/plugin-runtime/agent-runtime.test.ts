@@ -29,6 +29,11 @@ import {
   defineAgentTool,
   toolFeatureId,
 } from '@zhin.js/tool';
+import {
+  PromptSectionIndex,
+  defineAgentPromptSection,
+  promptSectionFeatureId,
+} from '@zhin.js/prompt-section';
 import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { compactAgentMessages, getLlmTransportModel } from '@zhin.js/ai';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
@@ -209,6 +214,7 @@ describe('Agent CapabilityIngress', () => {
     expect(capabilities.skills.map((skill) => skill.name)).toEqual(['research']);
     expect(capabilities.agents.map((agent) => agent.name)).toEqual(['planner']);
     expect(capabilities.mcp.map((connection) => connection.name)).toEqual(['memory']);
+    expect(capabilities.promptSections.map((section) => section.title)).toEqual(['Project rules']);
     await expect(capabilities.tools[0]?.execute({ value: 'x' }, invocation())).resolves.toBe('old:x');
     await expect(capabilities.mcp[0]?.listTools()).resolves.toEqual([{ name: 'search' }]);
     await expect(capabilities.mcp[0]?.callTool('search', { q: 'x' })).resolves.toEqual({ q: 'x' });
@@ -438,6 +444,7 @@ describe('Agent CapabilityIngress', () => {
     await bob;
     release();
     await alice;
+    expect(llm.calls[0]?.context.systemPrompt).toContain('Prefer repository-local conventions.');
 
     const session = await host.agentSessionStore.findActive('im:sandbox:main:group:team');
     expect(session).toBeDefined();
@@ -649,6 +656,26 @@ describe('Agent CapabilityIngress', () => {
     expect((await ingress.read(hidden.snapshot, hidden.child)).tools).toEqual([]);
     await hidden.mcp.stop();
   });
+
+  it('publishes platform prompt sections only to matching IM turns', async () => {
+    const fixture = await createFixture({ promptPlatforms: ['github'] });
+    const ingress = new CapabilityIngress();
+
+    expect((await ingress.read(
+      fixture.snapshot,
+      fixture.child,
+      () => true,
+      accessTurn('github'),
+    )).promptSections.map((section) => section.title)).toEqual(['Project rules']);
+    expect((await ingress.read(
+      fixture.snapshot,
+      fixture.child,
+      () => true,
+      accessTurn('icqq'),
+    )).promptSections).toEqual([]);
+
+    await fixture.mcp.stop();
+  });
 });
 
 async function createFixture(access: {
@@ -657,6 +684,7 @@ async function createFixture(access: {
   readonly permissions?: readonly string[];
   readonly hidden?: boolean;
   readonly approval?: 'never' | 'on-risk' | 'always';
+  readonly promptPlatforms?: readonly string[];
 } = {}) {
   const root = rootPluginId();
   const child = childPluginId(root, 'child');
@@ -711,7 +739,18 @@ async function createFixture(access: {
       }),
     }),
   });
-  const slots: readonly CapabilitySlot[] = [tool, skill, agent, mcpSlot];
+  const promptSection = createCapabilitySlot({
+    owner: root,
+    feature: promptSectionFeatureId,
+    localName: 'project-rules',
+    source: '/agent/prompt-sections/project-rules.ts',
+    definition: defineAgentPromptSection({
+      title: 'Project rules',
+      content: 'Prefer repository-local conventions.',
+      platforms: access.promptPlatforms,
+    }),
+  });
+  const slots: readonly CapabilitySlot[] = [tool, skill, agent, mcpSlot, promptSection];
   const journal = memoryJournalStore();
   const base = baseState(slots, journal);
   const view = createSnapshotView(1, base);
@@ -724,6 +763,7 @@ async function createFixture(access: {
       [skillFeatureId, new SkillIndex([skill], view)],
       [agentFeatureId, new AgentIndex([agent], view)],
       [mcpFeatureId, mcp],
+      [promptSectionFeatureId, new PromptSectionIndex([promptSection], view)],
     ]),
   });
   return { snapshot, child, mcp, journal };

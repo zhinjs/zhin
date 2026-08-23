@@ -17,21 +17,62 @@ const baseContext = {
 } as const;
 
 describe('PromptAssemblyRegistry', () => {
-  it('registers and sorts sections by priority', () => {
+  it('separates render order from budget retention and enforces per-section caps', () => {
+    const registry = new PromptAssemblyRegistry();
+    registry.register('preferred', {
+      layer: 'context',
+      title: 'Preferred',
+      content: 'P'.repeat(80),
+      order: 100,
+      retention: 'preferred',
+      maxChars: 40,
+    });
+    registry.register('opportunistic', {
+      layer: 'examples',
+      title: 'Opportunistic',
+      content: 'O'.repeat(80),
+      order: 200,
+      retention: 'opportunistic',
+    });
+
+    const entries = registry.entries();
+    expect(entries.map((entry) => entry.id)).toEqual(['opportunistic', 'preferred']);
+    const output = registry.build(70);
+    expect(output).toContain('P'.repeat(20));
+    expect(output).not.toContain('O'.repeat(20));
+    expect(output.length).toBeLessThanOrEqual(70);
+  });
+
+  it('rejects duplicate identities and required content that cannot fit the budget', () => {
+    const registry = new PromptAssemblyRegistry();
+    const required = {
+      layer: 'safety' as const,
+      title: 'Required',
+      content: 'R'.repeat(100),
+      order: 100,
+      retention: 'required' as const,
+    };
+    registry.register('required', required);
+
+    expect(() => registry.register('required', required)).toThrow(/Duplicate Prompt Section/);
+    expect(() => registry.build(50)).toThrow(/required Prompt Sections exceed the 50 character budget/);
+  });
+
+  it('registers and sorts sections by order', () => {
     const registry = new PromptAssemblyRegistry();
     registry.register('low', {
       layer: 'context',
       title: 'Low',
       content: 'low content',
-      priority: 10,
-      truncatable: true,
+      order: 10,
+      retention: 'preferred',
     });
     registry.register('high', {
       layer: 'system',
       title: 'High',
       content: 'high content',
-      priority: 100,
-      truncatable: false,
+      order: 100,
+      retention: 'required',
     });
 
     const entries = registry.entries();
@@ -47,15 +88,15 @@ describe('PromptAssemblyRegistry', () => {
       layer: 'system',
       title: 'System',
       content: 'S'.repeat(100),
-      priority: 100,
-      truncatable: false,
+      order: 100,
+      retention: 'required',
     });
     registry.register('details', {
       layer: 'context',
       title: 'Details',
       content: 'D'.repeat(100),
-      priority: 50,
-      truncatable: true,
+      order: 50,
+      retention: 'preferred',
     });
 
     const out = registry.build(150);
@@ -76,8 +117,8 @@ describe('PromptAssemblyRegistry', () => {
       layer: 'context',
       title: 'Custom',
       content: '# Custom\nhello registry',
-      priority: 95,
-      truncatable: true,
+      order: 95,
+      retention: 'preferred',
     });
 
     const prompt = buildRichSystemPrompt({

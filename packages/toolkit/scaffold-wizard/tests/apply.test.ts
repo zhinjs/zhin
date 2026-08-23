@@ -258,7 +258,7 @@ describe('applyAdaptersToConfig', () => {
 });
 
 describe('collectWizardDependencies / collectWizardFeatures', () => {
-  it('adds @zhin.js/tool dependency and feature entry when AI is enabled', () => {
+  it('adds Agent authoring Feature dependencies and entries when AI is enabled', () => {
     const ai = {
       enabled: true,
       agentProvider: 'ollama',
@@ -268,12 +268,17 @@ describe('collectWizardDependencies / collectWizardFeatures', () => {
     const deps = collectWizardDependencies({ ai });
     expect(deps['@zhin.js/agent']).toBe('latest');
     expect(deps['@zhin.js/tool']).toBe('latest');
-    expect(collectWizardFeatures({ ai })).toEqual([{ package: '@zhin.js/tool', api: '^1.0.0' }]);
+    expect(deps['@zhin.js/prompt-section']).toBe('latest');
+    expect(collectWizardFeatures({ ai })).toEqual([
+      { package: '@zhin.js/tool', api: '^1.0.0' },
+      { package: '@zhin.js/prompt-section', api: '^1.0.0' },
+    ]);
   });
 
   it('does not add @zhin.js/tool when AI is disabled', () => {
     const deps = collectWizardDependencies({ ai: { enabled: false } });
     expect(deps).not.toHaveProperty('@zhin.js/tool');
+    expect(deps).not.toHaveProperty('@zhin.js/prompt-section');
     expect(deps).not.toHaveProperty('@zhin.js/agent');
     expect(collectWizardFeatures({ ai: { enabled: false } })).toEqual([]);
   });

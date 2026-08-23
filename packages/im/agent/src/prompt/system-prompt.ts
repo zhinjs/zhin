@@ -71,8 +71,6 @@ export interface RichSystemPromptContext {
   bootstrapContext: string;
   /** toolSearch 模式：deferred 域统计，如 github(8), mcp(26) */
   toolSearchDeferredStats?: string;
-  /** Per-platform markdown from AgentPromptContributor (§6c). */
-  platformSections?: string;
   /** Canonical turn identity; never an IM Message adapter. */
   turn?: TurnContextView;
   /** SDK 分治编排片段（workspace prompts/orchestrator*.md） */
@@ -293,15 +291,6 @@ function buildSecuritySection(): string {
   ].join('\n');
 }
 
-function buildPlatformSection(platformSections: string | undefined, withIntro = true): string | null {
-  const body = platformSections?.trim();
-  if (!body) return null;
-  const intro = withIntro
-    ? 'IM-specific hints for deferred tasks (general rules are in # Orchestration):\n\n'
-    : '';
-  return `# Platform\n\n${intro}${body}`;
-}
-
 function buildSkillsSection(
   skillRegistry: SkillRegistry | null,
   skillsSummaryXML: string,
@@ -334,8 +323,8 @@ interface DefaultPromptSectionDefinition {
   id: string;
   layer: PromptLayer;
   title: string;
-  priority: number;
-  truncatable: boolean;
+  order: number;
+  retention: 'required' | 'preferred';
   content: (ctx: RichSystemPromptContext) => string | null;
 }
 
@@ -344,129 +333,121 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
     id: '§1_runtime',
     layer: 'context',
     title: 'Runtime',
-    priority: 160,
-    truncatable: false,
+    order: 160,
+    retention: 'required',
     content: (ctx) => buildContextSection(ctx.config, ctx.bootstrapContext, ctx.agentNickname, ctx.gitStatus),
   },
   {
     id: '§1b_critical_rules',
     layer: 'system',
     title: 'Critical Rules',
-    priority: 150,
-    truncatable: false,
+    order: 150,
+    retention: 'required',
     content: () => CRITICAL_RULES,
   },
   {
     id: '§1c_workflow',
     layer: 'task',
     title: 'Workflow',
-    priority: 140,
-    truncatable: false,
+    order: 140,
+    retention: 'required',
     content: () => WORKFLOW_RULES,
   },
   {
     id: '§1d_model_style',
     layer: 'role',
     title: 'Style',
-    priority: 130,
-    truncatable: false,
+    order: 130,
+    retention: 'required',
     content: (ctx) => new ModelAwarePromptBuilder(ctx.modelId).buildStyleSection(),
   },
   {
     id: '§3_tools',
     layer: 'tools',
     title: 'Orchestration',
-    priority: 120,
-    truncatable: false,
+    order: 120,
+    retention: 'required',
     content: (ctx) => buildOrchestrationSection(ctx.orchestratorSdk),
   },
   {
     id: '§4_security',
     layer: 'safety',
     title: 'Security',
-    priority: 110,
-    truncatable: false,
+    order: 110,
+    retention: 'required',
     content: () => buildSecuritySection(),
   },
   {
     id: '§5_error_handling',
     layer: 'constraints',
     title: 'Error Handling',
-    priority: 90,
-    truncatable: true,
+    order: 90,
+    retention: 'preferred',
     content: () => ERROR_HANDLING_RULES,
   },
   {
     id: '§5b_editing',
     layer: 'constraints',
     title: 'Editing',
-    priority: 80,
-    truncatable: true,
+    order: 80,
+    retention: 'preferred',
     content: () => EDITING_RULES,
   },
   {
     id: '§5c_task_completion',
     layer: 'constraints',
     title: 'Task Completion',
-    priority: 70,
-    truncatable: true,
+    order: 70,
+    retention: 'preferred',
     content: () => TASK_COMPLETION_RULES,
   },
   {
     id: '§5d_code_references',
     layer: 'constraints',
     title: 'Code References',
-    priority: 60,
-    truncatable: true,
+    order: 60,
+    retention: 'preferred',
     content: () => CODE_REFERENCE_RULES,
   },
   {
     id: '§5e_memory_instructions',
     layer: 'memory',
     title: 'Memory Instructions',
-    priority: 50,
-    truncatable: true,
+    order: 50,
+    retention: 'preferred',
     content: () => MEMORY_INSTRUCTIONS,
   },
   {
     id: '§5f_context_mode',
     layer: 'context',
     title: 'Context Mode',
-    priority: 40,
-    truncatable: true,
+    order: 40,
+    retention: 'preferred',
     content: (ctx) => new ModelAwarePromptBuilder(ctx.modelId)
       .buildContextModeHint(ctx.contextWindow ?? 128000),
-  },
-  {
-    id: '§6c_platform',
-    layer: 'context',
-    title: 'Platform',
-    priority: 100,
-    truncatable: false,
-    content: (ctx) => buildPlatformSection(ctx.platformSections),
   },
   {
     id: '§8_skills',
     layer: 'tools',
     title: 'Skills',
-    priority: 30,
-    truncatable: true,
+    order: 30,
+    retention: 'preferred',
     content: (ctx) => buildSkillsSection(ctx.skillRegistry, ctx.skillsSummaryXML),
   },
   {
     id: '§10_global',
     layer: 'context',
     title: 'Global Context',
-    priority: 20,
-    truncatable: true,
+    order: 20,
+    retention: 'preferred',
     content: (ctx) => ctx.globalContext?.trim() ? ctx.globalContext : null,
   },
   {
     id: '§11_bootstrap',
     layer: 'context',
     title: 'Bootstrap',
-    priority: 10,
-    truncatable: true,
+    order: 10,
+    retention: 'preferred',
     content: (ctx) => ctx.bootstrapContext?.trim() ? ctx.bootstrapContext : null,
   },
 ];
@@ -479,8 +460,8 @@ export function createDefaultPromptAssemblyRegistry(
     registry.register(definition.id, {
       layer: definition.layer,
       title: definition.title,
-      priority: definition.priority,
-      truncatable: definition.truncatable,
+      order: definition.order,
+      retention: definition.retention,
       content: definition.content(ctx) ?? '',
     });
   }
@@ -511,15 +492,12 @@ export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
 }
 
 
-/** Vision / lite paths: persona + optional platform + context hint. */
-export function buildLiteSystemPromptWithPlatform(
+/** Vision / lite paths: persona plus an optional context hint. */
+export function buildLiteSystemPrompt(
   personaBlock: string,
-  platformSections?: string,
   contextHint?: string,
 ): string {
   const parts: string[] = [personaBlock.trim()];
-  const platform = buildPlatformSection(platformSections, false);
-  if (platform) parts.push(platform);
   const hint = contextHint?.trim();
   if (hint) parts.push(hint);
   return parts.join('\n\n');

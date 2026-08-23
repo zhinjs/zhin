@@ -225,6 +225,12 @@
     "export * from './token.js';",
     "export{GenerationAdmissionGate,bindGenerationAdmission,createGenerationAdmissionGate,generationAdmissionBinder,generationAdmissionSource,type GenerationAdmissionBindable,type GenerationAdmissionSource,}from './admission.js';"
   ],
+  "prompt-section": [
+    "export * from './definition.js';",
+    "export * from './prompt-section-index.js';",
+    "export * from './provider.js';",
+    "export{default}from './provider.js';"
+  ],
   "runtime": [
     "export * from './compatibility.js';",
     "export * from './config-composer.js';",

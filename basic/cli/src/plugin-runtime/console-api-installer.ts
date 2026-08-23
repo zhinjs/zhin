@@ -7,6 +7,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { commandFeatureId, isCommandIndex } from '@zhin.js/command';
 import { componentFeatureId, isComponentIndex } from '@zhin.js/component';
 import { isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
+import { isPromptSectionIndex, promptSectionFeatureId } from '@zhin.js/prompt-section';
 import {
   formatDisplayPath,
   getLogger,
@@ -222,6 +223,7 @@ function createAgentRuntimeResolver(
         }
         return [...seen.values()];
       },
+      promptSections: () => listGenerationPromptSections(getSnapshot?.(), projectRoot),
       mcp: () => {
         const rows = new Map<string, Record<string, unknown>>();
         // 配置面（ai.mcpServers）始终可见；连接状态在 orchestrator 可用时补
@@ -242,6 +244,33 @@ function createAgentRuntimeResolver(
       },
     },
   });
+}
+
+/**
+ * Content-free Prompt Section catalog for Console. Prompt text can contain
+ * product policy or secrets and therefore never crosses this introspection seam.
+ */
+export function listGenerationPromptSections(
+  snapshot: RuntimeSnapshot | undefined,
+  projectRoot: string,
+): readonly Readonly<Record<string, unknown>>[] {
+  const projection = snapshot?.projections.get(promptSectionFeatureId);
+  if (!isPromptSectionIndex(projection)) return [];
+  return Object.freeze(projection.list().map((section) => Object.freeze({
+    name: section.name,
+    qualifiedName: section.qualifiedName,
+    title: section.title,
+    owner: String(section.owner),
+    layer: section.layer,
+    order: section.order,
+    retention: section.retention,
+    ...(section.maxChars === undefined ? {} : { maxChars: section.maxChars }),
+    profiles: [...section.profiles],
+    ...(section.platforms ? { platforms: [...section.platforms] } : {}),
+    source: displayConsolePath(section.source, projectRoot),
+    generation: section.generation,
+    contentChars: section.content.length,
+  })));
 }
 
 function createAgentRuntimeLeaseResolver(

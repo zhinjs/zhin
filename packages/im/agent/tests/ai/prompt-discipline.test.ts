@@ -54,19 +54,6 @@ describe('Prompt discipline block', () => {
     expect(prompt).not.toContain('# Deferred Tools');
   });
 
-  it('platformSections 注入 §6c', () => {
-    const prompt = buildRichSystemPrompt({
-      config: DEFAULT_CONFIG,
-      skillRegistry: null,
-      skillsSummaryXML: '',
-      activeSkillsContext: '',
-      bootstrapContext: '',
-      platformSections: 'icqq custom hint',
-    });
-    expect(prompt).toContain('# Platform');
-    expect(prompt).toContain('icqq custom hint');
-  });
-
   it('§11 bootstrap 不含 AGENTS；toolSearch §8 为 catalog 非全文 XML', () => {
     const xml = '<available_skills><skill available="true"><name>demo</name><description>' + 'x'.repeat(200) + '</description></skill></available_skills>';
     const prompt = buildRichSystemPrompt({

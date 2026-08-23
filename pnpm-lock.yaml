@@ -138,6 +138,9 @@ importers:
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../packages/im/plugin-runtime
+      '@zhin.js/prompt-section':
+        specifier: workspace:*
+        version: link:../../packages/im/prompt-section
       '@zhin.js/runtime':
         specifier: workspace:*
         version: link:../../packages/im/runtime
@@ -358,6 +361,9 @@ importers:
       '@zhin.js/page':
         specifier: workspace:*
         version: link:../../packages/console/page
+      '@zhin.js/prompt-section':
+        specifier: workspace:*
+        version: link:../../packages/im/prompt-section
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../../packages/toolkit/satori
@@ -1153,6 +1159,9 @@ importers:
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
+      '@zhin.js/prompt-section':
+        specifier: workspace:*
+        version: link:../prompt-section
       '@zhin.js/schedule':
         specifier: workspace:*
         version: link:../../../basic/schedule
@@ -1528,6 +1537,22 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/im/prompt-section:
+    dependencies:
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/im/runtime:
     dependencies:
       '@zhin.js/feature-kit':
@@ -1570,6 +1595,9 @@ importers:
       '@zhin.js/page':
         specifier: workspace:*
         version: link:../../console/page
+      '@zhin.js/prompt-section':
+        specifier: workspace:*
+        version: link:../prompt-section
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../skill
@@ -1935,6 +1963,9 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../../packages/im/agent
+      '@zhin.js/prompt-section':
+        specifier: workspace:*
+        version: link:../../../packages/im/prompt-section
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1981,6 +2012,9 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../../packages/im/agent
+      '@zhin.js/prompt-section':
+        specifier: workspace:*
+        version: link:../../../packages/im/prompt-section
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

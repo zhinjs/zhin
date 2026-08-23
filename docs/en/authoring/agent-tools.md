@@ -169,3 +169,66 @@ export default defineAgentTool<{ url: string }>({
   },
 });
 ```
+
+## Give an Agent plugin-owned context
+
+Use Prompt Sections when a plugin needs the Agent to understand business vocabulary,
+output rules, or tool-use constraints. A section is a generation-owned capability:
+a failed hot reload publishes nothing, while an in-flight turn keeps the exact
+generation it started with.
+
+### 1. Mount the Prompt Section Feature
+
+Declare both the dependency and the Feature:
+
+```json
+{
+  "dependencies": {
+    "@zhin.js/prompt-section": "latest"
+  },
+  "zhin": {
+    "features": [
+      { "package": "@zhin.js/prompt-section", "api": "^1.0.0" }
+    ]
+  }
+}
+```
+
+### 2. Declare a context section
+
+Create `agent/prompt-sections/project-rules.ts` at the plugin root:
+
+```ts
+import { defineAgentPromptSection } from '@zhin.js/prompt-section';
+
+export default defineAgentPromptSection({
+  title: 'Project rules',
+  content: 'Answer with repository-local terminology and cite changed files.',
+  layer: 'context',
+  order: 70,
+  retention: 'preferred',
+  maxChars: 1000,
+  profiles: ['interactive'],
+});
+```
+
+The relative file path supplies the local name; Zhin combines it with the plugin
+owner to form a globally unique identity. `order` controls presentation only.
+`retention` controls what happens when the prompt budget is tight:
+`required` must fit or the turn fails explicitly, `preferred` is retained before
+`opportunistic`, and opportunistic content yields first. `maxChars` caps this
+section, while `profiles` selects interactive turns, scheduled turns, or both.
+Use optional `platforms` to publish the section only to matching IM turns, for
+example `platforms: ['github']`.
+The total budget is configured by `ai.agent.systemPromptMaxChars`.
+
+### 3. Verify the published generation
+
+Open **Prompt Sections** in the Console capability catalog to inspect owner,
+source, generation, profiles, and budget policy. Introspection deliberately omits
+the prompt text because it can contain internal product policy. A runnable example
+is in `examples/full-bot/agent/prompt-sections/custom.ts`.
+
+A Prompt Section changes model context; it **does not grant tool, data, or approval
+authority**. Those permissions still come from Tool Features, Runtime resources,
+and Host policy.

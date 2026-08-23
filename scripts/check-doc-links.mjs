@@ -16,15 +16,7 @@ const scanRoots = [
   'README.zh-CN.md',
   'CLAUDE.md',
   '.github/copilot-instructions.md',
-  'docs/getting-started',
-  'docs/concepts',
-  'docs/authoring',
-  'docs/configuration',
-  'docs/cli',
-  'docs/ai',
-  'docs/console',
-  'docs/examples',
-  'docs/contributing',
+  'docs',
   'examples/minimal-bot',
   'examples/test-bot/ACCEPTANCE.md',
   'plugins/adapters/README.md',
@@ -52,7 +44,6 @@ function* extractLinks(filePath) {
         href.startsWith('https://') ||
         href.startsWith('mailto:') ||
         href.startsWith('data:') ||
-        href.startsWith('/') ||
         href === 'url'
       ) {
         continue;
@@ -95,7 +86,7 @@ for (const root of scanRoots) {
 function resolveTarget(fromFile, href) {
   const decoded = decodeURIComponent(href.split('#')[0]);
   if (decoded.startsWith('/')) {
-    return path.join(repoRoot, decoded.slice(1));
+    return path.join(repoRoot, 'docs', decoded.slice(1));
   }
   const base = path.dirname(fromFile);
   return path.normalize(path.join(base, decoded));
@@ -108,6 +99,9 @@ function existsAsDoc(target) {
   if (fs.existsSync(target)) return true;
   if (fs.existsSync(target + '.md')) return true;
   if (fs.existsSync(path.join(target, 'README.md'))) return true;
+  const relativeToDocs = path.relative(path.join(repoRoot, 'docs'), target);
+  if (!relativeToDocs.startsWith('..')
+    && fs.existsSync(path.join(repoRoot, 'docs/public', relativeToDocs))) return true;
   return false;
 }
 

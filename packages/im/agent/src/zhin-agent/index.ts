@@ -58,7 +58,6 @@ import { computeDeferredDelta } from '../turn/turn-deferred-delta.js';
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import { buildDisciplinedPrompt as assembleDisciplinedPrompt } from '../prompt/assembly.js';
-import { PromptAssemblyRegistry } from '../prompt/prompt-assembly-registry.js';
 import { createInboundTurnQueue, runWithInboundQueue } from '../turn/inbound-queue-runtime.js';
 import type { ResolvedInboundQueueConfig } from '../turn/inbound-queue-config.js';
 import type { InboundTurnQueue } from '../turn/inbound-turn-queue.js';
@@ -158,7 +157,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   readonly emitter = new ZhinAgentEventEmitter();
   readonly deferred = new DeferredTurnState();
   readonly promptController: PromptController;
-  readonly promptAssemblyRegistry = new PromptAssemblyRegistry();
   /** 无交互审批面传输的 host 级回退。 */
   approvalPort?: ApprovalPort;
   lastTurnMetrics: ZhinAgentTurnMetrics | null = null;
@@ -257,10 +255,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   buildDisciplinedPrompt(basePrompt: string): string {
     return assembleDisciplinedPrompt(asPrivate(this), basePrompt);
-  }
-
-  getPromptRegistry(): PromptAssemblyRegistry {
-    return this.promptAssemblyRegistry;
   }
 
   wireLlmApiLayer(): void {

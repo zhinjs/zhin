@@ -97,10 +97,11 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     adapterDeps['@zhin.js/adapter-sandbox'] = 'latest';
   }
 
-  // AI 依赖（agent 栈 + 所选 @ai-sdk/*）；tools/ 约定需要 @zhin.js/tool
+  // AI 依赖（agent 栈 + 所选 @ai-sdk/*）及 AI authoring Features
   const aiDeps: Record<string, string> = { ...getAIDependencies(options.ai) };
   if (aiEnabled) {
     aiDeps['@zhin.js/tool'] = ZHIN_STACK_VERSIONS['@zhin.js/tool'];
+    aiDeps['@zhin.js/prompt-section'] = ZHIN_STACK_VERSIONS['@zhin.js/prompt-section'];
   }
   // 脚手架默认生成 Satori 卡片组件示例
   const cardDeps = {
@@ -162,6 +163,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
         { package: '@zhin.js/page', api: '^1.0.0' },
         { package: '@zhin.js/layout', api: '^1.0.0' },
         ...(aiEnabled ? [{ package: '@zhin.js/tool', api: '^1.0.0' }] : []),
+        ...(aiEnabled ? [{ package: '@zhin.js/prompt-section', api: '^1.0.0' }] : []),
       ],
       plugins: collectAdapterPluginManifest(adapters),
     }

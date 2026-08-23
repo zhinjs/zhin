@@ -21,6 +21,11 @@ import toolFeature, {
   defineAgentTool,
   toolFeatureId,
 } from '@zhin.js/tool';
+import promptSectionFeature, {
+  PromptSectionIndex,
+  defineAgentPromptSection,
+  promptSectionFeatureId,
+} from '@zhin.js/prompt-section';
 import { RootRuntime, type ModuleRuntime } from '../src/index.js';
 
 const temporary: string[] = [];
@@ -40,6 +45,8 @@ describe('Agent Feature slot HMR', () => {
     modules.set(join(project, 'packages/skill/index.ts'), { default: skillFeature });
     modules.set(join(project, 'packages/agent/index.ts'), { default: agentFeature });
     modules.set(join(project, 'packages/mcp/index.ts'), { default: mcpFeature });
+    modules.set(join(project, 'packages/prompt/index.ts'), { default: promptSectionFeature });
+    modules.set(join(project, 'agent/prompt-sections/project-rules.ts'), { default: projectRules('fixture') });
     modules.set(join(project, 'tools/lookup.ts'), { default: lookupTool('fixture') });
     modules.set(join(project, 'mcp/memory.ts'), { default: memoryMcp([]) });
     const runtime = new RootRuntime({
@@ -71,10 +78,12 @@ describe('Agent Feature slot HMR', () => {
       skill: join(project, 'packages/skill/index.ts'),
       agent: join(project, 'packages/agent/index.ts'),
       mcp: join(project, 'packages/mcp/index.ts'),
+      prompt: join(project, 'packages/prompt/index.ts'),
     };
     const toolSource = join(project, 'tools/lookup.ts');
     const mcpSource = join(project, 'mcp/memory.ts');
     const agentSource = join(project, 'agents/planner.agent.md');
+    const promptSource = join(project, 'agent/prompt-sections/project-rules.ts');
     let setups = 0;
     modules.set(pluginSource, {
       default: definePlugin({ name: 'root', setup() { setups += 1; } }),
@@ -83,8 +92,10 @@ describe('Agent Feature slot HMR', () => {
     modules.set(providers.skill, { default: skillFeature });
     modules.set(providers.agent, { default: agentFeature });
     modules.set(providers.mcp, { default: mcpFeature });
+    modules.set(providers.prompt, { default: promptSectionFeature });
     modules.set(toolSource, { default: lookupTool('v1') });
     modules.set(mcpSource, { default: memoryMcp(events) });
+    modules.set(promptSource, { default: projectRules('v1') });
     const runtime = new RootRuntime({
       projectRoot: project,
       modules,
@@ -96,6 +107,7 @@ describe('Agent Feature slot HMR', () => {
     await expect(executeTool(first)).resolves.toBe('v1:value:1');
     expect(readSkill(first)).toBe('Research v1');
     expect(readAgent(first)).toBe('Planner v1');
+    expect(readPrompt(first)).toBe('Project rules v1');
     await expect(callMcp(first)).resolves.toEqual({ value: 'x' });
     expect(setups).toBe(1);
 
@@ -109,6 +121,7 @@ describe('Agent Feature slot HMR', () => {
 
     await expect(executeTool(second)).resolves.toBe('v2:value:2');
     expect(readAgent(second)).toBe('Planner v1');
+    expect(readPrompt(second)).toBe('Project rules v1');
     expect(second.projections.get(mcpFeatureId)).toBe(firstMcp);
     expect(modules.loadCount(toolSource)).toBe(2);
     expect(modules.loadCount(mcpSource)).toBe(1);
@@ -119,12 +132,19 @@ describe('Agent Feature slot HMR', () => {
     const third = runtime.snapshot;
 
     expect(readAgent(third)).toBe('Planner v2');
+    expect(readPrompt(third)).toBe('Project rules v1');
     await expect(executeTool(third)).resolves.toBe('v2:value:2');
     expect(third.projections.get(toolFeatureId)).toBe(second.projections.get(toolFeatureId));
     expect(third.projections.get(mcpFeatureId)).toBe(firstMcp);
     for (const provider of Object.values(providers)) {
       expect(modules.loadCount(provider)).toBe(1);
     }
+
+    modules.set(promptSource, { default: projectRules('v2') });
+    await hmr.enqueue(promptSource);
+    const fourth = runtime.snapshot;
+    expect(readPrompt(first)).toBe('Project rules v1');
+    expect(readPrompt(fourth)).toBe('Project rules v2');
     expect(setups).toBe(1);
 
     await runtime.stop();
@@ -148,6 +168,13 @@ function memoryMcp(events: string[]) {
       listTools: () => [{ name: 'search' }],
       callTool: (_name, input) => input,
     }),
+  });
+}
+
+function projectRules(version: string) {
+  return defineAgentPromptSection({
+    title: `Project rules ${version}`,
+    content: `Prompt rules ${version}`,
   });
 }
 
@@ -195,6 +222,11 @@ function readAgent(snapshot: RuntimeSnapshot): string | undefined {
     .get(rootPluginId(), 'planner')?.description;
 }
 
+function readPrompt(snapshot: RuntimeSnapshot): string | undefined {
+  return projection(snapshot, promptSectionFeatureId, PromptSectionIndex)
+    .visible(rootPluginId(), 'interactive')[0]?.title;
+}
+
 function callMcp(snapshot: RuntimeSnapshot): Promise<unknown> {
   return projection(snapshot, mcpFeatureId, McpIndex)
     .callTool(rootPluginId(), 'memory', 'search', { value: 'x' });
@@ -218,7 +250,7 @@ class FakeModules implements ModuleRuntime {
 async function createProject(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-agent-features-'));
   temporary.push(root);
-  const features = ['tool', 'skill', 'agent', 'mcp'];
+  const features = ['tool', 'skill', 'agent', 'mcp', 'prompt'];
   await writeJson(join(root, 'package.json'), {
     name: '@test/root',
     dependencies: Object.fromEntries(features.map((name) => [`@test/${name}`, 'workspace:*'])),
@@ -235,6 +267,7 @@ async function createProject(): Promise<string> {
     ...features.map((name) => `packages/${name}/index.ts`),
     'tools/lookup.ts',
     'mcp/memory.ts',
+    'agent/prompt-sections/project-rules.ts',
   ]) await touch(join(root, file));
   await touch(join(root, 'skills/research/SKILL.md'), '# Research v1\n\nResearch carefully.\n');
   await touch(join(root, 'agents/planner.agent.md'), '# Planner v1\n\nPlan carefully.\n');

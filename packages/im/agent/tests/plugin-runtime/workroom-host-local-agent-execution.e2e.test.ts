@@ -213,6 +213,7 @@ function assignmentCapabilities(): AgentCapabilities {
     ]),
     agents: Object.freeze([]),
     mcp: Object.freeze([]),
+    promptSections: Object.freeze([]),
   });
 }
 

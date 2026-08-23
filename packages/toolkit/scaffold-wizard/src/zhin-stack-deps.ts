@@ -22,6 +22,7 @@ export const ZHIN_STACK_VERSIONS = {
   '@zhin.js/core': 'latest',
   '@zhin.js/layout': 'latest',
   '@zhin.js/page': 'latest',
+  '@zhin.js/prompt-section': 'latest',
   '@zhin.js/tool': 'latest',
   '@zhin.js/client': 'latest',
   '@zhin.js/contract': 'latest',

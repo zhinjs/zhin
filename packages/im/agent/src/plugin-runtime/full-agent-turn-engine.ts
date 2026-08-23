@@ -22,6 +22,8 @@ import { createScheduleCapabilityPlan } from './schedule-capability-plan.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import { buildTextTurnOutbound } from '../turn/turn-complete.js';
 import { createTurnActivityProjector } from '../activity-feedback/turn-event-projector.js';
+import { PromptAssemblyRegistry } from '../prompt/prompt-assembly-registry.js';
+import type { PromptSectionDescriptor } from '@zhin.js/prompt-section';
 
 export interface FullAgentTurnEngineOptions {
   readonly host: ZhinAgentPrivate;
@@ -158,6 +160,7 @@ async function* runInteractiveTurn(
     agentNickname: host.activeBinding?.nickname,
     modelId: host.activeBinding?.model,
     providerAlias: host.activeBinding?.providerAlias,
+    registry: createTurnPromptRegistry(context.capabilities.promptSections),
   });
 
   const stream = host.promptController.scheduleStream({
@@ -316,6 +319,7 @@ async function* runScheduleTurn(
     agentNickname: host.activeBinding?.nickname,
     modelId: host.activeBinding?.model,
     providerAlias: host.activeBinding?.providerAlias,
+    registry: createTurnPromptRegistry(context.capabilities.promptSections),
   });
   const stream = host.promptController.scheduleStream({
     turnId: context.turn.identity.turnId,
@@ -375,6 +379,29 @@ async function* runScheduleTurn(
       });
     },
   };
+}
+
+function createTurnPromptRegistry(
+  sections: readonly PromptSectionDescriptor[],
+): PromptAssemblyRegistry {
+  const registry = new PromptAssemblyRegistry();
+  for (const section of sections) {
+    registry.register(section.qualifiedName, {
+      layer: section.layer,
+      title: section.title,
+      content: section.content,
+      order: section.order,
+      retention: section.retention,
+      maxChars: section.maxChars,
+      metadata: {
+        ...section.metadata,
+        owner: section.owner,
+        source: section.source,
+        generation: section.generation,
+      },
+    });
+  }
+  return registry;
 }
 
 async function* bufferTerminal(

@@ -18,6 +18,7 @@ const migratedRoots = [
   ['skill', 'packages/im/skill/src'],
   ['agent-feature', 'packages/im/agent-feature/src'],
   ['mcp-feature', 'packages/im/mcp-feature/src'],
+  ['prompt-section', 'packages/im/prompt-section/src'],
   ['agent/runtime', 'packages/im/agent/src/plugin-runtime'],
   ['console-contract', 'packages/console/plugin-contract/src'],
   ['page', 'packages/console/page/src'],

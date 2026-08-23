@@ -18,7 +18,7 @@ pnpm vitest run packages/agent/tests/advanced-acceptance.test.ts \
   packages/agent/tests/mcp-registry.test.ts \
   packages/agent/tests/tool-search-orchestrator.test.ts \
   packages/agent/tests/ai/prompt-discipline.test.ts \
-  packages/agent/tests/icqq-agent-prompt.test.ts
+  packages/im/prompt-section/tests/prompt-section.test.ts
 ```
 
 ---
@@ -61,7 +61,7 @@ pnpm vitest run packages/agent/tests/advanced-acceptance.test.ts \
   - [x] 文档边界：**仅私聊、无群**（见 [weixin-ilink README](../../plugins/adapters/weixin-ilink/README.md)）
   - 实机回归：`L4_SKIP_PLATFORM=0` + 配置 `weixin-ilink` 段后跑 `pnpm check:l4`（可选）
 - [x] **toolSearch + Worker**（`ai.agent.toolSearch: true`）：主编排 3 工具（`tool_search` / `run_deferred_task` / `ask_user`）；查 star 走 Worker — `advanced-acceptance.test.ts`、`tool-search-orchestrator.test.ts`；prompt token &lt; 20k — `advanced-acceptance.test.ts`
-- [x] **平台 Prompt**：icqq system 含 `# Platform`（经 `resolveAgentPromptMarkdown`）；通用 `buildRichSystemPrompt` 无 `mcp_icqq` 硬编码 — `prompt-discipline.test.ts`、`icqq-agent-prompt.test.ts`、`advanced-acceptance.test.ts`
+- [x] **平台 Prompt**：ICQQ/GitHub 指令是按 `platforms` 过滤的 generation-owned Prompt Section；通用 `buildRichSystemPrompt` 无平台硬编码 — `prompt-section.test.ts`、`agent-runtime.test.ts`、`prompt-discipline.test.ts`
 
 ### Assistant / Home（实机）
 

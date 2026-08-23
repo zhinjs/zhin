@@ -66,6 +66,7 @@ describe('Workroom priority and preemption production composition', () => {
         hostTool(owner, 'workroom_claim_task', async input => input),
       ]),
       skills: Object.freeze([]), agents: Object.freeze([]), mcp: Object.freeze([]),
+      promptSections: Object.freeze([]),
     });
     const chat = createDeferredCapabilityPlan({
       capabilities, sessionSnapshot: { loadedTools: {}, loadedSkills: [] },

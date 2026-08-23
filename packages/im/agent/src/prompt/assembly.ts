@@ -1,7 +1,6 @@
-import { resolveAgentPromptMarkdown } from '../agent-prompt/index.js';
 import {
   buildRichSystemPrompt,
-  buildLiteSystemPromptWithPlatform,
+  buildLiteSystemPrompt,
   buildUserMessageWithHistory,
   FIXED_DISCIPLINE_RULES,
   describePromptSectionsForDebug,
@@ -14,17 +13,16 @@ import { getLlmTransportModel, type AgentMessage } from '@zhin.js/ai';
 import { assembleSchedulePrompt } from '../schedule-domain/prompt-assembler.js';
 import type { AgentPromptProfile } from './turn-prompt-profile.js';
 import type { TurnContextView } from '../context/turn-envelope.js';
-
-function promptPlatform(turn: TurnContextView): string | undefined {
-  return turn.origin.kind === 'im' ? turn.origin.platform : undefined;
-}
+import { PromptAssemblyRegistry } from './prompt-assembly-registry.js';
+import { DEFAULT_CONFIG } from '../config/index.js';
 
 function scheduleSystemPrompt(
   agent: ZhinAgentPrivate,
   profile: Extract<AgentPromptProfile, { kind: 'schedule' }>,
   platformContext?: string,
+  registry?: import('./prompt-assembly-registry.js').PromptAssemblyRegistry,
 ): string {
-  return assembleSchedulePrompt({
+  const base = assembleSchedulePrompt({
     jobId: profile.jobId,
     prompt: profile.prompt,
     createdBy: profile.createdBy,
@@ -33,6 +31,30 @@ function scheduleSystemPrompt(
     skillContext: agent.getTurnActiveSkills(),
     bootstrapContext: [agent.globalContext, agent.bootstrapContext].filter(Boolean).join('\n\n'),
   }).systemPrompt;
+  return mergeRequiredBasePrompt(
+    base,
+    'Schedule Runtime',
+    agent.config?.systemPromptMaxChars ?? DEFAULT_CONFIG.systemPromptMaxChars,
+    registry,
+  );
+}
+
+function mergeRequiredBasePrompt(
+  base: string,
+  title: string,
+  maxChars: number,
+  registry?: PromptAssemblyRegistry,
+): string {
+  const assembly = new PromptAssemblyRegistry();
+  assembly.register('§runtime_base', {
+    layer: 'system',
+    title,
+    content: base,
+    order: Number.MAX_SAFE_INTEGER,
+    retention: 'required',
+  });
+  if (registry) assembly.merge(registry);
+  return assembly.build(maxChars);
 }
 
 export function buildDisciplinedPrompt(_host: AgentContextHost, basePrompt: string): string {
@@ -58,25 +80,11 @@ export async function describeAgentPathPromptSections(
     runtime?: PromptRuntimeOverrides;
   },
 ): Promise<PromptSectionDebugInfo[]> {
-  const platform = promptPlatform(options.turn);
-  const platformMarkdown = platform ? await resolveAgentPromptMarkdown({
-    ctx: {
-      slot: 'orchestrator',
-      platform,
-      userMessagePreview: options.content.slice(0, 500),
-      deferred: options.deferredStats
-        ? { goal: options.content, domainStats: options.deferredStats }
-        : undefined,
-    },
-    config: agent.config,
-    sessionId: options.sessionId,
-  }) : '';
-
   return describePromptSectionsForDebug({
     config: agent.config,
     skillRegistry: agent.skillRegistry,
     skillsSummaryXML: agent.skillsSummaryXML,
-    registry: agent.promptAssemblyRegistry,
+    registry: options.runtime?.registry,
     activeSkillsContext: options.runtime?.activeSkillsContext ?? agent.getTurnActiveSkills(),
     bootstrapContext: options.runtime?.bootstrapContext ?? agent.bootstrapContext,
     globalContext: agent.globalContext,
@@ -85,7 +93,6 @@ export async function describeAgentPathPromptSections(
       ? (await getGitStatusLine(process.cwd())) ?? undefined
       : undefined,
     toolSearchDeferredStats: options.deferredStats,
-    platformSections: platformMarkdown,
     orchestratorSdk: options.modelSdk,
     agentNickname: options.runtime?.agentNickname ?? agent.activeBinding?.nickname,
   });
@@ -105,23 +112,11 @@ export async function buildAgentPathSystemPrompt(
     runtime?: PromptRuntimeOverrides;
   },
 ): Promise<string> {
-  const { content, sessionId, personaEnhanced, preData, deferredStats, modelSdk } = options;
+  const { preData, deferredStats, modelSdk } = options;
 
   if (options.profile.kind === 'schedule') {
-    return scheduleSystemPrompt(agent, options.profile);
+    return scheduleSystemPrompt(agent, options.profile, undefined, options.runtime?.registry);
   }
-  const platform = promptPlatform(options.turn);
-  const platformMarkdown = platform ? await resolveAgentPromptMarkdown({
-    ctx: {
-      slot: 'orchestrator',
-      platform,
-      userMessagePreview: content.slice(0, 500),
-      deferred: deferredStats ? { goal: content, domainStats: deferredStats } : undefined,
-    },
-    config: agent.config,
-    sessionId,
-  }) : '';
-
   const gitStatus = agent.config.gitStatus
     ? await getGitStatusLine(process.cwd())
     : null;
@@ -138,14 +133,13 @@ export async function buildAgentPathSystemPrompt(
     config: agent.config,
     skillRegistry: agent.skillRegistry,
     skillsSummaryXML: agent.skillsSummaryXML,
-    registry: agent.promptAssemblyRegistry,
+    registry: options.runtime?.registry,
     activeSkillsContext: options.runtime?.activeSkillsContext ?? agent.getTurnActiveSkills(),
     bootstrapContext: options.runtime?.bootstrapContext ?? agent.bootstrapContext,
     globalContext: agent.globalContext,
     turn: options.turn,
     gitStatus: gitStatus ?? undefined,
     toolSearchDeferredStats: deferredStats,
-    platformSections: platformMarkdown,
     orchestratorSdk: modelSdk,
     agentNickname: options.runtime?.agentNickname ?? agent.activeBinding?.nickname,
     modelId: bindingModel,
@@ -162,15 +156,22 @@ export interface PromptRuntimeOverrides {
   readonly agentNickname?: string;
   readonly modelId?: string;
   readonly providerAlias?: string;
+  readonly registry?: import('./prompt-assembly-registry.js').PromptAssemblyRegistry;
 }
 
 export function buildChatPathSystemPrompt(
   agent: ZhinAgentPrivate,
   personaEnhanced: string,
   profile: AgentPromptProfile,
+  runtime?: PromptRuntimeOverrides,
 ): string {
-  if (profile.kind === 'schedule') return scheduleSystemPrompt(agent, profile);
-  return buildDisciplinedPrompt(agent, personaEnhanced);
+  if (profile.kind === 'schedule') return scheduleSystemPrompt(agent, profile, undefined, runtime?.registry);
+  return mergeRequiredBasePrompt(
+    buildDisciplinedPrompt(agent, personaEnhanced),
+    'Agent Runtime',
+    agent.config?.systemPromptMaxChars ?? DEFAULT_CONFIG.systemPromptMaxChars,
+    runtime?.registry,
+  );
 }
 
 export async function buildMultimodalVisionSystemPrompt(
@@ -180,22 +181,14 @@ export async function buildMultimodalVisionSystemPrompt(
     sessionId: string;
     textContent: string;
     personaEnhanced: string;
+    runtime?: PromptRuntimeOverrides;
   },
 ): Promise<string> {
-  const { turn, sessionId, textContent, personaEnhanced } = options;
-  const platform = promptPlatform(turn);
-  const platformMarkdown = platform ? await resolveAgentPromptMarkdown({
-    ctx: {
-      slot: 'orchestrator',
-      platform,
-      userMessagePreview: textContent.slice(0, 500),
-    },
-    config: agent.config,
-    sessionId,
-  }) : '';
-  return buildLiteSystemPromptWithPlatform(
-    personaEnhanced,
-    platformMarkdown,
+  return mergeRequiredBasePrompt(
+    buildLiteSystemPrompt(options.personaEnhanced),
+    'Vision Runtime',
+    agent.config?.systemPromptMaxChars ?? DEFAULT_CONFIG.systemPromptMaxChars,
+    options.runtime?.registry,
   );
 }
 

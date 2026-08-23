@@ -23,6 +23,12 @@ import {
   type ToolDescriptor,
   type ToolInvocationContext,
 } from '@zhin.js/tool';
+import {
+  isPromptSectionIndex,
+  promptSectionFeatureId,
+  type PromptSectionDescriptor,
+  type PromptProfile,
+} from '@zhin.js/prompt-section';
 
 export interface ToolCapability extends ToolDescriptor {
   execute<TInput = unknown, TResult = unknown>(
@@ -43,6 +49,7 @@ export interface AgentCapabilities {
   readonly skills: readonly SkillDescriptor[];
   readonly agents: readonly AgentDescriptor[];
   readonly mcp: readonly McpCapability[];
+  readonly promptSections: readonly PromptSectionDescriptor[];
 }
 
 export class CapabilityIngress {
@@ -55,6 +62,9 @@ export class CapabilityIngress {
     if (!snapshot.tree.has(owner)) throw new Error(`Unknown Agent capability owner: ${owner}`);
     const tools = projection(snapshot, toolFeatureId, ToolIndex);
     const mcp = projection(snapshot, mcpFeatureId, McpIndex);
+    const promptProjection = snapshot.projections.get(promptSectionFeatureId);
+    const promptSections = isPromptSectionIndex(promptProjection) ? promptProjection : undefined;
+    const promptProfile: PromptProfile = turn?.origin.kind === 'schedule' ? 'schedule' : 'interactive';
     return Object.freeze({
       generation: snapshot.generation,
       owner,
@@ -66,6 +76,9 @@ export class CapabilityIngress {
         ...(projection(snapshot, agentFeatureId, AgentIndex)?.visible(owner) ?? []),
       ]),
       mcp: bindMcp(mcp, owner, isActive),
+      promptSections: Object.freeze([...(promptSections?.visible(owner, promptProfile) ?? [])]
+        .filter((section) => !section.platforms
+          || (turn?.origin.kind === 'im' && section.platforms.includes(turn.origin.platform)))),
     });
   }
 }

@@ -175,7 +175,7 @@ ai:
     execApprovalMode: ask         # ask (default) | allow | deny
     gitStatus: true               # Default true: inject a one-line git status summary into the Runtime section (skipped outside git repos)
     contextPaths: []              # Extra context files injected into the system prompt (supports ~ and relative paths)
-    systemPromptMaxChars: 100000  # Total system prompt char budget; truncatable sections are cut in sacrifice order when exceeded
+    systemPromptMaxChars: 100000  # Total prompt budget; opportunistic content yields first, required content fails explicitly if it cannot fit
 ```
 
 In addition to `contextPaths`, the global context files `~/.config/zhin/AGENTS.md` and `~/.config/zhin/ZHIN.md` are loaded by default (skipped when missing) and injected as a `# User Context` section before the project bootstrap context; per-file cap is 8KB and the total cap is 16KB.

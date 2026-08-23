@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildChatPathSystemPrompt } from '../../src/prompt/assembly.js';
+import { PromptAssemblyRegistry } from '../../src/prompt/prompt-assembly-registry.js';
 
 describe('explicit Turn prompt profile', () => {
   it('builds a native Schedule prompt without ambient context or IM identity', () => {
@@ -21,5 +22,23 @@ describe('explicit Turn prompt profile', () => {
     expect(prompt).not.toContain('interactive persona must not leak');
     expect(prompt).not.toContain('platform:');
     expect(prompt).not.toContain('endpoint:');
+  });
+
+  it('injects turn-owned Prompt Sections even when the turn exposes no tools', () => {
+    const registry = new PromptAssemblyRegistry();
+    registry.register('root:business-rules', {
+      layer: 'context',
+      title: 'Business rules',
+      content: 'Use the canonical product vocabulary.',
+      order: 70,
+      retention: 'preferred',
+    });
+
+    const prompt = buildChatPathSystemPrompt({
+      config: { systemPromptMaxChars: 10_000 },
+    } as never, 'Helpful assistant.', { kind: 'interactive' }, { registry });
+
+    expect(prompt).toContain('Helpful assistant.');
+    expect(prompt).toContain('Use the canonical product vocabulary.');
   });
 });

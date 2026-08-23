@@ -14,7 +14,6 @@ export * from './side-event/index.js'
 export * from './schema-interaction.js'
 export type * from '@zhin.js/interaction'
 export * from './types.js'
-export * from './agent-prompt.js'
 export * from './utils.js'
 export * from './errors.js'
 

@@ -1,5 +1,5 @@
 /**
- * Worker 侧 deferred 工具载入（默认 TF-IDF；平台策略见 AgentPromptContributor）
+ * Worker 侧 deferred 工具载入（统一 TF-IDF 选择）。
  */
 import { type AgentTool, filterTools } from '@zhin.js/ai';
 export function selectDeferredToolsForWorker(

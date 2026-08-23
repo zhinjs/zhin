@@ -127,7 +127,7 @@ export type {
 } from './init/runtime-management-commands.js';
 export {
   buildRichSystemPrompt,
-  buildLiteSystemPromptWithPlatform,
+  buildLiteSystemPrompt,
   buildUserMessageWithHistory,
   describePromptSectionsForDebug,
   createDefaultPromptAssemblyRegistry,
@@ -144,16 +144,18 @@ export { promptAssemblyToken } from './prompt/tokens.js';
 export type { PromptAssemblyToken, PromptAssemblyResource } from './prompt/tokens.js';
 export {
   defineAgentPromptSection,
-} from './prompt/define-agent-prompt-section.js';
-export type { AgentPromptSectionConfig } from './prompt/define-agent-prompt-section.js';
-export {
-  PromptSectionLoader,
-} from './prompt/prompt-section-loader.js';
-export type { PromptSectionLoaderOptions } from './prompt/prompt-section-loader.js';
-export {
-  discoverAndRegisterPromptSections,
-  bootstrapPromptSections,
-} from './prompt/discover-prompt-sections.js';
+  isPromptSectionIndex,
+  PromptSectionIndex,
+  promptSectionFeatureId,
+} from '@zhin.js/prompt-section';
+export type {
+  AgentPromptSectionDefinition,
+  AgentPromptSectionInput,
+  PromptProfile,
+  PromptSectionDescriptor,
+  PromptSectionLayer,
+  PromptSectionRetention,
+} from '@zhin.js/prompt-section';
 export {
   buildAgentsEnvelopeContext,
   collectAgentsInstructionChain,
@@ -165,17 +167,6 @@ export {
   clearWorkspacePromptCache,
 } from './prompt/workspace-prompt.js';
 export type { WorkspacePromptRole } from './prompt/workspace-prompt.js';
-export {
-  registerAgentPromptContributor,
-  unregisterAgentPromptContributor,
-  getAgentPromptContributor,
-  clearAgentPromptContributors,
-  resolveAgentPromptSections,
-  resolveAgentPromptMarkdown,
-  resolveDeferredToolsForPlatform,
-  formatAgentPromptSectionsMarkdown,
-} from './agent-prompt/index.js';
-export type { ResolveAgentPromptOptions } from './agent-prompt/index.js';
 export { createUserProfileTool } from './tool/context-tools.js';
 export { createSpawnTaskTool } from './builtin/spawn-task-tool.js';
 export * from './interaction/index.js';

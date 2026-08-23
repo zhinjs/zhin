@@ -14,7 +14,7 @@ flowchart TB
   Package["npm / workspace package"] --> Instance["Plugin instance"]
   Instance --> Scope["owner-scoped PluginScope"]
   Scope --> Resources["Resources: config, env, database, schedule, logger"]
-  Scope --> Slots["Feature slots: command, component, middleware, adapter, page, tool, skill, agent"]
+  Scope --> Slots["Feature slots: command, component, middleware, adapter, page, tool, skill, agent, prompt section"]
   Slots --> Snapshot["immutable RuntimeSnapshot"]
   Snapshot --> Runtimes["IM / Agent / Console runtimes"]
   HMR["module change"] --> Transaction["prepare -> validate -> handoff -> commit / rollback"]
@@ -125,6 +125,7 @@ disposal. Standard providers use the following conventions:
 | Tool | `tools/**/*.ts` / `defineAgentTool()` | Agent capability catalog |
 | Skill | `skills/<name>/SKILL.md` | Agent capability catalog |
 | Agent | `agents/<name>.agent.md` | Agent capability catalog |
+| Prompt Section | `agent/prompt-sections/**/*.ts` / `defineAgentPromptSection()` | Fixed-generation Agent prompt assembly |
 | Page | `pages/**/*.ts(x)` / `definePage()` | Console PageIndex |
 | Layout | `pages/$nav.tsx`, `pages/$footer.tsx` | Console layout projection |
 

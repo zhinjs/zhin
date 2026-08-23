@@ -129,6 +129,7 @@
     "@zhin.js/mcp-feature": "workspace:*",
     "@zhin.js/permission": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/prompt-section": "workspace:*",
     "@zhin.js/schedule": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*",

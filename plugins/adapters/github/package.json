@@ -61,6 +61,7 @@
     "@zhin.js/command": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/prompt-section": "workspace:*",
     "zhin.js": "workspace:*",
     "zod": "^4.0.0"
   },
@@ -69,6 +70,9 @@
       "optional": true
     },
     "@zhin.js/command": {
+      "optional": true
+    },
+    "@zhin.js/prompt-section": {
       "optional": true
     },
     "zhin.js": {
@@ -81,6 +85,7 @@
   "devDependencies": {
     "@types/node": "^26.1.2",
     "@zhin.js/agent": "workspace:*",
+    "@zhin.js/prompt-section": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "zhin.js": "workspace:*",

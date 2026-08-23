@@ -36,6 +36,7 @@
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/middleware": "workspace:*",
     "@zhin.js/pagemanager": "workspace:*",
+    "@zhin.js/prompt-section": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
     "@zhin.js/scaffold-wizard": "workspace:*",

@@ -37,6 +37,7 @@
     "@zhin.js/mcp-feature": "workspace:*",
     "@zhin.js/middleware": "workspace:*",
     "@zhin.js/page": "workspace:*",
+    "@zhin.js/prompt-section": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "typescript": "^6.0.3"

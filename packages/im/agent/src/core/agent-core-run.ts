@@ -405,7 +405,7 @@ export async function* runAgentLoopTextTurnRun(
       modelSdk: llmModel.sdk,
       runtime: input.promptRuntime,
       })
-    : buildChatPathSystemPrompt(host, personaEnhanced, input.promptProfile);
+    : buildChatPathSystemPrompt(host, personaEnhanced, input.promptProfile, input.promptRuntime);
   if (outputSchema) {
     systemPrompt = `${systemPrompt}\n\n${buildAiOutboundPromptHint({})}`;
   }

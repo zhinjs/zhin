@@ -69,6 +69,7 @@ describe('runtime console RPC', () => {
     expect(isDemoHttpAllowed('GET', '/api/events/history', '/api')).toBe(true);
     expect(isDemoHttpAllowed('GET', '/api/introspection/middlewares', '/api')).toBe(true);
     expect(isDemoHttpAllowed('GET', '/api/introspection/components', '/api')).toBe(true);
+    expect(isDemoHttpAllowed('GET', '/api/introspection/prompt-sections', '/api')).toBe(true);
     expect(isDemoHttpAllowed('POST', '/api/introspection/components/render', '/api')).toBe(false);
     expect(isDemoHttpAllowed('POST', '/api/plugins', '/api')).toBe(false);
   });

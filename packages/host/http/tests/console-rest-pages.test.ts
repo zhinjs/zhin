@@ -395,6 +395,19 @@ function fakeAgentRuntime(overrides: Partial<ConsoleAgentRuntime> = {}): Console
       }),
       bindings: () => [{ name: 'main', provider: 'openai', model: 'gpt-x' }],
       tools: () => [{ name: 'search', source: 'builtin', description: 'web search' }],
+      promptSections: () => [{
+        name: 'project-rules',
+        qualifiedName: 'root:project-rules',
+        title: 'Project rules',
+        owner: 'root',
+        layer: 'context',
+        order: 70,
+        retention: 'preferred',
+        profiles: ['interactive'],
+        source: './agent/prompt-sections/project-rules.ts',
+        generation: 7,
+        contentChars: 36,
+      }],
       mcp: () => ({ rows: [{ name: 'fs', connected: true, toolCount: 3 }] }),
     },
     ...overrides,
@@ -448,6 +461,23 @@ describe('console-rest-pages introspection', () => {
       connected: true,
       toolCount: 3,
     });
+  });
+
+  it('exposes prompt section policy without exposing prompt content', async () => {
+    const base = await startHost(baseCtx({ acquireAgentRuntime: () => lease(fakeAgentRuntime()) }));
+    const response = await fetch(`${base}/api/introspection/prompt-sections`);
+    const body = await json(response);
+    const item = (body.data as { items: Array<Record<string, unknown>> }).items[0]!;
+
+    expect(response.status).toBe(200);
+    expect(item).toMatchObject({
+      name: 'project-rules',
+      title: 'Project rules',
+      retention: 'preferred',
+      generation: 7,
+      contentChars: 36,
+    });
+    expect(item).not.toHaveProperty('content');
   });
 
   it('exposes middleware/component catalogs and renders a full-scope preview', async () => {
@@ -554,21 +584,26 @@ describe('console-rest-pages introspection', () => {
 
   it('holds the generation lease until a catalog collector completes', async () => {
     let released = false;
+    let acquisitions = 0;
     const base = await startHost(baseCtx({
-      acquireAgentRuntime: () => ({
-        value: {
-          introspection: {
-            components: () => {
-              expect(released).toBe(false);
-              return [{ name: 'card', owner: 'root', source: './card.ts' }];
+      acquireAgentRuntime: () => {
+        acquisitions += 1;
+        return {
+          value: {
+            introspection: {
+              components: () => {
+                expect(released).toBe(false);
+                return [{ name: 'card', owner: 'root', source: './card.ts' }];
+              },
             },
           },
-        },
-        release: () => { released = true; },
-      }),
+          release: () => { released = true; },
+        };
+      },
     }));
     const response = await fetch(`${base}/api/introspection/components`);
     expect(response.status).toBe(200);
+    expect(acquisitions).toBe(1);
     expect(released).toBe(true);
   });
 });

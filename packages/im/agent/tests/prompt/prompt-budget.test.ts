@@ -9,30 +9,30 @@ import { DEFAULT_CONFIG, SECTION_SEP } from '../../src/config/index.js';
 describe('enforcePromptBudget', () => {
   it('未超预算：原样拼接', () => {
     const out = enforcePromptBudget([
-      { content: 'aaa', truncatable: false },
-      { content: 'bbb', truncatable: true },
+      { content: 'aaa', retention: 'required', order: 100 },
+      { content: 'bbb', retention: 'preferred', order: 50 },
     ], 1000);
     expect(out).toBe(['aaa', 'bbb'].join(SECTION_SEP));
   });
 
   it('空段与 null 被过滤', () => {
     const out = enforcePromptBudget([
-      { content: null, truncatable: true },
-      { content: '  ', truncatable: true },
-      { content: 'aaa', truncatable: false },
+      { content: null, retention: 'preferred', order: 20 },
+      { content: '  ', retention: 'preferred', order: 10 },
+      { content: 'aaa', retention: 'required', order: 100 },
     ], 1000);
     expect(out).toBe('aaa');
   });
 
-  it('超预算：数组靠前的可截断段先被尾部截断', () => {
+  it('超预算：低 order 的 preferred 段先被尾部截断', () => {
     const system = 'S'.repeat(100);
     const skills = 'K'.repeat(100);
     const bootstrap = 'B'.repeat(100);
     // 总量 = 100 + 4 + 100 + 4 + 100 = 308；预算 250 → 先截 skills
     const out = enforcePromptBudget([
-      { content: system, truncatable: false },
-      { content: skills, truncatable: true },
-      { content: bootstrap, truncatable: true },
+      { content: system, retention: 'required', order: 100 },
+      { content: skills, retention: 'preferred', order: 10 },
+      { content: bootstrap, retention: 'preferred', order: 20 },
     ], 250);
     expect(out).toContain('S'.repeat(100)); // 不可截断段完整保留
     expect(out).toContain('… (truncated)');
@@ -43,8 +43,8 @@ describe('enforcePromptBudget', () => {
   it('无法保留内容的可截断段被整段丢弃', () => {
     const system = 'S'.repeat(100);
     const out = enforcePromptBudget([
-      { content: system, truncatable: false },
-      { content: 'K'.repeat(100), truncatable: true },
+      { content: system, retention: 'required', order: 100 },
+      { content: 'K'.repeat(100), retention: 'preferred', order: 10 },
     ], 120);
     // 120 预算连截断标记都放不下 → 整段丢弃
     expect(out).toBe(system);
@@ -52,7 +52,7 @@ describe('enforcePromptBudget', () => {
 
   it('maxChars <= 0 时不做截断', () => {
     const out = enforcePromptBudget([
-      { content: 'K'.repeat(100), truncatable: true },
+      { content: 'K'.repeat(100), retention: 'preferred', order: 10 },
     ], 0);
     expect(out).toBe('K'.repeat(100));
   });
