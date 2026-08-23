@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/kook/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/kook/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=81be850a0f3b5171 -->
+<!-- sync-adapter-docs:sha256=116daa22e8a7d37c -->
 
 # @zhin.js/adapter-kook
 
@@ -110,6 +110,15 @@ platform permit checker 由 `plugin.ts` 的 generation 生命周期注册；Capa
 ## 迁移后出站能力变化
 
 迁移到 Plugin Runtime 后，出站统一经 `messageGatewayToken` 渲染并由 endpoint 编码为 KMarkdown（`sendChannelMsg` / `sendPrivateMsg`）。canonical `markdown` 保留格式；图片、视频、音频和文件仅有远程 URL 时可表示为 KMarkdown 链接。卡片消息与附件上传仍未接入统一出站通道。
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| WebSocket 无法上线 | 检查 Bot Token、网络与机器人能力开关 |
+| Webhook challenge 失败 | 检查公网路径、`verify_token` 与 HTTP Host |
+| 频道消息未触发 | 检查应用订阅、频道权限与机器人是否已加入服务器 |
+| 附件表现为链接 | 当前统一出站不上传附件；使用远程 URL 或按能力降级 |
 
 ## 许可证
 

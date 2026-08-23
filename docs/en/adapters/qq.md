@@ -120,7 +120,16 @@ The platform permit checker is registered by the `plugin.ts` generation lifecycl
 
 ## Post-Migration Outbound Capability Changes
 
-After migrating to Plugin Runtime, outbound messages are uniformly rendered to text via `messageGatewayToken` before sending (`sendPrivateMessage` / `sendGroupMessage` / `sendGuildMessage`). The old Adapter's rich media outbound capabilities (images / voice / video, keyboard buttons, markdown templates, etc.) have not yet been migrated — current outbound is equivalent to plain text. For rich media needs, you can use the endpoint's QQ API wrappers or call the QQ HTTP API directly as an escape hatch.
+QQ Endpoints declare native Markdown and keyboard support. `UserInteraction.ask()` renders confirm/select controls as Markdown buttons. Adapters without native buttons degrade the same keyboard semantics to numbered choices.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Gateway disconnects after Identify | `botKind` and intents; public bots must not request restricted intents |
+| QR binding remains offline | Console login task result, App ID, Secret, and Token |
+| Webhook has no events | HTTP Host, public path, callback settings, and signature parameters |
+| Markdown/button fails | Platform templates and permission; degrade by Endpoint capability |
 
 ## License
 

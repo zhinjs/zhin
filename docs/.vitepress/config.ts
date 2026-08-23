@@ -49,6 +49,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   ]),
   sidebarGroup('插件创作', [
     { text: 'definePlugin 全景', link: '/authoring/define-plugin' },
+    { text: '插件完整交付', link: '/authoring/plugin-delivery' },
     { text: '约定目录', link: '/authoring/conventions' },
     { text: '命令', link: '/authoring/commands' },
     { text: '中间件与组件', link: '/authoring/middleware-components' },
@@ -158,6 +159,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   ]),
   sidebarGroup('Plugin Authoring', [
     { text: 'definePlugin Overview', link: '/en/authoring/define-plugin' },
+    { text: 'Complete Plugin Delivery', link: '/en/authoring/plugin-delivery' },
     { text: 'Convention Directories', link: '/en/authoring/conventions' },
     { text: 'Commands', link: '/en/authoring/commands' },
     { text: 'Middleware & Components', link: '/en/authoring/middleware-components' },

@@ -87,3 +87,12 @@ plugins:
 pnpm --filter @zhin.js/adapter-dingtalk build
 pnpm --filter @zhin.js/adapter-dingtalk test
 ```
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| 平台校验 URL 失败 | 确认公网 HTTPS 可达，HTTP Host 已监听，路径与 `webhookPath` 一致 |
+| Webhook 返回 401/403 | 检查 `appSecret`、签名时间戳与服务器时钟 |
+| 能收到但无法回复 | 检查 `robotCode`、应用权限与 session webhook 是否有效 |
+| Endpoint 未出现 | 在日志查 Schema 或凭据错误，再到运行时能力核对 Endpoint |

@@ -26,6 +26,12 @@ pnpm add @zhin.js/adapter-onebot12
 入站：`gateway.receive({ conversation: ConversationRef, message: { conversation, id }, content, sender, metadata })`  
 出站：`send({ conversation, payload })` → WS `send_message`（payload 已由 gateway/core 渲染；无 segment-mapper）
 
+## 前置条件
+
+1. 启动兼容 OneBot 12 的实现，并确认其支持所选 WS 或 Webhook 模式。
+2. Webhook 出站还需要可用的 `api_url`；反向连接需要实现端可达 Zhin HTTP Host。
+3. 两端配置相同的 `access_token`，生产环境必须启用鉴权。
+
 ## 最小配置
 
 ```yaml
@@ -70,6 +76,15 @@ plugins:
 - [OneBot 12 标准](https://12.onebot.dev/)
 - [OneBot Connect WebSocket](https://12.onebot.dev/connect/communication/websocket/)
 - [适配器概览](https://zhin.js.org/essentials/adapters)
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| WS 连接失败 | 核对 OneBot 版本、连接方向、URL 与端口 |
+| Webhook 能收不能发 | 检查 `api_url` 可达性与 `send_message` 支持 |
+| 401 或握手失败 | 确认 Header/query token 与实现端一致 |
+| 事件字段无法识别 | 确认实现端发送的是 OneBot 12 而非 v11 结构 |
 
 ## 许可证
 

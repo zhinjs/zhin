@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/github/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/github/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=13785f28f8623254 -->
+<!-- sync-adapter-docs:sha256=9ff0c7673eb7000f -->
 
 # @zhin.js/adapter-github
 
@@ -29,6 +29,13 @@ pnpm add @zhin.js/adapter-github
 ```
 
 Webhook 需要 Root 提供 `@zhin.js/host-http`（`zhin runtime start` 默认装配）。
+
+## 前置条件
+
+1. 创建 GitHub App，记录 App ID、私钥与 Webhook Secret。
+2. 授予目标仓库所需的 Issues、Pull requests 与 Contents 权限。
+3. 将 Webhook 指向公网 HTTPS 的 `/github/webhook`，并订阅 Issue、PR 与评论事件。
+4. 把 App 安装到目标仓库；仓库 Workroom 使用稳定的 `owner/repo` 地址匹配。
 
 ## 配置（Plugin Runtime）
 
@@ -98,6 +105,15 @@ plugins:
 
 - 入站：`httpHostToken` POST → `messageGatewayToken.receive`
 - 出站：`send({ conversation, payload })`
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| Webhook 401 | 检查 Secret、`X-Hub-Signature-256` 与原始请求体 |
+| App 鉴权失败 | 检查 App ID、私钥 PEM/文件路径与服务器时钟 |
+| 评论没有进入 Workroom | 先查 Endpoint 收件箱，再核对 Catalog 的 Endpoint 与 `owner/repo` |
+| 能收事件但不能回复 | 检查 installation 与仓库权限；PAT MCP 不替代 App 出站 |
 
 ## License
 

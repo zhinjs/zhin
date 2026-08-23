@@ -38,6 +38,12 @@ pnpm add @zhin.js/adapter-onebot12
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'private'|'group'|'channel'`; guild containers land in `parent`)
 Outbound: `send({ conversation, payload })` -> WS `send_message` (payload is rendered by gateway/core; no segment-mapper)
 
+## Prerequisites
+
+1. Start a compatible OneBot 12 implementation that supports the selected WS or Webhook mode.
+2. Webhook outbound also requires a reachable `api_url`; reverse connections require access to the Zhin HTTP Host.
+3. Configure the same `access_token` on both sides and require authentication in production.
+
 ## Minimal Configuration
 
 ```yaml
@@ -82,6 +88,15 @@ See `agent/skills/onebot12.md` for skill documentation.
 - [OneBot 12 Standard](https://12.onebot.dev/)
 - [OneBot Connect WebSocket](https://12.onebot.dev/connect/communication/websocket/)
 - [Adapters overview](https://zhin.js.org/essentials/adapters)
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| WS connection fails | OneBot version, direction, URL, and port |
+| Webhook receives but cannot send | Reachable `api_url` and `send_message` support |
+| 401 or handshake failure | Matching Header/query token |
+| Event fields are rejected | The implementation must emit OneBot 12, not v11 structures |
 
 ## License
 

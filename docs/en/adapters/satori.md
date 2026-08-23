@@ -44,6 +44,12 @@ Outbound: `send({ conversation, payload })` -> Satori `message.create` (`channel
 
 Inbound `metadata.mentioned`: set to `true` when the id of an `<at id="..."/>` element in the message content equals the login selfId (from READY/event `login.user.id`).
 
+## Prerequisites
+
+1. Prepare a compatible Satori server and record its API base, platform identity, and user identity.
+2. Zhin must reach Satori for forward WS; Satori must reach the Zhin HTTP Host for Webhooks.
+3. When authentication is enabled, configure the same Bearer token on both sides.
+
 ## Minimal Configuration
 
 ```yaml
@@ -101,3 +107,12 @@ See `agent/skills/satori.md` for skill documentation.
 - [Introduction](https://satori.chat/zh-CN/introduction.html)
 - [Overview](https://satori.chat/zh-CN/protocol/overview.html)
 - [API](https://satori.chat/zh-CN/protocol/api.html)
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| WS IDENTIFY fails | `baseUrl`, platform/user identity, and token |
+| Webhook has no events | Path, `Satori-Opcode: 0`, and HTTP Host |
+| 401 | Matching token across API, WS IDENTIFY, and Webhook |
+| Wrong send target | `channel_id` and Conversation kind; only DIRECT maps to private |

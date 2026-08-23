@@ -26,6 +26,12 @@ pnpm add @zhin.js/adapter-milky
 入站：`gateway.receive({ conversation: ConversationRef(kind: "private"|"group", id), message, content, sender, metadata })`  
 出站：`send({ conversation, payload })` → HTTP `send_private_message` / `send_group_message`（payload 已由 gateway/core 渲染；无 segment-mapper）
 
+## 前置条件
+
+1. 启动兼容 Milky 的实现，并记录 HTTP API 与事件连接地址。
+2. 正向 WS/SSE 需 Zhin 主动可达实现端；Webhook/反向 WS 需实现端可达 Zhin HTTP Host。
+3. 两端配置相同的 `access_token`，生产环境不要暴露无鉴权接口。
+
 ## 最小配置
 
 ```yaml
@@ -73,6 +79,15 @@ plugins:
 - [Milky 快速开始](https://milky.ntqqrev.org/)
 - [Milky 通信](https://milky.ntqqrev.org/guide/communication)
 - [适配器概览](https://zhin.js.org/essentials/adapters)
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| WS/SSE 无事件 | 核对 `baseUrl`、连接模式与实现端事件服务 |
+| 401 或握手失败 | 确认 Bearer/query 中的 `access_token` 与实现端一致 |
+| Webhook/WSS 无法连接 | 检查 HTTP Host、网络可达性与回调路径 |
+| 能收不能发 | 检查 HTTP API 与发送动作支持情况 |
 
 ## 许可证
 

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/discord/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/discord/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=eaf43de80cd4c528 -->
+<!-- sync-adapter-docs:sha256=446353138259b37f -->
 
 # @zhin.js/adapter-discord
 
@@ -97,6 +97,15 @@ plugins:
 2. 创建应用并获取 Bot Token
 3. 开启 **MESSAGE CONTENT INTENT**
 4. 通过 OAuth2 URL 邀请 Bot 加入服务器
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| Gateway 反复断线 | 检查 Token、网络代理、Gateway Intents 与应用后台配置 |
+| 能上线但收不到正文 | 启用 Message Content Intent，并给 Bot 频道读取权限 |
+| 能收不能发 | 检查 Send Messages、Embed Links 与附件权限 |
+| `connection: interactions` 启动失败 | 当前生产路径使用 Gateway；改回 `gateway` |
 
 ## 许可证
 

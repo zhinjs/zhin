@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/lark/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/lark/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=d3ac7ca1c830b12d -->
+<!-- sync-adapter-docs:sha256=97a54d7b8a6aaadf -->
 
 # @zhin.js/adapter-lark
 
@@ -103,3 +103,12 @@ plugins:
 pnpm --filter @zhin.js/adapter-lark build
 pnpm --filter @zhin.js/adapter-lark test
 ```
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| URL 验证失败 | 检查公网 HTTPS、`webhookPath`、verification token 与 encrypt key |
+| Tenant Token 获取失败 | 检查 `appId`、`appSecret` 与应用版本是否已发布 |
+| 群里 @机器人不触发 AI | 当前无法可靠判定 bot open_id；使用显式 AI 前缀 |
+| 能收不能发 | 检查机器人消息权限、可见范围与应用是否已加入群聊 |

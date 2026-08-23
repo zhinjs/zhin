@@ -39,6 +39,12 @@ pnpm add @zhin.js/adapter-napcat
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'private'|'group'`; group temp sessions carry the group in `parent`)
 Outbound: `send({ conversation, payload })` -> WS `send_private_msg` / `send_group_msg`
 
+## Prerequisites
+
+1. Install and log into NapCatQQ, then enable one matching OneBot 11 connection.
+2. Zhin must reach NapCat for forward WS; NapCat must reach the Zhin HTTP Host for reverse WS or HTTP reports.
+3. Configure the same `access_token` on both sides and never expose an unauthenticated port.
+
 ## Minimal Configuration
 
 ```yaml
@@ -79,7 +85,7 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 
 ## Migration Notes (Plugin Runtime)
 
-- **Notice / request side events have been removed**: the old Adapter built `notice.receive` / `request.receive` events (including `$approve` / `$reject`) for `post_type: notice|request`; the new Plugin Runtime (`messageGatewayToken`) has no side-event bus yet — inbound only processes `post_type: message`, and notice / request events are silently discarded. Friend/group join request approval can be done via `callApi('set_friend_add_request' | 'set_group_add_request')`.
+- **Notice / request / meta side events** enter `sideEventGatewayToken` and dispatch to handlers. Requests expose `$approve` / `$reject`; messages continue through `messageGatewayToken`.
 - **Group management tools have not been migrated yet**: the old Adapter registered a full set of agent tools (kick/mute/group card, etc.) via `createSceneManagementTools`; after migration, `agent/tools/` only covers NapCat extension APIs. Other group management capabilities can be invoked via `callApi` (e.g., `set_group_kick`, `set_group_ban`) as an escape hatch.
 - **Platform permission access control**: `plugin.ts` setup has registered `registerDefaultScenePlatformPermitChecker('napcat')`. `scene_admin` / `scene_owner` are determined based on the sender's `role` (owner / admin) in the inbound metadata.
 
@@ -87,6 +93,15 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 
 - [NapCatQQ](https://github.com/NapNeko/NapCatQQ)
 - [Adapters overview](https://zhin.js.org/essentials/adapters)
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| WS connection is refused | NapCat URL, port, and connection direction |
+| 401 or handshake failure | Matching tokens and proxy preservation of Authorization |
+| Duplicate/self messages | Ensure only one report connection is enabled |
+| Requests/notices are missing | NapCat notice/request/meta reports and Endpoint categories |
 
 ## License
 

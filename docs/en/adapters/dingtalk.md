@@ -98,3 +98,12 @@ The `agent/` directory is retained (get_user, departments, group chat, work noti
 pnpm --filter @zhin.js/adapter-dingtalk build
 pnpm --filter @zhin.js/adapter-dingtalk test
 ```
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Platform URL verification fails | Public HTTPS reachability, listening HTTP Host, and exact `webhookPath` |
+| Webhook returns 401/403 | `appSecret`, signature timestamp, and server clock |
+| Receives but cannot reply | `robotCode`, App permissions, and session Webhook validity |
+| Endpoint is missing | Schema or credential errors in Logs, then Endpoint presence in Runtime Capabilities |

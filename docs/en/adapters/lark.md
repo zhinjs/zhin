@@ -101,3 +101,12 @@ The `agent/` directory is retained (get_user, group chat, administrators, file u
 pnpm --filter @zhin.js/adapter-lark build
 pnpm --filter @zhin.js/adapter-lark test
 ```
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| URL verification fails | Public HTTPS, `webhookPath`, verification token, and encrypt key |
+| Tenant Token fails | `appId`, `appSecret`, and whether the App version is published |
+| @bot does not trigger AI | Bot open_id cannot yet be identified reliably; use an explicit AI prefix |
+| Receives but cannot send | Message permission, visibility range, and chat membership |

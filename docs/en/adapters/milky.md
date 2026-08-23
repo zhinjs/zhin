@@ -38,6 +38,12 @@ pnpm add @zhin.js/adapter-milky
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'private'|'group'`; temp sessions carry the group in `parent`)
 Outbound: `send({ conversation, payload })` -> HTTP `send_private_message` / `send_group_message` (payload is rendered by gateway/core; no segment-mapper)
 
+## Prerequisites
+
+1. Start a compatible Milky implementation and record its HTTP API and event endpoints.
+2. Zhin must reach the implementation for WS/SSE; the implementation must reach Zhin for Webhook/reverse WS.
+3. Configure the same `access_token` on both sides. Never expose an unauthenticated production endpoint.
+
 ## Minimal Configuration
 
 ```yaml
@@ -85,6 +91,15 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 - [Milky Quick Start](https://milky.ntqqrev.org/)
 - [Milky Communication](https://milky.ntqqrev.org/guide/communication)
 - [Adapters overview](https://zhin.js.org/essentials/adapters)
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| WS/SSE has no events | `baseUrl`, connection mode, and implementation event service |
+| 401 or handshake failure | Matching `access_token` in Bearer/query and the implementation |
+| Webhook/WSS cannot connect | HTTP Host, network reachability, and callback path |
+| Receives but cannot send | HTTP API and supported send actions |
 
 ## License
 

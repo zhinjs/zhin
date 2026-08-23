@@ -108,7 +108,16 @@ The platform permit checker is registered by the `plugin.ts` generation lifecycl
 
 ## Post-Migration Outbound Capability Changes
 
-After migrating to Plugin Runtime, outbound messages are uniformly rendered to text via `messageGatewayToken` before sending (`sendChannelMsg` / `sendPrivateMsg`, KMarkdown text). The old Adapter's rich media outbound capabilities (images / card messages / attachments and other multi-modal segment direct sends) have not yet been migrated — current outbound is equivalent to plain text (KMarkdown). For sending cards or attachments, you can directly use the KOOK OpenAPI wrappers on the endpoint (same client as `getRoleList`, etc.) as an escape hatch.
+Outbound uses `messageGatewayToken` and encodes canonical Markdown as KMarkdown. Remote media URLs can be represented as links. Card messages and attachment upload are not yet part of the unified outbound path.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| WebSocket cannot connect | Bot Token, network, and bot capability switch |
+| Webhook challenge fails | Public path, `verify_token`, and HTTP Host |
+| Channel event does not arrive | Subscription, channel permissions, and bot membership |
+| Attachment becomes a link | Unified outbound does not upload attachments; use a remote URL or degrade |
 
 ## License
 

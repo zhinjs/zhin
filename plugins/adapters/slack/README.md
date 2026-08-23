@@ -38,6 +38,12 @@ pnpm add @zhin.js/adapter-slack
 | **Socket Mode**（默认） | `true` | 本地/内网，无需公网 URL | `appToken`（`xapp-...`） |
 | **HTTP Events** | `false` | 生产环境有公网 HTTPS | `signingSecret` + Runtime Host |
 
+## 前置条件
+
+1. 创建 Slack App，安装到 Workspace，并授予收发消息所需 OAuth scopes。
+2. Socket Mode 创建 `connections:write` App-Level Token；HTTP 模式配置 Signing Secret 与 Events URL。
+3. 订阅需要的 bot events，并把应用加入目标频道。
+
 ## 最小配置（Socket Mode）
 
 ```yaml
@@ -119,6 +125,15 @@ HTTP 模式下 Runtime Host（`http`）须已 listen；Slack App 的 Event Subsc
 - Modals / Select menus — 暂不支持
 - OAuth 安装流程 — 暂不支持
 - 旧 `usePlugin` / `extends Adapter` / host-router 生产入口已删除
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| Socket Mode 无法连接 | 检查 `xapp-` Token、Socket Mode 与 `connections:write` scope |
+| HTTP Events 返回 401 | 检查 Signing Secret、原始请求体、服务器时钟与反向代理 |
+| 频道消息未触发 | 确认事件订阅、OAuth scopes，并邀请 App 进入频道 |
+| 线程回复跑到主频道 | 检查入站 `thread_ts` 是否保留为 Conversation `threadId` |
 
 ## 许可证
 

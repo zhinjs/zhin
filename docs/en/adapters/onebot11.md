@@ -38,6 +38,12 @@ pnpm add @zhin.js/adapter-onebot11
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'private'|'group'`)
 Outbound: `send({ conversation, payload })` -> WS `send_private_msg` / `send_group_msg` (payload is rendered by gateway/core; no segment-mapper)
 
+## Prerequisites
+
+1. Start a compatible OneBot 11 implementation and choose forward or reverse WebSocket.
+2. Zhin must reach the implementation for forward WS; the implementation must reach Zhin for reverse WS.
+3. Configure the same `access_token` on both sides and require authentication in production.
+
 ## Minimal Configuration
 
 ```yaml
@@ -82,7 +88,7 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 
 ## Migration Notes (Plugin Runtime)
 
-- **Notice / request side events have been removed**: the old Adapter built `notice.receive` / `request.receive` events for `post_type: notice|request`; the new Plugin Runtime (`messageGatewayToken`) has no side-event bus yet — inbound only processes `post_type: message`, and notice / request events are silently discarded.
+- **Notice / request / meta side events** enter `sideEventGatewayToken` and dispatch to handlers. Messages continue through `messageGatewayToken`.
 - **Group management tools have not been migrated yet**: the old Adapter registered a full set of agent tools (kick/mute/group card, etc.) via `createSceneManagementTools`; after migration, only `onebot11_set_title` is retained. Other group management capabilities can be invoked via `callApi` (e.g., `set_group_kick`, `set_group_ban`) as an escape hatch.
 - **Platform permission access control**: `plugin.ts` setup has registered `registerDefaultScenePlatformPermitChecker('onebot11')`. `scene_admin` / `scene_owner` are determined based on the sender's `role` (owner / admin) in the inbound metadata.
 
@@ -90,6 +96,15 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 
 - [OneBot 11 Standard](https://github.com/botuniverse/onebot-11)
 - [Adapter Overview](https://zhin.js.org/essentials/adapters)
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| WS cannot connect | Direction, URL, port, and implementation WS service |
+| 401 or closed handshake | Matching Header/query token |
+| Receives but cannot send | Send-action support and account risk controls |
+| notice/request missing | Implementation post types and Endpoint request/notice views |
 
 ## License
 

@@ -4,13 +4,15 @@ title: Console
 
 # Console
 
-Whether you want to check the bot's running status, change a line of configuration on the fly, or chat without connecting to a platform -- you don't need to log into the server. When `zhin runtime start` starts up, it **automatically assembles** the Http Host and Console API (the project scripts `pnpm dev` / `pnpm start` ultimately go through it), available with zero configuration. The UI has two layers: the Remote Console hosted at <https://console.zhin.dev>, where you enter your Host address + token to connect; and the local pages served directly by the Host (`/console` index + individual page routes) along with the sandbox chat page.
+Console is Zhin's runtime fact surface. It answers what the current generation published, which Endpoint received a message, what an Agent did, and whether durable state recovered.
+
+`zhin runtime start` assembles the HTTP Host and Console API. Connect through <https://console.zhin.dev>, or open the local `/console` and Sandbox pages served by the Host.
 
 ```mermaid
 flowchart LR
     B[Browser] -->|Remote UI| RC[console.zhin.dev]
     B -->|Local pages| H
-    RC -->|Bearer token + CORS| H[Http Host :8086]
+    RC -->|Bearer token + CORS| H[Http Host]
     H --> R1[REST /api/*]
     H --> R2[RPC /api/console/request]
     H --> R3[SSE /api/events]
@@ -24,7 +26,7 @@ All configuration is in the `http:` section at the top level of `zhin.config.yml
 
 ```yaml
 http:
-  port: 8086                 # Default 8086
+  port: 8068                 # Scaffold default; trust project config
   host: 127.0.0.1            # Default 127.0.0.1; change to 0.0.0.0 for remote access
   token: ${HTTP_TOKEN}       # Main token (full scope)
   tokens:                    # Additional scoped tokens (optional)
@@ -35,7 +37,23 @@ http:
   base: /api                 # API prefix, default /api
 ```
 
-A few points relevant in actual deployment. Authentication: with a token configured, requests under `/api` require an `Authorization: Bearer <token>` header (or `?token=` query parameter); `/pub/*`, Console shell, and page routes remain public. Token comparison uses timing-safe comparison. CORS: `corsOrigins` is merged with the Remote Console origin so that cross-origin UIs can access the API. When the port is occupied, it's a soft degradation -- the Http Host logs and skips; adapters and the Agent continue to start, only the Console is unavailable. Additionally, when the Console triggers `system:restart`, the process exits with code 51, and the CLI daemon automatically re-launches.
+With a token configured, `/api` requests require a Bearer token. `/pub/*`, the Console shell, and page routes stay public. `corsOrigins` is merged with the Remote Console origin.
+
+A port conflict soft-degrades the HTTP Host: Adapters and Agents keep running, but Console is unavailable. A Console restart exits with code 51 and the CLI daemon relaunches the process.
+
+Runtime falls back to 8086 when no config exists; the current scaffold writes 8068. Always trust project configuration and the startup log.
+
+## Find the page from the symptom
+
+| Symptom | Start here | Fact to verify |
+| --- | --- | --- |
+| Console cannot connect | Dashboard / startup log | Host, port, token, CORS, and HTTP Host degradation |
+| Platform is online but receives nothing | Endpoint detail | Connection, inbox, requests/notices, and platform callback |
+| Command, middleware, or component is missing | Runtime Capabilities | Current-generation capability, order, and owner |
+| Agent does not call a tool | Agent Studio + Runtime Capabilities | Visibility, approval, security policy, trace, and cancellation |
+| Messages disappear after refresh | Endpoint conversation + Logs | History RPC recovery and SSE recovery gap |
+| Workroom does not claim a chat or repository | Workrooms + Task board | Catalog revision, full space address, Orchestrator, and Project Inbox |
+| File changed but behavior did not | Config + Dashboard | Successful save and publication of a new generation |
 
 ## Page Features
 
@@ -49,13 +67,23 @@ A few points relevant in actual deployment. Authentication: with a token configu
 | Cron | RPC `cron:*` | In-memory tasks registered by plugins (list); with Agent installed, can add/delete/pause persistent tasks |
 | Database | RPC `db:info` / `db:tables` / `db:select` / `db:insert` / `db:update` / `db:delete` / `db:kv:*` | Database browsing and editing, KV storage |
 | Files | RPC `files:tree` / `files:read` / `files:save`, `env:list` / `env:save` | Project file tree and `.env` management |
-| Runtime Capabilities | `GET /api/introspection/{commands,middlewares,components,tools,endpoints,bindings,mcp}`, `POST /api/introspection/components/render` | Current-generation command contracts, middleware order, component catalog and full-scope rendering lab, plus Agent tools |
+| Runtime Capabilities | `GET /api/introspection/{commands,middlewares,components,tools,prompt-sections,endpoints,bindings,mcp}`, `POST /api/introspection/components/render` | Current-generation contracts, owners, middleware order, component rendering lab, and Prompt Section governance metadata |
 | Agent Sessions | `GET/POST /api/agent/sessions/*` | AI session tree viewing and branch switching |
-| Workrooms | `config:get/set(ai)` + `GET /api/agent/workroom/runs[/*]` | Configure Projects, Agent roles, and Bot-to-Agent topology; inspect replayed Run / Task / Assignment / Reviewer / Sponsor Gate state for the selected Project |
+| Workrooms | Persistent Workroom Catalog + `GET /api/agent/workroom/runs[/*]` | Revision-CAS management for Projects, members, Agent roles, and chat/channel/repository bindings; inspect replayed Runs, Tasks, and Assignments |
 | Marketplace | `GET /pub/marketplace/search`, `/pub/marketplace/detail/*`, `GET /api/marketplace/updates` | Plugin marketplace (plugins.json + npmmirror) and update checks |
 | Sandbox | WS `/sandbox` | Built-in sandbox chat, direct conversation without platform integration |
 
 Real-time pushes go through SSE: `GET /api/events` (page directory sync, HMR reload, message/configuration events).
+
+## Standard acceptance run
+
+1. Dashboard reports a healthy connection with readable version and runtime data.
+2. Send a Sandbox message, refresh, and confirm Endpoint history remains.
+3. Inspect current owners for commands, middleware, components, Tools, and Prompt Sections.
+4. Run an Agent task and verify working directory, security policy, approval, cancellation, trace, and artifacts.
+5. For a Workroom, prove that a real chat, channel, or repository event enters the correct Project.
+
+A release is ready only when the current generation and durable projections agree. Disk configuration and plugin manifests are candidate inputs.
 
 ## /entries Plugin Page Mechanism
 
@@ -69,9 +97,9 @@ Page directory changes are pushed in real-time to connected UIs via SSE `sync` e
 
 ## Demo Scope (Read-Only Deployment)
 
-Issue a `scope: demo` token for demonstration environments, and the Console enters read-only mode:
+Issue a `scope: demo` token for demonstrations. Demo exposes only server-authorized, redacted data; a client-side mask is never a secret boundary.
 
-- Allowed: `GET /api/events`, `POST /api/console/request` (read-only RPCs only), `GET /api/system/status`, `GET /api/stats`, `GET /api/plugins*`;
+- Allowed: event stream and history, Runtime Capabilities, read-only Console RPC, system status, statistics, and plugin catalog;
 - WebSocket only for `/sandbox`;
 - All other write operations (changing config, clearing logs, DB writes, etc.) return `403`.
 

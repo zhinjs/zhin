@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=a6fa99a21ab163aa -->
+<!-- sync-adapter-docs:sha256=cd9b41392e678fa4 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -27,6 +27,10 @@ Zhin.js Sandbox 适配器，基于 WebSocket 的本地测试适配器；浏览�
 ```bash
 pnpm add @zhin.js/adapter-sandbox
 ```
+
+## 前置条件
+
+Sandbox 不需要外部账号。只需由 `zhin runtime start` 装配 HTTP Host，并确保浏览器能访问启动日志中的 Host 地址。
 
 ## 依赖
 
@@ -107,6 +111,15 @@ Sandbox 使用 JSON 消息格式：
 
 技能说明见 `agent/skills/sandbox.md`（本地沙箱调试约束）。
 
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| Console 无法连接 | 以启动日志中的 Host、端口和 token 为准 |
+| Sandbox 页面空白 | 检查 HTTP Host 是否因端口占用软降级，以及鉴权/CORS 错误 |
+| 刷新后没有历史消息 | 核对 Endpoint 与频道，并检查 history RPC 与 recovery gap 日志 |
+| 命令或工具未生效 | 在运行时能力页确认它已进入当前 generation |
 
 ## 许可证
 

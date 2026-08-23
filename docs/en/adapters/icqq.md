@@ -29,6 +29,12 @@ pnpm add @zhin.js/adapter-icqq
 pnpm add -g @icqqjs/cli   # or npx icqq login
 ```
 
+## Prerequisites
+
+1. Prepare a QQ account and either a remote `signApiAddr` or local `@icqqjs/qqsign`.
+2. Persist device and login state. Container deployments must mount the data directory.
+3. First login may require QR, slider, or device confirmation through Console login tasks or the terminal.
+
 ## Configuration (Plugin Runtime)
 
 ```yaml
@@ -82,7 +88,17 @@ Run `icqq login` first, then start Zhin.
 - `autoReconnect` has been re-implemented: after an unexpected IPC/RPC disconnect, the adapter automatically reconnects with exponential backoff (`stop()` is a deliberate disconnect and does not trigger reconnection).
 - `outboundMedia: file | base64` has been re-implemented: in `file` mode, segment base64 data is written to a temporary file before sending `[image:path]`; in `base64` mode (default when `rpc` is configured), `[image:base64://...]` is sent for the daemon to decode.
 - **Console social/group management RPC is now wired**: the endpoint within the Adapter normalizes ICQQ's `get_friend_list` / `get_group_list` / `get_group_member_list`, request approval, and group management operations into frozen `EndpointManagement` objects. The Host only consumes this semantic port and no longer probes for method aliases or reads `friends` / `groups` SDK caches.
-- **Notice / request inbound events have been removed**: the Plugin Runtime's `MessageGateway` only has a message channel and lacks `notice.receive` / `request.receive` event mechanisms. The old `icqq-side-events.ts` / `get-msg.ts` / `login-ipc-contract.ts` paths have been removed accordingly. Friend/join-group request handling will be restored once the runtime provides an event channel.
+- Friend and group requests enter the side-event gateway and expose approval through `Request` and `EndpointManagement`.
+- Login QR, slider, device, and auth challenges persist as Console login tasks and can also continue through terminal input.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Login never completes | Open Console login tasks and complete QR, slider, or device confirmation |
+| Signature fails | Reachability of `signApiAddr`, or installed and compatible local `@icqqjs/qqsign` |
+| Login repeats after restart | Persist device and session data directories |
+| Requests are missing | Endpoint request view; ICQQ reads the platform request list first |
 
 ## License
 

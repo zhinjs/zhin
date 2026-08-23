@@ -86,6 +86,15 @@ plugins:
 3. 开启 **MESSAGE CONTENT INTENT**
 4. 通过 OAuth2 URL 邀请 Bot 加入服务器
 
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| Gateway 反复断线 | 检查 Token、网络代理、Gateway Intents 与应用后台配置 |
+| 能上线但收不到正文 | 启用 Message Content Intent，并给 Bot 频道读取权限 |
+| 能收不能发 | 检查 Send Messages、Embed Links 与附件权限 |
+| `connection: interactions` 启动失败 | 当前生产路径使用 Gateway；改回 `gateway` |
+
 ## 许可证
 
 MIT License

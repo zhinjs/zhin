@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=698e1500983ad34d -->
+<!-- sync-adapter-docs:sha256=14f7307c5e24aa14 -->
 
 # @zhin.js/adapter-qq
 
@@ -155,6 +155,15 @@ Markdown + 指令按钮组。按钮值与手动输入共用同一解析入口，
 
 不支持原生按钮的 Adapter 会在 Core 中把同一 keyboard 语义降级为编号列表，并保存数字到
 payload 的回跳映射。图片、音频、视频和文件仍沿 canonical `MediaRef` 出站链投递。
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| Gateway Identify 后断线 | 检查 `botKind` 与 intents；公域机器人不要订阅受限 intent |
+| 二维码绑定后仍离线 | 在 Console 登录待办确认结果，并检查 App ID、Secret 与 Token |
+| Webhook 无事件 | 检查 HTTP Host、公网路径、平台回调与签名参数 |
+| Markdown/按钮发送失败 | 检查平台模板与权限，并按 Endpoint 能力降级 |
 
 ## 许可证
 

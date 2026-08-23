@@ -233,6 +233,8 @@ function buildPlatformTiersSnippet() {
 const stale = [];
 /** @type {string[]} */
 const updated = [];
+/** @type {string[]} */
+const operabilityIssues = [];
 
 for (const slug of listAdapterSlugs()) {
   if (!ADAPTER_META[slug]) {
@@ -243,6 +245,14 @@ for (const slug of listAdapterSlugs()) {
   const outPath = path.join(docsRoot, `${slug}.md`);
 
   const readmeBody = fs.readFileSync(readmePath, 'utf8');
+  const requiredSections = [
+    ['prerequisites', /^## (前置条件|Prerequisites)$/mu],
+    ['configuration', /^## (最小配置(?:（[^\n]+）)?|配置(?:（[^\n]+）)?|Minimal Configuration|Minimal config)$/mu],
+    ['troubleshooting', /^## (故障排查|Troubleshooting)$/mu],
+  ];
+  for (const [section, pattern] of requiredSections) {
+    if (!pattern.test(readmeBody)) operabilityIssues.push(`${slug} (missing ${section})`);
+  }
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
   const next = buildDoc(slug, pkg.name, readmeBody);
 
@@ -269,6 +279,13 @@ for (const slug of listAdapterSlugs()) {
 
 const nextIndex = buildIndexMarkdown();
 const nextSnippet = buildPlatformTiersSnippet();
+
+if (operabilityIssues.length > 0) {
+  console.error('Adapter README operability contract failed:\n');
+  for (const issue of operabilityIssues) console.error(`  - ${issue}`);
+  console.error('\nEach adapter needs prerequisites, minimal configuration, and troubleshooting.');
+  process.exit(1);
+}
 
 if (checkOnly) {
   if (!fs.existsSync(indexPath) || fs.readFileSync(indexPath, 'utf8') !== nextIndex) {

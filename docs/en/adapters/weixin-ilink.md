@@ -58,8 +58,6 @@ data/weixin-ilink/<bot-name>.json
 3. Background polls `get_qrcode_status` until `confirmed`, writes to `data/weixin-ilink/<name>.json`
 4. Calls `notifyStart` and enters long polling
 
-> The Console QR code panel (old `loginAssist` + host-router) has been removed from the production path; prefer `botToken` / sidecar credentials.
-
 ## Outbound Notes
 
 Replies must carry the `context_token` cached at inbound time (keyed by `endpointId + peerUserId`). If the user has not sent a message for a long time, causing the token to be missing, outbound will be rejected with a warning.

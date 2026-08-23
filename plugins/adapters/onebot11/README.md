@@ -26,6 +26,12 @@ pnpm add @zhin.js/adapter-onebot11
 入站：`gateway.receive({ conversation, message, content, sender, metadata })`（`conversation.kind` 为 `private`/`group`，`id` 为 uid/gid）  
 出站：`send({ conversation, payload })` → WS `send_private_msg` / `send_group_msg`（payload 已由 gateway/core 渲染；无 segment-mapper）
 
+## 前置条件
+
+1. 启动兼容 OneBot 11 的实现，并选定正向或反向 WebSocket。
+2. 正向 WS 需 Zhin 可达实现端；反向 WS 需实现端可达 Zhin HTTP Host。
+3. 两端配置相同的 `access_token`，生产环境不要开放无鉴权连接。
+
 ## 最小配置
 
 ```yaml
@@ -78,6 +84,15 @@ plugins:
 
 - [OneBot 11 标准](https://github.com/botuniverse/onebot-11)
 - [适配器概览](https://zhin.js.org/essentials/adapters)
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| WS 无法建立 | 核对连接方向、URL、端口与实现端 WS 服务 |
+| 401 或握手关闭 | 确认 Header/query token 与实现端一致 |
+| 能收不能发 | 检查发送动作支持与账号风控状态 |
+| notice/request 不出现 | 确认实现端上报对应 post type，并查看 Endpoint 请求/通知 |
 
 ## 许可证
 

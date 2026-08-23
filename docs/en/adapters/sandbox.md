@@ -28,6 +28,10 @@ Zhin.js Sandbox adapter — a WebSocket-based local testing adapter. The browser
 pnpm add @zhin.js/adapter-sandbox
 ```
 
+## Prerequisites
+
+Sandbox needs no external account. Let `zhin runtime start` assemble the HTTP Host and ensure the browser can reach the Host address printed at startup.
+
 ## Dependencies
 
 ### Plugin Runtime (new, `zhin runtime start`)
@@ -104,6 +108,15 @@ Sandbox uses a JSON message format:
 
 See `agent/skills/sandbox.md` for skill documentation (local sandbox debugging constraints).
 
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Console cannot connect | Host, port, and token printed at startup |
+| Sandbox is blank | HTTP Host port degradation and browser authentication/CORS errors |
+| History is missing after refresh | Current Endpoint/channel, history RPC, and recovery-gap logs |
+| Command or Tool is absent | Publication in the current generation under Runtime Capabilities |
 
 ## License
 

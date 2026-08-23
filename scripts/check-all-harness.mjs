@@ -125,6 +125,11 @@ const checks = [
     description: '检查平台适配器文档是否与 plugins/adapters README 同步',
   },
   {
+    name: 'Operability Docs',
+    command: 'pnpm check:operability-docs',
+    description: '检查适配器、Console 与插件交付文档是否形成可验收闭环',
+  },
+  {
     name: 'Platform Tiers SSOT',
     command: 'pnpm check:platform-tiers-ssot',
     description: '能力分档/适配器索引与 scripts/adapter-meta.mjs 一致',

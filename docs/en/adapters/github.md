@@ -30,6 +30,13 @@ pnpm add @zhin.js/adapter-github
 
 Webhook requires Root to provide `@zhin.js/host-http` (`zhin runtime start` assembles it by default).
 
+## Prerequisites
+
+1. Create a GitHub App and record its App ID, private key, and Webhook Secret.
+2. Grant the required Issues, Pull requests, and Contents permissions on target repositories.
+3. Point Webhooks at public HTTPS `/github/webhook` and subscribe to Issue, PR, and comment events.
+4. Install the App on each target repository. Repository Workrooms match stable `owner/repo` identity.
+
 ## Configuration (Plugin Runtime)
 
 ```yaml
@@ -98,6 +105,15 @@ See `agent/tools/`: `github_star`, `github_bind`, `github_subscribe`, `github_pr
 
 - Inbound: `httpHostToken` POST -> `messageGatewayToken.receive`
 - Outbound: `send({ conversation, payload })`
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Webhook returns 401 | Secret, `X-Hub-Signature-256`, and raw request body |
+| App authentication fails | App ID, private-key PEM/path, and server clock |
+| Comment misses the Workroom | Endpoint inbox, then Catalog Endpoint and canonical `owner/repo` |
+| Receives but cannot reply | Installation and repository permissions; PAT MCP does not replace App outbound |
 
 ## License
 

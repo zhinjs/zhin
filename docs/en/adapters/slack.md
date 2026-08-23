@@ -50,6 +50,12 @@ Outbound: `send({ conversation, payload })` -> Web API (`conversation.id` is the
 | **Socket Mode** (default) | `true` | Local / intranet, no public URL needed | `appToken` (`xapp-...`) |
 | **HTTP Events** | `false` | Production with public HTTPS | `signingSecret` + Runtime Host |
 
+## Prerequisites
+
+1. Create a Slack App, install it to the Workspace, and grant the required OAuth scopes.
+2. Socket Mode needs a `connections:write` App-Level Token; HTTP mode needs a Signing Secret and Events URL.
+3. Subscribe to required bot events and invite the App to target channels.
+
 ## Minimal Configuration (Socket Mode)
 
 ```yaml
@@ -131,6 +137,15 @@ Common Markdown (e.g., `**bold**`) is converted to Slack mrkdwn and sent via Blo
 - Modals / Select menus — not yet supported
 - OAuth installation flow — not yet supported
 - Old `usePlugin` / `extends Adapter` / host-router production entry points have been removed
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Socket Mode cannot connect | `xapp-` token, Socket Mode, and `connections:write` scope |
+| HTTP Events returns 401 | Signing Secret, raw body, server clock, and reverse proxy |
+| Channel event is missing | Event subscriptions, OAuth scopes, and App channel membership |
+| Reply escapes the thread | Preserve inbound `thread_ts` as Conversation `threadId` |
 
 ## License
 

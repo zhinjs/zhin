@@ -32,6 +32,12 @@ pnpm add @icqqjs/qqsign
 
 签名：未配置 `signApiAddr` 时，若已安装 `@icqqjs/qqsign` 则自动走本地签名。
 
+## 前置条件
+
+1. 准备可登录的 QQ 账号，并选择远程 `signApiAddr` 或安装本地 `@icqqjs/qqsign`。
+2. 确保运行目录可持久化设备与登录状态；容器部署应挂载对应数据目录。
+3. 首次登录可能要求二维码、滑块或设备确认，可在 Console 登录待办或终端完成。
+
 ## 配置（Plugin Runtime）
 
 ```yaml
@@ -83,6 +89,15 @@ plugins:
 - 好友/入群请求与通知：经 `sideEventGatewayToken` 分发到 `handlers`（`notice.receive` / `request.receive`）；审批走 `Request.$approve` / `EndpointManagement.approveRequest`。Console `request.list` 优先读 `management.listRequests()`（`getSystemMsg`），不再写入 `unified_inbox_request/notice`。
 - `system.*`（登录扫码等）分发到 `system.receive`。
 - **登录辅助**：`system.login.qrcode|slider|device|auth` 经 `loginAssistToken`（`LoginAssist`）挂起待办；刷新后可用 Console `login.list` / `login.submit` 或终端 stdin 继续（对齐 icqq 官方 stdin 流程）。`system.online` / `login.error` 会清理该 endpoint 待办。
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| 一直停在登录中 | 打开 Console 登录待办，完成二维码、滑块或设备确认 |
+| 签名失败 | 检查 `signApiAddr`；本地模式确认 `@icqqjs/qqsign` 已安装且版本匹配 |
+| 重启后重复登录 | 持久化设备与会话数据目录，避免每次生成新设备 |
+| 请求或通知未显示 | 在 Endpoint 详情检查请求视图；ICQQ 优先读取平台请求列表 |
 
 ## License
 

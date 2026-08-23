@@ -98,6 +98,15 @@ Tools use Discord Snowflake IDs to identify `guild_id`, `user_id`, `channel_id`.
 3. Enable **MESSAGE CONTENT INTENT**
 4. Invite the Bot to your server via the OAuth2 URL
 
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Gateway repeatedly disconnects | Token, proxy, Gateway Intents, and Developer Portal settings |
+| Online but message body is absent | Enable Message Content Intent and channel read permission |
+| Receives but cannot send | Send Messages, Embed Links, and attachment permissions |
+| `connection: interactions` fails | Use the production `gateway` path |
+
 ## License
 
 MIT License

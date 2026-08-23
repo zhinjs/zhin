@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/satori/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=197f63699b42889e -->
+<!-- sync-adapter-docs:sha256=862efe81c04534f0 -->
 
 # @zhin.js/adapter-satori
 
@@ -43,6 +43,12 @@ pnpm add @zhin.js/adapter-satori
 出站：`send({ conversation, payload })` → Satori `message.create`（`channel_id = conversation.id`；payload 已由 gateway/core 渲染；无 segment-mapper）
 
 入站 `metadata.mentioned`：消息 content 中 `<at id="…"/>` 元素的 id 等于登录 selfId（READY/事件 `login.user.id`）时置 `true`。
+
+## 前置条件
+
+1. 准备兼容 Satori 的服务端，记录 API Base、平台标识和用户标识。
+2. 正向 WS 需 Zhin 可达 Satori 服务；Webhook 需服务端可达 Zhin HTTP Host。
+3. 若服务启用鉴权，在两端配置相同的 Bearer token。
 
 ## 最小配置
 
@@ -101,3 +107,12 @@ SDK 会向 `path` 发送 POST，请求头 `Satori-Opcode: 0` 表示事件；适�
 - [介绍](https://satori.chat/zh-CN/introduction.html)
 - [总览](https://satori.chat/zh-CN/protocol/overview.html)
 - [API](https://satori.chat/zh-CN/protocol/api.html)
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| WS IDENTIFY 失败 | 检查 `baseUrl`、平台/用户标识与 token |
+| Webhook 无事件 | 确认路径、`Satori-Opcode: 0` 与 HTTP Host |
+| 401 | 检查 API、WS IDENTIFY 与 Webhook 使用的 token 是否一致 |
+| 发送目标错误 | 核对 `channel_id` 与 Conversation kind；DIRECT 才映射为 private |

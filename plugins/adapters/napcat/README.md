@@ -27,6 +27,12 @@ pnpm add @zhin.js/adapter-napcat
 入站：`gateway.receive({ conversation, message: { conversation, id }, content, sender, metadata })`（`conversation` 为 ConversationRef：私聊 `kind: 'private'`、群聊 `kind: 'group'`，临时会话群容器进 `parent`）  
 出站：`send({ conversation, payload })` → WS `send_private_msg` / `send_group_msg`
 
+## 前置条件
+
+1. 安装并登录 NapCatQQ，启用一个与 Zhin 配置匹配的 OneBot 11 连接。
+2. 正向 WS 需 Zhin 可达 NapCat；反向 WS/HTTP 上报需 NapCat 可达 Zhin HTTP Host。
+3. 两端配置相同的 `access_token`，不要把未鉴权端口暴露到公网。
+
 ## 最小配置
 
 ```yaml
@@ -75,6 +81,15 @@ plugins:
 
 - [NapCatQQ](https://github.com/NapNeko/NapCatQQ)
 - [适配器概览](https://zhin.js.org/essentials/adapters)
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| WS 连接被拒绝 | 检查 NapCat URL、端口与连接方向 |
+| 401 或握手失败 | 确认两端 token 一致，反向代理保留 Authorization |
+| 重复或自身消息触发 | 检查是否同时启用了多条上报连接 |
+| 请求/通知缺失 | 确认 NapCat 上报 notice/request/meta，并查看 Endpoint 对应分类 |
 
 ## 许可证
 
