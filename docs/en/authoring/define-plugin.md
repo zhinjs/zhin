@@ -1,6 +1,16 @@
 # definePlugin
 
-Declaring a plugin requires no base class inheritance and no manual registration in any registry -- default-exporting the return value of `definePlugin(...)` (from `zhin.js`) is all you need. This return value is called a `PluginDefinition`: a name, metadata, dependency declarations, plus a `setup(context)` assembly function.
+`definePlugin(...)` declares a plugin's assembly boundary: identity, dependencies, and `setup(context)`. It needs no base class and creates no private registry.
+
+## Choose the authoring surface first
+
+| Need | Use | Why |
+| --- | --- | --- |
+| One command, component, middleware, or tool | Convention directory | One file is one capability with file-level HMR |
+| Shared resources or lifecycle across capabilities | `setup` in `plugin.ts` | Assemble resources and cleanup in one Scope |
+| A discoverable capability for the ecosystem | Feature package | Own parsing, validation, projection, and authoring types |
+
+Choose one surface for a capability. Runtime rejects a same-name `setup` registration and convention file as a duplicate; neither silently wins.
 
 ```ts
 import { definePlugin } from 'zhin.js';
@@ -16,7 +26,7 @@ export default definePlugin<MyConfig>({
 });
 ```
 
-A few hard constraints to remember first. `name` is required and must match `^[a-z][a-z0-9-]*$`, otherwise `definePlugin` throws a `TypeError` directly; the returned definition is `Object.freeze`d and cannot be modified. `setup` can be sync or async, and may optionally return a `Dispose` that runs when the current generation ends.
+`name` is required and must match `^[a-z][a-z0-9-]*$`. The definition is frozen. `setup` may be synchronous or asynchronous and may return a `Dispose` that runs when the current generation ends.
 
 > Starting from scratch: for the shortest example see [single-file-bot](../examples/index.md#single-file-bot-一个-botts-就是机器人); for the convention directories tutorial see [Writing Your First Plugin](../getting-started/first-plugin.md); for concepts see [Plugin Model](../concepts/plugin-model.md).
 
@@ -106,12 +116,12 @@ Host tokens are capability handles provided by the Host to plugins, resolved in 
 | --- | --- | --- | --- |
 | `databaseHostToken` | `zhin.database.host` | `database:` configured | `define(name, columns)` registers a plugin-private logical table; Runtime maps it to a physical name by PluginId, and `models.get(name)` can access only that plugin's tables (`select` / `insert` / `update` / `delete` / `count`) |
 | `scheduleHostToken` | `zhin.schedule.host` | Always available | `register(job)` registers a plugin-private logical job id with a 6-field solar cron (`second minute hour day month weekday`), returns a cancel function; `list()` returns only that plugin's jobs |
-
-`databaseHostToken` and `scheduleHostToken` do not expose process-wide `start` / `stop`, Console administration, or the raw database. The CLI owns those root-only lifecycles; plugins use logical table names and job ids, so equal names cannot collide with sibling or child plugins.
 | `outboundHostToken` | `zhin.outbound.host` | Has available Adapter | `send(input)` proactive push (returns platform message id or `null`); optional `addReaction` / `removeReaction` / `recall` |
 | `htmlRendererToken` | `zhin.html-renderer.host` | `@zhin.js/html-renderer` installed | `render(html, { width, format, backgroundColor })` -> PNG (Buffer) or SVG (string); must degrade to plain text when not installed |
 | `runtimeEventPublisherToken` | `zhin.runtime.event-publisher` | Root-level, CLI console assembly | `publish(type, data)` broadcasts events to the Console SSE hub (used by adapters to push `endpoint:request` / `endpoint:notice` etc.) |
 | `httpHostToken` | `zhin.host.http` | HTTP Host enabled | `route(method, path, handler, meta?)` registers an HTTP route; `ws(path).onConnection(cb)` registers a WS endpoint; `listen()` / `close()` managed by Host |
+
+`databaseHostToken` and `scheduleHostToken` do not expose process-wide lifecycle, Console administration, or the raw database. The CLI owns root lifecycle; plugins use private logical table names and job ids.
 
 Host-token unregister functions belong in `lifecycle`; Tool capabilities are written directly to the candidate generation and need no manual cleanup.
 
@@ -161,7 +171,7 @@ context.handoff.add({
 ## Real-World Examples
 
 - **[capabilities-bot](https://github.com/zhinjs/zhin/tree/main/examples/capabilities-bot)**: A single `setup()` in `plugin.ts` exercises all common Host facets (database / schedule / agent-tools / outbound / handoff), each with `has()` graceful degradation, and is the source of all code snippets in this document.
-- **[lottery](https://github.com/zhinjs/zhin/tree/main/plugins/utils/lottery)** (`plugins/utils/lottery/plugin.ts`): A production-grade plugin -- database-first via `databaseHostToken`, falling back to in-memory implementation when absent; `provide`s its own token for command reuse; Agent tools use `await import()` for lazy loading, ensuring IM-only installations don't pull in `@zhin.js/agent`; daily pipeline via cron.
+- **[lottery](https://github.com/zhinjs/zhin/tree/main/plugins/utils/lottery)**: database-first with an in-memory fallback; a private token shares domain services; tools use the `@zhin.js/tool` convention directory; cron drives the daily pipeline.
 
 The assembly skeleton of lottery is worth copying:
 

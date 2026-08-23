@@ -10,6 +10,9 @@ useful.
 | A bot that understands your business | [Add governed Agent context](/en/authoring/agent-tools#give-an-agent-plugin-owned-context) | The Prompt Section is in the current generation and visible in Console |
 | Tools, MCP, skills, and sub-agents | [AI Agent path](/en/paths/ai-agent) | The Agent sees only capabilities authorized for the current turn |
 | Operate and diagnose a deployed bot | [Console Admin path](/en/paths/console) | You can inspect endpoints, logs, capabilities, and Agent runs |
+| Operate one product through multiple accounts | [Multi-Endpoint operations](/en/solutions/multi-endpoint-operations) | Each account is diagnosable while business capabilities stay shared |
+| Give an Agent business context without excess authority | [Governed business Agent](/en/solutions/governed-agent) | Prompts, tools, approvals, and execution policy are independently auditable |
+| Use one GitHub repository as a collaboration space | [GitHub repository Workroom](/en/solutions/github-workroom) | Repository events enter the right Project and task projection boundaries are explicit |
 | A personal schedule, reminder, and voice assistant | [Personal Assistant](/en/showcase/personal-assistant) | Messages, scheduled jobs, voice, and proactive delivery form one loop |
 | A multi-platform community bot | [Multi-platform Bot](/en/showcase/community-bot) | Business commands and components do not depend on one adapter |
 

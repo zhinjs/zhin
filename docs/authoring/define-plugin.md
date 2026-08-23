@@ -1,6 +1,16 @@
 # definePlugin
 
-声明一个插件不需要继承基类，也不用往任何注册表里手工挂条目——默认导出 `definePlugin(...)`（来自 `zhin.js`）的返回值就够了。这份返回值叫 `PluginDefinition`：名字、元数据、依赖声明，外加一个 `setup(context)` 装配函数。
+`definePlugin(...)` 定义插件的装配边界：它声明身份、依赖与 `setup(context)`，不要求继承基类，也不建立私有注册表。
+
+## 先选择创作入口
+
+| 需求 | 使用入口 | 原因 |
+| --- | --- | --- |
+| 一个命令、组件、中间件或工具 | 约定目录 | 文件即能力，支持单能力 HMR |
+| 多种能力共享资源或生命周期 | `plugin.ts` 的 `setup` | 在同一 Scope 装配资源与清理逻辑 |
+| 为生态定义一种可发现能力 | Feature 包 | 提供解析、校验、投影与创作类型 |
+
+同一种能力只选一个入口。同名的 `setup` 注册与约定目录文件会被 Runtime 判定为重复，而不是互相覆盖。
 
 ```ts
 import { definePlugin } from 'zhin.js';
@@ -16,7 +26,7 @@ export default definePlugin<MyConfig>({
 });
 ```
 
-几个硬约束先记住。`name` 必填，必须匹配 `^[a-z][a-z0-9-]*$`，否则 `definePlugin` 直接抛 `TypeError`；返回的 definition 被 `Object.freeze`，不可再改。`setup` 可同步、可 async，可选地返回一个 `Dispose`，在当前代（generation）结束时执行。
+`name` 必填并匹配 `^[a-z][a-z0-9-]*$`。definition 会被冻结；`setup` 可同步或异步，也可返回在当前 generation 结束时执行的 `Dispose`。
 
 > 从零起步：最短看 [single-file-bot](../examples/index.md#single-file-bot-一个-botts-就是机器人)；约定目录教程见 [编写第一个插件](../getting-started/first-plugin.md)；概念见 [插件模型](../concepts/plugin-model.md)。
 
@@ -108,12 +118,12 @@ Host token 是 Host 提供给插件的能力句柄，`setup` 里通过 `context.
 | --- | --- | --- | --- |
 | `databaseHostToken` | `zhin.database.host` | 配置了 `database:` | `define(name, columns)` 注册插件私有逻辑表；Runtime 按 PluginId 映射物理表名，`models.get(name)` 只访问本插件表（`select` / `insert` / `update` / `delete` / `count`） |
 | `scheduleHostToken` | `zhin.schedule.host` | 始终可用 | `register(job)` 注册插件私有逻辑任务 ID 的 6 段 solar cron（`秒 分 时 日 月 周`），返回取消函数；`list()` 只列出本插件任务 |
-
-`databaseHostToken` 与 `scheduleHostToken` 不暴露进程级 `start` / `stop`、Console 管理端口或原始数据库。CLI 负责这些 root-only 生命周期；插件只使用逻辑表名和任务 ID，因此同名资源不会与 sibling/child 插件冲突。
 | `outboundHostToken` | `zhin.outbound.host` | 有可用 Adapter | `send(input)` 主动推送（返回平台消息 id 或 `null`）；可选 `addReaction` / `removeReaction` / `recall` |
 | `htmlRendererToken` | `zhin.html-renderer.host` | 安装了 `@zhin.js/html-renderer` | `render(html, { width, format, backgroundColor })` → PNG（Buffer）或 SVG（string）；未安装时必须降级为纯文本 |
 | `runtimeEventPublisherToken` | `zhin.runtime.event-publisher` | Root 级，CLI console 装配 | `publish(type, data)` 向 Console SSE hub 广播事件（适配器用来推 `endpoint:request` / `endpoint:notice` 等） |
 | `httpHostToken` | `zhin.host.http` | HTTP Host 启用 | `route(method, path, handler, meta?)` 注册 HTTP 路由；`ws(path).onConnection(cb)` 注册 WS 端点；`listen()` / `close()` 由 Host 管理 |
+
+`databaseHostToken` 与 `scheduleHostToken` 不暴露进程级生命周期、Console 管理端口或原始数据库。CLI 管理 root 生命周期；插件只使用私有逻辑表名和任务 ID。
 
 Host token 注册返回的注销函数要挂进 `lifecycle`；Tool capability 则直接写候选 generation，无需手工清理。
 
@@ -163,7 +173,7 @@ context.handoff.add({
 ## 真实示例
 
 - **[capabilities-bot](https://github.com/zhinjs/zhin/tree/main/examples/capabilities-bot)**：`plugin.ts` 一个 `setup()` 调动全部常用 Host 面（database / schedule / agent-tools / outbound / handoff），每一项都配 `has()` 降级，是本文所有代码片段的来源。
-- **[lottery](https://github.com/zhinjs/zhin/tree/main/plugins/utils/lottery)**（`plugins/utils/lottery/plugin.ts`）：生产级插件——数据库优先用 `databaseHostToken`、缺省落内存实现；`provide` 自有 token 给命令复用；Agent 工具走 `await import()` 惰性加载，保证 IM-only 安装不引入 `@zhin.js/agent`；cron 每日流水线。
+- **[lottery](https://github.com/zhinjs/zhin/tree/main/plugins/utils/lottery)**：数据库优先、内存降级；用自有 token 复用领域服务；工具采用 `@zhin.js/tool` 约定目录；cron 驱动每日流水线。
 
 lottery 的装配骨架值得抄：
 

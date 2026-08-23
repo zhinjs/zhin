@@ -1,6 +1,27 @@
 # Platform Adapters
 
-Adapters connect IM / chat platforms to the Zhin.js core. Each `@zhin.js/adapter-*` package has its **own documentation page**, kept in sync with the in-package `README.md` (`pnpm sync:adapter-docs`).
+Adapters connect external platforms to Zhin's common message and Endpoint model. Choose by deployment constraints first, then verify capabilities and support tier. A platform name alone is not enough.
+
+## Make the choice first
+
+| Your constraint | Prefer | Representative adapters |
+| --- | --- | --- |
+| Validate the product without a real account | Local Sandbox | Sandbox |
+| The platform offers an official Bot or App API | Official connection | QQ Official, Discord, Telegram, Slack, DingTalk, Lark, WeChat MP |
+| You already operate a protocol bridge | Gateway connection | OneBot v11; validate NapCat, Milky, and OneBot v12 yourself |
+| Events originate in a collaboration system | Work-item connection | GitHub (Experimental) |
+| The source is not instant chat | Non-chat source | Email (Experimental) |
+
+Before choosing, confirm credential ownership, inbound delivery mode, required message or member operations, callback reachability, and whether the support tier meets your release bar.
+
+## Recommended connection flow
+
+1. Run `npx zhin setup --adapters` to select an adapter and generate configuration.
+2. Run `pnpm install` and `pnpm dev`; prove the Sandbox golden path first.
+3. In Console, verify inbound traffic under Conversations and Channels, Endpoint operations under Runtime Capabilities, and failures under Logs.
+4. Add the real platform to the same business flow. Commands, components, and middleware should not read a private platform SDK.
+
+Every `@zhin.js/adapter-*` package has its own page, synchronized with its package `README.md`. The tier and capability tables below are release facts, not rankings.
 
 > For framework-level concepts (multi-platform concurrency, message flow, endpoint lifecycle), see [Core Concepts](/concepts/architecture) and [Endpoint Lifecycle](/authoring/endpoint-lifecycle).
 >

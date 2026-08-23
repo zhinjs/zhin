@@ -11,8 +11,23 @@ title: 配置参考
 3. `config.json`
 4. `zhin.config.yml`
 5. `zhin.config.yaml`
+6. `zhin.config.json`
 
 建议统一用 `zhin.config.yml`，本文的示例都以它为准。
+
+## 这份参考怎么用
+
+先运行 `npx zhin setup` 生成可启动配置，再按本页修改字段。提交前运行 `npx zhin doctor`；启动后以 Console 展示的当前 generation 为准，不要把磁盘文件当成已生效事实。
+
+| 你要改变什么 | 应该放在哪里 |
+| --- | --- |
+| 安装哪些插件与 Feature | `package.json#zhin` 与依赖 |
+| Host、插件实例与 AI 参数 | `zhin.config.yml` |
+| 密钥与环境差异 | `.env` / `.env.<环境>`，由 `${VAR}` 引用 |
+| Workroom、成员与群/仓库绑定 | 持久 Workroom Catalog，通过 Console 管理 |
+| 当前运行时到底发布了什么 | Console 的 Endpoint、能力目录与 generation 状态 |
+
+配置只提供值，不负责挂载代码。新增适配器、Feature 或插件时先安装依赖并更新 `package.json#zhin`，再填写对应配置。
 
 ## 加载与校验流程
 
@@ -26,7 +41,9 @@ flowchart LR
     D --> G[plugins.&lt;instanceKey&gt;<br/>→ 各子插件 ConfigView]
 ```
 
-两份内容离开 mermaid 也值得记住：配置文件过 JSON Schema 校验，**顶层只允许下文列出的键**，键名写错会在启动时报 `Invalid Plugin config in zhin.config.yml`；`plugin` / `plugins` 之外的键（`http`、`database`、`ai`、`mcp`、`a2a`、`speech`、`htmlRenderer`、`assistant`、`log_level`）由 CLI 的 Host 装配层消费，不会下发给插件。
+配置文件会经过 JSON Schema 校验，**顶层只允许下文列出的键**。键名写错会在启动时报 `Invalid Plugin config in zhin.config.yml`。
+
+`plugin` / `plugins` 之外的顶层键由 CLI Host 装配层消费，不会下发给插件。
 
 ## 环境变量展开
 
@@ -37,7 +54,9 @@ http:
   token: ${HTTP_TOKEN:-dev-token}   # 未设置 HTTP_TOKEN 时回退为 dev-token
 ```
 
-变量没设置且没写默认值时会展开成空字符串——对 `apiKey` 这类字段来说，这正是后面 AI 章节的 soft-prune 触发条件。dotenv 文件按 `.env` → `.env.<环境>` 的顺序加载（环境名由 `--environment` 指定，默认 `development`）。密钥一律走环境变量，不要硬编码进配置文件。
+变量未设置且没有默认值时会展开为空字符串。对 `apiKey` 等字段，这会触发 AI provider 的 soft-prune。
+
+dotenv 按 `.env` → `.env.<环境>` 加载。环境名由 `--environment` 指定，默认 `development`。密钥一律走环境变量，不要硬编码进配置文件。
 
 ## 顶层键
 
@@ -59,13 +78,15 @@ http:
 
 ```yaml
 http:
-  port: 8086                 # 默认 8086
+  port: 8086                 # Runtime 无配置时的回退值
   host: 127.0.0.1            # 默认 127.0.0.1
   token: ${HTTP_TOKEN}       # API Bearer 令牌
   corsOrigins:               # 允许的跨域来源
     - "https://console.zhin.dev"
   base: /api                 # API 挂载路径
 ```
+
+Runtime 无配置时回退到 8086；当前脚手架生成的项目默认写入 8068。以项目配置和启动日志为准。
 
 `token` 未设置时本地开发可直接访问；生产环境务必设置。`tokens` 支持按作用域配置多枚令牌。
 
@@ -243,14 +264,16 @@ ai:
     thinkingPreview: false     # Activity 反馈展示 LLM 实际 thinking 内容（截断），而非静态 "思考中..."，默认 false
     thinkingPreviewMaxLength: 200  # thinkingPreview 展示的最大字符数，默认 200
   trigger:                 # AI 触发规则
-    prefixes: ["ai:"]          # 触发前缀，默认 ['#', 'AI:']
+    prefixes: ["ai:"]          # 触发前缀，默认 ['#', 'AI:', 'ai:']
     respondToAt: true          # 响应 @机器人，默认 true
     respondToPrivate: true     # 私聊免前缀直达，默认 true
     ignorePrefixes: ['/', '!', '！']  # 避免与命令冲突
     timeout: 60000
 ```
 
-`ai.multimodal`（图片/音频/视频入出站策略）、`ai.knowledge.baseDir`（本地知识库目录，默认 `knowledge`）等按需配置。远程 Agent 不再通过 `ai.remoteAgents` 旁路接入；可选 A2A Executor 只通过持久 Workroom Catalog 与 generation-owned Profile/Grant/Workspace/Disclosure/Endpoint authority 接入，并服从 Assignment lease/fence 与 Journal 事件契约。
+`ai.multimodal` 管理多模态入出站；`ai.knowledge.baseDir` 指定本地知识库目录，默认 `knowledge`。
+
+远程 Agent 不再通过 `ai.remoteAgents` 旁路接入。可选 A2A Executor 只通过持久 Workroom Catalog 和 generation-owned authority 接入，并服从 Assignment lease/fence 与 Journal 契约。
 
 `ai.workrooms` 已删除。Project、成员和协作空间由 Console 的持久化 Workroom Catalog 管理，保存后通过 revision CAS 立即生效，不需要重启运行时。
 
@@ -271,7 +294,9 @@ plugins:
         owner: sandbox-user
 ```
 
-`instanceKey` 默认由包名派生：取包名最后一段，去掉 `adapter-` / `plugin-` / `service-` 前缀。例如 `@zhin.js/adapter-icqq` → `icqq`。`zhin install` 会自动写入 `plugins.<instanceKey>` 并把包挂进 `package.json` 的 `zhin.plugins` 清单。
+`instanceKey` 默认取包名最后一段，并移除 `adapter-` / `plugin-` / `service-` 前缀。例如 `@zhin.js/adapter-icqq` → `icqq`。
+
+`zhin install` 会写入 `plugins.<instanceKey>`，并把包挂进 `package.json#zhin.plugins`。
 
 ### 适配器实例：master / trusted / commandPrefix
 

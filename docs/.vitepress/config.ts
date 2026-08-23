@@ -33,7 +33,12 @@ const DEV_DOC_PREFIXES = ['/contributing/', '/target-architecture']
 const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   { text: '快速开始', link: '/getting-started/' },
   { text: '第一个插件', link: '/getting-started/first-plugin' },
-  { text: '按场景选解决方案', link: '/solutions/' },
+  sidebarGroup('解决方案', [
+    { text: '按交付结果选择', link: '/solutions/' },
+    { text: '多 Endpoint 运营', link: '/solutions/multi-endpoint-operations' },
+    { text: '受治理的业务 Agent', link: '/solutions/governed-agent' },
+    { text: 'GitHub 仓库 Workroom', link: '/solutions/github-workroom' },
+  ], false),
   sidebarGroup('核心概念', [
     { text: '分层架构', link: '/concepts/architecture' },
     { text: '插件模型', link: '/concepts/plugin-model' },
@@ -138,7 +143,12 @@ const EN_DEV_DOC_PREFIXES = ['/en/contributing/']
 const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   { text: 'Quick Start', link: '/en/getting-started/' },
   { text: 'First Plugin', link: '/en/getting-started/first-plugin' },
-  { text: 'Choose a Solution', link: '/en/solutions/' },
+  sidebarGroup('Solutions', [
+    { text: 'Choose by Outcome', link: '/en/solutions/' },
+    { text: 'Multi-Endpoint Operations', link: '/en/solutions/multi-endpoint-operations' },
+    { text: 'Governed Business Agent', link: '/en/solutions/governed-agent' },
+    { text: 'GitHub Repository Workroom', link: '/en/solutions/github-workroom' },
+  ], false),
   sidebarGroup('Core Concepts', [
     { text: 'Layered Architecture', link: '/en/concepts/architecture' },
     { text: 'Plugin Model', link: '/en/concepts/plugin-model' },

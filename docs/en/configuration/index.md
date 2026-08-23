@@ -4,15 +4,30 @@ title: Configuration Reference
 
 # Configuration Reference
 
-At startup, `zhin runtime start` looks for a configuration file in the project root directory, checking in the following order and stopping at the first one found; if multiple exist simultaneously, it errors out directly and will not guess for you:
+At startup, `zhin runtime start` checks these project-root candidates in order. If more than one exists, startup fails instead of guessing:
 
 1. `config.yml`
 2. `config.yaml`
 3. `config.json`
 4. `zhin.config.yml`
 5. `zhin.config.yaml`
+6. `zhin.config.json`
 
 It is recommended to use `zhin.config.yml` consistently. All examples in this document use it.
+
+## How to use this reference
+
+Run `npx zhin setup` to generate a bootable configuration, then change fields with this page. Run `npx zhin doctor` before committing. After startup, trust the generation shown in Console rather than treating a disk file as applied state.
+
+| What you need to change | Where it belongs |
+| --- | --- |
+| Installed plugins and Features | dependencies and `package.json#zhin` |
+| Host, plugin-instance, and AI values | `zhin.config.yml` |
+| Secrets and environment differences | `.env` / `.env.<environment>`, referenced with `${VAR}` |
+| Workrooms, members, and chat or repository bindings | persistent Workroom Catalog, managed in Console |
+| What the runtime actually published | Endpoint, capability catalog, and generation state in Console |
+
+Configuration supplies values; it does not mount code. Install the dependency and update `package.json#zhin` before adding configuration for a new adapter, Feature, or plugin.
 
 ## Loading and Validation Flow
 
@@ -26,7 +41,9 @@ flowchart LR
     D --> G[plugins.&lt;instanceKey&gt;<br/>-> each child plugin's ConfigView]
 ```
 
-Two things worth remembering beyond the mermaid diagram: the configuration file undergoes JSON Schema validation, and **only the keys listed below are allowed at the top level**. Misspelled key names will produce `Invalid Plugin config in zhin.config.yml` at startup. Keys other than `plugin` / `plugins` (`http`, `database`, `ai`, `mcp`, `a2a`, `speech`, `htmlRenderer`, `assistant`, `log_level`) are consumed by the CLI's Host assembly layer and are not passed down to plugins.
+Configuration passes JSON Schema validation, and **only the keys listed below are allowed at the top level**. A misspelled key produces `Invalid Plugin config in zhin.config.yml` at startup.
+
+Top-level keys other than `plugin` and `plugins` are consumed by the CLI Host assembly layer. They are not passed to plugins.
 
 ## Environment Variable Expansion
 
@@ -37,7 +54,9 @@ http:
   token: ${HTTP_TOKEN:-dev-token}   # Falls back to dev-token when HTTP_TOKEN is not set
 ```
 
-When a variable is not set and no default value is specified, it expands to an empty string -- for fields like `apiKey`, this is exactly the soft-prune trigger condition described in the AI section below. Dotenv files are loaded in the order `.env` then `.env.<environment>` (the environment name is specified by `--environment`, default `development`). Secrets should always use environment variables and never be hardcoded in the configuration file.
+An unset variable without a default expands to an empty string. For fields such as `apiKey`, this triggers AI-provider soft pruning.
+
+Dotenv loads `.env` then `.env.<environment>`. `--environment` selects the name and defaults to `development`. Keep secrets in environment variables, never in the configuration file.
 
 ## Top-Level Keys
 
@@ -59,7 +78,7 @@ When a variable is not set and no default value is specified, it expands to an e
 
 ```yaml
 http:
-  port: 8086                 # Default 8086
+  port: 8086                 # Runtime fallback when no config exists
   host: 127.0.0.1            # Default 127.0.0.1
   token: ${HTTP_TOKEN}       # API Bearer token
   corsOrigins:               # Allowed cross-origin sources
@@ -67,7 +86,9 @@ http:
   base: /api                 # API mount path
 ```
 
-When `token` is not set, local development can access directly; be sure to set it for production environments. `tokens` supports configuring multiple tokens with different scopes.
+With no configuration, Runtime falls back to 8086; the current project scaffold writes 8068. Trust the project configuration and startup log.
+
+Local development can access without `token`; production must set one. `tokens` supports multiple scoped tokens.
 
 ## database
 
@@ -240,14 +261,16 @@ ai:
     thinkingPreview: false     # Show LLM actual thinking content (truncated) in activity feedback instead of static "Thinking...", default false
     thinkingPreviewMaxLength: 200  # Max chars for thinkingPreview, default 200
   trigger:                 # AI trigger rules
-    prefixes: ["ai:"]          # Trigger prefixes, default ['#', 'AI:']
+    prefixes: ["ai:"]          # Trigger prefixes, default ['#', 'AI:', 'ai:']
     respondToAt: true          # Respond to @bot, default true
     respondToPrivate: true     # Private chats bypass prefix requirement, default true
-    ignorePrefixes: ['/', '!', '!']  # Avoid conflicting with commands
+    ignorePrefixes: ['/', '!', '！']  # Avoid conflicting with commands
     timeout: 60000
 ```
 
-`ai.multimodal` (image/audio/video inbound and outbound strategies), `ai.knowledge.baseDir` (local knowledge base directory, default `knowledge`), etc., are configured as needed. Remote Agents are no longer attached through an `ai.remoteAgents` side path. The optional A2A Executor is admitted only through the persistent Workroom Catalog and generation-owned Profile/Grant/Workspace/Disclosure/Endpoint authority, and it follows Workroom Assignment lease/fence and Journal events.
+`ai.multimodal` governs multimodal input and output. `ai.knowledge.baseDir` selects the local knowledge directory and defaults to `knowledge`.
+
+Remote Agents no longer attach through `ai.remoteAgents`. An optional A2A Executor enters through the persistent Workroom Catalog and generation-owned authority, under Assignment lease/fence and Journal contracts.
 
 `ai.workrooms` has been removed. Projects, members, and collaboration spaces are managed by the persistent Workroom Catalog in Console; revision-checked saves take effect without restarting the runtime.
 
@@ -268,7 +291,9 @@ plugins:
         owner: sandbox-user
 ```
 
-`instanceKey` is derived from the package name by default: take the last segment of the package name and strip the `adapter-` / `plugin-` / `service-` prefix. For example, `@zhin.js/adapter-icqq` becomes `icqq`. `zhin install` automatically writes to `plugins.<instanceKey>` and adds the package to the `zhin.plugins` manifest in `package.json`.
+`instanceKey` defaults to the last package-name segment without the `adapter-`, `plugin-`, or `service-` prefix. For example, `@zhin.js/adapter-icqq` becomes `icqq`.
+
+`zhin install` writes `plugins.<instanceKey>` and mounts the package under `package.json#zhin.plugins`.
 
 ### Adapter Instances: master / trusted / commandPrefix
 

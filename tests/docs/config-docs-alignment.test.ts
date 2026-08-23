@@ -13,6 +13,10 @@ const configurationMd = fs.readFileSync(
   path.join(repoRoot, 'docs/configuration/index.md'),
   'utf8',
 );
+const configurationEnMd = fs.readFileSync(
+  path.join(repoRoot, 'docs/en/configuration/index.md'),
+  'utf8',
+);
 const aiMd = fs.readFileSync(path.join(repoRoot, 'docs/ai/agent.md'), 'utf8');
 const gettingStartedMd = fs.readFileSync(path.join(repoRoot, 'docs/getting-started/index.md'), 'utf8');
 const gettingStartedEnMd = fs.readFileSync(path.join(repoRoot, 'docs/en/getting-started/index.md'), 'utf8');
@@ -67,6 +71,28 @@ describe('config documentation alignment', () => {
   it('configuration.md 文档化 thinkingPreview 配置项', () => {
     expect(configurationMd).toMatch(/thinkingPreview/);
     expect(configurationMd).toMatch(/thinkingPreviewMaxLength/);
+  });
+
+  it('中英文配置参考覆盖 Runtime 配置候选与触发默认值', () => {
+    for (const content of [configurationMd, configurationEnMd]) {
+      expect(content).toContain('zhin.config.json');
+      expect(content).toContain("['#', 'AI:', 'ai:']");
+      expect(content).toContain(String(DEFAULT_CREATE_BOT_HTTP_PORT));
+      expect(content).toContain('8086');
+    }
+  });
+
+  it('解决方案明确 Workroom 与 GitHub Project Item 的权威边界', () => {
+    for (const relativePath of [
+      'docs/solutions/github-workroom.md',
+      'docs/en/solutions/github-workroom.md',
+    ]) {
+      const content = fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
+      expect(content, relativePath).toContain('Workroom');
+      expect(content, relativePath).toContain('Project Item');
+      expect(content, relativePath).toMatch(/Integration Port/);
+      expect(content, relativePath).toMatch(/task-key/);
+    }
   });
 
   it('minimal-bot 与 Stable 文档契约一致', () => {

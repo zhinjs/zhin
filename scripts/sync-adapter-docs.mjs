@@ -129,7 +129,28 @@ ${rows}
 function buildIndexMarkdown() {
   return `# 平台适配器
 
-适配器连接 IM / 聊天平台与 Zhin.js 核心。每个 \`@zhin.js/adapter-*\` 包有**独立文档页**，内容与包内 \`README.md\` 保持同步（\`pnpm sync:adapter-docs\`）。
+适配器把外部平台接入 Zhin 的统一消息与 Endpoint 模型。先按部署条件选择接入方式，再检查能力和维护档位；不要只按平台名称选包。
+
+## 先做选择
+
+| 你的条件 | 优先方向 | 代表适配器 |
+| --- | --- | --- |
+| 先验证业务，不接真实账号 | 本地 Sandbox | Sandbox |
+| 平台提供官方 Bot / App API | 官方连接 | QQ 官方、Discord、Telegram、Slack、钉钉、飞书、微信公众号 |
+| 已部署协议桥或网关 | 网关连接 | OneBot v11；NapCat、Milky、OneBot v12 等需自行验收 |
+| 事件天然来自协作系统 | 工作项连接 | GitHub（Experimental） |
+| 入口不是即时聊天 | 非聊天消息源 | Email（Experimental） |
+
+选择前确认五件事：凭据由谁保管、平台如何投递入站事件、是否需要撤回或成员管理、部署环境能否接收回调，以及该档位是否满足你的发布标准。
+
+## 推荐接入流程
+
+1. 用 \`npx zhin setup --adapters\` 选择并生成适配器配置。
+2. 执行 \`pnpm install\` 与 \`pnpm dev\`，先让 Sandbox 黄金路径通过。
+3. 在 Console 的“会话与频道”确认入站，在“运行时能力”核对 Endpoint 操作，在“日志”完成故障定位。
+4. 把真实平台加入同一业务链；命令、组件和中间件不应读取平台私有 SDK。
+
+每个 \`@zhin.js/adapter-*\` 包都有独立文档页，并与包内 \`README.md\` 同步。下方档位与能力表是发布事实，不是推荐榜单。
 
 > 框架级概念（多平台同跑、消息流、端点生命周期）见 [核心概念](/concepts/architecture) 与 [端点生命周期](/authoring/endpoint-lifecycle)。
 >

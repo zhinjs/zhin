@@ -1,34 +1,22 @@
 # 平台适配器
 
-本目录共 **20** 个 `@zhin.js/adapter-*` 包。对外 **Platform Stable** 列表以 [能力分档 — Platform Stable](../../docs/snippets/platform-tiers.md#platform-stable-适配器当前) 为准；其余为 **Advanced** 或 **Experimental**。
+本目录包含 Zhin 的平台连接包。档位的唯一来源是 [`scripts/adapter-meta.mjs`](../../scripts/adapter-meta.mjs)；下表只做包索引，不重复维护易失真的档位副本。
 
-| 适配器 | npm 包 | 档位 | 说明 |
-|--------|--------|------|------|
-| Sandbox | `@zhin.js/adapter-sandbox` | **Stable（Core）** | 本地 Web 控制台调试；[minimal-bot](../../examples/minimal-bot/) 默认 |
-| ICQQ | `@zhin.js/adapter-icqq` | **Platform Stable** | `@icqqjs/cli` 守护进程 IPC；先 `icqq login`，配置仅 QQ 号 |
-| QQ 官方 | `@zhin.js/adapter-qq` | **Platform Stable** | 官方 Endpoint API |
-| NapCat | `@zhin.js/adapter-napcat` | **Platform Stable** | NapCat 桥接 |
-| OneBot v11 | `@zhin.js/adapter-onebot11` | **Platform Stable** | OneBot 11 |
-| OneBot v12 | `@zhin.js/adapter-onebot12` | Experimental | OneBot 12 |
-| Milky | `@zhin.js/adapter-milky` | Experimental | Milky 协议 |
-| KOOK | `@zhin.js/adapter-kook` | **Platform Stable** | 开黑啦 |
-| Discord | `@zhin.js/adapter-discord` | **Platform Stable** | |
-| Telegram | `@zhin.js/adapter-telegram` | **Platform Stable** | |
-| Slack | `@zhin.js/adapter-slack` | **Platform Stable** | |
-| 钉钉 | `@zhin.js/adapter-dingtalk` | **Platform Stable** | |
-| 飞书 | `@zhin.js/adapter-lark` | **Platform Stable** | |
-| 微信公众号 | `@zhin.js/adapter-wechat-mp` | **Platform Stable** | |
-| 微信 iLink（ClawBot） | `@zhin.js/adapter-weixin-ilink` | **Platform Stable** | 个人微信长轮询；实机 dogfood 见 issue #486 |
-| LINE | `@zhin.js/adapter-line` | **Platform Stable** | LINE Messaging API（Webhook） |
-| 企业微信 | `@zhin.js/adapter-wecom` | **Platform Stable** | 企业微信应用机器人 |
-| Email | `@zhin.js/adapter-email` | Experimental | 邮件收发 |
-| GitHub | `@zhin.js/adapter-github` | Experimental | GitHub 事件 |
-| Satori | `@zhin.js/adapter-satori` | Experimental | Satori 通用协议 |
+| 适配器 | npm 包 | 说明 |
+|--------|--------|------|
+| Sandbox | `@zhin.js/adapter-sandbox` | 本地调试；minimal-bot 默认 |
+| ICQQ / QQ 官方 | `@zhin.js/adapter-icqq` / `@zhin.js/adapter-qq` | QQ 生态连接 |
+| OneBot v11 / v12 | `@zhin.js/adapter-onebot11` / `@zhin.js/adapter-onebot12` | OneBot 协议连接 |
+| NapCat / Milky / Satori | 对应 `@zhin.js/adapter-*` | 第三方网关协议 |
+| Discord / Telegram / Slack / KOOK | 对应 `@zhin.js/adapter-*` | 社区与协作平台 |
+| 钉钉 / 飞书 / 企业微信 | 对应 `@zhin.js/adapter-*` | 企业协作平台 |
+| 微信公众号 / 微信 iLink | 对应 `@zhin.js/adapter-*` | 微信生态连接 |
+| LINE / Email / GitHub | 对应 `@zhin.js/adapter-*` | 其他消息与事件源 |
 
 ## 档位含义
 
 - **Stable（Core）**：`pnpm check:stable` Core 批、minimal-bot；Sandbox 入站 + 核心 Agent 契约。
-- **Platform Stable**：包内 `integration.test.ts`（adapter-harness）；部分纳入 `pnpm check:stable` Platform 批。
+- **Platform Stable**：满足 ADR 0015 D3 并进入 `check:stable` Platform 批；当前为空。
 - **Advanced**：test-bot（维护者厨房水槽，非用户模板）中常用；实机与 LLM 见 [ACCEPTANCE Advanced](../../examples/test-bot/ACCEPTANCE.md)。
 - **Experimental**：可用性因平台/部署差异大；无全量 CI 承诺。
 
