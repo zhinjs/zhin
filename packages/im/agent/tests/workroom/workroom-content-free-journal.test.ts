@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -192,6 +192,58 @@ describe('content-free Workroom Journal', () => {
       expect(payloads.readCount).toBeGreaterThan(readsBeforeRestart);
     } finally {
       await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('replays an early v3 blocker header without requiring newly added readiness fields', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'zhin-v3-blocker-compat-'));
+    const payloads = new TestGovernedJournalPayloadPort();
+    try {
+      const kernel = new WorkroomKernel({
+        journal: new FileWorkroomJournal(directory, payloads),
+        now: () => 100,
+        createId: (() => { let id = 0; return () => `event-${++id}`; })(),
+      });
+      await kernel.createRun({ projectId: 'project-support', runId: 'run-v3', title: 'Run' });
+      await kernel.execute('project-support', 'run-v3', {
+        type: 'plan_task', taskKey: 'triage', title: 'Task', required: true, maxAttempts: 1,
+      });
+      await kernel.execute('project-support', 'run-v3', {
+        type: 'block_task', taskKey: 'triage', blockerId: 'approval', kind: 'human_input',
+        owner: 'sponsor', reason: 'Approval', deadline: 200,
+      });
+      const filenames = (await readdir(directory)).filter(name => name.endsWith('.json'));
+      for (const filename of filenames) {
+        const path = join(directory, filename);
+        const stored = JSON.parse(await readFile(path, 'utf8')) as {
+          version: 3;
+          runId: string;
+          expectedSequence: number;
+          events: Array<{ type: string; control: Record<string, unknown> }>;
+          payloadDigest: string;
+        };
+        const blocked = stored.events.find(event => event.type === 'task.blocked');
+        if (!blocked) continue;
+        blocked.control = {
+          taskKey: blocked.control.taskKey,
+          blockerId: blocked.control.blockerId,
+        };
+        stored.payloadDigest = digest({
+          version: stored.version,
+          runId: stored.runId,
+          expectedSequence: stored.expectedSequence,
+          events: stored.events,
+        });
+        await writeFile(path, canonicalWorkroomJson(stored), 'utf8');
+      }
+
+      await expect(new WorkroomKernel({
+        journal: new FileWorkroomJournal(directory, payloads),
+      }).read('project-support', 'run-v3')).resolves.toMatchObject({
+        tasks: { triage: { blockers: [{ kind: 'human_input', deadline: 200 }] } },
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
     }
   });
 

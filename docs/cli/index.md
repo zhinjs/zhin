@@ -198,13 +198,26 @@ zhin schedule resume <id>
 
 `add` 选项：`--prompt`（必填，到点发给 AI 的提示词）、`-l/--label`、`--kind`（默认 `solar`）、`--notify-channel im|silent|log`（默认 `silent`）、`--at`（单次 ISO8601）、`--every`（如 `30m`、`1h`、`1d`）。cron 与 `--at`/`--every` 三选一。
 
-## agent：Agent 创作面诊断
+## agent：Agent 诊断与 Workroom 观察
 
 ```bash
 zhin agent info [--json]
+zhin agent workroom runs --project <projectId> [--json]
+zhin agent workroom run <runId> --project <projectId> [--json]
+zhin agent workroom readiness <runId> --project <projectId> [--json]
+zhin agent workroom cancel <runId> --project <projectId> --expected-sequence <n> --reason-code <code> --control-deadline <timestamp> [--operation-id <id>] [--json]
+zhin agent workroom request-replan <runId> --project <projectId> --expected-sequence <n> --reason-code <code> [--operation-id <id>] [--json]
+zhin agent legacy-runs <input> [--output <file>]
+zhin agent legacy-payloads <input> --kind journal|projection|evidence|artifact [--storage file|database]
 ```
 
-列出发现的 `agent/` 创作面（tools / skills 等）。需安装 AI 栈（`@zhin.js/agent` + `zod` + `ai`）。
+`info` 列出发现的 `agent/` 创作面（tools / skills 等）。`workroom runs/run/readiness` 连接当前项目正在运行的
+Host API，使用配置中的 token-bound principal 读取 content-free Run、Task、Assignment 与 Blocker 状态；
+`cancel` 与 `request-replan` 还要求当前 Project Sponsor 权限，并通过 `expected-sequence` 做 CAS。后者只持久化
+重规划请求并暂停调度，不会伪装成已经生成了新 Plan Revision。以上在线命令需要先运行
+`zhin runtime start`。`legacy-runs` 与
+`legacy-payloads` 仅做离线只读审计，不会启动 Host 或写入新 Workroom Journal。以上命令需安装 AI 栈
+（`@zhin.js/agent` + `zod` + `ai`）。
 
 ## service：系统服务
 

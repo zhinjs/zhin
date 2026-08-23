@@ -33,6 +33,7 @@ export function replayWorkroom(events: readonly WorkroomEvent[]): WorkroomRunSta
     sequence: -1,
     now: first.occurredAt,
     cancelRequested: false,
+    replanRequested: false,
     tasks: {},
     assignments: {},
     reviewerAssignments: {},
@@ -41,10 +42,35 @@ export function replayWorkroom(events: readonly WorkroomEvent[]): WorkroomRunSta
   for (const event of events) {
     if (event.runId !== state.runId) throw new Error('Workroom journal contains another run');
     if (event.sequence !== state.sequence + 1) throw new Error('Workroom journal sequence is not contiguous');
+    if (event.type === 'run.control_decided') validateRunControlSuccessor(events, event);
     state = evolveWorkroom(state, event);
   }
   replayWorkroomPreemptions(events);
   return deriveRunStatus(state);
+}
+
+function validateRunControlSuccessor(
+  events: readonly WorkroomEvent[],
+  audit: WorkroomEvent,
+): void {
+  const next = events[audit.sequence + 1];
+  const expectedSequence = Number(audit.payload.expectedSequence);
+  if (!Number.isSafeInteger(expectedSequence) || expectedSequence !== audit.sequence - 1) {
+    throw new Error('Persisted Workroom Run control expectedSequence is not exact');
+  }
+  if (audit.payload.action === 'request_replan') {
+    if (!next || next.type !== 'run.replan_requested'
+      || next.payload.operationId !== audit.payload.operationId
+      || next.payload.reasonCode !== audit.payload.reasonCode
+      || next.payload.requestDigest !== audit.payload.requestDigest) {
+      throw new Error('Persisted Workroom replan request is not bound to its control audit');
+    }
+    return;
+  }
+  if (audit.payload.action !== 'cancel' || !next || next.type !== 'run.cancel_requested'
+    || next.payload.reason !== audit.payload.reasonCode) {
+    throw new Error('Persisted Workroom cancellation is not bound to its control audit');
+  }
 }
 
 export function decideWorkroom(
@@ -151,14 +177,17 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
   let reviewerAssignments = state.reviewerAssignments;
   let sponsorGates = state.sponsorGates;
   let cancelRequested = state.cancelRequested;
+  let replanRequested = state.replanRequested === true;
   let status = state.status;
   const payload = event.payload;
 
   switch (event.type) {
     case 'run.created': break;
     case 'plan.admitted': break;
-    case 'plan.revision_applied': break;
+    case 'plan.revision_applied': replanRequested = false; break;
     case 'plan_gate.decided': break;
+    case 'run.control_decided': break;
+    case 'run.replan_requested': replanRequested = true; status = 'needs_replan'; break;
     case 'local_execution.requested': break;
     case 'remote_dispatch.requested': break;
     case 'scheduler.dispatch_requested': break;
@@ -532,6 +561,7 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
     sequence: event.sequence,
     now: event.type === 'clock.advanced' ? Number(payload.now) : Math.max(state.now, event.occurredAt),
     cancelRequested,
+    replanRequested,
     tasks,
     assignments,
     reviewerAssignments,
@@ -704,6 +734,7 @@ function deriveRunStatus(state: WorkroomRunState): WorkroomRunState {
   if (state.status === 'cancelled') return state;
   const tasks = Object.values(state.tasks);
   if (state.cancelRequested) return { ...state, status: 'cancelling' };
+  if (state.replanRequested) return { ...state, status: 'needs_replan' };
   if (tasks.length > 0 && tasks.every(task => task.status === 'accepted' || (!task.required && TERMINAL_TASKS.has(task.status)))) {
     return { ...state, status: 'completed' };
   }

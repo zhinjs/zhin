@@ -94,6 +94,53 @@ describe('Workroom Console runtime projection', () => {
     expect(payloads.readCount).toBe(0);
   });
 
+  it('diagnoses active blockers from content-free stored headers without materializing reasons', async () => {
+    const payloads = new ReadSpyPayloads();
+    const journal = new MemoryWorkroomJournal(payloads);
+    const kernel = new WorkroomKernel({ journal, now: () => 50, createId: (() => {
+      let id = 0; return () => `event-${++id}`;
+    })() });
+    await kernel.createRun({ projectId: 'support', runId: 'run-blocked', title: SECRET_TITLE });
+    await kernel.execute('support', 'run-blocked', {
+      type: 'plan_task', taskKey: 'triage', title: SECRET_TITLE, required: true, maxAttempts: 3,
+    });
+    await journal.append('run-blocked', 1, [{
+      eventId: 'event-blocked', occurredAt: 51, type: 'task.blocked', payload: {
+        taskKey: 'triage', blockerId: 'blocker-1', kind: 'external',
+        owner: 'human:alice', reason: SECRET_REASON, deadline: 80,
+        allowedActions: ['replan', 'cancel'],
+      },
+    }]);
+    payloads.readCount = 0;
+    const runtime = createWorkroomRuntime(journal, {
+      authorize: async () => ({
+        catalogRevision: digest({ catalog: 1 }), projectDigest: digest({ project: 1 }),
+        governanceDigest: digest({ governance: 1 }), bindingDigest: digest({ binding: 1 }),
+      }),
+    });
+
+    const result = await runtime.getReadiness({
+      projectId: 'support', runId: 'run-blocked',
+      authenticatedPrincipal: { principalId: 'human:alice' },
+    });
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      readiness: {
+        projectId: 'support', runId: 'run-blocked', sequence: 2, state: 'blocked',
+        recommendedActions: ['resolve', 'replan', 'cancel'],
+        blockers: [{
+          kind: 'external', deadline: 80, allowedActions: ['resolve', 'replan', 'cancel'],
+        }],
+      },
+    });
+    const encoded = JSON.stringify(result);
+    expect(encoded).not.toContain(SECRET_TITLE);
+    expect(encoded).not.toContain(SECRET_REASON);
+    expect(encoded).not.toContain('human:alice');
+    expect(payloads.readCount).toBe(0);
+  });
+
   it('fails closed before reading stored headers when Project/recipient authority is absent', async () => {
     const store = {
       scanStoredHeaders: vi.fn(async () => []),

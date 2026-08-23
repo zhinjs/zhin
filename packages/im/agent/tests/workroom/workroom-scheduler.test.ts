@@ -109,6 +109,14 @@ describe('Workroom Scheduler', () => {
     ]);
     expect(decideWorkroomSchedule(cancelling)).toBeNull();
 
+    const replanning = journal(policy, [
+      task('build', 2, { sponsorLane: 'normal' }),
+      event(3, 'run.replan_requested', {
+        operationId: 'replan-1', reasonCode: 'requirements_changed', requestDigest: DIGEST_A,
+      }),
+    ]);
+    expect(decideWorkroomSchedule(replanning)).toBeNull();
+
     const malformedWait = journal(policy, [
       task('build', 2, { sponsorLane: 'normal' }),
       event(3, 'task.blocked', {

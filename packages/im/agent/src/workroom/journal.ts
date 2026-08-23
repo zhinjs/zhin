@@ -1,7 +1,12 @@
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import type { WorkroomEvent, WorkroomEventDraft } from './kernel-contracts.js';
+import type {
+  WorkroomBlocker,
+  WorkroomBlockerKind,
+  WorkroomEvent,
+  WorkroomEventDraft,
+} from './kernel-contracts.js';
 import { assertAcceptanceContract, assertPersistedAcceptanceRecord } from './acceptance-policy.js';
 import {
   canonicalWorkroomJson,
@@ -13,6 +18,10 @@ import { assertWorkflowPlanProposal } from './workflow-plan-builder.js';
 import { assertWorkflowPlanRevisionCandidate } from './plan-revision.js';
 import { parseWorkroomRemoteAssignmentIssuance } from './remote-assignment-issuance.js';
 import { parseWorkroomLocalAssignmentIssuance } from './local-assignment-issuance.js';
+import {
+  isWorkroomRunCancelReasonCode,
+  isWorkroomRunReplanReasonCode,
+} from './workroom-run-control.js';
 import {
   assertWorkroomSchedulerPolicySnapshot,
   parseWorkroomDispatchTaskDecision,
@@ -160,6 +169,9 @@ export interface WorkroomStoredEventControl {
   readonly taskKey?: string;
   readonly assignmentId?: string;
   readonly blockerId?: string;
+  readonly blockerKind?: WorkroomBlockerKind;
+  readonly blockerDeadline?: number;
+  readonly blockerAllowedActions?: WorkroomBlocker['allowedActions'];
   readonly waitId?: string;
   readonly waitStatus?: string;
   readonly role?: WorkroomAssignmentRoleHeader;
@@ -1043,7 +1055,13 @@ function deriveStoredEventControl(event: WorkroomEvent): WorkroomStoredEventCont
       required: payload.required === true,
       maxAttempts: storedHeaderPositiveInteger(payload, 'maxAttempts'),
     });
-    case 'task.blocked':
+    case 'task.blocked': return deepFreeze({
+      taskKey: taskKey(),
+      blockerId: opaqueStoredRef('blocker', event.runId, storedHeaderText(payload, 'blockerId')),
+      blockerKind: storedHeaderBlockerKind(payload.kind),
+      blockerDeadline: storedHeaderNonNegativeInteger(payload, 'deadline'),
+      blockerAllowedActions: Object.freeze(['resolve', 'replan', 'cancel'] as const),
+    });
     case 'task.blocker_resolved': return deepFreeze({
       taskKey: taskKey(),
       blockerId: opaqueStoredRef('blocker', event.runId, storedHeaderText(payload, 'blockerId')),
@@ -1124,7 +1142,9 @@ function deriveStoredEventControl(event: WorkroomEvent): WorkroomStoredEventCont
 const WORKROOM_EVENT_CONTROL_KEYS: Readonly<Record<WorkroomEvent['type'], readonly string[]>> = Object.freeze({
   'run.created': ['projectId'],
   'task.planned': ['taskKey', 'required', 'maxAttempts'],
-  'task.blocked': ['taskKey', 'blockerId'],
+  'task.blocked': [
+    'taskKey', 'blockerId', 'blockerKind', 'blockerDeadline', 'blockerAllowedActions',
+  ],
   'task.blocker_resolved': ['taskKey', 'blockerId'],
   'assignment.claimed': [
     'taskKey', 'assignmentId', 'role', 'attempt', 'assignmentRevision', 'fence',
@@ -1158,6 +1178,8 @@ const WORKROOM_EVENT_CONTROL_KEYS: Readonly<Record<WorkroomEvent['type'], readon
   'plan.admitted': [],
   'plan.revision_applied': [],
   'plan_gate.decided': [],
+  'run.control_decided': [],
+  'run.replan_requested': [],
   'run.cancel_requested': [],
   'run.cancelled': [],
   'scheduler.dispatch_requested': [],
@@ -1174,7 +1196,10 @@ function validateStoredEventControl(
   type: WorkroomEvent['type'],
   control: Readonly<Record<string, unknown>>,
 ): void {
-  assertExactRecordKeys(control, WORKROOM_EVENT_CONTROL_KEYS[type], 'Stored Workroom control');
+  const keys = type === 'task.blocked' && Object.keys(control).length === 2
+    ? ['taskKey', 'blockerId']
+    : WORKROOM_EVENT_CONTROL_KEYS[type];
+  assertExactRecordKeys(control, keys, 'Stored Workroom control');
   if (control.projectId !== undefined) storedHeaderText(control, 'projectId');
   for (const key of ['taskKey', 'assignmentId', 'blockerId', 'waitId'] as const) {
     if (control[key] !== undefined && (typeof control[key] !== 'string'
@@ -1187,6 +1212,13 @@ function validateStoredEventControl(
   }
   if (control.required !== undefined && typeof control.required !== 'boolean') {
     throw new Error('Stored Workroom control required is invalid');
+  }
+  if (control.blockerKind !== undefined) storedHeaderBlockerKind(control.blockerKind);
+  if (control.blockerDeadline !== undefined) {
+    storedHeaderNonNegativeInteger(control, 'blockerDeadline');
+  }
+  if (control.blockerAllowedActions !== undefined) {
+    storedHeaderBlockerActions(control.blockerAllowedActions);
   }
   if (control.role !== undefined) storedHeaderRole(control.role);
   if (control.outcome !== undefined) storedHeaderOutcome(control.outcome);
@@ -1244,6 +1276,33 @@ function storedHeaderPositiveInteger(payload: Readonly<Record<string, unknown>>,
     throw new Error(`Stored Workroom header ${key} is invalid`);
   }
   return Number(value);
+}
+
+function storedHeaderNonNegativeInteger(
+  payload: Readonly<Record<string, unknown>>,
+  key: string,
+): number {
+  const value = payload[key];
+  if (!Number.isSafeInteger(value) || Number(value) < 0) {
+    throw new Error(`Stored Workroom header ${key} is invalid`);
+  }
+  return Number(value);
+}
+
+function storedHeaderBlockerKind(value: unknown): WorkroomBlockerKind {
+  if (value !== 'dependency' && value !== 'approval' && value !== 'capability'
+    && value !== 'external' && value !== 'human_input') {
+    throw new Error('Stored Workroom header Blocker kind is invalid');
+  }
+  return value;
+}
+
+function storedHeaderBlockerActions(value: unknown): WorkroomBlocker['allowedActions'] {
+  if (!Array.isArray(value)
+    || canonicalWorkroomJson(value) !== canonicalWorkroomJson(['resolve', 'replan', 'cancel'])) {
+    throw new Error('Stored Workroom header Blocker allowedActions are invalid');
+  }
+  return Object.freeze([...value]) as WorkroomBlocker['allowedActions'];
 }
 
 function storedHeaderRecord(
@@ -1354,8 +1413,12 @@ async function materializeStoredEvents(
     const payload = await materializeValue(event.payload, '$.payload', event, projectId, payloads);
     if (!isRecord(payload)) throw new Error('Materialized Workroom Journal payload is invalid');
     validatePayload(event.type, payload, event.sequence);
-    if (canonicalWorkroomJson(event.control)
-      !== canonicalWorkroomJson(deriveStoredEventControl({ ...event, version: 1, payload }))) {
+    const derivedControl = deriveStoredEventControl({ ...event, version: 1, payload });
+    const comparableControl = event.type === 'task.blocked'
+      && Object.keys(event.control).length === 2
+      ? Object.freeze({ taskKey: derivedControl.taskKey, blockerId: derivedControl.blockerId })
+      : derivedControl;
+    if (canonicalWorkroomJson(event.control) !== canonicalWorkroomJson(comparableControl)) {
       throw new Error('Stored Workroom control projection does not match the governed payload');
     }
     const { control: _control, ...eventHeader } = event;
@@ -1677,7 +1740,8 @@ function isDigest(value: unknown): value is string {
 }
 
 const WORKROOM_EVENT_TYPES = new Set<WorkroomEvent['type']>([
-  'run.created', 'run.cancel_requested', 'run.cancelled', 'plan.admitted', 'plan_gate.decided',
+  'run.created', 'run.control_decided', 'run.replan_requested',
+  'run.cancel_requested', 'run.cancelled', 'plan.admitted', 'plan_gate.decided',
   'plan.revision_applied',
   'task.planned', 'task.blocked', 'task.blocker_resolved',
   'task.cancel_requested', 'task.cancelled', 'task.failed',
@@ -1707,6 +1771,12 @@ function isWorkroomEventType(value: unknown): value is WorkroomEvent['type'] {
  */
 const WORKROOM_EVENT_PAYLOAD_KEYS: Readonly<Record<WorkroomEvent['type'], readonly string[]>> = Object.freeze({
   'run.created': ['projectId', 'title'],
+  'run.control_decided': [
+    'operationId', 'action', 'reasonCode', 'expectedSequence', 'principalId', 'requestDigest',
+    'catalogRevision', 'projectDigest', 'authorizationRef',
+    'stateSequence', 'stateStatus', 'stateDigest',
+  ],
+  'run.replan_requested': ['operationId', 'reasonCode', 'requestDigest'],
   'run.cancel_requested': ['reason'],
   'run.cancelled': ['reason'],
   'plan.admitted': [
@@ -1836,6 +1906,34 @@ function validatePayload(
   switch (type) {
     case 'run.created':
       requirePayloadString(payload, 'projectId'); requirePayloadString(payload, 'title'); return;
+    case 'run.control_decided':
+      requirePayloadString(payload, 'operationId');
+      requirePayloadEnum(payload, 'action', ['cancel', 'request_replan']);
+      requirePayloadString(payload, 'reasonCode');
+      if (payload.action === 'cancel'
+        ? !isWorkroomRunCancelReasonCode(payload.reasonCode)
+        : !isWorkroomRunReplanReasonCode(payload.reasonCode)) {
+        throw new Error('Invalid Workroom event payload: Run control reasonCode');
+      }
+      if (!Number.isSafeInteger(payload.expectedSequence) || Number(payload.expectedSequence) < 0) {
+        throw new Error('Invalid Workroom event payload: expectedSequence');
+      }
+      requirePayloadString(payload, 'principalId'); requirePayloadDigest(payload, 'requestDigest');
+      requirePayloadString(payload, 'catalogRevision'); requirePayloadDigest(payload, 'projectDigest');
+      requirePayloadString(payload, 'authorizationRef');
+      if (!Number.isSafeInteger(payload.stateSequence) || Number(payload.stateSequence) < 0) {
+        throw new Error('Invalid Workroom event payload: stateSequence');
+      }
+      requirePayloadEnum(payload, 'stateStatus', [
+        'active', 'blocked', 'needs_replan', 'cancelling', 'completed', 'cancelled',
+      ]);
+      requirePayloadDigest(payload, 'stateDigest'); return;
+    case 'run.replan_requested':
+      requirePayloadString(payload, 'operationId'); requirePayloadString(payload, 'reasonCode');
+      if (!isWorkroomRunReplanReasonCode(payload.reasonCode)) {
+        throw new Error('Invalid Workroom event payload: replan reasonCode');
+      }
+      requirePayloadDigest(payload, 'requestDigest'); return;
     case 'plan.admitted':
       requirePayloadString(payload, 'operationId'); requirePayloadString(payload, 'sourceEventRef');
       requirePayloadDigest(payload, 'sourceEventDigest');

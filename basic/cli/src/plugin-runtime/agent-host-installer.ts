@@ -54,6 +54,7 @@ import {
   ActivatableWorkroomCatalog,
   FileWorkroomCatalog,
   WorkroomKernel,
+  createCatalogWorkroomRunControlAuthority,
   asPrivate,
   handleRuntimeOwnerApproveCommand,
   handleRuntimeManagementCommand,
@@ -149,6 +150,7 @@ import {
   type AgentCapabilities,
   type AssistantRuntimeHandle,
   type WorkroomRuntimeHandle,
+  type WorkroomRunControlCommand,
   type SessionTreeRuntimeHandle,
   type ToolCapability,
   type AgentTraceRecorder,
@@ -664,6 +666,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         resources.has(workroomPriorityAuthorityToken)
           ? resources.use(workroomPriorityAuthorityToken)
           : undefined),
+      runControlAuthority: createCatalogWorkroomRunControlAuthority(workroomCatalog),
     });
     const activateFileWorkroomJournal = () => {
       if (!workroomJournal.active) {
@@ -1022,6 +1025,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       console: Object.freeze({
         sessionTree: sessionTreeRuntime,
         workroom: workroomRuntime,
+        workroomControl: Object.freeze({
+          execute: (
+            command: WorkroomRunControlCommand,
+            authenticatedPrincipal: Readonly<{ principalId: string }>,
+          ) =>
+            workroomKernel.controlRun(command, authenticatedPrincipal),
+        }),
         workroomCatalog,
         listBindings: listGenerationBindings,
         assistant: schedule.assistantRuntime,

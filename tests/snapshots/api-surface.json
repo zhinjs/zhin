@@ -89,6 +89,7 @@
     "export * from './workroom/workroom-assignment-knowledge-context.js';",
     "export * from './workroom/workroom-kernel.js';",
     "export * from './workroom/workroom-preemption.js';",
+    "export * from './workroom/workroom-run-control.js';",
     "export * from './workroom/workroom-scheduler-application.js';",
     "export * from './workroom/workroom-scheduler.js';",
     "export * from './workroom/workroom-task-report-store.js';",

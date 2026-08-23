@@ -93,6 +93,7 @@
     "export * from './workroom-scheduler-route-registry.js';",
     "export * from './workroom-scheduler-runtime.js';",
     "export type{AssistantRuntimeHandle}from '../assistant/runtime-contract.js';",
+    "export type{WorkroomRunControlCommand,WorkroomRunControlReceipt,}from '../workroom/workroom-run-control.js';",
     "export{FileJournalStore}from '../journal/file-journal-store.js';",
     "export{capabilityToTool,toolInvocationFromTurn,toolsFromCapabilities,type GenerationStampedTool,}from './capability-tools.js';",
     "export{createCatalogGovernedWorkroomProjectionAuthority,createCatalogGovernedConsoleDisclosureAuthority,createWorkroomRuntime,type WorkroomProjectionReadAuthorityPort,type WorkroomRunDetail,type WorkroomRunHeader,type WorkroomRuntimeHandle,}from '../workroom/runtime.js';",

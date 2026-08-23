@@ -36,6 +36,8 @@ Production slice 4 (2026-08-22): 标准 Host 已组合 generation-owned Sponsor/
 
 Production slice 5 (2026-08-22): 组合级 Host/Kernel fixture 已固定剩余跨模块不变量：chat 保留 `spawn_task` 但执行不产生任何 Workroom Journal fact，Workroom Assignment 物理移除 spawn/typed writer，纯 PlanBuilder 前后 Journal 均为空；Local 与 authenticated Remote completion 归一为同构 `assignment.execution_completed` 且只到 `awaiting_acceptance`；只有 `task.accepted` 才推进 dependent Local Assignment。持续 urgent 输入下，超过 pinned starvation bound 的 low lane Task 仍先行且 lane 不被改写。Remote Assignment 缺 typed checkpoint provider时写带 resolve/replan/cancel 的 durable blocker，重启安装 provider后只重投 request、不伪造 ack；generation retire会 abort在途 delivery。既有 Kernel cancel、Plan Revision `preemption_required` 和 timeout blocker tests继续作为同一SSOT gate。剩余缺口收敛为 Console/Sponsor Room projection、Remote supply composition与外部typed checkpoint transport实装，P2保持 `in_progress`。
 
+Production slice 6 (2026-08-23): `zhin agent workroom readiness` 与 authenticated Host REST 现从 v3 Journal 的 content-free stored headers 投影 opaque Task/Blocker ref、闭集 kind、deadline 与 allowed actions，读取过程不 materialize title/reason/owner/progress；旧 v3 Blocker header缺新增诊断字段时保守显示 unknown。新增 Root-private Run control facade，Console token principal必须是 current enabled Catalog Project Sponsor，命令固定 operationId、expectedSequence、闭集 reasonCode 与 exact authority digest。`cancel` 原子复用 Kernel 两阶段取消；`request-replan` 原子写 control audit + `run.replan_requested`，Run进入 `needs_replan`且Scheduler停止新dispatch，后续真实 Plan Revision admission才恢复。重复operation exact replay，stale/未授权零写。该slice尚未生成新Plan，也未补Sponsor Room queue/priority控制与完整跨Local/Remote E2E，因此组合条目继续不勾选、P2保持 `in_progress`。
+
 ## P7：Risk-tier Acceptance
 
 Status: in_progress
