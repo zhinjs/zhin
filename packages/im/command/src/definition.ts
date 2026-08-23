@@ -1,3 +1,7 @@
+/**
+ * Command authoring API consumed from `zhin.js/command`.
+ * @module zhin.js/command
+ */
 import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   createCapabilityContext,
@@ -54,6 +58,7 @@ export type CommandDynamicValue =
   | CommandParameterValue
   | ((session: CommandSession) => CommandParameterValue);
 
+/** @internal Runtime validator lookup. */
 export const commandParameterTypes: ReadonlySet<CommandParameterType> = new Set([
   'string',
   'number',
@@ -177,7 +182,7 @@ export interface CommandMessage {
 
 /**
  * IM 入站快捷字段。
- * 有 `CommandMessage` 来源时由 {@link resolveCommandSession} 填充；
+ * 有 `CommandMessage` 来源时由 Runtime 从消息结构填充；
  * `CommandIndex.execute(name)` 等无消息路径下为 `undefined`。
  */
 export interface CommandSession {
@@ -234,7 +239,9 @@ export interface CommandDefinition<
   TResult = unknown,
   TInput extends CommandMessage = CommandMessage,
 > {
+  /** @internal Runtime feature brand. */
   readonly $feature: typeof commandBrand;
+  /** @internal Convention-derived parameter metadata. */
   readonly $parameter?: CommandParameterDefinition;
   readonly description?: string;
   /**
@@ -346,6 +353,7 @@ function validateCommandShortcutShape(
   }
 }
 
+/** @internal Convention-loader assembly helper. */
 export function bindCommandParameter<
   TConfig,
   TResult,
@@ -358,6 +366,7 @@ export function bindCommandParameter<
   return Object.freeze({ ...definition, $parameter: Object.freeze({ ...parameter }) });
 }
 
+/** @internal Runtime validation for convention-discovered modules. */
 export function parseCommandDefinition(value: unknown): CommandDefinition {
   if (!value || typeof value !== 'object') {
     throw new TypeError('Command module must default-export defineCommand(...)');
@@ -372,6 +381,7 @@ export function parseCommandDefinition(value: unknown): CommandDefinition {
 /**
  * 将动态参数值（可能包含函数）批量解析为静态值。
  * 函数值接收从 `source`（通常是 IM Runtime `Message`）解析出的 {@link CommandSession}。
+ * @internal Command projection helper.
  */
 export function resolveDynamicParams(
   params: Readonly<Record<string, CommandDynamicValue>>,
@@ -385,6 +395,7 @@ export function resolveDynamicParams(
   return Object.freeze(resolved);
 }
 
+/** @internal Command dispatcher assembly helper. */
 export function createCommandContext(
   snapshot: RuntimeSnapshot,
   ownerId: PluginId,
@@ -410,6 +421,7 @@ export function createCommandContext(
 /**
  * 从派发来源（通常是 Runtime `Message`）解析入站快捷字段。
  * 不依赖 `@zhin.js/core`，按 {@link CommandMessage} 结构鸭式识别。
+ * @internal Command dispatcher projection helper.
  */
 export function resolveCommandSession(input: unknown): CommandSession {
   if (!isCommandMessageLike(input)) return Object.freeze({});

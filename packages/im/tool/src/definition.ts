@@ -1,3 +1,7 @@
+/**
+ * Agent Tool authoring API consumed from `@zhin.js/tool`.
+ * @module @zhin.js/tool
+ */
 import type { CapabilityContext } from '@zhin.js/feature-kit';
 
 const toolBrand = 'zhin.agent-tool/1' as const;
@@ -96,6 +100,7 @@ export interface AgentToolDefinition<
   TResult = unknown,
   TConfig = unknown,
 > {
+  /** @internal Runtime feature brand. */
   readonly $feature: typeof toolBrand;
   readonly description: string;
   readonly inputSchema?: unknown;
@@ -116,6 +121,13 @@ declare module '@zhin.js/plugin-runtime' {
   }
 }
 
+/**
+ * Define an Agent tool together with its approval and invocation boundaries.
+ * Runtime policy remains authoritative even when a definition requests broad access.
+ *
+ * @public
+ * @experimental
+ */
 export function defineAgentTool<
   TInput = unknown,
   TResult = unknown,
@@ -151,6 +163,7 @@ export function defineAgentTool<
   });
 }
 
+/** @internal Runtime validation for convention-discovered modules. */
 export function parseAgentToolDefinition(value: unknown): AgentToolDefinition {
   if (!value || typeof value !== 'object') throw invalidTool();
   const definition = value as Partial<AgentToolDefinition>;

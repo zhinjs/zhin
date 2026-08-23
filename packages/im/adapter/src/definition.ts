@@ -1,3 +1,7 @@
+/**
+ * Adapter authoring API consumed from `zhin.js/adapter`.
+ * @module zhin.js/adapter
+ */
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import type { CapabilityContext } from '@zhin.js/feature-kit';
 import type {
@@ -101,6 +105,7 @@ const OUTBOUND_MEDIA_FORMS: readonly AdapterOutboundMedia[] = [
 const ADAPTER_OPERATIONS: readonly AdapterOperation[] = ['recall', 'edit', 'reaction', 'typing'];
 
 export interface AdapterDefinition<TConfig = unknown> {
+  /** @internal Runtime feature brand. */
   readonly $feature: typeof adapterBrand;
   readonly capabilities: readonly AdapterCapability[];
   /**
@@ -125,6 +130,25 @@ declare module '@zhin.js/plugin-runtime' {
   }
 }
 
+/**
+ * Define an Adapter module for the `adapters/` convention directory.
+ *
+ * The returned definition is immutable and declares capabilities before an
+ * Endpoint is created, so Runtime admission can fail closed.
+ *
+ * @public
+ * @example
+ * ```ts
+ * import { defineAdapter } from 'zhin.js/adapter';
+ *
+ * export default defineAdapter({
+ *   capabilities: ['inbound', 'outbound'],
+ *   create: () => ({
+ *     send: async () => 'platform-message-id',
+ *   }),
+ * });
+ * ```
+ */
 export function defineAdapter<TConfig = unknown>(
   definition: Omit<AdapterDefinition<TConfig>, '$feature'>,
 ): Readonly<AdapterDefinition<TConfig>> {
@@ -151,7 +175,10 @@ export function defineAdapter<TConfig = unknown>(
   });
 }
 
-/** Converts the definition's compact authoring form into the public contract. */
+/**
+ * Converts the definition's compact authoring form into the Runtime contract.
+ * @internal Adapter projection helper.
+ */
 export function endpointCapabilitiesOf(
   definition: Pick<AdapterDefinition, 'capabilities' | 'operations'>,
   resolvedOperations?: readonly AdapterOperation[],
@@ -172,7 +199,10 @@ export function endpointCapabilitiesOf(
   });
 }
 
-/** Resolve and validate the operation declaration for one concrete Endpoint. */
+/**
+ * Resolve and validate the operation declaration for one concrete Endpoint.
+ * @internal Adapter projection helper.
+ */
 export function resolveAdapterOperations<TConfig>(
   definition: Pick<AdapterDefinition<TConfig>, 'operations'>,
   context: AdapterContext<TConfig>,
@@ -251,6 +281,7 @@ function normalizeSegmentPolicy(
   });
 }
 
+/** @internal Runtime validation for convention-discovered modules. */
 export function parseAdapterDefinition(value: unknown): AdapterDefinition {
   if (!value || typeof value !== 'object') throw invalidAdapter();
   const definition = value as Partial<AdapterDefinition>;

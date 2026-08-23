@@ -648,8 +648,7 @@ export class Logger {
   /**
    * ERROR 级别日志
    * 支持传入Error对象，会自动打印错误堆栈信息
-   * @param message 错误消息
-   * @param args 其他参数，如果第一个参数是Error对象，会使用其message并打印堆栈
+   * @param args 错误消息及附加参数；首项为 Error 时会保留其堆栈
    */
   error(...args: any[]): void {
     this.log(LogLevel.ERROR,...args)

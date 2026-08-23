@@ -1,8 +1,9 @@
 /**
- * @zhin.js/agent — AI Agent orchestration hub
+ * AI Agent orchestration hub.
  *
  * Provides AgentResourceHub as the central registry for
  * tools, skills, subagents, mcps, and hooks.
+ * @module @zhin.js/agent
  */
 
 // ── Agent-specific modules ──

@@ -97,7 +97,7 @@ export function parseLogLevel(input: unknown, fallback: LogLevel = LogLevel.INFO
   return fallback;
 }
 
-/** @alias parseLogLevel — 规范为配置用小写字符串 */
+/** Normalize a log-level input to its canonical configuration value. */
 export function toLogLevelName(input: LogLevelInput, fallback: LogLevel = LogLevel.INFO): LogLevel {
   return parseLogLevel(input, fallback);
 }

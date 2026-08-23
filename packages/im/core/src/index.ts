@@ -1,3 +1,7 @@
+/**
+ * Canonical IM messages, Endpoints, rendering, and plugin-facing core types.
+ * @module @zhin.js/core
+ */
 // ── Core 类模块 ──────────────────────────────────────────────────────
 export * from './endpoint.js'
 export * from './endpoint-capabilities.js'

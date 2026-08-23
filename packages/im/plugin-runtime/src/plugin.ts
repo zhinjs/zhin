@@ -1,3 +1,7 @@
+/**
+ * Canonical plugin definition consumed from `zhin.js`.
+ * @module zhin.js
+ */
 import type { Dispose, DisposeStack } from './dispose.js';
 import type { GenerationHandoffRegistry } from './handoff.js';
 import type { FeatureId, PluginId } from './identity.js';
@@ -31,6 +35,7 @@ export interface PluginSetupContext<TConfig = unknown> {
   /**
    * Registers an in-memory definition through the same validation and
    * projection transaction used by convention-discovered capabilities.
+   * @internal Runtime bridge for feature installers; plugin authors use convention files.
    */
   addFeature<TDefinition>(
     feature: FeatureId | string,
@@ -48,6 +53,24 @@ export interface PluginDefinition<TConfig = unknown> {
 
 const pluginNamePattern = /^[a-z][a-z0-9-]*$/;
 
+/**
+ * Define the canonical `plugin.ts` entry point.
+ * Setup runs against one candidate generation and may return its disposer.
+ *
+ * @public
+ * @example
+ * ```ts
+ * import { definePlugin } from 'zhin.js';
+ *
+ * // plugin.ts
+ * export default definePlugin({
+ *   name: 'hello',
+ * });
+ * ```
+ *
+ * Put capabilities in convention files such as `commands/hello.ts`, each with
+ * one default export.
+ */
 export function definePlugin<TConfig = unknown>(
   definition: PluginDefinition<TConfig>,
 ): Readonly<PluginDefinition<TConfig>> {
@@ -60,3 +83,35 @@ export function definePlugin<TConfig = unknown>(
     requires: Object.freeze([...(definition.requires ?? [])]),
   });
 }
+
+// The application facade exposes these Host contracts beside definePlugin.
+export {
+  databaseHostToken,
+  type DatabaseHostConsole,
+  type DatabaseHostModel,
+  type DatabaseHostSelection,
+  type DatabaseHostSelectResult,
+  type DatabaseHostTable,
+  type DatabaseHostType,
+  type PluginDatabaseHost,
+} from './database-host.js';
+export {
+  outboundHostToken,
+  type OutboundConversation,
+  type OutboundEditInput,
+  type OutboundEndpointCapabilities,
+  type OutboundEndpointInput,
+  type OutboundEndpointOperation,
+  type OutboundHost,
+  type OutboundMessage,
+  type OutboundReactionInput,
+  type OutboundRecallInput,
+  type OutboundRemoveReactionInput,
+  type OutboundSendInput,
+  type OutboundTypingInput,
+} from './outbound-host.js';
+export {
+  scheduleHostToken,
+  type PluginScheduleHost,
+  type ScheduleJobRegistration,
+} from './schedule-host.js';

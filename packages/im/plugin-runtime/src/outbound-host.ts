@@ -97,6 +97,7 @@ export interface OutboundHost {
   typing?(input: OutboundTypingInput): Promise<void>;
 }
 
+/** @public Plugin-facing cross-platform outbound messaging Host. */
 export const outboundHostToken = createToken<OutboundHost>(
   'zhin.outbound.host',
   'Plugin Runtime outbound push host',

@@ -1,3 +1,7 @@
+/**
+ * Handler authoring API consumed from `zhin.js/handler`.
+ * @module zhin.js/handler
+ */
 import type { HandlerContext } from './context.js';
 
 const handlerBrand = 'zhin.handler/1' as const;
@@ -12,11 +16,18 @@ export interface HandlerEventMap {
 }
 
 export interface HandlerDefinition<K extends string = string> {
+  /** @internal Runtime feature brand. */
   readonly $feature: typeof handlerBrand;
   readonly event?: K;
   handle(this: HandlerContext, ...args: unknown[]): void | Promise<void>;
 }
 
+/**
+ * Define a lifecycle event handler with event-specific argument inference.
+ * When `event` is omitted, the convention loader derives it from the file path.
+ *
+ * @public
+ */
 export function defineHandler<K extends keyof HandlerEventMap & string>(
   options: {
     readonly event: K;
@@ -67,6 +78,7 @@ declare module '@zhin.js/plugin-runtime' {
   }
 }
 
+/** @internal Runtime validation for convention-discovered modules. */
 export function parseHandlerDefinition(value: unknown): HandlerDefinition {
   if (!value || typeof value !== 'object') throw invalidHandler();
   const definition = value as Partial<HandlerDefinition>;

@@ -1,8 +1,13 @@
+/**
+ * Skill Markdown parsing API consumed from `@zhin.js/skill`.
+ * @module @zhin.js/skill
+ */
 import type { ValidationContext } from '@zhin.js/feature-kit';
 
 const skillBrand = 'zhin.skill/1' as const;
 
 export interface SkillDefinition {
+  /** @internal Runtime feature brand. */
   readonly $feature: typeof skillBrand;
   readonly name: string;
   readonly description: string;
@@ -17,6 +22,13 @@ declare module '@zhin.js/plugin-runtime' {
   }
 }
 
+/**
+ * Parse a convention-loaded Skill Markdown file into its immutable runtime form.
+ * The first Markdown heading becomes the user-facing description.
+ *
+ * @public
+ * @experimental
+ */
 export function parseSkillMarkdown(value: unknown, context: ValidationContext): SkillDefinition {
   if (typeof value !== 'string' || !value.trim()) {
     throw new TypeError(`Skill ${context.source} must contain Markdown instructions`);

@@ -66,6 +66,7 @@ export function createGenerationAdmissionGate(): GenerationAdmissionGate {
 export const generationAdmissionBinder: unique symbol = Symbol('GenerationAdmissionBinder');
 
 export interface GenerationAdmissionBindable<T> {
+  /** @internal Runtime lifecycle wiring; never called by plugin authors. */
   [generationAdmissionBinder](gate: GenerationAdmissionGate): T;
 }
 

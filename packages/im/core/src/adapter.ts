@@ -91,9 +91,10 @@ export abstract class Adapter<
   }
 
   /**
-   * 构造函数
+   * 创建一个适配器运行实例。
+   * @param plugin 拥有该适配器的插件实例
    * @param name 适配器名称（如 'process'、'qq' 等）
-   * @param endpointFactory Bot工厂函数或构造器
+   * @param config Endpoint 配置列表
    */
   constructor(
     public plugin: Plugin,

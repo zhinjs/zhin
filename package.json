@@ -109,6 +109,7 @@
     "docs:build": "pnpm docs:api && pnpm sync:adapter-docs && pnpm --filter @zhin.js/docs build",
     "docs:preview": "pnpm --filter @zhin.js/docs preview",
     "docs:api": "typedoc",
+    "check:api-docs": "node scripts/check-api-docs-surface.mjs",
     "check:prod": "node scripts/check-production-config.js",
     "check:plugin": "node scripts/check-plugin-spec.mjs",
     "check:plugin-agent-publish": "node scripts/check-plugin-agent-publish.mjs",

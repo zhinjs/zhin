@@ -1,3 +1,7 @@
+/**
+ * Generation-owned plugin definitions, capability tokens, and Host resources.
+ * @module @zhin.js/plugin-runtime
+ */
 /** @internal Runtime 内部：CapabilitySlot（feature 与 projection 之间的载体）。 */
 export * from './capability.js';
 export * from './dispose.js';

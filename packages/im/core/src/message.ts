@@ -48,6 +48,7 @@ export interface MessageBase {
  * 完整消息类型，支持扩展
  */
 export type Message<T extends object={}>=MessageBase&T;
+/** @internal Legacy static helpers; not part of Agent resource authoring. */
 export namespace Message{
     /**
      * 工具方法：合并自定义字段与基础消息结构

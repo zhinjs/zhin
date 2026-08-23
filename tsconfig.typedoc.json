@@ -128,15 +128,49 @@
       "@zhin.js/host-http": [
         "./packages/host/http/src/index.ts"
       ],
+      "zhin.js": [
+        "./packages/im/zhin/src/index.ts"
+      ],
+      "zhin.js/agent": [
+        "./packages/im/zhin/src/agent.ts"
+      ],
+      "zhin.js/ai": [
+        "./packages/im/zhin/src/ai.ts"
+      ],
+      "zhin.js/adapter": [
+        "./packages/im/zhin/src/adapter.ts"
+      ],
+      "zhin.js/command": [
+        "./packages/im/zhin/src/command.ts"
+      ],
+      "zhin.js/component": [
+        "./packages/im/zhin/src/component.ts"
+      ],
+      "zhin.js/middleware": [
+        "./packages/im/zhin/src/middleware.ts"
+      ],
+      "zhin.js/handler": [
+        "./packages/im/zhin/src/handler.ts"
+      ],
       "@zhin.js/mcp": [
         "./packages/host/mcp/src/index.ts"
       ]
     }
   },
   "include": [
+    "packages/im/plugin-runtime/src/**/*.ts",
+    "packages/im/command/src/**/*.ts",
+    "packages/im/adapter/src/**/*.ts",
+    "packages/im/component/src/**/*.ts",
+    "packages/im/middleware/src/**/*.ts",
+    "packages/im/handler/src/**/*.ts",
+    "packages/im/tool/src/**/*.ts",
+    "packages/im/skill/src/**/*.ts",
+    "packages/im/prompt-section/src/**/*.ts",
     "packages/im/ai/src/**/*.ts",
     "packages/im/core/src/**/*.ts",
     "packages/im/agent/src/**/*.ts",
+    "packages/host/http/src/**/*.ts",
     "packages/im/kernel/src/**/*.ts",
     "basic/logger/src/**/*.ts",
     "basic/schema/src/**/*.ts",

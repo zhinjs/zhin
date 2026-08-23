@@ -81,7 +81,8 @@ export interface HttpRouteRegistration {
   (): void;
 }
 
-export interface HttpHost extends GenerationAdmissionBindable<HttpHost> {
+/** @public Stable HTTP and WebSocket Host contract resolved through `httpHostToken`. */
+export interface HttpHost {
   ws(path: string): WsHandle;
   route(
     method: string,
@@ -91,10 +92,12 @@ export interface HttpHost extends GenerationAdmissionBindable<HttpHost> {
   ): HttpRouteRegistration;
   listRoutes(): readonly ListedRoute[];
   get address(): HttpHostAddress | undefined;
+  /** @internal Console authentication registry owned by the process Host. */
   get tokenRegistry(): TokenRegistry;
 }
 
-export interface ProcessHttpHost extends HttpHost {
+/** @internal Process-root lifecycle and generation admission surface. */
+export interface ProcessHttpHost extends HttpHost, GenerationAdmissionBindable<HttpHost> {
   listen(): Promise<HttpHostAddress>;
   close(): Promise<void>;
 }
@@ -109,13 +112,17 @@ interface HttpRoute {
   readonly admission?: GenerationAdmissionGate;
 }
 
+interface AdmissionBoundHttpHost extends HttpHost, GenerationAdmissionBindable<HttpHost> {}
+
 interface WsRoute {
   readonly listener: (connection: WsConnection) => void;
   readonly admission?: GenerationAdmissionGate;
 }
 
+/** @public Stable Plugin Runtime HTTP Host token. */
 export const httpHostToken = createToken<HttpHost>('zhin.host.http');
 
+/** @internal CLI composition-root factory. */
 export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
   const host = options.host ?? '127.0.0.1';
   const port = options.port ?? 8086;
@@ -453,8 +460,8 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
 
   function createBoundHost(
     admission: GenerationAdmissionGate,
-  ): HttpHost {
-    const bound: HttpHost = {
+  ): AdmissionBoundHttpHost {
+    const bound: AdmissionBoundHttpHost = {
       [generationAdmissionBinder]: (next) => createBoundHost(next),
       ws: (path) => registerWs(path, admission),
       route: (method, path, handler, meta) => registerRoute(

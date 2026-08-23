@@ -101,11 +101,11 @@ export type OutputElement =
  * 从 AI 回复文本中解析出结构化的 OutputElement[]
  *
  * 识别规则:
- *   - ![alt](url)            → ImageElement
- *   - [audio](url)           → AudioElement
- *   - [video](url)           → VideoElement
- *   - ```card ... ```        → CardElement (JSON)
- *   - [file:name](url)       → FileElement
+ *   - `![alt](url)`            → ImageElement
+ *   - `[audio](url)`           → AudioElement
+ *   - `[video](url)`           → VideoElement
+ *   - `` ```card ... ``` ``    → CardElement (JSON)
+ *   - `[file:name](url)`        → FileElement
  *   - 其余文本               → TextElement
  */
 export function parseOutput(raw: string): OutputElement[] {

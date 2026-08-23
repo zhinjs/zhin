@@ -1,3 +1,7 @@
+/**
+ * Middleware authoring API consumed from `zhin.js/middleware`.
+ * @module zhin.js/middleware
+ */
 import type { CapabilityContext } from '@zhin.js/feature-kit';
 
 const middlewareBrand = 'zhin.middleware/1' as const;
@@ -12,6 +16,7 @@ export interface MiddlewareContext<TInput = unknown, TConfig = unknown>
 }
 
 export interface MiddlewareDefinition<TInput = unknown, TConfig = unknown> {
+  /** @internal Runtime feature brand. */
   readonly $feature: typeof middlewareBrand;
   readonly phase: MiddlewarePhase;
   readonly target: MiddlewareTarget;
@@ -28,6 +33,12 @@ declare module '@zhin.js/plugin-runtime' {
   }
 }
 
+/**
+ * Define ordered inbound or outbound middleware.
+ * Call `next()` to continue the chain; omit it to stop dispatch deliberately.
+ *
+ * @public
+ */
 export function defineMiddleware<TInput = unknown, TConfig = unknown>(
   definition: Omit<
     MiddlewareDefinition<TInput, TConfig>,
@@ -54,6 +65,7 @@ export function defineMiddleware<TInput = unknown, TConfig = unknown>(
   return Object.freeze({ ...definition, $feature: middlewareBrand, phase, target, order });
 }
 
+/** @internal Runtime validation for convention-discovered modules. */
 export function parseMiddlewareDefinition(value: unknown): MiddlewareDefinition {
   if (!value || typeof value !== 'object') throw invalidMiddleware();
   const definition = value as Partial<MiddlewareDefinition>;

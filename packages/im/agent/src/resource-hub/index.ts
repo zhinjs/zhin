@@ -17,10 +17,10 @@
  */
 
 import type { AgentTool } from '@zhin.js/ai';
-import { ToolRegistry, type ToolInput, type ToolLike } from './tool-registry.js';
+import { ToolRegistry, type ToolLike } from './tool-registry.js';
 import { SkillRegistry } from './skill-registry.js';
 import { SubAgentRegistry } from './subagent-registry.js';
-import { McpRegistry } from './mcp-registry.js';
+import { McpRegistry, type McpConnection } from './mcp-registry.js';
 import { HookRegistry, createAIHookEvent } from './hook-registry.js';
 import { createAgentStreamBus, type AgentStreamBus } from '../event/agent-stream-bus.js';
 import { createHookStreamSink } from '../event/hook-stream-sink.js';
@@ -30,21 +30,31 @@ import type {
   Skill,
   SubAgentDef,
   AgentPreset,
+  Tool,
   McpServerEntry,
   AIHook,
   AIHookEvent,
   AIHookEventType,
 } from './types.js';
 
+/** @public @experimental Plugin-facing generation-scoped Agent capability registry. */
 export class AgentResourceHub {
+  /** @internal Runtime-owned storage; use the AgentResourceHub methods below. */
   readonly tools = new ToolRegistry();
+  /** @internal Runtime-owned storage; use the AgentResourceHub methods below. */
   readonly skills = new SkillRegistry();
+  /** @internal Runtime-owned storage; use the AgentResourceHub methods below. */
   readonly subagents = new SubAgentRegistry();
+  /** @internal Runtime-owned storage; use the AgentResourceHub methods below. */
   readonly mcps = new McpRegistry();
+  /** @internal Runtime-owned storage; use the AgentResourceHub methods below. */
   readonly hooks = new HookRegistry();
+  /** @internal Runtime event transport. */
   readonly agentStreamBus: AgentStreamBus;
+  /** @internal Runtime approval state. */
   readonly approvalOnce = new ToolApprovalOnceStore();
 
+  /** @internal Created and disposed by the generation-owned Agent Host. */
   constructor() {
     this.agentStreamBus = createAgentStreamBus();
     this.agentStreamBus.registerSink(createHookStreamSink(this.hooks));
@@ -52,7 +62,7 @@ export class AgentResourceHub {
 
   // ── Tool shortcuts ──
 
-  addTool(tool: ToolInput | AgentTool | ToolLike, scope?: ResourceScope, source?: string): () => void {
+  addTool(tool: Tool | AgentTool | ToolLike, scope?: ResourceScope, source?: string): () => void {
     return this.tools.addTool(tool, scope, source);
   }
 
@@ -94,7 +104,7 @@ export class AgentResourceHub {
     return this.mcps.remove(name, scope);
   }
 
-  async connectMcp(name: string) {
+  async connectMcp(name: string): Promise<McpConnection> {
     return this.mcps.connect(name);
   }
 
@@ -140,6 +150,7 @@ export class AgentResourceHub {
 
   // ── Lifecycle ──
 
+  /** @internal Generation Host lifecycle; plugins dispose only their returned registrations. */
   dispose(): void {
     this.tools.dispose();
     this.skills.dispose();

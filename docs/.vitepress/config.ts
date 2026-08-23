@@ -29,6 +29,7 @@ const USE_DOC_PREFIXES = [
   '/advanced/',
   '/console/',
   '/operations/',
+  '/reference/',
   '/examples/',
   '/paths/',
   '/showcase/',
@@ -93,6 +94,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     ]),
   ]),
   sidebarGroup('参考', [
+    { text: 'API Reference', link: '/reference/api' },
     { text: '配置参考', link: '/configuration/' },
     { text: 'CLI 命令', link: '/cli/' },
     { text: 'zhin runtime start', link: '/cli/runtime' },
@@ -145,6 +147,7 @@ const EN_USE_DOC_PREFIXES = [
   '/en/ai/',
   '/en/console/',
   '/en/operations/',
+  '/en/reference/',
   '/en/examples/',
   '/en/paths/',
   '/en/showcase/',
@@ -208,6 +211,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     ]),
   ]),
   sidebarGroup('Reference', [
+    { text: 'API Reference', link: '/en/reference/api' },
     { text: 'Configuration', link: '/en/configuration/' },
     { text: 'CLI Commands', link: '/en/cli/' },
     { text: 'zhin runtime start', link: '/en/cli/runtime' },
@@ -296,8 +300,9 @@ export default withMermaid(defineConfig({
           { text: '适配器', link: '/adapters/', activeMatch: '^/adapters/' },
           {
             text: '参考',
-            activeMatch: '^/(configuration|cli|console|operations)/',
+            activeMatch: '^/(reference|configuration|cli|console|operations)/',
             items: [
+              { text: 'API Reference', link: '/reference/api' },
               { text: '配置参考', link: '/configuration/' },
               { text: 'CLI 命令', link: '/cli/' },
               { text: 'zhin runtime start', link: '/cli/runtime' },
@@ -370,8 +375,9 @@ export default withMermaid(defineConfig({
           { text: 'Adapters', link: '/en/adapters/', activeMatch: '^/en/adapters/' },
           {
             text: 'Reference',
-            activeMatch: '^/en/(configuration|cli|console|operations)/',
+            activeMatch: '^/en/(reference|configuration|cli|console|operations)/',
             items: [
+              { text: 'API Reference', link: '/en/reference/api' },
               { text: 'Configuration', link: '/en/configuration/' },
               { text: 'CLI Commands', link: '/en/cli/' },
               { text: 'zhin runtime start', link: '/en/cli/runtime' },

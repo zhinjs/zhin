@@ -1,9 +1,10 @@
 /**
- * @zhin.js/ai — Framework-agnostic AI engine
+ * Framework-agnostic AI engine.
  *
  * Provides AI provider abstractions, agent loop, session management,
  * memory & compaction utilities with ZERO dependency on IM/Bot concepts.
  * Can be used in any Node.js application.
+ * @module @zhin.js/ai
  */
 
 // ── LLM engine core (ADR 0009) ──

@@ -86,7 +86,7 @@ function assertLogicalJobId(id: string): void {
   }
 }
 
-/** Plugin-facing token; Runtime injects a facade bound to the current owner. */
+/** @public Plugin-facing token; Runtime injects a facade bound to the current owner. */
 export const scheduleHostToken = createToken<PluginScheduleHost>(
   'zhin.schedule.host',
   'Plugin Runtime scoped solar cron host',

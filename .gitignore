@@ -148,6 +148,7 @@ apps/**/config.*
 *.heapsnapshot
 # Generated API reference (run pnpm docs:api)
 docs/api/
+docs/public/api/
 # Plugin Runtime 运行产物
 .zhin/
 

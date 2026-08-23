@@ -1,12 +1,21 @@
 {
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": [
-    "packages/im/ai/src/index.ts",
-    "packages/im/core/src/index.ts",
-    "packages/im/agent/src/index.ts"
+    "packages/im/plugin-runtime/src/plugin.ts",
+    "packages/im/command/src/definition.ts",
+    "packages/im/adapter/src/definition.ts",
+    "packages/im/component/src/definition.ts",
+    "packages/im/middleware/src/definition.ts",
+    "packages/im/handler/src/definition.ts",
+    "packages/im/tool/src/definition.ts",
+    "packages/im/skill/src/definition.ts",
+    "packages/im/prompt-section/src/definition.ts",
+    "packages/im/core/src/plugin-runtime/im/public-api.ts",
+    "packages/im/agent/src/resource-hub/public-api.ts",
+    "packages/host/http/src/public-api.ts"
   ],
-  "out": "docs/api",
-  "name": "Zhin.js API Reference",
+  "out": "docs/public/api",
+  "name": "Zhin.js Public API Reference",
   "readme": "none",
   "excludePrivate": true,
   "excludeInternal": true,
@@ -20,6 +29,12 @@
   "githubPages": false,
   "hideGenerator": true,
   "searchInComments": true,
+  "treatWarningsAsErrors": true,
+  "validation": {
+    "invalidLink": true,
+    "notDocumented": false,
+    "notExported": false
+  },
   "navigationLinks": {
     "Zhin.js": "https://zhin.pages.dev",
     "GitHub": "https://github.com/zhinjs/zhin"

@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
+      - 'basic/**/src/**'
+      - 'packages/**/src/**'
+      - 'package.json'
       - 'typedoc.json'
       - 'tsconfig.typedoc.json'
       - '.github/workflows/deploy-docs.yml'

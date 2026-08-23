@@ -106,6 +106,7 @@ import {
 
 const logger = getLogger('im');
 
+/** @public Stable inbound and outbound IM gateway token for Adapter integrations. */
 export const messageGatewayToken = createToken<MessageGateway>('zhin.im.message-gateway');
 
 /** Generation-owned ingress hooks before ordinary dispatch and after it misses. */

@@ -124,6 +124,7 @@ export interface OutboundEnvelope {
   replace(payload: unknown): void;
 }
 
+/** @public Stable IM gateway contract resolved through `messageGatewayToken`. */
 export interface MessageGateway {
   receive(input: IncomingMessage): Promise<MessageDispatchResult>;
   send(request: SendRequest): Promise<DeliveryReceipt>;
@@ -147,6 +148,7 @@ export interface MessageDispatchResult {
 }
 
 export class Message {
+  /** @internal Constructed only by the generation-owned IM Runtime. */
   constructor(
     readonly conversation: ConversationRef,
     readonly content: string,

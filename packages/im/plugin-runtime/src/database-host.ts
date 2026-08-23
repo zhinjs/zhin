@@ -196,6 +196,7 @@ function assertLogicalResourceName(name: string): void {
  * The owner encoding keeps `root/a` and `root/a/b` disjoint, so a parent
  * facade cannot accidentally enumerate a descendant's tables.
  */
+/** @public Plugin-facing database facade bound to the current owner. */
 export const databaseHostToken = createToken<PluginDatabaseHost>(
   'zhin.database.host',
   'Plugin Runtime scoped database host',

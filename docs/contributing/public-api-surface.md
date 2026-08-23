@@ -27,6 +27,7 @@
 | `defineMiddleware` | `stable` | `zhin.js/middleware` | `@zhin.js/middleware` | 中间件模块（`middlewares/` 下默认导出） |
 | `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle 事件处理器（`handlers/` 下默认导出；`/` → `.` 推断事件名） |
 | `defineAgentTool` | `experimental` | `@zhin.js/tool`（`tools/`）；`zhin.js/agent`（`agent/tools/*.ts`） | `@zhin.js/tool` | AI 工具模块，Agent 自动发现 |
+| `defineAgentPromptSection` | `experimental` | `@zhin.js/prompt-section` | `@zhin.js/prompt-section` | generation-owned Prompt 分段，声明 layer、预算保留级别与适用 profile |
 
 > 注意：**没有 `defineAgentSkill`**。Agent 技能是纯 Markdown（`agent/skills/*.md`，由 `@zhin.js/skill` 的 `parseSkillMarkdown` 解析），不是代码符号。
 

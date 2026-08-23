@@ -122,7 +122,7 @@ export type GroupPassiveContextHandler = (message: Message<any>) => MaybePromise
 
 export type GuardrailMiddleware = MessageMiddleware<RegisteredAdapter>;
 
-/** @alias OutboundReplySource：出站回复来源（指令 / AI） */
+/** Backward-compatible name for the command or AI outbound reply source. */
 export type ReplySource = OutboundReplySource;
 
 /** replyWithPolish 可选参数 */

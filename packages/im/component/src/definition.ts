@@ -1,3 +1,7 @@
+/**
+ * Component authoring API consumed from `zhin.js/component`.
+ * @module zhin.js/component
+ */
 import type { PluginNodeSnapshot } from '@zhin.js/plugin-runtime';
 import type { CapabilityContext } from '@zhin.js/feature-kit';
 
@@ -12,6 +16,7 @@ export interface ComponentDefinition<
   TResult = unknown,
   TConfig = unknown,
 > {
+  /** @internal Runtime feature brand. */
   readonly $feature: typeof componentBrand;
   render(props: TProps, context: ComponentContext<TConfig>): TResult | Promise<TResult>;
 }
@@ -25,6 +30,20 @@ declare module '@zhin.js/plugin-runtime' {
   }
 }
 
+/**
+ * Define a renderable component for the `components/` convention directory.
+ * The render function may return synchronously or asynchronously.
+ *
+ * @public
+ * @example
+ * ```ts
+ * import { defineComponent } from 'zhin.js/component';
+ *
+ * export default defineComponent<{ name: string }, string>({
+ *   render: ({ name }) => `Hello ${name}`,
+ * });
+ * ```
+ */
 export function defineComponent<
   TProps = unknown,
   TResult = unknown,
@@ -38,6 +57,7 @@ export function defineComponent<
   return Object.freeze({ $feature: componentBrand, ...definition });
 }
 
+/** @internal Runtime validation for convention-discovered modules. */
 export function parseComponentDefinition(value: unknown): ComponentDefinition {
   if (!value || typeof value !== 'object') throw invalidComponent();
   const definition = value as Partial<ComponentDefinition>;

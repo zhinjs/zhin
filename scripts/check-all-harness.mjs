@@ -130,6 +130,11 @@ const checks = [
     description: '检查适配器、Console 与插件交付文档是否形成可验收闭环',
   },
   {
+    name: 'Generated API Docs',
+    command: 'pnpm check:api-docs',
+    description: '检查公开入口、源码注释链接与 API Reference 生成契约',
+  },
+  {
     name: 'Platform Tiers SSOT',
     command: 'pnpm check:platform-tiers-ssot',
     description: '能力分档/适配器索引与 scripts/adapter-meta.mjs 一致',

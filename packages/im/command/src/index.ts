@@ -1,4 +1,10 @@
+/**
+ * Command authoring contracts, parameter schemas, and permit helpers.
+ * @module @zhin.js/command
+ */
+/** @internal Runtime command projection. */
 export * from './command-index.js';
+/** @public Command authoring contract and `defineCommand`. */
 export * from './definition.js';
 export {
   assertBuiltinPermits,

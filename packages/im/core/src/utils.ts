@@ -130,7 +130,7 @@ export namespace segment {
     return new HtmlSegment(options);
   }
 
-  /** @alias htmlCard */
+  /** Short alias for {@link htmlCard}. */
   export const html = htmlCard;
 
   /** 出站 Markdown 段（Adapter policy 决定 image/text/origin） */

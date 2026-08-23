@@ -53,7 +53,7 @@ export interface PropertySchema {
 /**
  * IM-facing tool definition.
  * Mirrors @zhin.js/core Tool but with resource-hub-specific ToolParametersSchema.
- * @see {@link import('@zhin.js/core').Tool} for the canonical definition
+ * The canonical definition is `Tool` from `@zhin.js/core`.
  */
 export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   name: string;
@@ -75,6 +75,7 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   toModelOutput?: ToolToModelOutputFn<TArgs>;
 }
 
+/** @internal Legacy parameter inspection metadata. */
 export namespace Tool {
   export interface ParamInfo {
     name: string;

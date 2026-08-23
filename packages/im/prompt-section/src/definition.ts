@@ -1,3 +1,7 @@
+/**
+ * Prompt Section authoring API consumed from `@zhin.js/prompt-section`.
+ * @module @zhin.js/prompt-section
+ */
 const promptSectionBrand = 'zhin.agent-prompt-section/1' as const;
 
 export type PromptSectionLayer =
@@ -15,6 +19,7 @@ export type PromptSectionRetention = 'required' | 'preferred' | 'opportunistic';
 export type PromptProfile = 'interactive' | 'schedule';
 
 export interface AgentPromptSectionDefinition {
+  /** @internal Runtime feature brand. */
   readonly $feature: typeof promptSectionBrand;
   readonly title: string;
   readonly content: string;
@@ -43,6 +48,13 @@ declare module '@zhin.js/plugin-runtime' {
   }
 }
 
+/**
+ * Define a generation-owned Prompt section with deterministic layer and budget policy.
+ * Required sections fail closed when they cannot fit the active Prompt budget.
+ *
+ * @public
+ * @experimental
+ */
 export function defineAgentPromptSection(
   input: AgentPromptSectionInput,
 ): Readonly<AgentPromptSectionDefinition> {
@@ -90,6 +102,7 @@ export function defineAgentPromptSection(
   });
 }
 
+/** @internal Runtime validation for convention-discovered modules. */
 export function parseAgentPromptSectionDefinition(value: unknown): AgentPromptSectionDefinition {
   if (!value || typeof value !== 'object') throw invalidPromptSection();
   const definition = value as Partial<AgentPromptSectionDefinition>;
