@@ -13,7 +13,12 @@ import {
   resolveIcqqConfig,
 } from '../src/protocol.js';
 import { getIcqqAgentDeps, setIcqqAgentDeps } from '../src/icqq-agent-deps.js';
-import { createIcqqTestPorts } from './_icqq-mock.js';
+import {
+  createIcqqTestPorts,
+  hangNextMockIcqqLogin,
+  isMockIcqqClientConnected,
+  scheduleMockIcqqReconnect,
+} from './_icqq-mock.js';
 
 const adapterFeature = featureId('zhin.adapter');
 
@@ -27,13 +32,14 @@ function createEndpoint(overrides: {
   gateway?: MessageGateway;
   friends?: Map<number, unknown>;
   groups?: Map<number, unknown>;
+  config?: ReturnType<typeof resolveIcqqConfig>;
 } = {}): IcqqEndpoint {
   const receive = overrides.receive ?? vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
   const gateway = overrides.gateway ?? { receive, send: vi.fn(async () => 'sent') };
   const endpoint = new IcqqEndpoint({
     id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
     gateway,
-    config: baseConfig,
+    config: overrides.config ?? baseConfig,
     ...createIcqqTestPorts(),
   });
   const friends = overrides.friends ?? new Map([[2, { user_id: 2, nickname: 'bob', sex: 'unknown', age: 0 }]]);
@@ -44,6 +50,7 @@ function createEndpoint(overrides: {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   setIcqqAgentDeps(null);
 });
 
@@ -116,6 +123,244 @@ describe('icqq protocol helpers', () => {
 });
 
 describe('icqq plugin runtime adapter', () => {
+  it('keeps the replacement TCP session alive when config HMR retires the old endpoint', async () => {
+    const reconnectingConfig = resolveIcqqConfig({ id: '10001', autoReconnect: true });
+    const previous = createEndpoint({ config: reconnectingConfig });
+    await previous.start(new AbortController().signal);
+    previous.open();
+
+    const replacement = createEndpoint({ config: reconnectingConfig });
+    await replacement.start(new AbortController().signal);
+    replacement.open();
+
+    await previous.close();
+    await previous.stop();
+
+    expect(previous.logout).not.toHaveBeenCalled();
+    expect(previous.terminate).toHaveBeenCalledOnce();
+    expect(isMockIcqqClientConnected(replacement)).toBe(true);
+    await replacement.stop();
+  });
+
+  it('cancels the retiring SDK reconnect timer before it can revive the old generation', async () => {
+    vi.useFakeTimers();
+    const reconnectingConfig = resolveIcqqConfig({ id: '10001', autoReconnect: true });
+    const previous = createEndpoint({ config: reconnectingConfig });
+    const replacement = createEndpoint({ config: reconnectingConfig });
+    await previous.start(new AbortController().signal);
+    previous.open();
+    await replacement.start(new AbortController().signal);
+    replacement.open();
+
+    scheduleMockIcqqReconnect(previous, 50);
+    await previous.close();
+    await previous.stop();
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(previous.login).toHaveBeenCalledTimes(1);
+    expect(isMockIcqqClientConnected(previous)).toBe(false);
+    expect(isMockIcqqClientConnected(replacement)).toBe(true);
+    await replacement.stop();
+  });
+
+  it('retires an SDK reconnect whose login handshake already entered before stop', async () => {
+    vi.useFakeTimers();
+    const reconnectingConfig = resolveIcqqConfig({ id: '10001', autoReconnect: true });
+    const previous = createEndpoint({ config: reconnectingConfig });
+    const replacement = createEndpoint({ config: reconnectingConfig });
+    await previous.start(new AbortController().signal);
+    previous.open();
+    await replacement.start(new AbortController().signal);
+    replacement.open();
+
+    const handshake = hangNextMockIcqqLogin(previous);
+    scheduleMockIcqqReconnect(previous, 50);
+    await vi.advanceTimersByTimeAsync(50);
+    await handshake.entered;
+
+    await previous.close();
+    await previous.stop();
+    handshake.release();
+    await vi.runAllTimersAsync();
+
+    expect(previous.login).toHaveBeenCalledTimes(2);
+    expect(isMockIcqqClientConnected(previous)).toBe(false);
+    expect(isMockIcqqClientConnected(replacement)).toBe(true);
+    await replacement.stop();
+  });
+
+  it('arms reconnect retirement before waiting for in-flight inbound drain', async () => {
+    vi.useFakeTimers();
+    let releaseInbound!: () => void;
+    const inboundGate = new Promise<void>((resolve) => { releaseInbound = resolve; });
+    const receive = vi.fn(async () => {
+      await inboundGate;
+      return Object.freeze({ matched: true, value: 'ok' });
+    });
+    const reconnectingConfig = resolveIcqqConfig({ id: '10001', autoReconnect: true });
+    const previous = createEndpoint({ config: reconnectingConfig, receive });
+    const replacement = createEndpoint({ config: reconnectingConfig });
+    await previous.start(new AbortController().signal);
+    previous.open();
+    await replacement.start(new AbortController().signal);
+    replacement.open();
+
+    previous.emit('message.group.normal', {
+      post_type: 'message',
+      message_type: 'group',
+      group_id: 100,
+      user_id: 2,
+      message_id: 'inflight-before-stop',
+      raw_message: 'hold inbound drain',
+      time: 1_700_000_000,
+      sender: { user_id: 2, nickname: 'bob', role: 'member' },
+    });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledOnce());
+
+    const handshake = hangNextMockIcqqLogin(previous);
+    scheduleMockIcqqReconnect(previous, 50);
+    await vi.advanceTimersByTimeAsync(50);
+    await handshake.entered;
+
+    let closeSettled = false;
+    const closing = previous.close().then(() => { closeSettled = true; });
+    let stopSettled = false;
+    const stopping = previous.stop().then(() => { stopSettled = true; });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(closeSettled).toBe(false);
+    expect(stopSettled).toBe(false);
+    expect(previous.terminate).not.toHaveBeenCalled();
+    handshake.release();
+    await vi.runAllTimersAsync();
+
+    expect(isMockIcqqClientConnected(previous)).toBe(false);
+    expect(isMockIcqqClientConnected(replacement)).toBe(true);
+
+    releaseInbound();
+    await Promise.all([closing, stopping]);
+    await replacement.stop();
+  });
+
+  it('close waits for an in-flight guild message receive', async () => {
+    let releaseInbound!: () => void;
+    const inboundGate = new Promise<void>((resolve) => { releaseInbound = resolve; });
+    const receive = vi.fn(async () => {
+      await inboundGate;
+      return Object.freeze({ matched: true, value: 'ok' });
+    });
+    const endpoint = createEndpoint({ receive });
+    await endpoint.start(new AbortController().signal);
+    endpoint.open();
+
+    endpoint.emit('message.guild.normal', {
+      type: 'guild',
+      guild_id: 'g1',
+      guild_name: 'Guild One',
+      channel_id: 'c1',
+      channel_name: 'general',
+      tiny_id: 'u1',
+      nickname: 'alice',
+      message_id: 'guild-inflight',
+      raw_message: 'hold guild receive',
+      time: 1_700_000_000,
+    });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledOnce());
+
+    let closeSettled = false;
+    const closing = endpoint.close().then(() => { closeSettled = true; });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(closeSettled).toBe(false);
+
+    releaseInbound();
+    await closing;
+    await endpoint.stop();
+  });
+
+  it('stop waits for a held message receive flushed by open', async () => {
+    let releaseInbound!: () => void;
+    const inboundGate = new Promise<void>((resolve) => { releaseInbound = resolve; });
+    const receive = vi.fn(async () => {
+      await inboundGate;
+      return Object.freeze({ matched: true, value: 'ok' });
+    });
+    const endpoint = createEndpoint({ receive });
+    await endpoint.start(new AbortController().signal);
+
+    endpoint.emit('message.group.normal', {
+      post_type: 'message',
+      message_type: 'group',
+      group_id: 100,
+      user_id: 2,
+      message_id: 'held-inflight',
+      raw_message: 'hold until open',
+      time: 1_700_000_000,
+      sender: { user_id: 2, nickname: 'bob', role: 'member' },
+    });
+    await Promise.resolve();
+    expect(receive).not.toHaveBeenCalled();
+
+    endpoint.open();
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledOnce());
+    let stopSettled = false;
+    const stopping = endpoint.stop().then(() => { stopSettled = true; });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(stopSettled).toBe(false);
+
+    releaseInbound();
+    await stopping;
+  });
+
+  it.each(['close', 'stop'] as const)(
+    'fails fast when gateway.receive synchronously awaits endpoint.%s, while external lifecycle still drains',
+    async (method) => {
+      let releaseInbound!: () => void;
+      const inboundGate = new Promise<void>((resolve) => { releaseInbound = resolve; });
+      let markLifecycleAttempted!: () => void;
+      const lifecycleAttempted = new Promise<void>((resolve) => { markLifecycleAttempted = resolve; });
+      let internalError: unknown;
+      const holder: { endpoint?: IcqqEndpoint } = {};
+      const receive = vi.fn(async () => {
+        try {
+          await holder.endpoint![method]();
+        } catch (error) {
+          internalError = error;
+        } finally {
+          markLifecycleAttempted();
+        }
+        await inboundGate;
+        return Object.freeze({ matched: true, value: 'ok' });
+      });
+      const endpoint = createEndpoint({ receive });
+      holder.endpoint = endpoint;
+      await endpoint.start(new AbortController().signal);
+      endpoint.open();
+
+      endpoint.emit('message.group.normal', {
+        post_type: 'message',
+        message_type: 'group',
+        group_id: 100,
+        user_id: 2,
+        message_id: `self-${method}`,
+        raw_message: `self ${method}`,
+        time: 1_700_000_000,
+        sender: { user_id: 2, nickname: 'bob', role: 'member' },
+      });
+      await lifecycleAttempted;
+      expect(internalError).toBeInstanceOf(Error);
+      expect(String(internalError)).toMatch(/inbound|receive|lifecycle/i);
+
+      let externalSettled = false;
+      const external = endpoint[method]().then(() => { externalSettled = true; });
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(externalSettled).toBe(false);
+
+      releaseInbound();
+      await external;
+      if (method === 'close') await endpoint.stop();
+    },
+  );
+
   it('admits message events via MessageGateway when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const endpoint = createEndpoint({ receive });

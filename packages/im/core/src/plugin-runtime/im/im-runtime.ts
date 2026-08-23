@@ -11,6 +11,7 @@ import {
   type SnapshotLease,
   type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { MessageBus, messageBusToken } from './message-bus.js';
 import {
@@ -37,6 +38,7 @@ import {
   type ConversationResolution,
   type ConversationRef,
   type DeliveryReceipt,
+  type EndpointCapabilities,
   type MessageRef,
 } from '@zhin.js/im-contract';
 import { segmentsToPlainText } from '../../built/segment-contract/text.js';
@@ -204,6 +206,7 @@ export class ImRuntime implements MessageGateway {
     readonly admission?: GenerationAdmissionGate;
   }> = [];
   readonly #interactionClaims = new Map<string, UserInteractionClaim>();
+  readonly #operationSnapshot = new AsyncLocalStorage<SnapshotLease>();
   #snapshots?: SnapshotReader;
   readonly #inboundClaim?: ImRuntimeOptions['inboundClaim'];
   readonly #enrichSender?: ImRuntimeOptions['enrichSender'];
@@ -224,6 +227,19 @@ export class ImRuntime implements MessageGateway {
   /** Process composition replaces the bootstrap memory store after required DB activation. */
   replaceConversationEventStore(store: ConversationEventStore): void {
     this.conversationEvents = store;
+  }
+
+  /** Pins all nested IM operations to the snapshot current at operation ingress. */
+  async runWithSnapshotView<T>(operation: () => Promise<T>): Promise<T> {
+    const inherited = this.#operationSnapshot.getStore();
+    if (inherited?.active) return operation();
+    if (!this.#snapshots) throw new Error('ImRuntime is not attached to a Root');
+    const lease = this.#snapshots.acquire();
+    try {
+      return await this.#operationSnapshot.run(lease, operation);
+    } finally {
+      lease.release();
+    }
   }
 
   async resolveConversationReference(
@@ -665,7 +681,7 @@ export class ImRuntime implements MessageGateway {
       return result;
     } finally {
       active = false;
-      lease.release();
+      this.#release(lease);
     }
   }
 
@@ -674,7 +690,7 @@ export class ImRuntime implements MessageGateway {
     try {
       return await this.#sendWithSnapshot(request, lease.value);
     } finally {
-      lease.release();
+      this.#release(lease);
     }
   }
 
@@ -730,7 +746,7 @@ export class ImRuntime implements MessageGateway {
     try {
       await this.#runHandlers(lease.value, event, [payload]);
     } finally {
-      lease.release();
+      this.#release(lease);
     }
   }
 
@@ -823,10 +839,29 @@ export class ImRuntime implements MessageGateway {
           managementCapabilities: row.managementCapabilities,
         }));
       } finally {
-        lease.release();
+        this.#release(lease);
       }
     } catch {
       return Object.freeze([]);
+    }
+  }
+
+  /** Exact operation capabilities for one concrete live Endpoint. */
+  endpointCapabilities(input: {
+    readonly adapter: string;
+    readonly endpointKey: string;
+  }): EndpointCapabilities | undefined {
+    try {
+      const lease = this.#acquire();
+      try {
+        const index = requireAdapters(lease.value);
+        const id = index.resolve(input.adapter, input.endpointKey);
+        return id ? index.capabilities(id) : undefined;
+      } finally {
+        this.#release(lease);
+      }
+    } catch {
+      return undefined;
     }
   }
 
@@ -852,7 +887,7 @@ export class ImRuntime implements MessageGateway {
           }),
         });
       } finally {
-        lease.release();
+        this.#release(lease);
       }
     } catch {
       return Object.freeze({
@@ -891,7 +926,7 @@ export class ImRuntime implements MessageGateway {
           managementCapabilities: row.managementCapabilities,
         });
       } finally {
-        lease.release();
+        this.#release(lease);
       }
     } catch {
       return null;
@@ -922,7 +957,7 @@ export class ImRuntime implements MessageGateway {
       }, lease.value);
       return { messageId: result.message?.id ?? '' };
     } finally {
-      lease.release();
+      this.#release(lease);
     }
   }
 
@@ -1005,7 +1040,7 @@ export class ImRuntime implements MessageGateway {
       const control = id ? index.control(id, operation) : undefined;
       return control ? await run(control) : fallback;
     } finally {
-      lease.release();
+      this.#release(lease);
     }
   }
 
@@ -1026,7 +1061,7 @@ export class ImRuntime implements MessageGateway {
       if (!endpoint) return null;
       return await run(resolveEndpointManagement(endpoint) ?? Object.freeze({}));
     } finally {
-      lease.release();
+      this.#release(lease);
     }
   }
 
@@ -1129,9 +1164,16 @@ export class ImRuntime implements MessageGateway {
     return receipt ?? failedReceipt('outbound_delivery_incomplete');
   }
 
-  #acquire() {
+  #acquire(): SnapshotLease {
+    const inherited = this.#operationSnapshot.getStore();
+    if (inherited?.active) return inherited;
     if (!this.#snapshots) throw new Error('ImRuntime is not attached to a Root');
     return this.#snapshots.acquire();
+  }
+
+  #release(lease: SnapshotLease): void {
+    if (this.#operationSnapshot.getStore() === lease) return;
+    lease.release();
   }
 
   /**

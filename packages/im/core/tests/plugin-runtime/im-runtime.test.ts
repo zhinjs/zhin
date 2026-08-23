@@ -948,6 +948,13 @@ describe('IM Runtime', () => {
     };
     const message = { conversation, id: 'message-1' };
 
+    expect(fixture.im.endpointCapabilities({ adapter: 'memory', endpointKey: 'memory' }))
+      .toEqual({
+        inbound: true,
+        outbound: true,
+        operations: { recall: true, edit: true, reaction: true, typing: true },
+      });
+
     await fixture.im.recallEndpointMessage({ adapter: 'memory', endpointKey: 'memory', message });
     await expect(fixture.im.editEndpointMessage({
       adapter: 'memory', endpointKey: 'memory', message, content: 'updated',
@@ -1015,6 +1022,43 @@ describe('IM Runtime', () => {
     release();
     await recalling;
     await vi.waitFor(() => expect(disposed).toBe(true));
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it('pins delayed outbound operations to the snapshot captured at ingress', async () => {
+    const calls: string[] = [];
+    const fixture = await createFixture([], [], undefined, undefined, undefined, {
+      endpointControl: { recall: async () => { calls.push('old:recall'); } },
+      adapterOperations: ['recall'],
+    });
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const message = {
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private' as const,
+        id: 'room-1',
+      },
+      id: 'message-1',
+    };
+
+    const operation = fixture.im.runWithSnapshotView(async () => {
+      await pending;
+      await fixture.im.recallEndpointMessage({
+        adapter: 'memory', endpointKey: 'memory', message,
+      });
+    });
+    await Promise.resolve();
+    const current = fixture.store.current;
+    fixture.store.commit(current.generation, {
+      snapshot: { ...snapshotState(current), projections: new Map() },
+      dispose: () => undefined,
+    });
+    release();
+    await operation;
+
+    expect(calls).toEqual(['old:recall']);
     await fixture.adapters.stop();
     await fixture.store.close();
   });

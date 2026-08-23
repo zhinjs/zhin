@@ -164,6 +164,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   lastTurnMetrics: ZhinAgentTurnMetrics | null = null;
   private readonly inboundQueueConfig: ResolvedInboundQueueConfig;
   readonly inboundTurnQueue: InboundTurnQueue;
+  private disposal?: Promise<void>;
   readonly turnContextState: TurnContextBridgeState = {
     alwaysSkillsBaseline: '',
   };
@@ -524,13 +525,17 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return true;
   }
 
-  dispose(): void {
-    disposeZhinAgentResources(this);
-    this.subagentSystem = null;
-    this.lastTurnMetrics = null;
-     
-    this.provider = null!;
-    this.providerResolver = null;
-    clearZhinAgentRuntimeModules(this.runtimeModules);
+  dispose(): Promise<void> {
+    if (this.disposal) return this.disposal;
+    this.disposal = (async () => {
+      await disposeZhinAgentResources(this);
+      this.subagentSystem = null;
+      this.lastTurnMetrics = null;
+
+      this.provider = null!;
+      this.providerResolver = null;
+      clearZhinAgentRuntimeModules(this.runtimeModules);
+    })();
+    return this.disposal;
   }
 }

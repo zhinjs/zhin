@@ -513,6 +513,35 @@ describe('email plugin runtime adapter', () => {
     expect(imaps).toHaveLength(2);
   });
 
+  it('ignores a stale end from the replaced IMAP transport after reconnect', async () => {
+    vi.useFakeTimers();
+    const imaps: Array<ReturnType<typeof createMockImap>> = [];
+    const endpoint = new EmailEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'email'),
+      gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
+      config: {
+        ...baseConfig,
+        imap: { ...baseConfig.imap, reconnectInterval: 50 },
+      },
+      createSmtp: () => createMockSmtp(),
+      createImap: () => {
+        const imap = createMockImap();
+        imaps.push(imap);
+        return imap;
+      },
+    });
+
+    await endpoint.start();
+    imaps[0]!.emitError(new Error('socket reset'));
+    await vi.advanceTimersByTimeAsync(50);
+    expect(imaps).toHaveLength(2);
+
+    imaps[0]!.emit('end');
+    await vi.advanceTimersByTimeAsync(50);
+    expect(imaps).toHaveLength(2);
+    await endpoint.stop();
+  });
+
   it('disarms pending reconnect when stop runs before the backoff fires', async () => {
     const imaps: Array<ReturnType<typeof createMockImap>> = [];
     const endpoint = new EmailEndpoint({

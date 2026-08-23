@@ -19,6 +19,7 @@ interface QueuedInboundTurn<T> {
   sessionKey: string;
   senderId: string;
   commMessage: Message;
+  queuedFeedbackMessages: Message[];
   textParts: string[];
   enqueuedAt: number;
   lastEnqueuedAt: number;
@@ -86,6 +87,8 @@ export class InboundTurnQueue {
         tail.lastEnqueuedAt = now;
         tail.commMessage = commMessage;
         tail.run = run;
+        this.activityEmitter.emitQueuedStart(commMessage, sessionKey);
+        tail.queuedFeedbackMessages.push(commMessage);
         void this.pump(sessionKey);
         return tail.promise;
       }
@@ -102,6 +105,7 @@ export class InboundTurnQueue {
       sessionKey,
       senderId,
       commMessage,
+      queuedFeedbackMessages: [],
       textParts: content ? [content] : [],
       enqueuedAt: now,
       lastEnqueuedAt: now,
@@ -125,6 +129,7 @@ export class InboundTurnQueue {
     const shouldShowPending = this.inFlight.has(sessionKey) || queue.length > 1;
     if (shouldShowPending) {
       this.activityEmitter.emitQueuedStart(commMessage, sessionKey);
+      entry.queuedFeedbackMessages.push(commMessage);
     }
 
     void this.pump(sessionKey);
@@ -135,7 +140,7 @@ export class InboundTurnQueue {
     for (const queue of this.queues.values()) {
       for (const entry of queue) {
         entry.disposeAbortListener?.();
-        this.activityEmitter.emitQueuedClear(entry.commMessage, entry.sessionKey);
+        this.clearQueuedFeedback(entry);
         entry.reject(new Error('InboundTurnQueue disposed'));
       }
     }
@@ -155,7 +160,7 @@ export class InboundTurnQueue {
     while (queue.length > 0 && this.isExpired(queue[0]!, now)) {
       const expired = queue.shift()!;
       expired.disposeAbortListener?.();
-      this.activityEmitter.emitQueuedClear(expired.commMessage, sessionKey);
+      this.clearQueuedFeedback(expired);
       expired.reject(new InboundTurnExpiredError(sessionKey));
     }
 
@@ -181,7 +186,7 @@ export class InboundTurnQueue {
           this.queues.delete(sessionKey);
         }
 
-        this.activityEmitter.emitQueuedClear(entry.commMessage, sessionKey);
+        this.clearQueuedFeedback(entry);
         entry.started = true;
 
         try {
@@ -214,8 +219,15 @@ export class InboundTurnQueue {
     queue.splice(index, 1);
     if (queue.length === 0) this.queues.delete(entry.sessionKey);
     entry.disposeAbortListener?.();
-    this.activityEmitter.emitQueuedClear(entry.commMessage, entry.sessionKey);
+    this.clearQueuedFeedback(entry);
     entry.reject(inboundAbortReason(entry.sessionKey, entry.signal?.reason));
+  }
+
+  private clearQueuedFeedback(entry: QueuedInboundTurn<unknown>): void {
+    for (const commMessage of entry.queuedFeedbackMessages) {
+      this.activityEmitter.emitQueuedClear(commMessage, entry.sessionKey);
+    }
+    entry.queuedFeedbackMessages.length = 0;
   }
 }
 

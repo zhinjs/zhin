@@ -145,9 +145,11 @@ export class ReactionTypingIndicator implements TypingIndicator {
     this.active = false;
     this.reactionId = null;
 
-    void Promise.resolve(this.removeReaction(messageId, reactionId)).catch((error) => {
+    try {
+      await this.removeReaction(messageId, reactionId);
+    } catch (error) {
       logger.warn('Failed to remove reaction:', error);
-    });
+    }
   }
 
   isActive(): boolean {
@@ -241,6 +243,8 @@ export class MessageTypingIndicator implements TypingIndicator {
 export class NativeTypingIndicator implements TypingIndicator {
   private active = false;
   private keepaliveTimer?: ReturnType<typeof setInterval>;
+  private keepaliveTail: Promise<void> = Promise.resolve();
+  private stopping?: Promise<void>;
 
   constructor(
     private options: TypingIndicatorOptions,
@@ -250,6 +254,7 @@ export class NativeTypingIndicator implements TypingIndicator {
   ) {}
 
   async start(): Promise<void> {
+    if (this.stopping) await this.stopping;
     if (this.active || !hasTypingSendTarget(this.options)) {
       return;
     }
@@ -259,9 +264,14 @@ export class NativeTypingIndicator implements TypingIndicator {
       const raw = this.config.platformConfig?.keepaliveIntervalMs;
       const intervalMs = typeof raw === 'number' && raw > 0 ? raw : 5_000;
       this.keepaliveTimer = setInterval(() => {
-        void this.startTyping(this.options).catch((error) => {
-          logger.error('keepalive failed:', error);
-        });
+        this.keepaliveTail = this.keepaliveTail
+          .catch(() => undefined)
+          .then(async () => {
+            if (this.active) await this.startTyping(this.options);
+          })
+          .catch((error) => {
+            logger.error('keepalive failed:', error);
+          });
       }, intervalMs);
     } catch (error) {
       this.active = false;
@@ -274,20 +284,28 @@ export class NativeTypingIndicator implements TypingIndicator {
   }
 
   async stop(): Promise<void> {
+    if (this.stopping) return this.stopping;
     if (!this.active) {
       return;
     }
+    this.active = false;
     if (this.keepaliveTimer) {
       clearInterval(this.keepaliveTimer);
       this.keepaliveTimer = undefined;
     }
-    try {
-      await this.stopTyping(this.options);
-    } catch (error) {
-      logger.error('Failed to stop native typing:', error);
-    } finally {
-      this.active = false;
-    }
+    this.stopping = (async () => {
+      try {
+        // A keepalive may already be inside the platform call. Wait for it so
+        // stopTyping is the last wire operation and cannot be overwritten.
+        await this.keepaliveTail.catch(() => undefined);
+        await this.stopTyping(this.options);
+      } catch (error) {
+        logger.error('Failed to stop native typing:', error);
+      } finally {
+        this.stopping = undefined;
+      }
+    })();
+    return this.stopping;
   }
 
   isActive(): boolean {
@@ -310,6 +328,8 @@ export class NoneTypingIndicator implements TypingIndicator {
 export class TypingIndicatorManager {
   private adapters: Map<string, TypingIndicatorAdapter> = new Map();
   private activeIndicators: Map<string, TypingIndicator> = new Map();
+  private pendingStarts: Map<string, Promise<TypingIndicator>> = new Map();
+  private pendingStops: Map<string, Promise<void>> = new Map();
   private defaultConfig: TypingIndicatorConfig;
 
   constructor(defaultConfig: Partial<TypingIndicatorConfig> = {}) {
@@ -369,21 +389,35 @@ export class TypingIndicatorManager {
     config?: Partial<TypingIndicatorConfig>,
   ): Promise<TypingIndicator> {
     const key = this.getIndicatorKey(options);
+    const stopping = this.pendingStops.get(key);
+    if (stopping) await stopping;
     const existing = this.activeIndicators.get(key);
     if (existing) {
+      const pending = this.pendingStarts.get(key);
+      if (pending) return pending;
       return existing;
     }
 
     const indicator = this.createIndicator(options, config);
     this.activeIndicators.set(key, indicator);
+    const starting = (async () => {
+      try {
+        await indicator.start();
+        if (!indicator.isActive() && this.activeIndicators.get(key) === indicator) {
+          this.activeIndicators.delete(key);
+        }
+        return indicator;
+      } catch (error) {
+        if (this.activeIndicators.get(key) === indicator) this.activeIndicators.delete(key);
+        throw error;
+      }
+    })();
+    this.pendingStarts.set(key, starting);
     try {
-      await indicator.start();
-    } catch (error) {
-      this.activeIndicators.delete(key);
-      throw error;
+      return await starting;
+    } finally {
+      if (this.pendingStarts.get(key) === starting) this.pendingStarts.delete(key);
     }
-
-    return indicator;
   }
 
   /**
@@ -391,11 +425,26 @@ export class TypingIndicatorManager {
    */
   async stop(options: TypingIndicatorOptions): Promise<void> {
     const key = this.getIndicatorKey(options);
-    const indicator = this.activeIndicators.get(key);
-
-    if (indicator) {
-      await indicator.stop();
-      this.activeIndicators.delete(key);
+    const existingStop = this.pendingStops.get(key);
+    if (existingStop) return existingStop;
+    // Publish the shared stop before waiting for start. Otherwise two callers
+    // can both cross the await and independently stop the same indicator.
+    const stopping = (async () => {
+      await this.pendingStarts.get(key)?.catch(() => undefined);
+      const indicator = this.activeIndicators.get(key);
+      if (indicator) {
+        try {
+          await indicator.stop();
+        } finally {
+          if (this.activeIndicators.get(key) === indicator) this.activeIndicators.delete(key);
+        }
+      }
+    })();
+    this.pendingStops.set(key, stopping);
+    try {
+      await stopping;
+    } finally {
+      if (this.pendingStops.get(key) === stopping) this.pendingStops.delete(key);
     }
   }
 
@@ -403,6 +452,8 @@ export class TypingIndicatorManager {
    * 停止所有提示
    */
   async stopAll(): Promise<void> {
+    await Promise.allSettled(this.pendingStarts.values());
+    await Promise.allSettled(this.pendingStops.values());
     for (const [key, indicator] of this.activeIndicators.entries()) {
       try {
         await indicator.stop();
@@ -411,6 +462,8 @@ export class TypingIndicatorManager {
       }
     }
     this.activeIndicators.clear();
+    this.pendingStarts.clear();
+    this.pendingStops.clear();
   }
 
   /**
@@ -425,7 +478,11 @@ export class TypingIndicatorManager {
    * 生成指示器键
    */
   private getIndicatorKey(options: TypingIndicatorOptions): string {
-    return `${options.platform}:${options.endpointKey}:${options.sessionId || options.messageId}`;
+    return JSON.stringify([
+      options.platform,
+      options.endpointKey,
+      options.sessionId || options.messageId || null,
+    ]);
   }
 
   async dispose(): Promise<void> {
@@ -572,7 +629,7 @@ export function provideTypingIndicatorManager(
 ): TypingIndicatorManager {
   const manager = new TypingIndicatorManager(defaultConfig);
   typingStore.provide(context, manager);
-  context.lifecycle.add(() => void manager.dispose());
+  context.lifecycle.add(() => manager.dispose());
   return manager;
 }
 

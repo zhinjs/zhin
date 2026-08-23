@@ -27,6 +27,7 @@ function createCtx(): ActivityFeedbackEventContext {
 const phaseConfig: ResolvedActivityFeedbackPhaseConfig = {
   type: 'message',
   message: '处理中…',
+  autoRemove: true,
 };
 
 describe('createOutboundEndpointAccess', () => {
@@ -40,10 +41,14 @@ describe('createOutboundEndpointAccess', () => {
 
   it('start→stop 生命周期：指示器会停止，且不抛 TypeError', async () => {
     const sent: OutboundSendInput[] = [];
+    const recall = vi.fn().mockResolvedValue(undefined);
     const outbound: OutboundHost = {
+      capabilities: vi.fn(() => ({ operations: ['recall'] })),
       send: vi.fn(async (input: OutboundSendInput) => {
         sent.push(input);
+        return 'mid-1';
       }),
+      recall,
     };
     const access = createOutboundEndpointAccess(outbound, { debug: vi.fn() });
     const executor = new ActivityFeedbackExecutor(access);
@@ -71,15 +76,14 @@ describe('createOutboundEndpointAccess', () => {
 
     await executor.stop(ctx, 'active');
     expect(manager.getActiveIndicator('active', ctx.options)).toBeUndefined();
-
-    // OutboundHost 未提供 recall 时，control.recall 不存在
-    expect(endpoint.control?.recall).toBeUndefined();
+    expect(recall).toHaveBeenCalledOnce();
   });
 
   it('wires control.recall to OutboundHost.recall when available', async () => {
     const recalled: Array<{ adapter: string; endpointKey: string; message: unknown }> = [];
     const access = createOutboundEndpointAccess({
       send: vi.fn(async () => 'mid-1'),
+      capabilities: vi.fn(() => ({ operations: ['recall'] })),
       recall: vi.fn(async (input) => {
         recalled.push(input);
       }),
@@ -95,5 +99,198 @@ describe('createOutboundEndpointAccess', () => {
     };
     await endpoint.control?.recall?.(message);
     expect(recalled).toEqual([{ adapter: 'sandbox', endpointKey: 'bot1', message }]);
+  });
+
+  it('does not expose controls or temporary messages that the endpoint did not explicitly declare', async () => {
+    const access = createOutboundEndpointAccess({
+      send: vi.fn(),
+      recall: vi.fn(),
+      edit: vi.fn(),
+      addReaction: vi.fn(),
+      removeReaction: vi.fn(),
+      typing: vi.fn(),
+    });
+
+    const control = access.resolve('sandbox', 'bot1')!.endpoint.control;
+    expect(control?.recall).toBeUndefined();
+    expect(control?.edit).toBeUndefined();
+    expect(control?.addReaction).toBeUndefined();
+    expect(control?.removeReaction).toBeUndefined();
+    expect(control?.typing).toBeUndefined();
+    await new ActivityFeedbackExecutor(access).start(createCtx(), 'active', phaseConfig);
+    const manager = access.resolve('sandbox', 'bot1')!.endpoint.$activityFeedback;
+    if (!manager || !isGenericActivityFeedbackManager(manager)) {
+      throw new Error('expected generic activity feedback manager');
+    }
+    expect(manager.getAdapter('sandbox')?.supportedTypes).toEqual(['none']);
+  });
+
+  it('uses declared native typing and stops it for the same conversation', async () => {
+    const typing = vi.fn().mockResolvedValue(undefined);
+    const access = createOutboundEndpointAccess({
+      send: vi.fn(),
+      capabilities: vi.fn(() => ({ operations: ['typing'] })),
+      typing,
+    });
+    const executor = new ActivityFeedbackExecutor(access);
+    const ctx = { ...createCtx(), platform: 'telegram', options: { ...createCtx().options, platform: 'telegram' } };
+
+    await executor.start(ctx, 'active', { type: 'typing' });
+    await executor.stop(ctx, 'active');
+
+    expect(typing).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      adapter: 'telegram',
+      endpointKey: 'bot1',
+      conversation: expect.objectContaining({ kind: 'private', id: 'u1' }),
+      active: true,
+    }));
+    expect(typing).toHaveBeenNthCalledWith(2, expect.objectContaining({ active: false }));
+  });
+
+  it('updates an active status message through declared edit capability', async () => {
+    const edit = vi.fn().mockResolvedValue('mid-1');
+    const access = createOutboundEndpointAccess({
+      send: vi.fn(async () => 'mid-1'),
+      capabilities: vi.fn(() => ({ operations: ['edit', 'recall'] })),
+      edit,
+      recall: vi.fn(),
+    });
+    const executor = new ActivityFeedbackExecutor(access);
+    const ctx = createCtx();
+
+    await executor.start(ctx, 'active', phaseConfig);
+    await executor.updateText(ctx, 'active', '处理中 [2/15]…');
+
+    expect(edit).toHaveBeenCalledWith(expect.objectContaining({
+      adapter: 'sandbox',
+      endpointKey: 'bot1',
+      message: expect.objectContaining({ id: 'mid-1' }),
+      content: '处理中 [2/15]…',
+    }));
+  });
+
+  it('does not invent a message id or recall when send returns null', async () => {
+    const recall = vi.fn().mockResolvedValue(undefined);
+    const access = createOutboundEndpointAccess({
+      capabilities: vi.fn(() => ({ operations: ['recall'] })),
+      send: vi.fn().mockResolvedValue(null),
+      recall,
+    });
+    const executor = new ActivityFeedbackExecutor(access);
+    const ctx = createCtx();
+
+    await executor.start(ctx, 'active', phaseConfig);
+    await executor.stop(ctx, 'active');
+
+    expect(recall).not.toHaveBeenCalled();
+  });
+
+  it('awaits reaction removal before reporting cleanup complete', async () => {
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const removeReaction = vi.fn(() => pending);
+    const access = createOutboundEndpointAccess({
+      capabilities: vi.fn(() => ({ operations: ['reaction'] })),
+      send: vi.fn(),
+      removeReaction,
+    });
+    const endpoint = access.resolve('sandbox', 'bot1')!.endpoint;
+    const message = {
+      conversation: {
+        endpoint: { id: 'bot1', adapter: 'sandbox' },
+        kind: 'private' as const,
+        id: 'u1',
+      },
+      id: 'mid-1',
+    };
+    let settled = false;
+
+    const cleanup = endpoint.control!.removeReaction!(message, 'rid-1').then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    release();
+    await cleanup;
+
+    expect(removeReaction).toHaveBeenCalledOnce();
+  });
+
+  it('awaits reaction cleanup through executor and activity manager', async () => {
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const removeReaction = vi.fn(() => pending);
+    const access = createOutboundEndpointAccess({
+      capabilities: vi.fn(() => ({ operations: ['reaction'] })),
+      send: vi.fn(),
+      addReaction: vi.fn().mockResolvedValue('rid-1'),
+      removeReaction,
+    });
+    const executor = new ActivityFeedbackExecutor(access);
+    const base = createCtx();
+    const ctx = {
+      ...base,
+      messageId: 'source-mid',
+      options: { ...base.options, messageId: 'source-mid' },
+    };
+    await executor.start(ctx, 'active', {
+      type: 'reaction', emoji: '⏳', autoRemove: true,
+    });
+    let settled = false;
+
+    const stopping = executor.stop(ctx, 'active').then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    release();
+    await stopping;
+
+    expect(removeReaction).toHaveBeenCalledOnce();
+  });
+
+  it('adds queued reaction for each new inbound message in the same busy group session', async () => {
+    const addReaction = vi.fn(async (input: { message: { id: string } }) => input.message.id);
+    const removeReaction = vi.fn().mockResolvedValue(undefined);
+    const access = createOutboundEndpointAccess({
+      capabilities: vi.fn(() => ({ operations: ['reaction'] })),
+      send: vi.fn(),
+      addReaction,
+      removeReaction,
+    });
+    const executor = new ActivityFeedbackExecutor(access);
+    const base = createCtx();
+    const first = {
+      ...base,
+      sceneType: 'group' as const,
+      groupId: 'group-1',
+      messageId: 'inbound-1',
+      options: {
+        ...base.options,
+        sceneType: 'group' as const,
+        groupId: 'group-1',
+        messageId: 'inbound-1',
+      },
+    };
+    const second = {
+      ...first,
+      messageId: 'inbound-2',
+      options: { ...first.options, messageId: 'inbound-2' },
+    };
+    const config = { type: 'reaction' as const, emoji: '⏳', autoRemove: true };
+
+    await executor.start(first, 'queued', config);
+    await executor.start(second, 'queued', config);
+
+    expect(addReaction).toHaveBeenCalledTimes(2);
+    expect(addReaction.mock.calls.map(([input]) => input.message.id)).toEqual([
+      'inbound-1',
+      'inbound-2',
+    ]);
+
+    await executor.stop(first, 'queued');
+    expect(removeReaction).toHaveBeenCalledOnce();
+    expect(removeReaction.mock.calls[0]![0].message.id).toBe('inbound-1');
+    await executor.stop(second, 'queued');
+    expect(removeReaction).toHaveBeenCalledTimes(2);
+    expect(removeReaction.mock.calls[1]![0].message.id).toBe('inbound-2');
   });
 });

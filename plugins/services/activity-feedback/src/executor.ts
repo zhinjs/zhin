@@ -53,16 +53,21 @@ export function createOutboundEndpointAccess(
   const cache = new Map<string, { endpoint: EndpointWithActivityFeedback; adapter: Adapter }>();
   return {
     resolve(platform, endpointKey) {
-      const key = `${platform}:${endpointKey}`;
+      const key = JSON.stringify([platform, endpointKey]);
       const cached = cache.get(key);
       if (cached) return cached;
+      const declared = outbound.capabilities?.({ adapter: platform, endpointKey })?.operations;
+      const supports = (operation: 'recall' | 'edit' | 'reaction' | 'typing') =>
+        declared?.includes(operation) === true;
       const recall = outbound.recall;
+      const edit = outbound.edit;
       const addReaction = outbound.addReaction;
       const removeReaction = outbound.removeReaction;
+      const typing = outbound.typing;
       const endpoint = {
         $id: endpointKey,
         control: {
-          ...(recall ? {
+          ...(recall && supports('recall') ? {
             recall: async (message: Parameters<typeof recall>[0]['message']) => {
               try {
                 await recall({ adapter: platform, endpointKey, message });
@@ -74,7 +79,23 @@ export function createOutboundEndpointAccess(
               }
             },
           } : {}),
-          ...(addReaction ? {
+          ...(edit && supports('edit') ? {
+            edit: async (
+              message: Parameters<typeof edit>[0]['message'],
+              content: unknown,
+            ) => {
+              try {
+                return await edit({ adapter: platform, endpointKey, message, content });
+              } catch (error) {
+                logger?.debug(
+                  `[ActivityFeedback] outbound edit failed (${key}):`,
+                  error instanceof Error ? error.message : String(error),
+                );
+                return null;
+              }
+            },
+          } : {}),
+          ...(addReaction && supports('reaction') ? {
             addReaction: async (
               message: Parameters<typeof addReaction>[0]['message'],
               emoji: string,
@@ -98,19 +119,34 @@ export function createOutboundEndpointAccess(
               }
             },
           } : {}),
-          ...(removeReaction ? {
+          ...(removeReaction && supports('reaction') ? {
             removeReaction: async (
               message: Parameters<typeof removeReaction>[0]['message'],
               reactionId: string,
             ) => {
-              void Promise.resolve(
-                removeReaction({ adapter: platform, endpointKey, message, reactionId }),
-              ).catch((error) => {
+              try {
+                await removeReaction({ adapter: platform, endpointKey, message, reactionId });
+              } catch (error) {
                 logger?.debug(
                   `[ActivityFeedback] outbound removeReaction failed (${key}):`,
                   error instanceof Error ? error.message : String(error),
                 );
-              });
+              }
+            },
+          } : {}),
+          ...(typing && supports('typing') ? {
+            typing: async (
+              conversation: Parameters<typeof typing>[0]['conversation'],
+              active?: boolean,
+            ) => {
+              try {
+                await typing({ adapter: platform, endpointKey, conversation, active });
+              } catch (error) {
+                logger?.debug(
+                  `[ActivityFeedback] outbound typing failed (${key}):`,
+                  error instanceof Error ? error.message : String(error),
+                );
+              }
             },
           } : {}),
         },
@@ -133,9 +169,7 @@ export function createOutboundEndpointAccess(
               },
               content: text,
             });
-            // Prefer real id; fall back to a sentinel so MessageTypingIndicator
-            // keeps the phase active until stop (recall is a no-op here).
-            return messageId || `outbound:${Date.now()}`;
+            return messageId || null;
           } catch (error) {
             logger?.debug(
               `[ActivityFeedback] outbound send failed (${key}):`,
@@ -281,10 +315,24 @@ export class ActivityFeedbackExecutor {
     await driver.stop(ctx, phase);
   }
 
-  async updateThinkingText(ctx: ActivityFeedbackEventContext, text: string): Promise<void> {
+  async updateText(
+    ctx: ActivityFeedbackEventContext,
+    phase: ActivityFeedbackPhase,
+    text: string,
+  ): Promise<void> {
     const resolved = this.access.resolve(ctx.platform, ctx.endpointKey);
     if (!resolved) return;
     const driver = createPhaseDriver(resolved.endpoint, ctx.platform, resolved.adapter);
-    await driver.updateThinkingText(ctx, text);
+    const manager = resolved.endpoint.$activityFeedback;
+    if (!manager || !isGenericActivityFeedbackManager(manager)) {
+      if (phase === 'thinking') await driver.updateThinkingText(ctx, text);
+      return;
+    }
+    const indicator = manager.getActiveIndicator(phase, ctx.options);
+    if (indicator?.update) await indicator.update(text);
+  }
+
+  async updateThinkingText(ctx: ActivityFeedbackEventContext, text: string): Promise<void> {
+    await this.updateText(ctx, 'thinking', text);
   }
 }

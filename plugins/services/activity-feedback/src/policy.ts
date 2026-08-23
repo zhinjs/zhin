@@ -35,6 +35,7 @@ export class ActivityFeedbackPolicy {
       this.service.defaults,
       this.service.platforms?.[platform],
       this.service.endpoints?.[`${platform}:${endpointKey}`],
+      schedulePhaseLayer(this.service, phase),
     );
 
     if (policy?.enabled === false) {
@@ -48,4 +49,19 @@ export class ActivityFeedbackPolicy {
 
     return { kind: 'active', config };
   }
+}
+
+function schedulePhaseLayer(
+  service: ActivityFeedbackServiceConfig,
+  phase: ActivityFeedbackPhase,
+): import('@zhin.js/agent').ActivityFeedbackConfig | undefined {
+  const scheduleKey = phase === 'schedule_start'
+    ? 'start'
+    : phase === 'schedule_finish'
+      ? 'finish'
+      : phase === 'schedule_error'
+        ? 'error'
+        : undefined;
+  const scenes = scheduleKey ? service.schedule?.phases?.[scheduleKey] : undefined;
+  return scenes ? { phases: { [phase]: scenes } } : undefined;
 }

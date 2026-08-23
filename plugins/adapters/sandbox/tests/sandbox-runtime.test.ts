@@ -31,6 +31,39 @@ afterEach(async () => {
 });
 
 describe('sandbox plugin runtime adapter', () => {
+  it('keeps the replacement path claim when the previous HMR endpoint stops', () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const ws = vi.spyOn(http, 'ws');
+    const gateway: MessageGateway = {
+      receive: vi.fn(async () => Object.freeze({ matched: false })),
+      send: vi.fn(async () => 'sent'),
+    };
+    const createEndpoint = (id: string) => new SandboxWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, `sandbox-${id}`),
+      gateway,
+      http,
+      defaults: resolveSandboxEndpoint({ id, owner: 'sandbox-user' }),
+    });
+
+    const previous = createEndpoint('demo-bot');
+    const replacement = createEndpoint('demo-bot');
+    previous.start();
+    replacement.start();
+    previous.stop();
+
+    const other = createEndpoint('other-bot');
+    other.start();
+    expect(ws.mock.calls.map(([path]) => path)).toEqual([
+      '/sandbox',
+      '/sandbox',
+      '/sandbox/other-bot',
+    ]);
+
+    replacement.stop();
+    other.stop();
+  });
+
   it('shares a delayed readiness probe and lets callers suppress stale delivery', async () => {
     let resolveProbe: ((status: {
       available: boolean;

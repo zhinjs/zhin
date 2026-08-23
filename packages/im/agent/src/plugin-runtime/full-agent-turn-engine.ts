@@ -21,6 +21,7 @@ import type { TurnTerminalProjection } from '../turn/execute-agent-turn.js';
 import { createScheduleCapabilityPlan } from './schedule-capability-plan.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import { buildTextTurnOutbound } from '../turn/turn-complete.js';
+import { createTurnActivityProjector } from '../activity-feedback/turn-event-projector.js';
 
 export interface FullAgentTurnEngineOptions {
   readonly host: ZhinAgentPrivate;
@@ -196,32 +197,13 @@ async function* runInteractiveTurn(
     }),
   });
 
-  let thinkingSent = false;
-  let accumulatedThinking = '';
-  const thinkingPreview = host.config.thinkingPreview === true;
-  const thinkingMaxLen = host.config.thinkingPreviewMaxLength ?? 200;
-  const completion = yield* bufferTerminal(stream, (event) => {
-    if (!payload) return;
-    if (event.type === 'iteration_start' && event.iteration > 1) {
-      emitActivityEvent(host, 'ai.processing.start', {
-        ...payload,
-        iterations: event.iteration,
-        content: `处理中 [${event.iteration}/${event.maxIterations}]...`,
-      });
-      return;
-    }
-    if (event.type !== 'thinking' || !event.text) return;
-    accumulatedThinking += event.text;
-    if (thinkingPreview) {
-      const preview = accumulatedThinking.length > thinkingMaxLen
-        ? accumulatedThinking.slice(0, thinkingMaxLen) + '...'
-        : accumulatedThinking;
-      emitActivityEvent(host, 'ai.thinking', { ...payload, thinking: preview });
-    } else if (!thinkingSent) {
-      thinkingSent = true;
-      emitActivityEvent(host, 'ai.thinking', { ...payload, thinking: event.text });
-    }
-  });
+  const projectActivity = payload ? createTurnActivityProjector({
+    payload,
+    publish: (event, next) => emitActivityEvent(host, event, next),
+    thinkingPreview: host.config.thinkingPreview === true,
+    thinkingMaxLength: host.config.thinkingPreviewMaxLength ?? 200,
+  }) : undefined;
+  const completion = yield* bufferTerminal(stream, projectActivity);
   yield completion.terminal;
   return {
     project: async () => {

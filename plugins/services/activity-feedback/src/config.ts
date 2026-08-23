@@ -1,6 +1,6 @@
 import type { ActivityFeedbackConfig } from '@zhin.js/agent';
 
-/** 顶层 `activityFeedback` 配置（zhin.config.yml，与 endpoints 解耦） */
+/** Plugin Runtime 实例配置（`plugins.<instanceKey>`，与 Adapter endpoint 配置解耦）。 */
 export interface ActivityFeedbackServiceConfig {
   enabled?: boolean;
   defaults?: ActivityFeedbackConfig;

@@ -220,20 +220,23 @@ export class EmailEndpoint implements EndpointInstance {
     imap.on('error', (error) => {
       this.#logger.error('IMAP error:', error);
       // imap 通常在 error 后紧跟 end；两处都调度，靠已有定时器去重
-      this.#scheduleImapReconnect();
+      this.#scheduleImapReconnect(imap);
     });
     imap.on('end', () => {
       this.#logger.debug(formatCompact({
           op: 'disconnect',
         mode: 'imap',
       }));
-      this.#scheduleImapReconnect();
+      this.#scheduleImapReconnect(imap);
     });
   }
 
   /** IMAP 断线后按指数退避重建连接并恢复监听（基数 reconnectInterval，封顶 5 分钟）。 */
-  #scheduleImapReconnect(): void {
-    if (!this.#started || this.#reconnectTimer) return;
+  #scheduleImapReconnect(source?: EmailImapTransport): void {
+    // A replaced transport may emit a late `end` after its earlier `error`
+    // already caused a successful reconnect. Only the currently owned IMAP
+    // connection may arm the next generation's reconnect timer.
+    if (!this.#started || this.#reconnectTimer || (source && this.#imap !== source)) return;
     const base = this.#options.config.imap.reconnectInterval;
     const delay = Math.min(base * 2 ** this.#reconnectAttempts, 300_000);
     this.#reconnectAttempts += 1;
@@ -250,15 +253,17 @@ export class EmailEndpoint implements EndpointInstance {
 
   async #reconnectImap(): Promise<void> {
     if (!this.#started) return;
+    let imap: EmailImapTransport | undefined;
     try {
-      const imap = this.#options.createImap?.(this.#options.config.imap)
+      const nextImap = this.#options.createImap?.(this.#options.config.imap)
         ?? defaultCreateImap(this.#options.config.imap);
-      this.#imap = imap;
-      this.#setupImapListeners(imap);
+      imap = nextImap;
+      this.#imap = nextImap;
+      this.#setupImapListeners(nextImap);
       await new Promise<void>((resolve, reject) => {
-        imap.once('ready', () => resolve());
-        imap.once('error', (error) => reject(error));
-        imap.connect();
+        nextImap.once('ready', () => resolve());
+        nextImap.once('error', (error) => reject(error));
+        nextImap.connect();
       });
       this.#reconnectAttempts = 0;
       this.#logger.info(formatCompact({
@@ -274,7 +279,7 @@ export class EmailEndpoint implements EndpointInstance {
         ok: false,
         error: error instanceof Error ? error.message : String(error),
       }));
-      this.#scheduleImapReconnect();
+      this.#scheduleImapReconnect(imap);
     }
   }
 

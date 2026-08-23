@@ -104,6 +104,44 @@ describe('InboundTurnQueue', () => {
     expect(result).toEqual(['hello\nworld']);
   });
 
+  it('acknowledges and clears every coalesced message while another turn is active', async () => {
+    const queue = new InboundTurnQueue(fifoConfig, emitter);
+    const sessionKey = 'sandbox:b1:group:g1';
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+
+    const first = queue.schedule({
+      sessionKey,
+      commMessage: messageWithId({ scope: 'group', sceneId: 'g1', senderId: 'u1', messageId: 'm1' }),
+      content: 'busy',
+      run: async () => {
+        await firstGate;
+        return ['busy'];
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    const second = queue.schedule({
+      sessionKey,
+      commMessage: messageWithId({ scope: 'group', sceneId: 'g1', senderId: 'u2', messageId: 'm2' }),
+      content: 'hello',
+      run: async (merged) => [merged],
+    });
+    const third = queue.schedule({
+      sessionKey,
+      commMessage: messageWithId({ scope: 'group', sceneId: 'g1', senderId: 'u2', messageId: 'm3' }),
+      content: 'world',
+      run: async (merged) => [merged],
+    });
+
+    expect(second).toBe(third);
+    expect(emitter.starts.map((event) => event.messageId)).toEqual(['m2', 'm3']);
+
+    releaseFirst();
+    await Promise.all([first, second]);
+    expect(emitter.clears.map((event) => event.messageId)).toEqual(['m2', 'm3']);
+  });
+
   it('drops expired queue items and clears queued feedback', async () => {
     vi.useFakeTimers();
     const queue = new InboundTurnQueue(

@@ -14,12 +14,12 @@ export type DisposeZhinAgentTarget = Pick<
   lastTurnMetrics: unknown;
 };
 
-export function disposeZhinAgentResources(target: DisposeZhinAgentTarget): void {
+export async function disposeZhinAgentResources(target: DisposeZhinAgentTarget): Promise<void> {
   target.externalTools.clear();
   target.userProfiles.dispose();
   target.rateLimiter.dispose();
   if (target.subagentSystem) {
-    target.subagentSystem.dispose();
+    await target.subagentSystem.dispose();
     target.subagentSystem = null;
   }
   target.promptController.abort();

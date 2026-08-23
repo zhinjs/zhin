@@ -3,6 +3,7 @@ import {
   TypingIndicatorManager,
   ReactionTypingIndicator,
   MessageTypingIndicator,
+  NativeTypingIndicator,
   NoneTypingIndicator,
   ReactionTypingIndicatorAdapter,
   GenericTypingIndicatorAdapter,
@@ -12,6 +13,7 @@ import {
   stopTypingIndicator,
 } from '../../src/typing-indicator/index.js';
 import { DisposeStack } from '@zhin.js/plugin-runtime';
+import { AdapterActivityFeedbackManager } from '../../src/activity-feedback/adapter-integration.js';
 
 describe('TypingIndicatorManager', () => {
   let manager: TypingIndicatorManager;
@@ -187,7 +189,7 @@ describe('TypingIndicatorManager', () => {
       const mockIndicator = {
         start: vi.fn().mockResolvedValue(undefined),
         stop: vi.fn().mockResolvedValue(undefined),
-        isActive: vi.fn().mockReturnValue(false),
+        isActive: vi.fn().mockReturnValue(true),
       };
 
       const adapter: ICQQTypingIndicatorAdapter = {
@@ -219,13 +221,13 @@ describe('TypingIndicatorManager', () => {
       const mockIndicator1 = {
         start: vi.fn().mockResolvedValue(undefined),
         stop: vi.fn().mockResolvedValue(undefined),
-        isActive: vi.fn().mockReturnValue(false),
+        isActive: vi.fn().mockReturnValue(true),
       };
 
       const mockIndicator2 = {
         start: vi.fn().mockResolvedValue(undefined),
         stop: vi.fn().mockResolvedValue(undefined),
-        isActive: vi.fn().mockReturnValue(false),
+        isActive: vi.fn().mockReturnValue(true),
       };
 
       const adapter: ICQQTypingIndicatorAdapter = {
@@ -257,6 +259,156 @@ describe('TypingIndicatorManager', () => {
       expect(mockIndicator1.stop).toHaveBeenCalled();
       expect(mockIndicator2.stop).toHaveBeenCalled();
     });
+
+    it('启动未激活时应释放会话占位以便后续重试', async () => {
+      const inactive = {
+        start: vi.fn().mockResolvedValue(undefined),
+        stop: vi.fn().mockResolvedValue(undefined),
+        isActive: vi.fn().mockReturnValue(false),
+      };
+      const active = {
+        start: vi.fn().mockResolvedValue(undefined),
+        stop: vi.fn().mockResolvedValue(undefined),
+        isActive: vi.fn().mockReturnValue(true),
+      };
+      const adapter: ICQQTypingIndicatorAdapter = {
+        platform: 'icqq',
+        supportedTypes: ['reaction'],
+        createIndicator: vi.fn()
+          .mockReturnValueOnce(inactive)
+          .mockReturnValueOnce(active),
+      };
+      manager.registerAdapter(adapter);
+      const options = {
+        platform: 'icqq', endpointKey: 'bot', sessionId: 'group:1',
+        messageId: 'message-1', sceneType: 'group' as const,
+      };
+
+      expect((await manager.start(options)).isActive()).toBe(false);
+      expect((await manager.start(options)).isActive()).toBe(true);
+      expect(adapter.createIndicator).toHaveBeenCalledTimes(2);
+    });
+
+    it('并发 start 应共享启动结果且不在 indicator 激活前返回', async () => {
+      let releaseStart!: () => void;
+      let active = false;
+      const indicator = {
+        start: vi.fn().mockImplementation(async () => {
+          await new Promise<void>((resolve) => { releaseStart = resolve; });
+          active = true;
+        }),
+        stop: vi.fn().mockResolvedValue(undefined),
+        isActive: vi.fn(() => active),
+      };
+      manager.registerAdapter({
+        platform: 'icqq', supportedTypes: ['reaction'],
+        createIndicator: vi.fn().mockReturnValue(indicator),
+      });
+      const options = {
+        platform: 'icqq', endpointKey: 'bot', sessionId: 'group:1',
+        messageId: 'message-1', sceneType: 'group' as const,
+      };
+
+      const first = manager.start(options);
+      let secondSettled = false;
+      const second = manager.start(options).then((value) => {
+        secondSettled = true;
+        return value;
+      });
+      await Promise.resolve();
+      expect(secondSettled).toBe(false);
+      releaseStart();
+      expect(await second).toBe(await first);
+      expect(indicator.start).toHaveBeenCalledTimes(1);
+    });
+
+    it('启动未完成时的并发 stop 应共享同一清理', async () => {
+      let releaseStart!: () => void;
+      const indicator = {
+        start: vi.fn().mockImplementation(() => new Promise<void>((resolve) => {
+          releaseStart = resolve;
+        })),
+        stop: vi.fn().mockResolvedValue(undefined),
+        isActive: vi.fn().mockReturnValue(true),
+      };
+      manager.registerAdapter({
+        platform: 'test', supportedTypes: ['reaction'],
+        createIndicator: vi.fn().mockReturnValue(indicator),
+      });
+      const options = {
+        platform: 'test', endpointKey: 'bot', sessionId: 'group:1', sceneType: 'group' as const,
+      };
+
+      const starting = manager.start(options);
+      const firstStop = manager.stop(options);
+      const secondStop = manager.stop(options);
+      releaseStart();
+      await Promise.all([starting, firstStop, secondStop]);
+
+      expect(indicator.stop).toHaveBeenCalledTimes(1);
+    });
+
+    it('不应将分隔符组合不同的 endpoint 键串成同一指示器', async () => {
+      const first = {
+        start: vi.fn().mockResolvedValue(undefined), stop: vi.fn(),
+        isActive: vi.fn().mockReturnValue(true),
+      };
+      const second = {
+        start: vi.fn().mockResolvedValue(undefined), stop: vi.fn(),
+        isActive: vi.fn().mockReturnValue(true),
+      };
+      manager.registerAdapter({
+        platform: 'a:b', supportedTypes: ['reaction'],
+        createIndicator: vi.fn().mockReturnValue(first),
+      });
+      manager.registerAdapter({
+        platform: 'a', supportedTypes: ['reaction'],
+        createIndicator: vi.fn().mockReturnValue(second),
+      });
+
+      await manager.start({
+        platform: 'a:b', endpointKey: 'c', sessionId: 'd', sceneType: 'private',
+      });
+      await manager.start({
+        platform: 'a', endpointKey: 'b:c', sessionId: 'd', sceneType: 'private',
+      });
+
+      expect(first.start).toHaveBeenCalledTimes(1);
+      expect(second.start).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe('NativeTypingIndicator', () => {
+  it('停止时应等待已在途的 keepalive，再发送 stopTyping', async () => {
+    vi.useFakeTimers();
+    let releaseKeepalive!: () => void;
+    const startTyping = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockImplementationOnce(() => new Promise<void>((resolve) => {
+        releaseKeepalive = resolve;
+      }));
+    const stopTyping = vi.fn().mockResolvedValue(undefined);
+    const indicator = new NativeTypingIndicator(
+      {
+        platform: 'test', endpointKey: 'bot', sessionId: 'private:1',
+        userId: '1', sceneType: 'private',
+      },
+      { type: 'typing', platformConfig: { keepaliveIntervalMs: 10 } },
+      startTyping,
+      stopTyping,
+    );
+
+    await indicator.start();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(startTyping).toHaveBeenCalledTimes(2);
+    const stopping = indicator.stop();
+    await Promise.resolve();
+    expect(stopTyping).not.toHaveBeenCalled();
+    releaseKeepalive();
+    await stopping;
+    expect(stopTyping).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 });
 
@@ -335,7 +487,7 @@ describe('ReactionTypingIndicator', () => {
     expect(indicator.isActive()).toBe(false);
   });
 
-  it('stop 不等待 removeReaction 完成', async () => {
+  it('stop 等待 removeReaction 完成', async () => {
     const addReaction = vi.fn().mockResolvedValue('reaction-123');
     let resolveRemove!: () => void;
     const removeReaction = vi.fn().mockImplementation(
@@ -355,10 +507,15 @@ describe('ReactionTypingIndicator', () => {
     );
 
     await indicator.start();
-    await expect(indicator.stop()).resolves.toBeUndefined();
+    let settled = false;
+    const stopping = indicator.stop().then(() => { settled = true; });
+    await Promise.resolve();
     expect(removeReaction).toHaveBeenCalledTimes(1);
     expect(indicator.isActive()).toBe(false);
+    expect(settled).toBe(false);
     resolveRemove();
+    await stopping;
+    expect(settled).toBe(true);
   });
 
   it('并发 stop 只应 remove 一次', async () => {
@@ -530,6 +687,33 @@ describe('NoneTypingIndicator', () => {
   });
 });
 
+describe('Endpoint activity feedback capability boundary', () => {
+  it('does not use legacy $updateMessage without explicit endpoint edit control', async () => {
+    const legacyUpdate = vi.fn().mockResolvedValue(undefined);
+    const manager = new AdapterActivityFeedbackManager();
+    const endpoint = {
+      $id: 'bot',
+      control: { recall: vi.fn().mockResolvedValue(undefined) },
+      $updateMessage: legacyUpdate,
+    };
+    const feedback = manager.enableForEndpoint(endpoint as never, 'test', {
+      sendMessage: vi.fn().mockResolvedValue('status-1'),
+    } as never);
+    const options = {
+      platform: 'test', endpointKey: 'bot', sessionId: 'group:1',
+      groupId: '1', sceneType: 'group' as const,
+    };
+
+    const indicator = await feedback.start('active', options, {
+      type: 'message', message: 'processing',
+    });
+    await indicator.update?.('next');
+
+    expect(legacyUpdate).not.toHaveBeenCalled();
+    await feedback.stop('active', options);
+  });
+});
+
 describe('ReactionTypingIndicatorAdapter', () => {
   it('应该创建适配器', () => {
     const adapter = new ReactionTypingIndicatorAdapter(
@@ -671,6 +855,34 @@ describe('全局实例', () => {
     expect(instance).toBeDefined();
     void lifecycle.dispose();
   });
+
+  it('generation dispose 应等待活跃提示完成清理', async () => {
+    const lifecycle = new DisposeStack();
+    const manager = provideTypingIndicatorManager({ lifecycle });
+    let releaseStop!: () => void;
+    const indicator = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockImplementation(() => new Promise<void>((resolve) => {
+        releaseStop = resolve;
+      })),
+      isActive: vi.fn().mockReturnValue(true),
+    };
+    manager.registerAdapter({
+      platform: 'test', supportedTypes: ['reaction'],
+      createIndicator: vi.fn().mockReturnValue(indicator),
+    });
+    await manager.start({
+      platform: 'test', endpointKey: 'bot', sessionId: 'private:1', sceneType: 'private',
+    });
+
+    let disposed = false;
+    const disposing = lifecycle.dispose().then(() => { disposed = true; });
+    await vi.waitFor(() => expect(indicator.stop).toHaveBeenCalledTimes(1));
+    expect(disposed).toBe(false);
+    releaseStop();
+    await disposing;
+    expect(indicator.stop).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('便捷函数', () => {
@@ -709,7 +921,7 @@ describe('便捷函数', () => {
     const mockIndicator = {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
-      isActive: vi.fn().mockReturnValue(false),
+      isActive: vi.fn().mockReturnValue(true),
     };
 
     const adapter: ICQQTypingIndicatorAdapter = {

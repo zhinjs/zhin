@@ -3,7 +3,7 @@ import type { AIEventPayload } from '../ai-event-subscriber.js';
 
 const logger = getLogger('AIBus');
 
-type AIBusListener = (payload: AIEventPayload) => void;
+type AIBusListener = (payload: AIEventPayload) => void | Promise<void>;
 
 /**
  * Module-level AI event bus for Plugin Runtime consumers that cannot use
@@ -31,6 +31,10 @@ export class ActivityFeedbackAIBus {
   }
 
   emit(event: string, payload: AIEventPayload): void {
+    void this.dispatch(event, payload);
+  }
+
+  async dispatch(event: string, payload: AIEventPayload): Promise<void> {
     const set = this.listeners.get(event);
     if (!set || set.size === 0) {
       // 零订阅 = activity-feedback 插件未加载，或运行时装了双份 @zhin.js/agent
@@ -38,13 +42,21 @@ export class ActivityFeedbackAIBus {
       logger.debug(formatCompact({ op: 'ai_bus_no_listener', event }));
       return;
     }
-    for (const listener of set) {
+    // Snapshot before the first await: HMR may replace listeners while an old
+    // generation handler is still settling. A live Set iterator would then
+    // leak this in-flight event into the newly registered generation.
+    const listeners = [...set];
+    const pending = listeners.map((listener) => {
       try {
-        listener(payload);
+        // Invoke every snapshot listener before awaiting. Generation admission
+        // must be sampled at dispatch ingress, not after an earlier listener settles.
+        return Promise.resolve(listener(payload)).catch(() => undefined);
       } catch {
         // Listener errors must not break the Agent emit path.
+        return Promise.resolve();
       }
-    }
+    });
+    await Promise.all(pending);
   }
 
   /** Test helper — clears all listeners. */

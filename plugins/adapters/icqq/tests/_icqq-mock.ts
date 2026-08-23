@@ -26,6 +26,13 @@ export function createIcqqTestPorts(): {
  * to simulate icqq events, and vi.mocked(endpoint.method) to assert calls.
  */
 export class Client {
+  static readonly activeClients = new Map<number, Set<Client>>();
+  protected login_timer: ReturnType<typeof setTimeout> | null = null;
+  private nextLoginGate?: {
+    entered: () => void;
+    wait: Promise<void>;
+  };
+
   uin: number;
   fl = new Map<number, unknown>();
   gl = new Map<number, unknown>();
@@ -65,9 +72,27 @@ export class Client {
     return true;
   }
 
-  login = vi.fn(async (_password?: string) => { this.emit('system.online'); });
-  logout = vi.fn(async () => {});
-  terminate = vi.fn();
+  login = vi.fn(async (_password?: string) => {
+    const gate = this.nextLoginGate;
+    this.nextLoginGate = undefined;
+    if (gate) {
+      gate.entered();
+      await gate.wait;
+    }
+    if (!Client.activeClients.has(this.uin)) Client.activeClients.set(this.uin, new Set());
+    Client.activeClients.get(this.uin)!.add(this);
+    this.emit('system.online');
+  });
+  logout = vi.fn(async () => {
+    // ICQQ logout sends an account-level unregister packet. Model the observed
+    // effect during same-account HMR: every TCP session for that UIN is closed.
+    Client.activeClients.delete(this.uin);
+  });
+  terminate = vi.fn(() => {
+    const clients = Client.activeClients.get(this.uin);
+    clients?.delete(this);
+    if (clients?.size === 0) Client.activeClients.delete(this.uin);
+  });
   submitSlider = vi.fn(async (_ticket?: string) => {});
   sendSmsCode = vi.fn(async () => {});
   submitSmsCode = vi.fn(async (_code?: string) => {});
@@ -107,6 +132,33 @@ export class Client {
     setReaction: this.setReaction,
     delReaction: this.delReaction,
   }));
+}
+
+export function isMockIcqqClientConnected(client: Client): boolean {
+  return Client.activeClients.get(client.uin)?.has(client) ?? false;
+}
+
+export function scheduleMockIcqqReconnect(client: Client, delayMs: number): void {
+  const state = client as unknown as { login_timer: ReturnType<typeof setTimeout> | null };
+  state.login_timer = setTimeout(() => {
+    state.login_timer = null;
+    void client.login();
+  }, delayMs);
+}
+
+export function hangNextMockIcqqLogin(client: Client): {
+  readonly entered: Promise<void>;
+  readonly release: () => void;
+} {
+  let markEntered!: () => void;
+  let release!: () => void;
+  const entered = new Promise<void>((resolve) => { markEntered = resolve; });
+  const wait = new Promise<void>((resolve) => { release = resolve; });
+  const state = client as unknown as {
+    nextLoginGate?: { entered: () => void; wait: Promise<void> };
+  };
+  state.nextLoginGate = { entered: markEntered, wait };
+  return { entered, release };
 }
 
 export function parseGroupMessageId(msgid: string): {

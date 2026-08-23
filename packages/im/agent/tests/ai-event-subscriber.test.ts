@@ -123,4 +123,55 @@ describe('ai-event-subscriber', () => {
 
     expect(received).toEqual(['runtime-dispatch-1']);
   });
+
+  it('dispatch awaits async Runtime handlers', async () => {
+    activityFeedbackAiBus.clear();
+    const received: string[] = [];
+    const dispose = subscribeAIEventsOnTarget(activityFeedbackAiBus, {
+      onProcessingStart: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        received.push('start');
+      },
+    });
+
+    await activityFeedbackAiBus.dispatch('ai.processing.start', {
+      sessionId: 'ordered-session',
+      source: 'zhin-agent',
+    });
+
+    expect(received).toEqual(['start']);
+    dispose();
+    activityFeedbackAiBus.clear();
+  });
+
+  it('does not deliver an in-flight event to a listener added by the next generation', async () => {
+    activityFeedbackAiBus.clear();
+    const received: string[] = [];
+    let releaseOld!: () => void;
+    const oldPending = new Promise<void>((resolve) => {
+      releaseOld = resolve;
+    });
+    const oldListener = async () => {
+      received.push('old:start');
+      await oldPending;
+      received.push('old:finish');
+    };
+    const nextListener = () => {
+      received.push('next');
+    };
+    activityFeedbackAiBus.on('ai.processing.start', oldListener);
+
+    const dispatch = activityFeedbackAiBus.dispatch('ai.processing.start', {
+      sessionId: 'hmr-session',
+      source: 'zhin-agent',
+    });
+    await Promise.resolve();
+    activityFeedbackAiBus.off('ai.processing.start', oldListener);
+    activityFeedbackAiBus.on('ai.processing.start', nextListener);
+    releaseOld();
+    await dispatch;
+
+    expect(received).toEqual(['old:start', 'old:finish']);
+    activityFeedbackAiBus.clear();
+  });
 });

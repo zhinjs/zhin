@@ -9,6 +9,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import * as path from 'node:path';
 import { type Message, getLogger } from '@zhin.js/core';
 import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
@@ -197,6 +198,12 @@ export class SubagentRuntime {
   private eventEmitter: ZhinAgentEventEmitter | null;
   private resolveAgentMetaFn: ((agentName: string) => Promise<AgentMeta | null>) | null;
   private getParentContextSnapshotFn: ((origin: SubagentOrigin) => Promise<string | undefined>) | null;
+  private disposed = false;
+  private disposalStarted = false;
+  private externalDisposal?: Promise<void>;
+  private internalDisposalOwner?: string;
+  private readonly taskContext = new AsyncLocalStorage<string>();
+  private readonly taskSettlements = new Map<string, Promise<void>>();
 
   constructor(options: SubagentRuntimeOptions) {
     this.provider = options.provider;
@@ -275,15 +282,22 @@ export class SubagentRuntime {
   }
 
   /** 同步执行子 agent（入站 route 用）；返回最终文本，不经过 resultSender */
-  async spawnSync(options: SpawnOptions): Promise<string> {
+  spawnSync(options: SpawnOptions): Promise<string> {
+    return this.spawnSyncInner(options);
+  }
+
+  private async spawnSyncInner(options: SpawnOptions): Promise<string> {
+    if (this.disposed) throw new Error('SubagentRuntime has been disposed');
     const capError = this.parallelCapacityError();
     if (capError) return capError;
 
     const enriched = await this.enrichSpawnOptions(options);
+    this.assertActive();
     const role = enriched.role || 'subtask';
     const displayLabel = resolveSubagentDisplayLabel(enriched.label, enriched.task);
     const taskId = randomUUID().slice(0, 8);
     this.trackRunningTask(taskId);
+    const signal = this.runningTasks.get(taskId)!.signal;
     try {
       if (enriched.notifyContext) {
         await notifySubagentGoal(enriched.notifyContext, {
@@ -292,15 +306,10 @@ export class SubagentRuntime {
           label: displayLabel,
           agent: enriched.agent,
         });
+        this.assertActive(signal);
       }
-      const result = await this.runSubagent(
-        taskId,
-        enriched.task,
-        displayLabel,
-        enriched.origin,
-        role,
-        enriched.context,
-        {
+      const running = this.runAdmittedTask(taskId, () => this.runSubagent(
+        taskId, enriched.task, displayLabel, enriched.origin, role, enriched.context, {
           binding: enriched.binding ?? (enriched.agent ? this.resolveBindingFn?.(enriched.agent) ?? null : null),
           systemPrompt: enriched.systemPrompt,
           contextPreamble: enriched.contextPreamble,
@@ -313,19 +322,27 @@ export class SubagentRuntime {
           requestedSkills: enriched.requestedSkills,
           parentSessionLoaded: enriched.parentSessionLoaded,
           parentLoadedSkills: enriched.parentLoadedSkills,
+          signal,
         },
-      );
+      ));
+      const result = await running;
       return result ?? '任务已完成，但未生成最终响应。';
     } finally {
       this.releaseRunningTask(taskId);
     }
   }
 
-  async spawn(options: SpawnOptions): Promise<string> {
+  spawn(options: SpawnOptions): Promise<string> {
+    return this.spawnInner(options);
+  }
+
+  private async spawnInner(options: SpawnOptions): Promise<string> {
+    if (this.disposed) throw new Error('SubagentRuntime has been disposed');
     const capError = this.parallelCapacityError();
     if (capError) return capError;
 
     const enriched = await this.enrichSpawnOptions(options);
+    this.assertActive();
     const taskId = randomUUID().slice(0, 8);
     const role = enriched.role || 'subtask';
     const displayLabel = resolveSubagentDisplayLabel(enriched.label, enriched.task);
@@ -337,31 +354,11 @@ export class SubagentRuntime {
         label: displayLabel,
         agent: enriched.agent,
       });
+      this.assertActive();
     }
 
     const abortController = new AbortController();
     this.runningTasks.set(taskId, abortController);
-
-    const binding = enriched.binding ?? (enriched.agent ? this.resolveBindingFn?.(enriched.agent) ?? null : null);
-    const done = this.runSubagent(taskId, enriched.task, displayLabel, enriched.origin, role, enriched.context, {
-      binding,
-      systemPrompt: enriched.systemPrompt,
-      contextPreamble: enriched.contextPreamble,
-      presetName: enriched.agent ?? enriched.label,
-      agentMeta: enriched._agentMeta,
-      requestedTools: enriched.requestedTools,
-      requestedSkills: enriched.requestedSkills,
-      parentSessionLoaded: enriched.parentSessionLoaded,
-      parentLoadedSkills: enriched.parentLoadedSkills,
-    })
-      .then(() => undefined)
-      .catch((error) => {
-        logger.error({ error, taskId }, 'Subagent failed');
-      })
-      .finally(() => {
-        this.runningTasks.delete(taskId);
-      });
-    this.registerSubagentTask?.(done);
 
     logger.info(formatCompact({
       subagent: 'spawn',
@@ -371,7 +368,7 @@ export class SubagentRuntime {
       role,
       task: truncatePreview(enriched.task, 300),
     }));
-    void this.onEvent?.({
+    await this.publishLifecycleEvent({
       phase: 'spawn',
       taskId,
       label: displayLabel,
@@ -380,6 +377,34 @@ export class SubagentRuntime {
       role,
       agent: enriched.agent,
     });
+    try {
+      this.assertActive(abortController.signal);
+    } catch (error) {
+      this.runningTasks.delete(taskId);
+      throw error;
+    }
+
+    const binding = enriched.binding ?? (enriched.agent ? this.resolveBindingFn?.(enriched.agent) ?? null : null);
+    const done = this.runAdmittedTask(taskId, async () => {
+      try {
+        await this.runSubagent(taskId, enriched.task, displayLabel, enriched.origin, role, enriched.context, {
+          binding,
+          systemPrompt: enriched.systemPrompt,
+          contextPreamble: enriched.contextPreamble,
+          presetName: enriched.agent ?? enriched.label,
+          agentMeta: enriched._agentMeta,
+          requestedTools: enriched.requestedTools,
+          requestedSkills: enriched.requestedSkills,
+          parentSessionLoaded: enriched.parentSessionLoaded,
+          parentLoadedSkills: enriched.parentLoadedSkills,
+          signal: abortController.signal,
+        });
+      } catch (error) {
+        logger.error({ error, taskId }, 'Subagent failed');
+      }
+    }, () => this.runningTasks.delete(taskId));
+    this.registerSubagentTask?.(done);
+
     return `子任务 [${displayLabel}] 已启动 (id: ${taskId})，完成后会自动通知你。`;
   }
 
@@ -395,7 +420,6 @@ export class SubagentRuntime {
     } catch {
       // ignore
     }
-    this.runningTasks.delete(taskId);
     return true;
   }
 
@@ -416,6 +440,45 @@ export class SubagentRuntime {
 
   private releaseRunningTask(taskId: string): void {
     this.runningTasks.delete(taskId);
+  }
+
+  private async publishLifecycleEvent(event: SubagentLifecycleEvent): Promise<void> {
+    try {
+      await this.onEvent?.(event);
+    } catch (error) {
+      logger.error({ taskId: event.taskId, phase: event.phase, error }, 'Subagent lifecycle observer failed');
+    }
+  }
+
+  private assertActive(signal?: AbortSignal): void {
+    signal?.throwIfAborted();
+    if (this.disposed) {
+      throw new DOMException('SubagentRuntime generation retired', 'AbortError');
+    }
+  }
+
+  private runAdmittedTask<T>(
+    taskId: string,
+    operation: () => Promise<T>,
+    finalize: () => void = () => undefined,
+  ): Promise<T> {
+    let settle!: () => void;
+    const settlement = new Promise<void>((resolve) => { settle = resolve; });
+    this.taskSettlements.set(taskId, settlement);
+    let running: Promise<T>;
+    try {
+      running = this.taskContext.run(taskId, operation);
+    } catch (error) {
+      finalize();
+      this.taskSettlements.delete(taskId);
+      settle();
+      throw error;
+    }
+    return running.finally(() => {
+      finalize();
+      if (this.taskSettlements.get(taskId) === settlement) this.taskSettlements.delete(taskId);
+      settle();
+    });
   }
 
   // ── 内部方法 ──────────────────────────────────────────────────────
@@ -441,6 +504,7 @@ export class SubagentRuntime {
       requestedSkills?: string[];
       parentSessionLoaded?: string[];
       parentLoadedSkills?: string[];
+      signal?: AbortSignal;
     },
   ): Promise<string | void> {
     const startedAt = Date.now();
@@ -471,7 +535,7 @@ export class SubagentRuntime {
       await aiEvents.processingStart(task);
     }
 
-    await this.onEvent?.({
+    await this.publishLifecycleEvent({
       phase: 'start',
       taskId,
       label,
@@ -539,6 +603,7 @@ export class SubagentRuntime {
         maxIterations: effortIterations ?? this.maxIterations,
         commMessage: bashCommMessage,
         callbacks: aiEvents?.createAgentLoopCallbacks(model),
+        signal: opts?.signal,
       });
       this.onSubagentUsage?.(result.usage);
       const rawResult = result.content || '任务已完成，但未生成最终响应。';
@@ -558,7 +623,7 @@ export class SubagentRuntime {
         model,
         result: truncatePreview(finalResult, 480),
       }));
-      await this.onEvent?.({
+      await this.publishLifecycleEvent({
         phase: 'finish',
         taskId,
         label,
@@ -598,7 +663,7 @@ export class SubagentRuntime {
         ok: false,
         error: truncatePreview(errorMsg, 300),
       }));
-      await this.onEvent?.({
+      await this.publishLifecycleEvent({
         phase: 'finish',
         taskId,
         label,
@@ -625,6 +690,10 @@ export class SubagentRuntime {
   }
 
   private async deliverAsyncResult(payload: SubagentCompletePayload): Promise<void> {
+    // Generation retirement aborts work to release resources. Its cancellation
+    // terminal is still emitted above for activity cleanup, but an old runtime
+    // must never enqueue a new main-agent continuation or direct IM delivery.
+    if (this.disposed) return;
     if (this.onSubagentCompleteFn) {
       // 勿 await：onSubagentComplete → auto-continue 会 waitForIdle()，而主回合仍在
       // waitForPendingSubagents 中等待本 subagent 的 done，同步 await 会死锁。
@@ -693,10 +762,41 @@ Workspace path: ${this.workspace}
 When done, provide a clear summary of findings or actions.`;
   }
 
-  dispose(): void {
-    for (const [taskId, controller] of this.runningTasks.entries()) {
-      try { controller.abort(); } catch { /* ignore */ }
+  dispose(): Promise<void> {
+    if (!this.disposalStarted) {
+      this.disposalStarted = true;
+      this.disposed = true;
+      for (const controller of this.runningTasks.values()) {
+        try { controller.abort(); } catch { /* ignore */ }
+      }
     }
-    this.runningTasks.clear();
+
+    const currentTaskId = this.taskContext.getStore();
+    if (currentTaskId) {
+      // The first in-task disposer may wait for peers, but never itself. Any
+      // peer that also disposes must return immediately so two terminal
+      // observers cannot cross-wait each other.
+      if (this.internalDisposalOwner) return Promise.resolve();
+      this.internalDisposalOwner = currentTaskId;
+      return this.awaitTaskSettlements(currentTaskId);
+    }
+
+    if (!this.externalDisposal) {
+      this.externalDisposal = this.awaitTaskSettlements();
+    }
+    return this.externalDisposal;
+  }
+
+  private async awaitTaskSettlements(excludedTaskId?: string): Promise<void> {
+    while (true) {
+      const pending = [...this.taskSettlements.entries()]
+        .filter(([taskId]) => taskId !== excludedTaskId)
+        .map(([, settlement]) => settlement);
+      if (pending.length === 0) break;
+      await Promise.allSettled(pending);
+    }
+    if (!excludedTaskId) {
+      this.runningTasks.clear();
+    }
   }
 }

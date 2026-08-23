@@ -1,5 +1,6 @@
 /** Delivery boundary for the independent schedule execution domain. */
 import { getLogger } from '@zhin.js/logger';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createNotificationRouter, type NotificationRouter } from './assistant/notification-router.js';
 import type { ScheduleJob, ScheduleJobExecutionPlan } from './assistant/types.js';
 import { scheduleJobCreatorFromPrincipal } from './assistant/job-creator.js';
@@ -17,7 +18,6 @@ import type { ZhinAgentConfig } from './config/zhin-agent-config.js';
 import { DEFAULT_CONFIG } from './config/zhin-agent-defaults.js';
 
 const logger = getLogger('task-executor');
-const sceneLocks = new KeyedMutex();
 
 export interface TaskExecutionResult extends ScheduleExecutionResult {
   responseText: string;
@@ -52,6 +52,10 @@ export interface ScheduleActivityPort {
 }
 
 export function createTaskExecutor(deps: TaskExecutorDeps) {
+  const sceneLocks = new KeyedMutex();
+  const executionContext = new AsyncLocalStorage<boolean>();
+  let disposed = false;
+  let disposal: Promise<void> | undefined;
   const router = deps.router ?? createNotificationRouter({ resolveAdapter: deps.resolveAdapter });
   const domain = deps.domain ?? new ScheduleExecutionDomainImpl({
     turn: deps.turn ?? missingScheduleTurnPort(),
@@ -60,6 +64,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
   });
 
   async function execute(job: ScheduleJob, options: TaskExecutionOptions = {}): Promise<TaskExecutionResult> {
+    if (disposed) throw new Error('TaskExecutor has been disposed');
     options.signal?.throwIfAborted();
     const previewSource = options.previewSource;
     const effectiveNotify = router.resolveEffectiveNotify(job.notify, deps.defaultNotify);
@@ -71,52 +76,57 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       ? `preview:${previewSource.sessionKey}`
       : scheduleLockKey(job, effectiveNotify);
 
-    await event('start');
-    let result: ScheduleExecutionResult;
-    try {
-      result = await sceneLocks.run(lockKey, () => domain.execute(job, {
-        preview: Boolean(previewSource),
-        signal: options.signal,
-      }), options.signal);
-      options.signal?.throwIfAborted();
-    } catch (error) {
-      await event('error');
-      throw error;
-    }
-    const executionPlan = previewSource
-      ? {
-          prompt: job.action.prompt,
-          tools: result.audit.toolsResolved.length ? result.audit.toolsResolved : undefined,
-          skills: result.audit.skillsResolved?.length ? result.audit.skillsResolved : undefined,
-          previewSample: result.output || undefined,
-          previewedAt: Date.now(),
-          confirmed: false,
-        }
-      : job.executionPlan;
-
-    if (!result.success) {
-      await event('error');
-      logger.error(`[TaskExecutor] 执行失败: ${result.error ?? 'unknown error'}`);
-    } else if (previewSource) {
-      await event('finish');
-    } else {
-      if (result.output) {
-        try {
-          await deliverScheduleToAdapter({
-            notify: effectiveNotify,
-            content: result.output,
-            router,
-            source: 'scheduled',
-          });
-        } catch (error) {
-          await event('error');
-          throw error;
-        }
+    return sceneLocks.run(lockKey, () => executionContext.run(true, async () => {
+      // Activity belongs to admitted execution, not to time spent waiting for
+      // the per-scene mutex. Keeping its terminal inside the same critical
+      // section prevents a prior run from clearing a later run's indicator.
+      await event('start');
+      let result: ScheduleExecutionResult;
+      try {
+        result = await domain.execute(job, {
+          preview: Boolean(previewSource),
+          signal: options.signal,
+        });
+        options.signal?.throwIfAborted();
+      } catch (error) {
+        await event('error');
+        throw error;
       }
-      await event('finish');
-    }
+      const executionPlan = previewSource
+        ? {
+            prompt: job.action.prompt,
+            tools: result.audit.toolsResolved.length ? result.audit.toolsResolved : undefined,
+            skills: result.audit.skillsResolved?.length ? result.audit.skillsResolved : undefined,
+            previewSample: result.output || undefined,
+            previewedAt: Date.now(),
+            confirmed: false,
+          }
+        : job.executionPlan;
 
-    return { ...result, responseText: result.output, executionPlan };
+      if (!result.success) {
+        await event('error');
+        logger.error(`[TaskExecutor] 执行失败: ${result.error ?? 'unknown error'}`);
+      } else if (previewSource) {
+        await event('finish');
+      } else {
+        if (result.output) {
+          try {
+            await deliverScheduleToAdapter({
+              notify: effectiveNotify,
+              content: result.output,
+              router,
+              source: 'scheduled',
+            });
+          } catch (error) {
+            await event('error');
+            throw error;
+          }
+        }
+        await event('finish');
+      }
+
+      return { ...result, responseText: result.output, executionPlan };
+    }), options.signal);
   }
 
   async function preview(
@@ -141,7 +151,19 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
     return execute(job, { previewSource: source });
   }
 
-  return { execute, preview, resolveAdapter: deps.resolveAdapter };
+  function dispose(): Promise<void> {
+    if (executionContext.getStore()) {
+      return Promise.reject(new Error(
+        'TaskExecutor cannot dispose from inside its own execution callback; dispose it from the owning lifecycle',
+      ));
+    }
+    if (disposal) return disposal;
+    disposed = true;
+    disposal = sceneLocks.drain();
+    return disposal;
+  }
+
+  return { execute, preview, resolveAdapter: deps.resolveAdapter, dispose };
 }
 
 function missingScheduleTurnPort(): ScheduleTurnPort {
@@ -158,8 +180,15 @@ function scheduleLockKey(job: ScheduleJob, notify: import('./assistant/types.js'
   return `im:${scene.platform}:${scene.endpointKey}:${scene.kind}:${scene.sceneId}`;
 }
 
-export async function drainTaskExecutorLocks(timeoutMs: number): Promise<void> {
-  await sceneLocks.drain(timeoutMs);
+/**
+ * @deprecated Task executors now own and drain their own scene locks through
+ * `executor.dispose()`. Retained only to provide explicit migration guidance;
+ * calling it now rejects because no process-global lock owner exists.
+ */
+export async function drainTaskExecutorLocks(_timeoutMs: number): Promise<void> {
+  throw new Error(
+    'Global TaskExecutor lock draining is no longer supported; retain the executor and await executor.dispose()',
+  );
 }
 
 export type TaskExecutor = ReturnType<typeof createTaskExecutor>;

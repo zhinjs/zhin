@@ -11,6 +11,18 @@ const logger = getLogger('OutboundHost');
 
 export function createOutboundHost(im: ImRuntime): OutboundHost {
   return {
+    runWithView: (operation) => im.runWithSnapshotView(operation),
+    capabilities(input) {
+      const capabilities = im.endpointCapabilities(input);
+      const operations = capabilities?.operations;
+      if (!operations) return { operations: Object.freeze([]) };
+      return {
+        operations: Object.freeze(
+          (['recall', 'edit', 'reaction', 'typing'] as const)
+            .filter((operation) => operations[operation] === true),
+        ),
+      };
+    },
     async send(input: OutboundSendInput): Promise<string | null> {
       try {
         const result = await im.sendEndpointMessage({
@@ -78,6 +90,41 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
         endpointKey: input.endpointKey,
         message: input.message,
       });
+    },
+    async edit(input) {
+      try {
+        return await im.editEndpointMessage({
+          adapter: input.adapter,
+          endpointKey: input.endpointKey,
+          message: input.message,
+          content: input.content,
+        });
+      } catch (error) {
+        logger.debug(formatCompact({
+          op: 'outbound_edit_failed',
+          adapter: input.adapter,
+          endpointKey: input.endpointKey,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+        return null;
+      }
+    },
+    async typing(input) {
+      try {
+        await im.setEndpointTyping({
+          adapter: input.adapter,
+          endpointKey: input.endpointKey,
+          conversation: input.conversation,
+          active: input.active,
+        });
+      } catch (error) {
+        logger.debug(formatCompact({
+          op: 'outbound_typing_failed',
+          adapter: input.adapter,
+          endpointKey: input.endpointKey,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      }
     },
   };
 }
