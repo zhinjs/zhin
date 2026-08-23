@@ -1,6 +1,6 @@
 ---
-"@zhin.js/plugin-runtime": minor
-"@zhin.js/core": minor
+"@zhin.js/plugin-runtime": patch
+"@zhin.js/core": patch
 "@zhin.js/agent": patch
 "@zhin.js/cli": patch
 "@zhin.js/service-activity-feedback": patch
