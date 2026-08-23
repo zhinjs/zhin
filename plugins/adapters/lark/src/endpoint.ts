@@ -3,7 +3,14 @@
  */
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import type { EndpointGroup, EndpointInstance, EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
+import {
+  createRecallEndpointControl,
+  type EndpointControl,
+  type EndpointGroup,
+  type EndpointInstance,
+  type EndpointManagement,
+  type EndpointSendRequest,
+} from 'zhin.js/adapter';
 import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
@@ -86,6 +93,7 @@ export class LarkEndpoint implements EndpointInstance {
       { member_id_type: 'open_id' },
     ),
   });
+  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
   #routeReleases: HttpRouteRegistration[] = [];
   #accessToken: AccessToken = { token: '', expires_in: 0, timestamp: 0 };
   #refreshPromise: Promise<string> | null = null;

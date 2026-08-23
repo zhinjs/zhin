@@ -257,6 +257,46 @@ describe('slack plugin runtime adapter (socket)', () => {
     await endpoint.stop();
   });
 
+  it('maps canonical message controls to Slack chat and reaction APIs', async () => {
+    const client = mockClient();
+    const endpoint = new SlackEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      config: socketConfig,
+      createClient: () => client,
+      createSocket: () => mockSocket(),
+    });
+    await endpoint.start();
+    const conversation = {
+      endpoint: { id: 'test-endpoint', adapter: 'slack' },
+      kind: 'channel' as const,
+      id: 'C001',
+    };
+    const message = { conversation, id: '1700000001.000000' };
+
+    await endpoint.control.recall?.(message);
+    await expect(endpoint.control.edit?.(message, 'updated')).resolves.toBe(message.id);
+    await expect(endpoint.control.addReaction?.(message, ':thumbsup:')).resolves.toBe('thumbsup');
+    await endpoint.control.removeReaction?.(message, 'thumbsup');
+
+    expect(client.chat.delete).toHaveBeenCalledWith({ channel: 'C001', ts: message.id });
+    expect(client.chat.update).toHaveBeenCalledWith(expect.objectContaining({
+      channel: 'C001',
+      ts: message.id,
+      text: 'updated',
+    }));
+    expect(client.reactions.add).toHaveBeenCalledWith({
+      channel: 'C001', timestamp: message.id, name: 'thumbsup',
+    });
+    expect(client.reactions.remove).toHaveBeenCalledWith({
+      channel: 'C001', timestamp: message.id, name: 'thumbsup',
+    });
+    await endpoint.stop();
+  });
+
   it('registers agent endpoint on start', async () => {
     const endpoint = new SlackEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'slack'),

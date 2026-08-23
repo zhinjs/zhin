@@ -22,6 +22,7 @@ export type {
 
 export default defineAdapter<SatoriAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  operations: ['recall'],
   // Satori 协议 img/file 元素消费 url 与 base64 内联数据；无卡片交互面，交互段降级纯文本。
   segments: {
     outboundMedia: ['url', 'base64'],

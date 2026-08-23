@@ -3,8 +3,10 @@
  */
 import WebSocket from 'ws';
 import {
+  createRecallEndpointControl,
   createEndpointLifecycle,
   type EndpointConnectHandle,
+  type EndpointControl,
   type EndpointInstance,
   type EndpointLifecycle,
   type EndpointManagement,
@@ -57,6 +59,7 @@ export class OneBot11WsEndpoint implements EndpointInstance {
 
   readonly #options: OneBot11WsEndpointOptions;
   readonly management: EndpointManagement = createOneBot11EndpointManagement(this);
+  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
   readonly content = createOneBot11ContentPort((action, params) => this.callApi(action, params));
   readonly #lifecycle: EndpointLifecycle;
   #ws?: OneBot11WsSocket;

@@ -21,6 +21,7 @@ export type {
 
 export default defineAdapter<WeixinIlinkAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  operations: ['typing'],
   // 所有媒体（url 下载 / base64 落盘 / 本地 path）统一物化后走 CDN 上传（sendWeixinMediaFile），
   // 无直发面；微信无卡片交互面，交互段降级纯文本。
   segments: {

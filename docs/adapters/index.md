@@ -54,6 +54,22 @@ _（当前无）_
 | OneBot v12 | `@zhin.js/adapter-onebot12` | — | [OneBot v12](/adapters/onebot12) |
 | Satori | `@zhin.js/adapter-satori` | — | [Satori](/adapters/satori) |
 
+## 统一消息操作能力
+
+消息发送由所有声明 **outbound** 的 Endpoint 支持；消息级扩展操作通过统一
+**EndpointControl** 暴露，并按每个具体 Endpoint 精确声明。Core 不探测平台 SDK 私有方法。
+
+| 操作 | 已接入平台 |
+|------|------------|
+| recall | Discord、ICQQ、KOOK、飞书、Milky、NapCat、OneBot 11/12、QQ 官方、Satori、Slack、Telegram、企业微信 |
+| edit | Slack |
+| reaction | Discord Gateway、ICQQ、Slack |
+| typing | 微信 iLink |
+
+同一适配器不同接入模式可以具有不同能力。例如 Discord Gateway 支持 reaction，
+Interactions 模式只声明 recall；Host/Console 可从 Endpoint row 的 **operations** 字段读取
+当前模式的准确能力集。
+
 ## 维护说明
 
 - **单一来源（档位）**：`scripts/adapter-meta.mjs`

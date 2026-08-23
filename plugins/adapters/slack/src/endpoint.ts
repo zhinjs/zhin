@@ -6,6 +6,7 @@ import { WebClient } from '@slack/web-api';
 import type {
   EndpointFriend,
   EndpointGroup,
+  EndpointControl,
   EndpointInstance,
   EndpointManagement,
   EndpointSendRequest,
@@ -116,6 +117,31 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
   #started = false;
   #unregisterAgent?: () => void;
   readonly management: EndpointManagement = createSlackEndpointManagement(this);
+  readonly control: EndpointControl = Object.freeze<EndpointControl>({
+    recall: async (message) => {
+      const ref = this.resolveMessageRef(message.id, message.conversation.id);
+      if (!ref || !this.#client) return;
+      await this.#client.chat.delete(ref);
+    },
+    edit: async (message, content) => {
+      const ref = this.resolveMessageRef(message.id, message.conversation.id);
+      if (!ref) return null;
+      await this.editMessage(ref.channel, ref.ts, content);
+      return message.id;
+    },
+    addReaction: async (message, emoji) => {
+      const ref = this.resolveMessageRef(message.id, message.conversation.id);
+      if (!ref) return null;
+      const reaction = normalizeSlackReactionName(emoji);
+      await this.addReaction(ref.channel, ref.ts, reaction);
+      return reaction;
+    },
+    removeReaction: async (message, reactionId) => {
+      const ref = this.resolveMessageRef(message.id, message.conversation.id);
+      if (!ref) return;
+      await this.removeReaction(ref.channel, ref.ts, reactionId);
+    },
+  });
 
   constructor(options: SlackEndpointOptions) {
     this.#logger = getAdapterLogger('slack', options.config.id);

@@ -17,6 +17,7 @@ import {
   AdapterIndex,
   adapterFeatureId,
   defineAdapter,
+  type AdapterOperation,
   type EndpointControl,
   type EndpointManagement,
 } from '@zhin.js/adapter';
@@ -936,7 +937,10 @@ describe('IM Runtime', () => {
         calls.push(`typing:${target}:${String(active)}`);
       },
     };
-    const fixture = await createFixture([], [], undefined, undefined, undefined, { endpointControl: control });
+    const fixture = await createFixture([], [], undefined, undefined, undefined, {
+      endpointControl: control,
+      adapterOperations: ['recall', 'edit', 'reaction', 'typing'],
+    });
     const conversation = {
       endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
       kind: 'group' as const,
@@ -977,7 +981,7 @@ describe('IM Runtime', () => {
       undefined,
       undefined,
       undefined,
-      { endpointControl: control },
+      { endpointControl: control, adapterOperations: ['recall'] },
     );
     let disposed = false;
     fixture.store.commit(0, {
@@ -1011,6 +1015,30 @@ describe('IM Runtime', () => {
     release();
     await recalling;
     await vi.waitFor(() => expect(disposed).toBe(true));
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it('does not execute control methods added outside the declared capability set', async () => {
+    const calls: string[] = [];
+    const control: EndpointControl = {};
+    const fixture = await createFixture([], [], undefined, undefined, undefined, {
+      endpointControl: control,
+    });
+    control.recall = async () => { calls.push('recall'); };
+    const conversation = {
+      endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+      kind: 'private' as const,
+      id: 'room-1',
+    };
+
+    await fixture.im.recallEndpointMessage({
+      adapter: 'memory',
+      endpointKey: 'memory',
+      message: { conversation, id: 'message-1' },
+    });
+
+    expect(calls).toEqual([]);
     await fixture.adapters.stop();
     await fixture.store.close();
   });
@@ -1061,8 +1089,10 @@ describe('IM Runtime', () => {
       source: '/adapters/icqq.ts',
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
+        operations: ['recall'],
         create: () => ({
           name: '111111',
+          control: { recall: async () => undefined },
           management: {
             async listFriends() { return []; },
             async listGroups() { return []; },
@@ -1107,6 +1137,7 @@ describe('IM Runtime', () => {
       adapter: 'icqq',
       connected: true,
       status: 'online',
+      operations: ['recall'],
       managementCapabilities: ['listFriends', 'listGroups', 'kickGroupMember'],
     })]);
     // tree 仅 root → plugins=0；endpoints 与 listEndpoints 对齐
@@ -1121,6 +1152,7 @@ describe('IM Runtime', () => {
       adapter: 'icqq',
       connected: true,
       status: 'online',
+      operations: ['recall'],
       managementCapabilities: ['listFriends', 'listGroups', 'kickGroupMember'],
     }));
     // 用 live name 解析（console endpoint.info 路径）
@@ -1675,6 +1707,7 @@ async function createFixture(
     middleware?: boolean;
     adapterSegments?: { interactive?: 'native' | 'text'; outboundMedia?: readonly ('url' | 'path' | 'base64' | 'upload')[] };
     adapterCapabilities?: readonly ('inbound' | 'outbound')[];
+    adapterOperations?: readonly AdapterOperation[];
     endpointSend?: (request: unknown) => string;
     endpointControl?: EndpointControl;
     endpointManagement?: EndpointManagement;
@@ -1690,6 +1723,7 @@ async function createFixture(
     source: '/adapters/memory.ts',
     definition: defineAdapter({
       capabilities: options?.adapterCapabilities ?? ['inbound', 'outbound'],
+      ...(options?.adapterOperations ? { operations: options.adapterOperations } : {}),
       ...(options?.adapterSegments ? { segments: options.adapterSegments } : {}),
       create: () => ({
         ...(options?.endpointControl ? { control: options.endpointControl } : {}),

@@ -2,10 +2,12 @@
  * Milky reverse WSS endpoint — httpHostToken WS upgrade inbound + baseUrl HTTP API outbound.
  */
 import { clearInterval } from 'node:timers';
-import type {
-  EndpointInstance,
-  EndpointManagement,
-  EndpointSendRequest,
+import {
+  createRecallEndpointControl,
+  type EndpointControl,
+  type EndpointInstance,
+  type EndpointManagement,
+  type EndpointSendRequest,
 } from 'zhin.js/adapter';
 import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
@@ -51,6 +53,7 @@ export class MilkyWssEndpoint implements EndpointInstance {
   readonly #options: MilkyWssEndpointOptions;
   readonly #callApi: typeof callApi;
   readonly management: EndpointManagement = createMilkyEndpointManagement(this);
+  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
   #ws?: MilkyWsSocket;
   #wsRelease?: () => void;
   #heartbeatTimer?: NodeJS.Timeout;

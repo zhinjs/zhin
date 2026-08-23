@@ -17,6 +17,7 @@ export type { WecomEndpointOptions, WecomFetch } from '../src/endpoint.js';
 
 export default defineAdapter<WecomAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  operations: ['recall'],
   // image 段全部经 /cgi-bin/media/upload 物化为 media_id（url 下载后上传、
   // base64/path 直接上传、file 引用直用 media_id）；无卡片交互面，交互段降级纯文本。
   segments: {

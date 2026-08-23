@@ -29,6 +29,7 @@ declare module '@zhin.js/core' {
 
 export default defineAdapter<OneBot12AdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  operations: ['recall'],
   // 媒体段经 upload_file 物化为 file_id（spec 正式投递）；上传失败降级扩展字段透传。
   // 无卡片交互面，交互段降级纯文本。
   segments: {

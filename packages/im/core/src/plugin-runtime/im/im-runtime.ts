@@ -17,8 +17,8 @@ import {
   AdapterIndex,
   adapterFeatureId,
   isAdapterIndex,
-  endpointControlOf,
   resolveEndpointManagement,
+  type AdapterOperation,
   type EndpointControl,
   type EndpointManagement,
   type EndpointManagementCapability,
@@ -804,6 +804,7 @@ export class ImRuntime implements MessageGateway {
     readonly connected: boolean;
     readonly status: 'online' | 'offline';
     readonly phase: AdapterEndpointPhase;
+    readonly operations: readonly AdapterOperation[];
     readonly managementCapabilities: readonly EndpointManagementCapability[];
   }[] {
     try {
@@ -818,6 +819,7 @@ export class ImRuntime implements MessageGateway {
           connected: row.connected,
           status: row.status,
           phase: row.phase,
+          operations: row.operations,
           managementCapabilities: row.managementCapabilities,
         }));
       } finally {
@@ -866,6 +868,7 @@ export class ImRuntime implements MessageGateway {
     readonly connected: boolean;
     readonly status: 'online' | 'offline';
     readonly phase: AdapterEndpointPhase;
+    readonly operations: readonly AdapterOperation[];
     readonly managementCapabilities: readonly EndpointManagementCapability[];
   } | null {
     try {
@@ -884,6 +887,7 @@ export class ImRuntime implements MessageGateway {
           connected: row.connected,
           status: row.status,
           phase: row.phase,
+          operations: row.operations,
           managementCapabilities: row.managementCapabilities,
         });
       } finally {
@@ -931,7 +935,7 @@ export class ImRuntime implements MessageGateway {
     readonly sceneType?: string;
     readonly channelId?: string;
   }): Promise<string | null> {
-    return this.#withEndpointControl(input.adapter, input.endpointKey, (control) =>
+    return this.#withEndpointControl(input.adapter, input.endpointKey, 'reaction', (control) =>
       control.addReaction?.(input.message, input.emoji, {
         sceneType: input.sceneType,
         channelId: input.channelId,
@@ -944,7 +948,7 @@ export class ImRuntime implements MessageGateway {
     readonly message: MessageRef;
     readonly reactionId: string;
   }): Promise<void> {
-    await this.#withEndpointControl(input.adapter, input.endpointKey, (control) =>
+    await this.#withEndpointControl(input.adapter, input.endpointKey, 'reaction', (control) =>
       control.removeReaction?.(
         input.message,
         input.reactionId,
@@ -957,7 +961,7 @@ export class ImRuntime implements MessageGateway {
     readonly endpointKey: string;
     readonly message: MessageRef;
   }): Promise<void> {
-    await this.#withEndpointControl(input.adapter, input.endpointKey, (control) =>
+    await this.#withEndpointControl(input.adapter, input.endpointKey, 'recall', (control) =>
       control.recall?.(input.message), undefined);
   }
 
@@ -967,7 +971,7 @@ export class ImRuntime implements MessageGateway {
     readonly message: MessageRef;
     readonly content: unknown;
   }): Promise<string | null> {
-    return this.#withEndpointControl(input.adapter, input.endpointKey, (control) =>
+    return this.#withEndpointControl(input.adapter, input.endpointKey, 'edit', (control) =>
       control.edit?.(input.message, input.content) ?? null,
     null);
   }
@@ -978,13 +982,14 @@ export class ImRuntime implements MessageGateway {
     readonly conversation: ConversationRef;
     readonly active?: boolean;
   }): Promise<void> {
-    await this.#withEndpointControl(input.adapter, input.endpointKey, (control) =>
+    await this.#withEndpointControl(input.adapter, input.endpointKey, 'typing', (control) =>
       control.typing?.(input.conversation, input.active), undefined);
   }
 
   async #withEndpointControl<T>(
     adapter: string,
     endpointKey: string,
+    operation: AdapterOperation,
     run: (control: EndpointControl) => T | Promise<T>,
     fallback: T,
   ): Promise<T> {
@@ -995,8 +1000,9 @@ export class ImRuntime implements MessageGateway {
       return fallback;
     }
     try {
-      const endpoint = requireAdapters(lease.value).instance(adapter, endpointKey);
-      const control = endpointControlOf(endpoint);
+      const index = requireAdapters(lease.value);
+      const id = index.resolve(adapter, endpointKey);
+      const control = id ? index.control(id, operation) : undefined;
       return control ? await run(control) : fallback;
     } finally {
       lease.release();

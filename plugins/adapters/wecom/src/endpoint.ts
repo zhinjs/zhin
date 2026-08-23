@@ -1,7 +1,12 @@
 /**
  * WecomEndpoint — lifecycle, outbound send, inbound admit, OpenAPI helpers for agent tools.
  */
-import type { EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
+import {
+  createRecallEndpointControl,
+  type EndpointControl,
+  type EndpointInstance,
+  type EndpointSendRequest,
+} from 'zhin.js/adapter';
 import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
@@ -59,6 +64,7 @@ export class WecomEndpoint implements EndpointInstance {
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: WecomEndpointOptions;
+  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
   readonly #fetch: WecomFetch;
   #routeReleases: HttpRouteRegistration[] = [];
   #accessToken: AccessToken = { access_token: '', expires_in: 0, timestamp: 0 };

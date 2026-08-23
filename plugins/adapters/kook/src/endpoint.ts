@@ -2,12 +2,14 @@
  * KookEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
 import { Client } from 'kook-client';
-import type {
-  EndpointChannel,
-  EndpointGroup,
-  EndpointInstance,
-  EndpointManagement,
-  EndpointSendRequest,
+import {
+  createRecallEndpointControl,
+  type EndpointControl,
+  type EndpointChannel,
+  type EndpointGroup,
+  type EndpointInstance,
+  type EndpointManagement,
+  type EndpointSendRequest,
 } from 'zhin.js/adapter';
 import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
@@ -52,6 +54,7 @@ export class KookWebsocketEndpoint implements EndpointInstance {
   #started = false;
   #unregisterAgent?: () => void;
   readonly management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
+  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
 
   constructor(options: KookEndpointOptions) {
     this.#logger = getAdapterLogger('kook', options.config.id);
@@ -226,6 +229,7 @@ export class KookWebhookEndpoint implements EndpointInstance {
   #started = false;
   #unregisterAgent?: () => void;
   readonly management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
+  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
 
   constructor(options: KookWebhookEndpointOptions) {
     this.#logger = getAdapterLogger('kook', options.config.id);

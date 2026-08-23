@@ -26,6 +26,7 @@ declare module '@zhin.js/core' {
 
 export default defineAdapter<OneBot11AdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  operations: ['recall'],
   // OneBot file 参数原生消费 url / base64:// 媒体；无卡片交互面，交互段降级纯文本。
   segments: {
     outboundMedia: ['url', 'base64'],

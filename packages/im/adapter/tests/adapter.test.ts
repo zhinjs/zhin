@@ -24,6 +24,7 @@ import adapterFeature, {
   isAdapterIndex,
   parseAdapterDefinition,
   endpointControlOf,
+  createRecallEndpointControl,
   endpointContentOf,
   resolveEndpointManagement,
   type AdapterSegmentPolicy,
@@ -67,6 +68,22 @@ describe('Adapter Feature', () => {
 
     expect(control?.recall).toBe(explicitRecall);
     expect(endpointControlOf({ recallMessage: async () => undefined })).toBeUndefined();
+  });
+
+  it('adapts platform recall-by-id methods to canonical MessageRef control', async () => {
+    const recall = vi.fn(async () => undefined);
+    const control = createRecallEndpointControl(recall);
+    await control.recall?.({
+      conversation: {
+        endpoint: { id: 'memory', adapter: 'memory' },
+        kind: 'group',
+        id: 'room-1',
+      },
+      id: 'message-1',
+    });
+
+    expect(recall).toHaveBeenCalledWith('message-1');
+    expect(Object.isFrozen(control)).toBe(true);
   });
 
   it('resolves conversation references only through the explicit content port', async () => {
@@ -151,6 +168,94 @@ describe('Adapter Feature', () => {
     });
     const index = await createAdapterIndex([valid], snapshot([valid]));
     await index.stop();
+  });
+
+  it('resolves and exposes exact operations for each expanded Endpoint', async () => {
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'multi-mode',
+      source: '/adapters/multi-mode.ts',
+      definition: defineAdapter<{ mode: 'gateway' | 'webhook' }>({
+        capabilities: ['inbound', 'outbound'],
+        operations: (context) => context.config.mode === 'gateway'
+          ? ['recall', 'reaction']
+          : ['recall'],
+        create: (context) => ({
+          send: async () => 'message-1',
+          control: {
+            recall: async () => undefined,
+            ...(context.config.mode === 'gateway'
+              ? { addReaction: async () => 'reaction-1' }
+              : {}),
+          },
+        }),
+      }),
+    });
+    expect(() => endpointCapabilitiesOf(slot.definition)).toThrow(
+      'Dynamic Adapter operations must be resolved for one Endpoint',
+    );
+    const index = await createAdapterIndex([slot], snapshot([slot], new Map([[root, {
+      endpoints: [
+        { id: 'socket', mode: 'gateway' },
+        { id: 'hook', mode: 'webhook' },
+      ],
+    }]])));
+
+    const socket = index.describe().find((row) => row.name === 'socket');
+    const hook = index.describe().find((row) => row.name === 'hook');
+    expect(socket?.operations).toEqual(['recall', 'reaction']);
+    expect(hook?.operations).toEqual(['recall']);
+    expect(index.capabilities(socket!.id)).toEqual({
+      inbound: true,
+      outbound: true,
+      operations: { recall: true, reaction: true },
+    });
+    expect(index.capabilities(hook!.id)).toEqual({
+      inbound: true,
+      outbound: true,
+      operations: { recall: true },
+    });
+    await index.stop();
+  });
+
+  it('rejects explicit control operations that were not declared', async () => {
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'hidden-control',
+      source: '/adapters/hidden-control.ts',
+      definition: defineAdapter({
+        capabilities: ['outbound'],
+        create: () => ({
+          send: async () => 'message-1',
+          control: { recall: async () => undefined },
+        }),
+      }),
+    });
+
+    await expect(createAdapterIndex([slot], snapshot([slot])))
+      .rejects.toThrow('exposes control.recall but does not declare recall');
+
+    const hiddenReactionRemoval = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'hidden-reaction-removal',
+      source: '/adapters/hidden-reaction-removal.ts',
+      definition: defineAdapter({
+        capabilities: ['outbound'],
+        create: () => ({
+          send: async () => 'message-1',
+          control: { removeReaction: async () => undefined },
+        }),
+      }),
+    });
+    await expect(createAdapterIndex(
+      [hiddenReactionRemoval],
+      snapshot([hiddenReactionRemoval]),
+    )).rejects.toThrow('exposes control.removeReaction but does not declare reaction');
   });
 
   it('forwards only the structured conversation request', async () => {

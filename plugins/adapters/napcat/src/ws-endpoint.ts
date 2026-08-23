@@ -3,8 +3,10 @@
  */
 import WebSocket from 'ws';
 import {
+  createRecallEndpointControl,
   createEndpointLifecycle,
   type EndpointConnectHandle,
+  type EndpointControl,
   type EndpointInstance,
   type EndpointLifecycle,
   type EndpointManagement,
@@ -64,6 +66,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
   readonly #options: NapCatWsEndpointOptions;
   readonly #inboundDeduper = new InboundMessageDeduper();
   readonly management: EndpointManagement = createNapCatEndpointManagement(this);
+  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
   readonly content = createNapCatContentPort((action, params) => this.callApi(action, params));
   readonly #lifecycle: EndpointLifecycle;
   #ws?: NapCatWsSocket;

@@ -259,6 +259,8 @@ export type ConsoleEndpointPhase =
   | 'failed'
   | 'unconfigured';
 
+export type ConsoleEndpointOperation = 'recall' | 'edit' | 'reaction' | 'typing';
+
 /**
  * Forward-compatible Endpoint row shared by both Host implementations and the
  * Remote Console. Optional fields allow clients to consume older Hosts.
@@ -273,6 +275,7 @@ export interface ConsoleEndpointSummary {
   readonly pendingLogin?: boolean;
   readonly pendingRequestCount?: number;
   readonly pendingNoticeCount?: number;
+  readonly operations?: readonly ConsoleEndpointOperation[];
   readonly managementCapabilities?: readonly EndpointManagementCapability[];
 }
 

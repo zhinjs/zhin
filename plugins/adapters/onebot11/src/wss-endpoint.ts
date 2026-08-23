@@ -2,7 +2,13 @@
  * OneBot11 reverse WSS endpoint — accepts inbound WebSocket from OneBot implementation.
  */
 import { clearInterval } from 'node:timers';
-import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
+import {
+  createRecallEndpointControl,
+  type EndpointControl,
+  type EndpointInstance,
+  type EndpointManagement,
+  type EndpointSendRequest,
+} from 'zhin.js/adapter';
 import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
@@ -49,6 +55,7 @@ export class OneBot11WssEndpoint implements EndpointInstance {
 
   readonly #options: OneBot11WssEndpointOptions;
   readonly management: EndpointManagement = createOneBot11EndpointManagement(this);
+  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
   readonly content = createOneBot11ContentPort((action, params) => this.callApi(action, params));
   #ws?: OneBot11WsSocket;
   #wsRelease?: () => void;

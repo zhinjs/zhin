@@ -32,6 +32,7 @@ declare module '@zhin.js/core' {
 
 export default defineAdapter<QqAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  operations: ['recall'],
   // 媒体 url 直发，base64/path 由 SDK formatMediaData 物化走 /files 上传；
   // markdown/keyboard 原生按钮承载交互段。
   segments: {

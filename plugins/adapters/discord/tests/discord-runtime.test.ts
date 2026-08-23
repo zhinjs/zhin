@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { createEndpointRuntimeState, listEndpointManagementCapabilities } from 'zhin.js/adapter';
+import {
+  createEndpointRuntimeState,
+  listEndpointManagementCapabilities,
+  resolveAdapterOperations,
+} from 'zhin.js/adapter';
 import { discordRuntimeStateToken } from '../src/discord-runtime-state.js';
 import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
@@ -339,6 +343,15 @@ describe('discord protocol helpers', () => {
     expect(formatOutboundBody([
       { type: 'markdown', data: { content: '# Title\n\n**important**' } },
     ])).toEqual({ content: '# Title\n\n**important**' });
+  });
+
+  it('declares reaction only for the gateway Endpoint mode', () => {
+    expect(resolveAdapterOperations(defineDiscordAdapter, {
+      config: { connection: 'gateway' },
+    } as never)).toEqual(['recall', 'reaction']);
+    expect(resolveAdapterOperations(defineDiscordAdapter, {
+      config: { connection: 'interactions' },
+    } as never)).toEqual(['recall']);
   });
 
   it('maps canonical MediaRef media to outbound files and drops unusable media with a warn', () => {

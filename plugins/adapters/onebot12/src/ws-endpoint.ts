@@ -4,8 +4,10 @@
 import WebSocket from 'ws';
 import { clearTimeout } from 'node:timers';
 import {
+  createRecallEndpointControl,
   createEndpointLifecycle,
   type EndpointConnectHandle,
+  type EndpointControl,
   type EndpointInstance,
   type EndpointLifecycle,
   type EndpointManagement,
@@ -55,6 +57,7 @@ export class OneBot12WsEndpoint implements EndpointInstance {
 
   readonly #options: OneBot12WsEndpointOptions;
   readonly management: EndpointManagement = createOneBot12EndpointManagement(this);
+  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
   readonly content = createOneBot12ContentPort((action, params) => this.callApi(action, params));
   readonly #lifecycle: EndpointLifecycle;
   #ws?: OneBot12WsSocket;

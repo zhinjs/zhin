@@ -349,6 +349,35 @@ describe('satori plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
+  it('maps canonical recall control to Satori message.delete', async () => {
+    const callApi = vi.fn(async () => undefined);
+    const endpoint = new SatoriWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      config: baseConfig,
+      createWebSocket: createWsFactory(createMockSocket()),
+      callApi,
+    });
+    endpoint.setLogin({ platform: 'test', user: { id: 'bot-1' } });
+    const conversation = {
+      endpoint: { id: 'test-endpoint', adapter: 'satori' },
+      kind: 'group' as const,
+      id: 'ch-9',
+    };
+
+    await endpoint.control.recall?.({ conversation, id: 'inbound-1' });
+
+    expect(callApi).toHaveBeenCalledWith(
+      expect.objectContaining({ platform: 'test', userId: 'bot-1' }),
+      'message',
+      'delete',
+      { channel_id: 'ch-9', message_id: 'inbound-1' },
+    );
+  });
+
   it('creates webhook endpoint when httpHostToken provided', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);

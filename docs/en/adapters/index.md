@@ -54,6 +54,24 @@ _(Currently none)_
 | OneBot v12 | `@zhin.js/adapter-onebot12` | — | [OneBot v12](/adapters/onebot12) |
 | Satori | `@zhin.js/adapter-satori` | — | [Satori](/adapters/satori) |
 
+## Unified message operations
+
+Every Endpoint declaring `outbound` supports sending. Additional message operations
+use the platform-neutral `EndpointControl` port and are declared precisely for each
+concrete Endpoint; Core never probes private platform SDK methods.
+
+| Operation | Integrated platforms |
+|-----------|----------------------|
+| `recall` | Discord, ICQQ, KOOK, Lark, Milky, NapCat, OneBot 11/12, QQ Official, Satori, Slack, Telegram, WeCom |
+| `edit` | Slack |
+| `reaction` | Discord Gateway, ICQQ, Slack |
+| `typing` | Weixin iLink |
+
+Connection modes of one adapter may expose different capabilities. For example,
+Discord Gateway supports reactions while Interactions mode declares recall only.
+Host and Console clients can read the concrete capability set from `operations` on
+each Endpoint row.
+
 ## Maintenance Notes
 
 - **Single source of truth (tiers)**: `scripts/adapter-meta.mjs`

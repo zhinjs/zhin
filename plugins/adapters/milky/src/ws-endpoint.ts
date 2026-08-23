@@ -3,8 +3,10 @@
  */
 import WebSocket from 'ws';
 import {
+  createRecallEndpointControl,
   createEndpointLifecycle,
   type EndpointConnectHandle,
+  type EndpointControl,
   type EndpointInstance,
   type EndpointLifecycle,
   type EndpointManagement,
@@ -56,6 +58,7 @@ export class MilkyWsEndpoint implements EndpointInstance {
   readonly #options: MilkyWsEndpointOptions;
   readonly #callApi: typeof callApi;
   readonly management: EndpointManagement = createMilkyEndpointManagement(this);
+  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
   readonly #lifecycle: EndpointLifecycle;
   #ws?: MilkyWsSocket;
   #open = false;
