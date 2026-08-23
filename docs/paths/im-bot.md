@@ -1,10 +1,15 @@
-# IM Bot 路径（无 AI，约 1 小时）
+# 交付一个无 AI 的 IM Bot
 
-目标：一个响应命令、能发通知的聊天机器人。不碰任何 AI 概念。
+目标：完成“接收消息 → 执行业务 → 回复或主动通知”的闭环。预计 45–60 分钟，不涉及模型、Prompt 或 Agent。
 
-想先确认「框架能不能跑」？仓库里的 [single-file-bot](../examples/index.md#single-file-bot-一个-botts-就是机器人) 一个 `bot.ts` 就能在 Console Sandbox 里回 `/hello`。
+## 完成标准
 
-## 1. 创建项目（2 分钟）
+- Sandbox 中 `/roll` 能稳定回复。
+- 保存代码后，新 generation 自动生效。
+- 至少一个真实平台 Endpoint 在线。
+- 主动通知使用 Runtime 出站能力，而不是直接调用适配器实例。
+
+## 1. 从可重复的 Sandbox 开始
 
 ```bash
 npm create zhin-app my-bot -y
@@ -12,81 +17,96 @@ cd my-bot
 pnpm dev
 ```
 
-`-y` 走 IM-only 黄金路径：Sandbox 适配器（本地调试）+ Remote Console，**不需要任何云 Key**。
-看到启动日志后，打开 [console.zhin.dev](https://console.zhin.dev)，
-Host 填 `http://127.0.0.1:8086`，token 在 `.env` 的 `HTTP_TOKEN`。Sandbox 里发 **`/hello`** 应有回复。
+用终端打印的 API Base 和 `.env` 中的 `HTTP_TOKEN` 连接 Console。进入“渠道与会话”中的 Sandbox，先确认 `/hello` 有回复。
 
-## 2. 写第一个命令（5 分钟）
+## 2. 添加一个命令
 
-项目里已有一个 `hello` 命令。照它再写一个——在 `commands/` 新建 `roll.ts`：
+创建 `commands/roll.ts`：
 
 ```ts
-import { defineCommand } from 'zhin.js/command'
+import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
-  description: '掷骰子',
+  description: '掷一个六面骰子',
   execute: () => `🎲 ${1 + Math.floor(Math.random() * 6)}`,
-})
+});
 ```
 
-保存即热重载。在 Console 的 Sandbox 里发 `roll` 就有回应。
+保存后发送 `/roll`。文件路径提供命令路由；例如 `commands/gh/issue.ts` 对应 `/gh issue`。
 
-**规则只有一条**：`commands/` 下的文件路径就是命令名（`commands/gh/issue.ts` → 命令 `gh issue`）。
+## 3. 添加主动通知
 
-## 3. 定时通知（10 分钟）
-
-需要"每天 9 点往群里发一句"？用 schedule host——在 `plugin.ts` 的 `setup()` 里：
+定时任务只决定“何时执行”；消息仍应经过 `outboundHostToken`，这样 Sandbox 和真实平台共用同一条出站链路。
 
 ```ts
-import { definePlugin, scheduleHostToken } from 'zhin.js'
+import {
+  definePlugin,
+  outboundHostToken,
+  scheduleHostToken,
+} from 'zhin.js';
 
-export default definePlugin({
+interface Config {
+  morningTarget?: {
+    adapter: string;
+    endpointKey: string;
+    conversation: { kind: 'private' | 'group' | 'channel'; id: string };
+  };
+}
+
+export default definePlugin<Config>({
   name: 'my-bot',
-  setup(ctx) {
-    if (ctx.resources.has(scheduleHostToken)) {
-      const schedule = ctx.resources.use(scheduleHostToken)
-      schedule.register({
-        id: 'my-bot/morning',
-        cron: '0 0 9 * * *',
-        description: '早安推送',
-        async execute() { /* 通过 outbound host 发消息 */ },
-      })
-    }
+  setup(context) {
+    const target = context.config.get().morningTarget;
+    if (!target) return;
+    if (!context.resources.has(outboundHostToken)) return;
+    const outbound = context.resources.use(outboundHostToken);
+    const schedule = context.resources.use(scheduleHostToken);
+
+    context.lifecycle.add(schedule.register({
+      id: 'my-bot/morning',
+      cron: '0 0 9 * * *',
+      description: '每天 9 点发送早安',
+      execute: async () => {
+        await outbound.send({
+          ...target,
+          content: '早上好',
+        });
+      },
+    }));
   },
-})
+});
 ```
 
-## 4. 接真实平台（20 分钟）
+`endpointKey` 使用 Console“渠道与会话”显示的完整 Endpoint identity。`lifecycle.add()` 保证热重载退休旧 generation 时注销旧任务。
+
+## 4. 接入真实平台
 
 ```bash
-npx zhin setup    # 交互向导：选平台 → 填凭据（敏感信息自动写 .env）
+npx zhin setup --adapters
+pnpm install
+pnpm dev
 ```
 
-向导支持全部 20 个平台（QQ 官方 / icqq / 微信 / Discord / Slack / Telegram…），
-QQ 官方和微信 iLink 还能**扫码绑定**，不用手动找 token。
+向导会同时修改 `package.json#zhin.plugins`、`zhin.config.yml` 和 `.env`。凭据只进入 `.env`，配置文件保留变量引用。
 
-生成的配置长这样（凭据只占位，真实值在 `.env`）：
+一个适配器实例可声明多个 Endpoint。业务命令和组件不应依赖具体适配器，因此从 Sandbox 切换到 QQ、Discord 或 Slack 时无需重写业务层。
 
-```yaml
-plugins:
-  qq:
-    mode: websocket
-    endpoints:
-      - name: my-bot
-        appid: ${QQ_APPID}
-        secret: ${QQ_SECRET}
-```
+## 5. 在 Console 验收
 
-重启即上线。**一个 bot 要挂多个账号**？`endpoints` 数组再加一项就行。
+1. “渠道与会话”确认 Endpoint 在线并发送测试消息。
+2. “运行时能力”确认 `/roll` 来自当前 generation。
+3. “日志”检查命令和主动通知没有错误。
+4. 重启 Host，再重复一次真实平台测试。
 
-## 5. 你现在已经会的
+## 常见边界
 
-- 命令 = `commands/` 下的文件
-- 配置 = `zhin.config.yml`（平台）+ `.env`（凭据）
-- 管理 = Remote Console（发消息 / 改配置 / 看日志 / 管定时任务）
+- `zhin.config.yml` 保存配置；插件挂载关系只写 `package.json#zhin`。
+- 主动消息通过 `outboundHostToken`，不要持有全局 Adapter 实例。
+- 定时任务是六段 cron：秒、分、时、日、月、周。
+- 只有对应 Host token 已装配时，插件才能使用该能力。
 
 ## 下一步
 
-- 想要 AI 对话 → [AI Agent 路径](./ai-agent.md)
-- 想管多个账号/平台 → [Console 管理路径](./console.md)
-- 想写复杂插件 → [插件开发](../authoring/define-plugin.md)
+- 让 Bot 使用模型与工具：[AI Agent 路径](./ai-agent.md)
+- 管理多个账号和运行态：[Console 管理路径](./console.md)
+- 深入命令参数与权限：[命令系统](../authoring/commands.md)

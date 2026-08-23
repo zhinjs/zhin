@@ -1,87 +1,74 @@
-# Installation & Startup
+# Run your first Bot in 10 minutes
 
-First, verify your environment: Node.js `^20.19.0` or `>=22.12.0`, pnpm 9+.  
-When running TypeScript directly with Plugin Runtime, `zhin runtime start` requires Node **>=22.6** (22.6--22.17: the CLI automatically adds `--experimental-strip-types`; **>=22.18 recommended**).
+This page delivers one result: send `/hello` to a new Bot in the browser Sandbox and receive a reply from the real Runtime. No platform account or model key is required.
 
-## How easy is it?
+## Before you start
 
-Shortest path: **scaffold -> start -> send a command in Console**. No platform adapter boilerplate, no model key required.
+- Node.js `^20.19.0` or `>=22.12.0`; `>=22.18` is recommended for direct TypeScript execution.
+- pnpm 9 or newer.
+- Access to [Remote Console](https://console.zhin.dev).
+
+## 1. Create and start
 
 ```bash
-npm create zhin-app my-bot -y   # or pnpm create zhin-app my-bot -y
+npm create zhin-app my-bot -y
 cd my-bot
 pnpm dev
 ```
 
-1. Open [console.zhin.dev](https://console.zhin.dev)
-2. Fill in the Host address shown in the terminal (default `http://127.0.0.1:8086`) and the `HTTP_TOKEN` from `.env` (`-y` generates one)
-3. Go to **Sandbox**, send `/hello`
+`-y` creates the IM golden path with HTTP Host, Sandbox, Remote Console, and a `/hello` example. Remove `-y` when you want the wizard to configure a real platform, database, or AI.
 
-`-y` skips the wizard and takes the **IM golden path** (Sandbox + Host + Remote Console). To choose adapters / databases / AI, remove `-y` to enter the interactive wizard (`@zhin.js/scaffold-wizard`).
+## 2. Verify in Console
 
-Already have a project and want to add an adapter or AI:
+The startup output prints the API Base. New projects currently use `http://127.0.0.1:8068`; always trust the terminal or `http.port` in `zhin.config.yml`.
+
+1. Open [console.zhin.dev](https://console.zhin.dev).
+2. Enter the API Base printed by the Host.
+3. Use `HTTP_TOKEN` from the project `.env` file.
+4. Open Sandbox under **Conversations & Channels** and send `/hello`.
+
+A reply proves the Console authentication, HTTP Host, Sandbox Endpoint, command discovery, and outbound reply path all work.
+
+## 3. Know the generated project
+
+```text
+my-bot/
+├── package.json          # Runtime topology: entry, features, plugins
+├── zhin.config.yml       # Host and plugin configuration values
+├── .env                  # token, platform credentials, model keys
+├── plugin.ts             # root plugin entry
+├── commands/             # file paths define command routes
+├── components/           # reusable message components
+└── pages/                # Console pages contributed by the plugin
+```
+
+`package.json#zhin` is the topology source of truth. `zhin.config.yml` stores values only. Convention files and capabilities registered in `setup()` enter the same generation projection.
+
+## 4. Observe hot reload
+
+Change the reply in `commands/hello.ts`, save it, and send `/hello` again. New requests use the new generation; an in-flight request keeps its original snapshot.
+
+## Troubleshooting
 
 ```bash
-npx zhin setup
+npx zhin doctor
 ```
 
-## Want to see "one file is a bot"?
+Doctor checks Node, pnpm, ports, `HTTP_TOKEN`, CORS, and the project manifest. When Console cannot connect, check the API Base printed by this project instead of assuming a default port.
 
-The repo example [single-file-bot](../examples/index.md#single-file-bot-一个-botts-就是机器人) puts commands inside `setup({ addCommand })` in `bot.ts`, with no `commands/` directory:
+## Choose the next outcome
 
-```bash
-# pnpm install already ran at the repo root
-pnpm --filter single-file-bot dev
-```
+| Need | Shape | Continue with |
+| --- | --- | --- |
+| Validate an idea | one `bot.ts` file | [Examples](../examples/) |
+| Build commands and components | plugin + convention directories | [IM Bot path](../paths/im-bot.md) |
+| Add models and tools | Agent Features | [AI Agent path](../paths/ai-agent.md) |
+| Operate multiple accounts | HTTP Host + Remote Console | [Console path](../paths/console.md) |
 
-Console -> Sandbox -> `/hello`. Full instructions in that directory's [README](https://github.com/zhinjs/zhin/tree/main/examples/single-file-bot).
-
-## Four startup paths
-
-From "one file" to "full application" in ascending complexity -- **one command**: `zhin runtime start`.
-
-| Path | Form | Startup | Reference |
-|------|------|---------|-----------|
-| Single file | One `bot.ts` + `addCommand` / `addComponent`... | `zhin runtime start` | [single-file-bot](../examples/index.md#single-file-bot-一个-botts-就是机器人) |
-| Single plugin | `plugin.ts` + convention directories (`commands/` etc.) | `zhin runtime start` | [minimal-bot](../examples/index.md#minimal-bot-stable-最小路径) |
-| Plugin as application | Single plugin + `zhin.config.yml` (HTTP, database, sub-plugins) | `zhin runtime start` | [capabilities-bot](../examples/index.md#capabilities-bot-defineplugin-能力样板) |
-| Full application | Multi-plugin workspace (adapters + feature plugins + AI) | `pnpm create zhin-app` -> `pnpm dev` | [full-bot](../examples/index.md#full-bot-l4-参考含-ai) |
-
-```mermaid
-flowchart LR
-  subgraph Project directory
-    P[bot.ts / plugin.ts<br/>definePlugin]
-    C[commands/ components/ ...<br/>convention directories · optional]
-    Y[zhin.config.yml<br/>optional]
-    M[package.json#zhin<br/>topology manifest]
-  end
-  CLI[zhin runtime start] --> M
-  M --> P
-  M --> F[Feature providers<br/>adapter / command / component]
-  F --> C
-  Y -. injected per plugins.&lt;instanceKey&gt; .-> P
-```
-
-`package.json#zhin` is the single source of truth for topology: `entry`, `features`, `plugins`. `zhin.config.yml` holds only configuration values. Capabilities registered in `setup()` and those discovered from convention directories enter the same Feature projection -- if a single file is enough, write a single file; split into directories when you outgrow it.
-
-### Common commands
-
-```bash
-zhin runtime start                          # Development mode (watch + hot reload)
-zhin runtime start --mode production --no-watch   # Production mode
-zhin runtime start --daemon                 # Background daemon (zhin stop to stop)
-```
-
-The `zhin` binary is provided by the dev dependency `@zhin.js/cli`.
-
-## Install tiers (zhin.js 4.x)
+## Install tiers
 
 ```md
-<<< ../snippets/install-tiers.md#tiers-table
+<<< ../../snippets/install-tiers.md#tiers-table
 ```
 
-## Next steps
-
-- [Write your first plugin](./first-plugin.md): From an empty directory to a runnable plugin (or start with a single file)
-- [Examples at a glance](../examples/index.md): How to run the official examples
-- [definePlugin](../authoring/define-plugin.md): What else `setup` can do
+Prefer an outcome over learning the package graph first: [Choose a solution](../solutions/).

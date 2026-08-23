@@ -1,89 +1,112 @@
-# AI Agent 路径（约半天）
+# 从 IM Bot 增加一个受治理的 Agent
 
-目标：bot 能 AI 对话、会调工具、记得住事。建议先走完 [IM Bot 路径](./im-bot.md)。
+目标：在已有消息链上增加模型、工具和插件上下文，同时保持权限、Prompt 与 Runtime generation 可观察。建议先完成 [IM Bot 路径](./im-bot.md)。
 
-## 1. 装 AI（2 分钟）
+## 完成标准
+
+- 私聊或 `ai:` 前缀能触发模型回复。
+- Agent 能发现并调用一个 generation-owned Tool。
+- Prompt Section 出现在 Console 能力目录，但正文不会泄露。
+- 文件、命令和网络权限由策略控制，不由提示词授予。
+
+## 1. 用向导安装完整 AI 拓扑
 
 ```bash
-pnpm add @zhin.js/agent zod ai
-pnpm add @ai-sdk/openai   # 或 deepseek / anthropic / google，按厂商选
+npx zhin setup --ai
+pnpm install
+pnpm dev
 ```
 
-zhin 默认只是 IM 框架（<10MB）——AI 是**装上才有**的，不装不影响任何 IM 功能。
+向导不仅安装模型 SDK，还会挂载 `@zhin.js/tool` 与 `@zhin.js/prompt-section` Feature。只手工安装 `@zhin.js/agent` 不足以建立完整发现拓扑。
 
-## 2. 配 provider（5 分钟）
+云模型 Key 写入 `.env`。本地模型可选择 Ollama，不需要云凭据。
+
+## 2. 核对 provider 与 Agent binding
 
 ```yaml
-# zhin.config.yml
 ai:
   providers:
     openai-main:
       sdk: openai
-      apiKey: ${AI_API_KEY}        # 真实值放 .env
+      apiKey: ${AI_API_KEY}
   agents:
     zhin:
       provider: openai-main
       model: gpt-4o-mini
 ```
 
-重启后，私聊 bot 直接说话就是 AI 对话；群聊里 `@bot` 或 `ai:` 前缀触发。
+`providers` 定义连接；`agents` 把角色绑定到 provider 和 model。私聊默认可触发 Agent，群或频道可使用 `ai:`、`AI:`、`#` 前缀，或由适配器提供可信 mention 标记。
 
-**本地模型**：`sdk: ollama` + `host: http://localhost:11434`，零云成本
-（参考 [个人生活助手案例](../showcase/personal-assistant.md)）。
+## 3. 声明一个 Tool
 
-## 3. 给 AI 一件工具（20 分钟）
-
-在 `agent/tools/` 新建 `weather.ts`：
+创建 `tools/weather.ts`：
 
 ```ts
-import { defineAgentTool } from '@zhin.js/agent/tools'
-import { z } from 'zod'
+import { defineAgentTool } from '@zhin.js/tool';
+import { z } from 'zod';
 
-export default defineAgentTool({
-  name: 'weather',
+export default defineAgentTool<{ city: string }>({
   description: '查询城市实时天气',
-  inputSchema: z.object({ city: z.string().describe('城市名') }),
+  inputSchema: z.object({ city: z.string().min(1) }),
+  approval: 'never',
   async execute({ city }) {
-    const res = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=3`)
-    return res.text()
+    const response = await fetch(
+      `https://wttr.in/${encodeURIComponent(city)}?format=3`,
+    );
+    return response.text();
   },
-})
+});
 ```
 
-热重载后对 bot 说"查一下杭州天气"——AI 会自己发现并调用这个工具。
-（工具默认进 deferred catalog，模型用 `discover`/`load_tool` 按需装载，不占上下文。）
+文件路径提供本地名称。Tool 进入当前 generation 的能力目录，并按回合权限、平台、场景和审批策略过滤后才对模型可见。
 
-## 4. 记忆（10 分钟）
+## 4. 给插件补充业务上下文
 
-三层 Markdown 记忆开箱即用，无需配置：
+创建 `agent/prompt-sections/product-language.ts`：
 
-| 层 | 位置 | 记什么 |
-|----|------|--------|
-| 全局 | `data/memory/global/` | 你的偏好、长期事实 |
-| 平台 | `data/memory/platforms/<platform>/` | 平台规则、群规 |
-| 会话 | `data/memory/sessions/<id>/` | 这次对话的上下文 |
+```ts
+import { defineAgentPromptSection } from '@zhin.js/prompt-section';
 
-直接对 bot 说"记住我不吃香菜"，它会写进记忆；新会话里它还记得。
-
-## 5. 多 provider 分流（进阶，可选）
-
-不同角色用不同模型——便宜的做闲聊，贵的做评审：
-
-```yaml
-ai:
-  agents:
-    zhin:       { provider: openrouter, model: openrouter/free }
-    reviewer:   { provider: openai-main, model: gpt-4o, nickname: '妞妞' }
+export default defineAgentPromptSection({
+  title: 'Product language',
+  content: 'Use Workroom for a governed collaboration space.',
+  layer: 'context',
+  order: 70,
+  retention: 'preferred',
+  profiles: ['interactive'],
+});
 ```
 
-## 你现在已经会的
+Prompt Section 固定到 generation。热更后，新回合读取新版本；已经开始的回合继续使用旧快照。它只改变模型上下文，不增加任何 Tool、文件或网络权限。
 
-- AI = 装包 + `ai:` 配置，IM 部分零改动
-- 工具 = `agent/tools/` 下的文件，AI 自己发现调用
-- 记忆 = 不用管，三层自动写
+## 5. 理解记忆边界
+
+三层 Markdown 记忆默认可被读取：
+
+| 层 | 路径 | 适合保存 |
+| --- | --- | --- |
+| 部署级 | `data/memory/global/` | 长期产品事实与偏好 |
+| 平台级 | `data/memory/platforms/<platform>/` | 群规和平台约束 |
+| 会话级 | `data/memory/sessions/<hash>/` | 当前会话笔记 |
+
+“加载记忆”不等于“允许写入”。写文件仍要经过 Turn 的文件策略与 Tool；全局和平台记忆只有 Endpoint Owner 可以写，会话笔记用于普通会话。
+
+## 6. 在 Console 验收
+
+1. “Agent 概览”确认 provider、binding 和当前运行态。
+2. “运行时能力”检查 Tool 与 Prompt Section 的 owner、source、generation。
+3. 在“渠道与会话”发起请求，观察 Agent 工作台中的步骤和工具结果。
+4. 重载 Prompt Section，确认旧回合不被新内容污染。
+
+## 安全原则
+
+- Prompt 说明意图，Tool Feature 提供能力，Host 策略决定授权。
+- `required` Prompt Section 放不进预算时应明确失败，不静默截断。
+- MCP Server 先在 `ai.mcpServers` 声明，再由 `agents.<name>.mcpServers` 分配。
+- 工作目录和 shell 安全策略属于 Turn，不从用户文本或 Prompt 自报获得。
 
 ## 下一步
 
-- 工具要调本地文件/命令 → 读 [Agent 创作面与安全策略](../authoring/agent-tools.md)（白名单与审批）
-- 想接 MCP 服务 → `ai.mcpServers` 配置
-- 想在浏览器里管多个 bot → [Console 管理路径](./console.md)
+- 完整 Tool、Prompt 与执行策略：[Agent 创作面与安全](../authoring/agent-tools.md)
+- 外部工具协议：[MCP 配置](../configuration/#mcpservers-外部-mcp-server)
+- 多 Agent 协作空间：[Workroom Kernel](../ai/agent.md#workroom-kernel)

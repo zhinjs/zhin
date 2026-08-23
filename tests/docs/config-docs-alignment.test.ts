@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_CONFIG } from '../../packages/im/agent/src/config/index.js';
+import { DEFAULT_CREATE_BOT_HTTP_PORT } from '../../packages/toolkit/scaffold-wizard/src/zhin-stack-deps.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const configurationMd = fs.readFileSync(
@@ -13,6 +14,12 @@ const configurationMd = fs.readFileSync(
   'utf8',
 );
 const aiMd = fs.readFileSync(path.join(repoRoot, 'docs/ai/agent.md'), 'utf8');
+const gettingStartedMd = fs.readFileSync(path.join(repoRoot, 'docs/getting-started/index.md'), 'utf8');
+const gettingStartedEnMd = fs.readFileSync(path.join(repoRoot, 'docs/en/getting-started/index.md'), 'utf8');
+const aiPathMd = fs.readFileSync(path.join(repoRoot, 'docs/paths/ai-agent.md'), 'utf8');
+const aiPathEnMd = fs.readFileSync(path.join(repoRoot, 'docs/en/paths/ai-agent.md'), 'utf8');
+const consolePathMd = fs.readFileSync(path.join(repoRoot, 'docs/paths/console.md'), 'utf8');
+const consolePathEnMd = fs.readFileSync(path.join(repoRoot, 'docs/en/paths/console.md'), 'utf8');
 const minimalConfig = fs.readFileSync(
   path.join(repoRoot, 'examples/minimal-bot/zhin.config.yml'),
   'utf8',
@@ -80,6 +87,29 @@ describe('config documentation alignment', () => {
       const content = fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
       expect(content, relativePath).not.toMatch(/api:\s*ollama-chat/);
       expect(content, relativePath).not.toMatch(/driver 应迁移为 api/);
+    }
+  });
+
+  it('首跑与 Console 路径跟随脚手架端口而非 Runtime fallback', () => {
+    for (const content of [gettingStartedMd, gettingStartedEnMd, consolePathMd, consolePathEnMd]) {
+      expect(content).toContain(String(DEFAULT_CREATE_BOT_HTTP_PORT));
+      expect(content).not.toContain('http://127.0.0.1:8086');
+    }
+  });
+
+  it('AI 学习路径安装完整 Feature 拓扑', () => {
+    for (const content of [aiPathMd, aiPathEnMd]) {
+      expect(content).toContain('zhin setup --ai');
+      expect(content).toContain('@zhin.js/tool');
+      expect(content).toContain('@zhin.js/prompt-section');
+      expect(content).not.toContain('pnpm add @zhin.js/agent zod ai');
+    }
+  });
+
+  it('Console 路径把 Workroom Catalog 与 ai 配置分离', () => {
+    for (const content of [consolePathMd, consolePathEnMd]) {
+      expect(content).toMatch(/Runtime Catalog/);
+      expect(content).toContain('ai.workrooms');
     }
   });
 });

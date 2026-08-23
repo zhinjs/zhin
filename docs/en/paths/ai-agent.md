@@ -1,89 +1,112 @@
-# AI Agent Path (~Half a Day)
+# Add a governed Agent to an IM Bot
 
-Goal: a bot that can have AI conversations, call tools, and remember things. It is recommended to complete the [IM Bot Path](./im-bot.md) first.
+Goal: add models, tools, and plugin context to an existing message path while keeping authority, Prompt, and Runtime generation observable. Complete the [IM Bot path](./im-bot.md) first.
 
-## 1. Install AI (2 minutes)
+## Done means
+
+- A private message or `ai:` prefix triggers a model reply.
+- The Agent discovers and calls a generation-owned Tool.
+- A Prompt Section appears in Console without exposing its content.
+- File, command, and network authority comes from policy, never the Prompt.
+
+## 1. Install the complete AI topology
 
 ```bash
-pnpm add @zhin.js/agent zod ai
-pnpm add @ai-sdk/openai   # Or deepseek / anthropic / google, depending on your provider
+npx zhin setup --ai
+pnpm install
+pnpm dev
 ```
 
-zhin defaults to an IM-only framework (<10MB) -- AI is **added only when installed**, and not installing it does not affect any IM functionality.
+The wizard installs a model SDK and mounts the `@zhin.js/tool` and `@zhin.js/prompt-section` Features. Installing `@zhin.js/agent` alone does not create the complete discovery topology.
 
-## 2. Configure a Provider (5 minutes)
+Cloud model keys belong in `.env`. Ollama is available for local models without cloud credentials.
+
+## 2. Check the provider and Agent binding
 
 ```yaml
-# zhin.config.yml
 ai:
   providers:
     openai-main:
       sdk: openai
-      apiKey: ${AI_API_KEY}        # Real values go in .env
+      apiKey: ${AI_API_KEY}
   agents:
     zhin:
       provider: openai-main
       model: gpt-4o-mini
 ```
 
-After restarting, direct messages to the bot become AI conversations; in group chats, `@bot` or the `ai:` prefix triggers it.
+`providers` define connections. `agents` bind roles to a provider and model. Private messages trigger the Agent by default; groups and channels can use `ai:`, `AI:`, `#`, or a trusted mention supplied by the Adapter.
 
-**Local models**: `sdk: ollama` + `host: http://localhost:11434`, zero cloud cost
-(see the [Personal Assistant showcase](../showcase/personal-assistant.md)).
+## 3. Declare a Tool
 
-## 3. Give the AI a Tool (20 minutes)
-
-Create `weather.ts` in `agent/tools/`:
+Create `tools/weather.ts`:
 
 ```ts
-import { defineAgentTool } from '@zhin.js/agent/tools'
-import { z } from 'zod'
+import { defineAgentTool } from '@zhin.js/tool';
+import { z } from 'zod';
 
-export default defineAgentTool({
-  name: 'weather',
-  description: 'Query real-time weather for a city',
-  inputSchema: z.object({ city: z.string().describe('City name') }),
+export default defineAgentTool<{ city: string }>({
+  description: 'Get current weather for a city',
+  inputSchema: z.object({ city: z.string().min(1) }),
+  approval: 'never',
   async execute({ city }) {
-    const res = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=3`)
-    return res.text()
+    const response = await fetch(
+      `https://wttr.in/${encodeURIComponent(city)}?format=3`,
+    );
+    return response.text();
   },
-})
+});
 ```
 
-After hot-reload, tell the bot "check the weather in Hangzhou" -- the AI will discover and call this tool on its own.
-(Tools go into the deferred catalog by default; the model uses `discover`/`load_tool` to load them on demand, without occupying context.)
+The file path supplies the local name. The Tool enters the generation catalog, then turn authority, platform, scene, and approval policy decide whether the model can see it.
 
-## 4. Memory (10 minutes)
+## 4. Add plugin-owned context
 
-Three-layer Markdown memory works out of the box, no configuration needed:
+Create `agent/prompt-sections/product-language.ts`:
 
-| Layer | Location | What It Remembers |
-|-------|----------|-------------------|
-| Global | `data/memory/global/` | Your preferences, long-term facts |
-| Platform | `data/memory/platforms/<platform>/` | Platform rules, group rules |
-| Session | `data/memory/sessions/<id>/` | Context of this conversation |
+```ts
+import { defineAgentPromptSection } from '@zhin.js/prompt-section';
 
-Just tell the bot "remember I don't eat cilantro" and it will write it to memory; it will still remember in new sessions.
-
-## 5. Multi-Provider Routing (Advanced, Optional)
-
-Different roles use different models -- cheap ones for casual chat, expensive ones for reviews:
-
-```yaml
-ai:
-  agents:
-    zhin:       { provider: openrouter, model: openrouter/free }
-    reviewer:   { provider: openai-main, model: gpt-4o, nickname: 'Niuniu' }
+export default defineAgentPromptSection({
+  title: 'Product language',
+  content: 'Use Workroom for a governed collaboration space.',
+  layer: 'context',
+  order: 70,
+  retention: 'preferred',
+  profiles: ['interactive'],
+});
 ```
 
-## What You Now Know
+The section is pinned to a generation. New turns see the hot-reloaded version; an in-flight turn keeps its old snapshot. A Prompt Section changes context and grants no Tool, file, or network authority.
 
-- AI = install packages + `ai:` config; IM part requires zero changes
-- Tools = files under `agent/tools/`; AI discovers and calls them on its own
-- Memory = hands-off; three layers are written automatically
+## 5. Understand memory boundaries
 
-## Next Steps
+Three Markdown memory layers are read by default:
 
-- Tools need to access local files/commands -> Read [Agent Authoring Surface & Security Policies](../authoring/agent-tools.md) (allowlists and approvals)
-- Want to connect MCP services -> `ai.mcpServers` config
-- Want to manage multiple bots in a browser -> [Console Management Path](./console.md)
+| Layer | Path | Appropriate content |
+| --- | --- | --- |
+| Deployment | `data/memory/global/` | durable product facts and preferences |
+| Platform | `data/memory/platforms/<platform>/` | platform rules and constraints |
+| Session | `data/memory/sessions/<hash>/` | current conversation notes |
+
+Loading memory does not grant write access. Writes still pass through Turn file policy and Tools. Global and platform memory are owner-only; normal conversations use session notes.
+
+## 6. Accept the result in Console
+
+1. Check provider, binding, and runtime state in **Agent Overview**.
+2. Inspect Tool and Prompt Section owner, source, and generation in **Runtime Capabilities**.
+3. Start a request in **Conversations & Channels** and inspect its steps and Tool results.
+4. Reload the Prompt Section and verify an old turn is not contaminated.
+
+## Security rules
+
+- Prompt describes intent, Tool Feature provides capability, Host policy grants authority.
+- A `required` Prompt Section fails explicitly when it cannot fit the budget.
+- Declare MCP Servers in `ai.mcpServers`, then assign them through `agents.<name>.mcpServers`.
+- Working directory and shell policy belong to the Turn and cannot be self-declared in user text.
+
+## Next
+
+- Tool, Prompt, and execution policy: [Agent authoring and safety](../authoring/agent-tools.md)
+- External tool protocol: [MCP configuration](../configuration/#mcpservers-external-mcp-server)
+- Governed multi-Agent collaboration: [Workroom Kernel](../ai/agent.md#workroom-kernel)

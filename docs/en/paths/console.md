@@ -1,63 +1,76 @@
-# Console Management Path (~1 Hour)
+# Operate a running Zhin with Console
 
-Goal: manage your bot in a browser -- send messages, change config, view logs, manage multiple accounts.
-Console is a standalone site at [console.zhin.dev](https://console.zhin.dev);
-your bot (Host) only exposes an API and does not serve any pages.
+Goal: confirm the current generation, handle messages, diagnose failures, and observe Agent or Workroom state without signing in to the server.
 
-## 1. Connect Your Bot (3 minutes)
+Console is a separate Web app. The Host provides token-protected API, SSE, and Sandbox endpoints.
 
-After your bot starts (default `http://127.0.0.1:8086`):
+## Done means
 
-1. Open [console.zhin.dev](https://console.zhin.dev)
-2. Set Host to `http://127.0.0.1:8086`
-3. Set Token to the `HTTP_TOKEN` from your `.env`
+- You can distinguish desired configuration from active runtime state.
+- You can trace an Endpoint message through Agent steps and logs.
+- Persisted sessions and Workroom Tasks survive a page refresh.
+- Demo tokens remain read-only; full tokens can perform allowed administration.
 
-Three steps, that is it. No account system. The token is your authority -- do not leak it.
+## 1. Connect the Host
 
-## 2. Dashboard Quick Tour (10 minutes)
+1. Start the Bot and copy the API Base printed by the terminal.
+2. Open [console.zhin.dev](https://console.zhin.dev).
+3. Use `HTTP_TOKEN` from the project `.env` file.
 
-| Page | What You Can Do |
-|------|-----------------|
-| Overview | Plugin count / endpoint online count / uptime / memory |
-| Plugins | Capability card for each plugin (commands/tools/pages/adapters); click in to edit config |
-| Endpoints | Connection status for each account; click in to see friends/groups/send and receive messages |
-| Config | Edit any plugin config via form (hot-reload), or directly edit the full YAML |
-| Logs | Runtime logs stored in SystemLog (database), filterable by level |
-| Database | Browse/edit the bot's SQLite tables |
-| Scheduled Tasks | Start/stop/create/delete cron tasks |
+New projects currently use port `8068`, but Console should always follow terminal output or `http.port`. Run `npx zhin doctor` when the connection fails.
 
-## 3. Multi-Account Management (15 minutes)
+## 2. Choose a page by task
 
-One adapter plugin can host multiple accounts (endpoints) -- five QQ alt accounts, QQ Official main bot + sandbox bot.
-On the "Plugins" page, they appear as **one card with a row of endpoints beneath it**, each showing its online status.
+| Task | Page | Source of truth |
+| --- | --- | --- |
+| Judge system health | Dashboard | Endpoint, log, Agent, and action summaries |
+| Send messages or handle requests | Conversations & Channels | Endpoints, sessions, messages, notices, requests |
+| Observe one Agent execution | Agent Overview | runs, steps, Tool results, cancel and retry actions |
+| Operate collaboration projects | Workroom | Project-scoped runs, Tasks, Assignments, Gates |
+| Check active capabilities | Runtime Capabilities | commands, middleware, components, Tools, Prompt Sections, MCP |
+| Diagnose a failure | Logs | level, source, timeline, details |
+| Change the system | Config, Environment, Files, Database | full-scope administration only |
 
-Two ways to add accounts:
+Do not infer that a configured capability is active. Use the generation projection in **Runtime Capabilities** and the concrete Run.
 
-- **Config file**: Add an item to the `plugins.<adapter>.endpoints` array, then restart
-- **Chat command** (some platforms): Send `qq.endpoint add` in QQ Official chat,
-  scan the QR code on your phone to bind (credentials are auto-written to `.env`, config auto-appended, restart to take effect)
+## 3. Verify live events and history recovery
 
-## 4. Send & Receive Messages Live (10 minutes)
+**Conversations & Channels** receives incremental events through SSE and pulls authoritative history through HTTP RPC. On a recovery gap, Console discards the incremental projection and reloads the current Endpoint and Channel.
 
-Click into any endpoint on the "Endpoints" page:
+Refreshing should not lose messages persisted by the Host. If an Adapter cannot provide history, Console can show only the portion already persisted in the Host inbox.
 
-- Friends / groups list (when the platform supports it)
-- Select a conversation and send a message (uses the exact same outbound chain as bot replies)
-- Inbound messages push in real-time (SSE), no refresh needed
+## 4. Use the Agent workbench
 
-## 5. Remote / Production Setup (10 minutes)
+An Agent Run is identified by `runtimeId + turnId`; time and message text are not reliable identity. The workbench shows model steps, Tool calls, cancellation terminal state, and portable reports.
 
-- **CORS**: Add your Console origin to `http.corsOrigins`
-- **Demo read-only mode**: Use a demo token for public demos (read-only RPC, all write operations return 403)
-- **Reverse proxy**: Console and API can share a domain -- reverse-proxy `/api` and `/entries` to the bot's port 8086
+Lab sessions are persisted by the Host. A task can specify its working directory and security policy. Prompt Sections, Tools, and MCP still come from the fixed generation snapshot for that turn.
 
-## What You Now Know
+## 5. Use the Workroom board
 
-- Console = a pure frontend site + your bot provides the API; token is authority
-- Multi-account = one plugin card with multiple endpoints underneath
-- Day-to-day operations (logs/config/scheduled tasks/messaging) require no SSH and no code changes
+One Workroom binds one complete collaboration space: a group, channel, or GitHub repository. One Bot Endpoint may serve multiple Workrooms.
 
-## Next Steps
+**Workroom Configuration** writes the persistent Runtime Catalog and takes effect immediately. It does not write `ai.workrooms` or require a Host restart. Member Agents must reference current `ai.agents` bindings.
 
-- Write your own Console pages -> Plugin `pages/` directory (refer to the sandbox adapter)
-- Real multi-platform deployment reference -> [Multi-Platform Community Bot Showcase](../showcase/community-bot.md)
+Runs, Tasks, Assignments, Reviewer state, and Sponsor Gates are read-only projections of the Workroom Journal. Console cannot fabricate Task state; writes use authenticated typed control ports.
+
+## 6. Keep full and demo authority separate
+
+- Full token: Host policy may allow configuration, environment, file, database, and control operations.
+- Demo token: read-only catalogs and projections; no raw YAML, sending, rendering, or mutation.
+- A token is a credential. Keep it out of URLs, screenshots, and public frontend configuration.
+
+For remote deployment, configure `http.corsOrigins` and proxy API, SSE, WebSocket, and page entries. Proxying ordinary HTTP alone is incomplete.
+
+## 7. Use one diagnostic sequence
+
+1. Check connection and health on the Dashboard.
+2. Confirm inbound delivery in Conversations & Channels.
+3. Confirm the command, Tool, or Prompt Section in Runtime Capabilities.
+4. Inspect execution steps and terminal state in Agent Overview.
+5. Narrow Logs to the same time window and source.
+
+## Next
+
+- Console and Host boundaries: [Console architecture](../console/)
+- Workroom facts and authority: [Workroom Kernel](../ai/agent.md#workroom-kernel)
+- Multi-platform production example: [Community Bot](../showcase/community-bot.md)
