@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type {
   EndpointFriend,
+  EndpointControl,
   EndpointInstance,
   EndpointManagement,
   EndpointSendRequest,
@@ -107,6 +108,12 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
   #open = false;
   #started = false;
   readonly management: EndpointManagement = createWeixinIlinkEndpointManagement(this);
+  readonly control: EndpointControl = Object.freeze<EndpointControl>({
+    typing: (conversation, active) => this.sendTypingToUser(
+      conversation.id,
+      active === false ? 2 : 1,
+    ),
+  });
 
   constructor(options: WeixinIlinkEndpointOptions) {
     this.#logger = getAdapterLogger('weixin-ilink', options.config.id);

@@ -23,6 +23,15 @@ export interface EndpointWithControl {
   readonly control?: EndpointControl;
 }
 
+/** Bridges the common platform `recall(messageId)` shape into canonical control. */
+export function createRecallEndpointControl(
+  recallById: (messageId: string) => void | Promise<void>,
+): Readonly<EndpointControl> {
+  return Object.freeze<EndpointControl>({
+    recall: (message) => Promise.resolve(recallById(message.id)),
+  });
+}
+
 /** Reads the canonical control port without probing protocol-specific methods. */
 export function endpointControlOf(endpoint: unknown): EndpointControl | undefined {
   if (!endpoint || typeof endpoint !== 'object') return undefined;
@@ -46,6 +55,24 @@ export function hasExplicitEndpointOperation(
   }
 }
 
+/** Lists the semantic operations implemented by an Endpoint's explicit control port. */
+export function listExplicitEndpointOperations(
+  endpoint: unknown,
+): readonly ('recall' | 'edit' | 'reaction' | 'typing')[] {
+  if (!endpoint || typeof endpoint !== 'object') return Object.freeze([]);
+  const control = (endpoint as EndpointWithControl).control;
+  if (!control || typeof control !== 'object') return Object.freeze([]);
+  const operations: Array<'recall' | 'edit' | 'reaction' | 'typing'> = [];
+  if (typeof control.recall === 'function') operations.push('recall');
+  if (typeof control.edit === 'function') operations.push('edit');
+  if (
+    typeof control.addReaction === 'function'
+    || typeof control.removeReaction === 'function'
+  ) operations.push('reaction');
+  if (typeof control.typing === 'function') operations.push('typing');
+  return Object.freeze(operations);
+}
+
 /** Rejects a declaration that cannot be fulfilled by the explicit control port. */
 export function assertDeclaredEndpointOperations(
   endpoint: unknown,
@@ -59,8 +86,25 @@ export function assertDeclaredEndpointOperations(
       );
     }
   }
+  const declared = new Set(operations ?? []);
+  for (const operation of listExplicitEndpointOperations(endpoint)) {
+    if (!declared.has(operation)) {
+      throw new TypeError(
+        `Adapter Endpoint ${id} exposes control.${explicitControlMethodName(endpoint, operation)} but does not declare ${operation}`,
+      );
+    }
+  }
 }
 
 function controlMethodName(operation: 'recall' | 'edit' | 'reaction' | 'typing'): string {
   return operation === 'reaction' ? 'addReaction' : operation;
+}
+
+function explicitControlMethodName(
+  endpoint: unknown,
+  operation: 'recall' | 'edit' | 'reaction' | 'typing',
+): string {
+  if (operation !== 'reaction') return operation;
+  const control = (endpoint as EndpointWithControl).control;
+  return typeof control?.addReaction === 'function' ? 'addReaction' : 'removeReaction';
 }

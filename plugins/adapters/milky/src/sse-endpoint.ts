@@ -2,8 +2,10 @@
  * Milky SSE client endpoint — GET text/event-stream on /event.
  */
 import {
+  createRecallEndpointControl,
   createEndpointLifecycle,
   type EndpointConnectHandle,
+  type EndpointControl,
   type EndpointInstance,
   type EndpointLifecycle,
   type EndpointManagement,
@@ -58,6 +60,7 @@ export class MilkySseEndpoint implements EndpointInstance {
   readonly #options: MilkySseEndpointOptions;
   readonly #callApi: typeof callApi;
   readonly management: EndpointManagement = createMilkyEndpointManagement(this);
+  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
   readonly #lifecycle: EndpointLifecycle;
   #stream?: SseClientHandle;
   #open = false;

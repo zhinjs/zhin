@@ -26,8 +26,13 @@ AdapterIndex 和 generation lifecycle 管理。
 
 Adapter definitions declare `capabilities` for inbound/outbound admission and
 `operations` for optional actions such as `recall`, `edit`, `reaction`, and
-`typing`. Runtime callers should query the resulting `EndpointCapabilities`
-instead of probing optional endpoint methods. The zero-dependency types live in
+`typing`. `operations` accepts either a static list or a resolver receiving the
+concrete `AdapterContext`; use the resolver when connection modes expose different
+operations. `AdapterIndex` resolves, freezes, and exposes the exact set for every
+expanded Endpoint. Runtime callers should query the resulting `EndpointCapabilities`
+instead of probing optional endpoint methods. Declarations and the explicit
+`EndpointControl` port are validated in both directions, so hidden or unimplemented
+operations fail candidate generation before commit. The zero-dependency types live in
 [`@zhin.js/im-contract`](../im-contract/README.md).
 
 Framework-facing outbound code carries a structured `ConversationRef`.
@@ -45,7 +50,8 @@ boundary.
 
 New adapters should provide `control` directly and declare matching
 `operations`. Protocol-specific methods and compound string identifiers are not
-inspected or adapted by the runtime.
+inspected by the runtime. `createRecallEndpointControl()` bridges the common
+platform `recall(messageId)` shape without leaking that shape into Core.
 
 ## Endpoint 生命周期基座（createEndpointLifecycle）
 

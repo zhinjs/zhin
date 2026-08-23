@@ -32,6 +32,7 @@ declare module '@zhin.js/core' {
 
 export default defineAdapter<NapCatAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  operations: ['recall'],
   // OneBot file 参数原生消费 url / base64:// 媒体，file:// 本地路径由 NapCat 侧读盘；
   // 无卡片交互面，交互段降级纯文本。
   segments: {

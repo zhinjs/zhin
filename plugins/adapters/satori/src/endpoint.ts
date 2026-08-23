@@ -5,6 +5,7 @@ import {
   createEndpointLifecycle,
   type EndpointChannel,
   type EndpointConnectHandle,
+  type EndpointControl,
   type EndpointGroup,
   type EndpointInstance,
   type EndpointLifecycle,
@@ -66,6 +67,9 @@ export class SatoriWsEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createSatoriEndpointManagement(
     (resource, method, params) => this.#api(resource, method, params),
   );
+  readonly control: EndpointControl = Object.freeze<EndpointControl>({
+    recall: (message) => this.recall(message.id, message.conversation.id),
+  });
 
   constructor(options: SatoriWsEndpointOptions) {
     this.#logger = getAdapterLogger('satori', options.config.id);
@@ -168,10 +172,10 @@ export class SatoriWsEndpoint implements EndpointInstance {
     });
   }
 
-  async recall(id: string): Promise<void> {
+  async recall(id: string, fallbackChannelId?: string): Promise<void> {
     const { channelId, messageId } = parseMessageRef(id);
     await this.#api('message', 'delete', {
-      channel_id: channelId,
+      channel_id: channelId || fallbackChannelId || '',
       message_id: messageId,
     });
   }
@@ -325,6 +329,9 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createSatoriEndpointManagement(
     (resource, method, params) => this.#api(resource, method, params),
   );
+  readonly control: EndpointControl = Object.freeze<EndpointControl>({
+    recall: (message) => this.recall(message.id, message.conversation.id),
+  });
 
   constructor(options: SatoriWebhookEndpointOptions) {
     this.#logger = getAdapterLogger('satori', options.config.id);
@@ -425,10 +432,10 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
     });
   }
 
-  async recall(id: string): Promise<void> {
+  async recall(id: string, fallbackChannelId?: string): Promise<void> {
     const { channelId, messageId } = parseMessageRef(id);
     await this.#api('message', 'delete', {
-      channel_id: channelId,
+      channel_id: channelId || fallbackChannelId || '',
       message_id: messageId,
     });
   }

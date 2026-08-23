@@ -1,11 +1,13 @@
 /**
  * QQ endpoints — lifecycle, outbound, admit, agent tool surface.
  */
-import type {
-  EndpointChannel,
-  EndpointInstance,
-  EndpointManagement,
-  EndpointSendRequest,
+import {
+  createRecallEndpointControl,
+  type EndpointControl,
+  type EndpointChannel,
+  type EndpointInstance,
+  type EndpointManagement,
+  type EndpointSendRequest,
 } from 'zhin.js/adapter';
 import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost } from '@zhin.js/host-http';
@@ -64,6 +66,7 @@ export class QqWebsocketEndpoint implements EndpointInstance {
   #started = false;
   #unregisterAgent?: () => void;
   readonly management: EndpointManagement = createQqEndpointManagement(this);
+  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
 
   constructor(options: QqEndpointOptions) {
     this.#logger = getAdapterLogger('qq', options.config.id);
@@ -291,6 +294,7 @@ export class QqHttpEndpoint implements EndpointInstance {
   #started = false;
   #unregisterAgent?: () => void;
   readonly management: EndpointManagement = createQqEndpointManagement(this);
+  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
 
   constructor(options: QqHttpEndpointOptions) {
     this.#logger = getAdapterLogger('qq', options.config.id);

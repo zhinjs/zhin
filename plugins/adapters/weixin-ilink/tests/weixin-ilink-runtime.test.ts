@@ -128,6 +128,25 @@ describe('weixin-ilink protocol helpers', () => {
 });
 
 describe('weixin-ilink plugin runtime adapter', () => {
+  it('maps canonical typing control to the iLink typing status', async () => {
+    const endpoint = new WeixinIlinkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'weixin-ilink'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      config: baseConfig,
+      resolveCredentials: async () => ({ botToken: 'tok' }),
+    });
+    const sendTyping = vi.spyOn(endpoint, 'sendTypingToUser').mockResolvedValue(undefined);
+
+    await endpoint.control.typing?.(privateConversation('user-1'), true);
+    await endpoint.control.typing?.(privateConversation('user-1'), false);
+
+    expect(sendTyping).toHaveBeenNthCalledWith(1, 'user-1', 1);
+    expect(sendTyping).toHaveBeenNthCalledWith(2, 'user-1', 2);
+  });
+
   it('routes admitted messages through MessageGateway when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };

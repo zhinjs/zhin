@@ -10,20 +10,31 @@ import {
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import { createCapabilityContext } from '@zhin.js/feature-kit';
-import type {
-  AdapterCapability,
-  AdapterDefinition,
-  AdapterSegmentPolicy,
-  EndpointInstance,
-  EndpointSendRequest,
+import {
+  endpointCapabilitiesOf,
+  resolveAdapterOperations,
+  type AdapterCapability,
+  type AdapterDefinition,
+  type AdapterOperation,
+  type AdapterSegmentPolicy,
+  type EndpointInstance,
+  type EndpointSendRequest,
 } from './definition.js';
 import {
   listEndpointManagementCapabilities,
   type EndpointManagementCapability,
 } from './endpoint-management.js';
-import { assertDeclaredEndpointOperations } from './endpoint-control.js';
+import {
+  assertDeclaredEndpointOperations,
+  endpointControlOf,
+  type EndpointControl,
+} from './endpoint-control.js';
 import { endpointContentOf, type EndpointContentResolveContext } from './endpoint-content.js';
-import type { ConversationReference, ConversationResolution } from '@zhin.js/im-contract';
+import type {
+  ConversationReference,
+  ConversationResolution,
+  EndpointCapabilities,
+} from '@zhin.js/im-contract';
 
 export interface AdapterDescriptor {
   readonly id: CapabilityId;
@@ -31,6 +42,7 @@ export interface AdapterDescriptor {
   readonly name: string;
   readonly source: string;
   readonly capabilities: readonly AdapterCapability[];
+  readonly operations: readonly AdapterOperation[];
 }
 
 /** Console / Host-facing endpoint row (connected = admission open). */
@@ -80,7 +92,7 @@ export class AdapterIndex {
       for (const slot of [...slots].sort((left, right) => left.id.localeCompare(right.id))) {
         signal.throwIfAborted();
         for (const expansion of expandEndpointConfigs(slot, snapshot)) {
-          const endpoint = await createEndpoint(slot, snapshot, admission, signal, expansion);
+          const created = await createEndpoint(slot, snapshot, admission, signal, expansion);
           signal.throwIfAborted();
           records.push({
             id: expansion.id,
@@ -90,7 +102,8 @@ export class AdapterIndex {
             name: expansion.endpointId,
             source: slot.source,
             capabilities: slot.definition.capabilities,
-            endpoint,
+            operations: created.operations,
+            endpoint: created.endpoint,
             ...(slot.definition.segments ? { segments: slot.definition.segments } : {}),
             started: false,
             open: false,
@@ -122,6 +135,7 @@ export class AdapterIndex {
       name: endpointLiveName(record.endpoint) ?? record.name,
       source: record.source,
       capabilities: record.capabilities,
+      operations: record.operations,
       connected: record.open && !record.stopped,
       status: record.open && !record.stopped ? 'online' as const : 'offline' as const,
       phase: endpointPhase(record),
@@ -156,6 +170,21 @@ export class AdapterIndex {
     const record = this.#records.get(id);
     if (!record) throw new Error(`Unknown Adapter Endpoint: ${id}`);
     return record.owner;
+  }
+
+  /** Exact, serializable capabilities for one concrete Endpoint. */
+  capabilities(id: CapabilityId): EndpointCapabilities {
+    const record = this.#records.get(id);
+    if (!record) throw new Error(`Unknown Adapter Endpoint: ${id}`);
+    return endpointCapabilitiesOf(record, record.operations);
+  }
+
+  /** Returns the control port only when the concrete Endpoint declared the operation and is active. */
+  control(id: CapabilityId, operation: AdapterOperation): EndpointControl | undefined {
+    const record = this.#records.get(id);
+    if (!record || !record.started || record.stopped) return undefined;
+    if (!record.operations.includes(operation)) return undefined;
+    return endpointControlOf(record.endpoint);
   }
 
   /**
@@ -396,15 +425,15 @@ async function createEndpoint(
   admission: GenerationAdmissionGate,
   signal: AbortSignal,
   expansion?: EndpointExpansion,
-): Promise<EndpointInstance> {
-  const endpoint = await slot.definition.create(
-    Object.freeze({
-      ...createCapabilityContext(snapshot, slot.owner, admission, signal),
-      ...(expansion?.config ? { config: expansion.config } : {}),
-      id: expansion?.id ?? slot.id,
-      name: slot.localName,
-    }),
-  );
+): Promise<Readonly<{ endpoint: EndpointInstance; operations: readonly AdapterOperation[] }>> {
+  const context = Object.freeze({
+    ...createCapabilityContext(snapshot, slot.owner, admission, signal),
+    ...(expansion?.config ? { config: expansion.config } : {}),
+    id: expansion?.id ?? slot.id,
+    name: slot.localName,
+  });
+  const operations = resolveAdapterOperations(slot.definition, context);
+  const endpoint = await slot.definition.create(context);
   assertEndpoint(endpoint, expansion?.id ?? slot.id);
   if (slot.definition.capabilities.includes('outbound') && typeof endpoint.send !== 'function') {
     throw new TypeError(
@@ -413,10 +442,10 @@ async function createEndpoint(
   }
   assertDeclaredEndpointOperations(
     endpoint,
-    slot.definition.operations,
+    operations,
     String(expansion?.id ?? slot.id),
   );
-  return endpoint;
+  return Object.freeze({ endpoint, operations });
 }
 
 async function stopRecords(

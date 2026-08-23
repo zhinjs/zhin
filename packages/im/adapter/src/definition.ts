@@ -16,6 +16,11 @@ export type AdapterCapability = 'inbound' | 'outbound';
 /** Operations beyond sending, declared by an Adapter definition. */
 export type AdapterOperation = Exclude<EndpointOperation, 'send'>;
 
+/** Resolve operations for one concrete Endpoint configuration. */
+export type AdapterOperationDeclaration<TConfig = unknown> =
+  | readonly AdapterOperation[]
+  | ((context: AdapterContext<TConfig>) => readonly AdapterOperation[]);
+
 /** 端点可消费的出站媒体来源形式。 */
 export type AdapterOutboundMedia = 'url' | 'path' | 'base64' | 'upload';
 
@@ -103,7 +108,7 @@ export interface AdapterDefinition<TConfig = unknown> {
    * `capabilities: ['outbound']`; a method existing on an endpoint is not a
    * capability declaration.
    */
-  readonly operations?: readonly AdapterOperation[];
+  readonly operations?: AdapterOperationDeclaration<TConfig>;
   /** 可选：端点消息段能力声明（出站协商降级挂载点）。 */
   readonly segments?: AdapterSegmentPolicy;
   create(
@@ -134,7 +139,9 @@ export function defineAdapter<TConfig = unknown>(
     throw new TypeError('Adapter capabilities must contain inbound and/or outbound');
   }
   const segments = normalizeSegmentPolicy(definition.segments);
-  const operations = normalizeOperations(definition.operations);
+  const operations = typeof definition.operations === 'function'
+    ? definition.operations
+    : normalizeOperations(definition.operations);
   return Object.freeze({
     ...definition,
     $feature: adapterBrand,
@@ -147,8 +154,14 @@ export function defineAdapter<TConfig = unknown>(
 /** Converts the definition's compact authoring form into the public contract. */
 export function endpointCapabilitiesOf(
   definition: Pick<AdapterDefinition, 'capabilities' | 'operations'>,
+  resolvedOperations?: readonly AdapterOperation[],
 ): EndpointCapabilities {
-  const operations = definition.operations?.reduce<Partial<Record<AdapterOperation, true>>>(
+  if (typeof definition.operations === 'function' && resolvedOperations === undefined) {
+    throw new TypeError('Dynamic Adapter operations must be resolved for one Endpoint');
+  }
+  const declared = resolvedOperations
+    ?? (Array.isArray(definition.operations) ? definition.operations : undefined);
+  const operations = declared?.reduce<Partial<Record<AdapterOperation, true>>>(
     (result, operation) => ({ ...result, [operation]: true }),
     {},
   );
@@ -157,6 +170,18 @@ export function endpointCapabilitiesOf(
     outbound: definition.capabilities.includes('outbound'),
     ...(operations && Object.keys(operations).length > 0 ? { operations: Object.freeze(operations) } : {}),
   });
+}
+
+/** Resolve and validate the operation declaration for one concrete Endpoint. */
+export function resolveAdapterOperations<TConfig>(
+  definition: Pick<AdapterDefinition<TConfig>, 'operations'>,
+  context: AdapterContext<TConfig>,
+): readonly AdapterOperation[] {
+  const declaration = definition.operations;
+  const operations = typeof declaration === 'function'
+    ? declaration(context)
+    : declaration;
+  return normalizeOperations(operations) ?? Object.freeze([]);
 }
 
 function normalizeOperations(
@@ -240,7 +265,9 @@ export function parseAdapterDefinition(value: unknown): AdapterDefinition {
   ) throw invalidAdapter();
   // defineAdapter 已校验过形状；外部手工构造的 definition 也在此兜底
   normalizeSegmentPolicy(definition.segments);
-  normalizeOperations(definition.operations);
+  if (typeof definition.operations !== 'function') {
+    normalizeOperations(definition.operations);
+  }
   return definition as AdapterDefinition;
 }
 

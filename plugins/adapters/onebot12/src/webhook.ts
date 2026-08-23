@@ -2,7 +2,13 @@
  * OneBot12 HTTP webhook endpoint — POST inbound + api_url outbound.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
+import {
+  createRecallEndpointControl,
+  type EndpointControl,
+  type EndpointInstance,
+  type EndpointManagement,
+  type EndpointSendRequest,
+} from 'zhin.js/adapter';
 import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -40,6 +46,7 @@ export interface OneBot12WebhookEndpointOptions {
 export class OneBot12WebhookEndpoint implements EndpointInstance {
   readonly #options: OneBot12WebhookEndpointOptions;
   readonly management: EndpointManagement = createOneBot12EndpointManagement(this);
+  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
   readonly content = createOneBot12ContentPort((action, params) => this.callApi(action, params));
   readonly #callAction: typeof callOneBot12Action;
   #routeReleases: HttpRouteRegistration[] = [];
@@ -111,6 +118,11 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
       messageId,
     }));
     return messageId;
+  }
+
+  async recallMessage(messageId: string): Promise<void> {
+    if (!messageId) return;
+    await this.callApi('delete_message', { message_id: messageId });
   }
 
   /** Public API for management surface / callers；webhook 模式走 api_url。 */
