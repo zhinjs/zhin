@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-discord",
-  "version": "7.0.14",
+  "version": "8.0.0",
   "description": "Zhin.js Discord adapter for Plugin Runtime (Gateway WebSocket)",
   "type": "module",
   "main": "./lib/index.js",

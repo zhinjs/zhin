@@ -1,5 +1,65 @@
 # test-bot
 
+## 0.1.142
+
+### Patch Changes
+
+- Updated dependencies [b10d058]
+- Updated dependencies [f2c532f]
+- Updated dependencies [a94584f]
+- Updated dependencies [3dbf990]
+  - @zhin.js/cli@3.0.14
+  - @zhin.js/client@2.1.11
+  - @zhin.js/adapter-discord@8.0.0
+  - @zhin.js/adapter-kook@8.0.0
+  - @zhin.js/adapter-lark@7.0.0
+  - @zhin.js/adapter-milky@7.0.0
+  - @zhin.js/adapter-napcat@7.0.0
+  - @zhin.js/adapter-onebot11@7.0.0
+  - @zhin.js/adapter-onebot12@6.0.0
+  - @zhin.js/adapter-qq@8.0.0
+  - @zhin.js/adapter-satori@6.0.0
+  - @zhin.js/adapter-slack@7.0.0
+  - @zhin.js/adapter-wecom@5.0.0
+  - @zhin.js/adapter-weixin-ilink@6.0.0
+  - @zhin.js/agent@1.1.15
+  - @zhin.js/adapter-sandbox@8.0.0
+  - @zhin.js/contract@1.0.16
+  - @zhin.js/mcp@6.0.13
+  - @zhin.js/adapter-dingtalk@7.0.0
+  - @zhin.js/adapter-github@6.0.0
+  - @zhin.js/adapter-line@5.0.0
+  - @zhin.js/adapter-telegram@8.0.0
+  - @zhin.js/adapter-wechat-mp@6.0.0
+  - @zhin.js/adapter-email@6.0.0
+  - @zhin.js/adapter-icqq@9.0.0
+  - zhin.js@6.0.13
+  - @zhin.js/html-renderer@3.0.13
+  - @zhin.js/speech@3.0.13
+  - @zhin.js/plugin-blackjack@0.0.22
+  - @zhin.js/plugin-dice-duel@1.0.22
+  - @zhin.js/plugin-dungeon-expedition@1.0.18
+  - @zhin.js/plugin-guess-number@1.0.22
+  - @zhin.js/plugin-idiom-chain@1.0.22
+  - @zhin.js/plugin-rps@1.0.22
+  - @zhin.js/plugin-text-adventure@1.0.22
+  - @zhin.js/plugin-tic-tac-toe@1.0.22
+  - @zhin.js/plugin-word-riddle@1.0.22
+  - @zhin.js/plugin-content-moderation@1.0.11
+  - @zhin.js/plugin-group-suite@4.0.15
+  - @zhin.js/plugin-link-poster@3.0.22
+  - @zhin.js/plugin-music@8.0.0
+  - @zhin.js/plugin-qrcode@4.0.15
+  - @zhin.js/plugin-repeater@3.0.22
+  - @zhin.js/service-activity-feedback@3.0.15
+  - @zhin.js/plugin-60s@4.0.15
+  - @zhin.js/plugin-code-runner@4.0.15
+  - @zhin.js/plugin-lottery@2.0.15
+  - @zhin.js/plugin-rss@4.0.15
+  - @zhin.js/plugin-short-url@4.0.15
+  - @zhin.js/plugin-game-hub@1.0.21
+  - @zhin.js/process-monitor@3.0.20
+
 ## 0.1.141
 
 ### Patch Changes
