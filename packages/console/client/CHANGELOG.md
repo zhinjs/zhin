@@ -1,5 +1,15 @@
 # @zhin.js/client
 
+## 2.1.11
+
+### Patch Changes
+
+- b10d058: Preserve standard SSE event metadata, expose typed resumable Console event history, recover missed events before reconnecting the live stream, and allow durable unread notices to be rebuilt after a history gap.
+- Updated dependencies [b10d058]
+- Updated dependencies [f2c532f]
+  - @zhin.js/console-protocol@1.1.4
+  - @zhin.js/contract@1.0.16
+
 ## 2.1.10
 
 ### Patch Changes

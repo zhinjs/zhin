@@ -1,5 +1,24 @@
 # @zhin.js/cli
 
+## 3.0.14
+
+### Patch Changes
+
+- b10d058: Preserve standard SSE event metadata, expose typed resumable Console event history, recover missed events before reconnecting the live stream, and allow durable unread notices to be rebuilt after a history gap.
+- a94584f: Add authenticated `zhin agent workroom runs` and `zhin agent workroom run` commands for content-free online Run, Task, and Assignment status inspection, with explicit missing-token and offline-Host diagnostics.
+- 3dbf990: Add content-free Workroom readiness diagnostics and authenticated Sponsor controls for exact-sequence Run cancellation and durable replan requests.
+- Updated dependencies [b10d058]
+- Updated dependencies [f2c532f]
+- Updated dependencies [3dbf990]
+  - @zhin.js/host-http@1.0.12
+  - @zhin.js/adapter@1.2.0
+  - @zhin.js/core@1.5.13
+  - @zhin.js/agent@1.1.15
+  - @zhin.js/a2a@3.0.15
+  - @zhin.js/runtime@1.0.13
+  - @zhin.js/speech@3.0.13
+  - @zhin.js/pagemanager@2.0.20
+
 ## 3.0.13
 
 ### Patch Changes

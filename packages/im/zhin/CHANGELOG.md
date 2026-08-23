@@ -1,5 +1,17 @@
 # zhin.js
 
+## 6.0.13
+
+### Patch Changes
+
+- Updated dependencies [f2c532f]
+- Updated dependencies [3dbf990]
+  - @zhin.js/core@1.5.13
+  - @zhin.js/agent@1.1.15
+  - @zhin.js/runtime@1.0.13
+  - @zhin.js/html-renderer@3.0.13
+  - @zhin.js/speech@3.0.13
+
 ## 6.0.12
 
 ### Patch Changes

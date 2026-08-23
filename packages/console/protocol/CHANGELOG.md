@@ -1,5 +1,12 @@
 # @zhin.js/console-protocol
 
+## 1.1.4
+
+### Patch Changes
+
+- b10d058: Preserve standard SSE event metadata, expose typed resumable Console event history, recover missed events before reconnecting the live stream, and allow durable unread notices to be rebuilt after a history gap.
+- f2c532f: Expose exact per-Endpoint message operations through one validated Adapter capability model, route Core control calls through declared active capabilities, and connect existing recall, edit, reaction, and typing implementations across platform adapters.
+
 ## 1.1.3
 
 ### Patch Changes

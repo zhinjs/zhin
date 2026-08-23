@@ -1,5 +1,15 @@
 # @zhin.js/plugin-group-suite
 
+## 4.0.15
+
+### Patch Changes
+
+- Updated dependencies [f2c532f]
+- Updated dependencies [3dbf990]
+  - @zhin.js/core@1.5.13
+  - @zhin.js/agent@1.1.15
+  - zhin.js@6.0.13
+
 ## 4.0.14
 
 ### Patch Changes

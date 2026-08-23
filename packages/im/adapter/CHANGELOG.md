@@ -1,5 +1,11 @@
 # @zhin.js/adapter
 
+## 1.2.0
+
+### Minor Changes
+
+- f2c532f: Expose exact per-Endpoint message operations through one validated Adapter capability model, route Core control calls through declared active capabilities, and connect existing recall, edit, reaction, and typing implementations across platform adapters.
+
 ## 1.1.11
 
 ### Patch Changes

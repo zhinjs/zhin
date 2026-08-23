@@ -1,5 +1,13 @@
 # @zhin.js/agent
 
+## 1.1.15
+
+### Patch Changes
+
+- 3dbf990: Add content-free Workroom readiness diagnostics and authenticated Sponsor controls for exact-sequence Run cancellation and durable replan requests.
+- Updated dependencies [f2c532f]
+  - @zhin.js/core@1.5.13
+
 ## 1.1.14
 
 ### Patch Changes

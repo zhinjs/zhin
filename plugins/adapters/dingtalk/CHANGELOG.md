@@ -1,5 +1,18 @@
 # @zhin.js/adapter-dingtalk
 
+## 7.0.0
+
+### Patch Changes
+
+- Updated dependencies [b10d058]
+- Updated dependencies [f2c532f]
+- Updated dependencies [3dbf990]
+  - @zhin.js/host-http@1.0.12
+  - @zhin.js/adapter@1.2.0
+  - @zhin.js/core@1.5.13
+  - @zhin.js/agent@1.1.15
+  - zhin.js@6.0.13
+
 ## 6.0.14
 
 ### Patch Changes

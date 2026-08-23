@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-content-moderation",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Content moderation plugin for Zhin.js — inbound/outbound multi-source scanning (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",
