@@ -108,6 +108,17 @@ describe("applyConsoleEvent inbox record ids", () => {
     expect(new Set(rows.map((r) => r.id)).size).toBe(2);
   });
 
+  it('deduplicates the same resumable event across history and live delivery', async () => {
+    const event = { ...PUSH, runtimeId: 'runtime-a', eventId: 7, timestamp: 1700000000000 };
+    await applyConsoleEvent(event);
+    await applyConsoleEvent(event);
+
+    const rows = await idbListInbox('icqq', 'bot-1', 'message');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe('runtime-a:7');
+    expect(rows[0]?.updatedAt).toBe(1700000000000);
+  });
+
   it("reads legacy records that only carry endpointKey (camelCase)", async () => {
     // 旧版（DB v1 时代）记录只有 endpointKey 字段，升级后仍需能被列出
     const { idbPutInbox } = await import("./idb-store.js");

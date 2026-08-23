@@ -46,6 +46,56 @@ function makeInboxDb(tables: Record<string, Record<string, unknown>[] | Error>) 
   };
 }
 
+function makePagedInboxDb(
+  rows: Record<string, unknown>[],
+  observed: { limit?: number; offset?: number },
+) {
+  return {
+    models: {
+      get() {
+        return {
+          select: () => {
+            let selected = rows.slice();
+            let limit = selected.length;
+            let offset = 0;
+            const selection = {
+              where(query: Record<string, unknown>) {
+                selected = selected.filter((row) =>
+                  Object.entries(query).every(([key, value]) => row[key] === value));
+                return selection;
+              },
+              orderBy(field: string, direction: 'ASC' | 'DESC' = 'ASC') {
+                selected.sort((left, right) => {
+                  const delta = Number(left[field] ?? 0) - Number(right[field] ?? 0);
+                  return direction === 'DESC' ? -delta : delta;
+                });
+                return selection;
+              },
+              limit(count: number) {
+                observed.limit = count;
+                limit = count;
+                return selection;
+              },
+              offset(count: number) {
+                observed.offset = count;
+                offset = count;
+                return selection;
+              },
+              then<TResult1 = Record<string, unknown>[], TResult2 = never>(
+                onfulfilled?: ((value: Record<string, unknown>[]) => TResult1 | PromiseLike<TResult1>) | null,
+                onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+              ) {
+                return Promise.resolve(selected.slice(offset, offset + limit)).then(onfulfilled, onrejected);
+              },
+            };
+            return selection;
+          },
+        };
+      },
+    },
+  };
+}
+
 describe('dispatchExtendedConsoleRpc', () => {
   it('returns undefined for unknown types so the caller can continue the chain', async () => {
     await expect(
@@ -324,6 +374,80 @@ describe('dispatchExtendedConsoleRpc', () => {
           ],
         },
       });
+    });
+
+    it('inbox.notices can rebuild the durable unread projection', async () => {
+      const noticeRows = [
+        {
+          id: 7,
+          adapter: 'icqq',
+          endpoint_id: '1234',
+          platform_notice_id: 'notice-7',
+          type: 'group.increase',
+          scene_type: 'group',
+          scene_id: '888',
+          sub_type: null,
+          actor_id: '10001',
+          actor_name: '张三',
+          target_id: '10002',
+          target_name: '李四',
+          payload: '{"welcome":true}',
+          created_at: 7000,
+          consumed: 0,
+          consumed_at: null,
+        },
+        {
+          id: 8,
+          adapter: 'icqq',
+          endpoint_id: '1234',
+          platform_notice_id: 'notice-8',
+          type: 'group.decrease',
+          scene_type: 'group',
+          scene_id: '888',
+          sub_type: null,
+          actor_id: null,
+          actor_name: null,
+          target_id: '10003',
+          target_name: null,
+          payload: '{}',
+          created_at: 8000,
+          consumed: 1,
+          consumed_at: 8100,
+        },
+      ];
+      const ctx = makeCtx({
+        databaseHost: makeInboxDb({ unified_inbox_notice: noticeRows }),
+      });
+
+      const result = await dispatchExtendedConsoleRpc('inbox.notices', {
+        adapter: 'icqq', endpointKey: '1234', unreadOnly: true,
+      }, ctx);
+      expect(result).toEqual({
+        data: {
+          inboxEnabled: true,
+          notices: [expect.objectContaining({
+            id: 7,
+            noticeType: 'group.increase',
+            channel: { id: '888', type: 'group' },
+            payload: '{"welcome":true}',
+            timestamp: 7000,
+            consumed: 0,
+            consumed_at: undefined,
+          })],
+        },
+      });
+    });
+
+    it('bounds inbox pagination and pushes the safe window into the database', async () => {
+      const observed: { limit?: number; offset?: number } = {};
+      const ctx = makeCtx({
+        databaseHost: makePagedInboxDb([], observed),
+      });
+
+      await dispatchExtendedConsoleRpc('inbox.notices', {
+        adapter: 'icqq', endpointKey: '1234', limit: -1, offset: Number.MAX_VALUE,
+      }, ctx);
+      expect(observed).toEqual({ limit: 1, offset: 10_000 });
     });
 
     it('login.list / login.submit round-trip via LoginAssist', async () => {

@@ -2,10 +2,31 @@ import { ConnectionState, WebSocketError, ConnectionError, MessageError, Request
 
 import { getApiBase, getStoredToken, resolveApiUrl } from "./remote-settings.js";
 import { applyConsoleEvent } from "../persistence/idb-store.js";
+import { fetchConsoleEventHistory } from '../console-events.js';
 import {
+  CONSOLE_EVENT_RECOVERY_GAP_EVENT,
   SIDE_EVENT_PUSH,
   normalizeConsolePushMessage,
+  parseConsoleSseFrame,
+  type ConsoleEventData,
+  type ConsoleEventEnvelope,
+  type ConsoleEventHistoryPage,
+  type ConsoleEventHistoryQuery,
 } from "@zhin.js/console-protocol";
+
+interface ConsoleEventCursor {
+  readonly runtimeId: string;
+  readonly eventId: number;
+}
+
+export type ConsoleEventListener<Type extends string> = (
+  event: ConsoleEventEnvelope<Type, ConsoleEventData<Type>>,
+) => void;
+export interface ConsoleEventRecoveryGap {
+  readonly query: ConsoleEventHistoryQuery;
+  readonly page: ConsoleEventHistoryPage;
+}
+export type ConsoleEventRecoveryGapListener = (gap: ConsoleEventRecoveryGap) => void;
 
 export class WebSocketManager {
   private ws: WebSocket | null = null;
@@ -20,7 +41,12 @@ export class WebSocketManager {
     { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
   >();
   private connectedListeners = new Set<(connected: boolean) => void>();
+  private eventListeners = new Map<string, Set<ConsoleEventListener<string>>>();
+  private recoveryGapListeners = new Set<ConsoleEventRecoveryGapListener>();
   private sseAbort: AbortController | null = null;
+  private eventRuntimeId = '';
+  private lastEventId = 0;
+  private durableCursorBlocked = false;
   private useRestTransport = true;
 
   constructor(config: WebSocketConfig = {}, callbacks: WebSocketCallbacks = {}) {
@@ -36,6 +62,27 @@ export class WebSocketManager {
   onConnectionChange(listener: (connected: boolean) => void): () => void {
     this.connectedListeners.add(listener);
     return () => this.connectedListeners.delete(listener);
+  }
+
+  /** Subscribe by event name; known names infer their exact payload type. */
+  onConsoleEvent<Type extends string>(type: Type, listener: ConsoleEventListener<Type>): () => void {
+    let listeners = this.eventListeners.get(type);
+    if (!listeners) {
+      listeners = new Set();
+      this.eventListeners.set(type, listeners);
+    }
+    const stored = listener as ConsoleEventListener<string>;
+    listeners.add(stored);
+    return () => {
+      listeners?.delete(stored);
+      if (listeners?.size === 0) this.eventListeners.delete(type);
+    };
+  }
+
+  /** Observe a non-resumable cursor so domain views can perform a full resync. */
+  onConsoleEventRecoveryGap(listener: ConsoleEventRecoveryGapListener): () => void {
+    this.recoveryGapListeners.add(listener);
+    return () => this.recoveryGapListeners.delete(listener);
   }
 
   private notifyConnection(connected: boolean) {
@@ -73,7 +120,12 @@ export class WebSocketManager {
         Accept: "text/event-stream",
       };
       if (token) headers.Authorization = `Bearer ${token}`;
-      const res = await fetch(resolveApiUrl("/api/events"), {
+      await this.recoverEventHistory(this.sseAbort.signal);
+      const params = new URLSearchParams();
+      if (this.eventRuntimeId) params.set('runtimeId', this.eventRuntimeId);
+      if (this.lastEventId > 0) params.set('after', String(this.lastEventId));
+      const suffix = params.size ? `?${params}` : '';
+      const res = await fetch(resolveApiUrl(`/api/events${suffix}`), {
         headers,
         signal: this.sseAbort.signal,
       });
@@ -107,22 +159,21 @@ export class WebSocketManager {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
+        const parts = buffer.split(/\r?\n\r?\n/u);
         buffer = parts.pop() ?? "";
         for (const part of parts) {
-          const line = part.split("\n").find((l) => l.startsWith("data: "));
-          if (!line) continue;
-          const json = line.slice(6);
-          try {
-            const message = normalizeConsolePushMessage(
-              JSON.parse(json) as WebSocketMessage,
-            ) as WebSocketMessage;
-            void applyConsoleEvent(message);
-            this.handleBroadcast(message);
-            this.callbacks.onMessage?.(message);
-          } catch {
-            /* skip */
-          }
+          const parsed = parseConsoleSseFrame(part);
+          if (!parsed) continue;
+          const runtimeId = parsed.runtimeId ?? this.eventRuntimeId;
+          const event: ConsoleEventEnvelope = Object.freeze({
+            runtimeId,
+            eventId: parsed.eventId ?? 0,
+            type: parsed.type,
+            data: parsed.data,
+            timestamp: parsed.timestamp ?? Date.now(),
+            delivery: 'live',
+          });
+          await this.deliverConsoleEvent(event);
         }
       }
     } catch {
@@ -132,6 +183,99 @@ export class WebSocketManager {
         this.notifyConnection(false);
         this.setState(ConnectionState.RECONNECTING);
         this.scheduleReconnect();
+      }
+    }
+  }
+
+  private async recoverEventHistory(signal: AbortSignal): Promise<void> {
+    const stored = this.eventRuntimeId
+      ? { runtimeId: this.eventRuntimeId, eventId: this.lastEventId }
+      : readEventCursor();
+    let runtimeId = stored?.runtimeId;
+    let after = stored?.eventId ?? 0;
+    if (runtimeId) {
+      this.eventRuntimeId = runtimeId;
+      this.lastEventId = after;
+    }
+    for (;;) {
+      const query = { runtimeId, after, limit: 500 } satisfies ConsoleEventHistoryQuery;
+      const page = await fetchConsoleEventHistory(query, { signal });
+      if (page.runtimeId !== runtimeId) {
+        runtimeId = page.runtimeId;
+        after = 0;
+        this.lastEventId = 0;
+        this.durableCursorBlocked = false;
+      }
+      this.eventRuntimeId = page.runtimeId;
+      if (page.gap) this.notifyRecoveryGap({ query, page });
+      for (const item of page.items) {
+        await this.deliverConsoleEvent(Object.freeze({ ...item, delivery: 'history' }));
+        after = item.eventId;
+      }
+      if (!page.hasMore) {
+        this.lastEventId = Math.max(after, page.latestEventId);
+        if (!this.durableCursorBlocked) {
+          writeEventCursor({ runtimeId: page.runtimeId, eventId: this.lastEventId });
+        }
+        return;
+      }
+      after = page.nextAfter;
+    }
+  }
+
+  private async deliverConsoleEvent(event: ConsoleEventEnvelope): Promise<void> {
+    if (event.runtimeId && event.runtimeId !== this.eventRuntimeId) {
+      this.eventRuntimeId = event.runtimeId;
+      this.lastEventId = 0;
+      this.durableCursorBlocked = false;
+    }
+    if (event.eventId > 0
+      && event.runtimeId === this.eventRuntimeId
+      && event.eventId <= this.lastEventId) return;
+    const message = normalizeConsolePushMessage({
+      type: event.type,
+      data: event.data,
+      runtimeId: event.runtimeId,
+      eventId: event.eventId || undefined,
+      timestamp: event.timestamp,
+      delivery: event.delivery,
+    }) as WebSocketMessage;
+    try {
+      await applyConsoleEvent(message);
+    } catch (error) {
+      this.durableCursorBlocked = true;
+      console.error('[Console transport] Failed to persist event:', error);
+    }
+    this.handleBroadcast(message);
+    try {
+      this.callbacks.onMessage?.(message);
+    } catch (error) {
+      console.error('[Console transport] onMessage listener failed:', error);
+    }
+    for (const listener of this.eventListeners.get(event.type) ?? []) {
+      try {
+        listener(event as ConsoleEventEnvelope<string, unknown>);
+      } catch (error) {
+        console.error('[Console transport] event listener failed:', error);
+      }
+    }
+    if (event.eventId > 0 && event.runtimeId) {
+      this.lastEventId = Math.max(this.lastEventId, event.eventId);
+      if (!this.durableCursorBlocked) {
+        writeEventCursor({ runtimeId: event.runtimeId, eventId: this.lastEventId });
+      }
+    }
+  }
+
+  private notifyRecoveryGap(gap: ConsoleEventRecoveryGap): void {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(CONSOLE_EVENT_RECOVERY_GAP_EVENT, { detail: gap }));
+    }
+    for (const listener of this.recoveryGapListeners) {
+      try {
+        listener(gap);
+      } catch (error) {
+        console.error('[Console transport] recovery gap listener failed:', error);
       }
     }
   }
@@ -362,12 +506,12 @@ export class WebSocketManager {
       }
       return;
     }
-    if (t === "hmr:reload") {
+    if (t === "hmr:reload" && message.delivery !== 'history') {
       console.info(`[HMR] File changed, reloading...`);
       window.location.reload();
       return;
     }
-    if (t === "system:restarting") {
+    if (t === "system:restarting" && message.delivery !== 'history') {
       console.info("[System] Server restarting, will reload shortly...");
       setTimeout(() => window.location.reload(), 3000);
       return;
@@ -441,5 +585,33 @@ export class WebSocketManager {
       reject(new WebSocketError("Connection closed", "CONNECTION_CLOSED"));
     }
     this.pendingRequests.clear();
+  }
+}
+
+function eventCursorStorageKey(): string {
+  return `zhin.console.event-cursor:${getApiBase()}`;
+}
+
+function readEventCursor(): ConsoleEventCursor | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(eventCursorStorageKey()) ?? 'null') as Partial<ConsoleEventCursor> | null;
+    return parsed
+      && typeof parsed.runtimeId === 'string'
+      && Number.isSafeInteger(parsed.eventId)
+      && (parsed.eventId ?? -1) >= 0
+      ? { runtimeId: parsed.runtimeId, eventId: parsed.eventId as number }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeEventCursor(cursor: ConsoleEventCursor): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(eventCursorStorageKey(), JSON.stringify(cursor));
+  } catch {
+    // HTTP history remains available when browser storage is unavailable.
   }
 }

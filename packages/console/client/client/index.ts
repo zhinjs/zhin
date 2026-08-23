@@ -2,6 +2,7 @@
 export * from "./types";
 export {
   ENDPOINT_RPC,
+  CONSOLE_EVENT_RECOVERY_GAP_EVENT,
   ENDPOINT_MANAGEMENT_CAPABILITIES,
   INBOX_RPC,
   SIDE_EVENT_PUSH,
@@ -11,10 +12,34 @@ export {
   parseConsoleInboxEvent,
   type ConsoleInboxEvent,
   type ConsoleInboxEventKind,
+  type ConsoleInboxNoticeRow,
+  type ConsoleInboxNoticesQuery,
+  type ConsoleInboxNoticesResult,
   type ConsoleEndpointPhase,
   type ConsoleEndpointSummary,
+  type ConsoleEventActor,
+  type ConsoleEventChannel,
   type EndpointManagementCapability,
+  parseConsoleSseFrame,
+  type ConsoleEventDelivery,
+  type ConsoleEventData,
+  type ConsoleEndpointEventData,
+  type ConsoleEventEnvelope,
+  type ConsoleEventHistoryPage,
+  type ConsoleEventHistoryQuery,
+  type ConsoleEventPayloadMap,
+  type ConsoleMessageEventData,
+  type ConsoleNoticeEventData,
+  type ConsoleRequestEventData,
+  type KnownConsoleEventType,
+  type KnownConsoleEventEnvelope,
+  type ParsedConsoleSseFrame,
 } from "@zhin.js/console-protocol";
+
+export {
+  fetchConsoleEventHistory,
+  type FetchConsoleEventHistoryOptions,
+} from './console-events.js';
 
 // Media URL resolution
 export { resolveMediaSrc, pickMediaRawUrl, type MediaKind } from "./mediaSrc";

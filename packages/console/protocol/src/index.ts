@@ -41,6 +41,199 @@ export const ENDPOINT_RPC = {
   GROUP_ADMIN: 'endpoint.group_admin',
 } as const;
 
+/** Browser event dispatched when the bounded history cursor cannot be resumed. */
+export const CONSOLE_EVENT_RECOVERY_GAP_EVENT = 'zhin-console-event-recovery-gap' as const;
+
+export interface ConsoleEndpointEventData {
+  readonly adapter: string;
+  readonly endpointKey: string;
+  /** Human-facing endpoint alias retained in push payloads. */
+  readonly endpoint?: string;
+}
+
+export interface ConsoleEventActor {
+  readonly id: string;
+  readonly name?: string;
+}
+
+export interface ConsoleEventChannel {
+  readonly id: string;
+  readonly type: string;
+}
+
+export interface ConsoleRequestEventData extends ConsoleEndpointEventData {
+  readonly id: number;
+  readonly platformRequestId: string;
+  readonly type: string;
+  readonly sender: ConsoleEventActor;
+  readonly comment: string;
+  readonly channel: ConsoleEventChannel;
+  readonly timestamp: number;
+  readonly canAct?: boolean;
+}
+
+export interface ConsoleNoticeEventData extends ConsoleEndpointEventData {
+  readonly id: number;
+  readonly noticeType: string;
+  readonly channel: ConsoleEventChannel;
+  readonly payload: string;
+  readonly timestamp: number;
+}
+
+export interface ConsoleMessageEventData extends ConsoleEndpointEventData {
+  readonly direction: 'inbound' | 'outbound';
+  readonly channelType: string;
+  readonly channelId: string;
+  readonly content: unknown;
+  readonly timestamp: number;
+  readonly messageId?: string;
+  readonly sender?: unknown;
+  readonly requester?: unknown;
+}
+
+export interface ConsoleEventPayloadMap {
+  readonly 'notice.receive': ConsoleNoticeEventData;
+  readonly 'request.receive': ConsoleRequestEventData;
+  readonly 'message.receive': ConsoleMessageEventData;
+  readonly 'endpoint.lifecycle': ConsoleEndpointEventData;
+  readonly 'endpoint.login.pending': ConsoleEndpointEventData;
+  readonly 'endpoint.login.expired': ConsoleEndpointEventData;
+  readonly sync: Readonly<{ key: string; value: unknown }>;
+  readonly 'init-data': Readonly<{ timestamp: number }>;
+  readonly 'config:updated': Readonly<{ pluginName: string | null; keys?: readonly string[] }>;
+  readonly 'workrooms:updated': Readonly<{ revision: string }>;
+  readonly 'hmr:reload': Readonly<Record<string, unknown>>;
+  readonly 'system:restarting': Readonly<Record<string, unknown>>;
+}
+
+export type KnownConsoleEventType = keyof ConsoleEventPayloadMap;
+export type ConsoleEventDelivery = 'live' | 'history';
+export type ConsoleEventData<Type extends string> =
+  Type extends KnownConsoleEventType ? ConsoleEventPayloadMap[Type] : unknown;
+
+/** Canonical event shared by SSE delivery, HTTP history and client listeners. */
+export interface ConsoleEventEnvelope<
+  Type extends string = string,
+  Data = ConsoleEventData<Type>,
+> {
+  readonly runtimeId: string;
+  readonly eventId: number;
+  readonly type: Type;
+  readonly data: Data;
+  readonly timestamp: number;
+  /** Client-side delivery metadata; absent on Host history records. */
+  readonly delivery?: ConsoleEventDelivery;
+}
+
+/** Discriminated union for reducers that consume every built-in event type. */
+export type KnownConsoleEventEnvelope = {
+  [Type in KnownConsoleEventType]: ConsoleEventEnvelope<Type, ConsoleEventPayloadMap[Type]>
+}[KnownConsoleEventType];
+
+export interface ConsoleEventHistoryQuery {
+  readonly runtimeId?: string;
+  readonly after?: number;
+  readonly limit?: number;
+}
+
+export interface ConsoleEventHistoryPage {
+  readonly runtimeId: string;
+  readonly items: readonly ConsoleEventEnvelope[];
+  readonly oldestAvailableEventId: number | null;
+  readonly latestEventId: number;
+  readonly nextAfter: number;
+  readonly hasMore: boolean;
+  /** True when the requested runtime/cursor can no longer be resumed exactly. */
+  readonly gap: boolean;
+}
+
+export interface ConsoleInboxNoticesQuery {
+  readonly adapter: string;
+  readonly endpointKey: string;
+  readonly limit?: number;
+  readonly offset?: number;
+  /** Return only durable rows that have not been marked consumed. */
+  readonly unreadOnly?: boolean;
+}
+
+export interface ConsoleInboxNoticeRow {
+  readonly id: number;
+  readonly platform_notice_id: string;
+  readonly type: string;
+  readonly sub_type?: string;
+  readonly channel_id: string;
+  readonly channel_type?: string;
+  readonly operator_id?: string;
+  readonly operator_name?: string;
+  readonly target_id?: string;
+  readonly target_name?: string;
+  readonly payload: string;
+  readonly created_at: number;
+  readonly consumed: number;
+  readonly consumed_at?: number;
+  /** Realtime-view aliases shared with `notice.receive`. */
+  readonly noticeType: string;
+  readonly channel: ConsoleEventChannel;
+  readonly timestamp: number;
+}
+
+export interface ConsoleInboxNoticesResult {
+  readonly notices: readonly ConsoleInboxNoticeRow[];
+  readonly inboxEnabled: boolean;
+}
+
+export interface ParsedConsoleSseFrame {
+  readonly eventId?: number;
+  readonly runtimeId?: string;
+  readonly timestamp?: number;
+  readonly type: string;
+  readonly data: unknown;
+}
+
+/** Parse one complete SSE frame while preserving the standard `event:` field. */
+export function parseConsoleSseFrame(frame: string): ParsedConsoleSseFrame | null {
+  let type = '';
+  let rawId = '';
+  let runtimeId = '';
+  let rawTimestamp = '';
+  const dataLines: string[] = [];
+  for (const rawLine of frame.split(/\r?\n/u)) {
+    if (!rawLine || rawLine.startsWith(':')) continue;
+    const separator = rawLine.indexOf(':');
+    const field = separator < 0 ? rawLine : rawLine.slice(0, separator);
+    let value = separator < 0 ? '' : rawLine.slice(separator + 1);
+    if (value.startsWith(' ')) value = value.slice(1);
+    if (field === 'event') type = value;
+    else if (field === 'id') rawId = value;
+    else if (field === 'runtime') runtimeId = value;
+    else if (field === 'timestamp') rawTimestamp = value;
+    else if (field === 'data') dataLines.push(value);
+  }
+  if (dataLines.length === 0) return null;
+  let data: unknown;
+  try {
+    data = JSON.parse(dataLines.join('\n')) as unknown;
+  } catch {
+    return null;
+  }
+  const parsedId = Number(rawId);
+  const eventId = rawId && Number.isSafeInteger(parsedId) && parsedId > 0
+    ? parsedId
+    : undefined;
+  const parsedTimestamp = Number(rawTimestamp);
+  const timestamp = rawTimestamp && Number.isSafeInteger(parsedTimestamp) && parsedTimestamp > 0
+    ? parsedTimestamp
+    : undefined;
+  const embeddedType = isRecord(data) && typeof data.type === 'string' ? data.type : '';
+  return Object.freeze({
+    ...(eventId === undefined ? {} : { eventId }),
+    ...(runtimeId ? { runtimeId } : {}),
+    ...(timestamp === undefined ? {} : { timestamp }),
+    type: type || embeddedType || 'message',
+    data,
+  });
+}
+
 /** Stable capability ids advertised by `endpoint.list` / `endpoint.info`. */
 export const ENDPOINT_MANAGEMENT_CAPABILITIES = [
   'listFriends',

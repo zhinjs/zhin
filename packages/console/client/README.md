@@ -27,6 +27,10 @@ Peer：`react >= 18`（`createPluginRegisterHostApi` 需要 React 引用）。
 | `normalizeConsolePushType` / `normalizeConsolePushMessage` | 在 SDK 边界兼容旧 `endpoint:*` 推送并输出规范事件与 payload |
 | `parseConsoleInboxEvent` | 一次完成 Inbox 推送名称、身份别名和 message/request/notice 分类 |
 | `ConsoleEndpointSummary` / `EndpointManagementCapability` | Host 与 Remote Console 共享的 Endpoint wire 类型 |
+| `fetchConsoleEventHistory` | 按 `(runtimeId, eventId)` 拉取有界事件历史 |
+| `WebSocketManager.onConsoleEvent` | 订阅带 `live/history` 投递来源的强类型事件 |
+| `WebSocketManager.onConsoleEventRecoveryGap` | 观察不可续接游标并触发领域全量重同步 |
+| `ConsoleInboxNoticesQuery` / `ConsoleInboxNoticesResult` | 以 `unreadOnly` 从持久 Inbox 重建未读通知 |
 
 类型与 Entry 契约来自 `@zhin.js/contract`。
 
@@ -96,6 +100,8 @@ const res = await apiFetch("/api/console/request", {
 401 时清除 Token 并派发 `zhin:auth-required`。
 
 辅助：`resolveApiUrl`、`resolveWebSocketUrl`（SSE `/api/events` 等）。
+
+Client 在连接 `/api/events` 前先补拉 `/api/events/history`，再携带最新游标进入 SSE；Host 会原子重放 HTTP 与订阅之间产生的事件。游标只在 Inbox 持久化成功后推进，重复的 history/live 投递按 `(runtimeId, eventId)` 幂等写入 IndexedDB。`gap` 不会被吞掉，页面可订阅恢复缺口并改走领域 HTTP 全量投影。
 
 ## `createPluginRegisterHostApi`
 
