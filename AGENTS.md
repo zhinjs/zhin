@@ -86,7 +86,7 @@ basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp
 - `pnpm --filter <pkg> build|test`：只验证单个包。
 - `pnpm check:l4-ci`：PR 门禁 L4 确定性子集（编排/记忆/full-bot 契约）。
 - `pnpm check:l4`：L4 全维度验收（编排 + 语义记忆 + full-bot 契约 + MCP 鉴权 + adapter L4；实机 IM 项 `L4_SKIP_PLATFORM=1` 跳过）；nightly workflow 跑全量。
-- 暂无官方 Docker 镜像；自建容器参考 deploy/ 目录与 [docs/contributing/development.md](docs/contributing/development.md)。
+- 暂无官方 Docker 镜像；自建容器使用 [`docs/public/deploy/production/`](docs/public/deploy/production/) 中由 `pnpm check:deployment-templates` 校验的模板，并参考[生产部署与运维](docs/operations/production.md)。
 - `pnpm check:install-size`：zhin.js IM 核心 production `node_modules` ≤10MB（ADR 0019）。
 - `pnpm check:install-tiers-ssot`：根 `README` Install tiers 表与 `docs/snippets/install-tiers.md` 一致。
 - 改 **CLI** 或 **create-zhin-app** 前，若报找不到 `@zhin.js/scaffold-wizard`，先执行 `pnpm --filter @zhin.js/scaffold-wizard build`（或 `pnpm prepare:cli` / 全量 `pnpm build`）。该包产物在 `lib/`，未构建时 Node 无法解析。

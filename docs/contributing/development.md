@@ -4,7 +4,7 @@ title: 开发流程
 
 # 开发流程
 
-改完代码到合进 main，中间有几道关卡：本地构建与测试、38 项 harness 门禁、changeset、CI 发版。本页按这个顺序讲一遍日常闭环。
+改完代码到合进 main，中间有几道关卡：本地构建与测试、完整 harness 门禁、changeset、CI 发版。本页按这个顺序讲一遍日常闭环。
 
 ## 环境准备
 
@@ -37,7 +37,7 @@ pnpm --filter @zhin.js/scaffold-wizard build   # 或 pnpm prepare:cli
 
 ## harness 门禁（pnpm check:all）
 
-提交前最值得跑一次的是 `pnpm check:all`：它运行 `scripts/check-all-harness.mjs`，串行执行 **38 项检查**（含 type-check、lint、单测），全部通过才算绿——CI 跑的就是同一套。CI 若另跑 coverage 作业，可设 `HARNESS_SKIP_TEST=1` 跳过其中的 `pnpm test`，避免双跑。
+提交前最值得跑一次的是 `pnpm check:all`：它运行 `scripts/check-all-harness.mjs` 中登记的全部检查（含 type-check、lint、单测），全部通过才算绿——CI 跑的就是同一套。CI 若另跑 coverage 作业，可设 `HARNESS_SKIP_TEST=1` 跳过其中的 `pnpm test`，避免双跑。
 
 下面按职责分组列出（括号内是单项命令，均可单独运行）。
 
@@ -111,6 +111,7 @@ pnpm --filter @zhin.js/scaffold-wizard build   # 或 pnpm prepare:cli
 | Install Tiers SSOT（`pnpm check:install-tiers-ssot`） | 中文 `README.zh-CN.md` Install tiers 表与 `docs/snippets/install-tiers.md` 一致 |
 | Adapter Docs Sync（`pnpm check:adapter-docs`） | 平台适配器文档与 `plugins/adapters/*/README.md` 同步（修复用 `pnpm sync:adapter-docs`） |
 | Platform Tiers SSOT（`pnpm check:platform-tiers-ssot`） | 能力分档/适配器索引与 `scripts/adapter-meta.mjs` 一致 |
+| Deployment Templates（`pnpm check:deployment-templates`） | Compose、systemd、Kubernetes 模板与中英文下载入口一致 |
 
 **冒烟**
 

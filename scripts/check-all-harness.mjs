@@ -135,6 +135,11 @@ const checks = [
     description: '检查公开入口、源码注释链接与 API Reference 生成契约',
   },
   {
+    name: 'Deployment Templates',
+    command: 'pnpm check:deployment-templates',
+    description: '校验 Compose、systemd、Kubernetes 模板与中英文下载入口',
+  },
+  {
     name: 'Platform Tiers SSOT',
     command: 'pnpm check:platform-tiers-ssot',
     description: '能力分档/适配器索引与 scripts/adapter-meta.mjs 一致',

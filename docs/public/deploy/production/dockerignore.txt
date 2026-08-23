@@ -1,0 +1,10 @@
+.git
+.github
+.zhin
+data
+node_modules
+coverage
+dist
+lib
+*.log
+.env

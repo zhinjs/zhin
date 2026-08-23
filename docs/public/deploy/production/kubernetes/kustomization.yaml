@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - resources.yaml
+images:
+  - name: zhin-bot
+    newName: ghcr.io/your-org/your-bot
+    newTag: 1.0.0

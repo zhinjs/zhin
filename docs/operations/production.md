@@ -35,7 +35,57 @@ flowchart LR
 
 生产环境设置 full token。演示与只读观察使用独立 demo token；平台 Webhook 继续使用各自的签名密钥，不能拿 Console token 代替。
 
-## 3. 进程托管
+## 3. 可复制的部署模板
+
+模板不依赖尚未发布的官方 Zhin 镜像，而是从你的项目和 lockfile 构建可追溯镜像。先确保项目的 `package.json` 包含 `build` 与 `start`，并将 `http.host` 设为 `0.0.0.0`（仅容器内；公网仍应经过 TLS 入口）。
+
+### Docker Compose
+
+下载 <a href="/deploy/production/Dockerfile" download>Dockerfile</a>、<a href="/deploy/production/docker-compose.yml" download>docker-compose.yml</a>、<a href="/deploy/production/dockerignore.txt" download=".dockerignore">.dockerignore</a> 和 <a href="/deploy/production/env.example.txt" download=".env.example">.env.example</a> 到项目根目录。后两个链接会用标准点文件名保存：
+
+```bash
+cp .env.example .env
+# 编辑 .env：至少替换 HTTP_TOKEN
+docker compose config
+docker compose up -d --build
+docker compose ps
+curl --fail http://127.0.0.1:8068/pub/health
+```
+
+Compose 会将 `.env` 中的 Provider、Adapter 等密钥一并注入容器，并强制要求 `HTTP_TOKEN`。它默认以非 root、只读根文件系统运行，只开放 `data/`、`.zhin/` 与临时目录，并持久化两个命名卷。备份前仍需按数据库类型取得一致性快照。
+
+### systemd
+
+下载 <a href="/deploy/production/zhin@.service" download>zhin@.service</a>。模板把 Linux 用户名同时作为实例名，约定项目位于 `/srv/zhin/<user>`：
+
+```bash
+sudo install -m 0644 zhin@.service /etc/systemd/system/zhin@.service
+sudo install -d -o zhin -g zhin /srv/zhin/zhin/.zhin /srv/zhin/zhin/data
+sudo install -m 0600 -o zhin -g zhin .env /srv/zhin/zhin/.env
+sudo systemctl daemon-reload
+sudo systemctl enable --now zhin@zhin
+sudo systemctl status zhin@zhin
+journalctl -u zhin@zhin -f
+```
+
+先把项目放到 `/srv/zhin/zhin`，在本地准备好含 `HTTP_TOKEN` 的 `.env`，并确认 `pnpm` 位于 unit 的 PATH。unit 把密钥文件设为启动必需条件，只允许项目的 `.zhin/` 与 `data/` 写入，且在 120 秒内最多尝试启动 5 次。
+
+### Kubernetes
+
+下载 <a href="/deploy/production/kubernetes/resources.yaml" download>resources.yaml</a> 与 <a href="/deploy/production/kubernetes/kustomization.yaml" download>kustomization.yaml</a> 到同一目录。先构建并推送上面的 Dockerfile，然后修改 `newName` 与 `newTag`：
+
+```bash
+kubectl create secret generic zhin-secrets \
+  --from-env-file=.env
+kubectl kustomize ./kubernetes
+kubectl apply -k ./kubernetes
+kubectl rollout status deployment/zhin
+kubectl port-forward service/zhin 8068:8068
+```
+
+镜像会保留项目自己的 `zhin.config.yml`，Secret 则从 `.env` 整体投影，因此 Provider 与 Adapter 密钥不会被模板吞掉；修改密钥后需要重建 Secret 并滚动重启。模板固定单副本与 `Recreate`，因为默认 SQLite、Workroom 文件状态和 `ReadWriteOnce` 卷不是多写者系统。需要水平扩容时，先迁移到共享数据库与具备单一写入权威的 Workroom 存储。`/pub/health` 只适合作为进程探针，业务就绪仍通过 Console 验收。
+
+## 4. 进程托管
 
 ```bash
 # 容器或外部 supervisor：前台运行，由平台收集 stdout
@@ -50,7 +100,7 @@ macOS 使用不带 `--user` 的 launchd 服务命令。只保留一层进程重�
 
 退出码 51 表示 Console 请求重启，75 表示 Runtime 需要重启。若外部 supervisor 接管，需允许这两类退出重新拉起，同时配置重启风暴限制。
 
-## 4. 持久状态与备份
+## 5. 持久状态与备份
 
 | 状态 | 默认位置或权威源 | 备份要求 |
 | --- | --- | --- |
@@ -63,13 +113,13 @@ macOS 使用不带 `--user` 的 launchd 服务命令。只保留一层进程重�
 
 SQLite 备份应使用数据库快照或停写复制，不要在写入中直接复制单个文件。外部数据库使用对应引擎的备份工具，并定期做恢复演练。
 
-## 5. 监控与告警
+## 6. 监控与告警
 
 监控至少覆盖 HTTP 探针、进程重启次数、Endpoint 在线状态、SSE recovery gap、日志错误率、数据库容量、Workroom 阻塞项和 Agent 失败/取消比例。
 
 日志默认进入 stdout；daemon 模式写 `.zhin/runtime.log`。设置宿主日志轮转，不要只依赖 Console 清理。告警应携带 Endpoint、Project、runtimeId 或 runId，避免只报一段错误文本。
 
-## 6. 发布与回滚
+## 7. 发布与回滚
 
 1. 暂停会产生新副作用的入口，保留只读探针。
 2. 备份数据库、Workroom 状态、调度任务、配置与 lockfile。

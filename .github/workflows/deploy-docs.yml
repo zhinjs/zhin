@@ -8,6 +8,8 @@ on:
       - 'basic/**/src/**'
       - 'packages/**/src/**'
       - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'playwright.docs.config.ts'
       - 'typedoc.json'
       - 'tsconfig.typedoc.json'
       - '.github/workflows/deploy-docs.yml'
@@ -51,9 +53,9 @@ jobs:
         run: echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc
 
       - name: Install Dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
         env:
-          NPM_TOKEN: ${{ env.PERSONAL_TOKEN }}
+          NPM_TOKEN: ${{ env.NPM_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build packages
@@ -61,6 +63,12 @@ jobs:
 
       - name: Build docs
         run: pnpm docs:build
+
+      - name: Install docs browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Test docs journeys
+        run: pnpm test:docs:e2e:run
       
       - name: Upload artifact
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0

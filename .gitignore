@@ -149,6 +149,9 @@ apps/**/config.*
 # Generated API reference (run pnpm docs:api)
 docs/api/
 docs/public/api/
+# Playwright screenshots, traces, and reports
+test-results/
+playwright-report/
 # Plugin Runtime 运行产物
 .zhin/
 

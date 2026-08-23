@@ -4,7 +4,7 @@ title: Development Workflow
 
 # Development Workflow
 
-From finishing code to merging into main, there are several checkpoints: local build and test, 38 harness CI gates, changeset, and CI publishing. This page walks through the day-to-day workflow in that order.
+From finishing code to merging into main, there are several checkpoints: local build and test, the complete harness suite, changeset, and CI publishing. This page walks through the day-to-day workflow in that order.
 
 ## Environment Setup
 
@@ -37,7 +37,7 @@ pnpm --filter @zhin.js/scaffold-wizard build   # or pnpm prepare:cli
 
 ## Harness CI Gates (pnpm check:all)
 
-The most valuable command to run before committing is `pnpm check:all`: it runs `scripts/check-all-harness.mjs`, executing **38 checks** sequentially (including type-check, lint, and unit tests). All must pass to go green -- CI runs the exact same suite. If CI runs a separate coverage job, you can set `HARNESS_SKIP_TEST=1` to skip the `pnpm test` portion and avoid running tests twice.
+The most valuable command to run before committing is `pnpm check:all`: it runs every check registered in `scripts/check-all-harness.mjs` (including type-check, lint, and unit tests). All must pass to go green -- CI runs the exact same suite. If CI runs a separate coverage job, you can set `HARNESS_SKIP_TEST=1` to skip the `pnpm test` portion and avoid running tests twice.
 
 Below are the checks grouped by responsibility (the command in parentheses can be run individually).
 
@@ -111,6 +111,7 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 | Install Tiers SSOT (`pnpm check:install-tiers-ssot`) | Chinese `README.zh-CN.md` Install tiers table matches `docs/snippets/install-tiers.md` |
 | Adapter Docs Sync (`pnpm check:adapter-docs`) | Platform adapter docs sync with `plugins/adapters/*/README.md` (fix with `pnpm sync:adapter-docs`) |
 | Platform Tiers SSOT (`pnpm check:platform-tiers-ssot`) | Capability tiers/adapter index matches `scripts/adapter-meta.mjs` |
+| Deployment Templates (`pnpm check:deployment-templates`) | Compose, systemd, and Kubernetes templates match their Chinese and English download entries |
 
 **Smoke Tests**
 
