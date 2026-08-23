@@ -142,6 +142,7 @@ export interface WorkroomRunState {
   readonly sequence: number;
   readonly now: number;
   readonly cancelRequested: boolean;
+  readonly replanRequested?: boolean;
   readonly tasks: Readonly<Record<string, WorkroomTaskState>>;
   readonly assignments: Readonly<Record<string, WorkroomAssignmentState>>;
   readonly reviewerAssignments: Readonly<Record<string, WorkroomReviewerAssignmentState>>;
@@ -153,6 +154,8 @@ export type WorkroomEventType =
   | 'plan.admitted'
   | 'plan.revision_applied'
   | 'plan_gate.decided'
+  | 'run.control_decided'
+  | 'run.replan_requested'
   | 'run.cancel_requested'
   | 'run.cancelled'
   | 'task.planned'

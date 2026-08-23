@@ -78,10 +78,32 @@ export async function hostGet<T>(
   http: HostHttpConfig,
   apiPath: string,
 ): Promise<HostFetchResult<T>> {
+  return hostFetch(http, apiPath, { method: 'GET' });
+}
+
+/** 带 Bearer 的 JSON POST。 */
+export async function hostPost<T>(
+  http: HostHttpConfig,
+  apiPath: string,
+  body: unknown,
+): Promise<HostFetchResult<T>> {
+  return hostFetch(http, apiPath, { method: 'POST', body });
+}
+
+async function hostFetch<T>(
+  http: HostHttpConfig,
+  apiPath: string,
+  input: Readonly<{ method: 'GET' | 'POST'; body?: unknown }>,
+): Promise<HostFetchResult<T>> {
   const url = `${http.baseUrl}${apiPath.startsWith('/') ? apiPath : `/${apiPath}`}`;
   try {
     const res = await fetch(url, {
-      headers: http.token ? { Authorization: `Bearer ${http.token}` } : {},
+      method: input.method,
+      headers: {
+        ...(http.token ? { Authorization: `Bearer ${http.token}` } : {}),
+        ...(input.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      },
+      ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
       // Host 无响应时 5s 超时，避免 watch/send 等命令无限挂起。
       signal: AbortSignal.timeout(5_000),
     });

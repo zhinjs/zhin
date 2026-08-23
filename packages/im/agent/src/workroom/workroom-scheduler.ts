@@ -230,6 +230,7 @@ interface SchedulerProjection {
   readonly sequence: number;
   readonly now: number;
   readonly cancelRequested: boolean;
+  readonly replanRequested: boolean;
   readonly policy: WorkroomSchedulerPolicySnapshot;
   readonly tasks: ReadonlyMap<string, ScheduledTaskProjection>;
   readonly activeAssignments: ReadonlyMap<string, Readonly<{
@@ -297,7 +298,7 @@ export function decideWorkroomSchedule(
   events: readonly WorkroomEvent[],
 ): WorkroomScheduleDecision | null {
   const state = projectScheduler(events);
-  if (state.cancelRequested) return null;
+  if (state.cancelRequested || state.replanRequested) return null;
   assertWaitRecoveryMetadata(state.tasks);
   const used = state.activeAssignments.size + state.pendingDispatches.size;
   const candidates = [...state.tasks.values()].filter(task =>
@@ -484,6 +485,7 @@ function projectScheduler(events: readonly WorkroomEvent[]): SchedulerProjection
   let policy: WorkroomSchedulerPolicySnapshot | undefined;
   let now = created.occurredAt;
   let cancelRequested = false;
+  let replanRequested = false;
   let reservedTaskKey: string | undefined;
   let pendingPreemptionDecisionId: string | undefined;
   for (const [index, event] of events.entries()) {
@@ -507,6 +509,8 @@ function projectScheduler(events: readonly WorkroomEvent[]): SchedulerProjection
       }
       case 'run.cancel_requested':
       case 'run.cancelled': cancelRequested = true; break;
+      case 'run.replan_requested': replanRequested = true; break;
+      case 'plan.revision_applied': replanRequested = false; break;
       case 'task.planned': {
         const key = text(event.payload.taskKey, 'Scheduled Task key');
         if (tasks.has(key)) throw new Error(`Scheduled Task ${key} is duplicated`);
@@ -672,6 +676,7 @@ function projectScheduler(events: readonly WorkroomEvent[]): SchedulerProjection
     sequence: events.at(-1)!.sequence,
     now,
     cancelRequested,
+    replanRequested,
     policy,
     tasks,
     activeAssignments,

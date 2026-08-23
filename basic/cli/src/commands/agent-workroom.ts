@@ -1,12 +1,19 @@
+import { randomUUID } from 'node:crypto';
 import { Command } from 'commander';
-import type {
-  WorkroomAssignmentState,
-  WorkroomAssignmentStatus,
-  WorkroomExecutionRole,
-  WorkroomRunStatus,
-  WorkroomTaskStatus,
+import {
+  isWorkroomRunCancelReasonCode,
+  isWorkroomRunReplanReasonCode,
+  type WorkroomAssignmentState,
+  type WorkroomAssignmentStatus,
+  type WorkroomBlockerKind,
+  type WorkroomExecutionRole,
+  type WorkroomReadinessState,
+  type WorkroomRunStatus,
+  type WorkroomRunCancelReasonCode,
+  type WorkroomRunReplanReasonCode,
+  type WorkroomTaskStatus,
 } from '@zhin.js/agent';
-import { hostGet, loadHostHttpConfig } from '../utils/host-http.js';
+import { hostGet, hostPost, loadHostHttpConfig } from '../utils/host-http.js';
 
 type WorkroomAssignmentOutcome = NonNullable<WorkroomAssignmentState['outcome']>;
 
@@ -17,6 +24,21 @@ export interface WorkroomRunsCommandOptions {
 
 export interface WorkroomRunCommandOptions extends WorkroomRunsCommandOptions {
   readonly runId: string;
+}
+
+export interface WorkroomReadinessCommandOptions extends WorkroomRunCommandOptions {}
+
+export interface WorkroomCancelCommandOptions extends WorkroomRunCommandOptions {
+  readonly expectedSequence: number;
+  readonly reasonCode: WorkroomRunCancelReasonCode;
+  readonly controlDeadline: number;
+  readonly operationId?: string;
+}
+
+export interface WorkroomRequestReplanCommandOptions extends WorkroomRunCommandOptions {
+  readonly expectedSequence: number;
+  readonly reasonCode: WorkroomRunReplanReasonCode;
+  readonly operationId?: string;
 }
 
 export interface WorkroomRunHeaderOutput {
@@ -71,6 +93,42 @@ export interface WorkroomRunOutput extends WorkroomRunHeaderOutput {
   readonly assignments: readonly WorkroomAssignmentHeaderOutput[];
 }
 
+export interface WorkroomReadinessBlockerOutput {
+  readonly version: 1;
+  readonly taskRef: string;
+  readonly blockerRef: string;
+  readonly kind: WorkroomBlockerKind | 'unknown';
+  readonly deadline?: number;
+  readonly allowedActions: readonly ('resolve' | 'replan' | 'cancel')[];
+  readonly digest: string;
+}
+
+export interface WorkroomReadinessOutput {
+  readonly version: 1;
+  readonly projectId: string;
+  readonly runId: string;
+  readonly sequence: number;
+  readonly state: WorkroomReadinessState;
+  readonly blockers: readonly WorkroomReadinessBlockerOutput[];
+  readonly recommendedActions: readonly ('resolve' | 'replan' | 'cancel')[];
+  readonly authorityDigest: string;
+  readonly digest: string;
+}
+
+export interface WorkroomControlOutput {
+  readonly status: 'committed' | 'duplicate';
+  readonly action: 'cancel' | 'request_replan';
+  readonly operationId: string;
+  readonly receiptRef: string;
+  readonly receiptDigest: string;
+  readonly run: Readonly<{
+    projectId: string;
+    runId: string;
+    status: WorkroomRunStatus;
+    sequence: number;
+  }>;
+}
+
 export async function executeWorkroomRunsCommand(
   options: WorkroomRunsCommandOptions,
   cwd = process.cwd(),
@@ -100,6 +158,51 @@ export async function executeWorkroomRunCommand(
   return output;
 }
 
+export async function executeWorkroomReadinessCommand(
+  options: WorkroomReadinessCommandOptions,
+  cwd = process.cwd(),
+): Promise<WorkroomReadinessOutput> {
+  const projectId = requireIdentifier(options.projectId, 'Project');
+  const runId = requirePathIdentifier(options.runId, 'Run');
+  const value = await readWorkroomHost(
+    `/agent/workroom/readiness?projectId=${encodeURIComponent(projectId)}&runId=${encodeURIComponent(runId)}`,
+    cwd,
+  );
+  const output = parseWorkroomReadinessOutput(value, projectId, runId);
+  console.log(options.json ? JSON.stringify(output, null, 2) : formatWorkroomReadiness(output));
+  return output;
+}
+
+export async function executeWorkroomCancelCommand(
+  options: WorkroomCancelCommandOptions,
+  cwd = process.cwd(),
+): Promise<WorkroomControlOutput> {
+  const common = normalizeControlOptions(options);
+  if (!isCancelReasonCode(options.reasonCode)) throw new Error('Cancellation reasonCode 无效');
+  const controlDeadline = requireNonNegativeInteger(options.controlDeadline, 'controlDeadline');
+  return executeWorkroomControl({
+    version: 1,
+    ...common,
+    action: 'cancel',
+    reasonCode: options.reasonCode,
+    controlDeadline,
+  }, options.json === true, cwd);
+}
+
+export async function executeWorkroomRequestReplanCommand(
+  options: WorkroomRequestReplanCommandOptions,
+  cwd = process.cwd(),
+): Promise<WorkroomControlOutput> {
+  const common = normalizeControlOptions(options);
+  if (!isReplanReasonCode(options.reasonCode)) throw new Error('Replan reasonCode 无效');
+  return executeWorkroomControl({
+    version: 1,
+    ...common,
+    action: 'request_replan',
+    reasonCode: options.reasonCode,
+  }, options.json === true, cwd);
+}
+
 export function registerWorkroomOnlineCommands(agentCommand: Command): void {
   const workroom = agentCommand
     .command('workroom')
@@ -126,6 +229,65 @@ export function registerWorkroomOnlineCommands(agentCommand: Command): void {
       runOnlineAction(() => executeWorkroomRunCommand({
         projectId: options.project,
         runId,
+        ...(options.json ? { json: true } : {}),
+      }));
+    });
+
+  workroom
+    .command('readiness <runId>')
+    .description('Diagnose content-free blockers and allowed actions for one Run')
+    .requiredOption('--project <projectId>', 'Exact Workroom Project id')
+    .option('--json', 'Output JSON')
+    .action((runId: string, options: Readonly<{ project: string; json?: boolean }>) => {
+      runOnlineAction(() => executeWorkroomReadinessCommand({
+        projectId: options.project,
+        runId,
+        ...(options.json ? { json: true } : {}),
+      }));
+    });
+
+  workroom
+    .command('cancel <runId>')
+    .description('Request an exact-sequence, Sponsor-authorized Run cancellation')
+    .requiredOption('--project <projectId>', 'Exact Workroom Project id')
+    .requiredOption('--expected-sequence <sequence>', 'Current Run sequence')
+    .requiredOption('--reason-code <code>', 'operator_request|no_longer_required|superseded|policy_change')
+    .requiredOption('--control-deadline <timestamp>', 'Kernel control deadline')
+    .option('--operation-id <operationId>', 'Stable idempotency key')
+    .option('--json', 'Output JSON')
+    .action((runId: string, options: Readonly<{
+      project: string; expectedSequence: string; reasonCode: WorkroomRunCancelReasonCode;
+      controlDeadline: string; operationId?: string; json?: boolean;
+    }>) => {
+      runOnlineAction(() => executeWorkroomCancelCommand({
+        projectId: options.project,
+        runId,
+        expectedSequence: parseIntegerOption(options.expectedSequence, 'expected-sequence'),
+        reasonCode: options.reasonCode,
+        controlDeadline: parseIntegerOption(options.controlDeadline, 'control-deadline'),
+        ...(options.operationId ? { operationId: options.operationId } : {}),
+        ...(options.json ? { json: true } : {}),
+      }));
+    });
+
+  workroom
+    .command('request-replan <runId>')
+    .description('Persist an exact-sequence, Sponsor-authorized replan request')
+    .requiredOption('--project <projectId>', 'Exact Workroom Project id')
+    .requiredOption('--expected-sequence <sequence>', 'Current Run sequence')
+    .requiredOption('--reason-code <code>', 'requirements_changed|blocker_recovery|policy_change|operator_request')
+    .option('--operation-id <operationId>', 'Stable idempotency key')
+    .option('--json', 'Output JSON')
+    .action((runId: string, options: Readonly<{
+      project: string; expectedSequence: string; reasonCode: WorkroomRunReplanReasonCode;
+      operationId?: string; json?: boolean;
+    }>) => {
+      runOnlineAction(() => executeWorkroomRequestReplanCommand({
+        projectId: options.project,
+        runId,
+        expectedSequence: parseIntegerOption(options.expectedSequence, 'expected-sequence'),
+        reasonCode: options.reasonCode,
+        ...(options.operationId ? { operationId: options.operationId } : {}),
         ...(options.json ? { json: true } : {}),
       }));
     });
@@ -232,6 +394,112 @@ function parseAssignmentHeader(value: unknown, index: number): WorkroomAssignmen
   });
 }
 
+function parseWorkroomReadinessOutput(
+  value: unknown,
+  projectId: string,
+  runId: string,
+): WorkroomReadinessOutput {
+  if (!isRecord(value) || value.version !== 1 || value.projectId !== projectId
+    || value.runId !== runId || !nonNegativeInteger(value.sequence)
+    || !isReadinessState(value.state) || !Array.isArray(value.blockers)
+    || !isBlockerActions(value.recommendedActions)
+    || !nonEmptyString(value.authorityDigest) || !nonEmptyString(value.digest)) {
+    throw new Error('Host 返回了无效的 Workroom readiness');
+  }
+  return Object.freeze({
+    version: 1,
+    projectId,
+    runId,
+    sequence: value.sequence,
+    state: value.state,
+    blockers: Object.freeze(value.blockers.map((blocker, index) =>
+      parseReadinessBlocker(blocker, index))),
+    recommendedActions: Object.freeze([...value.recommendedActions]),
+    authorityDigest: value.authorityDigest,
+    digest: value.digest,
+  });
+}
+
+function parseReadinessBlocker(value: unknown, index: number): WorkroomReadinessBlockerOutput {
+  if (!isRecord(value) || value.version !== 1 || !nonEmptyString(value.taskRef)
+    || !nonEmptyString(value.blockerRef) || value.kind !== 'unknown' && !isBlockerKind(value.kind)
+    || value.deadline !== undefined && !nonNegativeInteger(value.deadline)
+    || !isBlockerActions(value.allowedActions)
+    || !nonEmptyString(value.digest)) {
+    throw new Error(`Host 返回了无效的 Workroom Blocker header（索引 ${index}）`);
+  }
+  return Object.freeze({
+    version: 1,
+    taskRef: value.taskRef,
+    blockerRef: value.blockerRef,
+    kind: value.kind,
+    ...(value.deadline === undefined ? {} : { deadline: value.deadline }),
+    allowedActions: Object.freeze([...value.allowedActions]),
+    digest: value.digest,
+  });
+}
+
+function normalizeControlOptions(
+  options: WorkroomRunCommandOptions & Readonly<{ expectedSequence: number; operationId?: string }>,
+): Readonly<{
+  operationId: string;
+  projectId: string;
+  runId: string;
+  expectedSequence: number;
+}> {
+  return Object.freeze({
+    operationId: options.operationId
+      ? requireIdentifier(options.operationId, 'Operation')
+      : randomUUID(),
+    projectId: requireIdentifier(options.projectId, 'Project'),
+    runId: requirePathIdentifier(options.runId, 'Run'),
+    expectedSequence: requireNonNegativeInteger(options.expectedSequence, 'expectedSequence'),
+  });
+}
+
+async function executeWorkroomControl(
+  command: Readonly<Record<string, unknown>>,
+  json: boolean,
+  cwd: string,
+): Promise<WorkroomControlOutput> {
+  const http = await loadHostHttpConfig(cwd);
+  if (!http) throw new Error('未找到 zhin.config，无法确定 Host API 地址');
+  if (!http.token.trim()) {
+    throw new Error('Host API token 未配置；请配置绑定 principal 的 full scope token');
+  }
+  const response = await hostPost<unknown>(http, '/agent/workroom/control', command);
+  if (!response.ok) {
+    throw new Error(response.error ?? `控制 Workroom Run 失败（HTTP ${response.status}）`);
+  }
+  const output = parseWorkroomControlOutput(response.data);
+  console.log(json ? JSON.stringify(output, null, 2) : formatWorkroomControl(output));
+  return output;
+}
+
+function parseWorkroomControlOutput(value: unknown): WorkroomControlOutput {
+  if (!isRecord(value) || value.status !== 'committed' && value.status !== 'duplicate'
+    || value.action !== 'cancel' && value.action !== 'request_replan'
+    || !nonEmptyString(value.operationId) || !nonEmptyString(value.receiptRef)
+    || !nonEmptyString(value.receiptDigest) || !isRecord(value.run)
+    || !nonEmptyString(value.run.projectId) || !nonEmptyString(value.run.runId)
+    || !isRunStatus(value.run.status) || !nonNegativeInteger(value.run.sequence)) {
+    throw new Error('Host 返回了无效的 Workroom control receipt');
+  }
+  return Object.freeze({
+    status: value.status,
+    action: value.action,
+    operationId: value.operationId,
+    receiptRef: value.receiptRef,
+    receiptDigest: value.receiptDigest,
+    run: Object.freeze({
+      projectId: value.run.projectId,
+      runId: value.run.runId,
+      status: value.run.status,
+      sequence: value.run.sequence,
+    }),
+  });
+}
+
 function formatWorkroomRuns(output: WorkroomRunsOutput): string {
   if (output.runs.length === 0) return `Workroom runs · ${output.projectId}\n(none)`;
   const rows = output.runs.map(run => [
@@ -294,6 +562,32 @@ function formatWorkroomRun(output: WorkroomRunOutput): string {
   ].join('\n');
 }
 
+function formatWorkroomReadiness(output: WorkroomReadinessOutput): string {
+  const rows = output.blockers.map(blocker => [
+    blocker.taskRef,
+    blocker.blockerRef,
+    blocker.kind,
+    blocker.deadline === undefined ? '-' : String(blocker.deadline),
+    blocker.allowedActions.join(','),
+  ]);
+  return [
+    `Workroom readiness · ${output.projectId}/${output.runId} · ${output.state} · seq ${output.sequence}`,
+    rows.length === 0
+      ? '(no active blockers)'
+      : formatTable(['TASK', 'BLOCKER', 'KIND', 'DEADLINE', 'ACTIONS'], rows),
+    `Recommended: ${output.recommendedActions.length > 0
+      ? output.recommendedActions.join(', ')
+      : 'none'}`,
+  ].join('\n');
+}
+
+function formatWorkroomControl(output: WorkroomControlOutput): string {
+  return [
+    'Workroom control', output.action, output.status,
+    `${output.run.projectId}/${output.run.runId}`, output.run.status, `seq ${output.run.sequence}`,
+  ].join(' · ');
+}
+
 function formatTable(headers: readonly string[], rows: readonly (readonly string[])[]): string {
   const widths = headers.map((header, index) => Math.max(
     header.length,
@@ -314,6 +608,16 @@ function requirePathIdentifier(value: string, label: string): string {
   const normalized = requireIdentifier(value, label);
   if (/[/?#]/u.test(normalized)) throw new Error(`${label} id 无效`);
   return normalized;
+}
+
+function requireNonNegativeInteger(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${label} 无效`);
+  return value;
+}
+
+function parseIntegerOption(value: string, label: string): number {
+  if (!/^\d+$/u.test(value)) throw new Error(`${label} 无效`);
+  return requireNonNegativeInteger(Number(value), label);
 }
 
 async function readWorkroomHost(apiPath: string, cwd: string): Promise<unknown> {
@@ -370,4 +674,29 @@ function isExecutionRole(value: unknown): value is WorkroomExecutionRole {
 
 function isAssignmentOutcome(value: unknown): value is WorkroomAssignmentOutcome {
   return value === 'interrupted' || value === 'committed' || value === 'outcome_unknown';
+}
+
+function isReadinessState(value: unknown): value is WorkroomReadinessState {
+  return value === 'ready' || value === 'blocked' || value === 'needs_replan'
+    || value === 'cancelling' || value === 'terminal';
+}
+
+function isBlockerKind(value: unknown): value is WorkroomBlockerKind {
+  return value === 'dependency' || value === 'approval' || value === 'capability'
+    || value === 'external' || value === 'human_input';
+}
+
+function isBlockerActions(
+  value: unknown,
+): value is readonly ('resolve' | 'replan' | 'cancel')[] {
+  return Array.isArray(value)
+    && value.every(action => action === 'resolve' || action === 'replan' || action === 'cancel');
+}
+
+function isCancelReasonCode(value: unknown): value is WorkroomRunCancelReasonCode {
+  return isWorkroomRunCancelReasonCode(value);
+}
+
+function isReplanReasonCode(value: unknown): value is WorkroomRunReplanReasonCode {
+  return isWorkroomRunReplanReasonCode(value);
 }

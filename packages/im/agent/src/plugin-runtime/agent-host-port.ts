@@ -26,6 +26,10 @@ import type {
   ProjectKnowledgeSnapshot,
 } from '../workroom/project-knowledge-registry.js';
 import type { WorkroomDataLifecycleConsoleControlPort } from './workroom-data-lifecycle-console.js';
+import type {
+  WorkroomRunControlCommand,
+  WorkroomRunControlReceipt,
+} from '../workroom/workroom-run-control.js';
 
 /**
  * Stable Host boundary for protocols that expose Agent capabilities externally.
@@ -68,6 +72,8 @@ export interface AgentHostIntrospectionPort {
 export interface AgentHostConsolePort {
   readonly sessionTree: SessionTreeRuntimeHandle;
   readonly workroom: WorkroomRuntimeHandle;
+  /** Sponsor-authorized Run mutation plane; identity is injected from the Host token. */
+  readonly workroomControl?: AgentHostWorkroomRunControlPort;
   /** Persistent topology SSOT; edits take effect without rebuilding the generation. */
   readonly workroomCatalog: WorkroomCatalog;
   /** Bindings from this exact generation, used for Catalog display and validation. */
@@ -84,6 +90,13 @@ export interface AgentHostConsolePort {
   readonly effectSponsor?: AgentHostEffectSponsorControlPort;
   /** Root-role + current P12 authorized, content-free Payload Lifecycle plane. */
   readonly dataLifecycle?: WorkroomDataLifecycleConsoleControlPort;
+}
+
+export interface AgentHostWorkroomRunControlPort {
+  execute(
+    command: WorkroomRunControlCommand,
+    authenticatedPrincipal: Readonly<{ principalId: string }>,
+  ): Promise<WorkroomRunControlReceipt>;
 }
 
 export interface AgentHostPortfolioSponsorControlPort

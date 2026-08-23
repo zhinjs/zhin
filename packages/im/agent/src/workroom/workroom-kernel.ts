@@ -4,6 +4,7 @@ import type {
   WorkroomEventDraft,
   WorkroomEventType,
   WorkroomRunState,
+  WorkroomRunStatus,
 } from './kernel-contracts.js';
 import { WorkroomSequenceConflictError, type WorkroomJournal } from './journal.js';
 import {
@@ -90,6 +91,14 @@ import {
   type WorkroomPlanGateDecisionInput,
   type WorkroomPlanGateDecisionReceipt,
 } from './plan-approval-control.js';
+import {
+  WorkroomRunControlUnauthorizedError,
+  assertWorkroomRunControlCommand,
+  workroomRunControlRequestDigest,
+  type WorkroomRunControlAuthorityPort,
+  type WorkroomRunControlCommand,
+  type WorkroomRunControlReceipt,
+} from './workroom-run-control.js';
 export interface CreateWorkroomRunInput {
   readonly runId?: string;
   readonly projectId: string;
@@ -109,6 +118,7 @@ export interface WorkroomKernelOptions {
   readonly localAssignmentAuthority?: WorkroomLocalAssignmentAuthorityPort;
   readonly planGateAuthority?: WorkroomPlanGateAuthorityPort;
   readonly priorityAuthority?: WorkroomPriorityAuthorityPort;
+  readonly runControlAuthority?: WorkroomRunControlAuthorityPort;
 }
 
 export interface WorkroomRemoteAssignmentIssuanceReceipt
@@ -197,6 +207,7 @@ export class WorkroomKernel {
   readonly #localAssignmentAuthority?: WorkroomLocalAssignmentAuthorityPort;
   readonly #planGateAuthority?: WorkroomPlanGateAuthorityPort;
   readonly #priorityAuthority?: WorkroomPriorityAuthorityPort;
+  readonly #runControlAuthority?: WorkroomRunControlAuthorityPort;
 
   constructor(options: WorkroomKernelOptions) {
     this.#journal = options.journal;
@@ -209,6 +220,7 @@ export class WorkroomKernel {
     this.#localAssignmentAuthority = options.localAssignmentAuthority;
     this.#planGateAuthority = options.planGateAuthority;
     this.#priorityAuthority = options.priorityAuthority;
+    this.#runControlAuthority = options.runControlAuthority;
     if (!Number.isSafeInteger(this.#assignmentHeartbeatLeaseMs)
       || this.#assignmentHeartbeatLeaseMs < 1) {
       throw new Error('Assignment heartbeat lease must be a positive safe integer');
@@ -682,6 +694,125 @@ export class WorkroomKernel {
     ];
     await this.#journal.append(runId, state.sequence, drafts);
     return drafts.length === 0 ? state : this.read(scopedProjectId, runId);
+  }
+
+  /** Sponsor-authorized, exact-sequence Run cancellation or durable replan request. */
+  async controlRun(
+    command: WorkroomRunControlCommand,
+    authenticatedPrincipal: Readonly<{ principalId: string }>,
+  ): Promise<WorkroomRunControlReceipt> {
+    assertWorkroomRunControlCommand(command);
+    const principalId = authenticatedPrincipal.principalId.trim();
+    if (!principalId) throw new Error('Workroom Run control authenticated principal is required');
+    const events = await this.#journal.read(command.runId);
+    if (events.length === 0) throw new Error(`Workroom run ${command.runId} not found`);
+    const state = replayWorkroom(events);
+    assertProject(state, command.projectId);
+    const requestDigest = workroomRunControlRequestDigest(command, principalId);
+    const replay = events.find(event => event.type === 'run.control_decided'
+      && event.payload.operationId === command.operationId);
+    if (replay) {
+      if (replay.payload.requestDigest !== requestDigest
+        || replay.payload.action !== command.action
+        || replay.payload.principalId !== principalId) {
+        throw new Error(`Workroom Run control replay payload drift: ${command.operationId}`);
+      }
+      await this.#authorizeRunControl(command, principalId, requestDigest, {
+        sequence: Number(replay.payload.stateSequence),
+        status: replay.payload.stateStatus as WorkroomRunStatus,
+        digest: String(replay.payload.stateDigest),
+      }, 'commit');
+      return runControlReceipt('duplicate', command, requestDigest, replay.eventId, state);
+    }
+    if (command.expectedSequence !== state.sequence) {
+      await this.#authorizeRunControl(command, principalId, requestDigest, {
+        sequence: state.sequence,
+        status: state.status,
+        digest: digestCanonicalWorkroomValue(state),
+      }, 'stale_probe');
+      return Object.freeze({ status: 'stale', actualSequence: state.sequence });
+    }
+    if (command.action === 'cancel' && state.cancelRequested) {
+      throw new Error('Workroom Run cancellation is already active');
+    }
+    if (state.status === 'completed' || state.status === 'cancelled') {
+      throw new Error(`Workroom run is terminal: ${state.status}`);
+    }
+    if (command.action === 'cancel' && command.controlDeadline < state.now) {
+      throw new Error('Workroom Run cancellation deadline is before the current Kernel clock');
+    }
+    if (command.action === 'request_replan' && state.cancelRequested) {
+      throw new Error('Cannot request replan while Run cancellation is active');
+    }
+    const stateDigest = digestCanonicalWorkroomValue(state);
+    const authorization = await this.#authorizeRunControl(command, principalId, requestDigest, {
+      sequence: state.sequence, status: state.status, digest: stateDigest,
+    }, 'commit');
+    const audit = this.#event('run.control_decided', {
+      operationId: command.operationId,
+      action: command.action,
+      reasonCode: command.reasonCode,
+      expectedSequence: command.expectedSequence,
+      principalId,
+      requestDigest,
+      catalogRevision: authorization.catalogRevision,
+      projectDigest: authorization.projectDigest,
+      authorizationRef: authorization.authorizationRef,
+      stateSequence: state.sequence,
+      stateStatus: state.status,
+      stateDigest,
+    });
+    const drafts = command.action === 'cancel'
+      ? [
+          audit,
+          ...decideWorkroom(state, {
+            type: 'cancel_run', reason: command.reasonCode,
+            controlDeadline: command.controlDeadline,
+          }, (type, payload) => this.#event(type, payload)),
+        ]
+      : [audit, this.#event('run.replan_requested', {
+          operationId: command.operationId,
+          reasonCode: command.reasonCode,
+          requestDigest,
+        })];
+    const appended = await this.#journal.append(command.runId, state.sequence, drafts);
+    if (appended.length !== drafts.length) {
+      throw new Error('Workroom Run control append did not commit one exact batch');
+    }
+    const next = replayWorkroom([...events, ...appended]);
+    return runControlReceipt('committed', command, requestDigest, appended[0]!.eventId, next);
+  }
+
+  async #authorizeRunControl(
+    command: WorkroomRunControlCommand,
+    principalId: string,
+    requestDigest: string,
+    state: Readonly<{ sequence: number; status: WorkroomRunStatus; digest: string }>,
+    purpose: 'commit' | 'stale_probe',
+  ) {
+    if (!this.#runControlAuthority) {
+      throw new WorkroomRunControlUnauthorizedError('authority_not_installed');
+    }
+    const authorization = await this.#runControlAuthority.authorize(Object.freeze({
+      version: 1 as const,
+      purpose,
+      command,
+      authenticatedPrincipalId: principalId,
+      requestDigest,
+      stateSequence: state.sequence,
+      stateStatus: state.status,
+      stateDigest: state.digest,
+    }));
+    if (!authorization.authorized) {
+      throw new WorkroomRunControlUnauthorizedError(authorization.reason);
+    }
+    if (authorization.principalId !== principalId
+      || !authorization.catalogRevision.trim()
+      || !authorization.projectDigest.trim()
+      || !authorization.authorizationRef.trim()) {
+      throw new WorkroomRunControlUnauthorizedError('authority_decision_not_exact');
+    }
+    return authorization;
   }
 
   /** Atomically persists the local Assignment claim and its exact Envelope. */
@@ -1429,6 +1560,29 @@ function assertProjectId(projectId: string): void {
 
 function assertProject(state: WorkroomRunState, projectId: string): void {
   if (state.projectId !== projectId) throw new Error('Workroom run does not belong to the requested Project');
+}
+
+function runControlReceipt(
+  status: 'committed' | 'duplicate',
+  command: WorkroomRunControlCommand,
+  requestDigest: string,
+  receiptRef: string,
+  state: WorkroomRunState,
+): WorkroomRunControlReceipt {
+  return Object.freeze({
+    status,
+    action: command.action,
+    operationId: command.operationId,
+    receiptRef,
+    receiptDigest: digestCanonicalWorkroomValue({
+      version: 1,
+      operationId: command.operationId,
+      action: command.action,
+      requestDigest,
+      receiptRef,
+    }),
+    state,
+  });
 }
 
 function findLocalAssignmentIssuance(

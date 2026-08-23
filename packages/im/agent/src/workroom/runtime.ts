@@ -8,6 +8,8 @@ import {
 } from './canonical-value.js';
 import type {
   WorkroomAssignmentState,
+  WorkroomBlocker,
+  WorkroomBlockerKind,
   WorkroomRunStatus,
   WorkroomTaskState,
 } from './kernel-contracts.js';
@@ -68,6 +70,16 @@ export interface WorkroomAssignmentHeader {
   readonly digest: string;
 }
 
+export interface WorkroomBlockerHeader {
+  readonly version: 1;
+  readonly taskRef: string;
+  readonly blockerRef: string;
+  readonly kind: WorkroomBlockerKind | 'unknown';
+  readonly deadline?: number;
+  readonly allowedActions: WorkroomBlocker['allowedActions'];
+  readonly digest: string;
+}
+
 export interface WorkroomRunHeader {
   readonly version: 1;
   readonly projectId: string;
@@ -89,6 +101,21 @@ export interface WorkroomRunHeader {
 export interface WorkroomRunDetail extends WorkroomRunHeader {
   readonly tasks: readonly WorkroomTaskHeader[];
   readonly assignments: readonly WorkroomAssignmentHeader[];
+  readonly blockers: readonly WorkroomBlockerHeader[];
+}
+
+export type WorkroomReadinessState = 'ready' | 'blocked' | 'needs_replan' | 'cancelling' | 'terminal';
+
+export interface WorkroomRunReadiness {
+  readonly version: 1;
+  readonly projectId: string;
+  readonly runId: string;
+  readonly sequence: number;
+  readonly state: WorkroomReadinessState;
+  readonly blockers: readonly WorkroomBlockerHeader[];
+  readonly recommendedActions: readonly ('resolve' | 'replan' | 'cancel')[];
+  readonly authorityDigest: string;
+  readonly digest: string;
 }
 
 export type WorkroomRunListResult =
@@ -100,10 +127,18 @@ export type WorkroomRunReadResult =
   | Readonly<{ status: 'not_found' }>
   | Readonly<{ status: 'forbidden' }>;
 
+export type WorkroomRunReadinessResult =
+  | Readonly<{ status: 'ready'; readiness: WorkroomRunReadiness }>
+  | Readonly<{ status: 'not_found' }>
+  | Readonly<{ status: 'forbidden' }>;
+
 /** Read-only, content-free generation projection for authenticated Console inspection. */
 export interface WorkroomRuntimeHandle {
   listRuns(input: WorkroomRuntimeReadInput): Promise<WorkroomRunListResult>;
   getRun(input: WorkroomRuntimeReadInput & Readonly<{ runId: string }>): Promise<WorkroomRunReadResult>;
+  getReadiness(
+    input: WorkroomRuntimeReadInput & Readonly<{ runId: string }>,
+  ): Promise<WorkroomRunReadinessResult>;
 }
 
 export function createWorkroomRuntime(
@@ -133,6 +168,40 @@ export function createWorkroomRuntime(
       const run = projectStoredRun(stored, authorization.bindingDigest);
       if (run.projectId !== input.projectId) return Object.freeze({ status: 'not_found' });
       return deepFreeze({ status: 'ready' as const, run });
+    },
+    getReadiness: async (
+      input: WorkroomRuntimeReadInput & Readonly<{ runId: string }>,
+    ): Promise<WorkroomRunReadinessResult> => {
+      const authorization = await authorizeRead(authority, input);
+      if (!authorization) return Object.freeze({ status: 'forbidden' });
+      const stored = await journal.readStoredHeaders(input.runId);
+      if (!stored) return Object.freeze({ status: 'not_found' });
+      const run = projectStoredRun(stored, authorization.bindingDigest);
+      if (run.projectId !== input.projectId) return Object.freeze({ status: 'not_found' });
+      const actions = new Set<'resolve' | 'replan' | 'cancel'>();
+      for (const blocker of run.blockers) {
+        for (const action of blocker.allowedActions) actions.add(action);
+      }
+      if (run.status === 'needs_replan') {
+        actions.add('replan');
+        actions.add('cancel');
+      }
+      const body = deepFreeze({
+        version: 1 as const,
+        projectId: run.projectId,
+        runId: run.runId,
+        sequence: run.sequence,
+        state: readinessState(run.status),
+        blockers: run.blockers,
+        recommendedActions: Object.freeze(
+          (['resolve', 'replan', 'cancel'] as const).filter(action => actions.has(action)),
+        ),
+        authorityDigest: run.authorityDigest,
+      });
+      return deepFreeze({
+        status: 'ready' as const,
+        readiness: { ...body, digest: digest(body) },
+      });
     },
   });
 }
@@ -225,7 +294,11 @@ interface ProjectedTask {
   attempt: number;
   maxAttempts: number;
   required: boolean;
-  readonly blockers: Set<string>;
+  readonly blockers: Map<string, Readonly<{
+    kind: WorkroomBlockerKind | 'unknown';
+    deadline?: number;
+    allowedActions: WorkroomBlocker['allowedActions'];
+  }>>;
   currentAssignmentId?: string;
   currentReviewerAssignmentId?: string;
   currentSponsorGateId?: string;
@@ -256,14 +329,15 @@ function projectStoredRun(
   const reviewerStatuses = new Map<string, string>();
   const sponsorStatuses = new Map<string, string>();
   let cancelRequested = false;
+  let replanRequested = false;
   let explicitlyCancelled = false;
   for (const event of stored.events) {
     const payload = event.control;
     switch (event.type) {
       case 'run.created':
       case 'plan.admitted':
-      case 'plan.revision_applied':
       case 'plan_gate.decided':
+      case 'run.control_decided':
       case 'local_execution.requested':
       case 'remote_dispatch.requested':
       case 'scheduler.dispatch_requested':
@@ -273,6 +347,8 @@ function projectStoredRun(
       case 'scheduler.preemption_timed_out':
       case 'assignment.checkpoint_requested':
       case 'clock.advanced': break;
+      case 'plan.revision_applied': replanRequested = false; break;
+      case 'run.replan_requested': replanRequested = true; break;
       case 'run.cancel_requested': cancelRequested = true; break;
       case 'run.cancelled': explicitlyCancelled = true; break;
       case 'task.planned': {
@@ -281,13 +357,21 @@ function projectStoredRun(
         tasks.set(key, {
           key, status: 'ready', revision: 1, attempt: 0,
           maxAttempts: headerPositiveInteger(payload, 'maxAttempts'),
-          required: payload.required === true, blockers: new Set(),
+          required: payload.required === true, blockers: new Map(),
         });
         break;
       }
       case 'task.blocked': {
         const task = requireProjectedTask(tasks, payload);
-        task.blockers.add(headerText(payload, 'blockerId'));
+        task.blockers.set(headerText(payload, 'blockerId'), Object.freeze({
+          kind: payload.blockerKind === undefined ? 'unknown' : headerBlockerKind(payload.blockerKind),
+          ...(payload.blockerDeadline === undefined
+            ? {}
+            : { deadline: headerNonNegativeInteger(payload, 'blockerDeadline') }),
+          allowedActions: payload.blockerAllowedActions === undefined
+            ? Object.freeze(['resolve', 'replan', 'cancel'] as const)
+            : headerBlockerActions(payload.blockerAllowedActions),
+        }));
         task.status = 'blocked';
         break;
       }
@@ -442,11 +526,15 @@ function projectStoredRun(
   }
   const taskValues = [...tasks.values()];
   const status = deriveHeaderRunStatus(
-    taskValues, reviewerStatuses, sponsorStatuses, cancelRequested, explicitlyCancelled,
+    taskValues, reviewerStatuses, sponsorStatuses, cancelRequested, replanRequested,
+    explicitlyCancelled,
   );
   const taskHeaders = taskValues.map(task => projectTaskHeader(task));
   const assignmentHeaders = [...assignments.values()].map(assignment =>
     projectAssignmentHeader(assignment));
+  const blockerHeaders = taskValues.flatMap(task => [...task.blockers.entries()].map(
+    ([blockerRef, blocker]) => projectBlockerHeader(task.key, blockerRef, blocker),
+  ));
   const body = deepFreeze({
     version: 1 as const,
     projectId,
@@ -463,6 +551,7 @@ function projectStoredRun(
     authorityDigest,
     tasks: taskHeaders,
     assignments: assignmentHeaders,
+    blockers: blockerHeaders,
   });
   return deepFreeze({ ...body, digest: digest(body) });
 }
@@ -512,6 +601,26 @@ function projectAssignmentHeader(
   return deepFreeze({ ...body, digest: digest(body) });
 }
 
+function projectBlockerHeader(
+  taskRef: string,
+  blockerRef: string,
+  blocker: Readonly<{
+    kind: WorkroomBlockerKind | 'unknown';
+    deadline?: number;
+    allowedActions: WorkroomBlocker['allowedActions'];
+  }>,
+): WorkroomBlockerHeader {
+  const body = deepFreeze({
+    version: 1 as const,
+    taskRef,
+    blockerRef,
+    kind: blocker.kind,
+    ...(blocker.deadline === undefined ? {} : { deadline: blocker.deadline }),
+    allowedActions: blocker.allowedActions,
+  });
+  return deepFreeze({ ...body, digest: digest(body) });
+}
+
 function requireProjectedTask(
   tasks: ReadonlyMap<string, ProjectedTask>,
   payload: WorkroomStoredEventControl,
@@ -551,10 +660,12 @@ function deriveHeaderRunStatus(
   reviewers: ReadonlyMap<string, string>,
   sponsors: ReadonlyMap<string, string>,
   cancelRequested: boolean,
+  replanRequested: boolean,
   explicitlyCancelled: boolean,
 ): WorkroomRunStatus {
   if (explicitlyCancelled) return 'cancelled';
   if (cancelRequested) return 'cancelling';
+  if (replanRequested) return 'needs_replan';
   const terminal = new Set<WorkroomTaskState['status']>(['accepted', 'failed', 'cancelled']);
   if (tasks.length > 0 && tasks.every(task =>
     task.status === 'accepted' || !task.required && terminal.has(task.status))) return 'completed';
@@ -571,12 +682,42 @@ function deriveHeaderRunStatus(
   return tasks.some(task => task.status === 'blocked') ? 'blocked' : 'active';
 }
 
+function readinessState(status: WorkroomRunStatus): WorkroomReadinessState {
+  if (status === 'completed' || status === 'cancelled') return 'terminal';
+  if (status === 'active') return 'ready';
+  return status;
+}
+
 function headerText(payload: object, key: string): string {
   const value = Reflect.get(payload, key) as unknown;
   if (typeof value !== 'string' || !value.trim()) {
     throw new Error(`Stored Workroom header ${key} is invalid`);
   }
   return value;
+}
+
+function headerNonNegativeInteger(payload: object, key: string): number {
+  const value = Reflect.get(payload, key) as unknown;
+  if (!Number.isSafeInteger(value) || Number(value) < 0) {
+    throw new Error(`Stored Workroom header ${key} is invalid`);
+  }
+  return Number(value);
+}
+
+function headerBlockerKind(value: unknown): WorkroomBlockerKind {
+  if (value !== 'dependency' && value !== 'approval' && value !== 'capability'
+    && value !== 'external' && value !== 'human_input') {
+    throw new Error('Stored Workroom header blockerKind is invalid');
+  }
+  return value;
+}
+
+function headerBlockerActions(value: unknown): WorkroomBlocker['allowedActions'] {
+  if (!Array.isArray(value)
+    || JSON.stringify(value) !== JSON.stringify(['resolve', 'replan', 'cancel'])) {
+    throw new Error('Stored Workroom header blockerAllowedActions are invalid');
+  }
+  return Object.freeze([...value]) as WorkroomBlocker['allowedActions'];
 }
 
 function headerPositiveInteger(payload: object, key: string): number {

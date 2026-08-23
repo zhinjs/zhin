@@ -443,11 +443,33 @@ describe('console REST routes', () => {
       input.projectId === 'engineering' && input.runId === 'run-1'
         ? { status: 'ready' as const, run: { ...safeRun, tasks: [], assignments: [] } }
         : { status: 'forbidden' as const });
+    const getReadiness = vi.fn(async (input: { projectId: string; runId: string }) =>
+      input.projectId === 'engineering' && input.runId === 'run-1'
+        ? { status: 'ready' as const, readiness: {
+            version: 1, projectId: 'engineering', runId: 'run-1', sequence: 4,
+            state: 'ready', blockers: [], recommendedActions: [],
+            authorityDigest: 'sha256:authority', digest: 'sha256:readiness',
+          } }
+        : { status: 'forbidden' as const });
+    const executeControl = vi.fn(async (command, principal) => ({
+      status: 'committed' as const,
+      action: command.action,
+      operationId: command.operationId,
+      receiptRef: 'event-control-1',
+      receiptDigest: 'sha256:control',
+      state: {
+        projectId: command.projectId, runId: command.runId, status: 'needs_replan', sequence: 6,
+        title: 'must-not-leak', now: 100, cancelRequested: false, replanRequested: true,
+        tasks: {}, assignments: {}, reviewerAssignments: {}, sponsorGates: {},
+      },
+      principal,
+    }));
     const snapshot = {
       root,
       resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
         console: {
-          sessionTree: {}, workroom: { listRuns, getRun }, assistant: null,
+          sessionTree: {}, workroom: { listRuns, getRun, getReadiness },
+          workroomControl: { execute: executeControl }, assistant: null,
           trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
         },
       }]])]]),
@@ -494,6 +516,64 @@ describe('console REST routes', () => {
       projectId: 'engineering', runId: 'run-1',
       authenticatedPrincipal: { principalId: 'human:alice' },
     });
+
+    const readiness = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/readiness?projectId=engineering&runId=run-1`,
+      { headers: { authorization: 'Bearer sponsor-token' } },
+    );
+    expect(readiness.status).toBe(200);
+    expect(await readiness.json()).toMatchObject({
+      success: true, data: { projectId: 'engineering', runId: 'run-1', state: 'ready' },
+    });
+    expect(getReadiness).toHaveBeenCalledWith({
+      projectId: 'engineering', runId: 'run-1',
+      authenticatedPrincipal: { principalId: 'human:alice' },
+    });
+
+    const control = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/control`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer sponsor-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          version: 1, operationId: 'replan-1', projectId: 'engineering', runId: 'run-1',
+          expectedSequence: 4, action: 'request_replan', reasonCode: 'requirements_changed',
+        }),
+      },
+    );
+    expect(control.status).toBe(200);
+    const controlBody = await control.json();
+    expect(controlBody).toMatchObject({
+      success: true,
+      data: {
+        status: 'committed', action: 'request_replan', operationId: 'replan-1',
+        run: { projectId: 'engineering', runId: 'run-1', status: 'needs_replan', sequence: 6 },
+      },
+    });
+    expect(JSON.stringify(controlBody)).not.toContain('must-not-leak');
+    expect(executeControl).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'request_replan', expectedSequence: 4,
+    }), { principalId: 'human:alice' });
+
+    const forgedControl = await fetch(
+      `http://127.0.0.1:${port}/api/agent/workroom/control`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer sponsor-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          version: 1, operationId: 'cancel-1', projectId: 'engineering', runId: 'run-1',
+          expectedSequence: 4, action: 'cancel', reasonCode: 'operator_request',
+          controlDeadline: 120, principalId: 'human:mallory',
+        }),
+      },
+    );
+    expect(forgedControl.status).toBe(400);
   });
 
   it('cancels an active Agent task through the generation-owned console port', async () => {

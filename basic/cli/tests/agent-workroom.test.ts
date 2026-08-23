@@ -4,6 +4,9 @@ import { join } from 'node:path';
 import { Command } from 'commander';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  executeWorkroomCancelCommand,
+  executeWorkroomReadinessCommand,
+  executeWorkroomRequestReplanCommand,
   executeWorkroomRunCommand,
   executeWorkroomRunsCommand,
   registerWorkroomOnlineCommands,
@@ -138,6 +141,99 @@ describe('zhin agent workroom runs', () => {
     expect(JSON.stringify(result)).not.toMatch(/title|reason|progress|objective|owner/u);
   });
 
+  it('diagnoses content-free blockers and actionable readiness for one Run', async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), 'zhin-workroom-cli-'));
+    await writeFile(join(projectRoot, 'zhin.config.yml'), 'http:\n  token: sponsor-token\n');
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
+      expect(String(input)).toBe(
+        'http://127.0.0.1:8086/api/agent/workroom/readiness?projectId=support&runId=run-2',
+      );
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          version: 1, projectId: 'support', runId: 'run-2', sequence: 9, state: 'blocked',
+          blockers: [{
+            version: 1, taskRef: 'task:triage', blockerRef: 'blocker:provider',
+            kind: 'capability', deadline: 120,
+            allowedActions: ['resolve', 'replan', 'cancel'], digest: 'sha256:blocker',
+          }],
+          recommendedActions: ['resolve', 'replan', 'cancel'],
+          authorityDigest: 'sha256:authority', digest: 'sha256:readiness',
+        },
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    const result = await executeWorkroomReadinessCommand({
+      projectId: 'support', runId: 'run-2',
+    }, projectRoot);
+
+    expect(result).toMatchObject({ state: 'blocked', blockers: [{ kind: 'capability' }] });
+    expect(log).toHaveBeenCalledWith([
+      'Workroom readiness · support/run-2 · blocked · seq 9',
+      'TASK         BLOCKER           KIND        DEADLINE  ACTIONS',
+      'task:triage  blocker:provider  capability  120       resolve,replan,cancel',
+      'Recommended: resolve, replan, cancel',
+    ].join('\n'));
+    expect(JSON.stringify(result)).not.toMatch(/reason|owner|title|progress/u);
+  });
+
+  it('submits typed cancel and replan controls without accepting caller identity or free-form reasons', async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), 'zhin-workroom-cli-'));
+    await writeFile(join(projectRoot, 'zhin.config.yml'), 'http:\n  token: sponsor-token\n');
+    const fetchMock = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      const command = JSON.parse(String(init?.body)) as { action: string; operationId: string };
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          status: 'committed', action: command.action, operationId: command.operationId,
+          receiptRef: `event:${command.operationId}`, receiptDigest: 'sha256:receipt',
+          run: {
+            projectId: 'support', runId: 'run-2',
+            status: command.action === 'cancel' ? 'cancelling' : 'needs_replan', sequence: 10,
+          },
+        },
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await executeWorkroomCancelCommand({
+      projectId: 'support', runId: 'run-2', expectedSequence: 9,
+      reasonCode: 'operator_request', controlDeadline: 120, operationId: 'cancel-1',
+    }, projectRoot);
+    await executeWorkroomRequestReplanCommand({
+      projectId: 'support', runId: 'run-2', expectedSequence: 9,
+      reasonCode: 'requirements_changed', operationId: 'replan-1',
+    }, projectRoot);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1,
+      'http://127.0.0.1:8086/api/agent/workroom/control', expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer sponsor-token', 'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          version: 1, operationId: 'cancel-1', projectId: 'support', runId: 'run-2',
+          expectedSequence: 9, action: 'cancel', reasonCode: 'operator_request',
+          controlDeadline: 120,
+        }),
+      }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2,
+      'http://127.0.0.1:8086/api/agent/workroom/control', expect.objectContaining({
+        body: JSON.stringify({
+          version: 1, operationId: 'replan-1', projectId: 'support', runId: 'run-2',
+          expectedSequence: 9, action: 'request_replan', reasonCode: 'requirements_changed',
+        }),
+      }));
+    expect(log).toHaveBeenNthCalledWith(
+      1, 'Workroom control · cancel · committed · support/run-2 · cancelling · seq 10',
+    );
+    expect(log).toHaveBeenNthCalledWith(
+      2, 'Workroom control · request_replan · committed · support/run-2 · needs_replan · seq 10',
+    );
+  });
+
   it('prints an explicit empty state instead of an ambiguous header-only table', async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), 'zhin-workroom-cli-'));
     await writeFile(join(projectRoot, 'zhin.config.yml'), [
@@ -244,6 +340,42 @@ describe('zhin agent workroom runs', () => {
       command.parse(['node', 'agent', 'workroom', 'runs', '--project', 'support']);
       await vi.waitFor(() => {
         expect(log).toHaveBeenCalledWith('Workroom runs · support\n(none)');
+      });
+    } finally {
+      process.chdir(previousCwd);
+    }
+  });
+
+  it('maps the synchronous request-replan grammar to one typed Host control command', async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), 'zhin-workroom-cli-'));
+    await writeFile(join(projectRoot, 'zhin.config.yml'), 'http:\n  token: sponsor-token\n');
+    const fetchMock = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      const command = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          status: 'committed', action: command.action, operationId: command.operationId,
+          receiptRef: 'event-1', receiptDigest: 'sha256:receipt',
+          run: { projectId: 'support', runId: 'run-2', status: 'needs_replan', sequence: 10 },
+        },
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const previousCwd = process.cwd();
+    const command = new Command('agent');
+    registerWorkroomOnlineCommands(command);
+    try {
+      process.chdir(projectRoot);
+      command.parse([
+        'node', 'agent', 'workroom', 'request-replan', 'run-2',
+        '--project', 'support', '--expected-sequence', '9',
+        '--reason-code', 'requirements_changed', '--operation-id', 'replan-1',
+      ]);
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+      expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+        version: 1, operationId: 'replan-1', projectId: 'support', runId: 'run-2',
+        expectedSequence: 9, action: 'request_replan', reasonCode: 'requirements_changed',
       });
     } finally {
       process.chdir(previousCwd);

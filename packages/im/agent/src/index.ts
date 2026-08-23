@@ -425,6 +425,7 @@ export * from './workroom/journal.js';
 export * from './workroom/journal-model.js';
 export * from './workroom/catalog.js';
 export * from './workroom/workroom-kernel.js';
+export * from './workroom/workroom-run-control.js';
 export * from './workroom/runtime.js';
 export * from './workroom/remote-callback-inbox.js';
 export * from './workroom/remote-callback-reconciliation-worker.js';
