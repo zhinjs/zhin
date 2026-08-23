@@ -282,6 +282,7 @@
     "examples/full-bot/skills/**/*",
     "examples/capabilities-bot/plugin.ts",
     "examples/capabilities-bot/commands/**/*",
+    "docs/snippets/**/*.ts",
     "plugins/*/*/plugin.ts",
     "plugins/*/*/commands/**/*.ts",
     "plugins/*/*/middlewares/**/*.ts",

@@ -11,6 +11,7 @@ import ZhinTerminal from './components/ZhinTerminal.vue'
 import ZhinFeatureGrid from './components/ZhinFeatureGrid.vue'
 import ZhinDuo from './components/ZhinDuo.vue'
 import ZhinSidebarFoot from './components/ZhinSidebarFoot.vue'
+import ZhinRolePaths from './components/ZhinRolePaths.vue'
 import './custom.css'
 
 export default {
@@ -32,6 +33,6 @@ export default {
     app.component('ZhinFeatureGrid', ZhinFeatureGrid)
     app.component('ZhinDuo', ZhinDuo)
     app.component('ZhinSidebarFoot', ZhinSidebarFoot)
+    app.component('ZhinRolePaths', ZhinRolePaths)
   }
 } satisfies Theme
-

@@ -1,5 +1,10 @@
 import { defineConfig, type DefaultTheme } from 'vitepress';
 import { withMermaid } from 'vitepress-plugin-mermaid'
+import { readFileSync } from 'node:fs'
+
+const zhinVersion = JSON.parse(
+  readFileSync(new URL('../../packages/im/zhin/package.json', import.meta.url), 'utf8'),
+).version as string
 
 /** 可折叠侧栏分组（默认折叠；含当前页的分组由 VitePress 自动展开） */
 function sidebarGroup(
@@ -23,6 +28,7 @@ const USE_DOC_PREFIXES = [
   '/ai/',
   '/advanced/',
   '/console/',
+  '/operations/',
   '/examples/',
   '/paths/',
   '/showcase/',
@@ -91,6 +97,10 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     { text: 'CLI 命令', link: '/cli/' },
     { text: 'zhin runtime start', link: '/cli/runtime' },
   ]),
+  sidebarGroup('生产运维', [
+    { text: '部署与恢复', link: '/operations/production' },
+    { text: '版本兼容与迁移', link: '/operations/upgrades' },
+  ], false),
   sidebarGroup('AI 模块', [
     { text: '总览', link: '/ai/' },
     { text: 'Agent 深入', link: '/ai/agent' },
@@ -134,6 +144,7 @@ const EN_USE_DOC_PREFIXES = [
   '/en/cli/',
   '/en/ai/',
   '/en/console/',
+  '/en/operations/',
   '/en/examples/',
   '/en/paths/',
   '/en/showcase/',
@@ -201,6 +212,10 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     { text: 'CLI Commands', link: '/en/cli/' },
     { text: 'zhin runtime start', link: '/en/cli/runtime' },
   ]),
+  sidebarGroup('Production Operations', [
+    { text: 'Deployment and Recovery', link: '/en/operations/production' },
+    { text: 'Compatibility and Migration', link: '/en/operations/upgrades' },
+  ], false),
   sidebarGroup('AI Module', [
     { text: 'Overview', link: '/en/ai/' },
     { text: 'Agent Deep Dive', link: '/en/ai/agent' },
@@ -241,6 +256,7 @@ export default withMermaid(defineConfig({
   description: 'AI-native TypeScript bot framework',
 
   ignoreDeadLinks: false,
+  lastUpdated: true,
 
   srcExclude: ['**/snippets/**', 'README.md'],
 
@@ -252,6 +268,7 @@ export default withMermaid(defineConfig({
       themeConfig: {
         nav: [
           { text: '首页', link: '/' },
+          { text: `v${zhinVersion}`, link: '/CHANGELOG' },
           {
             text: '使用文档',
             activeMatch: '^/(getting-started|solutions|concepts|authoring|examples|paths|showcase)/',
@@ -279,12 +296,14 @@ export default withMermaid(defineConfig({
           { text: '适配器', link: '/adapters/', activeMatch: '^/adapters/' },
           {
             text: '参考',
-            activeMatch: '^/(configuration|cli|console)/',
+            activeMatch: '^/(configuration|cli|console|operations)/',
             items: [
               { text: '配置参考', link: '/configuration/' },
               { text: 'CLI 命令', link: '/cli/' },
               { text: 'zhin runtime start', link: '/cli/runtime' },
               { text: 'Console', link: '/console/' },
+              { text: '生产部署', link: '/operations/production' },
+              { text: '升级与回滚', link: '/operations/upgrades' },
             ],
           },
           {
@@ -307,6 +326,12 @@ export default withMermaid(defineConfig({
           message: 'MIT License · <a href="/adapters/">适配器</a> · <a href="https://github.com/zhinjs/zhin">GitHub</a>',
           copyright: 'Copyright © 2024-present lc-cn',
         },
+        editLink: {
+          pattern: 'https://github.com/zhinjs/zhin/edit/main/docs/:path',
+          text: '在 GitHub 编辑此页',
+        },
+        lastUpdated: { text: '最后更新' },
+        docFooter: { prev: '上一篇', next: '下一步' },
       },
     },
     en: {
@@ -317,6 +342,7 @@ export default withMermaid(defineConfig({
       themeConfig: {
         nav: [
           { text: 'Home', link: '/en/' },
+          { text: `v${zhinVersion}`, link: '/CHANGELOG' },
           {
             text: 'Guide',
             activeMatch: '^/en/(getting-started|solutions|concepts|authoring|examples|paths|showcase)/',
@@ -344,12 +370,14 @@ export default withMermaid(defineConfig({
           { text: 'Adapters', link: '/en/adapters/', activeMatch: '^/en/adapters/' },
           {
             text: 'Reference',
-            activeMatch: '^/en/(configuration|cli|console)/',
+            activeMatch: '^/en/(configuration|cli|console|operations)/',
             items: [
               { text: 'Configuration', link: '/en/configuration/' },
               { text: 'CLI Commands', link: '/en/cli/' },
               { text: 'zhin runtime start', link: '/en/cli/runtime' },
               { text: 'Console', link: '/en/console/' },
+              { text: 'Production Deployment', link: '/en/operations/production' },
+              { text: 'Upgrade and Rollback', link: '/en/operations/upgrades' },
             ],
           },
           {
@@ -371,6 +399,12 @@ export default withMermaid(defineConfig({
           message: 'MIT License · <a href="/en/adapters/">Adapters</a> · <a href="https://github.com/zhinjs/zhin">GitHub</a>',
           copyright: 'Copyright © 2024-present lc-cn',
         },
+        editLink: {
+          pattern: 'https://github.com/zhinjs/zhin/edit/main/docs/:path',
+          text: 'Edit this page on GitHub',
+        },
+        lastUpdated: { text: 'Last updated' },
+        docFooter: { prev: 'Previous', next: 'Next step' },
       },
     },
   },

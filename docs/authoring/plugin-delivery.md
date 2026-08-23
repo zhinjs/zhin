@@ -49,7 +49,7 @@ title: 插件完整交付
 插件至少覆盖纯函数单测、能力发现测试、一次 Runtime 集成测试和一个失败路径。平台插件还应使用 adapter harness 验证 Endpoint 生命周期与消息归一化。
 
 ```bash
-pnpm typecheck
+pnpm build
 pnpm check:plugin
 pnpm check:plugin-runtime-api
 pnpm check:plugin-agent-publish

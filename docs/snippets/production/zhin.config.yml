@@ -1,0 +1,16 @@
+log_level: info
+
+http:
+  host: 127.0.0.1
+  port: 8068
+  token: ${HTTP_TOKEN}
+  corsOrigins:
+    - https://console.zhin.dev
+
+database:
+  dialect: sqlite
+  filename: ./data/bot.db
+
+plugins:
+  sandbox:
+    endpoints: []

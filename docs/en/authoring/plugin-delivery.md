@@ -49,7 +49,7 @@ Put cleanup from connections, timers, and Host registrations into `lifecycle`. U
 Cover pure functions, capability discovery, one Runtime integration, and one failure path. Platform plugins should also use the adapter harness for Endpoint lifecycle and message normalization.
 
 ```bash
-pnpm typecheck
+pnpm build
 pnpm check:plugin
 pnpm check:plugin-runtime-api
 pnpm check:plugin-agent-publish

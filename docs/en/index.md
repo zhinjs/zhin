@@ -10,6 +10,13 @@ layout: home
 <span>✔ IM golden path started — no model key required</span>
 </ZhinTerminal>
 
+<ZhinRolePaths heading="Start from your role" intro="You do not need the full architecture first. Choose the outcome you need now." :items="[
+  { eyebrow: 'BUILD', title: 'Build your first Bot', description: 'Move from Sandbox to one real platform through a repeatable message path.', href: '/en/getting-started/', action: 'Run the golden path' },
+  { eyebrow: 'AUTHOR', title: 'Ship a plugin', description: 'Close capability, configuration, lifecycle, testing, and release as one loop.', href: '/en/authoring/plugin-delivery', action: 'Open the delivery path' },
+  { eyebrow: 'OPERATE', title: 'Deploy and operate', description: 'Own TLS, supervision, monitoring, backup, upgrades, and rollback.', href: '/en/operations/production', action: 'Open production guide' },
+  { eyebrow: 'AGENT', title: 'Build an Agent team', description: 'Govern Prompt, Tool, Workroom, and repository collaboration boundaries.', href: '/en/solutions/governed-agent', action: 'Choose an Agent solution' },
+]" />
+
 <ZhinFeatureGrid heading="Why Zhin.js" :features="[
   { title: 'Plugin-based Core', desc: 'A <code>package.json#zhin</code> manifest plus a <code>plugin.ts</code> is all you need. Commands, components, and adapters are discovered from convention directories. Edit a file, get instant hot reload.' },
   { title: 'Multi-platform, One Message Flow', desc: 'QQ, OneBot, Discord, Telegram, Slack, KOOK, DingTalk, Lark, WeCom, LINE… 20+ adapters mount on demand, all sharing the same send chain.' },

@@ -39,7 +39,9 @@ Unknown options cause an immediate error before startup (fail fast), and will no
 
 ## Native TypeScript (strip-types)
 
-The runtime does not go through a compilation step; plugin source code (`plugin.ts`, etc.) is executed directly by Node. Minimum requirement is Node `>=22.6.0`; versions below this produce an immediate error. On Node `>=22.18` / `>=23.6` (strip-types is flag-free), foreground startup runs directly in the current process. For versions in the `22.6`--`22.17` range, the CLI re-spawns a child process with `--experimental-strip-types` and suppresses the related ExperimentalWarning. Daemon mode always uses a supervisor -> child process two-layer structure (see Process Management below).
+Runtime does not compile the project before startup. Node executes plugin source directly. Supported versions match repository `engines`: `^20.19.0 || >=22.12.0`; unsupported versions fail immediately.
+
+Foreground mode selects a wrapper based on Node's TypeScript support. Daemon mode always uses the supervisor -> child-process structure described below.
 
 Because it's "source as runtime," importing local TS files requires the `.js` extension (the runtime does specifier remapping), which is also one of the repository's code conventions.
 
@@ -117,4 +119,4 @@ zhin service install
 zhin runtime start --once --mode test
 ```
 
-For related commands and exit behavior, see [CLI Reference](./index.md); for configuration options, see [Configuration Reference](../configuration/index.md).
+See [CLI Reference](./index.md) for commands, [Configuration Reference](../configuration/index.md) for values, and [Production operations](../operations/production) for backup and recovery.

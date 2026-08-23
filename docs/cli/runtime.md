@@ -39,7 +39,9 @@ zhin runtime start --once                   # 启动一次后退出（CI / 脚�
 
 ## 原生 TypeScript（strip-types）
 
-运行时不经过编译步骤，插件源码（`plugin.ts` 等）由 Node 直接执行。最低要求 Node `>=22.6.0`，低于此版本直接报错。Node `>=22.18` / `>=23.6`（strip-types 已免旗标）时，前台启动直接在当前进程内运行；落在 `22.6`–`22.17` 区间时，CLI 会以 `--experimental-strip-types` 重新拉起一个子进程执行，并抑制相关 ExperimentalWarning。daemon 模式则总是经过 supervisor → 子进程两层结构（见下文进程管理）。
+运行时不经过项目编译步骤，插件源码由 Node 直接执行。支持版本与仓库 `engines` 一致：`^20.19.0 || >=22.12.0`，不满足时直接报错。
+
+前台模式会按 Node 的 TypeScript 支持能力决定是否需要 wrapper。daemon 模式始终使用 supervisor → 子进程两层结构，见下文进程管理。
 
 因为是「源码即运行时」，import 本地 TS 文件必须带 `.js` 扩展名（由运行时做 specifier 重映射），这也是仓库代码约定之一。
 
@@ -117,4 +119,4 @@ zhin service install
 zhin runtime start --once --mode test
 ```
 
-相关命令与退出行为见 [CLI 参考](./index.md)；配置项见 [配置参考](../configuration/index.md)。
+相关命令与退出行为见 [CLI 参考](./index.md)，配置项见 [配置参考](../configuration/index.md)，备份与恢复见[生产部署与运维](../operations/production)。

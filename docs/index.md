@@ -10,6 +10,8 @@ layout: home
 <span>✔ IM 黄金路径启动 —— 不需要任何模型 Key</span>
 </ZhinTerminal>
 
+<ZhinRolePaths />
+
 <ZhinFeatureGrid />
 
 <ZhinDuo heading="一个文件，就能打招呼">

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { YamlConfigDocument } from '../../packages/im/config-yaml/src/index.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (relativePath: string) => fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
@@ -60,6 +61,47 @@ describe('product documentation operability', () => {
       expect(content, relativePath).toContain('lifecycle');
       expect(content, relativePath).toContain('handoff');
       expect(content, relativePath).toContain('check:plugin-agent-publish');
+    }
+  });
+
+  it('production fixture is parseable and documentation follows source requirements', async () => {
+    const snapshot = await new YamlConfigDocument(
+      path.join(repoRoot, 'docs/snippets/production/zhin.config.yml'),
+    ).read();
+    const config = snapshot.document;
+    expect(Object.keys(config).sort()).toEqual(['database', 'http', 'log_level', 'plugins']);
+    expect(config).toMatchObject({
+      http: { host: '127.0.0.1', port: 8068 },
+      database: { dialect: 'sqlite', filename: './data/bot.db' },
+    });
+
+    const nodeRequirements = read('basic/cli/src/utils/node-requirements.ts');
+    const engine = nodeRequirements.match(/NODE_ENGINES_HINT = '([^']+)'/u)?.[1];
+    expect(engine).toBeTruthy();
+    for (const relativePath of [
+      'docs/cli/runtime.md',
+      'docs/en/cli/runtime.md',
+      'docs/operations/production.md',
+      'docs/en/operations/production.md',
+      'docs/operations/upgrades.md',
+      'docs/en/operations/upgrades.md',
+    ]) {
+      expect(read(relativePath), relativePath).toContain(engine);
+    }
+  });
+
+  it('production and migration guides stay paired across locales', () => {
+    const pairedFacts = {
+      production: ['/pub/health', 'Workroom', 'lockfile'],
+      upgrades: ['featureApi', 'Workroom', 'lockfile'],
+    } as const;
+    for (const [slug, facts] of Object.entries(pairedFacts)) {
+      const zh = read(`docs/operations/${slug}.md`);
+      const en = read(`docs/en/operations/${slug}.md`);
+      for (const fact of facts) {
+        expect(zh, `${slug} zh missing ${fact}`).toContain(fact);
+        expect(en, `${slug} en missing ${fact}`).toContain(fact);
+      }
     }
   });
 });
