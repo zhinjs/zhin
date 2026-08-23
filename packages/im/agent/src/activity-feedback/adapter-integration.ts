@@ -4,12 +4,16 @@
 
 import { getLogger } from '@zhin.js/logger';
 import type { Adapter, Endpoint, SendOptions } from '@zhin.js/core';
-import type { MessageRef } from '@zhin.js/im-contract';
+import type { ConversationRef, MessageRef } from '@zhin.js/im-contract';
 import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 import {
-  ReactionTypingIndicatorAdapter,
-  GenericTypingIndicatorAdapter,
+  MessageTypingIndicator,
+  NativeTypingIndicator,
+  NoneTypingIndicator,
+  ReactionTypingIndicator,
   type TypingIndicator,
+  type TypingIndicatorAdapter,
+  type TypingIndicatorConfig,
   type TypingIndicatorOptions,
 } from '../typing-indicator/index.js';
 import {
@@ -113,62 +117,92 @@ function registerPlatformAdapters(
   manager: ActivityFeedbackManager,
   endpoint: EndpointWithActivityFeedback,
   platform: string,
-  features: PlatformFeatures,
   outbound?: OutboundAdapter,
 ): void {
   const messages = new Map<string, MessageRef>();
   const sendMessage = createOutboundSendMessage(endpoint, platform, messages, outbound);
-  if (features.supportsReaction && endpoint.control?.addReaction && endpoint.control.removeReaction) {
-    manager.registerAdapter(new ReactionTypingIndicatorAdapter(
-      platform,
-      async (messageId, emoji, options) => {
-        try {
-          const message = toMessageRef(endpoint, platform, options, messageId);
-          messages.set(messageId, message);
-          return await endpoint.control!.addReaction!(message, emoji, {
-            sceneType: options.sceneType,
-            channelId: options.groupId,
-          });
-        } catch (error) {
-          logger.error(`[${platform}] Failed to add reaction:`, error);
-          return null;
-        }
-      },
-      async (messageId, reactionId) => {
-        const message = messages.get(messageId);
-        if (!message) return;
-        void Promise.resolve(endpoint.control!.removeReaction!(message, reactionId)).catch((error) => {
-          logger.warn(`[${platform}] Failed to remove reaction:`, error);
-        });
-      },
-      sendMessage,
-      async (messageId) => {
-        const message = messages.get(messageId);
-        if (message) await endpoint.control?.recall?.(message);
-      },
-      async (messageId, content) => {
-        const editBot = endpoint as BotWithEditing;
-        const message = messages.get(messageId);
-        if (message && endpoint.control?.edit) await endpoint.control.edit(message, content);
-        else if (typeof editBot.$updateMessage === 'function') await editBot.$updateMessage(messageId, content);
-      },
-    ));
-    return;
-  }
-  manager.registerAdapter(new GenericTypingIndicatorAdapter(
+  manager.registerAdapter(new EndpointActivityFeedbackAdapter(
     platform,
+    endpoint,
+    messages,
     sendMessage,
-    async (messageId) => {
-      const message = messages.get(messageId);
-      if (message) await endpoint.control?.recall?.(message);
-    },
-    async (messageId, content) => {
-      const editBot = endpoint as BotWithEditing;
-      const message = messages.get(messageId);
-      if (message && endpoint.control?.edit) await endpoint.control.edit(message, content);
-      else if (typeof editBot.$updateMessage === 'function') await editBot.$updateMessage(messageId, content);
-    },
   ));
+}
+
+/** One adapter selected from the concrete Endpoint control contract, not its platform name. */
+class EndpointActivityFeedbackAdapter implements TypingIndicatorAdapter {
+  readonly supportedTypes: import('../typing-indicator/index.js').TypingIndicatorType[];
+
+  constructor(
+    readonly platform: string,
+    private readonly endpoint: EndpointWithActivityFeedback,
+    private readonly messages: Map<string, MessageRef>,
+    private readonly sendMessage: (options: TypingIndicatorOptions, content: string) => Promise<string | null>,
+  ) {
+    const types: import('../typing-indicator/index.js').TypingIndicatorType[] = [];
+    if (endpoint.control?.addReaction && endpoint.control.removeReaction) types.push('reaction');
+    if (endpoint.control?.typing) types.push('typing');
+    // Activity messages are transient state, so advertising them without a
+    // matching recall operation would leave permanent “processing” debris in IM.
+    if (endpoint.control?.recall) types.push('message');
+    types.push('none');
+    this.supportedTypes = types;
+  }
+
+  createIndicator(options: TypingIndicatorOptions, config: TypingIndicatorConfig): TypingIndicator {
+    if (config.type === 'reaction' && this.endpoint.control?.addReaction && this.endpoint.control.removeReaction) {
+      return new ReactionTypingIndicator(
+        options,
+        config,
+        async (messageId, emoji, current) => {
+          const message = toMessageRef(this.endpoint, this.platform, current, messageId);
+          this.messages.set(messageId, message);
+          return this.endpoint.control!.addReaction!(message, emoji, {
+            sceneType: current.sceneType,
+            channelId: current.groupId,
+          });
+        },
+        async (messageId, reactionId) => {
+          const message = this.messages.get(messageId);
+          if (message) await this.endpoint.control!.removeReaction!(message, reactionId);
+        },
+      );
+    }
+    if (config.type === 'typing' && this.endpoint.control?.typing) {
+      return new NativeTypingIndicator(
+        options,
+        config,
+        async (current) => this.endpoint.control!.typing!(toConversationRef(
+          this.endpoint,
+          this.platform,
+          current,
+        ), true),
+        async (current) => this.endpoint.control!.typing!(toConversationRef(
+          this.endpoint,
+          this.platform,
+          current,
+        ), false),
+      );
+    }
+    if (config.type === 'message' && this.endpoint.control?.recall) {
+      return new MessageTypingIndicator(
+        options,
+        config,
+        this.sendMessage,
+        async (messageId) => {
+          const message = this.messages.get(messageId);
+          if (message) await this.endpoint.control!.recall!(message);
+        },
+        async (messageId, content) => {
+          const editBot = this.endpoint as BotWithEditing;
+          const message = this.messages.get(messageId);
+          if (message && this.endpoint.control?.edit) await this.endpoint.control.edit(message, content);
+          else if (typeof editBot.$updateMessage === 'function') await editBot.$updateMessage(messageId, content);
+        },
+      );
+    }
+    return new NoneTypingIndicator();
+  }
 }
 
 function toMessageRef(
@@ -177,14 +211,22 @@ function toMessageRef(
   options: TypingIndicatorOptions,
   id: string,
 ): MessageRef {
+  return {
+    conversation: toConversationRef(endpoint, platform, options),
+    id,
+  };
+}
+
+function toConversationRef(
+  endpoint: Endpoint,
+  platform: string,
+  options: TypingIndicatorOptions,
+): ConversationRef {
   const target = resolveSendTarget(options);
   return {
-    conversation: {
-      endpoint: { id: endpoint.$id, adapter: platform },
-      kind: options.sceneType,
-      id: target.id,
-    },
-    id,
+    endpoint: { id: endpoint.$id, adapter: platform },
+    kind: options.sceneType,
+    id: target.id,
   };
 }
 
@@ -200,16 +242,8 @@ export class AdapterActivityFeedbackManager {
     if (this.managers.has(botKey)) {
       return this.managers.get(botKey)!;
     }
-    const features = PLATFORM_FEATURES[platform] ?? {
-      platform,
-      supportsReaction: false,
-      supportsEdit: false,
-      supportsDelete: true,
-      supportsTyping: false,
-      defaultType: 'message' as const,
-    };
     const manager = new ActivityFeedbackManager();
-    registerPlatformAdapters(manager, endpoint, platform, features, outbound);
+    registerPlatformAdapters(manager, endpoint, platform, outbound);
     this.managers.set(botKey, manager);
     endpoint.$activityFeedback = manager;
     return manager;

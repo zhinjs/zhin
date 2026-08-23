@@ -46,4 +46,50 @@ describe('OutboundHost', () => {
       reactionId: '104',
     })).resolves.toBeUndefined();
   });
+
+  it('projects endpoint capabilities and delegates edit/typing controls', async () => {
+    const message = {
+      conversation: {
+        endpoint: { id: 'bot', adapter: 'discord' },
+        kind: 'channel' as const,
+        id: 'channel-1',
+      },
+      id: 'message-1',
+    };
+    const endpointCapabilities = vi.fn().mockReturnValue({
+      inbound: true,
+      outbound: true,
+      operations: { edit: true, typing: true },
+    });
+    const editEndpointMessage = vi.fn().mockResolvedValue('message-1');
+    const setEndpointTyping = vi.fn().mockResolvedValue(undefined);
+    const host = createOutboundHost({
+      endpointCapabilities,
+      editEndpointMessage,
+      setEndpointTyping,
+    } as unknown as ImRuntime);
+
+    expect(host.capabilities?.({ adapter: 'discord', endpointKey: 'bot' })).toEqual({
+      operations: ['edit', 'typing'],
+    });
+    await expect(host.edit?.({
+      adapter: 'discord',
+      endpointKey: 'bot',
+      message,
+      content: 'working',
+    })).resolves.toBe('message-1');
+    await expect(host.typing?.({
+      adapter: 'discord',
+      endpointKey: 'bot',
+      conversation: message.conversation,
+      active: true,
+    })).resolves.toBeUndefined();
+
+    expect(editEndpointMessage).toHaveBeenCalledWith({
+      adapter: 'discord', endpointKey: 'bot', message, content: 'working',
+    });
+    expect(setEndpointTyping).toHaveBeenCalledWith({
+      adapter: 'discord', endpointKey: 'bot', conversation: message.conversation, active: true,
+    });
+  });
 });

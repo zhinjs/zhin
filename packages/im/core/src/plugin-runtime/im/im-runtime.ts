@@ -37,6 +37,7 @@ import {
   type ConversationResolution,
   type ConversationRef,
   type DeliveryReceipt,
+  type EndpointCapabilities,
   type MessageRef,
 } from '@zhin.js/im-contract';
 import { segmentsToPlainText } from '../../built/segment-contract/text.js';
@@ -827,6 +828,25 @@ export class ImRuntime implements MessageGateway {
       }
     } catch {
       return Object.freeze([]);
+    }
+  }
+
+  /** Exact operation capabilities for one concrete live Endpoint. */
+  endpointCapabilities(input: {
+    readonly adapter: string;
+    readonly endpointKey: string;
+  }): EndpointCapabilities | undefined {
+    try {
+      const lease = this.#acquire();
+      try {
+        const index = requireAdapters(lease.value);
+        const id = index.resolve(input.adapter, input.endpointKey);
+        return id ? index.capabilities(id) : undefined;
+      } finally {
+        lease.release();
+      }
+    } catch {
+      return undefined;
     }
   }
 

@@ -5,6 +5,7 @@ import plugin from '../plugin.ts';
 import { loadActivityFeedbackServiceConfig } from '../src/config.js';
 import {
   bindActivityFeedbackToAIEventBus,
+  createActivityFeedbackAIEventHandlers,
   createActivityFeedbackOrchestratorForRuntime,
 } from '../src/ai-event-binder.js';
 
@@ -56,7 +57,7 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
     };
     activityFeedbackAiBus.on('ai.processing.start', probe as never);
 
-    activityFeedbackAiBus.emit('ai.processing.start', {
+    await activityFeedbackAiBus.dispatch('ai.processing.start', {
       sessionId: 's1',
       source: 'zhin-agent',
     } as never);
@@ -65,7 +66,7 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
     await lifecycle.dispose();
 
     received.length = 0;
-    activityFeedbackAiBus.emit('ai.processing.start', {
+    await activityFeedbackAiBus.dispatch('ai.processing.start', {
       sessionId: 's2',
       source: 'zhin-agent',
     } as never);
@@ -138,5 +139,98 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
         'test',
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it('updates task/tool progress and shows transient schedule terminal states', async () => {
+    const orchestrator = {
+      startPhase: vi.fn().mockResolvedValue(undefined),
+      stopPhase: vi.fn().mockResolvedValue(undefined),
+      updatePhaseText: vi.fn().mockResolvedValue(undefined),
+      showTransientPhase: vi.fn().mockResolvedValue(undefined),
+    };
+    const handlers = createActivityFeedbackAIEventHandlers(orchestrator as never);
+    const payload = {
+      sessionId: 's1',
+      source: 'zhin-agent',
+      platform: 'sandbox',
+      endpointKey: 'bot',
+      hookContext: { activityFeedbackEligible: true },
+    } as never;
+
+    await handlers.onProcessingStart?.({ ...payload, iterations: 2, content: '处理中 [2/15]...' });
+    await handlers.onToolCall?.({ ...payload, toolName: 'web_search' });
+    await handlers.onToolResult?.({ ...payload, toolName: 'web_search' });
+    await handlers.onToolResult?.({
+      ...payload,
+      toolName: 'shell',
+      status: 'error',
+      error: 'denied',
+    });
+
+    expect(orchestrator.updatePhaseText).toHaveBeenCalledWith(
+      expect.anything(), 'active', '处理中 [2/15]...',
+    );
+    expect(orchestrator.stopPhase).toHaveBeenCalledWith(
+      expect.anything(), 'thinking', 'processing.iteration',
+    );
+    expect(orchestrator.updatePhaseText).toHaveBeenCalledWith(
+      expect.anything(), 'active', '调用工具：web_search…',
+    );
+    expect(orchestrator.updatePhaseText).toHaveBeenCalledWith(
+      expect.anything(), 'active', '工具 web_search 已完成，继续处理…',
+    );
+    expect(orchestrator.updatePhaseText).toHaveBeenCalledWith(
+      expect.anything(), 'active', '工具 shell 未完成，继续处理…',
+    );
+
+    const schedulePayload = {
+      ...payload,
+      sessionId: 'schedule:job-1',
+      hookContext: { scheduleJobId: 'job-1', scheduleActivityFeedback: true },
+    } as never;
+    await handlers.onScheduleFinish?.(schedulePayload);
+    await handlers.onScheduleError?.(schedulePayload);
+    expect(orchestrator.showTransientPhase).toHaveBeenCalledWith(
+      schedulePayload, 'schedule_finish', 'schedule.finish',
+    );
+    expect(orchestrator.showTransientPhase).toHaveBeenCalledWith(
+      schedulePayload, 'schedule_error', 'schedule.error',
+    );
+  });
+
+  it('serializes start/finish handlers inside one plugin generation', async () => {
+    const order: string[] = [];
+    let finished!: () => void;
+    const done = new Promise<void>((resolve) => { finished = resolve; });
+    const orchestrator = {
+      startPhase: vi.fn(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        order.push('start');
+      }),
+      stopPhase: vi.fn(async (_payload, phase: string) => {
+        if (phase === 'active') {
+          order.push('finish');
+          finished();
+        }
+      }),
+      updatePhaseText: vi.fn(),
+      updateThinkingText: vi.fn(),
+      showTransientPhase: vi.fn(),
+    };
+    const dispose = bindActivityFeedbackToAIEventBus(orchestrator as never);
+    const payload = {
+      sessionId: 'ordered',
+      source: 'zhin-agent',
+      platform: 'sandbox',
+      endpointKey: 'bot',
+      hookContext: { activityFeedbackEligible: true },
+    } as never;
+
+    activityFeedbackAiBus.emit('ai.processing.start', payload);
+    activityFeedbackAiBus.emit('ai.processing.finish', payload);
+    await done;
+
+    expect(order).toEqual(['start', 'finish']);
+    dispose();
   });
 });

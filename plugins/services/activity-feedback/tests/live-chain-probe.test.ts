@@ -9,14 +9,15 @@ import type { OutboundHost, OutboundSendInput } from 'zhin.js';
 const logger = { debug: vi.fn(), error: vi.fn() };
 
 describe('live chain probe', () => {
-  it('processing.start → typing 文本经 OutboundHost 发出（默认配置）', async () => {
+  it('processing.start → 可撤回状态文本经 OutboundHost 发出', async () => {
     const sent: OutboundSendInput[] = [];
     const outbound: OutboundHost = {
+      capabilities: vi.fn(() => ({ operations: ['recall'] })),
       send: vi.fn(async (input: OutboundSendInput) => {
         sent.push(input);
         return 'mid-1';
       }),
-      addReaction: vi.fn(async () => 'rid-1'),
+      recall: vi.fn(),
     };
     const access = createOutboundEndpointAccess(outbound, logger);
     const orchestrator = createActivityFeedbackOrchestratorForRuntime({}, logger, access);
@@ -41,5 +42,6 @@ describe('live chain probe', () => {
       endpointKey: '8596238',
       conversation: { kind: 'group', id: '1001' },
     });
+    await orchestrator.dispose();
   });
 });

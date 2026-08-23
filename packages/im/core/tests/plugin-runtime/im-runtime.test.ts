@@ -948,6 +948,13 @@ describe('IM Runtime', () => {
     };
     const message = { conversation, id: 'message-1' };
 
+    expect(fixture.im.endpointCapabilities({ adapter: 'memory', endpointKey: 'memory' }))
+      .toEqual({
+        inbound: true,
+        outbound: true,
+        operations: { recall: true, edit: true, reaction: true, typing: true },
+      });
+
     await fixture.im.recallEndpointMessage({ adapter: 'memory', endpointKey: 'memory', message });
     await expect(fixture.im.editEndpointMessage({
       adapter: 'memory', endpointKey: 'memory', message, content: 'updated',

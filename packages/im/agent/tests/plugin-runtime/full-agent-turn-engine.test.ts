@@ -82,6 +82,19 @@ describe('FullAgentTurnEngine', () => {
       runText(input: Record<string, unknown>) {
         coreInput = input;
         return (async function* () {
+          yield {
+            type: 'tool_call' as const,
+            toolName: 'web_search',
+            args: { query: 'zhin' },
+            toolUseId: 'tool-1',
+          };
+          yield {
+            type: 'tool_result' as const,
+            toolName: 'web_search',
+            output: 'done',
+            durationMs: 12,
+            toolUseId: 'tool-1',
+          };
           yield { type: 'chunk' as const, text: 'done', accumulated: 'done' };
           yield {
             type: 'turn_end' as const,
@@ -133,7 +146,11 @@ describe('FullAgentTurnEngine', () => {
     const events: string[] = [];
     const started: Array<Record<string, unknown>> = [];
     const finished: Array<Record<string, unknown>> = [];
+    const toolCalls: Array<Record<string, unknown>> = [];
+    const toolResults: Array<Record<string, unknown>> = [];
     activityFeedbackAiBus.on('ai.processing.start', (payload) => started.push(payload as never));
+    activityFeedbackAiBus.on('ai.tool.call', (payload) => toolCalls.push(payload as never));
+    activityFeedbackAiBus.on('ai.tool.result', (payload) => toolResults.push(payload as never));
     activityFeedbackAiBus.on('ai.processing.finish', (payload) => {
       order.push('finish');
       finished.push(payload as never);
@@ -149,7 +166,7 @@ describe('FullAgentTurnEngine', () => {
       if (step.value.type === 'turn_end') order.push('terminal');
     }
 
-    expect(events).toEqual(['chunk', 'turn_end']);
+    expect(events).toEqual(['tool_call', 'tool_result', 'chunk', 'turn_end']);
     expect(order).toEqual(['context-read', 'terminal', 'reply', 'touch', 'context-commit:9', 'finalize', 'finish']);
     expect(started).toHaveLength(1);
     expect(started[0]).toMatchObject({
@@ -161,6 +178,8 @@ describe('FullAgentTurnEngine', () => {
       hookContext: { activityFeedbackEligible: true },
     });
     expect(finished).toHaveLength(1);
+    expect(toolCalls).toEqual([expect.objectContaining({ toolName: 'web_search' })]);
+    expect(toolResults).toEqual([expect.objectContaining({ toolName: 'web_search' })]);
     expect(coreInput).toMatchObject({
       toolLoading: 'deferred',
       generation: 7,

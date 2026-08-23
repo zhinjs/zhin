@@ -49,6 +49,27 @@ export interface OutboundRecallInput {
   readonly message: OutboundMessage;
 }
 
+export type OutboundEndpointOperation = 'recall' | 'edit' | 'reaction' | 'typing';
+
+export interface OutboundEndpointInput {
+  readonly adapter: string;
+  readonly endpointKey: string;
+}
+
+export interface OutboundEndpointCapabilities {
+  readonly operations: readonly OutboundEndpointOperation[];
+}
+
+export interface OutboundEditInput extends OutboundEndpointInput {
+  readonly message: OutboundMessage;
+  readonly content: unknown;
+}
+
+export interface OutboundTypingInput extends OutboundEndpointInput {
+  readonly conversation: OutboundMessage['conversation'];
+  readonly active?: boolean;
+}
+
 
 /** Structured message identity; structurally compatible with IM MessageRef. */
 export interface OutboundMessage {
@@ -59,6 +80,8 @@ export interface OutboundMessage {
 }
 
 export interface OutboundHost {
+  /** Exact operations declared by one live Endpoint. */
+  capabilities?(input: OutboundEndpointInput): OutboundEndpointCapabilities | undefined;
   /** Returns platform message id when available (activity-feedback needs it). */
   send(input: OutboundSendInput): Promise<string | null>;
   /** Optional: platform message reactions (icqq group emoji, etc.). */
@@ -66,6 +89,10 @@ export interface OutboundHost {
   removeReaction?(input: OutboundRemoveReactionInput): Promise<void>;
   /** Optional: recall/delete a status message (activity-feedback autoRemove). */
   recall?(input: OutboundRecallInput): Promise<void>;
+  /** Optional: update a previously sent status message. */
+  edit?(input: OutboundEditInput): Promise<string | null>;
+  /** Optional: toggle the platform-native typing indicator. */
+  typing?(input: OutboundTypingInput): Promise<void>;
 }
 
 export const outboundHostToken = createToken<OutboundHost>(

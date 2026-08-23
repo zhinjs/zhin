@@ -113,8 +113,8 @@ function matchesFilter(payload: AIEventPayload, filter?: AIEventFilter): boolean
 
 /** Plugin-agnostic on/off target (no AsyncLocalStorage). */
 export interface AIEventTarget {
-  on(event: string, listener: (payload: AIEventPayload) => void): unknown;
-  off(event: string, listener: (payload: AIEventPayload) => void): unknown;
+  on(event: string, listener: (payload: AIEventPayload) => void | Promise<void>): unknown;
+  off(event: string, listener: (payload: AIEventPayload) => void | Promise<void>): unknown;
 }
 
 function invokeHandlers(
@@ -144,7 +144,7 @@ export function subscribeAIEventsOnTarget(
   const disposers = AI_EVENT_NAMES.map((eventName) => {
     const listener = (payload: AIEventPayload) => {
       if (!matchesFilter(payload, filter)) return;
-      void invokeHandlers(eventName, payload, handlers);
+      return invokeHandlers(eventName, payload, handlers);
     };
     target.on(eventName, listener);
     return () => {

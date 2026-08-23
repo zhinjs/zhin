@@ -3058,10 +3058,10 @@ function observeTrace(
 
 function createScheduleActivityPort(agent: ZhinAgent) {
   return Object.freeze({
-    publish: (event: ScheduleActivityEvent) => {
+    publish: async (event: ScheduleActivityEvent) => {
       const payload = scheduleActivityPayload(event);
       if (!payload) return;
-      agent.getEventEmitter().emit(`schedule.${event.phase}`, payload);
+      await agent.getEventEmitter().dispatch(`schedule.${event.phase}`, payload);
     },
   });
 }

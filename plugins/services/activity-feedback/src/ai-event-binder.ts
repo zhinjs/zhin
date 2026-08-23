@@ -3,6 +3,8 @@ import {
   activityFeedbackAiBus,
   isActivityFeedbackEnabled,
   type AIEventHandlers,
+  type AIEventPayload,
+  type AIEventTarget,
 } from '@zhin.js/agent';
 import { loadActivityFeedbackServiceConfig, type ActivityFeedbackServiceConfig } from './config.js';
 import {
@@ -29,7 +31,13 @@ export function createActivityFeedbackAIEventHandlers(
     onProcessingStart: async (payload) => {
       if (!isActivityFeedbackEnabled(payload, 'active')) return;
       await orchestrator.stopPhase(payload, 'queued', 'processing.start');
+      if (typeof payload.iterations === 'number' && payload.iterations > 1) {
+        await orchestrator.stopPhase(payload, 'thinking', 'processing.iteration');
+      }
       await orchestrator.startPhase(payload, 'active', 'processing.start');
+      if (typeof payload.iterations === 'number' && payload.iterations > 1 && payload.content?.trim()) {
+        await orchestrator.updatePhaseText(payload, 'active', payload.content.trim());
+      }
     },
 
     onTypingStart: async () => {},
@@ -60,9 +68,26 @@ export function createActivityFeedbackAIEventHandlers(
       await orchestrator.updateThinkingText(payload, payload.thinking);
     },
 
+    onToolCall: async (payload) => {
+      if (!isActivityFeedbackEnabled(payload, 'active') || !payload.toolName?.trim()) return;
+      const text = `调用工具：${payload.toolName.trim()}…`;
+      await orchestrator.updatePhaseText(payload, 'thinking', text);
+      await orchestrator.updatePhaseText(payload, 'active', text);
+    },
+
+    onToolResult: async (payload) => {
+      if (!isActivityFeedbackEnabled(payload, 'active') || !payload.toolName?.trim()) return;
+      const outcome = payload.status === 'error' || payload.error ? '未完成' : '已完成';
+      const text = `工具 ${payload.toolName.trim()} ${outcome}，继续处理…`;
+      await orchestrator.updatePhaseText(payload, 'thinking', text);
+      await orchestrator.updatePhaseText(payload, 'active', text);
+    },
+
     onSubagentStart: async (payload) => {
       if (!isActivityFeedbackEnabled(payload, 'thinking')) return;
-      // Do not stop the parent turn's active indicator — subagent uses an isolated session key.
+      // The subagent has an isolated session key; remove its own active placeholder
+      // before switching to the richer thinking state.
+      await orchestrator.stopPhase(payload, 'active', 'subagent.start');
       await orchestrator.startPhase(payload, 'thinking', 'subagent.start');
       const tag = payload.agentId?.trim() || 'subagent';
       const label = payload.label?.trim()
@@ -74,14 +99,17 @@ export function createActivityFeedbackAIEventHandlers(
     onSubagentFinish: async (payload) => {
       if (!isActivityFeedbackEnabled(payload, 'active')) return;
       await orchestrator.stopPhase(payload, 'thinking', 'subagent.finish');
-      await orchestrator.startPhase(payload, 'active', 'subagent.finish');
+      await orchestrator.stopPhase(payload, 'active', 'subagent.finish');
     },
 
     onScheduleStart: (payload) => orchestrator.startPhase(payload, 'schedule_start', 'schedule.start'),
-    onScheduleFinish: (payload) => orchestrator.stopPhase(payload, 'schedule_start', 'schedule.finish'),
+    onScheduleFinish: async (payload) => {
+      await orchestrator.stopPhase(payload, 'schedule_start', 'schedule.finish');
+      await orchestrator.showTransientPhase(payload, 'schedule_finish', 'schedule.finish');
+    },
     onScheduleError: async (payload) => {
       await orchestrator.stopPhase(payload, 'schedule_start', 'schedule.error');
-      await orchestrator.startPhase(payload, 'schedule_error', 'schedule.error');
+      await orchestrator.showTransientPhase(payload, 'schedule_error', 'schedule.error');
     },
   };
 }
@@ -92,11 +120,65 @@ export function createActivityFeedbackAIEventHandlers(
  */
 export function bindActivityFeedbackToAIEventBus(
   orchestrator: ActivityFeedbackOrchestrator,
-): () => void {
-  return subscribeAIEventsOnTarget(
-    activityFeedbackAiBus,
+): () => Promise<void> {
+  const serialized = createGenerationSerializedTarget(activityFeedbackAiBus);
+  const unsubscribe = subscribeAIEventsOnTarget(
+    serialized.target,
     createActivityFeedbackAIEventHandlers(orchestrator),
   );
+  return async () => {
+    unsubscribe();
+    await serialized.close();
+  };
+}
+
+/** Generation-local ordering: one queue per IM session, no module-level runtime state. */
+function createGenerationSerializedTarget(source: AIEventTarget): {
+  target: AIEventTarget;
+  close(): Promise<void>;
+} {
+  const tails = new Map<string, Promise<void>>();
+  const wrappers = new Map<(payload: AIEventPayload) => void | Promise<void>,
+    (payload: AIEventPayload) => Promise<void>>();
+  let closed = false;
+  const target: AIEventTarget = {
+    on(event, listener) {
+      const wrapped = async (payload: AIEventPayload) => {
+        const key = payload.sessionId || '__global__';
+        const previous = tails.get(key);
+        const run = async () => {
+          if (!closed) await listener(payload);
+        };
+        const current = previous
+          ? previous.catch(() => undefined).then(run)
+          : run();
+        tails.set(key, current);
+        try {
+          await current;
+        } finally {
+          if (tails.get(key) === current) tails.delete(key);
+        }
+      };
+      wrappers.set(listener, wrapped);
+      return source.on(event, wrapped);
+    },
+    off(event, listener) {
+      const wrapped = wrappers.get(listener);
+      if (!wrapped) return source.off(event, listener);
+      wrappers.delete(listener);
+      return source.off(event, wrapped);
+    },
+  };
+  return {
+    target,
+    async close() {
+      closed = true;
+      const pending = [...tails.values()];
+      await Promise.allSettled(pending);
+      tails.clear();
+      wrappers.clear();
+    },
+  };
 }
 
 export type ActivityFeedbackLogger = {

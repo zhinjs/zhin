@@ -31,7 +31,7 @@ export function createSubagentSystem(opts: SubagentSystemInitOptions): SubagentS
     onSubagentUsage: (usage) => getActiveTurnTracker()?.addSubagentUsage(usage),
     registerSubagentTask: (done) => getActiveTurnTracker()?.trackSubagent(done),
     eventEmitter: opts.emitter,
-    onEvent: (event) => {
+    onEvent: async (event) => {
       const sessionId = resolveIMSessionIdFromMessage(event.origin.message);
       const payload = opts.emitter.createPayload(sessionId, event.origin.message, 'text', {
         source: 'subagent',
@@ -48,11 +48,11 @@ export function createSubagentSystem(opts: SubagentSystemInitOptions): SubagentS
         },
       });
       if (event.phase === 'spawn') {
-        opts.emitter.emit('ai.subagent.spawn', payload);
+        await opts.emitter.dispatch('ai.subagent.spawn', payload);
       } else if (event.phase === 'start') {
-        opts.emitter.emit('ai.subagent.start', payload);
+        await opts.emitter.dispatch('ai.subagent.start', payload);
       } else {
-        opts.emitter.emit('ai.subagent.finish', payload);
+        await opts.emitter.dispatch('ai.subagent.finish', payload);
       }
     },
     onSubagentComplete: opts.onSubagentComplete,

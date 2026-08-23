@@ -38,6 +38,25 @@ describe('activityFeedback config', () => {
     const service = loadActivityFeedbackServiceConfig({ enabled: false });
     expect(resolveActivityFeedbackForTarget(service, 'icqq', 'x')?.enabled).toBe(false);
   });
+
+  it('schedule finish/error 配置覆盖常规平台默认值', () => {
+    const policy = new ActivityFeedbackPolicy(loadActivityFeedbackServiceConfig({
+      schedule: {
+        phases: {
+          finish: {
+            private: { type: 'message', message: '计划完成', removeDelay: 1200 },
+          },
+        },
+      },
+    }));
+
+    expect(policy.resolvePhase('discord', 'bot', 'schedule_finish', 'private')).toEqual({
+      kind: 'active',
+      config: expect.objectContaining({
+        type: 'message', message: '计划完成', removeDelay: 1200,
+      }),
+    });
+  });
 });
 
 describe('ActivityFeedbackOrchestrator', () => {
@@ -45,6 +64,7 @@ describe('ActivityFeedbackOrchestrator', () => {
     const executor = {
       start: vi.fn(),
       stop: vi.fn(),
+      updateText: vi.fn(),
       updateThinkingText: vi.fn(),
     } satisfies ActivityFeedbackExecutor;
 
@@ -84,6 +104,7 @@ describe('ActivityFeedbackOrchestrator', () => {
     const executor = {
       start: vi.fn(),
       stop: vi.fn(),
+      updateText: vi.fn(),
       updateThinkingText: vi.fn(),
     } satisfies ActivityFeedbackExecutor;
 
@@ -132,6 +153,42 @@ describe('ActivityFeedbackOrchestrator', () => {
       expect.anything(),
       'active',
       expect.objectContaining({ message: '[researcher] 正在处理中...' }),
+    );
+  });
+
+  it('dispose 清理所有仍活跃的主/子 Agent phase', async () => {
+    const executor = {
+      start: vi.fn(),
+      stop: vi.fn(),
+      updateText: vi.fn(),
+      updateThinkingText: vi.fn(),
+    } satisfies ActivityFeedbackExecutor;
+    const orchestrator = new ActivityFeedbackOrchestrator(
+      new ActivityFeedbackPolicy(loadActivityFeedbackServiceConfig({})),
+      executor,
+      { debug: vi.fn(), error: vi.fn() },
+    );
+    const base = {
+      platform: 'discord',
+      endpointKey: 'bot',
+      sessionId: 'discord:bot:private:u1',
+      sceneId: 'u1',
+      userId: 'u1',
+      scope: 'private',
+      hookContext: { activityFeedbackEligible: true },
+    } as AIEventPayload;
+    await orchestrator.startPhase(base, 'active', 'test');
+    await orchestrator.startPhase({
+      ...base, source: 'subagent', agentId: 'researcher', taskId: 'task-1',
+    }, 'thinking', 'test');
+
+    await orchestrator.dispose();
+
+    expect(executor.stop).toHaveBeenCalledTimes(2);
+    expect(executor.stop).toHaveBeenCalledWith(expect.anything(), 'active');
+    expect(executor.stop).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: expect.stringContaining('::agent:researcher:') }),
+      'thinking',
     );
   });
 });

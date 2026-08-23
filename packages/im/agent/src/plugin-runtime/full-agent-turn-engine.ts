@@ -202,6 +202,36 @@ async function* runInteractiveTurn(
   const thinkingMaxLen = host.config.thinkingPreviewMaxLength ?? 200;
   const completion = yield* bufferTerminal(stream, (event) => {
     if (!payload) return;
+    if (event.type === 'tool_call') {
+      emitActivityEvent(host, 'ai.tool.call', {
+        ...payload,
+        toolName: event.toolName,
+        args: event.args,
+      });
+      return;
+    }
+    if (event.type === 'tool_result') {
+      emitActivityEvent(host, 'ai.tool.result', {
+        ...payload,
+        toolName: event.toolName,
+        result: event.output,
+        status: 'ok',
+      });
+      return;
+    }
+    if (
+      event.type === 'tool_failed'
+      || event.type === 'tool_denied'
+      || event.type === 'tool_cancelled'
+    ) {
+      emitActivityEvent(host, 'ai.tool.result', {
+        ...payload,
+        toolName: event.toolName,
+        error: event.type === 'tool_failed' ? event.error : event.reason,
+        status: 'error',
+      });
+      return;
+    }
     if (event.type === 'iteration_start' && event.iteration > 1) {
       emitActivityEvent(host, 'ai.processing.start', {
         ...payload,

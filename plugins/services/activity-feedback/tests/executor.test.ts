@@ -27,6 +27,7 @@ function createCtx(): ActivityFeedbackEventContext {
 const phaseConfig: ResolvedActivityFeedbackPhaseConfig = {
   type: 'message',
   message: '处理中…',
+  autoRemove: true,
 };
 
 describe('createOutboundEndpointAccess', () => {
@@ -40,10 +41,14 @@ describe('createOutboundEndpointAccess', () => {
 
   it('start→stop 生命周期：指示器会停止，且不抛 TypeError', async () => {
     const sent: OutboundSendInput[] = [];
+    const recall = vi.fn().mockResolvedValue(undefined);
     const outbound: OutboundHost = {
+      capabilities: vi.fn(() => ({ operations: ['recall'] })),
       send: vi.fn(async (input: OutboundSendInput) => {
         sent.push(input);
+        return 'mid-1';
       }),
+      recall,
     };
     const access = createOutboundEndpointAccess(outbound, { debug: vi.fn() });
     const executor = new ActivityFeedbackExecutor(access);
@@ -71,15 +76,14 @@ describe('createOutboundEndpointAccess', () => {
 
     await executor.stop(ctx, 'active');
     expect(manager.getActiveIndicator('active', ctx.options)).toBeUndefined();
-
-    // OutboundHost 未提供 recall 时，control.recall 不存在
-    expect(endpoint.control?.recall).toBeUndefined();
+    expect(recall).toHaveBeenCalledOnce();
   });
 
   it('wires control.recall to OutboundHost.recall when available', async () => {
     const recalled: Array<{ adapter: string; endpointKey: string; message: unknown }> = [];
     const access = createOutboundEndpointAccess({
       send: vi.fn(async () => 'mid-1'),
+      capabilities: vi.fn(() => ({ operations: ['recall'] })),
       recall: vi.fn(async (input) => {
         recalled.push(input);
       }),
@@ -95,5 +99,73 @@ describe('createOutboundEndpointAccess', () => {
     };
     await endpoint.control?.recall?.(message);
     expect(recalled).toEqual([{ adapter: 'sandbox', endpointKey: 'bot1', message }]);
+  });
+
+  it('does not expose controls or temporary messages that the endpoint did not explicitly declare', async () => {
+    const access = createOutboundEndpointAccess({
+      send: vi.fn(),
+      recall: vi.fn(),
+      edit: vi.fn(),
+      addReaction: vi.fn(),
+      removeReaction: vi.fn(),
+      typing: vi.fn(),
+    });
+
+    const control = access.resolve('sandbox', 'bot1')!.endpoint.control;
+    expect(control?.recall).toBeUndefined();
+    expect(control?.edit).toBeUndefined();
+    expect(control?.addReaction).toBeUndefined();
+    expect(control?.removeReaction).toBeUndefined();
+    expect(control?.typing).toBeUndefined();
+    await new ActivityFeedbackExecutor(access).start(createCtx(), 'active', phaseConfig);
+    const manager = access.resolve('sandbox', 'bot1')!.endpoint.$activityFeedback;
+    if (!manager || !isGenericActivityFeedbackManager(manager)) {
+      throw new Error('expected generic activity feedback manager');
+    }
+    expect(manager.getAdapter('sandbox')?.supportedTypes).toEqual(['none']);
+  });
+
+  it('uses declared native typing and stops it for the same conversation', async () => {
+    const typing = vi.fn().mockResolvedValue(undefined);
+    const access = createOutboundEndpointAccess({
+      send: vi.fn(),
+      capabilities: vi.fn(() => ({ operations: ['typing'] })),
+      typing,
+    });
+    const executor = new ActivityFeedbackExecutor(access);
+    const ctx = { ...createCtx(), platform: 'telegram', options: { ...createCtx().options, platform: 'telegram' } };
+
+    await executor.start(ctx, 'active', { type: 'typing' });
+    await executor.stop(ctx, 'active');
+
+    expect(typing).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      adapter: 'telegram',
+      endpointKey: 'bot1',
+      conversation: expect.objectContaining({ kind: 'private', id: 'u1' }),
+      active: true,
+    }));
+    expect(typing).toHaveBeenNthCalledWith(2, expect.objectContaining({ active: false }));
+  });
+
+  it('updates an active status message through declared edit capability', async () => {
+    const edit = vi.fn().mockResolvedValue('mid-1');
+    const access = createOutboundEndpointAccess({
+      send: vi.fn(async () => 'mid-1'),
+      capabilities: vi.fn(() => ({ operations: ['edit', 'recall'] })),
+      edit,
+      recall: vi.fn(),
+    });
+    const executor = new ActivityFeedbackExecutor(access);
+    const ctx = createCtx();
+
+    await executor.start(ctx, 'active', phaseConfig);
+    await executor.updateText(ctx, 'active', '处理中 [2/15]…');
+
+    expect(edit).toHaveBeenCalledWith(expect.objectContaining({
+      adapter: 'sandbox',
+      endpointKey: 'bot1',
+      message: expect.objectContaining({ id: 'mid-1' }),
+      content: '处理中 [2/15]…',
+    }));
   });
 });

@@ -63,7 +63,7 @@ export class ZhinAgentEventEmitter {
   ): Promise<void> {
     // Always fan-out for Plugin Runtime subscribers (activity-feedback, etc.).
     // Legacy Feature path still receives the same event via root.dispatch below.
-    activityFeedbackAiBus.emit(String(name), payload);
+    await activityFeedbackAiBus.dispatch(String(name), payload);
     const root = this.hostPlugin?.root ?? this.hostPlugin;
     if (!root) return;
     await root.dispatch(name as any, payload);

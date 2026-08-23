@@ -3,7 +3,7 @@ import type { AIEventPayload } from '../ai-event-subscriber.js';
 
 const logger = getLogger('AIBus');
 
-type AIBusListener = (payload: AIEventPayload) => void;
+type AIBusListener = (payload: AIEventPayload) => void | Promise<void>;
 
 /**
  * Module-level AI event bus for Plugin Runtime consumers that cannot use
@@ -31,6 +31,10 @@ export class ActivityFeedbackAIBus {
   }
 
   emit(event: string, payload: AIEventPayload): void {
+    void this.dispatch(event, payload);
+  }
+
+  async dispatch(event: string, payload: AIEventPayload): Promise<void> {
     const set = this.listeners.get(event);
     if (!set || set.size === 0) {
       // 零订阅 = activity-feedback 插件未加载，或运行时装了双份 @zhin.js/agent
@@ -38,9 +42,13 @@ export class ActivityFeedbackAIBus {
       logger.debug(formatCompact({ op: 'ai_bus_no_listener', event }));
       return;
     }
-    for (const listener of set) {
+    // Snapshot before the first await: HMR may replace listeners while an old
+    // generation handler is still settling. A live Set iterator would then
+    // leak this in-flight event into the newly registered generation.
+    const listeners = [...set];
+    for (const listener of listeners) {
       try {
-        listener(payload);
+        await listener(payload);
       } catch {
         // Listener errors must not break the Agent emit path.
       }

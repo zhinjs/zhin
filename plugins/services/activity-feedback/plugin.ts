@@ -43,9 +43,10 @@ export default definePlugin<ActivityFeedbackServiceConfig>({
       access,
     );
     const dispose = bindActivityFeedbackToAIEventBus(orchestrator);
-    context.lifecycle.add(() => {
+    context.lifecycle.add(async () => {
       logger.debug('[ActivityFeedback] Disposing Runtime AI event binder');
-      dispose();
+      await dispose();
+      await orchestrator.dispose();
     });
   },
 });
