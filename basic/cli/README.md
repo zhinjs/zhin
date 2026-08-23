@@ -24,6 +24,7 @@ zhin setup                # 交互式配置向导（适配器 / AI / 数据库�
 zhin config check [--fix] # 校验/修复 zhin.config.yml
 zhin doctor               # 环境诊断
 zhin send <scene_id> ...  # 向运行中的实例发消息
+zhin agent workroom runs --project <id> # 查看在线 Workroom Run 状态
 zhin --help               # 全部命令
 ```
 

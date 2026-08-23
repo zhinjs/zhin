@@ -100,12 +100,23 @@ export async function hostGet<T>(
     return { ok: true, status: res.status, data: body.data ?? (body as T) };
   } catch (e: unknown) {
     const err = e as NodeJS.ErrnoException;
+    const connectionCode = errorCode(e);
     const msg =
       err?.name === 'TimeoutError'
         ? `请求 ${http.baseUrl} 超时（5s 无响应）`
-        : err?.code === 'ECONNREFUSED'
+        : connectionCode === 'ECONNREFUSED'
           ? `无法连接 ${http.baseUrl}（请先 zhin runtime start）`
           : (err?.message ?? String(e));
     return { ok: false, status: 0, error: msg };
   }
+}
+
+function errorCode(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const direct = Reflect.get(value, 'code');
+  if (typeof direct === 'string') return direct;
+  const cause = Reflect.get(value, 'cause');
+  if (!cause || typeof cause !== 'object') return undefined;
+  const nested = Reflect.get(cause, 'code');
+  return typeof nested === 'string' ? nested : undefined;
 }

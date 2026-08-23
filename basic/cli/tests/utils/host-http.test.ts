@@ -34,4 +34,20 @@ describe('hostGet', () => {
     expect(result.error).toContain('超时');
     expect(result.error).toContain('http://127.0.0.1:8086/api');
   });
+
+  it('maps Node fetch connection refusal causes to the runtime-start hint', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new TypeError('fetch failed', {
+        cause: Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }),
+      });
+    }));
+
+    const result = await hostGet({ baseUrl: 'http://127.0.0.1:8086/api', token: 'token' }, '/stats');
+
+    expect(result).toEqual({
+      ok: false,
+      status: 0,
+      error: '无法连接 http://127.0.0.1:8086/api（请先 zhin runtime start）',
+    });
+  });
 });
