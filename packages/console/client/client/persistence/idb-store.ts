@@ -66,13 +66,29 @@ export async function idbListInbox(
   );
 }
 
-export async function applyConsoleEvent(event: { type: string; data?: unknown }): Promise<void> {
+export async function applyConsoleEvent(event: {
+  type: string;
+  data?: unknown;
+  runtimeId?: string;
+  eventId?: number;
+  timestamp?: number;
+}): Promise<void> {
   const parsed = parseConsoleInboxEvent(event);
   if (!parsed) return;
-  const updatedAt = Date.now();
+  const updatedAt = typeof event.timestamp === 'number' && Number.isFinite(event.timestamp)
+    ? event.timestamp
+    : Date.now();
+  const resumableId = typeof event.runtimeId === 'string'
+    && event.runtimeId
+    && Number.isSafeInteger(event.eventId)
+    && (event.eventId ?? 0) > 0
+    ? `${event.runtimeId}:${event.eventId}`
+    : null;
   await idbPutInbox({
-    // 追加自增+随机后缀：同毫秒同会话的两条事件不会因主键相同而互相覆盖
-    id: `${parsed.adapter}:${parsed.endpointKey}:${parsed.type}:${updatedAt}:${inboxEventSeq++}:${Math.random().toString(36).slice(2, 8)}`,
+    // Resumable Host events are idempotent across history/live redelivery.
+    // Legacy/unsequenced sources retain collision-safe append ids.
+    id: resumableId
+      ?? `${parsed.adapter}:${parsed.endpointKey}:${parsed.type}:${updatedAt}:${inboxEventSeq++}:${Math.random().toString(36).slice(2, 8)}`,
     adapter: parsed.adapter,
     endpoint_id: parsed.endpointKey,
     kind: parsed.kind,

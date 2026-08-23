@@ -26,6 +26,7 @@ import {
 const TABLE_MESSAGE = 'unified_inbox_message';
 const TABLE_REQUEST = 'unified_inbox_request';
 const TABLE_NOTICE = 'unified_inbox_notice';
+const MAX_INBOX_OFFSET = 10_000;
 
 export interface ConsoleRpcExtendedCtx {
   /** full scope 才允许写操作；demo scope 只放行只读 RPC。 */
@@ -131,6 +132,8 @@ interface InboxSelection {
   orderBy?(field: string, direction?: 'ASC' | 'DESC'): InboxSelection;
   /** 可选：DB 侧 limit 下推。 */
   limit?(count: number): InboxSelection;
+  /** 可选：DB 侧 offset 下推。 */
+  offset?(count: number): InboxSelection;
   then<TResult1 = Record<string, unknown>[], TResult2 = never>(
     onfulfilled?: ((value: Record<string, unknown>[]) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
@@ -509,23 +512,34 @@ async function readInboxRows(
     orderBy?: { field: string; direction?: 'ASC' | 'DESC' };
     /** DB 侧 limit 下推（模型不支持时由调用方内存分页兜底）。 */
     limit?: number;
+    /** DB 侧 offset 下推（模型不支持时由调用方内存分页兜底）。 */
+    offset?: number;
   },
-): Promise<{ rows: Record<string, unknown>[]; enabled: boolean }> {
+): Promise<{ rows: Record<string, unknown>[]; enabled: boolean; offsetApplied: boolean }> {
   const model = getInboxModel(ctx, table);
-  if (!model) return { rows: [], enabled: false };
+  if (!model) return { rows: [], enabled: false, offsetApplied: false };
   try {
     let selection: InboxSelection = model.select().where(where);
+    let orderApplied = options?.orderBy == null;
     if (options?.orderBy && typeof selection.orderBy === 'function') {
       selection = selection.orderBy(options.orderBy.field, options.orderBy.direction ?? 'DESC');
+      orderApplied = true;
     }
-    if (options?.limit != null && typeof selection.limit === 'function') {
-      selection = selection.limit(options.limit);
+    const offset = options?.offset ?? 0;
+    const offsetSelection = orderApplied ? selection.offset : undefined;
+    const canApplyOffset = typeof offsetSelection === 'function';
+    const offsetApplied = offset === 0 || canApplyOffset;
+    if (offset > 0 && canApplyOffset) {
+      selection = offsetSelection.call(selection, offset);
+    }
+    if (options?.limit != null && orderApplied && typeof selection.limit === 'function') {
+      selection = selection.limit(options.limit + (offsetApplied ? 0 : offset));
     }
     const rows = await selection;
-    return { rows: Array.isArray(rows) ? rows : [], enabled: true };
+    return { rows: Array.isArray(rows) ? rows : [], enabled: true, offsetApplied };
   } catch {
     // 表未创建 / 方言未启动等场景降级为空，不向上抛。
-    return { rows: [], enabled: false };
+    return { rows: [], enabled: false, offsetApplied: false };
   }
 }
 
@@ -539,20 +553,26 @@ async function listInbox(
   const adapter = strField(d, '$adapter', 'adapter');
   const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
   if (!adapter || !endpointKey) return { error: '$adapter and $endpoint required' };
-  const limit = Math.min(numField(d, 30, '$limit', 'limit'), 100);
-  const offset = Math.max(0, numField(d, 0, '$offset', 'offset'));
-  const { rows, enabled } = await readInboxRows(ctx, table, {
+  const limit = boundedIntegerField(d, 30, 1, 100, '$limit', 'limit');
+  const offset = boundedIntegerField(
+    d, 0, 0, MAX_INBOX_OFFSET, '$offset', 'offset',
+  );
+  const unreadOnly = table === TABLE_NOTICE
+    && boolField(d, false, '$unread_only', 'unreadOnly', 'unread_only');
+  const { rows, enabled, offsetApplied } = await readInboxRows(ctx, table, {
     adapter,
     endpoint_id: endpointKey,
+    ...(unreadOnly ? { consumed: 0 } : {}),
   }, {
     // sort/limit 下推到 DB 侧（内存 sort/slice 保留，作为无下推能力模型的兜底）
     orderBy: { field: 'created_at', direction: 'DESC' },
-    limit: offset + limit,
+    limit,
+    offset,
   });
   const sorted = rows
     .slice()
     .sort((a, b) => Number(b.created_at ?? 0) - Number(a.created_at ?? 0))
-    .slice(offset, offset + limit)
+    .slice(offsetApplied ? 0 : offset, (offsetApplied ? 0 : offset) + limit)
     .map(mapRow);
   return { data: { [key]: sorted, inboxEnabled: enabled } };
 }
@@ -615,7 +635,7 @@ async function listInboxMessages(
   if (!adapter || !endpointKey || !channelId || !channelType) {
     return { error: '$adapter, $endpoint, $channel_id, $channel_type required' };
   }
-  const limit = Math.min(numField(d, 50, '$limit', 'limit'), 100);
+  const limit = boundedIntegerField(d, 50, 1, 100, '$limit', 'limit');
   const beforeTs = optionalNum(d, '$before_ts', 'beforeTs', 'before_ts');
   const beforeId = optionalNum(d, '$before_id', 'beforeId', 'before_id');
   const parent = normalizeParent(d.$parent ?? d.parent);
@@ -685,16 +705,18 @@ function mapRequestRow(row: Record<string, unknown>): Record<string, unknown> {
 function mapNoticeRow(row: Record<string, unknown>): Record<string, unknown> {
   const actorId = row.actor_id ?? undefined;
   const actorName = row.actor_name ?? undefined;
-  const sceneId = row.scene_id;
-  const sceneType = row.scene_type ?? undefined;
+  const sceneId = String(row.scene_id ?? '');
+  const sceneType = row.scene_type == null ? undefined : String(row.scene_type);
   return {
     id: row.id,
     platform_notice_id: row.platform_notice_id,
     type: row.type,
+    noticeType: row.type,
     scene_type: sceneType,
     scene_id: sceneId,
     channel_id: sceneId,
     channel_type: sceneType,
+    channel: { id: sceneId, type: sceneType ?? '' },
     sub_type: row.sub_type ?? undefined,
     actor_id: actorId,
     actor_name: actorName,
@@ -706,6 +728,8 @@ function mapNoticeRow(row: Record<string, unknown>): Record<string, unknown> {
     payload: row.payload,
     created_at: row.created_at,
     timestamp: row.created_at,
+    consumed: row.consumed,
+    consumed_at: row.consumed_at ?? undefined,
   };
 }
 
@@ -961,6 +985,26 @@ function numField(d: Record<string, unknown>, fallback: number, ...keys: string[
   for (const key of keys) {
     const parsed = Number(d[key]);
     if (d[key] != null && Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function boundedIntegerField(
+  d: Record<string, unknown>,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+  ...keys: string[]
+): number {
+  const value = numField(d, fallback, ...keys);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(maximum, Math.max(minimum, Math.trunc(value)));
+}
+
+function boolField(d: Record<string, unknown>, fallback: boolean, ...keys: string[]): boolean {
+  for (const key of keys) {
+    const value = d[key];
+    if (typeof value === 'boolean') return value;
   }
   return fallback;
 }

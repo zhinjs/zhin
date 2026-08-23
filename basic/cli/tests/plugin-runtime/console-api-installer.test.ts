@@ -1218,6 +1218,20 @@ describe('console SSE events', () => {
     const outbound = await readUntil('"direction":"outbound"');
     expect(outbound).toContain('"content":"reply text"');
 
+    const historyResponse = await fetch(`http://127.0.0.1:${port}/api/events/history?after=0&limit=10`);
+    expect(historyResponse.status).toBe(200);
+    const history = await historyResponse.json() as {
+      success: boolean;
+      data: { runtimeId: string; latestEventId: number; items: Array<Record<string, unknown>> };
+    };
+    expect(history.success).toBe(true);
+    expect(history.data.runtimeId).toBe(hub.runtimeId);
+    expect(history.data.latestEventId).toBe(2);
+    expect(history.data.items).toEqual([
+      expect.objectContaining({ eventId: 1, type: 'message.receive' }),
+      expect.objectContaining({ eventId: 2, type: 'message.receive' }),
+    ]);
+
     reader.cancel().catch(() => undefined);
   });
 

@@ -1,6 +1,11 @@
+import type { ConsoleEventDelivery } from '@zhin.js/console-protocol';
+
 export interface BaseMessage {
   type: string;
   timestamp?: number;
+  runtimeId?: string;
+  eventId?: number;
+  delivery?: ConsoleEventDelivery;
   requestId?: number;
   error?: string;
 }

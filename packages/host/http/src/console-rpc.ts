@@ -801,6 +801,8 @@ export function isDemoHttpAllowed(method: string, pathname: string, apiBase: str
   const normalizedBase = apiBase.replace(/\/$/u, '') || '/api';
   const m = method.toUpperCase();
   if (m === 'GET' && pathname === `${normalizedBase}/events`) return true;
+  if (m === 'GET' && pathname === `${normalizedBase}/events/history`) return true;
+  if (m === 'GET' && DEMO_INTROSPECTION_PATHS.has(pathname.slice(normalizedBase.length))) return true;
   if (m === 'POST' && pathname === `${normalizedBase}/console/request`) return true;
   // Read-only dashboard / plugin inspection routes (legacy host-api parity).
   if (m === 'GET' && pathname === `${normalizedBase}/system/status`) return true;
@@ -809,3 +811,13 @@ export function isDemoHttpAllowed(method: string, pathname: string, apiBase: str
     || pathname.startsWith(`${normalizedBase}/plugins/`))) return true;
   return false;
 }
+
+const DEMO_INTROSPECTION_PATHS: ReadonlySet<string> = new Set([
+  '/introspection/commands',
+  '/introspection/middlewares',
+  '/introspection/components',
+  '/introspection/endpoints',
+  '/introspection/bindings',
+  '/introspection/tools',
+  '/introspection/mcp',
+]);

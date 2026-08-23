@@ -7,6 +7,7 @@ import {
   normalizeConsoleRpcMessage,
   normalizeConsoleRpcType,
   parseConsoleInboxEvent,
+  parseConsoleSseFrame,
 } from '../src/index.js';
 
 describe('Console RPC protocol', () => {
@@ -98,5 +99,23 @@ describe('Console RPC protocol', () => {
 
   it('stabilizes endpoint send response aliases', () => {
     expect(endpointSendResult(42)).toEqual({ message_id: '42', messageId: '42' });
+  });
+
+  it('parses standard SSE event, id and typed extension fields', () => {
+    expect(parseConsoleSseFrame([
+      'id: 42',
+      'event: message.receive',
+      'runtime: runtime-a',
+      'timestamp: 1720000000000',
+      'data: {"adapter":"sandbox",',
+      'data: "endpointKey":"bot"}',
+    ].join('\n'))).toEqual({
+      eventId: 42,
+      runtimeId: 'runtime-a',
+      timestamp: 1720000000000,
+      type: 'message.receive',
+      data: { adapter: 'sandbox', endpointKey: 'bot' },
+    });
+    expect(parseConsoleSseFrame('event: broken\ndata: {')).toBeNull();
   });
 });
