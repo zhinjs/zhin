@@ -93,6 +93,7 @@ jobs:
         run: pnpm check:all
         env:
           HARNESS_SKIP_TEST: '1'
+          HARNESS_SEQUENTIAL: '1'
 
       - name: run tests with coverage
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
