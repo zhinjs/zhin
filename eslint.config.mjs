@@ -15,6 +15,7 @@ export default tseslint.config(
       '**/*.cjs',
       '**/*.d.ts',
       '.github/skills/**',
+      '.tmp/**',
       'vendor/**',
     ],
   },
