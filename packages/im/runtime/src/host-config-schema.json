@@ -5,7 +5,113 @@
   "properties": {
     "http": { "type": "object", "additionalProperties": true, "description": "HTTP, Console, REST/RPC/SSE, and Webhook Host.", "x-descriptionZh": "HTTP、Console、REST/RPC/SSE 与 Webhook Host。" },
     "database": { "type": "object", "additionalProperties": true, "description": "Database Host and dialect connection options.", "x-descriptionZh": "Database Host 与方言连接参数。" },
-    "ai": { "type": "object", "additionalProperties": true, "description": "Providers, Agents, sessions, memory, tools, and execution security.", "x-descriptionZh": "Provider、Agent、会话、记忆、工具与执行安全策略。" },
+    "ai": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Providers, Agents, sessions, memory, tools, and execution security.",
+      "x-descriptionZh": "Provider、Agent、会话、记忆、工具与执行安全策略。",
+      "properties": {
+        "agent": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Agent execution, queueing, tool, and model policies.",
+          "x-descriptionZh": "Agent 执行、排队、工具与模型策略。",
+          "properties": {
+            "inboundQueue": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Inbound turn queue policy.",
+              "x-descriptionZh": "入站回合排队策略。",
+              "properties": {
+                "groupMode": {
+                  "type": "string",
+                  "enum": ["supersede", "fifo"],
+                  "description": "Replace an older queued group turn, or process all turns in arrival order.",
+                  "x-descriptionZh": "覆盖较早的群聊排队回合，或按到达顺序处理全部回合。"
+                }
+              }
+            },
+            "execSecurity": {
+              "type": "string",
+              "enum": ["deny", "allowlist", "full"],
+              "description": "Shell command security boundary.",
+              "x-descriptionZh": "Shell 命令安全边界。"
+            },
+            "execPreset": {
+              "type": "string",
+              "enum": ["readonly", "network", "development", "custom"],
+              "description": "Command allowlist preset used outside full mode.",
+              "x-descriptionZh": "非 full 模式使用的命令白名单预设。"
+            },
+            "execApprovalMode": { "type": "string", "enum": ["ask", "allow", "deny"], "description": "Approval policy for main Agent commands.", "x-descriptionZh": "主 Agent 命令的审批策略。" },
+            "subagentExecApprovalMode": { "type": "string", "enum": ["ask", "allow", "deny"], "description": "Approval policy for sub-Agent commands.", "x-descriptionZh": "子 Agent 命令的审批策略。" },
+            "workerExecApprovalMode": { "type": "string", "enum": ["ask", "allow", "deny"], "description": "Approval policy for worker commands.", "x-descriptionZh": "Worker 命令的审批策略。" },
+            "taskExecApprovalMode": { "type": "string", "enum": ["ask", "allow", "deny"], "description": "Approval policy for task commands.", "x-descriptionZh": "Task 命令的审批策略。" },
+            "toolExecution": {
+              "type": "string",
+              "enum": ["parallel", "sequential", "tiered"],
+              "description": "How tool calls in one model step are scheduled.",
+              "x-descriptionZh": "同一模型步骤中的工具调用调度方式。"
+            },
+            "modelSizeHint": {
+              "type": "string",
+              "enum": ["", "small", "medium", "large"],
+              "description": "Optional model-size hint; an empty string clears the hint.",
+              "x-descriptionZh": "可选模型尺寸提示；空字符串表示清除提示。"
+            },
+            "promptCacheRetention": {
+              "type": "string",
+              "enum": ["in_memory", "24h"],
+              "description": "Provider prompt-cache retention policy.",
+              "x-descriptionZh": "Provider Prompt Cache 保留策略。"
+            },
+            "steeringMode": {
+              "type": "string",
+              "enum": ["one-at-a-time", "all"],
+              "description": "Process steering messages one at a time or drain all pending messages together.",
+              "x-descriptionZh": "逐条处理 Steering 消息，或一次取出全部待处理消息。"
+            },
+            "followUpMode": {
+              "type": "string",
+              "enum": ["one-at-a-time", "all"],
+              "description": "Process follow-up messages one at a time or drain all pending messages together.",
+              "x-descriptionZh": "逐条处理 Follow-up 消息，或一次取出全部待处理消息。"
+            },
+            "outputSchema": {
+              "anyOf": [
+                { "type": "boolean" },
+                { "type": "string", "enum": ["segments"] },
+                { "type": "object" }
+              ],
+              "description": "Structured final-output mode: false for text, true or segments for canonical message segments, or a custom JSON Schema object.",
+              "x-descriptionZh": "结构化最终输出：false 表示文本，true 或 segments 表示规范消息段，也可传入自定义 JSON Schema 对象。"
+            },
+            "schedule": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Unattended Schedule execution policy.",
+              "x-descriptionZh": "无人值守 Schedule 执行策略。",
+              "properties": {
+                "security": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Schedule command security policy.",
+                  "x-descriptionZh": "Schedule 命令安全策略。",
+                  "properties": {
+                    "execPreset": {
+                      "type": "string",
+                      "enum": ["readonly", "network"],
+                      "description": "Schedule Jobs may use only the read-only or network preset.",
+                      "x-descriptionZh": "Schedule Job 只能使用只读或网络预设。"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "mcp": { "type": "object", "additionalProperties": true, "description": "Expose Bot tools through an MCP Server.", "x-descriptionZh": "把 Bot 工具公开为 MCP Server。" },
     "a2a": { "type": "object", "additionalProperties": true, "description": "A2A Agent Card, remote execution, and Workroom callbacks.", "x-descriptionZh": "A2A Agent Card、远程执行与 Workroom 回调。" },
     "speech": { "type": "object", "additionalProperties": true, "description": "Speech-to-text and text-to-speech Host.", "x-descriptionZh": "语音识别与语音合成 Host。" },

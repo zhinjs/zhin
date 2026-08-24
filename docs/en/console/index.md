@@ -75,6 +75,19 @@ Runtime falls back to 8086 when no config exists; the current scaffold writes 80
 
 Real-time pushes go through SSE: `GET /api/events` (page directory sync, HMR reload, message/configuration events).
 
+## Agent Studio run policy
+
+The working directory and security policy belong to each run. They are not Prompt content, and the model cannot elevate them. A safe beginner baseline is the current project directory, `workspace-write`, `ask`, and network access disabled.
+
+| Field | Accepted values | How to choose |
+| --- | --- | --- |
+| `safetyMode` | `read-only` / `workspace-write` / `danger-full-access` | Use read-only for inspection, workspace-write for project edits, and full host access only for a local task whose risks are understood |
+| `approvalMode` | `ask` / `deny` / `allow` | Default to `ask`; choose `deny` for unattended fail-closed runs, and `allow` only behind external isolation and authorization |
+| `networkAccess` | `false` / `true` | Enable only when the task needs the network; `danger-full-access` inherently includes network authority |
+| `workingDirectory` | directory path | Point to the project directory this run may use; avoid a broad system root |
+
+These values are a closed contract, not free-form labels. Unknown `safetyMode` or `approvalMode` values fall back to `workspace-write` or `ask`; Agent Studio should always echo the effective policy before execution.
+
 ## Standard acceptance run
 
 1. Dashboard reports a healthy connection with readable version and runtime data.

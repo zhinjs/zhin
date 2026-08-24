@@ -14,18 +14,36 @@ outline: [2, 3]
 
 权威契约来自 Runtime 实际消费的 [`packages/im/runtime/src/host-config-schema.json`](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json)；消费位置见 [`basic/cli/src/plugin-runtime/console-api-installer.ts`](https://github.com/zhinjs/zhin/blob/main/basic/cli/src/plugin-runtime/console-api-installer.ts)。
 
-| 路径 | 类型 | 说明 | 来源 |
-| --- | --- | --- | --- |
-| `http` | object | HTTP、Console、REST/RPC/SSE 与 Webhook Host。 | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `database` | object | Database Host 与方言连接参数。 | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `ai` | object | Provider、Agent、会话、记忆、工具与执行安全策略。 | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `mcp` | object | 把 Bot 工具公开为 MCP Server。 | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `a2a` | object | A2A Agent Card、远程执行与 Workroom 回调。 | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `speech` | object | 语音识别与语音合成 Host。 | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `htmlRenderer` | object | HTML/图片渲染参数。 | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `assistant` | object | 调度任务、事件入口和失败通知。 | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `log_level` | string \| number | Runtime 日志级别。 | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `plugin` | object | Root Plugin 配置；组合时由项目 Schema 替换。 | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
+| 路径 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `http` | object | 否 | — | HTTP、Console、REST/RPC/SSE 与 Webhook Host。 |
+| `database` | object | 否 | — | Database Host 与方言连接参数。 |
+| `ai` | object | 否 | — | Provider、Agent、会话、记忆、工具与执行安全策略。 |
+| `ai.agent` | object | 否 | — | Agent 执行、排队、工具与模型策略。 |
+| `ai.agent.inboundQueue` | object | 否 | — | 入站回合排队策略。 |
+| `ai.agent.inboundQueue.groupMode` | string: `"supersede"`, `"fifo"` | 否 | — | 覆盖较早的群聊排队回合，或按到达顺序处理全部回合。 |
+| `ai.agent.execSecurity` | string: `"deny"`, `"allowlist"`, `"full"` | 否 | — | Shell 命令安全边界。 |
+| `ai.agent.execPreset` | string: `"readonly"`, `"network"`, `"development"`, `"custom"` | 否 | — | 非 full 模式使用的命令白名单预设。 |
+| `ai.agent.execApprovalMode` | string: `"ask"`, `"allow"`, `"deny"` | 否 | — | 主 Agent 命令的审批策略。 |
+| `ai.agent.subagentExecApprovalMode` | string: `"ask"`, `"allow"`, `"deny"` | 否 | — | 子 Agent 命令的审批策略。 |
+| `ai.agent.workerExecApprovalMode` | string: `"ask"`, `"allow"`, `"deny"` | 否 | — | Worker 命令的审批策略。 |
+| `ai.agent.taskExecApprovalMode` | string: `"ask"`, `"allow"`, `"deny"` | 否 | — | Task 命令的审批策略。 |
+| `ai.agent.toolExecution` | string: `"parallel"`, `"sequential"`, `"tiered"` | 否 | — | 同一模型步骤中的工具调用调度方式。 |
+| `ai.agent.modelSizeHint` | string: `""`, `"small"`, `"medium"`, `"large"` | 否 | — | 可选模型尺寸提示；空字符串表示清除提示。 |
+| `ai.agent.promptCacheRetention` | string: `"in_memory"`, `"24h"` | 否 | — | Provider Prompt Cache 保留策略。 |
+| `ai.agent.steeringMode` | string: `"one-at-a-time"`, `"all"` | 否 | — | 逐条处理 Steering 消息，或一次取出全部待处理消息。 |
+| `ai.agent.followUpMode` | string: `"one-at-a-time"`, `"all"` | 否 | — | 逐条处理 Follow-up 消息，或一次取出全部待处理消息。 |
+| `ai.agent.outputSchema` | boolean \| string: `"segments"` \| object | 否 | — | 结构化最终输出：false 表示文本，true 或 segments 表示规范消息段，也可传入自定义 JSON Schema 对象。 |
+| `ai.agent.schedule` | object | 否 | — | 无人值守 Schedule 执行策略。 |
+| `ai.agent.schedule.security` | object | 否 | — | Schedule 命令安全策略。 |
+| `ai.agent.schedule.security.execPreset` | string: `"readonly"`, `"network"` | 否 | — | Schedule Job 只能使用只读或网络预设。 |
+| `mcp` | object | 否 | — | 把 Bot 工具公开为 MCP Server。 |
+| `a2a` | object | 否 | — | A2A Agent Card、远程执行与 Workroom 回调。 |
+| `speech` | object | 否 | — | 语音识别与语音合成 Host。 |
+| `htmlRenderer` | object | 否 | — | HTML/图片渲染参数。 |
+| `assistant` | object | 否 | — | 调度任务、事件入口和失败通知。 |
+| `log_level` | string \| number | 否 | — | Runtime 日志级别。 |
+| `plugin` | object | 否 | — | Root Plugin 配置；组合时由项目 Schema 替换。 |
 
 ## 插件实例字段
 
@@ -573,11 +591,480 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.activity-feedback.enabled` | boolean | 否 | `true` | — |
-| `plugins.activity-feedback.defaults` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints` | object | 否 | — | — |
-| `plugins.activity-feedback.schedule` | object | 否 | — | — |
+| `plugins.activity-feedback.enabled` | boolean | 否 | `true` | 是否启用当前活动反馈插件实例。 |
+| `plugins.activity-feedback.defaults` | object | 否 | — | 所有平台与 Endpoint 的默认策略。 |
+| `plugins.activity-feedback.defaults.enabled` | boolean | 否 | `true` | 是否启用当前策略层。 |
+| `plugins.activity-feedback.defaults.phases` | object | 否 | — | 按生命周期 phase 配置反馈策略。 |
+| `plugins.activity-feedback.defaults.phases.queued` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.queued.private` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.queued.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.queued.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.queued.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.queued.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.queued.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.queued.group` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.queued.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.queued.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.queued.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.queued.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.queued.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.queued.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.queued.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.queued.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.queued.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.queued.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.queued.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.active` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.active.private` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.active.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.active.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.active.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.active.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.active.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.active.group` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.active.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.active.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.active.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.active.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.active.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.active.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.active.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.active.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.active.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.active.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.active.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.thinking` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.thinking.private` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.thinking.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.thinking.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.thinking.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.thinking.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.thinking.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.thinking.group` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.thinking.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.thinking.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.thinking.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.thinking.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.thinking.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.thinking.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.thinking.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.thinking.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.thinking.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.thinking.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.thinking.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_start.private` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.group` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.schedule_start.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.private` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.group` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_error.private` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.group` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.defaults.phases.schedule_error.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms` | object | 否 | — | 按平台名覆盖；值的结构与 defaults 相同。 |
+| `plugins.activity-feedback.platforms.<platform>.enabled` | boolean | 否 | `true` | 是否启用当前策略层。 |
+| `plugins.activity-feedback.platforms.<platform>.phases` | object | 否 | — | 按生命周期 phase 配置反馈策略。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.private` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.group` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.private` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.group` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints` | object | 否 | — | 按 platform:endpointKey 覆盖；值的结构与 defaults 相同。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.enabled` | boolean | 否 | `true` | 是否启用当前策略层。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases` | object | 否 | — | 按生命周期 phase 配置反馈策略。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.schedule` | object | 否 | — | 仅用于 Schedule 的开始、完成与失败反馈。 |
+| `plugins.activity-feedback.schedule.phases` | object | 否 | — | — |
+| `plugins.activity-feedback.schedule.phases.start` | object | 否 | — | — |
+| `plugins.activity-feedback.schedule.phases.start.private` | object | 否 | — | — |
+| `plugins.activity-feedback.schedule.phases.start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.schedule.phases.start.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.schedule.phases.start.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.schedule.phases.start.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.schedule.phases.start.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.schedule.phases.start.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.schedule.phases.start.group` | object | 否 | — | — |
+| `plugins.activity-feedback.schedule.phases.start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.schedule.phases.start.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.schedule.phases.start.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.schedule.phases.start.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.schedule.phases.start.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.schedule.phases.start.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.schedule.phases.start.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.schedule.phases.start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.schedule.phases.start.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.schedule.phases.start.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.schedule.phases.start.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.schedule.phases.start.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.schedule.phases.start.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.schedule.phases.finish` | object | 否 | — | — |
+| `plugins.activity-feedback.schedule.phases.finish.private` | object | 否 | — | — |
+| `plugins.activity-feedback.schedule.phases.finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.schedule.phases.finish.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.schedule.phases.finish.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.schedule.phases.finish.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.schedule.phases.finish.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.schedule.phases.finish.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.schedule.phases.finish.group` | object | 否 | — | — |
+| `plugins.activity-feedback.schedule.phases.finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.schedule.phases.finish.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.schedule.phases.finish.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.schedule.phases.finish.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.schedule.phases.finish.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.schedule.phases.finish.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.schedule.phases.finish.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.schedule.phases.finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.schedule.phases.finish.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.schedule.phases.finish.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.schedule.phases.finish.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.schedule.phases.finish.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.schedule.phases.finish.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.schedule.phases.error` | object | 否 | — | — |
+| `plugins.activity-feedback.schedule.phases.error.private` | object | 否 | — | — |
+| `plugins.activity-feedback.schedule.phases.error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.schedule.phases.error.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.schedule.phases.error.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.schedule.phases.error.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.schedule.phases.error.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.schedule.phases.error.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.schedule.phases.error.group` | object | 否 | — | — |
+| `plugins.activity-feedback.schedule.phases.error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.schedule.phases.error.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.schedule.phases.error.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.schedule.phases.error.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.schedule.phases.error.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.schedule.phases.error.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `plugins.activity-feedback.schedule.phases.error.channel` | object | 否 | — | — |
+| `plugins.activity-feedback.schedule.phases.error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `plugins.activity-feedback.schedule.phases.error.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `plugins.activity-feedback.schedule.phases.error.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `plugins.activity-feedback.schedule.phases.error.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `plugins.activity-feedback.schedule.phases.error.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `plugins.activity-feedback.schedule.phases.error.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
 
 ### 60s
 

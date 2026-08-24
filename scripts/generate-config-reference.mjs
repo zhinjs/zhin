@@ -27,18 +27,36 @@ function listSchemaFiles(root) {
   return result.sort();
 }
 
-function displayType(schema, fieldPath) {
-  if (Array.isArray(schema.anyOf)) {
-    if (schema.anyOf.length === 0) throw new Error(`${fieldPath}: anyOf must not be empty`);
-    return schema.anyOf.map((option, index) => displayType(option, `${fieldPath}.anyOf[${index}]`)).join(' | ');
+function resolveSchema(schema, rootSchema, fieldPath) {
+  if (!schema?.$ref) return schema;
+  if (typeof schema.$ref !== 'string' || !schema.$ref.startsWith('#/')) {
+    throw new Error(`${fieldPath}: only local JSON Schema references are supported`);
   }
-  if (schema.type === 'array' && schema.items) {
-    return `array<${displayType(schema.items, `${fieldPath}.items`)}>`;
+  let resolved = rootSchema;
+  for (const rawSegment of schema.$ref.slice(2).split('/')) {
+    const segment = rawSegment.replaceAll('~1', '/').replaceAll('~0', '~');
+    resolved = resolved?.[segment];
   }
-  const type = Array.isArray(schema.type) ? schema.type.join(' | ') : schema.type;
-  const base = typeof type === 'string' ? type : schema.enum ? 'enum' : schema.properties ? 'object' : undefined;
+  if (!resolved || typeof resolved !== 'object' || Array.isArray(resolved)) {
+    throw new Error(`${fieldPath}: unresolved JSON Schema reference ${schema.$ref}`);
+  }
+  const { $ref: _reference, ...siblings } = schema;
+  return { ...resolved, ...siblings };
+}
+
+function displayType(schema, fieldPath, rootSchema = schema) {
+  const resolved = resolveSchema(schema, rootSchema, fieldPath);
+  if (Array.isArray(resolved.anyOf)) {
+    if (resolved.anyOf.length === 0) throw new Error(`${fieldPath}: anyOf must not be empty`);
+    return resolved.anyOf.map((option, index) => displayType(option, `${fieldPath}.anyOf[${index}]`, rootSchema)).join(' | ');
+  }
+  if (resolved.type === 'array' && resolved.items) {
+    return `array<${displayType(resolved.items, `${fieldPath}.items`, rootSchema)}>`;
+  }
+  const type = Array.isArray(resolved.type) ? resolved.type.join(' | ') : resolved.type;
+  const base = typeof type === 'string' ? type : resolved.enum ? 'enum' : resolved.properties ? 'object' : undefined;
   if (!base) throw new Error(`${fieldPath}: unsupported Schema shape; add explicit generator support`);
-  return schema.enum ? `${base}: ${schema.enum.map(formatValue).join(', ')}` : base;
+  return resolved.enum ? `${base}: ${resolved.enum.map(formatValue).join(', ')}` : base;
 }
 
 function formatValue(value) {
@@ -54,26 +72,43 @@ function escapeCell(value) {
     .replaceAll('\n', ' ');
 }
 
-function flattenProperties(schema, prefix, inheritedRequired = new Set()) {
-  const properties = schema?.properties && typeof schema.properties === 'object'
-    ? schema.properties
+function flattenProperties(schema, prefix, inheritedRequired = new Set(), rootSchema = schema) {
+  const resolvedSchema = resolveSchema(schema, rootSchema, prefix);
+  const properties = resolvedSchema?.properties && typeof resolvedSchema.properties === 'object'
+    ? resolvedSchema.properties
     : {};
-  const required = new Set(Array.isArray(schema?.required) ? schema.required : inheritedRequired);
+  const required = new Set(Array.isArray(resolvedSchema?.required) ? resolvedSchema.required : inheritedRequired);
   const rows = [];
   for (const [key, value] of Object.entries(properties)) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
-    const fieldPath = `${prefix}.${key}`;
+    const fieldPath = prefix ? `${prefix}.${key}` : key;
+    const resolvedValue = resolveSchema(value, rootSchema, fieldPath);
     rows.push({
       path: fieldPath,
-      type: displayType(value, fieldPath),
+      type: displayType(resolvedValue, fieldPath, rootSchema),
       required: required.has(key),
-      defaultValue: formatValue(value.default),
-      description: value.description ?? '—',
+      defaultValue: formatValue(resolvedValue.default),
+      description: resolvedValue.description ?? resolvedValue['x-descriptionZh'] ?? '—',
+      descriptionZh: resolvedValue['x-descriptionZh'] ?? resolvedValue.description ?? '—',
     });
-    if (value.type === 'object' || value.properties) {
-      rows.push(...flattenProperties(value, fieldPath));
-    } else if (value.type === 'array' && value.items?.properties) {
-      rows.push(...flattenProperties(value.items, `${fieldPath}[]`));
+    if (resolvedValue.type === 'object' || resolvedValue.properties) {
+      rows.push(...flattenProperties(resolvedValue, fieldPath, new Set(), rootSchema));
+    } else if (resolvedValue.type === 'array' && resolvedValue.items) {
+      const resolvedItems = resolveSchema(resolvedValue.items, rootSchema, `${fieldPath}[]`);
+      if (resolvedItems.properties) {
+        rows.push(...flattenProperties(resolvedItems, `${fieldPath}[]`, new Set(), rootSchema));
+      }
+    }
+    if (resolvedValue.additionalProperties
+      && typeof resolvedValue.additionalProperties === 'object'
+      && !Array.isArray(resolvedValue.additionalProperties)) {
+      const placeholder = resolvedValue['x-keyPlaceholder'] ?? '<key>';
+      rows.push(...flattenProperties(
+        resolvedValue.additionalProperties,
+        `${fieldPath}.${placeholder}`,
+        new Set(),
+        rootSchema,
+      ));
     }
   }
   return rows;
@@ -85,7 +120,7 @@ function pluginEntries() {
     const schema = JSON.parse(fs.readFileSync(absolute, 'utf8'));
     const segments = relative.split('/');
     const key = segments.at(-2);
-    return { key, relative, rows: flattenProperties(schema, `plugins.${key}`) };
+    return { key, relative, rows: flattenProperties(schema, `plugins.${key}`, new Set(), schema) };
   });
 }
 
@@ -118,17 +153,11 @@ function render(locale) {
       ? `权威契约来自 Runtime 实际消费的 [\`${hostReferencePath}\`](https://github.com/zhinjs/zhin/blob/main/${hostReferencePath})；消费位置见 [\`${hostSource}\`](https://github.com/zhinjs/zhin/blob/main/${hostSource})。`
       : `The authoritative contract is [\`${hostReferencePath}\`](https://github.com/zhinjs/zhin/blob/main/${hostReferencePath}), consumed by the Runtime at [\`${hostSource}\`](https://github.com/zhinjs/zhin/blob/main/${hostSource}).`,
     '',
-    zh
-      ? '| 路径 | 类型 | 说明 | 来源 |\n| --- | --- | --- | --- |'
-      : '| Path | Type | Description | Source |\n| --- | --- | --- | --- |',
+    tableHeader(locale),
   ];
 
-  for (const [key, schema] of Object.entries(hostReference.properties ?? {})) {
-    const description = locale === 'zh' ? schema['x-descriptionZh'] : schema.description;
-    if (!description) {
-      throw new Error(`${hostReferencePath}#properties.${key} is missing generated-doc metadata`);
-    }
-    lines.push(`| \`${key}\` | ${escapeCell(displayType(schema, key))} | ${escapeCell(description)} | [source](https://github.com/zhinjs/zhin/blob/main/${hostReferencePath}) |`);
+  for (const row of flattenProperties(hostReference, '', new Set(), hostReference)) {
+    lines.push(`| \`${row.path}\` | ${escapeCell(row.type)} | ${row.required ? (zh ? '是' : 'yes') : (zh ? '否' : 'no')} | ${escapeCell(row.defaultValue)} | ${escapeCell(zh ? row.descriptionZh : row.description)} |`);
   }
 
   lines.push('', `## ${zh ? '插件实例字段' : 'Plugin instance fields'}`, '');
@@ -145,7 +174,7 @@ function render(locale) {
     }
     lines.push(tableHeader(locale));
     for (const row of plugin.rows) {
-      lines.push(`| \`${row.path}\` | ${escapeCell(row.type)} | ${row.required ? (zh ? '是' : 'yes') : (zh ? '否' : 'no')} | ${escapeCell(row.defaultValue)} | ${escapeCell(row.description)} |`);
+      lines.push(`| \`${row.path}\` | ${escapeCell(row.type)} | ${row.required ? (zh ? '是' : 'yes') : (zh ? '否' : 'no')} | ${escapeCell(row.defaultValue)} | ${escapeCell(zh ? row.descriptionZh : row.description)} |`);
     }
   }
   return `${lines.join('\n')}\n`;

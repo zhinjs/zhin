@@ -75,6 +75,19 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 
 实时推送走 SSE：`GET /api/events`（页面目录同步、HMR 重载、消息/配置事件）。
 
+## Agent 工作台运行策略
+
+工作目录与安全策略属于每一次运行，不写入 Prompt，也不会由模型自行提升。新手可以从默认组合开始：工作目录留空时使用当前项目目录，`safetyMode` 选 `workspace-write`，`approvalMode` 选 `ask`，`networkAccess` 保持关闭。
+
+| 字段 | 可选值 | 怎么选 |
+| --- | --- | --- |
+| `safetyMode` | `read-only` / `workspace-write` / `danger-full-access` | 只检查时选只读；需要修改项目文件时选工作区写入；完整主机权限只用于明确理解风险的本地任务 |
+| `approvalMode` | `ask` / `deny` / `allow` | 默认 `ask`；无人值守但不允许越权时选 `deny`；仅在已有外部隔离与授权时选 `allow` |
+| `networkAccess` | `false` / `true` | 只有任务确实要访问网络时开启；`danger-full-access` 会天然包含网络权限 |
+| `workingDirectory` | 目录路径 | 指向本次任务允许工作的项目目录，不要用宽泛的系统根目录 |
+
+这些是固定契约，不是自由文本。未知的 `safetyMode` / `approvalMode` 会回退到 `workspace-write` / `ask`；工作台应始终回显最终生效值供用户确认。
+
 ## 一次标准验收
 
 1. Dashboard 显示连接正常，版本与运行时信息可读。

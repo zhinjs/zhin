@@ -59,6 +59,7 @@
     "check:readme-exports": "node scripts/check-readme-exports.mjs",
     "check:console-contract": "vitest run scripts/workspace-pack-closure.test.ts && node scripts/check-console-contract.mjs",
     "check:config-docs": "vitest run tests/docs/config-docs-alignment.test.ts",
+    "check:config-enums": "vitest run tests/docs/config-enum-reference.test.ts",
     "check:operability-docs": "vitest run tests/docs/operability-docs.test.ts",
     "check:adapter-docs": "node scripts/sync-adapter-docs.mjs --check",
     "check:platform-tiers-ssot": "node scripts/check-platform-tiers-ssot.mjs",

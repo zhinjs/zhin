@@ -6,4 +6,4 @@
 
 | 插件 | 说明 |
 |------|------|
-| `@zhin.js/service-activity-feedback` | 订阅 AI 生命周期事件，按根级 `activityFeedback` 配置驱动各适配器反馈（queued / active / thinking） |
+| `@zhin.js/service-activity-feedback` | 订阅 AI 与 Schedule 生命周期事件，按插件配置驱动 queued / active / thinking / schedule_* 活动反馈；[配置枚举与示例](../../docs/advanced/activity-feedback.md) |

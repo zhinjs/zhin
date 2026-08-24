@@ -55,6 +55,14 @@ pnpm add @zhin.js/service-activity-feedback @zhin.js/agent
 plugins:
   activity-feedback:
     enabled: true
+    defaults:
+      phases:
+        queued:
+          group: { type: reaction, emoji: "⏳" }
+        active:
+          group: { type: typing }
+        thinking:
+          group: { type: message, message: "思考中…" }
     platforms:
       icqq:
         phases:
@@ -62,4 +70,11 @@ plugins:
             group: { type: reaction, emoji: "60" }
 ```
 
-详见 [Activity Feedback](../../../docs/advanced/activity-feedback.md)、[ADR 0034](../../../docs/adr/0034-activity-feedback-service-plugin.md)。
+交互回合支持 `queued`、`active`、`thinking`，Schedule 支持
+`schedule_start`、`schedule_finish`、`schedule_error`。每个 phase 可按
+`private`、`group`、`channel` 配置，呈现 `reaction`、`message`、`typing` 或 `none`。
+
+这些枚举的触发时机、推荐选择与全部字段见
+[Activity Feedback](../../../docs/advanced/activity-feedback.md) 和
+[自动生成配置参考](../../../docs/configuration/generated.md#activity-feedback)；设计边界见
+[ADR 0034](../../../docs/adr/0034-activity-feedback-service-plugin.md)。

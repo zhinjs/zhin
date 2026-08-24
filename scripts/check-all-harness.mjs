@@ -140,6 +140,11 @@ const checks = [
     description: '检查配置字段参考与 Runtime 源码、插件 JSON Schema 无漂移',
   },
   {
+    name: 'Source-owned Config Enums',
+    command: 'pnpm check:config-enums',
+    description: '检查源码既定配置枚举在 Runtime/插件 Schema、生成参考和叙事文档间无漂移',
+  },
+  {
     name: 'Troubleshooting Center',
     command: 'pnpm check:troubleshooting',
     description: '检查结构化故障目录与中英文排查页面无漂移',

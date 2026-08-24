@@ -109,6 +109,7 @@ pnpm --filter @zhin.js/scaffold-wizard build   # 或 pnpm prepare:cli
 | README Exports（`pnpm check:readme-exports`） | README import 与包导出一致 |
 | Config Docs（`pnpm check:config-docs`） | 配置文档与 DEFAULT_CONFIG 关键字段对齐 |
 | Generated Config Reference（`pnpm check:config-reference`） | 自动生成配置字段与 Runtime 源码、插件 JSON Schema 无漂移 |
+| Source-owned Config Enums（`pnpm check:config-enums`） | 源码既定配置枚举在 Runtime/插件 Schema、生成参考和叙事文档间无漂移 |
 | Troubleshooting Center（`pnpm check:troubleshooting`） | 故障目录与“症状 → 原因 → 操作 → 验证”中英文页面无漂移 |
 | Install Tiers SSOT（`pnpm check:install-tiers-ssot`） | 中文 `README.zh-CN.md` Install tiers 表与 `docs/snippets/install-tiers.md` 一致 |
 | Adapter Docs Sync（`pnpm check:adapter-docs`） | 平台适配器文档与 `plugins/adapters/*/README.md` 同步（修复用 `pnpm sync:adapter-docs`） |

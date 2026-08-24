@@ -149,6 +149,7 @@ const EN_USE_DOC_PREFIXES = [
   '/en/configuration/',
   '/en/cli/',
   '/en/ai/',
+  '/en/advanced/',
   '/en/console/',
   '/en/operations/',
   '/en/troubleshooting/',
@@ -231,6 +232,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   sidebarGroup('AI Module', [
     { text: 'Overview', link: '/en/ai/' },
     { text: 'Agent Deep Dive', link: '/en/ai/agent' },
+    { text: 'Activity Feedback', link: '/en/advanced/activity-feedback' },
     { text: 'Speech', link: '/en/ai/speech' },
   ]),
   { text: 'Console', link: '/en/console/' },
@@ -402,10 +404,11 @@ export default withMermaid(defineConfig({
           },
           {
             text: 'AI Module',
-            activeMatch: '^/en/ai/',
+            activeMatch: '^/en/(ai|advanced)/',
             items: [
               { text: 'Overview', link: '/en/ai/' },
               { text: 'Agent Deep Dive', link: '/en/ai/agent' },
+              { text: 'Activity Feedback', link: '/en/advanced/activity-feedback' },
               { text: 'Speech', link: '/en/ai/speech' },
             ],
           },

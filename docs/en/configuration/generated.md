@@ -14,18 +14,36 @@ outline: [2, 3]
 
 The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json), consumed by the Runtime at [`basic/cli/src/plugin-runtime/console-api-installer.ts`](https://github.com/zhinjs/zhin/blob/main/basic/cli/src/plugin-runtime/console-api-installer.ts).
 
-| Path | Type | Description | Source |
-| --- | --- | --- | --- |
-| `http` | object | HTTP, Console, REST/RPC/SSE, and Webhook Host. | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `database` | object | Database Host and dialect connection options. | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `ai` | object | Providers, Agents, sessions, memory, tools, and execution security. | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `mcp` | object | Expose Bot tools through an MCP Server. | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `a2a` | object | A2A Agent Card, remote execution, and Workroom callbacks. | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `speech` | object | Speech-to-text and text-to-speech Host. | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `htmlRenderer` | object | HTML and image rendering options. | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `assistant` | object | Scheduled jobs, event ingress, and failure notifications. | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `log_level` | string \| number | Runtime log level. | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
-| `plugin` | object | Root Plugin configuration; replaced by its project schema during composition. | [source](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json) |
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `http` | object | no | — | HTTP, Console, REST/RPC/SSE, and Webhook Host. |
+| `database` | object | no | — | Database Host and dialect connection options. |
+| `ai` | object | no | — | Providers, Agents, sessions, memory, tools, and execution security. |
+| `ai.agent` | object | no | — | Agent execution, queueing, tool, and model policies. |
+| `ai.agent.inboundQueue` | object | no | — | Inbound turn queue policy. |
+| `ai.agent.inboundQueue.groupMode` | string: `"supersede"`, `"fifo"` | no | — | Replace an older queued group turn, or process all turns in arrival order. |
+| `ai.agent.execSecurity` | string: `"deny"`, `"allowlist"`, `"full"` | no | — | Shell command security boundary. |
+| `ai.agent.execPreset` | string: `"readonly"`, `"network"`, `"development"`, `"custom"` | no | — | Command allowlist preset used outside full mode. |
+| `ai.agent.execApprovalMode` | string: `"ask"`, `"allow"`, `"deny"` | no | — | Approval policy for main Agent commands. |
+| `ai.agent.subagentExecApprovalMode` | string: `"ask"`, `"allow"`, `"deny"` | no | — | Approval policy for sub-Agent commands. |
+| `ai.agent.workerExecApprovalMode` | string: `"ask"`, `"allow"`, `"deny"` | no | — | Approval policy for worker commands. |
+| `ai.agent.taskExecApprovalMode` | string: `"ask"`, `"allow"`, `"deny"` | no | — | Approval policy for task commands. |
+| `ai.agent.toolExecution` | string: `"parallel"`, `"sequential"`, `"tiered"` | no | — | How tool calls in one model step are scheduled. |
+| `ai.agent.modelSizeHint` | string: `""`, `"small"`, `"medium"`, `"large"` | no | — | Optional model-size hint; an empty string clears the hint. |
+| `ai.agent.promptCacheRetention` | string: `"in_memory"`, `"24h"` | no | — | Provider prompt-cache retention policy. |
+| `ai.agent.steeringMode` | string: `"one-at-a-time"`, `"all"` | no | — | Process steering messages one at a time or drain all pending messages together. |
+| `ai.agent.followUpMode` | string: `"one-at-a-time"`, `"all"` | no | — | Process follow-up messages one at a time or drain all pending messages together. |
+| `ai.agent.outputSchema` | boolean \| string: `"segments"` \| object | no | — | Structured final-output mode: false for text, true or segments for canonical message segments, or a custom JSON Schema object. |
+| `ai.agent.schedule` | object | no | — | Unattended Schedule execution policy. |
+| `ai.agent.schedule.security` | object | no | — | Schedule command security policy. |
+| `ai.agent.schedule.security.execPreset` | string: `"readonly"`, `"network"` | no | — | Schedule Jobs may use only the read-only or network preset. |
+| `mcp` | object | no | — | Expose Bot tools through an MCP Server. |
+| `a2a` | object | no | — | A2A Agent Card, remote execution, and Workroom callbacks. |
+| `speech` | object | no | — | Speech-to-text and text-to-speech Host. |
+| `htmlRenderer` | object | no | — | HTML and image rendering options. |
+| `assistant` | object | no | — | Scheduled jobs, event ingress, and failure notifications. |
+| `log_level` | string \| number | no | — | Runtime log level. |
+| `plugin` | object | no | — | Root Plugin configuration; replaced by its project schema during composition. |
 
 ## Plugin instance fields
 
@@ -573,11 +591,480 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.activity-feedback.enabled` | boolean | no | `true` | — |
-| `plugins.activity-feedback.defaults` | object | no | — | — |
-| `plugins.activity-feedback.platforms` | object | no | — | — |
-| `plugins.activity-feedback.endpoints` | object | no | — | — |
-| `plugins.activity-feedback.schedule` | object | no | — | — |
+| `plugins.activity-feedback.enabled` | boolean | no | `true` | Enable activity feedback for this plugin instance. |
+| `plugins.activity-feedback.defaults` | object | no | — | Default policy for all platforms and Endpoints. |
+| `plugins.activity-feedback.defaults.enabled` | boolean | no | `true` | Enable this policy layer. |
+| `plugins.activity-feedback.defaults.phases` | object | no | — | Feedback policy keyed by lifecycle phase. |
+| `plugins.activity-feedback.defaults.phases.queued` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.queued.private` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.queued.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.queued.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.queued.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.queued.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.queued.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.queued.group` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.queued.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.queued.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.queued.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.queued.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.queued.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.queued.channel` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.queued.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.queued.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.queued.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.queued.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.queued.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.active` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.active.private` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.active.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.active.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.active.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.active.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.active.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.active.group` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.active.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.active.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.active.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.active.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.active.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.active.channel` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.active.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.active.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.active.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.active.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.active.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.thinking` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.thinking.private` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.thinking.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.thinking.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.thinking.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.thinking.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.thinking.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.thinking.group` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.thinking.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.thinking.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.thinking.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.thinking.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.thinking.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.thinking.channel` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.thinking.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.thinking.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.thinking.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.thinking.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.thinking.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.schedule_start` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_start.private` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.group` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.channel` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.schedule_start.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.private` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.group` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.channel` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.schedule_error` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_error.private` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.group` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.channel` | object | no | — | — |
+| `plugins.activity-feedback.defaults.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.defaults.phases.schedule_error.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms` | object | no | — | Platform overrides keyed by platform name; values use the same shape as defaults. |
+| `plugins.activity-feedback.platforms.<platform>.enabled` | boolean | no | `true` | Enable this policy layer. |
+| `plugins.activity-feedback.platforms.<platform>.phases` | object | no | — | Feedback policy keyed by lifecycle phase. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.private` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.group` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.private` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.group` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.channel` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel` | object | no | — | — |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints` | object | no | — | Endpoint overrides keyed by platform:endpointKey; values use the same shape as defaults. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.enabled` | boolean | no | `true` | Enable this policy layer. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases` | object | no | — | Feedback policy keyed by lifecycle phase. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel` | object | no | — | — |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.schedule` | object | no | — | Schedule-only start, finish, and error feedback. |
+| `plugins.activity-feedback.schedule.phases` | object | no | — | — |
+| `plugins.activity-feedback.schedule.phases.start` | object | no | — | — |
+| `plugins.activity-feedback.schedule.phases.start.private` | object | no | — | — |
+| `plugins.activity-feedback.schedule.phases.start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.schedule.phases.start.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.schedule.phases.start.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.schedule.phases.start.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.schedule.phases.start.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.schedule.phases.start.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.schedule.phases.start.group` | object | no | — | — |
+| `plugins.activity-feedback.schedule.phases.start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.schedule.phases.start.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.schedule.phases.start.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.schedule.phases.start.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.schedule.phases.start.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.schedule.phases.start.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.schedule.phases.start.channel` | object | no | — | — |
+| `plugins.activity-feedback.schedule.phases.start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.schedule.phases.start.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.schedule.phases.start.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.schedule.phases.start.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.schedule.phases.start.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.schedule.phases.start.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.schedule.phases.finish` | object | no | — | — |
+| `plugins.activity-feedback.schedule.phases.finish.private` | object | no | — | — |
+| `plugins.activity-feedback.schedule.phases.finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.schedule.phases.finish.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.schedule.phases.finish.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.schedule.phases.finish.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.schedule.phases.finish.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.schedule.phases.finish.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.schedule.phases.finish.group` | object | no | — | — |
+| `plugins.activity-feedback.schedule.phases.finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.schedule.phases.finish.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.schedule.phases.finish.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.schedule.phases.finish.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.schedule.phases.finish.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.schedule.phases.finish.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.schedule.phases.finish.channel` | object | no | — | — |
+| `plugins.activity-feedback.schedule.phases.finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.schedule.phases.finish.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.schedule.phases.finish.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.schedule.phases.finish.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.schedule.phases.finish.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.schedule.phases.finish.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.schedule.phases.error` | object | no | — | — |
+| `plugins.activity-feedback.schedule.phases.error.private` | object | no | — | — |
+| `plugins.activity-feedback.schedule.phases.error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.schedule.phases.error.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.schedule.phases.error.private.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.schedule.phases.error.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.schedule.phases.error.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.schedule.phases.error.private.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.schedule.phases.error.group` | object | no | — | — |
+| `plugins.activity-feedback.schedule.phases.error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.schedule.phases.error.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.schedule.phases.error.group.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.schedule.phases.error.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.schedule.phases.error.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.schedule.phases.error.group.platformConfig` | object | no | — | Platform-specific options. |
+| `plugins.activity-feedback.schedule.phases.error.channel` | object | no | — | — |
+| `plugins.activity-feedback.schedule.phases.error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `plugins.activity-feedback.schedule.phases.error.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `plugins.activity-feedback.schedule.phases.error.channel.message` | string | no | — | Status text for type=message. |
+| `plugins.activity-feedback.schedule.phases.error.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `plugins.activity-feedback.schedule.phases.error.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `plugins.activity-feedback.schedule.phases.error.channel.platformConfig` | object | no | — | Platform-specific options. |
 
 ### 60s
 

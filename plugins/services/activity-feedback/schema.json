@@ -3,10 +3,126 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "enabled": { "type": "boolean", "default": true },
-    "defaults": { "type": "object", "additionalProperties": true },
-    "platforms": { "type": "object", "additionalProperties": true },
-    "endpoints": { "type": "object", "additionalProperties": true },
-    "schedule": { "type": "object", "additionalProperties": true }
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable activity feedback for this plugin instance.",
+      "x-descriptionZh": "是否启用当前活动反馈插件实例。"
+    },
+    "defaults": {
+      "$ref": "#/$defs/activityFeedback",
+      "description": "Default policy for all platforms and Endpoints.",
+      "x-descriptionZh": "所有平台与 Endpoint 的默认策略。"
+    },
+    "platforms": {
+      "type": "object",
+      "x-keyPlaceholder": "<platform>",
+      "additionalProperties": { "$ref": "#/$defs/activityFeedback" },
+      "description": "Platform overrides keyed by platform name; values use the same shape as defaults.",
+      "x-descriptionZh": "按平台名覆盖；值的结构与 defaults 相同。"
+    },
+    "endpoints": {
+      "type": "object",
+      "x-keyPlaceholder": "<platform:endpointKey>",
+      "additionalProperties": { "$ref": "#/$defs/activityFeedback" },
+      "description": "Endpoint overrides keyed by platform:endpointKey; values use the same shape as defaults.",
+      "x-descriptionZh": "按 platform:endpointKey 覆盖；值的结构与 defaults 相同。"
+    },
+    "schedule": {
+      "$ref": "#/$defs/scheduleFeedback",
+      "description": "Schedule-only start, finish, and error feedback.",
+      "x-descriptionZh": "仅用于 Schedule 的开始、完成与失败反馈。"
+    }
+  },
+  "$defs": {
+    "activityFeedback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable this policy layer.",
+          "x-descriptionZh": "是否启用当前策略层。"
+        },
+        "phases": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Feedback policy keyed by lifecycle phase.",
+          "x-descriptionZh": "按生命周期 phase 配置反馈策略。",
+          "properties": {
+            "queued": { "$ref": "#/$defs/scenePhases" },
+            "active": { "$ref": "#/$defs/scenePhases" },
+            "thinking": { "$ref": "#/$defs/scenePhases" },
+            "schedule_start": { "$ref": "#/$defs/scenePhases" },
+            "schedule_finish": { "$ref": "#/$defs/scenePhases" },
+            "schedule_error": { "$ref": "#/$defs/scenePhases" }
+          }
+        }
+      }
+    },
+    "scenePhases": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "private": { "$ref": "#/$defs/phaseConfig" },
+        "group": { "$ref": "#/$defs/phaseConfig" },
+        "channel": { "$ref": "#/$defs/phaseConfig" }
+      }
+    },
+    "phaseConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["reaction", "message", "typing", "none"],
+          "description": "How the phase is presented.",
+          "x-descriptionZh": "该 phase 的呈现方式。"
+        },
+        "emoji": {
+          "type": "string",
+          "description": "Reaction value for type=reaction.",
+          "x-descriptionZh": "type=reaction 时使用的回应值。"
+        },
+        "message": {
+          "type": "string",
+          "description": "Status text for type=message.",
+          "x-descriptionZh": "type=message 时使用的状态文本。"
+        },
+        "autoRemove": {
+          "type": "boolean",
+          "default": true,
+          "description": "Remove the feedback after the phase stops.",
+          "x-descriptionZh": "phase 停止后是否自动移除反馈。"
+        },
+        "removeDelay": {
+          "type": "number",
+          "description": "Delay before removal in milliseconds; negative values are normalized to zero at runtime.",
+          "x-descriptionZh": "自动移除前等待的毫秒数；负值会在运行时归一化为 0。"
+        },
+        "platformConfig": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Platform-specific options.",
+          "x-descriptionZh": "平台特定选项。"
+        }
+      }
+    },
+    "scheduleFeedback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "phases": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "start": { "$ref": "#/$defs/scenePhases" },
+            "finish": { "$ref": "#/$defs/scenePhases" },
+            "error": { "$ref": "#/$defs/scenePhases" }
+          }
+        }
+      }
+    }
   }
 }
