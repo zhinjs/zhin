@@ -1,9 +1,9 @@
 ---
-"@zhin.js/prompt-section": major
-"@zhin.js/agent": major
-"@zhin.js/core": major
-"@zhin.js/host-http": minor
-"@zhin.js/cli": minor
+"@zhin.js/prompt-section": patch
+"@zhin.js/agent": patch
+"@zhin.js/core": patch
+"@zhin.js/host-http": patch
+"@zhin.js/cli": patch
 "@zhin.js/scaffold-wizard": patch
 "create-zhin-app": patch
 "@zhin.js/adapter-icqq": patch
