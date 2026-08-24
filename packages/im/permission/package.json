@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/permission",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Unified PermissionHost for command permit, tool permit, and platform-level auth in Zhin Plugin Runtime",
   "type": "module",
   "main": "./lib/index.js",

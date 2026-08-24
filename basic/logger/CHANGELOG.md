@@ -1,5 +1,11 @@
 # @zhin.js/logger
 
+## 1.0.77
+
+### Patch Changes
+
+- 09b14d6: Publish clearer package and authoring API documentation for generated references and editor IntelliSense.
+
 ## 1.0.76
 
 ### Patch Changes

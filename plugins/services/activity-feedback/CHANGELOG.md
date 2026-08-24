@@ -1,5 +1,22 @@
 # @zhin.js/service-activity-feedback
 
+## 3.0.16
+
+### Patch Changes
+
+- 2719580: Publish source-aligned configuration enums for Agent execution policies and the complete activity feedback Schema, including lifecycle phases, Schedule aliases, conversation scenes, presentation types, defaults, dynamic override paths, and localized field descriptions.
+- 902fa35: Separate Adapter definitions from live Endpoint responsibilities in activity feedback. Runtime feedback now depends on a narrow outbound send port and the concrete Endpoint control surface instead of fabricating the legacy all-in-one Adapter class.
+- 12025ee: Project exact Endpoint control capabilities through the outbound Host and connect native typing, editable progress, ordered Agent/subagent/tool events, and transient Schedule completion states to IM activity feedback. Gate event ingress by the committed Runtime generation, pin Endpoint operations and retirement cleanup to that generation's IM snapshot, and guarantee terminal cleanup across public Agent error and cancellation paths.
+- Updated dependencies [e9c6a73]
+- Updated dependencies [902fa35]
+- Updated dependencies [54bfd6b]
+- Updated dependencies [12025ee]
+- Updated dependencies [09b14d6]
+- Updated dependencies [1fc78bc]
+  - @zhin.js/agent@1.1.16
+  - @zhin.js/logger@1.0.77
+  - zhin.js@6.0.14
+
 ## 3.0.15
 
 ### Patch Changes

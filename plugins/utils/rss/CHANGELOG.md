@@ -1,5 +1,19 @@
 # @zhin.js/plugin-rss
 
+## 4.0.16
+
+### Patch Changes
+
+- Updated dependencies [e9c6a73]
+- Updated dependencies [902fa35]
+- Updated dependencies [54bfd6b]
+- Updated dependencies [12025ee]
+- Updated dependencies [09b14d6]
+- Updated dependencies [1fc78bc]
+  - @zhin.js/agent@1.1.16
+  - @zhin.js/command@1.0.16
+  - zhin.js@6.0.14
+
 ## 4.0.15
 
 ### Patch Changes

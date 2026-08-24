@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-dingtalk",
-  "version": "7.0.0",
+  "version": "7.0.1",
   "description": "Zhin.js DingTalk (钉钉) adapter for Plugin Runtime (HTTP webhook)",
   "type": "module",
   "main": "./lib/index.js",

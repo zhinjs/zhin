@@ -1,5 +1,16 @@
 # @zhin.js/skill
 
+## 1.0.13
+
+### Patch Changes
+
+- 09b14d6: Publish clearer package and authoring API documentation for generated references and editor IntelliSense.
+- Updated dependencies [12025ee]
+- Updated dependencies [09b14d6]
+- Updated dependencies [1fc78bc]
+  - @zhin.js/plugin-runtime@1.1.8
+  - @zhin.js/feature-kit@1.0.13
+
 ## 1.0.12
 
 ### Patch Changes

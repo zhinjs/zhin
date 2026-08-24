@@ -1,5 +1,12 @@
 # @zhin.js/plugin-runtime
 
+## 1.1.8
+
+### Patch Changes
+
+- 12025ee: Project exact Endpoint control capabilities through the outbound Host and connect native typing, editable progress, ordered Agent/subagent/tool events, and transient Schedule completion states to IM activity feedback. Gate event ingress by the committed Runtime generation, pin Endpoint operations and retirement cleanup to that generation's IM snapshot, and guarantee terminal cleanup across public Agent error and cancellation paths.
+- 09b14d6: Publish clearer package and authoring API documentation for generated references and editor IntelliSense.
+
 ## 1.1.7
 
 ### Patch Changes
