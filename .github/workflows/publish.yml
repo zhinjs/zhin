@@ -62,6 +62,8 @@ jobs:
       # type-check / lint / unit tests 已纳入 pnpm check:all
       - name: run harness checks (incl. type-check, lint, test)
         run: pnpm check:all
+        env:
+          HARNESS_SEQUENTIAL: '1'
 
       # npm 要求包名已存在后才能走可信发布 / changesets；新包需维护者手动首次发包。
       - name: detect packages needing first publish
