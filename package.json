@@ -47,6 +47,7 @@
     "check:harness-paths": "node scripts/check-im-send-bypass.mjs",
     "check:no-koa": "node scripts/check-no-koa-imports.mjs",
     "check:architecture": "node scripts/check-architecture-layers.mjs",
+    "check:adapter-endpoint-boundaries": "node scripts/check-adapter-endpoint-boundaries.mjs",
     "check:im-session-ssot": "node scripts/check-im-session-ssot.mjs",
     "check:get-model-imports": "node scripts/check-get-model-imports.mjs",
     "check:legacy-ai-exports": "node scripts/check-legacy-ai-exports.mjs",

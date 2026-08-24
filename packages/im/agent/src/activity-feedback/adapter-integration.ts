@@ -3,7 +3,7 @@
  */
 
 import { getLogger } from '@zhin.js/logger';
-import type { Adapter, Endpoint, SendOptions } from '@zhin.js/core';
+import type { EndpointControl } from '@zhin.js/core';
 import type { ConversationRef, MessageRef } from '@zhin.js/im-contract';
 import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 import {
@@ -28,7 +28,34 @@ const logger = getLogger('ActivityFeedback');
 
 export { PLATFORM_FEATURES, buildTypingSendContent, type PlatformFeatures };
 
-type OutboundAdapter = Pick<Adapter, 'sendMessage'>;
+/**
+ * Narrow outbound seam used by activity feedback.
+ *
+ * An Adapter definition selects and constructs Endpoints; it is not a live
+ * message sender. Runtime integrations therefore depend on this port instead
+ * of importing or fabricating the legacy all-in-one Adapter class.
+ */
+export interface ActivityFeedbackSendPort {
+  send(input: Readonly<{
+    conversation: ConversationRef;
+    content: unknown;
+  }>): Promise<string | null | undefined>;
+}
+
+/** Structural compatibility for callers that still expose legacy sendMessage. */
+export interface LegacyActivityFeedbackSendPort {
+  sendMessage(options: Readonly<{
+    type: 'private' | 'group';
+    id: string;
+    context: string;
+    endpoint: string;
+    content: unknown;
+  }>): Promise<string | null | undefined>;
+}
+
+export type ActivityFeedbackOutbound =
+  | ActivityFeedbackSendPort
+  | LegacyActivityFeedbackSendPort;
 
 function resolveSendTarget(options: TypingIndicatorOptions): { type: 'private' | 'group'; id: string } {
   if ((options.sceneType === 'group' || options.sceneType === 'channel') && options.groupId) {
@@ -49,29 +76,33 @@ function resolveSendTarget(options: TypingIndicatorOptions): { type: 'private' |
 }
 
 function createOutboundSendMessage(
-  endpoint: Endpoint,
+  endpoint: EndpointWithActivityFeedback,
   platform: string,
   messages: Map<string, MessageRef>,
-  outbound?: OutboundAdapter,
+  outbound?: ActivityFeedbackOutbound,
 ): (options: TypingIndicatorOptions, content: string) => Promise<string | null> {
   return async (options, content) => {
     try {
       const segments = buildTypingSendContent(platform, options, content);
       if (!segments) return null;
       const { type, id } = resolveSendTarget(options);
-      const sendOptions: SendOptions = {
-        type,
-        id,
-        context: platform,
-        endpoint: endpoint.$id,
-        content: segments,
-      };
       if (outbound) {
-        const messageId = await outbound.sendMessage(sendOptions);
+        const messageId = 'send' in outbound
+          ? await outbound.send({
+            conversation: toConversationRef(endpoint, platform, options),
+            content: segments,
+          })
+          : await outbound.sendMessage({
+            type,
+            id,
+            context: platform,
+            endpoint: endpoint.$id,
+            content: segments,
+          });
         if (messageId) messages.set(messageId, toMessageRef(endpoint, platform, options, messageId));
-        return messageId;
+        return messageId ?? null;
       }
-      logger.error(`[${platform}] Activity feedback requires Adapter.sendMessage; endpoint ${endpoint.$id} has no outbound adapter`);
+      logger.error(`[${platform}] Activity feedback requires an outbound send port; endpoint ${endpoint.$id} has none`);
       return null;
     } catch (error) {
       logger.error(`[${platform}] Failed to send activity feedback message:`, error);
@@ -108,7 +139,11 @@ export interface PlatformActivityFeedbackManager {
 
 export type BotActivityFeedbackManager = ActivityFeedbackManager | PlatformActivityFeedbackManager;
 
-export interface EndpointWithActivityFeedback extends Endpoint {
+export interface EndpointWithActivityFeedback {
+  /** Concrete Endpoint identity within one Adapter definition. */
+  readonly $id: string;
+  /** Runtime IO/control belongs to the concrete Endpoint, never the Adapter definition. */
+  readonly control?: EndpointControl;
   $activityFeedback?: BotActivityFeedbackManager;
 }
 
@@ -116,7 +151,7 @@ function registerPlatformAdapters(
   manager: ActivityFeedbackManager,
   endpoint: EndpointWithActivityFeedback,
   platform: string,
-  outbound?: OutboundAdapter,
+  outbound?: ActivityFeedbackOutbound,
 ): void {
   const messages = new Map<string, MessageRef>();
   const sendMessage = createOutboundSendMessage(endpoint, platform, messages, outbound);
@@ -203,7 +238,7 @@ class EndpointActivityFeedbackAdapter implements TypingIndicatorAdapter {
 }
 
 function toMessageRef(
-  endpoint: Endpoint,
+  endpoint: EndpointWithActivityFeedback,
   platform: string,
   options: TypingIndicatorOptions,
   id: string,
@@ -215,7 +250,7 @@ function toMessageRef(
 }
 
 function toConversationRef(
-  endpoint: Endpoint,
+  endpoint: EndpointWithActivityFeedback,
   platform: string,
   options: TypingIndicatorOptions,
 ): ConversationRef {
@@ -233,7 +268,7 @@ export class AdapterActivityFeedbackManager {
   enableForEndpoint(
     endpoint: EndpointWithActivityFeedback,
     platform: string,
-    outbound?: OutboundAdapter,
+    outbound?: ActivityFeedbackOutbound,
   ): ActivityFeedbackManager {
     const botKey = JSON.stringify([platform, endpoint.$id]);
     if (this.managers.has(botKey)) {
@@ -278,7 +313,7 @@ export const initAdapterActivityFeedbackManager = () => new AdapterActivityFeedb
 export function enableActivityFeedbackForBot(
   endpoint: EndpointWithActivityFeedback,
   platform: string,
-  outbound?: OutboundAdapter,
+  outbound?: ActivityFeedbackOutbound,
 ): ActivityFeedbackManager {
   return getAdapterActivityFeedbackManager().enableForEndpoint(endpoint, platform, outbound);
 }
