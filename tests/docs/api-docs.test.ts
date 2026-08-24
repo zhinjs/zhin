@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
@@ -85,11 +84,11 @@ describe('generated API reference', () => {
     }
   });
 
-  it('matches the generated TypeDoc reflection to the public API allowlist', () => {
-    execFileSync(
-      process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
-      ['check:api-docs'],
-      { cwd: repoRoot, stdio: 'pipe' },
+  it('runs the public API allowlist as a dedicated harness gate', () => {
+    const harness = fs.readFileSync(
+      path.join(repoRoot, 'scripts/check-all-harness.mjs'),
+      'utf8',
     );
+    expect(harness).toContain("command: 'pnpm check:api-docs'");
   });
 });
