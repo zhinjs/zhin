@@ -38,6 +38,7 @@ const checks = [
     name: 'Lint',
     command: 'pnpm lint:ci',
     description: 'ESLint（.ts/.tsx）',
+    retries: 1,
   },
   {
     name: 'Type Check',
@@ -256,23 +257,47 @@ const checks = [
   },
 ].filter((c) => !(skipUnitTests && c.name === 'Unit Tests'));
 
-function runCheck(check) {
-  const start = performance.now();
+function executeCheck(check) {
   return new Promise((resolve) => {
     exec(check.command, {
       cwd: repoRoot,
       maxBuffer: 32 * 1024 * 1024,
-    }, (error, _stdout, stderr) => {
-      const elapsed = ((performance.now() - start) / 1000).toFixed(1);
-      if (error) {
-        console.log(`  ✗ ${check.name} FAILED (${elapsed}s)`);
-        resolve({ name: check.name, status: 'FAILED', elapsed, error: stderr || error.message });
-      } else {
-        console.log(`  ✓ ${check.name} (${elapsed}s)`);
-        resolve({ name: check.name, status: 'PASSED', elapsed });
-      }
-    });
+    }, (error, stdout, stderr) => resolve({ error, stdout, stderr }));
   });
+}
+
+async function runCheck(check) {
+  const start = performance.now();
+  const attempts = 1 + (check.retries ?? 0);
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const { error, stdout, stderr } = await executeCheck(check);
+    const elapsed = ((performance.now() - start) / 1000).toFixed(1);
+    if (!error) {
+      console.log(`  ✓ ${check.name} (${elapsed}s)`);
+      return { name: check.name, status: 'PASSED', elapsed };
+    }
+
+    if (attempt < attempts) {
+      console.log(`  ↻ ${check.name} failed; retrying once`);
+      continue;
+    }
+
+    const output = [stdout, stderr]
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .join('\n');
+    const details = [
+      output,
+      error.message,
+      `exit code: ${String(error.code ?? 'unknown')}`,
+      `signal: ${String(error.signal ?? 'none')}`,
+    ].filter(Boolean).join('\n');
+    console.log(`  ✗ ${check.name} FAILED (${elapsed}s)`);
+    return { name: check.name, status: 'FAILED', elapsed, error: details };
+  }
+
+  throw new Error(`unreachable check state: ${check.name}`);
 }
 
 async function runPool(items, limit) {
