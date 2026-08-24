@@ -31,10 +31,12 @@ const phaseConfig: ResolvedActivityFeedbackPhaseConfig = {
 };
 
 describe('createOutboundEndpointAccess', () => {
-  it('按 platform:endpointKey 缓存同一 { endpoint, adapter }', () => {
+  it('按 platform:endpointKey 缓存同一 { endpoint, outbound }，不伪造 Adapter', () => {
     const access = createOutboundEndpointAccess({ send: vi.fn() });
     const first = access.resolve('sandbox', 'bot1');
     expect(first).toBeDefined();
+    expect(first).not.toHaveProperty('adapter');
+    expect(first?.outbound.send).toBeTypeOf('function');
     expect(access.resolve('sandbox', 'bot1')).toBe(first);
     expect(access.resolve('sandbox', 'bot2')).not.toBe(first);
   });

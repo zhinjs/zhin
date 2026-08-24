@@ -594,6 +594,7 @@ export type {
   ActivityFeedbackConfig,
   ResolvedActivityFeedbackPhaseConfig,
   EndpointWithActivityFeedback,
+  ActivityFeedbackSendPort,
   PlatformActivityFeedbackManager,
   PlatformActivityFeedbackStartOptions,
   BotActivityFeedbackManager,

@@ -105,6 +105,11 @@ const checks = [
     description: '检查架构层级依赖是否正确',
   },
   {
+    name: 'Adapter Endpoint Boundaries',
+    command: 'pnpm check:adapter-endpoint-boundaries',
+    description: '检查 Adapter definition 与 Endpoint instance 职责不混淆',
+  },
+  {
     name: 'IM Session SSOT',
     command: 'pnpm check:im-session-ssot',
     description: '检查 IM 场景/session 身份解析是否使用 core SSOT',

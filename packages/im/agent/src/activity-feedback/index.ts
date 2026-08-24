@@ -49,6 +49,7 @@ export {
 export type {
   PlatformFeatures,
   EndpointWithActivityFeedback,
+  ActivityFeedbackSendPort,
   PlatformActivityFeedbackManager,
   PlatformActivityFeedbackStartOptions,
   BotActivityFeedbackManager,

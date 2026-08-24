@@ -22,6 +22,28 @@ export default defineAdapter({
 单文件插件可用 `setup({ addAdapter })` 注册 `defineAdapter(...)`；Endpoint 仍由同一个
 AdapterIndex 和 generation lifecycle 管理。
 
+## Adapter 与 Endpoint 职责
+
+二者不是同一个运行时对象的两种叫法。固定职责如下：
+
+| Module | 负责 | 禁止承担 |
+| --- | --- | --- |
+| Adapter definition | 声明平台能力与段策略；解析单个 endpoint 配置；注入依赖；选择并构造一种 Endpoint implementation | 建连、收发消息、持有 socket/timer/listener、维护在线状态、保存 live Endpoint Map |
+| Endpoint instance | 代表一个具体账号/连接；拥有 transport、协议编解码、send/control/content/management、start/open/close/stop 与资源清理 | 展开多账号配置、查找兄弟 Endpoint、发布 generation、维护全局 registry、执行 endpoint add/edit/remove 配置命令 |
+| AdapterIndex | 展开 1:N 配置；作为当前 generation 的 Endpoint directory；校验能力；编排 admission 与生命周期；提供 Runtime 查询 | 理解平台协议、鉴权、媒体上传或 SDK 类型 |
+| Plugin composition | 提供 schema、Resource、命令、HTTP Host 和平台专属 Agent tools | 绕过 AdapterIndex 保存另一份 live Endpoint 权威状态 |
+
+`defineAdapter().create()` 是 Adapter 与 Endpoint 的唯一 Seam：调用前属于配置、能力和
+依赖装配，返回后属于具体 Endpoint 的运行期。Adapter definition 应保持无连接状态；
+Endpoint 不得把自己注册进模块级 Map。需要从命令、Agent tool 或 Host 查找当前 Endpoint
+时，应解析当前 generation 的 AdapterIndex/Resource View，不能建立 second source of truth。
+
+旧 `@zhin.js/core` 的 `Adapter` class 同时承担集合、消息管线、发送和 Registry，属于兼容
+外壳，不是 Plugin Runtime 的 authoring model。新代码不得依赖、继承或伪造该 class；运行
+期协作应依赖 `MessageGateway`、`OutboundHost`、`EndpointControl` 等窄 Interface。
+`pnpm check:adapter-endpoint-boundaries` 对现存 legacy Adapter consumer 与模块级 Agent
+Endpoint registry 使用基线 allowlist 做单调收缩门禁：允许逐项删除，但禁止新增。
+
 ## Transport Contract
 
 Adapter definitions declare `capabilities` for inbound/outbound admission and

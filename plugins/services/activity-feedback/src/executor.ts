@@ -1,5 +1,4 @@
-import type { Adapter } from 'zhin.js';
-import { enableActivityFeedbackForBot, isGenericActivityFeedbackManager, type ActivityFeedbackManager, type ActivityFeedbackPhase, type EndpointWithActivityFeedback, type PlatformActivityFeedbackManager, type ResolvedActivityFeedbackPhaseConfig, type ActivityFeedbackEventContext } from '@zhin.js/agent';
+import { enableActivityFeedbackForBot, isGenericActivityFeedbackManager, type ActivityFeedbackManager, type ActivityFeedbackPhase, type ActivityFeedbackSendPort, type EndpointWithActivityFeedback, type PlatformActivityFeedbackManager, type ResolvedActivityFeedbackPhaseConfig, type ActivityFeedbackEventContext } from '@zhin.js/agent';
 import type { OutboundHost } from 'zhin.js';
 
 /** IM 侧 endpoint 访问 seam（便于测试注入 fake） */
@@ -7,7 +6,7 @@ export interface ActivityFeedbackEndpointAccess {
   resolve(
     platform: string,
     endpointKey: string,
-  ): { endpoint: EndpointWithActivityFeedback; adapter: Adapter } | undefined;
+  ): { endpoint: EndpointWithActivityFeedback; outbound: ActivityFeedbackSendPort } | undefined;
 }
 
 /** Slice-2: no Adapter inject — executor start/stop no-op when resolve returns undefined. */
@@ -42,7 +41,7 @@ function stringifySendContent(content: unknown): string {
  * Plugin Runtime: resolve endpoints via OutboundHost → ImRuntime.sendEndpointMessage.
  * Typing/reaction text goes through the unified outbound chain (no legacy Adapter.inject).
  *
- * 按 platform:endpointKey 缓存 { endpoint, adapter }：activity manager 挂在
+ * 按 platform:endpointKey 缓存 { endpoint, outbound }：activity manager 挂在
  * endpoint.$activityFeedback 上，start/stop 必须解析到同一个对象，否则
  * stop 时拿不到 manager，typing 指示器永远无法停止。
  */
@@ -50,7 +49,10 @@ export function createOutboundEndpointAccess(
   outbound: OutboundHost,
   logger?: { debug: (msg: string, ...args: unknown[]) => void },
 ): ActivityFeedbackEndpointAccess {
-  const cache = new Map<string, { endpoint: EndpointWithActivityFeedback; adapter: Adapter }>();
+  const cache = new Map<string, {
+    endpoint: EndpointWithActivityFeedback;
+    outbound: ActivityFeedbackSendPort;
+  }>();
   return {
     resolve(platform, endpointKey) {
       const key = JSON.stringify([platform, endpointKey]);
@@ -151,21 +153,17 @@ export function createOutboundEndpointAccess(
           } : {}),
         },
       } as EndpointWithActivityFeedback;
-      const adapter = {
-        sendMessage: async (options: {
-          type?: string;
-          id?: string;
-          content?: unknown;
-        }) => {
-          const text = stringifySendContent(options.content);
-          if (!text || !options.id) return null;
+      const sendPort: ActivityFeedbackSendPort = {
+        send: async ({ conversation, content }) => {
+          const text = stringifySendContent(content);
+          if (!text || !conversation.id) return null;
           try {
             const messageId = await outbound.send({
               adapter: platform,
               endpointKey,
               conversation: {
-                kind: (options.type as 'private' | 'group' | 'channel' | undefined) || 'private',
-                id: options.id,
+                kind: conversation.kind,
+                id: conversation.id,
               },
               content: text,
             });
@@ -178,11 +176,8 @@ export function createOutboundEndpointAccess(
             return null;
           }
         },
-        endpoints: {
-          get: (id: string) => (id === endpointKey ? endpoint : undefined),
-        },
       };
-      const resolved = { endpoint, adapter: adapter as unknown as Adapter };
+      const resolved = { endpoint, outbound: sendPort };
       cache.set(key, resolved);
       return resolved;
     },
@@ -242,7 +237,7 @@ class GenericPhaseDriver implements PhaseDriver {
   constructor(
     private readonly endpoint: EndpointWithActivityFeedback,
     private readonly platform: string,
-    private readonly adapter: Adapter,
+    private readonly outbound: ActivityFeedbackSendPort,
   ) {}
 
   private async ensureManager(): Promise<ActivityFeedbackManager> {
@@ -252,7 +247,7 @@ class GenericPhaseDriver implements PhaseDriver {
       this.manager = existing;
       return existing;
     }
-    this.manager = enableActivityFeedbackForBot(this.endpoint, this.platform, this.adapter);
+    this.manager = enableActivityFeedbackForBot(this.endpoint, this.platform, this.outbound);
     return this.manager;
   }
 
@@ -285,13 +280,13 @@ class GenericPhaseDriver implements PhaseDriver {
 function createPhaseDriver(
   endpoint: EndpointWithActivityFeedback,
   platform: string,
-  adapter: Adapter,
+  outbound: ActivityFeedbackSendPort,
 ): PhaseDriver {
   const manager = endpoint.$activityFeedback;
   if (manager && !isGenericActivityFeedbackManager(manager)) {
     return new PlatformPhaseDriver(manager);
   }
-  return new GenericPhaseDriver(endpoint, platform, adapter);
+  return new GenericPhaseDriver(endpoint, platform, outbound);
 }
 
 export class ActivityFeedbackExecutor {
@@ -304,14 +299,14 @@ export class ActivityFeedbackExecutor {
   ): Promise<void> {
     const resolved = this.access.resolve(ctx.platform, ctx.endpointKey);
     if (!resolved) return;
-    const driver = createPhaseDriver(resolved.endpoint, ctx.platform, resolved.adapter);
+    const driver = createPhaseDriver(resolved.endpoint, ctx.platform, resolved.outbound);
     await driver.start(ctx, phase, phaseConfig);
   }
 
   async stop(ctx: ActivityFeedbackEventContext, phase: ActivityFeedbackPhase): Promise<void> {
     const resolved = this.access.resolve(ctx.platform, ctx.endpointKey);
     if (!resolved?.endpoint.$activityFeedback) return;
-    const driver = createPhaseDriver(resolved.endpoint, ctx.platform, resolved.adapter);
+    const driver = createPhaseDriver(resolved.endpoint, ctx.platform, resolved.outbound);
     await driver.stop(ctx, phase);
   }
 
@@ -322,7 +317,7 @@ export class ActivityFeedbackExecutor {
   ): Promise<void> {
     const resolved = this.access.resolve(ctx.platform, ctx.endpointKey);
     if (!resolved) return;
-    const driver = createPhaseDriver(resolved.endpoint, ctx.platform, resolved.adapter);
+    const driver = createPhaseDriver(resolved.endpoint, ctx.platform, resolved.outbound);
     const manager = resolved.endpoint.$activityFeedback;
     if (!manager || !isGenericActivityFeedbackManager(manager)) {
       if (phase === 'thinking') await driver.updateThinkingText(ctx, text);
