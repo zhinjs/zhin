@@ -20,7 +20,7 @@ Zhin.js [OneBot 12](https://12.onebot.dev/) adapter (Plugin Runtime). Default is
 - Convention-based `defineAdapter` / `definePlugin` (no `usePlugin` needed)
 - **Forward WebSocket** (`connection: ws`): the application connects to the OneBot implementation's WS server
 - `access_token` authentication (Bearer + query)
-- Inbound via `messageGatewayToken`; outbound `send({ conversation, payload })`
+- Inbound via `Endpoint.emit(...)`; outbound `send({ conversation, payload })`
 
 ## Installation
 
@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-onebot12
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — convention-based `adapters/onebot12.ts` (`defineAdapter`)
-- `@zhin.js/core` — `messageGatewayToken` inbound/outbound
+- `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 

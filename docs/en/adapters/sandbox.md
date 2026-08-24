@@ -38,7 +38,7 @@ Sandbox needs no external account. Let `zhin runtime start` assemble the HTTP Ho
 
 - `@zhin.js/adapter` — convention-based `adapters/sandbox.ts`
 - `@zhin.js/host-http` — `httpHostToken` provided by Root (WebSocket `/sandbox` + Console HTTP)
-- `@zhin.js/core` — `messageGatewayToken` / ImRuntime inbound-outbound
+- `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/page` + `pages/index.tsx` — ADR 0046 convention page (`definePage`; route `/sandbox`)
 
 Root loads `@zhin.js/host-http`, `ConsoleRuntime`, and `ClientBuildModuleRuntime` at `zhin runtime start`. Open `http://<host>:<port>/console` to browse pages. The Sandbox page (route `/sandbox`, sharing the same path as WebSocket `/sandbox`: GET opens the page, Upgrade goes to WS) has a built-in chat shell.

@@ -1,18 +1,16 @@
 import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
-import { getKookAgentDeps } from '../../src/kook-agent-deps.js';
 
-export default defineAgentTool<{ endpoint_id: string; guild_id: string }>({
+export default defineAgentTool<{ guild_id: string }>({
   description: '获取 KOOK 服务器的角色列表',
   inputSchema: z.object({
-    endpoint_id: z.string().describe('Endpoint 名称'),
     guild_id: z.string().describe('服务器 ID'),
   }),
-  platforms: ['kook'],
+  adapter: 'kook',
   tags: ['kook'],
-  async execute({ endpoint_id, guild_id  }: { endpoint_id: string; guild_id: string }) {
-    const endpoint = getKookAgentDeps().getEndpoint(endpoint_id);
-    const roles = await endpoint.getRoleList(guild_id);
+  async execute({ guild_id  }: { guild_id: string }, context) {
+    const client = context.$client;
+    const roles = await client.pickGuild(guild_id).getRoleList();
     return {
       roles: roles.map((r) => ({
         id: String(r.role_id),

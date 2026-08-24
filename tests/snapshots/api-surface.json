@@ -145,7 +145,7 @@
     "export{AGENT_ROLE_CONFIGS}from './resource-hub/role-configs.js';",
     "export{AIService}from './service.js';",
     "export{AI_EVENT_NAMES,subscribeAIEvents,subscribeAIEventsOnTarget,}from './ai-event-subscriber.js';",
-    "export{ActivityFeedbackManager,getActivityFeedbackManager,initActivityFeedbackManager,provideActivityFeedbackManager,resolveActivityFeedbackPhaseConfig,isActivityFeedbackEnabled,toActivityFeedbackEventContext,resolveActivitySceneType,resolveActivityEventTargets,enableActivityFeedbackForBot,getAdapterActivityFeedbackManager,initAdapterActivityFeedbackManager,provideAdapterActivityFeedbackManager,isGenericActivityFeedbackManager,activityFeedbackAiBus,ActivityFeedbackAIBus,resolveSubagentActivityTag,formatSubagentActivityPrefix,withSubagentActivityPrefix,applySubagentActivityPrefixToConfig,resolveActivityFeedbackSessionId,}from './activity-feedback/index.js';",
+    "export{ActivityFeedbackManager,resolveActivityFeedbackPhaseConfig,isActivityFeedbackEnabled,toActivityFeedbackEventContext,resolveActivitySceneType,resolveActivityEventTargets,enableActivityFeedbackForBot,isGenericActivityFeedbackManager,activityFeedbackAiBus,ActivityFeedbackAIBus,resolveSubagentActivityTag,formatSubagentActivityPrefix,withSubagentActivityPrefix,applySubagentActivityPrefixToConfig,resolveActivityFeedbackSessionId,}from './activity-feedback/index.js';",
     "export{AgentFeature,MCPFeature,}from './features/index.js';",
     "export{AgentResourceHub}from './resource-hub/index.js';",
     "export{BashBuiltinTool,createBashTool,BASH_PARAMETERS,type BashExecAsync,}from './builtin/bash-tool.js';",

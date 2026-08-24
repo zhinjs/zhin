@@ -11,7 +11,7 @@ import {
 } from '@zhin.js/core';
 import {
   ingressRouteToken,
-  messageGatewayToken,
+  outboundMessageToken,
   type ImRuntime,
   type Message,
   type SendContent,
@@ -179,7 +179,7 @@ import {
   workroomRemoteCallbackRuntimeToken,
   createGenerationWorkroomRemoteAssignmentAuthority,
   workroomRemoteAssignmentAuthorityToken,
-  createWorkroomProjectionMessageGatewayPort,
+  createWorkroomProjectionOutboundMessageServicePort,
   createProjectionHumanIngressTargetResolver,
   WorkroomProjectionReplyResolver,
   WorkroomProjectionRuntime,
@@ -1915,8 +1915,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       catalog: workroomCatalog,
       journal: workroomJournal,
       repository: projectionRepository,
-      outbound: createWorkroomProjectionMessageGatewayPort(
-        resources.use(messageGatewayToken),
+      outbound: createWorkroomProjectionOutboundMessageServicePort(
+        resources.use(outboundMessageToken),
         rootPluginId(),
       ),
       workerId: `workroom-projection:${randomUUID()}`,
@@ -3340,6 +3340,7 @@ export function createRuntimeTurnRequest(
   const access = createRuntimeTurnAccess(message, roles);
   const origin = access.origin;
   if (origin.kind !== 'im') throw new Error('Runtime IM ingress must produce an IM origin');
+  const clientAdapter = message.clientAdapter;
   const mediaEntries = collectSegmentMedia(
     message.segments ? toCanonicalSegments(message.segments) : undefined,
   ).map(({ type, media: ref }) => Object.freeze({
@@ -3464,6 +3465,10 @@ export function createRuntimeTurnRequest(
     signal: input.signal,
     ports: Object.freeze({
       ...input.ports,
+      ...(clientAdapter ? { client: Object.freeze({
+        adapter: clientAdapter,
+        get: () => message.$client,
+      }) } : {}),
       ...(referencePort ? { references: referencePort } : {}),
       ...(conversationContext ? { conversationContext } : {}),
     }),

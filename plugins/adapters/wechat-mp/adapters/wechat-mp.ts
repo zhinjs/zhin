@@ -2,7 +2,6 @@
  * Convention entry: discover `adapters/wechat-mp.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import { WeChatMpEndpoint } from '../src/endpoint.js';
 import {
@@ -12,7 +11,8 @@ import {
 import { wechatMpRuntimeStateToken } from '../src/wechat-mp-runtime-state.js';
 
 export { WeChatMpEndpoint } from '../src/endpoint.js';
-export type { WeChatMpEndpointOptions, WeChatMpFetch } from '../src/endpoint.js';
+export type { WeChatMpEndpointOptions } from '../src/endpoint.js';
+export type { WeChatMpFetch } from '../src/client.js';
 
 export default defineAdapter<WeChatMpAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
@@ -31,8 +31,6 @@ export default defineAdapter<WeChatMpAdapterConfig>({
     });
     return new WeChatMpEndpoint({
       id: context.id,
-      gateway: context.use(messageGatewayToken),
-      sideEvents: context.use(sideEventGatewayToken),
       http: context.use(httpHostToken),
       config,
     });

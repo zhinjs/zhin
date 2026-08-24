@@ -1,3 +1,4 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
  * OneBot12 HTTP webhook endpoint — POST inbound + api_url outbound.
  */
@@ -5,11 +6,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   createRecallEndpointControl,
   type EndpointControl,
-  type EndpointInstance,
   type EndpointManagement,
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -30,30 +29,31 @@ import {
 } from './protocol.js';
 import { receiveOneBot12SideEvent } from './side-event-dispatch.js';
 import { createOneBot12ContentPort } from './content-port.js';
+import { Onebot12Client } from './client.js';
 import { verifyOneBotAccessToken } from './wss-auth.js';
 
 const logger = getLogger('onebot12');
 
 export interface OneBot12WebhookEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: OneBot12WebhookConfig;
   readonly callAction?: typeof callOneBot12Action;
 }
 
-export class OneBot12WebhookEndpoint implements EndpointInstance {
+export class OneBot12WebhookEndpoint extends Endpoint<Onebot12Client> {
+  readonly client = new Onebot12Client((action, params) => this.#callApi(action, params));
   readonly #options: OneBot12WebhookEndpointOptions;
-  readonly management: EndpointManagement = createOneBot12EndpointManagement(this);
+  readonly management: EndpointManagement = createOneBot12EndpointManagement(this.client);
   readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
-  readonly content = createOneBot12ContentPort((action, params) => this.callApi(action, params));
+  readonly content = createOneBot12ContentPort((action, params) => this.client.callApi(action, params));
   readonly #callAction: typeof callOneBot12Action;
   #routeReleases: HttpRouteRegistration[] = [];
   #open = false;
   #started = false;
 
   constructor(options: OneBot12WebhookEndpointOptions) {
+    super();
     this.#options = options;
     this.#callAction = options.callAction ?? callOneBot12Action;
   }
@@ -97,7 +97,7 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const materialized = await uploadOneBot12MediaSegments(
       payload,
-      (action, params) => this.callApi(action, params),
+      (action, params) => this.client.callApi(action, params),
       (error) => {
         logger.warn(formatCompact({
           op: 'onebot12_upload_failed',
@@ -108,7 +108,7 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
     );
     const message = formatOutboundSegments(materialized);
     const params = buildSendMessageParams(conversation, message);
-    const data = await this.callApi('send_message', params) as { message_id?: string } | undefined;
+    const data = await this.client.callApi('send_message', params) as { message_id?: string } | undefined;
     const messageId = data?.message_id ?? '';
     logger.debug(formatCompact({
       op: 'onebot12_send',
@@ -122,11 +122,10 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
 
   async recallMessage(messageId: string): Promise<void> {
     if (!messageId) return;
-    await this.callApi('delete_message', { message_id: messageId });
+    await this.client.callApi('delete_message', { message_id: messageId });
   }
 
-  /** Public API for management surface / callers；webhook 模式走 api_url。 */
-  async callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
+  async #callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
     const apiUrl = this.#options.config.api_url;
     if (!apiUrl) {
       throw new Error('OneBot12 connection:webhook requires api_url for outbound api');
@@ -141,11 +140,17 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
 
   admit(ev: OneBot12Event): void {
     if (!this.#open) return;
+    void this.emitPlatform(oneBot12PlatformEventName(ev), ev).catch((error) => {
+      logger.warn(formatCompact({
+        op: 'onebot12_platform_event_failed',
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
     if (!isMessageEvent(ev)) {
       receiveOneBot12SideEvent(
-        this.#options.sideEvents,
+        (name, payload) => this.emit(name, payload),
         this.#options.config.id,
-        this,
+        this.client,
         ev,
         logger,
       );
@@ -155,7 +160,7 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
     const content = formatInboundContent(ev);
     const nickname = senderNickname(ev);
     const mentioned = isBotMentioned(ev);
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: ev.message_id },
       content,
@@ -217,6 +222,10 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
       }
     }
   }
+}
+
+function oneBot12PlatformEventName(ev: OneBot12Event): string {
+  return [ev.type, ev.detail_type, ev.sub_type].filter(Boolean).join('.');
 }
 
 async function readRequestBody(request: IncomingMessage): Promise<string> {

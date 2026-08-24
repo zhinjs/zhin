@@ -7,6 +7,9 @@ import {
 } from '../../src/turn/inbound-turn-queue.js';
 import { normalizeInboundQueueConfig } from '../../src/turn/inbound-queue-config.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
+import { activityFeedbackAiBus } from '../../src/activity-feedback/ai-bus.js';
+import { ZhinAgentEventEmitter } from '../../src/event/event-emitter.js';
+import { createInboundTurnQueue } from '../../src/turn/inbound-queue-runtime.js';
 
 describe('InboundTurnQueue', () => {
   const fifoConfig = normalizeInboundQueueConfig({ groupMode: 'fifo' });
@@ -16,6 +19,7 @@ describe('InboundTurnQueue', () => {
   };
 
   beforeEach(() => {
+    activityFeedbackAiBus.clear();
     emitter = {
       starts: [],
       clears: [],
@@ -26,6 +30,43 @@ describe('InboundTurnQueue', () => {
         this.clears.push({ sessionKey, messageId: commMessage.$id });
       },
     };
+  });
+
+  it('marks every message queued behind a pending turn as activity-feedback eligible', async () => {
+    const runtime = createInboundTurnQueue({
+      inboundQueue: { groupMode: 'fifo', coalesceWindowMs: 0 },
+    } as never, new ZhinAgentEventEmitter());
+    const sessionKey = 'sandbox:b1:group:g1';
+    const starts: Array<{ messageId?: string; eligible?: unknown }> = [];
+    activityFeedbackAiBus.on('ai.activity.queued.start', (payload) => {
+      starts.push({
+        messageId: payload.messageId,
+        eligible: payload.hookContext?.activityFeedbackEligible,
+      });
+    });
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const first = runtime.queue.schedule({
+      sessionKey,
+      commMessage: messageWithId({ scope: 'group', sceneId: 'g1', senderId: 'u1', messageId: 'm1' }),
+      content: 'busy',
+      run: async () => {
+        await firstGate;
+        return 'first';
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = runtime.queue.schedule({
+      sessionKey,
+      commMessage: messageWithId({ scope: 'group', sceneId: 'g1', senderId: 'u2', messageId: 'm2' }),
+      content: 'next',
+      run: async () => 'second',
+    });
+
+    await vi.waitFor(() => expect(starts).toContainEqual({ messageId: 'm2', eligible: true }));
+    releaseFirst();
+    await Promise.all([first, second]);
+    runtime.queue.dispose();
   });
 
   function messageWithId(overrides: Parameters<typeof mockCommMessage>[0] & { messageId?: string }) {

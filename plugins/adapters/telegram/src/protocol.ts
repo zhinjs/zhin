@@ -358,7 +358,7 @@ export function senderDisplayName(user?: TelegramUser): string {
   return user.username || user.first_name || String(user.id);
 }
 
-/** Build inbound text for MessageGateway.receive. */
+/** Build inbound text for OutboundMessageService.receive. */
 export function formatInboundContent(msg: TelegramMessage): string {
   if (msg.text) return msg.text;
   if (msg.caption) return msg.caption;

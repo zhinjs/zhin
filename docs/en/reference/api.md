@@ -23,7 +23,7 @@ The API Reference reads Zhin's public authoring entries, Host contracts, and JSD
 | Inject Prompt Sections | `@zhin.js/prompt-section` (experimental) |
 | Use database, scheduling, and cross-platform messaging Hosts | `databaseHostToken`, `scheduleHostToken`, and `outboundHostToken` from `zhin.js` |
 | Register HTTP / WebSocket routes | `httpHostToken` from `@zhin.js/host-http` |
-| Integrate with the IM message gateway | `messageGatewayToken` from `zhin.js/core/runtime` |
+| Integrate with the IM message gateway | `outboundMessageToken` from `zhin.js/core/runtime` |
 | Register Agent capability resources | `AgentResourceHub` from `zhin.js/agent` (experimental) |
 
 The reference answers “what is the signature?” Guides answer “how should these pieces work together?” Start with [plugin authoring](/en/authoring/define-plugin) and use the [Public API surface](/en/contributing/public-api-surface) for stability guarantees.

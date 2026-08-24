@@ -1,8 +1,9 @@
+import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
 import { createHmac } from 'node:crypto';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost } from '@zhin.js/host-http';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import defineGithubAdapter from '../adapters/github.js';
 import { GithubEndpoint } from '../src/endpoint.js';
 import { GhClient } from '../src/gh-client.js';
@@ -13,7 +14,7 @@ import {
   shouldAutoReplyRepo,
   verifyWebhookSignature,
 } from '../src/protocol.js';
-import { getGithubAgentDeps, setGithubAgentDeps } from '../src/github-agent-deps.js';
+import { githubClient } from '../src/client.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
@@ -46,7 +47,6 @@ function mockGhClient(overrides: Partial<GhClient> = {}): GhClient {
 }
 
 afterEach(async () => {
-  setGithubAgentDeps(null);
   await Promise.all(hosts.splice(0).map((host) => host.close()));
 });
 
@@ -111,19 +111,19 @@ describe('github protocol helpers', () => {
 });
 
 describe('github plugin runtime adapter', () => {
-  it('POST webhook with valid signature admits via MessageGateway when open', async () => {
+  it('POST webhook with valid signature admits via OutboundMessageService when open', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const gh = mockGhClient();
-    const endpoint = new GithubEndpoint({
+    const endpoint = bindTestEndpoint(new GithubEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'github'),
       gateway,
       http,
       config: baseConfig,
       createClient: () => gh,
-    });
+    }), gateway, undefined);
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -172,13 +172,13 @@ describe('github plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = new GithubEndpoint({
+    const endpoint = bindTestEndpoint(new GithubEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'github'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       createClient: () => mockGhClient(),
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -199,12 +199,12 @@ describe('github plugin runtime adapter', () => {
 
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = new GithubEndpoint({
+    const endpoint = bindTestEndpoint(new GithubEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'github'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: resolveGithubConfig({ id: 'api-only', app_id: 1, private_key: 'k' }),
       createClient: () => mockGhClient(),
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.admit({
       id: '1',
@@ -221,12 +221,12 @@ describe('github plugin runtime adapter', () => {
 
   it('send posts issue comment via GhClient', async () => {
     const gh = mockGhClient();
-    const endpoint = new GithubEndpoint({
+    const endpoint = bindTestEndpoint(new GithubEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'github'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: resolveGithubConfig({ id: 'api-only', app_id: 1, private_key: 'k' }),
       createClient: () => gh,
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     const id = await endpoint.send({
@@ -244,14 +244,14 @@ describe('github plugin runtime adapter', () => {
   });
 
   it('registers agent endpoint on start', async () => {
-    const endpoint = new GithubEndpoint({
+    const endpoint = bindTestEndpoint(new GithubEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'github'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: resolveGithubConfig({ id: 'agent-bot', app_id: 1, private_key: 'k' }),
       createClient: () => mockGhClient(),
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
-    expect(getGithubAgentDeps().getEndpoint('agent-bot')).toBe(endpoint);
+    expect(githubClient.get(endpointClientContext(endpoint), 'agent-bot')).toBe(endpoint.client);
     await endpoint.stop();
   });
 

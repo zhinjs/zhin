@@ -1,13 +1,14 @@
 # 消息流
 
-用户在群里发一条 `/ping`，到 Bot 的回复落回平台，中间经过的每个环节都在一条单向管道上：**入站**从平台 Endpoint 流向命令/AI，**出站**从插件代码流向平台 Endpoint。整条管道由 `ImRuntime`（`@zhin.js/core` 的 `MessageGateway` 实现）串起来，每个环节都从当前 generation 快照取数，天然热重载安全。
+用户在群里发一条 `/ping`，到 Bot 的回复落回平台，中间经过的每个环节都在一条单向管道上：**入站**从平台 Endpoint 流向命令/AI，**出站**从插件代码流向平台 Endpoint。`ImRuntime` 同时实现唯一入站边界 `EndpointEventGateway` 与出站服务 `OutboundMessageService`；两边都从 operation 持有的 generation 快照取数，天然热重载安全。
 
 ## 入站：Adapter → 中间件 → 命令 → AI 兜底
 
 ```mermaid
 flowchart LR
-    P[平台事件<br/>WS / HTTP] --> E[EndpointInstance]
-    E -->|"gateway.receive(input)"| G[ImRuntime]
+    P[平台 SDK / 协议事件<br/>WS / HTTP] --> C[Platform Client]
+    C --> E[Endpoint]
+    E -->|"emit(name, payload)"| G[EndpointEventGateway / ImRuntime]
     G --> L[acquire 快照租约]
     L --> M["new Message(...)"]
     M --> MW["中间件 inbound<br/>before-dispatch → after-dispatch"]
@@ -22,7 +23,20 @@ flowchart LR
 
 各环节的真实代码位置：
 
-1. **Endpoint 归一化**。平台适配器的 Endpoint（如沙箱的 `SandboxWsEndpoint`）把平台事件归一化为 `IncomingMessage`，调用创建时注入的 `messageGatewayToken`：
+1. **Client 与 Endpoint 分工**。Client 是真实平台 SDK 或干净的协议 Client，负责平台 API 与原始事件；Endpoint 负责账号、Transport、热重载生命周期和框架边界。所有 Endpoint 继承 `Endpoint<TClient>`，并通过唯一的 `emit(name, payload)` 入站。每个事件统一包装为：
+
+   ```ts
+   interface EndpointEvent<TPayload, TClient> {
+     readonly name: string;
+     readonly payload: TPayload;
+     readonly endpoint: { id: CapabilityId; adapter: string };
+     readonly client: TClient;
+   }
+   ```
+
+   原生事件先以 `platform.receive` 无损上送（payload 为 `{ name, event }`），已知事件再可选投影为 `message.receive`、`notice.receive`、`request.receive`、`system.receive`。因此消息、入群申请、成员变动、上线/离线和平台扩展事件都能在插件中访问同一个 Client。候选 generation 在 `start()` 期间产生的首批事件由 Endpoint 基座暂存，提交时按序回放；退役代的迟到事件被丢弃。
+
+2. **消息归一化**。对于 `message.receive`，Endpoint 把平台消息投影为以下 payload：
 
    ```ts
    interface IncomingMessage {
@@ -36,9 +50,9 @@ flowchart LR
    }
    ```
 
-2. **租约与 Message**。`ImRuntime.receive` 先 `acquire()` 当前代快照（在途消息不被重载打断，见 [generation 与生命周期](./generation-lifecycle.md)），查出该 endpoint 的 owner 插件作为默认 requester，构造 `Message`。`Message` 携带 `$reply(content)` 与 `$replyFrom(owner, content)` 两个出站闭包；dispatch 结束后 reply 作用域关闭，之后再调 `$reply` 会抛 `Message reply scope has ended`。
+3. **租约与 Message**。`ImRuntime.endpointEvents.receive` 在事件所属 generation 上取得租约（在途事件不被重载打断，见 [generation 与生命周期](./generation-lifecycle.md)）。消息事件构造 `Message`，并注入按需读取当前平台 SDK 实例的 `$client` getter、`$reply(content)` 与 `$replyFrom(owner, content)`；dispatch 结束后作用域关闭，之后再读取 `$client` 或调用 `$reply` 都会失败。
 
-3. **入站中间件**。`MiddlewareIndex` 按 `phase`（`before-dispatch` 先、`after-dispatch` 后）与 `order` 排序，逐个包住终端动作：
+4. **入站中间件**。`MiddlewareIndex` 按 `phase`（`before-dispatch` 先、`after-dispatch` 后）与 `order` 排序，逐个包住终端动作：
 
    ```ts
    defineMiddleware({
@@ -52,11 +66,11 @@ flowchart LR
    });
    ```
 
-4. **命令分发**。`MessageDispatcher` 先解析命令前缀（默认按消息所属适配器实例的配置：`endpoints[i].commandPrefix` 覆盖顶层 `commandPrefix`，默认 `''` 无前缀，见 [配置即数据](./config-as-data.md)），前缀不匹配直接 miss；命中前缀则剥离后交给 `CommandIndex.dispatch`。命令有返回值时，分发器用命令 owner 身份 `$replyFrom(owner, value)` 自动回复。
+5. **命令分发**。`MessageDispatcher` 先解析命令前缀（默认按消息所属适配器实例的配置：`endpoints[i].commandPrefix` 覆盖顶层 `commandPrefix`，默认 `''` 无前缀，见 [配置即数据](./config-as-data.md)），前缀不匹配直接 miss；命中前缀则剥离后交给 `CommandIndex.dispatch`。命令有返回值时，分发器用命令 owner 身份 `$replyFrom(owner, value)` 自动回复。
 
-5. **AI 兜底**。命令 miss（或无前缀文本）时，`ImRuntime` 从当前消息所持 snapshot 的 root resources 解析 generation-owned `IngressRoute`。装了 `@zhin.js/agent` 的 composition root 会在 generation setup 提供该内部 route；未安装则消息安静丢弃。它不是 `MessageGateway` 上可变的插件 setter。
+6. **AI 兜底**。命令 miss（或无前缀文本）时，`ImRuntime` 从当前消息所持 snapshot 的 root resources 解析 generation-owned `IngressRoute`。装了 `@zhin.js/agent` 的 composition root 会在 generation setup 提供该内部 route；未安装则消息安静丢弃。它不是 `OutboundMessageService` 上可变的插件 setter。
 
-6. **事件广播**。dispatch 完成后向 `onMessage` 订阅者发出 `RuntimeMessageEvent`（含方向、conversation、sender、≤200 字的 `contentPreview`、时间戳），Console 的实时消息流就是消费它。
+7. **事件广播**。dispatch 完成后向 `onMessage` 订阅者发出 `RuntimeMessageEvent`（含方向、conversation、sender、≤200 字的 `contentPreview`、时间戳），Console 的实时消息流就是消费它。
 
 ## 出站：$reply → 渲染 → 中间件 → Endpoint
 
@@ -75,7 +89,7 @@ flowchart LR
 - **出站中间件**与入站共用一套定义，`target: 'outbound'` 即拦截出站。
 - **最终一公里**在 `AdapterIndex.send`：endpoint 必须声明 `outbound` 能力、且处于 `started && !stopped`，否则抛错；通过后调用 `endpoint.send()` 落到平台。
 
-所有发送都应走这条统一管道（`$reply` / `$replyFrom` / `gateway.send`），不要在插件里直接持有平台 SDK 发消息——那会绕过渲染、中间件与事件广播。
+普通消息发送都应走这条统一管道（`$reply` / `$replyFrom` / `OutboundMessageService.send`），避免绕过渲染、中间件与事件广播。入群审批、角色管理、平台查询等非消息业务则应从当前事件/命令/工具 operation 解析 Client，直接调用平台 SDK；不要把 Client 缓存到 operation 之外。
 
 ## 多模态：双向 Segment 一贯制
 
@@ -92,7 +106,7 @@ interface MediaRef {
 // image / audio / video / file 段的 data 一律为 { media: MediaRef, alt?/duration?/name? }
 ```
 
-**入站**：适配器把平台载荷归一为 `Segment[]` 随 `gateway.receive({ segments })` 上送。不透明平台 id 必须经当前 generation 的 `EndpointContentPort` 物化；引用解析期间快照租约一直持有。所有 URL、path 与 base64 随后进入同一条流水线：HTTPS/SSRF 与重定向检查 → 字节上限 → 文件魔数识别 → 声明 MIME/实际类型一致性检查 → `UserMessage.media`。框架不信任扩展名或 Adapter 声明的 MIME，也不把二进制/base64 写入会话事实源。每项媒体恰好产生 `accepted | derived | unsupported | rejected | failed` 终态；失败以明确的不可信 user-context 文本呈现，绝不伪装成“模型已看到图片”。Provider 必须显式声明 `text/image/audio/video/file` 输入能力，缺省仅 `text`；不支持的类型不会猜测放行。
+**入站**：适配器把平台载荷归一为 `Segment[]` 随 `emit('message.receive', { segments })` 上送。不透明平台 id 必须经当前 generation 的 `EndpointContentPort` 物化；引用解析期间快照租约一直持有。所有 URL、path 与 base64 随后进入同一条流水线：HTTPS/SSRF 与重定向检查 → 字节上限 → 文件魔数识别 → 声明 MIME/实际类型一致性检查 → `UserMessage.media`。框架不信任扩展名或 Adapter 声明的 MIME，也不把二进制/base64 写入会话事实源。每项媒体恰好产生 `accepted | derived | unsupported | rejected | failed` 终态；失败以明确的不可信 user-context 文本呈现，绝不伪装成“模型已看到图片”。Provider 必须显式声明 `text/image/audio/video/file` 输入能力，缺省仅 `text`；不支持的类型不会猜测放行。
 
 ## 会话事实、引用与通知
 

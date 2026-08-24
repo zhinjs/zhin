@@ -1,6 +1,7 @@
+import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import { messageGatewayToken, sideEventGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
+import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import defineQqAdapter from '../adapters/qq.js';
 import {
@@ -17,7 +18,7 @@ import {
   type QqInboundMessage,
 } from '../src/protocol.js';
 import { formatOutbound, type QqOutboundMessage } from '../src/outbound.js';
-import { getQqAgentDeps, setQqAgentDeps } from '../src/qq-agent-deps.js';
+import { qqClient } from '../src/client.js';
 import { createQqRuntimeState, qqRuntimeStateToken } from '../src/qq-runtime-state.js';
 import { stopQqOfficialBot } from '../src/ws.js';
 
@@ -89,7 +90,6 @@ function createMockBot(): QqBotTransport & {
 }
 
 afterEach(() => {
-  setQqAgentDeps(null);
 });
 
 describe('qq protocol helpers', () => {
@@ -154,17 +154,17 @@ describe('qq protocol helpers', () => {
 });
 
 describe('qq plugin runtime adapter', () => {
-  it('routes admitted messages through MessageGateway when open', async () => {
+  it('routes admitted messages through OutboundMessageService when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const mock = createMockBot();
     const createBot: CreateQqBot = () => mock;
-    const endpoint = new QqWebsocketEndpoint({
+    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
       gateway,
       config: baseConfig,
       createBot,
-    });
+    }), gateway, undefined);
 
     await endpoint.start();
     endpoint.open();
@@ -186,12 +186,12 @@ describe('qq plugin runtime adapter', () => {
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const mock = createMockBot();
-    const endpoint = new QqWebsocketEndpoint({
+    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createBot: () => mock,
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.admit(textMessage());
     expect(receive).not.toHaveBeenCalled();
@@ -200,12 +200,12 @@ describe('qq plugin runtime adapter', () => {
 
   it('sends outbound payloads via QQ APIs', async () => {
     const mock = createMockBot();
-    const endpoint = new QqWebsocketEndpoint({
+    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createBot: () => mock,
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     const messageId = await endpoint.send({ conversation: {
         endpoint: { id: 'test-endpoint', adapter: 'test' },
@@ -219,25 +219,27 @@ describe('qq plugin runtime adapter', () => {
 
   it('registers agent endpoint for tools', async () => {
     const mock = createMockBot();
-    const endpoint = new QqWebsocketEndpoint({
+    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createBot: () => mock,
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
-    const guilds = await getQqAgentDeps().getEndpoint('test-qq-bot').getGuilds();
+    const client = qqClient.get(endpointClientContext(endpoint), 'test-qq-bot');
+    expect(client).toBe(mock);
+    const guilds = await client.getGuilds();
     expect(guilds).toHaveLength(1);
     await endpoint.stop();
   });
 
   it('normalizes guild channels through endpoint management', async () => {
-    const endpoint = new QqWebsocketEndpoint({
+    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createBot: () => createMockBot(),
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await expect(endpoint.management.listChannels?.()).resolves.toEqual([
       {
@@ -256,7 +258,7 @@ describe('qq plugin runtime adapter', () => {
       name: 'qq',
       config: { appid: 'a', secret: 's', mode: 'websocket', id: 'ep-stop' },
       use: (token: unknown) => {
-        if (token === messageGatewayToken) {
+        if (token === outboundMessageToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
         }
         if (token === sideEventGatewayToken) {
@@ -287,12 +289,12 @@ describe('qq plugin runtime adapter', () => {
 
   it('sends http(s) image segments directly as URL media', async () => {
     const mock = createMockBot();
-    const endpoint = new QqWebsocketEndpoint({
+    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createBot: () => mock,
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await endpoint.send({
       conversation: {
@@ -312,12 +314,12 @@ describe('qq plugin runtime adapter', () => {
 
   it('uploads base64 / local image segments via the media file field', async () => {
     const mock = createMockBot();
-    const endpoint = new QqWebsocketEndpoint({
+    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createBot: () => mock,
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await endpoint.send({
       conversation: {
@@ -351,12 +353,12 @@ describe('qq plugin runtime adapter', () => {
 
   it('sends markdown segments as msg_type=2 payloads', async () => {
     const mock = createMockBot();
-    const endpoint = new QqWebsocketEndpoint({
+    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createBot: () => mock,
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await endpoint.send({
       conversation: {
@@ -390,12 +392,12 @@ describe('qq plugin runtime adapter', () => {
 
   it('expands keyboard rows into button segments with preceding text as markdown', async () => {
     const mock = createMockBot();
-    const endpoint = new QqWebsocketEndpoint({
+    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createBot: () => mock,
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await endpoint.send({
       conversation: {
@@ -458,12 +460,12 @@ describe('qq plugin runtime adapter', () => {
     mock.sendGroupMessage = vi.fn(async () => {
       throw new Error('QQ API 500');
     });
-    const endpoint = new QqWebsocketEndpoint({
+    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createBot: () => mock,
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await expect(endpoint.send({ conversation: {
         endpoint: { id: 'test-endpoint', adapter: 'test' },
@@ -477,12 +479,12 @@ describe('qq plugin runtime adapter', () => {
   it('rejects when the send result carries no message id', async () => {
     const mock = createMockBot();
     mock.sendGroupMessage = vi.fn(async () => ({ code: 304023, message: 'audit rejected' }));
-    const endpoint = new QqWebsocketEndpoint({
+    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createBot: () => mock,
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await expect(endpoint.send({ conversation: {
         endpoint: { id: 'test-endpoint', adapter: 'test' },
@@ -501,7 +503,7 @@ describe('qq plugin runtime adapter', () => {
       config: { appid: 'a', secret: 's', mode: 'middleware' },
       use: (token: unknown) => {
         if (token === httpHostToken) return http;
-        if (token === messageGatewayToken) {
+        if (token === outboundMessageToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
         }
         if (token === sideEventGatewayToken) {
@@ -520,9 +522,9 @@ describe('qq plugin runtime adapter', () => {
 
   it('routes admitted messages through http endpoint when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const mock = createMockBot();
-    const endpoint = new QqHttpEndpoint({
+    const endpoint = bindTestEndpoint(new QqHttpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
       gateway,
       http: createHttpHost({ host: '127.0.0.1', port: 0 }),
@@ -539,7 +541,7 @@ describe('qq plugin runtime adapter', () => {
         ...mock,
         middleware: vi.fn(async () => undefined),
       }),
-    });
+    }), gateway, undefined);
     await endpoint.start();
     endpoint.open();
     endpoint.admit(textMessage());

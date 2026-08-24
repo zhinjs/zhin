@@ -3,10 +3,10 @@ import type { Message } from 'zhin.js';
 import { getCurrentCommMessage } from '@zhin.js/agent/security';
 import { GhClient } from './gh-client.js';
 import type { EventType } from './types.js';
-import { getAdapter, getGithubAgentDeps } from './github-agent-deps.js';
+import type { GithubClient } from './client.js';
 
-function oauthModel() {
-  const db = getGithubAgentDeps().getDatabase?.() as {
+function oauthModel(client: GithubClient) {
+  const db = client.database as {
     models?: Map<string, unknown>;
   } | null | undefined;
   return db?.models?.get('github_oauth_users') as {
@@ -16,8 +16,8 @@ function oauthModel() {
   } | undefined;
 }
 
-function subscriptionsModel() {
-  const db = getGithubAgentDeps().getDatabase?.() as {
+function subscriptionsModel(client: GithubClient) {
+  const db = client.database as {
     models?: Map<string, unknown>;
   } | null | undefined;
   return db?.models?.get('github_subscriptions') as {
@@ -29,18 +29,16 @@ function subscriptionsModel() {
 }
 
 function depsLogger() {
-  return getGithubAgentDeps().logger ?? {
+  return {
     debug: (...args: unknown[]) => console.debug(...args),
     warn: (...args: unknown[]) => console.warn(...args),
     error: (...args: unknown[]) => console.error(...args),
   };
 }
 
-export async function executeGithubStar(args: { action: 'star' | 'unstar' | 'check'; repo: string }, commMessage?: Message) {
-  const adapter = getAdapter();
+export async function executeGithubStar(args: { action: 'star' | 'unstar' | 'check'; repo: string }, client: GithubClient, commMessage?: Message) {
   const msg = commMessage ?? getCurrentCommMessage();
-  const gh = await adapter.getUserOrDefaultAPI(msg?.$adapter, msg?.$sender.id);
-  if (!gh) return '❌ 没有可用的 GitHub bot';
+  const gh = await client.getUserOrDefaultApi(msg?.$adapter, msg?.$sender.id);
   switch (args.action) {
     case 'star': {
       const r = await gh.starRepo(args.repo);
@@ -59,16 +57,15 @@ export async function executeGithubStar(args: { action: 'star' | 'unstar' | 'che
   }
 }
 
-export async function executeGithubBind(_args: Record<string, never>, commMessage?: Message) {
-  const adapter = getAdapter();
+export async function executeGithubBind(_args: Record<string, never>, client: GithubClient, commMessage?: Message) {
   const log = depsLogger();
   const msg = commMessage ?? getCurrentCommMessage();
   if (!msg?.$adapter || !msg?.$sender?.id) return '❌ 无法获取当前用户信息';
 
-  const clientId = adapter.getClientId();
+  const clientId = client.clientId;
   if (!clientId) return '❌ Endpoint 未配置 GitHub App 或 App 无 client_id，无法进行账号绑定';
 
-  const model = oauthModel();
+  const model = oauthModel(client);
   if (!model) return '❌ 数据库未就绪';
 
   const [existing] = await model.select().where({ platform: msg.$adapter, platform_uid: msg.$sender.id });
@@ -77,7 +74,7 @@ export async function executeGithubBind(_args: Record<string, never>, commMessag
   }
 
   try {
-    const host = adapter.getHost();
+    const host = client.host;
     const codeResp = await GhClient.deviceFlowRequestCode(clientId, host);
     const tokenPromise = GhClient.deviceFlowPollToken(
       clientId, codeResp.device_code, codeResp.interval, codeResp.expires_in, host,
@@ -125,11 +122,11 @@ export async function executeGithubBind(_args: Record<string, never>, commMessag
   }
 }
 
-export async function executeGithubUnbind(_args: Record<string, never>, commMessage?: Message) {
+export async function executeGithubUnbind(_args: Record<string, never>, client: GithubClient, commMessage?: Message) {
   const msg = commMessage ?? getCurrentCommMessage();
   if (!msg?.$adapter || !msg?.$sender?.id) return '❌ 无法获取当前用户信息';
 
-  const model = oauthModel();
+  const model = oauthModel(client);
   if (!model) return '❌ 数据库未就绪';
 
   const [existing] = await model.select().where({ platform: msg.$adapter, platform_uid: msg.$sender.id });
@@ -139,18 +136,17 @@ export async function executeGithubUnbind(_args: Record<string, never>, commMess
   return `✅ 已解除 GitHub 账号绑定: ${existing.github_login}`;
 }
 
-export async function executeGithubWhoami(_args: Record<string, never>, commMessage?: Message) {
-  const adapter = getAdapter();
+export async function executeGithubWhoami(_args: Record<string, never>, client: GithubClient, commMessage?: Message) {
   const msg = commMessage ?? getCurrentCommMessage();
   if (!msg?.$adapter || !msg?.$sender?.id) return '❌ 无法获取当前用户信息';
 
-  const model = oauthModel();
+  const model = oauthModel(client);
   if (!model) return '❌ 数据库未就绪';
 
   const [existing] = await model.select().where({ platform: msg.$adapter, platform_uid: msg.$sender.id });
   if (!existing) return '📭 你尚未绑定 GitHub 账号\n🔗 使用 github_bind 绑定你的账号';
 
-  const userGh = new GhClient({ host: adapter.getHost(), token: existing.access_token });
+  const userGh = new GhClient({ host: client.host, token: existing.access_token });
   const auth = await userGh.verifyAuth();
   if (auth.ok) {
     return `👤 已绑定 GitHub 账号: ${auth.user}\n📅 绑定时间: ${new Date(existing.created_at).toLocaleString('zh-CN')}`;
@@ -158,12 +154,11 @@ export async function executeGithubWhoami(_args: Record<string, never>, commMess
   return `⚠️ 已绑定账号 ${existing.github_login}，但 Token 已失效\n🔗 请执行 github_unbind 后重新 github_bind`;
 }
 
-export async function executeGithubInstall() {
-  const adapter = getAdapter();
-  const slug = adapter.getAppSlug();
+export async function executeGithubInstall(client: GithubClient) {
+  const slug = client.appSlug;
   if (!slug) return '❌ Endpoint 未配置 GitHub App';
-  const host = adapter.getHost() || 'github.com';
-  const installations = adapter.getInstallations();
+  const host = client.host || 'github.com';
+  const installations = client.installations;
   let msg = `🔗 请点击以下链接安装 GitHub App 到你的仓库：\n   https://${host}/apps/${slug}/installations/new`;
   if (installations.length) {
     msg += `\n\n📋 当前已安装 (${installations.length}):`;
@@ -174,13 +169,13 @@ export async function executeGithubInstall() {
   return msg;
 }
 
-export async function executeGithubSubscribe(args: { repo: string; events?: string }, commMessage?: Message) {
+export async function executeGithubSubscribe(args: { repo: string; events?: string }, client: GithubClient, commMessage?: Message) {
   const msg = commMessage ?? getCurrentCommMessage();
   if (!msg?.$adapter || !msg?.$sender.id || !msg?.$channel?.id || !msg?.$endpoint) {
     return '❌ 无法获取当前聊天通道信息';
   }
 
-  const model = subscriptionsModel();
+  const model = subscriptionsModel(client);
   if (!model) return '❌ 数据库未就绪';
 
   const validEvents: EventType[] = ['push', 'issue', 'star', 'fork', 'unstar', 'pull_request'];
@@ -212,13 +207,13 @@ export async function executeGithubSubscribe(args: { repo: string; events?: stri
   return `✅ 已订阅 ${args.repo}\n📡 事件: ${events.join(', ')}\n📌 通知将推送到当前通道`;
 }
 
-export async function executeGithubUnsubscribe(args: { repo: string }, commMessage?: Message) {
+export async function executeGithubUnsubscribe(args: { repo: string }, client: GithubClient, commMessage?: Message) {
   const msg = commMessage ?? getCurrentCommMessage();
   if (!msg?.$adapter || !msg?.$channel?.id || !msg?.$endpoint) {
     return '❌ 无法获取当前聊天通道信息';
   }
 
-  const model = subscriptionsModel();
+  const model = subscriptionsModel(client);
   if (!model) return '❌ 数据库未就绪';
 
   const [existing] = await model.select().where({
@@ -233,13 +228,13 @@ export async function executeGithubUnsubscribe(args: { repo: string }, commMessa
   return `✅ 已取消订阅 ${args.repo}`;
 }
 
-export async function executeGithubSubscriptions(_args: Record<string, never>, commMessage?: Message) {
+export async function executeGithubSubscriptions(_args: Record<string, never>, client: GithubClient, commMessage?: Message) {
   const msg = commMessage ?? getCurrentCommMessage();
   if (!msg?.$adapter || !msg?.$channel?.id || !msg?.$endpoint) {
     return '❌ 无法获取当前聊天通道信息';
   }
 
-  const model = subscriptionsModel();
+  const model = subscriptionsModel(client);
   if (!model) return '❌ 数据库未就绪';
 
   const subs = await model.select().where({

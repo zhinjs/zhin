@@ -1,6 +1,7 @@
+import { bindTestEndpoint } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import { LoginAssist } from '@zhin.js/core';
 
 vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
@@ -16,24 +17,24 @@ const baseConfig = resolveIcqqConfig({ id: '10001', autoReconnect: false });
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 function makeEndpoint(assist: LoginAssist): IcqqEndpoint {
-  const gateway: MessageGateway = {
+  const gateway: OutboundMessageService = {
     receive: vi.fn(async () => Object.freeze({ matched: true })),
     send: vi.fn(async () => 'sent'),
   };
-  return new IcqqEndpoint({
+  return bindTestEndpoint(new IcqqEndpoint({
     id: endpointKey,
     gateway,
     config: baseConfig,
     sideEvents: createIcqqTestPorts().sideEvents,
     loginAssist: assist,
-  });
+  }), gateway, createIcqqTestPorts().sideEvents);
 }
 
 describe('icqq LoginAssist wiring', () => {
   it('settles start when candidate activation is aborted', async () => {
     const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
     const endpoint = makeEndpoint(assist);
-    vi.mocked(endpoint.login).mockImplementation(() => new Promise(() => undefined));
+    vi.mocked(endpoint.client.login).mockImplementation(() => new Promise(() => undefined));
     const controller = new AbortController();
     const start = endpoint.start(controller.signal);
     controller.abort(new Error('candidate rolled back'));
@@ -43,10 +44,10 @@ describe('icqq LoginAssist wiring', () => {
   it('does not register after abort while pending system requests are loading', async () => {
     const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
     const endpoint = makeEndpoint(assist);
-    vi.mocked(endpoint.login).mockImplementation(async function (this: IcqqEndpoint) {
-      this.emit('system.online');
+    vi.mocked(endpoint.client.login).mockImplementation(async () => {
+      endpoint.client.emit('system.online');
     });
-    vi.mocked(endpoint.getSystemMsg).mockImplementation(() => new Promise(() => undefined));
+    vi.mocked(endpoint.client.getSystemMsg).mockImplementation(() => new Promise(() => undefined));
     const controller = new AbortController();
     const start = endpoint.start(controller.signal);
     await flush();
@@ -58,10 +59,10 @@ describe('icqq LoginAssist wiring', () => {
     const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
     const endpoint = makeEndpoint(assist);
     let loginCalls = 0;
-    vi.mocked(endpoint.login).mockImplementation(async function (this: IcqqEndpoint) {
+    vi.mocked(endpoint.client.login).mockImplementation(async () => {
       loginCalls += 1;
       if (loginCalls === 1) {
-        this.emit('system.login.qrcode', { image: Buffer.from('png') });
+        endpoint.client.emit('system.login.qrcode', { image: Buffer.from('png') });
       }
     });
 
@@ -78,7 +79,7 @@ describe('icqq LoginAssist wiring', () => {
     assist.submit(assist.listPending()[0]!.id, 'ok');
     await flush();
     expect(loginCalls).toBeGreaterThanOrEqual(2);
-    endpoint.emit('system.online');
+    endpoint.client.emit('system.online');
     await startP;
     await endpoint.stop();
   });
@@ -86,8 +87,8 @@ describe('icqq LoginAssist wiring', () => {
   it('slider challenge submits ticket via submitSlider', async () => {
     const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
     const endpoint = makeEndpoint(assist);
-    vi.mocked(endpoint.login).mockImplementation(async function (this: IcqqEndpoint) {
-      this.emit('system.login.slider', { url: 'https://example.com/slider' });
+    vi.mocked(endpoint.client.login).mockImplementation(async () => {
+      endpoint.client.emit('system.login.slider', { url: 'https://example.com/slider' });
     });
 
     const startP = endpoint.start(new AbortController().signal);
@@ -95,8 +96,8 @@ describe('icqq LoginAssist wiring', () => {
     expect(assist.listPending()[0]).toMatchObject({ type: 'slider' });
     assist.submit(assist.listPending()[0]!.id, 'ticket-abc');
     await flush();
-    expect(endpoint.submitSlider).toHaveBeenCalledWith('ticket-abc');
-    endpoint.emit('system.online');
+    expect(endpoint.client.submitSlider).toHaveBeenCalledWith('ticket-abc');
+    endpoint.client.emit('system.online');
     await startP;
     await endpoint.stop();
   });
@@ -104,17 +105,17 @@ describe('icqq LoginAssist wiring', () => {
   it('device challenge sends SMS then submits code', async () => {
     const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
     const endpoint = makeEndpoint(assist);
-    vi.mocked(endpoint.login).mockImplementation(async function (this: IcqqEndpoint) {
-      this.emit('system.login.device', { url: 'https://ex', phone: '138****' });
+    vi.mocked(endpoint.client.login).mockImplementation(async () => {
+      endpoint.client.emit('system.login.device', { url: 'https://ex', phone: '138****' });
     });
 
     const startP = endpoint.start(new AbortController().signal);
     await flush();
-    expect(endpoint.sendSmsCode).toHaveBeenCalled();
+    expect(endpoint.client.sendSmsCode).toHaveBeenCalled();
     assist.submit(assist.listPending()[0]!.id, '123456');
     await flush();
-    expect(endpoint.submitSmsCode).toHaveBeenCalledWith('123456');
-    endpoint.emit('system.online');
+    expect(endpoint.client.submitSmsCode).toHaveBeenCalledWith('123456');
+    endpoint.client.emit('system.online');
     await startP;
     await endpoint.stop();
   });

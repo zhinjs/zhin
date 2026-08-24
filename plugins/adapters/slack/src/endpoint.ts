@@ -1,3 +1,4 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
  * SlackEndpoint — lifecycle, outbound, admit, Socket Mode, agent tool surface.
  */
@@ -7,11 +8,9 @@ import type {
   EndpointFriend,
   EndpointGroup,
   EndpointControl,
-  EndpointInstance,
   EndpointManagement,
   EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -28,7 +27,6 @@ import {
   type SlackMessageEvent,
   type SlackSlashCommand,
 } from './protocol.js';
-import { registerSlackAgentEndpoint, type SlackUserInfo } from './slack-agent-deps.js';
 import {
   createSlackInboundFilterState,
   shouldDropSlackInboundMessage,
@@ -92,8 +90,6 @@ export interface SlackWebClientLike extends SlackChatClient {
 
 export interface SlackEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly config: ResolvedSlackConfig;
   readonly http?: HttpHost;
   readonly createClient?: (token: string) => SlackWebClientLike;
@@ -103,7 +99,7 @@ export interface SlackEndpointOptions {
   }) => SlackSocketLike;
 }
 
-export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
+export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements SlackWebhookHandler {
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: SlackEndpointOptions;
@@ -115,8 +111,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
   #botUserId?: string;
   #open = false;
   #started = false;
-  #unregisterAgent?: () => void;
-  readonly management: EndpointManagement = createSlackEndpointManagement(this);
+  readonly management: EndpointManagement = createSlackEndpointManagement(() => this.client);
   readonly control: EndpointControl = Object.freeze<EndpointControl>({
     recall: async (message) => {
       const ref = this.resolveMessageRef(message.id, message.conversation.id);
@@ -126,24 +121,25 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
     edit: async (message, content) => {
       const ref = this.resolveMessageRef(message.id, message.conversation.id);
       if (!ref) return null;
-      await this.editMessage(ref.channel, ref.ts, content);
+      await this.#editMessage(ref.channel, ref.ts, content);
       return message.id;
     },
     addReaction: async (message, emoji) => {
       const ref = this.resolveMessageRef(message.id, message.conversation.id);
       if (!ref) return null;
       const reaction = normalizeSlackReactionName(emoji);
-      await this.addReaction(ref.channel, ref.ts, reaction);
+      await this.#addReaction(ref.channel, ref.ts, reaction);
       return reaction;
     },
     removeReaction: async (message, reactionId) => {
       const ref = this.resolveMessageRef(message.id, message.conversation.id);
       if (!ref) return;
-      await this.removeReaction(ref.channel, ref.ts, reactionId);
+      await this.#removeReaction(ref.channel, ref.ts, reactionId);
     },
   });
 
   constructor(options: SlackEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('slack', options.config.id);
     this.#options = options;
   }
@@ -153,7 +149,8 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
     return this.#options.config.id;
   }
 
-  get client(): SlackWebClientLike | undefined {
+  get client(): SlackWebClientLike {
+    if (!this.#client) throw new Error('Slack client not connected');
     return this.#client;
   }
 
@@ -172,8 +169,6 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
       const { config } = this.#options;
       this.#client = this.#options.createClient?.(config.token)
         ?? (new WebClient(config.token) as unknown as SlackWebClientLike);
-
-      this.#unregisterAgent = registerSlackAgentEndpoint(config.id, this);
 
       if (config.mode === 'socket') {
         await this.#startSocket();
@@ -223,8 +218,6 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
       this.#socket = undefined;
     }
     for (const release of this.#routeReleases.splice(0)) release();
-    this.#unregisterAgent?.();
-    this.#unregisterAgent = undefined;
     this.#client = undefined;
     this.#started = false;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
@@ -247,6 +240,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
   /** Test / internal: admit a message event when open. */
   admit(event: SlackMessageEvent | SlackEvent): void {
     if (!this.#open) return;
+    void this.#emitPlatformEvent(event.type || 'event', event);
     if (event.type !== 'message' && event.type !== 'app_mention') return;
     const msg = event as SlackMessageEvent;
     if (shouldDropSlackInboundMessage(msg, this.#inboundFilter, this.#botUserId)) return;
@@ -259,7 +253,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
       channelType: msg.channel_type,
       threadId: threadTs,
     });
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: msg.ts },
       content: formatInboundContent(msg),
@@ -283,6 +277,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
 
   admitInteraction(payload: SlackInteractionPayload): void {
     if (!this.#open) return;
+    void this.#emitPlatformEvent(`interaction.${payload.type}`, payload);
     if (payload.type !== 'block_actions' || !payload.actions?.length) return;
     const channelId = payload.channel?.id ?? '';
     const userId = payload.user.id;
@@ -296,7 +291,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
       // block_actions 无 channel_type；无 channel 时按与发起用户的 DM 处理
       channelType: channelId ? undefined : 'im',
     });
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: actionTs },
       content: formatInteractionContent(payload),
@@ -318,11 +313,12 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
 
   admitSlashCommand(cmd: SlackSlashCommand): void {
     if (!this.#open) return;
+    void this.#emitPlatformEvent(`slash.${cmd.command}`, cmd);
     postSlackEphemeral(cmd.response_url, '处理中…', this.#logger);
     const conversation = slackInboundConversation(String(this.#options.id), {
       channelId: cmd.channel_id,
     });
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: cmd.trigger_id },
       content: formatSlashContent(cmd),
@@ -346,8 +342,9 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
     if (envelope?.type === 'event_callback' && envelope.event) {
       const event = envelope.event;
       if (event.type !== 'message' && event.type !== 'app_mention') {
+        void this.#emitPlatformEvent(event.type || 'event', event);
         receiveSlackSideEvent(
-          this.#options.sideEvents,
+          (name, payload) => this.emit(name, payload),
           String(this.#options.id),
           this.#options.config.id,
           event,
@@ -388,95 +385,41 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
     await this.#client.chat.delete({ channel: ref.channel, ts: ref.ts });
   }
 
-  async editMessage(channel: string, messageTs: string, content: unknown): Promise<void> {
+  async #editMessage(channel: string, messageTs: string, content: unknown): Promise<void> {
     if (!this.#client) throw new Error('Slack client not connected');
     await editSlackContent(this.#client, channel, messageTs, content);
   }
 
-  // ── Agent tool surface ──────────────────────────────────────────────
-
-  async inviteToChannel(channel: string, users: string[]): Promise<boolean> {
-    await this.#client!.conversations.invite({ channel, users: users.join(',') });
-    return true;
-  }
-
-  async kickFromChannel(channel: string, user: string): Promise<boolean> {
-    await this.#client!.conversations.kick({ channel, user });
-    return true;
-  }
-
-  async setChannelTopic(channel: string, topic: string): Promise<boolean> {
-    await this.#client!.conversations.setTopic({ channel, topic });
-    return true;
-  }
-
-  async setChannelPurpose(channel: string, purpose: string): Promise<boolean> {
-    await this.#client!.conversations.setPurpose({ channel, purpose });
-    return true;
-  }
-
-  async archiveChannel(channel: string): Promise<boolean> {
-    await this.#client!.conversations.archive({ channel });
-    return true;
-  }
-
-  async unarchiveChannel(channel: string): Promise<boolean> {
-    await this.#client!.conversations.unarchive({ channel });
-    return true;
-  }
-
-  async renameChannel(channel: string, name: string): Promise<boolean> {
-    await this.#client!.conversations.rename({ channel, name });
-    return true;
-  }
-
-  async getChannelMembers(channel: string): Promise<string[]> {
-    const result = await this.#client!.conversations.members({ channel });
-    return result.members || [];
-  }
-
-  async getChannelInfo(channel: string): Promise<unknown> {
-    const result = await this.#client!.conversations.info({ channel });
-    return result.channel;
-  }
-
-  async getUserInfo(user: string): Promise<SlackUserInfo | undefined> {
-    const result = await this.#client!.users.info({ user });
-    return result.user as SlackUserInfo | undefined;
-  }
-
-  async addReaction(channel: string, timestamp: string, name: string): Promise<boolean> {
+  async #addReaction(channel: string, timestamp: string, name: string): Promise<void> {
     const reaction = normalizeSlackReactionName(name);
     try {
       await this.#client!.reactions.add({ channel, timestamp, name: reaction });
-      return true;
     } catch (error) {
       const code = (error as { data?: { error?: string } })?.data?.error;
-      if (code === 'already_reacted') return true;
+      if (code === 'already_reacted') return;
       throw error;
     }
   }
 
-  async removeReaction(channel: string, timestamp: string, name: string): Promise<boolean> {
+  async #removeReaction(channel: string, timestamp: string, name: string): Promise<void> {
     const reaction = normalizeSlackReactionName(name);
     try {
       await this.#client!.reactions.remove({ channel, timestamp, name: reaction });
-      return true;
     } catch (error) {
       const code = (error as { data?: { error?: string } })?.data?.error;
-      if (code === 'no_reaction') return true;
+      if (code === 'no_reaction') return;
       throw error;
     }
   }
 
-  async pinMessage(channel: string, timestamp: string): Promise<boolean> {
-    await this.#client!.pins.add({ channel, timestamp });
-    return true;
-  }
-
-  async unpinMessage(channel: string, timestamp: string): Promise<boolean> {
-    await this.#client!.pins.remove({ channel, timestamp });
-    return true;
+  async #emitPlatformEvent(name: string, event: unknown): Promise<void> {
+    await this.emitPlatform(name, event).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'slack_platform_event_failed',
+        event: name,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
   }
 
   async #startSocket(): Promise<void> {
@@ -515,12 +458,9 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
 /** Slack Web API 分页上限（每页 1000，cursor 翻页直到 next_cursor 为空）。 */
 const SLACK_LIST_PAGE_SIZE = 1000;
 
-function createSlackEndpointManagement(endpoint: SlackEndpoint): EndpointManagement {
-  const requireClient = (): SlackWebClientLike => {
-    const client = endpoint.client;
-    if (!client) throw new Error('Slack client not connected');
-    return client;
-  };
+function createSlackEndpointManagement(
+  requireClient: () => SlackWebClientLike,
+): EndpointManagement {
   return Object.freeze<EndpointManagement>({
     // Slack 无"群"概念：public channel 归一为 group（channel 语义由 listChannels 之外省略，
     // Slack channel 本身就是会话载体，避免同一批数据在两个列表里重复）。

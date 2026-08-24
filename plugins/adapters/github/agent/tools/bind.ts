@@ -2,11 +2,12 @@ import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { executeGithubBind } from '../../src/github-tool-handlers.js';
 
-export default defineAgentTool({
+export default defineAgentTool<{}>({
   description: '绑定你的 GitHub 账号 — 使用 Device Flow 授权，无需输入密码',
+  adapter: 'github',
   inputSchema: z.object({}),
   tags: ['github'],
-  async execute() {
-    return executeGithubBind({});
+  async execute(input, context) {
+    return executeGithubBind({}, context.$client, context.message);
   },
 });

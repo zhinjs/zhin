@@ -1,8 +1,9 @@
+import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
 import { createHmac } from 'node:crypto';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost } from '@zhin.js/host-http';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import { SlackEndpoint, type SlackSocketLike, type SlackWebClientLike } from '../src/endpoint.js';
 import {
   formatInboundContent,
@@ -13,7 +14,7 @@ import {
   verifySlackSignature,
   type SlackMessageEvent,
 } from '../src/protocol.js';
-import { getSlackAgentDeps, setSlackAgentDeps } from '../src/slack-agent-deps.js';
+import { slackClient } from '../src/client.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
@@ -112,7 +113,6 @@ function signBody(body: string, secret = SIGNING_SECRET): { timestamp: string; s
 }
 
 afterEach(async () => {
-  setSlackAgentDeps(null);
   await Promise.all(hosts.splice(0).map((host) => host.close()));
 });
 
@@ -183,18 +183,18 @@ describe('slack protocol helpers', () => {
 });
 
 describe('slack plugin runtime adapter (socket)', () => {
-  it('admits socket events via MessageGateway when open', async () => {
+  it('admits socket events via OutboundMessageService when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const socket = mockSocket();
     const client = mockClient();
-    const endpoint = new SlackEndpoint({
+    const endpoint = bindTestEndpoint(new SlackEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
       gateway,
       config: socketConfig,
       createClient: () => client,
       createSocket: () => socket,
-    });
+    }), gateway, undefined);
     await endpoint.start();
     endpoint.open();
 
@@ -215,13 +215,13 @@ describe('slack plugin runtime adapter (socket)', () => {
 
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = new SlackEndpoint({
+    const endpoint = bindTestEndpoint(new SlackEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: socketConfig,
       createClient: () => mockClient(),
       createSocket: () => mockSocket(),
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.admit(textEvent());
     expect(receive).not.toHaveBeenCalled();
@@ -230,7 +230,7 @@ describe('slack plugin runtime adapter (socket)', () => {
 
   it('sends via chat.postMessage', async () => {
     const client = mockClient();
-    const endpoint = new SlackEndpoint({
+    const endpoint = bindTestEndpoint(new SlackEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -239,7 +239,10 @@ describe('slack plugin runtime adapter (socket)', () => {
       config: socketConfig,
       createClient: () => client,
       createSocket: () => mockSocket(),
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     endpoint.open();
     const id = await endpoint.send({
@@ -259,7 +262,7 @@ describe('slack plugin runtime adapter (socket)', () => {
 
   it('maps canonical message controls to Slack chat and reaction APIs', async () => {
     const client = mockClient();
-    const endpoint = new SlackEndpoint({
+    const endpoint = bindTestEndpoint(new SlackEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -268,7 +271,10 @@ describe('slack plugin runtime adapter (socket)', () => {
       config: socketConfig,
       createClient: () => client,
       createSocket: () => mockSocket(),
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     const conversation = {
       endpoint: { id: 'test-endpoint', adapter: 'slack' },
@@ -298,7 +304,7 @@ describe('slack plugin runtime adapter (socket)', () => {
   });
 
   it('registers agent endpoint on start', async () => {
-    const endpoint = new SlackEndpoint({
+    const endpoint = bindTestEndpoint(new SlackEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -307,26 +313,29 @@ describe('slack plugin runtime adapter (socket)', () => {
       config: socketConfig,
       createClient: () => mockClient(),
       createSocket: () => mockSocket(),
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
-    const agent = getSlackAgentDeps().getEndpoint('test-slack-bot');
-    expect(await agent.getChannelMembers('C001')).toEqual(['U1']);
+    const client = slackClient.get(endpointClientContext(endpoint), 'test-slack-bot');
+    expect((await client.conversations.members({ channel: 'C001' })).members).toEqual(['U1']);
     await endpoint.stop();
   });
 });
 
 describe('slack plugin runtime adapter (http)', () => {
-  it('POST events with valid signature admits via MessageGateway when open', async () => {
+  it('POST events with valid signature admits via OutboundMessageService when open', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const endpoint = new SlackEndpoint({
+    const endpoint = bindTestEndpoint(new SlackEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: httpConfig,
       createClient: () => mockClient(),
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -358,13 +367,13 @@ describe('slack plugin runtime adapter (http)', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = new SlackEndpoint({
+    const endpoint = bindTestEndpoint(new SlackEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: httpConfig,
       createClient: () => mockClient(),
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -387,7 +396,7 @@ describe('slack plugin runtime adapter (http)', () => {
   it('answers url_verification challenge', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = new SlackEndpoint({
+    const endpoint = bindTestEndpoint(new SlackEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -396,7 +405,10 @@ describe('slack plugin runtime adapter (http)', () => {
       http,
       config: httpConfig,
       createClient: () => mockClient(),
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     const { port } = await http.listen();
 
@@ -419,7 +431,7 @@ describe('slack plugin runtime adapter (http)', () => {
 
 describe('slack messageChannelMap LRU', () => {
   it('evicts the oldest entries beyond 1024', () => {
-    const endpoint = new SlackEndpoint({
+    const endpoint = bindTestEndpoint(new SlackEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -427,7 +439,10 @@ describe('slack messageChannelMap LRU', () => {
       },
       config: socketConfig,
       createClient: () => mockClient(),
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     for (let i = 0; i < 1100; i += 1) {
       endpoint.trackMessageChannel(`1700000000.${String(i).padStart(6, '0')}`, 'C001');
     }

@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-dingtalk
 
 - `@zhin.js/adapter` — convention-based thin entry `adapters/dingtalk.ts` (`defineAdapter`)
 - Implementation: `src/endpoint.ts` (lifecycle/outbound/OpenAPI), `src/webhook.ts` (signature verification inbound), `src/protocol.ts`
-- `@zhin.js/core` — `messageGatewayToken` inbound/outbound
+- `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — `httpHostToken` registers Webhook route (**not** legacy host-router/Koa)
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
@@ -86,7 +86,7 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 
 ## Agent Tools
 
-The `agent/` directory is retained (get_user, departments, group chat, work notifications, etc.). The Endpoint self-registers to `dingtalk-agent-deps` at `start`.
+The `agent/` directory is retained (get_user, departments, group chat, work notifications, etc.). A tool declaring `adapter: 'dingtalk'` lazily receives the current operation's `DingTalkClient` through `context.$client`; the model no longer selects an Endpoint id.
 
 ## Platform Permissions (platform permit)
 

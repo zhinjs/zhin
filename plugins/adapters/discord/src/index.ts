@@ -18,12 +18,10 @@ export {
 } from './protocol.js';
 
 export {
-  getDiscordAgentDeps,
-  registerDiscordAgentEndpoint,
-  setDiscordAgentDeps,
-  type DiscordAgentDeps,
-  type DiscordAgentEndpoint,
-} from './discord-agent-deps.js';
+  discordClient,
+  type DiscordClient,
+  type DiscordClientEventMap,
+} from './client.js';
 
 export {
   checkDiscordPlatformPermit,

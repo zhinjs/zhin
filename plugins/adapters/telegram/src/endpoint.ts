@@ -1,9 +1,9 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
  * TelegramEndpoint — lifecycle, outbound, admit, Bot API helpers for agent tools.
  */
 import { readFile } from 'node:fs/promises';
-import type { EndpointContentPort, EndpointContentResolveContext, EndpointControl, EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
+import type { EndpointContentPort, EndpointContentResolveContext, EndpointControl, EndpointSendRequest } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
   type ConversationRef,
@@ -33,7 +33,6 @@ import {
   type TelegramOutboundUpload,
   type TelegramUpdate,
 } from './protocol.js';
-import { registerTelegramAgentEndpoint } from './telegram-agent-deps.js';
 import { registerTelegramWebhookRoutes } from './webhook.js';
 
 const CHAT_MEMBER_CACHE_TTL_MS = 60_000;
@@ -64,11 +63,59 @@ export type TelegramFetch = (
 
 export interface TelegramEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly config: ResolvedTelegramConfig;
   readonly http?: HttpHost;
   readonly fetch?: TelegramFetch;
+}
+
+export interface TelegramClientApi {
+  callApi<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>;
+  callApiForm<T = unknown>(method: string, form: FormData): Promise<T>;
+  pinMessage(chatId: number, messageId: number): Promise<boolean>;
+  unpinMessage(chatId: number, messageId?: number): Promise<boolean>;
+  setChatDescription(chatId: number, description: string): Promise<boolean>;
+  setMessageReaction(chatId: number, messageId: number, reaction: string): Promise<boolean>;
+  getChatMemberCount(chatId: number): Promise<number>;
+  getChatAdmins(chatId: number): Promise<TelegramChatMember[]>;
+  sendStickerMessage(chatId: number, sticker: string): Promise<{ message_id: number }>;
+  setChatPermissionsAll(chatId: number, permissions: Record<string, boolean | undefined>): Promise<boolean>;
+  createInviteLink(chatId: number): Promise<string>;
+  sendPoll(
+    chatId: number,
+    question: string,
+    options: string[],
+    isAnonymous?: boolean,
+    allowsMultipleAnswers?: boolean,
+  ): Promise<{ message_id: number }>;
+}
+
+/** Telegram Bot API client carried by message, update and lifecycle events. */
+export class TelegramClient implements TelegramClientApi {
+  constructor(readonly api: TelegramClientApi) {}
+  callApi = <T = unknown>(method: string, params: Record<string, unknown> = {}) =>
+    this.api.callApi<T>(method, params);
+  callApiForm = <T = unknown>(method: string, form: FormData) =>
+    this.api.callApiForm<T>(method, form);
+  pinMessage = (chatId: number, messageId: number) => this.api.pinMessage(chatId, messageId);
+  unpinMessage = (chatId: number, messageId?: number) => this.api.unpinMessage(chatId, messageId);
+  setChatDescription = (chatId: number, description: string) =>
+    this.api.setChatDescription(chatId, description);
+  setMessageReaction = (chatId: number, messageId: number, reaction: string) =>
+    this.api.setMessageReaction(chatId, messageId, reaction);
+  getChatMemberCount = (chatId: number) => this.api.getChatMemberCount(chatId);
+  getChatAdmins = (chatId: number) => this.api.getChatAdmins(chatId);
+  sendStickerMessage = (chatId: number, sticker: string) =>
+    this.api.sendStickerMessage(chatId, sticker);
+  setChatPermissionsAll = (chatId: number, permissions: Record<string, boolean | undefined>) =>
+    this.api.setChatPermissionsAll(chatId, permissions);
+  createInviteLink = (chatId: number) => this.api.createInviteLink(chatId);
+  sendPoll = (
+    chatId: number,
+    question: string,
+    options: string[],
+    anonymous?: boolean,
+    multiple?: boolean,
+  ) => this.api.sendPoll(chatId, question, options, anonymous, multiple);
 }
 
 interface TelegramApiOk<T> {
@@ -87,7 +134,24 @@ interface TelegramApiErr {
  * 仅 getChat/getChatMember 按已知 id 单查，不构成列表能力；
  * 因此本 endpoint 不暴露 EndpointManagement（Console 社交面 RPC 对该平台保持未接线）。
  */
-export class TelegramEndpoint implements EndpointInstance {
+export class TelegramEndpoint extends Endpoint<TelegramClient> {
+  readonly client = new TelegramClient({
+    callApi: (method, params) => this.callApi(method, params),
+    callApiForm: (method, form) => this.callApiForm(method, form),
+    pinMessage: (chatId, messageId) => this.pinMessage(chatId, messageId),
+    unpinMessage: (chatId, messageId) => this.unpinMessage(chatId, messageId),
+    setChatDescription: (chatId, description) => this.setChatDescription(chatId, description),
+    setMessageReaction: (chatId, messageId, reaction) =>
+      this.setMessageReaction(chatId, messageId, reaction),
+    getChatMemberCount: (chatId) => this.getChatMemberCount(chatId),
+    getChatAdmins: (chatId) => this.getChatAdmins(chatId),
+    sendStickerMessage: (chatId, sticker) => this.sendStickerMessage(chatId, sticker),
+    setChatPermissionsAll: (chatId, permissions) =>
+      this.setChatPermissionsAll(chatId, permissions),
+    createInviteLink: (chatId) => this.createInviteLink(chatId),
+    sendPoll: (chatId, question, options, anonymous, multiple) =>
+      this.sendPoll(chatId, question, options, anonymous, multiple),
+  });
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: TelegramEndpointOptions;
@@ -97,7 +161,6 @@ export class TelegramEndpoint implements EndpointInstance {
   #routeReleases: HttpRouteRegistration[] = [];
   #open = false;
   #started = false;
-  #unregisterAgent?: () => void;
   #updateOffset = 0;
   #botUserId?: number;
   #botUsername?: string;
@@ -110,6 +173,7 @@ export class TelegramEndpoint implements EndpointInstance {
   });
 
   constructor(options: TelegramEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('telegram', options.config.id);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
@@ -140,7 +204,6 @@ export class TelegramEndpoint implements EndpointInstance {
     if (this.#started) return;
     this.#started = true;
     try {
-      this.#unregisterAgent = registerTelegramAgentEndpoint(this.#options.config.id, this);
       const me = await this.callApi<{ id?: number; username?: string; first_name?: string }>('getMe');
       this.#botUserId = me.id;
       this.#botUsername = me.username;
@@ -209,8 +272,6 @@ export class TelegramEndpoint implements EndpointInstance {
       /* poll loop exit */
     }
     for (const release of this.#routeReleases.splice(0)) release();
-    this.#unregisterAgent?.();
-    this.#unregisterAgent = undefined;
     this.#chatMemberCache.clear();
     this.#started = false;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
@@ -330,7 +391,7 @@ export class TelegramEndpoint implements EndpointInstance {
     const permit = await this.#resolveGroupSenderPermit(msg);
     // 新 Runtime Message.content 为纯文本：@ 本机只能经 metadata 传递
     const mentioned = this.#isBotMentioned(msg);
-    await this.#options.gateway.receive({
+    await this.emit('message.receive', {
       conversation,
       message: { conversation, id: String(msg.message_id) },
       content: formatInboundContent(msg),
@@ -417,7 +478,7 @@ export class TelegramEndpoint implements EndpointInstance {
     const conversation = msg
       ? telegramInboundConversation(endpointKey, msg.chat)
       : telegramInboundConversation(endpointKey, { id: query.from.id, type: 'private' });
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: query.id },
       content: formatCallbackContent(query),
@@ -440,6 +501,18 @@ export class TelegramEndpoint implements EndpointInstance {
 
   /** Used by webhook / polling handlers. */
   handleUpdate(update: TelegramUpdate): void {
+    const eventName = update.message
+      ? 'message'
+      : update.callback_query
+        ? 'callback_query'
+        : 'update';
+    void this.emitPlatform(eventName, update).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'telegram_platform_event_failed',
+        event: eventName,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
     if (update.message) {
       this.admit(update.message);
       return;

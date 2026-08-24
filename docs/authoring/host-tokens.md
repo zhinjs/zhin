@@ -6,7 +6,7 @@ Plugin Runtime 里，插件通过 `context.use(token)`（setup 期）或命令/�
 
 | Token | 注入后得到 | 关键方法 |
 | --- | --- | --- |
-| `messageGatewayToken`（`@zhin.js/core/runtime`） | `MessageGateway` | `receive` / `send(request) → DeliveryReceipt` / `sendEndpointMessage` / `onMessage` / `registerInteractiveHandler` |
+| `outboundMessageToken`（`@zhin.js/core/runtime`） | `OutboundMessageService` | `receive` / `send(request) → DeliveryReceipt` / `sendEndpointMessage` / `onMessage` / `registerInteractiveHandler` |
 | `outboundHostToken`（`zhin.js`） | `OutboundHost` | `send({ adapter, endpointId, conversation, content })` —— 跨平台出站，寻址用 ConversationRef |
 | `runtimeEventPublisherToken`（`zhin.js`） | `RuntimeEventPublisher` | 广播 runtime 事件（inbox/Console 消息流的来源） |
 
@@ -21,7 +21,7 @@ Plugin Runtime 里，插件通过 `context.use(token)`（setup 期）或命令/�
 
 | Token | 注入后得到 | 关键方法 |
 | --- | --- | --- |
-| `scheduleHostToken`（`zhin.js`） | `PluginScheduleHost`（按 owner 隔离） | 注册/取消 cron 任务；与 `messageGatewayToken` 组合即可做定时推送 |
+| `scheduleHostToken`（`zhin.js`） | `PluginScheduleHost`（按 owner 隔离） | 注册/取消 cron 任务；与 `outboundMessageToken` 组合即可做定时推送 |
 | `scheduleRootHostToken`（`zhin.js`，仅 root） | `ScheduleHost` | 进程级日程宿主 |
 
 ## Agent
@@ -45,7 +45,7 @@ export default definePlugin({
   name: 'reminder',
   setup({ use }) {
     const schedule = use(scheduleHostToken);
-    const gateway = use(messageGatewayToken);
+    const gateway = use(outboundMessageToken);
     schedule.register('0 9 * * *', async () => {
       await gateway.send({ conversation, requester, content: '早安' });
     });
@@ -55,6 +55,6 @@ export default definePlugin({
 
 规则：`use()` 在 setup 期调用；token 未安装对应 Host 时 `use()` 抛错（如未装 `@zhin.js/agent` 取 `agentHostToken`）。Scope 化 token（database/schedule）按插件 owner 自动隔离，root 进程级 token 仅在 composition root（`basic/cli`）或显式 root 场景使用。
 
-AI fallback 不是 `MessageGateway` 的可变插件 API。composition root 在 generation setup
+AI fallback 不是 `OutboundMessageService` 的可变插件 API。composition root 在 generation setup
 中向 root resources 提供内部 `ingressRouteToken`；`ImRuntime.receive` 只从当前消息所持
 snapshot 解析该 route。普通插件不应注册或替换此 token。

@@ -1,4 +1,4 @@
-import type { SideEventGateway } from '../plugin-runtime/im/side-event-gateway.js';
+import type { EndpointEventEmitter } from '@zhin.js/adapter';
 import {
   buildNotice,
   buildRequest,
@@ -21,11 +21,11 @@ export interface OneBotLikeSideEventInput {
 }
 
 /**
- * Normalize OneBot / icqq-style notice|request|meta payloads and forward to SideEventGateway.
+ * Normalize OneBot / icqq-style notice|request|meta payloads and feed Endpoint.emit().
  * Returns which kind was dispatched, or null when the payload is not a side event.
  */
 export async function receiveOneBotLikeSideEvent(
-  gateway: SideEventGateway,
+  emit: EndpointEventEmitter,
   input: OneBotLikeSideEventInput,
 ): Promise<'notice' | 'request' | 'system' | null> {
   const raw = input.raw;
@@ -74,7 +74,7 @@ export async function receiveOneBotLikeSideEvent(
         ? { $role: 'admin', $enabled: String(raw.sub_type ?? '') === 'set' }
         : {}),
     });
-    await gateway.receiveNotice(notice);
+    await emit('notice.receive', notice);
     return 'notice';
   }
 
@@ -125,7 +125,7 @@ export async function receiveOneBotLikeSideEvent(
       },
     });
     try {
-      await gateway.receiveRequest(request);
+      await emit('request.receive', request);
     } finally {
       active = false;
       await Promise.allSettled([...actions]);
@@ -160,7 +160,7 @@ export async function receiveOneBotLikeSideEvent(
       $sub_type: subType ?? metaType,
       $timestamp: toMillis(raw.time),
     });
-    await gateway.receiveSystem(system);
+    await emit('system.receive', system);
     return 'system';
   }
 

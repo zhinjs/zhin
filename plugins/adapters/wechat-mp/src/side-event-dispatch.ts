@@ -1,5 +1,5 @@
 import { buildNotice, senderFromId } from '@zhin.js/core';
-import type { SideEventGateway } from '@zhin.js/core/runtime';
+import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 import { formatInboundId, type WeChatMessage } from './protocol.js';
 
@@ -15,15 +15,15 @@ function mapWeChatMpEventParts(eventName: string): { scene_type: string; sub_typ
 }
 
 export function receiveWeChatMpSideEvent(
-  sideEvents: SideEventGateway | undefined,
+  emit: EndpointEventEmitter,
   configId: string,
   msg: WeChatMessage,
   logger: ReturnType<typeof getAdapterLogger>,
 ): boolean {
-  if (!sideEvents || msg.MsgType !== 'event') return false;
+  if (msg.MsgType !== 'event') return false;
   const eventName = msg.Event ?? 'unknown';
   const parts = mapWeChatMpEventParts(eventName);
-  void sideEvents.receiveNotice(buildNotice(msg, {
+  void emit('notice.receive', buildNotice(msg, {
     $id: `wechat-mp:${formatInboundId(msg)}`,
     $adapter: 'wechat-mp' as never,
     $endpoint: configId,

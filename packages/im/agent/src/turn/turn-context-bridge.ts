@@ -2,17 +2,12 @@ import { appendTurnActiveSkills, getTurnActiveSkillsFromContext, runInTurnContex
 import { TurnTracker } from './turn-tracker.js';
 import type { ZhinAgentConfig } from '../config/index.js';
 export interface TurnContextBridgeState {
-  pendingActivityFeedbackEligible?: boolean;
   alwaysSkillsBaseline: string;
 }
 
 /** Explicit turn state used by concurrency-safe entry points. */
 export interface TurnContextRunOptions {
   readonly activityFeedbackEligible?: boolean;
-}
-
-export function initInboundTurnContext(state: TurnContextBridgeState): void {
-  state.pendingActivityFeedbackEligible = true;
 }
 
 export function getTurnActiveSkills(state: TurnContextBridgeState): string {
@@ -29,11 +24,8 @@ export function runInTurnContext<T>(
   options?: TurnContextRunOptions,
 ): Promise<T> {
   const tracker = new TurnTracker(config.subagentTurnWaitMs);
-  const activityFeedbackEligible = options?.activityFeedbackEligible
-    ?? state.pendingActivityFeedbackEligible;
-  if (options?.activityFeedbackEligible === undefined) state.pendingActivityFeedbackEligible = undefined;
   const init: Partial<Pick<import('../internal/turn-context.js').TurnContextStore, 'activityFeedbackEligible'>> = {};
-  if (activityFeedbackEligible) init.activityFeedbackEligible = true;
+  if (options?.activityFeedbackEligible === true) init.activityFeedbackEligible = true;
   return runInTurnContextAls(turnId, tracker, fn, Object.keys(init).length ? init : undefined);
 }
 

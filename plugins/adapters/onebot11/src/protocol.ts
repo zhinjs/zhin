@@ -196,7 +196,7 @@ export function onebot11InboundConversation(endpointKey: string, ev: OneBot11Eve
   };
 }
 
-/** Build inbound text for MessageGateway.receive */
+/** Build inbound text for OutboundMessageService.receive */
 export function formatInboundContent(ev: OneBot11Event): string {
   if (Array.isArray(ev.message)) {
     return ev.message

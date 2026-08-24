@@ -5,7 +5,6 @@
 import { getLogger } from '@zhin.js/logger';
 import type { EndpointControl } from '@zhin.js/core';
 import type { ConversationRef, MessageRef } from '@zhin.js/im-contract';
-import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 import {
   MessageTypingIndicator,
   NativeTypingIndicator,
@@ -294,28 +293,17 @@ export class AdapterActivityFeedbackManager {
   }
 }
 
-const adapterFeedbackStore = createGenerationStore<AdapterActivityFeedbackManager>('zhin.agent.adapter-activity-feedback');
-
-export function getAdapterActivityFeedbackManager(): AdapterActivityFeedbackManager {
-  return adapterFeedbackStore.tryUse() ?? new AdapterActivityFeedbackManager();
-}
-
-export function provideAdapterActivityFeedbackManager(context: GenerationStoreContext): AdapterActivityFeedbackManager {
-  const manager = new AdapterActivityFeedbackManager();
-  adapterFeedbackStore.provide(context, manager);
-  context.lifecycle.add(() => manager.clearAll());
-  return manager;
-}
-
-/** @deprecated 使用 provideAdapterActivityFeedbackManager 替代 */
-export const initAdapterActivityFeedbackManager = () => new AdapterActivityFeedbackManager();
-
 export function enableActivityFeedbackForBot(
   endpoint: EndpointWithActivityFeedback,
   platform: string,
   outbound?: ActivityFeedbackOutbound,
 ): ActivityFeedbackManager {
-  return getAdapterActivityFeedbackManager().enableForEndpoint(endpoint, platform, outbound);
+  const existing = endpoint.$activityFeedback;
+  if (existing instanceof ActivityFeedbackManager) return existing;
+  const manager = new ActivityFeedbackManager();
+  registerPlatformAdapters(manager, endpoint, platform, outbound);
+  endpoint.$activityFeedback = manager;
+  return manager;
 }
 
 export function isGenericActivityFeedbackManager(

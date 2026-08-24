@@ -1,17 +1,14 @@
 import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
-import { getQqAgentDeps } from '../../src/qq-agent-deps.js';
 
-export default defineAgentTool<{ endpoint_id: string }>({
+export default defineAgentTool<Record<string, never>>({
   description: '获取 QQ 频道列表',
-  inputSchema: z.object({
-    endpoint_id: z.string().describe('Endpoint 名称'),
-  }),
-  platforms: ['qq'],
+  inputSchema: z.object({}),
+  adapter: 'qq',
   tags: ['qq'],
-  async execute({ endpoint_id  }: { endpoint_id: string }) {
-    const endpoint = getQqAgentDeps().getEndpoint(endpoint_id);
-    const guilds = await endpoint.getGuilds();
+  async execute(_input, context) {
+    const client = context.$client;
+    const guilds = await client.getGuilds();
     return { guilds, count: guilds.length };
   },
 });

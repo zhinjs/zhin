@@ -8,9 +8,9 @@ export default defineAgentTool<{ repo: string; events?: string }>({
     repo: z.string().min(1),
     events: z.string().optional(),
   }),
-  platforms: ['github'],
+  adapter: 'github',
   tags: ['github'],
-  async execute(input) {
-    return executeGithubSubscribe(input);
+  async execute(input, context) {
+    return executeGithubSubscribe(input, context.$client, context.message);
   },
 });

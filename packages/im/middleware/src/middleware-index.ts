@@ -1,5 +1,9 @@
 import type { CapabilitySlot, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { createCapabilityContext } from '@zhin.js/feature-kit';
+import {
+  createCapabilityContext,
+  operationClientAdapter,
+  readOperationClient,
+} from '@zhin.js/feature-kit';
 import type {
   MiddlewareContext,
   MiddlewareDefinition,
@@ -15,6 +19,7 @@ export interface MiddlewareDescriptor {
   readonly phase: MiddlewarePhase;
   readonly target: MiddlewareTarget;
   readonly order: number;
+  readonly adapter?: string;
 }
 
 interface MiddlewareRecord extends MiddlewareDescriptor {
@@ -37,6 +42,7 @@ export class MiddlewareIndex {
       phase: slot.definition.phase,
       target: slot.definition.target,
       order: slot.definition.order,
+      ...(slot.definition.adapter ? { adapter: slot.definition.adapter } : {}),
       slot,
     })).sort((left, right) => compareMiddleware(left, right, topology)));
   }
@@ -50,17 +56,24 @@ export class MiddlewareIndex {
     terminal: MiddlewareNext = async () => undefined,
     target: MiddlewareTarget = 'inbound',
   ): Promise<void> {
-    const records = this.#records.filter((record) => record.target === target);
+    const clientAdapter = operationClientAdapter(input);
+    const records = this.#records.filter((record) =>
+      record.target === target && (!record.adapter || record.adapter === clientAdapter));
     let cursor = -1;
     const dispatch = async (index: number): Promise<void> => {
       if (index <= cursor) throw new Error('Middleware next() called more than once');
       cursor = index;
       const record = records[index];
       if (!record) return terminal();
-      const context: MiddlewareContext<TInput> = Object.freeze({
+      const context = {
         ...createCapabilityContext(this.snapshot, record.owner),
         input,
+      } as MiddlewareContext<TInput>;
+      Object.defineProperty(context, '$client', {
+        enumerable: true,
+        get: () => readOperationClient(input, record.adapter),
       });
+      Object.freeze(context);
       await record.slot.definition.handle(context, () => dispatch(index + 1));
     };
     await dispatch(0);

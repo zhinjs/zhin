@@ -118,12 +118,13 @@ ws.on('message', (data) => {
 `plugins/adapters/napcat/src/ws-endpoint.ts` is the canonical usage of the base, structured in just four blocks:
 
 ```ts
-export class NapCatWsEndpoint implements EndpointInstance {
+export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
+  readonly client = new NapcatClient((action, params) => this.#callApi(action, params));
   readonly #lifecycle: EndpointLifecycle;
   #ws?: NapCatWsSocket;
-  #unregisterAgent?: () => void;
 
   constructor(options: NapCatWsEndpointOptions) {
+    super();
     // 1. Create the base during construction; reconnect_interval legacy semantics = fixed interval:
     //    multiplier 1 + no jitter + no cap
     this.#lifecycle = createEndpointLifecycle({
@@ -139,15 +140,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
 
   async start(): Promise<void> {
     if (this.#lifecycle.started) return;                 // Idempotent
-    this.#unregisterAgent = registerNapcatAgentEndpoint(this.#options.config.name, this);
-    try {
-      await this.#lifecycle.start((handle) => this.#connect(handle));
-    } catch (err) {
-      // Start failure reset guaranteed by the base; agent register/unregister is adapter-specific, stays on adapter side
-      this.#unregisterAgent?.();
-      this.#unregisterAgent = undefined;
-      throw err;
-    }
+    await this.#lifecycle.start((handle) => this.#connect(handle));
   }
   // stop() see previous section; #connect(handle) see start/notifyClosed section
 }
@@ -163,7 +156,7 @@ Compared to hand-written state machines, the base removes these fields and branc
 | "Stale socket's late close event kills new connection" | Generation-expired handles auto-invalidated |
 | "stop vs connect race causing unhandled rejection" | stopWaiters race settle, silent resolve |
 
-The adapter side retains only three categories of specific logic: agent registration mount/unmount (`registerNapcatAgentEndpoint`), pending request table rejection (`rejectAllPending`), and inbound deduplicator cleanup (`deduper.clear()`).
+The adapter side retains only protocol-specific logic: the Client API transport, pending request rejection (`rejectAllPending`), and inbound deduplicator cleanup (`deduper.clear()`). Client is a distinct object; Endpoint owns only account connectivity, lifecycle, and event ingress.
 
 ## Adapter 1:N Endpoints and Per-Endpoint Config
 

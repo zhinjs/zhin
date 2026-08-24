@@ -7,9 +7,9 @@ export default defineAgentTool<{ repo: string }>({
   inputSchema: z.object({
     repo: z.string().min(1),
   }),
-  platforms: ['github'],
+  adapter: 'github',
   tags: ['github'],
-  async execute(input) {
-    return executeGithubUnsubscribe(input);
+  async execute(input, context) {
+    return executeGithubUnsubscribe(input, context.$client, context.message);
   },
 });

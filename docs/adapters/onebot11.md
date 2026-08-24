@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/onebot11/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot11/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=5f99e8af5e2ba063 -->
+<!-- sync-adapter-docs:sha256=a390c9139b59c20c -->
 
 # @zhin.js/adapter-onebot11
 
@@ -20,7 +20,7 @@ Zhin.js [OneBot 11](https://github.com/botuniverse/onebot-11) 适配器（Plugin
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - **正向 WebSocket**（`connection: ws`）：应用连 OneBot 实现的 WS 服务器
 - `access_token` 鉴权（Bearer + query）
-- 入站经 `messageGatewayToken`；出站 `send({ conversation, payload })`
+- 入站经 `Endpoint.emit(...)`；出站 `send({ conversation, payload })`
 
 ## 安装
 
@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-onebot11
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — 约定式 `adapters/onebot11.ts`（`defineAdapter`）
-- `@zhin.js/core` — `messageGatewayToken` 入站/出站
+- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
@@ -88,7 +88,7 @@ plugins:
 
 ## 迁移说明（Plugin Runtime）
 
-- **notice / request / meta 侧事件**：经 `sideEventGatewayToken` 归一后分发到 `handlers`；消息仍走 `messageGatewayToken`。
+- **notice / request / meta 侧事件**：经 the unified `Endpoint.emit(...)` ingress 归一后分发到 `handlers`；消息仍走 `outboundMessageToken`。
 - **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后仅保留 `onebot11_set_title`，其余群管能力可通过 `callApi`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
 - **平台权限门禁**：`plugin.ts` setup 已注册 `registerDefaultScenePlatformPermitChecker('onebot11')`，`scene_admin` / `scene_owner` 依据入站 metadata 中的 sender `role`（owner / admin）判定。
 

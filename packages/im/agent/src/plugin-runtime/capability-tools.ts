@@ -76,5 +76,6 @@ export function toolInvocationFromTurn(turn: TurnIngress | TurnRequest): ToolInv
         : {}),
     }),
     ...(turn.ports.question ? { question: turn.ports.question } : {}),
+    ...(turn.ports.client ? { client: turn.ports.client } : {}),
   });
 }

@@ -217,7 +217,7 @@ export function slackInboundConversation(
   };
 }
 
-/** Build inbound text for MessageGateway.receive. */
+/** Build inbound text for OutboundMessageService.receive. */
 export function formatInboundContent(event: SlackMessageEvent | SlackEvent): string {
   const text = typeof event.text === 'string' ? event.text : '';
   if (text) return mrkdwnToMarkdown(text);

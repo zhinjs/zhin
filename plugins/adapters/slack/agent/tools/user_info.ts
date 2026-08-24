@@ -1,22 +1,19 @@
 import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
-import { getSlackAgentDeps } from '../../src/slack-agent-deps.js';
+import type { SlackUserInfo } from '../../src/client.js';
 
 export default defineAgentTool<{
-  endpoint_id: string;
   user_id: string;
 }>({
   description: '查询 Slack 用户详细信息',
   inputSchema: z.object({
-    endpoint_id: z.string().describe('Endpoint 名称'),
     user_id: z.string().describe('用户 ID'),
   }),
-  platforms: ['slack'],
+  adapter: 'slack',
   tags: ['slack'],
-  async execute({ endpoint_id, user_id }) {
-    const { getEndpoint } = getSlackAgentDeps();
-    const endpoint = getEndpoint(endpoint_id);
-    const user = await endpoint.getUserInfo(user_id);
+  async execute({ user_id }, context) {
+    const client = context.$client;
+    const user = (await client.users.info({ user: user_id })).user as SlackUserInfo | undefined;
     if (!user) throw new Error(`Slack 用户不存在: ${user_id}`);
     return {
       id: user.id,

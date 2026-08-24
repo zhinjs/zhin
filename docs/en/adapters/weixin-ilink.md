@@ -21,7 +21,7 @@ The protocol implementation is ported from [Tencent/openclaw-weixin](https://git
 | Item | weixin-ilink | wechat-mp |
 |------|-------------|-----------|
 | Account type | Personal WeChat (ClawBot) | WeChat Official Account |
-| Inbound | Long polling `getupdates` -> `messageGatewayToken` | Webhook (`httpHostToken`) |
+| Inbound | Long polling `getupdates` -> `Endpoint.emit(...)` | Webhook (`httpHostToken`) |
 | Login | QR code / sidecar credentials / `botToken` | AppId/Secret/Token |
 | Group chat | Not supported (private chat only) | Supported |
 
@@ -62,7 +62,7 @@ data/weixin-ilink/<bot-name>.json
 
 Replies must carry the `context_token` cached at inbound time (keyed by `endpointId + peerUserId`). If the user has not sent a message for a long time, causing the token to be missing, outbound will be rejected with a warning.
 
-Outbound goes through the Runtime: `MessageGateway` -> `endpoint.send({ conversation, payload })` (always `kind: 'private'`, `conversation.id` is the peer user_id).
+Outbound goes through the Runtime: `OutboundMessageService` -> `endpoint.send({ conversation, payload })` (always `kind: 'private'`, `conversation.id` is the peer user_id).
 
 **Image-text limitation**: WeChat does not support mixed image-text in a single message. The adapter automatically:
 

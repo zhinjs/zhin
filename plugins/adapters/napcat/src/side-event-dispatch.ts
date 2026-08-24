@@ -1,5 +1,5 @@
 import { receiveOneBotLikeSideEvent } from '@zhin.js/core';
-import type { SideEventGateway } from '@zhin.js/core/runtime';
+import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 import type { NapCatEvent } from './protocol.js';
 
@@ -8,19 +8,19 @@ export interface NapCatSideEventCaller {
 }
 
 export function receiveNapCatSideEvent(
-  sideEvents: SideEventGateway | undefined,
+  emit: EndpointEventEmitter,
   endpointKey: string,
   caller: NapCatSideEventCaller,
   raw: NapCatEvent,
   logger: ReturnType<typeof getAdapterLogger>,
 ): void {
-  if (!sideEvents) return;
+  if (!emit) return;
   const record = raw as Record<string, unknown>;
   const postType = String(record.post_type ?? '');
   const requestType = String(record.request_type ?? '');
   const isRequest = postType === 'request' || postType.startsWith('request.');
   const isFriend = requestType === 'friend' || postType.includes('friend');
-  void receiveOneBotLikeSideEvent(sideEvents, {
+  void receiveOneBotLikeSideEvent(emit, {
     adapter: 'napcat',
     endpointKey,
     platform: 'napcat',

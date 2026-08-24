@@ -40,7 +40,7 @@ Endpoint 不得把自己注册进模块级 Map。需要从命令、Agent tool �
 
 旧 `@zhin.js/core` 的 `Adapter` class 同时承担集合、消息管线、发送和 Registry，属于兼容
 外壳，不是 Plugin Runtime 的 authoring model。新代码不得依赖、继承或伪造该 class；运行
-期协作应依赖 `MessageGateway`、`OutboundHost`、`EndpointControl` 等窄 Interface。
+期协作应依赖 `OutboundMessageService`、`OutboundHost`、`EndpointControl` 等窄 Interface。
 `pnpm check:adapter-endpoint-boundaries` 对现存 legacy Adapter consumer 与模块级 Agent
 Endpoint registry 使用基线 allowlist 做单调收缩门禁：允许逐项删除，但禁止新增。
 
@@ -65,7 +65,7 @@ non-empty platform message id. IM Runtime alone wraps that id as a structured
 
 ## Endpoint Control Port
 
-`EndpointInstance.control` owns actions addressed to an existing message:
+`Endpoint.control` owns actions addressed to an existing message:
 `recall`, `addReaction`, and `removeReaction`. IM Core consumes only this port;
 adapter-specific method names and compound message ids stay at the protocol
 boundary.
@@ -74,6 +74,30 @@ New adapters should provide `control` directly and declare matching
 `operations`. Protocol-specific methods and compound string identifiers are not
 inspected by the runtime. `createRecallEndpointControl()` bridges the common
 platform `recall(messageId)` shape without leaking that shape into Core.
+
+## Operation-scoped Client resolution
+
+每个平台包公开一个由 `defineEndpointClient<Client, EventMap>()` 创建的 token，并通过
+`AdapterClientRegistry` 注册 Client/EventMap 类型。当前 IM operation 不需要手动查找
+Endpoint：Handler 的事件参数直接携带 `client`，Command、Middleware 和 Agent Tool 的
+`context.$client` 是按需解析的属性 getter：
+
+```ts
+defineCommand({
+  adapter: 'icqq',
+  execute(context) {
+    return context.$client.getGroupList();
+  },
+});
+
+const client = icqqClient.get(context, id);  // task / schedule / Host / 跨账号
+const client = icqqClient.find(context, id); // 可选显式查找；不存在时返回 undefined
+```
+
+声明字面量 `adapter` 后 `$client` 会反射为确切 Client；不声明时保持 `unknown`。
+Token 的 `get()` 会校验 Endpoint adapter，并从当前 generation 的 AdapterIndex 解析；
+返回值不得缓存到当前 operation 之外。平台 SDK 方法直接在 Client 上调用，Endpoint 不复制
+SDK interface。普通消息发送仍必须走统一 outbound chain。
 
 ## Endpoint 生命周期基座（createEndpointLifecycle）
 

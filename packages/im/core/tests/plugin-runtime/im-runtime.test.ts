@@ -15,9 +15,14 @@ import {
 } from '@zhin.js/plugin-runtime';
 import {
   AdapterIndex,
+  Endpoint,
   adapterFeatureId,
-  defineAdapter,
+  defineAdapter as defineAdapterContract,
+  endpointEventGatewayToken,
   type AdapterOperation,
+  type AdapterContext,
+  type AdapterDefinition,
+  type EndpointEvent,
   type EndpointControl,
   type EndpointManagement,
 } from '@zhin.js/adapter';
@@ -54,6 +59,61 @@ import {
 } from '../../src/plugin-runtime/im/index.js';
 import { resetKeyboardFallbackStoreForTests } from '../../src/built/interactive-segments/index.js';
 
+type TestAdapterDefinition<TConfig> = Omit<AdapterDefinition<TConfig>, '$feature' | 'create'> & {
+  create(context: AdapterContext<TConfig>): object | Promise<object>;
+};
+
+class TestEndpoint extends Endpoint<object> {
+  readonly client: object;
+
+  constructor(surface: object) {
+    super();
+    this.client = surface;
+    Object.assign(this, surface);
+  }
+}
+
+function defineAdapter<TConfig = unknown>(
+  definition: TestAdapterDefinition<TConfig>,
+): Readonly<AdapterDefinition<TConfig>> {
+  return defineAdapterContract<TConfig>({
+    ...definition,
+    async create(context) {
+      const value = await definition.create(context);
+      return value instanceof Endpoint ? value : new TestEndpoint(value);
+    },
+  });
+}
+
+const ignoredEndpointEvents = Object.freeze({
+  receive: async (_event: EndpointEvent) => undefined,
+});
+
+function receive(
+  im: ImRuntime,
+  payload: Parameters<ImRuntime['receiveEndpointEvent']>[0]['payload'],
+) {
+  const input = payload as { conversation?: { endpoint?: { id?: string } } };
+  return im.receiveEndpointEvent(Object.freeze({
+    name: 'message.receive',
+    payload,
+    endpoint: Object.freeze({
+      id: (input.conversation?.endpoint?.id ?? 'test-endpoint') as never,
+      name: 'test',
+    }),
+    client: ignoredEndpointEvents,
+  })) as Promise<import('../../src/plugin-runtime/im/index.js').MessageDispatchResult>;
+}
+
+function receiveEvent(im: ImRuntime, name: string, payload: unknown): Promise<unknown> {
+  return im.receiveEndpointEvent(Object.freeze({
+    name,
+    payload,
+    endpoint: Object.freeze({ id: 'test-endpoint' as never, adapter: 'test' }),
+    client: ignoredEndpointEvents,
+  }));
+}
+
 describe('IM Runtime', () => {
   it('writes normalized notices once before handler projection', async () => {
     const fixture = await createFixture([], []);
@@ -70,9 +130,9 @@ describe('IM Runtime', () => {
       $duration_seconds: 60,
       $timestamp: 123,
     };
-    await fixture.im.receiveNotice(notice as never);
-    await fixture.im.receiveNotice(notice as never);
-    await fixture.im.receiveNotice({ ...notice, $scene_id: 'room-2' } as never);
+    await receiveEvent(fixture.im, 'notice.receive', notice as never);
+    await receiveEvent(fixture.im, 'notice.receive', notice as never);
+    await receiveEvent(fixture.im, 'notice.receive', { ...notice, $scene_id: 'room-2' } as never);
     const events = await fixture.im.conversationEvents.listBetween({
       endpoint: { adapter: 'test', id: String(fixture.adapter.id) },
       kind: 'group',
@@ -125,7 +185,7 @@ describe('IM Runtime', () => {
       $timestamp: 123,
     };
     for (const id of ['reaction-1', 'reaction-2']) {
-      await fixture.im.receiveNotice({
+      await receiveEvent(fixture.im, 'notice.receive', {
         ...common,
         $id: id,
         $sub_type: 'emoji_reaction',
@@ -134,7 +194,7 @@ describe('IM Runtime', () => {
         $operation: 'added',
       } as never);
     }
-    await fixture.im.receiveNotice({
+    await receiveEvent(fixture.im, 'notice.receive', {
       ...common,
       $id: 'poke-1',
       $sub_type: 'poke',
@@ -165,7 +225,7 @@ describe('IM Runtime', () => {
       kind: 'group' as const,
       id: 'room-1',
     };
-    await fixture.im.receive({
+    await receive(fixture.im, {
       conversation,
       message: { conversation, id: 'm-1' },
       content: 'quoted body',
@@ -196,14 +256,14 @@ describe('IM Runtime', () => {
       kind: 'group' as const,
       id: 'room-context',
     };
-    await fixture.im.receive({
+    await receive(fixture.im, {
       conversation,
       message: { conversation, id: 'background-1' },
       content: 'background context',
       segments: [{ type: 'text', data: { text: 'background context' } }],
       sender: { id: 'alice', name: 'Alice' },
     });
-    await fixture.im.receive({
+    await receive(fixture.im, {
       conversation,
       message: { conversation, id: 'current-2' },
       content: 'current question',
@@ -317,7 +377,7 @@ describe('IM Runtime', () => {
     await fixture.store.close();
   });
 
-  it('fails every generation-bound MessageGateway operation closed outside admission', async () => {
+  it('fails every generation-bound OutboundMessageService operation closed outside admission', async () => {
     const gate = createGenerationAdmissionGate();
     const im = new ImRuntime();
     const gateway = im[generationAdmissionBinder](gate);
@@ -366,7 +426,7 @@ describe('IM Runtime', () => {
         return true;
       },
     });
-    const result = await fixture.im.receive({
+    const result = await receive(fixture.im, {
       conversation: {
         endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
         kind: 'private',
@@ -410,7 +470,7 @@ describe('IM Runtime', () => {
       kind: 'private' as const,
       id: 'alice',
     };
-    const inFlight = fixture.im.receive({
+    const inFlight = receive(fixture.im, {
       conversation,
       message: { conversation, id: 'routed-message' },
       content: 'hello',
@@ -428,7 +488,7 @@ describe('IM Runtime', () => {
     });
     release();
     await expect(inFlight).resolves.toMatchObject({ matched: true, command: 'ai' });
-    await expect(fixture.im.receive({ conversation, content: 'next' }))
+    await expect(receive(fixture.im, { conversation, content: 'next' }))
       .resolves.toEqual({ matched: false });
 
     await fixture.adapters.stop();
@@ -467,7 +527,7 @@ describe('IM Runtime', () => {
       id: 'workroom-1',
     };
 
-    const result = await fixture.im.receive({
+    const result = await receive(fixture.im, {
       conversation,
       message: { conversation, id: 'workroom-message' },
       content: '/gh issue list open',
@@ -509,7 +569,7 @@ describe('IM Runtime', () => {
       dispose: () => undefined,
     });
 
-    const result = await fixture.im.receive({
+    const result = await receive(fixture.im, {
       conversation: {
         endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
         kind: 'private',
@@ -547,7 +607,7 @@ describe('IM Runtime', () => {
       dispose: () => undefined,
     });
 
-    await fixture.im.receive({
+    await receive(fixture.im, {
       conversation: {
         endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
         kind: 'private',
@@ -718,7 +778,10 @@ describe('IM Runtime', () => {
         commandPrefix: '/',
         endpoints: [{ id: 'bot-1', commandPrefix: '#' }],
       }]]),
-      resources: new Map([[root, new Map()]]),
+      resources: new Map([[root, new Map([[
+        endpointEventGatewayToken.id,
+        ignoredEndpointEvents,
+      ]])]]),
       capabilities: new Map([[echo.id, echo]]),
       projections: new Map(),
     };
@@ -822,7 +885,7 @@ describe('IM Runtime', () => {
     const sent: unknown[] = [];
     const fixture = await createFixture(events, sent);
 
-    const result = await fixture.im.receive({
+    const result = await receive(fixture.im, {
       conversation: {
         endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
         kind: 'private' as const,
@@ -857,7 +920,7 @@ describe('IM Runtime', () => {
     let captured: Message | undefined;
     const fixture = await createFixture([], sent, (message) => { captured = message; });
 
-    await fixture.im.receive({
+    await receive(fixture.im, {
       conversation: {
         endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
         kind: 'private' as const,
@@ -1155,12 +1218,15 @@ describe('IM Runtime', () => {
       tree: new Map([[root, {
         id: root,
         instanceKey: 'root',
-        packageName: '@zhin.js/adapter-icqq',
+      packageName: '@zhin.js/adapter-icqq',
         packageRoot: '/project',
         children: [],
       }]]),
       config: new Map([[root, {}]]),
-      resources: new Map([[root, new Map()]]),
+      resources: new Map([[root, new Map([[
+        endpointEventGatewayToken.id,
+        ignoredEndpointEvents,
+      ]])]]),
       capabilities: new Map([[adapter.id, adapter]]),
       projections: new Map(),
     };
@@ -1230,7 +1296,7 @@ describe('IM Runtime', () => {
       kind: 'group' as const,
       id: 'room-1',
     };
-    await fixture.im.receive({
+    await receive(fixture.im, {
       conversation: groupConversation,
       message: { conversation: groupConversation, id: 'msg-1' },
       content: 'hello console',
@@ -1249,7 +1315,7 @@ describe('IM Runtime', () => {
 
     // 未匹配消息也触发入站事件（无回复时仅有 inbound 一条）
     events.length = 0;
-    await fixture.im.receive({
+    await receive(fixture.im, {
       conversation: {
         endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
         kind: 'private' as const,
@@ -1282,7 +1348,7 @@ describe('IM Runtime', () => {
 
     unsubscribe();
     events.length = 0;
-    await fixture.im.receive({
+    await receive(fixture.im, {
       conversation: {
         endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
         kind: 'private' as const,
@@ -1433,7 +1499,7 @@ describe('IM Runtime', () => {
     fixture.im.onMessage((event) => events.push(event));
 
     const longContent = 'x'.repeat(500);
-    await fixture.im.receive({
+    await receive(fixture.im, {
       conversation: {
         endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
         kind: 'private' as const,
@@ -1493,7 +1559,7 @@ describe('IM Runtime', () => {
       dispose: () => { disposed = true; },
     });
 
-    const running = fixture.im.receive({
+    const running = receive(fixture.im, {
       conversation: {
         endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
         kind: 'private' as const,
@@ -1568,7 +1634,7 @@ describe('IM Runtime', () => {
     expect(outbound.payload[1]?.data.text).toContain('2. 猜数字');
 
     // 数字回跳 → 中央 fallback map → handler
-    const digit = await fixture.im.receive({
+    const digit = await receive(fixture.im, {
       conversation: {
         endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
         kind: 'group' as const,
@@ -1581,7 +1647,7 @@ describe('IM Runtime', () => {
     expect(handled).toEqual(['2']);
 
     // 平台 callback action 段 → handler
-    const action = await fixture.im.receive({
+    const action = await receive(fixture.im, {
       conversation: {
         endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
         kind: 'group' as const,
@@ -1595,7 +1661,7 @@ describe('IM Runtime', () => {
     expect(handled).toEqual(['2', '[action: hub:h1:g_ttt]']);
 
     // 无匹配 payload 的普通消息不受影响
-    const miss = await fixture.im.receive({
+    const miss = await receive(fixture.im, {
       conversation: {
         endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
         kind: 'group' as const,
@@ -1616,14 +1682,16 @@ describe('IM Runtime', () => {
     });
     const calls: string[] = [];
     const previousGate = createGenerationAdmissionGate();
-    const previous = fixture.im[generationAdmissionBinder](previousGate);
-    previous.registerInteractiveHandler('hub:', () => {
+    const previousHost = fixture.im[generationAdmissionBinder](previousGate);
+    const previous = fixture.im.endpointEvents[generationAdmissionBinder](previousGate);
+    previousHost.registerInteractiveHandler('hub:', () => {
       calls.push('previous');
       return true;
     });
     const nextGate = createGenerationAdmissionGate();
-    const candidate = fixture.im[generationAdmissionBinder](nextGate);
-    candidate.registerInteractiveHandler('hub:next:', () => {
+    const candidateHost = fixture.im[generationAdmissionBinder](nextGate);
+    const candidate = fixture.im.endpointEvents[generationAdmissionBinder](nextGate);
+    candidateHost.registerInteractiveHandler('hub:next:', () => {
       calls.push('next');
       return true;
     });
@@ -1650,7 +1718,13 @@ describe('IM Runtime', () => {
       },
       dispose: () => undefined,
     });
-    await expect(previous.receive(input)).resolves.toMatchObject({ matched: true });
+    const endpointEvent = Object.freeze({
+      name: 'message.receive',
+      payload: input,
+      endpoint: Object.freeze({ id: fixture.adapter.id, adapter: 'memory' }),
+      client: ignoredEndpointEvents,
+    });
+    await expect(previous.receive(endpointEvent)).resolves.toMatchObject({ matched: true });
     expect(calls).toEqual(['previous']);
 
     current = fixture.store.current;
@@ -1664,7 +1738,7 @@ describe('IM Runtime', () => {
       },
       dispose: () => undefined,
     });
-    await expect(candidate.receive(input)).resolves.toMatchObject({ matched: true });
+    await expect(candidate.receive(endpointEvent)).resolves.toMatchObject({ matched: true });
     expect(calls).toEqual(['previous', 'next']);
 
     await fixture.adapters.stop();
@@ -1710,7 +1784,7 @@ describe('IM Runtime', () => {
       { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example/a.jpg' } } },
     ] as const;
 
-    await fixture.im.receive({
+    await receive(fixture.im, {
       conversation,
       message: messageRef,
       content: '看图[image]',
@@ -1725,7 +1799,7 @@ describe('IM Runtime', () => {
     expect(captured?.message).toEqual(messageRef);
     expect(captured?.id).toBe('message-1');
 
-    await fixture.im.receive({
+    await receive(fixture.im, {
       conversation: {
         endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
         kind: 'private' as const,
@@ -1883,7 +1957,10 @@ function baseState(slots: readonly CapabilitySlot[]): SnapshotState {
       children: [],
     }]]),
     config: new Map([[root, { commandPrefix: '/' }]]),
-    resources: new Map([[root, new Map()]]),
+    resources: new Map([[root, new Map([[
+      endpointEventGatewayToken.id,
+      ignoredEndpointEvents,
+    ]])]]),
     capabilities: new Map(slots.map((slot) => [slot.id, slot])),
     projections: new Map(),
   };
@@ -2191,7 +2268,7 @@ describe('UserInteraction via ImRuntime', () => {
   it('text interaction 应发送提示并等待用户输入后返回', async () => {
     const { im, sent, getResult } = await createInteractionFixture();
 
-    const commandPromise = im.receive(incomingMessage('/ask'));
+    const commandPromise = receive(im, incomingMessage('/ask'));
 
     await vi.waitFor(() => {
       expect(sent.length).toBeGreaterThanOrEqual(1);
@@ -2203,7 +2280,7 @@ describe('UserInteraction via ImRuntime', () => {
       }],
     }));
 
-    const answerResult = await im.receive(incomingMessage('张三'));
+    const answerResult = await receive(im, incomingMessage('张三'));
     expect(answerResult.matched).toBe(true);
     expect(answerResult.command).toBe('interaction');
 
@@ -2216,13 +2293,13 @@ describe('UserInteraction via ImRuntime', () => {
   it('interaction 应仅匹配同一用户同一频道的消息', async () => {
     const { im, sent } = await createInteractionFixture();
 
-    im.receive(incomingMessage('/ask'));
+    receive(im, incomingMessage('/ask'));
 
     await vi.waitFor(() => {
       expect(sent.length).toBeGreaterThanOrEqual(1);
     });
 
-    const otherUserResult = await im.receive(incomingMessage('李四', 'user-2'));
+    const otherUserResult = await receive(im, incomingMessage('李四', 'user-2'));
     expect(otherUserResult.matched).toBe(false);
   });
 
@@ -2276,9 +2353,9 @@ describe('UserInteraction via ImRuntime', () => {
     await adapters.start();
     adapters.open();
 
-    const initial = im.receive(incomingMessage('start'));
+    const initial = receive(im, incomingMessage('start'));
     await vi.waitFor(() => expect(sent).toHaveLength(1));
-    await expect(im.receive(incomingMessage('完成'))).resolves.toMatchObject({
+    await expect(receive(im, incomingMessage('完成'))).resolves.toMatchObject({
       matched: true,
       command: 'interaction',
     });
@@ -2342,7 +2419,7 @@ describe('UserInteraction via ImRuntime', () => {
     await adapters.start();
     adapters.open();
 
-    await im.receive(incomingMessage('/ask'));
+    await receive(im, incomingMessage('/ask'));
 
     expect(interactionError).toBeInstanceOf(Error);
     expect((interactionError as Error).message).toBe('等太久了');
@@ -2401,10 +2478,10 @@ describe('UserInteraction via ImRuntime', () => {
     await adapters.start();
     adapters.open();
 
-    const commandPromise = im.receive(incomingMessage('/age'));
+    const commandPromise = receive(im, incomingMessage('/age'));
     await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(1); });
 
-    await im.receive(incomingMessage('25'));
+    await receive(im, incomingMessage('25'));
     await commandPromise;
     expect(interactionResult).toBe(25);
   });
@@ -2458,7 +2535,7 @@ describe('UserInteraction via ImRuntime', () => {
     await adapters.start();
     adapters.open();
 
-    const commandPromise = im.receive(incomingMessage('/confirm'));
+    const commandPromise = receive(im, incomingMessage('/confirm'));
     await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(1); });
 
     expect(sent[0]).toEqual(expect.objectContaining({
@@ -2471,7 +2548,7 @@ describe('UserInteraction via ImRuntime', () => {
       ],
     }));
 
-    await im.receive({
+    await receive(im, {
       ...incomingMessage('[button:confirm]'),
       segments: [{ type: 'action', data: { id: 'confirm', payload: 'yes' } }],
     });
@@ -2479,10 +2556,10 @@ describe('UserInteraction via ImRuntime', () => {
     expect(interactionResult).toBe(true);
 
     const sentBeforeSecondRun = sent.length;
-    const cancelledCommand = im.receive(incomingMessage('/confirm'));
+    const cancelledCommand = receive(im, incomingMessage('/confirm'));
     await vi.waitFor(() => { expect(sent.length).toBeGreaterThan(sentBeforeSecondRun); });
 
-    await im.receive(incomingMessage('no'));
+    await receive(im, incomingMessage('no'));
     await cancelledCommand;
     expect(interactionResult).toBe(false);
   });
@@ -2557,18 +2634,18 @@ describe('UserInteraction via ImRuntime', () => {
     await adapters.start();
     adapters.open();
 
-    const commandPromise = im.receive(incomingMessage('/environment'));
+    const commandPromise = receive(im, incomingMessage('/environment'));
     await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(1); });
 
-    const firstAnswer = await im.receive(incomingMessage('正式发布'));
+    const firstAnswer = await receive(im, incomingMessage('正式发布'));
     expect(firstAnswer).toMatchObject({ matched: true, command: 'interaction' });
     await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(2); });
 
-    const secondAnswer = await im.receive(incomingMessage('2'));
+    const secondAnswer = await receive(im, incomingMessage('2'));
     expect(secondAnswer).toMatchObject({ matched: true, command: 'interaction' });
     await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(3); });
 
-    const thirdAnswer = await im.receive(incomingMessage('yes'));
+    const thirdAnswer = await receive(im, incomingMessage('yes'));
     expect(thirdAnswer).toMatchObject({ matched: true, command: 'interaction' });
     await commandPromise;
     expect(sequenceResult).toEqual({
@@ -2636,11 +2713,11 @@ describe('UserInteraction via ImRuntime', () => {
     await adapters.start();
     adapters.open();
 
-    await expect(im.receive(incomingMessage('/abort-confirm'))).resolves.toMatchObject({
+    await expect(receive(im, incomingMessage('/abort-confirm'))).resolves.toMatchObject({
       matched: true,
     });
     expect(interactionError).toBeInstanceOf(Error);
-    await expect(im.receive(incomingMessage('yes'))).resolves.toMatchObject({
+    await expect(receive(im, incomingMessage('yes'))).resolves.toMatchObject({
       matched: false,
     });
   });
@@ -2662,7 +2739,7 @@ describe('UserInteraction via ImRuntime', () => {
 
     await expect(interaction.ask({ type: 'text', title: '请输入' }))
       .rejects.toThrow(/delivery/i);
-    await expect(im.receive(incomingMessage('后续消息'))).resolves.toMatchObject({ matched: false });
+    await expect(receive(im, incomingMessage('后续消息'))).resolves.toMatchObject({ matched: false });
   });
 
   it('keeps same-user interaction claims isolated by canonical thread identity', async () => {
@@ -2680,13 +2757,13 @@ describe('UserInteraction via ImRuntime', () => {
     const second = threadTwo.ask({ type: 'text', title: '线程二' });
     await new Promise<void>((resolve) => queueMicrotask(resolve));
 
-    await expect(im.receive({
+    await expect(receive(im, {
       ...incomingMessage('答案二'),
       conversation: { ...incomingMessage('答案二').conversation, threadId: 'thread-2' },
     })).resolves.toMatchObject({ matched: true, command: 'interaction' });
     await expect(second).resolves.toBe('答案二');
 
-    await expect(im.receive({
+    await expect(receive(im, {
       ...incomingMessage('答案一'),
       conversation: { ...incomingMessage('答案一').conversation, threadId: 'thread-1' },
     })).resolves.toMatchObject({ matched: true, command: 'interaction' });
@@ -2715,8 +2792,8 @@ describe('UserInteraction via ImRuntime', () => {
     expect(interaction).toBeDefined();
     const pending = interaction!.ask({ type: 'confirm', title: '请 master 确认' });
     await vi.waitFor(() => { expect(delivered.length).toBeGreaterThanOrEqual(1); });
-    await expect(im.receive(incomingMessage('yes', 'user-1'))).resolves.toMatchObject({ matched: false });
-    await expect(im.receive(incomingMessage('yes', 'master-1'))).resolves.toMatchObject({
+    await expect(receive(im, incomingMessage('yes', 'user-1'))).resolves.toMatchObject({ matched: false });
+    await expect(receive(im, incomingMessage('yes', 'master-1'))).resolves.toMatchObject({
       matched: true,
       command: 'interaction',
     });

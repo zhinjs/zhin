@@ -226,7 +226,7 @@ export function onebot12InboundConversation(endpointKey: string, ev: OneBot12Eve
   };
 }
 
-/** Build inbound text for MessageGateway.receive */
+/** Build inbound text for OutboundMessageService.receive */
 export function formatInboundContent(ev: OneBot12Event): string {
   if (Array.isArray(ev.message)) {
     return ev.message

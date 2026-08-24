@@ -1,8 +1,9 @@
+import { bindTestEndpoint } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { onebot11RuntimeStateToken } from '../src/onebot11-runtime-state.js';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import { messageGatewayToken, sideEventGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
+import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { OneBot11WsEndpoint } from '../src/ws-endpoint.js';
 import type { OneBot11WsSocket } from '../src/ws-types.js';
@@ -266,11 +267,11 @@ describe('onebot11 protocol helpers', () => {
 });
 
 describe('onebot11 plugin runtime adapter', () => {
-  it('routes admitted message events through MessageGateway when open', async () => {
+  it('routes admitted message events through OutboundMessageService when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const ws = createMockWs();
-    const endpoint = new OneBot11WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
       gateway,
       config: baseConfig,
@@ -278,7 +279,7 @@ describe('onebot11 plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), gateway, undefined);
 
     await endpoint.start();
     endpoint.open();
@@ -309,7 +310,7 @@ describe('onebot11 plugin runtime adapter', () => {
   it('marks mentioned when a group message @s the bot self_id', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const ws = createMockWs();
-    const endpoint = new OneBot11WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
@@ -317,7 +318,7 @@ describe('onebot11 plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     endpoint.admit({
@@ -347,7 +348,7 @@ describe('onebot11 plugin runtime adapter', () => {
   it('does not mark mentioned when @ targets someone else or @all', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const ws = createMockWs();
-    const endpoint = new OneBot11WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
@@ -355,7 +356,7 @@ describe('onebot11 plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
 
@@ -396,7 +397,7 @@ describe('onebot11 plugin runtime adapter', () => {
   it('forwards reply segment id as replyTo', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const ws = createMockWs();
-    const endpoint = new OneBot11WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
@@ -404,7 +405,7 @@ describe('onebot11 plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     endpoint.admit({
@@ -430,7 +431,7 @@ describe('onebot11 plugin runtime adapter', () => {
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
-    const endpoint = new OneBot11WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
@@ -438,7 +439,7 @@ describe('onebot11 plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.admit({
       post_type: 'message',
@@ -453,7 +454,7 @@ describe('onebot11 plugin runtime adapter', () => {
 
   it('sends outbound payloads via WS send_private_msg action', async () => {
     const ws = createMockWs();
-    const endpoint = new OneBot11WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -464,7 +465,10 @@ describe('onebot11 plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     endpoint.open();
 
@@ -499,7 +503,7 @@ describe('onebot11 plugin runtime adapter', () => {
   it('admits inbound events received over the socket when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
-    const endpoint = new OneBot11WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
@@ -507,7 +511,7 @@ describe('onebot11 plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     ws.emitMessage(JSON.stringify({
@@ -536,7 +540,7 @@ describe('onebot11 plugin runtime adapter', () => {
       config: { connection: 'wss', id: 'rev', path: '/onebot/ws' },
       use: (token: unknown) => {
         if (token === httpHostToken) return http;
-        if (token === messageGatewayToken) {
+        if (token === outboundMessageToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
         }
         if (token === sideEventGatewayToken) {
@@ -556,9 +560,8 @@ describe('onebot11 plugin runtime adapter', () => {
 
 describe('onebot11 ws lifecycle', () => {
   it('does not arm reconnect when the initial connect closes before open', async () => {
-    const { getOnebot11AgentDeps } = await import('../src/onebot11-agent-deps.js');
     let creates = 0;
-    const endpoint = new OneBot11WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig, // reconnect_interval: 50
@@ -568,23 +571,21 @@ describe('onebot11 ws lifecycle', () => {
         queueMicrotask(() => ws.emitClose(1006, 'refused'));
         return ws;
       },
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
 
     await expect(endpoint.start()).rejects.toThrow('OneBot11 WS 关闭');
     // 等超过一个 reconnect_interval，不应有幽灵重连发生
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(creates).toBe(1);
-    // start 失败后 agent endpoint 已反注册
-    expect(() => getOnebot11AgentDeps().getEndpoint('test-ob11')).toThrow();
   });
 
   it('settles start() silently when stop() races the initial connect', async () => {
-    const endpoint = new OneBot11WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => createMockWs(), // 永不 open，模拟连接挂起
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
 
     const startPromise = endpoint.start();
     await endpoint.stop();
@@ -594,7 +595,7 @@ describe('onebot11 ws lifecycle', () => {
 
   it('reconnects only after an established connection closes', async () => {
     const sockets: Array<ReturnType<typeof createMockWs>> = [];
-    const endpoint = new OneBot11WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
@@ -606,7 +607,7 @@ describe('onebot11 ws lifecycle', () => {
         });
         return ws;
       },
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
 
     await endpoint.start();
     sockets[0]!.emitClose(1006, 'lost');
@@ -620,7 +621,7 @@ describe('onebot11 ws lifecycle', () => {
     const warnSpy = vi.spyOn(getAdapterLogger('onebot11', 'wss-noauth'), 'warn');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     try {
-      const endpoint = new OneBot11WssEndpoint({
+      const endpoint = bindTestEndpoint(new OneBot11WssEndpoint({
         id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
         gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
         http,
@@ -629,7 +630,7 @@ describe('onebot11 ws lifecycle', () => {
           id: 'wss-noauth',
           path: '/ob11/ws',
         }) as import('../src/protocol.js').OneBot11WssConfig,
-      });
+      }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
       await endpoint.start();
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('missing access_token'));
       await endpoint.stop();

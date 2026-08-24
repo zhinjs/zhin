@@ -243,8 +243,8 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
       options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
     },
   });
-  // Bind before start so Adapter definitions can resolve messageGatewayToken
-  // while the first generation is still being prepared.
+  // Attach before start so the generation-owned Endpoint event boundary is
+  // available while the first generation is still being prepared.
   im.attach(host.runtime.snapshots);
   agentHost?.attach(host.runtime.snapshots);
   consoleHost.console.attach(host.runtime.snapshots);

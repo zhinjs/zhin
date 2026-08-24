@@ -3,7 +3,7 @@ import type { ConversationRef, MessageRef } from '@zhin.js/im-contract';
 /**
  * Transport-neutral control plane for a live endpoint.
  *
- * Sending belongs to EndpointInstance.send(). This port intentionally owns
+ * Sending belongs to Endpoint.send(). This port intentionally owns
  * operations that address an existing platform message, so Core never needs
  * to know a protocol's method names or identifier layout.
  */

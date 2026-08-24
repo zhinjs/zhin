@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=712c4bbd46abfdbd -->
+<!-- sync-adapter-docs:sha256=57cdba702775dd44 -->
 
 # @zhin.js/adapter-icqq
 
@@ -17,7 +17,7 @@ ICQQ Plugin Runtime 适配器 — 进程内直接使用 [@icqqjs/icqq](https://g
 ## 功能特性
 
 - 群聊 / 私聊 / 群临时会话 / QQ 频道消息
-- 入站：`messageGatewayToken`，文本与图片 / 语音 / 视频 / 文件统一归一为 canonical `Segment` + `MediaRef`
+- 入站：ICQQ Client 原始事件经 `Endpoint.emit(...)` 唯一入口上送；文本与图片 / 语音 / 视频 / 文件统一归一为 canonical `Segment` + `MediaRef`
 - 出站：canonical Segment 直接投影为 ICQQ 原生 `Sendable`，再由 `sendGroupMsg` / `sendPrivateMsg` / …发送
 - 群聊 reaction：`control.addReaction` / `removeReaction`（协议 ACK 失败不阻塞后续发送）
 - Agent 工具：包根 `tools/`（`@zhin.js/tool` Feature；模型侧名为 `icqq__send_user_like` 等）
@@ -83,10 +83,74 @@ plugins:
 | 群临时会话 | `{ kind: 'private', id: uin, parent: { kind: 'group', id: gid } }` |
 | 频道 | `{ kind: 'channel', id: channelId, parent: { kind: 'channel', id: guildId } }` |
 
+## 直接使用完整 ICQQ Client
+
+适配器把 `icqq` 注册为 `@icqqjs/icqq.Client` 与 SDK `EventMap` 的类型判别项。
+所有 Feature 都使用同一个 `adapter` 字段完成类型缩窄与运行时过滤：
+
+```ts
+import { defineHandler } from 'zhin.js/handler'
+import '@zhin.js/adapter-icqq'
+
+export default defineHandler({
+  adapter: 'icqq',
+  event: 'request.group.add',
+  async handle({ client, event }) {
+    await client.setGroupAddRequest(event.flag, true)
+  },
+})
+```
+
+`client` 就是当前账号的真实 ICQQ SDK 实例，不是 Endpoint facade。未知扩展事件可显式使用
+`event: '*'`；此时 Client 类型保持完整，事件 payload 为 `unknown`。普通消息回复仍应走
+`Message.$reply`；群管理、请求审批与 ICQQ 专属查询可直接调用当前事件的 `client`。
+
+Command context 的 `$client` 是按需读取的 getter：
+
+```ts
+export default defineCommand({
+  adapter: 'icqq',
+  async execute(context) {
+    await context.$client.sendLike(Number(context.sender!.id), 10)
+    return 'ok'
+  },
+})
+```
+
+Middleware 使用同一个判别字段；不声明 `adapter` 时 `$client` 的类型是 `unknown`：
+
+```ts
+export default defineMiddleware<Message>({
+  target: 'inbound',
+  adapter: 'icqq',
+  async handle(context, next) {
+    console.log(context.$client.uin, context.input.content)
+    await next()
+  },
+})
+```
+
+Agent tool 的 IM turn 同样直接读取当前 Client：
+
+```ts
+export default defineAgentTool({
+  adapter: 'icqq',
+  description: '获取群列表',
+  async execute(_input, context) {
+    return context.$client.getGroupList()
+  },
+})
+```
+
+`adapter` 缺失时 `$client` 静态类型为 `unknown`；声明后若实际 operation 不属于 ICQQ，
+运行时会在执行前拒绝。Client 只能在当前 operation 内使用。task、schedule 或 Host 等脱离
+IM turn 的场景，才使用 `icqqClient.get(context, endpointId)` 显式选择账号。
+
 ## 架构
 
 - `plugin.ts` + `adapters/icqq.ts`（`defineAdapter`）
-- Endpoint：`src/endpoint.ts`（继承 icqq `Client`，`start()` 内 `login()`）
+- Client token：`src/client.ts`（直接引用 ICQQ `Client` / `EventMap`）
+- Endpoint：`src/endpoint.ts`（组合 ICQQ `Client`，负责账号 transport 与 Zhin lifecycle）
 - 协议常量 / 配置：`src/protocol.ts`
 - Agent 工具：`tools/*.ts`；权限说明见 `agent/PERMITS.md`
 
@@ -98,7 +162,7 @@ plugins:
 - ICQQ 的语音、视频、文件是独立消息元素；它们与其他段混发时适配器会明确拒绝，避免协议栈静默丢段。
 - 入站语音 / 视频在 Endpoint 持有原生 Client 时解析可下载 URL；解析失败则保留真实平台引用，不伪造或丢弃媒体。
 - **Console 社交/群管 RPC 已接线**：endpoint 把好友/群/群成员列表、请求审批和群管操作归一化为冻结的 `EndpointManagement`。Host 只消费该语义端口。
-- 好友/入群请求与通知：经 `sideEventGatewayToken` 分发到 `handlers`（`notice.receive` / `request.receive`）；审批走 `Request.$approve` / `EndpointManagement.approveRequest`。Console `request.list` 优先读 `management.listRequests()`（`getSystemMsg`），不再写入 `unified_inbox_request/notice`。
+- 好友/入群请求与通知：经 the unified `Endpoint.emit(...)` ingress 分发到 `handlers`（`notice.receive` / `request.receive`）；审批走 `Request.$approve` / `EndpointManagement.approveRequest`。Console `request.list` 优先读 `management.listRequests()`（`getSystemMsg`），不再写入 `unified_inbox_request/notice`。
 - `system.*`（登录扫码等）分发到 `system.receive`。
 - **登录辅助**：`system.login.qrcode|slider|device|auth` 经 `loginAssistToken`（`LoginAssist`）挂起待办；刷新后可用 Console `login.list` / `login.submit` 或终端 stdin 继续（对齐 icqq 官方 stdin 流程）。`system.online` / `login.error` 会清理该 endpoint 待办。
 

@@ -1,12 +1,11 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
  * DingTalkEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
-import type { EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
+import { type EndpointSendRequest } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
-import { registerDingtalkAgentEndpoint } from './dingtalk-agent-deps.js';
 import { normalizeDingtalkSenderForPermit } from './platform-permit.js';
 import {
   dingtalkInboundConversation,
@@ -41,11 +40,41 @@ export type DingTalkFetch = (
 
 export interface DingTalkEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: ResolvedDingTalkConfig;
   readonly fetch?: DingTalkFetch;
+}
+
+export interface DingTalkClientApi {
+  getUserInfo(userId: string): Promise<unknown>;
+  getDepartmentUsers(deptId: number): Promise<unknown[]>;
+  sendWorkNotice(userIdList: string[], content: unknown): Promise<boolean>;
+  getDepartmentList(deptId?: number): Promise<unknown[]>;
+  getDepartmentInfo(deptId: number): Promise<unknown>;
+  createChat(name: string, ownerUserId: string, userIdList: string[]): Promise<string | null>;
+  getChatInfo(chatId: string): Promise<unknown>;
+  updateChat(chatId: string, options: {
+    name?: string;
+    owner?: string;
+    add_useridlist?: string[];
+    del_useridlist?: string[];
+  }): Promise<boolean>;
+}
+
+/** SDK-like DingTalk OpenAPI surface available on every Endpoint event. */
+export class DingTalkClient implements DingTalkClientApi {
+  constructor(readonly api: DingTalkClientApi) {}
+  getUserInfo = (userId: string) => this.api.getUserInfo(userId);
+  getDepartmentUsers = (deptId: number) => this.api.getDepartmentUsers(deptId);
+  sendWorkNotice = (userIds: string[], content: unknown) =>
+    this.api.sendWorkNotice(userIds, content);
+  getDepartmentList = (deptId?: number) => this.api.getDepartmentList(deptId);
+  getDepartmentInfo = (deptId: number) => this.api.getDepartmentInfo(deptId);
+  createChat = (name: string, owner: string, users: string[]) =>
+    this.api.createChat(name, owner, users);
+  getChatInfo = (chatId: string) => this.api.getChatInfo(chatId);
+  updateChat = (chatId: string, options: Parameters<DingTalkClientApi['updateChat']>[1]) =>
+    this.api.updateChat(chatId, options);
 }
 
 /**
@@ -53,7 +82,17 @@ export interface DingTalkEndpointOptions {
  * 「我所在的群」枚举面，仅能收发消息；
  * 因此本 endpoint 不暴露 EndpointManagement（Console 社交面 RPC 对该平台保持未接线）。
  */
-export class DingTalkEndpoint implements EndpointInstance {
+export class DingTalkEndpoint extends Endpoint<DingTalkClient> {
+  readonly client = new DingTalkClient({
+    getUserInfo: (userId) => this.#getUserInfo(userId),
+    getDepartmentUsers: (deptId) => this.#getDepartmentUsers(deptId),
+    sendWorkNotice: (userIds, content) => this.#sendWorkNotice(userIds, content),
+    getDepartmentList: (deptId) => this.#getDepartmentList(deptId),
+    getDepartmentInfo: (deptId) => this.#getDepartmentInfo(deptId),
+    createChat: (name, owner, users) => this.#createChat(name, owner, users),
+    getChatInfo: (chatId) => this.#getChatInfo(chatId),
+    updateChat: (chatId, options) => this.#updateChat(chatId, options),
+  });
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: DingTalkEndpointOptions;
@@ -64,9 +103,9 @@ export class DingTalkEndpoint implements EndpointInstance {
   #sessionWebhooks = new Map<string, string>();
   #open = false;
   #started = false;
-  #unregisterAgent?: () => void;
 
   constructor(options: DingTalkEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('dingtalk', options.config.id);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
@@ -86,7 +125,6 @@ export class DingTalkEndpoint implements EndpointInstance {
     this.#started = true;
     try {
       await this.#refreshAccessToken();
-      this.#unregisterAgent = registerDingtalkAgentEndpoint(this.#options.config.id, this);
       this.#routeReleases.push(...registerDingTalkWebhookRoutes(this.#options.http, this));
       this.#logger.debug(formatCompact({
         endpoint: this.#options.config.id,
@@ -112,8 +150,6 @@ export class DingTalkEndpoint implements EndpointInstance {
     this.#open = false;
     this.#sessionWebhooks.clear();
     for (const release of this.#routeReleases.splice(0)) release();
-    this.#unregisterAgent?.();
-    this.#unregisterAgent = undefined;
     this.#started = false;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
@@ -160,13 +196,14 @@ export class DingTalkEndpoint implements EndpointInstance {
   /** Test / internal: admit a parsed event when open (non-webhook path). */
   admit(event: DingTalkEvent | DingTalkMessage): void {
     if (!this.#open) return;
+    this.#emitPlatformEvent(event.msgtype || 'event', event);
     if (event.sessionWebhook && event.conversationId) {
       this.#sessionWebhooks.set(event.conversationId, event.sessionWebhook);
     }
     const conversation = dingtalkInboundConversation(String(this.#options.id), event);
     const chatType = resolveChatType(event.conversationType);
     const permit = normalizeDingtalkSenderForPermit({ isAdmin: event.isAdmin === true });
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: generateMessageId(event) },
       content: formatInboundContent(event),
@@ -194,7 +231,17 @@ export class DingTalkEndpoint implements EndpointInstance {
     });
   }
 
-  async getUserInfo(userId: string): Promise<unknown> {
+  #emitPlatformEvent(name: string, event: unknown): void {
+    void this.emitPlatform(name, event).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'dingtalk_platform_event_failed',
+        event: name,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
+  }
+
+  async #getUserInfo(userId: string): Promise<unknown> {
     try {
       const data = await this.#request('/topapi/v2/user/get', {
         method: 'POST',
@@ -208,7 +255,7 @@ export class DingTalkEndpoint implements EndpointInstance {
     }
   }
 
-  async getDepartmentUsers(deptId: number): Promise<unknown[]> {
+  async #getDepartmentUsers(deptId: number): Promise<unknown[]> {
     try {
       const data = await this.#request('/topapi/user/listid', {
         method: 'POST',
@@ -225,7 +272,7 @@ export class DingTalkEndpoint implements EndpointInstance {
     }
   }
 
-  async sendWorkNotice(userIdList: string[], content: unknown): Promise<boolean> {
+  async #sendWorkNotice(userIdList: string[], content: unknown): Promise<boolean> {
     try {
       const data = await this.#request('/topapi/message/corpconversation/asyncsend_v2', {
         method: 'POST',
@@ -243,7 +290,7 @@ export class DingTalkEndpoint implements EndpointInstance {
     }
   }
 
-  async getDepartmentList(deptId: number = 1): Promise<unknown[]> {
+  async #getDepartmentList(deptId: number = 1): Promise<unknown[]> {
     try {
       const data = await this.#request('/topapi/v2/department/listsub', {
         method: 'POST',
@@ -257,7 +304,7 @@ export class DingTalkEndpoint implements EndpointInstance {
     }
   }
 
-  async getDepartmentInfo(deptId: number): Promise<unknown> {
+  async #getDepartmentInfo(deptId: number): Promise<unknown> {
     try {
       const data = await this.#request('/topapi/v2/department/get', {
         method: 'POST',
@@ -271,7 +318,7 @@ export class DingTalkEndpoint implements EndpointInstance {
     }
   }
 
-  async createChat(
+  async #createChat(
     name: string,
     ownerUserId: string,
     userIdList: string[],
@@ -289,7 +336,7 @@ export class DingTalkEndpoint implements EndpointInstance {
     }
   }
 
-  async getChatInfo(chatId: string): Promise<unknown> {
+  async #getChatInfo(chatId: string): Promise<unknown> {
     try {
       const data = await this.#request('/topapi/chat/get', {
         method: 'POST',
@@ -303,7 +350,7 @@ export class DingTalkEndpoint implements EndpointInstance {
     }
   }
 
-  async updateChat(
+  async #updateChat(
     chatId: string,
     options: {
       name?: string;

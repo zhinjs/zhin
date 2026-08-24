@@ -1,3 +1,4 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
  * KookEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
@@ -7,22 +8,21 @@ import {
   type EndpointControl,
   type EndpointChannel,
   type EndpointGroup,
-  type EndpointInstance,
   type EndpointManagement,
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
-import { registerKookAgentEndpoint } from './kook-agent-deps.js';
 import {
   formatInboundContent,
   formatOutboundKmarkdown,
   isKookBotMentioned,
   kookInboundConversation,
+  normalizeKookWebhookEvent,
   senderDisplayName,
   type KookInboundMessage,
+  type KookWebhookEventData,
   type ResolvedKookWebhookConfig,
   type ResolvedKookWebsocketConfig,
 } from './protocol.js';
@@ -38,13 +38,11 @@ import { receiveKookSideEvent } from './side-event-dispatch.js';
 
 export interface KookEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly config: ResolvedKookWebsocketConfig;
   readonly createClient?: CreateKookClient;
 }
 
-export class KookWebsocketEndpoint implements EndpointInstance {
+export class KookWebsocketEndpoint extends Endpoint<KookClientTransport> {
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: KookEndpointOptions;
@@ -52,21 +50,24 @@ export class KookWebsocketEndpoint implements EndpointInstance {
   #client: KookClientTransport | null = null;
   #open = false;
   #started = false;
-  #unregisterAgent?: () => void;
   readonly management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
   readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
 
   constructor(options: KookEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('kook', options.config.id);
     this.#options = options;
     this.#createClient = options.createClient ?? (defaultCreateClient as CreateKookClient);
+  }
+
+  get client(): KookClientTransport {
+    return this.#requireClient();
   }
 
   async start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
     try {
-      this.#unregisterAgent = registerKookAgentEndpoint(this.#options.config.id, this);
       this.#client = this.#createClient(this.#options.config);
       this.#bindClient(this.#client);
       await this.#client.connect();
@@ -93,8 +94,6 @@ export class KookWebsocketEndpoint implements EndpointInstance {
 
   async stop(): Promise<void> {
     this.#open = false;
-    this.#unregisterAgent?.();
-    this.#unregisterAgent = undefined;
     if (this.#client) {
       try {
         this.#client.removeAllListeners();
@@ -124,13 +123,13 @@ export class KookWebsocketEndpoint implements EndpointInstance {
     return messageId;
   }
 
-  /** Test / internal: admit a message when open. */
+  /** Test / internal: admit a normalized message when open. */
   admit(msg: KookInboundMessage): void {
     if (!this.#open) return;
     if (msg.authorBot) return;
     const conversation = kookInboundConversation(String(this.#options.id), msg);
     const selfId = this.#client?.self_id != null ? String(this.#client.self_id) : undefined;
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: msg.id },
       content: formatInboundContent(msg),
@@ -161,44 +160,26 @@ export class KookWebsocketEndpoint implements EndpointInstance {
     await this.#requireClient().recallMsg?.(messageId);
   }
 
-  // ── Agent tool surface ──────────────────────────────────────────────
-
-  async getRoleList(guildId: string) {
-    return this.#requireClient().pickGuild(guildId).getRoleList();
-  }
-
-  async createRole(guildId: string, name: string) {
-    return this.#requireClient().pickGuild(guildId).createRole(name);
-  }
-
-  async deleteRole(guildId: string, roleId: string) {
-    return this.#requireClient().pickGuild(guildId).deleteRole(roleId);
-  }
-
-  async grantRole(guildId: string, userId: string, roleId: string) {
-    return this.#requireClient().pickGuildMember(guildId, userId).grant(roleId);
-  }
-
-  async revokeRole(guildId: string, userId: string, roleId: string) {
-    return this.#requireClient().pickGuildMember(guildId, userId).revoke(roleId);
-  }
-
-  async addToBlacklist(guildId: string, userId: string, remark?: string) {
-    return this.#requireClient().pickGuildMember(guildId, userId).addToBlackList(remark);
-  }
-
-  async removeFromBlacklist(guildId: string, userId: string) {
-    return this.#requireClient().pickGuildMember(guildId, userId).removeFromBlackList();
-  }
-
   #bindClient(client: KookClientTransport): void {
     client.on('message', (raw) => {
+      this.#emitPlatformEvent('message', raw);
       const msg = normalizeKookMessage(raw);
       if (msg) this.admit(msg);
     });
     const receiver = (client as { receiver?: { on(event: string, listener: (...args: unknown[]) => void): void } }).receiver;
     receiver?.on('event', (raw) => {
-      receiveKookSideEvent(this.#options.sideEvents, this.#options.config.id, raw, this.#logger);
+      this.#emitPlatformEvent('event', raw);
+      receiveKookSideEvent((name, payload) => this.emit(name, payload), this.#options.config.id, raw, this.#logger);
+    });
+  }
+
+  #emitPlatformEvent(name: string, event: unknown): void {
+    void this.emitPlatform(name, event).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'kook_platform_event_failed',
+        event: name,
+        error: error instanceof Error ? error.message : String(error),
+      }));
     });
   }
 
@@ -210,14 +191,12 @@ export class KookWebsocketEndpoint implements EndpointInstance {
 
 export interface KookWebhookEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: ResolvedKookWebhookConfig;
   readonly createClient?: CreateKookClient;
 }
 
-export class KookWebhookEndpoint implements EndpointInstance {
+export class KookWebhookEndpoint extends Endpoint<KookClientTransport> {
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: KookWebhookEndpointOptions;
@@ -227,14 +206,18 @@ export class KookWebhookEndpoint implements EndpointInstance {
   #processedSn = new Set<number>();
   #open = false;
   #started = false;
-  #unregisterAgent?: () => void;
   readonly management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
   readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
 
   constructor(options: KookWebhookEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('kook', options.config.id);
     this.#options = options;
     this.#createClient = options.createClient ?? (defaultCreateWebhookClient as CreateKookClient);
+  }
+
+  get client(): KookClientTransport {
+    return this.#requireClient();
   }
 
   /** Used by webhook handler. */
@@ -254,7 +237,6 @@ export class KookWebhookEndpoint implements EndpointInstance {
     if (this.#started) return;
     this.#started = true;
     try {
-      this.#unregisterAgent = registerKookAgentEndpoint(this.#options.config.id, this);
       this.#client = this.#createClient(this.#options.config);
       await (this.#client as Client).init();
       this.#routeReleases.push(...registerKookWebhookRoutes(this.#options.http, this));
@@ -283,8 +265,6 @@ export class KookWebhookEndpoint implements EndpointInstance {
   async stop(): Promise<void> {
     this.#open = false;
     for (const release of this.#routeReleases.splice(0)) release();
-    this.#unregisterAgent?.();
-    this.#unregisterAgent = undefined;
     this.#processedSn.clear();
     if (this.#client) {
       try {
@@ -315,13 +295,34 @@ export class KookWebhookEndpoint implements EndpointInstance {
     return messageId;
   }
 
+  admitEvent(event: KookWebhookEventData): void {
+    void this.emitPlatform(String(event.type ?? 'event'), event).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'kook_platform_event_failed',
+        event: String(event.type ?? 'event'),
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
+    if (receiveKookSideEvent(
+      (name, payload) => this.emit(name, payload),
+      this.#options.config.id,
+      event,
+      this.#logger,
+    )) return;
+    const message = normalizeKookWebhookEvent(event, {
+      ignore: this.#options.config.ignore,
+      selfId: this.selfId,
+    });
+    if (message) this.admit(message);
+  }
+
   /** Test / internal: admit a message when open. */
   admit(msg: KookInboundMessage): void {
     if (!this.#open) return;
     if (msg.authorBot) return;
     const conversation = kookInboundConversation(String(this.#options.id), msg);
     const selfId = this.#client?.self_id != null ? String(this.#client.self_id) : undefined;
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: msg.id },
       content: formatInboundContent(msg),
@@ -360,34 +361,6 @@ export class KookWebhookEndpoint implements EndpointInstance {
       if (first != null) this.#processedSn.delete(first);
     }
     return true;
-  }
-
-  async getRoleList(guildId: string) {
-    return this.#requireClient().pickGuild(guildId).getRoleList();
-  }
-
-  async createRole(guildId: string, name: string) {
-    return this.#requireClient().pickGuild(guildId).createRole(name);
-  }
-
-  async deleteRole(guildId: string, roleId: string) {
-    return this.#requireClient().pickGuild(guildId).deleteRole(roleId);
-  }
-
-  async grantRole(guildId: string, userId: string, roleId: string) {
-    return this.#requireClient().pickGuildMember(guildId, userId).grant(roleId);
-  }
-
-  async revokeRole(guildId: string, userId: string, roleId: string) {
-    return this.#requireClient().pickGuildMember(guildId, userId).revoke(roleId);
-  }
-
-  async addToBlacklist(guildId: string, userId: string, remark?: string) {
-    return this.#requireClient().pickGuildMember(guildId, userId).addToBlackList(remark);
-  }
-
-  async removeFromBlacklist(guildId: string, userId: string) {
-    return this.#requireClient().pickGuildMember(guildId, userId).removeFromBlackList();
   }
 
   #requireClient(): KookClientTransport {

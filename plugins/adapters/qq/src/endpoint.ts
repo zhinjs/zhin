@@ -1,3 +1,4 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
  * QQ endpoints — lifecycle, outbound, admit, agent tool surface.
  */
@@ -5,16 +6,13 @@ import {
   createRecallEndpointControl,
   type EndpointControl,
   type EndpointChannel,
-  type EndpointInstance,
   type EndpointManagement,
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { formatOutbound } from './outbound.js';
-import { registerQqAgentEndpoint } from './qq-agent-deps.js';
 import {
   formatInboundContent,
   parseCompoundMessageId,
@@ -50,13 +48,11 @@ export type { CreateQqHttpBot, QqHttpBotTransport } from './webhook.js';
 
 export interface QqEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly config: ResolvedQqWebsocketConfig;
   readonly createBot?: CreateQqBot;
 }
 
-export class QqWebsocketEndpoint implements EndpointInstance {
+export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: QqEndpointOptions;
@@ -64,14 +60,18 @@ export class QqWebsocketEndpoint implements EndpointInstance {
   #bot: QqBotTransport | null = null;
   #open = false;
   #started = false;
-  #unregisterAgent?: () => void;
-  readonly management: EndpointManagement = createQqEndpointManagement(this);
+  readonly management: EndpointManagement = createQqEndpointManagement(() => this.#requireBot());
   readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
 
   constructor(options: QqEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('qq', options.config.id);
     this.#options = options;
     this.#createBot = options.createBot ?? defaultCreateBot;
+  }
+
+  get client(): QqBotTransport {
+    return this.#requireBot();
   }
 
   /** Live endpoint 名（Console/AdapterIndex 展示用，如 bot appid 别名）。 */
@@ -83,7 +83,6 @@ export class QqWebsocketEndpoint implements EndpointInstance {
     if (this.#started) return;
     this.#started = true;
     try {
-      this.#unregisterAgent = registerQqAgentEndpoint(this.#options.config.id, this);
       this.#bot = this.#createBot(this.#options.config);
       this.#bindBot(this.#bot);
       await this.#bot.start();
@@ -111,8 +110,6 @@ export class QqWebsocketEndpoint implements EndpointInstance {
 
   async stop(): Promise<void> {
     this.#open = false;
-    this.#unregisterAgent?.();
-    this.#unregisterAgent = undefined;
     if (this.#bot) {
       try {
         this.#bot.removeAllListeners();
@@ -191,7 +188,7 @@ export class QqWebsocketEndpoint implements EndpointInstance {
       + (msg.mentioned ? ' (mentioned)' : '')
       + ` | ${truncatePreview(content, 80)}`,
     );
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: msg.id },
       content,
@@ -218,52 +215,32 @@ export class QqWebsocketEndpoint implements EndpointInstance {
     });
   }
 
-  getGuilds() {
-    return this.#requireBot().getGuilds();
-  }
-
-  getChannels(guildId: string) {
-    return this.#requireBot().getChannels(guildId);
-  }
-
-  getChannelInfo(channelId: string) {
-    return this.#requireBot().getChannelInfo(channelId);
-  }
-
-  getGuildMember(guildId: string, userId: string) {
-    return this.#requireBot().getGuildMember(guildId, userId);
-  }
-
-  getGuildRoles(guildId: string) {
-    return this.#requireBot().getGuildRoles(guildId);
-  }
-
-  createGuildRole(guildId: string, name: string, color?: number) {
-    return this.#requireBot().createGuildRole(guildId, name, color);
-  }
-
-  addMemberRole(guildId: string, channelId: string, userId: string, roleId: string) {
-    return this.#requireBot().addMemberRole(guildId, channelId, userId, roleId);
-  }
-
-  removeMemberRole(guildId: string, channelId: string, userId: string, roleId: string) {
-    return this.#requireBot().removeMemberRole(guildId, channelId, userId, roleId);
-  }
-
   #bindBot(bot: QqBotTransport): void {
     bindQqBotInboundEvents(bot, (raw) => {
+      this.#emitPlatformEvent('message', raw);
       const msg = normalizeQqMessage(raw);
       if (msg) this.admit(msg);
     });
     bindQqBotSideEvents(bot, (eventName, raw) => {
+      this.#emitPlatformEvent(eventName, raw);
       receiveQqSideEvent(
-        this.#options.sideEvents,
+        (name, payload) => this.emit(name, payload),
         this.#options.config.id,
         bot as QqSideEventCaller,
         eventName,
         raw,
         this.#logger,
       );
+    });
+  }
+
+  #emitPlatformEvent(name: string, event: unknown): void {
+    void this.emitPlatform(name, event).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'qq_platform_event_failed',
+        event: name,
+        error: error instanceof Error ? error.message : String(error),
+      }));
     });
   }
 
@@ -275,15 +252,13 @@ export class QqWebsocketEndpoint implements EndpointInstance {
 
 export interface QqHttpEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: ResolvedQqHttpConfig;
   readonly createBot?: CreateQqHttpBot;
 }
 
 /** Webhook / middleware inbound via httpHostToken POST (qq-official-bot Middleware receiver). */
-export class QqHttpEndpoint implements EndpointInstance {
+export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: QqHttpEndpointOptions;
@@ -292,14 +267,18 @@ export class QqHttpEndpoint implements EndpointInstance {
   #routeReleases: ReturnType<typeof registerQqWebhookRoutes> = [];
   #open = false;
   #started = false;
-  #unregisterAgent?: () => void;
-  readonly management: EndpointManagement = createQqEndpointManagement(this);
+  readonly management: EndpointManagement = createQqEndpointManagement(() => this.#requireBot());
   readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
 
   constructor(options: QqHttpEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('qq', options.config.id);
     this.#options = options;
     this.#createBot = options.createBot ?? defaultCreateHttpBot;
+  }
+
+  get client(): QqHttpBotTransport {
+    return this.#requireBot();
   }
 
   /** Live endpoint 名（Console/AdapterIndex 展示用）。 */
@@ -311,10 +290,6 @@ export class QqHttpEndpoint implements EndpointInstance {
     if (this.#started) return;
     this.#started = true;
     try {
-      this.#unregisterAgent = registerQqAgentEndpoint(
-        this.#options.config.id,
-        this as unknown as QqWebsocketEndpoint,
-      );
       this.#setupRoutes();
       this.#bot = this.#createBot(this.#options.config);
       this.#bindBot(this.#bot);
@@ -340,8 +315,6 @@ export class QqHttpEndpoint implements EndpointInstance {
   async stop(): Promise<void> {
     this.#open = false;
     for (const release of this.#routeReleases.splice(0)) release();
-    this.#unregisterAgent?.();
-    this.#unregisterAgent = undefined;
     if (this.#bot) {
       try {
         this.#bot.removeAllListeners();
@@ -419,7 +392,7 @@ export class QqHttpEndpoint implements EndpointInstance {
       + (msg.mentioned ? ' (mentioned)' : '')
       + ` | ${truncatePreview(content, 80)}`,
     );
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: msg.id },
       content,
@@ -446,38 +419,6 @@ export class QqHttpEndpoint implements EndpointInstance {
     });
   }
 
-  getGuilds() {
-    return this.#requireBot().getGuilds();
-  }
-
-  getChannels(guildId: string) {
-    return this.#requireBot().getChannels(guildId);
-  }
-
-  getChannelInfo(channelId: string) {
-    return this.#requireBot().getChannelInfo(channelId);
-  }
-
-  getGuildMember(guildId: string, userId: string) {
-    return this.#requireBot().getGuildMember(guildId, userId);
-  }
-
-  getGuildRoles(guildId: string) {
-    return this.#requireBot().getGuildRoles(guildId);
-  }
-
-  createGuildRole(guildId: string, name: string, color?: number) {
-    return this.#requireBot().createGuildRole(guildId, name, color);
-  }
-
-  addMemberRole(guildId: string, channelId: string, userId: string, roleId: string) {
-    return this.#requireBot().addMemberRole(guildId, channelId, userId, roleId);
-  }
-
-  removeMemberRole(guildId: string, channelId: string, userId: string, roleId: string) {
-    return this.#requireBot().removeMemberRole(guildId, channelId, userId, roleId);
-  }
-
   #setupRoutes(): void {
     this.#routeReleases.push(...registerQqWebhookRoutes(this.#options.http, {
       config: this.#options.config,
@@ -487,12 +428,14 @@ export class QqHttpEndpoint implements EndpointInstance {
 
   #bindBot(bot: QqBotTransport): void {
     bindQqBotInboundEvents(bot, (raw) => {
+      this.#emitPlatformEvent('message', raw);
       const msg = normalizeQqMessage(raw);
       if (msg) this.admit(msg);
     });
     bindQqBotSideEvents(bot, (eventName, raw) => {
+      this.#emitPlatformEvent(eventName, raw);
       receiveQqSideEvent(
-        this.#options.sideEvents,
+        (name, payload) => this.emit(name, payload),
         this.#options.config.id,
         bot as QqSideEventCaller,
         eventName,
@@ -502,26 +445,36 @@ export class QqHttpEndpoint implements EndpointInstance {
     });
   }
 
-  #requireBot(): QqBotTransport {
+  #emitPlatformEvent(name: string, event: unknown): void {
+    void this.emitPlatform(name, event).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'qq_platform_event_failed',
+        event: name,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
+  }
+
+  #requireBot(): QqHttpBotTransport {
     if (!this.#bot) throw new Error('QQ bot not connected');
     return this.#bot;
   }
 }
 
-function createQqEndpointManagement(endpoint: {
-  getGuilds(): Promise<unknown[]>;
-  getChannels(guildId: string): Promise<unknown[]>;
-}): EndpointManagement {
+function createQqEndpointManagement(
+  requireClient: () => Pick<QqBotTransport, 'getGuilds' | 'getChannels'>,
+): EndpointManagement {
   return Object.freeze<EndpointManagement>({
     async listChannels(): Promise<readonly EndpointChannel[]> {
       const channels: EndpointChannel[] = [];
-      const guilds = await endpoint.getGuilds();
+      const client = requireClient();
+      const guilds = await client.getGuilds();
       for (const guildValue of Array.isArray(guilds) ? guilds : []) {
         const guild = asRecord(guildValue);
         const guildId = String(guild.id ?? guild.guild_id ?? guildValue ?? '');
         if (!guildId) continue;
         const guildName = String(guild.name ?? guild.guild_name ?? guildId);
-        const rows = await endpoint.getChannels(guildId);
+        const rows = await client.getChannels(guildId);
         for (const channelValue of Array.isArray(rows) ? rows : []) {
           const channel = asRecord(channelValue);
           const id = String(channel.id ?? channel.channel_id ?? channelValue ?? '');

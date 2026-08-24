@@ -1,3 +1,4 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
  * WeixinIlinkEndpoint — lifecycle, long-poll inbound, outbound send.
  */
@@ -7,14 +8,12 @@ import path from 'node:path';
 import type {
   EndpointFriend,
   EndpointControl,
-  EndpointInstance,
   EndpointManagement,
   EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
-import { getUpdates, notifyStart, notifyStop, sendTyping } from './ilink-api.js';
+import { getUpdates, notifyStart, notifyStop } from './ilink-api.js';
 import { configureIlinkMeta } from './ilink-meta.js';
 import {
   loadSyncBuf,
@@ -24,7 +23,6 @@ import {
 } from './credentials.js';
 import { resolveCredentials } from './login.js';
 import {
-  getContextToken,
   listContextTokenUserIds,
   restoreContextTokens,
   setContextToken,
@@ -39,7 +37,6 @@ import {
 } from './ilink-session-guard.js';
 import { downloadMediaFromItem } from './media-download.js';
 import { sendMessageWeixin } from './weixin-send.js';
-import { sendWeixinMediaFile } from './weixin-send-media.js';
 import { materializeOutboundMedia } from './outbound-media.js';
 import { MessageItemType, type WeixinMessage } from './ilink-types.js';
 import { getExtensionFromMime, sniffMimeFromBuffer } from './mime.js';
@@ -57,6 +54,7 @@ import {
   type WeixinMessageWithMedia,
   type WeixinWireSegment,
 } from './protocol.js';
+import { WeixinIlinkClient } from './client.js';
 
 const MAX_CONSECUTIVE_FAILURES = 3;
 const BACKOFF_DELAY_MS = 30_000;
@@ -73,8 +71,6 @@ export type WeixinIlinkGetUpdates = typeof getUpdates;
 
 export interface WeixinIlinkEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly config: ResolvedWeixinIlinkConfig;
   readonly resolveCredentials?: (
     config: ResolvedWeixinIlinkConfig,
@@ -87,7 +83,8 @@ export interface WeixinIlinkEndpointOptions {
   readonly sendText?: WeixinIlinkSendText;
 }
 
-export class WeixinIlinkEndpoint implements EndpointInstance {
+export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
+  readonly client: WeixinIlinkClient;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: WeixinIlinkEndpointOptions;
@@ -107,15 +104,18 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
   #mediaSweepTimer?: ReturnType<typeof setInterval>;
   #open = false;
   #started = false;
-  readonly management: EndpointManagement = createWeixinIlinkEndpointManagement(this);
+  readonly management: EndpointManagement = createWeixinIlinkEndpointManagement(() => this.client);
   readonly control: EndpointControl = Object.freeze<EndpointControl>({
-    typing: (conversation, active) => this.sendTypingToUser(
-      conversation.id,
-      active === false ? 2 : 1,
-    ),
+    typing: async (conversation, active) => {
+      await this.client.sendTyping(
+        conversation.id,
+        active === false ? 2 : 1,
+      );
+    },
   });
 
   constructor(options: WeixinIlinkEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('weixin-ilink', options.config.id);
     this.#options = options;
     this.#resolveCredentials = options.resolveCredentials ?? resolveCredentials;
@@ -123,23 +123,16 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
     this.#notifyStop = options.notifyStop ?? notifyStop;
     this.#getUpdates = options.getUpdates ?? getUpdates;
     this.#sendText = options.sendText ?? sendMessageWeixin;
+    this.client = new WeixinIlinkClient(
+      options.config,
+      () => this.#creds,
+      () => this.#configManager,
+      this.#sendText,
+    );
   }
 
   get hasCredentials(): boolean {
-    return Boolean(this.#creds?.botToken);
-  }
-
-  /** Live endpoint 名（context token 按 account 名分桶，management 推导对端用）。 */
-  get configName(): string {
-    return this.#options.config.id;
-  }
-
-  apiBaseUrl(): string {
-    return this.#creds?.baseUrl ?? this.#options.config.baseUrl;
-  }
-
-  cdnBaseUrl(): string {
-    return this.#options.config.cdnBaseUrl;
+    return this.client.authenticated;
   }
 
   async start(): Promise<void> {
@@ -153,12 +146,12 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
       restoreContextTokens(this.#options.config.id);
 
       await this.#notifyStart({
-        baseUrl: this.apiBaseUrl(),
+        baseUrl: this.client.apiBaseUrl,
         token: this.#creds.botToken,
       });
 
       this.#configManager = new WeixinConfigManager(
-        { baseUrl: this.apiBaseUrl(), token: this.#creds.botToken },
+        { baseUrl: this.client.apiBaseUrl, token: this.#creds.botToken },
         (msg) => this.#logger.debug(msg),
       );
 
@@ -169,6 +162,9 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
         op: 'connect',
         endpoint: this.#options.config.id,
       }));
+      void this.#emitPlatformEvent('system.online', {
+        account: this.#options.config.id,
+      });
     } catch (error) {
       await this.stop();
       this.#logger.error('Failed to connect weixin-ilink bot:', error);
@@ -198,7 +194,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
     flushContextTokenPersist(this.#options.config.id);
     if (this.#creds?.botToken) {
       try {
-        await this.#notifyStop({ baseUrl: this.apiBaseUrl(), token: this.#creds.botToken });
+        await this.#notifyStop({ baseUrl: this.client.apiBaseUrl, token: this.#creds.botToken });
       } catch (err) {
         this.#logger.warn(formatCompact({
           op: 'notify_stop',
@@ -208,6 +204,9 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
       }
     }
     this.#started = false;
+    void this.#emitPlatformEvent('system.offline', {
+      account: this.#options.config.id,
+    });
     this.#logger.debug(formatCompact({
           op: 'disconnect',
     }));
@@ -219,7 +218,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
     }
     // 个人微信仅 private 会话，对端 user_id 即 conversation.id
     const target = conversation.id;
-    const contextToken = getContextToken(this.#options.config.id, target);
+    const contextToken = this.client.contextToken(target);
     if (!contextToken) {
       this.#logger.warn(formatCompact({
         op: 'send',
@@ -229,12 +228,6 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
       }));
       throw new Error(`missing context_token for peer ${target}`);
     }
-
-    const apiOpts = {
-      baseUrl: this.apiBaseUrl(),
-      token: this.#creds.botToken,
-      contextToken,
-    };
 
     const outboundDir = path.join(resolveStateDir(), 'media', 'outbound');
     const wire = formatOutboundSegments(payload);
@@ -259,21 +252,11 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
       if (filePath && fs.existsSync(filePath)) {
         // 微信限制：单条消息不能图文混排 → 先单独发文本，再发纯媒体
         if (pendingText.trim()) {
-          const textResult = await this.#sendText({
-            to: target,
-            text: pendingText,
-            opts: apiOpts,
-          });
+          const textResult = await this.client.sendText(target, pendingText);
           pendingText = '';
           lastId = textResult.messageId;
         }
-        const result = await sendWeixinMediaFile({
-          filePath,
-          to: target,
-          text: '',
-          opts: apiOpts,
-          cdnBaseUrl: this.cdnBaseUrl(),
-        });
+        const result = await this.client.sendMedia(target, filePath);
         lastId = result.messageId;
         continue;
       }
@@ -288,11 +271,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
     }
 
     if (pendingText.trim()) {
-      const result = await this.#sendText({
-        to: target,
-        text: pendingText,
-        opts: apiOpts,
-      });
+      const result = await this.client.sendText(target, pendingText);
       lastId = result.messageId;
     }
 
@@ -308,7 +287,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
     }
     const conversation = weixinIlinkInboundConversation(String(this.#options.id), userId);
     const replyTo = weixinReplyTo(msg);
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: inboundMessageId(msg) },
       content: formatInboundContent(msg),
@@ -329,29 +308,6 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
     });
   }
 
-  async sendTypingToUser(userId: string, status: number): Promise<void> {
-    if (!this.#creds?.botToken || !this.#configManager) return;
-    const contextToken = getContextToken(this.#options.config.id, userId);
-    const cfg = await this.#configManager.getForUser(userId, contextToken);
-    if (!cfg.typingTicket) {
-      this.#logger.debug(formatCompact({
-        op: 'send_typing',
-        skip: 'no_typing_ticket',
-        userId,
-      }));
-      return;
-    }
-    await sendTyping({
-      baseUrl: this.apiBaseUrl(),
-      token: this.#creds.botToken,
-      body: {
-        ilink_user_id: userId,
-        typing_ticket: cfg.typingTicket,
-        status,
-      },
-    });
-  }
-
   async #pollLoop(abortSignal: AbortSignal): Promise<void> {
     if (!this.#creds?.botToken) return;
 
@@ -368,7 +324,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
 
       try {
         const resp = await this.#getUpdates({
-          baseUrl: this.apiBaseUrl(),
+          baseUrl: this.client.apiBaseUrl,
           token: this.#creds.botToken,
           get_updates_buf: getUpdatesBuf,
           timeoutMs: nextTimeoutMs,
@@ -430,6 +386,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
   }
 
   async #handleInboundMessage(full: WeixinMessage): Promise<void> {
+    void this.#emitPlatformEvent(`message.${full.message_type ?? 'unknown'}`, full);
     const fromUserId = full.from_user_id ?? '';
     if (full.context_token && fromUserId) {
       setContextToken(this.#options.config.id, fromUserId, full.context_token);
@@ -443,6 +400,16 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
       target: fromUserId,
       preview: formatInboundContent({ ...full, _media: mediaOpts }).slice(0, 80),
     }));
+  }
+
+  async #emitPlatformEvent(name: string, event: unknown): Promise<void> {
+    await this.emitPlatform(name, event).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'weixin_ilink_platform_event_failed',
+        event: name,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
   }
 
   async #downloadInboundMedia(full: WeixinMessage): Promise<WeixinInboundMediaOpts> {
@@ -466,7 +433,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
     if (!mediaItem) return {};
 
     return downloadMediaFromItem(mediaItem, {
-      cdnBaseUrl: this.cdnBaseUrl(),
+      cdnBaseUrl: this.client.cdnBaseUrl,
       saveMedia: (buffer, contentType, subdir, maxBytes, originalFilename) =>
         this.#saveInboundMedia(buffer, contentType, subdir, maxBytes, originalFilename),
       log: (msg) => this.#logger.debug(msg),
@@ -546,13 +513,15 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
   }
 }
 
-function createWeixinIlinkEndpointManagement(endpoint: WeixinIlinkEndpoint): EndpointManagement {
+function createWeixinIlinkEndpointManagement(
+  requireClient: () => WeixinIlinkClient,
+): EndpointManagement {
   return Object.freeze<EndpointManagement>({
     // 个人微信无群概念（listGroups/listGroupMembers 不接），也没有通讯录/资料接口。
     // "好友"只能从会话推导：凡持有 context_token 的对端（来过消息，含重启后从磁盘恢复的）
     // 即为可达私聊对端；昵称不可得，用 user_id 占位并在 remark 注明来源。
     async listFriends(): Promise<readonly EndpointFriend[]> {
-      return listContextTokenUserIds(endpoint.configName).map((userId) => ({
+      return listContextTokenUserIds(requireClient().config.id).map((userId) => ({
         user_id: userId,
         nickname: userId,
         remark: 'ilink: 从会话 context_token 推导，非通讯录',

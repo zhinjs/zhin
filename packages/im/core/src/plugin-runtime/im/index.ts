@@ -7,4 +7,3 @@ export * from './message-dispatcher.js';
 export * from './outbound-renderer.js';
 export * from './outbound-segments.js';
 export * from './service-tokens.js';
-export * from './side-event-gateway.js';

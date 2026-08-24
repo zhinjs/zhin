@@ -32,9 +32,15 @@ export {
 } from './passive-reply.js';
 
 export {
+  WeChatMpClient,
+  wechatMpClient,
+  type WeChatMpClientEventMap,
+  type WeChatMpFetch,
+} from './client.js';
+
+export {
   WeChatMpEndpoint,
   type WeChatMpEndpointOptions,
-  type WeChatMpFetch,
 } from './endpoint.js';
 
 export {

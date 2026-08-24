@@ -1,11 +1,11 @@
+import { bindTestEndpoint } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { milkyRuntimeStateToken } from '../src/milky-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { messageGatewayToken, sideEventGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
+import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import defineMilkyAdapter from '../adapters/milky.js';
-import { getMilkyAgentDeps } from '../src/milky-agent-deps.js';
 import {
   MilkySseEndpoint,
   MilkyWebhookEndpoint,
@@ -320,12 +320,12 @@ describe('milky protocol helpers', () => {
 });
 
 describe('milky plugin runtime adapter', () => {
-  it('routes admitted message events through MessageGateway when open', async () => {
+  it('routes admitted message events through OutboundMessageService when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const ws = createMockWs();
     const callApi = vi.fn(async () => ({}));
-    const endpoint = new MilkyWsEndpoint({
+    const endpoint = bindTestEndpoint(new MilkyWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
       gateway,
       config: baseConfig,
@@ -334,7 +334,7 @@ describe('milky plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), gateway, undefined);
 
     await endpoint.start();
     endpoint.open();
@@ -372,7 +372,7 @@ describe('milky plugin runtime adapter', () => {
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
-    const endpoint = new MilkyWsEndpoint({
+    const endpoint = bindTestEndpoint(new MilkyWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
@@ -381,7 +381,7 @@ describe('milky plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.admit({
       event_type: 'message_receive',
@@ -403,7 +403,7 @@ describe('milky plugin runtime adapter', () => {
   it('sends outbound payloads via HTTP send_private_message', async () => {
     const ws = createMockWs();
     const callApi = vi.fn(async () => ({ message_seq: 99 }));
-    const endpoint = new MilkyWsEndpoint({
+    const endpoint = bindTestEndpoint(new MilkyWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -415,7 +415,10 @@ describe('milky plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     endpoint.open();
 
@@ -438,7 +441,7 @@ describe('milky plugin runtime adapter', () => {
   it('admits inbound events received over the socket when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
-    const endpoint = new MilkyWsEndpoint({
+    const endpoint = bindTestEndpoint(new MilkyWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
@@ -447,7 +450,7 @@ describe('milky plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     ws.emitMessage(JSON.stringify({
@@ -474,7 +477,7 @@ describe('milky plugin runtime adapter', () => {
   it('marks mentioned when a mention segment targets the bot self_id', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const ws = createMockWs();
-    const endpoint = new MilkyWsEndpoint({
+    const endpoint = bindTestEndpoint(new MilkyWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
@@ -483,7 +486,7 @@ describe('milky plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     endpoint.admit({
@@ -515,7 +518,7 @@ describe('milky plugin runtime adapter', () => {
   it('does not mark mentioned when a mention targets someone else', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
-    const endpoint = new MilkyWsEndpoint({
+    const endpoint = bindTestEndpoint(new MilkyWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
@@ -524,7 +527,7 @@ describe('milky plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     endpoint.admit({
@@ -563,7 +566,7 @@ describe('milky plugin runtime adapter', () => {
       },
       use: (token: unknown) => {
         if (token === httpHostToken) return http;
-        if (token === messageGatewayToken) {
+        if (token === outboundMessageToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
         }
         if (token === sideEventGatewayToken) {
@@ -594,7 +597,7 @@ describe('milky plugin runtime adapter', () => {
       },
       use: (token: unknown) => {
         if (token === httpHostToken) return http;
-        if (token === messageGatewayToken) {
+        if (token === outboundMessageToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
         }
         if (token === sideEventGatewayToken) {
@@ -613,10 +616,10 @@ describe('milky plugin runtime adapter', () => {
 
   it('creates sse endpoint and admits events from stream frames', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     let onMessage!: (data: string) => void;
     let onOpen!: () => void;
-    const endpoint = new MilkySseEndpoint({
+    const endpoint = bindTestEndpoint(new MilkySseEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
       gateway,
       config: resolveMilkyConfig({
@@ -633,7 +636,7 @@ describe('milky plugin runtime adapter', () => {
           close() { /* noop */ },
         };
       },
-    });
+    }), gateway, undefined);
     await endpoint.start();
     endpoint.open();
     onMessage(JSON.stringify({
@@ -672,7 +675,7 @@ describe('milky plugin runtime adapter', () => {
         baseUrl: 'http://127.0.0.1:8080',
       },
       use: (token: unknown) => {
-        if (token === messageGatewayToken) return gateway;
+        if (token === outboundMessageToken) return gateway;
         if (token === sideEventGatewayToken) {
           return {
             receiveNotice: vi.fn(async () => {}),
@@ -707,12 +710,12 @@ describe('milky plugin runtime adapter', () => {
     })).toBe('https://x/a.wav');
   });
 
-  it('handles webhook POST and routes events through MessageGateway', async () => {
+  it('handles webhook POST and routes events through OutboundMessageService', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = new MilkyWebhookEndpoint({
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
+    const endpoint = bindTestEndpoint(new MilkyWebhookEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
       gateway,
       http,
@@ -723,7 +726,7 @@ describe('milky plugin runtime adapter', () => {
         path: '/milky/webhook',
       }) as ReturnType<typeof resolveMilkyConfig> & { connection: 'webhook' },
       callApi: vi.fn(async () => ({})),
-    });
+    }), gateway, undefined);
 
     await endpoint.start();
     const { port } = await http.listen();
@@ -771,7 +774,7 @@ describe('milky ws lifecycle', () => {
 
   it('resets state and does not reconnect when the initial connect closes before open', async () => {
     let attempt = 0;
-    const endpoint = new MilkyWsEndpoint({
+    const endpoint = bindTestEndpoint(new MilkyWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig, // reconnect_interval: 50
@@ -785,14 +788,12 @@ describe('milky ws lifecycle', () => {
         });
         return ws;
       },
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
 
     await expect(endpoint.start()).rejects.toThrow('Milky WS 关闭');
     // 等超过一个 reconnect_interval，不应武装重连
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(attempt).toBe(1);
-    // start 失败后 agent endpoint 已反注册
-    expect(() => getMilkyAgentDeps().getEndpoint('test-milky')).toThrow();
     // #started 已复位，可重新 start
     await endpoint.start();
     expect(attempt).toBe(2);
@@ -801,7 +802,7 @@ describe('milky ws lifecycle', () => {
 
   it('reconnects only after an established connection closes', async () => {
     const sockets: ReturnType<typeof createMockWs>[] = [];
-    const endpoint = new MilkyWsEndpoint({
+    const endpoint = bindTestEndpoint(new MilkyWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
@@ -814,7 +815,7 @@ describe('milky ws lifecycle', () => {
         });
         return ws;
       },
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
 
     await endpoint.start();
     sockets[0]!.emitClose(1006, 'lost');
@@ -824,7 +825,7 @@ describe('milky ws lifecycle', () => {
 
   it('clears the heartbeat interval when the socket closes', async () => {
     const ws = createMockWs();
-    const endpoint = new MilkyWsEndpoint({
+    const endpoint = bindTestEndpoint(new MilkyWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: resolveMilkyConfig({
@@ -840,7 +841,7 @@ describe('milky ws lifecycle', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
 
     await endpoint.start();
     await new Promise((resolve) => setTimeout(resolve, 70));
@@ -858,7 +859,7 @@ describe('milky ws lifecycle', () => {
 describe('milky sse lifecycle', () => {
   it('resets state and does not reconnect when the initial connect fails before open', async () => {
     let attempt = 0;
-    const endpoint = new MilkySseEndpoint({
+    const endpoint = bindTestEndpoint(new MilkySseEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: resolveMilkyConfig({
@@ -876,14 +877,12 @@ describe('milky sse lifecycle', () => {
           close() { /* noop */ },
         };
       },
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
 
     await expect(endpoint.start()).rejects.toThrow('boom');
     // 等超过一个 reconnect_interval，不应武装重连
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(attempt).toBe(1);
-    // start 失败后 agent endpoint 已反注册
-    expect(() => getMilkyAgentDeps().getEndpoint('sse-retry-bot')).toThrow();
     // #started 已复位，可重新 start
     await endpoint.start();
     expect(attempt).toBe(2);
@@ -895,7 +894,7 @@ describe('milky sse lifecycle', () => {
     const closed = new Promise<void>((resolve) => {
       resolveClosed = resolve;
     });
-    const endpoint = new MilkySseEndpoint({
+    const endpoint = bindTestEndpoint(new MilkySseEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: resolveMilkyConfig({
@@ -909,7 +908,7 @@ describe('milky sse lifecycle', () => {
           queueMicrotask(() => resolveClosed());
         },
       }),
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
 
     // 基座语义：stop-during-connect 静默 settle（主动停止），start 不再 reject
     const startPromise = endpoint.start();

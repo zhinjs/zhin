@@ -64,14 +64,14 @@ After a plugin declares a dependency on a capability type via the `features` arr
 ```ts
 // plugins/adapters/sandbox/adapters/sandbox.ts
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken } from '@zhin.js/core/runtime';
+import { outboundMessageToken } from '@zhin.js/core/runtime';
 import { SandboxWsEndpoint } from '../src/endpoint.js';
 
 export default defineAdapter({
   capabilities: ['inbound', 'outbound'],
   create(context) {
     return new SandboxWsEndpoint({
-      gateway: context.use(messageGatewayToken),
+      gateway: context.use(outboundMessageToken),
       defaults: resolveSandboxEndpoint(context.config),
       // ...
     });

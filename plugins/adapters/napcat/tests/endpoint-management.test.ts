@@ -1,6 +1,7 @@
+import { bindTestEndpoint } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi } from 'vitest';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import type { HttpHost } from '@zhin.js/host-http';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createNapCatEndpointManagement } from '../src/endpoint-management.js';
@@ -16,7 +17,7 @@ import { NapCatWssEndpoint } from '../src/wss-endpoint.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const endpointKey = capabilityId(rootPluginId(), adapterFeature, 'napcat');
-const gateway: MessageGateway = { receive: vi.fn(), send: vi.fn(async () => 'sent') };
+const gateway: OutboundMessageService = { receive: vi.fn(), send: vi.fn(async () => 'sent') };
 const httpStub = { ws: vi.fn(), route: vi.fn() } as unknown as HttpHost;
 
 const expectedCapabilities = ['listFriends', 'listGroups', 'listGroupMembers'];
@@ -111,13 +112,13 @@ describe('napcat.endpoint management wiring', () => {
     }) as NapCatHttpConfig;
 
     const endpoints = [
-      new NapCatWsEndpoint({ id: endpointKey, gateway, config: wsConfig }),
-      new NapCatWssEndpoint({ id: endpointKey, gateway, http: httpStub, config: wssConfig }),
-      new NapCatHttpEndpoint({ id: endpointKey, gateway, http: httpStub, config: httpConfig }),
+      bindTestEndpoint(new NapCatWsEndpoint({ id: endpointKey, gateway, config: wsConfig }), gateway, undefined),
+      bindTestEndpoint(new NapCatWssEndpoint({ id: endpointKey, gateway, http: httpStub, config: wssConfig }), gateway, undefined),
+      bindTestEndpoint(new NapCatHttpEndpoint({ id: endpointKey, gateway, http: httpStub, config: httpConfig }), gateway, undefined),
     ];
     for (const endpoint of endpoints) {
       expect(listEndpointManagementCapabilities(endpoint)).toEqual(expectedCapabilities);
-      const callApi = vi.spyOn(endpoint, 'callApi').mockResolvedValue([
+      const callApi = vi.spyOn(endpoint.client, 'callApi').mockResolvedValue([
         { user_id: 10001, nickname: 'Alice' },
       ]);
       await expect(endpoint.management.listFriends?.()).resolves.toEqual([

@@ -1,3 +1,4 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
  * OneBot11 reverse WSS endpoint — accepts inbound WebSocket from OneBot implementation.
  */
@@ -5,16 +6,13 @@ import { clearInterval } from 'node:timers';
 import {
   createRecallEndpointControl,
   type EndpointControl,
-  type EndpointInstance,
   type EndpointManagement,
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { createOneBot11EndpointManagement } from './endpoint-management.js';
-import { registerOnebot11AgentEndpoint } from './onebot11-agent-deps.js';
 import {
   buildSendAction,
   formatInboundContent,
@@ -41,22 +39,22 @@ import {
   type OneBot11PendingAction,
   type OneBot11WsSocket,
 } from './ws-types.js';
+import { Onebot11Client } from './client.js';
 
 export interface OneBot11WssEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: OneBot11WssConfig;
 }
 
-export class OneBot11WssEndpoint implements EndpointInstance {
+export class OneBot11WssEndpoint extends Endpoint<Onebot11Client> {
+  readonly client = new Onebot11Client((action, params) => this.#callApi(action, params));
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: OneBot11WssEndpointOptions;
-  readonly management: EndpointManagement = createOneBot11EndpointManagement(this);
+  readonly management: EndpointManagement = createOneBot11EndpointManagement(this.client);
   readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
-  readonly content = createOneBot11ContentPort((action, params) => this.callApi(action, params));
+  readonly content = createOneBot11ContentPort((action, params) => this.client.callApi(action, params));
   #ws?: OneBot11WsSocket;
   #wsRelease?: () => void;
   #heartbeatTimer?: NodeJS.Timeout;
@@ -64,9 +62,9 @@ export class OneBot11WssEndpoint implements EndpointInstance {
   #pending = new Map<string, OneBot11PendingAction>();
   #open = false;
   #started = false;
-  #unregisterAgent?: () => void;
 
   constructor(options: OneBot11WssEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('onebot11', options.config.id);
     this.#options = options;
   }
@@ -83,10 +81,6 @@ export class OneBot11WssEndpoint implements EndpointInstance {
         error: 'missing access_token',
       }));
     }
-    this.#unregisterAgent = registerOnebot11AgentEndpoint(
-      this.#options.config.id,
-      this as unknown as OneBot11WsEndpoint,
-    );
     const handle = this.#options.http.ws(this.#options.config.path);
     this.#wsRelease = handle.onConnection((connection) => {
       this.#acceptConnection(connection);
@@ -109,8 +103,6 @@ export class OneBot11WssEndpoint implements EndpointInstance {
 
   async stop(): Promise<void> {
     this.#open = false;
-    this.#unregisterAgent?.();
-    this.#unregisterAgent = undefined;
     this.#wsRelease?.();
     this.#wsRelease = undefined;
     if (this.#heartbeatTimer) {
@@ -132,36 +124,32 @@ export class OneBot11WssEndpoint implements EndpointInstance {
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(conversation, message);
-    const data = await this.callApi(action, params) as { message_id?: number | string } | undefined;
+    const data = await this.client.callApi(action, params) as { message_id?: number | string } | undefined;
     return data?.message_id != null ? String(data.message_id) : '';
   }
 
   async recallMessage(messageId: string): Promise<void> {
     if (!messageId) return;
-    await this.callApi('delete_msg', { message_id: Number(messageId) });
+    await this.client.callApi('delete_msg', { message_id: Number(messageId) });
   }
 
-  callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
+  #callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
     return callOneBot11WsAction(this.#ws, this.#pending, this.#requestId, action, params);
-  }
-
-  async setTitle(groupId: number, userId: number, title: string, duration = -1): Promise<boolean> {
-    await this.callApi('set_group_special_title', {
-      group_id: groupId,
-      user_id: userId,
-      special_title: title,
-      duration,
-    });
-    return true;
   }
 
   admit(ev: OneBot11Event): void {
     if (!this.#open) return;
+    void this.emitPlatform(oneBot11PlatformEventName(ev), ev).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'onebot11_platform_event_failed',
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
     if (!isMessageEvent(ev)) {
       receiveOneBot11SideEvent(
-        this.#options.sideEvents,
+        (name, payload) => this.emit(name, payload),
         this.#options.config.id,
-        this,
+        this.client,
         ev,
         this.#logger,
       );
@@ -169,7 +157,7 @@ export class OneBot11WssEndpoint implements EndpointInstance {
     }
     const conversation = onebot11InboundConversation(String(this.#options.id), ev);
     const inbound = formatInboundMetadata(ev, this.#options.config.id);
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: String(ev.message_id) },
       content: formatInboundContent(ev),
@@ -232,4 +220,10 @@ export class OneBot11WssEndpoint implements EndpointInstance {
       peer: connection.request.socket.remoteAddress,
     }));
   }
+}
+
+function oneBot11PlatformEventName(ev: OneBot11Event): string {
+  return [ev.post_type, ev.message_type ?? ev.notice_type ?? ev.request_type, ev.sub_type]
+    .filter(Boolean)
+    .join('.');
 }

@@ -40,6 +40,19 @@ describe('generation admission', () => {
     expect(candidate.active).toBe(false);
   });
 
+  it('notifies activation exactly once at commit', async () => {
+    const candidate = createGenerationAdmissionGate();
+    const activated = vi.fn();
+    candidate.onActivate(activated);
+    const root = new RootController(state());
+
+    await root.start(() => ({ snapshot: state(candidate), dispose: () => undefined }));
+    await root.transact(() => ({ snapshot: state(candidate), dispose: () => undefined }));
+
+    expect(activated).toHaveBeenCalledTimes(1);
+    await root.stop();
+  });
+
   it('switches admission at commit while retired resources remain lease-protected', async () => {
     const previous = createGenerationAdmissionGate();
     const next = createGenerationAdmissionGate();

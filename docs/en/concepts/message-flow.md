@@ -1,13 +1,14 @@
 # Message Flow
 
-When a user sends `/ping` in a group chat, through to the Bot's reply landing back on the platform, every step passes through a unidirectional pipeline: **inbound** flows from the platform Endpoint to commands/AI, **outbound** flows from plugin code to the platform Endpoint. The entire pipeline is orchestrated by `ImRuntime` (the `MessageGateway` implementation in `@zhin.js/core`), with each step reading from the current generation snapshot -- naturally hot-reload safe.
+When a user sends `/ping` in a group chat, through to the Bot's reply landing back on the platform, every step passes through a unidirectional pipeline: **inbound** flows from the platform Endpoint to commands/AI, **outbound** flows from plugin code to the platform Endpoint. `ImRuntime` implements both the sole inbound `EndpointEventGateway` and the outbound `OutboundMessageService`; both use the generation snapshot held by the current operation.
 
 ## Inbound: Adapter -> Middleware -> Command -> AI Fallback
 
 ```mermaid
 flowchart LR
-    P[Platform Event<br/>WS / HTTP] --> E[EndpointInstance]
-    E -->|"gateway.receive(input)"| G[ImRuntime]
+    P[Platform SDK / protocol event<br/>WS / HTTP] --> C[Platform Client]
+    C --> E[Endpoint]
+    E -->|"emit(name, payload)"| G[EndpointEventGateway / ImRuntime]
     G --> L[Acquire snapshot lease]
     L --> M["new Message(...)"]
     M --> MW["Middleware inbound<br/>before-dispatch -> after-dispatch"]
@@ -22,7 +23,11 @@ flowchart LR
 
 The actual code locations for each step:
 
-1. **Endpoint normalization**. The platform adapter's Endpoint (e.g., the sandbox's `SandboxWsEndpoint`) normalizes platform events into `IncomingMessage` and calls the `messageGatewayToken` injected at creation time:
+1. **Client and Endpoint responsibilities**. Client is the real platform SDK or a clean protocol Client. It owns platform APIs and raw events. Endpoint owns the account, transport, hot-reload lifecycle, and framework boundary. Every platform Endpoint extends `Endpoint<TClient>` and enters Core only through `emit(name, payload)`. Core wraps every event as `{ name, payload, endpoint, client }`.
+
+   Native events are first emitted losslessly as `platform.receive` with `{ name, event }`; known events may additionally be projected to `message.receive`, `notice.receive`, `request.receive`, or `system.receive`. Messages, join requests, member changes, online/offline events, and platform extensions therefore all expose the same Client to plugins. Events produced while a candidate generation starts are buffered by the Endpoint base and replayed in order on admission; late events from a retired generation are dropped.
+
+2. **Message normalization**. A `message.receive` payload has this shape:
 
    ```ts
    interface IncomingMessage {
@@ -36,9 +41,9 @@ The actual code locations for each step:
    }
    ```
 
-2. **Lease and Message**. `ImRuntime.receive` first `acquire()`s the current generation snapshot (in-flight messages are not interrupted by reloads, see [Generation and Lifecycle](./generation-lifecycle.md)), looks up the owner plugin for that endpoint as the default requester, and constructs a `Message`. `Message` carries two outbound closures: `$reply(content)` and `$replyFrom(owner, content)`; after dispatch ends, the reply scope is closed, and calling `$reply` afterward throws `Message reply scope has ended`.
+3. **Lease and Message**. `ImRuntime.endpointEvents.receive` acquires a lease on the event's generation (in-flight events are not interrupted by reloads, see [Generation and Lifecycle](./generation-lifecycle.md)). Message events construct a `Message` with a lazy `$client` getter for the current platform SDK instance, `$reply(content)`, and `$replyFrom(owner, content)`; after dispatch ends, reading `$client` or calling `$reply` fails because the operation scope has ended.
 
-3. **Inbound middleware**. `MiddlewareIndex` sorts by `phase` (`before-dispatch` first, `after-dispatch` later) and `order`, wrapping each around the terminal action:
+4. **Inbound middleware**. `MiddlewareIndex` sorts by `phase` (`before-dispatch` first, `after-dispatch` later) and `order`, wrapping each around the terminal action:
 
    ```ts
    defineMiddleware({
@@ -52,11 +57,11 @@ The actual code locations for each step:
    });
    ```
 
-4. **Command dispatch**. `MessageDispatcher` first resolves the command prefix (by default based on the message's adapter instance configuration: `endpoints[i].commandPrefix` overrides the top-level `commandPrefix`, defaulting to `''` with no prefix, see [Config as Data](./config-as-data.md)). If the prefix doesn't match, it's an immediate miss; if the prefix matches, it is stripped and passed to `CommandIndex.dispatch`. When a command has a return value, the dispatcher automatically replies using the command owner's identity via `$replyFrom(owner, value)`.
+5. **Command dispatch**. `MessageDispatcher` first resolves the command prefix (by default based on the message's adapter instance configuration: `endpoints[i].commandPrefix` overrides the top-level `commandPrefix`, defaulting to `''` with no prefix, see [Config as Data](./config-as-data.md)). If the prefix doesn't match, it's an immediate miss; if the prefix matches, it is stripped and passed to `CommandIndex.dispatch`. When a command has a return value, the dispatcher automatically replies using the command owner's identity via `$replyFrom(owner, value)`.
 
-5. **AI fallback**. On command miss (or unmatched plain text), `ImRuntime` resolves a generation-owned `IngressRoute` from the root resources of the snapshot held by the message. The composition root provides this internal route during generation setup when `@zhin.js/agent` is installed; without it, the message is silently discarded. It is not a mutable plugin setter on `MessageGateway`.
+6. **AI fallback**. On command miss (or unmatched plain text), `ImRuntime` resolves a generation-owned `IngressRoute` from the root resources of the snapshot held by the message. The composition root provides this internal route during generation setup when `@zhin.js/agent` is installed; without it, the message is silently discarded. It is not a mutable plugin setter on `OutboundMessageService`.
 
-6. **Event broadcast**. After dispatch completes, a `RuntimeMessageEvent` is emitted to `onMessage` subscribers (containing direction, conversation, sender, a `contentPreview` of up to 200 characters, and timestamp). The Console's real-time message stream consumes this.
+7. **Event broadcast**. After dispatch completes, a `RuntimeMessageEvent` is emitted to `onMessage` subscribers (containing direction, conversation, sender, a `contentPreview` of up to 200 characters, and timestamp). The Console's real-time message stream consumes this.
 
 ## Outbound: $reply -> Render -> Middleware -> Endpoint
 
@@ -75,7 +80,7 @@ flowchart LR
 - **Outbound middleware** shares the same definition as inbound; `target: 'outbound'` intercepts outbound messages.
 - **The last mile** is in `AdapterIndex.send`: the endpoint must declare `outbound` capability and be in `started && !stopped` state, otherwise an error is thrown; once passed, `endpoint.send()` is called to deliver to the platform.
 
-All sending should go through this unified pipeline (`$reply` / `$replyFrom` / `gateway.send`). Do not directly hold platform SDKs in plugins to send messages -- that would bypass rendering, middleware, and event broadcasting.
+Ordinary message delivery must go through this unified pipeline (`$reply` / `$replyFrom` / `OutboundMessageService.send`) so rendering, middleware, and event broadcasting are preserved. Non-message business operations such as join approval, role management, and platform queries should resolve the Client from the current event/command/tool operation and call the platform SDK directly. Do not retain a Client beyond that operation.
 
 ## Multimodal: bidirectional Segment uniformity
 
@@ -92,7 +97,7 @@ interface MediaRef {
 // image / audio / video / file segment data is always { media: MediaRef, alt?/duration?/name? }
 ```
 
-**Inbound**: adapters normalize platform payloads into `Segment[]` via `gateway.receive({ segments })`. Opaque platform ids must be materialized through the current generation's `EndpointContentPort`; the snapshot lease remains held until resolution settles. URLs, paths, and base64 then share one pipeline: HTTPS/SSRF and redirect checks → byte limit → file-signature detection → declared/actual type validation → `UserMessage.media`. File extensions and adapter-declared MIME values are not trusted, and binary/base64 data is never persisted in the conversation fact store. Every media item reaches exactly one `accepted | derived | unsupported | rejected | failed` terminal state. Failures are explicit untrusted user-context data, never a placeholder pretending the model saw the media. Providers must explicitly declare `text/image/audio/video/file` input support; omission means text-only.
+**Inbound**: adapters normalize platform payloads into `Segment[]` via `emit('message.receive', { segments })`. Opaque platform ids must be materialized through the current generation's `EndpointContentPort`; the snapshot lease remains held until resolution settles. URLs, paths, and base64 then share one pipeline: HTTPS/SSRF and redirect checks → byte limit → file-signature detection → declared/actual type validation → `UserMessage.media`. File extensions and adapter-declared MIME values are not trusted, and binary/base64 data is never persisted in the conversation fact store. Every media item reaches exactly one `accepted | derived | unsupported | rejected | failed` terminal state. Failures are explicit untrusted user-context data, never a placeholder pretending the model saw the media. Providers must explicitly declare `text/image/audio/video/file` input support; omission means text-only.
 
 ## Conversation facts, references, and notices
 

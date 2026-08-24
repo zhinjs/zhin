@@ -1,8 +1,9 @@
+import { bindTestEndpoint } from '../../test-utils/endpoint.js';
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost } from '@zhin.js/host-http';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { WeChatMpEndpoint } from '../src/endpoint.js';
 import {
@@ -179,7 +180,7 @@ describe('wechat-mp plugin runtime adapter', () => {
   it('GET 验签通过后回显 echostr', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const gateway: MessageGateway = {
+    const gateway: OutboundMessageService = {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     };
@@ -191,13 +192,13 @@ describe('wechat-mp plugin runtime adapter', () => {
       path: '/wechat/webhook',
       encrypt: false,
     });
-    const endpoint = new WeChatMpEndpoint({
+    const endpoint = bindTestEndpoint(new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway,
       http,
       config,
       fetch: mockFetchOk(),
-    });
+    }), gateway, undefined);
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -214,7 +215,7 @@ describe('wechat-mp plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('POST 文本消息经 MessageGateway 被动回复 XML', async () => {
+  it('POST 文本消息经 OutboundMessageService 被动回复 XML', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     // eslint-disable-next-line prefer-const -- assigned after `receive` closes over it
@@ -224,7 +225,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       await endpoint.send({ conversation: privateConversation('oUser'), payload: 'pong' });
       return Object.freeze({ matched: true, value: 'pong' });
     });
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const config = resolveWeChatMpConfig({
       name: 'bot',
       appId: 'wx-app',
@@ -235,13 +236,13 @@ describe('wechat-mp plugin runtime adapter', () => {
       replyMode: 'passive',
       passiveReplyTimeoutMs: 2000,
     });
-    endpoint = new WeChatMpEndpoint({
+    endpoint = bindTestEndpoint(new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway,
       http,
       config,
       fetch: mockFetchOk(),
-    });
+    }), gateway, undefined);
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -285,7 +286,7 @@ describe('wechat-mp plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = new WeChatMpEndpoint({
+    const endpoint = bindTestEndpoint(new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
@@ -297,7 +298,7 @@ describe('wechat-mp plugin runtime adapter', () => {
         encrypt: false,
       }),
       fetch: mockFetchOk(),
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await http.listen();
     endpoint.admit({
@@ -315,7 +316,7 @@ describe('wechat-mp plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const fetchFn = mockFetchOk();
-    const endpoint = new WeChatMpEndpoint({
+    const endpoint = bindTestEndpoint(new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -331,7 +332,10 @@ describe('wechat-mp plugin runtime adapter', () => {
         replyMode: 'customer_service',
       }),
       fetch: fetchFn,
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     await http.listen();
     endpoint.open();
@@ -366,7 +370,7 @@ describe('wechat-mp plugin runtime adapter', () => {
         ? { data: { errcode: 40001, errmsg: 'invalid credential' } }
         : { data: { errcode: 0, msgid: 77 } };
     });
-    const endpoint = new WeChatMpEndpoint({
+    const endpoint = bindTestEndpoint(new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -382,7 +386,10 @@ describe('wechat-mp plugin runtime adapter', () => {
         replyMode: 'customer_service',
       }),
       fetch: fetchFn,
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     await http.listen();
     endpoint.open();
@@ -408,7 +415,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       }
       return { data: { errcode: 0, msgid: 88 } };
     });
-    const endpoint = new WeChatMpEndpoint({
+    const endpoint = bindTestEndpoint(new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -424,7 +431,10 @@ describe('wechat-mp plugin runtime adapter', () => {
         replyMode: 'customer_service',
       }),
       fetch: fetchFn,
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     await http.listen();
     endpoint.open();
@@ -447,7 +457,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       }
       return { data: { errcode: 0, msgid: 43 } };
     });
-    const endpoint = new WeChatMpEndpoint({
+    const endpoint = bindTestEndpoint(new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -463,7 +473,10 @@ describe('wechat-mp plugin runtime adapter', () => {
         replyMode: 'customer_service',
       }),
       fetch: fetchFn,
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     await http.listen();
     endpoint.open();
@@ -507,7 +520,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       }
       return { data: { errcode: 0, msgid: 44 } };
     });
-    const endpoint = new WeChatMpEndpoint({
+    const endpoint = bindTestEndpoint(new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -523,7 +536,10 @@ describe('wechat-mp plugin runtime adapter', () => {
         replyMode: 'customer_service',
       }),
       fetch: fetchFn,
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     await http.listen();
     endpoint.open();
@@ -556,7 +572,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       }
       return { data: { errcode: 0, msgid: 45 } };
     });
-    const endpoint = new WeChatMpEndpoint({
+    const endpoint = bindTestEndpoint(new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -572,7 +588,10 @@ describe('wechat-mp plugin runtime adapter', () => {
         replyMode: 'customer_service',
       }),
       fetch: fetchFn,
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     await http.listen();
     endpoint.open();
@@ -601,7 +620,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       }
       return { data: { errcode: 0, msgid: 46 } };
     });
-    const endpoint = new WeChatMpEndpoint({
+    const endpoint = bindTestEndpoint(new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -617,7 +636,10 @@ describe('wechat-mp plugin runtime adapter', () => {
         replyMode: 'customer_service',
       }),
       fetch: fetchFn,
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     await http.listen();
     endpoint.open();
@@ -649,7 +671,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       }
       return { data: { errcode: 0, msgid: 47 } };
     });
-    const endpoint = new WeChatMpEndpoint({
+    const endpoint = bindTestEndpoint(new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -665,7 +687,10 @@ describe('wechat-mp plugin runtime adapter', () => {
         replyMode: 'customer_service',
       }),
       fetch: fetchFn,
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     await http.listen();
     endpoint.open();
@@ -700,7 +725,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       await endpoint.send({ conversation: privateConversation('oUser'), payload: 'pong' });
       return Object.freeze({ matched: true, value: 'pong' });
     });
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const config = resolveWeChatMpConfig({
       name: 'bot',
       appId: 'wx-app',
@@ -711,13 +736,13 @@ describe('wechat-mp plugin runtime adapter', () => {
       replyMode: 'passive',
       passiveReplyTimeoutMs: 2000,
     });
-    endpoint = new WeChatMpEndpoint({
+    endpoint = bindTestEndpoint(new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway,
       http,
       config,
       fetch: mockFetchOk(),
-    });
+    }), gateway, undefined);
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();

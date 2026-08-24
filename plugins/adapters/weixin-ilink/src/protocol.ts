@@ -82,7 +82,7 @@ export function resolveWeixinIlinkConfig(
   };
 }
 
-/** Build inbound text for MessageGateway.receive (gateway owns reply routing). */
+/** Build inbound text for OutboundMessageService.receive (gateway owns reply routing). */
 export function formatInboundContent(msg: WeixinMessageWithMedia): string {
   return bodyFromItemList(msg.item_list).trim();
 }

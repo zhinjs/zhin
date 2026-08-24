@@ -22,13 +22,7 @@ export {
   type WecomWireSegment,
 } from './protocol.js';
 
-export {
-  getWecomAgentDeps,
-  registerWecomAgentEndpoint,
-  setWecomAgentDeps,
-  type WecomAgentDeps,
-  type WecomAgentEndpoint,
-} from './wecom-agent-deps.js';
+export { wecomClient, type WecomClientEventMap } from './client.js';
 
 export {
   checkWecomPlatformPermit,
@@ -38,7 +32,9 @@ export {
 } from './platform-permit.js';
 
 export {
+  WecomClient,
   WecomEndpoint,
+  type WecomClientApi,
   type WecomEndpointOptions,
   type WecomFetch,
 } from './endpoint.js';

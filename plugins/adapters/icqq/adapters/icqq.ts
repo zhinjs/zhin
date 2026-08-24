@@ -1,12 +1,8 @@
 /**
  * Convention entry: discover `adapters/icqq.ts` → defineAdapter.
  */
-import { defineAdapter, type AdapterContext } from 'zhin.js/adapter';
-import {
-  loginAssistToken,
-  messageGatewayToken,
-  sideEventGatewayToken,
-} from '@zhin.js/core/runtime';
+import { defineAdapter } from 'zhin.js/adapter';
+import { loginAssistToken } from '@zhin.js/core/runtime';
 import { IcqqEndpoint } from '../src/endpoint.js';
 import { icqqRuntimeStateToken } from '../src/icqq-runtime-state.js';
 import {
@@ -39,8 +35,6 @@ export default defineAdapter<IcqqAdapterConfig>({
     });
     return new IcqqEndpoint({
       id: context.id,
-      gateway: context.use(messageGatewayToken),
-      sideEvents: context.use(sideEventGatewayToken),
       loginAssist: context.use(loginAssistToken),
       config,
     });

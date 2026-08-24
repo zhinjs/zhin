@@ -1,10 +1,11 @@
+import { bindTestEndpoint } from '../../test-utils/endpoint.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import { WeixinIlinkEndpoint } from '../src/endpoint.js';
 import {
   clearContextTokensForAccount,
@@ -21,17 +22,17 @@ const baseConfig = resolveWeixinIlinkConfig({
   longPollTimeoutMs: 1000,
 });
 
-function gateway(): MessageGateway {
+function gateway(): OutboundMessageService {
   return { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') };
 }
 
 function makeEndpoint(): WeixinIlinkEndpoint {
-  return new WeixinIlinkEndpoint({
+  return bindTestEndpoint(new WeixinIlinkEndpoint({
     id: capabilityId(rootPluginId(), adapterFeature, 'weixin-ilink'),
     gateway: gateway(),
     config: baseConfig,
     resolveCredentials: async () => ({ botToken: 'tok' }),
-  });
+  }), gateway(), undefined);
 }
 
 beforeEach(() => {

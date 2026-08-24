@@ -2,7 +2,6 @@
  * Convention entry: discover `adapters/napcat.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import { NapCatHttpEndpoint } from '../src/http-endpoint.js';
 import { resolveNapCatConfig, type NapCatAdapterConfig } from '../src/protocol.js';
@@ -41,8 +40,6 @@ export default defineAdapter<NapCatAdapterConfig>({
   },
   create(context) {
     const config = resolveNapCatConfig(context.config);
-    const gateway = context.use(messageGatewayToken);
-    const sideEvents = context.use(sideEventGatewayToken);
     // 注册到插件运行时状态（napcat.endpoint list 的"运行中"数据源）
     context.use(napcatRuntimeStateToken).endpoints.set(config.id, {
       id: config.id,
@@ -51,8 +48,6 @@ export default defineAdapter<NapCatAdapterConfig>({
     if (config.connection === 'wss') {
       return new NapCatWssEndpoint({
         id: context.id,
-        gateway,
-        sideEvents,
         http: context.use(httpHostToken),
         config,
       });
@@ -60,12 +55,10 @@ export default defineAdapter<NapCatAdapterConfig>({
     if (config.connection === 'http') {
       return new NapCatHttpEndpoint({
         id: context.id,
-        gateway,
-        sideEvents,
         http: context.use(httpHostToken),
         config,
       });
     }
-    return new NapCatWsEndpoint({ id: context.id, gateway, sideEvents, config });
+    return new NapCatWsEndpoint({ id: context.id, config });
   },
 });

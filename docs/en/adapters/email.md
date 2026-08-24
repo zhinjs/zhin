@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-email
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — convention-based `adapters/email.ts` (`defineAdapter`)
-- `@zhin.js/core` — `messageGatewayToken` inbound/outbound
+- `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json` (`smtp` / `imap`)
 

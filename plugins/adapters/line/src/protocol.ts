@@ -243,7 +243,7 @@ export function generateMessageId(event: LineEvent): string {
   return `${event.type}-${event.timestamp}`;
 }
 
-/** Build inbound text for MessageGateway.receive. */
+/** Build inbound text for OutboundMessageService.receive. */
 export function formatInboundContent(event: LineEvent): string {
   if (isMessageEvent(event)) {
     const msg = event.message;

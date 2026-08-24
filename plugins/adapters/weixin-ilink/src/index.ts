@@ -17,6 +17,12 @@ export type { WeixinMessage, MessageItem } from './ilink-types.js';
 export type { WeixinIlinkCredentials } from './credentials.js';
 
 export {
+  WeixinIlinkClient,
+  weixinIlinkClient,
+  type WeixinIlinkClientEventMap,
+} from './client.js';
+
+export {
   WeixinIlinkEndpoint,
   type WeixinIlinkEndpointOptions,
   type WeixinIlinkGetUpdates,

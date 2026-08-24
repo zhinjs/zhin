@@ -2,7 +2,6 @@
  * Convention entry: discover `adapters/slack.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import { SlackEndpoint } from '../src/endpoint.js';
 import {
@@ -34,16 +33,12 @@ export default defineAdapter<SlackAdapterConfig>({
     if (config.mode === 'http') {
       return new SlackEndpoint({
         id: context.id,
-        gateway: context.use(messageGatewayToken),
-        sideEvents: context.use(sideEventGatewayToken),
         http: context.use(httpHostToken),
         config,
       });
     }
     return new SlackEndpoint({
       id: context.id,
-      gateway: context.use(messageGatewayToken),
-      sideEvents: context.use(sideEventGatewayToken),
       config,
     });
   },

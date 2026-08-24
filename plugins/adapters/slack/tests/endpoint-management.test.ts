@@ -1,7 +1,8 @@
+import { bindTestEndpoint } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import { SlackEndpoint, type SlackSocketLike, type SlackWebClientLike } from '../src/endpoint.js';
 import { resolveSlackConfig } from '../src/protocol.js';
 
@@ -57,18 +58,18 @@ function mockClient(overrides: {
   };
 }
 
-function gateway(): MessageGateway {
+function gateway(): OutboundMessageService {
   return { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') };
 }
 
 async function startedEndpoint(client: SlackWebClientLike): Promise<SlackEndpoint> {
-  const endpoint = new SlackEndpoint({
+  const endpoint = bindTestEndpoint(new SlackEndpoint({
     id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
     gateway: gateway(),
     config: socketConfig,
     createClient: () => client,
     createSocket: () => mockSocket(),
-  });
+  }), gateway(), undefined);
   await endpoint.start();
   return endpoint;
 }
@@ -142,13 +143,13 @@ describe('slack.endpoint management', () => {
   });
 
   it('未连接时抛错而不是静默返回空', async () => {
-    const endpoint = new SlackEndpoint({
+    const endpoint = bindTestEndpoint(new SlackEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
       gateway: gateway(),
       config: socketConfig,
       createClient: () => mockClient(),
       createSocket: () => mockSocket(),
-    });
+    }), gateway(), undefined);
     await expect(endpoint.management.listGroups!()).rejects.toThrow(/not connected/);
   });
 });

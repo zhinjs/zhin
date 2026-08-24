@@ -222,7 +222,7 @@ export async function callSatoriApi<T = unknown>(
   }
 }
 
-/** Build inbound text for MessageGateway.receive. */
+/** Build inbound text for OutboundMessageService.receive. */
 export function formatInboundContent(body: SatoriEventBody & { message: SatoriMessage }): string {
   const content = body.message.content ?? '';
   return typeof content === 'string' ? content : String(content);

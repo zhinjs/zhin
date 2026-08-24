@@ -24,6 +24,19 @@ import {
 
 type TestPluginId = ReturnType<typeof rootPluginId>;
 
+interface CommandTestClient {
+  readonly id: string;
+}
+
+declare module '@zhin.js/feature-kit' {
+  interface AdapterClientRegistry {
+    readonly 'command-test': {
+      readonly client: CommandTestClient;
+      readonly events: Record<string, unknown>;
+    };
+  }
+}
+
 function slotFor(owner: TestPluginId, localName: string, result = 'ok') {
   return createCapabilitySlot({
     owner,
@@ -182,6 +195,38 @@ describe('Command Feature', () => {
       scene: undefined,
       sender: undefined,
     });
+  });
+
+  it('filters adapter-bound commands and resolves $client only when read', async () => {
+    const owner = rootPluginId();
+    const client: CommandTestClient = { id: 'client-1' };
+    let reads = 0;
+    const definition = defineCommand({
+      adapter: 'command-test',
+      execute(context) {
+        return context.$client.id;
+      },
+    });
+    const slot = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'client-id',
+      source: '/commands/client-id.ts',
+      definition,
+    });
+    const index = new CommandIndex([slot], snapshotWithOwners([owner], [slot]));
+
+    await expect(index.dispatch('client-id', {
+      clientAdapter: 'other',
+      get $client() { reads += 1; return client; },
+    })).resolves.toEqual({ matched: false });
+    expect(reads).toBe(0);
+
+    await expect(index.dispatch('client-id', {
+      clientAdapter: 'command-test',
+      get $client() { reads += 1; return client; },
+    })).resolves.toMatchObject({ matched: true, value: 'client-1' });
+    expect(reads).toBe(1);
   });
 
   it('discovers nested files as hierarchical command words', async () => {

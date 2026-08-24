@@ -1,3 +1,4 @@
+import { bindTestEndpoint } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
@@ -38,7 +39,7 @@ function mockLarkApi(
 }
 
 function createEndpoint(fetch: LarkFetch): LarkEndpoint {
-  return new LarkEndpoint({
+  return bindTestEndpoint(new LarkEndpoint({
     id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
     gateway: {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -48,7 +49,10 @@ function createEndpoint(fetch: LarkFetch): LarkEndpoint {
     http: {} as HttpHost,
     config: baseConfig,
     fetch,
-  });
+  }), {
+      receive: vi.fn(async () => Object.freeze({ matched: false })),
+      send: vi.fn(async () => 'sent'),
+    }, undefined);
 }
 
 describe('lark.endpoint management', () => {

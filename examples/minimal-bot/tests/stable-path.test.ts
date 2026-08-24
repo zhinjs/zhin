@@ -2,8 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
-import { AdapterIndex, adapterFeatureId, isAdapterIndex } from 'zhin.js/adapter';
-import { ImRuntime, type MessageGateway } from 'zhin.js/core/runtime';
+import {
+  AdapterIndex,
+  adapterFeatureId,
+  bindEndpoint,
+  isAdapterIndex,
+  type AdapterContext,
+  type EndpointEventGateway,
+} from 'zhin.js/adapter';
+import { ImRuntime } from 'zhin.js/core/runtime';
 import { capabilityId, rootPluginId } from 'zhin.js';
 import {
   NativeDevelopmentModuleRuntime,
@@ -90,17 +97,18 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
         kind: 'private' as const,
         id,
       });
-      const hello = await im.receive({
-        conversation: conversationOf('terminal'),
-        content: '/hello',
-      });
+      const endpoint = (adapters as AdapterIndex).connection('terminal', 'terminal')!;
+      const receive = (content: string) => im.endpointEvents.receive(Object.freeze({
+        name: 'message.receive',
+        payload: Object.freeze({ conversation: conversationOf('terminal'), content }),
+        endpoint: endpoint.identity,
+        client: endpoint.client,
+      }));
+      const hello = await receive('/hello');
       expect(hello).toMatchObject({ matched: true, command: 'hello' });
       expect(writes.join('')).toContain('Hello from minimal-bot.');
 
-      const card = await im.receive({
-        conversation: conversationOf('terminal'),
-        content: '/card',
-      });
+      const card = await receive('/card');
       expect(card).toMatchObject({ matched: true, command: 'card' });
       expect(writes.join('')).toContain('minimal-bot');
       expect(writes.join('')).toContain('RSS');
@@ -115,27 +123,25 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     const writes: string[] = [];
     output.on('data', (chunk: Buffer) => writes.push(chunk.toString()));
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
-    const gateway: MessageGateway = {
-      receive,
-      send: vi.fn(),
-    };
-    const endpoint = new TerminalEndpoint({
+    const endpoint = bindTerminalEndpoint(new TerminalEndpoint({
       id: capabilityId(rootPluginId(), adapterFeatureId, 'terminal'),
-      gateway,
       input,
       output,
       error: output,
       interactive: true,
       prompt: 'zhin> ',
-    });
+    }), receive);
 
     endpoint.start();
     endpoint.open();
     await vi.waitFor(() => expect(writes.join('')).toContain('zhin> '));
     input.write('/hello\n');
     await vi.waitFor(() => expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      content: '/hello',
-      sender: expect.objectContaining({ id: 'local-user' }),
+      name: 'message.receive',
+      payload: expect.objectContaining({
+        content: '/hello',
+        sender: expect.objectContaining({ id: 'local-user' }),
+      }),
     })));
     await vi.waitFor(() => {
       expect(writes.join('').match(/zhin> /gu)).toHaveLength(2);
@@ -150,17 +156,16 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     Object.defineProperty(output, 'isTTY', { value: true });
     const previousReceive = vi.fn(async () => Object.freeze({ matched: true }));
     const nextReceive = vi.fn(async () => Object.freeze({ matched: true }));
-    const createEndpoint = (gateway: MessageGateway) => new TerminalEndpoint({
+    const createEndpoint = (receive: EndpointEventGateway['receive']) => bindTerminalEndpoint(new TerminalEndpoint({
       id: capabilityId(rootPluginId(), adapterFeatureId, 'terminal'),
-      gateway,
       input,
       output,
       error: output,
       interactive: true,
       prompt: 'zhin> ',
-    });
-    const previous = createEndpoint({ receive: previousReceive, send: vi.fn() });
-    const next = createEndpoint({ receive: nextReceive, send: vi.fn() });
+    }), receive);
+    const previous = createEndpoint(previousReceive);
+    const next = createEndpoint(nextReceive);
 
     previous.start();
     previous.open();
@@ -170,7 +175,9 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     previous.stop();
     input.write('/hello\n');
 
-    await vi.waitFor(() => expect(nextReceive).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(nextReceive.mock.calls.filter(
+      ([event]) => event.name === 'message.receive',
+    )).toHaveLength(1));
     expect(previousReceive).not.toHaveBeenCalled();
     next.stop();
   });
@@ -181,15 +188,14 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     Object.defineProperty(input, 'isTTY', { value: true });
     Object.defineProperty(output, 'isTTY', { value: true });
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
-    const previous = new TerminalEndpoint({
+    const previous = bindTerminalEndpoint(new TerminalEndpoint({
       id: capabilityId(rootPluginId(), adapterFeatureId, 'terminal'),
-      gateway: { receive, send: vi.fn() },
       input,
       output,
       error: output,
       interactive: true,
       prompt: 'zhin> ',
-    });
+    }), receive);
 
     previous.start();
     previous.open();
@@ -197,7 +203,9 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     previous.open();
     input.write('/hello\n');
 
-    await vi.waitFor(() => expect(receive).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(receive.mock.calls.filter(
+      ([event]) => event.name === 'message.receive',
+    )).toHaveLength(1));
     previous.stop();
   });
 
@@ -225,3 +233,15 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     expect((await new MigrationReadiness().inspect(botRoot)).state).toBe('ready');
   });
 });
+
+function bindTerminalEndpoint(
+  endpoint: TerminalEndpoint,
+  receive: EndpointEventGateway['receive'],
+): TerminalEndpoint {
+  bindEndpoint(endpoint, {
+    id: capabilityId(rootPluginId(), adapterFeatureId, 'terminal'),
+    name: 'terminal',
+    use: () => Object.freeze({ receive }),
+  } as unknown as AdapterContext);
+  return endpoint;
+}

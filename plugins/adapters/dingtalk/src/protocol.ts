@@ -176,7 +176,7 @@ export function generateMessageId(msg: DingTalkMessage): string {
   return msg.msgId || `${msg.createAt ?? Date.now()}`;
 }
 
-/** Build inbound text for MessageGateway.receive. */
+/** Build inbound text for OutboundMessageService.receive. */
 export function formatInboundContent(msg: DingTalkMessage): string {
   if (!msg.msgtype) return '';
   switch (msg.msgtype) {

@@ -7,8 +7,11 @@ import {
 } from '@zhin.js/plugin-runtime';
 import {
   AdapterIndex,
+  Endpoint,
   adapterFeatureId,
   defineAdapter,
+  endpointEventGatewayToken,
+  type EndpointEventEmitter,
 } from '@zhin.js/adapter';
 import {
   HandlerIndex,
@@ -25,11 +28,10 @@ describe('ImRuntime side-event handlers', () => {
   it('expires request action ports when gateway dispatch settles', async () => {
     let captured: Request | undefined;
     const approve = vi.fn(async () => undefined);
-    await receiveOneBotLikeSideEvent({
-      receiveNotice: vi.fn(async () => undefined),
-      receiveSystem: vi.fn(async () => undefined),
-      receiveRequest: vi.fn(async (request) => { captured = request; }),
-    }, {
+    const emit: EndpointEventEmitter = async (name, payload) => {
+      if (name === 'request.receive') captured = payload as Request;
+    };
+    await receiveOneBotLikeSideEvent(emit, {
       adapter: 'onebot11',
       endpointKey: 'bot',
       raw: { post_type: 'request', request_type: 'friend', flag: 'f1', user_id: 'u1' },
@@ -45,14 +47,13 @@ describe('ImRuntime side-event handlers', () => {
     let captured: Request | undefined;
     const approve = vi.fn(() => action);
     let dispatchSettled = false;
-    const dispatch = receiveOneBotLikeSideEvent({
-      receiveNotice: vi.fn(async () => undefined),
-      receiveSystem: vi.fn(async () => undefined),
-      receiveRequest: vi.fn(async (request) => {
-        captured = request;
-        void request.$approve();
-      }),
-    }, {
+    const emit: EndpointEventEmitter = async (name, payload) => {
+      if (name !== 'request.receive') return;
+      const request = payload as Request;
+      captured = request;
+      void request.$approve();
+    };
+    const dispatch = receiveOneBotLikeSideEvent(emit, {
       adapter: 'onebot11',
       endpointKey: 'bot',
       raw: { post_type: 'request', request_type: 'friend', flag: 'f1', user_id: 'u1' },
@@ -70,17 +71,15 @@ describe('ImRuntime side-event handlers', () => {
 
   it('normalizes member targets and reaction operations at the adapter boundary', async () => {
     const receiveNotice = vi.fn(async () => undefined);
-    const gateway = {
-      receiveNotice,
-      receiveSystem: vi.fn(async () => undefined),
-      receiveRequest: vi.fn(async () => undefined),
+    const emit: EndpointEventEmitter = async (name, payload) => {
+      if (name === 'notice.receive') await receiveNotice(payload);
     };
-    await receiveOneBotLikeSideEvent(gateway, {
+    await receiveOneBotLikeSideEvent(emit, {
       adapter: 'onebot11',
       endpointKey: 'bot',
       raw: { post_type: 'notice', notice_type: 'group_increase', group_id: 1, user_id: 2, time: 3 },
     });
-    await receiveOneBotLikeSideEvent(gateway, {
+    await receiveOneBotLikeSideEvent(emit, {
       adapter: 'onebot11',
       endpointKey: 'bot',
       platform: 'slack',
@@ -103,14 +102,16 @@ describe('ImRuntime side-event handlers', () => {
     const noticed: unknown[] = [];
     const systems: unknown[] = [];
     const root = rootPluginId();
-    const liveEndpoint = Object.freeze({
-      start() {},
-      open() {},
-      close() {},
-      stop() {},
-      send() { return 'ok'; },
-      tag: 'live-memory',
-    });
+    const liveClient = Object.freeze({ tag: 'live-memory' });
+    class MemoryEndpoint extends Endpoint<typeof liveClient> {
+      readonly client = liveClient;
+      start(): void {}
+      open(): void {}
+      close(): void {}
+      stop(): void {}
+      send() { return 'ok'; }
+    }
+    const liveEndpoint = new MemoryEndpoint();
     const adapter = createCapabilitySlot({
       owner: root,
       feature: adapterFeatureId,
@@ -128,8 +129,8 @@ describe('ImRuntime side-event handlers', () => {
       source: '/handlers/notice/receive.ts',
       definition: defineHandler({
         event: 'notice.receive',
-        handle(notice) {
-          noticed.push(notice);
+        handle(event) {
+          noticed.push(event);
         },
       }),
     });
@@ -152,12 +153,13 @@ describe('ImRuntime side-event handlers', () => {
       source: '/handlers/request/receive.ts',
       definition: defineHandler({
         event: 'request.receive',
-        handle: onRequest,
+        handle: (event) => onRequest(event.payload),
       }),
     }) : undefined;
     const slots = [adapter, noticeHandler, systemHandler, requestHandler].filter(
       (slot): slot is NonNullable<typeof slot> => slot != null,
     );
+    const im = new ImRuntime();
     const base = {
       root,
       tree: new Map([[root, {
@@ -168,7 +170,10 @@ describe('ImRuntime side-event handlers', () => {
         children: [],
       }]]),
       config: new Map([[root, {}]]),
-      resources: new Map([[root, new Map()]]),
+      resources: new Map([[root, new Map([[
+        endpointEventGatewayToken.id,
+        im.endpointEvents,
+      ]])]]),
       capabilities: new Map(slots.map((slot) => [slot.id, slot])),
       projections: new Map(),
     };
@@ -183,15 +188,14 @@ describe('ImRuntime side-event handlers', () => {
       ], view)],
     ]);
     const store = new SnapshotStore({ ...base, projections });
-    const im = new ImRuntime();
     im.attach(store);
     await adapters.start();
     adapters.open();
-    return { im, noticed, systems, adapterLocalName: 'memory' };
+    return { im, noticed, systems, liveClient, adapterLocalName: 'memory' };
   }
 
   it('receiveNotice dispatches generation-safe handlers', async () => {
-    const { im, noticed } = await createFixture();
+    const { im, noticed, liveClient } = await createFixture();
     const notice = Notice.from({}, {
       $id: 'n1',
       $adapter: 'memory' as never,
@@ -202,9 +206,13 @@ describe('ImRuntime side-event handlers', () => {
       $sub_type: 'member_increase',
       $timestamp: Date.now(),
     });
-    await im.receiveNotice(notice);
+    await receiveEndpointEvent(im, 'notice.receive', notice, liveClient);
     expect(noticed).toHaveLength(1);
-    expect('$liveEndpoint' in (noticed[0] as object)).toBe(false);
+    expect(noticed[0]).toMatchObject({
+      name: 'notice.receive',
+      payload: notice,
+      client: liveClient,
+    });
   });
 
   it('keeps ImRuntime request operation open until started actions settle', async () => {
@@ -230,7 +238,7 @@ describe('ImRuntime side-event handlers', () => {
       $reject: async () => undefined,
     });
     let settled = false;
-    const dispatch = im.receiveRequest(request).finally(() => { settled = true; });
+    const dispatch = receiveEndpointEvent(im, 'request.receive', request, {}).finally(() => { settled = true; });
     await Promise.resolve();
     await Promise.resolve();
     expect(approve).toHaveBeenCalledOnce();
@@ -252,8 +260,22 @@ describe('ImRuntime side-event handlers', () => {
       $sub_type: 'qrcode',
       $timestamp: Date.now(),
     });
-    await im.receiveSystem(event);
+    await receiveEndpointEvent(im, 'system.receive', event, {});
     expect(systems).toHaveLength(1);
-    expect((systems[0] as { $sub_type?: string }).$sub_type).toBe('qrcode');
+    expect((systems[0] as { payload?: { $sub_type?: string } }).payload?.$sub_type).toBe('qrcode');
   });
 });
+
+function receiveEndpointEvent(
+  im: ImRuntime,
+  name: string,
+  payload: unknown,
+  client: object,
+): Promise<unknown> {
+  return im.endpointEvents.receive(Object.freeze({
+    name,
+    payload,
+    endpoint: Object.freeze({ id: 'memory' as never, adapter: 'memory' }),
+    client,
+  }));
+}

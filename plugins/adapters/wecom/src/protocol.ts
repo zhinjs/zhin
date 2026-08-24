@@ -227,7 +227,7 @@ export function parseXmlMessage(xml: string): WecomMessage | null {
   }
 }
 
-/** Build inbound text for MessageGateway.receive. */
+/** Build inbound text for OutboundMessageService.receive. */
 export function formatInboundContent(msg: WecomMessage): string {
   switch (msg.MsgType) {
     case 'text':

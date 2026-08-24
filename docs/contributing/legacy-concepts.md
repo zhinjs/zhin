@@ -50,7 +50,7 @@ if (context.resources.has(httpHostToken)) {
 // 新（adapters/my.ts）：
 export default defineAdapter<MyConfig>({
   capabilities: ['inbound', 'outbound'],
-  create(context) { /* 返回 EndpointInstance */ },
+  create(context) { /* 返回继承 Endpoint<Client> 的实例 */ },
 });
 ```
 

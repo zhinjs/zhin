@@ -1,7 +1,11 @@
 import type { OutputElement, Usage } from '@zhin.js/ai';
 import type { ApprovalPort } from '../session/approval-port.js';
 import type { PermissionSubject } from '@zhin.js/permission';
-import type { ToolInvocationOrigin, ToolQuestionPort } from '@zhin.js/tool';
+import type {
+  ToolInvocationContext,
+  ToolInvocationOrigin,
+  ToolQuestionPort,
+} from '@zhin.js/tool';
 import type { ScheduleJobCreator, ScheduleJobExecutionPlan } from '../assistant/types.js';
 import type { ConversationContextBlock } from '@zhin.js/im-contract';
 
@@ -166,6 +170,8 @@ export interface TurnPorts {
   readonly question?: ToolQuestionPort;
   readonly references?: ReferencePort;
   readonly conversationContext?: ConversationContextPort;
+  /** Runtime-only native Client capability; absent for detached/scheduled turns. */
+  readonly client?: NonNullable<ToolInvocationContext['client']>;
 }
 
 /** Ports supplied by an ingress adapter; Journal authority is injected by AgentRuntime. */

@@ -1,7 +1,6 @@
+import { Endpoint, defineAdapter } from 'zhin.js/adapter';
 import { createInterface, type Interface as ReadlineInterface } from 'node:readline';
 import type { Readable, Writable } from 'node:stream';
-import { defineAdapter, type EndpointInstance } from 'zhin.js/adapter';
-import { messageGatewayToken, type MessageGateway } from 'zhin.js/core/runtime';
 import type { CapabilityId } from 'zhin.js';
 
 interface TerminalConfig {
@@ -13,7 +12,6 @@ interface TerminalConfig {
 
 export interface TerminalEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
   readonly input: Readable;
   readonly output: Writable;
   readonly error: Writable;
@@ -21,7 +19,25 @@ export interface TerminalEndpointOptions {
   readonly prompt: string;
 }
 
-export class TerminalEndpoint implements EndpointInstance {
+export class TerminalClient {
+  constructor(
+    readonly input: Readable,
+    readonly output: Writable,
+    readonly error: Writable,
+    private readonly resolveReadline: () => ReadlineInterface | undefined,
+  ) {}
+
+  get readline(): ReadlineInterface | undefined {
+    return this.resolveReadline();
+  }
+
+  write(payload: unknown): void {
+    this.output.write(`${formatPayload(payload)}\n`);
+  }
+}
+
+export class TerminalEndpoint extends Endpoint<TerminalClient> {
+  readonly client: TerminalClient;
   readonly #options: TerminalEndpointOptions;
   #messageSequence = 0;
   #readline?: ReadlineInterface;
@@ -30,7 +46,14 @@ export class TerminalEndpoint implements EndpointInstance {
   #stopped = false;
 
   constructor(options: TerminalEndpointOptions) {
+    super();
     this.#options = options;
+    this.client = new TerminalClient(
+      options.input,
+      options.output,
+      options.error,
+      () => this.#readline,
+    );
   }
 
   start(): void {
@@ -43,6 +66,9 @@ export class TerminalEndpoint implements EndpointInstance {
     });
     readline.setPrompt(this.#options.prompt);
     readline.on('line', (line) => {
+      void this.emitPlatform('line', line).catch((error) => {
+        this.#options.error.write(`${formatError(error)}\n`);
+      });
       const content = line.trim();
       if (!this.#open) return;
       if (!content) {
@@ -50,7 +76,7 @@ export class TerminalEndpoint implements EndpointInstance {
         return;
       }
       const endpointKey = String(this.#options.id);
-      void this.#options.gateway.receive({
+      void this.emit('message.receive', {
         conversation: {
           endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
           kind: 'private',
@@ -96,7 +122,7 @@ export class TerminalEndpoint implements EndpointInstance {
   }
 
   send({ payload }: { readonly payload: unknown }): string {
-    this.#options.output.write(`${formatPayload(payload)}\n`);
+    this.client.write(payload);
     this.#messageSequence += 1;
     return `terminal-${this.#messageSequence}`;
   }
@@ -123,7 +149,6 @@ export default defineAdapter<TerminalConfig>({
   create(context) {
     return new TerminalEndpoint({
       id: context.id,
-      gateway: context.use(messageGatewayToken),
       input: process.stdin,
       output: process.stdout,
       error: process.stderr,

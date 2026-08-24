@@ -1,5 +1,5 @@
 import { receiveOneBotLikeSideEvent } from '@zhin.js/core';
-import type { SideEventGateway } from '@zhin.js/core/runtime';
+import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 import type { OneBot12Event } from './protocol.js';
 
@@ -8,19 +8,19 @@ export interface OneBot12SideEventCaller {
 }
 
 export function receiveOneBot12SideEvent(
-  sideEvents: SideEventGateway | undefined,
+  emit: EndpointEventEmitter,
   endpointKey: string,
   caller: OneBot12SideEventCaller,
   raw: OneBot12Event,
   logger: ReturnType<typeof getAdapterLogger>,
 ): void {
-  if (!sideEvents) return;
+  if (!emit) return;
   const record = raw as Record<string, unknown>;
   const eventType = String(record.type ?? record.post_type ?? '');
   const detailType = String(record.detail_type ?? '');
   const isRequest = eventType === 'request' || eventType.startsWith('request.');
   const isFriend = detailType.includes('friend') || String(record.request_type ?? '') === 'friend';
-  void receiveOneBotLikeSideEvent(sideEvents, {
+  void receiveOneBotLikeSideEvent(emit, {
     adapter: 'onebot12',
     endpointKey,
     platform: 'onebot',

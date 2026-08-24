@@ -8,7 +8,7 @@ Zhin.js [NapCatQQ](https://github.com/NapNeko/NapCatQQ) 适配器（Plugin Runti
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - **正向 WebSocket**（`connection: ws`）：应用连 NapCat WS
 - `access_token` 鉴权（Bearer + query）
-- 入站经 `messageGatewayToken`（去重 + 自发过滤）；出站 `send({ conversation, payload })`
+- 入站经 `Endpoint.emit(...)`（去重 + 自发过滤）；出站 `send({ conversation, payload })`
 - 41 个 AI 工具（`agent/tools/`）
 
 ## 安装
@@ -20,7 +20,7 @@ pnpm add @zhin.js/adapter-napcat
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — 约定式 `adapters/napcat.ts`（`defineAdapter`）
-- `@zhin.js/core` — `messageGatewayToken` 入站/出站
+- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
@@ -73,7 +73,7 @@ plugins:
 
 ## 迁移说明（Plugin Runtime）
 
-- **notice / request / meta 侧事件**：经 `sideEventGatewayToken` 归一后分发到 `handlers`（`notice.receive` / `request.receive` / `system.receive`），请求带 `$approve` / `$reject`。消息仍走 `messageGatewayToken`。
+- **notice / request / meta 侧事件**：经 the unified `Endpoint.emit(...)` ingress 归一后分发到 `handlers`（`notice.receive` / `request.receive` / `system.receive`），请求带 `$approve` / `$reject`。消息仍走 `outboundMessageToken`。
 - **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后 `agent/tools/` 仅覆盖 NapCat 扩展 API，其余群管能力可通过 `callApi`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
 - **平台权限门禁**：`plugin.ts` setup 已注册 `registerDefaultScenePlatformPermitChecker('napcat')`，`scene_admin` / `scene_owner` 依据入站 metadata 中的 sender `role`（owner / admin）判定。
 

@@ -20,7 +20,7 @@ Zhin.js [Milky](https://milky.ntqqrev.org/) protocol adapter (Plugin Runtime). D
 - Convention-based `defineAdapter` / `definePlugin` (no `usePlugin` needed)
 - **Forward WebSocket** (`connection: ws`): the application connects to the protocol endpoint `ws(s)://baseUrl/event`
 - `access_token` authentication (Bearer + query)
-- Inbound via `messageGatewayToken`; outbound `send({ conversation, payload })` -> HTTP `send_*_message`
+- Inbound via `Endpoint.emit(...)`; outbound `send({ conversation, payload })` -> HTTP `send_*_message`
 
 ## Installation
 
@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-milky
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — convention-based `adapters/milky.ts` (`defineAdapter`)
-- `@zhin.js/core` — `messageGatewayToken` inbound/outbound
+- `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 

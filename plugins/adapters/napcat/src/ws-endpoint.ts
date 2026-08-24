@@ -1,3 +1,4 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
  * NapCat WS client endpoint — outbound connect to NapCat.
  */
@@ -7,16 +8,13 @@ import {
   createEndpointLifecycle,
   type EndpointConnectHandle,
   type EndpointControl,
-  type EndpointInstance,
   type EndpointLifecycle,
   type EndpointManagement,
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { createNapCatEndpointManagement } from './endpoint-management.js';
-import { registerNapcatAgentEndpoint } from './napcat-agent-deps.js';
 import {
   InboundMessageDeduper,
   isNapCatBotMentioned,
@@ -48,11 +46,10 @@ import {
   type NapCatWsSocket,
 } from './ws-types.js';
 import { createNapCatContentPort } from './onebot-get-msg.js';
+import { NapcatClient } from './client.js';
 
 export interface NapCatWsEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly config: NapCatWsConfig;
   readonly createWebSocket?: (
     url: string,
@@ -60,22 +57,23 @@ export interface NapCatWsEndpointOptions {
   ) => NapCatWsSocket;
 }
 
-export class NapCatWsEndpoint implements EndpointInstance {
+export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
+  readonly client = new NapcatClient((action, params) => this.#callApi(action, params));
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: NapCatWsEndpointOptions;
   readonly #inboundDeduper = new InboundMessageDeduper();
-  readonly management: EndpointManagement = createNapCatEndpointManagement(this);
+  readonly management: EndpointManagement = createNapCatEndpointManagement(this.client);
   readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
-  readonly content = createNapCatContentPort((action, params) => this.callApi(action, params));
+  readonly content = createNapCatContentPort((action, params) => this.client.callApi(action, params));
   readonly #lifecycle: EndpointLifecycle;
   #ws?: NapCatWsSocket;
   #requestId = { value: 0 };
   #pending = new Map<string, NapCatPendingAction>();
   #open = false;
-  #unregisterAgent?: () => void;
 
   constructor(options: NapCatWsEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('napcat', options.config.id);
     this.#options = options;
     this.#lifecycle = createEndpointLifecycle({
@@ -92,15 +90,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
 
   async start(): Promise<void> {
     if (this.#lifecycle.started) return;
-    this.#unregisterAgent = registerNapcatAgentEndpoint(this.#options.config.id, this);
-    try {
-      await this.#lifecycle.start((handle) => this.#connect(handle));
-    } catch (err) {
-      // start 失败复位由基座保证；agent 注册/反注册是适配器专有依赖，留在适配器侧
-      this.#unregisterAgent?.();
-      this.#unregisterAgent = undefined;
-      throw err;
-    }
+    await this.#lifecycle.start((handle) => this.#connect(handle));
   }
 
   open(): void {
@@ -114,8 +104,6 @@ export class NapCatWsEndpoint implements EndpointInstance {
   async stop(): Promise<void> {
     this.#open = false;
     await this.#lifecycle.stop();
-    this.#unregisterAgent?.();
-    this.#unregisterAgent = undefined;
     rejectAllPending(this.#pending);
     this.#inboundDeduper.clear();
     if (this.#ws) {
@@ -131,7 +119,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(napcatOutboundTarget(conversation), message);
-    const data = await this.callApi(action, params) as { message_id?: number | string } | undefined;
+    const data = await this.client.callApi(action, params) as { message_id?: number | string } | undefined;
     const messageId = data?.message_id != null ? String(data.message_id) : '';
     this.#logger.debug(formatCompact({
       op: 'napcat_send',
@@ -144,197 +132,27 @@ export class NapCatWsEndpoint implements EndpointInstance {
 
   async recallMessage(messageId: string): Promise<void> {
     if (!messageId) return;
-    await this.callApi('delete_msg', { message_id: Number(messageId) });
+    await this.client.callApi('delete_msg', { message_id: Number(messageId) });
   }
 
-  callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
+  #callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
     return callNapCatWsAction(this.#ws, this.#pending, this.#requestId, action, params);
-  }
-
-  // ── Agent-facing API wrappers ─────────────────────────────────────
-
-  async setTitle(groupId: number, userId: number, title: string, duration = -1): Promise<boolean> {
-    await this.callApi('set_group_special_title', {
-      group_id: groupId,
-      user_id: userId,
-      special_title: title,
-      duration,
-    });
-    return true;
-  }
-
-  sendLike(userId: number, times = 1) {
-    return this.callApi('send_like', { user_id: userId, times });
-  }
-
-  deleteFriend(userId: number) {
-    return this.callApi('delete_friend', { user_id: userId });
-  }
-
-  markMsgAsRead(messageId: number) {
-    return this.callApi('mark_msg_as_read', { message_id: messageId });
-  }
-
-  ocrImage(image: string) {
-    return this.callApi('ocr_image', { image });
-  }
-
-  setQQProfile(
-    nickname: string,
-    company?: string,
-    email?: string,
-    college?: string,
-    personalNote?: string,
-  ) {
-    return this.callApi('set_qq_profile', {
-      nickname,
-      company,
-      email,
-      college,
-      personal_note: personalNote,
-    });
-  }
-
-  setGroupPortrait(groupId: number, file: string) {
-    return this.callApi('set_group_portrait', { group_id: groupId, file });
-  }
-
-  setEssenceMsg(messageId: number) {
-    return this.callApi('set_essence_msg', { message_id: messageId });
-  }
-
-  deleteEssenceMsg(messageId: number) {
-    return this.callApi('delete_essence_msg', { message_id: messageId });
-  }
-
-  getEssenceMsgList(groupId: number) {
-    return this.callApi('get_essence_msg_list', { group_id: groupId });
-  }
-
-  sendGroupSign(groupId: number) {
-    return this.callApi('send_group_sign', { group_id: groupId });
-  }
-
-  sendGroupNotice(groupId: number, content: string, image?: string) {
-    return this.callApi('_send_group_notice', { group_id: groupId, content, image });
-  }
-
-  getGroupNotice(groupId: number) {
-    return this.callApi('_get_group_notice', { group_id: groupId });
-  }
-
-  deleteGroupNotice(groupId: number, noticeId: string) {
-    return this.callApi('_del_group_notice', { group_id: groupId, notice_id: noticeId });
-  }
-
-  uploadGroupFile(groupId: number, file: string, name: string, folder?: string) {
-    return this.callApi('upload_group_file', { group_id: groupId, file, name, folder });
-  }
-
-  getGroupRootFiles(groupId: number) {
-    return this.callApi('get_group_root_files', { group_id: groupId });
-  }
-
-  getGroupFileUrl(groupId: number, fileId: string, busid: number) {
-    return this.callApi('get_group_file_url', { group_id: groupId, file_id: fileId, busid });
-  }
-
-  downloadFile(url: string, threadCount = 1, headers?: string[]) {
-    return this.callApi('download_file', { url, thread_count: threadCount, headers });
-  }
-
-  setOnlineStatus(status: number, extStatus: number) {
-    return this.callApi('set_online_status', { status, ext_status: extStatus });
-  }
-
-  setQQAvatar(file: string) {
-    return this.callApi('set_qq_avatar', { file });
-  }
-
-  forwardFriendSingleMsg(userId: number, messageId: number) {
-    return this.callApi('forward_friend_single_msg', { user_id: userId, message_id: messageId });
-  }
-
-  forwardGroupSingleMsg(groupId: number, messageId: number) {
-    return this.callApi('forward_group_single_msg', { group_id: groupId, message_id: messageId });
-  }
-
-  translateEn2Zh(sourceText: string) {
-    return this.callApi('translate_en2zh', { source_text: sourceText });
-  }
-
-  setMsgEmojiLike(messageId: number, emojiId: string) {
-    return this.callApi('set_msg_emoji_like', { message_id: messageId, emoji_id: emojiId });
-  }
-
-  sendForwardMsg(messageType: 'private' | 'group', id: number, messages: unknown[]) {
-    return this.callApi('send_forward_msg', {
-      message_type: messageType,
-      [messageType === 'group' ? 'group_id' : 'user_id']: id,
-      messages,
-    });
-  }
-
-  getFriendMsgHistory(userId: number, messageSeq?: number, count?: number) {
-    return this.callApi('get_friend_msg_history', {
-      user_id: userId,
-      message_seq: messageSeq,
-      count,
-    });
-  }
-
-  getGroupMsgHistory(groupId: number, messageSeq?: number, count?: number) {
-    return this.callApi('get_group_msg_history', {
-      group_id: groupId,
-      message_seq: messageSeq,
-      count,
-    });
-  }
-
-  setSelfLongnick(longnick: string) {
-    return this.callApi('set_self_longnick', { longNick: longnick });
-  }
-
-  getGroupInfoEx(groupId: number) {
-    return this.callApi('get_group_info_ex', { group_id: groupId });
-  }
-
-  sendPoke(userId: number, groupId?: number) {
-    return this.callApi('send_poke', { user_id: userId, group_id: groupId });
-  }
-
-  ncGetUserStatus(userId: number) {
-    return this.callApi('nc_get_user_status', { user_id: userId });
-  }
-
-  getGroupShutList(groupId: number) {
-    return this.callApi('get_group_shut_list', { group_id: groupId });
-  }
-
-  getMiniAppArk(type: string, title: string, desc: string, picUrl: string, jumpUrl: string) {
-    return this.callApi('get_mini_app_ark', { type, title, desc, picUrl, jumpUrl });
-  }
-
-  getAiCharacters(groupId: number) {
-    return this.callApi('get_ai_characters', { group_id: groupId });
-  }
-
-  sendGroupAiRecord(groupId: number, characterId: string, text: string) {
-    return this.callApi('send_group_ai_record', {
-      group_id: groupId,
-      character: characterId,
-      text,
-    });
   }
 
   /** Test / internal: admit a parsed event when the endpoint is open. */
   admit(ev: NapCatEvent): void {
     if (!this.#open) return;
+    void this.emitPlatform(napCatPlatformEventName(ev), ev).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'napcat_platform_event_failed',
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
     if (!isMessageEvent(ev)) {
       receiveNapCatSideEvent(
-        this.#options.sideEvents,
+        (name, payload) => this.emit(name, payload),
         this.#options.config.id,
-        this,
+        this.client,
         ev,
         this.#logger,
       );
@@ -350,7 +168,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
     const content = formatInboundContent(ev);
     const nickname = senderNickname(ev);
     const mentioned = isNapCatBotMentioned(ev);
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: msgId },
       content,
@@ -474,4 +292,10 @@ export class NapCatWsEndpoint implements EndpointInstance {
       });
     });
   }
+}
+
+function napCatPlatformEventName(ev: NapCatEvent): string {
+  return [ev.post_type, ev.message_type ?? ev.notice_type ?? ev.request_type, ev.sub_type]
+    .filter(Boolean)
+    .join('.');
 }

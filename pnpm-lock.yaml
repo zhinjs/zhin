@@ -1829,6 +1829,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -1872,6 +1875,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -1915,6 +1921,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../../../packages/im/im-contract
@@ -1964,6 +1973,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -2007,6 +2019,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../../../packages/im/im-contract
@@ -2056,6 +2071,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -2102,6 +2120,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -2145,6 +2166,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -2185,6 +2209,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -2231,6 +2258,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -2280,6 +2310,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -2329,6 +2362,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -2369,6 +2405,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -2421,6 +2460,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -2476,6 +2518,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -2522,6 +2567,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -2565,6 +2613,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -2608,6 +2659,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -2651,6 +2705,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
@@ -2694,6 +2751,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../../../packages/im/im-contract

@@ -20,7 +20,7 @@ pnpm add @zhin.js/adapter-qq
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — 约定式 `adapters/qq.ts`（`defineAdapter`）
-- `@zhin.js/core` — `messageGatewayToken` 入站/出站
+- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 - **无需** `@zhin.js/host-http` / `@zhin.js/host-router`（WebSocket 路径）

@@ -75,7 +75,6 @@ import {
 import {
   appendActiveSkills,
   getTurnActiveSkills,
-  initInboundTurnContext as bridgeInitInboundTurnContext,
   runInTurnContext as bridgeRunInTurnContext,
   type TurnContextBridgeState,
   type TurnContextRunOptions,
@@ -243,10 +242,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   getAlwaysSkillsBaseline(): string {
     return this.alwaysSkillsBaseline;
-  }
-
-  initInboundTurnContext(): void {
-    bridgeInitInboundTurnContext(this.turnContextState);
   }
 
   appendActiveSkillsContext(fragment: string): void {
@@ -463,7 +458,13 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   }
 
   async process(content: string, commMessage: Message, externalTools: Tool[] = [], onChunk?: OnChunkCallback): Promise<OutputElement[]> {
-    return this.processTurn({ content, message: commMessage, tools: externalTools, onChunk });
+    return this.processTurn({
+      content,
+      message: commMessage,
+      tools: externalTools,
+      onChunk,
+      activityFeedbackEligible: true,
+    });
   }
 
   /**
@@ -510,7 +511,9 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     yield* processTextTurnStream(asPrivate(this), {
       content, commMessage, externalTools,
       inboundQueueConfig: this.inboundQueueConfig, inboundTurnQueue: this.inboundTurnQueue,
-      runInTurnContext: (id, fn) => this.runInTurnContext(id, fn),
+      runInTurnContext: (id, fn) => this.runInTurnContext(id, fn, {
+        activityFeedbackEligible: true,
+      }),
     });
   }
 

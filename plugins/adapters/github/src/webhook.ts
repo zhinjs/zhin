@@ -22,6 +22,7 @@ const logger = getLogger('github');
 
 export interface GithubWebhookHandler {
   readonly config: ResolvedGithubConfig;
+  admitPlatform(name: string, event: unknown): void;
   admit(comment: GithubInboundComment): void;
 }
 
@@ -106,6 +107,10 @@ export async function dispatchGithubWebhookPayload(
   const body = payload as Record<string, unknown>;
   const repo = (body.repository as { full_name?: string } | undefined)?.full_name;
   logger.debug(`Webhook: ${event}${(body.action as string) ? `.${body.action}` : ''} ${repo || ''}`);
+  handler.admitPlatform(
+    typeof body.action === 'string' && body.action ? `${event}.${body.action}` : event,
+    payload,
+  );
 
   if (event === 'issue_comment') {
     const inbound = parseIssueCommentInbound(payload as IssueCommentPayload);

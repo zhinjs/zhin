@@ -564,18 +564,12 @@ export { registerEndpointKeyColumnMigrationHook } from './init/upgrade-endpoint-
 // ── Activity Feedback（替代 endpoint typingIndicator）──
 export {
   ActivityFeedbackManager,
-  getActivityFeedbackManager,
-  initActivityFeedbackManager,
-  provideActivityFeedbackManager,
   resolveActivityFeedbackPhaseConfig,
   isActivityFeedbackEnabled,
   toActivityFeedbackEventContext,
   resolveActivitySceneType,
   resolveActivityEventTargets,
   enableActivityFeedbackForBot,
-  getAdapterActivityFeedbackManager,
-  initAdapterActivityFeedbackManager,
-  provideAdapterActivityFeedbackManager,
   isGenericActivityFeedbackManager,
   activityFeedbackAiBus,
   ActivityFeedbackAIBus,

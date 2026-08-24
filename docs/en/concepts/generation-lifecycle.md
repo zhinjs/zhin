@@ -73,7 +73,7 @@ try {
 
 `@zhin.js/adapter` does not close the old Endpoint before commit. The candidate
 `AdapterIndex` completes `start()` and `open()` during `activateNext`, but its
-`CapabilityContext` injects a `MessageGateway` bound to the candidate generation's
+`CapabilityContext` injects a `OutboundMessageService` bound to the candidate generation's
 `GenerationAdmissionGate`; every inbound event fails closed before commit. When
 `SnapshotStore` publishes the new snapshot it synchronously closes removed gates and opens
 new gates. A projection retained by both generations is never closed briefly.

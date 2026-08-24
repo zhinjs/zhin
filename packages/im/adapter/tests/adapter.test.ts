@@ -18,8 +18,10 @@ import {
 } from '@zhin.js/feature-kit';
 import adapterFeature, {
   AdapterIndex,
+  Endpoint,
   adapterFeatureId,
-  defineAdapter,
+  defineAdapter as defineAdapterContract,
+  endpointEventGatewayToken,
   endpointCapabilitiesOf,
   isAdapterIndex,
   parseAdapterDefinition,
@@ -28,7 +30,63 @@ import adapterFeature, {
   endpointContentOf,
   resolveEndpointManagement,
   type AdapterSegmentPolicy,
+  type AdapterContext,
+  type AdapterDefinition,
+  type EndpointEvent,
 } from '../src/index.js';
+
+type TestAdapterDefinition<TConfig> = Omit<AdapterDefinition<TConfig>, '$feature' | 'create'> & {
+  create(context: AdapterContext<TConfig>): object | Promise<object>;
+};
+
+class TestEndpoint extends Endpoint<object> {
+  readonly client: object;
+
+  constructor(surface: object) {
+    super();
+    this.client = surface;
+    Object.assign(this, surface);
+  }
+
+  start(): void {}
+  open(): void {}
+  close(): void {}
+  stop(): void {}
+}
+
+class EmittingEndpoint extends Endpoint<object> {
+  readonly client = Object.freeze({ api: 'native' });
+
+  start(): void {}
+  open(): void {}
+  close(): void {}
+  stop(): void {}
+
+  publish(name: string, payload: unknown): Promise<unknown> {
+    return this.emit(name, payload);
+  }
+}
+
+function defineAdapter<TConfig = unknown>(
+  definition: TestAdapterDefinition<TConfig>,
+): Readonly<AdapterDefinition<TConfig>> {
+  return defineAdapterContract<TConfig>({
+    ...definition,
+    async create(context) {
+      const value = await definition.create(context);
+      return value instanceof Endpoint ? value : new TestEndpoint(value);
+    },
+  });
+}
+
+const testEndpointEvents = Object.freeze({
+  receive: async (_event: EndpointEvent) => undefined,
+  [generationAdmissionBinder](gate: GenerationAdmissionGate) {
+    return Object.freeze({
+      receive: (event: EndpointEvent) => gate.enter(() => this.receive(event)),
+    });
+  },
+});
 
 describe('Adapter Feature', () => {
   it('derives explicit endpoint operations from the adapter declaration', () => {
@@ -689,6 +747,52 @@ describe('Adapter Feature', () => {
     await store.close();
   });
 
+  it('replays pre-commit endpoint events after admission opens', async () => {
+    const root = rootPluginId();
+    const received: EndpointEvent[] = [];
+    const eventGateway = {
+      async receive(event: EndpointEvent): Promise<void> {
+        received.push(event);
+      },
+      [generationAdmissionBinder](gate: GenerationAdmissionGate) {
+        return Object.freeze({
+          receive: async (event: EndpointEvent) => gate.enter(() => this.receive(event)),
+        });
+      },
+    };
+    let endpoint!: EmittingEndpoint;
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'native',
+      source: '/adapters/native.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound'],
+        create: () => (endpoint = new EmittingEndpoint()),
+      }),
+    });
+    const candidate = snapshot([slot], undefined, new Map([
+      [endpointEventGatewayToken.id, eventGateway],
+    ]));
+    const index = await createAdapterIndex([slot], candidate);
+    await index.start();
+
+    await endpoint.publish('platform.receive', { name: 'ready', event: { online: true } });
+    expect(received).toEqual([]);
+
+    const store = new SnapshotStore({
+      ...snapshotState(candidate),
+      projections: new Map([[adapterFeatureId, index]]),
+    });
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+    expect(received[0]).toMatchObject({
+      name: 'platform.receive',
+      client: endpoint.client,
+      payload: { name: 'ready', event: { online: true } },
+    });
+    await store.close();
+  });
+
   it('describes endpoint status and resolves Console adapter/endpoint pairs', async () => {
     const root = rootPluginId();
     const slot = createCapabilitySlot({
@@ -716,7 +820,7 @@ describe('Adapter Feature', () => {
     expect(index.resolve('missing', 'sandbox')).toBeUndefined();
   });
 
-  it('resolves Console pairs by live EndpointInstance.name (bot uin)', async () => {
+  it('resolves Console pairs by the live Endpoint identity (bot uin)', async () => {
     const root = rootPluginId();
     const slotA = createCapabilitySlot({
       owner: childPluginId(root, 'icqq'),
@@ -748,7 +852,7 @@ describe('Adapter Feature', () => {
     expect(index.resolve('icqq', '111111')).toBe(slotA.id);
     expect(index.resolve('icqq', '222222')).toBe(slotB.id);
     expect(index.resolve('icqq', '999999')).toBeUndefined();
-    expect(index.instance('icqq', '222222')).toMatchObject({ name: '222222' });
+    expect(index.connection('icqq', '222222')).toMatchObject({ name: '222222' });
   });
 
   it('expands an endpoints array into one record per entry with merged config', async () => {
@@ -830,7 +934,7 @@ describe('Adapter Feature', () => {
     // 错误的 adapter/endpoint 组合不得命中其它 record
     expect(index.resolve('icqq~8596238', '1234567')).toBeUndefined();
     expect(index.resolve('missing~8596238', '8596238')).toBeUndefined();
-    expect(index.instance('icqq~8596238', '8596238')).toMatchObject({ name: '8596238' });
+    expect(index.connection('icqq~8596238', '8596238')).toMatchObject({ name: '8596238' });
   });
 });
 
@@ -933,7 +1037,18 @@ function snapshot(
     root,
     tree: tree as RuntimeSnapshot['tree'],
     config: new Map([[root, configs?.get(root) ?? {}], ...slots.map((slot) => [slot.owner, configs?.get(slot.owner as ReturnType<typeof rootPluginId>) ?? {}] as const)]),
-    resources: new Map([[root, rootResources], ...slots.filter((slot) => slot.owner !== root).map((slot) => [slot.owner, new Map()] as const)]),
+    resources: new Map([
+      [root, new Map([
+        ...rootResources,
+        ...(!rootResources.has(endpointEventGatewayToken.id)
+          ? [[endpointEventGatewayToken.id, testEndpointEvents] as const]
+          : []),
+      ])],
+      ...slots.filter((slot) => slot.owner !== root).map((slot) => [
+        slot.owner,
+        new Map([[endpointEventGatewayToken.id, testEndpointEvents]]),
+      ] as const),
+    ]),
     capabilities: new Map(slots.map((slot) => [slot.id, slot])),
     projections: new Map(),
   };

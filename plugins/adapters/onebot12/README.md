@@ -8,7 +8,7 @@ Zhin.js [OneBot 12](https://12.onebot.dev/) 适配器（Plugin Runtime）。默�
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - **正向 WebSocket**（`connection: ws`）：应用连 OneBot 实现的 WS 服务器
 - `access_token` 鉴权（Bearer + query）
-- 入站经 `messageGatewayToken`；出站 `send({ conversation, payload })`
+- 入站经 `Endpoint.emit(...)`；出站 `send({ conversation, payload })`
 
 ## 安装
 
@@ -19,7 +19,7 @@ pnpm add @zhin.js/adapter-onebot12
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — 约定式 `adapters/onebot12.ts`（`defineAdapter`）
-- `@zhin.js/core` — `messageGatewayToken` 入站/出站
+- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 

@@ -6,6 +6,7 @@
 export class GenerationAdmissionGate {
   constructor() {
     admissionState.set(this, { active: false });
+    admissionActivationListeners.set(this, new Set());
     admissionDeactivationListeners.set(this, new Set());
   }
 
@@ -16,6 +17,18 @@ export class GenerationAdmissionGate {
   acquire(): (() => void) | undefined {
     const state = admissionState.get(this);
     return state?.active ? state.acquire?.() : undefined;
+  }
+
+  /** Observe the first commit which publishes this generation. */
+  onActivate(listener: () => void): () => void {
+    const listeners = admissionActivationListeners.get(this);
+    if (!listeners) throw new Error('Unknown generation admission gate');
+    if (this.active) {
+      listener();
+      return () => undefined;
+    }
+    listeners.add(listener);
+    return () => { listeners.delete(listener); };
   }
 
   /**
@@ -56,6 +69,7 @@ interface AdmissionState {
 
 const admissionState = new WeakMap<GenerationAdmissionGate, AdmissionState>();
 const admissionOwners = new WeakMap<GenerationAdmissionGate, object>();
+const admissionActivationListeners = new WeakMap<GenerationAdmissionGate, Set<() => void>>();
 const admissionDeactivationListeners = new WeakMap<GenerationAdmissionGate, Set<() => void>>();
 
 export function createGenerationAdmissionGate(): GenerationAdmissionGate {
@@ -132,6 +146,16 @@ export function replaceGenerationAdmissions(
   }
   for (const gate of next) {
     admissionState.set(gate, { active: true, acquire: acquireNext });
+    const listeners = admissionActivationListeners.get(gate);
+    for (const listener of listeners ?? []) {
+      try {
+        listener();
+      } catch {
+        // Admission publication is an infallible pointer switch. Buffered
+        // ingress reports through its own dispatch path.
+      }
+    }
+    listeners?.clear();
   }
 }
 

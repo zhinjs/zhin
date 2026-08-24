@@ -199,16 +199,17 @@ describe('CLI new command integration', () => {
 
     const pluginDir = path.join(testDir, 'plugins', adapterName)
 
-    // adapters/<name>.ts：defineAdapter 骨架，入站经 messageGatewayToken
+    // adapters/<name>.ts：defineAdapter + Endpoint 骨架，入站经 Endpoint.emit
     const adapterTs = await fs.readFile(
       path.join(pluginDir, 'adapters', `${adapterName}.ts`),
       'utf-8'
     )
     expect(adapterTs).toContain('defineAdapter')
     expect(adapterTs).toContain('zhin.js/adapter')
-    expect(adapterTs).toContain('messageGatewayToken')
+    expect(adapterTs).toContain('extends Endpoint')
+    expect(adapterTs).toContain('this.emit(name, payload)')
     expect(adapterTs).toContain("capabilities: ['inbound', 'outbound']")
-    expect(adapterTs).toContain('async start()')
+    expect(adapterTs).toContain('async start(')
     expect(adapterTs).toContain('async stop()')
     expect(adapterTs).toContain('async send(')
 

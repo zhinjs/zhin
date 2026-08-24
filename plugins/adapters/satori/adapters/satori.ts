@@ -2,7 +2,6 @@
  * Convention entry: discover `adapters/satori.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import { SatoriWebhookEndpoint, SatoriWsEndpoint } from '../src/endpoint.js';
 import {
@@ -30,8 +29,6 @@ export default defineAdapter<SatoriAdapterConfig>({
   },
   create(context) {
     const config = resolveSatoriConfig(context.config);
-    const gateway = context.use(messageGatewayToken);
-    const sideEvents = context.use(sideEventGatewayToken);
     // 注册到插件运行时状态（satori.endpoint list 的"运行中"数据源）
     context.use(satoriRuntimeStateToken).endpoints.set(config.id, {
       id: config.id,
@@ -40,16 +37,12 @@ export default defineAdapter<SatoriAdapterConfig>({
     if (config.connection === 'webhook') {
       return new SatoriWebhookEndpoint({
         id: context.id,
-        gateway,
-        sideEvents,
         http: context.use(httpHostToken),
         config,
       });
     }
     return new SatoriWsEndpoint({
       id: context.id,
-      gateway,
-      sideEvents,
       config,
     });
   },

@@ -171,7 +171,7 @@ export function parseEmailMessage(
   };
 }
 
-/** Build inbound text for MessageGateway.receive (gateway owns reply routing). */
+/** Build inbound text for OutboundMessageService.receive (gateway owns reply routing). */
 export function formatInboundContent(email: EmailMessage): string {
   const parts: string[] = [];
   if (email.subject) parts.push(`Subject: ${email.subject}`, '');

@@ -1,6 +1,7 @@
+import { bindTestEndpoint } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
+import type { OutboundMessageService, SideEventGateway } from '@zhin.js/core/runtime';
 
 vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
 
@@ -44,19 +45,19 @@ function createSideEvents(): SideEventGateway & {
 async function startEndpoint(
   options?: { systemMsg?: unknown[]; sideEvents?: SideEventGateway },
 ): Promise<IcqqEndpoint> {
-  const gateway: MessageGateway = {
+  const gateway: OutboundMessageService = {
     receive: vi.fn(async () => Object.freeze({ matched: true })),
     send: vi.fn(async () => 'sent'),
   };
-  const endpoint = new IcqqEndpoint({
+  const endpoint = bindTestEndpoint(new IcqqEndpoint({
     id: endpointKey,
     gateway,
     config: baseConfig,
     sideEvents: options?.sideEvents ?? createSideEvents(),
     loginAssist: new LoginAssist(null, { defaultTimeoutMs: 60_000 }),
-  });
+  }), gateway, options?.sideEvents ?? createSideEvents());
   if (options?.systemMsg) {
-    vi.mocked(endpoint.getSystemMsg).mockResolvedValue(options.systemMsg as never);
+    vi.mocked(endpoint.client.getSystemMsg).mockResolvedValue(options.systemMsg as never);
   }
   await endpoint.start(new AbortController().signal);
   endpoint.open();
@@ -176,7 +177,7 @@ describe('icqq.endpoint side-event wiring (no inbox dual-write)', () => {
     const sideEvents = createSideEvents();
     const endpoint = await startEndpoint({ sideEvents });
     try {
-      (endpoint as any).emit('request.friend.add', {
+      endpoint.client.emit('request.friend.add', {
         post_type: 'request',
         request_type: 'friend',
         user_id: 20002,
@@ -193,7 +194,7 @@ describe('icqq.endpoint side-event wiring (no inbox dual-write)', () => {
         $endpoint: '10001',
       });
 
-      (endpoint as any).emit('request.friend.add', {
+      endpoint.client.emit('request.friend.add', {
         post_type: 'request',
         request_type: 'friend',
         user_id: 20002,
@@ -210,7 +211,7 @@ describe('icqq.endpoint side-event wiring (no inbox dual-write)', () => {
   it('dispatches notice events to SideEventGateway', async () => {
     const sideEvents = createSideEvents();
     const endpoint = await startEndpoint({ sideEvents });
-    (endpoint as any).emit('notice.group.increase', {
+    endpoint.client.emit('notice.group.increase', {
       post_type: 'notice',
       notice_type: 'group',
       sub_type: 'increase',
@@ -238,7 +239,7 @@ describe('icqq.endpoint side-event wiring (no inbox dual-write)', () => {
       sideEvents,
     });
     await flush();
-    expect(endpoint.getSystemMsg).toHaveBeenCalled();
+    expect(endpoint.client.getSystemMsg).toHaveBeenCalled();
     expect(sideEvents.requests).toHaveLength(2);
     await endpoint.stop();
   });
@@ -260,7 +261,7 @@ describe('icqq.endpoint side-event wiring (no inbox dual-write)', () => {
 
   it('ignores request/notice when SideEventGateway is absent', async () => {
     const endpoint = await startEndpoint();
-    expect(() => (endpoint as any).emit('request.friend.add', {
+    expect(() => endpoint.client.emit('request.friend.add', {
       post_type: 'request', request_type: 'friend', user_id: 1, flag: 'f', time: 1,
     })).not.toThrow();
     await flush();

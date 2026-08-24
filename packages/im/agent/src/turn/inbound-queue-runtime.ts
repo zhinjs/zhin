@@ -18,13 +18,17 @@ export function createInboundTurnQueue(
     emitQueuedStart: (commMessage, sessionKey) => {
       emitter.emit(
         'ai.activity.queued.start',
-        emitter.createPayload(sessionKey, commMessage, 'text'),
+        emitter.createPayload(sessionKey, commMessage, 'text', {
+          hookContext: { activityFeedbackEligible: true },
+        }),
       );
     },
     emitQueuedClear: (commMessage, sessionKey) => {
       emitter.emit(
         'ai.activity.queued.clear',
-        emitter.createPayload(sessionKey, commMessage, 'text'),
+        emitter.createPayload(sessionKey, commMessage, 'text', {
+          hookContext: { activityFeedbackEligible: true },
+        }),
       );
     },
   });

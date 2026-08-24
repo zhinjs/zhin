@@ -9,9 +9,19 @@ import type {
   EndpointCapabilities,
   EndpointOperation,
 } from '@zhin.js/im-contract';
-import type { EndpointManagement } from './endpoint-management.js';
-import type { EndpointControl } from './endpoint-control.js';
-import type { EndpointContentPort } from './endpoint-content.js';
+import type { Endpoint } from './endpoint.js';
+
+export { Endpoint } from './endpoint.js';
+export type {
+  EndpointEvent,
+  EndpointIdentity,
+  PlatformEvent,
+} from './endpoint.js';
+export { defineEndpointClient } from './endpoint-client.js';
+export type {
+  EndpointClientContext,
+  EndpointClientToken,
+} from './endpoint-client.js';
 
 const adapterBrand = 'zhin.adapter/1' as const;
 
@@ -39,25 +49,9 @@ export interface EndpointSendRequest {
   readonly payload: unknown;
 }
 
-export interface EndpointInstance {
-  /** Optional platform-neutral Console/Host management surface. */
-  readonly management?: EndpointManagement;
-  /** Optional platform-neutral control surface for existing messages. */
-  readonly control?: EndpointControl;
-  /** Optional canonical resolver for message, merged-forward and media references. */
-  readonly content?: EndpointContentPort;
-  /** Required readiness; must observe abort and settle before rollback returns. */
-  start?(signal: AbortSignal): void | Promise<void>;
-  /** Opens Endpoint-local flow behind the candidate generation admission gate. */
-  open?(): void;
-  /** Stops new inbound events while preserving in-flight work. */
-  close?(): void | Promise<void>;
-  /** Releases transport resources. Calls must be idempotent. */
-  stop?(): void | Promise<void>;
-  /** Platform message id. Core wraps it in the canonical MessageRef/DeliveryReceipt. */
-  send?(request: EndpointSendRequest): string | Promise<string>;
-}
-
+/**
+ * Generation-owned construction context for one runtime Endpoint.
+ */
 export interface AdapterContext<TConfig = unknown> extends CapabilityContext<TConfig> {
   readonly id: CapabilityId;
   readonly name: string;
@@ -104,7 +98,7 @@ const OUTBOUND_MEDIA_FORMS: readonly AdapterOutboundMedia[] = [
 
 const ADAPTER_OPERATIONS: readonly AdapterOperation[] = ['recall', 'edit', 'reaction', 'typing'];
 
-export interface AdapterDefinition<TConfig = unknown> {
+export interface AdapterDefinition<TConfig = unknown, TClient = unknown> {
   /** @internal Runtime feature brand. */
   readonly $feature: typeof adapterBrand;
   readonly capabilities: readonly AdapterCapability[];
@@ -118,7 +112,7 @@ export interface AdapterDefinition<TConfig = unknown> {
   readonly segments?: AdapterSegmentPolicy;
   create(
     context: AdapterContext<TConfig>,
-  ): EndpointInstance | Promise<EndpointInstance>;
+  ): Endpoint<TClient> | Promise<Endpoint<TClient>>;
 }
 
 declare module '@zhin.js/plugin-runtime' {
@@ -143,9 +137,7 @@ declare module '@zhin.js/plugin-runtime' {
  *
  * export default defineAdapter({
  *   capabilities: ['inbound', 'outbound'],
- *   create: () => ({
- *     send: async () => 'platform-message-id',
- *   }),
+ *   create: () => new MyPlatformEndpoint(),
  * });
  * ```
  */

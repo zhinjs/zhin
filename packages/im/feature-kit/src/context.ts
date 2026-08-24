@@ -1,5 +1,6 @@
 import {
   bindGenerationAdmission,
+  type FeatureId,
   type GenerationAdmissionGate,
   type PluginId,
   type PluginNodeSnapshot,
@@ -13,6 +14,8 @@ export interface CapabilityContext<TConfig = unknown> {
   readonly generation: number;
   readonly config: Readonly<TConfig>;
   use<T>(token: Token<T>): T;
+  /** Resolve a generation-owned Feature projection from this operation's snapshot. */
+  project<T>(feature: FeatureId): T;
 }
 
 export function createCapabilityContext<TConfig = unknown>(
@@ -35,6 +38,12 @@ export function createCapabilityContext<TConfig = unknown>(
       }
       const value = resources.get(token.id) as T;
       return admission ? bindGenerationAdmission(value, admission) : value;
+    },
+    project<T>(feature: FeatureId): T {
+      if (!snapshot.projections.has(feature)) {
+        throw new Error(`Missing Feature projection ${feature}`);
+      }
+      return snapshot.projections.get(feature) as T;
     },
   });
 }

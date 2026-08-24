@@ -1,20 +1,18 @@
 import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
-import { getDingtalkAgentDeps } from '../../src/dingtalk-agent-deps.js';
-export default defineAgentTool<{ endpoint_id: string; chat_id: string; name?: string; owner?: string; add_members?: string; remove_members?: string }>({
+export default defineAgentTool<{ chat_id: string; name?: string; owner?: string; add_members?: string; remove_members?: string }>({
   description: '更新钉钉群聊设置（改名、换群主、增减成员）',
   inputSchema: z.object({
-    endpoint_id: z.string().describe('Endpoint 名称'),
     chat_id: z.string().describe('群聊 ID'),
     name: z.string().optional().describe('新群名（可选）'),
     owner: z.string().optional().describe('新群主 userId（可选）'),
     add_members: z.string().optional().describe('要添加的成员 userId，逗号分隔（可选）'),
     remove_members: z.string().optional().describe('要移除的成员 userId，逗号分隔（可选）'),
   }),
-  platforms: ['dingtalk'],
+  adapter: 'dingtalk',
   tags: ['dingtalk'],
-  async execute({ endpoint_id, chat_id, name, owner, add_members, remove_members    }: { endpoint_id: string; chat_id: string; name?: string; owner?: string; add_members?: string; remove_members?: string }) {
-    const endpoint = getDingtalkAgentDeps().getEndpoint(endpoint_id);
+  async execute({ chat_id, name, owner, add_members, remove_members    }: { chat_id: string; name?: string; owner?: string; add_members?: string; remove_members?: string }, context) {
+    const endpoint = context.$client;
     const options: Record<string, unknown> = {};
     if (name) options.name = name;
     if (owner) options.owner = owner;

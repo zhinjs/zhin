@@ -9,7 +9,7 @@
 | 项 | weixin-ilink | wechat-mp |
 |---|---|---|
 | 账号类型 | 个人微信（ClawBot） | 微信公众号 |
-| 入站 | 长轮询 `getupdates` → `messageGatewayToken` | Webhook（`httpHostToken`） |
+| 入站 | 长轮询 `getupdates` → `Endpoint.emit(...)` | Webhook（`httpHostToken`） |
 | 登录 | 扫码 / 侧车凭证 / `botToken` | AppId/Secret/Token |
 | 群聊 | 不支持（仅私聊） | 支持 |
 
@@ -52,7 +52,7 @@ data/weixin-ilink/<bot-name>.json
 
 回复必须携带入站时缓存的 `context_token`（按 `endpointId + peerUserId`）。若用户久未发消息导致 token 缺失，出站会拒绝并打 warn。
 
-出站经 Runtime：`MessageGateway` → `endpoint.send({ conversation, payload })`（`conversation` 为入站归一化出的 `ConversationRef`，kind 恒为 `private`，`id` 即对端 user_id）。
+出站经 Runtime：`OutboundMessageService` → `endpoint.send({ conversation, payload })`（`conversation` 为入站归一化出的 `ConversationRef`，kind 恒为 `private`，`id` 即对端 user_id）。
 
 **图文限制**：微信单条消息不支持图文混排。适配器会自动：
 

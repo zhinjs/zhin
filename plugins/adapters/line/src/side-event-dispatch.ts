@@ -1,5 +1,5 @@
 import { buildNotice, senderFromId } from '@zhin.js/core';
-import type { SideEventGateway } from '@zhin.js/core/runtime';
+import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 import {
   isLineLifecycleEvent,
@@ -23,17 +23,17 @@ function mapLineLifecycleParts(type: LineEvent['type']): { scene_type: string; s
 }
 
 export function receiveLineSideEvent(
-  sideEvents: SideEventGateway | undefined,
+  emit: EndpointEventEmitter,
   endpointKey: string,
   configId: string,
   event: LineEvent,
   logger: ReturnType<typeof getAdapterLogger>,
 ): void {
-  if (!sideEvents || !isLineLifecycleEvent(event)) return;
+  if (!isLineLifecycleEvent(event)) return;
   const parts = mapLineLifecycleParts(event.type);
   const conversation = lineInboundConversation(endpointKey, event.source);
   const userId = event.source.userId || conversation.id;
-  void sideEvents.receiveNotice(buildNotice(event, {
+  void emit('notice.receive', buildNotice(event, {
     $id: `line:${event.type}:${event.timestamp}:${userId}`,
     $adapter: 'line' as never,
     $endpoint: configId,

@@ -19,6 +19,19 @@ import toolFeature, {
   toolFeatureId,
 } from '../src/index.js';
 
+interface ToolTestClient {
+  readonly id: string;
+}
+
+declare module '@zhin.js/feature-kit' {
+  interface AdapterClientRegistry {
+    readonly 'tool-test': {
+      readonly client: ToolTestClient;
+      readonly events: Record<string, unknown>;
+    };
+  }
+}
+
 describe('Tool Feature', () => {
   it('brands definitions and discovers only flat tools/*.ts', async () => {
     const definition = defineAgentTool({
@@ -166,6 +179,36 @@ describe('Tool Feature', () => {
       unattended: false,
       network: { enabled: false, httpsOnly: undefined, allowedDomains: [] },
     });
+  });
+
+  it('injects the current adapter Client lazily and rejects mismatched turns', async () => {
+    const root = rootPluginId();
+    const client: ToolTestClient = { id: 'client-1' };
+    let reads = 0;
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: toolFeatureId,
+      localName: 'client-id',
+      source: '/tools/client-id.ts',
+      definition: defineAgentTool<Record<string, never>>({
+        adapter: 'tool-test',
+        description: 'Read the native client',
+        execute: (_input, context) => context.$client.id,
+      }),
+    });
+    const index = new ToolIndex([slot], createSnapshot([slot], createToken('unused').id));
+
+    await expect(index.execute(root, 'client-id', {}, {
+      ...invocation(),
+      client: { adapter: 'other', get: () => client },
+    })).rejects.toThrow('requires adapter tool-test');
+    expect(reads).toBe(0);
+
+    await expect(index.execute(root, 'client-id', {}, {
+      ...invocation(),
+      client: { adapter: 'tool-test', get: () => { reads += 1; return client; } },
+    })).resolves.toBe('client-1');
+    expect(reads).toBe(1);
   });
 
   it('publishes every plugin-owned Tool under one collision-free qualified identity', async () => {

@@ -1,14 +1,16 @@
+import { bindTestEndpoint } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost } from '@zhin.js/host-http';
-import { WeChatMpEndpoint, type WeChatMpFetch } from '../src/endpoint.js';
+import { WeChatMpEndpoint } from '../src/endpoint.js';
+import type { WeChatMpFetch } from '../src/client.js';
 import { resolveWeChatMpConfig } from '../src/protocol.js';
 
 const adapterFeature = featureId('zhin.adapter');
 
-function gateway(): MessageGateway {
+function gateway(): OutboundMessageService {
   return { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') };
 }
 
@@ -25,13 +27,13 @@ function config() {
 describe('wechat-mp.endpoint management', () => {
   it('只暴露 listFriends（公众号无群/频道概念）', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const endpoint = new WeChatMpEndpoint({
+    const endpoint = bindTestEndpoint(new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway: gateway(),
       http,
       config: config(),
       fetch: vi.fn(async () => ({ data: {} })) as unknown as WeChatMpFetch,
-    });
+    }), gateway(), undefined);
     expect(listEndpointManagementCapabilities(endpoint)).toEqual(['listFriends']);
     expect(endpoint.management.listGroups).toBeUndefined();
     expect(endpoint.management.listGroupMembers).toBeUndefined();
@@ -50,13 +52,13 @@ describe('wechat-mp.endpoint management', () => {
       };
     });
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const endpoint = new WeChatMpEndpoint({
+    const endpoint = bindTestEndpoint(new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway: gateway(),
       http,
       config: config(),
       fetch: fetchFn as unknown as WeChatMpFetch,
-    });
+    }), gateway(), undefined);
 
     const friends = await endpoint.management.listFriends!();
 
@@ -66,7 +68,10 @@ describe('wechat-mp.endpoint management', () => {
     ]);
     // 先刷 token，再带 access_token 拉关注者
     expect(urls[0]).toContain('/cgi-bin/token');
-    expect(urls[1]).toContain('/cgi-bin/user/get?access_token=tok-1');
+    const followerUrl = new URL(urls[1]!);
+    expect(followerUrl.pathname).toBe('/cgi-bin/user/get');
+    expect(followerUrl.searchParams.get('access_token')).toBe('tok-1');
+    expect(followerUrl.searchParams.get('next_openid')).toBe('');
     await http.close();
   });
 
@@ -78,13 +83,13 @@ describe('wechat-mp.endpoint management', () => {
       return { data: { errcode: 48001, errmsg: 'api unauthorized' } };
     });
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const endpoint = new WeChatMpEndpoint({
+    const endpoint = bindTestEndpoint(new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway: gateway(),
       http,
       config: config(),
       fetch: fetchFn as unknown as WeChatMpFetch,
-    });
+    }), gateway(), undefined);
 
     await expect(endpoint.management.listFriends!()).rejects.toThrow(/48001/);
     await http.close();

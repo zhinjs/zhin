@@ -44,10 +44,8 @@ export {
 } from './webhook.js';
 
 export {
-  getLineAgentDeps,
-  getLineApiConfig,
-  registerLineAgentEndpoint,
-  setLineAgentDeps,
-  type LineAgentDeps,
-  type LineAgentEndpoint,
-} from './line-agent-deps.js';
+  LineClient,
+  lineClient,
+  type LineClientEventMap,
+  type LineGroupMember,
+} from './client.js';

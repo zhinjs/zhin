@@ -17,7 +17,7 @@ ICQQ Plugin Runtime adapter — connects to a logged-in QQ account via the [@icq
 ## Features
 
 - Group chat / private chat / temporary group session / QQ channel messages
-- Inbound: `messageGatewayToken` (IPC event subscription)
+- Inbound: `outboundMessageToken` (IPC event subscription)
 - Outbound: `send({ conversation, payload })` -> `send_group_msg` / `send_private_msg` / ... (`kind`/`id`/`parent` structured addressing)
 - Agent tools: `agent/tools/` (poke, group management, friend list, etc.) retained
 - Console Endpoint management: `src/endpoint.ts` explicitly implements `EndpointManagement` (friend/group/group member lists, request approval, delete friend, kick member, mute, set admin). Console uses standardized RPCs such as `endpoint.friends` / `endpoint.groups` / `endpoint.group_members`
@@ -88,7 +88,7 @@ Run `icqq login` first, then start Zhin.
 - `autoReconnect` has been re-implemented: after an unexpected IPC/RPC disconnect, the adapter automatically reconnects with exponential backoff (`stop()` is a deliberate disconnect and does not trigger reconnection).
 - `outboundMedia: file | base64` has been re-implemented: in `file` mode, segment base64 data is written to a temporary file before sending `[image:path]`; in `base64` mode (default when `rpc` is configured), `[image:base64://...]` is sent for the daemon to decode.
 - **Console social/group management RPC is now wired**: the endpoint within the Adapter normalizes ICQQ's `get_friend_list` / `get_group_list` / `get_group_member_list`, request approval, and group management operations into frozen `EndpointManagement` objects. The Host only consumes this semantic port and no longer probes for method aliases or reads `friends` / `groups` SDK caches.
-- Friend and group requests enter the side-event gateway and expose approval through `Request` and `EndpointManagement`.
+- Friend and group requests enter the unified Endpoint event gateway and expose approval through `Request` and `EndpointManagement`.
 - Login QR, slider, device, and auth challenges persist as Console login tasks and can also continue through terminal input.
 
 ## Troubleshooting

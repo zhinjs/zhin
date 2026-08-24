@@ -51,9 +51,7 @@ export {
 export { verifyOneBotAccessToken } from './wss-auth.js';
 
 export {
-  getOnebot11AgentDeps,
-  registerOnebot11AgentEndpoint,
-  setOnebot11AgentDeps,
-  type Onebot11AgentDeps,
-  type Onebot11AgentEndpoint,
-} from './onebot11-agent-deps.js';
+  onebot11Client,
+  type Onebot11Client,
+  type Onebot11ClientEventMap,
+} from './client.js';

@@ -17,9 +17,9 @@ import {
   type AdapterDefinition,
   type AdapterOperation,
   type AdapterSegmentPolicy,
-  type EndpointInstance,
   type EndpointSendRequest,
 } from './definition.js';
+import { bindEndpoint, isEndpoint, type Endpoint } from './endpoint.js';
 import {
   listEndpointManagementCapabilities,
   type EndpointManagementCapability,
@@ -57,7 +57,7 @@ export type AdapterEndpointPhase =
   'pending' | 'starting' | 'online';
 
 interface AdapterRecord extends AdapterDescriptor {
-  readonly endpoint: EndpointInstance;
+  readonly endpoint: Endpoint;
   readonly segments?: AdapterSegmentPolicy;
   started: boolean;
   open: boolean;
@@ -157,13 +157,47 @@ export class AdapterIndex {
     return exact?.id ?? matches[0]?.id;
   }
 
-  /**
-   * Resolve a live EndpointInstance for Host-side side channels (reactions, etc.).
-   */
-  instance(adapter: string, endpointKey: string): EndpointInstance | undefined {
+  /** Resolve the framework-owned Endpoint for internal Host control ports. */
+  connection(adapter: string, endpointKey: string): Endpoint | undefined {
     const id = this.resolve(adapter, endpointKey);
     if (!id) return undefined;
     return this.#records.get(id)?.endpoint;
+  }
+
+  /** Resolve the platform-native client owned by one active Endpoint. */
+  client<TClient>(adapter: string, endpointKey: string): TClient {
+    const id = this.resolve(adapter, endpointKey);
+    const record = id ? this.#records.get(id) : undefined;
+    if (!record) throw new Error(`Endpoint ${adapter}/${endpointKey} does not exist`);
+    if (!record.started || record.stopped) {
+      throw new Error(`Endpoint ${adapter}/${endpointKey} is not active`);
+    }
+    return record.endpoint.client as TClient;
+  }
+
+  /** Resolve the Client directly from a generation-stable CapabilityId. */
+  clientById<TClient>(id: CapabilityId): TClient {
+    const record = this.#records.get(id);
+    if (!record) throw new Error(`Unknown Adapter Endpoint: ${id}`);
+    if (!record.started || record.stopped) {
+      throw new Error(`Adapter Endpoint ${id} is not active`);
+    }
+    return record.endpoint.client as TClient;
+  }
+
+  /** Literal adapter name used by authoring-context type discrimination. */
+  clientAdapter(id: CapabilityId): string {
+    const record = this.#records.get(id);
+    if (!record) throw new Error(`Unknown Adapter Endpoint: ${id}`);
+    return record.endpoint.identity.adapter;
+  }
+
+  /** Optional Client lookup for cross-platform middleware and routing. */
+  findClient<TClient>(adapter: string, endpointKey: string): TClient | undefined {
+    const id = this.resolve(adapter, endpointKey);
+    const record = id ? this.#records.get(id) : undefined;
+    if (!record || !record.started || record.stopped) return undefined;
+    return record.endpoint.client as TClient;
   }
 
   owner(id: CapabilityId): PluginId {
@@ -228,6 +262,11 @@ export class AdapterIndex {
         }
         signal.throwIfAborted();
         if (record.stopped) throw new Error(`Adapter Endpoint stopped during start: ${record.id}`);
+        if (record.endpoint.client === record.endpoint) {
+          throw new TypeError(
+            `Adapter Endpoint ${record.id} must expose a distinct platform client`,
+          );
+        }
         record.started = true;
       }
     } catch (error) {
@@ -335,7 +374,7 @@ function matchesEndpoint(
     || record.id.endsWith(`/${adapter}`)
     || record.owner === adapter
     || record.owner.endsWith(`/${adapter}`);
-  // Live EndpointInstance.name is the bot runtime id (e.g. ICQQ uin). Host /
+  // The live Endpoint identity is the bot runtime id (e.g. ICQQ uin). Host /
   // activity-feedback resolve with that id; slot.localName alone is not enough
   // when multiple plugin instances share localName "icqq".
   const liveName = endpointLiveName(record.endpoint);
@@ -346,7 +385,7 @@ function matchesEndpoint(
   return adapterOk && endpointOk;
 }
 
-function endpointLiveName(endpoint: EndpointInstance): string | undefined {
+function endpointLiveName(endpoint: Endpoint): string | undefined {
   const name = (endpoint as { readonly name?: unknown }).name;
   return typeof name === 'string' && name.length > 0 ? name : undefined;
 }
@@ -357,9 +396,9 @@ function endpointPhase(record: AdapterRecord): AdapterEndpointPhase {
   return 'pending';
 }
 
-function assertEndpoint(value: unknown, id: CapabilityId): asserts value is EndpointInstance {
-  if (!value || typeof value !== 'object') {
-    throw new TypeError(`Adapter ${id} create() must return an Endpoint instance`);
+function assertEndpoint(value: unknown, id: CapabilityId): asserts value is Endpoint {
+  if (!isEndpoint(value)) {
+    throw new TypeError(`Adapter ${id} create() must return an Endpoint subclass`);
   }
 }
 
@@ -425,7 +464,7 @@ async function createEndpoint(
   admission: GenerationAdmissionGate,
   signal: AbortSignal,
   expansion?: EndpointExpansion,
-): Promise<Readonly<{ endpoint: EndpointInstance; operations: readonly AdapterOperation[] }>> {
+): Promise<Readonly<{ endpoint: Endpoint; operations: readonly AdapterOperation[] }>> {
   const context = Object.freeze({
     ...createCapabilityContext(snapshot, slot.owner, admission, signal),
     ...(expansion?.config ? { config: expansion.config } : {}),
@@ -435,6 +474,7 @@ async function createEndpoint(
   const operations = resolveAdapterOperations(slot.definition, context);
   const endpoint = await slot.definition.create(context);
   assertEndpoint(endpoint, expansion?.id ?? slot.id);
+  bindEndpoint(endpoint, context, admission);
   if (slot.definition.capabilities.includes('outbound') && typeof endpoint.send !== 'function') {
     throw new TypeError(
       `Adapter Endpoint ${String(expansion?.id ?? slot.id)} declares outbound but send() is missing`,

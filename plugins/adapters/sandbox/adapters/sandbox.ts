@@ -2,7 +2,6 @@
  * Convention entry: discover `adapters/sandbox.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import { SandboxWsEndpoint } from '../src/endpoint.js';
 import {
@@ -24,8 +23,6 @@ export default defineAdapter<SandboxAdapterConfig>({
   create(context) {
     return new SandboxWsEndpoint({
       id: context.id,
-      gateway: context.use(messageGatewayToken),
-      sideEvents: context.use(sideEventGatewayToken),
       http: context.use(httpHostToken),
       defaults: resolveSandboxEndpoint(context.config),
     });

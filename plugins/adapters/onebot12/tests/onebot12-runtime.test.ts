@@ -1,8 +1,9 @@
+import { bindTestEndpoint } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { onebot12RuntimeStateToken } from '../src/onebot12-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { messageGatewayToken, sideEventGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
+import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import defineOneBot12Adapter from '../adapters/onebot12.js';
 import { OneBot12WebhookEndpoint } from '../src/webhook.js';
@@ -285,11 +286,11 @@ describe('onebot12 protocol helpers', () => {
 });
 
 describe('onebot12 plugin runtime adapter', () => {
-  it('routes admitted message events through MessageGateway when open', async () => {
+  it('routes admitted message events through OutboundMessageService when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const ws = createMockWs();
-    const endpoint = new OneBot12WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot12WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
       gateway,
       config: baseConfig,
@@ -297,7 +298,7 @@ describe('onebot12 plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), gateway, undefined);
 
     await endpoint.start();
     endpoint.open();
@@ -329,9 +330,9 @@ describe('onebot12 plugin runtime adapter', () => {
 
   it('marks mentioned when a mention segment targets self.user_id', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const ws = createMockWs();
-    const endpoint = new OneBot12WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot12WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
       gateway,
       config: baseConfig,
@@ -339,7 +340,7 @@ describe('onebot12 plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), gateway, undefined);
     await endpoint.start();
     endpoint.open();
     endpoint.admit({
@@ -370,9 +371,9 @@ describe('onebot12 plugin runtime adapter', () => {
 
   it('does not mark mentioned when the mention targets someone else', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const ws = createMockWs();
-    const endpoint = new OneBot12WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot12WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
       gateway,
       config: baseConfig,
@@ -380,7 +381,7 @@ describe('onebot12 plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), gateway, undefined);
     await endpoint.start();
     endpoint.open();
     endpoint.admit({
@@ -409,7 +410,7 @@ describe('onebot12 plugin runtime adapter', () => {
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
-    const endpoint = new OneBot12WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot12WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
@@ -417,7 +418,7 @@ describe('onebot12 plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.admit({
       id: 'e1',
@@ -435,7 +436,7 @@ describe('onebot12 plugin runtime adapter', () => {
 
   it('sends outbound payloads via WS send_message action', async () => {
     const ws = createMockWs();
-    const endpoint = new OneBot12WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot12WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -446,7 +447,10 @@ describe('onebot12 plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     endpoint.open();
 
@@ -482,7 +486,7 @@ describe('onebot12 plugin runtime adapter', () => {
 
   it('uploads base64 media via upload_file then sends file_id segment', async () => {
     const ws = createMockWs();
-    const endpoint = new OneBot12WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot12WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -493,7 +497,10 @@ describe('onebot12 plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     endpoint.open();
 
@@ -547,7 +554,7 @@ describe('onebot12 plugin runtime adapter', () => {
 
   it('degrades to extension fields when upload_file fails', async () => {
     const ws = createMockWs();
-    const endpoint = new OneBot12WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot12WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -558,7 +565,10 @@ describe('onebot12 plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     endpoint.open();
 
@@ -602,7 +612,7 @@ describe('onebot12 plugin runtime adapter', () => {
   it('admits inbound events received over the socket when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
-    const endpoint = new OneBot12WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot12WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
@@ -610,7 +620,7 @@ describe('onebot12 plugin runtime adapter', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     ws.emitMessage(JSON.stringify({
@@ -636,7 +646,7 @@ describe('onebot12 plugin runtime adapter', () => {
   it('creates webhook endpoint when httpHostToken provided', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const gateway: MessageGateway = {
+    const gateway: OutboundMessageService = {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     };
@@ -651,7 +661,7 @@ describe('onebot12 plugin runtime adapter', () => {
       },
       use: (token: unknown) => {
         if (token === httpHostToken) return http;
-        if (token === messageGatewayToken) return gateway;
+        if (token === outboundMessageToken) return gateway;
         if (token === sideEventGatewayToken) {
           return {
             receiveNotice: vi.fn(async () => {}),
@@ -675,7 +685,7 @@ describe('onebot12 plugin runtime adapter', () => {
       config: { connection: 'wss', id: 'rev', path: '/onebot12/ws' },
       use: (token: unknown) => {
         if (token === httpHostToken) return http;
-        if (token === messageGatewayToken) {
+        if (token === outboundMessageToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
         }
         if (token === sideEventGatewayToken) {
@@ -692,18 +702,18 @@ describe('onebot12 plugin runtime adapter', () => {
     expect(endpoint).toBeInstanceOf(OneBot12WssEndpoint);
   });
 
-  it('handles webhook POST and routes events through MessageGateway', async () => {
+  it('handles webhook POST and routes events through OutboundMessageService', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const callAction = vi.fn(async () => ({
       status: 'ok' as const,
       retcode: 0,
       data: { message_id: 'out-1' },
       message: '',
     }));
-    const endpoint = new OneBot12WebhookEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot12WebhookEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
       gateway,
       http,
@@ -714,7 +724,7 @@ describe('onebot12 plugin runtime adapter', () => {
         api_url: 'http://127.0.0.1:6700',
       }) as ReturnType<typeof resolveOneBot12Config> & { connection: 'webhook' },
       callAction,
-    });
+    }), gateway, undefined);
 
     await endpoint.start();
     const { port } = await http.listen();
@@ -756,7 +766,7 @@ describe('onebot12 plugin runtime adapter', () => {
 describe('onebot12 ws lifecycle', () => {
   it('does not arm reconnect when the initial connect closes before open', async () => {
     let creates = 0;
-    const endpoint = new OneBot12WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot12WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig, // reconnect_interval: 50
@@ -766,7 +776,7 @@ describe('onebot12 ws lifecycle', () => {
         queueMicrotask(() => ws.emitClose(1006, 'refused'));
         return ws;
       },
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
 
     await expect(endpoint.start()).rejects.toThrow('OneBot12 WS 关闭');
     // 等超过一个 reconnect_interval，不应有幽灵重连发生
@@ -775,12 +785,12 @@ describe('onebot12 ws lifecycle', () => {
   });
 
   it('settles start() silently when stop() races the initial connect', async () => {
-    const endpoint = new OneBot12WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot12WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => createMockWs(), // 永不 open，模拟连接挂起
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
 
     const startPromise = endpoint.start();
     await endpoint.stop();
@@ -790,7 +800,7 @@ describe('onebot12 ws lifecycle', () => {
 
   it('reconnects only after an established connection closes', async () => {
     const sockets: Array<ReturnType<typeof createMockWs>> = [];
-    const endpoint = new OneBot12WsEndpoint({
+    const endpoint = bindTestEndpoint(new OneBot12WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
@@ -802,7 +812,7 @@ describe('onebot12 ws lifecycle', () => {
         });
         return ws;
       },
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
 
     await endpoint.start();
     sockets[0]!.emitClose(1006, 'lost');
@@ -816,7 +826,7 @@ describe('onebot12 ws lifecycle', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     try {
-      const endpoint = new OneBot12WssEndpoint({
+      const endpoint = bindTestEndpoint(new OneBot12WssEndpoint({
         id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
         gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
         http,
@@ -825,7 +835,7 @@ describe('onebot12 ws lifecycle', () => {
           id: 'wss-noauth',
           path: '/ob12/ws',
         }) as import('../src/protocol.js').OneBot12WssConfig,
-      });
+      }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
       await endpoint.start();
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('missing access_token'));
       await endpoint.stop();
@@ -840,7 +850,7 @@ describe('onebot12 ws lifecycle', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     try {
-      const endpoint = new OneBot12WebhookEndpoint({
+      const endpoint = bindTestEndpoint(new OneBot12WebhookEndpoint({
         id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
         gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
         http,
@@ -849,7 +859,7 @@ describe('onebot12 ws lifecycle', () => {
           id: 'hook-noauth',
           path: '/ob12/hook',
         }) as ReturnType<typeof resolveOneBot12Config> & { connection: 'webhook' },
-      });
+      }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
       await endpoint.start();
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('missing access_token'));
       await endpoint.stop();

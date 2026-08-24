@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/dingtalk/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/dingtalk/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=798331701135142d -->
+<!-- sync-adapter-docs:sha256=acb652bd61620344 -->
 
 # @zhin.js/adapter-dingtalk
 
@@ -32,7 +32,7 @@ pnpm add @zhin.js/adapter-dingtalk
 
 - `@zhin.js/adapter` — 约定式薄入口 `adapters/dingtalk.ts`（`defineAdapter`）
 - 实现：`src/endpoint.ts`（生命周期/出站/OpenAPI）、`src/webhook.ts`（验签入站）、`src/protocol.ts`
-- `@zhin.js/core` — `messageGatewayToken` 入站/出站
+- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
@@ -87,7 +87,7 @@ plugins:
 
 ## Agent 工具
 
-`agent/` 目录保留（get_user、部门、群聊、工作通知等）。Endpoint 在 `start` 时自注册到 `dingtalk-agent-deps`。
+`agent/` 目录保留（get_user、部门、群聊、工作通知等）。工具声明 `adapter: 'dingtalk'` 后，通过惰性的 `context.$client` 自动取得当前操作的 `DingTalkClient`；无需把 Endpoint id 暴露给模型。
 
 ## 平台权限（platform permit）
 

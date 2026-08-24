@@ -1,3 +1,4 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
  * LarkEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
@@ -7,15 +8,12 @@ import {
   createRecallEndpointControl,
   type EndpointControl,
   type EndpointGroup,
-  type EndpointInstance,
   type EndpointManagement,
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
-import { registerLarkAgentEndpoint } from './lark-agent-deps.js';
 import {
   buildImageUploadForm,
   readOutboundImageMedia,
@@ -55,14 +53,59 @@ export type LarkFetch = (
 
 export interface LarkEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: ResolvedLarkConfig;
   readonly fetch?: LarkFetch;
 }
 
-export class LarkEndpoint implements EndpointInstance {
+export interface LarkClientApi {
+  getUserInfo(userId: string, userIdType?: 'open_id' | 'user_id' | 'union_id'): Promise<unknown>;
+  getChatInfo(chatId: string): Promise<unknown>;
+  uploadFile(filePath: string, fileType?: 'image' | 'file' | 'video' | 'audio'): Promise<string | null>;
+  createChat(name: string, userIds: string[], ownerId?: string): Promise<string | null>;
+  updateChatInfo(chatId: string, options: { name?: string; description?: string }): Promise<boolean>;
+  addChatMembers(chatId: string, userIds: string[]): Promise<boolean>;
+  removeChatMembers(chatId: string, userIds: string[]): Promise<boolean>;
+  getChatMembers(chatId: string): Promise<unknown[]>;
+  dissolveChat(chatId: string): Promise<boolean>;
+  setChatManagers(chatId: string, userIds: string[]): Promise<boolean>;
+  removeChatManagers(chatId: string, userIds: string[]): Promise<boolean>;
+}
+
+/** Feishu/Lark OpenAPI client surface carried by every Endpoint event. */
+export class LarkClient implements LarkClientApi {
+  constructor(readonly api: LarkClientApi) {}
+  getUserInfo = (id: string, type?: 'open_id' | 'user_id' | 'union_id') =>
+    this.api.getUserInfo(id, type);
+  getChatInfo = (id: string) => this.api.getChatInfo(id);
+  uploadFile = (path: string, type?: 'image' | 'file' | 'video' | 'audio') =>
+    this.api.uploadFile(path, type);
+  createChat = (name: string, users: string[], owner?: string) =>
+    this.api.createChat(name, users, owner);
+  updateChatInfo = (id: string, options: { name?: string; description?: string }) =>
+    this.api.updateChatInfo(id, options);
+  addChatMembers = (id: string, users: string[]) => this.api.addChatMembers(id, users);
+  removeChatMembers = (id: string, users: string[]) => this.api.removeChatMembers(id, users);
+  getChatMembers = (id: string) => this.api.getChatMembers(id);
+  dissolveChat = (id: string) => this.api.dissolveChat(id);
+  setChatManagers = (id: string, users: string[]) => this.api.setChatManagers(id, users);
+  removeChatManagers = (id: string, users: string[]) => this.api.removeChatManagers(id, users);
+}
+
+export class LarkEndpoint extends Endpoint<LarkClient> {
+  readonly client = new LarkClient({
+    getUserInfo: (id, type) => this.getUserInfo(id, type),
+    getChatInfo: (id) => this.getChatInfo(id),
+    uploadFile: (path, type) => this.uploadFile(path, type),
+    createChat: (name, users, owner) => this.createChat(name, users, owner),
+    updateChatInfo: (id, options) => this.updateChatInfo(id, options),
+    addChatMembers: (id, users) => this.addChatMembers(id, users),
+    removeChatMembers: (id, users) => this.removeChatMembers(id, users),
+    getChatMembers: (id) => this.getChatMembers(id),
+    dissolveChat: (id) => this.dissolveChat(id),
+    setChatManagers: (id, users) => this.setChatManagers(id, users),
+    removeChatManagers: (id, users) => this.removeChatManagers(id, users),
+  });
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: LarkEndpointOptions;
@@ -99,9 +142,9 @@ export class LarkEndpoint implements EndpointInstance {
   #refreshPromise: Promise<string> | null = null;
   #open = false;
   #started = false;
-  #unregisterAgent?: () => void;
 
   constructor(options: LarkEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('lark', options.config.id);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
@@ -130,7 +173,6 @@ export class LarkEndpoint implements EndpointInstance {
         }));
       }
       await this.#refreshAccessToken();
-      this.#unregisterAgent = registerLarkAgentEndpoint(this.#options.config.id, this);
       this.#routeReleases.push(...registerLarkWebhookRoutes(this.#options.http, this));
       this.#logger.debug(formatCompact({
         endpoint: this.#options.config.id,
@@ -155,8 +197,6 @@ export class LarkEndpoint implements EndpointInstance {
   async stop(): Promise<void> {
     this.#open = false;
     for (const release of this.#routeReleases.splice(0)) release();
-    this.#unregisterAgent?.();
-    this.#unregisterAgent = undefined;
     this.#started = false;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
@@ -242,7 +282,7 @@ export class LarkEndpoint implements EndpointInstance {
   admit(msg: LarkMessage): void {
     if (!this.#open) return;
     const conversation = larkInboundConversation(String(this.#options.id), msg);
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: generateMessageId(msg) },
       content: formatInboundContent(msg),
@@ -257,6 +297,17 @@ export class LarkEndpoint implements EndpointInstance {
         op: 'lark_gateway_receive_failed',
         conversation: conversation.id,
         error: err instanceof Error ? err.message : String(err),
+      }));
+    });
+  }
+
+  admitPlatform(name: string, event: unknown): void {
+    if (!this.#open) return;
+    void this.emitPlatform(name, event).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'lark_platform_event_failed',
+        event: name,
+        error: error instanceof Error ? error.message : String(error),
       }));
     });
   }

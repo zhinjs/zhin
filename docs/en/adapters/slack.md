@@ -18,7 +18,7 @@ Zhin.js Slack adapter (Plugin Runtime). Prefers Socket Mode; can also send and r
 
 - **Socket Mode** (default): persistent WebSocket connection, no public URL needed
 - **HTTP Events API**: `httpHostToken` POST (signature verification), **not** legacy host-router/Koa
-- Inbound via `messageGatewayToken`; outbound `send({ conversation, payload })` -> `chat.postMessage` / Block Kit
+- Inbound via `Endpoint.emit(...)`; outbound `send({ conversation, payload })` -> `chat.postMessage` / Block Kit
 - Convention-based `defineAdapter` / `definePlugin` (no `usePlugin` needed)
 - Block Kit buttons, slash commands, message editing, emoji reactions, etc. (see `agent/tools/`)
 
@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-slack
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — convention-based `adapters/slack.ts` (`defineAdapter`)
-- `@zhin.js/core` — `messageGatewayToken` inbound/outbound
+- `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — only needed for HTTP mode to register Events route via `httpHostToken`
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`

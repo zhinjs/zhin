@@ -1,10 +1,10 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
- * SandboxWsEndpoint — WebSocket lifecycle and MessageGateway bridge for /sandbox.
+ * SandboxWsEndpoint — WebSocket lifecycle and OutboundMessageService bridge for /sandbox.
  */
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import type { EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
+import { type EndpointSendRequest } from 'zhin.js/adapter';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -17,6 +17,7 @@ import {
   type ResolvedSandboxBot,
   type SandboxWsSocket,
 } from './protocol.js';
+import { SandboxClient, type SandboxClientConnection } from './client.js';
 
 /**
  * 多 sandbox endpoint 共用同一个 HttpHost 时，同 path 的所有 WS listener
@@ -113,8 +114,6 @@ export function createSandboxReadinessGate(probe: ShellIsolationProbe): Readonly
 
 export interface SandboxEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly defaults: ResolvedSandboxBot;
 }
@@ -123,7 +122,8 @@ export interface SandboxEndpointOptions {
  * Sandbox 是本地开发/测试面，无平台社交图谱（好友/群/频道），
  * 不适用 EndpointManagement 语义端口；本 endpoint 不暴露该端口。
  */
-export class SandboxWsEndpoint implements EndpointInstance {
+export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
+  readonly client: SandboxClient;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: SandboxEndpointOptions;
@@ -136,8 +136,18 @@ export class SandboxWsEndpoint implements EndpointInstance {
   #started = false;
 
   constructor(options: SandboxEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('sandbox', options.defaults.id);
     this.#options = options;
+    this.client = new SandboxClient(
+      () => this.#wsPath,
+      () => [...this.#connections.values()].map((connection) => ({
+        target: connection.target,
+        owner: connection.owner,
+        socket: connection.socket,
+        placeholder: connection.placeholder === true,
+      } satisfies SandboxClientConnection)),
+    );
   }
 
   /** Live endpoint id (config `id`) — Console endpoint.list/resolve uses it. */
@@ -259,6 +269,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
     }
     const release = bindSandboxWsSocket(socket, {
       onMessage: (raw) => {
+        void this.#emitPlatformEvent('message', raw);
         if (!canExecute) {
           socket.send(JSON.stringify({
             type: 'error',
@@ -285,7 +296,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
         }));
         // Don't gate on #open — inbound must always reach the gateway so
         // Command/AI dispatch and outbound replies work.
-        void this.#options.gateway.receive({
+        void this.emit('message.receive', {
           conversation,
           ...(parsed.messageId ? { message: { conversation, id: parsed.messageId } } : {}),
           content: parsed.text,
@@ -309,6 +320,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
         });
       },
       onClose: () => {
+        void this.#emitPlatformEvent('connection.close', { target, owner });
         // Only drop the map entry if we still own this socket — a replace
         // may have already swapped in a newer connection for the same target.
         const current = this.#connections.get(target);
@@ -318,6 +330,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
         }
       },
       onError: (err) => {
+        void this.#emitPlatformEvent('connection.error', { target, owner, error: err });
         this.#logger.warn(formatCompact({
           op: 'sandbox_ws_error',
           target,
@@ -326,6 +339,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
       },
     });
     this.#connections.set(target, { target, owner, socket, release });
+    void this.#emitPlatformEvent('connection.open', { target, owner, socket });
     this.#logger.debug(formatCompact({ op: 'sandbox_ws_connected', target, owner }));
     this.#readiness.afterProbe((shellIsolation) => {
       const current = this.#connections.get(target);
@@ -361,6 +375,16 @@ export class SandboxWsEndpoint implements EndpointInstance {
       socket: { send: () => undefined, close: () => undefined },
       release: () => undefined,
       placeholder: true,
+    });
+  }
+
+  async #emitPlatformEvent(name: string, event: unknown): Promise<void> {
+    await this.emitPlatform(name, event).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'sandbox_platform_event_failed',
+        event: name,
+        error: error instanceof Error ? error.message : String(error),
+      }));
     });
   }
 }

@@ -1,16 +1,14 @@
 import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
-import { getDingtalkAgentDeps } from '../../src/dingtalk-agent-deps.js';
-export default defineAgentTool<{ endpoint_id: string; dept_id: string }>({
+export default defineAgentTool<{ dept_id: string }>({
   description: '获取钉钉部门详细信息',
   inputSchema: z.object({
-    endpoint_id: z.string().describe('Endpoint 名称'),
     dept_id: z.string().describe('部门 ID'),
   }),
-  platforms: ['dingtalk'],
+  adapter: 'dingtalk',
   tags: ['dingtalk'],
-  async execute({ endpoint_id, dept_id    }: { endpoint_id: string; dept_id: string }) {
-    const endpoint = getDingtalkAgentDeps().getEndpoint(endpoint_id);
+  async execute({ dept_id    }: { dept_id: string }, context) {
+    const endpoint = context.$client;
     return await endpoint.getDepartmentInfo(Number(dept_id));
   },
 });

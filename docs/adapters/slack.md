@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=cb011d7d2b6f6efe -->
+<!-- sync-adapter-docs:sha256=4cc22093f9d2b71f -->
 
 # @zhin.js/adapter-slack
 
@@ -18,7 +18,7 @@ Zhin.js Slack 适配器（Plugin Runtime），优先 Socket Mode，也可经 Run
 
 - **Socket Mode**（默认）：WebSocket 长连接，无需公网 URL
 - **HTTP Events API**：`httpHostToken` POST（签名验证），**非** legacy host-router/Koa
-- 入站经 `messageGatewayToken`；出站 `send({ conversation, payload })` → `chat.postMessage` / Block Kit
+- 入站经 `Endpoint.emit(...)`；出站 `send({ conversation, payload })` → `chat.postMessage` / Block Kit
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - Block Kit 按钮、斜杠命令、消息编辑、表情反应等（见 `agent/tools/`）
 
@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-slack
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — 约定式 `adapters/slack.ts`（`defineAdapter`）
-- `@zhin.js/core` — `messageGatewayToken` 入站/出站
+- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — 仅 HTTP 模式需要 `httpHostToken` 注册 Events 路由
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`

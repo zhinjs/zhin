@@ -35,10 +35,11 @@ const expectedSurface = new Map([
     'outboundHostToken', 'scheduleHostToken',
   ]],
   ['zhin.js/adapter', [
-    'AdapterContext', 'AdapterDefinition', 'AdapterSegmentPolicy', 'EndpointInstance',
-    'EndpointSendRequest', 'AdapterCapability', 'AdapterInteractiveMode',
+    'AdapterContext', 'AdapterDefinition', 'AdapterSegmentPolicy', 'Endpoint',
+    'EndpointClientContext', 'EndpointClientToken', 'EndpointEvent', 'EndpointIdentity',
+    'EndpointSendRequest', 'PlatformEvent', 'AdapterCapability', 'AdapterInteractiveMode',
     'AdapterMarkdownMode', 'AdapterOperation', 'AdapterOperationDeclaration',
-    'AdapterOutboundMedia', 'HtmlOutboundMode', 'defineAdapter',
+    'AdapterOutboundMedia', 'HtmlOutboundMode', 'defineAdapter', 'defineEndpointClient',
   ]],
   ['zhin.js/agent', [
     'AgentResourceHub', 'AgentPreset', 'AgentTool', 'AgentToolExecutionContext',
@@ -57,9 +58,9 @@ const expectedSurface = new Map([
   ['zhin.js/component', ['ComponentContext', 'ComponentDefinition', 'defineComponent']],
   ['zhin.js/core/runtime', [
     'Message', 'ComponentCall', 'IncomingContext', 'IncomingMessage',
-    'MessageDispatchResult', 'MessageGateway', 'MessageSenderRef', 'OutboundEnvelope',
+    'MessageDispatchResult', 'OutboundMessageService', 'MessageSenderRef', 'OutboundEnvelope',
     'RawContent', 'SendRequest', 'ConversationAddress', 'SendContent',
-    'messageGatewayToken',
+    'outboundMessageToken',
   ]],
   ['zhin.js/handler', ['HandlerDefinition', 'HandlerEventMap', 'defineHandler']],
   ['zhin.js/middleware', [
@@ -97,8 +98,8 @@ const expectedMembers = new Map([
     'removeMcp', 'removeSkill', 'removeSubAgent', 'removeTool', 'triggerHook',
   ]],
   ['zhin.js/core/runtime.Message', [
-    '$reply', '$replyFrom', '$replyToChannel', '$replyToGroup', '$replyToPrivate',
-    '$sendTo', 'content', 'conversation', 'endpointId', 'generation', 'id',
+    '$client', '$reply', '$replyFrom', '$replyToChannel', '$replyToGroup', '$replyToPrivate',
+    '$sendTo', 'clientAdapter', 'content', 'conversation', 'endpointId', 'generation', 'id',
     'mentioned', 'message', 'metadata', 'replyTo', 'segments', 'sender',
   ]],
 ]);

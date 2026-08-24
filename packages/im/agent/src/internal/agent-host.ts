@@ -70,7 +70,6 @@ export interface AgentTurnLifecycleHost {
   readonly phaseConfig: HostPhaseTraceConfig;
   readonly promptTraceConfig: HostPromptTraceConfig;
   readonly rateLimiter: RateLimiter;
-  initInboundTurnContext(): void;
   beginActiveTurn(): void;
   finalizeActiveTurn(
     partial: Omit<HostTurnMetrics, 'usage' | 'mainUsage' | 'subagentUsage'> & { usage: Usage },

@@ -37,13 +37,10 @@ export {
 } from './napcat-inbound.js';
 
 export {
-  getEndpoint,
-  getNapcatAgentDeps,
-  registerNapcatAgentEndpoint,
-  setNapcatAgentDeps,
-  type NapcatAgentDeps,
-  type NapcatAgentEndpoint,
-} from './napcat-agent-deps.js';
+  napcatClient,
+  type NapcatClient,
+  type NapcatClientEventMap,
+} from './client.js';
 
 export { parseOneBotGetMsgResponse } from './onebot-get-msg.js';
 

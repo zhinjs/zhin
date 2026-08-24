@@ -1,5 +1,5 @@
 import { buildNotice, buildSystem, senderFromId } from '@zhin.js/core';
-import type { SideEventGateway } from '@zhin.js/core/runtime';
+import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 import { resolveChatType, type WecomMessage } from './protocol.js';
 
@@ -17,16 +17,16 @@ function mapWecomEventParts(eventName: string): { scene_type: string; sub_type: 
 }
 
 export function receiveWecomSideEvent(
-  sideEvents: SideEventGateway | undefined,
+  emit: EndpointEventEmitter,
   endpointKey: string,
   configId: string,
   msg: WecomMessage,
   logger: ReturnType<typeof getAdapterLogger>,
 ): boolean {
-  if (!sideEvents || msg.MsgType !== 'event') return false;
+  if (msg.MsgType !== 'event') return false;
   const eventName = msg.Event ?? 'unknown';
   if (eventName === 'enter_agent') {
-    void sideEvents.receiveSystem(buildSystem(msg, {
+    void emit('system.receive', buildSystem(msg, {
       $id: `wecom:enter_agent:${msg.FromUserName}:${msg.CreateTime ?? Date.now()}`,
       $adapter: 'wecom' as never,
       $endpoint: configId,
@@ -48,7 +48,7 @@ export function receiveWecomSideEvent(
   const parts = mapWecomEventParts(eventName);
   if (!parts) return false;
   const sceneType = resolveChatType(msg.FromUserName);
-  void sideEvents.receiveNotice(buildNotice(msg, {
+  void emit('notice.receive', buildNotice(msg, {
     $id: `wecom:${eventName}:${msg.FromUserName}:${msg.CreateTime ?? Date.now()}`,
     $adapter: 'wecom' as never,
     $endpoint: configId,

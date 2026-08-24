@@ -5,8 +5,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { definePlugin, rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import adapterFeature, {
   AdapterIndex,
+  Endpoint,
   adapterFeatureId,
   defineAdapter,
+  endpointEventGatewayToken,
 } from '@zhin.js/adapter';
 import commandFeature, {
   CommandIndex,
@@ -76,6 +78,9 @@ describe('IM Feature slot HMR', () => {
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
+      installResources: ({ resources }) => resources.provide(endpointEventGatewayToken, {
+        receive: async () => undefined,
+      }),
     });
     const first = await runtime.start();
 
@@ -144,16 +149,18 @@ function testAdapter(counters: {
   closes: number;
   stops: number;
 }) {
+  class TestEndpoint extends Endpoint<Record<string, never>> {
+    readonly client = Object.freeze({});
+    start(): void { counters.starts += 1; }
+    open(): void { counters.opens += 1; }
+    close(): void { counters.closes += 1; }
+    stop(): void { counters.stops += 1; }
+  }
   return defineAdapter({
     capabilities: ['inbound'],
     create() {
       counters.creates += 1;
-      return {
-        start() { counters.starts += 1; },
-        open() { counters.opens += 1; },
-        close() { counters.closes += 1; },
-        stop() { counters.stops += 1; },
-      };
+      return new TestEndpoint();
     },
   });
 }

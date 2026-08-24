@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/milky/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=9c9de234996ba8b0 -->
+<!-- sync-adapter-docs:sha256=c7add0446834edac -->
 
 # @zhin.js/adapter-milky
 
@@ -20,7 +20,7 @@ Zhin.js [Milky](https://milky.ntqqrev.org/) 协议适配器（Plugin Runtime）�
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - **正向 WebSocket**（`connection: ws`）：应用连协议端 `ws(s)://baseUrl/event`
 - `access_token` 鉴权（Bearer + query）
-- 入站经 `messageGatewayToken`；出站 `send({ conversation, payload })` → HTTP `send_*_message`
+- 入站经 `Endpoint.emit(...)`；出站 `send({ conversation, payload })` → HTTP `send_*_message`
 
 ## 安装
 
@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-milky
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — 约定式 `adapters/milky.ts`（`defineAdapter`）
-- `@zhin.js/core` — `messageGatewayToken` 入站/出站
+- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 

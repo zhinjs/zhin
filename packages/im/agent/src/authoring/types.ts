@@ -5,6 +5,7 @@
 
 import type { ToolParametersSchema } from '../resource-hub/types.js';
 import type { Message } from '@zhin.js/core';
+import type { AdapterClient } from '@zhin.js/tool';
 import type { ToolApprovalPolicy, ToolToModelOutputFn } from '@zhin.js/ai/tool-policy';
 
 export const AUTHORING_KIND = Symbol.for('zhin.authoring.kind');
@@ -22,10 +23,14 @@ export interface AuthoringMarker {
   [AUTHORING_KIND]: AuthoringKind;
 }
 
-export interface AuthoringToolContext {
+export interface AuthoringToolContext<TAdapter extends string | undefined = undefined> {
   pluginName: string;
   runtimeName: string;
   filePath: string;
+  /** Current IM operation, when the tool was invoked from an IM turn. */
+  message?: Message;
+  /** Lazily resolved native Client. Without `adapter`, its static type is `unknown`. */
+  readonly $client: AdapterClient<TAdapter>;
 }
 
 export interface AuthoringAgentDefinition extends AuthoringMarker {
@@ -42,11 +47,16 @@ export interface AuthoringAgentDefinition extends AuthoringMarker {
   systemPrompt?: string;
 }
 
-export interface AuthoringToolDefinition<TInput = Record<string, unknown>> extends AuthoringMarker {
+export interface AuthoringToolDefinition<
+  TInput = Record<string, unknown>,
+  TAdapter extends string | undefined = string | undefined,
+> extends AuthoringMarker {
   [AUTHORING_KIND]: 'tool';
   description: string;
   inputSchema: unknown;
-  execute: (input: TInput, ctx: AuthoringToolContext) => unknown | Promise<unknown>;
+  execute: (input: TInput, ctx: AuthoringToolContext<TAdapter>) => unknown | Promise<unknown>;
+  /** Restrict this tool to one adapter and infer `context.$client`. */
+  adapter?: TAdapter;
   platforms?: string[];
   scopes?: ('private' | 'group' | 'channel')[];
   permissions?: string[];

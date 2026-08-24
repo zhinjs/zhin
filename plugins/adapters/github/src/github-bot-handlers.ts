@@ -3,15 +3,15 @@
  */
 import type { Message } from 'zhin.js';
 import { getCurrentCommMessage } from '@zhin.js/agent/security';
-import { getAdapter, getGithubAgentDeps } from './github-agent-deps.js';
+import type { GithubClient } from './client.js';
 import {
   parseMessageChannel,
   resolveWorkspaceBranch,
   formatChannelContext,
 } from './github-channel-context.js';
 
-function requireBotGh() {
-  const gh = getAdapter().getAPI();
+function requireBotGh(client: GithubClient) {
+  const gh = client.api;
   if (!gh?.isAppAuth) {
     throw new Error('需要 GitHub App 认证（app_id + private_key），Bot 写操作不可用');
   }
@@ -35,12 +35,13 @@ function resolveChannel(msg: Message, repo?: string) {
 
 export async function executeGithubPrepareWorkspace(
   args: { repo?: string },
+  client: GithubClient,
   commMessage?: Message,
 ) {
   const msg = resolveCommMessage(commMessage);
   const ctx = resolveChannel(msg, args.repo);
-  const gh = requireBotGh();
-  const wm = getGithubAgentDeps().getWorkspaceManager();
+  const gh = requireBotGh(client);
+  const wm = client.workspaceManager;
   const { branch, base } = await resolveWorkspaceBranch(gh, ctx);
   const repoPath = await wm.checkoutBranch(ctx.repo, branch, base);
   return [
@@ -53,11 +54,12 @@ export async function executeGithubPrepareWorkspace(
 
 export async function executeGithubPatchFile(
   args: { repo?: string; path: string; content: string; message: string; branch?: string },
+  client: GithubClient,
   commMessage?: Message,
 ) {
   const msg = resolveCommMessage(commMessage);
   const ctx = resolveChannel(msg, args.repo);
-  const gh = requireBotGh();
+  const gh = requireBotGh(client);
   const { branch } = args.branch
     ? { branch: args.branch }
     : await resolveWorkspaceBranch(gh, ctx);
@@ -80,12 +82,13 @@ export async function executeGithubPatchFile(
 
 export async function executeGithubPushBranch(
   args: { repo?: string; branch?: string; message: string },
+  client: GithubClient,
   commMessage?: Message,
 ) {
   const msg = resolveCommMessage(commMessage);
   const ctx = resolveChannel(msg, args.repo);
-  const gh = requireBotGh();
-  const wm = getGithubAgentDeps().getWorkspaceManager();
+  const gh = requireBotGh(client);
+  const wm = client.workspaceManager;
   const branch = args.branch ?? (await resolveWorkspaceBranch(gh, ctx)).branch;
   const result = await wm.commitAndPush(ctx.repo, branch, args.message);
   return `✅ ${result}\n📍 ${ctx.repo} @ \`${branch}\``;
@@ -93,11 +96,12 @@ export async function executeGithubPushBranch(
 
 export async function executeGithubCreatePr(
   args: { repo?: string; title: string; body?: string; head?: string; base?: string },
+  client: GithubClient,
   commMessage?: Message,
 ) {
   const msg = resolveCommMessage(commMessage);
   const ctx = resolveChannel(msg, args.repo);
-  const gh = requireBotGh();
+  const gh = requireBotGh(client);
   const resolved = await resolveWorkspaceBranch(gh, ctx);
   const head = args.head ?? resolved.branch;
   const base = args.base ?? resolved.base;

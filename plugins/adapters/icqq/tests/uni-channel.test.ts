@@ -1,14 +1,14 @@
+import { bindTestEndpoint } from '../../test-utils/endpoint.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 
 vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
 
 import defineIcqqAdapter from '../adapters/icqq.js';
 import { IcqqEndpoint } from '../src/endpoint.js';
 import { resolveIcqqConfig } from '../src/protocol.js';
-import { setIcqqAgentDeps } from '../src/icqq-agent-deps.js';
 import { createIcqqTestPorts } from './_icqq-mock.js';
 
 const adapterFeature = featureId('zhin.adapter');
@@ -28,17 +28,16 @@ function createEndpoint(
   receive: ReturnType<typeof vi.fn>,
   config = baseConfig,
 ): IcqqEndpoint {
-  const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
-  return new IcqqEndpoint({
+  const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
+  return bindTestEndpoint(new IcqqEndpoint({
     id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
     gateway,
     config,
     ...createIcqqTestPorts(),
-  });
+  }), gateway, undefined);
 }
 
 afterEach(() => {
-  setIcqqAgentDeps(null);
 });
 
 describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
@@ -48,7 +47,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    (endpoint as any).emit('message.group.normal', {
+    endpoint.client.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -91,14 +90,14 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
   it('在 endpoint lease 内解析 ICQQ 私有语音/视频引用后再进入 Gateway', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
     const endpoint = createEndpoint(receive);
-    vi.mocked(endpoint.pickGroup).mockReturnValue({
+    vi.mocked(endpoint.client.pickGroup).mockReturnValue({
       getPttUrl: vi.fn(async () => 'https://cdn.example/voice.silk'),
       getVideoUrl: vi.fn(async () => 'https://cdn.example/video.mp4'),
     } as never);
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    (endpoint as any).emit('message.group.normal', {
+    endpoint.client.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -129,14 +128,14 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
     const endpoint = createEndpoint(receive);
     let resolvePtt!: (url: string) => void;
     const pttUrl = new Promise<string>((resolve) => { resolvePtt = resolve; });
-    vi.mocked(endpoint.pickGroup).mockReturnValue({
+    vi.mocked(endpoint.client.pickGroup).mockReturnValue({
       getPttUrl: vi.fn(() => pttUrl),
       getVideoUrl: vi.fn(async () => null),
     } as never);
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    (endpoint as any).emit('message.group.normal', {
+    endpoint.client.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -172,7 +171,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    (endpoint as any).emit('message.group.normal', {
+    endpoint.client.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -209,7 +208,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    (endpoint as any).emit('message.group.normal', {
+    endpoint.client.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -254,7 +253,7 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
       ],
     });
 
-    expect(endpoint.sendGroupMsg).toHaveBeenCalledWith(100, [
+    expect(endpoint.client.sendGroupMsg).toHaveBeenCalledWith(100, [
       { type: 'reply', id: 'm1' },
       { type: 'at', qq: 2 },
       'hi',
@@ -280,7 +279,7 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
       ],
     });
 
-    expect(endpoint.sendGroupMsg).toHaveBeenCalledWith(
+    expect(endpoint.client.sendGroupMsg).toHaveBeenCalledWith(
       100,
       [
         { type: 'image', file: 'https://x/a.jpg' },
@@ -307,14 +306,14 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
       payload: [{ type, data: { media } }],
     });
 
-    expect(endpoint.sendGroupMsg).toHaveBeenCalledWith(100, expected);
+    expect(endpoint.client.sendGroupMsg).toHaveBeenCalledWith(100, expected);
     await endpoint.stop();
   });
 
   it('file 使用 ICQQ 文件 API，不经过 sendGroupMsg 的空消息路径', async () => {
     const endpoint = createEndpoint(vi.fn(), base64MediaConfig);
     const sendFile = vi.fn(async () => ({ fid: 'group-file-1' }));
-    vi.mocked(endpoint.pickGroup).mockReturnValue({ sendFile } as never);
+    vi.mocked(endpoint.client.pickGroup).mockReturnValue({ sendFile } as never);
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
@@ -331,7 +330,7 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
     });
 
     expect(sendFile).toHaveBeenCalledWith('/tmp/report.pdf', '/', 'report.pdf');
-    expect(endpoint.sendGroupMsg).not.toHaveBeenCalled();
+    expect(endpoint.client.sendGroupMsg).not.toHaveBeenCalled();
     expect(messageId).toBe('group-file-1');
     await endpoint.stop();
   });
@@ -352,7 +351,7 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
       ],
     });
 
-    const message = vi.mocked(endpoint.sendGroupMsg).mock.calls[0]?.[1] as {
+    const message = vi.mocked(endpoint.client.sendGroupMsg).mock.calls[0]?.[1] as {
       type: string;
       file: string;
     };

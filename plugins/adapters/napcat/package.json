@@ -52,6 +52,7 @@
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/core": "workspace:*",
+    "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",

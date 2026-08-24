@@ -34,13 +34,7 @@ export {
   type KookClientTransport,
 } from './ws.js';
 
-export {
-  getKookAgentDeps,
-  registerKookAgentEndpoint,
-  setKookAgentDeps,
-  type KookAgentDeps,
-  type KookAgentEndpoint,
-} from './kook-agent-deps.js';
+export { kookClient, type KookClientEventMap } from './client.js';
 
 export {
   checkKookPlatformPermit,

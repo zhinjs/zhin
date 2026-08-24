@@ -54,7 +54,7 @@ pnpm check:stable
 The runtime test starts a real Root generation and verifies:
 
 ```text
-Adapter -> messageGatewayToken -> ImRuntime -> Command -> Component
+Adapter -> outboundMessageToken -> ImRuntime -> Command -> Component
         -> OutboundRenderer -> AdapterIndex.send
 ```
 

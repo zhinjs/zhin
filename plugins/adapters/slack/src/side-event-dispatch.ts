@@ -1,16 +1,16 @@
 import { buildNotice, mapNoticeParts, senderFromId, SLACK_NOTICE_PARTS_MAP } from '@zhin.js/core';
-import type { SideEventGateway } from '@zhin.js/core/runtime';
+import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 import type { SlackEvent } from './protocol.js';
 
 export function receiveSlackSideEvent(
-  sideEvents: SideEventGateway | undefined,
+  emit: EndpointEventEmitter,
   endpointKey: string,
   configId: string,
   event: SlackEvent,
   logger: ReturnType<typeof getAdapterLogger>,
 ): void {
-  if (!sideEvents) return;
+  if (!emit) return;
   const eventType = String(event.type ?? '');
   if (!Object.prototype.hasOwnProperty.call(SLACK_NOTICE_PARTS_MAP, eventType)) return;
   const record = event as Record<string, unknown>;
@@ -24,7 +24,7 @@ export function receiveSlackSideEvent(
     user ?? '',
     String(record.ts ?? record.event_ts ?? ''),
   ].join(':');
-  void sideEvents.receiveNotice(buildNotice(record, {
+  void emit('notice.receive', buildNotice(record, {
     $id: `slack:${dedupeKey}`,
     $adapter: 'slack' as never,
     $endpoint: configId,

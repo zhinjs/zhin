@@ -52,7 +52,7 @@
 | `databaseHostToken` | `stable` | `zhin.js` | 数据库 Host 能力 |
 | `scheduleHostToken` | `stable` | `zhin.js` | 定时任务 Host 能力 |
 | `outboundHostToken` | `stable` | `zhin.js` | 跨平台出站消息能力 |
-| `messageGatewayToken` | `stable` | `@zhin.js/core`（`zhin.js/core/runtime`） | 入站消息投递网关（适配器用） |
+| `outboundMessageToken` | `stable` | `@zhin.js/core`（`zhin.js/core/runtime`） | 入站消息投递网关（适配器用） |
 | `httpHostToken` | `stable` | `@zhin.js/host-http` | HTTP/WS Host 能力（Console、Webhook 用） |
 
 ### Agent 能力资源

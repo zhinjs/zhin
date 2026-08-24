@@ -182,7 +182,7 @@ export function generateMessageId(msg: LarkMessage): string {
   return msg.message_id || `${msg.create_time ?? Date.now()}`;
 }
 
-/** Build inbound text for MessageGateway.receive. */
+/** Build inbound text for OutboundMessageService.receive. */
 export function formatInboundContent(msg: LarkMessage): string {
   if (!msg.content || !msg.message_type) return '';
   try {

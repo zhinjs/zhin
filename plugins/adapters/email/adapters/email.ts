@@ -2,7 +2,6 @@
  * Convention entry: discover `adapters/email.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { EmailEndpoint } from '../src/endpoint.js';
 import {
   resolveEmailConfig,
@@ -30,8 +29,6 @@ export default defineAdapter<EmailAdapterConfig>({
   create(context) {
     return new EmailEndpoint({
       id: context.id,
-      gateway: context.use(messageGatewayToken),
-      sideEvents: context.use(sideEventGatewayToken),
       config: resolveEmailConfig(context.config),
     });
   },

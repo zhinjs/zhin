@@ -1,8 +1,9 @@
+import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost } from '@zhin.js/host-http';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import { LarkEndpoint } from '../src/endpoint.js';
 import {
   formatInboundContent,
@@ -12,7 +13,7 @@ import {
   verifySignature,
   type LarkMessage,
 } from '../src/protocol.js';
-import { getLarkAgentDeps, setLarkAgentDeps } from '../src/lark-agent-deps.js';
+import { larkClient } from '../src/client.js';
 import defineLarkAdapter from '../adapters/lark.js';
 
 const adapterFeature = featureId('zhin.adapter');
@@ -83,7 +84,6 @@ function mockFetchOk(messageId = 'sent-1'): ReturnType<typeof vi.fn> {
 }
 
 afterEach(async () => {
-  setLarkAgentDeps(null);
   await Promise.all(hosts.splice(0).map((host) => host.close()));
 });
 
@@ -198,7 +198,7 @@ describe('lark plugin runtime adapter', () => {
   it('responds to url_verification challenge', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = new LarkEndpoint({
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -207,7 +207,10 @@ describe('lark plugin runtime adapter', () => {
       http,
       config: { ...baseConfig, encryptKey: undefined },
       fetch: mockFetchOk(),
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -223,18 +226,18 @@ describe('lark plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('POST webhook with valid signature admits via MessageGateway when open', async () => {
+  it('POST webhook with valid signature admits via OutboundMessageService when open', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = new LarkEndpoint({
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway,
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    });
+    }), gateway, undefined);
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -272,13 +275,13 @@ describe('lark plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = new LarkEndpoint({
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -306,13 +309,13 @@ describe('lark plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = new LarkEndpoint({
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -348,13 +351,13 @@ describe('lark plugin runtime adapter', () => {
       appSecret: 'secret-test',
       verificationToken: 'vt-secret',
     });
-    const endpoint = new LarkEndpoint({
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config,
       fetch: mockFetchOk(),
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -382,13 +385,13 @@ describe('lark plugin runtime adapter', () => {
     try {
       const http = createHttpHost({ host: '127.0.0.1', port: 0 });
       hosts.push(http);
-      const endpoint = new LarkEndpoint({
+      const endpoint = bindTestEndpoint(new LarkEndpoint({
         id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
         gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
         http,
         config: resolveLarkConfig({ id: 'noauth-lark', appId: 'cli_test', appSecret: 'secret-test' }),
         fetch: mockFetchOk(),
-      });
+      }), { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') }, undefined);
       await endpoint.start();
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('unauthenticated'));
       await endpoint.stop();
@@ -401,13 +404,13 @@ describe('lark plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = new LarkEndpoint({
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     endpoint.admit(textMessage({ chat_id: 'oc_p2pchat', chat_type: 'p2p' }));
@@ -423,13 +426,13 @@ describe('lark plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = new LarkEndpoint({
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await http.listen();
     endpoint.admit(textMessage());
@@ -441,7 +444,7 @@ describe('lark plugin runtime adapter', () => {
     const fetchMock = mockFetchOk('out-42');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = new LarkEndpoint({
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -450,7 +453,10 @@ describe('lark plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchMock,
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({ conversation: groupConversation, payload: 'pong' });
@@ -489,7 +495,7 @@ describe('lark plugin runtime adapter', () => {
     });
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = new LarkEndpoint({
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -498,7 +504,10 @@ describe('lark plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchMock,
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({
@@ -561,7 +570,7 @@ describe('lark plugin runtime adapter', () => {
     });
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = new LarkEndpoint({
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -570,7 +579,10 @@ describe('lark plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchMock,
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({
@@ -598,7 +610,7 @@ describe('lark plugin runtime adapter', () => {
   it('registers agent endpoint on start', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = new LarkEndpoint({
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -607,11 +619,14 @@ describe('lark plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     await http.listen();
-    expect(getLarkAgentDeps().getEndpoint('test-lark-bot')).toBe(endpoint);
+    expect(larkClient.get(endpointClientContext(endpoint), 'test-lark-bot'))
+      .toBe(endpoint.client);
     await endpoint.stop();
-    expect(() => getLarkAgentDeps().getEndpoint('test-lark-bot')).toThrow(/不存在/);
   });
 });

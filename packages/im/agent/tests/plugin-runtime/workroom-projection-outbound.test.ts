@@ -1,26 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import {
-  createWorkroomProjectionMessageGatewayPort,
+  createWorkroomProjectionOutboundMessageServicePort,
 } from '../../src/plugin-runtime/workroom-projection-outbound.js';
 import type { WorkroomProjectionOutboxItem } from '../../src/workroom/projection-outbox.js';
 
 describe('Workroom Projection unified outbound', () => {
   const body = new TextEncoder().encode('[Developer · executor] build：正在执行');
-  it('sends the durable projection through MessageGateway and preserves its canonical receipt', async () => {
-    const requests: Parameters<MessageGateway['send']>[0][] = [];
+  it('sends the durable projection through OutboundMessageService and preserves its canonical receipt', async () => {
+    const requests: Parameters<OutboundMessageService['send']>[0][] = [];
     const gateway = {
-      async send(request: Parameters<MessageGateway['send']>[0]) {
+      async send(request: Parameters<OutboundMessageService['send']>[0]) {
         requests.push(request);
         return {
           status: 'sent' as const,
           message: { conversation: request.conversation, id: 'platform-message-1' },
         };
       },
-    } as MessageGateway;
-    const port = createWorkroomProjectionMessageGatewayPort(
+    } as OutboundMessageService;
+    const port = createWorkroomProjectionOutboundMessageServicePort(
       gateway,
-      '@zhin.js/agent' as Parameters<MessageGateway['send']>[0]['requester'],
+      '@zhin.js/agent' as Parameters<OutboundMessageService['send']>[0]['requester'],
     );
 
     const result = await port.send(item(), body, new AbortController().signal);
@@ -48,10 +48,10 @@ describe('Workroom Projection unified outbound', () => {
           ? { status, failure: { code: 'endpoint_timeout', message: 'timeout', retryable } }
           : { status, failure: { code: `projection_${status}`, message: status } };
       },
-    } as MessageGateway;
-    const port = createWorkroomProjectionMessageGatewayPort(
+    } as OutboundMessageService;
+    const port = createWorkroomProjectionOutboundMessageServicePort(
       gateway,
-      '@zhin.js/agent' as Parameters<MessageGateway['send']>[0]['requester'],
+      '@zhin.js/agent' as Parameters<OutboundMessageService['send']>[0]['requester'],
     );
 
     await expect(port.send(item(), body, new AbortController().signal)).resolves.toEqual({

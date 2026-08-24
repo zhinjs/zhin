@@ -4,6 +4,7 @@ import { executeGithubPatchFile } from '../../src/github-bot-handlers.js';
 
 export default defineAgentTool<{ repo?: string; path: string; content: string; message: string; branch?: string }>({
   description: '通过 Contents API 单文件更新（小改；Bot Installation Token 身份）',
+  adapter: 'github',
   inputSchema: z.object({
     repo: z.string().optional().describe('owner/repo'),
     path: z.string().describe('仓库内文件路径'),
@@ -12,7 +13,7 @@ export default defineAgentTool<{ repo?: string; path: string; content: string; m
     branch: z.string().optional().describe('目标分支，缺省从 Issue/PR 上下文推断'),
   }),
   tags: ['github'],
-  async execute(input) {
-    return executeGithubPatchFile(input);
+  async execute(input, context) {
+    return executeGithubPatchFile(input, context.$client, context.message);
   },
 });

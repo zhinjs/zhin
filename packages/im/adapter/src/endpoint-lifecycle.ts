@@ -22,25 +22,19 @@
  *    构造器里 `this.#lifecycle = createEndpointLifecycle({ name: config.id, reconnect, heartbeat })`。
  * 2. `start()` 改为：
  *    ```ts
- *    this.#unregisterAgent = registerXxxAgentEndpoint(name, this); // agent 注册仍在适配器侧
- *    try {
- *      await this.#lifecycle.start(async (handle) => {
- *        this.#handle = handle; // 供 ws 'close' 回调引用
- *        await new Promise<void>((resolve, reject) => {
- *          const ws = createWebSocket(...); this.#ws = ws;
- *          ws.on('open', () => { this.#lifecycle.startHeartbeat(() => beat(), interval); resolve(); });
- *          ws.on('close', (code, reason) => { handle.notifyClosed(...); rejectIfNotSettled(...); });
- *          ws.on('error', (err) => rejectIfNotSettled(err));
- *        });
+ *    await this.#lifecycle.start(async (handle) => {
+ *      this.#handle = handle; // 供 ws 'close' 回调引用
+ *      await new Promise<void>((resolve, reject) => {
+ *        const ws = createWebSocket(...); this.#ws = ws;
+ *        ws.on('open', () => { this.#lifecycle.startHeartbeat(() => beat(), interval); resolve(); });
+ *        ws.on('close', (code, reason) => { handle.notifyClosed(...); rejectIfNotSettled(...); });
+ *        ws.on('error', (err) => rejectIfNotSettled(err));
  *      });
- *    } catch (err) {
- *      this.#unregisterAgent?.(); this.#unregisterAgent = undefined; // 反注册对称
- *      throw err;
- *    }
+ *    });
  *    ```
- *    start 失败复位由基座保证；agent 注册/反注册是适配器专有依赖，刻意不收入基座。
+ *    start 失败复位由基座保证；Client 由 Endpoint 直接持有，不建立旁路 registry。
  * 3. `stop()` 改为：先 `await this.#lifecycle.stop()`（清定时器 + 强关 ws + 竞态 settle），
- *    再做适配器专有清理（rejectAllPending、deduper.clear、agent 反注册）。
+ *    再做适配器专有清理（rejectAllPending、deduper.clear）。
  * 4. `handle.onForceClose(() => this.#ws?.close())` 在每次拿到新 socket 后注册，
  *    供心跳看门狗主动断开；ws 'message'/'pong' 回调里调 `notifyHeartbeatAck()` 喂狗。
  * 5. 退避参数由配置映射：reconnect_interval → initialIntervalMs，可按需覆盖

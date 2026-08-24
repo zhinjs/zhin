@@ -25,6 +25,9 @@ import {
   type EndpointManagementCapability,
   type AdapterEndpointPhase,
   type EndpointContentResolveContext,
+  endpointEventGatewayToken,
+  type EndpointEvent,
+  type EndpointEventGateway,
 } from '@zhin.js/adapter';
 import {
   MemoryConversationEventStore,
@@ -52,16 +55,12 @@ import {
   type ConversationAddress,
   type IncomingMessage,
   type MessageDispatchResult,
-  type MessageGateway,
+  type OutboundMessageService,
   type MessageSenderRef,
   type OutboundEnvelope,
   type SendContent,
   type SendRequest,
 } from './contracts.js';
-import {
-  sideEventGatewayToken,
-  type SideEventGateway,
-} from './side-event-gateway.js';
 import { loginAssistToken } from './login-assist-host.js';
 import { LoginAssist } from '../../built/login-assist.js';
 import type { Notice } from '../../notice.js';
@@ -107,7 +106,7 @@ import {
 const logger = getLogger('im');
 
 /** @public Stable inbound and outbound IM gateway token for Adapter integrations. */
-export const messageGatewayToken = createToken<MessageGateway>('zhin.im.message-gateway');
+export const outboundMessageToken = createToken<OutboundMessageService>('zhin.im.outbound-message');
 
 /** Generation-owned ingress hooks before ordinary dispatch and after it misses. */
 export interface IngressRoute {
@@ -199,7 +198,7 @@ class UserInteractionDeliveryError extends Error {
   }
 }
 
-export class ImRuntime implements MessageGateway {
+export class ImRuntime implements OutboundMessageService {
   readonly #dispatcher: MessageDispatcher;
   readonly #renderer: OutboundRenderer;
   readonly #messageListeners = new Set<(event: RuntimeMessageEvent) => void>();
@@ -308,44 +307,35 @@ export class ImRuntime implements MessageGateway {
   readonly loginAssist = new LoginAssist();
 
   install(resources: Scope): void {
-    resources.provide(messageGatewayToken, this);
-    resources.provide(sideEventGatewayToken, this.#sideEventGateway);
+    resources.provide(outboundMessageToken, this);
+    resources.provide(endpointEventGatewayToken, this.endpointEvents);
     resources.provide(loginAssistToken, this.loginAssist);
     resources.provide(permissionHostToken, this.permissionHost);
     resources.provide(messageBusToken, this.messageBus);
   }
 
-  readonly #sideEventGateway: SideEventGateway & {
-    [generationAdmissionBinder](gate: GenerationAdmissionGate): SideEventGateway;
+  /** The sole Adapter ingress, also installed as endpointEventGatewayToken. */
+  readonly endpointEvents: EndpointEventGateway & {
+    [generationAdmissionBinder](gate: GenerationAdmissionGate): EndpointEventGateway;
   } = (() => {
     const self = this;
-    const gateway: SideEventGateway & {
-      [generationAdmissionBinder](gate: GenerationAdmissionGate): SideEventGateway;
+    const gateway: EndpointEventGateway & {
+      [generationAdmissionBinder](gate: GenerationAdmissionGate): EndpointEventGateway;
     } = {
-      receiveNotice: (notice) => self.receiveNotice(notice),
-      receiveRequest: (request) => self.receiveRequest(request),
-      receiveSystem: (event) => self.receiveSystem(event),
-      [generationAdmissionBinder](gate: GenerationAdmissionGate): SideEventGateway {
+      receive: (event) => self.receiveEndpointEvent(event),
+      [generationAdmissionBinder](gate: GenerationAdmissionGate): EndpointEventGateway {
         return Object.freeze({
-          receiveNotice: async (notice: Notice) => {
-            await gate.enter(() => self.receiveNotice(notice));
-          },
-          receiveRequest: async (request: Request) => {
-            await gate.enter(() => self.receiveRequest(request));
-          },
-          receiveSystem: async (event: SystemEvent) => {
-            await gate.enter(() => self.receiveSystem(event));
-          },
+          receive: async (event: EndpointEvent) => gate.enter(
+            () => self.receiveEndpointEvent(event, gate),
+          ),
         });
       },
     };
     return gateway;
   })();
 
-  [generationAdmissionBinder](gate: GenerationAdmissionGate): MessageGateway {
-    const gateway: MessageGateway = {
-      receive: async (input: IncomingMessage) => gate.enter(() => this.#receive(input, gate))
-        ?? Object.freeze({ matched: false }),
+  [generationAdmissionBinder](gate: GenerationAdmissionGate): OutboundMessageService {
+    const gateway: OutboundMessageService = {
       send: async (request: SendRequest) => gate.enter(() => this.send(request))
         ?? failedReceipt('generation_not_admitted'),
       registerInteractiveHandler: (prefix, handler) =>
@@ -545,14 +535,11 @@ export class ImRuntime implements MessageGateway {
     }
   }
 
-  async receive(input: IncomingMessage): Promise<MessageDispatchResult> {
-    return this.#receive(input);
-  }
-
   async #receive(
-    input: IncomingMessage,
+    source: EndpointEvent<IncomingMessage>,
     admission?: GenerationAdmissionGate,
   ): Promise<MessageDispatchResult> {
+    const input = source.payload;
     const lease = this.#acquire();
     let active = true;
     try {
@@ -599,6 +586,11 @@ export class ImRuntime implements MessageGateway {
         input.endpointId,
         input.mentioned,
         input.replyTo,
+        (): unknown => {
+          if (!active) throw new Error('Message Client scope has ended');
+          return source.client;
+        },
+        source.endpoint.adapter,
       );
       let conversationSequence: number | undefined;
       if (input.message?.id) {
@@ -645,7 +637,9 @@ export class ImRuntime implements MessageGateway {
               result = Object.freeze({ matched: true, command: 'pre-route', owner: requester });
               return;
             }
-            await this.#runHandlers(lease.value, 'message.receive', [message]);
+            await this.#runHandlers(lease.value, 'message.receive', [
+              withEndpointEventPayload(source, message),
+            ]);
             result = await this.#dispatchInteractive(message, requester, admission)
               ?? await this.#dispatcher.dispatch(message, lease.value, interactionFactory);
             if (!result.matched && ingressRoute) {
@@ -695,15 +689,16 @@ export class ImRuntime implements MessageGateway {
     }
   }
 
-  async receiveNotice(notice: Notice): Promise<void> {
+  async #receiveNotice(source: EndpointEvent<Notice>): Promise<void> {
+    const notice = source.payload;
     const event = conversationEventFromNotice(notice);
     if (event) await this.conversationEvents.append(event);
-    await this.#receiveSideEvent('notice.receive', notice);
+    await this.#receiveSideEvent(withEndpointEventPayload(source, notice));
   }
 
-  async receiveRequest(request: Request): Promise<void> {
-    await this.#withRequestActionScope(request, async (scoped) => {
-      await this.#receiveSideEvent('request.receive', scoped);
+  async #receiveRequest(source: EndpointEvent<Request>): Promise<void> {
+    await this.#withRequestActionScope(source.payload, async (scoped) => {
+      await this.#receiveSideEvent(withEndpointEventPayload(source, scoped));
     });
   }
 
@@ -735,19 +730,41 @@ export class ImRuntime implements MessageGateway {
     }
   }
 
-  async receiveSystem(event: SystemEvent): Promise<void> {
-    await this.#receiveSideEvent('system.receive', event);
+  async #receiveSystem(source: EndpointEvent<SystemEvent>): Promise<void> {
+    await this.#receiveSideEvent(source);
   }
 
-  async #receiveSideEvent(
-    event: 'notice.receive' | 'request.receive' | 'system.receive',
-    payload: Notice | Request | SystemEvent,
-  ): Promise<void> {
+  async #receiveSideEvent(event: EndpointEvent<Notice | Request | SystemEvent>): Promise<void> {
     const lease = this.#acquire();
     try {
-      await this.#runHandlers(lease.value, event, [payload]);
+      await this.#runHandlers(lease.value, event.name, [event]);
     } finally {
       this.#release(lease);
+    }
+  }
+
+  async receiveEndpointEvent(
+    event: EndpointEvent,
+    admission?: GenerationAdmissionGate,
+  ): Promise<unknown> {
+    switch (event.name) {
+      case 'message.receive':
+        return this.#receive(event as EndpointEvent<IncomingMessage>, admission);
+      case 'notice.receive':
+        return this.#receiveNotice(event as EndpointEvent<Notice>);
+      case 'request.receive':
+        return this.#receiveRequest(event as EndpointEvent<Request>);
+      case 'system.receive':
+        return this.#receiveSystem(event as EndpointEvent<SystemEvent>);
+      default: {
+        const lease = this.#acquire();
+        try {
+          await this.#runHandlers(lease.value, event.name, [event]);
+          return undefined;
+        } finally {
+          this.#release(lease);
+        }
+      }
     }
   }
 
@@ -792,7 +809,8 @@ export class ImRuntime implements MessageGateway {
     if (!index) return;
     const options: HandlerDispatchOptions = {
       resolveInteraction: (name, interactionArgs) => {
-        const payload = interactionArgs[0];
+        const context = interactionArgs[0] as EndpointEvent | undefined;
+        const payload = context?.payload;
         if (name === 'message.receive' && payload instanceof Message) {
           return this.createInteraction(payload);
         }
@@ -1058,7 +1076,7 @@ export class ImRuntime implements MessageGateway {
       return null;
     }
     try {
-      const endpoint = requireAdapters(lease.value).instance(adapter, endpointKey);
+      const endpoint = requireAdapters(lease.value).connection(adapter, endpointKey);
       if (!endpoint) return null;
       return await run(resolveEndpointManagement(endpoint) ?? Object.freeze({}));
     } finally {
@@ -1082,11 +1100,18 @@ export class ImRuntime implements MessageGateway {
       return rejectedReceipt('outbound_payload_rejected');
     }
 
+    let adapters: AdapterIndex;
+    try {
+      adapters = requireAdapters(snapshot);
+    } catch (error) {
+      return receiptFromEndpointError(error);
+    }
     const envelope = createOutboundEnvelope({
       conversation: request.conversation,
       requester: request.requester,
       generation: snapshot.generation,
-    }, initialPayload);
+      clientAdapter: adapters.clientAdapter(adapter),
+    }, initialPayload, () => adapters.clientById(adapter));
     let terminalEntered = false;
     let receipt: DeliveryReceipt | undefined;
 
@@ -1534,4 +1559,16 @@ function conversationSegmentsFromContent(content: unknown): readonly import('@zh
 function abortError(signal: AbortSignal | undefined, fallback: string): Error {
   if (signal?.reason instanceof Error) return signal.reason;
   return new Error(fallback);
+}
+
+function withEndpointEventPayload<TPayload, TClient, TName extends string>(
+  source: EndpointEvent<unknown, TClient, TName>,
+  payload: TPayload,
+): EndpointEvent<TPayload, TClient, TName> {
+  return Object.freeze({
+    name: source.name,
+    payload,
+    endpoint: source.endpoint,
+    client: source.client,
+  });
 }

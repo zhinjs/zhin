@@ -1,5 +1,5 @@
 import { buildNotice, mapNoticeParts, senderFromId, KOOK_NOTICE_PARTS_MAP } from '@zhin.js/core';
-import type { SideEventGateway } from '@zhin.js/core/runtime';
+import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 import type { KookWebhookEventData } from './protocol.js';
 
@@ -15,12 +15,11 @@ function extractKookNoticeType(raw: unknown): string | null {
 }
 
 export function receiveKookSideEvent(
-  sideEvents: SideEventGateway | undefined,
+  emit: EndpointEventEmitter,
   configId: string,
   raw: unknown,
   logger: ReturnType<typeof getAdapterLogger>,
 ): boolean {
-  if (!sideEvents) return false;
   const noticeType = extractKookNoticeType(raw);
   if (!noticeType) return false;
   if (!Object.prototype.hasOwnProperty.call(KOOK_NOTICE_PARTS_MAP, noticeType)) return false;
@@ -33,7 +32,7 @@ export function receiveKookSideEvent(
     : userId != null
       ? String(userId)
       : configId;
-  void sideEvents.receiveNotice(buildNotice(event, {
+  void emit('notice.receive', buildNotice(event, {
     $id: `kook:${noticeType}:${event.msg_timestamp ?? Date.now()}:${sceneId}:${String(userId ?? '')}`,
     $adapter: 'kook' as never,
     $endpoint: configId,

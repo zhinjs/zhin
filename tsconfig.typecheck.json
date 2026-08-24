@@ -287,6 +287,7 @@
     "plugins/*/*/commands/**/*.ts",
     "plugins/*/*/middlewares/**/*.ts",
     "plugins/*/*/agent/**/*.ts",
+    "plugins/adapters/*/src/client.ts",
     "plugins/*/*/adapters/**/*.ts",
     "plugins/*/*/src/**/*.d.ts"
   ],

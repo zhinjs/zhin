@@ -4,6 +4,7 @@ import { executeGithubCreatePr } from '../../src/github-bot-handlers.js';
 
 export default defineAgentTool<{ repo?: string; title: string; body?: string; head?: string; base?: string }>({
   description: '以 GitHub App Bot 身份创建 Pull Request（需 HITL 确认；Issue 场景常用）',
+  adapter: 'github',
   inputSchema: z.object({
     repo: z.string().optional().describe('owner/repo'),
     title: z.string().describe('PR 标题'),
@@ -13,7 +14,7 @@ export default defineAgentTool<{ repo?: string; title: string; body?: string; he
   }),
   tags: ['github'],
   approval: 'always',
-  async execute(input) {
-    return executeGithubCreatePr(input);
+  async execute(input, context) {
+    return executeGithubCreatePr(input, context.$client, context.message);
   },
 });

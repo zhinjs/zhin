@@ -24,6 +24,7 @@ export interface DiscordInteractionsHandler {
   readonly config: ResolvedDiscordInteractionsConfig;
   readonly isOpen: boolean;
   admit(msg: DiscordInboundMessage): void;
+  admitPlatform(event: Record<string, unknown>): void;
 }
 
 export function registerDiscordInteractionRoutes(
@@ -63,6 +64,7 @@ export async function handleDiscordInteractionRequest(
       return;
     }
     const interaction = JSON.parse(rawBody) as Record<string, unknown>;
+    if (handler.isOpen) handler.admitPlatform(interaction);
     if (interaction.type === INTERACTION_TYPE_PING) {
       writeJson(response, 200, { type: INTERACTION_RESPONSE_PONG });
       return;

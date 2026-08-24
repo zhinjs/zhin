@@ -20,12 +20,10 @@ export {
 export * from './types.js';
 
 export {
-  getIcqqAgentDeps,
-  registerIcqqAgentEndpoint,
-  setIcqqAgentDeps,
-  type IcqqAgentDeps,
-  type IcqqAgentEndpoint,
-} from './icqq-agent-deps.js';
+  icqqClient,
+  type IcqqClient,
+  type IcqqClientEventMap,
+} from './client.js';
 
 export {
   resolveIcqqInboundMessageId,

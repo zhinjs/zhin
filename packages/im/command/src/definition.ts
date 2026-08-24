@@ -5,6 +5,9 @@
 import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   createCapabilityContext,
+  readOperationClient,
+  type AdapterClient,
+  type RegisteredAdapterName,
   type CapabilityContext,
 } from '@zhin.js/feature-kit';
 import { assertPermitSyntax } from '@zhin.js/permission';
@@ -153,6 +156,8 @@ export interface CommandMessage {
   readonly sender?: { readonly id: string; readonly name?: string; readonly roles?: readonly string[] };
   readonly id?: string;
   readonly metadata?: Readonly<Record<string, unknown>>;
+  readonly clientAdapter?: string;
+  readonly $client?: unknown;
   /** 若上游已结构化，优先采用。 */
   readonly scene?: CommandScene;
   // 方法式声明（而非属性式函数类型）：方法参数双变，runtime `Message` 的
@@ -217,6 +222,7 @@ export interface CommandSession {
 export interface CommandContext<
   TConfig = unknown,
   TInput extends CommandMessage = CommandMessage,
+  TAdapter extends string | undefined = undefined,
 > extends CapabilityContext<TConfig>, CommandSession {
   readonly args: readonly string[];
   readonly params: Readonly<Record<string, CommandParameterValue>>;
@@ -227,6 +233,8 @@ export interface CommandContext<
    * Host / `CommandIndex.execute` 等无消息路径可能为 `undefined`。
    */
   readonly input?: TInput;
+  /** Lazily resolved native Client. Without `adapter`, its static type is `unknown`. */
+  readonly $client: AdapterClient<TAdapter>;
   /**
    * 对话式交互输入。IM 派发时自动注入；无消息来源时为 `undefined`。
    */
@@ -238,12 +246,15 @@ export interface CommandDefinition<
   TConfig = unknown,
   TResult = unknown,
   TInput extends CommandMessage = CommandMessage,
+  TAdapter extends string | undefined = string | undefined,
 > {
   /** @internal Runtime feature brand. */
   readonly $feature: typeof commandBrand;
   /** @internal Convention-derived parameter metadata. */
   readonly $parameter?: CommandParameterDefinition;
   readonly description?: string;
+  /** Restrict this command to one adapter and infer `context.$client`. */
+  readonly adapter?: TAdapter;
   /**
    * Next.js 风格参数声明：动态段文件名（`[name]` 等）的形态配合这里的
    * 类型 / 默认值 / 描述使用。静态命令可忽略本字段。
@@ -264,14 +275,18 @@ export interface CommandDefinition<
    * 可打破 owner 命名空间。
    */
   readonly shortcut?: Readonly<Record<string, Readonly<Record<string, CommandDynamicValue>>>>;
-  execute(context: CommandContext<TConfig, TInput>): TResult | Promise<TResult>;
+  execute(context: CommandContext<TConfig, TInput, TAdapter>): TResult | Promise<TResult>;
 }
 
 declare module '@zhin.js/plugin-runtime' {
   interface PluginSetupContext<TConfig = unknown> {
-    addCommand<TResult = unknown, TInput extends CommandMessage = CommandMessage>(
+    addCommand<
+      TResult = unknown,
+      TInput extends CommandMessage = CommandMessage,
+      TAdapter extends string | undefined = undefined,
+    >(
       localName: string,
-      definition: CommandDefinition<TConfig, TResult, TInput>,
+      definition: CommandDefinition<TConfig, TResult, TInput, TAdapter>,
     ): void;
   }
 }
@@ -280,16 +295,30 @@ declare module '@zhin.js/plugin-runtime' {
  * 定义一个命令模块（`commands/` 约定目录下默认导出）。
  * @public 用户侧创作面，承诺 semver（见 docs/contributing/public-api-surface.md）。
  */
+type CommandAuthoringDefinition<
+  TConfig,
+  TResult,
+  TInput extends CommandMessage,
+> =
+  | Omit<CommandDefinition<TConfig, TResult, TInput, undefined>, '$feature' | '$parameter'>
+  | {
+      [TAdapter in RegisteredAdapterName]: Omit<
+        CommandDefinition<TConfig, TResult, TInput, TAdapter>,
+        '$feature' | '$parameter'
+      > & { readonly adapter: TAdapter }
+    }[RegisteredAdapterName];
+
 export function defineCommand<
   TConfig = unknown,
   TResult = unknown,
   TInput extends CommandMessage = CommandMessage,
 >(
-  definition: Omit<CommandDefinition<TConfig, TResult, TInput>, '$feature' | '$parameter'>,
-): Readonly<CommandDefinition<TConfig, TResult, TInput>> {
+  definition: CommandAuthoringDefinition<TConfig, TResult, TInput>,
+): Readonly<CommandDefinition<TConfig, TResult, TInput, string | undefined>> {
   if (typeof definition.execute !== 'function') {
     throw new TypeError('Command execute must be a function');
   }
+  validateAdapterName(definition.adapter);
   if (definition.params !== undefined) {
     if (!definition.params || typeof definition.params !== 'object') {
       throw new TypeError('Command params must be a Record<string, CommandParamSchema>');
@@ -304,7 +333,15 @@ export function defineCommand<
   validateCommandAlias(definition.alias);
   validateCommandPermit(definition.permit);
   validateCommandShortcutShape(definition.shortcut);
-  return Object.freeze({ $feature: commandBrand, ...definition });
+  return Object.freeze({ $feature: commandBrand, ...definition }) as Readonly<
+    CommandDefinition<TConfig, TResult, TInput, string | undefined>
+  >;
+}
+
+function validateAdapterName(adapter: string | undefined): void {
+  if (adapter !== undefined && (typeof adapter !== 'string' || adapter.trim() === '')) {
+    throw new TypeError('Command adapter must be a non-empty string');
+  }
 }
 
 function validateCommandAlias(alias: readonly string[] | undefined): void {
@@ -358,10 +395,11 @@ export function bindCommandParameter<
   TConfig,
   TResult,
   TInput extends CommandMessage,
+  TAdapter extends string | undefined,
 >(
-  definition: CommandDefinition<TConfig, TResult, TInput>,
+  definition: CommandDefinition<TConfig, TResult, TInput, TAdapter>,
   parameter: CommandParameterDefinition | undefined,
-): Readonly<CommandDefinition<TConfig, TResult, TInput>> {
+): Readonly<CommandDefinition<TConfig, TResult, TInput, TAdapter>> {
   if (!parameter) return definition;
   return Object.freeze({ ...definition, $parameter: Object.freeze({ ...parameter }) });
 }
@@ -375,6 +413,7 @@ export function parseCommandDefinition(value: unknown): CommandDefinition {
   if (definition.$feature !== commandBrand || typeof definition.execute !== 'function') {
     throw new TypeError('Command module must default-export defineCommand(...)');
   }
+  validateAdapterName(definition.adapter);
   return definition as CommandDefinition;
 }
 
@@ -404,10 +443,11 @@ export function createCommandContext(
   input: unknown = undefined,
   segments: readonly Readonly<CommandSegment>[] = Object.freeze([]),
   interaction?: UserInteraction,
+  adapter?: string,
 ): CommandContext {
   const context = createCapabilityContext(snapshot, ownerId);
   const session = resolveCommandSession(input);
-  return Object.freeze({
+  const result = {
     ...context,
     ...session,
     args: Object.freeze([...args]),
@@ -415,7 +455,12 @@ export function createCommandContext(
     segments: freezeSegments(segments),
     ...(input !== undefined ? { input: input as CommandMessage } : {}),
     ...(interaction !== undefined ? { interaction } : {}),
+  } as CommandContext;
+  Object.defineProperty(result, '$client', {
+    enumerable: true,
+    get: () => readOperationClient(input, adapter),
   });
+  return Object.freeze(result);
 }
 
 /**

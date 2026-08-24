@@ -1,5 +1,7 @@
 export {
+  TelegramClient,
   TelegramEndpoint,
+  type TelegramClientApi,
   type TelegramEndpointOptions,
   type TelegramFetch,
 } from './endpoint.js';
@@ -27,13 +29,7 @@ export {
   type TelegramWireSegment,
 } from './protocol.js';
 
-export {
-  getTelegramAgentDeps,
-  registerTelegramAgentEndpoint,
-  setTelegramAgentDeps,
-  type TelegramAgentDeps,
-  type TelegramAgentEndpoint,
-} from './telegram-agent-deps.js';
+export { telegramClient, type TelegramClientEventMap } from './client.js';
 
 export {
   checkTelegramPlatformPermit,

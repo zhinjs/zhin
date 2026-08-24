@@ -1,7 +1,8 @@
+import { bindTestEndpoint } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost } from '@zhin.js/host-http';
 import { LineEndpoint, type LineFetch } from '../src/endpoint.js';
 import { resolveLineConfig } from '../src/protocol.js';
@@ -16,7 +17,7 @@ const baseConfig = resolveLineConfig({
   apiBaseUrl: 'https://api.line.me',
 });
 
-function gateway(): MessageGateway {
+function gateway(): OutboundMessageService {
   return { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') };
 }
 
@@ -27,13 +28,13 @@ function jsonResponse(body: unknown, ok = true, status = 200) {
 describe('line.endpoint management', () => {
   it('只暴露 listGroupMembers（Bot API 无群列表）', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const endpoint = new LineEndpoint({
+    const endpoint = bindTestEndpoint(new LineEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'line'),
       gateway: gateway(),
       http,
       config: baseConfig,
       fetch: vi.fn(async () => jsonResponse({ memberIds: [] })) as unknown as LineFetch,
-    });
+    }), gateway(), undefined);
     expect(listEndpointManagementCapabilities(endpoint)).toEqual(['listGroupMembers']);
     expect(endpoint.management.listGroups).toBeUndefined();
     expect(endpoint.management.listFriends).toBeUndefined();
@@ -55,13 +56,13 @@ describe('line.endpoint management', () => {
       throw new Error(`unexpected url: ${url}`);
     });
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const endpoint = new LineEndpoint({
+    const endpoint = bindTestEndpoint(new LineEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'line'),
       gateway: gateway(),
       http,
       config: baseConfig,
       fetch: fetchFn as unknown as LineFetch,
-    });
+    }), gateway(), undefined);
 
     const members = await endpoint.management.listGroupMembers!('G123');
 
@@ -86,13 +87,13 @@ describe('line.endpoint management', () => {
       return jsonResponse({ displayName: 'Roomie' });
     });
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const endpoint = new LineEndpoint({
+    const endpoint = bindTestEndpoint(new LineEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'line'),
       gateway: gateway(),
       http,
       config: baseConfig,
       fetch: fetchFn as unknown as LineFetch,
-    });
+    }), gateway(), undefined);
 
     const members = await endpoint.management.listGroupMembers!('R999');
 

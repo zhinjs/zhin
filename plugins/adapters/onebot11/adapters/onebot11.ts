@@ -2,7 +2,6 @@
  * Convention entry: discover `adapters/onebot11.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import { OneBot11WsEndpoint } from '../src/ws-endpoint.js';
 import { OneBot11WssEndpoint } from '../src/wss-endpoint.js';
@@ -34,8 +33,6 @@ export default defineAdapter<OneBot11AdapterConfig>({
   },
   create(context) {
     const config = resolveOneBot11Config(context.config);
-    const gateway = context.use(messageGatewayToken);
-    const sideEvents = context.use(sideEventGatewayToken);
     // 注册到插件运行时状态（onebot11.endpoint list 的"运行中"数据源）
     context.use(onebot11RuntimeStateToken).endpoints.set(config.id, {
       id: config.id,
@@ -44,16 +41,12 @@ export default defineAdapter<OneBot11AdapterConfig>({
     if (config.connection === 'wss') {
       return new OneBot11WssEndpoint({
         id: context.id,
-        gateway,
-        sideEvents,
         http: context.use(httpHostToken),
         config,
       });
     }
     return new OneBot11WsEndpoint({
       id: context.id,
-      gateway,
-      sideEvents,
       config,
     });
   },

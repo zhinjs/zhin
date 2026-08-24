@@ -2,7 +2,7 @@
  * Public IM gateway contract exposed from `zhin.js/core/runtime`.
  * @module zhin.js/core/runtime
  */
-export { messageGatewayToken } from './im-runtime.js';
+export { outboundMessageToken } from './im-runtime.js';
 export {
   Message,
   type ComponentCall,
@@ -10,7 +10,7 @@ export {
   type IncomingContext,
   type IncomingMessage,
   type MessageDispatchResult,
-  type MessageGateway,
+  type OutboundMessageService,
   type MessageSenderRef,
   type OutboundEnvelope,
   type RawContent,

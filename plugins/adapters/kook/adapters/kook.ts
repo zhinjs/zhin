@@ -3,7 +3,6 @@
  * Implementation lives under `src/` (endpoint / webhook / ws / protocol).
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import {
   KookWebhookEndpoint,
@@ -37,8 +36,6 @@ export default defineAdapter<KookAdapterConfig>({
   },
   create(context) {
     const config = resolveKookConfig(context.config);
-    const gateway = context.use(messageGatewayToken);
-    const sideEvents = context.use(sideEventGatewayToken);
     // 注册到插件运行时状态（kook.endpoint list 的"运行中"数据源）
     context.use(kookRuntimeStateToken).endpoints.set(config.id, {
       id: config.id,
@@ -47,16 +44,12 @@ export default defineAdapter<KookAdapterConfig>({
     if (config.connection === 'webhook') {
       return new KookWebhookEndpoint({
         id: context.id,
-        gateway,
-        sideEvents,
         http: context.use(httpHostToken),
         config,
       });
     }
     return new KookWebsocketEndpoint({
       id: context.id,
-      gateway,
-      sideEvents,
       config,
     });
   },

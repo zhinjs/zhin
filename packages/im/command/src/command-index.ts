@@ -9,6 +9,7 @@ import type {
   RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import type { UserInteractionFactory } from '@zhin.js/interaction';
+import { operationClientAdapter } from '@zhin.js/feature-kit';
 import {
   permissionHostToken,
   toPermissionSubject,
@@ -32,6 +33,7 @@ export interface CommandParameterDescriptor extends CommandParameterDefinition {
 export interface CommandDescriptor {
   readonly name: string;
   readonly description?: string;
+  readonly adapter?: string;
   readonly source: string;
   readonly parameters: readonly CommandParameterDescriptor[];
   readonly alias?: readonly string[];
@@ -132,6 +134,7 @@ export class CommandIndex {
       const record: CommandRecord = Object.freeze({
         name,
         description: slot.definition.description,
+        ...(slot.definition.adapter ? { adapter: slot.definition.adapter } : {}),
         source: slot.source,
         parameters: Object.freeze(parameter ? [{
           ...parameter,
@@ -216,6 +219,10 @@ export class CommandIndex {
         match.command.slot.owner,
         args,
         resolveDynamicParams(match.params, undefined),
+        undefined,
+        Object.freeze([]),
+        undefined,
+        match.command.slot.definition.adapter,
       ),
     );
   }
@@ -240,6 +247,9 @@ export class CommandIndex {
     const interaction = interactionFactory?.(source);
     const shortcut = this.#matchShortcut(input);
     if (shortcut) {
+      if (!commandAdapterMatches(shortcut.record, source)) {
+        return Object.freeze({ matched: false });
+      }
       if (!(await this.#permitAllows(shortcut.record, source))) {
         return Object.freeze({ matched: false });
       }
@@ -252,6 +262,7 @@ export class CommandIndex {
           source,
           Object.freeze([]),
           interaction,
+          shortcut.record.slot.definition.adapter,
         ),
       );
       return Object.freeze({
@@ -264,6 +275,9 @@ export class CommandIndex {
 
     const match = this.#match(input, false);
     if (!match) return Object.freeze({ matched: false });
+    if (!commandAdapterMatches(match.command, source)) {
+      return Object.freeze({ matched: false });
+    }
     if (!(await this.#permitAllows(match.command, source))) {
       return Object.freeze({ matched: false });
     }
@@ -277,6 +291,7 @@ export class CommandIndex {
         source,
         match.remaining,
         interaction,
+        match.command.slot.definition.adapter,
       ),
     );
     return Object.freeze({
@@ -748,6 +763,10 @@ function toDescriptor({
   ...descriptor
 }: CommandRecord): CommandDescriptor {
   return descriptor;
+}
+
+function commandAdapterMatches(record: CommandRecord, source: unknown): boolean {
+  return !record.adapter || operationClientAdapter(source) === record.adapter;
 }
 
 export class CommandParameterValueError extends TypeError {

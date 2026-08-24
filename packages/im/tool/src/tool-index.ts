@@ -23,6 +23,7 @@ export interface ToolDescriptor {
   readonly description: string;
   readonly inputSchema?: unknown;
   readonly approval: ToolApproval;
+  readonly adapter?: string;
   readonly platforms?: readonly string[];
   readonly scopes?: readonly ToolScope[];
   readonly permissions?: readonly string[];
@@ -61,8 +62,12 @@ export class ToolIndex {
     const entry = this.#index.resolve(requester, name);
     if (!entry) throw new Error(`Unknown Agent Tool ${name} for ${requester}`);
     const parsedInput = parseExecutableInputSchema<TInput>(entry.qualifiedName, entry.slot.definition.inputSchema, input);
+    const expectedAdapter = entry.slot.definition.adapter;
+    if (expectedAdapter && invocation.client?.adapter !== expectedAdapter) {
+      throw new Error(`Agent Tool ${entry.qualifiedName} requires adapter ${expectedAdapter}`);
+    }
     const capability = createCapabilityContext(this.snapshot, entry.owner);
-    const context: ToolExecutionContext = Object.freeze({
+    const context = {
       ...capability,
       signal: invocation.signal,
       traceId: invocation.traceId,
@@ -90,7 +95,12 @@ export class ToolIndex {
           : {}),
       }),
       ...(invocation.question ? { question: invocation.question } : {}),
+    } as ToolExecutionContext;
+    Object.defineProperty(context, '$client', {
+      enumerable: true,
+      get: () => invocation.client?.get(),
     });
+    Object.freeze(context);
     return entry.slot.definition.execute(parsedInput, context) as TResult | Promise<TResult>;
   }
 }
@@ -123,6 +133,7 @@ function toDescriptor(entry: OwnerCapabilityEntry<AgentToolDefinition>): ToolDes
     description: definition.description,
     inputSchema: definition.inputSchema,
     approval: definition.approval,
+    ...(definition.adapter ? { adapter: definition.adapter } : {}),
     platforms: definition.platforms,
     scopes: definition.scopes,
     permissions: definition.permissions,

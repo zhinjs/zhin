@@ -1,5 +1,5 @@
 import { defineCommand, type CommandSegment } from 'zhin.js/command';
-import { Actions, getIcqqAgentDeps } from '@zhin.js/adapter-icqq';
+import { Actions } from '@zhin.js/adapter-icqq';
 
 const MAX_TIMES = 20;
 const DEFAULT_TIMES = 10;
@@ -78,14 +78,13 @@ export function parseZanArgs(input: {
 
 /** ICQQ 点赞（竖大拇指）。每人每天约最多 20 次。 */
 export default defineCommand({
+  adapter: 'icqq',
   description: 'ICQQ 点赞：赞我 [@用户|QQ号] [次数]',
   alias: ['zan'],
   permit: ['adapter(icqq)'],
-  execute: async ({ endpoint, sender, args, segments }) => {
+  execute: async (context) => {
+    const { sender, args, segments } = context;
     console.log(sender);
-    if (!endpoint) {
-      return '无法解析当前 ICQQ Endpoint';
-    }
 
     const parsed = parseZanArgs({
       args,
@@ -95,7 +94,7 @@ export default defineCommand({
     if ('error' in parsed) return parsed.error;
 
     try {
-      const bot = getIcqqAgentDeps().getEndpoint(endpoint);
+      const bot = context.$client;
       const resp = await bot.ipc.request(Actions.FRIEND_LIKE, {
         user_id: parsed.userId,
         times: parsed.times,

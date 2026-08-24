@@ -227,7 +227,7 @@ export function senderDisplayName(msg: DiscordInboundMessage): string {
   return msg.authorName || msg.authorId;
 }
 
-/** Build inbound text for MessageGateway.receive (gateway owns reply routing). */
+/** Build inbound text for OutboundMessageService.receive (gateway owns reply routing). */
 export function formatInboundContent(msg: DiscordInboundMessage): string {
   const parts: string[] = [];
   if (msg.content?.trim()) parts.push(msg.content.trim());

@@ -5,22 +5,6 @@ import path from 'node:path';
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const adaptersRoot = path.join(repoRoot, 'plugins/adapters');
 const errors = [];
-const legacyAgentEndpointRegistries = new Set([
-  'plugins/adapters/dingtalk/src/dingtalk-agent-deps.ts',
-  'plugins/adapters/discord/src/discord-agent-deps.ts',
-  'plugins/adapters/github/src/github-agent-deps.ts',
-  'plugins/adapters/icqq/src/icqq-agent-deps.ts',
-  'plugins/adapters/kook/src/kook-agent-deps.ts',
-  'plugins/adapters/lark/src/lark-agent-deps.ts',
-  'plugins/adapters/line/src/line-agent-deps.ts',
-  'plugins/adapters/milky/src/milky-agent-deps.ts',
-  'plugins/adapters/napcat/src/napcat-agent-deps.ts',
-  'plugins/adapters/onebot11/src/onebot11-agent-deps.ts',
-  'plugins/adapters/qq/src/qq-agent-deps.ts',
-  'plugins/adapters/slack/src/slack-agent-deps.ts',
-  'plugins/adapters/telegram/src/telegram-agent-deps.ts',
-  'plugins/adapters/wecom/src/wecom-agent-deps.ts',
-]);
 const legacyAdapterConsumers = new Set([
   'packages/im/agent/src/init/introspection-collectors.ts',
   'packages/im/agent/src/security/owner-approve-always-store.ts',
@@ -34,13 +18,16 @@ for (const file of typescriptFiles(adaptersRoot)) {
 
   if (/\bextends\s+Adapter\b/u.test(source)
     || importsLegacyAdapter(source)) {
-    errors.push(`${relative}: platform adapters must use defineAdapter + EndpointInstance, not the legacy Adapter class`);
+    errors.push(`${relative}: platform adapters must use defineAdapter + Endpoint, not the legacy Adapter class`);
   }
 
   if (/^const\s+endpoints\s*=\s*new\s+Map\b/mu.test(source)
-    && /-agent-deps\.ts$/u.test(relative)
-    && !legacyAgentEndpointRegistries.has(relative)) {
-    errors.push(`${relative}: new module-level Agent Endpoint registries are forbidden; resolve the current generation Endpoint instead`);
+    && /-agent-deps\.ts$/u.test(relative)) {
+    errors.push(`${relative}: module-level Agent Endpoint registries are forbidden; resolve the current generation Client instead`);
+  }
+
+  if (/-agent-deps\.ts$/u.test(relative) || /from\s+['"][^'"]*-agent-deps\.js['"]/u.test(source)) {
+    errors.push(`${relative}: adapter-specific Agent dependency lookup is forbidden; use adapter + operation $client`);
   }
 
   if (/^plugins\/adapters\/[^/]+\/adapters\//u.test(relative)) {
@@ -48,7 +35,7 @@ for (const file of typescriptFiles(adaptersRoot)) {
       [/\b(?:setTimeout|setInterval)\s*\(/u, 'own timers'],
       [/\baddEventListener\s*\(/u, 'own runtime listeners'],
       [/\bregister\w*AgentEndpoint\s*\(/u, 'register live Agent endpoints'],
-      [/\bimplements\s+EndpointInstance\b/u, 'implement Endpoint runtime behavior'],
+      [/\bimplements\s+EndpointConnection\b/u, 'implement Endpoint runtime behavior'],
     ];
     for (const [pattern, responsibility] of forbidden) {
       if (pattern.test(source)) {
@@ -64,6 +51,25 @@ for (const file of typescriptFiles(adaptersRoot)) {
     if (/\b(?:defineEndpointRuntimeStateToken|createEndpointRuntimeState)\b/u.test(source)) {
       errors.push(`${relative}: Endpoint implementation must not own the cross-endpoint directory`);
     }
+    if (/\breadonly\s+client\s*=\s*this\b/u.test(source)
+      || /\bget\s+client\s*\([^)]*\)\s*\{\s*return\s+this\s*;/su.test(source)) {
+      errors.push(`${relative}: Endpoint must produce a distinct SDK/protocol Client, not expose itself as Client`);
+    }
+    if (/\bclass\s+\w+Endpoint\s+extends\s+Endpoint\s*\{/u.test(source)) {
+      errors.push(`${relative}: Endpoint must declare Endpoint<TClient> explicitly`);
+    }
+  }
+}
+
+for (const entry of fs.readdirSync(adaptersRoot, { withFileTypes: true })) {
+  if (!entry.isDirectory() || entry.name === 'test-utils') continue;
+  const src = path.join(adaptersRoot, entry.name, 'src');
+  if (!fs.existsSync(src)) continue;
+  const hasClientRegistry = typescriptFiles(src).some((file) => (
+    /\binterface\s+AdapterClientRegistry\b/u.test(fs.readFileSync(file, 'utf8'))
+  ));
+  if (!hasClientRegistry) {
+    errors.push(`plugins/adapters/${entry.name}: adapter must register its public Client in AdapterClientRegistry`);
   }
 }
 
@@ -96,7 +102,7 @@ if (errors.length > 0) {
 } else {
   console.log(
     `Adapter/Endpoint responsibility check passed `
-    + `(${legacyAgentEndpointRegistries.size} Agent registries and `
+    + `(distinct registered Clients, no Agent Endpoint registries; `
     + `${legacyAdapterConsumers.size} legacy Adapter consumers remain ratcheted debt).`,
   );
 }

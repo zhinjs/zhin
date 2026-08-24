@@ -1,5 +1,5 @@
 import { defineCommand } from 'zhin.js/command';
-import { messageGatewayToken, raw } from 'zhin.js/core/runtime';
+import { outboundMessageToken, raw } from 'zhin.js/core/runtime';
 import { buildZtReportHtml, ZT_REPORT_CANVAS } from '../lib/zt-report-card.js';
 import {
   buildZtReportText,
@@ -16,9 +16,9 @@ type RuntimeInventoryHost = {
   };
 };
 
-function readFrameworkCounts(use: (token: typeof messageGatewayToken) => unknown): ZtFrameworkCounts {
+function readFrameworkCounts(use: (token: typeof outboundMessageToken) => unknown): ZtFrameworkCounts {
   try {
-    const host = use(messageGatewayToken) as RuntimeInventoryHost;
+    const host = use(outboundMessageToken) as RuntimeInventoryHost;
     const inventory = host.inventory();
     return {
       // Runtime 无独立 Adapter 列表；展示用 endpoint 总数（Console endpoints.total）。

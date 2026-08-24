@@ -154,8 +154,8 @@ render it, but Console is not the source of reload state.
 
 ```mermaid
 flowchart LR
-  Inbound["platform event"] --> Endpoint["EndpointInstance"]
-  Endpoint --> Gateway["MessageGateway.receive"]
+  Inbound["platform event"] --> Endpoint["Endpoint<Client>"]
+  Endpoint --> Gateway["EndpointEventGateway.receive"]
   Gateway --> Normalize["canonical Segment + ConversationRef"]
   Normalize --> Middleware["inbound middleware"]
   Middleware --> Command["CommandIndex"]

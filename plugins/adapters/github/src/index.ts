@@ -20,16 +20,8 @@ export {
 
 export * from './types.js';
 
-export {
-  getAdapter,
-  getGithubAgentDeps,
-  registerGithubAgentEndpoint,
-  setGithubAgentDeps,
-  type GithubAgentDeps,
-  type GithubAgentEndpoint,
-} from './github-agent-deps.js';
-
 export { GhClient } from './gh-client.js';
+export { GithubClient, githubClient, type GithubClientEventMap } from './client.js';
 export { WorkspaceManager } from './workspace-manager.js';
 export {
   parseMessageChannel,

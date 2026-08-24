@@ -55,13 +55,7 @@ export {
   normalizeQqMessage,
 } from './ws.js';
 
-export {
-  getQqAgentDeps,
-  registerQqAgentEndpoint,
-  setQqAgentDeps,
-  type QqAgentDeps,
-  type QqAgentEndpoint,
-} from './qq-agent-deps.js';
+export { qqClient, type QqClientEventMap } from './client.js';
 
 export {
   checkQqPlatformPermit,

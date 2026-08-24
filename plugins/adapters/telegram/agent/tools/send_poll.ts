@@ -1,21 +1,19 @@
 import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
-import { getTelegramAgentDeps } from '../../src/telegram-agent-deps.js';
 
-export default defineAgentTool<{ endpoint_id: string; chat_id: string; question: string; options: string; is_anonymous?: boolean; allows_multiple?: boolean }>({
+export default defineAgentTool<{ chat_id: string; question: string; options: string; is_anonymous?: boolean; allows_multiple?: boolean }>({
   description: '在 Telegram 群组中发起投票',
   inputSchema: z.object({
-    endpoint_id: z.string().describe('Endpoint 名称'),
     chat_id: z.string().describe('聊天 ID'),
     question: z.string().describe('投票问题'),
     options: z.string().describe('选项 JSON 数组，如 ["A","B","C"]'),
     is_anonymous: z.boolean().optional().describe('是否匿名投票，默认 true'),
     allows_multiple: z.boolean().optional().describe('是否允许多选，默认 false'),
   }),
-  platforms: ['telegram'],
+  adapter: 'telegram',
   tags: ['telegram'],
-  async execute({ endpoint_id, chat_id, question, options, is_anonymous, allows_multiple  }: { endpoint_id: string; chat_id: string; question: string; options: string; is_anonymous?: boolean; allows_multiple?: boolean }) {
-    const endpoint = getTelegramAgentDeps().getEndpoint(endpoint_id);
+  async execute({ chat_id, question, options, is_anonymous, allows_multiple  }: { chat_id: string; question: string; options: string; is_anonymous?: boolean; allows_multiple?: boolean }, context) {
+    const endpoint = context.$client;
     let optList: string[];
     try {
       optList = JSON.parse(options);

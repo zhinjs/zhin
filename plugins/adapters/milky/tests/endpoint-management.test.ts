@@ -1,6 +1,7 @@
+import { bindTestEndpoint } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi } from 'vitest';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import type { HttpHost } from '@zhin.js/host-http';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createMilkyEndpointManagement } from '../src/endpoint-management.js';
@@ -18,7 +19,7 @@ import { MilkyWssEndpoint } from '../src/wss-endpoint.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const endpointKey = capabilityId(rootPluginId(), adapterFeature, 'milky');
-const gateway: MessageGateway = { receive: vi.fn(), send: vi.fn(async () => 'sent') };
+const gateway: OutboundMessageService = { receive: vi.fn(), send: vi.fn(async () => 'sent') };
 const httpStub = { ws: vi.fn(), route: vi.fn() } as unknown as HttpHost;
 
 const expectedCapabilities = ['listFriends', 'listGroups', 'listGroupMembers'];
@@ -123,14 +124,14 @@ describe('milky.endpoint management wiring', () => {
     }) as MilkyWebhookConfig;
 
     const endpoints = [
-      new MilkyWsEndpoint({ id: endpointKey, gateway, config: wsConfig }),
-      new MilkyWssEndpoint({ id: endpointKey, gateway, http: httpStub, config: wssConfig }),
-      new MilkySseEndpoint({ id: endpointKey, gateway, config: sseConfig }),
-      new MilkyWebhookEndpoint({ id: endpointKey, gateway, http: httpStub, config: webhookConfig }),
+      bindTestEndpoint(new MilkyWsEndpoint({ id: endpointKey, gateway, config: wsConfig }), gateway, undefined),
+      bindTestEndpoint(new MilkyWssEndpoint({ id: endpointKey, gateway, http: httpStub, config: wssConfig }), gateway, undefined),
+      bindTestEndpoint(new MilkySseEndpoint({ id: endpointKey, gateway, config: sseConfig }), gateway, undefined),
+      bindTestEndpoint(new MilkyWebhookEndpoint({ id: endpointKey, gateway, http: httpStub, config: webhookConfig }), gateway, undefined),
     ];
     for (const endpoint of endpoints) {
       expect(listEndpointManagementCapabilities(endpoint)).toEqual(expectedCapabilities);
-      const callApi = vi.spyOn(endpoint, 'callApi').mockResolvedValue({
+      const callApi = vi.spyOn(endpoint.client, 'callApi').mockResolvedValue({
         friends: [{ user_id: 10001, nickname: 'Alice' }],
       });
       await expect(endpoint.management.listFriends?.()).resolves.toEqual([

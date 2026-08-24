@@ -1,12 +1,12 @@
+import { bindTestEndpoint } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 
 vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
 
 import { IcqqEndpoint } from '../src/endpoint.js';
 import { resolveIcqqConfig } from '../src/protocol.js';
-import { setIcqqAgentDeps } from '../src/icqq-agent-deps.js';
 import { createIcqqTestPorts } from './_icqq-mock.js';
 
 const adapterFeature = featureId('zhin.adapter');
@@ -24,29 +24,29 @@ interface EndpointSetup {
   onKick?: () => { ok: boolean; error?: string };
 }
 
-const gateway: MessageGateway = { receive: vi.fn(), send: vi.fn(async () => 'sent') };
+const gateway: OutboundMessageService = { receive: vi.fn(), send: vi.fn(async () => 'sent') };
 
 async function startEndpoint(options: EndpointSetup = {}): Promise<IcqqEndpoint> {
-  const endpoint = new IcqqEndpoint({
+  const endpoint = bindTestEndpoint(new IcqqEndpoint({
     id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
     gateway,
     config: baseConfig,
     ...createIcqqTestPorts(),
-  });
+  }), gateway, undefined);
   const friends = options.friends ?? new Map([[2, { user_id: 2, nickname: 'bob', remark: '小博', sex: 'unknown', age: 0 }]]);
   const groups = options.groups ?? new Map([[100, { group_id: 100, group_name: 'g', member_count: 1, max_member_count: 200 }]]);
-  for (const [k, v] of friends) endpoint.fl.set(k, v as never);
-  for (const [k, v] of groups) endpoint.gl.set(k, v as never);
+  for (const [k, v] of friends) endpoint.client.fl.set(k, v as never);
+  for (const [k, v] of groups) endpoint.client.gl.set(k, v as never);
 
   if (options.members) {
-    vi.mocked(endpoint.getGroupMemberList).mockResolvedValue(options.members as never);
+    vi.mocked(endpoint.client.getGroupMemberList).mockResolvedValue(options.members as never);
   }
   if (options.systemMsg) {
-    vi.mocked(endpoint.getSystemMsg).mockResolvedValue(options.systemMsg as never);
+    vi.mocked(endpoint.client.getSystemMsg).mockResolvedValue(options.systemMsg as never);
   }
   if (options.onKick) {
     const onKick = options.onKick;
-    vi.mocked(endpoint.setGroupKick).mockImplementation(async () => {
+    vi.mocked(endpoint.client.setGroupKick).mockImplementation(async () => {
       const result = onKick();
       if (!result.ok) throw new Error(result.error ?? 'unknown');
       return true as never;
@@ -58,7 +58,6 @@ async function startEndpoint(options: EndpointSetup = {}): Promise<IcqqEndpoint>
 }
 
 afterEach(() => {
-  setIcqqAgentDeps(null);
 });
 
 describe('icqq.endpoint management 接口', () => {
@@ -87,8 +86,8 @@ describe('icqq.endpoint management 接口', () => {
 
   it('management.listChannels 走 QQ 频道 catalog', async () => {
     const endpoint = await startEndpoint({ friends: new Map(), groups: new Map() });
-    vi.mocked(endpoint.getGuildList).mockReturnValue([{ guild_id: 'g1', guild_name: 'Guild' }] as never);
-    vi.mocked(endpoint.getChannelList).mockReturnValue([{ channel_id: 'c1', channel_name: 'chat' }] as never);
+    vi.mocked(endpoint.client.getGuildList).mockReturnValue([{ guild_id: 'g1', guild_name: 'Guild' }] as never);
+    vi.mocked(endpoint.client.getChannelList).mockReturnValue([{ channel_id: 'c1', channel_name: 'chat' }] as never);
     await expect(endpoint.management.listChannels!()).resolves.toEqual([{
       id: 'c1',
       name: 'chat',
@@ -99,7 +98,7 @@ describe('icqq.endpoint management 接口', () => {
 
   it('adds inbound QQ guild channels to the management catalog', async () => {
     const endpoint = await startEndpoint({ friends: new Map(), groups: new Map() });
-    (endpoint as any).emit('message.guild.normal', {
+    endpoint.client.emit('message.guild.normal', {
       type: 'guild',
       guild_id: 'g-live',
       guild_name: 'Live Guild',
@@ -126,7 +125,7 @@ describe('icqq.endpoint management 接口', () => {
       members: new Map([[7, member]]),
     });
     expect(await endpoint.management.listGroupMembers!('100')).toEqual([member]);
-    expect(endpoint.getGroupMemberList).toHaveBeenCalledWith(100);
+    expect(endpoint.client.getGroupMemberList).toHaveBeenCalledWith(100);
     await endpoint.stop();
   });
 
@@ -139,8 +138,8 @@ describe('icqq.endpoint management 接口', () => {
       ],
     });
     await endpoint.management.approveRequest!('flag-f1', '备注A');
-    expect(endpoint.setFriendAddRequest).toHaveBeenCalledWith('flag-f1', true, '备注A');
-    expect(endpoint.setGroupAddRequest).not.toHaveBeenCalled();
+    expect(endpoint.client.setFriendAddRequest).toHaveBeenCalledWith('flag-f1', true, '备注A');
+    expect(endpoint.client.setGroupAddRequest).not.toHaveBeenCalled();
     await endpoint.stop();
   });
 
@@ -152,8 +151,8 @@ describe('icqq.endpoint management 接口', () => {
       ],
     });
     await endpoint.management.approveRequest!('flag-g1');
-    expect(endpoint.setGroupAddRequest).toHaveBeenCalledWith('flag-g1', true);
-    expect(endpoint.setFriendAddRequest).not.toHaveBeenCalled();
+    expect(endpoint.client.setGroupAddRequest).toHaveBeenCalledWith('flag-g1', true);
+    expect(endpoint.client.setFriendAddRequest).not.toHaveBeenCalled();
     await endpoint.stop();
   });
 
@@ -165,7 +164,7 @@ describe('icqq.endpoint management 接口', () => {
       ],
     });
     await endpoint.management.rejectRequest!('flag-g1', '不欢迎');
-    expect(endpoint.setGroupAddRequest).toHaveBeenCalledWith('flag-g1', false, '不欢迎');
+    expect(endpoint.client.setGroupAddRequest).toHaveBeenCalledWith('flag-g1', false, '不欢迎');
     await endpoint.stop();
   });
 
@@ -177,7 +176,7 @@ describe('icqq.endpoint management 接口', () => {
       ],
     });
     await endpoint.management.rejectRequest!('flag-f1');
-    expect(endpoint.setFriendAddRequest).toHaveBeenCalledWith('flag-f1', false);
+    expect(endpoint.client.setFriendAddRequest).toHaveBeenCalledWith('flag-f1', false);
     await endpoint.stop();
   });
 
@@ -187,36 +186,36 @@ describe('icqq.endpoint management 接口', () => {
       systemMsg: [],
     });
     await expect(endpoint.management.approveRequest!('flag-x')).rejects.toThrow(/未找到待处理请求: flag-x/);
-    expect(endpoint.setFriendAddRequest).not.toHaveBeenCalled();
-    expect(endpoint.setGroupAddRequest).not.toHaveBeenCalled();
+    expect(endpoint.client.setFriendAddRequest).not.toHaveBeenCalled();
+    expect(endpoint.client.setGroupAddRequest).not.toHaveBeenCalled();
     await endpoint.stop();
   });
 
   it('management.kickGroupMember → setGroupKick（字符串收敛为数字）', async () => {
     const endpoint = await startEndpoint();
     await endpoint.management.kickGroupMember!('100', '7');
-    expect(endpoint.setGroupKick).toHaveBeenCalledWith(100, 7);
+    expect(endpoint.client.setGroupKick).toHaveBeenCalledWith(100, 7);
     await endpoint.stop();
   });
 
   it('management.muteGroupMember → setGroupBan', async () => {
     const endpoint = await startEndpoint();
     await endpoint.management.muteGroupMember!('100', '7', 120);
-    expect(endpoint.setGroupBan).toHaveBeenCalledWith(100, 7, 120);
+    expect(endpoint.client.setGroupBan).toHaveBeenCalledWith(100, 7, 120);
     await endpoint.stop();
   });
 
   it('management.setGroupAdmin → setGroupAdmin', async () => {
     const endpoint = await startEndpoint();
     await endpoint.management.setGroupAdmin!('100', '7', true);
-    expect(endpoint.setGroupAdmin).toHaveBeenCalledWith(100, 7, true);
+    expect(endpoint.client.setGroupAdmin).toHaveBeenCalledWith(100, 7, true);
     await endpoint.stop();
   });
 
   it('management.deleteFriend → deleteFriend', async () => {
     const endpoint = await startEndpoint();
     await endpoint.management.deleteFriend!('7');
-    expect(endpoint.deleteFriend).toHaveBeenCalledWith(7);
+    expect(endpoint.client.deleteFriend).toHaveBeenCalledWith(7);
     await endpoint.stop();
   });
 
@@ -230,8 +229,8 @@ describe('icqq.endpoint management 接口', () => {
 
   it('fl/gl Map 直接访问 Client 缓存', async () => {
     const endpoint = await startEndpoint();
-    expect((endpoint.fl.get(2) as any)?.nickname).toBe('bob');
-    expect((endpoint.gl.get(100) as any)?.group_name).toBe('g');
+    expect((endpoint.client.fl.get(2) as any)?.nickname).toBe('bob');
+    expect((endpoint.client.gl.get(100) as any)?.group_name).toBe('g');
     await endpoint.stop();
   });
 });

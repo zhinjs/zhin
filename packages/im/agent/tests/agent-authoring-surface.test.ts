@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   defineAgent,
+  defineAgentTool,
   defineTool,
   namespaceAuthoringName,
   slotNameFromFile,
@@ -9,7 +10,7 @@ import {
 } from '../src/authoring/index.js';
 import { z } from 'zod';
 import { parseConfigWithZodSchema } from '../src/authoring/zod-schema.js';
-import { bridgeAuthoringConnection } from '../src/authoring/bridge.js';
+import { bridgeAuthoringConnection, bridgeAuthoringTool } from '../src/authoring/bridge.js';
 import { defineConnection } from '../src/authoring/define-connection.js';
 import {
   collectPluginAgentRoots,
@@ -18,6 +19,15 @@ import {
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+
+declare module '@zhin.js/feature-kit' {
+  interface AdapterClientRegistry {
+    readonly authoring_test: {
+      readonly client: { readonly account: string };
+      readonly events: Record<string, unknown>;
+    };
+  }
+}
 
 describe('authoring define* helpers', () => {
   it('defineAgent marks authoring kind', () => {
@@ -33,6 +43,37 @@ describe('authoring define* helpers', () => {
       async execute({ x }) { return x; },
     });
     expect(isAuthoringDefinition(def, 'tool')).toBe(true);
+  });
+
+  it('resolves an adapter Client lazily for file-based tools', async () => {
+    let reads = 0;
+    const definition = defineAgentTool({
+      description: 'read account',
+      adapter: 'authoring_test',
+      inputSchema: z.object({}),
+      execute(_input, context) {
+        return context.$client.account;
+      },
+    });
+    const bridged = bridgeAuthoringTool({
+      runtimeName: 'fixture_read_account',
+      slotName: 'read_account',
+      pluginName: 'fixture',
+      filePath: '/fixture/agent/tools/read_account.ts',
+      definition,
+    });
+    const message = {
+      clientAdapter: 'authoring_test',
+      get $client() {
+        reads += 1;
+        return { account: 'bot-1' };
+      },
+    };
+
+    expect(reads).toBe(0);
+    await expect(bridged.execute({}, message as never)).resolves.toBe('bot-1');
+    expect(reads).toBe(1);
+    expect(bridged.platforms).toEqual(['authoring_test']);
   });
 });
 

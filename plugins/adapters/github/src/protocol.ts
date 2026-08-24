@@ -206,7 +206,7 @@ export function enrichInboundContent(
   return `@${login} ${content}`;
 }
 
-/** Build inbound text for MessageGateway.receive from markdown/comment body. */
+/** Build inbound text for OutboundMessageService.receive from markdown/comment body. */
 export function formatInboundContent(body: string): string {
   return body;
 }

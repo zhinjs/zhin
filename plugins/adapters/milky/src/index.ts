@@ -48,9 +48,7 @@ export {
 } from './endpoint.js';
 
 export {
-  getMilkyAgentDeps,
-  registerMilkyAgentEndpoint,
-  setMilkyAgentDeps,
-  type MilkyAgentDeps,
-  type MilkyAgentEndpoint,
-} from './milky-agent-deps.js';
+  milkyClient,
+  type MilkyClient,
+  type MilkyClientEventMap,
+} from './client.js';

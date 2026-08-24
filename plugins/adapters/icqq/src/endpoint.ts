@@ -9,15 +9,14 @@ import {
 } from '@icqqjs/icqq';
 import { inspect } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { Endpoint } from 'zhin.js/adapter';
 import type {
   EndpointControl,
-  EndpointInstance,
   EndpointManagement,
   EndpointPendingRequest,
   EndpointSendRequest,
 } from 'zhin.js/adapter';
 import type { EndpointContentPort, EndpointContentResolveContext } from '@zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import { receiveOneBotLikeSideEvent, SystemEvent, toCanonicalSegments, type LoginAssist } from '@zhin.js/core';
 import type {
   ConversationMessage,
@@ -28,7 +27,6 @@ import type {
 } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
-import { registerIcqqAgentEndpoint } from './icqq-agent-deps.js';
 import { runIcqqLoginAssistStep } from './icqq-login-assist.js';
 import {
   InboundMessageDeduper,
@@ -67,9 +65,7 @@ import { normalizeForwardMsgResponse } from './forward-msg.js';
 
 export interface IcqqEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
   readonly config: ResolvedIcqqConfig;
-  readonly sideEvents: SideEventGateway;
   readonly loginAssist: LoginAssist;
 }
 
@@ -92,7 +88,16 @@ const BOUND_EVENTS = [
   'system.login.auth',
 ] as const;
 
-export class IcqqEndpoint extends Client implements EndpointInstance {
+class ManagedIcqqClient extends Client {
+  cancelReconnect(): void {
+    if (!this.login_timer) return;
+    clearTimeout(this.login_timer);
+    this.login_timer = null;
+  }
+}
+
+export class IcqqEndpoint extends Endpoint<Client> {
+  readonly client: ManagedIcqqClient;
   readonly #logger: ReturnType<typeof getAdapterLogger>;
   readonly #options: IcqqEndpointOptions;
   readonly endpointName: string;
@@ -105,9 +110,9 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   #started = false;
   #retirementEpoch = 0;
   #retirementArmed = false;
+  #disposeNativeEvents?: () => void;
   #resolveStartOnline?: () => void;
   #heldInbound: IcqqInboundMessage[] = [];
-  #unregisterAgent?: () => void;
   readonly #inflightInbound = new Set<Promise<void>>();
   readonly #inboundOwner = new AsyncLocalStorage<symbol>();
   readonly #messageContent = new Map<string, ConversationMessage>();
@@ -160,7 +165,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       // ICQQ does not expose a cancellable getForwardMsg API. Keep the caller's
       // generation lease until the native operation actually settles, then honor
       // cancellation before publishing any resolved content.
-      const raw = await this.getForwardMsg(forwardId);
+      const raw = await this.client.getForwardMsg(forwardId);
       context.signal.throwIfAborted();
       const entries = normalizeForwardMsgResponse(raw).slice(0, state.remainingEntries);
       state.remainingEntries -= entries.length;
@@ -194,43 +199,43 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
 
   readonly management: EndpointManagement = Object.freeze<EndpointManagement>({
     listFriends: async () =>
-      Array.from(this.fl.values()).map((f) => ({
+      Array.from(this.client.fl.values()).map((f) => ({
         user_id: f.user_id,
         nickname: f.nickname,
         remark: f.remark ?? '',
       })),
     listGroups: async () =>
-      Array.from(this.gl.values()).map((g) => ({
+      Array.from(this.client.gl.values()).map((g) => ({
         group_id: g.group_id,
         name: g.group_name,
       })),
     listChannels: async () => {
-      await this.#guildCatalog.syncAll(this);
+      await this.#guildCatalog.syncAll(this.client);
       return this.#guildCatalog.getGuildChannelList();
     },
     listGroupMembers: async (groupId) =>
-      Array.from((await this.getGroupMemberList(Number(groupId))).values()),
+      Array.from((await this.client.getGroupMemberList(Number(groupId))).values()),
     listRequests: () => this.#listPendingRequests(),
     approveRequest: (requestId, remark) => this.#approveRequest(requestId, remark),
     rejectRequest: (requestId, reason) => this.#rejectRequest(requestId, reason),
     kickGroupMember: async (groupId, userId) => {
-      await this.setGroupKick(Number(groupId), Number(userId));
+      await this.client.setGroupKick(Number(groupId), Number(userId));
     },
     muteGroupMember: async (groupId, userId, duration) => {
-      await this.setGroupBan(Number(groupId), Number(userId), duration);
+      await this.client.setGroupBan(Number(groupId), Number(userId), duration);
     },
     setGroupAdmin: async (groupId, userId, enabled) => {
-      await this.setGroupAdmin(Number(groupId), Number(userId), enabled);
+      await this.client.setGroupAdmin(Number(groupId), Number(userId), enabled);
     },
     deleteFriend: async (userId) => {
-      await this.deleteFriend(Number(userId));
+      await this.client.deleteFriend(Number(userId));
     },
   });
 
   readonly control: EndpointControl = Object.freeze({
     recall: async (message: MessageRef) => {
       if (!message.id || message.id.startsWith('outbound:')) return;
-      await this.deleteMsg(message.id);
+      await this.client.deleteMsg(message.id);
     },
     addReaction: async (message: MessageRef, emoji: string) => {
       const target = resolveIcqqGroupReactionTarget(message);
@@ -239,7 +244,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
         // Do not await protocol ACK — packet timeout must not stall the AI reply.
         this.#ignoreReactionAck(
           'add',
-          this.pickGroup(target.groupId).setReaction(target.seq, emoji),
+          this.client.pickGroup(target.groupId).setReaction(target.seq, emoji),
         );
       } catch (error) {
         this.#logger.debug(formatCompact({
@@ -255,7 +260,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       try {
         this.#ignoreReactionAck(
           'remove',
-          this.pickGroup(target.groupId).delReaction(target.seq, reactionId),
+          this.client.pickGroup(target.groupId).delReaction(target.seq, reactionId),
         );
       } catch (error) {
         this.#logger.debug(formatCompact({
@@ -267,8 +272,9 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   });
 
   constructor(options: IcqqEndpointOptions) {
+    super();
     const nativeConfig = resolveNativeClientConfig(options.config);
-    super(Number(options.config.id), nativeConfig);
+    this.client = new ManagedIcqqClient(Number(options.config.id), nativeConfig);
     this.#logger = getAdapterLogger('icqq', options.config.id);
     this.#options = options;
     this.endpointName = options.config.id;
@@ -291,7 +297,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     this.#retirementEpoch += 1;
     this.#retirementArmed = false;
     this.#retiring = false;
-    this.off('system.online');
+    this.client.off('system.online');
     this.#started = true;
     let resolveOnline!: () => void;
     const onlineReady = new Promise<void>((resolve) => {
@@ -302,14 +308,13 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     signal.addEventListener('abort', onAbort, { once: true });
     try {
       this.#bindClientEvents();
-      await raceAbort(Promise.resolve(this.login(this.#options.config.password)), signal);
+      await raceAbort(Promise.resolve(this.client.login(this.#options.config.password)), signal);
       await onlineReady;
       signal.throwIfAborted();
       await this.#pullPendingSystemMessages(signal);
       signal.throwIfAborted();
-      this.#unregisterAgent = registerIcqqAgentEndpoint(this.endpointName, this);
       this.#logger.info(
-        `connected (direct) | friends: ${this.fl.size} | groups: ${this.gl.size}`,
+        `connected (direct) | friends: ${this.client.fl.size} | groups: ${this.client.gl.size}`,
       );
     } catch (error) {
       await this.stop();
@@ -325,7 +330,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     if (this.#retirementArmed) {
       this.#retirementEpoch += 1;
       this.#retirementArmed = false;
-      this.off('system.online');
+      this.client.off('system.online');
       this.#bindSystemOnlineEvent();
     }
     this.#retiring = false;
@@ -351,12 +356,12 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     this.#resolveStartOnline?.();
     this.#options.loginAssist.cancelOwned(this.#loginAssistOwner, 'endpoint_stopped');
     this.#heldInbound.length = 0;
-    this.#unregisterAgent?.();
-    this.#unregisterAgent = undefined;
+    this.#disposeNativeEvents?.();
+    this.#disposeNativeEvents = undefined;
     for (const event of BOUND_EVENTS) {
       // The retirement guard owns this matcher until a late login handshake
       // has finished. start()/open() replace it with the normal listener.
-      if (event !== 'system.online') this.off(event);
+      if (event !== 'system.online') this.client.off(event);
     }
     // `Client.logout()` sends an account-level unregister packet before it
     // closes this transport. During config HMR the replacement endpoint for
@@ -364,7 +369,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     // also closes the replacement session. Endpoint ownership is transport
     // scoped: retire only this Client's TCP connection.
     try {
-      this.terminate();
+      this.client.terminate();
     } catch { /* ignore */ }
       this.#inboundDeduper.clear();
       this.#sideEventDeduper.clear();
@@ -381,19 +386,16 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     const retirementEpoch = ++this.#retirementEpoch;
     // ICQQ owns reconnect through this per-Client timer. Clear it before any
     // asynchronous drain so a queued callback cannot enter while close waits.
-    if (this.login_timer) {
-      clearTimeout(this.login_timer);
-      this.login_timer = null;
-    }
+    this.client.cancelReconnect();
     // A login callback may already be inside the SDK handshake, which has no
     // abort API. Replace the normal online listener with an epoch-owned guard
     // before draining inbound work. Transport termination is account-local;
     // logout would also unregister an HMR replacement using the same UIN.
-    this.off('system.online');
-    this.on('system.online', () => {
+    this.client.off('system.online');
+    this.client.on('system.online', () => {
       if (this.#retirementEpoch !== retirementEpoch || !this.#retiring) return;
       try {
-        this.terminate();
+        this.client.terminate();
       } catch { /* already closed */ }
     });
   }
@@ -437,11 +439,11 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     if (isIcqqFileElement(message)) {
       switch (target.kind) {
         case 'private': {
-          const id = await this.pickFriend(target.userId).sendFile(message.file, message.name);
+          const id = await this.client.pickFriend(target.userId).sendFile(message.file, message.name);
           return { message_id: id };
         }
         case 'group': {
-          const stat = await this.pickGroup(target.groupId).sendFile(message.file, '/', message.name);
+          const stat = await this.client.pickGroup(target.groupId).sendFile(message.file, '/', message.name);
           return { message_id: stat.fid };
         }
         case 'temp':
@@ -451,13 +453,13 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     }
     switch (target.kind) {
       case 'private':
-        return this.sendPrivateMsg(target.userId, message);
+        return this.client.sendPrivateMsg(target.userId, message);
       case 'group':
-        return this.sendGroupMsg(target.groupId, message);
+        return this.client.sendGroupMsg(target.groupId, message);
       case 'temp':
-        return this.sendTempMsg(target.groupId, target.userId, message);
+        return this.client.sendTempMsg(target.groupId, target.userId, message);
       case 'channel':
-        return this.sendGuildMsg(target.guildId, target.channelId, message) as unknown as { message_id?: unknown };
+        return this.client.sendGuildMsg(target.guildId, target.channelId, message) as unknown as { message_id?: unknown };
     }
   }
 
@@ -526,7 +528,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       + (mentioned ? ' (mentioned)' : '')
       + ` | ${truncatePreview(msg.content, 80)}`,
     );
-    await this.#options.gateway.receive({
+    await this.emit('message.receive', {
       conversation,
       message: { conversation, id: msg.id },
       content: msg.content,
@@ -551,6 +553,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   }
 
   #bindClientEvents(): void {
+    this.#bindNativeEvents();
     const safe = (label: string, fn: () => void): void => {
       try {
         fn();
@@ -563,36 +566,60 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
         }));
       }
     };
-    this.on('message.private', (event) => this.#startMessageEvent('message.private', event));
-    this.on('message.group', (event) => this.#startMessageEvent('message.group', event));
-    this.on('message.guild', (event) => {
+    this.client.on('message.private', (event) => {
+      this.#startMessageEvent('message.private', event);
+    });
+    this.client.on('message.group', (event) => {
+      this.#startMessageEvent('message.group', event);
+    });
+    this.client.on('message.guild', (event) => {
       void this.#handleGuildEvent(event).catch((error) => {
         this.#logInboundHandlerFailure('message.guild', error);
       });
     });
-    this.on('request.friend', (event) => safe('request.friend', () => this.#onRequestEvent(serializeIcqqEvent(event))));
-    this.on('request.group', (event) => safe('request.group', () => this.#onRequestEvent(serializeIcqqEvent(event))));
-    this.on('notice.friend', (event) => safe('notice.friend', () => this.#onNoticeEvent(serializeIcqqEvent(event))));
-    this.on('notice.group', (event) => safe('notice.group', () => this.#onNoticeEvent(serializeIcqqEvent(event))));
+    this.client.on('request.friend', (event) => safe('request.friend', () => {
+      this.#onRequestEvent(serializeIcqqEvent(event));
+    }));
+    this.client.on('request.group', (event) => safe('request.group', () => {
+      this.#onRequestEvent(serializeIcqqEvent(event));
+    }));
+    this.client.on('notice.friend', (event) => safe('notice.friend', () => {
+      this.#onNoticeEvent(serializeIcqqEvent(event));
+    }));
+    this.client.on('notice.group', (event) => safe('notice.group', () => {
+      this.#onNoticeEvent(serializeIcqqEvent(event));
+    }));
     this.#bindSystemOnlineEvent();
-    this.on('system.offline', (event) => this.#logSystemEvent('offline', event));
-    this.on('system.offline.network', (event) => this.#logSystemEvent('offline.network', event));
-    this.on('system.offline.kickoff', (event) => this.#logSystemEvent('offline.kickoff', event));
-    this.on('system.login.qrcode', (event) => {
+    this.client.on('system.offline', (event) => {
+      this.#logSystemEvent('offline', event);
+    });
+    this.client.on('system.offline.network', (event) => {
+      this.#logSystemEvent('offline.network', event);
+    });
+    this.client.on('system.offline.kickoff', (event) => {
+      this.#logSystemEvent('offline.kickoff', event);
+    });
+    this.client.on('system.login.qrcode', (event) => {
       this.#logger.info('icqq 收到二维码登录事件，等待 LoginAssist / 终端确认后继续');
       this.#handleLoginChallenge('qrcode', event);
     });
-    this.on('system.login.device', (event) => this.#handleLoginChallenge('device', event));
-    this.on('system.login.slider', (event) => this.#handleLoginChallenge('slider', event));
-    this.on('system.login.error', (event) => {
+    this.client.on('system.login.device', (event) => {
+      this.#handleLoginChallenge('device', event);
+    });
+    this.client.on('system.login.slider', (event) => {
+      this.#handleLoginChallenge('slider', event);
+    });
+    this.client.on('system.login.error', (event) => {
       this.#options.loginAssist.cancelOwned(this.#loginAssistOwner, 'login_error');
       this.#logSystemEvent('login.error', event);
     });
-    this.on('system.login.auth', (event) => this.#handleLoginChallenge('auth', event));
+    this.client.on('system.login.auth', (event) => {
+      this.#handleLoginChallenge('auth', event);
+    });
   }
 
   #bindSystemOnlineEvent(): void {
-    this.on('system.online', (event) => {
+    this.client.on('system.online', (event) => {
       if (this.#retiring) return;
       try {
         this.#resolveStartOnline?.();
@@ -609,6 +636,36 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     });
   }
 
+  /** Forward every public SDK event, including protocol extensions unknown to Zhin. */
+  #bindNativeEvents(): void {
+    this.#disposeNativeEvents?.();
+    let matchedName: string | undefined;
+    const registration = this.client.on(
+      (eventName: unknown) => {
+        matchedName = typeof eventName === 'string' && !eventName.startsWith('internal.')
+          ? eventName
+          : undefined;
+        return matchedName !== undefined;
+      },
+      (event: unknown) => {
+        const name = matchedName;
+        if (name) this.#emitNativeEvent(name, event);
+      },
+    );
+    this.#disposeNativeEvents = () => registration();
+  }
+
+  #emitNativeEvent(name: string, event: unknown): void {
+    void this.emitPlatform(name, event).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'icqq_platform_event_failed',
+        endpoint: this.endpointName,
+        event: name,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
+  }
+
   #handleLoginChallenge(
     step: 'qrcode' | 'slider' | 'device' | 'auth',
     event: unknown,
@@ -619,7 +676,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     this.#logSystemEvent(`login.${step}`, event);
     void runIcqqLoginAssistStep({
       assist: this.#options.loginAssist,
-      client: this,
+      client: this.client,
       adapter: 'icqq',
       endpointKey: this.endpointName,
       owner: this.#loginAssistOwner,
@@ -640,11 +697,10 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   }
 
   #dispatchIcqqSideEvent(payload: Record<string, unknown>): void {
-    const sideEvents = this.#options.sideEvents;
     const postType = String(payload.post_type ?? '');
     const isRequest = postType === 'request' || postType.startsWith('request.');
     const flag = payload.flag != null ? String(payload.flag) : '';
-    void receiveOneBotLikeSideEvent(sideEvents, {
+    void receiveOneBotLikeSideEvent((name, payload) => this.emit(name, payload), {
       adapter: 'icqq',
       endpointKey: this.endpointName,
       platform: 'icqq',
@@ -664,9 +720,8 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   }
 
   #dispatchIcqqSystemSideEvent(type: string, payload: Record<string, unknown> | null): void {
-    const sideEvents = this.#options.sideEvents;
     const { scene_type, sub_type } = parseIcqqSystemScene(type);
-    void sideEvents.receiveSystem(SystemEvent.from(payload ?? {}, {
+    void this.emit('system.receive', SystemEvent.from(payload ?? {}, {
       $id: `system:${this.endpointName}:${type}:${Date.now()}`,
       $adapter: 'icqq' as never,
       $endpoint: this.endpointName,
@@ -790,13 +845,13 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
     if (!Number.isFinite(userId) || userId <= 0) return null;
     if (data.message_type === 'group' || data.group_id != null) {
       const groupId = Number(data.group_id);
-      return Number.isFinite(groupId) && groupId > 0 ? this.pickGroup(groupId) : null;
+      return Number.isFinite(groupId) && groupId > 0 ? this.client.pickGroup(groupId) : null;
     }
     const sourceGroupId = Number(data.sender?.group_id);
     if (Number.isFinite(sourceGroupId) && sourceGroupId > 0) {
-      return this.pickMember(sourceGroupId, userId);
+      return this.client.pickMember(sourceGroupId, userId);
     }
-    return this.pickFriend(userId);
+    return this.client.pickFriend(userId);
   }
 
   #logInboundHandlerFailure(event: string, error: unknown): void {
@@ -870,7 +925,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   }
 
   async #listPendingRequests(): Promise<readonly EndpointPendingRequest[]> {
-    const messages = await this.getSystemMsg();
+    const messages = await this.client.getSystemMsg();
     const rows: EndpointPendingRequest[] = [];
     for (const raw of messages) {
       const msg = raw as unknown as IcqqSystemMessage & { request_type?: string };
@@ -898,7 +953,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
 
   async #pullPendingSystemMessages(signal: AbortSignal): Promise<void> {
     try {
-      const messages = await raceAbort(Promise.resolve(this.getSystemMsg()), signal);
+      const messages = await raceAbort(Promise.resolve(this.client.getSystemMsg()), signal);
       for (const raw of messages) {
         signal.throwIfAborted();
         const msg = raw as unknown as IcqqSystemMessage & { request_type?: string };
@@ -927,7 +982,7 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
   }
 
   async #approveRequest(id: string, remark?: string): Promise<void> {
-    const messages = await this.getSystemMsg();
+    const messages = await this.client.getSystemMsg();
     const target = messages.find((m) => {
       const msg = m as unknown as IcqqSystemMessage;
       return msg.flag === id || (msg.seq != null && String(msg.seq) === id);
@@ -936,14 +991,14 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       throw new Error(`icqq 未找到待处理请求: ${id}`);
     }
     if ((target as { request_type?: string }).request_type === 'friend') {
-      await this.setFriendAddRequest(target.flag, true, remark);
+      await this.client.setFriendAddRequest(target.flag, true, remark);
     } else {
-      await this.setGroupAddRequest(target.flag, true);
+      await this.client.setGroupAddRequest(target.flag, true);
     }
   }
 
   async #rejectRequest(id: string, reason?: string): Promise<void> {
-    const messages = await this.getSystemMsg();
+    const messages = await this.client.getSystemMsg();
     const target = messages.find((m) => {
       const msg = m as unknown as IcqqSystemMessage;
       return msg.flag === id || (msg.seq != null && String(msg.seq) === id);
@@ -952,9 +1007,9 @@ export class IcqqEndpoint extends Client implements EndpointInstance {
       throw new Error(`icqq 未找到待处理请求: ${id}`);
     }
     if ((target as { request_type?: string }).request_type === 'friend') {
-      await this.setFriendAddRequest(target.flag, false);
+      await this.client.setFriendAddRequest(target.flag, false);
     } else {
-      await this.setGroupAddRequest(target.flag, false, reason);
+      await this.client.setGroupAddRequest(target.flag, false, reason);
     }
   }
 }

@@ -37,12 +37,10 @@ export {
 } from './webhook.js';
 
 export {
-  getSlackAgentDeps,
-  registerSlackAgentEndpoint,
-  setSlackAgentDeps,
-  type SlackAgentDeps,
-  type SlackAgentEndpoint,
-} from './slack-agent-deps.js';
+  slackClient,
+  type SlackClientEventMap,
+  type SlackUserInfo,
+} from './client.js';
 
 export {
   checkSlackPlatformPermit,

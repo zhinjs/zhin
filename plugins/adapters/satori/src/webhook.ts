@@ -19,6 +19,7 @@ export interface SatoriWebhookHandler {
   readonly isOpen: boolean;
   admit(body: SatoriEventBody): void;
   setLogin(login: SatoriLogin): void;
+  admitMeta(body: SatoriEventBody): void;
 }
 
 export function registerSatoriWebhookRoutes(
@@ -61,8 +62,8 @@ export async function handleSatoriWebhookRequest(
     }
     if (opcode === SatoriOpcode.EVENT && handler.isOpen) {
       handler.admit(body);
-    } else if (opcode === SatoriOpcode.META && body.login && handler.isOpen) {
-      handler.setLogin(body.login);
+    } else if (opcode === SatoriOpcode.META && handler.isOpen) {
+      handler.admitMeta(body);
     }
     response.writeHead(200, { 'Content-Type': 'application/json' });
     response.end(JSON.stringify({ message: 'OK' }));

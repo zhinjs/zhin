@@ -1,3 +1,4 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
  * OneBot12 reverse WSS endpoint — accepts inbound WebSocket from OneBot implementation.
  */
@@ -5,11 +6,9 @@ import { clearInterval } from 'node:timers';
 import {
   createRecallEndpointControl,
   type EndpointControl,
-  type EndpointInstance,
   type EndpointManagement,
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -31,24 +30,24 @@ import {
 } from './protocol.js';
 import { receiveOneBot12SideEvent } from './side-event-dispatch.js';
 import { createOneBot12ContentPort } from './content-port.js';
+import { Onebot12Client } from './client.js';
 import { verifyOneBotAccessToken } from './wss-auth.js';
 import { type OneBot12WsSocket, WS_OPEN } from './ws-types.js';
 
 export interface OneBot12WssEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: OneBot12WssConfig;
 }
 
-export class OneBot12WssEndpoint implements EndpointInstance {
+export class OneBot12WssEndpoint extends Endpoint<Onebot12Client> {
+  readonly client = new Onebot12Client((action, params) => this.#callAction(action, params ?? {}));
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: OneBot12WssEndpointOptions;
-  readonly management: EndpointManagement = createOneBot12EndpointManagement(this);
+  readonly management: EndpointManagement = createOneBot12EndpointManagement(this.client);
   readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
-  readonly content = createOneBot12ContentPort((action, params) => this.callApi(action, params));
+  readonly content = createOneBot12ContentPort((action, params) => this.client.callApi(action, params));
   #ws?: OneBot12WsSocket;
   #wsRelease?: () => void;
   #heartbeatTimer?: NodeJS.Timeout;
@@ -62,6 +61,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
   #started = false;
 
   constructor(options: OneBot12WssEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('onebot12', options.config.id);
     this.#options = options;
   }
@@ -125,7 +125,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const materialized = await uploadOneBot12MediaSegments(
       payload,
-      (action, params) => this.callApi(action, params),
+      (action, params) => this.client.callApi(action, params),
       (error) => {
         this.#logger.warn(formatCompact({
           op: 'onebot12_upload_failed',
@@ -145,18 +145,19 @@ export class OneBot12WssEndpoint implements EndpointInstance {
     await this.#callAction('delete_message', { message_id: messageId });
   }
 
-  /** Public API for management surface / callers. */
-  callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
-    return this.#callAction(action, params);
-  }
-
   admit(ev: OneBot12Event): void {
     if (!this.#open) return;
+    void this.emitPlatform(oneBot12PlatformEventName(ev), ev).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'onebot12_platform_event_failed',
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
     if (!isMessageEvent(ev)) {
       receiveOneBot12SideEvent(
-        this.#options.sideEvents,
+        (name, payload) => this.emit(name, payload),
         this.#options.config.id,
-        this,
+        this.client,
         ev,
         this.#logger,
       );
@@ -165,7 +166,7 @@ export class OneBot12WssEndpoint implements EndpointInstance {
     const conversation = onebot12InboundConversation(String(this.#options.id), ev);
     const nickname = senderNickname(ev);
     const mentioned = isBotMentioned(ev);
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: ev.message_id },
       content: formatInboundContent(ev),
@@ -278,4 +279,8 @@ export class OneBot12WssEndpoint implements EndpointInstance {
       this.#callAction('get_status', {}).catch(() => {});
     }, this.#options.config.heartbeat_interval);
   }
+}
+
+function oneBot12PlatformEventName(ev: OneBot12Event): string {
+  return [ev.type, ev.detail_type, ev.sub_type].filter(Boolean).join('.');
 }

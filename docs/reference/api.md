@@ -23,7 +23,7 @@ API Reference 直接读取 Zhin 的公开创作入口、Host 契约和 JSDoc。�
 | 注入 Prompt Section | `@zhin.js/prompt-section`（experimental） |
 | 使用数据库、调度与跨平台发送 Host | `zhin.js` 的 `databaseHostToken`、`scheduleHostToken`、`outboundHostToken` |
 | 注册 HTTP / WebSocket 路由 | `@zhin.js/host-http` 的 `httpHostToken` |
-| 接入 IM 消息网关 | `zhin.js/core/runtime` 的 `messageGatewayToken` |
+| 接入 IM 消息网关 | `zhin.js/core/runtime` 的 `outboundMessageToken` |
 | 注册 Agent 能力资源 | `zhin.js/agent` 的 `AgentResourceHub`（experimental） |
 
 API Reference 回答“签名是什么”；指南回答“为何这样组合”。从[插件创作](/authoring/define-plugin)学习交付路径，从 [Public API 面](/contributing/public-api-surface)确认稳定性承诺。

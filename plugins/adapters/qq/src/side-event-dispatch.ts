@@ -1,5 +1,5 @@
 import { receiveOneBotLikeSideEvent, type OneBotLikeRawEvent } from '@zhin.js/core';
-import type { SideEventGateway } from '@zhin.js/core/runtime';
+import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 
 export interface QqSideEventCaller {
@@ -66,21 +66,21 @@ function toOneBotLikeRaw(eventName: string, raw: unknown): OneBotLikeRawEvent | 
 }
 
 export function receiveQqSideEvent(
-  sideEvents: SideEventGateway | undefined,
+  emit: EndpointEventEmitter,
   endpointKey: string,
   caller: QqSideEventCaller,
   eventName: string,
   raw: unknown,
   logger: ReturnType<typeof getAdapterLogger>,
 ): void {
-  if (!sideEvents) return;
+  if (!emit) return;
   const mapped = toOneBotLikeRaw(eventName, raw);
   if (!mapped) return;
   const isJoinRequest = eventName === 'notice.group.join_request';
   const joinRaw = isJoinRequest && raw && typeof raw === 'object'
     ? raw as { group_id?: string | number; user_id?: string | number; join_request_id?: string | number }
     : undefined;
-  void receiveOneBotLikeSideEvent(sideEvents, {
+  void receiveOneBotLikeSideEvent(emit, {
     adapter: 'qq',
     endpointKey,
     platform: 'qq',

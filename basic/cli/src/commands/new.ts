@@ -445,8 +445,7 @@ export default defineCommand({
  * Convention entry: discover \`adapters/${pluginName}.ts\` → defineAdapter.
  * 最小形态参考 plugins/adapters/sandbox 与 plugins/adapters/email。
  */
-import { defineAdapter, type EndpointInstance } from 'zhin.js/adapter';
-import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
+import { Endpoint, defineAdapter, type EndpointSendRequest } from 'zhin.js/adapter';
 
 export interface ${capitalizedName}AdapterConfig {
   /** Endpoint 名称（对应 schema.json 的 name 字段） */
@@ -455,48 +454,59 @@ export interface ${capitalizedName}AdapterConfig {
   token?: string;
 }
 
+export class ${capitalizedName}Client {
+  constructor(readonly token?: string) {}
+
+  async send(target: string, payload: unknown): Promise<string> {
+    // TODO: 调用平台 SDK / HTTP API，返回平台侧消息 ID。
+    return \`stub-message-id:\${target}:\${typeof payload}\`;
+  }
+}
+
+export class ${capitalizedName}Endpoint extends Endpoint<${capitalizedName}Client> {
+  readonly client: ${capitalizedName}Client;
+  #opened = false;
+
+  constructor(
+    readonly endpointId: string,
+    config: ${capitalizedName}AdapterConfig,
+  ) {
+    super();
+    this.client = new ${capitalizedName}Client(config.token);
+  }
+
+  async start(_signal: AbortSignal): Promise<void> {
+    // TODO: 建立账号 Transport；收到任意平台事件后，经 emit() 统一投递。
+  }
+
+  open(): void {
+    this.#opened = true;
+  }
+
+  close(): void {
+    this.#opened = false;
+  }
+
+  async stop(): Promise<void> {
+    this.#opened = false;
+    // TODO: 幂等释放 Transport、心跳和重连任务。
+  }
+
+  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+    return this.client.send(conversation.id, payload);
+  }
+
+  /** 示例：消息、通知、请求、生命周期和平台扩展事件都使用同一个 emit()。 */
+  admit(name: string, payload: unknown): Promise<unknown> {
+    if (!this.#opened) return Promise.resolve(undefined);
+    return this.emit(name, payload);
+  }
+}
+
 export default defineAdapter<${capitalizedName}AdapterConfig>({
   capabilities: ['inbound', 'outbound'],
   create(context) {
-    const gateway = context.use(messageGatewayToken);
-    const sideEvents = context.use(sideEventGatewayToken);
-    let opened = false;
-
-    /** 入站：平台事件 → 标准消息投递（仅在 open() 之后调用） */
-    const admit = async (target: string, content: string, sender?: string): Promise<void> => {
-      if (!opened) return;
-      await gateway.receive({
-        adapter: context.id,
-        target,
-        content,
-        sender,
-      });
-    };
-
-    const endpoint: EndpointInstance = {
-      async start() {
-        // TODO: 建立平台连接（WebSocket / Webhook / 轮询），
-        // 收到平台消息后调用 admit(target, content, sender) 投递入站。
-        // notice/request/system 经 sideEvents.receiveNotice|Request|System 上报。
-        void admit;
-        void sideEvents;
-      },
-      open() {
-        opened = true;
-      },
-      close() {
-        opened = false;
-      },
-      async stop() {
-        opened = false;
-        // TODO: 释放平台连接（需幂等）
-      },
-      async send({ target, payload }) {
-        // TODO: 将 payload 投递到平台 target，返回平台侧消息 ID
-        return \`stub-message-id:\${target}:\${typeof payload}\`;
-      },
-    };
-    return endpoint;
+    return new ${capitalizedName}Endpoint(String(context.id), context.config);
   },
 });
 `;
@@ -505,7 +515,7 @@ export default defineAdapter<${capitalizedName}AdapterConfig>({
 
   const readmeIntro =
     kind === 'adapter'
-      ? `${capitalizedName} 适配器（\`zhin new --type adapter\` 生成）：约定式 Plugin Runtime 形态，\`adapters/\` 下的 \`defineAdapter\` 模块即适配器，Endpoint 骨架含 start/open/close/stop/send，入站经 \`messageGatewayToken\` / \`sideEventGatewayToken\` 投递。`
+      ? `${capitalizedName} 适配器（\`zhin new --type adapter\` 生成）：约定式 Plugin Runtime 形态，\`adapters/\` 下的 \`defineAdapter\` 模块即适配器；Endpoint 只管理账号 Transport，平台 Client 暴露业务 API，所有入站事件经 Endpoint.emit() 统一投递。`
       : kind === 'service'
         ? `${capitalizedName} 服务插件（\`zhin new --type service\` 生成）：\`plugin.ts\` 的 \`setup(context)\` 负责初始化与清理，宿主资源（database/schedule/outbound）经 \`context.resources\` 按需取用。`
         : `${capitalizedName} 普通插件（\`zhin new\` / \`--type normal\` 生成）：\`commands/\` 下的 \`defineCommand\` 模块即命令，含动态段 \`[text]\` 示例。`;

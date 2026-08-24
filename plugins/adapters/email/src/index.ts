@@ -19,6 +19,12 @@ export {
 } from './protocol.js';
 
 export {
+  EmailClient,
+  emailClient,
+  type EmailClientEventMap,
+} from './client.js';
+
+export {
   EmailEndpoint,
   type EmailEndpointOptions,
 } from './endpoint.js';

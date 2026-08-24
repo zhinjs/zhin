@@ -6,7 +6,7 @@ In the Plugin Runtime, plugins consume Host capabilities by token: `context.use(
 
 | Token | Yields | Key methods |
 | --- | --- | --- |
-| `messageGatewayToken` (`@zhin.js/core/runtime`) | `MessageGateway` | `receive` / `send(request) → DeliveryReceipt` / `sendEndpointMessage` / `onMessage` / `registerInteractiveHandler` |
+| `outboundMessageToken` (`@zhin.js/core/runtime`) | `OutboundMessageService` | `receive` / `send(request) → DeliveryReceipt` / `sendEndpointMessage` / `onMessage` / `registerInteractiveHandler` |
 | `outboundHostToken` (`zhin.js`) | `OutboundHost` | `send({ adapter, endpointId, conversation, content })` — cross-platform outbound, addressed by ConversationRef |
 | `runtimeEventPublisherToken` (`zhin.js`) | `RuntimeEventPublisher` | Broadcasts runtime events (source of inbox/Console message stream) |
 
@@ -21,7 +21,7 @@ In the Plugin Runtime, plugins consume Host capabilities by token: `context.use(
 
 | Token | Yields | Key methods |
 | --- | --- | --- |
-| `scheduleHostToken` (`zhin.js`) | `PluginScheduleHost` (isolated per owner) | Register/cancel cron jobs; combine with `messageGatewayToken` for scheduled pushes |
+| `scheduleHostToken` (`zhin.js`) | `PluginScheduleHost` (isolated per owner) | Register/cancel cron jobs; combine with `outboundMessageToken` for scheduled pushes |
 | `scheduleRootHostToken` (`zhin.js`, root only) | `ScheduleHost` | Process-wide schedule host |
 
 ## Agent
@@ -45,7 +45,7 @@ export default definePlugin({
   name: 'reminder',
   setup({ use }) {
     const schedule = use(scheduleHostToken);
-    const gateway = use(messageGatewayToken);
+    const gateway = use(outboundMessageToken);
     schedule.register('0 9 * * *', async () => {
       await gateway.send({ conversation, requester, content: 'Good morning' });
     });
@@ -55,7 +55,7 @@ export default definePlugin({
 
 Rules: call `use()` during setup; `use()` throws when the backing Host is not installed (e.g. `agentHostToken` without `@zhin.js/agent`). Scoped tokens (database/schedule) isolate data per plugin owner automatically; root-level process tokens are for the composition root (`basic/cli`) or explicit root scenarios only.
 
-AI fallback is not a mutable `MessageGateway` plugin API. During generation setup,
+AI fallback is not a mutable `OutboundMessageService` plugin API. During generation setup,
 the composition root provides the internal `ingressRouteToken` in root resources;
 `ImRuntime.receive` resolves it only from the snapshot held by that message. Regular
 plugins must not register or replace this token.

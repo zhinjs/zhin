@@ -19,6 +19,7 @@ const logger = getLogger('lark');
 export interface LarkWebhookHandler {
   readonly config: ResolvedLarkConfig;
   readonly isOpen: boolean;
+  admitPlatform(name: string, event: unknown): void;
   admit(msg: LarkMessage): void;
 }
 
@@ -76,6 +77,13 @@ export async function handleLarkWebhookRequest(
       response.writeHead(200, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify({ code: 0, msg: 'success' }));
       return;
+    }
+
+    if (handler.isOpen) {
+      const eventName = event.type === 'event_callback'
+        ? String(event.event?.type ?? event.type)
+        : String(event.type ?? 'event');
+      handler.admitPlatform(eventName, event);
     }
 
     if (event.type === 'url_verification') {

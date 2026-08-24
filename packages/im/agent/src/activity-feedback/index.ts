@@ -32,18 +32,12 @@ export {
 
 export {
   ActivityFeedbackManager,
-  getActivityFeedbackManager,
-  initActivityFeedbackManager,
-  provideActivityFeedbackManager,
 } from './manager.js';
 
 export {
   PLATFORM_FEATURES,
   buildTypingSendContent,
   enableActivityFeedbackForBot,
-  getAdapterActivityFeedbackManager,
-  initAdapterActivityFeedbackManager,
-  provideAdapterActivityFeedbackManager,
   isGenericActivityFeedbackManager,
 } from './adapter-integration.js';
 export type {

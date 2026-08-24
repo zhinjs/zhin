@@ -121,12 +121,15 @@ export interface OutboundEnvelope {
   readonly requester: PluginId;
   readonly generation: number;
   readonly payload: unknown;
+  /** Native platform Client for the Endpoint selected by `conversation`. */
+  readonly $client: unknown;
+  /** Literal adapter name used to validate adapter-bound middleware. */
+  readonly clientAdapter?: string;
   replace(payload: unknown): void;
 }
 
-/** @public Stable IM gateway contract resolved through `messageGatewayToken`. */
-export interface MessageGateway {
-  receive(input: IncomingMessage): Promise<MessageDispatchResult>;
+/** @public Stable IM gateway contract resolved through `outboundMessageToken`. */
+export interface OutboundMessageService {
   send(request: SendRequest): Promise<DeliveryReceipt>;
   /**
    * 注册 interactive action 回跳 handler（prefix 最长匹配；返回注销函数）。
@@ -148,6 +151,8 @@ export interface MessageDispatchResult {
 }
 
 export class Message {
+  readonly #resolveClient: () => unknown;
+
   /** @internal Constructed only by the generation-owned IM Runtime. */
   constructor(
     readonly conversation: ConversationRef,
@@ -166,7 +171,12 @@ export class Message {
     readonly endpointId?: string,
     readonly mentioned?: boolean,
     readonly replyTo?: { readonly id: string },
+    client: () => unknown = () => {
+      throw new Error('Message has no Endpoint Client context');
+    },
+    readonly clientAdapter?: string,
   ) {
+    this.#resolveClient = client;
     this.$reply = (content) => reply(content);
     this.$replyFrom = (requester, content) => reply(content, requester);
     this.$sendTo = (target, content) => reply(content, undefined, target);
@@ -207,6 +217,13 @@ export class Message {
   }
 
   readonly $reply: (content: SendContent) => Promise<DeliveryReceipt>;
+  /**
+   * Platform-native Client that received this message. The getter is
+   * generation-scoped; retaining the returned Client after dispatch is invalid.
+   */
+  get $client(): unknown {
+    return this.#resolveClient();
+  }
   readonly $replyFrom: (requester: PluginId, content: SendContent) => Promise<DeliveryReceipt>;
   /**
    * 向同 Endpoint 的另一个通道发送消息（通用）。
@@ -255,13 +272,15 @@ export class Message {
 }
 
 export function createOutboundEnvelope(
-  request: Omit<OutboundEnvelope, 'payload' | 'replace'>,
+  request: Omit<OutboundEnvelope, 'payload' | '$client' | 'replace'>,
   initialPayload: unknown,
+  resolveClient: () => unknown = () => undefined,
 ): OutboundEnvelope {
   let payload = initialPayload;
   return Object.freeze({
     ...request,
     get payload() { return payload; },
+    get $client() { return resolveClient(); },
     replace(next: unknown) { payload = next; },
   });
 }

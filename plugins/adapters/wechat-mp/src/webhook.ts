@@ -2,7 +2,6 @@
  * WeChat MP webhook HTTP: URL verification + inbound message handling.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -36,8 +35,7 @@ export interface WeChatMpWebhookHandler {
   readonly config: ResolvedWeChatMpConfig;
   readonly isOpen: boolean;
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  admit(msg: WeChatMessage): void;
+  admit(msg: WeChatMessage): void | Promise<unknown>;
   /** MsgId 去重缓存（可选；实现见 WeChatMpEndpoint）。 */
   getCachedReply?(msgId: string): string | undefined;
   cacheReply?(msgId: string, replyXML: string): void;
@@ -221,18 +219,7 @@ export async function collectPassiveReply(
   const text = await runWithPassiveReplyCapture(async () => {
     const conversation = wechatMpInboundConversation(String(handler.id), wechatMsg);
     await Promise.race([
-      handler.gateway.receive({
-        conversation,
-        message: { conversation, id: formatInboundId(wechatMsg) },
-        content: formatInboundContent(wechatMsg),
-        sender: { id: wechatMsg.FromUserName },
-        endpointId: handler.config.id,
-        metadata: Object.freeze({
-          msgType: wechatMsg.MsgType,
-          event: wechatMsg.Event,
-          toUserName: wechatMsg.ToUserName,
-        }),
-      }),
+      Promise.resolve(handler.admit(wechatMsg)),
       new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
     ]);
     return getPassiveReplyCapture()?.text ?? null;

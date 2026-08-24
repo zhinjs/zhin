@@ -1,17 +1,15 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
  * WecomEndpoint — lifecycle, outbound send, inbound admit, OpenAPI helpers for agent tools.
  */
 import {
   createRecallEndpointControl,
   type EndpointControl,
-  type EndpointInstance,
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
-import { registerWecomAgentEndpoint } from './wecom-agent-deps.js';
 import {
   buildMediaUploadForm,
   readOutboundImageMedia,
@@ -48,11 +46,25 @@ export type WecomFetch = (
 
 export interface WecomEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: ResolvedWecomConfig;
   readonly fetch?: WecomFetch;
+}
+
+export interface WecomClientApi {
+  getUserInfo(userId: string): Promise<unknown>;
+  getDepartmentUsers(deptId: number): Promise<unknown[]>;
+  getDepartmentList(deptId?: number): Promise<unknown[]>;
+  sendTextMessage(userId: string, content: string): Promise<boolean>;
+}
+
+/** WeCom API surface exposed to plugin events without Endpoint lifecycle methods. */
+export class WecomClient implements WecomClientApi {
+  constructor(readonly api: WecomClientApi) {}
+  getUserInfo = (userId: string) => this.api.getUserInfo(userId);
+  getDepartmentUsers = (deptId: number) => this.api.getDepartmentUsers(deptId);
+  getDepartmentList = (deptId?: number) => this.api.getDepartmentList(deptId);
+  sendTextMessage = (userId: string, content: string) => this.api.sendTextMessage(userId, content);
 }
 
 /**
@@ -60,7 +72,13 @@ export interface WecomEndpointOptions {
  * 独立授权域，非 bot 社交面），好友/频道概念亦不存在；
  * 因此本 endpoint 不暴露 EndpointManagement（Console 社交面 RPC 对该平台保持未接线）。
  */
-export class WecomEndpoint implements EndpointInstance {
+export class WecomEndpoint extends Endpoint<WecomClient> {
+  readonly client = new WecomClient({
+    getUserInfo: (userId) => this.#getUserInfo(userId),
+    getDepartmentUsers: (deptId) => this.#getDepartmentUsers(deptId),
+    getDepartmentList: (deptId) => this.#getDepartmentList(deptId),
+    sendTextMessage: (userId, content) => this.#sendTextMessage(userId, content),
+  });
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: WecomEndpointOptions;
@@ -71,9 +89,9 @@ export class WecomEndpoint implements EndpointInstance {
   #refreshPromise: Promise<string> | null = null;
   #open = false;
   #started = false;
-  #unregisterAgent?: () => void;
 
   constructor(options: WecomEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('wecom', options.config.id);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
@@ -93,7 +111,6 @@ export class WecomEndpoint implements EndpointInstance {
     this.#started = true;
     try {
       await this.#refreshAccessToken();
-      this.#unregisterAgent = registerWecomAgentEndpoint(this.#options.config.id, this);
       this.#routeReleases.push(...registerWecomWebhookRoutes(this.#options.http, this));
       this.#logger.debug(formatCompact({
         endpoint: this.#options.config.id,
@@ -118,8 +135,6 @@ export class WecomEndpoint implements EndpointInstance {
   async stop(): Promise<void> {
     this.#open = false;
     for (const release of this.#routeReleases.splice(0)) release();
-    this.#unregisterAgent?.();
-    this.#unregisterAgent = undefined;
     this.#started = false;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
@@ -210,8 +225,15 @@ export class WecomEndpoint implements EndpointInstance {
   /** Test / internal: admit a parsed message when open (non-webhook path). */
   admit(msg: WecomMessage): void {
     if (!this.#open) return;
+    void this.emitPlatform(msg.Event || msg.MsgType || 'event', msg).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'wecom_platform_event_failed',
+        event: msg.Event || msg.MsgType,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
     if (receiveWecomSideEvent(
-      this.#options.sideEvents,
+      (name, payload) => this.emit(name, payload),
       String(this.#options.id),
       this.#options.config.id,
       msg,
@@ -221,7 +243,7 @@ export class WecomEndpoint implements EndpointInstance {
     }
     const chatType = resolveChatType(msg.FromUserName);
     const conversation = wecomInboundConversation(String(this.#options.id), msg);
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: msg.MsgId || `${msg.CreateTime}` },
       content: formatInboundContent(msg),
@@ -243,7 +265,7 @@ export class WecomEndpoint implements EndpointInstance {
     });
   }
 
-  async getUserInfo(userId: string): Promise<WecomApiResponse | null> {
+  async #getUserInfo(userId: string): Promise<WecomApiResponse | null> {
     try {
       const data = await this.#request('/cgi-bin/user/get', {
         params: { userid: userId },
@@ -256,7 +278,7 @@ export class WecomEndpoint implements EndpointInstance {
     }
   }
 
-  async getDepartmentUsers(deptId: number): Promise<unknown[]> {
+  async #getDepartmentUsers(deptId: number): Promise<unknown[]> {
     try {
       const data = await this.#request('/cgi-bin/user/simplelist', {
         params: { department_id: deptId },
@@ -269,7 +291,7 @@ export class WecomEndpoint implements EndpointInstance {
     }
   }
 
-  async getDepartmentList(deptId: number = 1): Promise<unknown[]> {
+  async #getDepartmentList(deptId: number = 1): Promise<unknown[]> {
     try {
       const data = await this.#request('/cgi-bin/department/list', {
         params: { id: deptId },
@@ -282,7 +304,7 @@ export class WecomEndpoint implements EndpointInstance {
     }
   }
 
-  async sendTextMessage(userId: string, content: string): Promise<boolean> {
+  async #sendTextMessage(userId: string, content: string): Promise<boolean> {
     try {
       const endpointKey = String(this.#options.id);
       await this.send({

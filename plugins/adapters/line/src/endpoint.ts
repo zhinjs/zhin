@@ -1,12 +1,11 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
  * LineEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
-import type { EndpointInstance, EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
+import { type EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
-import { registerLineAgentEndpoint } from './line-agent-deps.js';
 import {
   formatInboundContent,
   formatOutboundMessages,
@@ -21,6 +20,7 @@ import {
 } from './protocol.js';
 import { registerLineWebhookRoutes } from './webhook.js';
 import { receiveLineSideEvent } from './side-event-dispatch.js';
+import { LineClient } from './client.js';
 
 /** LINE replyToken 有效期短，过期后 reply 必 400；缓存带时间戳，超时弃用改走 push。 */
 const REPLY_TOKEN_TTL_MS = 60_000;
@@ -44,14 +44,13 @@ export type LineFetch = (
 
 export interface LineEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: ResolvedLineConfig;
   readonly fetch?: LineFetch;
 }
 
-export class LineEndpoint implements EndpointInstance {
+export class LineEndpoint extends Endpoint<LineClient> {
+  readonly client: LineClient;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: LineEndpointOptions;
@@ -60,13 +59,14 @@ export class LineEndpoint implements EndpointInstance {
   #replyTokenCache = new Map<string, { token: string; timestamp: number }>();
   #open = false;
   #started = false;
-  #unregisterAgent?: () => void;
   readonly management: EndpointManagement = createLineEndpointManagement(this);
 
   constructor(options: LineEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('line', options.config.id);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
+    this.client = new LineClient(options.config, this.#fetch);
   }
 
   /** Used by webhook handler. */
@@ -78,18 +78,10 @@ export class LineEndpoint implements EndpointInstance {
     return this.#options.config;
   }
 
-  getApiConfig(): { accessToken: string; apiBaseUrl: string } {
-    return {
-      accessToken: this.#options.config.channelAccessToken,
-      apiBaseUrl: this.#options.config.apiBaseUrl,
-    };
-  }
-
   async start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
     try {
-      this.#unregisterAgent = registerLineAgentEndpoint(this.#options.config.id, this);
       this.#routeReleases.push(...registerLineWebhookRoutes(this.#options.http, this));
       this.#logger.debug(formatCompact({
         endpoint: this.#options.config.id,
@@ -115,8 +107,6 @@ export class LineEndpoint implements EndpointInstance {
     this.#open = false;
     this.#replyTokenCache.clear();
     for (const release of this.#routeReleases.splice(0)) release();
-    this.#unregisterAgent?.();
-    this.#unregisterAgent = undefined;
     this.#started = false;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
@@ -158,9 +148,16 @@ export class LineEndpoint implements EndpointInstance {
   /** Test / internal: admit a parsed event when open (non-webhook path). */
   admit(event: LineEvent): void {
     if (!this.#open) return;
+    void this.emitPlatform(event.type || 'event', event).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'line_platform_event_failed',
+        event: event.type,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
     if (isLineLifecycleEvent(event)) {
       receiveLineSideEvent(
-        this.#options.sideEvents,
+        (name, payload) => this.emit(name, payload),
         String(this.#options.id),
         this.#options.config.id,
         event,
@@ -172,7 +169,7 @@ export class LineEndpoint implements EndpointInstance {
     if ('replyToken' in event && typeof event.replyToken === 'string') {
       this.#replyTokenCache.set(conversation.id, { token: event.replyToken, timestamp: Date.now() });
     }
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: generateMessageId(event) },
       content: formatInboundContent(event),
@@ -244,55 +241,11 @@ export class LineEndpoint implements EndpointInstance {
    * members/ids 分页（next continuation token）后逐个取 profile 归一 nickname；
    * 单个 profile 失败（用户已退群等）时回退 userId 占位，不拖垮整批。
    */
-  async getGroupMembers(groupId: string): Promise<LineGroupMember[]> {
-    const kind = groupId.startsWith('R') ? 'room' : 'group';
-    const memberIds: string[] = [];
-    let start: string | undefined;
-    do {
-      const query = start ? `?start=${encodeURIComponent(start)}` : '';
-      const data = await this.#get(
-        `${this.#options.config.apiBaseUrl}/v2/bot/${kind}/${encodeURIComponent(groupId)}/members/ids${query}`,
-      ) as { memberIds?: string[]; next?: string };
-      for (const id of data.memberIds ?? []) {
-        if (typeof id === 'string' && id) memberIds.push(id);
-      }
-      start = data.next || undefined;
-    } while (start);
-
-    return Promise.all(memberIds.map(async (userId) => {
-      try {
-        const profile = await this.#get(
-          `${this.#options.config.apiBaseUrl}/v2/bot/${kind}/${encodeURIComponent(groupId)}/member/${encodeURIComponent(userId)}`,
-        ) as { displayName?: string };
-        return { user_id: userId, nickname: String(profile.displayName ?? userId) };
-      } catch {
-        return { user_id: userId, nickname: userId };
-      }
-    }));
-  }
-
-  async #get(url: string): Promise<unknown> {
-    const response = await this.#fetch(url, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${this.#options.config.channelAccessToken}` },
-      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`LINE API error ${response.status}: ${errorText}`);
-    }
-    return response.json();
-  }
-}
-
-export interface LineGroupMember {
-  readonly user_id: string;
-  readonly nickname: string;
 }
 
 function createLineEndpointManagement(endpoint: LineEndpoint): EndpointManagement {
   return Object.freeze<EndpointManagement>({
     // listGroups 不接：LINE Bot API 没有"我加入了哪些群"的接口，群 id 只能来自入站事件。
-    listGroupMembers: (groupId) => endpoint.getGroupMembers(groupId),
+    listGroupMembers: (groupId) => endpoint.client.getGroupMembers(groupId),
   });
 }

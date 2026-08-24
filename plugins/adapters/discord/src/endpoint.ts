@@ -1,3 +1,4 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
  * DiscordEndpoint — lifecycle, outbound, admit, gateway / interactions modes, agent tool surface.
  */
@@ -8,11 +9,9 @@ import type {
   EndpointContentResolveContext,
   EndpointControl,
   EndpointGroup,
-  EndpointInstance,
   EndpointManagement,
   EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
   type ConversationReference,
@@ -21,7 +20,6 @@ import {
 } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
-import { registerDiscordAgentEndpoint } from './discord-agent-deps.js';
 import {
   connectDiscordGatewayClient,
   defaultCreateClient,
@@ -58,14 +56,12 @@ export type {
 
 export interface DiscordEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly config: ResolvedDiscordGatewayConfig;
   readonly createClient?: CreateDiscordClient;
   readonly fetch?: typeof globalThis.fetch;
 }
 
-export class DiscordGatewayEndpoint implements EndpointInstance {
+export class DiscordGatewayEndpoint extends Endpoint<DiscordClientTransport> {
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: DiscordEndpointOptions;
@@ -74,11 +70,9 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
   #client: DiscordClientTransport | null = null;
   #open = false;
   #started = false;
-  #unregisterAgent?: () => void;
-  readonly management: EndpointManagement = createDiscordEndpointManagement({
-    getClient: () => this.#requireClient(),
-    getMembers: (guildId) => this.getMembers(guildId),
-  });
+  readonly management: EndpointManagement = createDiscordEndpointManagement(
+    () => this.#requireClient(),
+  );
   readonly control: EndpointControl = Object.freeze({
     recall: (message: MessageRef) => this.recallMessage(message),
     addReaction: async (
@@ -88,7 +82,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
     ) => {
       const channelId = hint?.channelId ?? message.conversation.id;
       if (!channelId || !message.id) return null;
-      await this.addReaction(channelId, message.id, emoji);
+      await this.#addReaction(channelId, message.id, emoji);
       return emoji;
     },
   });
@@ -98,27 +92,35 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
   });
 
   constructor(options: DiscordEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('discord', options.config.id);
     this.#options = options;
     this.#createClient = options.createClient ?? defaultCreateClient;
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
 
+  /** The actual discord.js-compatible client used by this connection. */
+  get client(): DiscordClientTransport {
+    return this.#requireClient();
+  }
+
   async start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
     try {
-      this.#unregisterAgent = registerDiscordAgentEndpoint(this.#options.config.id, this);
       const intents = this.#options.config.intents?.length
         ? [...this.#options.config.intents]
         : DEFAULT_INTENTS;
       this.#client = this.#createClient(intents);
       await connectDiscordGatewayClient(this.#client, this.#options.config, {
+        onPlatformEvent: (name, event) => {
+          void this.#emitPlatformEvent(name, event);
+        },
         onMessage: (msg) => this.admit(msg),
         onButton: (interaction) => this.admitButton(interaction),
         onGuildMemberAdd: (member) => {
           receiveDiscordGuildMemberSideEvent(
-            this.#options.sideEvents,
+            (name, payload) => this.emit(name, payload),
             this.#options.config.id,
             'member_increase',
             member,
@@ -127,7 +129,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
         },
         onGuildMemberRemove: (member) => {
           receiveDiscordGuildMemberSideEvent(
-            this.#options.sideEvents,
+            (name, payload) => this.emit(name, payload),
             this.#options.config.id,
             'member_decrease',
             member,
@@ -158,8 +160,6 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
 
   async stop(): Promise<void> {
     this.#open = false;
-    this.#unregisterAgent?.();
-    this.#unregisterAgent = undefined;
     if (this.#client) {
       try {
         this.#client.removeAllListeners();
@@ -198,7 +198,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
     if (!this.#open) return;
     if (msg.authorBot) return;
     const conversation = discordInboundConversation(String(this.#options.id), msg);
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: msg.id },
       content: formatInboundContent(msg),
@@ -230,7 +230,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
   admitButton(interaction: DiscordButtonInbound): void {
     if (!this.#open) return;
     const conversation = discordInboundConversation(String(this.#options.id), interaction);
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: interaction.id },
       content: formatButtonContent(interaction),
@@ -251,58 +251,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
     });
   }
 
-  // ── Agent tool surface ──────────────────────────────────────────────
-
-  async addRole(guildId: string, userId: string, roleId: string): Promise<boolean> {
-    const member = await this.#fetchMember(guildId, userId) as { roles: { add(id: string): Promise<unknown> } };
-    await member.roles.add(roleId);
-    return true;
-  }
-
-  async removeRole(guildId: string, userId: string, roleId: string): Promise<boolean> {
-    const member = await this.#fetchMember(guildId, userId) as { roles: { remove(id: string): Promise<unknown> } };
-    await member.roles.remove(roleId);
-    return true;
-  }
-
-  async getRoles(guildId: string): Promise<unknown[]> {
-    const guild = await this.#requireClient().guilds.fetch(guildId);
-    await guild.roles.fetch();
-    const cache = guild.roles.cache as Map<string, {
-      id: string;
-      name: string;
-      hexColor: string;
-      position: number;
-      permissions: { bitfield: bigint };
-    }>;
-    return [...cache.values()].map((role) => ({
-      id: role.id,
-      name: role.name,
-      color: role.hexColor,
-      position: role.position,
-      permissions: role.permissions.bitfield.toString(),
-    }));
-  }
-
-  async createThread(
-    channelId: string,
-    name: string,
-    messageId?: string,
-    autoArchiveDuration?: number,
-  ): Promise<{ id: string }> {
-    const channel = await this.#requireClient().channels.fetch(channelId);
-    if (!channel || !('threads' in channel) || !channel.threads) {
-      throw new Error(`Channel ${channelId} 不支持创建帖子`);
-    }
-    const options: Record<string, unknown> = {
-      name,
-      autoArchiveDuration: autoArchiveDuration || 1440,
-    };
-    if (messageId) options.startMessage = messageId;
-    return channel.threads.create(options);
-  }
-
-  async addReaction(channelId: string, messageId: string, emoji: string): Promise<void> {
+  async #addReaction(channelId: string, messageId: string, emoji: string): Promise<void> {
     const channel = await this.#requireClient().channels.fetch(channelId);
     if (!channel?.isTextBased() || !channel.messages) {
       throw new Error(`Channel ${channelId} 不是文本频道`);
@@ -311,105 +260,14 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
     await message.react(emoji);
   }
 
-  async sendEmbed(
-    channelId: string,
-    embedData: Record<string, unknown>,
-  ): Promise<{ id: string }> {
-    const body: DiscordOutboundBody = { embeds: [embedData] };
-    const id = await this.#sendBody(channelId, body);
-    return { id };
-  }
-
-  async createForumPost(
-    channelId: string,
-    name: string,
-    content: string,
-    tags?: string[],
-  ): Promise<{ id: string }> {
-    const channel = await this.#requireClient().channels.fetch(channelId);
-    if (!channel || channel.type !== ChannelType.GuildForum || !channel.threads) {
-      throw new Error(`Channel ${channelId} 不是论坛频道`);
-    }
-    const options: Record<string, unknown> = {
-      name,
-      message: { content },
-    };
-    if (tags?.length && channel.availableTags?.length) {
-      const tagIds = channel.availableTags
-        .filter((t) => tags.includes(t.name))
-        .map((t) => t.id);
-      if (tagIds.length) options.appliedTags = tagIds;
-    }
-    return channel.threads.create(options);
-  }
-
-  async kickMember(guildId: string, userId: string, reason?: string): Promise<boolean> {
-    const member = await this.#fetchMember(guildId, userId) as { kick(reason?: string): Promise<unknown> };
-    await member.kick(reason);
-    return true;
-  }
-
-  async banMember(guildId: string, userId: string, reason?: string): Promise<boolean> {
-    const guild = await this.#requireClient().guilds.fetch(guildId);
-    await guild.members.ban(userId, { reason });
-    return true;
-  }
-
-  async unbanMember(guildId: string, userId: string, reason?: string): Promise<boolean> {
-    const guild = await this.#requireClient().guilds.fetch(guildId);
-    await guild.members.unban(userId, reason);
-    return true;
-  }
-
-  async timeoutMember(
-    guildId: string,
-    userId: string,
-    duration = 600,
-    reason?: string,
-  ): Promise<boolean> {
-    const member = await this.#fetchMember(guildId, userId) as {
-      timeout(ms: number | null, reason?: string): Promise<unknown>;
-    };
-    await member.timeout(duration === 0 ? null : duration * 1000, reason);
-    return true;
-  }
-
-  async setNickname(guildId: string, userId: string, nickname: string): Promise<boolean> {
-    const member = await this.#fetchMember(guildId, userId) as {
-      setNickname(nickname: string): Promise<unknown>;
-    };
-    await member.setNickname(nickname);
-    return true;
-  }
-
-  async getMembers(guildId: string, limit = 100): Promise<unknown[]> {
-    const guild = await this.#requireClient().guilds.fetch(guildId);
-    const members = await guild.members.fetch({ limit }) as Map<string, {
-      id: string;
-      user: { username: string };
-      nickname: string | null;
-      roles: { cache: { map(fn: (r: { id: string }) => string): string[] } };
-      joinedAt?: Date | null;
-    }>;
-    return [...members.values()].map((member) => ({
-      id: member.id,
-      username: member.user.username,
-      nickname: member.nickname,
-      roles: member.roles.cache.map((r) => r.id),
-      joined_at: member.joinedAt?.toISOString(),
-    }));
-  }
-
-  async getGuildInfo(guildId: string): Promise<unknown> {
-    const guild = await this.#requireClient().guilds.fetch(guildId);
-    return {
-      id: guild.id,
-      name: guild.name,
-      icon: guild.iconURL?.(),
-      owner_id: guild.ownerId,
-      member_count: guild.memberCount,
-      created_at: guild.createdAt?.toISOString(),
-    };
+  async #emitPlatformEvent(name: string, event: unknown): Promise<void> {
+    await this.emitPlatform(name, event).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'discord_platform_event_failed',
+        event: name,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
   }
 
   async #sendBody(channelId: string, body: DiscordOutboundBody): Promise<string> {
@@ -422,11 +280,6 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
     return result.id;
   }
 
-  async #fetchMember(guildId: string, userId: string): Promise<unknown> {
-    const guild = await this.#requireClient().guilds.fetch(guildId);
-    return guild.members.fetch(userId);
-  }
-
   #requireClient(): DiscordClientTransport {
     if (!this.#client) throw new Error('Discord client not connected');
     return this.#client;
@@ -435,14 +288,50 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
 
 export interface DiscordInteractionsEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: ResolvedDiscordInteractionsConfig;
   readonly fetch?: typeof globalThis.fetch;
 }
 
-export class DiscordInteractionsEndpoint implements EndpointInstance {
+/** Minimal Discord REST client used when Gateway is intentionally disabled. */
+export class DiscordRestClient {
+  constructor(
+    readonly token: string,
+    readonly fetch: typeof globalThis.fetch = globalThis.fetch,
+  ) {}
+
+  async request<T = unknown>(
+    method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+    path: string,
+    body?: unknown,
+  ): Promise<T> {
+    const response = await this.fetch(`${DISCORD_API}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bot ${this.token}`,
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(`Discord API ${method} ${path} failed (${response.status}): ${text.slice(0, 200)}`);
+    }
+    return (text ? JSON.parse(text) : undefined) as T;
+  }
+
+  createMessage(channelId: string, body: unknown): Promise<{ id?: string }> {
+    return this.request('POST', `/channels/${channelId}/messages`, body);
+  }
+
+  deleteMessage(channelId: string, messageId: string): Promise<void> {
+    return this.request('DELETE', `/channels/${channelId}/messages/${messageId}`);
+  }
+}
+
+export class DiscordInteractionsEndpoint extends Endpoint<DiscordRestClient> {
+  readonly client: DiscordRestClient;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: DiscordInteractionsEndpointOptions;
@@ -459,9 +348,11 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
   });
 
   constructor(options: DiscordInteractionsEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('discord', options.config.id);
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
+    this.client = new DiscordRestClient(options.config.token, this.#fetch);
   }
 
   get isOpen(): boolean {
@@ -501,42 +392,19 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const body = formatOutboundBody(payload);
-    const channelId = conversation.id;
-    const response = await this.#fetch(`${DISCORD_API}/channels/${channelId}/messages`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bot ${this.#options.config.token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
-    });
-    const text = await response.text();
-    if (!response.ok) {
-      throw new Error(`Discord send failed (${response.status}): ${text.slice(0, 200)}`);
-    }
-    const data = JSON.parse(text) as { id?: string };
-    const snowflake = data.id ?? '';
-    return snowflake;
+    const data = await this.client.createMessage(conversation.id, body);
+    return data.id ?? '';
   }
 
   async recallMessage(message: MessageRef): Promise<void> {
     if (!message.id) return;
-    const response = await this.#fetch(`${DISCORD_API}/channels/${message.conversation.id}/messages/${message.id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bot ${this.#options.config.token}` },
-      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
-    });
-    if (!response.ok && response.status !== 404) {
-      const text = await response.text();
-      throw new Error(`Discord recall failed (${response.status}): ${text.slice(0, 200)}`);
-    }
+    await this.client.deleteMessage(message.conversation.id, message.id);
   }
 
   admit(msg: DiscordInboundMessage): void {
     if (!this.#open) return;
     const conversation = discordInboundConversation(String(this.#options.id), msg);
-    void this.#options.gateway.receive({
+    void this.emit('message.receive', {
       conversation,
       message: { conversation, id: msg.id },
       content: formatInboundContent(msg),
@@ -558,6 +426,18 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
         op: 'discord_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
         error: err instanceof Error ? err.message : String(err),
+      }));
+    });
+  }
+
+  admitPlatform(event: Record<string, unknown>): void {
+    if (!this.#open) return;
+    const type = typeof event.type === 'number' ? `interaction.${event.type}` : 'interaction';
+    void this.emitPlatform(type, event).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'discord_platform_event_failed',
+        event: type,
+        error: error instanceof Error ? error.message : String(error),
       }));
     });
   }
@@ -628,14 +508,13 @@ function toGroupId(id: string): number {
  * DiscordGatewayEndpoint 的 EndpointManagement 语义端口（参照 qq 的工厂模式）。
  * 数据源为 discord.js SDK 缓存：guilds.cache / guild.channels.cache / guild.members。
  */
-export function createDiscordEndpointManagement(endpoint: {
-  getClient(): DiscordClientTransport;
-  getMembers(guildId: string): Promise<unknown[]>;
-}): EndpointManagement {
+export function createDiscordEndpointManagement(
+  requireClient: () => DiscordClientTransport,
+): EndpointManagement {
   return Object.freeze<EndpointManagement>({
     async listGroups(): Promise<readonly EndpointGroup[]> {
       const groups: EndpointGroup[] = [];
-      for (const guild of endpoint.getClient().guilds.cache.values()) {
+      for (const guild of requireClient().guilds.cache.values()) {
         if (!guild?.id) continue;
         groups.push({
           group_id: toGroupId(String(guild.id)),
@@ -646,7 +525,7 @@ export function createDiscordEndpointManagement(endpoint: {
     },
     async listChannels(): Promise<readonly EndpointChannel[]> {
       const channels: EndpointChannel[] = [];
-      for (const guild of endpoint.getClient().guilds.cache.values()) {
+      for (const guild of requireClient().guilds.cache.values()) {
         if (!guild?.id) continue;
         const guildId = String(guild.id);
         const guildName = String(guild.name ?? guildId);
@@ -663,7 +542,21 @@ export function createDiscordEndpointManagement(endpoint: {
       return channels;
     },
     async listGroupMembers(groupId: string): Promise<readonly unknown[]> {
-      return endpoint.getMembers(groupId);
+      const guild = await requireClient().guilds.fetch(groupId);
+      const members = await guild.members.fetch({ limit: 100 }) as Map<string, {
+        id: string;
+        user: { username: string };
+        nickname: string | null;
+        roles: { cache: { map(fn: (role: { id: string }) => string): string[] } };
+        joinedAt?: Date | null;
+      }>;
+      return [...members.values()].map((member) => ({
+        id: member.id,
+        username: member.user.username,
+        nickname: member.nickname,
+        roles: member.roles.cache.map((role) => role.id),
+        joined_at: member.joinedAt?.toISOString(),
+      }));
     },
   });
 }

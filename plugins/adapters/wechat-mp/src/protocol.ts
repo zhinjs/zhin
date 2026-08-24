@@ -337,7 +337,7 @@ export function formatInboundId(msg: WeChatMessage): string {
     .join(':');
 }
 
-/** Build inbound text for MessageGateway.receive. */
+/** Build inbound text for OutboundMessageService.receive. */
 export function formatInboundContent(msg: WeChatMessage): string {
   switch (msg.MsgType) {
     case 'text':

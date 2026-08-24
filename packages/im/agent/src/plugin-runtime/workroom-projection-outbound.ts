@@ -1,18 +1,18 @@
-import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import type {
   WorkroomProjectionDeliveryPort,
   WorkroomProjectionDeliveryResult,
   WorkroomProjectionOutboxItem,
 } from '../workroom/projection-outbox.js';
 
-type ProjectionRequester = Parameters<MessageGateway['send']>[0]['requester'];
+type ProjectionRequester = Parameters<OutboundMessageService['send']>[0]['requester'];
 
 /**
- * Composition adapter for the canonical IM outbound chain. MessageGateway
+ * Composition adapter for the canonical IM outbound chain. OutboundMessageService
  * owns render, before.sendMessage middleware and Endpoint delivery.
  */
-export function createWorkroomProjectionMessageGatewayPort(
-  gateway: MessageGateway,
+export function createWorkroomProjectionOutboundMessageServicePort(
+  gateway: OutboundMessageService,
   requester: ProjectionRequester,
 ): WorkroomProjectionDeliveryPort {
   return Object.freeze({

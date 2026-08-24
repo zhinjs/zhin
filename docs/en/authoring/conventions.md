@@ -148,7 +148,7 @@ export default defineAdapter<NapCatAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
   create(context) {
     const config = resolveNapCatConfig(context.config);
-    const gateway = context.use(messageGatewayToken);
+    const gateway = context.use(outboundMessageToken);
     return new NapCatWsEndpoint({ id: context.id, gateway, config });
   },
 });

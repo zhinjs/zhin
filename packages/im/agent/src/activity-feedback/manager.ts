@@ -4,7 +4,6 @@ import {
   type TypingIndicatorConfig,
   type TypingIndicatorOptions,
 } from '../typing-indicator/index.js';
-import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 import { type ActivityFeedbackPhase, toTypingIndicatorConfig, type ResolvedActivityFeedbackPhaseConfig } from './types.js';
 function phaseSessionId(sessionId: string, phase: ActivityFeedbackPhase): string {
   return `${sessionId}::phase:${phase}`;
@@ -84,19 +83,3 @@ export class ActivityFeedbackManager {
     return this.inner.dispose();
   }
 }
-
-const feedbackStore = createGenerationStore<ActivityFeedbackManager>('zhin.agent.activity-feedback');
-
-export function getActivityFeedbackManager(): ActivityFeedbackManager {
-  return feedbackStore.tryUse() ?? new ActivityFeedbackManager();
-}
-
-export function provideActivityFeedbackManager(context: GenerationStoreContext): ActivityFeedbackManager {
-  const manager = new ActivityFeedbackManager();
-  feedbackStore.provide(context, manager);
-  context.lifecycle.add(() => manager.dispose());
-  return manager;
-}
-
-/** @deprecated 使用 provideActivityFeedbackManager 替代 */
-export const initActivityFeedbackManager = () => new ActivityFeedbackManager();

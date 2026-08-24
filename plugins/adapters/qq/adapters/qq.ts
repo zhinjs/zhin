@@ -2,7 +2,6 @@
  * Convention entry: discover `adapters/qq.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { messageGatewayToken, sideEventGatewayToken } from '@zhin.js/core/runtime';
 import { httpHostToken } from '@zhin.js/host-http';
 import { QqHttpEndpoint, QqWebsocketEndpoint } from '../src/endpoint.js';
 import {
@@ -43,8 +42,6 @@ export default defineAdapter<QqAdapterConfig>({
   },
   create(context) {
     const config = resolveQqConfig(context.config);
-    const gateway = context.use(messageGatewayToken);
-    const sideEvents = context.use(sideEventGatewayToken);
     // 注册到插件运行时状态（qq.endpoint list 的"运行中"数据源）
     const state = context.use(qqRuntimeStateToken);
     state.endpoints.set(config.id, {
@@ -56,14 +53,10 @@ export default defineAdapter<QqAdapterConfig>({
     const endpoint = config.mode === 'websocket'
       ? new QqWebsocketEndpoint({
         id: context.id,
-        gateway,
-        sideEvents,
         config,
       })
       : new QqHttpEndpoint({
         id: context.id,
-        gateway,
-        sideEvents,
         http: context.use(httpHostToken),
         config,
       });

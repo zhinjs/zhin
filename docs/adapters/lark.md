@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/lark/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/lark/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=97a54d7b8a6aaadf -->
+<!-- sync-adapter-docs:sha256=badc7385025f5e84 -->
 
 # @zhin.js/adapter-lark
 
@@ -32,7 +32,7 @@ pnpm add @zhin.js/adapter-lark
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — 约定式 `adapters/lark.ts`（`defineAdapter`）
-- `@zhin.js/core` — `messageGatewayToken` 入站/出站
+- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
@@ -91,7 +91,7 @@ plugins:
 
 ## Agent 工具
 
-`agent/` 目录保留（get_user、群聊、管理员、上传文件等）。Endpoint 在 `start` 时自注册到 `lark-agent-deps`。
+`agent/` 目录保留（get_user、群聊、管理员、上传文件等）。工具声明 `adapter: 'lark'` 后，通过惰性的 `context.$client` 自动取得当前操作的 `LarkClient`；无需把 Endpoint id 暴露给模型。
 
 ## 平台权限（platform permit）
 

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/kook/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/kook/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=116daa22e8a7d37c -->
+<!-- sync-adapter-docs:sha256=d7dbfff784130338 -->
 
 # @zhin.js/adapter-kook
 
@@ -32,7 +32,7 @@ pnpm add @zhin.js/adapter-kook
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — 约定式 `adapters/kook.ts`（`defineAdapter`）
-- `@zhin.js/core` — `messageGatewayToken` 入站/出站
+- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — Webhook 模式 POST 路由（WebSocket 不需要）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
@@ -109,7 +109,7 @@ platform permit checker 由 `plugin.ts` 的 generation 生命周期注册；Capa
 
 ## 迁移后出站能力变化
 
-迁移到 Plugin Runtime 后，出站统一经 `messageGatewayToken` 渲染并由 endpoint 编码为 KMarkdown（`sendChannelMsg` / `sendPrivateMsg`）。canonical `markdown` 保留格式；图片、视频、音频和文件仅有远程 URL 时可表示为 KMarkdown 链接。卡片消息与附件上传仍未接入统一出站通道。
+迁移到 Plugin Runtime 后，出站统一经 `outboundMessageToken` 渲染并由 endpoint 编码为 KMarkdown（`sendChannelMsg` / `sendPrivateMsg`）。canonical `markdown` 保留格式；图片、视频、音频和文件仅有远程 URL 时可表示为 KMarkdown 链接。卡片消息与附件上传仍未接入统一出站通道。
 
 ## 故障排查
 

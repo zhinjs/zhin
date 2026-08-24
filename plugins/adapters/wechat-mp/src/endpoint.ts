@@ -1,9 +1,9 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
  * WeChatMpEndpoint — lifecycle, outbound, admit, access token refresh.
  */
 import axios from 'axios';
-import type { EndpointFriend, EndpointInstance, EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
+import type { EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -14,8 +14,6 @@ import {
   formatInboundId,
   wechatMpInboundConversation,
   type ResolvedWeChatMpConfig,
-  type TokenResponse,
-  type WeChatAPIResponse,
   type WeChatMessage,
 } from './protocol.js';
 import {
@@ -30,9 +28,7 @@ import {
 } from './passive-reply.js';
 import { registerWeChatMpWebhookRoutes } from './webhook.js';
 import { receiveWeChatMpSideEvent } from './side-event-dispatch.js';
-
-/** token 失效类错误码：40001/40014 invalid access_token、42001 access_token expired。 */
-const TOKEN_INVALID_ERRCODES = new Set([40001, 40014, 42001]);
+import { WeChatMpClient, type WeChatMpFetch } from './client.js';
 
 /**
  * canonical 媒体段类型 → 微信 /cgi-bin/media/upload 的 type。
@@ -45,15 +41,8 @@ const WECHAT_UPLOAD_TYPE: Readonly<Record<string, 'image' | 'voice' | 'video'>> 
   video: 'video',
 };
 
-export type WeChatMpFetch = (
-  url: string,
-  init?: { readonly method?: string; readonly body?: unknown; readonly headers?: Record<string, string> },
-) => Promise<{ readonly data: unknown }>;
-
 export interface WeChatMpEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly http: HttpHost;
   readonly config: ResolvedWeChatMpConfig;
   readonly fetch?: WeChatMpFetch;
@@ -71,26 +60,27 @@ function defaultFetch(
   }).then((response) => ({ data: response.data }));
 }
 
-export class WeChatMpEndpoint implements EndpointInstance {
+export class WeChatMpEndpoint extends Endpoint<WeChatMpClient> {
+  readonly client: WeChatMpClient;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: WeChatMpEndpointOptions;
   readonly #fetch: WeChatMpFetch;
   #routeReleases: HttpRouteRegistration[] = [];
-  #accessToken: string | null = null;
-  #tokenExpireTime = 0;
   #tokenRefreshTimer?: ReturnType<typeof setInterval>;
   /** MsgId → 首次回复 XML（微信 5s 重推去重，有界 LRU）。 */
   readonly #replyCache = new Map<string, string>();
   static readonly #REPLY_CACHE_LIMIT = 1000;
   #open = false;
   #started = false;
-  readonly management: EndpointManagement = createWeChatMpEndpointManagement(this);
+  readonly management: EndpointManagement = createWeChatMpEndpointManagement(() => this.client);
 
   constructor(options: WeChatMpEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('wechat-mp', options.config.id);
     this.#options = options;
     this.#fetch = options.fetch ?? defaultFetch;
+    this.client = new WeChatMpClient(options.config, this.#fetch);
   }
 
   /** Used by webhook handler. */
@@ -104,10 +94,6 @@ export class WeChatMpEndpoint implements EndpointInstance {
 
   get id(): CapabilityId {
     return this.#options.id;
-  }
-
-  get gateway(): MessageGateway {
-    return this.#options.gateway;
   }
 
   /** 微信 5s 重推去重：见过该 MsgId 时返回首次回复 XML（含空串=success）。 */
@@ -129,7 +115,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
     if (this.#started) return;
     this.#started = true;
     try {
-      await this.#refreshAccessToken();
+      await this.client.refreshAccessToken();
       this.#routeReleases.push(...registerWeChatMpWebhookRoutes(this.#options.http, this));
       this.#startTokenRefreshTimer();
       this.#logger.debug(formatCompact({
@@ -184,18 +170,24 @@ export class WeChatMpEndpoint implements EndpointInstance {
   }
 
   /** Test / internal: admit a parsed message when open (non-webhook path). */
-  admit(msg: WeChatMessage): void {
+  admit(msg: WeChatMessage): void | Promise<unknown> {
     if (!this.#open) return;
+    void this.emitPlatform(msg.Event ? `${msg.MsgType}.${msg.Event}` : msg.MsgType, msg).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'wechat_mp_platform_event_failed',
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
     if (receiveWeChatMpSideEvent(
-      this.#options.sideEvents,
+      (name, payload) => this.emit(name, payload),
       this.#options.config.id,
       msg,
       this.#logger,
     )) {
-      return;
+      return undefined;
     }
     const conversation = wechatMpInboundConversation(String(this.#options.id), msg);
-    void this.#options.gateway.receive({
+    return this.emit('message.receive', {
       conversation,
       message: { conversation, id: formatInboundId(msg) },
       content: formatInboundContent(msg),
@@ -217,21 +209,9 @@ export class WeChatMpEndpoint implements EndpointInstance {
 
   async #sendCustomerService(target: string, payload: unknown): Promise<string> {
     // 发送前检查过期（不只判 null）：过期 token 直接刷新，不白跑一次 40001。
-    if (!this.#accessToken || Date.now() >= this.#tokenExpireTime) {
-      await this.#refreshAccessToken();
-    }
     const materialized = await this.#materializeOutboundMedia(payload);
     const messageData = formatCustomerServiceBody(target, materialized);
-    let result = await this.#postCustomerService(messageData);
-    if (result.errcode && TOKEN_INVALID_ERRCODES.has(Number(result.errcode))) {
-      // 对端提前作废 token（多端共用等）：刷新后重试一次。
-      this.#logger.warn(formatCompact({
-        op: 'wechat_mp_token_invalid_retry',
-        errcode: result.errcode,
-      }));
-      await this.#refreshAccessToken();
-      result = await this.#postCustomerService(messageData);
-    }
+    const result = await this.client.sendCustomerService(messageData);
     if (result.errcode && result.errcode !== 0) {
       throw new Error(`WeChat API error: ${result.errcode} - ${result.errmsg}`);
     }
@@ -305,76 +285,13 @@ export class WeChatMpEndpoint implements EndpointInstance {
   ): Promise<string> {
     const binary = await resolveMediaBinary(media);
     const form = buildMediaUploadForm(binary);
-    const url = `https://api.weixin.qq.com/cgi-bin/media/upload?access_token=${this.#accessToken}&type=${type}`;
-    const response = await this.#fetch(url, { method: 'POST', body: form });
-    const data = response.data as WeChatMediaUploadResult;
-    if (data.media_id) return data.media_id;
-    throw new Error(`WeChat media upload failed: ${data.errcode ?? 'unknown'} ${data.errmsg ?? ''}`.trim());
-  }
-
-  async #postCustomerService(messageData: unknown): Promise<WeChatAPIResponse> {
-    const url = `https://api.weixin.qq.com/cgi-bin/message/custom/send?access_token=${this.#accessToken}`;
-    const response = await this.#fetch(url, { method: 'POST', body: messageData });
-    return response.data as WeChatAPIResponse;
-  }
-
-  /**
-   * 关注者列表（GET /cgi-bin/user/get，按 next_openid 分页，每页最多 10000）。
-   * 该接口只回 openid 不回昵称；昵称需逐个调 user/info（成本高且依赖用户授权），
-   * 这里 nickname 用 openid 占位，由 Console 侧自行理解。
-   */
-  async getFollowers(): Promise<readonly EndpointFriend[]> {
-    if (!this.#accessToken || Date.now() >= this.#tokenExpireTime) {
-      await this.#refreshAccessToken();
-    }
-    const friends: EndpointFriend[] = [];
-    let nextOpenid = '';
-    do {
-      const url = `https://api.weixin.qq.com/cgi-bin/user/get?access_token=${this.#accessToken}&next_openid=${encodeURIComponent(nextOpenid)}`;
-      const response = await this.#fetch(url);
-      const data = response.data as WeChatAPIResponse & {
-        count?: number;
-        data?: { openid?: string[] };
-        next_openid?: string;
-      };
-      if (data.errcode && data.errcode !== 0) {
-        throw new Error(`WeChat API error: ${data.errcode} - ${data.errmsg}`);
-      }
-      for (const openid of data.data?.openid ?? []) {
-        if (typeof openid === 'string' && openid) {
-          friends.push({ user_id: openid, nickname: openid, remark: '' });
-        }
-      }
-      const fetched = Number(data.count ?? 0);
-      nextOpenid = typeof data.next_openid === 'string' ? data.next_openid : '';
-      // 满页（10000）才可能有下一页；不足一页即到底，避免依赖 next_openid 回显语义。
-      if (fetched < 10_000) break;
-    } while (nextOpenid);
-    return friends;
-  }
-
-  async #refreshAccessToken(): Promise<void> {
-    const { appId, appSecret } = this.#options.config;
-    const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appId}&secret=${appSecret}`;
-    const response = await this.#fetch(url);
-    const data = response.data as TokenResponse & WeChatAPIResponse;
-    if (data.access_token) {
-      this.#accessToken = data.access_token;
-      this.#tokenExpireTime = Date.now() + (data.expires_in - 300) * 1000;
-      this.#logger.debug(formatCompact({ op: 'token_refresh' }));
-      return;
-    }
-    throw new Error(
-      data.errmsg
-        ? `Failed to get access token: ${data.errcode} ${data.errmsg}`
-        : 'Failed to get access token',
-    );
+    return this.client.uploadMedia(type, form);
   }
 
   #startTokenRefreshTimer(): void {
     this.#tokenRefreshTimer = setInterval(() => {
-      if (Date.now() >= this.#tokenExpireTime) {
-        void this.#refreshAccessToken().catch((error) => {
+      if (this.client.tokenExpired) {
+        void this.client.refreshAccessToken().catch((error) => {
           this.#logger.error('Failed to refresh access token in timer:', error);
         });
       }
@@ -382,9 +299,15 @@ export class WeChatMpEndpoint implements EndpointInstance {
   }
 }
 
-function createWeChatMpEndpointManagement(endpoint: WeChatMpEndpoint): EndpointManagement {
+function createWeChatMpEndpointManagement(
+  requireClient: () => WeChatMpClient,
+): EndpointManagement {
   return Object.freeze<EndpointManagement>({
     // 公众号无群/频道概念；关注者即"好友"（nickname 为 openid 占位，见 getFollowers）。
-    listFriends: () => endpoint.getFollowers(),
+    listFriends: async () => (await requireClient().getFollowerIds()).map((openid) => ({
+      user_id: openid,
+      nickname: openid,
+      remark: '',
+    })),
   });
 }

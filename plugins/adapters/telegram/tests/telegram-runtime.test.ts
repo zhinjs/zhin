@@ -1,3 +1,4 @@
+import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -6,7 +7,7 @@ import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { telegramRuntimeStateToken } from '../src/telegram-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import { messageGatewayToken, sideEventGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
+import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { TelegramEndpoint, type TelegramFetch } from '../src/endpoint.js';
 import { runTelegramPollLoop, type TelegramPollingHost } from '../src/polling.js';
 import { safeTokenEqual } from '../src/webhook.js';
@@ -21,7 +22,7 @@ import {
   resolveTelegramConfig,
   type TelegramMessage,
 } from '../src/protocol.js';
-import { getTelegramAgentDeps, setTelegramAgentDeps } from '../src/telegram-agent-deps.js';
+import { telegramClient } from '../src/client.js';
 import defineTelegramAdapter from '../adapters/telegram.js';
 
 const adapterFeature = featureId('zhin.adapter');
@@ -110,7 +111,6 @@ function mockApiFetch(handlers: Record<string, unknown> = {}): TelegramFetch & {
 }
 
 afterEach(async () => {
-  setTelegramAgentDeps(null);
   await Promise.all(hosts.splice(0).map((host) => host.close()));
 });
 
@@ -382,12 +382,12 @@ describe('telegram conversation content port', () => {
         headers: { get: (name) => name.toLowerCase() === 'content-type' ? 'image/jpeg' : null },
       };
     };
-    const endpoint = new TelegramEndpoint({
+    const endpoint = bindTestEndpoint(new TelegramEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram') as never,
       gateway: { receive: vi.fn() } as never,
       config: baseConfig,
       fetch,
-    });
+    }), { receive: vi.fn() } as never, undefined);
     const conversation = testConversation('private', '1001');
     await expect(endpoint.content.resolve({
       kind: 'media',
@@ -406,16 +406,16 @@ describe('telegram conversation content port', () => {
 });
 
 describe('telegram plugin runtime adapter', () => {
-  it('routes admitted messages through MessageGateway when open', async () => {
+  it('routes admitted messages through OutboundMessageService when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const fetch = mockApiFetch();
-    const endpoint = new TelegramEndpoint({
+    const endpoint = bindTestEndpoint(new TelegramEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
       gateway,
       config: baseConfig,
       fetch,
-    });
+    }), gateway, undefined);
 
     await endpoint.start();
     endpoint.open();
@@ -436,13 +436,13 @@ describe('telegram plugin runtime adapter', () => {
 
   it('marks mentioned when entities @ the bot username', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = new TelegramEndpoint({
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
+    const endpoint = bindTestEndpoint(new TelegramEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
       gateway,
       config: baseConfig,
       fetch: mockApiFetch(),
-    });
+    }), gateway, undefined);
 
     await endpoint.start();
     endpoint.open();
@@ -462,12 +462,12 @@ describe('telegram plugin runtime adapter', () => {
 
   it('does not mark mentioned when @ targets someone else', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = new TelegramEndpoint({
+    const endpoint = bindTestEndpoint(new TelegramEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       fetch: mockApiFetch(),
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
 
     await endpoint.start();
     endpoint.open();
@@ -485,12 +485,12 @@ describe('telegram plugin runtime adapter', () => {
 
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = new TelegramEndpoint({
+    const endpoint = bindTestEndpoint(new TelegramEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       fetch: mockApiFetch(),
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.admit(textMessage());
     expect(receive).not.toHaveBeenCalled();
@@ -499,7 +499,7 @@ describe('telegram plugin runtime adapter', () => {
 
   it('sends outbound payloads via Bot API', async () => {
     const fetch = mockApiFetch({ sendMessage: { message_id: 77 } });
-    const endpoint = new TelegramEndpoint({
+    const endpoint = bindTestEndpoint(new TelegramEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -507,7 +507,10 @@ describe('telegram plugin runtime adapter', () => {
       },
       config: baseConfig,
       fetch,
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     endpoint.open();
     const messageId = await endpoint.send({ conversation: testConversation('private', '1001'), payload: 'pong' });
@@ -522,7 +525,7 @@ describe('telegram plugin runtime adapter', () => {
 
   it('uses the native chat id from the structured conversation', async () => {
     const fetch = mockApiFetch({ sendMessage: { message_id: 78 } });
-    const endpoint = new TelegramEndpoint({
+    const endpoint = bindTestEndpoint(new TelegramEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -530,7 +533,10 @@ describe('telegram plugin runtime adapter', () => {
       },
       config: baseConfig,
       fetch,
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     endpoint.open();
     await expect(endpoint.send({ conversation: testConversation('group', '-1001'), payload: 'pong' }))
@@ -543,7 +549,7 @@ describe('telegram plugin runtime adapter', () => {
 
   it('uploads base64 image via multipart sendPhoto', async () => {
     const fetch = mockApiFetch({ sendPhoto: { message_id: 88 } });
-    const endpoint = new TelegramEndpoint({
+    const endpoint = bindTestEndpoint(new TelegramEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -551,7 +557,10 @@ describe('telegram plugin runtime adapter', () => {
       },
       config: baseConfig,
       fetch,
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
     endpoint.open();
     const messageId = await endpoint.send({
@@ -589,7 +598,7 @@ describe('telegram plugin runtime adapter', () => {
       const filePath = path.join(dir, 'local.png');
       await writeFile(filePath, 'disk-bytes');
       const fetch = mockApiFetch({ sendPhoto: { message_id: 89 } });
-      const endpoint = new TelegramEndpoint({
+      const endpoint = bindTestEndpoint(new TelegramEndpoint({
         id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
         gateway: {
           receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -597,7 +606,10 @@ describe('telegram plugin runtime adapter', () => {
         },
         config: baseConfig,
         fetch,
-      });
+      }), {
+          receive: vi.fn(async () => Object.freeze({ matched: false })),
+          send: vi.fn(async () => 'sent'),
+        }, undefined);
       await endpoint.start();
       endpoint.open();
       const messageId = await endpoint.send({
@@ -623,7 +635,7 @@ describe('telegram plugin runtime adapter', () => {
         user: { id: 1, username: 'admin', first_name: 'Admin' },
       }],
     });
-    const endpoint = new TelegramEndpoint({
+    const endpoint = bindTestEndpoint(new TelegramEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -631,27 +643,31 @@ describe('telegram plugin runtime adapter', () => {
       },
       config: baseConfig,
       fetch,
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     await endpoint.start();
-    const admins = await getTelegramAgentDeps().getEndpoint('test-telegram-bot').getChatAdmins(9);
+    const admins = await telegramClient
+      .get(endpointClientContext(endpoint), 'test-telegram-bot').getChatAdmins(9);
     expect(admins).toHaveLength(1);
     expect(admins[0]?.user.username).toBe('admin');
     await endpoint.stop();
   });
 
-  it('POST webhook admits update via MessageGateway when open', async () => {
+  it('POST webhook admits update via OutboundMessageService when open', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const apiFetch = mockApiFetch();
-    const endpoint = new TelegramEndpoint({
+    const endpoint = bindTestEndpoint(new TelegramEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
       gateway,
       http,
       config: webhookConfig,
       fetch: apiFetch,
-    });
+    }), gateway, undefined);
 
     await endpoint.start();
     endpoint.open();
@@ -685,13 +701,13 @@ describe('telegram plugin runtime adapter', () => {
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const apiFetch = mockApiFetch();
-    const endpoint = new TelegramEndpoint({
+    const endpoint = bindTestEndpoint(new TelegramEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: webhookConfig,
       fetch: apiFetch,
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
 
     await endpoint.start();
     endpoint.open();
@@ -710,7 +726,7 @@ describe('telegram plugin runtime adapter', () => {
 
   it('creates webhook endpoint via adapter factory when polling is false', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const gateway: MessageGateway = {
+    const gateway: OutboundMessageService = {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     };
@@ -724,7 +740,7 @@ describe('telegram plugin runtime adapter', () => {
       },
       use: (token: unknown) => {
         if (token === httpHostToken) return http;
-        if (token === messageGatewayToken) return gateway;
+        if (token === outboundMessageToken) return gateway;
         if (token === sideEventGatewayToken) {
           return {
             receiveNotice: vi.fn(async () => {}),
@@ -754,7 +770,7 @@ describe('telegram webhook auth', () => {
     hosts.push(http);
     const { getAdapterLogger } = await import('@zhin.js/logger');
     const warn = vi.spyOn(getAdapterLogger('telegram', 'no-secret-bot'), 'warn');
-    const endpoint = new TelegramEndpoint({
+    const endpoint = bindTestEndpoint(new TelegramEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -769,7 +785,10 @@ describe('telegram webhook auth', () => {
         webhook: { domain: 'https://bot.example.com', path: '/telegram/webhook' },
       }),
       fetch: mockApiFetch(),
-    });
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
     try {
       await endpoint.start();
       expect(warn).toHaveBeenCalledWith(

@@ -1,8 +1,9 @@
+import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createEndpointRuntimeState, listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import { kookRuntimeStateToken } from '../src/kook-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { messageGatewayToken, sideEventGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
+import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import defineKookAdapter from '../adapters/kook.js';
 import {
@@ -24,7 +25,7 @@ import {
   type KookInboundMessage,
   type KookWebhookEventData,
 } from '../src/protocol.js';
-import { getKookAgentDeps, setKookAgentDeps } from '../src/kook-agent-deps.js';
+import { kookClient } from '../src/client.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
@@ -116,7 +117,6 @@ function createMockClient(): KookClientTransport & {
 }
 
 afterEach(async () => {
-  setKookAgentDeps(null);
   await Promise.all(hosts.splice(0).map((host) => host.close()));
 });
 
@@ -244,17 +244,17 @@ describe('kook protocol helpers', () => {
 });
 
 describe('kook plugin runtime adapter', () => {
-  it('routes admitted messages through MessageGateway when open', async () => {
+  it('routes admitted messages through OutboundMessageService when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const mock = createMockClient();
     const createClient: CreateKookClient = () => mock;
-    const endpoint = new KookWebsocketEndpoint({
+    const endpoint = bindTestEndpoint(new KookWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
       gateway,
       config: baseConfig,
       createClient,
-    });
+    }), gateway, undefined);
 
     await endpoint.start();
     endpoint.open();
@@ -275,14 +275,14 @@ describe('kook plugin runtime adapter', () => {
 
   it('marks mentioned when channel message @s the bot', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const mock = createMockClient(); // self_id = 'bot-1'
-    const endpoint = new KookWebsocketEndpoint({
+    const endpoint = bindTestEndpoint(new KookWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
       gateway,
       config: baseConfig,
       createClient: () => mock,
-    });
+    }), gateway, undefined);
     await endpoint.start();
     endpoint.open();
 
@@ -303,12 +303,12 @@ describe('kook plugin runtime adapter', () => {
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const mock = createMockClient();
-    const endpoint = new KookWebsocketEndpoint({
+    const endpoint = bindTestEndpoint(new KookWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createClient: () => mock,
-    });
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.admit(textMessage());
     expect(receive).not.toHaveBeenCalled();
@@ -317,12 +317,12 @@ describe('kook plugin runtime adapter', () => {
 
   it('sends outbound payloads via channel / private APIs', async () => {
     const mock = createMockClient();
-    const endpoint = new KookWebsocketEndpoint({
+    const endpoint = bindTestEndpoint(new KookWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createClient: () => mock,
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     const channelId = await endpoint.send({
       conversation: {
@@ -350,14 +350,16 @@ describe('kook plugin runtime adapter', () => {
 
   it('registers agent endpoint for tools', async () => {
     const mock = createMockClient();
-    const endpoint = new KookWebsocketEndpoint({
+    const endpoint = bindTestEndpoint(new KookWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createClient: () => mock,
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
-    const roles = await getKookAgentDeps().getEndpoint('test-kook-bot').getRoleList('guild-1');
+    const client = kookClient.get(endpointClientContext(endpoint), 'test-kook-bot');
+    expect(client).toBe(mock);
+    const roles = await client.pickGuild('guild-1').getRoleList();
     expect(roles).toHaveLength(1);
     expect(roles[0].name).toBe('Admin');
     await endpoint.stop();
@@ -366,7 +368,7 @@ describe('kook plugin runtime adapter', () => {
   it('creates webhook endpoint when httpHostToken provided', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const gateway: MessageGateway = {
+    const gateway: OutboundMessageService = {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     };
@@ -380,7 +382,7 @@ describe('kook plugin runtime adapter', () => {
       },
       use: (token: unknown) => {
         if (token === httpHostToken) return http;
-        if (token === messageGatewayToken) return gateway;
+        if (token === outboundMessageToken) return gateway;
         if (token === sideEventGatewayToken) {
           return {
             receiveNotice: vi.fn(async () => {}),
@@ -396,20 +398,20 @@ describe('kook plugin runtime adapter', () => {
     await http.close().catch(() => undefined);
   });
 
-  it('handles webhook challenge and routes messages through MessageGateway', async () => {
+  it('handles webhook challenge and routes messages through OutboundMessageService', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const mock = createMockClient();
     const createClient: CreateKookClient = () => mock;
-    const endpoint = new KookWebhookEndpoint({
+    const endpoint = bindTestEndpoint(new KookWebhookEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
       gateway,
       http,
       config: webhookConfig,
       createClient,
-    });
+    }), gateway, undefined);
 
     await endpoint.start();
     const { port } = await http.listen();
@@ -473,12 +475,12 @@ describe('kook.endpoint management', () => {
   const GUILD_ID = '9876543210987654321';
 
   function createManagementEndpoint(mock: KookClientTransport) {
-    return new KookWebsocketEndpoint({
+    return bindTestEndpoint(new KookWebsocketEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
       gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createClient: () => mock,
-    });
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
   }
 
   it('advertises only implemented management capabilities', async () => {

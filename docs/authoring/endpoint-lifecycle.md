@@ -118,12 +118,13 @@ ws.on('message', (data) => {
 `plugins/adapters/napcat/src/ws-endpoint.ts` 是基座的范式用法，结构只有四块：
 
 ```ts
-export class NapCatWsEndpoint implements EndpointInstance {
+export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
+  readonly client = new NapcatClient((action, params) => this.#callApi(action, params));
   readonly #lifecycle: EndpointLifecycle;
   #ws?: NapCatWsSocket;
-  #unregisterAgent?: () => void;
 
   constructor(options: NapCatWsEndpointOptions) {
+    super();
     // 1. 构造期建基座；reconnect_interval 旧语义为固定间隔：
     //    multiplier 1 + 无 jitter + 不封顶
     this.#lifecycle = createEndpointLifecycle({
@@ -139,15 +140,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
 
   async start(): Promise<void> {
     if (this.#lifecycle.started) return;                 // 幂等
-    this.#unregisterAgent = registerNapcatAgentEndpoint(this.#options.config.name, this);
-    try {
-      await this.#lifecycle.start((handle) => this.#connect(handle));
-    } catch (err) {
-      // start 失败复位由基座保证；agent 注册/反注册是适配器专有依赖，留在适配器侧
-      this.#unregisterAgent?.();
-      this.#unregisterAgent = undefined;
-      throw err;
-    }
+    await this.#lifecycle.start((handle) => this.#connect(handle));
   }
   // stop() 见上一节；#connect(handle) 见 start/notifyClosed 一节
 }
@@ -163,7 +156,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
 | 「旧 socket 迟到的 close 事件误杀新连接」 | generation 过期句柄自动失效 |
 | 「stop 与 connect 竞态导致 unhandled rejection」 | stopWaiters 竞态 settle，静默 resolve |
 
-适配器侧只保留三类专有逻辑：agent 注册的挂/摘（`registerNapcatAgentEndpoint`）、pending 请求表的拒绝（`rejectAllPending`）、入站去重器清理（`deduper.clear()`）。
+适配器侧只保留协议专有逻辑：Client 的 API transport、pending 请求表的拒绝（`rejectAllPending`）和入站去重器清理（`deduper.clear()`）。Client 是独立对象；Endpoint 只管账号连接、生命周期和事件入口。
 
 ## Adapter 1:N endpoints 与 per-endpoint config
 

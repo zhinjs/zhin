@@ -50,7 +50,7 @@ if (context.resources.has(httpHostToken)) {
 // New (adapters/my.ts):
 export default defineAdapter<MyConfig>({
   capabilities: ['inbound', 'outbound'],
-  create(context) { /* return EndpointInstance */ },
+  create(context) { /* return an Endpoint<Client> subclass instance */ },
 });
 ```
 

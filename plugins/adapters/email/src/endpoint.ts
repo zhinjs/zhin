@@ -1,11 +1,11 @@
+import { Endpoint } from 'zhin.js/adapter';
 /**
  * EmailEndpoint — lifecycle, SMTP outbound, IMAP inbound polling.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { simpleParser } from 'mailparser';
-import type { EndpointInstance, EndpointSendRequest } from 'zhin.js/adapter';
-import type { MessageGateway, SideEventGateway } from '@zhin.js/core/runtime';
+import { type EndpointSendRequest } from 'zhin.js/adapter';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import {
@@ -26,11 +26,10 @@ import {
   type EmailImapTransport,
   type EmailSmtpTransport,
 } from './transport.js';
+import { EmailClient } from './client.js';
 
 export interface EmailEndpointOptions {
   readonly id: CapabilityId;
-  readonly gateway: MessageGateway;
-  readonly sideEvents?: SideEventGateway;
   readonly config: ResolvedEmailConfig;
   readonly createSmtp?: (config: ResolvedEmailConfig['smtp']) => EmailSmtpTransport | Promise<EmailSmtpTransport>;
   readonly createImap?: (config: ResolvedEmailConfig['imap']) => EmailImapTransport;
@@ -40,7 +39,8 @@ export interface EmailEndpointOptions {
  * Email（SMTP/IMAP）无好友/群/频道等社交图谱概念，
  * 不适用 EndpointManagement 语义端口；本 endpoint 不暴露该端口。
  */
-export class EmailEndpoint implements EndpointInstance {
+export class EmailEndpoint extends Endpoint<EmailClient> {
+  readonly client: EmailClient;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: EmailEndpointOptions;
@@ -54,8 +54,10 @@ export class EmailEndpoint implements EndpointInstance {
   #started = false;
 
   constructor(options: EmailEndpointOptions) {
+    super();
     this.#logger = getAdapterLogger('email', options.config.id);
     this.#options = options;
+    this.client = new EmailClient(() => this.#smtp, () => this.#imap);
   }
 
   async start(): Promise<void> {
@@ -70,7 +72,10 @@ export class EmailEndpoint implements EndpointInstance {
       this.#imap = this.#options.createImap?.(imap) ?? defaultCreateImap(imap);
       this.#setupImapListeners(this.#imap);
       await new Promise<void>((resolve, reject) => {
-        this.#imap!.once('ready', () => resolve());
+        this.#imap!.once('ready', () => {
+          void this.#emitPlatformEvent('imap.ready', Object.freeze({}));
+          resolve();
+        });
         this.#imap!.once('error', (error) => reject(error));
         this.#imap!.connect();
       });
@@ -124,13 +129,12 @@ export class EmailEndpoint implements EndpointInstance {
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
-    if (!this.#smtp) throw new Error('SMTP transporter not initialized');
     const target = conversation.id;
     const mailOptions = formatOutboundMail(payload, {
       from: this.#options.config.smtp.auth.user,
       to: target,
     });
-    const info = await this.#smtp.sendMail(mailOptions);
+    const info = await this.client.sendMail(mailOptions);
     this.#logger.debug(formatCompact({ op: 'email_send', target, messageId: info.messageId }));
     return info.messageId || '';
   }
@@ -138,6 +142,7 @@ export class EmailEndpoint implements EndpointInstance {
   /** Test / internal: admit a parsed mail when the endpoint is open. */
   admit(email: EmailMessage): void {
     if (!this.#open) return;
+    void this.#emitPlatformEvent('mail', email);
     void this.#admitWithAttachments(email).catch((err) => {
       this.#logger.warn(formatCompact({
         op: 'email_gateway_receive_failed',
@@ -152,7 +157,7 @@ export class EmailEndpoint implements EndpointInstance {
     const content = formatInboundContent(email);
     const sender = email.from;
     const conversation = emailInboundConversation(String(this.#options.id), email);
-    await this.#options.gateway.receive({
+    await this.emit('message.receive', {
       conversation,
       ...(email.messageId ? { message: { conversation, id: email.messageId } } : {}),
       content,
@@ -215,19 +220,32 @@ export class EmailEndpoint implements EndpointInstance {
 
   #setupImapListeners(imap: EmailImapTransport): void {
     imap.on('mail', () => {
+      void this.#emitPlatformEvent('imap.mail', Object.freeze({}));
       void this.#checkForNewEmails();
     });
     imap.on('error', (error) => {
+      void this.#emitPlatformEvent('imap.error', error);
       this.#logger.error('IMAP error:', error);
       // imap 通常在 error 后紧跟 end；两处都调度，靠已有定时器去重
       this.#scheduleImapReconnect(imap);
     });
     imap.on('end', () => {
+      void this.#emitPlatformEvent('imap.end', Object.freeze({}));
       this.#logger.debug(formatCompact({
           op: 'disconnect',
         mode: 'imap',
       }));
       this.#scheduleImapReconnect(imap);
+    });
+  }
+
+  async #emitPlatformEvent(name: string, event: unknown): Promise<void> {
+    await this.emitPlatform(name, event).catch((error) => {
+      this.#logger.warn(formatCompact({
+        op: 'email_platform_event_failed',
+        event: name,
+        error: error instanceof Error ? error.message : String(error),
+      }));
     });
   }
 
@@ -261,7 +279,10 @@ export class EmailEndpoint implements EndpointInstance {
       this.#imap = nextImap;
       this.#setupImapListeners(nextImap);
       await new Promise<void>((resolve, reject) => {
-        nextImap.once('ready', () => resolve());
+        nextImap.once('ready', () => {
+          void this.#emitPlatformEvent('imap.ready', Object.freeze({ reconnect: true }));
+          resolve();
+        });
         nextImap.once('error', (error) => reject(error));
         nextImap.connect();
       });

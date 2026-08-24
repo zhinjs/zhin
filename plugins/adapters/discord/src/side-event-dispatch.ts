@@ -1,5 +1,5 @@
 import { buildNotice, senderFromId } from '@zhin.js/core';
-import type { SideEventGateway } from '@zhin.js/core/runtime';
+import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 
 export interface DiscordGuildMemberSideEvent {
@@ -9,14 +9,14 @@ export interface DiscordGuildMemberSideEvent {
 }
 
 export function receiveDiscordGuildMemberSideEvent(
-  sideEvents: SideEventGateway | undefined,
+  emit: EndpointEventEmitter,
   configId: string,
   kind: 'member_increase' | 'member_decrease',
   event: DiscordGuildMemberSideEvent,
   logger: ReturnType<typeof getAdapterLogger>,
 ): void {
-  if (!sideEvents) return;
-  void sideEvents.receiveNotice(buildNotice(event, {
+  if (!emit) return;
+  void emit('notice.receive', buildNotice(event, {
     $id: `discord:guild_member:${kind}:${event.guildId}:${event.userId}:${Date.now()}`,
     $adapter: 'discord' as never,
     $endpoint: configId,

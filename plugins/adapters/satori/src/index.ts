@@ -46,3 +46,9 @@ export {
   WS_OPEN,
   defaultCreateWebSocket,
 } from './ws.js';
+
+export {
+  SatoriClient,
+  satoriClient,
+  type SatoriClientEventMap,
+} from './client.js';

@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-kook
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — convention-based `adapters/kook.ts` (`defineAdapter`)
-- `@zhin.js/core` — `messageGatewayToken` inbound/outbound
+- `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — Webhook mode POST route (not needed for WebSocket)
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
@@ -108,7 +108,7 @@ The platform permit checker is registered by the `plugin.ts` generation lifecycl
 
 ## Post-Migration Outbound Capability Changes
 
-Outbound uses `messageGatewayToken` and encodes canonical Markdown as KMarkdown. Remote media URLs can be represented as links. Card messages and attachment upload are not yet part of the unified outbound path.
+Outbound uses `outboundMessageToken` and encodes canonical Markdown as KMarkdown. Remote media URLs can be represented as links. Card messages and attachment upload are not yet part of the unified outbound path.
 
 ## Troubleshooting
 

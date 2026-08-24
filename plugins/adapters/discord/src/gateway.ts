@@ -285,6 +285,7 @@ function decodeBase64(value: string): Buffer {
 }
 
 export interface DiscordGatewayConnectHandlers {
+  onPlatformEvent(name: string, event: unknown): void;
   onMessage(msg: DiscordInboundMessage): void;
   onButton(interaction: DiscordButtonInbound): void;
   onGuildMemberAdd?(member: { guildId: string; userId: string; userName?: string }): void;
@@ -300,6 +301,7 @@ export async function connectDiscordGatewayClient(
     let settled = false;
 
     client.on('messageCreate', (raw) => {
+      handlers.onPlatformEvent('messageCreate', raw);
       const msg = normalizeDiscordMessage(raw);
       if (!msg) return;
       // clientReady 之后 client.user 一定可用；消息事件只会在此之后到达
@@ -310,6 +312,7 @@ export async function connectDiscordGatewayClient(
     });
 
     client.on('interactionCreate', (raw) => {
+      handlers.onPlatformEvent('interactionCreate', raw);
       const interaction = raw as {
         isButton?(): boolean;
         deferUpdate?(): Promise<unknown>;
@@ -334,6 +337,7 @@ export async function connectDiscordGatewayClient(
     });
 
     client.on('guildMemberAdd', (raw) => {
+      handlers.onPlatformEvent('guildMemberAdd', raw);
       const member = raw as {
         guild?: { id?: string };
         user?: { id?: string; username?: string; displayName?: string };
@@ -349,6 +353,7 @@ export async function connectDiscordGatewayClient(
     });
 
     client.on('guildMemberRemove', (raw) => {
+      handlers.onPlatformEvent('guildMemberRemove', raw);
       const member = raw as {
         guild?: { id?: string };
         user?: { id?: string; username?: string; displayName?: string };
@@ -364,6 +369,7 @@ export async function connectDiscordGatewayClient(
     });
 
     client.once('clientReady', () => {
+      handlers.onPlatformEvent('clientReady', client.user);
       void (async () => {
         try {
           if (config.defaultActivity && client.user?.setActivity) {

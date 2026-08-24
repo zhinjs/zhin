@@ -1,4 +1,5 @@
 import type { Message } from '@zhin.js/core';
+import { readOperationClient } from '@zhin.js/tool';
 import type { Skill, Tool, McpServerEntry } from '../resource-hub/types.js';
 import {
   type AuthoringSkillDefinition,
@@ -31,12 +32,21 @@ export function bridgeAuthoringTool(
 ): BridgedToolFromAuthoring {
   const { definition, runtimeName, pluginName, filePath } = discovered;
   const parameters = zodObjectToParameters(definition.inputSchema);
-  const ctxBase = { pluginName, runtimeName, filePath };
-
-  const execute = async (args: Record<string, unknown>, _message?: Message) => {
+  const execute = async (args: Record<string, unknown>, message?: Message) => {
     const parsed = parseWithZodSchema<Record<string, unknown>>(definition.inputSchema, args);
     if (!parsed.ok) return `Error: ${parsed.error}`;
-    return definition.execute(parsed.data, ctxBase);
+    const context = {
+      pluginName,
+      runtimeName,
+      filePath,
+      ...(message ? { message } : {}),
+    } as Record<string, unknown>;
+    Object.defineProperty(context, '$client', {
+      configurable: false,
+      enumerable: true,
+      get: () => readOperationClient(message, definition.adapter),
+    });
+    return definition.execute(parsed.data, context as never);
   };
 
   return {
@@ -44,7 +54,7 @@ export function bridgeAuthoringTool(
     description: definition.description,
     parameters,
     execute,
-    platforms: definition.platforms,
+    platforms: definition.adapter ? [definition.adapter] : definition.platforms,
     scopes: definition.scopes,
     permissions: definition.permissions,
     tags: definition.tags,

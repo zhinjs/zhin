@@ -18,6 +18,19 @@ import middlewareFeature, {
   parseMiddlewareDefinition,
 } from '../src/index.js';
 
+interface MiddlewareTestClient {
+  readonly id: string;
+}
+
+declare module '@zhin.js/feature-kit' {
+  interface AdapterClientRegistry {
+    readonly 'middleware-test': {
+      readonly client: MiddlewareTestClient;
+      readonly events: Record<string, unknown>;
+    };
+  }
+}
+
 describe('Middleware Feature', () => {
   it('brands definitions and validates normalized phase/order metadata', () => {
     const middleware = defineMiddleware({ handle: (_context, next) => next() });
@@ -111,6 +124,38 @@ describe('Middleware Feature', () => {
     const index = new MiddlewareIndex([slot], snapshot(root, undefined, [slot]));
 
     await expect(index.run({})).rejects.toThrow('next() called more than once');
+  });
+
+  it('filters by adapter before lazily resolving $client', async () => {
+    const root = rootPluginId();
+    const client: MiddlewareTestClient = { id: 'client-1' };
+    let reads = 0;
+    const definition = defineMiddleware({
+      adapter: 'middleware-test',
+      handle(context) {
+        expect(context.$client).toBe(client);
+      },
+    });
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: middlewareFeatureId,
+      localName: 'native-client',
+      source: '/middlewares/native-client.ts',
+      definition,
+    });
+    const index = new MiddlewareIndex([slot], snapshot(root, undefined, [slot]));
+
+    await index.run({
+      clientAdapter: 'other',
+      get $client() { reads += 1; return client; },
+    });
+    expect(reads).toBe(0);
+
+    await index.run({
+      clientAdapter: 'middleware-test',
+      get $client() { reads += 1; return client; },
+    });
+    expect(reads).toBe(1);
   });
 });
 

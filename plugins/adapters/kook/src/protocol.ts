@@ -208,7 +208,7 @@ export function senderDisplayName(msg: KookInboundMessage): string {
   return msg.authorName || msg.authorId;
 }
 
-/** Build inbound text for MessageGateway.receive */
+/** Build inbound text for OutboundMessageService.receive */
 export function formatInboundContent(msg: KookInboundMessage): string {
   const text = (msg.content || msg.rawMessage || '').trim();
   return text || '(Empty message)';

@@ -17,13 +17,13 @@ export function createIcqqTestPorts(): {
 }
 
 /**
- * Mock @icqqjs/icqq module for testing IcqqEndpoint (which extends Client).
+ * Mock @icqqjs/icqq module for testing the Client composed by IcqqEndpoint.
  *
  * Usage:
  *   vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
  *
- * Then IcqqEndpoint inherits this mock Client — call endpoint.emit()
- * to simulate icqq events, and vi.mocked(endpoint.method) to assert calls.
+ * Call endpoint.client.emit() to simulate icqq events, and inspect
+ * endpoint.client methods to assert direct SDK calls.
  */
 export class Client {
   static readonly activeClients = new Map<number, Set<Client>>();
@@ -40,19 +40,31 @@ export class Client {
   dir = '';
   config = {};
 
-  readonly _listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+  readonly _listeners = new Map<
+    string | ((eventName: string, ...args: unknown[]) => boolean),
+    Set<(...args: unknown[]) => void>
+  >();
 
   constructor(uin?: number | Record<string, unknown>, _config?: unknown) {
     this.uin = typeof uin === 'number' ? uin : 0;
   }
 
-  on(event: string, fn: (...args: unknown[]) => void): this {
+  on(
+    event: string | ((eventName: string, ...args: unknown[]) => boolean),
+    fn: (...args: unknown[]) => void,
+  ): this & (() => void) {
     if (!this._listeners.has(event)) this._listeners.set(event, new Set());
     this._listeners.get(event)!.add(fn);
-    return this;
+    const dispose = () => this._listeners.get(event)?.delete(fn);
+    return new Proxy(dispose, {
+      get: (_target, property) => Reflect.get(this, property, this),
+    }) as this & (() => void);
   }
 
-  off(event: string, fn?: (...args: unknown[]) => void): this {
+  off(
+    event: string | ((eventName: string, ...args: unknown[]) => boolean),
+    fn?: (...args: unknown[]) => void,
+  ): this {
     if (fn) {
       this._listeners.get(event)?.delete(fn);
     } else {
@@ -62,6 +74,10 @@ export class Client {
   }
 
   emit(event: string, ...args: unknown[]): boolean {
+    for (const [matcher, listeners] of this._listeners) {
+      if (typeof matcher !== 'function' || !matcher(event, ...args)) continue;
+      for (const fn of listeners) fn(...args);
+    }
     for (const fn of this._listeners.get(event) ?? []) fn(...args);
     const parts = event.split('.');
     while (parts.length > 1) {

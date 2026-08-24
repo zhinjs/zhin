@@ -73,7 +73,7 @@ try {
 
 `@zhin.js/adapter` 不会提前关闭旧 Endpoint。候选 `AdapterIndex` 在
 `activateNext` 中完成 `start()` 与 `open()`，但 `CapabilityContext` 注入的是绑定到候选代
-`GenerationAdmissionGate` 的 `MessageGateway`；commit 前所有入站都 fail-closed。`SnapshotStore`
+`GenerationAdmissionGate` 的 `OutboundMessageService`；commit 前所有入站都 fail-closed。`SnapshotStore`
 提交新快照时同步关闭被移除的 gate、开放新 gate，保留在两代里的同一投影不会被短暂关闭。
 
 因此旧代在 commit 前始终可用，候选激活失败只需 `stop()` 候选；commit 后旧 Endpoint
