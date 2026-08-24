@@ -287,11 +287,12 @@ async function runCheck(check) {
       .map((value) => value.trim())
       .filter(Boolean)
       .join('\n');
-    const details = output || [
+    const details = [
+      output,
       error.message,
       `exit code: ${String(error.code ?? 'unknown')}`,
       `signal: ${String(error.signal ?? 'none')}`,
-    ].join('\n');
+    ].filter(Boolean).join('\n');
     console.log(`  ✗ ${check.name} FAILED (${elapsed}s)`);
     return { name: check.name, status: 'FAILED', elapsed, error: details };
   }
