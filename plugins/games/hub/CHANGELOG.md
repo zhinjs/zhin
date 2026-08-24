@@ -1,5 +1,15 @@
 # @zhin.js/plugin-game-hub
 
+## 1.0.22
+
+### Patch Changes
+
+- Updated dependencies [09b14d6]
+- Updated dependencies [1fc78bc]
+  - @zhin.js/command@1.0.16
+  - zhin.js@6.0.14
+  - @zhin.js/game-kit@3.0.14
+
 ## 1.0.21
 
 ### Patch Changes

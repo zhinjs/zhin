@@ -1,5 +1,13 @@
 # @zhin.js/ai
 
+## 1.5.7
+
+### Patch Changes
+
+- 09b14d6: Publish clearer package and authoring API documentation for generated references and editor IntelliSense.
+- Updated dependencies [09b14d6]
+  - @zhin.js/logger@1.0.77
+
 ## 1.5.6
 
 ### Patch Changes

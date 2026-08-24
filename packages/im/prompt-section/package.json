@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/prompt-section",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Generation-owned Agent Prompt Section Feature for Zhin Plugin Runtime",
   "type": "module",
   "main": "./lib/index.js",
@@ -12,7 +12,10 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib", "src"],
+  "files": [
+    "lib",
+    "src"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",

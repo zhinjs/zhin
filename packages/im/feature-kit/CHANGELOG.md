@@ -1,5 +1,14 @@
 # @zhin.js/feature-kit
 
+## 1.0.13
+
+### Patch Changes
+
+- 1fc78bc: Unify native platform Client access behind the literal `adapter` discriminant. Handlers infer both native events and Clients, while command, inbound/outbound middleware, and both Agent tool authoring surfaces expose the exact operation-scoped Client through a lazy `$client` getter. Definitions without `adapter` keep `$client` typed as `unknown`, and runtime dispatch rejects adapter mismatches before resolving the Client. Bundled platform tools now use this single path instead of model-provided endpoint ids and adapter-specific dependency wrappers. Every adapter registers one Client/EventMap contract, and protocol adapters including NapCat, Milky, OneBot and Satori now produce transport-independent Client objects rather than letting Endpoint instances impersonate Clients.
+- Updated dependencies [12025ee]
+- Updated dependencies [09b14d6]
+  - @zhin.js/plugin-runtime@1.1.8
+
 ## 1.0.12
 
 ### Patch Changes

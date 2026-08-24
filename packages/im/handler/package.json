@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/handler",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Convention-based Handler Feature for Zhin Plugin Runtime",
   "type": "module",
   "main": "./lib/index.js",

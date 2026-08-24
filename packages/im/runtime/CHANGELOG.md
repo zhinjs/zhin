@@ -1,5 +1,17 @@
 # @zhin.js/runtime
 
+## 1.0.14
+
+### Patch Changes
+
+- 2719580: Publish source-aligned configuration enums for Agent execution policies and the complete activity feedback Schema, including lifecycle phases, Schedule aliases, conversation scenes, presentation types, defaults, dynamic override paths, and localized field descriptions.
+- c92286c: Make the Host configuration Schema a machine-readable Runtime contract so validation, generated configuration reference pages, and Console configuration projection share one source of truth.
+- Updated dependencies [12025ee]
+- Updated dependencies [09b14d6]
+- Updated dependencies [1fc78bc]
+  - @zhin.js/plugin-runtime@1.1.8
+  - @zhin.js/feature-kit@1.0.13
+
 ## 1.0.13
 
 ### Patch Changes

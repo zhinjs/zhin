@@ -1,5 +1,29 @@
 # zhin.js
 
+## 6.0.14
+
+### Patch Changes
+
+- 09b14d6: Publish clearer package and authoring API documentation for generated references and editor IntelliSense.
+- 1fc78bc: Unify native platform Client access behind the literal `adapter` discriminant. Handlers infer both native events and Clients, while command, inbound/outbound middleware, and both Agent tool authoring surfaces expose the exact operation-scoped Client through a lazy `$client` getter. Definitions without `adapter` keep `$client` typed as `unknown`, and runtime dispatch rejects adapter mismatches before resolving the Client. Bundled platform tools now use this single path instead of model-provided endpoint ids and adapter-specific dependency wrappers. Every adapter registers one Client/EventMap contract, and protocol adapters including NapCat, Milky, OneBot and Satori now produce transport-independent Client objects rather than letting Endpoint instances impersonate Clients.
+- Updated dependencies [e9c6a73]
+- Updated dependencies [2719580]
+- Updated dependencies [902fa35]
+- Updated dependencies [c92286c]
+- Updated dependencies [54bfd6b]
+- Updated dependencies [12025ee]
+- Updated dependencies [09b14d6]
+- Updated dependencies [1fc78bc]
+  - @zhin.js/agent@1.1.16
+  - @zhin.js/runtime@1.0.14
+  - @zhin.js/core@1.5.14
+  - @zhin.js/plugin-runtime@1.1.8
+  - @zhin.js/ai@1.5.7
+  - @zhin.js/logger@1.0.77
+  - @zhin.js/html-renderer@3.0.14
+  - @zhin.js/speech@3.0.14
+  - @zhin.js/permission@1.0.4
+
 ## 6.0.13
 
 ### Patch Changes

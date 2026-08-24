@@ -1,5 +1,79 @@
 # test-bot
 
+## 0.1.143
+
+### Patch Changes
+
+- Updated dependencies [e9c6a73]
+- Updated dependencies [4e8117c]
+- Updated dependencies [2719580]
+- Updated dependencies [902fa35]
+- Updated dependencies [e9c6a73]
+- Updated dependencies [c92286c]
+- Updated dependencies [54bfd6b]
+- Updated dependencies [e9c6a73]
+- Updated dependencies [e9c6a73]
+- Updated dependencies [12025ee]
+- Updated dependencies [09b14d6]
+- Updated dependencies [1fc78bc]
+- Updated dependencies [2ca9a52]
+  - @zhin.js/agent@1.1.16
+  - @zhin.js/adapter-milky@7.0.1
+  - @zhin.js/adapter-satori@6.0.1
+  - @zhin.js/adapter-onebot11@7.0.1
+  - @zhin.js/adapter-onebot12@6.0.1
+  - @zhin.js/service-activity-feedback@3.0.16
+  - @zhin.js/adapter-email@6.0.1
+  - @zhin.js/cli@3.0.15
+  - @zhin.js/adapter-icqq@9.0.1
+  - @zhin.js/adapter-github@6.0.1
+  - @zhin.js/adapter-sandbox@8.0.1
+  - @zhin.js/skill@1.0.13
+  - @zhin.js/tool@1.0.13
+  - zhin.js@6.0.14
+  - @zhin.js/adapter-dingtalk@7.0.1
+  - @zhin.js/adapter-discord@8.0.1
+  - @zhin.js/adapter-kook@8.0.1
+  - @zhin.js/adapter-lark@7.0.1
+  - @zhin.js/adapter-line@5.0.1
+  - @zhin.js/adapter-napcat@7.0.1
+  - @zhin.js/adapter-qq@8.0.1
+  - @zhin.js/adapter-slack@7.0.1
+  - @zhin.js/adapter-telegram@8.0.1
+  - @zhin.js/adapter-wecom@5.0.1
+  - @zhin.js/adapter-wechat-mp@6.0.1
+  - @zhin.js/adapter-weixin-ilink@6.0.1
+  - @zhin.js/plugin-60s@4.0.16
+  - @zhin.js/plugin-code-runner@4.0.16
+  - @zhin.js/plugin-group-suite@4.0.16
+  - @zhin.js/plugin-lottery@2.0.16
+  - @zhin.js/plugin-qrcode@4.0.16
+  - @zhin.js/plugin-rss@4.0.16
+  - @zhin.js/plugin-short-url@4.0.16
+  - @zhin.js/mcp@6.0.14
+  - @zhin.js/html-renderer@3.0.14
+  - @zhin.js/speech@3.0.14
+  - @zhin.js/plugin-blackjack@0.0.23
+  - @zhin.js/plugin-dice-duel@1.0.23
+  - @zhin.js/plugin-dungeon-expedition@1.0.19
+  - @zhin.js/plugin-guess-number@1.0.23
+  - @zhin.js/plugin-idiom-chain@1.0.23
+  - @zhin.js/plugin-rps@1.0.23
+  - @zhin.js/plugin-text-adventure@1.0.23
+  - @zhin.js/plugin-tic-tac-toe@1.0.23
+  - @zhin.js/plugin-word-riddle@1.0.23
+  - @zhin.js/plugin-content-moderation@1.0.12
+  - @zhin.js/plugin-link-poster@3.0.23
+  - @zhin.js/plugin-music@8.0.1
+  - @zhin.js/plugin-repeater@3.0.23
+  - @zhin.js/page@1.0.13
+  - @zhin.js/agent-feature@1.0.13
+  - @zhin.js/mcp-feature@1.0.13
+  - @zhin.js/contract@1.0.17
+  - @zhin.js/process-monitor@3.0.21
+  - @zhin.js/plugin-game-hub@1.0.22
+  - @zhin.js/client@2.1.12
+
 ## 0.1.142
 
 ### Patch Changes
