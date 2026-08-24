@@ -75,7 +75,13 @@ jobs:
       # STATUS_DLL_INIT_FAILED when Turbo fans out multiple nested tsc/tsup processes.
       - name: build packages (Windows)
         if: runner.os == 'Windows'
-        run: pnpm build --concurrency=1
+        run: |
+          pnpm build --concurrency=1
+          if ($LASTEXITCODE -eq -1073741502 -or $LASTEXITCODE -eq 3221225794) {
+            Write-Warning 'Windows child process initialization failed; retrying incremental build once.'
+            pnpm build --concurrency=1
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: build packages
         if: runner.os != 'Windows'
