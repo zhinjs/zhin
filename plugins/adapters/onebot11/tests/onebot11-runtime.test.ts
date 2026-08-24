@@ -283,7 +283,7 @@ describe('onebot11 plugin runtime adapter', () => {
 
     await endpoint.start();
     endpoint.open();
-    endpoint.admit({
+    endpoint.client.ingest({
       post_type: 'message',
       message_type: 'private',
       message_id: 42,
@@ -321,7 +321,7 @@ describe('onebot11 plugin runtime adapter', () => {
     }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
-    endpoint.admit({
+    endpoint.client.ingest({
       post_type: 'message',
       message_type: 'group',
       message_id: 100,
@@ -360,7 +360,7 @@ describe('onebot11 plugin runtime adapter', () => {
     await endpoint.start();
     endpoint.open();
 
-    endpoint.admit({
+    endpoint.client.ingest({
       post_type: 'message',
       message_type: 'group',
       message_id: 101,
@@ -376,7 +376,7 @@ describe('onebot11 plugin runtime adapter', () => {
     let metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
     expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
 
-    endpoint.admit({
+    endpoint.client.ingest({
       post_type: 'message',
       message_type: 'group',
       message_id: 102,
@@ -408,7 +408,7 @@ describe('onebot11 plugin runtime adapter', () => {
     }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
-    endpoint.admit({
+    endpoint.client.ingest({
       post_type: 'message',
       message_type: 'group',
       message_id: 103,
@@ -441,7 +441,7 @@ describe('onebot11 plugin runtime adapter', () => {
       },
     }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
-    endpoint.admit({
+    endpoint.client.ingest({
       post_type: 'message',
       message_type: 'private',
       message_id: 1,
@@ -497,6 +497,35 @@ describe('onebot11 plugin runtime adapter', () => {
     }));
 
     await expect(sendPromise).resolves.toBe('99');
+    await endpoint.stop();
+  });
+
+  it('preserves failed status, message, data and echo from client.call()', async () => {
+    const ws = createMockWs();
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    await endpoint.start();
+
+    const call = endpoint.client.call('get_status');
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(1));
+    const request = JSON.parse(ws.sent[0]!) as { echo: string };
+    const response = {
+      status: 'failed' as const,
+      retcode: 1404,
+      message: 'unsupported',
+      data: { action: 'get_status' },
+      echo: request.echo,
+    };
+    ws.emitMessage(JSON.stringify(response));
+
+    await expect(call).resolves.toEqual(response);
     await endpoint.stop();
   });
 

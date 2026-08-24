@@ -25,7 +25,7 @@ export function handleOneBot11WsMessage(
   options: {
     readonly endpointId: string;
     readonly pending: Map<string, OneBot11PendingAction>;
-    readonly admit: (ev: OneBot11Event) => void;
+    readonly ingest: (ev: OneBot11Event) => void;
   },
 ): void {
   try {
@@ -37,12 +37,11 @@ export function handleOneBot11WsMessage(
       if (pending) {
         options.pending.delete(resp.echo!);
         clearTimeout(pending.timeout);
-        if (resp.status === 'ok') pending.resolve(resp.data);
-        else pending.reject(new Error(`OneBot11 retcode=${resp.retcode}`));
+        pending.resolve(resp);
       }
       return;
     }
-    options.admit(msg as OneBot11Event);
+    options.ingest(msg as OneBot11Event);
   } catch (error) {
     logger.warn(formatCompact({
       op: 'onebot11_parse_failed',
@@ -58,7 +57,7 @@ export function callOneBot11WsAction(
   requestId: { value: number },
   action: string,
   params: Record<string, unknown>,
-): Promise<unknown> {
+): Promise<OneBot11ActionResponse> {
   if (!ws || ws.readyState !== WS_OPEN) {
     return Promise.reject(new Error('WebSocket 未连接'));
   }

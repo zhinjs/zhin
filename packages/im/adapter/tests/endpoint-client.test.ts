@@ -1,7 +1,10 @@
+import { EventEmitter } from 'node:events';
 import {
+  ClientEndpoint,
   defineEndpointClient,
   type EndpointClientContext,
 } from '../src/endpoint-client.js';
+import { bindEndpoint, endpointEventGatewayToken } from '../src/endpoint.js';
 
 interface NativeClient {
   readonly id: string;
@@ -9,6 +12,50 @@ interface NativeClient {
 }
 
 const nativeClient = defineEndpointClient<NativeClient>('native');
+
+class NativeEventEndpoint extends ClientEndpoint<EventEmitter> {
+  readonly client = new EventEmitter();
+
+  constructor() {
+    super();
+    this.bindClientEvents((receive) => {
+      const listener = (payload: unknown) => receive('native.event', payload);
+      this.client.on('native.event', listener);
+      return () => this.client.off('native.event', listener);
+    });
+  }
+
+  start(): void {}
+  stop(): void {}
+}
+
+describe('ClientEndpoint', () => {
+  it('owns the single open-gated Client event bridge', async () => {
+    const receive = vi.fn(async () => undefined);
+    const endpoint = new NativeEventEndpoint();
+    bindEndpoint(endpoint, {
+      id: 'native-endpoint',
+      name: 'native',
+      use: (token: unknown) => token === endpointEventGatewayToken ? { receive } : undefined,
+    } as never);
+
+    endpoint.client.emit('native.event', { phase: 'closed' });
+    expect(receive).not.toHaveBeenCalled();
+
+    endpoint.open();
+    endpoint.client.emit('native.event', { phase: 'open' });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledOnce());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'platform.receive',
+      payload: { name: 'native.event', event: { phase: 'open' } },
+      client: endpoint.client,
+    }));
+
+    endpoint.close();
+    endpoint.client.emit('native.event', { phase: 'closed-again' });
+    expect(receive).toHaveBeenCalledOnce();
+  });
+});
 
 describe('EndpointClientToken.get', () => {
   it('infers the current Client from command and inbound middleware input', () => {

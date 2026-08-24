@@ -78,7 +78,7 @@ export interface OneBot12Event {
   type: 'meta' | 'message' | 'notice' | 'request';
   detail_type: string;
   sub_type: string;
-  self?: OneBot12Self;
+  self: OneBot12Self;
   message_id?: string;
   message?: OneBot12Segment[];
   alt_message?: string;

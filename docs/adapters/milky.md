@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/milky/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=c7add0446834edac -->
+<!-- sync-adapter-docs:sha256=7ba8452148d55383 -->
 
 # @zhin.js/adapter-milky
 
@@ -38,6 +38,11 @@ pnpm add @zhin.js/adapter-milky
 入站：`gateway.receive({ conversation: ConversationRef(kind: "private"|"group", id), message, content, sender, metadata })`  
 出站：`send({ conversation, payload })` → HTTP `send_private_message` / `send_group_message`（payload 已由 gateway/core 渲染；无 segment-mapper）
 
+每个 Endpoint 的 `$client` 是 `@imhelper/milky-v1` 的 `MilkyV1Client`。插件可直接调用
+`$client.call()`、`getGroupList()` 等公开能力；`defineHandler({ adapter: 'milky', event: ... })`
+使用 imhelper 的精确事件名与 payload 类型。HTTP、纯事件 WS/WSS 和 `ingest()` 都汇入同一个
+Client 事件流，Endpoint 仍独占账号连接、鉴权、重连和心跳。
+
 ## 前置条件
 
 1. 启动兼容 Milky 的实现，并记录 HTTP API 与事件连接地址。
@@ -66,7 +71,8 @@ plugins:
 | connection | 状态 |
 |------------|------|
 | `ws` | 已实现（推荐） |
-| `sse` | HTTP GET `/event`（`Accept: text/event-stream`） || `webhook` | 已实现：POST 入站 + baseUrl HTTP API 出站 |
+| `sse` | HTTP GET `/event`（`Accept: text/event-stream`） |
+| `webhook` | 已实现：POST 入站 + baseUrl HTTP API 出站 |
 | `wss` | 已实现：反向 WS（httpHostToken） |
 
 ## 鉴权

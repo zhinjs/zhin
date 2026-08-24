@@ -1,4 +1,5 @@
 import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { OneBotV11Client } from '@imhelper/onebot-v11';
 import { describe, expect, it, vi } from 'vitest';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
@@ -108,14 +109,17 @@ describe('onebot11.endpoint management wiring', () => {
       bindTestEndpoint(new OneBot11WssEndpoint({ id: endpointKey, gateway, http: httpStub, config: wssConfig }), gateway, undefined),
     ];
     for (const endpoint of endpoints) {
+      expect(endpoint.client).toBeInstanceOf(OneBotV11Client);
       expect(listEndpointManagementCapabilities(endpoint)).toEqual(expectedCapabilities);
-      const callApi = vi.spyOn(endpoint.client, 'callApi').mockResolvedValue([
-        { user_id: 10001, nickname: 'Alice' },
-      ]);
+      const call = vi.spyOn(endpoint.client, 'call').mockResolvedValue({
+        status: 'ok',
+        retcode: 0,
+        data: [{ user_id: 10001, nickname: 'Alice' }],
+      });
       await expect(endpoint.management.listFriends?.()).resolves.toEqual([
         { user_id: 10001, nickname: 'Alice', remark: '' },
       ]);
-      expect(callApi).toHaveBeenCalledWith('get_friend_list');
+      expect(call).toHaveBeenCalledWith('get_friend_list', undefined);
     }
   });
 });

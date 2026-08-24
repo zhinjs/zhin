@@ -1,26 +1,58 @@
-import { defineEndpointClient } from 'zhin.js/adapter';
-import type { SatoriEventBody } from './protocol.js';
+import {
+  SatoriV1Client,
+  type SatoriV1Event,
+} from '@imhelper/satori-v1';
+import { EventFactory, type EventMap, type ImHelperEventMap } from 'imhelper';
+import {
+  defineEndpointClient,
+  forwardEndpointClientEvents,
+  type ClientEventPayloads,
+} from 'zhin.js/adapter';
+import type {
+  ResolvedSatoriConfig,
+  SatoriApiOptions,
+  callSatoriApi,
+} from './protocol.js';
 
-export type SatoriClientCall = (
-  resource: string,
-  method: string,
-  params: Record<string, unknown>,
-) => Promise<unknown>;
+export { SatoriV1Client as SatoriClient } from '@imhelper/satori-v1';
 
-/** Account-bound Satori API Client produced by both WS and Webhook Endpoints. */
-export class SatoriClient {
-  constructor(readonly callApi: SatoriClientCall) {}
+type SatoriClientEvents = ImHelperEventMap<string, SatoriV1Event, EventMap<string>>;
+export type SatoriClientEventMap = ClientEventPayloads<SatoriClientEvents>;
+
+export function createSatoriEndpointClient(
+  config: ResolvedSatoriConfig,
+  request: typeof callSatoriApi,
+  apiOptions: () => SatoriApiOptions,
+): SatoriV1Client {
+  return new SatoriV1Client({
+    baseUrl: config.baseUrl,
+    selfId: config.id,
+    accessToken: config.token,
+    receiveMode: config.connection,
+    ...(config.connection === 'webhook' ? { path: config.path } : {}),
+    call: (resource, method, params) => request(apiOptions(), resource, method, params ?? {}),
+  });
 }
 
-export type SatoriClientEventMap = Record<string, SatoriEventBody>;
+const satoriClientEventNames = Object.freeze([
+  ...EventFactory.getSupportedEventTypes<string>(),
+  'event',
+]);
+
+export function forwardSatoriClientEvents(
+  client: SatoriV1Client,
+  receive: (name: string, payload: unknown) => void,
+): () => void {
+  return forwardEndpointClientEvents(client, satoriClientEventNames, receive);
+}
 
 declare module '@zhin.js/feature-kit' {
   interface AdapterClientRegistry {
     readonly satori: {
-      readonly client: SatoriClient;
+      readonly client: SatoriV1Client;
       readonly events: SatoriClientEventMap;
     };
   }
 }
 
-export const satoriClient = defineEndpointClient<SatoriClient, SatoriClientEventMap>('satori');
+export const satoriClient = defineEndpointClient<SatoriV1Client, SatoriClientEventMap>('satori');

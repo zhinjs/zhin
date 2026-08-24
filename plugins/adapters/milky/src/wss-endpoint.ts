@@ -1,10 +1,11 @@
-import { Endpoint } from 'zhin.js/adapter';
 /**
  * Milky reverse WSS endpoint — httpHostToken WS upgrade inbound + baseUrl HTTP API outbound.
  */
-import { clearInterval } from 'node:timers';
 import {
+  ClientEndpoint,
+  createEndpointLifecycle,
   createRecallEndpointControl,
+  type EndpointLifecycle,
   type EndpointControl,
   type EndpointManagement,
   type EndpointSendRequest,
@@ -14,7 +15,7 @@ import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { verifyMilkyAccessToken } from './milky-auth.js';
 import { createMilkyEndpointManagement } from './endpoint-management.js';
-import { MilkyClient } from './client.js';
+import { callMilkyClient, createMilkyEndpointClient, forwardMilkyClientEvents, type MilkyClient } from './client.js';
 import {
   buildSendAction,
   callApi,
@@ -44,33 +45,60 @@ export interface MilkyWssEndpointOptions {
   readonly callApi?: typeof callApi;
 }
 
-export class MilkyWssEndpoint extends Endpoint<MilkyClient> {
-  readonly client = new MilkyClient((action, params) => this.#callApi(this.apiOptions(), action, params));
+export class MilkyWssEndpoint extends ClientEndpoint<MilkyClient> {
+  readonly client: MilkyClient;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: MilkyWssEndpointOptions;
   readonly #callApi: typeof callApi;
-  readonly management: EndpointManagement = createMilkyEndpointManagement(this.client);
+  readonly management: EndpointManagement;
   readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
   #ws?: MilkyWsSocket;
   #wsRelease?: () => void;
-  #heartbeatTimer?: NodeJS.Timeout;
-  #open = false;
-  #started = false;
+  #clientSocketRelease?: () => void;
+  readonly #lifecycle: EndpointLifecycle;
 
   constructor(options: MilkyWssEndpointOptions) {
     super();
     this.#logger = getAdapterLogger('milky', options.config.id);
     this.#options = options;
     this.#callApi = options.callApi ?? callApi;
+    this.#lifecycle = createEndpointLifecycle({
+      name: options.config.id,
+      reconnect: false,
+      heartbeat: { intervalMs: options.config.heartbeat_interval },
+    });
+    this.client = createMilkyEndpointClient(options.config, this.#callApi);
+    this.management = createMilkyEndpointManagement({
+      callApi: (action, params) => callMilkyClient(this.client, action, params),
+    });
+    this.bindClientEvents(
+      (receive) => forwardMilkyClientEvents(this.client, receive),
+      (name, payload) => {
+        if (name === 'event') this.#admitRaw(payload as MilkyEvent);
+      },
+      (_name, error) => this.#warnPlatformEvent(error),
+    );
   }
 
   async start(): Promise<void> {
-    if (this.#started) return;
-    this.#started = true;
-    const handle = this.#options.http.ws(this.#options.config.path);
-    this.#wsRelease = handle.onConnection((connection) => {
-      this.#acceptConnection(connection);
+    await this.#lifecycle.start(async (lifecycleHandle) => {
+      const handle = this.#options.http.ws(this.#options.config.path);
+      this.#wsRelease = handle.onConnection((connection) => {
+        this.#acceptConnection(connection);
+      });
+      lifecycleHandle.onForceClose(() => {
+        this.#wsRelease?.();
+        this.#wsRelease = undefined;
+        this.#clientSocketRelease?.();
+        this.#clientSocketRelease = undefined;
+        try {
+          this.#ws?.close();
+        } catch {
+          /* ignore */
+        }
+        this.#ws = undefined;
+      });
     });
     this.#logger.info(formatCompact({
       op: 'listen',
@@ -80,37 +108,15 @@ export class MilkyWssEndpoint extends Endpoint<MilkyClient> {
     }));
   }
 
-  open(): void {
-    this.#open = true;
-  }
-
-  close(): void {
-    this.#open = false;
-  }
-
   async stop(): Promise<void> {
-    this.#open = false;
-    this.#wsRelease?.();
-    this.#wsRelease = undefined;
-    if (this.#heartbeatTimer) {
-      clearInterval(this.#heartbeatTimer);
-      this.#heartbeatTimer = undefined;
-    }
-    if (this.#ws) {
-      try {
-        this.#ws.close();
-      } catch {
-        /* ignore */
-      }
-      this.#ws = undefined;
-    }
-    this.#started = false;
+    this.close();
+    await this.#lifecycle.stop();
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(conversation, message);
-    const data = await this.client.callApi(action, params) as { message_seq?: number } | undefined;
+    const data = await callMilkyClient<{ message_seq?: number }>(this.client, action, params);
     const messageId = formatOutboundMessageId(conversation, data?.message_seq);
     this.#logger.debug(formatCompact({
       op: 'milky_send',
@@ -125,36 +131,26 @@ export class MilkyWssEndpoint extends Endpoint<MilkyClient> {
     const parsed = parseMilkyMessageId(id);
     if (!parsed) throw new Error(`Invalid message id: ${id}`);
     if (parsed.message_scene === 'group') {
-      await this.client.callApi('recall_group_message', {
+      await callMilkyClient(this.client, 'recall_group_message', {
         group_id: parsed.peer_id,
         message_seq: parsed.message_seq,
       });
     } else {
-      await this.client.callApi('recall_private_message', {
+      await callMilkyClient(this.client, 'recall_private_message', {
         user_id: parsed.peer_id,
         message_seq: parsed.message_seq,
       });
     }
   }
 
-  admit(event: MilkyEvent): void {
-    if (!this.#open) return;
-    void this.emitPlatform(event.event_type || 'event', event).catch((error) => {
-      this.#logger.warn(formatCompact({
-        op: 'milky_platform_event_failed',
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    });
+  #admitRaw(event: MilkyEvent): void {
     const data = parseMessageReceiveData(event);
     if (!data) return;
     this.#admitMessage(data, event);
   }
 
-  apiOptions(): { baseUrl: string; access_token?: string } {
-    return {
-      baseUrl: this.#options.config.baseUrl,
-      access_token: this.#options.config.access_token,
-    };
+  #warnPlatformEvent(error: unknown): void {
+    this.#logger.warn(formatCompact({ op: 'milky_platform_event_failed', error: error instanceof Error ? error.message : String(error) }));
   }
 
   #admitMessage(data: MilkyIncomingMessage, event: MilkyEvent): void {
@@ -205,12 +201,22 @@ export class MilkyWssEndpoint extends Endpoint<MilkyClient> {
       }
     }
     this.#ws = socket;
-    this.#startHeartbeat();
-    socket.on('message', (data) => {
-      this.#onMessage(data);
+    this.#lifecycle.startHeartbeat(() => {
+      try {
+        if (this.#ws?.readyState === WS_OPEN) this.#ws.ping?.();
+      } catch {
+        /* ignore */
+      }
     });
+    this.#clientSocketRelease?.();
+    this.#clientSocketRelease = this.client.acceptWebSocket(socket);
     socket.on('close', () => {
-      if (this.#ws === socket) this.#ws = undefined;
+      this.#clientSocketRelease?.();
+      this.#clientSocketRelease = undefined;
+      if (this.#ws === socket) {
+        this.#ws = undefined;
+        this.#lifecycle.stopHeartbeat();
+      }
     });
     this.#logger.debug(formatCompact({
       endpoint: this.#options.config.id,
@@ -219,36 +225,4 @@ export class MilkyWssEndpoint extends Endpoint<MilkyClient> {
     }));
   }
 
-  #onMessage(data: unknown): void {
-    try {
-      const raw = typeof data === 'string'
-        ? data
-        : Buffer.isBuffer(data)
-          ? data.toString()
-          : data instanceof ArrayBuffer
-            ? new TextDecoder().decode(data)
-            : String(data ?? '');
-      const event = JSON.parse(raw) as MilkyEvent;
-      this.admit(event);
-    } catch (error) {
-      this.#logger.warn(formatCompact({
-        op: 'milky_parse_failed',
-        endpoint: this.#options.config.id,
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    }
-  }
-
-  #startHeartbeat(): void {
-    if (this.#heartbeatTimer) clearInterval(this.#heartbeatTimer);
-    const interval = this.#options.config.heartbeat_interval;
-    if (interval <= 0) return;
-    this.#heartbeatTimer = setInterval(() => {
-      try {
-        if (this.#ws?.readyState === WS_OPEN) this.#ws.ping?.();
-      } catch {
-        /* ignore */
-      }
-    }, interval);
-  }
 }

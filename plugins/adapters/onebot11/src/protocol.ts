@@ -96,9 +96,10 @@ export interface OneBot11ActionRequest {
 }
 
 export interface OneBot11ActionResponse {
-  status: string;
+  status: 'ok' | 'failed';
   retcode: number;
   data?: unknown;
+  message?: string;
   echo?: string;
 }
 

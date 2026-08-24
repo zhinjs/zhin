@@ -77,7 +77,7 @@ export type ResolvedMilkyConfig =
 export type MilkyEndpointConfig = ResolvedMilkyConfig;
 
 export interface MilkyApiResponse<T = unknown> {
-  status: string;
+  status: 'ok' | 'failed';
   retcode: number;
   data?: T;
   message?: string;
@@ -203,13 +203,13 @@ function authQuery(access_token?: string): string {
 
 /**
  * 调用协议端 API：POST {baseUrl}/api/{apiName}，Body JSON，鉴权。
- * 非 200 或 retcode !== 0 时抛错。
+ * HTTP 层错误抛出；协议响应原样返回，由 Client 公开 call() 保留完整语义。
  */
 export async function callApi<T = unknown>(
   options: MilkyApiClientOptions,
   apiName: string,
   params: Record<string, unknown> = {},
-): Promise<T> {
+): Promise<MilkyApiResponse<T>> {
   const { baseUrl, access_token } = options;
   const url = new URL(`/api/${apiName}`, baseUrl.replace(/\/$/, ''));
   const q = authQuery(access_token);
@@ -235,10 +235,7 @@ export async function callApi<T = unknown>(
   if (res.status !== 200) {
     throw new Error(`Milky API ${apiName}: HTTP ${res.status} ${body.message ?? text}`);
   }
-  if (body.retcode !== 0) {
-    throw new Error(`Milky API ${apiName}: retcode=${body.retcode} ${body.message ?? ''}`);
-  }
-  return (body.data ?? {}) as T;
+  return body;
 }
 
 /** 根据 event_type 判断是否为 message_receive，并解析 data */

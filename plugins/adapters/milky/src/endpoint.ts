@@ -21,6 +21,6 @@ export {
 
 export type { MilkyWsSocket, MilkyWsCreateOptions } from './ws-types.js';
 
-export { verifyMilkyAccessToken, readRequestBody } from './milky-auth.js';
+export { verifyMilkyAccessToken } from './milky-auth.js';
 
 export { openSseStream, consumeSseBuffer } from './sse-client.js';

@@ -36,7 +36,6 @@ export {
   MilkyWsEndpoint,
   consumeSseBuffer,
   openSseStream,
-  readRequestBody,
   verifyMilkyAccessToken,
   type CreateMilkySseStream,
   type MilkySseEndpointOptions,
@@ -48,7 +47,18 @@ export {
 } from './endpoint.js';
 
 export {
+  MilkyClient,
   milkyClient,
-  type MilkyClient,
   type MilkyClientEventMap,
 } from './client.js';
+
+export type {
+  MilkyAdapterConfig as ImHelperMilkyAdapterConfig,
+  MilkyActionUrlResolver,
+  MilkyCall,
+  MilkyMessageReceiveEvent,
+  MilkyMessageRecallEvent,
+  MilkyV1ClientConfig,
+  MilkyV1Event,
+  MilkyV1Response,
+} from '@imhelper/milky-v1';

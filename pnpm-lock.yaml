@@ -2200,6 +2200,9 @@ importers:
 
   plugins/adapters/milky:
     dependencies:
+      '@imhelper/milky-v1':
+        specifier: 1.0.6
+        version: 1.0.6(imhelper@1.0.6)
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
@@ -2221,6 +2224,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      imhelper:
+        specifier: 1.0.6
+        version: 1.0.6
       ws:
         specifier: ^8.21.1
         version: 8.21.1
@@ -2301,6 +2307,9 @@ importers:
 
   plugins/adapters/onebot11:
     dependencies:
+      '@imhelper/onebot-v11':
+        specifier: 1.0.6
+        version: 1.0.6(imhelper@1.0.6)
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
@@ -2325,6 +2334,9 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
+      imhelper:
+        specifier: 1.0.6
+        version: 1.0.6
       ws:
         specifier: ^8.21.1
         version: 8.21.1
@@ -2353,6 +2365,9 @@ importers:
 
   plugins/adapters/onebot12:
     dependencies:
+      '@imhelper/onebot-v12':
+        specifier: 1.0.6
+        version: 1.0.6(imhelper@1.0.6)
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
@@ -2374,6 +2389,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      imhelper:
+        specifier: 1.0.6
+        version: 1.0.6
       ws:
         specifier: ^8.21.1
         version: 8.21.1
@@ -2509,6 +2527,9 @@ importers:
 
   plugins/adapters/satori:
     dependencies:
+      '@imhelper/satori-v1':
+        specifier: 1.0.6
+        version: 1.0.6(imhelper@1.0.6)
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
@@ -2530,6 +2551,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      imhelper:
+        specifier: 1.0.6
+        version: 1.0.6
       ws:
         specifier: ^8.21.1
         version: 8.21.1
@@ -4089,6 +4113,26 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       '@icqqjs/icqq': '*'
+
+  '@imhelper/milky-v1@1.0.6':
+    resolution: {integrity: sha512-ItPclZRAKLQKHf5QC/gNYxr9fjsqKH/i/6QKvUpTUNSsjKwDBxE00U109OiDpoDnYQVEVlk/dyIvSI0qHfVN/Q==}
+    peerDependencies:
+      imhelper: 1.0.6
+
+  '@imhelper/onebot-v11@1.0.6':
+    resolution: {integrity: sha512-41CxFSJzvhUyG3oz63SjfLR3VaXu04M3S7ORO2gHFPCRa3tfaFg2PprQEXTIyM9aYT/+Wfcr3uw4+ry2IGzD4g==}
+    peerDependencies:
+      imhelper: 1.0.6
+
+  '@imhelper/onebot-v12@1.0.6':
+    resolution: {integrity: sha512-Jg2i+MvhReimDb/K58TyLOdFtBU7ojPSpfGxUslQaOL+RY6zzA1eD0W1lg+HZzGQmPX9wOvrA4sezZc6PfqJvw==}
+    peerDependencies:
+      imhelper: 1.0.6
+
+  '@imhelper/satori-v1@1.0.6':
+    resolution: {integrity: sha512-/x25QF1pC4WSyCTH2jfhz4x+JglXMZnqWlikmlHs0E9lsD5Ve2X5U2MjiSm2U/XgvBO6Yidnv5zmqPzi4YrQWw==}
+    peerDependencies:
+      imhelper: 1.0.6
 
   '@inquirer/ansi@2.0.7':
     resolution: {integrity: sha512-3eTuUO1vH2cZm2ZKHeQxnOqlTi9EfZDGgIe3BL3I4u+rJHocr9Fz86M4fjYABPvFnQG/gGK551HqDiIcETwU6Q==}
@@ -6731,6 +6775,10 @@ packages:
     resolution: {integrity: sha512-CRT1WTyuQoD771GW56XEZFQ/ZoSfWid1alKGDYMmkt2yl8UXrVR4pspqWNEcqKvVIzg6PAltWjxcSSPrboA4iA==}
     engines: {node: '>=18.0.0'}
 
+  eventsource@4.1.1:
+    resolution: {integrity: sha512-D6bTRWh6KahHTK/m4WnjPQyEinNPf9eFLEZSEoj7d6fTibspnAVYfzHvirL7u/aoX5d9YYfIkBVAhmigUELk9w==}
+    engines: {node: '>=20.0.0'}
+
   expand-template@2.0.3:
     resolution: {integrity: sha512-XYfuKMvj4O35f/pOXLObndIRvyQ+/+6AhODh+OKWj9S9498pHHn/IMszH+gt0fBCRWMNfk1ZSp5x3AifmnI2vg==}
     engines: {node: '>=6'}
@@ -7059,6 +7107,9 @@ packages:
   imap@0.8.19:
     resolution: {integrity: sha512-z5DxEA1uRnZG73UcPA4ES5NSCGnPuuouUx43OPX7KZx1yzq3N8/vx2mtXEShT5inxB3pRgnfG1hijfu7XN2YMw==}
     engines: {node: '>=0.8.0'}
+
+  imhelper@1.0.6:
+    resolution: {integrity: sha512-27bgQzT9xcTFIC1F0jxn95uzcoTqi9Afv208hUgd/tYgpXjPDFNhdGijLWyYXSdIN4rxgi9cromr1E+hPw1yTg==}
 
   import-meta-resolve@4.2.0:
     resolution: {integrity: sha512-Iqv2fzaTQN28s/FwZAoFq0ZSs/7hMAHJVX+w8PZl3cY19Pxk6jFFalxQoIfW2826i/fDLXv8IiEZRIT0lDuWcg==}
@@ -9571,6 +9622,38 @@ snapshots:
     dependencies:
       '@icqqjs/icqq': 1.12.3
     optional: true
+
+  '@imhelper/milky-v1@1.0.6(imhelper@1.0.6)':
+    dependencies:
+      imhelper: 1.0.6
+      ws: 8.21.1
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  '@imhelper/onebot-v11@1.0.6(imhelper@1.0.6)':
+    dependencies:
+      imhelper: 1.0.6
+      ws: 8.21.1
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  '@imhelper/onebot-v12@1.0.6(imhelper@1.0.6)':
+    dependencies:
+      imhelper: 1.0.6
+      ws: 8.21.1
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  '@imhelper/satori-v1@1.0.6(imhelper@1.0.6)':
+    dependencies:
+      imhelper: 1.0.6
+      ws: 8.21.1
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   '@inquirer/ansi@2.0.7': {}
 
@@ -12359,6 +12442,10 @@ snapshots:
     dependencies:
       eventsource-parser: 3.1.0
 
+  eventsource@4.1.1:
+    dependencies:
+      eventsource-parser: 3.1.0
+
   expand-template@2.0.3: {}
 
   expect-type@1.4.0: {}
@@ -12738,6 +12825,14 @@ snapshots:
     dependencies:
       readable-stream: 1.1.14
       utf7: 1.0.2
+
+  imhelper@1.0.6:
+    dependencies:
+      eventsource: 4.1.1
+      ws: 8.21.1
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   import-meta-resolve@4.2.0: {}
 

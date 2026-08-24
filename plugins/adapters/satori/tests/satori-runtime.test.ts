@@ -1,4 +1,5 @@
 import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { SatoriV1Client } from '@imhelper/satori-v1';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createEndpointRuntimeState, listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import { satoriRuntimeStateToken } from '../src/satori-runtime-state.js';
@@ -169,6 +170,7 @@ describe('satori plugin runtime adapter', () => {
 
     await endpoint.start();
     endpoint.open();
+    expect(endpoint.client).toBeInstanceOf(SatoriV1Client);
 
     const body: SatoriEventBody = {
       type: 'message-created',
@@ -176,7 +178,7 @@ describe('satori plugin runtime adapter', () => {
       channel: { id: 'ch-1', type: 0 },
       user: { id: 'u-1', name: 'alice' },
     };
-    endpoint.admit(body);
+    endpoint.client.ingest(body);
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
@@ -200,7 +202,7 @@ describe('satori plugin runtime adapter', () => {
       createWebSocket: createWsFactory(socket),
     }), gateway, undefined);
     await endpoint.start();
-    endpoint.admit({
+    endpoint.client.ingest({
       type: 'message-created',
       message: { id: '1', content: 'nope' },
       channel: { id: 'ch' },
@@ -222,9 +224,9 @@ describe('satori plugin runtime adapter', () => {
     }), gateway, undefined);
     await endpoint.start();
     endpoint.open();
-    endpoint.setLogin({ platform: 'test', user: { id: 'bot-1' } });
+    endpoint.client.ingest({ type: 'login-updated', login: { platform: 'test', user: { id: 'bot-1' } } });
 
-    endpoint.admit({
+    endpoint.client.ingest({
       type: 'message-created',
       message: { id: 'm-at', content: '<at id="bot-1"/> 在吗' },
       channel: { id: 'ch-1', type: 0 },
@@ -252,9 +254,9 @@ describe('satori plugin runtime adapter', () => {
     }), gateway, undefined);
     await endpoint.start();
     endpoint.open();
-    endpoint.setLogin({ platform: 'test', user: { id: 'bot-1' } });
+    endpoint.client.ingest({ type: 'login-updated', login: { platform: 'test', user: { id: 'bot-1' } } });
 
-    endpoint.admit({
+    endpoint.client.ingest({
       type: 'message-created',
       message: { id: 'm-other', content: '<at id="user-2"/> 在吗' },
       channel: { id: 'ch-1', type: 0 },
@@ -337,7 +339,7 @@ describe('satori plugin runtime adapter', () => {
       }, undefined);
     await endpoint.start();
     endpoint.open();
-    endpoint.setLogin({ platform: 'test', user: { id: 'bot-1' } });
+    endpoint.client.ingest({ type: 'login-updated', login: { platform: 'test', user: { id: 'bot-1' } } });
     const messageId = await endpoint.send({
       conversation: {
         endpoint: { id: 'test-endpoint', adapter: 'test' },
@@ -371,7 +373,8 @@ describe('satori plugin runtime adapter', () => {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
       }, undefined);
-    endpoint.setLogin({ platform: 'test', user: { id: 'bot-1' } });
+    endpoint.open();
+    endpoint.client.ingest({ type: 'login-updated', login: { platform: 'test', user: { id: 'bot-1' } } });
     const conversation = {
       endpoint: { id: 'test-endpoint', adapter: 'satori' },
       kind: 'group' as const,
@@ -458,6 +461,7 @@ describe('satori plugin runtime adapter', () => {
       }),
     });
     expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ status: 'ok' });
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'group', id: 'ch-1' }),

@@ -32,6 +32,10 @@ pnpm add @zhin.js/adapter-satori
 
 入站 `metadata.mentioned`：消息 content 中 `<at id="…"/>` 元素的 id 等于登录 selfId（READY/事件 `login.user.id`）时置 `true`。
 
+每个 Endpoint 的 `$client` 是 `@imhelper/satori-v1` 的 `SatoriV1Client`。业务代码直接调用
+`$client.call(resource, method, params)` 或其公开便捷方法；Client 负责协议事件变换，Endpoint
+只负责 Satori IDENTIFY/心跳、Webhook 鉴权和 Zhin 投影。
+
 ## 前置条件
 
 1. 准备兼容 Satori 的服务端，记录 API Base、平台标识和用户标识。

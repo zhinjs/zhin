@@ -1,5 +1,6 @@
 import type { CapabilityContext } from '@zhin.js/feature-kit';
 import { isAdapterIndex } from './adapter-index.js';
+import { Endpoint } from './endpoint.js';
 import { adapterFeatureId } from './provider.js';
 
 const endpointClientBrand = 'zhin.endpoint-client/1' as const;
@@ -11,6 +12,87 @@ export type {
   AdapterEvents,
   RegisteredAdapterName,
 } from '@zhin.js/feature-kit';
+
+/** Convert an EventEmitter-style tuple map into the payload map used by handlers. */
+export type ClientEventPayloads<TEvents extends object> = {
+  readonly [K in keyof TEvents]: TEvents[K] extends readonly [infer TPayload, ...unknown[]]
+    ? TPayload
+    : never;
+};
+
+interface ClientEventSource {
+  on(name: string, listener: (payload: unknown) => void): unknown;
+  off(name: string, listener: (payload: unknown) => void): unknown;
+}
+
+/**
+ * Forward one Client's public event surface through the Endpoint boundary.
+ * The returned disposer is useful when a Client can outlive its Endpoint.
+ */
+export function forwardEndpointClientEvents(
+  client: ClientEventSource,
+  names: readonly string[],
+  receive: (name: string, payload: unknown) => void,
+): () => void {
+  const subscriptions = names.map((name) => {
+    const listener = (payload: unknown) => receive(name, payload);
+    client.on(name, listener);
+    return { name, listener };
+  });
+  return () => {
+    for (const { name, listener } of subscriptions) client.off(name, listener);
+  };
+}
+
+export type ClientEventSubscription = (
+  receive: (name: string, payload: unknown) => void,
+) => () => void;
+
+/**
+ * Deep Endpoint base for SDK/protocol Clients.
+ *
+ * It owns the open admission gate and the single Client-event → Endpoint-event
+ * bridge. Concrete Endpoints only own account transport and raw-event
+ * normalization; they do not repeat dispatch plumbing.
+ */
+export abstract class ClientEndpoint<TClient = unknown> extends Endpoint<TClient> {
+  #clientEventsOpen = false;
+  #clientEventsRelease?: () => void;
+
+  open(): void {
+    this.#clientEventsOpen = true;
+  }
+
+  close(): void {
+    this.#clientEventsOpen = false;
+  }
+
+  protected get clientEventsOpen(): boolean {
+    return this.#clientEventsOpen;
+  }
+
+  protected bindClientEvents(
+    subscribe: ClientEventSubscription,
+    receive?: (name: string, payload: unknown) => void,
+    onError?: (name: string, error: unknown) => void,
+  ): void {
+    this.#clientEventsRelease?.();
+    this.#clientEventsRelease = subscribe((name, payload) => {
+      if (!this.#clientEventsOpen) return;
+      void this.emitPlatform(name, payload).catch((error) => onError?.(name, error));
+      try {
+        receive?.(name, payload);
+      } catch (error) {
+        onError?.(name, error);
+      }
+    });
+  }
+
+  protected releaseClientEvents(): void {
+    this.#clientEventsRelease?.();
+    this.#clientEventsRelease = undefined;
+  }
+}
 
 /** Typed identity for one platform's native Client surface. */
 export interface EndpointClientToken<TClient, TEvents extends object = Record<string, unknown>> {

@@ -26,6 +26,10 @@ pnpm add @zhin.js/adapter-onebot12
 入站：`gateway.receive({ conversation: ConversationRef, message: { conversation, id }, content, sender, metadata })`  
 出站：`send({ conversation, payload })` → WS `send_message`（payload 已由 gateway/core 渲染；无 segment-mapper）
 
+每个 Endpoint 的 `$client` 是 `@imhelper/onebot-v12` 的 `OneBotV12Client`。业务代码直接调用
+`$client.call(action, params)` 和 Client 的公开平台能力；Webhook 使用 Client 的
+`acceptHttp()`，双工 WS 则由 Endpoint 分离 `echo` 响应后把事件交给 `ingest()`。
+
 ## 前置条件
 
 1. 启动兼容 OneBot 12 的实现，并确认其支持所选 WS 或 Webhook 模式。

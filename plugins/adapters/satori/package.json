@@ -46,12 +46,14 @@
     "directory": "plugins/adapters/satori"
   },
   "dependencies": {
+    "@imhelper/satori-v1": "1.0.6",
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
+    "imhelper": "1.0.6",
     "ws": "^8.21.1"
   },
   "devDependencies": {

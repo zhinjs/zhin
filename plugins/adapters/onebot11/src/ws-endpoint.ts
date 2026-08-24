@@ -1,9 +1,9 @@
-import { Endpoint } from 'zhin.js/adapter';
 /**
  * OneBot11 WS client endpoint — outbound connect to OneBot implementation.
  */
 import WebSocket from 'ws';
 import {
+  ClientEndpoint,
   createRecallEndpointControl,
   createEndpointLifecycle,
   type EndpointConnectHandle,
@@ -40,7 +40,7 @@ import {
   type OneBot11WsCreateOptions,
   type OneBot11WsSocket,
 } from './ws-types.js';
-import { Onebot11Client } from './client.js';
+import { callOnebot11Client, createOnebot11EndpointClient, forwardOnebot11ClientEvents, type Onebot11Client } from './client.js';
 
 export interface OneBot11WsEndpointOptions {
   readonly id: CapabilityId;
@@ -51,24 +51,34 @@ export interface OneBot11WsEndpointOptions {
   ) => OneBot11WsSocket;
 }
 
-export class OneBot11WsEndpoint extends Endpoint<Onebot11Client> {
-  readonly client = new Onebot11Client((action, params) => this.#callApi(action, params));
+export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
+  readonly client: Onebot11Client;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: OneBot11WsEndpointOptions;
-  readonly management: EndpointManagement = createOneBot11EndpointManagement(this.client);
+  readonly management: EndpointManagement;
   readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
-  readonly content = createOneBot11ContentPort((action, params) => this.client.callApi(action, params));
+  readonly content;
   readonly #lifecycle: EndpointLifecycle;
   #ws?: OneBot11WsSocket;
   #requestId = { value: 0 };
   #pending = new Map<string, OneBot11PendingAction>();
-  #open = false;
 
   constructor(options: OneBot11WsEndpointOptions) {
     super();
     this.#logger = getAdapterLogger('onebot11', options.config.id);
     this.#options = options;
+    this.client = createOnebot11EndpointClient(options.config, (action, params) => this.#callApi(action, params));
+    const callApi = (action: string, params?: Record<string, unknown>) => callOnebot11Client(this.client, action, params);
+    this.management = createOneBot11EndpointManagement({ callApi });
+    this.content = createOneBot11ContentPort(callApi);
+    this.bindClientEvents(
+      (receive) => forwardOnebot11ClientEvents(this.client, receive),
+      (name, payload) => {
+        if (name === 'event') this.#admitRaw(payload as OneBot11Event);
+      },
+      (_name, error) => this.#warnPlatformEvent(error),
+    );
     const { config } = options;
     this.#lifecycle = createEndpointLifecycle({
       name: config.id,
@@ -101,16 +111,8 @@ export class OneBot11WsEndpoint extends Endpoint<Onebot11Client> {
     }
   }
 
-  open(): void {
-    this.#open = true;
-  }
-
-  close(): void {
-    this.#open = false;
-  }
-
   async stop(): Promise<void> {
-    this.#open = false;
+    this.close();
     // 基座负责：清重连/心跳定时器、强关 ws、唤醒 stop-during-connect 竞态
     await this.#lifecycle.stop();
     rejectAllPending(this.#pending);
@@ -120,7 +122,7 @@ export class OneBot11WsEndpoint extends Endpoint<Onebot11Client> {
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(conversation, message);
-    const data = await this.client.callApi(action, params) as { message_id?: number | string } | undefined;
+    const data = await callOnebot11Client<{ message_id?: number | string }>(this.client, action, params);
     const messageId = data?.message_id != null ? String(data.message_id) : '';
     this.#logger.debug(formatCompact({
       op: 'onebot11_send',
@@ -133,27 +135,22 @@ export class OneBot11WsEndpoint extends Endpoint<Onebot11Client> {
 
   async recallMessage(messageId: string): Promise<void> {
     if (!messageId) return;
-    await this.client.callApi('delete_msg', { message_id: Number(messageId) });
+    await callOnebot11Client(this.client, 'delete_msg', { message_id: Number(messageId) });
   }
 
-  #callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
+  #callApi(
+    action: string,
+    params: Record<string, unknown> = {},
+  ): ReturnType<typeof callOneBot11WsAction> {
     return callOneBot11WsAction(this.#ws, this.#pending, this.#requestId, action, params);
   }
 
-  /** Test / internal: admit a parsed event when the endpoint is open. */
-  admit(ev: OneBot11Event): void {
-    if (!this.#open) return;
-    void this.emitPlatform(oneBot11PlatformEventName(ev), ev).catch((error) => {
-      this.#logger.warn(formatCompact({
-        op: 'onebot11_platform_event_failed',
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    });
+  #admitRaw(ev: OneBot11Event): void {
     if (!isMessageEvent(ev)) {
       receiveOneBot11SideEvent(
         (name, payload) => this.emit(name, payload),
         this.#options.config.id,
-        this.client,
+        { callApi: (action, params) => callOnebot11Client(this.client, action, params) },
         ev,
         this.#logger,
       );
@@ -182,6 +179,13 @@ export class OneBot11WsEndpoint extends Endpoint<Onebot11Client> {
         error: err instanceof Error ? err.message : String(err),
       }));
     });
+  }
+
+  #warnPlatformEvent(error: unknown): void {
+    this.#logger.warn(formatCompact({
+      op: 'onebot11_platform_event_failed',
+      error: error instanceof Error ? error.message : String(error),
+    }));
   }
 
   async #connect(handle: EndpointConnectHandle): Promise<void> {
@@ -225,7 +229,7 @@ export class OneBot11WsEndpoint extends Endpoint<Onebot11Client> {
         handleOneBot11WsMessage(data, {
           endpointId: this.#options.config.id,
           pending: this.#pending,
-          admit: (ev) => this.admit(ev),
+          ingest: (ev) => this.client.ingest(ev as Parameters<Onebot11Client['ingest']>[0]),
         });
       });
 
@@ -265,10 +269,4 @@ export class OneBot11WsEndpoint extends Endpoint<Onebot11Client> {
       });
     });
   }
-}
-
-function oneBot11PlatformEventName(ev: OneBot11Event): string {
-  return [ev.post_type, ev.message_type ?? ev.notice_type ?? ev.request_type, ev.sub_type]
-    .filter(Boolean)
-    .join('.');
 }

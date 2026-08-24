@@ -151,6 +151,7 @@ describe('onebot12 protocol helpers', () => {
       type: 'message',
       detail_type: 'private',
       sub_type: '',
+      self: { platform: 'qq', user_id: 'bot-1' },
       message_id: 'm3',
       user_id: 'u2',
       group_id: '300',
@@ -302,12 +303,13 @@ describe('onebot12 plugin runtime adapter', () => {
 
     await endpoint.start();
     endpoint.open();
-    endpoint.admit({
+    endpoint.client.ingest({
       id: 'e1',
       time: 1_700_000_000,
       type: 'message',
       detail_type: 'private',
       sub_type: '',
+      self: { platform: 'qq', user_id: 'bot-1' },
       message_id: 'msg-1',
       user_id: '10001',
       alt_message: '你好',
@@ -343,7 +345,7 @@ describe('onebot12 plugin runtime adapter', () => {
     }), gateway, undefined);
     await endpoint.start();
     endpoint.open();
-    endpoint.admit({
+    endpoint.client.ingest({
       id: 'e-at',
       time: 1_700_000_000,
       type: 'message',
@@ -384,7 +386,7 @@ describe('onebot12 plugin runtime adapter', () => {
     }), gateway, undefined);
     await endpoint.start();
     endpoint.open();
-    endpoint.admit({
+    endpoint.client.ingest({
       id: 'e-other',
       time: 1_700_000_000,
       type: 'message',
@@ -420,12 +422,13 @@ describe('onebot12 plugin runtime adapter', () => {
       },
     }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
-    endpoint.admit({
+    endpoint.client.ingest({
       id: 'e1',
       time: 1,
       type: 'message',
       detail_type: 'private',
       sub_type: '',
+      self: { platform: 'qq', user_id: 'bot-1' },
       message_id: 'm',
       user_id: '1',
       alt_message: 'nope',
@@ -481,6 +484,35 @@ describe('onebot12 plugin runtime adapter', () => {
     }));
 
     await expect(sendPromise).resolves.toBe('out-1');
+    await endpoint.stop();
+  });
+
+  it('preserves failed status, message, data and echo from client.call()', async () => {
+    const ws = createMockWs();
+    const endpoint = bindTestEndpoint(new OneBot12WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    await endpoint.start();
+
+    const call = endpoint.client.call('get_status');
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(1));
+    const request = JSON.parse(ws.sent[0]!) as { echo: string };
+    const response = {
+      status: 'failed' as const,
+      retcode: 1404,
+      message: 'unsupported',
+      data: { action: 'get_status' },
+      echo: request.echo,
+    };
+    ws.emitMessage(JSON.stringify(response));
+
+    await expect(call).resolves.toEqual(response);
     await endpoint.stop();
   });
 
@@ -629,6 +661,7 @@ describe('onebot12 plugin runtime adapter', () => {
       type: 'message',
       detail_type: 'group',
       sub_type: '',
+      self: { platform: 'qq', user_id: 'bot-1' },
       message_id: 'gm-1',
       group_id: '200',
       user_id: '9',
@@ -739,12 +772,14 @@ describe('onebot12 plugin runtime adapter', () => {
         type: 'message',
         detail_type: 'private',
         sub_type: '',
+        self: { platform: 'qq', user_id: 'bot-1' },
         message_id: 'msg-1',
         user_id: '10001',
         alt_message: 'from-webhook',
       }),
     });
     expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ status: 'ok' });
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: makeConversation('private', '10001'),

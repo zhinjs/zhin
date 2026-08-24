@@ -14,7 +14,8 @@ export interface OneBot11WsCreateOptions {
 export const WS_OPEN = 1;
 
 export interface OneBot11PendingAction {
-  resolve: (value: unknown) => void;
+  resolve: (value: OneBot11ActionResponse) => void;
   reject: (err: Error) => void;
   timeout: NodeJS.Timeout;
 }
+import type { OneBot11ActionResponse } from './protocol.js';

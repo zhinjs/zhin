@@ -8,8 +8,6 @@ import { getLogger } from '@zhin.js/logger';
 import {
   SatoriOpcode,
   type ResolvedSatoriWebhookConfig,
-  type SatoriEventBody,
-  type SatoriLogin,
 } from './protocol.js';
 
 const logger = getLogger('satori');
@@ -17,9 +15,7 @@ const logger = getLogger('satori');
 export interface SatoriWebhookHandler {
   readonly config: ResolvedSatoriWebhookConfig;
   readonly isOpen: boolean;
-  admit(body: SatoriEventBody): void;
-  setLogin(login: SatoriLogin): void;
-  admitMeta(body: SatoriEventBody): void;
+  acceptHttp(request: IncomingMessage, response: ServerResponse): Promise<void>;
 }
 
 export function registerSatoriWebhookRoutes(
@@ -51,22 +47,12 @@ export async function handleSatoriWebhookRequest(
       response.end(JSON.stringify({ message: 'OK' }));
       return;
     }
-    const raw = await readRequestBody(request);
-    let body: SatoriEventBody;
-    try {
-      body = JSON.parse(raw) as SatoriEventBody;
-    } catch {
-      response.writeHead(400, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'Invalid JSON' }));
-      return;
+    if (handler.isOpen) {
+      await handler.acceptHttp(request, response);
+    } else {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ status: 'ok' }));
     }
-    if (opcode === SatoriOpcode.EVENT && handler.isOpen) {
-      handler.admit(body);
-    } else if (opcode === SatoriOpcode.META && handler.isOpen) {
-      handler.admitMeta(body);
-    }
-    response.writeHead(200, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ message: 'OK' }));
   } catch (error) {
     logger.error('Satori webhook error:', error);
     if (!response.headersSent) {
@@ -90,19 +76,4 @@ export function verifySatoriToken(token: string | undefined, request: IncomingMe
   const expected = Buffer.from(`Bearer ${token}`, 'utf8');
   const actual = Buffer.from(auth, 'utf8');
   return actual.length === expected.length && timingSafeEqual(actual, expected);
-}
-
-export async function readRequestBody(request: IncomingMessage): Promise<string> {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (size > 1_048_576) {
-      request.destroy();
-      throw new Error('Request body exceeds 1MB');
-    }
-    chunks.push(buffer);
-  }
-  return Buffer.concat(chunks).toString('utf8');
 }

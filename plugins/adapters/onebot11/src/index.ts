@@ -51,7 +51,16 @@ export {
 export { verifyOneBotAccessToken } from './wss-auth.js';
 
 export {
+  Onebot11Client,
   onebot11Client,
-  type Onebot11Client,
   type Onebot11ClientEventMap,
 } from './client.js';
+
+export type {
+  OneBotV11ActionUrlResolver,
+  OneBotV11AdapterConfig as ImHelperOneBotV11AdapterConfig,
+  OneBotV11Call,
+  OneBotV11ClientConfig,
+  OneBotV11Event as ImHelperOneBotV11Event,
+  OneBotV11Response,
+} from '@imhelper/onebot-v11';

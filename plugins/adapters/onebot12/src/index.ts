@@ -54,3 +54,12 @@ export {
   onebot12Client,
   type Onebot12ClientEventMap,
 } from './client.js';
+
+export type {
+  OneBotV12ActionUrlResolver,
+  OneBotV12AdapterConfig as ImHelperOneBotV12AdapterConfig,
+  OneBotV12Call,
+  OneBotV12ClientConfig,
+  OneBotV12Event as ImHelperOneBotV12Event,
+  OneBotV12Response,
+} from '@imhelper/onebot-v12';

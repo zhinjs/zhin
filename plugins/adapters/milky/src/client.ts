@@ -1,59 +1,83 @@
-import { defineEndpointClient } from 'zhin.js/adapter';
-import type { MilkyEvent } from './protocol.js';
+import {
+  MilkyV1Client,
+  type MilkyV1Event,
+  type MilkyV1Response,
+} from '@imhelper/milky-v1';
+import {
+  EventFactory,
+  type EventMap,
+  type ImHelperEventMap,
+} from 'imhelper';
+import {
+  defineEndpointClient,
+  forwardEndpointClientEvents,
+  type ClientEventPayloads,
+} from 'zhin.js/adapter';
+import type { ResolvedMilkyConfig, callApi } from './protocol.js';
 
-export type MilkyApiCall = (
+export { MilkyV1Client as MilkyClient } from '@imhelper/milky-v1';
+
+type MilkyClientEvents = ImHelperEventMap<string, MilkyV1Event, EventMap<string>>;
+export type MilkyClientEventMap = ClientEventPayloads<MilkyClientEvents>;
+
+/** Construct the exact public imhelper Client without handing it transport ownership. */
+export function createMilkyEndpointClient(
+  config: ResolvedMilkyConfig,
+  request: typeof callApi,
+): MilkyV1Client {
+  return new MilkyV1Client({
+    baseUrl: config.baseUrl,
+    selfId: config.id,
+    accessToken: config.access_token,
+    receiveMode: config.connection,
+    ...(config.connection === 'wss' || config.connection === 'webhook'
+      ? { path: config.path }
+      : {}),
+    call: (action, params) => request(
+      {
+        baseUrl: config.baseUrl,
+        access_token: config.access_token,
+      },
+      action,
+      params,
+    ),
+  });
+}
+
+/** Use the Client's complete protocol response while keeping Endpoint internals data-oriented. */
+export async function callMilkyClient<T = unknown>(
+  client: MilkyV1Client,
   action: string,
   params?: Record<string, unknown>,
-) => Promise<unknown>;
-
-/** Transport-independent Milky protocol Client produced by every Endpoint mode. */
-export class MilkyClient {
-  constructor(readonly callApi: MilkyApiCall) {}
-
-  async kickMember(groupId: number, userId: number, rejectAddRequest = false): Promise<boolean> {
-    await this.callApi('kick_group_member', { group_id: groupId, user_id: userId, reject_add_request: rejectAddRequest });
-    return true;
+): Promise<T | undefined> {
+  const response: MilkyV1Response<T> = await client.call<T>(action, params);
+  if (response.status !== 'ok') {
+    throw new Error(
+      `Milky API ${action}: retcode=${response.retcode}${response.message ? ` ${response.message}` : ''}`,
+    );
   }
-  async muteMember(groupId: number, userId: number, duration = 600): Promise<boolean> {
-    await this.callApi('set_group_member_mute', { group_id: groupId, user_id: userId, duration });
-    return true;
-  }
-  async muteAll(groupId: number, enable = true): Promise<boolean> {
-    await this.callApi('set_group_whole_mute', { group_id: groupId, is_mute: enable });
-    return true;
-  }
-  async setAdmin(groupId: number, userId: number, enable = true): Promise<boolean> {
-    await this.callApi('set_group_member_admin', { group_id: groupId, user_id: userId, is_set: enable });
-    return true;
-  }
-  async setCard(groupId: number, userId: number, card: string): Promise<boolean> {
-    await this.callApi('set_group_member_card', { group_id: groupId, user_id: userId, card });
-    return true;
-  }
-  async setTitle(groupId: number, userId: number, title: string): Promise<boolean> {
-    await this.callApi('set_group_member_special_title', { group_id: groupId, user_id: userId, special_title: title });
-    return true;
-  }
-  async setGroupName(groupId: number, name: string): Promise<boolean> {
-    await this.callApi('set_group_name', { group_id: groupId, new_group_name: name });
-    return true;
-  }
-  getMemberList(groupId: number): Promise<unknown[]> {
-    return this.callApi('get_group_member_list', { group_id: groupId }) as Promise<unknown[]>;
-  }
-  getGroupInfo(groupId: number): Promise<unknown> {
-    return this.callApi('get_group_info', { group_id: groupId });
-  }
+  return response.data;
 }
-export type MilkyClientEventMap = Record<string, MilkyEvent>;
+
+const milkyClientEventNames = Object.freeze([
+  ...EventFactory.getSupportedEventTypes<string>(),
+  'event',
+]);
+
+export function forwardMilkyClientEvents(
+  client: MilkyV1Client,
+  receive: (name: string, payload: unknown) => void,
+): () => void {
+  return forwardEndpointClientEvents(client, milkyClientEventNames, receive);
+}
 
 declare module '@zhin.js/feature-kit' {
   interface AdapterClientRegistry {
     readonly milky: {
-      readonly client: MilkyClient;
+      readonly client: MilkyV1Client;
       readonly events: MilkyClientEventMap;
     };
   }
 }
 
-export const milkyClient = defineEndpointClient<MilkyClient, MilkyClientEventMap>('milky');
+export const milkyClient = defineEndpointClient<MilkyV1Client, MilkyClientEventMap>('milky');

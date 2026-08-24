@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/onebot12/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot12/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=f8558e8138da2aa0 -->
+<!-- sync-adapter-docs:sha256=d2bdee3ab75db8e4 -->
 
 # @zhin.js/adapter-onebot12
 
@@ -37,6 +37,10 @@ pnpm add @zhin.js/adapter-onebot12
 
 入站：`gateway.receive({ conversation: ConversationRef, message: { conversation, id }, content, sender, metadata })`  
 出站：`send({ conversation, payload })` → WS `send_message`（payload 已由 gateway/core 渲染；无 segment-mapper）
+
+每个 Endpoint 的 `$client` 是 `@imhelper/onebot-v12` 的 `OneBotV12Client`。业务代码直接调用
+`$client.call(action, params)` 和 Client 的公开平台能力；Webhook 使用 Client 的
+`acceptHttp()`，双工 WS 则由 Endpoint 分离 `echo` 响应后把事件交给 `ingest()`。
 
 ## 前置条件
 

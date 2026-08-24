@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/satori/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=ade9ce8a2d26f743 -->
+<!-- sync-adapter-docs:sha256=8a8d90da170991bb -->
 
 # @zhin.js/adapter-satori
 
@@ -43,6 +43,10 @@ pnpm add @zhin.js/adapter-satori
 出站：`send({ conversation, payload })` → Satori `message.create`（`channel_id = conversation.id`；payload 已由 gateway/core 渲染；无 segment-mapper）
 
 入站 `metadata.mentioned`：消息 content 中 `<at id="…"/>` 元素的 id 等于登录 selfId（READY/事件 `login.user.id`）时置 `true`。
+
+每个 Endpoint 的 `$client` 是 `@imhelper/satori-v1` 的 `SatoriV1Client`。业务代码直接调用
+`$client.call(resource, method, params)` 或其公开便捷方法；Client 负责协议事件变换，Endpoint
+只负责 Satori IDENTIFY/心跳、Webhook 鉴权和 Zhin 投影。
 
 ## 前置条件
 

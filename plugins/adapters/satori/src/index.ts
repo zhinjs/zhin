@@ -35,7 +35,6 @@ export {
 
 export {
   handleSatoriWebhookRequest,
-  readRequestBody,
   registerSatoriWebhookRoutes,
   resolveSatoriOpcode,
   verifySatoriToken,
@@ -52,3 +51,12 @@ export {
   satoriClient,
   type SatoriClientEventMap,
 } from './client.js';
+
+export type {
+  SatoriAdapterConfig as ImHelperSatoriAdapterConfig,
+  SatoriActionUrlResolver,
+  SatoriCall,
+  SatoriV1ClientConfig,
+  SatoriV1Event,
+  SatoriV1Response,
+} from '@imhelper/satori-v1';

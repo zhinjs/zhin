@@ -131,13 +131,15 @@ describe('milky.endpoint management wiring', () => {
     ];
     for (const endpoint of endpoints) {
       expect(listEndpointManagementCapabilities(endpoint)).toEqual(expectedCapabilities);
-      const callApi = vi.spyOn(endpoint.client, 'callApi').mockResolvedValue({
-        friends: [{ user_id: 10001, nickname: 'Alice' }],
+      const call = vi.spyOn(endpoint.client, 'call').mockResolvedValue({
+        status: 'ok',
+        retcode: 0,
+        data: { friends: [{ user_id: 10001, nickname: 'Alice' }] },
       });
       await expect(endpoint.management.listFriends?.()).resolves.toEqual([
         { user_id: 10001, nickname: 'Alice', remark: '' },
       ]);
-      expect(callApi).toHaveBeenCalledWith('get_friend_list');
+      expect(call).toHaveBeenCalledWith('get_friend_list', undefined);
     }
   });
 });

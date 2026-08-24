@@ -1,4 +1,5 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { bindTestEndpoint, bindTestEndpointEvents } from '../../test-utils/endpoint.js';
+import { MilkyV1Client } from '@imhelper/milky-v1';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { milkyRuntimeStateToken } from '../src/milky-runtime-state.js';
@@ -320,6 +321,72 @@ describe('milky protocol helpers', () => {
 });
 
 describe('milky plugin runtime adapter', () => {
+  it('preserves the complete native response from client.call()', async () => {
+    const response = {
+      status: 'failed' as const,
+      retcode: 1001,
+      message: 'not logged in',
+      data: { retryable: true },
+    };
+    const endpoint = bindTestEndpoint(new MilkyWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      callApi: vi.fn(async () => response),
+      createWebSocket: () => createMockWs(),
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+
+    await expect(endpoint.client.call('get_login_info')).resolves.toBe(response);
+  });
+
+  it('exposes the published Client and routes ingest through its public event stream', async () => {
+    const events = vi.fn(async () => undefined);
+    const endpoint = bindTestEndpointEvents(new MilkyWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      callApi: vi.fn(async () => ({})),
+      createWebSocket: () => createMockWs(),
+    }), { receive: events });
+    const rawEvent = {
+      event_type: 'message_receive',
+      time: 1,
+      self_id: 1,
+      data: {
+        message_scene: 'friend' as const,
+        peer_id: 42,
+        message_seq: 7,
+        sender_id: 42,
+        time: 1,
+        segments: [{ type: 'text', data: { text: 'hello' } }],
+      },
+    };
+    const raw = vi.fn();
+    const message = vi.fn();
+
+    expect(endpoint.client).toBeInstanceOf(MilkyV1Client);
+    endpoint.client.on('event', raw);
+    endpoint.client.on('message.private', message);
+    endpoint.open();
+    endpoint.client.ingest(rawEvent);
+
+    expect(raw).toHaveBeenCalledWith(rawEvent);
+    expect(message).toHaveBeenCalledWith(expect.objectContaining({
+      message_id: 'milky:friend:42:7',
+      user_id: '42',
+    }));
+    expect(events).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'platform.receive',
+      payload: expect.objectContaining({ name: 'message.private' }),
+      client: endpoint.client,
+    }));
+    expect(events).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'platform.receive',
+      payload: { name: 'event', event: rawEvent },
+      client: endpoint.client,
+    }));
+  });
+
   it('routes admitted message events through OutboundMessageService when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
@@ -338,7 +405,7 @@ describe('milky plugin runtime adapter', () => {
 
     await endpoint.start();
     endpoint.open();
-    endpoint.admit({
+    endpoint.client.ingest({
       event_type: 'message_receive',
       time: 1_700_000_000,
       self_id: 1,
@@ -383,7 +450,7 @@ describe('milky plugin runtime adapter', () => {
       },
     }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
-    endpoint.admit({
+    endpoint.client.ingest({
       event_type: 'message_receive',
       time: 1,
       self_id: 1,
@@ -402,7 +469,11 @@ describe('milky plugin runtime adapter', () => {
 
   it('sends outbound payloads via HTTP send_private_message', async () => {
     const ws = createMockWs();
-    const callApi = vi.fn(async () => ({ message_seq: 99 }));
+    const callApi = vi.fn(async () => ({
+      status: 'ok' as const,
+      retcode: 0,
+      data: { message_seq: 99 },
+    }));
     const endpoint = bindTestEndpoint(new MilkyWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
       gateway: {
@@ -489,7 +560,7 @@ describe('milky plugin runtime adapter', () => {
     }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
-    endpoint.admit({
+    endpoint.client.ingest({
       event_type: 'message_receive',
       time: 1,
       self_id: 10001,
@@ -530,7 +601,7 @@ describe('milky plugin runtime adapter', () => {
     }), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
-    endpoint.admit({
+    endpoint.client.ingest({
       event_type: 'message_receive',
       time: 1,
       self_id: 10001,
@@ -751,6 +822,7 @@ describe('milky plugin runtime adapter', () => {
       }),
     });
     expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ status: 'ok' });
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: milkyConversation('private', '10001'),

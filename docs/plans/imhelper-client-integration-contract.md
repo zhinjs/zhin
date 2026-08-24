@@ -4,6 +4,9 @@ sidebar: false
 
 # Platform Client × Zhin integration contract
 
+> 实施状态（2026-08-24）：Zhin 已接入 `imhelper@1.0.6` 及 Milky V1、Satori V1、
+> OneBot 11/12 `1.0.6` Client。下文既记录已落地契约，也列出仍适合在上游继续收紧的边界。
+
 这份契约适用于所有 Zhin 平台适配器：ICQQ 等 SDK 实例、Discord/Slack/Telegram 等平台
 Client，以及 `imhelper` / `@imhelper/*` 协议 Client。目标是让事件直接暴露真实 Client，
 而不是让 Zhin 复制平台方法或让 Client 接管框架生命周期：
@@ -12,6 +15,10 @@ Client，以及 `imhelper` / `@imhelper/*` 协议 Client。目标是让事件直
   `HttpHost` 路由与 WebSocket upgrade、事件送入 Zhin Core。
 - Platform Client：平台 API、协议事件解码、类型、实例对象与便捷业务方法。
 - 插件收到任意事件时，通过事件的 `client` 直接调用该 Client。
+
+Zhin 中的具体平台 Endpoint 统一继承 `ClientEndpoint`。这个深模块唯一负责
+Client 公开事件订阅、open/close admission 和 `platform.receive` 注入；WS、WSS、
+SSE、Webhook 子类只实现各自 transport 与账号生命周期，不再各写一套事件桥。
 
 ## 所有适配器的统一 Client 规则
 
@@ -27,24 +34,28 @@ Client，以及 `imhelper` / `@imhelper/*` 协议 Client。目标是让事件直
 - 平台原生方法不在 Endpoint 上重包一层。普通消息仍走统一 outbound chain；入群审批、成员
   管理、平台查询等业务直接调用当前 operation 的 Client。
 
-## imhelper 必需的公开构造面
+## imhelper 已提供的公开构造面
 
-当前 npm `1.0.4` 实际只导出 `create*Adapter()`，README 中的
-`OneBotV11Client` / `connect()` / `onEvent()` 与包导出不一致。建议每个协议包公开稳定的
-Client 类，并让工厂返回该 Client：
+`1.0.6` 已从各协议包公开稳定 Client 类和工厂，例如 `OneBotV11Client` /
+`createOnebot11Client()`。Client 继承 `ImHelper`，公开原生 `call()`、完整平台能力、精确事件
+重载以及三种宿主注入入口：
 
 ```ts
-export class OneBotV11Client extends EventEmitter<OneBotV11EventMap> {
-  constructor(options: OneBotV11ClientOptions)
-
-  readonly selfId: number
-  call<T>(action: string, params?: Record<string, unknown>, options?: CallOptions): Promise<T>
-  ingest(event: OneBotV11Event): Promise<void> | void
+export class OneBotV11Client extends ImHelper<
+  number,
+  OneBotV11Event,
+  EventMap<number>,
+  OneBotV11Adapter
+> {
+  call<T>(action: string, params?: Record<string, unknown>): Promise<OneBotV11Response<T>>
+  ingest(event: OneBotV11Event): void
+  acceptHttp(request: HttpIngressRequest, response?: HttpIngressResponseWriter): Promise<HttpIngressResult>
+  acceptWebSocket(socket: UpgradedWebSocket): () => void
 }
 ```
 
-Milky、Satori、OneBot 12 使用同一形态，同时保留各协议准确的便捷方法。Zhin 需要拿到
-Client 本身，而不是一个同时创建 HTTP server、管理端口和隐藏内部 Client 的 Adapter。
+Milky、Satori、OneBot 12 使用同一形态。Zhin Endpoint 直接暴露这些 Client，并只把 Zhin
+拥有的 transport 输入交给它们；不会调用 Client 的 `start()`/`stop()` 去启动第二套连接器。
 
 ## 公开类型必须以 Client 为根完整闭合
 
@@ -57,7 +68,7 @@ export interface OneBotV11ClientOptions { /* ... */ }
 export interface OneBotV11ClientEventMap {
   readonly event: OneBotV11Event
   readonly 'message.private': OneBotV11PrivateMessageEvent
-  readonly 'notice.group.increase': OneBotV11GroupIncreaseEvent
+  readonly 'notice.group_member_increase': GroupMemberIncreaseNoticeEvent<number>
   // 未知扩展事件仍由 `event` 保底，不静默丢弃。
 }
 export type OneBotV11ClientEventName = keyof OneBotV11ClientEventMap
@@ -91,7 +102,7 @@ declare module '@zhin.js/feature-kit' {
 ```ts
 export default defineHandler({
   adapter: 'onebot11',
-  event: 'notice.group.increase',
+  event: 'notice.group_member_increase',
   async handle({ client, event, endpoint }) {
     await client.call('get_group_info', { group_id: event.group_id })
   },
@@ -189,44 +200,34 @@ Client 不应强制自己打开端口。HTTP/Webhook 的基线入口采用标准
 Endpoint 决定路由和调用时机，Client 处理当前请求的协议语义：
 
 ```ts
-interface ProtocolHttpResponse {
-  readonly type: 'response'
+interface HttpIngressResult {
   readonly status: number
-  readonly headers?: Readonly<Record<string, string>>
-  readonly body?: string | Uint8Array
-}
-
-interface ProtocolHttpHandled {
-  readonly type: 'handled'
+  readonly headers: Readonly<Record<string, string>>
+  readonly body: { status: 'ok' | 'error'; message?: string }
 }
 
 interface ProtocolClient<TRawEvent> {
   // 消费宿主交入的一条 HTTP/Webhook 请求；不得创建 server 或监听端口。
   acceptHttp(
     request: import('node:http').IncomingMessage,
-    response: import('node:http').ServerResponse,
-  ): Promise<ProtocolHttpResponse | ProtocolHttpHandled>
+    response?: import('node:http').ServerResponse,
+  ): Promise<HttpIngressResult>
 
   // Host/Endpoint 已完成解析，或 Transport 不是 HTTP 时使用。
   ingest(event: TRawEvent): Promise<void> | void
 }
 ```
 
-`acceptHttp()` 必须在当前请求已经完成解析、鉴权且对应事件已经提交给 Client 的事件分发器
-后 resolve。Client 若直接完成流式/特殊响应，必须返回 `{ type: 'handled' }`；否则返回纯数据
-的 `{ type: 'response', status, headers?, body? }`，由 Endpoint 写入 `ServerResponse`。
-两种完成方式必须互斥，禁止“已经写 response 但仍返回结构化 response”的模糊状态。解析、
-鉴权或 body 限制失败由 Client 抛结构化错误，Endpoint 统一记录并完成兜底响应。Client 可以
-处理当前请求的协议响应，但不得持有 response、路由、socket 或 server 的跨请求生命周期。
+`acceptHttp()` 在事件已摄取后 resolve；传入 response 时由 Client 写出响应，同时仍返回相同
+结构化结果，省略 response 时可由 Host 自行写出。鉴权和路由归 Endpoint，JSON 解析、方法检查
+与 1MB body 限制归 Client。Client 不持有 response、路由、socket 或 server 的跨请求生命周期。
 
 反向 WebSocket upgrade 不是纯 `IncomingMessage`，可提供独立重载或方法：
 
 ```ts
 acceptWebSocket(
-  request: import('node:http').IncomingMessage,
   socket: WebSocketLike,
-  head?: Uint8Array,
-): Promise<Disposable | void>
+): () => void
 ```
 
 这里的 socket 仍由 Endpoint/HttpHost 创建和关闭；`head` 保留 Node upgrade 时已经读出的
@@ -241,11 +242,33 @@ close(): Promise<void>
 ```
 
 因此最终语义固定为：`acceptHttp(request, response)` 消费宿主 HTTP 请求，
-`acceptWebSocket(request, socket, head?)` 接收宿主已经升级的 socket，`ingest(rawEvent)`
-处理最底层原始事件，`open()` 建立主动出站连接，`close()`/返回的 `Disposable` 释放资源。
+`acceptWebSocket(socket)` 接收宿主已经升级的纯事件 socket，`ingest(rawEvent)` 处理最底层
+原始事件，`start()`/`stop()` 管理 Client 自带 receiver，返回的 disposer 只解除宿主 socket
+监听。Zhin 使用前三个注入入口，不调用 Client 自带 receiver 生命周期。
 Zhin `Endpoint` 负责决定何时调用它们。
 
-## 生命周期与重连要求
+## 上游仍可继续优化的边界
+
+- 当前 `1.0.6` 的 EventMap 声明了全部 canonical 事件，但运行时投影尚未闭合：
+  OneBot 11/12 只投影已知消息，Milky 只投影消息与撤回；其他
+  notice/request/meta 只会触发原始 `event`。这会使 `client.on('request.group', ...)`
+  和同名 Zhin handler 通过类型检查却不触发。上游应让每个协议 adapter 的
+  `transformEvent()` 覆盖其声明的每个投影，或把 EventMap 收窄到真正会发出的事件。
+- `OneBotV12Response` 缺少协议 action response 实际包含的 `echo`，因此
+  `$client.call()` 运行时会完整返回 echo，但 TypeScript 无法读取。该字段应补到上游响应类型。
+- 四个协议包尚未公开结构化协议错误类型。Client 的原生 `call()` 应原样返回
+  `status/retcode/data/message/echo`；网络、HTTP 和解析失败则应抛出带 action/status 的结构化错误。
+- 增加显式 `receiveMode: 'manual'`（或允许不创建 receiver）。Zhin 当前虽不调用
+  `start()`，但 Client 构造时仍会创建一个永不启动的 receiver。
+- 为 OneBot 双工 WS 提供可注入的 action-response classifier，或明确文档说明
+  `acceptWebSocket()` 仅适合纯事件 socket。Zhin 目前正确地先按 `echo` 分流，再只对事件调用
+  `ingest()`；Milky 纯事件 WS/WSS 则直接使用 `acceptWebSocket()`。
+- 给异步监听器增加可等待的 dispatch/错误汇聚语义。当前 EventEmitter + `ingest(): void`
+  无法等待 async listener，listener rejection 仍可能成为未处理拒绝。
+- Client 的宽泛 `on(eventName: string | symbol, ...)` overload 会放过拼错的事件名；建议将逃生舱
+  改成单独的 `onUnknown()`，让默认 `on()` 保持严格。
+
+## Client 自带 receiver 的生命周期与重连要求
 
 - `open()` 必须以“初次连接真正 ready”为 resolve 边界，初连失败应 reject。
 - `close()` 必须幂等，取消并清空重连、心跳、请求超时，关闭 socket，并等待当前
@@ -265,8 +288,9 @@ Zhin `Endpoint` 负责决定何时调用它们。
 - Milky 使用标准 `/api/{action}`；Satori 使用 `/v1/{resource}.{method}` 及
   `Satori-Platform` / `Satori-User-ID` headers。
 - 暴露原生 `call()`；便捷方法建立在 `call()` 上，不隐藏协议扩展 action。
-- 支持注入 `fetch`、超时和 `AbortSignal`；非 2xx、协议 retcode/code 失败应抛出包含
-  action、status、retcode 的结构化错误。
+- 支持注入 `fetch`、超时和 `AbortSignal`；非 2xx、解析与 transport 失败应抛出包含
+  action/status 的结构化错误。协议 retcode/code 失败由原生 `call()` 完整返回，
+  便捷方法或框架内部解包器可再把它转成错误。
 - token 不能出现在日志或错误 URL 中。
 
 ## 事件要求
@@ -305,7 +329,9 @@ Zhin `Endpoint` 负责决定何时调用它们。
 
 ```ts
 const client = new OneBotV11Client({
-  selfId,
+  baseUrl,
+  selfId: String(selfId),
+  receiveMode: 'ws',
   call: actionTransport,
 })
 

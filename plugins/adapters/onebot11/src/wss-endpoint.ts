@@ -1,10 +1,11 @@
-import { Endpoint } from 'zhin.js/adapter';
 /**
  * OneBot11 reverse WSS endpoint — accepts inbound WebSocket from OneBot implementation.
  */
-import { clearInterval } from 'node:timers';
 import {
+  ClientEndpoint,
+  createEndpointLifecycle,
   createRecallEndpointControl,
+  type EndpointLifecycle,
   type EndpointControl,
   type EndpointManagement,
   type EndpointSendRequest,
@@ -32,14 +33,13 @@ import {
   callOneBot11WsAction,
   handleOneBot11WsMessage,
   rejectAllPending,
-  startOneBot11Heartbeat,
 } from './ws-transport.js';
 import { OneBot11WsEndpoint } from './ws-endpoint.js';
 import {
   type OneBot11PendingAction,
   type OneBot11WsSocket,
 } from './ws-types.js';
-import { Onebot11Client } from './client.js';
+import { callOnebot11Client, createOnebot11EndpointClient, forwardOnebot11ClientEvents, type Onebot11Client } from './client.js';
 
 export interface OneBot11WssEndpointOptions {
   readonly id: CapabilityId;
@@ -47,31 +47,43 @@ export interface OneBot11WssEndpointOptions {
   readonly config: OneBot11WssConfig;
 }
 
-export class OneBot11WssEndpoint extends Endpoint<Onebot11Client> {
-  readonly client = new Onebot11Client((action, params) => this.#callApi(action, params));
+export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
+  readonly client: Onebot11Client;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: OneBot11WssEndpointOptions;
-  readonly management: EndpointManagement = createOneBot11EndpointManagement(this.client);
+  readonly management: EndpointManagement;
   readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
-  readonly content = createOneBot11ContentPort((action, params) => this.client.callApi(action, params));
+  readonly content;
   #ws?: OneBot11WsSocket;
   #wsRelease?: () => void;
-  #heartbeatTimer?: NodeJS.Timeout;
+  readonly #lifecycle: EndpointLifecycle;
   #requestId = { value: 0 };
   #pending = new Map<string, OneBot11PendingAction>();
-  #open = false;
-  #started = false;
 
   constructor(options: OneBot11WssEndpointOptions) {
     super();
     this.#logger = getAdapterLogger('onebot11', options.config.id);
     this.#options = options;
+    this.#lifecycle = createEndpointLifecycle({
+      name: options.config.id,
+      reconnect: false,
+      heartbeat: { intervalMs: options.config.heartbeat_interval },
+    });
+    this.client = createOnebot11EndpointClient(options.config, (action, params) => this.#callApi(action, params));
+    const callApi = (action: string, params?: Record<string, unknown>) => callOnebot11Client(this.client, action, params);
+    this.management = createOneBot11EndpointManagement({ callApi });
+    this.content = createOneBot11ContentPort(callApi);
+    this.bindClientEvents(
+      (receive) => forwardOnebot11ClientEvents(this.client, receive),
+      (name, payload) => {
+        if (name === 'event') this.#admitRaw(payload as OneBot11Event);
+      },
+      (_name, error) => this.#warnPlatformEvent(error),
+    );
   }
 
   async start(): Promise<void> {
-    if (this.#started) return;
-    this.#started = true;
     if (!this.#options.config.access_token) {
       // wss 模式未配 access_token 时任何连接都会被放行（verifyOneBotAccessToken 直接 return true）
       this.#logger.warn(formatCompact({
@@ -81,9 +93,21 @@ export class OneBot11WssEndpoint extends Endpoint<Onebot11Client> {
         error: 'missing access_token',
       }));
     }
-    const handle = this.#options.http.ws(this.#options.config.path);
-    this.#wsRelease = handle.onConnection((connection) => {
-      this.#acceptConnection(connection);
+    await this.#lifecycle.start(async (lifecycleHandle) => {
+      const handle = this.#options.http.ws(this.#options.config.path);
+      this.#wsRelease = handle.onConnection((connection) => {
+        this.#acceptConnection(connection);
+      });
+      lifecycleHandle.onForceClose(() => {
+        this.#wsRelease?.();
+        this.#wsRelease = undefined;
+        try {
+          this.#ws?.close();
+        } catch {
+          /* ignore */
+        }
+        this.#ws = undefined;
+      });
     });
     this.#logger.info(formatCompact({
       op: 'listen',
@@ -93,63 +117,37 @@ export class OneBot11WssEndpoint extends Endpoint<Onebot11Client> {
     }));
   }
 
-  open(): void {
-    this.#open = true;
-  }
-
-  close(): void {
-    this.#open = false;
-  }
-
   async stop(): Promise<void> {
-    this.#open = false;
-    this.#wsRelease?.();
-    this.#wsRelease = undefined;
-    if (this.#heartbeatTimer) {
-      clearInterval(this.#heartbeatTimer);
-      this.#heartbeatTimer = undefined;
-    }
+    this.close();
+    await this.#lifecycle.stop();
     rejectAllPending(this.#pending);
-    if (this.#ws) {
-      try {
-        this.#ws.close();
-      } catch {
-        /* ignore */
-      }
-      this.#ws = undefined;
-    }
-    this.#started = false;
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(conversation, message);
-    const data = await this.client.callApi(action, params) as { message_id?: number | string } | undefined;
+    const data = await callOnebot11Client<{ message_id?: number | string }>(this.client, action, params);
     return data?.message_id != null ? String(data.message_id) : '';
   }
 
   async recallMessage(messageId: string): Promise<void> {
     if (!messageId) return;
-    await this.client.callApi('delete_msg', { message_id: Number(messageId) });
+    await callOnebot11Client(this.client, 'delete_msg', { message_id: Number(messageId) });
   }
 
-  #callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
+  #callApi(
+    action: string,
+    params: Record<string, unknown> = {},
+  ): ReturnType<typeof callOneBot11WsAction> {
     return callOneBot11WsAction(this.#ws, this.#pending, this.#requestId, action, params);
   }
 
-  admit(ev: OneBot11Event): void {
-    if (!this.#open) return;
-    void this.emitPlatform(oneBot11PlatformEventName(ev), ev).catch((error) => {
-      this.#logger.warn(formatCompact({
-        op: 'onebot11_platform_event_failed',
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    });
+  #admitRaw(ev: OneBot11Event): void {
     if (!isMessageEvent(ev)) {
       receiveOneBot11SideEvent(
         (name, payload) => this.emit(name, payload),
         this.#options.config.id,
-        this.client,
+        { callApi: (action, params) => callOnebot11Client(this.client, action, params) },
         ev,
         this.#logger,
       );
@@ -179,6 +177,13 @@ export class OneBot11WssEndpoint extends Endpoint<Onebot11Client> {
     });
   }
 
+  #warnPlatformEvent(error: unknown): void {
+    this.#logger.warn(formatCompact({
+      op: 'onebot11_platform_event_failed',
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+
   #acceptConnection(connection: WsConnection): void {
     if (!verifyOneBotAccessToken(this.#options.config.access_token, connection.request)) {
       connection.socket.close(4003, 'Unauthorized');
@@ -193,25 +198,25 @@ export class OneBot11WssEndpoint extends Endpoint<Onebot11Client> {
       }
     }
     this.#ws = socket;
-    this.#heartbeatTimer = startOneBot11Heartbeat(
-      this.#ws,
-      this.#options.config.heartbeat_interval,
-      this.#heartbeatTimer,
-    );
+    this.#lifecycle.startHeartbeat(() => {
+      try {
+        this.#ws?.ping?.();
+      } catch {
+        /* ignore */
+      }
+    });
     socket.on('message', (data) => {
+      this.#lifecycle.notifyHeartbeatAck();
       handleOneBot11WsMessage(data, {
         endpointId: this.#options.config.id,
         pending: this.#pending,
-        admit: (ev) => this.admit(ev),
+        ingest: (ev) => this.client.ingest(ev as Parameters<Onebot11Client['ingest']>[0]),
       });
     });
     socket.on('close', () => {
       if (this.#ws === socket) {
         this.#ws = undefined;
-        if (this.#heartbeatTimer) {
-          clearInterval(this.#heartbeatTimer);
-          this.#heartbeatTimer = undefined;
-        }
+        this.#lifecycle.stopHeartbeat();
       }
     });
     this.#logger.debug(formatCompact({
@@ -220,10 +225,4 @@ export class OneBot11WssEndpoint extends Endpoint<Onebot11Client> {
       peer: connection.request.socket.remoteAddress,
     }));
   }
-}
-
-function oneBot11PlatformEventName(ev: OneBot11Event): string {
-  return [ev.post_type, ev.message_type ?? ev.notice_type ?? ev.request_type, ev.sub_type]
-    .filter(Boolean)
-    .join('.');
 }

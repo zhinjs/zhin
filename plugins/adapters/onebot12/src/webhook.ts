@@ -1,9 +1,9 @@
-import { Endpoint } from 'zhin.js/adapter';
 /**
  * OneBot12 HTTP webhook endpoint — POST inbound + api_url outbound.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
+  ClientEndpoint,
   createRecallEndpointControl,
   type EndpointControl,
   type EndpointManagement,
@@ -29,7 +29,7 @@ import {
 } from './protocol.js';
 import { receiveOneBot12SideEvent } from './side-event-dispatch.js';
 import { createOneBot12ContentPort } from './content-port.js';
-import { Onebot12Client } from './client.js';
+import { callOnebot12Client, createOnebot12EndpointClient, forwardOnebot12ClientEvents, type Onebot12Client } from './client.js';
 import { verifyOneBotAccessToken } from './wss-auth.js';
 
 const logger = getLogger('onebot12');
@@ -41,21 +41,31 @@ export interface OneBot12WebhookEndpointOptions {
   readonly callAction?: typeof callOneBot12Action;
 }
 
-export class OneBot12WebhookEndpoint extends Endpoint<Onebot12Client> {
-  readonly client = new Onebot12Client((action, params) => this.#callApi(action, params));
+export class OneBot12WebhookEndpoint extends ClientEndpoint<Onebot12Client> {
+  readonly client: Onebot12Client;
   readonly #options: OneBot12WebhookEndpointOptions;
-  readonly management: EndpointManagement = createOneBot12EndpointManagement(this.client);
+  readonly management: EndpointManagement;
   readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
-  readonly content = createOneBot12ContentPort((action, params) => this.client.callApi(action, params));
+  readonly content;
   readonly #callAction: typeof callOneBot12Action;
   #routeReleases: HttpRouteRegistration[] = [];
-  #open = false;
   #started = false;
 
   constructor(options: OneBot12WebhookEndpointOptions) {
     super();
     this.#options = options;
     this.#callAction = options.callAction ?? callOneBot12Action;
+    this.client = createOnebot12EndpointClient(options.config, (action, params) => this.#callApi(action, params));
+    const callApi = (action: string, params?: Record<string, unknown>) => callOnebot12Client(this.client, action, params);
+    this.management = createOneBot12EndpointManagement({ callApi });
+    this.content = createOneBot12ContentPort(callApi);
+    this.bindClientEvents(
+      (receive) => forwardOnebot12ClientEvents(this.client, receive),
+      (name, payload) => {
+        if (name === 'event') this.#admitRaw(payload as OneBot12Event);
+      },
+      (_name, error) => this.#warnPlatformEvent(error),
+    );
   }
 
   async start(): Promise<void> {
@@ -79,16 +89,8 @@ export class OneBot12WebhookEndpoint extends Endpoint<Onebot12Client> {
     }));
   }
 
-  open(): void {
-    this.#open = true;
-  }
-
-  close(): void {
-    this.#open = false;
-  }
-
   async stop(): Promise<void> {
-    this.#open = false;
+    this.close();
     for (const release of this.#routeReleases.splice(0)) release();
     this.#started = false;
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.id }));
@@ -97,7 +99,7 @@ export class OneBot12WebhookEndpoint extends Endpoint<Onebot12Client> {
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const materialized = await uploadOneBot12MediaSegments(
       payload,
-      (action, params) => this.client.callApi(action, params),
+      (action, params) => callOnebot12Client(this.client, action, params),
       (error) => {
         logger.warn(formatCompact({
           op: 'onebot12_upload_failed',
@@ -108,7 +110,7 @@ export class OneBot12WebhookEndpoint extends Endpoint<Onebot12Client> {
     );
     const message = formatOutboundSegments(materialized);
     const params = buildSendMessageParams(conversation, message);
-    const data = await this.client.callApi('send_message', params) as { message_id?: string } | undefined;
+    const data = await callOnebot12Client<{ message_id?: string }>(this.client, 'send_message', params);
     const messageId = data?.message_id ?? '';
     logger.debug(formatCompact({
       op: 'onebot12_send',
@@ -122,35 +124,30 @@ export class OneBot12WebhookEndpoint extends Endpoint<Onebot12Client> {
 
   async recallMessage(messageId: string): Promise<void> {
     if (!messageId) return;
-    await this.client.callApi('delete_message', { message_id: messageId });
+    await callOnebot12Client(this.client, 'delete_message', { message_id: messageId });
   }
 
-  async #callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
+  async #callApi(
+    action: string,
+    params: Record<string, unknown> = {},
+  ): Promise<import('@imhelper/onebot-v12').OneBotV12Response> {
     const apiUrl = this.#options.config.api_url;
     if (!apiUrl) {
       throw new Error('OneBot12 connection:webhook requires api_url for outbound api');
     }
-    const resp = await this.#callAction(
+    return this.#callAction(
       { url: apiUrl, access_token: this.#options.config.access_token },
       action,
       params,
     );
-    return resp.data;
   }
 
-  admit(ev: OneBot12Event): void {
-    if (!this.#open) return;
-    void this.emitPlatform(oneBot12PlatformEventName(ev), ev).catch((error) => {
-      logger.warn(formatCompact({
-        op: 'onebot12_platform_event_failed',
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    });
+  #admitRaw(ev: OneBot12Event): void {
     if (!isMessageEvent(ev)) {
       receiveOneBot12SideEvent(
         (name, payload) => this.emit(name, payload),
         this.#options.config.id,
-        this.client,
+        { callApi: (action, params) => callOnebot12Client(this.client, action, params) },
         ev,
         logger,
       );
@@ -186,6 +183,13 @@ export class OneBot12WebhookEndpoint extends Endpoint<Onebot12Client> {
     });
   }
 
+  #warnPlatformEvent(error: unknown): void {
+    logger.warn(formatCompact({
+      op: 'onebot12_platform_event_failed',
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+
   #setupRoutes(): void {
     const path = this.#options.config.path;
     this.#routeReleases.push(
@@ -202,18 +206,12 @@ export class OneBot12WebhookEndpoint extends Endpoint<Onebot12Client> {
         response.end(JSON.stringify({ message: 'Unauthorized' }));
         return;
       }
-      const raw = await readRequestBody(request);
-      let ev: OneBot12Event;
-      try {
-        ev = JSON.parse(raw) as OneBot12Event;
-      } catch {
-        response.writeHead(400, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ message: 'Invalid JSON' }));
+      if (!this.clientEventsOpen) {
+        response.writeHead(200, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ status: 'ok' }));
         return;
       }
-      if (this.#open) this.admit(ev);
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ status: 'ok' }));
+      await this.client.acceptHttp(request, response);
     } catch (error) {
       logger.error('OneBot12 webhook error:', error);
       if (!response.headersSent) {
@@ -222,23 +220,4 @@ export class OneBot12WebhookEndpoint extends Endpoint<Onebot12Client> {
       }
     }
   }
-}
-
-function oneBot12PlatformEventName(ev: OneBot12Event): string {
-  return [ev.type, ev.detail_type, ev.sub_type].filter(Boolean).join('.');
-}
-
-async function readRequestBody(request: IncomingMessage): Promise<string> {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (size > 1_048_576) {
-      request.destroy();
-      throw new Error('Request body exceeds 1MB');
-    }
-    chunks.push(buffer);
-  }
-  return Buffer.concat(chunks).toString('utf8');
 }

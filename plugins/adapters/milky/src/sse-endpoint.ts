@@ -1,8 +1,8 @@
-import { Endpoint } from 'zhin.js/adapter';
 /**
  * Milky SSE client endpoint — GET text/event-stream on /event.
  */
 import {
+  ClientEndpoint,
   createRecallEndpointControl,
   createEndpointLifecycle,
   type EndpointConnectHandle,
@@ -14,7 +14,7 @@ import {
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { createMilkyEndpointManagement } from './endpoint-management.js';
-import { MilkyClient } from './client.js';
+import { callMilkyClient, createMilkyEndpointClient, forwardMilkyClientEvents, type MilkyClient } from './client.js';
 import {
   buildSendAction,
   buildSseConnectOptions,
@@ -51,23 +51,33 @@ export interface MilkySseEndpointOptions {
   readonly callApi?: typeof callApi;
 }
 
-export class MilkySseEndpoint extends Endpoint<MilkyClient> {
-  readonly client = new MilkyClient((action, params) => this.#callApi(this.apiOptions(), action, params));
+export class MilkySseEndpoint extends ClientEndpoint<MilkyClient> {
+  readonly client: MilkyClient;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: MilkySseEndpointOptions;
   readonly #callApi: typeof callApi;
-  readonly management: EndpointManagement = createMilkyEndpointManagement(this.client);
+  readonly management: EndpointManagement;
   readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
   readonly #lifecycle: EndpointLifecycle;
   #stream?: SseClientHandle;
-  #open = false;
 
   constructor(options: MilkySseEndpointOptions) {
     super();
     this.#logger = getAdapterLogger('milky', options.config.id);
     this.#options = options;
     this.#callApi = options.callApi ?? callApi;
+    this.client = createMilkyEndpointClient(options.config, this.#callApi);
+    this.management = createMilkyEndpointManagement({
+      callApi: (action, params) => callMilkyClient(this.client, action, params),
+    });
+    this.bindClientEvents(
+      (receive) => forwardMilkyClientEvents(this.client, receive),
+      (name, payload) => {
+        if (name === 'event') this.#admitRaw(payload as MilkyEvent);
+      },
+      (_name, error) => this.#warnPlatformEvent(error),
+    );
     this.#lifecycle = createEndpointLifecycle({
       name: options.config.id,
       // reconnect_interval 旧语义为固定间隔：multiplier 1 + 无 jitter + 不封顶
@@ -90,16 +100,8 @@ export class MilkySseEndpoint extends Endpoint<MilkyClient> {
     }
   }
 
-  open(): void {
-    this.#open = true;
-  }
-
-  close(): void {
-    this.#open = false;
-  }
-
   async stop(): Promise<void> {
-    this.#open = false;
+    this.close();
     await this.#lifecycle.stop();
     this.#stream?.close();
     this.#stream = undefined;
@@ -108,7 +110,7 @@ export class MilkySseEndpoint extends Endpoint<MilkyClient> {
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(conversation, message);
-    const data = await this.client.callApi(action, params) as { message_seq?: number } | undefined;
+    const data = await callMilkyClient<{ message_seq?: number }>(this.client, action, params);
     const messageId = formatOutboundMessageId(conversation, data?.message_seq);
     this.#logger.debug(formatCompact({
       op: 'milky_send',
@@ -124,36 +126,26 @@ export class MilkySseEndpoint extends Endpoint<MilkyClient> {
     const parsed = parseMilkyMessageId(id);
     if (!parsed) throw new Error(`Invalid message id: ${id}`);
     if (parsed.message_scene === 'group') {
-      await this.client.callApi('recall_group_message', {
+      await callMilkyClient(this.client, 'recall_group_message', {
         group_id: parsed.peer_id,
         message_seq: parsed.message_seq,
       });
     } else {
-      await this.client.callApi('recall_private_message', {
+      await callMilkyClient(this.client, 'recall_private_message', {
         user_id: parsed.peer_id,
         message_seq: parsed.message_seq,
       });
     }
   }
 
-  admit(event: MilkyEvent): void {
-    if (!this.#open) return;
-    void this.emitPlatform(event.event_type || 'event', event).catch((error) => {
-      this.#logger.warn(formatCompact({
-        op: 'milky_platform_event_failed',
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    });
+  #admitRaw(event: MilkyEvent): void {
     const data = parseMessageReceiveData(event);
     if (!data) return;
     this.#admitMessage(data, event);
   }
 
-  apiOptions(): { baseUrl: string; access_token?: string } {
-    return {
-      baseUrl: this.#options.config.baseUrl,
-      access_token: this.#options.config.access_token,
-    };
+  #warnPlatformEvent(error: unknown): void {
+    this.#logger.warn(formatCompact({ op: 'milky_platform_event_failed', error: error instanceof Error ? error.message : String(error) }));
   }
 
   #admitMessage(data: MilkyIncomingMessage, event: MilkyEvent): void {
@@ -253,7 +245,7 @@ export class MilkySseEndpoint extends Endpoint<MilkyClient> {
   #onMessage(data: string): void {
     try {
       const event = JSON.parse(data) as MilkyEvent;
-      this.admit(event);
+      this.client.ingest(event as Parameters<MilkyClient['ingest']>[0]);
     } catch (error) {
       this.#logger.warn(formatCompact({
         op: 'milky_parse_failed',

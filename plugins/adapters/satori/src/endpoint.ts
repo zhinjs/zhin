@@ -1,8 +1,9 @@
-import { Endpoint } from 'zhin.js/adapter';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 /**
  * SatoriEndpoint — WebSocket and webhook lifecycle, outbound, admit.
  */
 import {
+  ClientEndpoint,
   createEndpointLifecycle,
   type EndpointChannel,
   type EndpointConnectHandle,
@@ -36,7 +37,7 @@ import {
   type SatoriSignal,
 } from './protocol.js';
 import { registerSatoriWebhookRoutes } from './webhook.js';
-import { SatoriClient } from './client.js';
+import { createSatoriEndpointClient, forwardSatoriClientEvents, type SatoriClient } from './client.js';
 import {
   WS_OPEN,
   defaultCreateWebSocket,
@@ -53,8 +54,8 @@ export interface SatoriWsEndpointOptions {
   readonly callApi?: SatoriApiCaller;
 }
 
-export class SatoriWsEndpoint extends Endpoint<SatoriClient> {
-  readonly client = new SatoriClient((resource, method, params) => this.#api(resource, method, params));
+export class SatoriWsEndpoint extends ClientEndpoint<SatoriClient> {
+  readonly client: SatoriClient;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: SatoriWsEndpointOptions;
@@ -62,10 +63,7 @@ export class SatoriWsEndpoint extends Endpoint<SatoriClient> {
   #ws: SatoriWsSocket | null = null;
   #login: SatoriLogin | undefined;
   #lastSn: number | undefined;
-  #open = false;
-  readonly management: EndpointManagement = createSatoriEndpointManagement(
-    (resource, method, params) => this.client.callApi(resource, method, params),
-  );
+  readonly management: EndpointManagement;
   readonly control: EndpointControl = Object.freeze<EndpointControl>({
     recall: (message) => this.recall(message.id, message.conversation.id),
   });
@@ -74,6 +72,21 @@ export class SatoriWsEndpoint extends Endpoint<SatoriClient> {
     super();
     this.#logger = getAdapterLogger('satori', options.config.id);
     this.#options = options;
+    this.client = createSatoriEndpointClient(
+      options.config,
+      options.callApi ?? callSatoriApi,
+      () => this.#apiOptions(),
+    );
+    this.management = createSatoriEndpointManagement(
+      (resource, method, params) => this.client.call(resource, method, params),
+    );
+    this.bindClientEvents(
+      (receive) => forwardSatoriClientEvents(this.client, receive),
+      (name, payload) => {
+        if (name === 'event') this.#admitRaw(payload as SatoriEventBody);
+      },
+      (name, error) => this.#warnPlatformEvent(name, error),
+    );
     const { config } = options;
     this.#lifecycle = createEndpointLifecycle({
       name: config.id,
@@ -109,16 +122,8 @@ export class SatoriWsEndpoint extends Endpoint<SatoriClient> {
     }
   }
 
-  open(): void {
-    this.#open = true;
-  }
-
-  close(): void {
-    this.#open = false;
-  }
-
   async stop(): Promise<void> {
-    this.#open = false;
+    this.close();
     // 基座负责：清重连/心跳定时器、强关 ws、唤醒 stop-during-connect 竞态
     await this.#lifecycle.stop();
     this.#ws = null;
@@ -126,7 +131,7 @@ export class SatoriWsEndpoint extends Endpoint<SatoriClient> {
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const content = formatSatoriOutbound(payload);
-    const result = await this.client.callApi('message', 'create', {
+    const result = await this.client.call('message', 'create', {
       channel_id: conversation.id,
       content,
     });
@@ -140,16 +145,7 @@ export class SatoriWsEndpoint extends Endpoint<SatoriClient> {
     return msgId ? formatMessageId(conversation.id, msgId) : '';
   }
 
-  /** Test / internal: admit a gateway event when the endpoint is open. */
-  admit(body: SatoriEventBody): void {
-    if (!this.#open) return;
-    void this.emitPlatform(body.type ?? 'event', body).catch((error) => {
-      this.#logger.warn(formatCompact({
-        op: 'satori_platform_event_failed',
-        event: body.type ?? 'event',
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    });
+  #admitRaw(body: SatoriEventBody): void {
     if (body.login && !this.#login) this.#login = body.login;
     if (!isMessageEvent(body)) return;
     const conversation = satoriInboundConversation(String(this.#options.id), body);
@@ -181,27 +177,18 @@ export class SatoriWsEndpoint extends Endpoint<SatoriClient> {
 
   async recall(id: string, fallbackChannelId?: string): Promise<void> {
     const { channelId, messageId } = parseMessageRef(id);
-    await this.client.callApi('message', 'delete', {
+    await this.client.call('message', 'delete', {
       channel_id: channelId || fallbackChannelId || '',
       message_id: messageId,
     });
   }
 
-  /** Test helper: inject a READY login without a live socket. */
-  setLogin(login: SatoriLogin): void {
-    this.#login = login;
-  }
-
-  admitMeta(body: SatoriEventBody): void {
-    if (!this.#open) return;
-    if (body.login) this.#login = body.login;
-    void this.emitPlatform('meta', body).catch((error) => {
-      this.#logger.warn(formatCompact({
-        op: 'satori_platform_event_failed',
-        event: 'meta',
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    });
+  #warnPlatformEvent(name: string, error: unknown): void {
+    this.#logger.warn(formatCompact({
+      op: 'satori_platform_event_failed',
+      event: name,
+      error: error instanceof Error ? error.message : String(error),
+    }));
   }
 
   async #connect(handle: EndpointConnectHandle): Promise<void> {
@@ -314,7 +301,7 @@ export class SatoriWsEndpoint extends Endpoint<SatoriClient> {
     }
     if (signal.op === SatoriOpcode.EVENT && signal.body) {
       if (typeof signal.body.sn === 'number') this.#lastSn = signal.body.sn;
-      this.admit(signal.body as SatoriEventBody);
+      this.client.ingest(signal.body as Parameters<SatoriClient['ingest']>[0]);
     }
   }
 
@@ -332,14 +319,6 @@ export class SatoriWsEndpoint extends Endpoint<SatoriClient> {
     };
   }
 
-  #api(
-    resource: string,
-    method: string,
-    params: Record<string, unknown>,
-  ): Promise<unknown> {
-    const call = this.#options.callApi ?? callSatoriApi;
-    return call(this.#apiOptions(), resource, method, params);
-  }
 }
 
 export interface SatoriWebhookEndpointOptions {
@@ -349,18 +328,15 @@ export interface SatoriWebhookEndpointOptions {
   readonly callApi?: SatoriApiCaller;
 }
 
-export class SatoriWebhookEndpoint extends Endpoint<SatoriClient> {
-  readonly client = new SatoriClient((resource, method, params) => this.#api(resource, method, params));
+export class SatoriWebhookEndpoint extends ClientEndpoint<SatoriClient> {
+  readonly client: SatoriClient;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: SatoriWebhookEndpointOptions;
   #login: SatoriLogin | undefined;
   #routeReleases: HttpRouteRegistration[] = [];
-  #open = false;
   #started = false;
-  readonly management: EndpointManagement = createSatoriEndpointManagement(
-    (resource, method, params) => this.client.callApi(resource, method, params),
-  );
+  readonly management: EndpointManagement;
   readonly control: EndpointControl = Object.freeze<EndpointControl>({
     recall: (message) => this.recall(message.id, message.conversation.id),
   });
@@ -369,15 +345,34 @@ export class SatoriWebhookEndpoint extends Endpoint<SatoriClient> {
     super();
     this.#logger = getAdapterLogger('satori', options.config.id);
     this.#options = options;
+    this.client = createSatoriEndpointClient(
+      options.config,
+      options.callApi ?? callSatoriApi,
+      () => this.#apiOptions(),
+    );
+    this.management = createSatoriEndpointManagement(
+      (resource, method, params) => this.client.call(resource, method, params),
+    );
+    this.bindClientEvents(
+      (receive) => forwardSatoriClientEvents(this.client, receive),
+      (name, payload) => {
+        if (name === 'event') this.#admitRaw(payload as SatoriEventBody);
+      },
+      (name, error) => this.#warnPlatformEvent(name, error),
+    );
   }
 
   /** Used by webhook handler. */
   get isOpen(): boolean {
-    return this.#open;
+    return this.clientEventsOpen;
   }
 
   get config(): ResolvedSatoriWebhookConfig {
     return this.#options.config;
+  }
+
+  async acceptHttp(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    await this.client.acceptHttp(request, response);
   }
 
   async start(): Promise<void> {
@@ -401,16 +396,8 @@ export class SatoriWebhookEndpoint extends Endpoint<SatoriClient> {
     }));
   }
 
-  open(): void {
-    this.#open = true;
-  }
-
-  close(): void {
-    this.#open = false;
-  }
-
   async stop(): Promise<void> {
-    this.#open = false;
+    this.close();
     for (const release of this.#routeReleases.splice(0)) release();
     this.#started = false;
     this.#logger.debug(formatCompact({
@@ -420,7 +407,7 @@ export class SatoriWebhookEndpoint extends Endpoint<SatoriClient> {
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const content = formatSatoriOutbound(payload);
-    const result = await this.client.callApi('message', 'create', {
+    const result = await this.client.call('message', 'create', {
       channel_id: conversation.id,
       content,
     });
@@ -434,15 +421,7 @@ export class SatoriWebhookEndpoint extends Endpoint<SatoriClient> {
     return msgId ? formatMessageId(conversation.id, msgId) : '';
   }
 
-  admit(body: SatoriEventBody): void {
-    if (!this.#open) return;
-    void this.emitPlatform(body.type ?? 'event', body).catch((error) => {
-      this.#logger.warn(formatCompact({
-        op: 'satori_platform_event_failed',
-        event: body.type ?? 'event',
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    });
+  #admitRaw(body: SatoriEventBody): void {
     if (body.login && !this.#login) this.#login = body.login;
     if (!isMessageEvent(body)) return;
     const conversation = satoriInboundConversation(String(this.#options.id), body);
@@ -474,27 +453,18 @@ export class SatoriWebhookEndpoint extends Endpoint<SatoriClient> {
 
   async recall(id: string, fallbackChannelId?: string): Promise<void> {
     const { channelId, messageId } = parseMessageRef(id);
-    await this.client.callApi('message', 'delete', {
+    await this.client.call('message', 'delete', {
       channel_id: channelId || fallbackChannelId || '',
       message_id: messageId,
     });
   }
 
-  /** Test helper: inject login without a live webhook push. */
-  setLogin(login: SatoriLogin): void {
-    this.#login = login;
-  }
-
-  admitMeta(body: SatoriEventBody): void {
-    if (!this.#open) return;
-    if (body.login) this.#login = body.login;
-    void this.emitPlatform('meta', body).catch((error) => {
-      this.#logger.warn(formatCompact({
-        op: 'satori_platform_event_failed',
-        event: 'meta',
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    });
+  #warnPlatformEvent(name: string, error: unknown): void {
+    this.#logger.warn(formatCompact({
+      op: 'satori_platform_event_failed',
+      event: name,
+      error: error instanceof Error ? error.message : String(error),
+    }));
   }
 
   #apiOptions(): SatoriApiOptions {
@@ -506,14 +476,6 @@ export class SatoriWebhookEndpoint extends Endpoint<SatoriClient> {
     };
   }
 
-  #api(
-    resource: string,
-    method: string,
-    params: Record<string, unknown>,
-  ): Promise<unknown> {
-    const call = this.#options.callApi ?? callSatoriApi;
-    return call(this.#apiOptions(), resource, method, params);
-  }
 }
 
 function isPrivateChannelType(body: SatoriEventBody): boolean {
