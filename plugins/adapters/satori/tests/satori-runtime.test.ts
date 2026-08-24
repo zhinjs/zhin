@@ -157,6 +157,35 @@ describe('satori protocol helpers', () => {
 });
 
 describe('satori plugin runtime adapter', () => {
+  it('projects non-message requests through the Client public event map', () => {
+    const endpoint = bindTestEndpoint(new SatoriWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: createWsFactory(createMockSocket()),
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const request = vi.fn();
+    endpoint.client.on('request.group', request);
+
+    endpoint.client.ingest({
+      id: 'request-7',
+      type: 'guild-request',
+      platform: 'test',
+      self_id: 'bot-1',
+      timestamp: 1_000,
+      guild: { id: 'guild-1' },
+      user: { id: 'user-1' },
+      message: { id: 'message-1', content: 'please' },
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      request_id: 'request-7',
+      group_id: 'guild-1',
+      user_id: 'user-1',
+      request_type: 'group',
+    }));
+  });
+
   it('routes admitted events through OutboundMessageService when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };

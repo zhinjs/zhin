@@ -35,8 +35,7 @@ export function createOnebot11EndpointClient(
       : 'http://localhost',
     selfId: config.id,
     accessToken: config.access_token,
-    receiveMode: config.connection,
-    ...(config.connection === 'wss' ? { path: config.path } : {}),
+    receiveMode: 'manual',
     call: request,
   });
 }

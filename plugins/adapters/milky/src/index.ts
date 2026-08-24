@@ -62,3 +62,5 @@ export type {
   MilkyV1Event,
   MilkyV1Response,
 } from '@imhelper/milky-v1';
+export { ProtocolError } from '@imhelper/milky-v1';
+export type { ProtocolErrorKind, ProtocolErrorOptions } from 'imhelper';

@@ -60,3 +60,5 @@ export type {
   SatoriV1Event,
   SatoriV1Response,
 } from '@imhelper/satori-v1';
+export { ProtocolError } from '@imhelper/satori-v1';
+export type { ProtocolErrorKind, ProtocolErrorOptions } from 'imhelper';

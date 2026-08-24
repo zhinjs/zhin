@@ -47,14 +47,14 @@
     "directory": "plugins/adapters/onebot12"
   },
   "dependencies": {
-    "@imhelper/onebot-v12": "1.0.6",
+    "@imhelper/onebot-v12": "1.0.7",
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
-    "imhelper": "1.0.6",
+    "imhelper": "1.0.7",
     "ws": "^8.21.1"
   },
   "devDependencies": {

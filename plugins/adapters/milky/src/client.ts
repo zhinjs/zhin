@@ -29,10 +29,7 @@ export function createMilkyEndpointClient(
     baseUrl: config.baseUrl,
     selfId: config.id,
     accessToken: config.access_token,
-    receiveMode: config.connection,
-    ...(config.connection === 'wss' || config.connection === 'webhook'
-      ? { path: config.path }
-      : {}),
+    receiveMode: 'manual',
     call: (action, params) => request(
       {
         baseUrl: config.baseUrl,

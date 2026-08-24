@@ -2201,8 +2201,8 @@ importers:
   plugins/adapters/milky:
     dependencies:
       '@imhelper/milky-v1':
-        specifier: 1.0.6
-        version: 1.0.6(imhelper@1.0.6)
+        specifier: 1.0.7
+        version: 1.0.7(imhelper@1.0.7)
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
@@ -2225,8 +2225,8 @@ importers:
         specifier: workspace:*
         version: link:../../../basic/logger
       imhelper:
-        specifier: 1.0.6
-        version: 1.0.6
+        specifier: 1.0.7
+        version: 1.0.7
       ws:
         specifier: ^8.21.1
         version: 8.21.1
@@ -2308,8 +2308,8 @@ importers:
   plugins/adapters/onebot11:
     dependencies:
       '@imhelper/onebot-v11':
-        specifier: 1.0.6
-        version: 1.0.6(imhelper@1.0.6)
+        specifier: 1.0.7
+        version: 1.0.7(imhelper@1.0.7)
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
@@ -2335,8 +2335,8 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/permission
       imhelper:
-        specifier: 1.0.6
-        version: 1.0.6
+        specifier: 1.0.7
+        version: 1.0.7
       ws:
         specifier: ^8.21.1
         version: 8.21.1
@@ -2366,8 +2366,8 @@ importers:
   plugins/adapters/onebot12:
     dependencies:
       '@imhelper/onebot-v12':
-        specifier: 1.0.6
-        version: 1.0.6(imhelper@1.0.6)
+        specifier: 1.0.7
+        version: 1.0.7(imhelper@1.0.7)
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
@@ -2390,8 +2390,8 @@ importers:
         specifier: workspace:*
         version: link:../../../basic/logger
       imhelper:
-        specifier: 1.0.6
-        version: 1.0.6
+        specifier: 1.0.7
+        version: 1.0.7
       ws:
         specifier: ^8.21.1
         version: 8.21.1
@@ -2528,8 +2528,8 @@ importers:
   plugins/adapters/satori:
     dependencies:
       '@imhelper/satori-v1':
-        specifier: 1.0.6
-        version: 1.0.6(imhelper@1.0.6)
+        specifier: 1.0.7
+        version: 1.0.7(imhelper@1.0.7)
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
@@ -2552,8 +2552,8 @@ importers:
         specifier: workspace:*
         version: link:../../../basic/logger
       imhelper:
-        specifier: 1.0.6
-        version: 1.0.6
+        specifier: 1.0.7
+        version: 1.0.7
       ws:
         specifier: ^8.21.1
         version: 8.21.1
@@ -4114,25 +4114,25 @@ packages:
     peerDependencies:
       '@icqqjs/icqq': '*'
 
-  '@imhelper/milky-v1@1.0.6':
-    resolution: {integrity: sha512-ItPclZRAKLQKHf5QC/gNYxr9fjsqKH/i/6QKvUpTUNSsjKwDBxE00U109OiDpoDnYQVEVlk/dyIvSI0qHfVN/Q==}
+  '@imhelper/milky-v1@1.0.7':
+    resolution: {integrity: sha512-ayerD8D3LFMgZDF0rM1XaoihwZ7UQGlCD0jFyztjx1Uq3JTUKIQlbKhjS90oaLGN2W2tlieYa0BYHbYU5uH+MQ==}
     peerDependencies:
-      imhelper: 1.0.6
+      imhelper: 1.0.7
 
-  '@imhelper/onebot-v11@1.0.6':
-    resolution: {integrity: sha512-41CxFSJzvhUyG3oz63SjfLR3VaXu04M3S7ORO2gHFPCRa3tfaFg2PprQEXTIyM9aYT/+Wfcr3uw4+ry2IGzD4g==}
+  '@imhelper/onebot-v11@1.0.7':
+    resolution: {integrity: sha512-QoMThk/FHSGgaPTEYoFqqQEs6XkjmwM402HUUG39i9tAK8/sJ0Qs/JvhD/DrwILN0N0k3Sry9uahwMzZZ+8MwA==}
     peerDependencies:
-      imhelper: 1.0.6
+      imhelper: 1.0.7
 
-  '@imhelper/onebot-v12@1.0.6':
-    resolution: {integrity: sha512-Jg2i+MvhReimDb/K58TyLOdFtBU7ojPSpfGxUslQaOL+RY6zzA1eD0W1lg+HZzGQmPX9wOvrA4sezZc6PfqJvw==}
+  '@imhelper/onebot-v12@1.0.7':
+    resolution: {integrity: sha512-bNHshtOBxpMcZMOYUgpvLYCnmtsfKpeYRyQhYJ2S/wJgGhu5JrkHb741YDlQh9JV78SemNJ2uJ/EAH8KPXA1Mg==}
     peerDependencies:
-      imhelper: 1.0.6
+      imhelper: 1.0.7
 
-  '@imhelper/satori-v1@1.0.6':
-    resolution: {integrity: sha512-/x25QF1pC4WSyCTH2jfhz4x+JglXMZnqWlikmlHs0E9lsD5Ve2X5U2MjiSm2U/XgvBO6Yidnv5zmqPzi4YrQWw==}
+  '@imhelper/satori-v1@1.0.7':
+    resolution: {integrity: sha512-+LUOfrv1k/z4M0S3WguLLb2D2WOgNWtg7pjBSaGpnYM5X1+onUS8Q61HjviIMlJ8125kemm1LmBsOv//az94xQ==}
     peerDependencies:
-      imhelper: 1.0.6
+      imhelper: 1.0.7
 
   '@inquirer/ansi@2.0.7':
     resolution: {integrity: sha512-3eTuUO1vH2cZm2ZKHeQxnOqlTi9EfZDGgIe3BL3I4u+rJHocr9Fz86M4fjYABPvFnQG/gGK551HqDiIcETwU6Q==}
@@ -7108,8 +7108,8 @@ packages:
     resolution: {integrity: sha512-z5DxEA1uRnZG73UcPA4ES5NSCGnPuuouUx43OPX7KZx1yzq3N8/vx2mtXEShT5inxB3pRgnfG1hijfu7XN2YMw==}
     engines: {node: '>=0.8.0'}
 
-  imhelper@1.0.6:
-    resolution: {integrity: sha512-27bgQzT9xcTFIC1F0jxn95uzcoTqi9Afv208hUgd/tYgpXjPDFNhdGijLWyYXSdIN4rxgi9cromr1E+hPw1yTg==}
+  imhelper@1.0.7:
+    resolution: {integrity: sha512-esjgPvjdPtdH8Rr/gefO0CHJtYslq8/vXSgwF5DFi5BPiU73cslIFTX7AahK2L+7j0wyUPIO7R/ACfZBcJLsLw==}
 
   import-meta-resolve@4.2.0:
     resolution: {integrity: sha512-Iqv2fzaTQN28s/FwZAoFq0ZSs/7hMAHJVX+w8PZl3cY19Pxk6jFFalxQoIfW2826i/fDLXv8IiEZRIT0lDuWcg==}
@@ -9623,33 +9623,33 @@ snapshots:
       '@icqqjs/icqq': 1.12.3
     optional: true
 
-  '@imhelper/milky-v1@1.0.6(imhelper@1.0.6)':
+  '@imhelper/milky-v1@1.0.7(imhelper@1.0.7)':
     dependencies:
-      imhelper: 1.0.6
+      imhelper: 1.0.7
       ws: 8.21.1
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@imhelper/onebot-v11@1.0.6(imhelper@1.0.6)':
+  '@imhelper/onebot-v11@1.0.7(imhelper@1.0.7)':
     dependencies:
-      imhelper: 1.0.6
+      imhelper: 1.0.7
       ws: 8.21.1
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@imhelper/onebot-v12@1.0.6(imhelper@1.0.6)':
+  '@imhelper/onebot-v12@1.0.7(imhelper@1.0.7)':
     dependencies:
-      imhelper: 1.0.6
+      imhelper: 1.0.7
       ws: 8.21.1
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@imhelper/satori-v1@1.0.6(imhelper@1.0.6)':
+  '@imhelper/satori-v1@1.0.7(imhelper@1.0.7)':
     dependencies:
-      imhelper: 1.0.6
+      imhelper: 1.0.7
       ws: 8.21.1
     transitivePeerDependencies:
       - bufferutil
@@ -12826,7 +12826,7 @@ snapshots:
       readable-stream: 1.1.14
       utf7: 1.0.2
 
-  imhelper@1.0.6:
+  imhelper@1.0.7:
     dependencies:
       eventsource: 4.1.1
       ws: 8.21.1

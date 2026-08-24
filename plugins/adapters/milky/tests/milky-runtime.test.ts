@@ -1,5 +1,5 @@
 import { bindTestEndpoint, bindTestEndpointEvents } from '../../test-utils/endpoint.js';
-import { MilkyV1Client } from '@imhelper/milky-v1';
+import { MilkyV1Client, ProtocolError } from '@imhelper/milky-v1';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { milkyRuntimeStateToken } from '../src/milky-runtime-state.js';
@@ -321,7 +321,7 @@ describe('milky protocol helpers', () => {
 });
 
 describe('milky plugin runtime adapter', () => {
-  it('preserves the complete native response from client.call()', async () => {
+  it('exposes a structured ProtocolError with the complete failed response', async () => {
     const response = {
       status: 'failed' as const,
       retcode: 1001,
@@ -336,7 +336,16 @@ describe('milky plugin runtime adapter', () => {
       createWebSocket: () => createMockWs(),
     }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
 
-    await expect(endpoint.client.call('get_login_info')).resolves.toBe(response);
+    const error = await endpoint.client.call('get_login_info').catch((cause) => cause);
+    expect(error).toMatchObject({
+      name: 'ProtocolError',
+      protocol: 'milky-v1',
+      operation: 'get_login_info',
+      kind: 'protocol',
+      code: 1001,
+      response,
+    });
+    expect(error).toBeInstanceOf(ProtocolError);
   });
 
   it('exposes the published Client and routes ingest through its public event stream', async () => {
@@ -384,6 +393,37 @@ describe('milky plugin runtime adapter', () => {
       name: 'platform.receive',
       payload: { name: 'event', event: rawEvent },
       client: endpoint.client,
+    }));
+  });
+
+  it('projects non-message requests through the Client public event map', () => {
+    const endpoint = bindTestEndpointEvents(new MilkyWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      callApi: vi.fn(async () => ({})),
+      createWebSocket: () => createMockWs(),
+    }), { receive: vi.fn() });
+    const request = vi.fn();
+    endpoint.client.on('request.group', request);
+
+    endpoint.client.ingest({
+      event_type: 'group_join_request',
+      time: 1,
+      self_id: 1,
+      data: {
+        notification_seq: 7,
+        group_id: 200,
+        initiator_id: 42,
+        is_filtered: false,
+        comment: 'please',
+      },
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      group_id: '200',
+      user_id: '42',
+      request_type: 'group',
     }));
   });
 

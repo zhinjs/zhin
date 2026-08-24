@@ -1,4 +1,5 @@
 import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { ProtocolError } from '@imhelper/onebot-v12';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { onebot12RuntimeStateToken } from '../src/onebot12-runtime-state.js';
@@ -487,7 +488,7 @@ describe('onebot12 plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('preserves failed status, message, data and echo from client.call()', async () => {
+  it('exposes failed status, data and echo through ProtocolError', async () => {
     const ws = createMockWs();
     const endpoint = bindTestEndpoint(new OneBot12WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
@@ -512,8 +513,47 @@ describe('onebot12 plugin runtime adapter', () => {
     };
     ws.emitMessage(JSON.stringify(response));
 
-    await expect(call).resolves.toEqual(response);
+    const error = await call.catch((cause) => cause);
+    expect(error).toMatchObject({
+      protocol: 'onebot-v12',
+      operation: 'get_status',
+      kind: 'protocol',
+      code: 1404,
+      response,
+    });
+    expect(error).toBeInstanceOf(ProtocolError);
     await endpoint.stop();
+  });
+
+  it('projects non-message requests through the Client public event map', () => {
+    const endpoint = bindTestEndpoint(new OneBot12WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => createMockWs(),
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const request = vi.fn();
+    endpoint.client.on('request.group', request);
+
+    endpoint.client.ingest({
+      id: 'event-7',
+      time: 1,
+      type: 'request',
+      detail_type: 'group',
+      sub_type: 'add',
+      self: { platform: 'qq', user_id: 'bot-1' },
+      request_id: 'request-7',
+      group_id: '200',
+      user_id: '42',
+      message: 'please',
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      request_id: 'request-7',
+      group_id: '200',
+      user_id: '42',
+      sub_type: 'add',
+    }));
   });
 
   it('uploads base64 media via upload_file then sends file_id segment', async () => {

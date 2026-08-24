@@ -63,3 +63,5 @@ export type {
   OneBotV12Event as ImHelperOneBotV12Event,
   OneBotV12Response,
 } from '@imhelper/onebot-v12';
+export { ProtocolError } from '@imhelper/onebot-v12';
+export type { ProtocolErrorKind, ProtocolErrorOptions } from 'imhelper';

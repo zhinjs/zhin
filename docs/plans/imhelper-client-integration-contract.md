@@ -4,8 +4,8 @@ sidebar: false
 
 # Platform Client × Zhin integration contract
 
-> 实施状态（2026-08-24）：Zhin 已接入 `imhelper@1.0.6` 及 Milky V1、Satori V1、
-> OneBot 11/12 `1.0.6` Client。下文既记录已落地契约，也列出仍适合在上游继续收紧的边界。
+> 实施状态（2026-08-24）：Zhin 已接入 `imhelper@1.0.7` 及 Milky V1、Satori V1、
+> OneBot 11/12 `1.0.7` Client。下文既记录已落地契约，也列出仍适合在上游继续收紧的边界。
 
 这份契约适用于所有 Zhin 平台适配器：ICQQ 等 SDK 实例、Discord/Slack/Telegram 等平台
 Client，以及 `imhelper` / `@imhelper/*` 协议 Client。目标是让事件直接暴露真实 Client，
@@ -36,7 +36,7 @@ SSE、Webhook 子类只实现各自 transport 与账号生命周期，不再各�
 
 ## imhelper 已提供的公开构造面
 
-`1.0.6` 已从各协议包公开稳定 Client 类和工厂，例如 `OneBotV11Client` /
+`1.0.7` 已从各协议包公开稳定 Client 类和工厂，例如 `OneBotV11Client` /
 `createOnebot11Client()`。Client 继承 `ImHelper`，公开原生 `call()`、完整平台能力、精确事件
 重载以及三种宿主注入入口：
 
@@ -72,7 +72,7 @@ export interface OneBotV11ClientEventMap {
   // 未知扩展事件仍由 `event` 保底，不静默丢弃。
 }
 export type OneBotV11ClientEventName = keyof OneBotV11ClientEventMap
-export class OneBotV11ProtocolError extends Error { /* status/action/retcode */ }
+export class ProtocolError extends Error { /* protocol/operation/kind/code/response */ }
 ```
 
 EventMap 固定使用“事件名 → payload”的映射，不把 listener 函数签名当 payload，也不以
@@ -249,17 +249,14 @@ Zhin `Endpoint` 负责决定何时调用它们。
 
 ## 上游仍可继续优化的边界
 
-- 当前 `1.0.6` 的 EventMap 声明了全部 canonical 事件，但运行时投影尚未闭合：
-  OneBot 11/12 只投影已知消息，Milky 只投影消息与撤回；其他
-  notice/request/meta 只会触发原始 `event`。这会使 `client.on('request.group', ...)`
-  和同名 Zhin handler 通过类型检查却不触发。上游应让每个协议 adapter 的
-  `transformEvent()` 覆盖其声明的每个投影，或把 EventMap 收窄到真正会发出的事件。
-- `OneBotV12Response` 缺少协议 action response 实际包含的 `echo`，因此
-  `$client.call()` 运行时会完整返回 echo，但 TypeScript 无法读取。该字段应补到上游响应类型。
-- 四个协议包尚未公开结构化协议错误类型。Client 的原生 `call()` 应原样返回
-  `status/retcode/data/message/echo`；网络、HTTP 和解析失败则应抛出带 action/status 的结构化错误。
-- 增加显式 `receiveMode: 'manual'`（或允许不创建 receiver）。Zhin 当前虽不调用
-  `start()`，但 Client 构造时仍会创建一个永不启动的 receiver。
+- `1.0.7` 已补齐 Milky、Satori、OneBot 11/12 声明的 canonical 非消息事件投影、
+  `OneBotV12Response.echo`、统一 `ProtocolError` 和 `receiveMode: 'manual'`。Zhin 的 Client
+  全部使用 manual 模式，transport 生命周期只存在于 Endpoint，并以 Client 公开事件行为做回归测试。
+- 各协议包目前只从入口重导出 `ProtocolError` 值，未同时重导出 `ProtocolErrorKind` /
+  `ProtocolErrorOptions`；Zhin 适配器入口已补齐这两个类型，上游协议包也应闭合自己的公开构造类型。
+- 注入 `call` 抛出的非 `ProtocolError` 当前统一被标成 `kind: 'protocol'`。虽然原始错误保留在
+  `cause`，但网络失败、宿主配置错误也会被误分类；上游应允许注入方提供错误种类，或把未知调用异常
+  默认归为 `transport`。
 - 为 OneBot 双工 WS 提供可注入的 action-response classifier，或明确文档说明
   `acceptWebSocket()` 仅适合纯事件 socket。Zhin 目前正确地先按 `echo` 分流，再只对事件调用
   `ingest()`；Milky 纯事件 WS/WSS 则直接使用 `acceptWebSocket()`。

@@ -1,4 +1,5 @@
 import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { ProtocolError } from '@imhelper/onebot-v11';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { onebot11RuntimeStateToken } from '../src/onebot11-runtime-state.js';
@@ -500,7 +501,7 @@ describe('onebot11 plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('preserves failed status, message, data and echo from client.call()', async () => {
+  it('exposes failed status, data and echo through ProtocolError', async () => {
     const ws = createMockWs();
     const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
@@ -525,8 +526,46 @@ describe('onebot11 plugin runtime adapter', () => {
     };
     ws.emitMessage(JSON.stringify(response));
 
-    await expect(call).resolves.toEqual(response);
+    const error = await call.catch((cause) => cause);
+    expect(error).toMatchObject({
+      protocol: 'onebot-v11',
+      operation: 'get_status',
+      kind: 'protocol',
+      code: 1404,
+      response,
+    });
+    expect(error).toBeInstanceOf(ProtocolError);
     await endpoint.stop();
+  });
+
+  it('projects non-message requests through the Client public event map', () => {
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => createMockWs(),
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const request = vi.fn();
+    endpoint.client.on('request.group', request);
+
+    endpoint.client.ingest({
+      time: 1,
+      self_id: 1,
+      post_type: 'request',
+      request_type: 'group',
+      sub_type: 'add',
+      flag: 'request-7',
+      group_id: 200,
+      user_id: 42,
+      comment: 'please',
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      flag: 'request-7',
+      group_id: 200,
+      user_id: 42,
+      sub_type: 'add',
+    }));
   });
 
   it('admits inbound events received over the socket when open', async () => {

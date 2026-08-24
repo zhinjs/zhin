@@ -38,7 +38,7 @@ export function createOnebot12EndpointClient(
     baseUrl,
     selfId: config.id,
     accessToken: config.access_token,
-    receiveMode: config.connection,
+    receiveMode: 'manual',
     call: request,
   });
 }

@@ -28,8 +28,7 @@ export function createSatoriEndpointClient(
     baseUrl: config.baseUrl,
     selfId: config.id,
     accessToken: config.token,
-    receiveMode: config.connection,
-    ...(config.connection === 'webhook' ? { path: config.path } : {}),
+    receiveMode: 'manual',
     call: (resource, method, params) => request(apiOptions(), resource, method, params ?? {}),
   });
 }
