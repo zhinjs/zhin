@@ -84,7 +84,6 @@ export default defineCommand({
   permit: ['adapter(icqq)'],
   execute: async (context) => {
     const { sender, args, segments } = context;
-    console.log(sender);
 
     const parsed = parseZanArgs({
       args,
