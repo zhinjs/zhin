@@ -313,7 +313,7 @@ function normalizeDefinitions(
     if (!Array.isArray(definition.members)) throw new Error(`Invalid Workroom Catalog ${projectId}.members`);
     const members = definition.members.map((member, index) => {
       if (!isRecord(member)) throw new Error(`Invalid Workroom Catalog ${projectId}.members.${index}`);
-      exactKeys(member, ['agent', 'role', 'assignmentRoute'], `${projectId}.members.${index}`);
+      exactKeys(member, ['agent', 'role', 'assignmentRoute', 'messageRoute'], `${projectId}.members.${index}`);
       text(member.agent, `${projectId}.members.${index}.agent`);
       if (!['orchestrator', 'executor', 'reviewer', 'integration'].includes(String(member.role))) {
         throw new Error(`Invalid Workroom Catalog ${projectId}.members.${index}.role`);
@@ -334,10 +334,24 @@ function normalizeDefinitions(
           throw new Error(`Invalid Workroom Catalog ${projectId}.members.${index}.assignmentRoute.kind`);
         }
       }
+      let messageRoute: WorkroomDefinition['members'][number]['messageRoute'];
+      if (member.messageRoute !== undefined) {
+        if (!isRecord(member.messageRoute)) {
+          throw new Error(`Invalid Workroom Catalog ${projectId}.members.${index}.messageRoute`);
+        }
+        exactKeys(member.messageRoute, ['adapter', 'endpoint'], `${projectId}.members.${index}.messageRoute`);
+        text(member.messageRoute.adapter, `${projectId}.members.${index}.messageRoute.adapter`);
+        text(member.messageRoute.endpoint, `${projectId}.members.${index}.messageRoute.endpoint`);
+        messageRoute = {
+          adapter: member.messageRoute.adapter,
+          endpoint: member.messageRoute.endpoint,
+        };
+      }
       return {
         agent: member.agent,
         role: member.role,
         ...(assignmentRoute ? { assignmentRoute } : {}),
+        ...(messageRoute ? { messageRoute } : {}),
       } as WorkroomDefinition['members'][number];
     });
     let sponsors: string[] | undefined;

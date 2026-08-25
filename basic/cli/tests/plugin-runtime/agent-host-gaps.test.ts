@@ -86,6 +86,38 @@ describe('process-fixed Workroom storage identity', () => {
     });
   });
 
+  it('resolves each Workroom member messageRoute to an exact runtime Endpoint', () => {
+    const incoming = {
+      endpoint: { id: 'root\0zhin.adapter\0icqq~reviewer', adapter },
+      kind: 'group' as const,
+      id: '129043431',
+    };
+    const binding = createCatalogWorkroomProjectionBinding({
+      revision: 'c'.repeat(64),
+      definitions: {
+        zhin: {
+          name: 'Zhin',
+          members: [
+            { agent: 'zhin', role: 'orchestrator' },
+            {
+              agent: 'reviewer', role: 'reviewer',
+              messageRoute: { adapter: 'icqq', endpoint: 'reviewer' },
+            },
+          ],
+          conversation: {
+            adapter: 'icqq', endpoint: 'main', kind: 'group', id: '129043431', agent: 'zhin',
+          },
+        },
+      },
+    }, 'zhin', incoming, 7, [
+      { id: 'runtime-main', name: 'main', adapter: 'icqq', owner: adapter },
+      { id: 'runtime-reviewer', name: 'reviewer', adapter: 'icqq', owner: adapter },
+    ]);
+
+    expect(binding.conversation.endpoint).toEqual({ id: 'runtime-main', adapter });
+    expect(binding.agents[0]?.messageEndpoint).toEqual({ id: 'runtime-reviewer', adapter });
+  });
+
   it('constructs a distinct persistent Sponsor Room projection binding', () => {
     const conversation = {
       endpoint: { id: 'root\0zhin.adapter\0slack~main', adapter: 'adapter-owner' },

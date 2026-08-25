@@ -30,6 +30,8 @@ export interface WorkroomProjectionAgentIdentity {
   readonly agentDefinitionId: string;
   readonly displayName: string;
   readonly role: 'orchestrator' | WorkroomExecutionRole;
+  /** Exact generation-owned Endpoint used to present this member in the room. */
+  readonly messageEndpoint?: Readonly<{ id: string; adapter: string }>;
 }
 
 export interface WorkroomProjectionBinding {
@@ -1297,7 +1299,7 @@ function projectEvent(
     sourceSequence: event.sequence,
     bindingRevision: binding.bindingRevision,
     projectionPolicyRevision: binding.projectionPolicyRevision,
-    conversation: binding.conversation,
+    conversation: projectionConversationForSpeaker(binding, speaker),
     speaker,
     kind: definition.kind,
     content: `[${speaker.displayName} · ${speaker.role}] ${definition.content}`,
@@ -1677,6 +1679,17 @@ function requireAgentIdentity(
   return matches[0]!;
 }
 
+function projectionConversationForSpeaker(
+  binding: WorkroomProjectionBinding,
+  speaker: WorkroomProjectionAgentIdentity,
+): WorkroomProjectionConversation {
+  if (!speaker.messageEndpoint) return binding.conversation;
+  return deepFreeze({
+    ...binding.conversation,
+    endpoint: speaker.messageEndpoint,
+  });
+}
+
 function freezeAndValidateBinding(value: WorkroomProjectionBinding): WorkroomProjectionBinding {
   if (value.version !== 1) throw new Error('Workroom Projection binding version is unsupported');
   projectionAudience(value);
@@ -1767,6 +1780,10 @@ function requireIdentity(value: WorkroomProjectionAgentIdentity, label: string):
   requireText(value.displayName, `${label}.displayName`);
   if (!['orchestrator', 'executor', 'reviewer', 'integration'].includes(value.role)) {
     throw new Error(`Workroom Projection ${label}.role is invalid`);
+  }
+  if (value.messageEndpoint) {
+    requireText(value.messageEndpoint.id, `${label}.messageEndpoint.id`);
+    requireText(value.messageEndpoint.adapter, `${label}.messageEndpoint.adapter`);
   }
 }
 

@@ -175,6 +175,44 @@ describe('production human ingress Orchestrator admission', () => {
       .rejects.toThrow('not found');
   });
 
+  it('reads a source whose runtime Endpoint identity contains canonical separators', async () => {
+    const runtimeConversation = Object.freeze({
+      endpoint: Object.freeze({
+        adapter: 'root/icqq',
+        id: 'root/icqq\0zhin.adapter\0icqq~8596238',
+      }),
+      kind: 'group' as const,
+      id: '129043431',
+    });
+    const ref = Object.freeze({ conversation: runtimeConversation, id: 'message-runtime-1' });
+    const event = Object.freeze({
+      eventId: `message:${messageRefKey(ref)}`,
+      conversation: runtimeConversation,
+      timestamp: 100,
+      type: 'message.created' as const,
+      message: Object.freeze({
+        ref,
+        actor: Object.freeze({ id: 'human-1' }),
+        segments: Object.freeze([{ type: 'text', data: Object.freeze({ text: '@bot hello' }) }]),
+        timestamp: 100,
+      }),
+    });
+    const store = new MemoryConversationEventStore();
+    await store.append(event);
+
+    await expect(new ConversationEventHumanIngressSourceReader(store).read({
+      ref: `conversation-event:${event.eventId}`,
+      digest: digestHumanIngressConversationEvent(1, event),
+      sequence: 1,
+      conversationKey: conversationRefKey(runtimeConversation),
+    })).resolves.toMatchObject({
+      eventId: event.eventId,
+      text: '@bot hello',
+      sequence: 1,
+      event: { conversation: runtimeConversation },
+    });
+  });
+
   it('turns explicit work into a typed Plan admission and replays the same operation without duplicate Tasks', async () => {
     const store = new MemoryConversationEventStore();
     const event = sourceEvent();

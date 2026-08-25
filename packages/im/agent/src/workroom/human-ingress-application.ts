@@ -193,6 +193,8 @@ export interface HumanIngressApplicationServiceOptions {
   readonly now?: () => number;
   readonly claimLeaseMs?: number;
   readonly retryDelayMs?: number;
+  /** Ephemeral diagnostics only; durable retry events remain content-free. */
+  readonly onError?: (error: unknown, request: HumanIngressApplicationRequest) => void;
 }
 
 /** Crash/restart-safe consumer for durable, content-free human proposals. */
@@ -278,6 +280,7 @@ export class HumanIngressApplicationService {
     } catch (error) {
       if (error instanceof HumanIngressApplicationSequenceConflictError
         || error instanceof HumanIngressApplicationReplayConflictError) throw error;
+      this.options.onError?.(error, request);
       const retryAt = safeTime(this.#now(), 'now') + this.#retryDelayMs;
       const retry = eventDraft(identity, safeTime(this.#now(), 'now'), attempt, fence, {
         type: 'proposal.retry_scheduled' as const,

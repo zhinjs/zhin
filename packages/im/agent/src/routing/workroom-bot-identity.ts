@@ -35,15 +35,23 @@ export function resolveWorkroomBotIdentity(
       ['workroom', workroom.conversation],
       ['sponsor_room', workroom.sponsorConversation],
     ] as const).flatMap(([space, conversation]) => {
-      if (!conversation || conversation.adapter !== input.adapter
-        || conversation.endpoint !== input.endpoint || conversation.kind !== input.kind
+      if (!conversation || conversation.kind !== input.kind
         || !sameSpaceId(conversation.kind, conversation.id, input.id)) return [];
+      const routedMember = space === 'workroom'
+        ? workroom.members.find(member => member.messageRoute?.adapter === input.adapter
+          && member.messageRoute.endpoint === input.endpoint)
+        : undefined;
+      const usesPrimaryEndpoint = conversation.adapter === input.adapter
+        && conversation.endpoint === input.endpoint;
+      if (!usesPrimaryEndpoint && !routedMember) return [];
       return [(() => {
-        const member = workroom.members.find((candidate) => candidate.agent === conversation.agent);
+        const member = routedMember ?? workroom.members.find(
+          candidate => candidate.agent === conversation.agent,
+        );
         if (!member) {
           throw new Error(`Workroom ${projectId} conversation has no member identity`);
         }
-        return { projectId, agent: conversation.agent, role: member.role, space };
+        return { projectId, agent: member.agent, role: member.role, space };
       })()];
     }));
   const selected = input.projectId && matches.every(match => match.space === 'sponsor_room')

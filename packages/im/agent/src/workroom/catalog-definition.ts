@@ -8,12 +8,20 @@ export type WorkroomAssignmentRouteDefinition =
   | { readonly kind: 'local' }
   | { readonly kind: 'remote'; readonly endpointId: string };
 
+/** Selects the Bot/App Endpoint that presents one member inside the shared room. */
+export interface WorkroomMessageRouteDefinition {
+  readonly adapter: string;
+  readonly endpoint: string;
+}
+
 /** One named Agent participating in a Project-scoped Workroom. */
 export interface WorkroomAgentMemberDefinition {
   /** References ai.agents.<name>. */
   agent: string;
   role: WorkroomMemberRole;
   assignmentRoute?: WorkroomAssignmentRouteDefinition;
+  /** Omit to send this member's projections through the room's primary Endpoint. */
+  messageRoute?: WorkroomMessageRouteDefinition;
 }
 
 export type WorkroomSpaceKind = 'group' | 'channel' | 'repository';

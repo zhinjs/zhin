@@ -204,6 +204,8 @@ export class WorkroomHumanIngressPreRoute {
         for (const application of applications) {
           if (application.status === 'clarification_required') {
             await message.$reply(renderHumanIngressClarification(application.reason));
+          } else if (application.status === 'applied') {
+            await message.$reply(renderHumanIngressReceipt(application.kind, decision.projectId));
           }
         }
         return true;
@@ -253,6 +255,19 @@ export class WorkroomHumanIngressPreRoute {
       sourceDigest: desired.sourceDigest,
     });
   }
+}
+
+function renderHumanIngressReceipt(
+  kind: 'discussion_recorded' | 'plan_proposal_submitted' | 'control_proposal_submitted',
+  projectId: string,
+): string {
+  if (kind === 'plan_proposal_submitted') {
+    return `已收到，Workroom「${projectId}」已提交工作计划。`;
+  }
+  if (kind === 'control_proposal_submitted') {
+    return `已收到，Workroom「${projectId}」已提交控制请求。`;
+  }
+  return `已收到，消息已进入 Workroom「${projectId}」项目收件箱。`;
 }
 
 function createEmbeddedSourceEvent(

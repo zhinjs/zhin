@@ -17,6 +17,27 @@ describe('resolveWorkroomBotIdentity', () => {
     });
   });
 
+  it('resolves a member Bot through its persisted messageRoute in the same shared room', () => {
+    expect(resolveWorkroomBotIdentity({
+      support: {
+        name: 'Support',
+        members: [
+          { agent: 'zhin', role: 'orchestrator' },
+          {
+            agent: 'reviewer', role: 'reviewer',
+            messageRoute: { adapter: 'icqq', endpoint: 'reviewer-bot' },
+          },
+        ],
+        conversation: {
+          adapter: 'icqq', endpoint: 'zhin-bot', kind: 'group', id: 'support-room', agent: 'zhin',
+        },
+      },
+    }, { adapter: 'icqq', endpoint: 'reviewer-bot', kind: 'group', id: 'support-room' }))
+      .toEqual({
+        projectId: 'support', agent: 'reviewer', role: 'reviewer', space: 'workroom',
+      });
+  });
+
   it('ignores disabled Workrooms and rejects ambiguous enabled ownership', () => {
     const conversation = { adapter: 'telegram', endpoint: 'bot', kind: 'group' as const, id: 'room', agent: 'zhin' };
     const workroom = { name: 'Room', members: [{ agent: 'zhin', role: 'orchestrator' as const }], conversation };
