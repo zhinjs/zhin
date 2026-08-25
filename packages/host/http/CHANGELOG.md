@@ -1,5 +1,11 @@
 # @zhin.js/host-http
 
+## 1.0.15
+
+### Patch Changes
+
+- d85eddd: Add an end-to-end first-time Workroom planning setup flow: configure trusted Pack publishers, diagnose token/Catalog/Profile/Policy joins in Console, and bootstrap a governed Capability Pack, active Project Profile, and Planning Policy from the exact current generation.
+
 ## 1.0.14
 
 ### Patch Changes

@@ -1,5 +1,46 @@
 # test-bot
 
+## 0.1.147
+
+### Patch Changes
+
+- Updated dependencies [14ebc6b]
+- Updated dependencies [d85eddd]
+  - @zhin.js/plugin-word-riddle@1.0.25
+  - @zhin.js/agent@1.1.19
+  - @zhin.js/cli@3.0.19
+  - @zhin.js/client@2.1.13
+  - @zhin.js/contract@1.0.18
+  - zhin.js@6.0.15
+  - @zhin.js/adapter-dingtalk@7.0.4
+  - @zhin.js/adapter-discord@8.0.4
+  - @zhin.js/adapter-github@6.0.4
+  - @zhin.js/adapter-icqq@9.0.5
+  - @zhin.js/adapter-kook@8.0.4
+  - @zhin.js/adapter-lark@7.0.4
+  - @zhin.js/adapter-line@5.0.4
+  - @zhin.js/adapter-milky@7.0.4
+  - @zhin.js/adapter-napcat@7.0.4
+  - @zhin.js/adapter-onebot11@7.0.4
+  - @zhin.js/adapter-qq@8.0.4
+  - @zhin.js/adapter-slack@7.0.4
+  - @zhin.js/adapter-telegram@8.0.4
+  - @zhin.js/adapter-wecom@5.0.4
+  - @zhin.js/service-activity-feedback@3.0.20
+  - @zhin.js/plugin-60s@4.0.19
+  - @zhin.js/plugin-code-runner@4.0.19
+  - @zhin.js/plugin-group-suite@4.0.19
+  - @zhin.js/plugin-lottery@2.0.19
+  - @zhin.js/plugin-qrcode@4.0.19
+  - @zhin.js/plugin-rss@4.0.19
+  - @zhin.js/plugin-short-url@4.0.19
+  - @zhin.js/mcp@6.0.15
+  - @zhin.js/adapter-onebot12@6.0.3
+  - @zhin.js/adapter-sandbox@8.0.3
+  - @zhin.js/adapter-satori@6.0.3
+  - @zhin.js/adapter-wechat-mp@6.0.3
+  - @zhin.js/plugin-music@8.0.5
+
 ## 0.1.146
 
 ### Patch Changes

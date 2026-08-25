@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 1.1.19
+
+### Patch Changes
+
+- d85eddd: Add an end-to-end first-time Workroom planning setup flow: configure trusted Pack publishers, diagnose token/Catalog/Profile/Policy joins in Console, and bootstrap a governed Capability Pack, active Project Profile, and Planning Policy from the exact current generation.
+- Updated dependencies [d85eddd]
+  - @zhin.js/ai@1.5.8
+  - @zhin.js/core@1.5.15
+
 ## 1.1.18
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @zhin.js/plugin-word-riddle
 
+## 1.0.25
+
+### Patch Changes
+
+- 14ebc6b: Make package and CI builds deterministic by reusing the committed character-riddle dataset; downloading the upstream CSV now happens only during an explicit `RIDDLE_REFRESH=1` maintainer refresh.
+  - @zhin.js/core@1.5.15
+  - zhin.js@6.0.15
+
 ## 1.0.24
 
 ### Patch Changes

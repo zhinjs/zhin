@@ -1,5 +1,15 @@
 # qq-games-bot
 
+## 0.1.31
+
+### Patch Changes
+
+- Updated dependencies [14ebc6b]
+  - @zhin.js/plugin-word-riddle@1.0.25
+  - zhin.js@6.0.15
+  - @zhin.js/adapter-qq@8.0.4
+  - @zhin.js/plugin-group-suite@4.0.19
+
 ## 0.1.30
 
 ### Patch Changes
