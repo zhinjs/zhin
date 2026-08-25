@@ -1,5 +1,16 @@
 # @zhin.js/agent
 
+## 1.1.18
+
+### Patch Changes
+
+- a5ee497: Stop Workroom feedback loops in shared IM rooms by consuming trusted Bot principals without confusing Endpoint aliases with platform user IDs. Admit explicit mentions on member Bot endpoints, route projection replies through each member's configured or default primary endpoint, and keep governed `/work` requests inside Workroom when planning is unavailable. Converge stale Workroom projection bindings to the interaction binding revision with monotonic idempotent replay, and preserve Sponsor bindings when one Agent definition occupies multiple member roles.
+- 7108d0b: Resolve uniquely mentioned Workroom members to their active Assignment, isolate Orchestrator turns from ordinary room sessions and conversation tails, remove classic subagent delegation from Workroom capabilities, deliver replies through the canonical Orchestrator Endpoint, reject untrusted bot identity metadata, and recognize implicit default Endpoints during Catalog validation.
+- Updated dependencies [ba7e17a]
+- Updated dependencies [7108d0b]
+  - @zhin.js/core@1.5.15
+  - @zhin.js/ai@1.5.7
+
 ## 1.1.17
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @zhin.js/database
 
+## 1.0.81
+
+### Patch Changes
+
+- a5ee497: Normalize numeric SQLite transaction results so update and delete operations report their affected rows correctly.
+
 ## 1.0.80
 
 ### Patch Changes

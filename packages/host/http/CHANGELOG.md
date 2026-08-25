@@ -1,5 +1,12 @@
 # @zhin.js/host-http
 
+## 1.0.14
+
+### Patch Changes
+
+- a5ee497: Return a renderable empty Agent session tree for canonical channel conversations that have not started an AI conversation yet, while preserving 404 for unknown keys and strict branch mutations.
+- ba7e17a: Prevent concurrent Workroom discussions from losing their Orchestrator handoff, route those handoffs before ordinary commands, resolve cross-Endpoint projection replies through their canonical message reference, respect the global AI trigger switch, and reject unknown canonical Console session keys when the durable inbox is available.
+
 ## 1.0.13
 
 ### Patch Changes
