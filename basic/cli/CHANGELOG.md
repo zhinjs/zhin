@@ -1,5 +1,11 @@
 # @zhin.js/cli
 
+## 3.0.20
+
+### Patch Changes
+
+- c9823b7: Pass the digest-free Capability Pack manifest input through first-time Workroom bootstrap instead of re-submitting the canonical published shape.
+
 ## 3.0.19
 
 ### Patch Changes
