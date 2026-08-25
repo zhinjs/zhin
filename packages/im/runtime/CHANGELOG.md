@@ -1,5 +1,11 @@
 # @zhin.js/runtime
 
+## 1.0.15
+
+### Patch Changes
+
+- 45d4f24: Fix direct ICQQ password configuration, keep Plugin-local JSON Schema references and UI annotations valid during runtime config composition, and make activity feedback rollback safe before generation activation.
+
 ## 1.0.14
 
 ### Patch Changes

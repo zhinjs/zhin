@@ -1,5 +1,12 @@
 # @zhin.js/config-yaml
 
+## 1.0.15
+
+### Patch Changes
+
+- Updated dependencies [45d4f24]
+  - @zhin.js/runtime@1.0.15
+
 ## 1.0.14
 
 ### Patch Changes

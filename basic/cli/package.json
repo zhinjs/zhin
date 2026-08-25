@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/cli",
-  "version": "3.0.15",
+  "version": "3.0.16",
   "description": "Command-line interface for Zhin.js bot framework",
   "type": "module",
   "main": "./lib/index.js",

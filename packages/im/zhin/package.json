@@ -105,7 +105,7 @@
     "@zhin.js/ai": "^1.5.7",
     "@zhin.js/html-renderer": "workspace:^",
     "@zhin.js/speech": "workspace:^",
-    "@zhin.js/runtime": "^1.0.14"
+    "@zhin.js/runtime": "^1.0.15"
   },
   "peerDependenciesMeta": {
     "@zhin.js/agent": {
