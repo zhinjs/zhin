@@ -5,6 +5,7 @@ import {
   requireOauthModel,
   startDeviceFlowBind,
 } from '../../lib/github-oauth.js';
+import { resolveGithubEndpoint } from '../../lib/github-api.js';
 
 /**
  * Bind the chat user to a GitHub identity (PAT or Device Flow).
@@ -12,16 +13,19 @@ import {
  */
 export default defineCommand({
   description: '绑定 GitHub 账号（PAT 或 Device Flow）',
-  execute: async ({ args, input, use }) => {
-    const modelOrError = requireOauthModel(use);
+  execute: async (context) => {
+    const { args, input } = context;
+    const endpoint = resolveGithubEndpoint(context);
+    if (typeof endpoint === 'string') return endpoint;
+    const modelOrError = requireOauthModel(endpoint);
     if (typeof modelOrError === 'string') return modelOrError;
     const identity = platformIdentity(input);
     if (typeof identity === 'string') return identity;
 
     const token = args.join(' ').trim();
     if (token) {
-      return bindWithPat(modelOrError, identity.platform, identity.uid, token);
+      return bindWithPat(endpoint, modelOrError, identity.platform, identity.uid, token);
     }
-    return startDeviceFlowBind(modelOrError, identity.platform, identity.uid);
+    return startDeviceFlowBind(endpoint, modelOrError, identity.platform, identity.uid);
   },
 });

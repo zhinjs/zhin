@@ -4,8 +4,9 @@ import { ghApiMessage, resolveGhClient } from '../../../lib/github-api.js';
 export default defineCommand({
   description: '搜索 GitHub 仓库',
   params: { query: { type: 'string' } },
-  execute: async ({ params, args, input }) => {
-    const api = await resolveGhClient(input);
+  execute: async (context) => {
+    const { params, args } = context;
+    const api = await resolveGhClient(context);
     if (typeof api === 'string') return api;
     const query = [String(params.query), ...args].join(' ').trim();
     if (!query) return '用法: gh search <关键词>';

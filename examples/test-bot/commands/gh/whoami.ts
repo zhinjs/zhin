@@ -4,26 +4,24 @@ import {
   requireOauthModel,
   whoamiOauth,
 } from '../../lib/github-oauth.js';
-import { resolveGhClient } from '../../lib/github-api.js';
-import { getAdapter } from '@zhin.js/adapter-github';
+import { resolveGhClient, resolveGithubEndpoint } from '../../lib/github-api.js';
 
 export default defineCommand({
   description: '查看 Bot / App 与当前用户绑定状态',
-  execute: async ({ input, use }) => {
-    const modelOrError = requireOauthModel(use);
+  execute: async (context) => {
+    const { input } = context;
+    const endpoint = resolveGithubEndpoint(context);
+    if (typeof endpoint === 'string') return endpoint;
+    const modelOrError = requireOauthModel(endpoint);
     if (typeof modelOrError === 'string') {
       // DB missing: still report App identity honestly.
-      const api = await resolveGhClient(input);
+      const api = await resolveGhClient(context);
       if (typeof api === 'string') return `${api}\n${modelOrError}`;
       const auth = await api.verifyAuth();
       let extra = '';
-      try {
-        const installs = getAdapter().getInstallations();
-        if (installs.length) {
-          extra = `\nInstallations: ${installs.map((i) => i.account.login).join(', ')}`;
-        }
-      } catch {
-        /* registry 未就绪 */
+      const installs = endpoint.installations;
+      if (installs.length) {
+        extra = `\nInstallations: ${installs.map((i) => i.account.login).join(', ')}`;
       }
       return auth.ok
         ? `Bot / App: ${auth.user}${extra}\n${modelOrError}`
@@ -31,13 +29,13 @@ export default defineCommand({
     }
     const identity = platformIdentity(input);
     if (typeof identity === 'string') {
-      const api = await resolveGhClient(input);
+      const api = await resolveGhClient(context);
       if (typeof api === 'string') return api;
       const auth = await api.verifyAuth();
       return auth.ok
         ? `Bot / App: ${auth.user}\n${identity}`
         : `GitHub 认证失败: ${auth.message}`;
     }
-    return whoamiOauth(modelOrError, identity.platform, identity.uid);
+    return whoamiOauth(endpoint, modelOrError, identity.platform, identity.uid);
   },
 });

@@ -129,8 +129,10 @@ export function bindActivityFeedbackToAIEventBus(
   runWithView: <T>(operation: () => Promise<T>) => Promise<T>,
 ): () => Promise<void> {
   let stopWatchingRetirement: (() => void) | undefined;
+  let cleanupNeedsGenerationView = false;
   const watchRetirement = () => {
     if (stopWatchingRetirement) return;
+    cleanupNeedsGenerationView = true;
     stopWatchingRetirement = admission.onDeactivate(() => {
       void close();
     });
@@ -148,14 +150,17 @@ export function bindActivityFeedbackToAIEventBus(
   let shutdown: Promise<void> | undefined;
   function close(): Promise<void> {
     if (shutdown) return shutdown;
-    // Retirement is published before SnapshotStore changes its current pointer.
-    // Enter the IM view synchronously here so timers, native-typing keepalives,
-    // and final reaction/message cleanup all remain on this generation's Endpoint.
-    shutdown = runWithView(async () => {
+    const cleanup = async () => {
       unsubscribe();
       await serialized.close();
       await orchestrator.dispose();
-    });
+    };
+    // Retirement is published before SnapshotStore changes its current pointer.
+    // Enter the IM view synchronously here so timers, native-typing keepalives,
+    // and final reaction/message cleanup all remain on this generation's Endpoint.
+    // A candidate rolled back before admitting any event has no generation-local
+    // feedback state, and its view is unavailable while Root is still idle.
+    shutdown = cleanupNeedsGenerationView ? runWithView(cleanup) : cleanup();
     return shutdown;
   }
   return async () => {

@@ -1,5 +1,5 @@
 import { defineCommand, type CommandSegment } from 'zhin.js/command';
-import { Actions } from '@zhin.js/adapter-icqq';
+import type { IcqqClient } from '@zhin.js/adapter-icqq';
 
 const MAX_TIMES = 20;
 const DEFAULT_TIMES = 10;
@@ -94,14 +94,9 @@ export default defineCommand({
     if ('error' in parsed) return parsed.error;
 
     try {
-      const bot = context.$client;
-      const resp = await bot.ipc.request(Actions.FRIEND_LIKE, {
-        user_id: parsed.userId,
-        times: parsed.times,
-      });
-      if (!resp.ok) {
-        return `点赞失败：${resp.error ?? '未知错误'}`;
-      }
+      const bot: IcqqClient = context.$client;
+      const ok = await bot.sendLike(parsed.userId, parsed.times);
+      if (!ok) return '点赞失败：ICQQ 未确认操作成功';
       return `已给 ${parsed.userId} 点赞 ${parsed.times} 次`;
     } catch (error) {
       return `点赞失败：${error instanceof Error ? error.message : String(error)}`;

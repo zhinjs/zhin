@@ -4,8 +4,9 @@ import { ghApiMessage, resolveGhClient } from '../../../lib/github-api.js';
 export default defineCommand({
   description: '查看提交记录',
   params: { repo: { type: 'string' } },
-  execute: async ({ params, args, input }) => {
-    const api = await resolveGhClient(input);
+  execute: async (context) => {
+    const { params, args } = context;
+    const api = await resolveGhClient(context);
     if (typeof api === 'string') return api;
     const limitRaw = args[0];
     const limit = limitRaw ? Number(limitRaw) : 10;

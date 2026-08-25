@@ -4,11 +4,15 @@ import {
   requireOauthModel,
   unbindOauth,
 } from '../../lib/github-oauth.js';
+import { resolveGithubEndpoint } from '../../lib/github-api.js';
 
 export default defineCommand({
   description: '解绑 GitHub 账号',
-  execute: async ({ input, use }) => {
-    const modelOrError = requireOauthModel(use);
+  execute: async (context) => {
+    const { input } = context;
+    const endpoint = resolveGithubEndpoint(context);
+    if (typeof endpoint === 'string') return endpoint;
+    const modelOrError = requireOauthModel(endpoint);
     if (typeof modelOrError === 'string') return modelOrError;
     const identity = platformIdentity(input);
     if (typeof identity === 'string') return identity;

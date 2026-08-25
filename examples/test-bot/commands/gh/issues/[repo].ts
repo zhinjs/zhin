@@ -4,8 +4,9 @@ import { ghApiMessage, resolveGhClient } from '../../../lib/github-api.js';
 export default defineCommand({
   description: '列出 Issue',
   params: { repo: { type: 'string' } },
-  execute: async ({ params, input }) => {
-    const api = await resolveGhClient(input);
+  execute: async (context) => {
+    const { params } = context;
+    const api = await resolveGhClient(context);
     if (typeof api === 'string') return api;
     const r = await api.listIssues(String(params.repo), 'open');
     if (!r.ok) return ghApiMessage(r.data, '查询失败');

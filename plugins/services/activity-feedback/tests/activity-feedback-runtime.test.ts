@@ -152,6 +152,26 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
     expect(startPhase).not.toHaveBeenCalled();
   });
 
+  it('rolls back an unactivated binder without entering a generation view', async () => {
+    const orchestrator = {
+      startPhase: vi.fn(),
+      stopPhase: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    };
+    const runWithUnavailableView = vi.fn(async () => {
+      throw new Error('Root is not accepting generation operations (idle)');
+    });
+    const dispose = bindActivityFeedbackToAIEventBus(
+      orchestrator as never,
+      mutableAdmission(false).gate,
+      runWithUnavailableView,
+    );
+
+    await expect(dispose()).resolves.toBeUndefined();
+    expect(runWithUnavailableView).not.toHaveBeenCalled();
+    expect(orchestrator.dispose).toHaveBeenCalledOnce();
+  });
+
   it('createActivityFeedbackOrchestratorForRuntime uses noop endpoint access by default', async () => {
     const orchestrator = createActivityFeedbackOrchestratorForRuntime(
       loadActivityFeedbackServiceConfig({}),
