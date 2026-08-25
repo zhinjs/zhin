@@ -1,7 +1,7 @@
 {
   "name": "full-bot",
   "private": true,
-  "version": "0.0.36",
+  "version": "0.0.37",
   "description": "Zhin.js Plugin Runtime L4 reference (Sandbox + NapCat + KOOK + Agent)",
   "type": "module",
   "scripts": {

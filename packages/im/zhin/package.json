@@ -101,7 +101,7 @@
     "chalk": "^5.6.2"
   },
   "peerDependencies": {
-    "@zhin.js/agent": "^1.1.16",
+    "@zhin.js/agent": "^1.1.17",
     "@zhin.js/ai": "^1.5.7",
     "@zhin.js/html-renderer": "workspace:^",
     "@zhin.js/speech": "workspace:^",

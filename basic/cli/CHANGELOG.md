@@ -1,5 +1,14 @@
 # @zhin.js/cli
 
+## 3.0.17
+
+### Patch Changes
+
+- 736fa04: Fix Workroom human-ingress replay for runtime Endpoint identities containing canonical separators, add per-member Bot/App message routes for shared rooms, acknowledge applied human input, and expose exact application errors in runtime logs.
+- Updated dependencies [736fa04]
+  - @zhin.js/agent@1.1.17
+  - @zhin.js/a2a@3.0.17
+
 ## 3.0.16
 
 ### Patch Changes
