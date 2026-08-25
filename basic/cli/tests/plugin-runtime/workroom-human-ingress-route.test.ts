@@ -114,6 +114,26 @@ describe('WorkroomHumanIngressPreRoute', () => {
     expect(route.takeAgentTurn(incoming)).toBeUndefined();
   });
 
+  it('hands the current discussion to the Orchestrator even while an older application is waiting', async () => {
+    const repositories = repositoriesFixture();
+    const configured = createCatalogWorkroomSpace({
+      projectId: 'project:zhin', agentDefinitionId: 'support', space: 'workroom',
+      sourceRef: 'workroom-catalog:project:zhin:conversation',
+      sourceDigest: `sha256:${'a'.repeat(64)}`,
+    });
+    const route = fixture(() => configured, repositories, undefined, {
+      application: {
+        drain: async () => [{ status: 'waiting' as const, wakeAt: 9_999 }],
+      },
+    });
+    const incoming = message('m-backlog', '请继续分析');
+
+    await expect(route.preRoute(incoming, 1)).resolves.toBe(false);
+    expect(route.takeAgentTurn(incoming)).toMatchObject({
+      projectId: 'project:zhin', agentDefinitionId: 'support', intent: 'discussion',
+    });
+  });
+
   it('replies with a typed clarification after its durable lifecycle is committed', async () => {
     const repositories = repositoriesFixture();
     const configured = createCatalogWorkroomSpace({
@@ -387,19 +407,22 @@ function fixture(
   extra: Pick<
     ConstructorParameters<typeof WorkroomHumanIngressPreRoute>[0],
     'createTargetResolver' | 'onWorkroomResolved'
-  > = {},
+  > & Readonly<{
+    application?: ConstructorParameters<typeof WorkroomHumanIngressPreRoute>[0]['application'];
+  }> = {},
 ): WorkroomHumanIngressPreRoute {
+  const { application, ...routeExtra } = extra;
   return new WorkroomHumanIngressPreRoute({
     bindings: repositories.bindings,
     proposals: repositories.proposals,
-    application: new HumanIngressApplicationService({
+    application: application ?? new HumanIngressApplicationService({
       proposals: repositories.proposals,
       applications: repositories.applications,
       port,
     }),
     resolveCatalogSpace,
     resolveIntent: resolveWorkroomHumanIntent,
-    ...extra,
+    ...routeExtra,
     bindingRouter: new InteractionSpaceRouter(repositories.bindings),
     principalOwner: String(rootPluginId()),
   });

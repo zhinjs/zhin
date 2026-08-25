@@ -441,6 +441,27 @@ export function classifyWorkroomIngressSource(
     : 'non_owner_endpoint';
 }
 
+/** Resolves reply provenance across Bot Endpoints that share one room. */
+export function resolveIndexedProjectionReply<
+  T extends Readonly<{ message: NonNullable<Message['message']> }>,
+>(
+  message: Pick<Message, 'conversation' | 'replyTo'>,
+  messageIndex: Readonly<Record<string, T>>,
+): T | undefined {
+  if (!message.replyTo) return undefined;
+  const exact = messageIndex[workroomProjectionMessageKey({
+    conversation: message.conversation,
+    id: message.replyTo.id,
+  })];
+  if (exact) return exact;
+  const roomMatches = Object.values(messageIndex).filter(entry =>
+    entry.message.id === message.replyTo!.id
+    && entry.message.conversation.endpoint.adapter === message.conversation.endpoint.adapter
+    && entry.message.conversation.kind === message.conversation.kind
+    && entry.message.conversation.id === message.conversation.id);
+  return roomMatches.length === 1 ? roomMatches[0] : undefined;
+}
+
 export async function assertWorkroomCatalogMatchesGeneration(
   catalog: Pick<WorkroomCatalog, 'read'>,
   agentNames: readonly string[],
@@ -2551,6 +2572,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       }
     };
     if (!persistencePendingActivate) await recoverHumanIngress();
+    const projectionReplyTargets = new WeakMap<Message, Message['message']>();
     const workroomHumanIngress = new WorkroomHumanIngressPreRoute({
       bindings: interactionSpaceBindings,
       bindingRouter: interactionSpaceRouter,
@@ -2567,8 +2589,10 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
             })
           : createProjectionHumanIngressTargetResolver({
               resolver: projectionReplyResolver,
-              ...(message.replyTo
-                ? { replyTo: { conversation: message.conversation, id: message.replyTo.id } }
+              ...(projectionReplyTargets.get(message)
+                ? { replyTo: projectionReplyTargets.get(message)! }
+                : message.replyTo
+                  ? { replyTo: { conversation: message.conversation, id: message.replyTo.id } }
                 : {}),
               intent,
             }),
@@ -2599,21 +2623,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         const catalogSnapshot = await workroomCatalog.read();
         const explicitProjectId = sponsorRoomProjectId(message.content);
         const projectionState = await projectionRepository.read();
-        const exactReplyEntry = message.replyTo
-          ? projectionState.messageIndex[workroomProjectionMessageKey({
-              conversation: message.conversation,
-              id: message.replyTo.id,
-            })]
-          : undefined;
-        const roomReplyEntries = message.replyTo
-          ? Object.values(projectionState.messageIndex).filter(entry =>
-              entry.message.id === message.replyTo!.id
-              && entry.message.conversation.endpoint.adapter === message.conversation.endpoint.adapter
-              && entry.message.conversation.kind === message.conversation.kind
-              && entry.message.conversation.id === message.conversation.id)
-          : [];
-        const replyEntry = exactReplyEntry
-          ?? (roomReplyEntries.length === 1 ? roomReplyEntries[0] : undefined);
+        const replyEntry = resolveIndexedProjectionReply(message, projectionState.messageIndex);
+        // Cross-Endpoint replies carry the inbound Endpoint in Message.replyTo,
+        // while the durable projection index is keyed by the speaking Bot's
+        // original Endpoint. Preserve that canonical ref for target resolution.
+        if (replyEntry) projectionReplyTargets.set(message, replyEntry.message);
         const repliedProjectId = replyEntry?.target.projectId;
         if (explicitProjectId && repliedProjectId && explicitProjectId !== repliedProjectId) {
           return Object.freeze({ status: 'rejected' as const, reason: 'project_conflict' as const });
@@ -2698,6 +2712,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         _requester: PluginId,
         conversationSequence: number | undefined,
       ) => await workroomHumanIngress.preRoute(message, conversationSequence),
+      shouldRouteBeforeDispatch: (message: Message) =>
+        workroomHumanIngress.hasAgentTurn(message)
+        && resolveRuntimeAgentTrigger(message, service.getTriggerConfig(), true) != null,
       route: async (
         message: Message,
         lease: import('@zhin.js/plugin-runtime').SnapshotLease,
@@ -2733,20 +2750,22 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       };
 
       // 管理命令（原 MessageCommand /models /tree /reset…）— 在 AI trigger 前拦截
-      const managementReply = await handleRuntimeManagementCommand({
-        service,
-        zhinAgent,
-        sessionKey,
-        content: message.content,
-        senderRoles,
-      });
+      const managementReply = workroomAgentTurn
+        ? null
+        : await handleRuntimeManagementCommand({
+            service,
+            zhinAgent,
+            sessionKey,
+            content: message.content,
+            senderRoles,
+          });
       if (managementReply != null) {
         await reply(managementReply);
         logger.info(formatCompact({ op: 'agent_host_management', handled: true }));
         return true;
       }
 
-      const approveReply = /^\/approve(?:\s|$)/iu.test(message.content.trim())
+      const approveReply = !workroomAgentTurn && /^\/approve(?:\s|$)/iu.test(message.content.trim())
         ? handleRuntimeOwnerApproveCommand(
             {
               platform: turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '',
@@ -2768,7 +2787,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         return false;
       }
 
-      if (isClearCommand(matched.content)) {
+      if (!workroomAgentTurn && isClearCommand(matched.content)) {
         await zhinAgent.archiveSession(sessionKey);
         await reply('已清空本会话的 AI 多轮上下文。');
         return true;
@@ -4441,6 +4460,7 @@ export function resolveRuntimeAgentTrigger(
   workroomAgentTurn: boolean,
 ): { content: string } | null {
   if (!workroomAgentTurn) return matchAiTrigger(message, trigger);
+  if (trigger?.enabled === false) return null;
   const text = message.content.trim();
   if (!text) return null;
   return { content: stripMentionMarkup(text) || text };

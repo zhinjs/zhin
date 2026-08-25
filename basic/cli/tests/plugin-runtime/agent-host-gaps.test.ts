@@ -28,6 +28,7 @@ import {
   resolveCatalogSponsorProjectionConversation,
   resolveWorkroomStorageMode,
   routeSpecialistAgent,
+  resolveIndexedProjectionReply,
 } from '../../src/plugin-runtime/agent-host-installer.js';
 import {
   createEndpointRoleResolver,
@@ -101,6 +102,43 @@ describe('Workroom ingress source ownership', () => {
       adapter: 'icqq', endpoint: '8596238', senderId: '1659488338',
       space: 'workroom', replySpeakerAgent: 'reviewer', replySpeakerRole: 'reviewer',
     })).toBe('accept');
+  });
+});
+
+describe('Workroom projection reply provenance', () => {
+  it('finds the original speaking Endpoint when a shared-room reply arrives through another Bot', () => {
+    const inboundConversation = {
+      endpoint: { id: 'reviewer-cap', adapter: 'root' },
+      kind: 'group' as const,
+      id: 'shared-room',
+    };
+    const originalMessage = {
+      conversation: {
+        endpoint: { id: 'orchestrator-cap', adapter: 'root' },
+        kind: 'group' as const,
+        id: 'shared-room',
+      },
+      id: 'projection-1',
+    };
+    const entry = { message: originalMessage, target: { projectId: 'zhin' } };
+
+    expect(resolveIndexedProjectionReply({
+      conversation: inboundConversation,
+      replyTo: { conversation: inboundConversation, id: 'projection-1' },
+    }, { canonical: entry })).toBe(entry);
+  });
+
+  it('fails closed when the room-level reply id is ambiguous', () => {
+    const conversation = {
+      endpoint: { id: 'member-cap', adapter: 'root' },
+      kind: 'group' as const,
+      id: 'shared-room',
+    };
+    const message = { conversation: { ...conversation, endpoint: { id: 'other', adapter: 'root' } }, id: 'same' };
+    expect(resolveIndexedProjectionReply({
+      conversation,
+      replyTo: { conversation, id: 'same' },
+    }, { a: { message }, b: { message: { ...message } } })).toBeUndefined();
   });
 });
 

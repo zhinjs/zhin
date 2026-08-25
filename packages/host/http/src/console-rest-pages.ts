@@ -42,6 +42,10 @@ export interface ConsoleRestCtx {
     readonly started: boolean;
     readonly models: { get(name: string): unknown };
   };
+  /** Distinguishes a real IM conversation with no Agent turn from a typo key. */
+  readonly isKnownConversationSession?: (
+    sessionKey: string,
+  ) => boolean | undefined | Promise<boolean | undefined>;
 }
 
 /** 内省数据门面 — 由 basic/cli 用 agent 包 collectIntrospection* 装配。 */
@@ -865,6 +869,14 @@ function registerAgentSessionRoutes(
       const sessionId = await runtime.resolveActiveSessionId(parsed.sessionKey);
       if (!sessionId) {
         if (!isRuntimeImSessionKey(parsed.sessionKey)) {
+          writeJson(response, 404, {
+            success: false,
+            error: `未找到会话：${parsed.sessionKey}`,
+          });
+          return;
+        }
+        const knownConversation = await ctx.isKnownConversationSession?.(parsed.sessionKey);
+        if (knownConversation === false) {
           writeJson(response, 404, {
             success: false,
             error: `未找到会话：${parsed.sessionKey}`,
