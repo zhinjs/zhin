@@ -1,5 +1,14 @@
 # @zhin.js/plugin-60s
 
+## 4.0.18
+
+### Patch Changes
+
+- Updated dependencies [a5ee497]
+- Updated dependencies [7108d0b]
+  - @zhin.js/agent@1.1.18
+  - zhin.js@6.0.15
+
 ## 4.0.17
 
 ### Patch Changes

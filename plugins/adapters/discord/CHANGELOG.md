@@ -1,5 +1,18 @@
 # @zhin.js/adapter-discord
 
+## 8.0.3
+
+### Patch Changes
+
+- Updated dependencies [a5ee497]
+- Updated dependencies [a5ee497]
+- Updated dependencies [ba7e17a]
+- Updated dependencies [7108d0b]
+  - @zhin.js/agent@1.1.18
+  - @zhin.js/host-http@1.0.14
+  - @zhin.js/core@1.5.15
+  - zhin.js@6.0.15
+
 ## 8.0.2
 
 ### Patch Changes

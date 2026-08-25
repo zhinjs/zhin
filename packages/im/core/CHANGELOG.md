@@ -1,5 +1,14 @@
 # @zhin.js/core
 
+## 1.5.15
+
+### Patch Changes
+
+- ba7e17a: Prevent concurrent Workroom discussions from losing their Orchestrator handoff, route those handoffs before ordinary commands, resolve cross-Endpoint projection replies through their canonical message reference, respect the global AI trigger switch, and reject unknown canonical Console session keys when the durable inbox is available.
+- 7108d0b: Resolve uniquely mentioned Workroom members to their active Assignment, isolate Orchestrator turns from ordinary room sessions and conversation tails, remove classic subagent delegation from Workroom capabilities, deliver replies through the canonical Orchestrator Endpoint, reject untrusted bot identity metadata, and recognize implicit default Endpoints during Catalog validation.
+- Updated dependencies [a5ee497]
+  - @zhin.js/database@1.0.81
+
 ## 1.5.14
 
 ### Patch Changes

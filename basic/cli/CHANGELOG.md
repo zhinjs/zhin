@@ -1,5 +1,27 @@
 # @zhin.js/cli
 
+## 3.0.18
+
+### Patch Changes
+
+- a5ee497: Stop Workroom feedback loops in shared IM rooms by consuming trusted Bot principals without confusing Endpoint aliases with platform user IDs. Admit explicit mentions on member Bot endpoints, route projection replies through each member's configured or default primary endpoint, and keep governed `/work` requests inside Workroom when planning is unavailable. Converge stale Workroom projection bindings to the interaction binding revision with monotonic idempotent replay, and preserve Sponsor bindings when one Agent definition occupies multiple member roles.
+- a5ee497: Validate persisted Workroom catalogs against Endpoint identities read from the candidate config instead of the previous live Adapter generation.
+- ba7e17a: Prevent concurrent Workroom discussions from losing their Orchestrator handoff, route those handoffs before ordinary commands, resolve cross-Endpoint projection replies through their canonical message reference, respect the global AI trigger switch, and reject unknown canonical Console session keys when the durable inbox is available.
+- d9eea4b: Continue durable Workroom discussions into the catalog Orchestrator turn instead of stopping after an inbox receipt, bypass ordinary group trigger filtering for that one-shot handoff, and only surface application results belonging to the current proposal.
+- 7108d0b: Resolve uniquely mentioned Workroom members to their active Assignment, isolate Orchestrator turns from ordinary room sessions and conversation tails, remove classic subagent delegation from Workroom capabilities, deliver replies through the canonical Orchestrator Endpoint, reject untrusted bot identity metadata, and recognize implicit default Endpoints during Catalog validation.
+- Updated dependencies [a5ee497]
+- Updated dependencies [a5ee497]
+- Updated dependencies [ba7e17a]
+- Updated dependencies [a5ee497]
+- Updated dependencies [7108d0b]
+  - @zhin.js/agent@1.1.18
+  - @zhin.js/host-http@1.0.14
+  - @zhin.js/core@1.5.15
+  - @zhin.js/database@1.0.81
+  - @zhin.js/a2a@3.0.18
+  - @zhin.js/speech@3.0.15
+  - @zhin.js/ai@1.5.7
+
 ## 3.0.17
 
 ### Patch Changes
