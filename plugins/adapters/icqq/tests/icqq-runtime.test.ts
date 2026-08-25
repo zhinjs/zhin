@@ -70,6 +70,18 @@ describe('icqq protocol helpers', () => {
     expect(resolved.context).toBe('icqq');
   });
 
+  it('prefers the direct password and keeps transitional endpoint fallback', () => {
+    expect(resolveIcqqConfig({
+      id: '12345',
+      password: 'direct-secret',
+      endpoints: [{ context: 'icqq', id: '54321', password: 'legacy-secret' }],
+    }).password).toBe('direct-secret');
+
+    expect(resolveIcqqConfig({
+      endpoints: [{ context: 'icqq', id: '12345', password: 'legacy-secret' }],
+    }).password).toBe('legacy-secret');
+  });
+
   it('rejects non-numeric id', () => {
     expect(() => resolveIcqqConfig({ id: 'bot' })).toThrow(/numeric id/);
   });

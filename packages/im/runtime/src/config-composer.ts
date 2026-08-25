@@ -94,6 +94,7 @@ export class ConfigComposer {
       allowUnionTypes: true,
     });
     ajv.addKeyword({ keyword: 'x-descriptionZh', schemaType: 'string' });
+    ajv.addKeyword({ keyword: 'x-keyPlaceholder', schemaType: 'string' });
     const validate = ajv.compile(effectiveSchema);
     if (!validate(document)) {
       throw new ConfigValidationError(formatErrors(validate.errors ?? []), source);
@@ -223,6 +224,7 @@ async function readOwnSchema(node: PluginGraphNode): Promise<JsonSchema> {
     );
   }
   return Object.freeze({
+    $id: `urn:zhin:plugin-config:${encodeURIComponent(String(node.id))}`,
     type: 'object',
     additionalProperties: false,
     ...schema,
