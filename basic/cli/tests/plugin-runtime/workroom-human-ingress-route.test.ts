@@ -84,7 +84,8 @@ describe('WorkroomHumanIngressPreRoute', () => {
     const replies: unknown[] = [];
     const route = fixture(() => configured, repositories);
 
-    await expect(route.preRoute(message('m1', 'hello', replies), 1)).resolves.toBe(false);
+    const incoming = message('m1', 'hello', replies);
+    await expect(route.preRoute(incoming, 1)).resolves.toBe(false);
     await expect(repositories.proposals.read('project:zhin')).resolves.toEqual([
       expect.objectContaining({
         proposal: expect.objectContaining({
@@ -101,9 +102,16 @@ describe('WorkroomHumanIngressPreRoute', () => {
       expect.objectContaining({ type: 'proposal.claimed' }),
       expect.objectContaining({ type: 'proposal.applied', kind: 'discussion_recorded' }),
     ]);
-    expect(replies).toEqual([
-      '已收到，消息已进入 Workroom「project:zhin」项目收件箱。',
-    ]);
+    // A recorded discussion continues into the Orchestrator turn. Do not emit
+    // a terminal-looking inbox receipt that makes the user think work stopped.
+    expect(replies).toEqual([]);
+    expect(route.takeAgentTurn(incoming)).toEqual({
+      projectId: 'project:zhin',
+      agentDefinitionId: 'support',
+      intent: 'discussion',
+      proposalId: expect.any(String),
+    });
+    expect(route.takeAgentTurn(incoming)).toBeUndefined();
   });
 
   it('replies with a typed clarification after its durable lifecycle is committed', async () => {

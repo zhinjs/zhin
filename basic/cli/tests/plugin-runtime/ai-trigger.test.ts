@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { Message } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { AITriggerConfig } from '@zhin.js/core';
-import { matchAiTrigger } from '../../src/plugin-runtime/agent-host-installer.js';
+import {
+  matchAiTrigger,
+  resolveRuntimeAgentTrigger,
+} from '../../src/plugin-runtime/agent-host-installer.js';
 
 const adapter = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'icqq');
 
@@ -65,6 +68,14 @@ describe('matchAiTrigger（新 Plugin Runtime，对齐 legacy shouldTriggerAI）
   it('群聊未 @（无 mentioned）不触发', () => {
     expect(matchAiTrigger(groupMessage('在吗'), undefined)).toBeNull();
     expect(matchAiTrigger(groupMessage('[CQ:at,qq=10002] 在吗'), undefined)).toBeNull();
+  });
+
+  it('Workroom durable discussion handoff bypasses the ordinary group trigger', () => {
+    const msg = groupMessage('请分析这个问题');
+    expect(matchAiTrigger(msg, { enabled: false })).toBeNull();
+    expect(resolveRuntimeAgentTrigger(msg, { enabled: false }, true)).toEqual({
+      content: '请分析这个问题',
+    });
   });
 
   it('respondToAt=false 时群聊 @ 不触发', () => {

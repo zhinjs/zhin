@@ -27,6 +27,7 @@ import {
   createCatalogSponsorRoomProjectionBinding,
   resolveCatalogSponsorProjectionConversation,
   resolveWorkroomStorageMode,
+  routeSpecialistAgent,
 } from '../../src/plugin-runtime/agent-host-installer.js';
 import {
   createEndpointRoleResolver,
@@ -100,6 +101,28 @@ describe('Workroom ingress source ownership', () => {
       adapter: 'icqq', endpoint: '8596238', senderId: '1659488338',
       space: 'workroom', replySpeakerAgent: 'reviewer', replySpeakerRole: 'reviewer',
     })).toBe('accept');
+  });
+});
+
+describe('Workroom Orchestrator turn routing', () => {
+  const support = {
+    $feature: 'zhin.agent/1' as const,
+    name: 'support',
+    qualifiedName: 'root/support',
+    description: 'support',
+    instructions: 'help',
+    owner: rootPluginId(),
+    source: '/agents/support.md',
+  };
+
+  it('pins a Workroom continuation to the catalog Orchestrator', () => {
+    expect(routeSpecialistAgent('处理这个问题', { agents: [support] }, 'support', 'zhin'))
+      .toEqual({ userText: '处理这个问题', agent: support });
+  });
+
+  it('uses the default binding when it is the catalog Orchestrator', () => {
+    expect(routeSpecialistAgent('处理这个问题', { agents: [support] }, 'zhin', 'zhin'))
+      .toEqual({ userText: '处理这个问题' });
   });
 });
 

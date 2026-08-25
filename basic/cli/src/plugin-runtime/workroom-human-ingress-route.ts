@@ -33,6 +33,12 @@ export interface CatalogWorkroomSpaceInput {
 }
 
 export type CatalogWorkroomSpace = Readonly<CatalogWorkroomSpaceInput>;
+export interface WorkroomAgentTurnContinuation {
+  readonly projectId: string;
+  readonly agentDefinitionId: string;
+  readonly intent: 'discussion';
+  readonly proposalId: string;
+}
 export type CatalogWorkroomSpaceResolution = CatalogWorkroomSpace | Readonly<{
   status: 'rejected';
   reason: 'project_required' | 'project_conflict' | 'binding_unavailable' | 'stale_binding';
@@ -70,7 +76,16 @@ export interface WorkroomHumanIngressPreRouteOptions {
  * reinterpreted as ordinary chat.
  */
 export class WorkroomHumanIngressPreRoute {
+  readonly #agentTurnContinuations = new WeakMap<Message, WorkroomAgentTurnContinuation>();
+
   constructor(readonly options: WorkroomHumanIngressPreRouteOptions) {}
+
+  /** One-shot handoff from durable Workroom ingress into the Orchestrator turn. */
+  takeAgentTurn(message: Message): WorkroomAgentTurnContinuation | undefined {
+    const continuation = this.#agentTurnContinuations.get(message);
+    this.#agentTurnContinuations.delete(message);
+    return continuation;
+  }
 
   async preRoute(message: Message, conversationSequence: number | undefined): Promise<boolean> {
     const resolution = await this.options.resolveCatalogSpace(message);
@@ -203,15 +218,30 @@ export class WorkroomHumanIngressPreRoute {
         },
       );
       try {
-        await service.propose(input);
+        const outcome = await service.propose(input);
+        if (outcome.status === 'clarification_required') {
+          await message.$reply(renderHumanIngressClarification(outcome.reason));
+          return true;
+        }
+        const proposalId = outcome.event.proposal.id;
         const applications = await this.options.application.drain(decision.projectId);
         let continueToOrdinaryChat = false;
-        for (const application of applications) {
+        for (const application of applications.filter(result =>
+          'proposalId' in result && result.proposalId === proposalId)) {
           if (application.status === 'clarification_required') {
             await message.$reply(renderHumanIngressClarification(application.reason));
           } else if (application.status === 'applied') {
-            await message.$reply(renderHumanIngressReceipt(application.kind, decision.projectId));
-            if (application.kind === 'discussion_recorded') continueToOrdinaryChat = true;
+            if (application.kind === 'discussion_recorded' && configured?.agentDefinitionId) {
+              this.#agentTurnContinuations.set(message, Object.freeze({
+                projectId: decision.projectId,
+                agentDefinitionId: configured.agentDefinitionId,
+                intent: 'discussion',
+                proposalId: application.proposalId,
+              }));
+              continueToOrdinaryChat = true;
+            } else {
+              await message.$reply(renderHumanIngressReceipt(application.kind, decision.projectId));
+            }
           }
         }
         return !continueToOrdinaryChat;
