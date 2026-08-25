@@ -496,12 +496,14 @@ function assertCatalogBinding(
     || binding.conversation.id !== conversation.id) {
     throw new Error('Workroom Projection binding does not match persistent Catalog conversation');
   }
-  const members = new Map(definition.members.map(member => [member.agent, member.role]));
+  const hasCatalogMember = (agentDefinitionId: string, role: string) =>
+    definition.members.some(member => member.agent === agentDefinitionId && member.role === role);
   if (conversation.agent !== binding.orchestrator.agentDefinitionId
-    || members.get(binding.orchestrator.agentDefinitionId) !== 'orchestrator'
-    || binding.agents.some(agent => members.get(agent.agentDefinitionId) !== agent.role)
+    || !hasCatalogMember(binding.orchestrator.agentDefinitionId, 'orchestrator')
+    || binding.agents.some(agent => !hasCatalogMember(agent.agentDefinitionId, agent.role))
     || definition.members.some(member => member.role !== 'orchestrator'
-      && !binding.agents.some(agent => agent.agentDefinitionId === member.agent))) {
+      && !binding.agents.some(agent => agent.agentDefinitionId === member.agent
+        && agent.role === member.role))) {
     throw new Error(`Workroom Projection binding is stale for Catalog ${catalog.revision}`);
   }
 }

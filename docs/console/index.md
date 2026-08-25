@@ -68,7 +68,7 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 | Database | RPC `db:info` / `db:tables` / `db:select` / `db:insert` / `db:update` / `db:delete` / `db:kv:*` | 数据库浏览与编辑、KV 存储 |
 | Files | RPC `files:tree` / `files:read` / `files:save`、`env:list` / `env:save` | 项目文件树与 `.env` 管理 |
 | 运行时能力 | `GET /api/introspection/{commands,middlewares,components,tools,prompt-sections,endpoints,bindings,mcp}`、`POST /api/introspection/components/render` | 当前 generation 的能力契约、owner、中间件顺序、组件渲染实验台与 Prompt Section 治理信息 |
-| Agent Sessions | `GET/POST /api/agent/sessions/*` | AI 会话树查看与分支切换 |
+| Agent Sessions | `GET/POST /api/agent/sessions/*` | AI 会话树查看与分支切换；渠道会话尚未产生 AI 对话时，GET 返回 `state: not_started` 空树 |
 | Workrooms | 持久 Workroom Catalog + `GET /api/agent/workroom/runs[/*]` | 以 revision CAS 管理 Project、成员、Agent 角色和群/频道/仓库绑定；查看 replayed Run / Task / Assignment |
 | Marketplace | `GET /pub/marketplace/search`、`/pub/marketplace/detail/*`、`GET /api/marketplace/updates` | 插件市场（plugins.json + npmmirror）与更新检查 |
 | Sandbox | WS `/sandbox` | 内置沙箱聊天，免平台联调直接对话 |

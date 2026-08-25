@@ -353,6 +353,19 @@ describe.skipIf(!sqliteAvailable)('Database Core Features', () => {
         expect(users[0].name).toBe('Alice');
       });
     });
+
+    it('should report affected rows for SQLite transaction updates and deletes', async () => {
+      await db.insertMany('users', [
+        { id: 1, name: 'Alice', email: 'a@t.com', status: 'active', age: 25, deletedAt: null, createdAt: new Date(), updatedAt: new Date() },
+        { id: 2, name: 'Bob', email: 'b@t.com', status: 'active', age: 30, deletedAt: null, createdAt: new Date(), updatedAt: new Date() },
+      ]);
+
+      await db.transaction(async (trx) => {
+        expect(await trx.update('users', { status: 'inactive' }).where({ id: 1 })).toBe(1);
+        expect(await trx.delete('users').where({ id: 2 })).toBe(1);
+        expect(await trx.update('users', { status: 'inactive' }).where({ id: 99 })).toBe(0);
+      });
+    });
   });
 
   // ==========================================================================
@@ -1747,4 +1760,3 @@ describe.skipIf(!sqliteAvailable)('Many-to-Many Relations (belongsToMany)', () =
     await db2.stop();
   });
 });
-

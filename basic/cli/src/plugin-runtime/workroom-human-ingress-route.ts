@@ -36,6 +36,9 @@ export type CatalogWorkroomSpace = Readonly<CatalogWorkroomSpaceInput>;
 export type CatalogWorkroomSpaceResolution = CatalogWorkroomSpace | Readonly<{
   status: 'rejected';
   reason: 'project_required' | 'project_conflict' | 'binding_unavailable' | 'stale_binding';
+}> | Readonly<{
+  status: 'ignored';
+  reason: 'bot_principal' | 'non_owner_endpoint';
 }> | null;
 
 export interface WorkroomHumanIngressPreRouteOptions {
@@ -72,6 +75,7 @@ export class WorkroomHumanIngressPreRoute {
   async preRoute(message: Message, conversationSequence: number | undefined): Promise<boolean> {
     const resolution = await this.options.resolveCatalogSpace(message);
     if (resolution && 'status' in resolution) {
+      if (resolution.status === 'ignored') return true;
       await message.$reply(resolution.reason === 'project_conflict'
         ? 'Sponsor Room 的显式 Project 与回复卡片不一致；请确认目标 Project 后重试。'
         : resolution.reason === 'stale_binding'
@@ -201,14 +205,16 @@ export class WorkroomHumanIngressPreRoute {
       try {
         await service.propose(input);
         const applications = await this.options.application.drain(decision.projectId);
+        let continueToOrdinaryChat = false;
         for (const application of applications) {
           if (application.status === 'clarification_required') {
             await message.$reply(renderHumanIngressClarification(application.reason));
           } else if (application.status === 'applied') {
             await message.$reply(renderHumanIngressReceipt(application.kind, decision.projectId));
+            if (application.kind === 'discussion_recorded') continueToOrdinaryChat = true;
           }
         }
-        return true;
+        return !continueToOrdinaryChat;
       } catch (error) {
         const concurrent = error instanceof HumanIngressProposalSequenceConflictError
           || error instanceof HumanIngressProposalReplayConflictError;
@@ -308,9 +314,9 @@ function renderHumanIngressClarification(reason: string): string {
     case 'missing_work_scope':
       return '这条工作请求已进入项目收件箱，但还需要明确工作范围和验收目标。请补充后重新使用 /work 提交。';
     case 'planning_unavailable':
-      return '这条工作请求已进入项目收件箱，但当前 Project 尚未安装受治理的动态工作流规划器，未创建默认单任务。请配置 Profile/Strategy 后重试。';
+      return 'Workroom 编排配置尚未完成，请先配置规划能力后重新提交 /work。';
     case 'planning_disclosure_unavailable':
-      return '这条工作请求已进入项目收件箱，但缺少可用于模型规划的 P12 数据披露目标或策略，正文未发送给模型。请完成数据治理配置后重试。';
+      return 'Workroom 编排披露配置尚未完成，请先配置披露能力后重新提交 /work。';
     case 'missing_control_target':
       return '这条控制请求已进入项目收件箱，但还需要明确 Run/Task 目标和具体动作。请补充后重新使用 /control 提交。';
     case 'unauthorized_control':

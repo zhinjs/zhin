@@ -667,6 +667,7 @@ describe('console-rest-pages agent sessions', () => {
     expect(body).toMatchObject({
       success: true,
       data: {
+        state: 'active',
         sessionKey: 'known',
         sessionId: 'sid-1',
         activeLeafMessageId: 7,
@@ -675,11 +676,33 @@ describe('console-rest-pages agent sessions', () => {
     });
   });
 
-  it('GET tree：未知会话 404，runtime 未装配 503', async () => {
+  it('GET tree：尚未产生 Agent 对话的渠道会话返回可渲染空态', async () => {
     const base = await startHost(sessionCtx());
-    const missing = await fetch(`${base}/api/agent/sessions/ghost/tree`);
-    expect(missing.status).toBe(404);
+    const sessionKey = 'icqq:endpoint:group:scene';
+    const missing = await fetch(
+      `${base}/api/agent/sessions/${encodeURIComponent(sessionKey)}/tree`,
+    );
+    expect(missing.status).toBe(200);
+    expect(await json(missing)).toMatchObject({
+      success: true,
+      data: {
+        state: 'not_started',
+        sessionKey,
+        sessionId: null,
+        activeLeafMessageId: null,
+        points: [],
+      },
+    });
+  });
 
+  it('GET tree：不存在的非渠道会话 key 仍返回 404', async () => {
+    const base = await startHost(sessionCtx());
+    const missing = await fetch(`${base}/api/agent/sessions/definitely-not-a-session/tree`);
+    expect(missing.status).toBe(404);
+    expect(await json(missing)).toMatchObject({ success: false });
+  });
+
+  it('GET tree：runtime 未装配 503', async () => {
     const bare = await startHost(baseCtx());
     const unavailable = await fetch(`${bare}/api/agent/sessions/known/tree`);
     expect(unavailable.status).toBe(503);
@@ -706,6 +729,20 @@ describe('console-rest-pages agent sessions', () => {
     });
     expect(fail.status).toBe(400);
     expect(await json(fail)).toMatchObject({ success: false, message: '切换失败' });
+  });
+
+  it('POST leaf：尚未产生 Agent 对话时仍拒绝切换', async () => {
+    const base = await startHost(sessionCtx());
+    const response = await fetch(`${base}/api/agent/sessions/ghost/leaf`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messageId: 9 }),
+    });
+    expect(response.status).toBe(404);
+    expect(await json(response)).toMatchObject({
+      success: false,
+      error: '未找到活跃会话：ghost',
+    });
   });
 
   it('POST leaf：index 跳转与参数校验', async () => {

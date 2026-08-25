@@ -60,7 +60,19 @@ describe('WorkroomHumanIngressPreRoute', () => {
     await expect(route.preRoute(message('m1'), 1)).resolves.toBe(false);
   });
 
-  it('routes the first message for a configured Workroom to Project Inbox', async () => {
+  it('silently consumes configured Workroom traffic authored by a Bot principal', async () => {
+    const repositories = repositoriesFixture();
+    const replies: unknown[] = [];
+    const route = fixture(() => ({ status: 'ignored', reason: 'bot_principal' }), repositories);
+
+    await expect(route.preRoute(message('bot-receipt', '已收到', replies), 1)).resolves.toBe(true);
+
+    expect(replies).toEqual([]);
+    await expect(repositories.proposals.read('project:zhin')).resolves.toEqual([]);
+    await expect(repositories.applications.read('project:zhin')).resolves.toEqual([]);
+  });
+
+  it('records Workroom discussion durably and continues to the ordinary AI response route', async () => {
     const repositories = repositoriesFixture();
     const configured = createCatalogWorkroomSpace({
       projectId: 'project:zhin',
@@ -72,7 +84,7 @@ describe('WorkroomHumanIngressPreRoute', () => {
     const replies: unknown[] = [];
     const route = fixture(() => configured, repositories);
 
-    await expect(route.preRoute(message('m1', 'hello', replies), 1)).resolves.toBe(true);
+    await expect(route.preRoute(message('m1', 'hello', replies), 1)).resolves.toBe(false);
     await expect(repositories.proposals.read('project:zhin')).resolves.toEqual([
       expect.objectContaining({
         proposal: expect.objectContaining({
@@ -122,6 +134,28 @@ describe('WorkroomHumanIngressPreRoute', () => {
     expect(replies).toEqual([expect.stringContaining('工作范围')]);
   });
 
+  it('keeps /work governed when Workroom planning is unavailable', async () => {
+    const repositories = repositoriesFixture();
+    const configured = createCatalogWorkroomSpace({
+      projectId: 'project:zhin', agentDefinitionId: 'support', space: 'workroom',
+      sourceRef: 'workroom-catalog:project:zhin:conversation',
+      sourceDigest: `sha256:${'a'.repeat(64)}`,
+    });
+    const replies: unknown[] = [];
+    const route = fixture(() => configured, repositories, {
+      apply: request => Object.freeze({
+        ...request.identity,
+        status: 'clarification_required' as const,
+        reason: 'planning_unavailable' as const,
+        candidateRefs: Object.freeze([]),
+      }),
+    });
+
+    await expect(route.preRoute(message('m-fallback', '/work inspect repository', replies), 1))
+      .resolves.toBe(true);
+    expect(replies).toEqual(['Workroom 编排配置尚未完成，请先配置规划能力后重新提交 /work。']);
+  });
+
   it('keeps removal as a barrier and supports an immediate next-sequence rebind', async () => {
     const repositories = repositoriesFixture();
     let configured: ReturnType<typeof createCatalogWorkroomSpace> | null = createCatalogWorkroomSpace({
@@ -149,7 +183,7 @@ describe('WorkroomHumanIngressPreRoute', () => {
       sourceRef: 'workroom-catalog:project:zhin:conversation',
       sourceDigest: `sha256:${'b'.repeat(64)}`,
     });
-    await expect(route.preRoute(message('m4'), 4)).resolves.toBe(true);
+    await expect(route.preRoute(message('m4'), 4)).resolves.toBe(false);
     await expect(repositories.proposals.read('project:zhin')).resolves.toEqual(expect.arrayContaining([
       expect.objectContaining({ proposal: expect.objectContaining({
         sourceEvent: expect.objectContaining({ sequence: 4 }),
@@ -177,7 +211,7 @@ describe('WorkroomHumanIngressPreRoute', () => {
       sourceRef: 'workroom-catalog:project:zhin:conversation',
       sourceDigest: `sha256:${'b'.repeat(64)}`,
     });
-    await expect(route.preRoute(message('m2'), 2)).resolves.toBe(true);
+    await expect(route.preRoute(message('m2'), 2)).resolves.toBe(false);
     const proposals = await repositories.proposals.read('project:zhin');
     expect(proposals.at(-1)?.proposal).toMatchObject({
       sourceEvent: { sequence: 2 },
@@ -200,7 +234,7 @@ describe('WorkroomHumanIngressPreRoute', () => {
     await expect(Promise.all([
       route.preRoute(message('m2'), 2),
       route.preRoute(message('m3'), 3),
-    ])).resolves.toEqual([true, true]);
+    ])).resolves.toEqual([false, false]);
     await expect(repositories.proposals.read('project:zhin')).resolves.toHaveLength(3);
   });
 
