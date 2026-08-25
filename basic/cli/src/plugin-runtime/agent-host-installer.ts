@@ -2706,7 +2706,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       ) => {
       const snapshot = lease.value;
       const trigger = service.getTriggerConfig();
-      const matched = matchAiTrigger(message, trigger);
+      const workroomAgentTurn = workroomHumanIngress.takeAgentTurn(message);
+      const matched = resolveRuntimeAgentTrigger(message, trigger, workroomAgentTurn != null);
 
       const ownerId = resolveOwnerForRuntimeMessage(message, options.resolveEndpointOwner);
       const endpointTrusted = resolveTrustedForRuntimeMessage(message, options.resolveEndpointTrusted);
@@ -2788,7 +2789,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           senderRoles,
           () => capabilityActive,
         );
-        const routed = routeSpecialistAgent(inbound.text, capabilities);
+        const routed = routeSpecialistAgent(
+          inbound.text,
+          capabilities,
+          workroomAgentTurn?.agentDefinitionId,
+          binding.name,
+        );
         // thinkingMessage：进入 AI 处理前先回占位（对齐 legacy inbound-turn-pipeline）。
         // 占位消息不 await 回包——平台 ack 慢不应拖住 turn 启动；
         // 失败仅记日志（正式回复仍走 replyAndRecord 的完整确认）。
@@ -4334,10 +4340,22 @@ function stripAudioPlaceholders(content: string): string {
   return content.replace(/\[audio:[^\]]*\]/gu, '').trim();
 }
 
-function routeSpecialistAgent(
+export function routeSpecialistAgent(
   userText: string,
-  capabilities: AgentCapabilities,
+  capabilities: Pick<AgentCapabilities, 'agents'>,
+  preferredAgentDefinitionId?: string,
+  defaultAgentDefinitionId?: string,
 ): { readonly userText: string; readonly agent?: AgentCapabilities['agents'][number] } {
+  if (preferredAgentDefinitionId) {
+    if (preferredAgentDefinitionId === defaultAgentDefinitionId) return { userText };
+    const preferred = capabilities.agents.find((item) =>
+      item.name === preferredAgentDefinitionId
+      || item.qualifiedName === preferredAgentDefinitionId);
+    if (!preferred) {
+      throw new Error(`Workroom Orchestrator Agent is unavailable: ${preferredAgentDefinitionId}`);
+    }
+    return { userText, agent: preferred };
+  }
   const match = userText.match(/^@([^\s:：]+)[:：]?\s*/u);
   if (!match) return { userText };
   const name = match[1]!.toLowerCase();
@@ -4414,6 +4432,18 @@ export function matchAiTrigger(
   }
 
   return null;
+}
+
+/** Durable Workroom discussion handoff bypasses ordinary chat trigger filtering. */
+export function resolveRuntimeAgentTrigger(
+  message: Message,
+  trigger: AITriggerConfig | undefined,
+  workroomAgentTurn: boolean,
+): { content: string } | null {
+  if (!workroomAgentTurn) return matchAiTrigger(message, trigger);
+  const text = message.content.trim();
+  if (!text) return null;
+  return { content: stripMentionMarkup(text) || text };
 }
 
 /** 剥离 @ 触发后残留的提及标记：icqq CQ 码、QQ 官方/频道与 Slack 的 `<@!id>`。 */
