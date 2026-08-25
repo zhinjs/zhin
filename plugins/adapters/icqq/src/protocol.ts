@@ -321,7 +321,7 @@ export function resolveIcqqConfig(config: IcqqAdapterConfig = {}): ResolvedIcqqC
   }
   const autoReconnect = config.autoReconnect ?? entry?.autoReconnect ?? true;
   const outboundMedia = config.outboundMedia ?? entry?.outboundMedia;
-  const password = entry?.password;
+  const password = config.password ?? entry?.password;
   const platform = config.platform ?? entry?.platform ?? 2;
   const ver = config.ver ?? entry?.ver ?? '9.1.70';
   const dataDir = config.dataDir ?? entry?.dataDir ?? `data/icqq/${id}`;

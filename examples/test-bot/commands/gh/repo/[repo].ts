@@ -4,8 +4,9 @@ import { ghApiMessage, resolveGhClient } from '../../../lib/github-api.js';
 export default defineCommand({
   description: '查看仓库信息',
   params: { repo: { type: 'string' } },
-  execute: async ({ params, input }) => {
-    const api = await resolveGhClient(input);
+  execute: async (context) => {
+    const { params } = context;
+    const api = await resolveGhClient(context);
     if (typeof api === 'string') return api;
     const repo = String(params.repo);
     const r = await api.getRepo(repo);

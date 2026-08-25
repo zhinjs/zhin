@@ -1,8 +1,14 @@
 /**
- * Runtime `gh *` 命令共享：从 adapter-github 进程内 registry 取 GhClient。
- * Endpoint start 后才会 register；未上线时返回可读错误。
+ * Runtime `gh *` 命令共享：从当前 generation 的 Adapter projection 取 GithubClient。
  */
-import { getAdapter, type GhClient } from '@zhin.js/adapter-github';
+import {
+  githubClient,
+  type GhClient,
+  type GithubClient,
+} from '@zhin.js/adapter-github';
+import type { EndpointClientContext } from 'zhin.js/adapter';
+
+const GITHUB_ENDPOINT = process.env.GITHUB_ENDPOINT_ID?.trim() || 'zhin-dev';
 
 export function ghApiMessage(data: unknown, fallback: string): string {
   if (data && typeof data === 'object' && 'message' in data) {
@@ -38,16 +44,19 @@ function platformFromInput(input: unknown): { adapter?: string; senderId?: strin
   return { adapter, senderId };
 }
 
-export async function resolveGhClient(input?: unknown): Promise<GhClient | string> {
+export function resolveGithubEndpoint(context: EndpointClientContext): GithubClient | string {
   try {
-    const endpoint = getAdapter();
-    const { adapter, senderId } = platformFromInput(input);
-    const api = await endpoint.getUserOrDefaultAPI(adapter, senderId);
-    if (!api) return 'GitHub 未就绪（无可用 client）';
-    return api;
+    return githubClient.get({ project: context.project }, GITHUB_ENDPOINT);
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
   }
+}
+
+export async function resolveGhClient(context: EndpointClientContext): Promise<GhClient | string> {
+  const endpoint = resolveGithubEndpoint(context);
+  if (typeof endpoint === 'string') return endpoint;
+  const { adapter, senderId } = platformFromInput(context.input);
+  return endpoint.getUserOrDefaultApi(adapter, senderId);
 }
 
 export function requireRepo(args: readonly string[], usage: string): string | { repo: string; rest: string[] } {

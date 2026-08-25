@@ -8,12 +8,13 @@ import {
 
 export default defineCommand({
   description: '查看 PR 详情',
-  execute: async ({ args, input }) => {
+  execute: async (context) => {
+    const { args } = context;
     const parsed = requireRepo(args, '用法: gh pr <owner/repo> <编号>');
     if (typeof parsed === 'string') return parsed;
     const number = parsePositiveInt(parsed.rest[0], '编号');
     if (typeof number === 'string') return number;
-    const api = await resolveGhClient(input);
+    const api = await resolveGhClient(context);
     if (typeof api === 'string') return api;
     const r = await api.getPR(parsed.repo, number);
     if (!r.ok) return ghApiMessage(r.data, 'PR 不存在');

@@ -48,6 +48,45 @@ describe('hierarchical Plugin config', () => {
     });
   });
 
+  it('scopes local refs to each Plugin schema and accepts UI annotations', async () => {
+    const root = await configProject({
+      rootSchema: {},
+      childSchema: {
+        type: 'object',
+        additionalProperties: false,
+        $defs: {
+          profile: {
+            type: 'object',
+            additionalProperties: false,
+            properties: { enabled: { type: 'boolean' } },
+            required: ['enabled'],
+          },
+        },
+        properties: {
+          profiles: {
+            type: 'object',
+            'x-keyPlaceholder': '<profile-name>',
+            additionalProperties: { $ref: '#/$defs/profile' },
+          },
+        },
+      },
+    });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const composer = new ConfigComposer();
+
+    const config = await composer.compose(graph, {
+      plugins: { child: { profiles: { default: { enabled: true } } } },
+    });
+    expect(config.views.get(graph.root.children[0]!.id)).toEqual({
+      profiles: { default: { enabled: true } },
+    });
+
+    await expect(composer.compose(graph, {
+      plugins: { child: { profiles: { default: { enabled: 'yes' } } } },
+    })).rejects.toBeInstanceOf(ConfigValidationError);
+  });
+
   it('rejects parent fields colliding with child instance keys', async () => {
     const root = await configProject({
       rootSchema: {},
