@@ -36,6 +36,7 @@ export type CatalogWorkroomSpace = Readonly<CatalogWorkroomSpaceInput>;
 export interface WorkroomAgentTurnContinuation {
   readonly projectId: string;
   readonly agentDefinitionId: string;
+  readonly space: 'workroom' | 'sponsor_room';
   readonly intent: 'discussion';
   readonly proposalId: string;
 }
@@ -238,6 +239,7 @@ export class WorkroomHumanIngressPreRoute {
           this.#agentTurnContinuations.set(message, Object.freeze({
             projectId: decision.projectId,
             agentDefinitionId: configured.agentDefinitionId,
+            space: decision.space,
             intent: 'discussion',
             proposalId,
           }));

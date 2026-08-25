@@ -991,6 +991,30 @@ describe('IM Runtime', () => {
     await fixture.store.close();
   });
 
+  it('pins cross-Endpoint sends to the admitted generation lease', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent);
+    const lease = fixture.store.acquire();
+    const request = {
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'group' as const,
+        id: 'workroom-room',
+      },
+      requester: rootPluginId(),
+      content: 'orchestrator reply',
+    };
+
+    await expect(fixture.im.sendWithSnapshotLease(lease, request)).resolves.toMatchObject({
+      status: 'sent',
+    });
+    lease.release();
+    await expect(fixture.im.sendWithSnapshotLease(lease, request))
+      .rejects.toThrow('generation lease expired');
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
   it('passes structured conversations through Core and anchors host send addresses', async () => {
     const sent: unknown[] = [];
     const fixture = await createFixture([], sent);

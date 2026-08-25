@@ -29,6 +29,9 @@ import {
   resolveWorkroomStorageMode,
   routeSpecialistAgent,
   resolveIndexedProjectionReply,
+  restrictWorkroomAgentCapabilities,
+  resolveWorkroomOrchestratorConversation,
+  workroomOrchestratorSessionKey,
 } from '../../src/plugin-runtime/agent-host-installer.js';
 import {
   createEndpointRoleResolver,
@@ -67,7 +70,7 @@ describe('Workroom ingress source ownership', () => {
       adapter: 'slack', endpoint: 'main', senderId: 'main', space: 'workroom',
     })).toBe('accept');
     expect(classifyWorkroomIngressSource(aliasDefinition, {
-      adapter: 'slack', endpoint: 'main', senderId: 'human', space: 'workroom', senderIsBot: true,
+      adapter: 'slack', endpoint: 'main', senderId: 'human', space: 'workroom', trustedSenderIsBot: true,
     })).toBe('bot_principal');
   });
 
@@ -161,6 +164,28 @@ describe('Workroom Orchestrator turn routing', () => {
   it('uses the default binding when it is the catalog Orchestrator', () => {
     expect(routeSpecialistAgent('处理这个问题', { agents: [support] }, 'zhin', 'zhin'))
       .toEqual({ userText: '处理这个问题' });
+  });
+
+  it('isolates the Project session and removes classic subagent delegation', () => {
+    expect(workroomOrchestratorSessionKey({
+      projectId: 'project:zhin', agentDefinitionId: 'software.orchestrator',
+    })).toBe('workroom:project%3Azhin:orchestrator:software.orchestrator');
+    const spawn = { name: 'spawn_task' };
+    const deferred = { name: 'run_deferred_task' };
+    const work = { name: 'workroom_orchestrator_plan_propose' };
+    const capabilities = {
+      generation: 1, owner: rootPluginId(), tools: [spawn, deferred, work],
+      skills: [], agents: [], mcp: [], promptSections: [],
+    } as never;
+    expect(restrictWorkroomAgentCapabilities(capabilities, true).tools).toEqual([work]);
+    expect(restrictWorkroomAgentCapabilities(capabilities, false)).toBe(capabilities);
+    const conversation = {
+      endpoint: { id: 'orchestrator-capability', adapter: 'root/orchestrator' },
+      kind: 'group' as const, id: 'shared-room',
+    };
+    expect(resolveWorkroomOrchestratorConversation({
+      zhin: { conversation },
+    }, { projectId: 'zhin', space: 'workroom' })).toBe(conversation);
   });
 });
 
@@ -680,6 +705,31 @@ describe('canonical IM TurnRequest ingress', () => {
     expect(request.policy.permissions).toEqual(['owner', 'admin', 'trusted']);
   });
 
+  it('uses a trusted Workroom envelope without exposing ordinary conversation context', () => {
+    const message = makeMessage({
+      content: '继续处理', sender: { id: 'sponsor' }, metadata: { endpoint: 'member-bot' },
+    });
+    const request = createRuntimeTurnRequest(message, '继续处理', {
+      isMaster: false,
+      isTrusted: true,
+    }, {
+      traceId: 'trace-workroom', turnId: 'turn-workroom',
+      signal: new AbortController().signal, workspaceRoot: '/workspace', ports: {},
+      intent: { kind: 'new' },
+      sessionKey: 'workroom:zhin:orchestrator:software.orchestrator',
+      trustedMetadata: {
+        workroom: {
+          projectId: 'zhin', proposalId: 'proposal-1', disposition: 'discussion',
+        },
+      },
+    });
+    expect(request.session.key).toBe('workroom:zhin:orchestrator:software.orchestrator');
+    expect(request.input.metadata).toMatchObject({
+      workroom: { projectId: 'zhin', proposalId: 'proposal-1', disposition: 'discussion' },
+    });
+    expect(request.ports.conversationContext).toBeUndefined();
+  });
+
   it('maps an explicit trusted runtime turn intent', () => {
     const message = makeMessage({
       content: 'more detail',
@@ -1042,6 +1092,15 @@ describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () 
         slack: { endpoints: [{ id: 'ignored-id', name: 'workspace-bot' }] },
       },
     } as never)).resolves.toEqual(new Set(['icqq:10001', 'slack:workspace-bot']));
+  });
+
+  it('endpoints 缺省或为空时读取运行时创建的默认 Endpoint key', async () => {
+    await expect(readConfiguredEndpointKeys({
+      plugins: {
+        sandbox: {},
+        icqq: { endpoints: [] },
+      },
+    } as never)).resolves.toEqual(new Set(['sandbox:sandbox', 'icqq:icqq']));
   });
 
   it('master + trusted 数组解析，name 别名键可查', async () => {

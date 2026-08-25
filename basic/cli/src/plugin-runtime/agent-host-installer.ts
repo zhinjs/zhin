@@ -316,6 +316,7 @@ import {
   WorkroomHumanIngressPreRoute,
   createCatalogWorkroomSpace,
   resolveWorkroomHumanIntent,
+  type WorkroomAgentTurnContinuation,
 } from './workroom-human-ingress-route.js';
 
 const WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT = `You produce one untrusted Workroom DAG candidate as strict JSON.
@@ -405,7 +406,7 @@ export function classifyWorkroomIngressSource(
     replySpeakerAgent?: string;
     replySpeakerRole?: WorkroomMemberRole;
     mentioned?: boolean;
-    senderIsBot?: boolean;
+    trustedSenderIsBot?: boolean;
   }>,
 ): 'accept' | 'bot_principal' | 'non_owner_endpoint' {
   const botEndpoints = [
@@ -415,8 +416,9 @@ export function classifyWorkroomIngressSource(
   ].filter((route): route is NonNullable<typeof route> => route != null);
   // Adapter endpoint names and sender principals live in different namespaces.
   // Numeric IM adapters (ICQQ/OneBot) conventionally use the Bot UIN as both;
-  // other adapters must provide trusted bot metadata instead of comparing aliases.
-  if (input.senderIsBot || (/^\d+$/u.test(input.senderId) && botEndpoints.some(route =>
+  // other adapters may provide a typed trusted claim from their Endpoint boundary;
+  // generic Message.metadata is never promoted into this field.
+  if (input.trustedSenderIsBot || (/^\d+$/u.test(input.senderId) && botEndpoints.some(route =>
     route.adapter === input.adapter && route.endpoint === input.senderId))) {
     return 'bot_principal';
   }
@@ -2573,6 +2575,10 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     };
     if (!persistencePendingActivate) await recoverHumanIngress();
     const projectionReplyTargets = new WeakMap<Message, Message['message']>();
+    const projectionMentionTargets = new WeakMap<Message, Readonly<{
+      agentDefinitionId: string;
+      candidates: readonly NonNullable<Message['message']>[];
+    }>>();
     const workroomHumanIngress = new WorkroomHumanIngressPreRoute({
       bindings: interactionSpaceBindings,
       bindingRouter: interactionSpaceRouter,
@@ -2593,6 +2599,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 ? { replyTo: projectionReplyTargets.get(message)! }
                 : message.replyTo
                   ? { replyTo: { conversation: message.conversation, id: message.replyTo.id } }
+                : {}),
+              ...(projectionMentionTargets.get(message)
+                ? { mention: projectionMentionTargets.get(message)! }
                 : {}),
               intent,
             }),
@@ -2663,9 +2672,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           senderId: String(message.sender?.id ?? ''),
           space: identity.space,
           mentioned: message.mentioned === true || message.metadata.mentioned === true,
-          senderIsBot: message.metadata.authorBot === true
-            || message.metadata.senderBot === true
-            || message.metadata.isBot === true,
+          // Generic message metadata is not identity authority. Adapter-owned
+          // self filtering and exact configured numeric Bot principals remain
+          // the trusted echo suppression paths.
           ...(replyEntry ? {
             replySpeakerAgent: replyEntry.speaker.agentDefinitionId,
             replySpeakerRole: replyEntry.speaker.role,
@@ -2673,6 +2682,19 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         });
         if (sourceDecision !== 'accept') {
           return Object.freeze({ status: 'ignored' as const, reason: sourceDecision });
+        }
+        if (!replyEntry && identity.space === 'workroom' && identity.role !== 'orchestrator'
+          && (message.mentioned === true || message.metadata.mentioned === true)) {
+          const candidates = Object.values(projectionState.messageIndex)
+            .filter(entry => entry.target.projectId === identity.projectId
+              && entry.target.agentDefinitionId === identity.agent
+              && entry.target.taskKey != null
+              && entry.target.assignmentId != null)
+            .map(entry => entry.message);
+          projectionMentionTargets.set(message, Object.freeze({
+            agentDefinitionId: identity.agent,
+            candidates: Object.freeze(candidates),
+          }));
         }
         const sponsorBinding = identity.space === 'sponsor_room'
           ? projectionState.bindings[workroomProjectionBindingKey(
@@ -2730,7 +2752,18 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       const endpointTrusted = resolveTrustedForRuntimeMessage(message, options.resolveEndpointTrusted);
       const senderRoles = resolveRuntimeSenderRoles(message, ownerId, endpointTrusted, trigger);
       const turnAccess = createRuntimeTurnAccess(message, senderRoles);
-      const sessionKey = runtimeImSessionKey(turnAccess);
+      const sessionKey = workroomAgentTurn
+        ? workroomOrchestratorSessionKey(workroomAgentTurn)
+        : runtimeImSessionKey(turnAccess);
+      const workroomReplyConversation = workroomAgentTurn
+        ? resolveWorkroomOrchestratorConversation(
+            (await projectionRepository.read()).bindings,
+            workroomAgentTurn,
+          )
+        : undefined;
+      if (workroomAgentTurn && !workroomReplyConversation) {
+        throw new Error(`Workroom ${workroomAgentTurn.projectId} has no current Orchestrator projection binding`);
+      }
 
       // Runtime message.adapter is a CapabilityId (\0-separated); strip it and
       // use Endpoint liveName so the OutboundHost resolve() succeeds.
@@ -2739,7 +2772,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       const reply = async (
         content: SendContent,
       ): Promise<Awaited<ReturnType<Message['$reply']>>> => {
-        const receipt = await message.$reply(content);
+        const receipt = workroomReplyConversation
+          ? await options.im.sendWithSnapshotLease(lease, {
+              conversation: workroomReplyConversation,
+              requester: rootPluginId(),
+              content,
+            })
+          : await message.$reply(content);
         logger.debug(formatCompact({
           op: 'replychain_message_reply',
           status: receipt.status,
@@ -2800,14 +2839,14 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           matched.content,
           options.transcribeUrl,
         );
-        const capabilities = await readCapabilities(
+        const capabilities = restrictWorkroomAgentCapabilities(await readCapabilities(
           ingress,
           snapshot,
           requester,
           message,
           senderRoles,
           () => capabilityActive,
-        );
+        ), workroomAgentTurn != null);
         const routed = routeSpecialistAgent(
           inbound.text,
           capabilities,
@@ -2844,6 +2883,18 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               filesystemAccess: turnPolicy.filesystem.access,
               shell: turnPolicy.shell,
               network: turnPolicy.network,
+              sessionKey,
+              ...(workroomAgentTurn ? {
+                trustedMetadata: Object.freeze({
+                  workroom: Object.freeze({
+                    projectId: workroomAgentTurn.projectId,
+                    proposalId: workroomAgentTurn.proposalId,
+                    space: workroomAgentTurn.space,
+                    disposition: 'discussion',
+                    orchestratorAgentDefinitionId: workroomAgentTurn.agentDefinitionId,
+                  }),
+                }),
+              } : {}),
               intent: await resolveProductTurnIntent(
                 message,
                 senderRoles,
@@ -2857,7 +2908,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                   maxEntries: limits.maxEntries,
                   maxChars: limits.maxChars,
                 }),
-              ...(conversationSequence === undefined ? {} : {
+              ...(conversationSequence === undefined || workroomAgentTurn ? {} : {
                 readConversationContext: async (consumer: string, contextSignal: AbortSignal) => {
                   contextSignal.throwIfAborted();
                   if (!lease.active) throw new Error('Conversation context generation lease expired');
@@ -3503,6 +3554,7 @@ export function createRuntimeTurnRequest(
     filesystemAccess?: NonNullable<TurnRequest['policy']['filesystem']>['access'];
     shell?: TurnRequest['policy']['shell'];
     network?: TurnRequest['policy']['network'];
+    sessionKey?: string;
     intent: TurnIntent;
     ports: TurnRequestPorts;
     resolveReference?: (
@@ -3607,7 +3659,7 @@ export function createRuntimeTurnRequest(
     : undefined;
   // Conversation events belong to the Agent session, not to whichever principal
   // happened to trigger the next turn in a shared room.
-  const sessionKey = runtimeImSessionKey(access);
+  const sessionKey = input.sessionKey ?? runtimeImSessionKey(access);
   const contextConsumer = `agent-session:${sessionKey}`;
   const conversationContext = input.readConversationContext && input.commitConversationContext
     ? Object.freeze({
@@ -4451,6 +4503,37 @@ export function matchAiTrigger(
   }
 
   return null;
+}
+
+/** Project-scoped session isolates Workroom authority from ordinary room chat. */
+export function workroomOrchestratorSessionKey(
+  continuation: Pick<WorkroomAgentTurnContinuation, 'projectId' | 'agentDefinitionId'>,
+): string {
+  return `workroom:${encodeURIComponent(continuation.projectId)}:orchestrator:${encodeURIComponent(continuation.agentDefinitionId)}`;
+}
+
+/** Pins a Workroom reply to the Catalog projection's canonical Endpoint. */
+export function resolveWorkroomOrchestratorConversation(
+  bindings: Readonly<Record<string, Readonly<{ conversation: ConversationRef }>>>,
+  continuation: Pick<WorkroomAgentTurnContinuation, 'projectId' | 'space'>,
+): ConversationRef | undefined {
+  return bindings[workroomProjectionBindingKey(
+    continuation.projectId,
+    continuation.space,
+  )]?.conversation;
+}
+
+/** Workroom Orchestrators delegate only through governed Run/Task commands. */
+export function restrictWorkroomAgentCapabilities(
+  capabilities: AgentCapabilities,
+  workroomTurn: boolean,
+): AgentCapabilities {
+  if (!workroomTurn) return capabilities;
+  const forbidden = new Set(['spawn_task', 'run_deferred_task']);
+  return Object.freeze({
+    ...capabilities,
+    tools: Object.freeze(capabilities.tools.filter(tool => !forbidden.has(tool.name))),
+  });
 }
 
 /** Durable Workroom discussion handoff bypasses ordinary chat trigger filtering. */

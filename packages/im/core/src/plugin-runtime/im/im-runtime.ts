@@ -703,6 +703,17 @@ export class ImRuntime implements OutboundMessageService {
     }
   }
 
+  /** Sends through the exact generation lease that admitted the current operation. */
+  async sendWithSnapshotLease(
+    lease: SnapshotLease,
+    request: SendRequest,
+  ): Promise<DeliveryReceipt> {
+    if (!this.#snapshots?.owns(lease) || !lease.active) {
+      throw new Error('Outbound message generation lease expired');
+    }
+    return this.#sendWithSnapshot(request, lease.value);
+  }
+
   async #receiveNotice(source: EndpointEvent<Notice>): Promise<void> {
     const notice = source.payload;
     const event = conversationEventFromNotice(notice);

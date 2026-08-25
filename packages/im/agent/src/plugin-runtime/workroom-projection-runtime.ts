@@ -368,12 +368,16 @@ export class WorkroomProjectionReplyResolver {
 export function createProjectionHumanIngressTargetResolver(options: Readonly<{
   resolver: WorkroomProjectionReplyResolver;
   replyTo?: WorkroomProjectionMessageRef;
+  mention?: Readonly<{
+    agentDefinitionId: string;
+    candidates: readonly WorkroomProjectionMessageRef[];
+  }>;
   intent: HumanIngressIntent;
 }>): HumanIngressTargetResolverPort {
   return Object.freeze({
     async resolve(request: HumanIngressTargetResolutionRequest) {
       const resolverRef = 'projection-message-index:v1';
-      if (!options.replyTo) {
+      if (!options.replyTo && !options.mention) {
         return Object.freeze({
           ...request,
           status: 'unaddressed' as const,
@@ -382,13 +386,58 @@ export function createProjectionHumanIngressTargetResolver(options: Readonly<{
           resolverDigest: digest({ resolverRef, intent: options.intent, status: 'unaddressed' }),
         });
       }
-      const decision = await options.resolver.resolve({
-        projectId: request.decision.projectId,
-        bindingRevision: request.decision.bindingRevision,
-        replyTo: options.replyTo,
-        intent: options.intent === 'discussion' ? 'discussion' : 'task_input',
-      });
-      const resolverDigest = digest({ resolverRef, intent: options.intent, decision });
+      let via: 'reply' | 'mention' = 'reply';
+      let decision: WorkroomProjectionReplyTargetDecision;
+      if (options.replyTo) {
+        decision = await options.resolver.resolve({
+          projectId: request.decision.projectId,
+          bindingRevision: request.decision.bindingRevision,
+          replyTo: options.replyTo,
+          intent: options.intent === 'discussion' ? 'discussion' : 'task_input',
+        });
+      } else {
+        via = 'mention';
+        const mention = options.mention!;
+        const candidates = await Promise.all(mention.candidates.map(replyTo =>
+          options.resolver.resolve({
+            projectId: request.decision.projectId,
+            bindingRevision: request.decision.bindingRevision,
+            replyTo,
+            intent: options.intent === 'discussion' ? 'discussion' : 'task_input',
+          })));
+        const targets = new Map<string, Extract<WorkroomProjectionReplyTargetDecision, {
+          status: 'task_target';
+        }>>();
+        for (const candidate of candidates) {
+          if (candidate.status !== 'task_target' || candidate.target.status !== 'active'
+            || candidate.target.agentDefinitionId !== mention.agentDefinitionId) continue;
+          targets.set([
+            candidate.target.runId,
+            candidate.target.assignmentId,
+            candidate.target.assignmentRevision,
+          ].join('\0'), candidate);
+        }
+        const matches = [...targets.values()];
+        if (matches.length !== 1) {
+          const candidateRefs = [...new Set(matches.map(match => match.sourceProjectionId))].sort();
+          const reason = matches.length === 0 ? 'target_not_found' as const : 'ambiguous_target' as const;
+          const resolverDigest = digest({
+            resolverRef, intent: options.intent, via, agentDefinitionId: mention.agentDefinitionId,
+            reason, candidateRefs,
+          });
+          return Object.freeze({
+            ...request,
+            status: 'clarification_required' as const,
+            intent: options.intent,
+            resolverRef,
+            resolverDigest,
+            reason,
+            candidateRefs,
+          });
+        }
+        decision = matches[0]!;
+      }
+      const resolverDigest = digest({ resolverRef, intent: options.intent, via, decision });
       if (decision.status === 'clarification_required') {
         return Object.freeze({
           ...request,
@@ -408,7 +457,7 @@ export function createProjectionHumanIngressTargetResolver(options: Readonly<{
         intent: options.intent,
         resolverRef,
         resolverDigest,
-        via: 'reply' as const,
+        via,
         target: Object.freeze({
           projectId: decision.target.projectId,
           runId: decision.target.runId,
