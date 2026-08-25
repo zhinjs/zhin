@@ -19,6 +19,9 @@ async function loadCsv() {
   try {
     return await readFile(CACHE, 'utf8');
   } catch {
+    // The generated JSON is committed and is the deterministic build input.
+    // Network refreshes are maintainer actions, never a package/CI build dependency.
+    if (process.env.RIDDLE_REFRESH !== '1') return undefined;
     const res = await fetch(CSV_URL);
     if (!res.ok) throw new Error(`Failed to download CSV: ${res.status}`);
     const text = await res.text();
@@ -26,6 +29,14 @@ async function loadCsv() {
     await writeFile(CACHE, text, 'utf8');
     return text;
   }
+}
+
+async function verifyCommittedOutput() {
+  const entries = JSON.parse(await readFile(OUT, 'utf8'));
+  if (!Array.isArray(entries) || entries.length === 0) {
+    throw new Error('Committed char-riddles.json is empty or invalid; run RIDDLE_REFRESH=1 pnpm build:data');
+  }
+  console.log(`Reused ${entries.length} committed char riddles → ${OUT}`);
 }
 
 function parseCsv(text) {
@@ -65,6 +76,10 @@ function parseCsv(text) {
 }
 
 const csv = await loadCsv();
+if (csv === undefined) {
+  await verifyCommittedOutput();
+  process.exit(0);
+}
 const entries = parseCsv(csv);
 await mkdir(dirname(OUT), { recursive: true });
 await writeFile(OUT, JSON.stringify(entries), 'utf8');
