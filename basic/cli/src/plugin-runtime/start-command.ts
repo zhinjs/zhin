@@ -757,6 +757,10 @@ export async function readConfiguredEndpointKeys(
   for (const [adapter, raw] of Object.entries(expanded)) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
     const endpoints = (raw as Record<string, unknown>).endpoints;
+    if (endpoints === undefined || (Array.isArray(endpoints) && endpoints.length === 0)) {
+      keys.add(`${adapter}:${adapter}`);
+      continue;
+    }
     if (!Array.isArray(endpoints)) continue;
     for (const entry of endpoints) {
       if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;

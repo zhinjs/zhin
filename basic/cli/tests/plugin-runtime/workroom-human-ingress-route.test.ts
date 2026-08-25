@@ -108,6 +108,7 @@ describe('WorkroomHumanIngressPreRoute', () => {
     expect(route.takeAgentTurn(incoming)).toEqual({
       projectId: 'project:zhin',
       agentDefinitionId: 'support',
+      space: 'workroom',
       intent: 'discussion',
       proposalId: expect.any(String),
     });

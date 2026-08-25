@@ -8,6 +8,7 @@ import {
 } from '../../src/workroom/projection-outbox.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 import {
+  createProjectionHumanIngressTargetResolver,
   WorkroomProjectionReplyResolver,
   WorkroomProjectionRuntime,
   WorkroomProjectionScheduler,
@@ -462,6 +463,51 @@ describe('production Workroom Projection runtime', () => {
     })).resolves.toMatchObject({
       status: 'task_target', disposition: 'context_proposal',
       target: { assignmentId: 'assignment-1', status: 'active' },
+    });
+  });
+
+  it('resolves a unique mentioned member to its active Assignment', async () => {
+    const message = { conversation: binding().conversation, id: 'reviewer-progress-1' };
+    const resolver = new WorkroomProjectionReplyResolver({
+      repository: { read: async () => ({
+        revision: 1, bindings: { 'project-1': binding() }, cursors: {}, items: {},
+        messageIndex: {
+          [workroomProjectionMessageKey(message)]: {
+            projectionId: 'projection:reviewer', bindingRevision: 3,
+            sourceEventIds: ['event-reviewer'], message,
+            speaker: binding().agents[0]!,
+            target: {
+              projectId: 'project-1', runId: 'run-1', taskKey: 'review',
+              taskRevision: 1, assignmentId: 'assignment-reviewer', assignmentRevision: 2,
+              agentDefinitionId: 'software.developer',
+            },
+          },
+        },
+      }) },
+      runState: { read: async () => ({ assignments: {
+        'assignment-reviewer': {
+          id: 'assignment-reviewer', taskKey: 'review', taskRevision: 1,
+          revision: 2, status: 'running',
+        },
+      } }) },
+    });
+    const target = createProjectionHumanIngressTargetResolver({
+      resolver,
+      intent: 'discussion',
+      mention: {
+        agentDefinitionId: 'software.developer',
+        candidates: [message],
+      },
+    });
+
+    await expect(target.resolve({
+      decision: { projectId: 'project-1', bindingRevision: 3 },
+    } as Parameters<typeof target.resolve>[0])).resolves.toMatchObject({
+      status: 'task_target', via: 'mention', intent: 'discussion',
+      target: {
+        projectId: 'project-1', assignmentId: 'assignment-reviewer',
+        agentDefinitionId: 'software.developer', status: 'active',
+      },
     });
   });
 
