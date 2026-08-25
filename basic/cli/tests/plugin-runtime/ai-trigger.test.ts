@@ -70,10 +70,11 @@ describe('matchAiTrigger（新 Plugin Runtime，对齐 legacy shouldTriggerAI）
     expect(matchAiTrigger(groupMessage('[CQ:at,qq=10002] 在吗'), undefined)).toBeNull();
   });
 
-  it('Workroom durable discussion handoff bypasses the ordinary group trigger', () => {
+  it('Workroom durable discussion bypasses ordinary filters but respects the global switch', () => {
     const msg = groupMessage('请分析这个问题');
     expect(matchAiTrigger(msg, { enabled: false })).toBeNull();
-    expect(resolveRuntimeAgentTrigger(msg, { enabled: false }, true)).toEqual({
+    expect(resolveRuntimeAgentTrigger(msg, { enabled: false }, true)).toBeNull();
+    expect(resolveRuntimeAgentTrigger(msg, { enabled: true }, true)).toEqual({
       content: '请分析这个问题',
     });
   });

@@ -116,6 +116,8 @@ export interface IngressRoute {
     requester: PluginId,
     conversationSequence: number | undefined,
   ): Promise<boolean>;
+  /** A live pre-route handoff that must run before handlers and commands. */
+  shouldRouteBeforeDispatch?(message: Message): boolean;
   route(
     message: Message,
     lease: SnapshotLease,
@@ -636,6 +638,18 @@ export class ImRuntime implements OutboundMessageService {
             if (preRouted) {
               result = Object.freeze({ matched: true, command: 'pre-route', owner: requester });
               return;
+            }
+            if (ingressRoute?.shouldRouteBeforeDispatch?.(message) === true) {
+              const handled = await ingressRoute.route(
+                message,
+                lease,
+                requester,
+                conversationSequence,
+              );
+              if (handled) {
+                result = Object.freeze({ matched: true, command: 'ai', owner: requester });
+                return;
+              }
             }
             await this.#runHandlers(lease.value, 'message.receive', [
               withEndpointEventPayload(source, message),

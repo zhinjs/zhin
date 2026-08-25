@@ -39,6 +39,7 @@ import type { LoginAssist } from '@zhin.js/core';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { bindLoginAssistStdin } from './login-assist-stdin.js';
 import {
+  INBOX_TABLE_MESSAGE,
   runtimeEventPublisherToken,
   type DatabaseHost,
   type PluginNodeSnapshot,
@@ -102,6 +103,29 @@ function acquireLoginAssistBinding(assist: LoginAssist, hub: ConsoleEventHub): (
   };
   loginAssistBindings.set(assist, binding);
   return () => releaseLoginAssistBinding(assist, binding);
+}
+
+/** Verifies canonical IM session keys against the durable Console inbox. */
+export async function isKnownConversationSession(
+  databaseHost: Pick<DatabaseHost, 'started' | 'models'>,
+  sessionKey: string,
+): Promise<boolean | undefined> {
+  if (!databaseHost.started) return undefined;
+  const first = sessionKey.indexOf(':');
+  const second = sessionKey.indexOf(':', first + 1);
+  const third = sessionKey.indexOf(':', second + 1);
+  if (first <= 0 || second <= first + 1 || third <= second + 1 || third >= sessionKey.length - 1) {
+    return false;
+  }
+  const model = databaseHost.models.get(INBOX_TABLE_MESSAGE);
+  if (!model) return undefined;
+  const rows = await model.select('id').where({
+    adapter: sessionKey.slice(0, first),
+    endpoint_id: sessionKey.slice(first + 1, second),
+    channel_type: sessionKey.slice(second + 1, third),
+    channel_id: sessionKey.slice(third + 1),
+  }).limit(1);
+  return rows.length > 0;
 }
 
 function releaseLoginAssistBinding(assist: LoginAssist, binding: LoginAssistBinding): void {
@@ -622,6 +646,9 @@ export function registerConsoleApiRoutes(
       ? () => im.listEndpoints()
       : undefined,
     acquireAgentRuntime: createAgentRuntimeLeaseResolver(projectRoot, snapshots),
+    isKnownConversationSession: databaseHost
+      ? (sessionKey) => isKnownConversationSession(databaseHost, sessionKey)
+      : undefined,
     databaseHost: databaseHost
       ? {
         dialect: databaseHost.dialect,

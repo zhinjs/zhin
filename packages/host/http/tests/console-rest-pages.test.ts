@@ -702,6 +702,18 @@ describe('console-rest-pages agent sessions', () => {
     expect(await json(missing)).toMatchObject({ success: false });
   });
 
+  it('GET tree：格式正确但不存在的渠道会话 key 返回 404', async () => {
+    const base = await startHost(sessionCtx({
+      isKnownConversationSession: async key => key === 'icqq:main:group:known-room',
+    }));
+    const sessionKey = 'icqq:main:group:typo-room';
+    const missing = await fetch(
+      `${base}/api/agent/sessions/${encodeURIComponent(sessionKey)}/tree`,
+    );
+    expect(missing.status).toBe(404);
+    expect(await json(missing)).toMatchObject({ success: false });
+  });
+
   it('GET tree：runtime 未装配 503', async () => {
     const bare = await startHost(baseCtx());
     const unavailable = await fetch(`${bare}/api/agent/sessions/known/tree`);

@@ -30,6 +30,7 @@ import {
   flattenConfigDocument,
   getSystemStatusData,
   jsonSchemaToConsoleSchema,
+  isKnownConversationSession,
   listSnapshotPlugins,
   listGenerationPromptSections,
   registerConsoleApiRoutes,
@@ -41,6 +42,40 @@ import {
 
 const hosts: HttpHost[] = [];
 const tempRoots: string[] = [];
+
+describe('isKnownConversationSession', () => {
+  it('matches the durable inbox using all four canonical session fields', async () => {
+    const queries: Record<string, unknown>[] = [];
+    const selection = {
+      where(query: Record<string, unknown>) {
+        queries.push(query);
+        return this;
+      },
+      limit() {
+        return Promise.resolve([{ id: 1 }]);
+      },
+    };
+    const host = {
+      started: true,
+      models: { get: () => ({ select: () => selection }) },
+    };
+
+    await expect(isKnownConversationSession(
+      host as Parameters<typeof isKnownConversationSession>[0],
+      'icqq:main:group:room:thread',
+    )).resolves.toBe(true);
+    expect(queries).toEqual([{
+      adapter: 'icqq', endpoint_id: 'main', channel_type: 'group', channel_id: 'room:thread',
+    }]);
+  });
+
+  it('keeps the result unknown until the inbox model is available', async () => {
+    await expect(isKnownConversationSession({
+      started: false,
+      models: { get: () => undefined },
+    }, 'icqq:main:group:room')).resolves.toBeUndefined();
+  });
+});
 
 afterEach(async () => {
   await Promise.all(hosts.splice(0).map((host) => host.close()));

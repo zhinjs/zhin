@@ -586,6 +586,48 @@ describe('IM Runtime', () => {
     await fixture.store.close();
   });
 
+  it('runs a requested priority ingress route before ordinary command dispatch', async () => {
+    const events: string[] = [];
+    const fixture = await createFixture(events, []);
+    const current = fixture.store.current;
+    const resources = new Map(current.resources);
+    resources.set(current.root, new Map([
+      [ingressRouteToken.id, Object.freeze({
+        async preRoute() {
+          events.push('pre-route:false');
+          return false;
+        },
+        shouldRouteBeforeDispatch() {
+          return true;
+        },
+        async route() {
+          events.push('priority-route');
+          return true;
+        },
+      })],
+    ]));
+    fixture.store.commit(0, {
+      snapshot: { ...snapshotState(current), resources },
+      dispose: () => undefined,
+    });
+
+    const result = await receive(fixture.im, {
+      conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        kind: 'private',
+        id: 'workroom-priority',
+      },
+      content: '/gh issue list open',
+      sender: { id: 'alice' },
+    });
+
+    expect(result).toMatchObject({ matched: true, command: 'ai' });
+    expect(events).toContain('priority-route');
+    expect(events).not.toContain('command:open');
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
   it('passes an undefined conversation sequence to pre-route when ingress has no message id', async () => {
     const fixture = await createFixture([], []);
     let receivedSequence: number | undefined = 42;

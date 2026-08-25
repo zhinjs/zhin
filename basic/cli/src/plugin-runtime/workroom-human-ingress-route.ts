@@ -81,6 +81,11 @@ export class WorkroomHumanIngressPreRoute {
   constructor(readonly options: WorkroomHumanIngressPreRouteOptions) {}
 
   /** One-shot handoff from durable Workroom ingress into the Orchestrator turn. */
+  hasAgentTurn(message: Message): boolean {
+    return this.#agentTurnContinuations.has(message);
+  }
+
+  /** One-shot handoff from durable Workroom ingress into the Orchestrator turn. */
   takeAgentTurn(message: Message): WorkroomAgentTurnContinuation | undefined {
     const continuation = this.#agentTurnContinuations.get(message);
     this.#agentTurnContinuations.delete(message);
@@ -224,22 +229,29 @@ export class WorkroomHumanIngressPreRoute {
           return true;
         }
         const proposalId = outcome.event.proposal.id;
-        const applications = await this.options.application.drain(decision.projectId);
+        // Correlate the live message with its own durable proposal before the
+        // project-wide application drain. Another ingress may already own that
+        // drain (or consume this proposal's result), which must not swallow the
+        // current Orchestrator turn. Durable replay is deliberately excluded.
         let continueToOrdinaryChat = false;
+        if (intent === 'discussion' && configured?.agentDefinitionId && !outcome.duplicate) {
+          this.#agentTurnContinuations.set(message, Object.freeze({
+            projectId: decision.projectId,
+            agentDefinitionId: configured.agentDefinitionId,
+            intent: 'discussion',
+            proposalId,
+          }));
+          continueToOrdinaryChat = true;
+        }
+        const applications = await this.options.application.drain(decision.projectId);
         for (const application of applications.filter(result =>
           'proposalId' in result && result.proposalId === proposalId)) {
           if (application.status === 'clarification_required') {
+            this.#agentTurnContinuations.delete(message);
+            continueToOrdinaryChat = false;
             await message.$reply(renderHumanIngressClarification(application.reason));
           } else if (application.status === 'applied') {
-            if (application.kind === 'discussion_recorded' && configured?.agentDefinitionId) {
-              this.#agentTurnContinuations.set(message, Object.freeze({
-                projectId: decision.projectId,
-                agentDefinitionId: configured.agentDefinitionId,
-                intent: 'discussion',
-                proposalId: application.proposalId,
-              }));
-              continueToOrdinaryChat = true;
-            } else {
+            if (application.kind !== 'discussion_recorded') {
               await message.$reply(renderHumanIngressReceipt(application.kind, decision.projectId));
             }
           }
