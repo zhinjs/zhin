@@ -1,5 +1,12 @@
 # @zhin.js/service-activity-feedback
 
+## 3.0.17
+
+### Patch Changes
+
+- 45d4f24: Fix direct ICQQ password configuration, keep Plugin-local JSON Schema references and UI annotations valid during runtime config composition, and make activity feedback rollback safe before generation activation.
+  - zhin.js@6.0.14
+
 ## 3.0.16
 
 ### Patch Changes

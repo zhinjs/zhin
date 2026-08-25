@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/example-plugin-runtime-migration-bot",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "private": true,
   "description": "Executable behavior tracer for migration to the Zhin Plugin Runtime",
   "type": "module",

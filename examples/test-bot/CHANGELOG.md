@@ -1,5 +1,17 @@
 # test-bot
 
+## 0.1.144
+
+### Patch Changes
+
+- Updated dependencies [45d4f24]
+  - @zhin.js/adapter-icqq@9.0.2
+  - @zhin.js/service-activity-feedback@3.0.17
+  - @zhin.js/plugin-music@8.0.2
+  - @zhin.js/cli@3.0.16
+  - zhin.js@6.0.14
+  - @zhin.js/adapter-sandbox@8.0.1
+
 ## 0.1.143
 
 ### Patch Changes
