@@ -112,6 +112,7 @@ describe('dispatchExtendedConsoleRpc', () => {
       const ctx = makeCtx({
         authenticatedPrincipal: { principalId: 'sponsor:alpha' },
         workroomProfileControl: {
+          getPlanningStatus: vi.fn(), bootstrapPlanning: vi.fn(),
           publishPack: vi.fn(), publishProfile, publishRollback: vi.fn(), publishPlanningPolicy: vi.fn(),
         },
       });
@@ -128,6 +129,7 @@ describe('dispatchExtendedConsoleRpc', () => {
     it('rejects demo writes and caller-carried principal/authority facts before control invocation', async () => {
       const publishPack = vi.fn();
       const control = {
+        getPlanningStatus: vi.fn(), bootstrapPlanning: vi.fn(),
         publishPack, publishProfile: vi.fn(), publishRollback: vi.fn(), publishPlanningPolicy: vi.fn(),
       };
       await expect(dispatchExtendedConsoleRpc('workroom.profile.pack.publish', {
@@ -142,6 +144,44 @@ describe('dispatchExtendedConsoleRpc', () => {
         error: 'Demo scope: RPC "workroom.profile.pack.publish" is forbidden',
       });
       expect(publishPack).not.toHaveBeenCalled();
+    });
+
+    it('diagnoses and bootstraps Planning through authenticated narrow ports', async () => {
+      const getPlanningStatus = vi.fn(async (_projectId, principal) => ({
+        projectId: 'alpha', principalId: principal?.principalId, ready: false,
+      }));
+      const bootstrapPlanning = vi.fn(async command => ({
+        projectId: command.projectId, ready: true,
+      }));
+      const ctx = makeCtx({
+        authenticatedPrincipal: { principalId: 'sponsor:alpha' },
+        workroomProfileControl: {
+          getPlanningStatus, bootstrapPlanning,
+          publishPack: vi.fn(), publishProfile: vi.fn(), publishRollback: vi.fn(),
+          publishPlanningPolicy: vi.fn(),
+        },
+      });
+      await expect(dispatchExtendedConsoleRpc('workroom.profile.status', {
+        projectId: 'alpha',
+      }, ctx)).resolves.toEqual({
+        data: { projectId: 'alpha', principalId: 'sponsor:alpha', ready: false },
+      });
+      expect(getPlanningStatus).toHaveBeenCalledWith('alpha', { principalId: 'sponsor:alpha' });
+      await expect(dispatchExtendedConsoleRpc('workroom.profile.status', {
+        projectId: 'alpha', principalId: 'sponsor:forged',
+      }, ctx)).resolves.toEqual({
+        error: 'Console Workroom Profile request cannot carry principalId',
+      });
+      expect(getPlanningStatus).toHaveBeenCalledTimes(1);
+
+      await expect(dispatchExtendedConsoleRpc('workroom.profile.bootstrap', {
+        operationId: 'bootstrap:1', projectId: 'alpha', expectedRegistryRevision: -1,
+        includeTools: ['bash'], includeSkills: [],
+      }, ctx)).resolves.toEqual({ data: { projectId: 'alpha', ready: true } });
+      expect(bootstrapPlanning).toHaveBeenCalledWith({
+        operationId: 'bootstrap:1', projectId: 'alpha', expectedRegistryRevision: -1,
+        includeTools: ['bash'], includeSkills: [],
+      }, { principalId: 'sponsor:alpha' });
     });
   });
 

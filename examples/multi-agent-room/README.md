@@ -32,3 +32,9 @@ ai: 请调研一个主题，交给 researcher 完成后汇总结论
 页面创建 Project，把 `sandbox:assistant-bot` 对应的协作空间绑定到该 Project，
 并将入口 Agent 设为具有 `orchestrator` 角色的成员。Catalog 修改使用 revision CAS
 直接生效，不会改写配置文件或触发运行时重启。
+
+首次提交 `/work` 前，还要在 Console 的 **规划能力配置** 中完成诊断和初始化。为
+Console full token 配置 `principalId`，把同一 principal 同时加入 Project `sponsors`
+和 `ai.workroom.trustedPackPublishers`（该进程策略变更后需重启）。每个角色使用独立
+的 `ai.agents` binding；随后“初始化规划能力”会发布并激活首个 Profile 与 Planning
+Policy。

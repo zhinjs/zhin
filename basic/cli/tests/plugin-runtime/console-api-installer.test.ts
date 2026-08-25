@@ -690,6 +690,10 @@ describe('console REST routes', () => {
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const root = rootPluginId();
     const publishPack = vi.fn(async (command) => ({ pack: command.pack }));
+    const getPlanningStatus = vi.fn(async (_projectId, principal) => ({
+      projectId: 'engineering', principalId: principal?.principalId, ready: false,
+    }));
+    const bootstrapPlanning = vi.fn(async command => ({ projectId: command.projectId, ready: true }));
     const publishKnowledge = vi.fn(async () => ({ projectId: 'engineering', revision: 0 }));
     const snapshot = {
       root,
@@ -698,6 +702,8 @@ describe('console REST routes', () => {
           sessionTree: {}, workroom: {}, assistant: null,
           trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
           workroomProfiles: {
+            getPlanningStatus,
+            bootstrapPlanning,
             publishPack,
             publishProfile: vi.fn(),
             publishRollback: vi.fn(),
@@ -736,6 +742,29 @@ describe('console REST routes', () => {
     });
     expect(demo.status).toBe(400);
     expect(publishPack).toHaveBeenCalledTimes(1);
+
+    const status = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'workroom.profile.status', requestId: 25, projectId: 'engineering',
+      }),
+    });
+    expect(status.status).toBe(200);
+    expect(getPlanningStatus).toHaveBeenCalledWith('engineering', { principalId: 'human:alice' });
+
+    const bootstrap = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'workroom.profile.bootstrap', requestId: 26,
+        operationId: 'console:bootstrap:26', projectId: 'engineering', expectedRegistryRevision: -1,
+      }),
+    });
+    expect(bootstrap.status).toBe(200);
+    expect(bootstrapPlanning).toHaveBeenCalledWith({
+      operationId: 'console:bootstrap:26', projectId: 'engineering', expectedRegistryRevision: -1,
+    }, { principalId: 'human:alice' });
 
     const knowledge = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
       method: 'POST',

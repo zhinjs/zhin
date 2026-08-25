@@ -66,6 +66,15 @@ export interface ConsoleRpcExtendedCtx {
 }
 
 export interface ConsoleWorkroomProfileControlPort {
+  getPlanningStatus(projectId: string,
+    authenticatedPrincipal?: Readonly<{ principalId: string }>): Promise<unknown>;
+  bootstrapPlanning(command: Readonly<{
+    operationId: string;
+    projectId: string;
+    expectedRegistryRevision: number;
+    includeTools?: readonly string[];
+    includeSkills?: readonly string[];
+  }>, authenticatedPrincipal: Readonly<{ principalId: string }>): Promise<unknown>;
   publishPack(command: Readonly<{ operationId: string; pack: unknown }>,
     authenticatedPrincipal: Readonly<{ principalId: string }>): Promise<unknown>;
   publishProfile(command: Readonly<{
@@ -258,6 +267,8 @@ export async function dispatchExtendedConsoleRpc(
     case 'endpoint.delete_friend':
       return deleteFriend(d, ctx);
 
+    case 'workroom.profile.status':
+    case 'workroom.profile.bootstrap':
     case 'workroom.profile.pack.publish':
     case 'workroom.profile.publish':
     case 'workroom.profile.rollback':
@@ -275,7 +286,8 @@ export async function dispatchExtendedConsoleRpc(
 }
 
 async function mutateWorkroomProfile(
-  type: 'workroom.profile.pack.publish' | 'workroom.profile.publish'
+  type: 'workroom.profile.status' | 'workroom.profile.bootstrap'
+    | 'workroom.profile.pack.publish' | 'workroom.profile.publish'
     | 'workroom.profile.rollback' | 'workroom.profile.policy.publish',
   data: Record<string, unknown>,
   ctx: ConsoleRpcExtendedCtx,
@@ -287,10 +299,36 @@ async function mutateWorkroomProfile(
   ]) {
     if (forbidden in data) return { error: `Console Workroom Profile request cannot carry ${forbidden}` };
   }
+  if (type === 'workroom.profile.status') {
+    try {
+      return { data: await control.getPlanningStatus(
+        requiredRpcText(data.projectId, 'projectId'),
+        ctx.authenticatedPrincipal,
+      ) };
+    } catch (error) {
+      return { error: errorMessage(error) };
+    }
+  }
   const principal = ctx.authenticatedPrincipal;
   if (!principal) return { error: 'Workroom Profile control requires an authenticated principal' };
   try {
     const operationId = requiredRpcText(data.operationId, 'operationId');
+    if (type === 'workroom.profile.bootstrap') {
+      const projectId = requiredRpcText(data.projectId, 'projectId');
+      const includeTools = optionalRpcTextArray(data.includeTools, 'includeTools');
+      const includeSkills = optionalRpcTextArray(data.includeSkills, 'includeSkills');
+      return { data: await control.bootstrapPlanning(Object.freeze({
+        operationId,
+        projectId,
+        expectedRegistryRevision: requiredRpcInteger(
+          data.expectedRegistryRevision,
+          'expectedRegistryRevision',
+          -1,
+        ),
+        ...(includeTools ? { includeTools } : {}),
+        ...(includeSkills ? { includeSkills } : {}),
+      }), principal) };
+    }
     if (type === 'workroom.profile.pack.publish') {
       return { data: await control.publishPack(Object.freeze({ operationId, pack: requiredRpcValue(data.pack, 'pack') }), principal) };
     }
@@ -372,6 +410,14 @@ function requiredRpcText(value: unknown, name: string): string {
 
 function optionalRpcText(value: unknown, name: string): string | undefined {
   return value === undefined ? undefined : requiredRpcText(value, name);
+}
+
+function optionalRpcTextArray(value: unknown, name: string): readonly string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new Error(`${name} is invalid`);
+  const result = value.map((item, index) => requiredRpcText(item, `${name}.${index}`));
+  if (new Set(result).size !== result.length) throw new Error(`${name} contains duplicates`);
+  return Object.freeze(result);
 }
 
 function requiredRpcInteger(value: unknown, name: string, minimum = 1): number {

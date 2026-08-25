@@ -11,6 +11,21 @@
       "description": "Providers, Agents, sessions, memory, tools, and execution security.",
       "x-descriptionZh": "Provider、Agent、会话、记忆、工具与执行安全策略。",
       "properties": {
+        "workroom": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Process-owned Workroom control-plane policy; Projects remain in the persistent Catalog.",
+          "x-descriptionZh": "进程持有的 Workroom 控制面策略；Project 仍由持久化 Catalog 管理。",
+          "properties": {
+            "trustedPackPublishers": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "uniqueItems": true,
+              "description": "Authenticated Console principal ids allowed to publish shared Capability Packs.",
+              "x-descriptionZh": "允许发布共享 Capability Pack 的 Console 认证 principalId。"
+            }
+          }
+        },
         "agent": {
           "type": "object",
           "additionalProperties": true,

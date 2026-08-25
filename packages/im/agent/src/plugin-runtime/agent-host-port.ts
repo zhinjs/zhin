@@ -110,6 +110,12 @@ export interface AgentHostEffectSponsorControlPort {
 }
 
 export interface AgentHostWorkroomProfileControlPort {
+  getPlanningStatus(
+    projectId: string,
+    authenticatedPrincipal?: Readonly<{ principalId: string }>,
+  ): Promise<WorkroomPlanningSetupStatus>;
+  bootstrapPlanning(command: WorkroomPlanningBootstrapCommand,
+    authenticatedPrincipal: Readonly<{ principalId: string }>): Promise<WorkroomPlanningSetupStatus>;
   publishPack(command: Omit<PublishCapabilityPackCommand, 'version' | 'authenticatedPrincipalId'>,
     authenticatedPrincipal: Readonly<{ principalId: string }>):
     ReturnType<WorkroomProfileControlPort['publishPack']>;
@@ -124,6 +130,30 @@ export interface AgentHostWorkroomProfileControlPort {
     'version' | 'authenticatedPrincipalId' | 'catalogRevision' | 'projectDigest' | 'profileDigest'>,
     authenticatedPrincipal: Readonly<{ principalId: string }>):
     ReturnType<WorkroomProfileControlPort['publishPlanningPolicy']>;
+}
+
+export interface WorkroomPlanningBootstrapCommand {
+  readonly operationId: string;
+  readonly projectId: string;
+  readonly expectedRegistryRevision: number;
+  readonly includeTools?: readonly string[];
+  readonly includeSkills?: readonly string[];
+}
+
+export interface WorkroomPlanningSetupStatus {
+  readonly projectId: string;
+  readonly ready: boolean;
+  readonly principalId?: string;
+  readonly trustedPackPublisher: boolean;
+  readonly projectSponsor: boolean;
+  readonly catalogReady: boolean;
+  readonly registryRevision: number;
+  readonly activeProfile?: Readonly<{ revisionId: string; digest: string }>;
+  readonly planningPolicyReady: boolean;
+  readonly availableAgents: readonly string[];
+  readonly availableTools: readonly string[];
+  readonly availableSkills: readonly string[];
+  readonly diagnostics: readonly string[];
 }
 
 export interface AgentHostWorkroomKnowledgeControlPort {

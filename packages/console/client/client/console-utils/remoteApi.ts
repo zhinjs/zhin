@@ -61,6 +61,22 @@ export async function apiFetch(
   return res;
 }
 
+/** Typed POST adapter for the canonical Plugin Runtime Console RPC endpoint. */
+export async function consoleRpc<T>(
+  type: string,
+  data: Readonly<Record<string, unknown>> = {},
+): Promise<T> {
+  const requestId = Date.now();
+  const res = await apiFetch('/api/console/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type, requestId, ...data }),
+  });
+  const body = await res.json() as { success?: boolean; data?: T; error?: string };
+  if (!res.ok || !body.success) throw new Error(body.error ?? `HTTP ${res.status}`);
+  return body.data as T;
+}
+
 function trimTrailingSlash(value: string): string {
   return value.endsWith("/") ? value.slice(0, -1) : value;
 }

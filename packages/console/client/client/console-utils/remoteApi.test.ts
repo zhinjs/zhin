@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { apiFetch, getToken } from "./remoteApi.js";
+import { apiFetch, consoleRpc, getToken } from "./remoteApi.js";
 
 function mockStorage(map: Record<string, string> = {}): Storage {
   return {
@@ -64,5 +64,28 @@ describe("apiFetch 401 handling", () => {
     expect(win.__ZHIN_API_TOKEN).toBe("valid-demo-token");
     expect(getToken()).toBe("valid-demo-token");
     expect(win.dispatchEvent).not.toHaveBeenCalled();
+  });
+
+  it("sends canonical Console RPC envelopes and returns typed data", async () => {
+    installBrowserGlobals("sponsor-token");
+    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: { ready: true } }),
+      request: init,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(consoleRpc<{ ready: boolean }>("workroom.profile.status", {
+      projectId: "alpha",
+    })).resolves.toEqual({ ready: true });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:5173/api/console/request",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      type: "workroom.profile.status", projectId: "alpha",
+    });
   });
 });

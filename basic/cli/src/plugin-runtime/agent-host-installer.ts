@@ -125,6 +125,7 @@ import {
   createWorkroomRoleCapabilitySnapshot,
   createAssignmentExecutionEnvelope,
   type WorkroomPreemptionState,
+  createWorkroomSchedulerPolicySnapshot,
 } from '@zhin.js/agent';
 import {
   agentHostToken,
@@ -171,6 +172,9 @@ import {
   createGenerationHumanIngressPlanningPort,
   createGenerationOwnedDynamicPlanningProvider,
   createWorkroomDynamicPlanningGenerationSnapshot,
+  createWorkroomDynamicPlanningPolicySnapshot,
+  createCapabilityPackManifest,
+  createWorkroomProfileOverlay,
   type WorkroomDynamicPlanningPolicyPort,
   type WorkroomPlanningDisclosurePort,
   type WorkroomStructuredDagModelInput,
@@ -205,6 +209,7 @@ import {
   createGenerationWorkroomLocalAssignmentAuthority,
   GenerationOwnedWorkroomAssignmentAuthorityProvider,
   createWorkroomGenerationAuthoritySnapshotFromRuntime,
+  type WorkroomGenerationAuthoritySnapshot,
   WorkroomLocalAssignmentRuntime,
   workroomLocalAssignmentRuntimeToken,
   PinnedProfileCatalogLocalAssignmentRoute,
@@ -229,6 +234,8 @@ import {
   JournalWorkroomRunProfilePinAuthority,
   KernelPlanAdmissionRunProfilePinWriter,
   type AgentHostWorkroomProfileControlPort,
+  type WorkroomPlanningBootstrapCommand,
+  type WorkroomPlanningSetupStatus,
   type AgentHostWorkroomKnowledgeControlPort,
   type AgentHostEffectSponsorControlPort,
   type AgentHostPortfolioSponsorControlPort,
@@ -381,7 +388,25 @@ export async function resolveAiConfig(
   if (!ai || typeof ai !== 'object') return undefined;
   // Top-level `ai` bypasses Plugin ConfigView, so expand environment values
   // here. Validation remains fail-closed; missing secrets are errors.
-  return expandEnvironmentValue(ai, (key) => process.env[key]) as AIConfig;
+  const expanded = expandEnvironmentValue(ai, (key) => process.env[key]) as AIConfig;
+  resolveWorkroomTrustedPackPublishers(expanded);
+  return expanded;
+}
+
+export function resolveWorkroomTrustedPackPublishers(ai: AIConfig | undefined): readonly string[] {
+  const value = ai?.workroom?.trustedPackPublishers;
+  if (value === undefined) return Object.freeze([]);
+  if (!Array.isArray(value)) throw new Error('ai.workroom.trustedPackPublishers must be an array');
+  const normalized = value.map((principalId, index) => {
+    if (typeof principalId !== 'string' || !principalId.trim() || principalId !== principalId.trim()) {
+      throw new Error(`ai.workroom.trustedPackPublishers.${index} is invalid`);
+    }
+    return principalId;
+  });
+  if (new Set(normalized).size !== normalized.length) {
+    throw new Error('ai.workroom.trustedPackPublishers contains duplicates');
+  }
+  return Object.freeze(normalized);
 }
 
 export function resolveWorkroomStorageMode(ai: AIConfig | undefined): WorkroomStorageMode {
@@ -1457,7 +1482,228 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     if (!resources.has(workroomAcceptanceProjectionSourceAuthorityToken)) {
       resources.provide(workroomAcceptanceProjectionSourceAuthorityToken, acceptanceProfileSource);
     }
+    const trustedPackPublishers = new Set(options.workroomTrustedPackPublishers ?? []);
+    const readPlanningSetupStatus = async (
+      projectId: string,
+      authenticatedPrincipal?: Readonly<{ principalId: string }>,
+    ): Promise<WorkroomPlanningSetupStatus> => {
+      const [catalog, profiles] = await Promise.all([
+        workroomCatalog.read(),
+        projectProfiles.read(projectId),
+      ]);
+      const definition = catalog.definitions[projectId];
+      const principalId = authenticatedPrincipal?.principalId;
+      const lease = options.snapshots!.acquire();
+      try {
+        if (lease.value.generation !== generation) {
+          throw new Error('Workroom Planning setup targets another Root generation');
+        }
+        const supply = createWorkroomGenerationAuthoritySnapshotFromRuntime(
+          lease.value,
+          listGenerationBindings(),
+        );
+        const availableAgents = supply.agents.map(agent => agent.id).sort();
+        const availableTools = supply.tools.map(tool => tool.name).sort();
+        const availableSkills = supply.skills.map(skill => skill.name).sort();
+        const diagnostics: string[] = [];
+        const trustedPackPublisher = principalId !== undefined && trustedPackPublishers.has(principalId);
+        const projectSponsor = principalId !== undefined && definition?.sponsors?.includes(principalId) === true;
+        if (!principalId) diagnostics.push('当前 Console token 未绑定 principalId');
+        else {
+          if (!trustedPackPublisher) diagnostics.push(`principal ${principalId} 不在 ai.workroom.trustedPackPublishers`);
+          if (!projectSponsor) diagnostics.push(`principal ${principalId} 不在 Project sponsors`);
+        }
+        let catalogReady = definition !== undefined && definition.enabled !== false
+          && definition.conversation !== undefined;
+        if (!definition) diagnostics.push(`Workroom Project ${projectId} 不存在`);
+        else {
+          if (definition.enabled === false) diagnostics.push(`Workroom Project ${projectId} 已停用`);
+          if (!definition.conversation) diagnostics.push('Project 尚未绑定 Workroom conversation');
+          const rolesByAgent = new Map<string, Set<string>>();
+          for (const member of definition.members) {
+            const roles = rolesByAgent.get(member.agent) ?? new Set<string>();
+            roles.add(member.role);
+            rolesByAgent.set(member.agent, roles);
+            if (!availableAgents.includes(member.agent)) {
+              diagnostics.push(`成员 ${member.agent} 没有对应的 ai.agents binding`);
+              catalogReady = false;
+            }
+          }
+          for (const [agent, roles] of rolesByAgent) {
+            if (roles.size > 1) {
+              diagnostics.push(`成员 ${agent} 同时承担 ${[...roles].sort().join('/')}；每个 Workroom 角色需要独立 Agent binding`);
+              catalogReady = false;
+            }
+          }
+          const orchestrator = definition.members.find(member => member.role === 'orchestrator'
+            && member.agent === definition.conversation?.agent);
+          if (!orchestrator) {
+            diagnostics.push('conversation.agent 必须对应唯一 orchestrator 成员');
+            catalogReady = false;
+          }
+        }
+        const active = profiles.active;
+        const activeRevision = active ? profiles.revisions[active.revisionId] : undefined;
+        if (!active || !activeRevision) diagnostics.push('尚未发布并激活 Project Profile');
+        let planningPolicyReady = false;
+        if (definition && active && activeRevision) {
+          const profile = activeRevision.compiledProfile;
+          const authority = await profileComposition.planningPolicy.resolve({
+            version: 1,
+            generation: createWorkroomDynamicPlanningGenerationSnapshot(generation),
+            projectId,
+            catalogRevision: catalog.revision,
+            projectDigest: digestWorkroomProfileCatalogProject(definition),
+            profile: {
+              revisionId: active.revisionId,
+              digest: active.compiledDigest,
+              strategies: profile.workflows.map(workflow => ({
+                id: workflow.id,
+                version: active.revisionId,
+                digest: workflow.digest,
+              })),
+              roles: [...new Set(profile.agents.map(agent => agent.role))].sort(),
+              capabilities: {
+                tools: profile.tools.map(tool => tool.id).sort(),
+                skills: profile.skills.map(skill => skill.id).sort(),
+                integrations: [],
+                authorities: [],
+              },
+            },
+          });
+          planningPolicyReady = authority !== undefined;
+          if (!planningPolicyReady) diagnostics.push('active Profile 尚未绑定 Planning Policy');
+        }
+        const ready = catalogReady && activeRevision !== undefined && planningPolicyReady;
+        return Object.freeze({
+          projectId,
+          ready,
+          ...(principalId ? { principalId } : {}),
+          trustedPackPublisher,
+          projectSponsor,
+          catalogReady,
+          registryRevision: profiles.registryRevision,
+          ...(active ? { activeProfile: Object.freeze({
+            revisionId: active.revisionId,
+            digest: active.compiledDigest,
+          }) } : {}),
+          planningPolicyReady,
+          availableAgents: Object.freeze(availableAgents),
+          availableTools: Object.freeze(availableTools),
+          availableSkills: Object.freeze(availableSkills),
+          diagnostics: Object.freeze(diagnostics),
+        });
+      } finally {
+        lease.release();
+      }
+    };
+    const bootstrapPlanning = async (
+      command: WorkroomPlanningBootstrapCommand,
+      authenticatedPrincipal: Readonly<{ principalId: string }>,
+    ): Promise<WorkroomPlanningSetupStatus> => {
+      if (authenticatedPrincipal.principalId === WORKROOM_CONTROL_PLANE_ROOT_PRINCIPAL) {
+        throw new Error('Control-plane Root Pack bootstrap is not exposed through Console HTTP');
+      }
+      const before = await readPlanningSetupStatus(command.projectId, authenticatedPrincipal);
+      if (before.ready) return before;
+      if (!before.catalogReady || !before.trustedPackPublisher || !before.projectSponsor) {
+        throw new Error(before.diagnostics.join('; ') || 'Workroom Planning bootstrap prerequisites are unavailable');
+      }
+      if (before.registryRevision !== command.expectedRegistryRevision) {
+        throw new Error(
+          `Project Profile Registry revision conflict: expected ${command.expectedRegistryRevision}, actual ${before.registryRevision}`,
+        );
+      }
+      const [catalog, profiles] = await Promise.all([
+        workroomCatalog.read(),
+        projectProfiles.read(command.projectId),
+      ]);
+      const definition = catalog.definitions[command.projectId]!;
+      const lease = options.snapshots!.acquire();
+      try {
+        if (lease.value.generation !== generation) {
+          throw new Error('Workroom Planning bootstrap targets another Root generation');
+        }
+        const supply = createWorkroomGenerationAuthoritySnapshotFromRuntime(
+          lease.value,
+          listGenerationBindings(),
+        );
+        const artifacts = createWorkroomPlanningBootstrapArtifacts({
+          projectId: command.projectId,
+          definition,
+          supply,
+          principalId: authenticatedPrincipal.principalId,
+          ...(command.includeTools ? { includeTools: command.includeTools } : {}),
+          ...(command.includeSkills ? { includeSkills: command.includeSkills } : {}),
+        });
+        if (before.activeProfile) {
+          const active = profiles.revisions[before.activeProfile.revisionId];
+          if (!active) throw new Error('Active Project Profile revision is unavailable');
+          await profileComposition.control.publishPlanningPolicy({
+            version: 1,
+            operationId: `${command.operationId}:policy`,
+            authenticatedPrincipalId: authenticatedPrincipal.principalId,
+            projectId: command.projectId,
+            catalogRevision: catalog.revision,
+            projectDigest: digestWorkroomProfileCatalogProject(definition),
+            profileRevisionId: active.revisionId,
+            profileDigest: active.compiledDigest,
+            revision: 1,
+            policy: artifacts.policy,
+          }, signal);
+          return await readPlanningSetupStatus(command.projectId, authenticatedPrincipal);
+        }
+        const publication = await profileComposition.control.publishPack({
+          version: 1,
+          operationId: `${command.operationId}:pack`,
+          authenticatedPrincipalId: authenticatedPrincipal.principalId,
+          pack: artifacts.pack,
+        }, signal);
+        const overlay = createWorkroomProfileOverlay({
+          version: 1,
+          projectId: command.projectId,
+          revisionId: artifacts.overlay.revisionId,
+          charterRevisionId: artifacts.overlay.charterRevisionId,
+          packs: [publication.pack],
+          enabledTools: artifacts.overlay.enabledTools,
+          enabledSkills: artifacts.overlay.enabledSkills,
+          enabledAgents: artifacts.overlay.enabledAgents,
+          enabledWorkflows: artifacts.overlay.enabledWorkflows,
+        });
+        const profile = await profileComposition.control.publishProfile({
+          version: 1,
+          operationId: `${command.operationId}:profile`,
+          authenticatedPrincipalId: authenticatedPrincipal.principalId,
+          projectId: command.projectId,
+          expectedRegistryRevision: profiles.registryRevision,
+          overlay,
+          source: {
+            kind: 'sponsor_decision',
+            sourceId: `console-bootstrap:${command.operationId}`,
+          },
+          activate: true,
+        }, signal);
+        const active = profile.active!;
+        await profileComposition.control.publishPlanningPolicy({
+          version: 1,
+          operationId: `${command.operationId}:policy`,
+          authenticatedPrincipalId: authenticatedPrincipal.principalId,
+          projectId: command.projectId,
+          catalogRevision: catalog.revision,
+          projectDigest: digestWorkroomProfileCatalogProject(definition),
+          profileRevisionId: active.revisionId,
+          profileDigest: active.compiledDigest,
+          revision: 1,
+          policy: artifacts.policy,
+        }, signal);
+      } finally {
+        lease.release();
+      }
+      return await readPlanningSetupStatus(command.projectId, authenticatedPrincipal);
+    };
     workroomProfileConsoleControl.current = Object.freeze({
+      getPlanningStatus: readPlanningSetupStatus,
+      bootstrapPlanning,
       publishPack: async (
         command: Parameters<AgentHostWorkroomProfileControlPort['publishPack']>[0],
         authenticatedPrincipal: Parameters<AgentHostWorkroomProfileControlPort['publishPack']>[1],
@@ -4232,6 +4478,110 @@ function createSponsorProjectionControlTargetResolver(options: Readonly<{
       });
     },
   });
+}
+
+export function createWorkroomPlanningBootstrapArtifacts(input: Readonly<{
+  projectId: string;
+  definition: WorkroomDefinition;
+  supply: WorkroomGenerationAuthoritySnapshot;
+  principalId: string;
+  includeTools?: readonly string[];
+  includeSkills?: readonly string[];
+}>) {
+  const select = <T extends { readonly name: string }>(
+    values: readonly T[], requested: readonly string[] | undefined, label: string,
+  ): readonly T[] => {
+    if (requested === undefined) return values;
+    const names = new Set(requested);
+    for (const name of names) {
+      if (!values.some(value => value.name === name)) throw new Error(`${label} ${name} 不在当前 generation`);
+    }
+    return values.filter(value => names.has(value.name));
+  };
+  const tools = select(input.supply.tools, input.includeTools, 'Tool');
+  const skills = select(input.supply.skills, input.includeSkills, 'Skill');
+  const toolIds = tools.map(tool => tool.name).sort();
+  const skillIds = skills.map(skill => skill.name).sort();
+  const members = [...input.definition.members].sort((left, right) => left.agent.localeCompare(right.agent));
+  const seenAgents = new Set<string>();
+  for (const member of members) {
+    if (seenAgents.has(member.agent)) {
+      throw new Error(`成员 ${member.agent} 承担多个角色；每个 Workroom 角色需要独立 Agent binding`);
+    }
+    seenAgents.add(member.agent);
+    if (!input.supply.agents.some(agent => agent.id === member.agent)) {
+      throw new Error(`成员 ${member.agent} 没有对应的 ai.agents binding`);
+    }
+  }
+  const workerRoles = [...new Set(members.filter(member => member.role !== 'orchestrator')
+    .map(member => member.role))].sort();
+  const taskRoles: WorkroomMemberRole[] = workerRoles.length > 0 ? workerRoles : ['orchestrator'];
+  const workflowId = `workroom:${input.projectId}:dynamic`;
+  const workflowTasks = taskRoles.map((role, index) => ({
+    key: `${role}-${index + 1}`,
+    role,
+    requires: {},
+  }));
+  const workflowDigest = digestInstallerValue({ workflowId, workflowTasks });
+  const pack = createCapabilityPackManifest({
+    id: `workroom:${input.projectId}:bootstrap`,
+    version: '1.0.0',
+    kind: 'domain',
+    tools: tools.map(tool => ({ id: tool.name, digest: tool.digest })),
+    skills: skills.map(skill => ({ id: skill.name, digest: skill.digest, requiresTools: [] })),
+    agents: members.map(member => {
+      const agent = input.supply.agents.find(candidate => candidate.id === member.agent)!;
+      return {
+        id: agent.id,
+        digest: agent.digest,
+        role: member.role,
+        allowedTools: toolIds,
+        allowedSkills: skillIds,
+      };
+    }),
+    workflows: [{
+      id: workflowId,
+      digest: workflowDigest,
+      requiredByProfile: true,
+      tasks: workflowTasks,
+    }],
+  });
+  const revisionId = `profile:${input.projectId}:bootstrap:1`;
+  const overlay = createWorkroomProfileOverlay({
+    version: 1,
+    projectId: input.projectId,
+    revisionId,
+    charterRevisionId: `charter:${input.projectId}:bootstrap:1`,
+    packs: [pack],
+    enabledTools: toolIds,
+    enabledSkills: skillIds,
+    enabledAgents: members.map(member => member.agent).sort(),
+    enabledWorkflows: [workflowId],
+  });
+  const policy = createWorkroomDynamicPlanningPolicySnapshot({
+    revisionId: `planning:${input.projectId}:1`,
+    maxTasks: Math.max(4, Math.min(16, taskRoles.length * 4)),
+    maxTotalAttempts: Math.max(12, taskRoles.length * 8),
+    maxAttemptsPerTask: 3,
+    allowOptionalTasks: true,
+    approvalRequiredAuthorities: [],
+    sponsorGate: { owner: input.principalId, decisionTimeoutMs: 15 * 60_000 },
+    schedulerPolicy: createWorkroomSchedulerPolicySnapshot({
+      policyRef: `scheduler:${input.projectId}:bootstrap`,
+      revision: 1,
+      pinnedAtSequence: 0,
+      capacity: Math.max(1, Math.min(4, taskRoles.length)),
+      agingStepMs: 30_000,
+      starvationBoundMs: {
+        urgent: 30_000, high: 60_000, normal: 120_000, low: 300_000,
+      },
+      preemptionDeadlineMs: 30_000,
+    }),
+    defaultSponsorLane: 'normal',
+    defaultTaskDeadlineMs: 60 * 60_000,
+    defaultPreemptibility: 'atomic',
+  });
+  return Object.freeze({ pack, overlay, policy, revisionId, workflowId });
 }
 
 function digestInstallerValue(value: unknown): string {

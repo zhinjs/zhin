@@ -19,6 +19,8 @@ outline: [2, 3]
 | `http` | object | 否 | — | HTTP、Console、REST/RPC/SSE 与 Webhook Host。 |
 | `database` | object | 否 | — | Database Host 与方言连接参数。 |
 | `ai` | object | 否 | — | Provider、Agent、会话、记忆、工具与执行安全策略。 |
+| `ai.workroom` | object | 否 | — | 进程持有的 Workroom 控制面策略；Project 仍由持久化 Catalog 管理。 |
+| `ai.workroom.trustedPackPublishers` | array&lt;string&gt; | 否 | — | 允许发布共享 Capability Pack 的 Console 认证 principalId。 |
 | `ai.agent` | object | 否 | — | Agent 执行、排队、工具与模型策略。 |
 | `ai.agent.inboundQueue` | object | 否 | — | 入站回合排队策略。 |
 | `ai.agent.inboundQueue.groupMode` | string: `"supersede"`, `"fifo"` | 否 | — | 覆盖较早的群聊排队回合，或按到达顺序处理全部回合。 |

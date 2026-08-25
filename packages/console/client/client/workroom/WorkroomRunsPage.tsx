@@ -1,5 +1,21 @@
 import { useCallback, useState } from 'react';
-import { apiFetch } from '../console-utils/remoteApi.js';
+import { apiFetch, consoleRpc } from '../console-utils/remoteApi.js';
+
+type PlanningSetupStatus = {
+  projectId: string;
+  ready: boolean;
+  principalId?: string;
+  trustedPackPublisher: boolean;
+  projectSponsor: boolean;
+  catalogReady: boolean;
+  registryRevision: number;
+  activeProfile?: { revisionId: string; digest: string };
+  planningPolicyReady: boolean;
+  availableAgents: string[];
+  availableTools: string[];
+  availableSkills: string[];
+  diagnostics: string[];
+};
 
 type WorkroomTask = {
   key: string;
@@ -60,6 +76,46 @@ export default function WorkroomRunsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [detailView, setDetailView] = useState<'tasks' | 'assignments' | 'acceptance'>('tasks');
+  const [planning, setPlanning] = useState<PlanningSetupStatus | null>(null);
+  const [planningBusy, setPlanningBusy] = useState(false);
+
+  const loadPlanning = useCallback(async () => {
+    if (!projectId.trim()) {
+      setError('请输入 projectId');
+      return;
+    }
+    setPlanningBusy(true);
+    setError('');
+    try {
+      setPlanning(await consoleRpc<PlanningSetupStatus>('workroom.profile.status', {
+        projectId: projectId.trim(),
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPlanningBusy(false);
+    }
+  }, [projectId]);
+
+  const bootstrapPlanning = useCallback(async () => {
+    if (!planning) return;
+    setPlanningBusy(true);
+    setError('');
+    try {
+      const next = await consoleRpc<PlanningSetupStatus>('workroom.profile.bootstrap', {
+        operationId: `console:planning-bootstrap:${planning.projectId}:${Date.now()}`,
+        projectId: planning.projectId,
+        expectedRegistryRevision: planning.registryRevision,
+        includeTools: planning.availableTools,
+        includeSkills: planning.availableSkills,
+      });
+      setPlanning(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPlanningBusy(false);
+    }
+  }, [planning]);
 
   const loadRuns = useCallback(async () => {
     if (!projectId.trim()) {
@@ -150,6 +206,44 @@ export default function WorkroomRunsPage() {
           查询 Runs
         </button>
       </div>
+
+      <section className="rounded-xl border p-4 space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">规划能力配置</h2>
+            <p className="mt-1 text-xs text-muted-foreground">诊断 Catalog、Sponsor、Profile 与 Planning Policy，并以当前 generation 的真实能力生成首个受治理 Profile。</p>
+          </div>
+          <button type="button" className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted" disabled={planningBusy || !projectId.trim()} onClick={() => void loadPlanning()}>
+            {planningBusy ? '检查中…' : '检查规划能力'}
+          </button>
+        </div>
+        {planning ? (
+          <div className="space-y-3 text-sm">
+            <div className={`rounded-lg border p-3 ${planning.ready ? 'border-green-500/40 bg-green-500/5' : 'border-amber-500/40 bg-amber-500/5'}`}>
+              <p className="font-medium">{planning.ready ? '规划能力已就绪，可以提交 /work' : '规划能力尚未就绪'}</p>
+              <p className="mt-1 text-xs text-muted-foreground">principal: {planning.principalId ?? '未绑定'} · Profile: {planning.activeProfile?.revisionId ?? '未激活'} · Policy: {planning.planningPolicyReady ? '已发布' : '未发布'}</p>
+            </div>
+            {planning.diagnostics.length > 0 ? <ul className="list-disc space-y-1 pl-5 text-xs text-amber-700 dark:text-amber-300">{planning.diagnostics.map(item => <li key={item}>{item}</li>)}</ul> : null}
+            {!planning.principalId || !planning.trustedPackPublisher ? (
+              <details className="rounded-lg border bg-muted/20">
+                <summary className="cursor-pointer px-3 py-2 text-xs font-medium">首次配置所需 YAML（保存后重启）</summary>
+                <pre className="overflow-auto border-t p-3 text-xs">{'http:\n  tokens:\n    - token: ${WORKROOM_SPONSOR_TOKEN}\n      scope: full\n      principalId: workroom-admin\nai:\n  workroom:\n    trustedPackPublishers:\n      - workroom-admin'}</pre>
+                <p className="border-t px-3 py-2 text-xs text-muted-foreground">重启后用 WORKROOM_SPONSOR_TOKEN 登录 Console，并在 Project sponsors 中加入 workroom-admin。</p>
+              </details>
+            ) : null}
+            {!planning.ready && planning.catalogReady && planning.trustedPackPublisher && planning.projectSponsor ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">{planning.activeProfile
+                  ? '为当前 active Profile 发布默认 Planning Policy。'
+                  : `将当前 ${planning.availableAgents.length} 个 Agent、${planning.availableTools.length} 个 Tool、${planning.availableSkills.length} 个 Skill 固定进首个 Profile，并发布默认 Planning Policy。`}</p>
+                <button type="button" className="rounded-md border bg-primary px-3 py-1.5 text-sm text-primary-foreground" disabled={planningBusy} onClick={() => void bootstrapPlanning()}>
+                  {planning.activeProfile ? '补齐 Planning Policy' : '初始化规划能力'}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 

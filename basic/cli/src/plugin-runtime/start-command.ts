@@ -371,6 +371,7 @@ async function loadConfiguredAgentHost(
         runtime,
         snapshots: snapshotReader,
         workroomStorageMode,
+        workroomTrustedPackPublishers: module.resolveWorkroomTrustedPackPublishers(initialAi),
         extraTools: options.extraTools as Parameters<typeof module.installAgentHost>[0]['extraTools'],
       });
     },

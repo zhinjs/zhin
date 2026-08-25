@@ -169,6 +169,22 @@ Catalog 与 Run Journal 使用相同的持久化选择：数据库模式写入 `
 
 `/work` 不会回退成固定单 Task。生产入口只有在 composition root 安装受治理的 `HumanIngressPlanningPort` 后才会创建 Run；否则持久化请求并返回 `planning_unavailable` 澄清。推荐使用 `DynamicWorkflowPlanningPort`：模型或 Strategy 只返回不可信的结构化 DAG candidate，Project/Catalog、Profile、Orchestrator、planning policy、预算和 Sponsor Gate authority 全由可信端口注入；候选经过 `WorkflowPlanBuilder` 重新校验 Profile capability ceiling、required/optional、依赖/cycle、Task/attempt budget 与 approval gate 后，只有 `WorkroomKernel.admitWorkflowPlan()` 可以原子写入 Plan/Task facts。Plan Gate 会先物化为 `approval` Blocker，普通 Orchestrator `resolve_blocker` 无法解除；安装 `WorkroomPlanGateAuthorityPort` 后，人类 Sponsor 可用 `/control plan-gate <approve|reject|request-changes|cancel> <runId> <taskKey> <gateId> [reason]` 提交 exact、可重放的 typed decision。
 
+首次启用规划时，在 Console 的 **Workrooms → 规划能力配置** 输入 `projectId` 并运行诊断。写操作要求使用绑定了 `principalId` 的 full token；同一 principal 还必须同时出现在 Project `sponsors` 与进程固定的共享 Pack 发布者列表中：
+
+```yaml
+http:
+  tokens:
+    - token: ${WORKROOM_SPONSOR_TOKEN}
+      scope: full
+      principalId: workroom-admin
+ai:
+  workroom:
+    trustedPackPublishers:
+      - workroom-admin
+```
+
+保存后重启 Host，用该 token 登录 Console，并在 Catalog Project 的 `sponsors` 中加入 `workroom-admin`。每个 Workroom 角色必须引用一个独立的 `ai.agents` binding；诊断通过后点击“初始化规划能力”，Console 会从当前 generation 的真实 Agent/Tool/Skill digest 发布 Capability Pack、激活首个 Project Profile，并发布默认 Planning Policy。成功状态会明确显示“可以提交 `/work`”，不再要求手工调用隐藏 RPC。
+
 Workroom 的 Journal 后端在进程启动时固定：`ai.sessions.useDatabase !== false` 使用 `workroom_events`，Database Root Host 未就绪会使候选 generation 发布失败；显式设为 `false` 时使用 `.zhin/workroom-journal` 的原子文件事件流。热重载不能切换后端，修改该选择必须重启进程，避免旧代 lease 与新代写入两个无 CAS 关系的事实源。Console 的 Run 列表与详情仍是 Project-scoped 只读投影（例如 `GET /api/agent/workroom/runs?projectId=...`），不能直接修改 Task/Assignment。认证 Console 另有彼此隔离的 typed 控制面：Profile 与 Project Knowledge 通过 `workroom.profile.*` / `workroom.knowledge.*` RPC 发布或回滚，Portfolio Sponsor 通过 `POST /api/agent/workroom/portfolio/commands` 提交 exact command，Effect Sponsor 通过 `POST /api/agent/workroom/effects/sponsor-decisions` 只决定绑定 exact Intent 的授权；该命令只接受闭集 `reasonCode`，不持久化任意解释文本。Data Steward/Privacy/Compliance 使用 `/api/agent/workroom/data-lifecycle`、`/overdue` 与 `/commands` 查询 content-free lifecycle projection，并执行 Hold、subject erasure/export、retention purge/reconcile；这些入口只有在 Root-private role authority、当前 Catalog Project 与 P12 Console recipient 同时匹配时发布。它们都从认证 token 重新派生 principal，并重验当前 Catalog/Profile/governance revision；请求体自报身份、approval 或 discussion 不能取得状态写权限。可选 Remote A2A Executor 复用同一 Assignment lease/fence/event 契约；只有持久 Profile、Authority Grant、Workspace、Disclosure 与 endpoint Card/auth/transport 快照全部精确匹配时才允许新 claim，缺项会持久阻塞，旧 `ai.remoteAgents` poller 不再存在。
 
 升级旧数据时，`zhin agent legacy-runs <input>` 只读审计 legacy Run export，`zhin agent legacy-payloads <input> --kind <kind>` 只读扫描遗留内嵌正文；两者只生成 create-only audit/proposal，不会自动写新 Journal、接受旧结果、删除 payload 或执行迁移。详见[旧概念兼容说明](../contributing/legacy-concepts.md)。

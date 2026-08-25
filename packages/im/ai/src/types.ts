@@ -323,6 +323,11 @@ export interface AgentBindingConfig {
 
 export interface AIConfig {
   enabled?: boolean;
+  /** Workroom control-plane policy. Project definitions remain in the persistent Catalog. */
+  workroom?: {
+    /** Authenticated Console principal ids allowed to publish shared Capability Packs. */
+    trustedPackPublishers?: string[];
+  };
   /** 命名 provider 实例 */
   providers?: Record<string, ProviderInstanceConfig>;
   /** per-agent 绑定 + 可选入站 priority/match（协作角色如 researcher 亦用 agents.<role>） */

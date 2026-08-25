@@ -19,6 +19,8 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `http` | object | no | — | HTTP, Console, REST/RPC/SSE, and Webhook Host. |
 | `database` | object | no | — | Database Host and dialect connection options. |
 | `ai` | object | no | — | Providers, Agents, sessions, memory, tools, and execution security. |
+| `ai.workroom` | object | no | — | Process-owned Workroom control-plane policy; Projects remain in the persistent Catalog. |
+| `ai.workroom.trustedPackPublishers` | array&lt;string&gt; | no | — | Authenticated Console principal ids allowed to publish shared Capability Packs. |
 | `ai.agent` | object | no | — | Agent execution, queueing, tool, and model policies. |
 | `ai.agent.inboundQueue` | object | no | — | Inbound turn queue policy. |
 | `ai.agent.inboundQueue.groupMode` | string: `"supersede"`, `"fifo"` | no | — | Replace an older queued group turn, or process all turns in arrival order. |
