@@ -1,5 +1,14 @@
 # @zhin.js/adapter-icqq
 
+## 9.0.5
+
+### Patch Changes
+
+- Updated dependencies [d85eddd]
+  - @zhin.js/agent@1.1.19
+  - @zhin.js/core@1.5.15
+  - zhin.js@6.0.15
+
 ## 9.0.4
 
 ### Patch Changes

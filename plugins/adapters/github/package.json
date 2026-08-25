@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-github",
-  "version": "6.0.3",
+  "version": "6.0.4",
   "description": "Zhin.js GitHub adapter for Plugin Runtime (App auth + webhook)",
   "type": "module",
   "main": "./lib/index.js",

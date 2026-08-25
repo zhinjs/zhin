@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.0.4
+
+### Patch Changes
+
+- Updated dependencies [d85eddd]
+  - @zhin.js/agent@1.1.19
+  - @zhin.js/host-http@1.0.15
+  - @zhin.js/core@1.5.15
+  - zhin.js@6.0.15
+
 ## 7.0.3
 
 ### Patch Changes
