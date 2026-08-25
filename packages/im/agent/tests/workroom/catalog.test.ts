@@ -14,6 +14,21 @@ afterEach(async () => {
 });
 
 describe('FileWorkroomCatalog', () => {
+  it('persists a member-specific message route', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'workroom-catalog-message-route-'));
+    roots.push(root);
+    const store = new FileWorkroomCatalog(join(root, 'catalog.json'));
+    const saved = await store.replace({ project: {
+      ...definition('room'),
+      members: [{
+        agent: 'zhin', role: 'orchestrator',
+        messageRoute: { adapter: 'icqq', endpoint: '8596238' },
+      }],
+    } }, (await store.read()).revision);
+    expect(saved.definitions.project.members[0]?.messageRoute).toEqual({
+      adapter: 'icqq', endpoint: '8596238',
+    });
+  });
   it('persists an exact local or remote Assignment route as Catalog authority', async () => {
     const root = await mkdtemp(join(tmpdir(), 'workroom-catalog-route-'));
     roots.push(root);

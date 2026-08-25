@@ -411,8 +411,13 @@ export function createCatalogWorkroomProjectionBinding(
   projectId: string,
   conversation: ConversationRef,
   bindingRevision: number,
+  endpoints: readonly Readonly<{
+    id: string; name: string; adapter: string; owner: string;
+  }>[] = [],
 ): WorkroomProjectionBinding {
-  return createCatalogProjectionBinding(catalog, projectId, conversation, bindingRevision, 'workroom');
+  return createCatalogProjectionBinding(
+    catalog, projectId, conversation, bindingRevision, 'workroom', endpoints,
+  );
 }
 
 export function createCatalogSponsorRoomProjectionBinding(
@@ -450,6 +455,9 @@ function createCatalogProjectionBinding(
   conversation: ConversationRef,
   bindingRevision: number,
   audience: 'workroom' | 'sponsor_room',
+  endpoints: readonly Readonly<{
+    id: string; name: string; adapter: string; owner: string;
+  }>[] = [],
 ): WorkroomProjectionBinding {
   const definition = catalog.definitions[projectId];
   const configured = audience === 'workroom'
@@ -468,12 +476,43 @@ function createCatalogProjectionBinding(
   if (!orchestratorMember) {
     throw new Error(`Workroom Projection Catalog ${projectId} has no exact Orchestrator`);
   }
-  const identity = (member: (typeof definition.members)[number]) => Object.freeze({
-    principalId: member.agent,
-    agentDefinitionId: member.agent,
-    displayName: member.agent,
-    role: member.role,
-  });
+  const resolveMessageEndpoint = (member: (typeof definition.members)[number]) => {
+    if (audience !== 'workroom' || !member.messageRoute) return undefined;
+    const matches = endpoints.filter(endpoint => endpoint.adapter === member.messageRoute!.adapter
+      && endpoint.name === member.messageRoute!.endpoint);
+    if (matches.length !== 1) {
+      throw new Error(
+        `Workroom Projection member ${member.agent} messageRoute is not one exact Endpoint`,
+      );
+    }
+    return Object.freeze({ id: matches[0]!.id, adapter: matches[0]!.owner });
+  };
+  const identity = (member: (typeof definition.members)[number]) => {
+    const messageEndpoint = resolveMessageEndpoint(member);
+    return Object.freeze({
+      principalId: member.agent,
+      agentDefinitionId: member.agent,
+      displayName: member.agent,
+      role: member.role,
+      ...(messageEndpoint ? { messageEndpoint } : {}),
+    });
+  };
+  const primaryEndpoint = audience === 'workroom' && endpoints.length > 0
+    ? endpoints.filter(endpoint => endpoint.adapter === configured.adapter
+      && endpoint.name === configured.endpoint)
+    : [];
+  if (audience === 'workroom' && endpoints.length > 0 && primaryEndpoint.length !== 1) {
+    throw new Error(`Workroom Projection Catalog ${projectId} primary Endpoint is unavailable`);
+  }
+  const projectionConversation = primaryEndpoint.length === 1
+    ? Object.freeze({
+        ...structuredClone(conversation),
+        endpoint: Object.freeze({
+          id: primaryEndpoint[0]!.id,
+          adapter: primaryEndpoint[0]!.owner,
+        }),
+      })
+    : Object.freeze(structuredClone(conversation));
   return Object.freeze({
     version: 1,
     audience,
@@ -481,7 +520,7 @@ function createCatalogProjectionBinding(
     catalogBindingDigest: workroomProjectionCatalogBindingDigest(definition),
     bindingRevision,
     projectionPolicyRevision: 1,
-    conversation: Object.freeze(structuredClone(conversation)),
+    conversation: projectionConversation,
     orchestrator: identity(orchestratorMember) as WorkroomProjectionBinding['orchestrator'],
     agents: Object.freeze(definition.members
       .filter(member => member !== orchestratorMember)
@@ -2374,6 +2413,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       proposals: humanIngressProposals,
       applications: humanIngressApplications,
       port: options.workroomHumanIngressPort ?? productionHumanIngressPort,
+      onError: (error, request) => logger.error(formatCompact({
+        op: 'workroom_human_ingress_application',
+        projectId: request.identity.projectId,
+        proposalId: request.identity.proposalId,
+        attempt: request.attempt,
+        error: error instanceof Error ? error.message : String(error),
+      })),
     });
     let humanIngressRetryTimer: ReturnType<typeof setTimeout> | undefined;
     let humanIngressRetryAt: number | undefined;
@@ -2442,6 +2488,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           decision.projectId,
           message.conversation,
           decision.bindingRevision,
+          options.im.listEndpoints(),
         );
         for (let conflict = 0; conflict < 8; conflict += 1) {
           const current = await projectionRepository.read();
@@ -2523,7 +2570,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         const sourceRef = `workroom-catalog:${encodeURIComponent(identity.projectId)}:${identity.space}`;
         return createCatalogWorkroomSpace({
           projectId: identity.projectId,
-          agentDefinitionId: identity.agent,
+          // Every human message enters the Orchestrator-owned Project Inbox.
+          // identity.agent may be the member Bot Endpoint that received it.
+          agentDefinitionId: configured.agent,
           space: identity.space,
           sourceRef,
           sourceDigest: catalogSpaceSourceDigest(identity.projectId, identity.space, configured),

@@ -175,6 +175,7 @@ describe('HumanIngressApplicationService', () => {
     const applications = new MemoryHumanIngressApplicationRepository();
     let now = 10_000;
     const operations: string[] = [];
+    const errors: string[] = [];
     let calls = 0;
     const port: HumanIngressOrchestratorProposalPort = {
       apply: async request => {
@@ -197,6 +198,7 @@ describe('HumanIngressApplicationService', () => {
       now: () => now,
       retryDelayMs: 100,
       claimLeaseMs: 50,
+      onError: error => errors.push(error instanceof Error ? error.message : String(error)),
     });
 
     expect(await firstGeneration.runOnce('project-alpha')).toMatchObject({
@@ -221,6 +223,7 @@ describe('HumanIngressApplicationService', () => {
       `human-ingress-application:${proposal.id}`,
       `human-ingress-application:${proposal.id}`,
     ]);
+    expect(errors).toEqual(['response lost']);
     expect((await applications.read('project-alpha')).map(event => event.type)).toEqual([
       'proposal.claimed',
       'proposal.retry_scheduled',

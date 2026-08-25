@@ -36,6 +36,36 @@ describe('validateAiRoutingConfig', () => {
     );
   });
 
+  it('校验成员消息出口必须指向唯一、已配置的 Bot Endpoint', () => {
+    const workrooms = {
+      support: {
+        name: 'Support',
+        members: [
+          { agent: 'zhin', role: 'orchestrator' },
+          {
+            agent: 'reviewer', role: 'reviewer',
+            messageRoute: { adapter: 'icqq', endpoint: 'reviewer-bot' },
+          },
+        ],
+        conversation: {
+          adapter: 'icqq', endpoint: 'zhin-bot', kind: 'group', id: '10001', agent: 'zhin',
+        },
+      },
+    };
+    expect(validateWorkroomDefinitions(
+      workrooms,
+      ['zhin', 'reviewer'],
+      new Set(['icqq:zhin-bot', 'icqq:reviewer-bot']),
+    )).toEqual([]);
+    expect(validateWorkroomDefinitions(
+      workrooms,
+      ['zhin', 'reviewer'],
+      new Set(['icqq:zhin-bot']),
+    )).toContain(
+      'workroomCatalog.support.members.1.messageRoute: unknown configured Bot Endpoint "icqq:reviewer-bot"',
+    );
+  });
+
   it('允许同一 Bot Endpoint 服务多个群，但拒绝重复绑定同一个完整会话地址', () => {
     const definition = (id: string) => ({
       name: 'Room',

@@ -69,9 +69,10 @@ describe('WorkroomHumanIngressPreRoute', () => {
       sourceRef: 'workroom-catalog:project:zhin:conversation',
       sourceDigest: `sha256:${'a'.repeat(64)}`,
     });
+    const replies: unknown[] = [];
     const route = fixture(() => configured, repositories);
 
-    await expect(route.preRoute(message('m1'), 1)).resolves.toBe(true);
+    await expect(route.preRoute(message('m1', 'hello', replies), 1)).resolves.toBe(true);
     await expect(repositories.proposals.read('project:zhin')).resolves.toEqual([
       expect.objectContaining({
         proposal: expect.objectContaining({
@@ -87,6 +88,9 @@ describe('WorkroomHumanIngressPreRoute', () => {
     await expect(repositories.applications.read('project:zhin')).resolves.toEqual([
       expect.objectContaining({ type: 'proposal.claimed' }),
       expect.objectContaining({ type: 'proposal.applied', kind: 'discussion_recorded' }),
+    ]);
+    expect(replies).toEqual([
+      '已收到，消息已进入 Workroom「project:zhin」项目收件箱。',
     ]);
   });
 

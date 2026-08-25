@@ -96,8 +96,15 @@ implements HumanIngressSourceReaderPort {
  * IM contract; keep parsing private and verify round-trip before use.
  */
 function parseConversationKey(key: string): import('@zhin.js/im-contract').ConversationRef {
-  const [adapter, endpointId, kind, id, parentKind, parentId, threadId, ...extra] = key.split('\0');
-  if (extra.length > 0 || !adapter || !endpointId || !id
+  const parts = key.split('\0');
+  const adapter = parts.shift();
+  const threadId = parts.pop();
+  const parentId = parts.pop();
+  const parentKind = parts.pop();
+  const id = parts.pop();
+  const kind = parts.pop();
+  const endpointId = parts.join('\0');
+  if (!adapter || !endpointId || !id
     || (kind !== 'private' && kind !== 'group' && kind !== 'channel')
     || (Boolean(parentKind) !== Boolean(parentId))
     || (parentKind && parentKind !== 'private' && parentKind !== 'group' && parentKind !== 'channel')) {

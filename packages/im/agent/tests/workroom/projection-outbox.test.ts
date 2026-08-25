@@ -101,8 +101,9 @@ describe('Workroom Projection Outbox', () => {
       governance,
     });
 
-    const captured = await tracer.capture(binding(), 'run-1');
-    const replayed = await tracer.capture(binding(), 'run-1');
+    const routedBinding = binding('workroom', true);
+    const captured = await tracer.capture(routedBinding, 'run-1');
+    const replayed = await tracer.capture(routedBinding, 'run-1');
 
     const agentItems = Object.values(captured.items).filter(item =>
       item.speaker.agentDefinitionId === 'software.developer');
@@ -127,6 +128,10 @@ describe('Workroom Projection Outbox', () => {
         agentDefinitionId: 'software.developer',
       },
       delivery: { status: 'pending', attempts: 0, fence: 0 },
+      conversation: {
+        endpoint: { id: 'slack-developer', adapter: '@zhin.js/adapter-slack' },
+        kind: 'channel', id: 'project-1-room',
+      },
     });
     expect(Object.values(captured.cursors)).toContain(completed.sequence);
     expect(replayed.revision).toBe(captured.revision);
@@ -639,7 +644,10 @@ function workroomEvent(
   };
 }
 
-function binding(audience: 'workroom' | 'sponsor_room' = 'workroom'): WorkroomProjectionBinding {
+function binding(
+  audience: 'workroom' | 'sponsor_room' = 'workroom',
+  routedMember = false,
+): WorkroomProjectionBinding {
   return {
     version: 1,
     audience,
@@ -664,6 +672,9 @@ function binding(audience: 'workroom' | 'sponsor_room' = 'workroom'): WorkroomPr
       agentDefinitionId: 'software.developer',
       displayName: 'Developer',
       role: 'executor',
+      ...(routedMember
+        ? { messageEndpoint: { id: 'slack-developer', adapter: '@zhin.js/adapter-slack' } }
+        : {}),
     }],
   };
 }

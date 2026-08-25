@@ -131,6 +131,7 @@ export function validateWorkroomDefinitions(
     }
     const memberAgents = new Set<string>();
     const memberKeys = new Set<string>();
+    const messageRouteOwners = new Map<string, string>();
     let orchestrators = 0;
     workroom.members.forEach((member, index) => {
       const memberPath = `${path}.members.${index}`;
@@ -158,6 +159,29 @@ export function validateWorkroomDefinitions(
           errors.push(`${memberPath}.assignmentRoute.endpointId: endpoint id is required`);
         }
       }
+      if (member.messageRoute !== undefined) {
+        const route = member.messageRoute;
+        if (!route || typeof route !== 'object' || Array.isArray(route)) {
+          errors.push(`${memberPath}.messageRoute: route must be an object`);
+        } else if (typeof route.adapter !== 'string' || !route.adapter.trim()
+          || route.adapter !== route.adapter.trim()) {
+          errors.push(`${memberPath}.messageRoute.adapter: adapter is required`);
+        } else if (typeof route.endpoint !== 'string' || !route.endpoint.trim()
+          || route.endpoint !== route.endpoint.trim()) {
+          errors.push(`${memberPath}.messageRoute.endpoint: endpoint is required`);
+        } else {
+          const routeKey = `${route.adapter}:${route.endpoint}`;
+          const owner = messageRouteOwners.get(routeKey);
+          if (owner && owner !== member.agent) {
+            errors.push(`${memberPath}.messageRoute: Bot Endpoint "${routeKey}" is already assigned to member "${owner}"`);
+          } else {
+            messageRouteOwners.set(routeKey, member.agent);
+          }
+          if (endpointKeys && !endpointKeys.has(routeKey)) {
+            errors.push(`${memberPath}.messageRoute: unknown configured Bot Endpoint "${routeKey}"`);
+          }
+        }
+      }
       if (member.role === 'orchestrator') orchestrators += 1;
       const key = `${member.agent}:${member.role}`;
       if (memberKeys.has(key)) errors.push(`${memberPath}: duplicate Agent role membership "${key}"`);
@@ -180,6 +204,26 @@ export function validateWorkroomDefinitions(
         binding, field, path, projectId, workroom, memberAgents,
         enabledConversationOwners, endpointKeys, errors,
       });
+    }
+    if (workroom.enabled !== false && conversation) {
+      const canonicalId = conversation.kind === 'repository'
+        ? conversation.id.toLowerCase()
+        : conversation.id;
+      for (const [index, member] of workroom.members.entries()) {
+        if (!member.messageRoute || typeof member.messageRoute !== 'object'
+          || Array.isArray(member.messageRoute)
+          || typeof member.messageRoute.adapter !== 'string'
+          || typeof member.messageRoute.endpoint !== 'string') continue;
+        const address = `${member.messageRoute.adapter}:${member.messageRoute.endpoint}`
+          + `:${conversation.kind}:${canonicalId}`;
+        const owner = enabledConversationOwners.get(address);
+        if (owner && !owner.projectIds.includes(projectId)) {
+          const label = owner.kind === 'workroom' ? 'Workroom' : 'Sponsor Room';
+          errors.push(`${path}.members.${index}.messageRoute: conversation "${address}" is already owned by enabled ${label} "${owner.projectIds.join(',')}"`);
+        } else if (!owner) {
+          enabledConversationOwners.set(address, { kind: 'workroom', projectIds: [projectId] });
+        }
+      }
     }
   }
   for (const [address, owner] of enabledConversationOwners) {
