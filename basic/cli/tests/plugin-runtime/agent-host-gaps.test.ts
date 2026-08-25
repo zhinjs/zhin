@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Message, type ImRuntime } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { AITriggerConfig } from '@zhin.js/core';
-import { turnIntentResolverToken } from '@zhin.js/agent/runtime';
+import { createCapabilityPackManifest, turnIntentResolverToken } from '@zhin.js/agent/runtime';
 import { MemoryWorkroomProjectionRepository } from '@zhin.js/agent';
 import {
   classifyWorkroomIngressSource,
@@ -234,6 +234,9 @@ describe('Workroom Planning Console bootstrap', () => {
       ],
       workflows: [{ id: 'workroom:zhin:dynamic', requiredByProfile: true }],
     });
+    expect(artifacts.packInput).not.toHaveProperty('digest');
+    expect(artifacts.packInput).toMatchObject({ id: artifacts.pack.id, version: artifacts.pack.version });
+    expect(createCapabilityPackManifest(artifacts.packInput).digest).toBe(artifacts.pack.digest);
     expect(artifacts.overlay).toMatchObject({
       projectId: 'zhin', revisionId: 'profile:zhin:bootstrap:1',
       enabledAgents: ['executor', 'planner', 'reviewer'],

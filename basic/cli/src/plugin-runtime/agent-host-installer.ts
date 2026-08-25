@@ -1657,7 +1657,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           version: 1,
           operationId: `${command.operationId}:pack`,
           authenticatedPrincipalId: authenticatedPrincipal.principalId,
-          pack: artifacts.pack,
+          pack: artifacts.packInput,
         }, signal);
         const overlay = createWorkroomProfileOverlay({
           version: 1,
@@ -4546,6 +4546,7 @@ export function createWorkroomPlanningBootstrapArtifacts(input: Readonly<{
       tasks: workflowTasks,
     }],
   });
+  const { digest: _packDigest, ...packInput } = pack;
   const revisionId = `profile:${input.projectId}:bootstrap:1`;
   const overlay = createWorkroomProfileOverlay({
     version: 1,
@@ -4581,7 +4582,7 @@ export function createWorkroomPlanningBootstrapArtifacts(input: Readonly<{
     defaultTaskDeadlineMs: 60 * 60_000,
     defaultPreemptibility: 'atomic',
   });
-  return Object.freeze({ pack, overlay, policy, revisionId, workflowId });
+  return Object.freeze({ pack, packInput: Object.freeze(packInput), overlay, policy, revisionId, workflowId });
 }
 
 function digestInstallerValue(value: unknown): string {
