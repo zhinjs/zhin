@@ -86,9 +86,9 @@ class TrxUpdation<S extends Record<string, object>, T extends keyof S> implement
       conditions: this.conditions
     });
     
-    return this.trx.query<{ affectedRows?: number; changes?: number }>(query, params)
+    return this.trx.query<number | { affectedRows?: number; changes?: number }>(query, params)
       .then(result => {
-        const affected = result.affectedRows ?? result.changes ?? 0;
+        const affected = affectedRows(result);
         return onfulfilled ? onfulfilled(affected) : affected as any;
       });
   }
@@ -118,12 +118,18 @@ class TrxDeletion<S extends Record<string, object>, T extends keyof S> implement
       conditions: this.conditions
     });
     
-    return this.trx.query<{ affectedRows?: number; changes?: number }>(query, params)
+    return this.trx.query<number | { affectedRows?: number; changes?: number }>(query, params)
       .then(result => {
-        const affected = result.affectedRows ?? result.changes ?? 0;
+        const affected = affectedRows(result);
         return onfulfilled ? onfulfilled(affected) : affected as any;
       });
   }
+}
+
+function affectedRows(result: number | { affectedRows?: number; changes?: number }): number {
+  return typeof result === 'number'
+    ? result
+    : result.affectedRows ?? result.changes ?? 0;
 }
 
 /**
@@ -210,4 +216,3 @@ export class TransactionContextImpl<S extends Record<string, object>> implements
     return new TrxDeletion(this.db, this.trx, tableName);
   }
 }
-

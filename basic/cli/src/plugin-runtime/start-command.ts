@@ -181,6 +181,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
           projectRoot: options.root,
           resolveEndpointOwner: endpointRoles.resolveOwner,
           resolveEndpointTrusted: endpointRoles.resolveTrusted,
+          resolveConfiguredEndpointKeys: () => readConfiguredEndpointKeys(config),
           extraTools: speechHandle?.tools,
           transcribeUrl: speechHandle
             ? (url) => speechHandle.transcribeUrl(url)
@@ -342,6 +343,7 @@ interface ConfiguredAgentHost {
     readonly projectRoot: string;
     readonly resolveEndpointOwner: (adapter: string, endpoint: string) => string | undefined;
     readonly resolveEndpointTrusted: (adapter: string, endpoint: string) => readonly string[];
+    readonly resolveConfiguredEndpointKeys: () => Promise<ReadonlySet<string>>;
     readonly extraTools?: readonly unknown[];
     readonly transcribeUrl?: (url: string) => Promise<string | null>;
   }): RootResourceInstaller;
@@ -739,6 +741,33 @@ export async function createEndpointRoleResolver(
       ]),
     ],
   };
+}
+
+/** Reads Bot Endpoint identities from the candidate config, not the old live ImRuntime. */
+export async function readConfiguredEndpointKeys(
+  config: RuntimeConfigDocument | ConfigDocumentPort,
+): Promise<ReadonlySet<string>> {
+  const document = await readConfigDocumentValue(config);
+  const keys = new Set<string>();
+  const plugins = document && typeof document === 'object'
+    ? (document as Record<string, unknown>).plugins
+    : undefined;
+  if (!plugins || typeof plugins !== 'object' || Array.isArray(plugins)) return keys;
+  const expanded = expandEnvironmentValue(plugins, (key) => process.env[key]) as Record<string, unknown>;
+  for (const [adapter, raw] of Object.entries(expanded)) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const endpoints = (raw as Record<string, unknown>).endpoints;
+    if (!Array.isArray(endpoints)) continue;
+    for (const entry of endpoints) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+      const endpoint = entry as Record<string, unknown>;
+      const identity = endpoint.name ?? endpoint.id;
+      if (identity != null && String(identity).trim() !== '') {
+        keys.add(`${adapter}:${String(identity)}`);
+      }
+    }
+  }
+  return keys;
 }
 
 /** trusted id 归一：数组逐项、字符串按空白/逗号拆分（对齐 legacy normalizeEndpointIdList）。 */

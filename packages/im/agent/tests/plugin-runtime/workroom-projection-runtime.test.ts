@@ -223,6 +223,49 @@ describe('production Workroom Projection runtime', () => {
       .toEqual(['failed', 'sent']);
   });
 
+  it('keeps a Sponsor binding stable when one Agent definition occupies multiple member roles', async () => {
+    const repository = new MemoryWorkroomProjectionRepository();
+    const definition = {
+      name: 'Zhin',
+      members: [
+        { agent: 'zhin', role: 'orchestrator' as const },
+        { agent: 'zhin', role: 'executor' as const },
+        { agent: 'zhin', role: 'reviewer' as const },
+        { agent: 'zhin', role: 'integration' as const },
+      ],
+      conversation: {
+        adapter: 'icqq', endpoint: 'main', kind: 'group' as const,
+        id: 'workroom', agent: 'zhin',
+      },
+      sponsorConversation: {
+        adapter: 'icqq', endpoint: 'main', kind: 'group' as const,
+        id: 'sponsors', agent: 'zhin',
+      },
+    };
+    const runtime = new WorkroomProjectionRuntime({
+      catalog: { read: async () => ({
+        revision: 'c'.repeat(64), definitions: { zhin: definition },
+      }) },
+      journal: new MemoryWorkroomJournal(), repository,
+      outbound: { send: async () => ({ status: 'sent' }) },
+      workerId: 'projection-multi-role', leaseMs: 30_000,
+      maxRunsPerTick: 4, maxDeliveriesPerTick: 4, governance,
+      lifecycleOverdue: { project: async () => {
+        const { digest: _digest, ...snapshot } = overdueSnapshot();
+        const body = { ...snapshot, projectId: 'zhin' };
+        return { ...body, digest: digest(body) };
+      } },
+    });
+
+    await runtime.runOnce(new AbortController().signal);
+    const first = await repository.read();
+    await runtime.runOnce(new AbortController().signal);
+    const replay = await repository.read();
+
+    expect(first.bindings['zhin:sponsor-room']).toMatchObject({ bindingRevision: 1 });
+    expect(replay.bindings['zhin:sponsor-room']).toMatchObject({ bindingRevision: 1 });
+  });
+
   it('backs off one retryable delivery so another durable item is not starved', async () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
     const repository = new MemoryWorkroomProjectionRepository();

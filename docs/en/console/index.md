@@ -68,7 +68,7 @@ Runtime falls back to 8086 when no config exists; the current scaffold writes 80
 | Database | RPC `db:info` / `db:tables` / `db:select` / `db:insert` / `db:update` / `db:delete` / `db:kv:*` | Database browsing and editing, KV storage |
 | Files | RPC `files:tree` / `files:read` / `files:save`, `env:list` / `env:save` | Project file tree and `.env` management |
 | Runtime Capabilities | `GET /api/introspection/{commands,middlewares,components,tools,prompt-sections,endpoints,bindings,mcp}`, `POST /api/introspection/components/render` | Current-generation contracts, owners, middleware order, component rendering lab, and Prompt Section governance metadata |
-| Agent Sessions | `GET/POST /api/agent/sessions/*` | AI session tree viewing and branch switching |
+| Agent Sessions | `GET/POST /api/agent/sessions/*` | AI session tree viewing and branch switching; GET returns an empty `state: not_started` tree before a channel conversation creates an AI session |
 | Workrooms | Persistent Workroom Catalog + `GET /api/agent/workroom/runs[/*]` | Revision-CAS management for Projects, members, Agent roles, and chat/channel/repository bindings; inspect replayed Runs, Tasks, and Assignments |
 | Marketplace | `GET /pub/marketplace/search`, `/pub/marketplace/detail/*`, `GET /api/marketplace/updates` | Plugin marketplace (plugins.json + npmmirror) and update checks |
 | Sandbox | WS `/sandbox` | Built-in sandbox chat, direct conversation without platform integration |

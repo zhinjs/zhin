@@ -864,9 +864,25 @@ function registerAgentSessionRoutes(
     try {
       const sessionId = await runtime.resolveActiveSessionId(parsed.sessionKey);
       if (!sessionId) {
-        writeJson(response, 404, {
-          success: false,
-          error: `未找到活跃会话：${parsed.sessionKey}`,
+        if (!isRuntimeImSessionKey(parsed.sessionKey)) {
+          writeJson(response, 404, {
+            success: false,
+            error: `未找到会话：${parsed.sessionKey}`,
+          });
+          return;
+        }
+        // 渠道会话与 Agent 会话的生命周期不同：用户可以先在 Console
+        // 选中一个真实渠道会话，而该会话尚未触发过 Agent。树查询是只读操作，
+        // 因而将这种正常状态返回为可渲染空态，而不是误报资源不存在。
+        writeJson(response, 200, {
+          success: true,
+          data: {
+            state: 'not_started',
+            sessionKey: parsed.sessionKey,
+            sessionId: null,
+            activeLeafMessageId: null,
+            points: [],
+          },
         });
         return;
       }
@@ -876,6 +892,7 @@ function registerAgentSessionRoutes(
       writeJson(response, 200, {
         success: true,
         data: {
+          state: 'active',
           sessionKey: parsed.sessionKey,
           sessionId,
           activeLeafMessageId,
@@ -973,6 +990,17 @@ function registerAgentSessionRoutes(
       lease.release();
     }
   }, { summary: 'Switch agent session active leaf', tags: ['console', 'agent'] });
+}
+
+/** Runtime IM session keys are `<platform>:<endpoint>:<scope>:<sceneId>`. */
+function isRuntimeImSessionKey(value: string): boolean {
+  const first = value.indexOf(':');
+  const second = value.indexOf(':', first + 1);
+  const third = value.indexOf(':', second + 1);
+  return first > 0
+    && second > first + 1
+    && third > second + 1
+    && third < value.length - 1;
 }
 
 function parseSessionAction(

@@ -73,6 +73,7 @@ import {
   type DeliveryOutcome,
   type WorkroomCatalog,
   type WorkroomDefinition,
+  type WorkroomMemberRole,
   FileJournalStore,
   demoteScheduleCreator,
   type ScheduleActivityEvent,
@@ -99,6 +100,7 @@ import {
   WorkroomProjectionRevisionConflictError,
   type WorkroomCatalogSnapshot,
   type WorkroomProjectionBinding,
+  type WorkroomProjectionRepository,
   FileAssignmentAuthorityGrantRepository,
   FilePortfolioJournalRepository,
   FilePortfolioControlOutboxRepository,
@@ -393,12 +395,60 @@ export function assertFixedWorkroomStorageMode(
   throw new Error(`Workroom storage mode changed from ${fixed} to ${requested}; process restart required`);
 }
 
+export function classifyWorkroomIngressSource(
+  definition: WorkroomDefinition,
+  input: Readonly<{
+    adapter: string;
+    endpoint: string;
+    senderId: string;
+    space: 'workroom' | 'sponsor_room';
+    replySpeakerAgent?: string;
+    replySpeakerRole?: WorkroomMemberRole;
+    mentioned?: boolean;
+    senderIsBot?: boolean;
+  }>,
+): 'accept' | 'bot_principal' | 'non_owner_endpoint' {
+  const botEndpoints = [
+    definition.conversation,
+    definition.sponsorConversation,
+    ...definition.members.map(member => member.messageRoute),
+  ].filter((route): route is NonNullable<typeof route> => route != null);
+  // Adapter endpoint names and sender principals live in different namespaces.
+  // Numeric IM adapters (ICQQ/OneBot) conventionally use the Bot UIN as both;
+  // other adapters must provide trusted bot metadata instead of comparing aliases.
+  if (input.senderIsBot || (/^\d+$/u.test(input.senderId) && botEndpoints.some(route =>
+    route.adapter === input.adapter && route.endpoint === input.senderId))) {
+    return 'bot_principal';
+  }
+
+  if (input.space !== 'workroom') return 'accept';
+  const primary = definition.conversation?.adapter === input.adapter
+    && definition.conversation.endpoint === input.endpoint;
+  const routedMember = definition.members.find(member =>
+    member.messageRoute?.adapter === input.adapter
+    && member.messageRoute.endpoint === input.endpoint);
+  if (input.replySpeakerAgent) {
+    const speaker = definition.members.find(member =>
+      member.agent === input.replySpeakerAgent
+      && (input.replySpeakerRole == null || member.role === input.replySpeakerRole));
+    const expectedRoute = speaker?.messageRoute ?? definition.conversation;
+    return expectedRoute?.adapter === input.adapter && expectedRoute.endpoint === input.endpoint
+      ? 'accept'
+      : 'non_owner_endpoint';
+  }
+  return primary || (input.mentioned === true && routedMember != null)
+    ? 'accept'
+    : 'non_owner_endpoint';
+}
+
 export async function assertWorkroomCatalogMatchesGeneration(
   catalog: Pick<WorkroomCatalog, 'read'>,
   agentNames: readonly string[],
-  endpointKeys: ReadonlySet<string>,
+  endpointKeys?: ReadonlySet<string>,
 ): Promise<void> {
   const snapshot = await catalog.read();
+  // Endpoint keys come from the candidate config document. ImRuntime still
+  // exposes the previously committed Adapter projection during root install.
   const errors = validateWorkroomDefinitions(snapshot.definitions, agentNames, endpointKeys);
   if (errors.length > 0) {
     throw new Error(`Persisted Workroom Catalog is incompatible with this Agent generation: ${errors.join('; ')}`);
@@ -418,6 +468,49 @@ export function createCatalogWorkroomProjectionBinding(
   return createCatalogProjectionBinding(
     catalog, projectId, conversation, bindingRevision, 'workroom', endpoints,
   );
+}
+
+export async function ensureCatalogWorkroomProjectionBinding(options: Readonly<{
+  repository: Pick<WorkroomProjectionRepository, 'read' | 'bind'>;
+  catalog: WorkroomCatalogSnapshot;
+  projectId: string;
+  conversation: ConversationRef;
+  interactionBindingRevision: number;
+  endpoints?: readonly Readonly<{
+    id: string; name: string; adapter: string; owner: string;
+  }>[];
+}>): Promise<WorkroomProjectionBinding> {
+  for (let conflict = 0; conflict < 8; conflict += 1) {
+    const state = await options.repository.read();
+    const current = state.bindings[workroomProjectionBindingKey(options.projectId, 'workroom')];
+    const desiredRevision = current
+      ? Math.max(current.bindingRevision, options.interactionBindingRevision)
+      : options.interactionBindingRevision;
+    let exact = createCatalogWorkroomProjectionBinding(
+      options.catalog,
+      options.projectId,
+      options.conversation,
+      desiredRevision,
+      options.endpoints,
+    );
+    if (current && digestInstallerValue(current) === digestInstallerValue(exact)) return current;
+    if (current) {
+      exact = createCatalogWorkroomProjectionBinding(
+        options.catalog,
+        options.projectId,
+        options.conversation,
+        Math.max(current.bindingRevision + 1, options.interactionBindingRevision),
+        options.endpoints,
+      );
+    }
+    try {
+      const next = await options.repository.bind(state.revision, exact);
+      return next.bindings[workroomProjectionBindingKey(options.projectId, 'workroom')]!;
+    } catch (error) {
+      if (!(error instanceof WorkroomProjectionRevisionConflictError) || conflict === 7) throw error;
+    }
+  }
+  throw new Error('Workroom Projection binding CAS retries exhausted');
 }
 
 export function createCatalogSponsorRoomProjectionBinding(
@@ -561,6 +654,8 @@ export interface InstallAgentHostOptions {
    * 对齐 legacy resolveSenderRoles：trusted 角色弱于 master（不参与 Owner 审批放行）。
    */
   readonly resolveEndpointTrusted?: (adapterLocalName: string, endpointKey: string) => readonly string[];
+  /** Candidate config Endpoint identities; never read from the old live ImRuntime projection. */
+  readonly resolveConfiguredEndpointKeys?: () => Promise<ReadonlySet<string>>;
   /** Extra Host tools (e.g. Speech Host voice_stt / voice_tts). */
   readonly extraTools?: readonly AgentToolLike[];
   /** Optional inbound STT (Speech Host). */
@@ -635,10 +730,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         .filter((entry): entry is NonNullable<typeof entry> => entry != null)
         .map((entry) => Object.freeze({ ...entry, mcpServers: [...entry.mcpServers] })),
     );
-    const generationEndpointKeys = () => new Set(
-      options.im.listEndpoints().map((endpoint) => `${endpoint.adapter}:${endpoint.name}`),
-    );
-
     let zhinAgent: ZhinAgent | undefined;
     let composedRuntime: ReturnType<typeof composeZhinAgentRuntime> | undefined;
     let seedPresets: () => Promise<number>;
@@ -720,7 +811,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       await assertWorkroomCatalogMatchesGeneration(
         workroomCatalog,
         listGenerationBindings().map((binding) => binding.name),
-        generationEndpointKeys(),
+        await options.resolveConfiguredEndpointKeys?.(),
       );
     };
     let workroomRuntime: WorkroomRuntimeHandle;
@@ -911,7 +1002,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               await assertWorkroomCatalogMatchesGeneration(
                 workroomCatalog,
                 listGenerationBindings().map((binding) => binding.name),
-                generationEndpointKeys(),
+                await options.resolveConfiguredEndpointKeys?.(),
               );
               await recoverHumanIngress();
               signal.throwIfAborted();
@@ -2483,23 +2574,14 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
             }),
       onWorkroomResolved: async (message, decision) => {
         const catalog = await workroomCatalog.read();
-        const exact = createCatalogWorkroomProjectionBinding(
+        await ensureCatalogWorkroomProjectionBinding({
+          repository: projectionRepository,
           catalog,
-          decision.projectId,
-          message.conversation,
-          decision.bindingRevision,
-          options.im.listEndpoints(),
-        );
-        for (let conflict = 0; conflict < 8; conflict += 1) {
-          const current = await projectionRepository.read();
-          try {
-            await projectionRepository.bind(current.revision, exact);
-            return;
-          } catch (error) {
-            if (!(error instanceof WorkroomProjectionRevisionConflictError)) throw error;
-          }
-        }
-        throw new Error('Workroom Projection binding CAS retries exhausted');
+          projectId: decision.projectId,
+          conversation: message.conversation,
+          interactionBindingRevision: decision.bindingRevision,
+          endpoints: options.im.listEndpoints(),
+        });
       },
       principalOwner: String(rootPluginId()),
       resolveCatalogSpace: async message => {
@@ -2517,12 +2599,21 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         const catalogSnapshot = await workroomCatalog.read();
         const explicitProjectId = sponsorRoomProjectId(message.content);
         const projectionState = await projectionRepository.read();
-        const replyEntry = message.replyTo
+        const exactReplyEntry = message.replyTo
           ? projectionState.messageIndex[workroomProjectionMessageKey({
               conversation: message.conversation,
               id: message.replyTo.id,
             })]
           : undefined;
+        const roomReplyEntries = message.replyTo
+          ? Object.values(projectionState.messageIndex).filter(entry =>
+              entry.message.id === message.replyTo!.id
+              && entry.message.conversation.endpoint.adapter === message.conversation.endpoint.adapter
+              && entry.message.conversation.kind === message.conversation.kind
+              && entry.message.conversation.id === message.conversation.id)
+          : [];
+        const replyEntry = exactReplyEntry
+          ?? (roomReplyEntries.length === 1 ? roomReplyEntries[0] : undefined);
         const repliedProjectId = replyEntry?.target.projectId;
         if (explicitProjectId && repliedProjectId && explicitProjectId !== repliedProjectId) {
           return Object.freeze({ status: 'rejected' as const, reason: 'project_conflict' as const });
@@ -2551,6 +2642,23 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           : definition?.sponsorConversation;
         if (!definition || !configured) {
           throw new Error(`Workroom Catalog ${identity.projectId} has no collaboration space`);
+        }
+        const sourceDecision = classifyWorkroomIngressSource(definition, {
+          adapter,
+          endpoint,
+          senderId: String(message.sender?.id ?? ''),
+          space: identity.space,
+          mentioned: message.mentioned === true || message.metadata.mentioned === true,
+          senderIsBot: message.metadata.authorBot === true
+            || message.metadata.senderBot === true
+            || message.metadata.isBot === true,
+          ...(replyEntry ? {
+            replySpeakerAgent: replyEntry.speaker.agentDefinitionId,
+            replySpeakerRole: replyEntry.speaker.role,
+          } : {}),
+        });
+        if (sourceDecision !== 'accept') {
+          return Object.freeze({ status: 'ignored' as const, reason: sourceDecision });
         }
         const sponsorBinding = identity.space === 'sponsor_room'
           ? projectionState.bindings[workroomProjectionBindingKey(
