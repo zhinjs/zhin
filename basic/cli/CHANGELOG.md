@@ -1,5 +1,17 @@
 # @zhin.js/cli
 
+## 3.0.22
+
+### Patch Changes
+
+- fcbff21: Add durable Console plugin lifecycle controls and support secure multi-listener HTTP, HTTPS, and WebSocket hosts.
+- Updated dependencies [fcbff21]
+  - @zhin.js/host-http@1.0.16
+  - @zhin.js/runtime@1.0.18
+  - @zhin.js/a2a@3.0.20
+  - @zhin.js/pagemanager@2.0.23
+  - @zhin.js/config-yaml@1.0.18
+
 ## 3.0.21
 
 ### Patch Changes

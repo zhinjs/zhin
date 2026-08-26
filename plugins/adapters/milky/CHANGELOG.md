@@ -1,5 +1,13 @@
 # @zhin.js/adapter-milky
 
+## 7.0.6
+
+### Patch Changes
+
+- Updated dependencies [fcbff21]
+  - @zhin.js/host-http@1.0.16
+  - zhin.js@6.0.15
+
 ## 7.0.5
 
 ### Patch Changes

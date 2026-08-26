@@ -1,5 +1,11 @@
 # @zhin.js/runtime
 
+## 1.0.18
+
+### Patch Changes
+
+- fcbff21: Add durable Console plugin lifecycle controls and support secure multi-listener HTTP, HTTPS, and WebSocket hosts.
+
 ## 1.0.17
 
 ### Patch Changes

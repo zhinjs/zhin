@@ -1,5 +1,13 @@
 # @zhin.js/adapter-onebot12
 
+## 6.0.4
+
+### Patch Changes
+
+- Updated dependencies [fcbff21]
+  - @zhin.js/host-http@1.0.16
+  - zhin.js@6.0.15
+
 ## 6.0.3
 
 ### Patch Changes

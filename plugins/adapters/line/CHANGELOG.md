@@ -1,5 +1,13 @@
 # @zhin.js/adapter-line
 
+## 5.0.6
+
+### Patch Changes
+
+- Updated dependencies [fcbff21]
+  - @zhin.js/host-http@1.0.16
+  - zhin.js@6.0.15
+
 ## 5.0.5
 
 ### Patch Changes
