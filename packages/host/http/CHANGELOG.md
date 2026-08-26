@@ -1,5 +1,11 @@
 # @zhin.js/host-http
 
+## 1.0.16
+
+### Patch Changes
+
+- fcbff21: Add durable Console plugin lifecycle controls and support secure multi-listener HTTP, HTTPS, and WebSocket hosts.
+
 ## 1.0.15
 
 ### Patch Changes

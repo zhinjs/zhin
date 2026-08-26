@@ -1,5 +1,31 @@
 # test-bot
 
+## 0.1.150
+
+### Patch Changes
+
+- Updated dependencies [fcbff21]
+  - @zhin.js/cli@3.0.22
+  - @zhin.js/mcp@6.0.15
+  - @zhin.js/adapter-dingtalk@7.0.6
+  - @zhin.js/adapter-discord@8.0.6
+  - @zhin.js/adapter-github@6.0.6
+  - @zhin.js/adapter-kook@8.0.6
+  - @zhin.js/adapter-lark@7.0.6
+  - @zhin.js/adapter-line@5.0.6
+  - @zhin.js/adapter-milky@7.0.6
+  - @zhin.js/adapter-napcat@7.0.6
+  - @zhin.js/adapter-onebot11@7.0.6
+  - @zhin.js/adapter-onebot12@6.0.4
+  - @zhin.js/adapter-qq@8.0.6
+  - @zhin.js/adapter-sandbox@8.0.5
+  - @zhin.js/adapter-satori@6.0.4
+  - @zhin.js/adapter-slack@7.0.6
+  - @zhin.js/adapter-telegram@8.0.6
+  - @zhin.js/adapter-wechat-mp@6.0.4
+  - @zhin.js/adapter-wecom@5.0.6
+  - zhin.js@6.0.15
+
 ## 0.1.149
 
 ### Patch Changes

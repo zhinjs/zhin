@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/config-yaml",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "Comment-preserving YAML ConfigDocument adapter for the Zhin Plugin Runtime",
   "type": "module",
   "main": "./lib/index.js",
