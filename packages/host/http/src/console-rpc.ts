@@ -81,6 +81,11 @@ export type RuntimeConsoleRpcContext = {
    * Returns whether a process restart is required (always true without ConfigFeature).
    */
   setConfigKey?(pluginName: string, data: unknown): Promise<{ restartRequired: boolean }>;
+  /** Persist a declared child Plugin lifecycle state. Takes effect after restart. */
+  setPluginEnabled?(
+    instanceKey: string,
+    enabled: boolean,
+  ): Promise<Readonly<{ disabled: readonly string[] }>>;
   /** Atomic, revision-checked runtime Workroom Catalog read/write. */
   readWorkroomCatalog?(): Promise<Readonly<{
     agents: Readonly<Record<string, unknown>>;
@@ -751,6 +756,41 @@ export async function dispatchRuntimeConsoleRpc(
           requestId,
           error: error instanceof Error ? error.message : String(error),
         });
+      }
+      return payloads;
+    }
+    case 'plugin:set-enabled': {
+      try {
+        const instanceKey = typeof message.instanceKey === 'string' ? message.instanceKey : '';
+        const enabled = message.enabled;
+        if (!instanceKey || typeof enabled !== 'boolean') {
+          emit({ requestId, error: 'instanceKey and boolean enabled are required' });
+          return payloads;
+        }
+        if (!ctx.setPluginEnabled) {
+          emit({ requestId, error: 'Plugin lifecycle management is not configured' });
+          return payloads;
+        }
+        const lifecycle = await ctx.setPluginEnabled(instanceKey, enabled);
+        ctx.publishEvent?.('plugin:lifecycle-updated', { instanceKey, enabled });
+        emit({
+          requestId,
+          data: {
+            success: true,
+            instanceKey,
+            enabled,
+            disabled: lifecycle.disabled,
+            restartRequired: true,
+            message: `${instanceKey} 已${enabled ? '启用' : '停用'}，Host 正在重启`,
+          },
+        });
+        if (ctx.requestRestart) {
+          setTimeout(() => {
+            void Promise.resolve(ctx.requestRestart?.()).catch(() => undefined);
+          }, 500);
+        }
+      } catch (error) {
+        emit({ requestId, error: error instanceof Error ? error.message : String(error) });
       }
       return payloads;
     }
