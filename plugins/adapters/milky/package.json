@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-milky",
-  "version": "7.0.4",
+  "version": "7.0.5",
   "description": "Zhin.js Milky adapter for Plugin Runtime (WebSocket client)",
   "type": "module",
   "main": "./lib/index.js",

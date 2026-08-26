@@ -1,5 +1,14 @@
 # @zhin.js/adapter-qq
 
+## 8.0.5
+
+### Patch Changes
+
+- Updated dependencies [882a08a]
+  - @zhin.js/agent@1.1.20
+  - zhin.js@6.0.15
+  - @zhin.js/core@1.5.15
+
 ## 8.0.4
 
 ### Patch Changes
