@@ -88,6 +88,18 @@ describe('console event hub', () => {
     expect(hub.subscriberCount).toBe(0);
   });
 
+  it('delivers immutable snapshots to trusted in-process listeners and isolates failures', () => {
+    const hub = createConsoleEventHub({runtimeId: 'runtime-bridge'});
+    const received: unknown[] = [];
+    hub.listen(() => { throw new Error('broken bridge'); });
+    const stop = hub.listen(event => received.push(event));
+    const published = hub.publish('message.receive', {content: 'hello'});
+    stop();
+    hub.publish('message.receive', {content: 'ignored'});
+    expect(received).toEqual([published]);
+    expect(Object.isFrozen(received[0])).toBe(true);
+  });
+
   it('serves bounded paginated history and reports cursor gaps', () => {
     const hub = createConsoleEventHub({ runtimeId: 'runtime-a', historyLimit: 3 });
     for (let index = 1; index <= 5; index += 1) hub.publish('test', { index });

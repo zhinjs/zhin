@@ -48,6 +48,30 @@ describe('hierarchical Plugin config', () => {
     });
   });
 
+  it('preserves an inactive child namespace without mounting or validating its Plugin view', async () => {
+    const root = await configProject({
+      rootSchema: {},
+      childSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {retries: {type: 'integer'}},
+      },
+    });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver, {
+      disabledPluginInstanceKeys: ['child'],
+    }).inspect(root);
+    const config = await new ConfigComposer(['child']).compose(graph, {
+      plugins: {child: {retries: 3, secret: 'preserved while inactive'}},
+    });
+
+    expect(graph.root.children).toEqual([]);
+    expect(config.document.plugins).toEqual({
+      child: {retries: 3, secret: 'preserved while inactive'},
+    });
+    expect([...config.views.keys()]).toEqual([graph.root.id]);
+  });
+
   it('scopes local refs to each Plugin schema and accepts UI annotations', async () => {
     const root = await configProject({
       rootSchema: {},

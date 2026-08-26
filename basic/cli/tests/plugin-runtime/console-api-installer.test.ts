@@ -298,6 +298,7 @@ describe('plugin list helpers', () => {
       ],
       packageName: '@zhin.js/adapter-icqq',
       instanceKey: 'icqq',
+      manageable: false,
     });
   });
 

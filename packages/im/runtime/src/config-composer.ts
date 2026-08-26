@@ -46,6 +46,8 @@ export class ConfigValidationError extends Error {
 }
 
 export class ConfigComposer {
+  constructor(private readonly inactivePluginInstanceKeys: readonly string[] = []) {}
+
   async compose(
     graph: ProjectGraph,
     input: RuntimeConfigDocument = {},
@@ -77,7 +79,10 @@ export class ConfigComposer {
           additionalProperties: false,
           default: {},
           properties: Object.fromEntries(
-            childSchemas.map(([key, schema]) => [key, withDefault(schema)]),
+            [
+              ...this.inactivePluginInstanceKeys.map((key) => [key, {}] as const),
+              ...childSchemas.map(([key, schema]) => [key, withDefault(schema)] as const),
+            ],
           ),
         },
       },

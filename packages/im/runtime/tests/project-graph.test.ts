@@ -66,6 +66,31 @@ describe('static Project Graph', () => {
     ]);
   });
 
+  it('omits a disabled root child from the logical tree before module setup', async () => {
+    const root = await project({
+      root: {
+        name: '@test/root',
+        dependencies: {'@test/child': 'workspace:*'},
+        zhin: {
+          protocol: 1, type: 'plugin', entry: './plugin.ts',
+          plugins: [{package: '@test/child', instanceKey: 'child'}],
+        },
+      },
+      plugins: [{
+        directory: 'child',
+        json: {name: '@test/child', zhin: {protocol: 1, type: 'plugin', entry: './plugin.ts'}},
+      }],
+    });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver, {
+      disabledPluginInstanceKeys: ['child'],
+    }).inspect(root);
+    expect(graph.root.children).toEqual([]);
+    // Physical workspace discovery remains complete for package tooling, while
+    // the logical runtime tree no longer mounts or sets up the disabled child.
+    expect(graph.buildOrder.map((pkg) => pkg.name)).toEqual(['@test/child', '@test/root']);
+  });
+
   it('resolves ./-relative local plugin directories from the declaring package root', async () => {
     const root = await project({
       root: {

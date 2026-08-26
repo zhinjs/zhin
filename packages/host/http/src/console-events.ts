@@ -7,6 +7,7 @@ import type {
   ConsoleEventPayloadMap,
   KnownConsoleEventType,
 } from '@zhin.js/console-protocol';
+import { createToken } from '@zhin.js/plugin-runtime';
 
 /**
  * Console 实时事件枢纽（Plugin Runtime Host 的 `/api/events` SSE 事件源）。
@@ -27,11 +28,16 @@ export interface ConsoleEventHub {
     Type extends KnownConsoleEventType ? ConsoleEventPayloadMap[Type] : unknown
   >;
   history(query?: ConsoleEventHistoryQuery): ConsoleEventHistoryPage;
+  /** In-process delivery for trusted Host bridges such as Device Protocol. */
+  listen(listener: (event: ConsoleEventEnvelope) => void): () => void;
   /** Atomically replay the resumable suffix, then join live fan-out. */
   subscribe(response: ServerResponse, options?: ConsoleEventSubscriptionOptions): () => void;
   readonly runtimeId: string;
   readonly subscriberCount: number;
 }
+
+/** Shared Console event authority installed by the Plugin Runtime composition root. */
+export const consoleEventHubToken = createToken<ConsoleEventHub>('zhin.host.console-events');
 
 export interface ConsoleEventHubOptions {
   readonly runtimeId?: string;
@@ -65,6 +71,7 @@ export function createConsoleEventHub(options: ConsoleEventHubOptions = {}): Con
   const journal: JournalEntry[] = [];
   let journalBytes = 0;
   const subscribers = new Set<ServerResponse>();
+  const listeners = new Set<(event: ConsoleEventEnvelope) => void>();
 
   const remove = (response: ServerResponse): void => {
     subscribers.delete(response);
@@ -120,6 +127,9 @@ export function createConsoleEventHub(options: ConsoleEventHubOptions = {}): Con
           remove(response);
         }
       }
+      for (const listener of [...listeners]) {
+        try { listener(event); } catch { /* isolate trusted bridge failures */ }
+      }
       return event as ConsoleEventEnvelope<
         Type,
         Type extends KnownConsoleEventType ? ConsoleEventPayloadMap[Type] : unknown
@@ -157,6 +167,10 @@ export function createConsoleEventHub(options: ConsoleEventHubOptions = {}): Con
         hasMore: available.length > items.length,
         gap,
       });
+    },
+    listen(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
     subscribe(response, options = {}) {
       // Replay and subscription are synchronous relative to publish(), closing

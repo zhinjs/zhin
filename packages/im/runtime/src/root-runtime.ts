@@ -115,6 +115,7 @@ export interface RootRuntimeOptions {
   readonly installResources?: RootResourceInstaller;
   readonly isolation?: IsolatedPluginRuntimePort;
   readonly onControlError?: ControlErrorHandler;
+  readonly disabledPluginInstanceKeys?: readonly string[];
 }
 
 export type RootHmrOptions = Omit<HmrCoordinatorOptions, 'modules' | 'ownership' | 'runtime'>;
@@ -139,6 +140,7 @@ export class RootRuntime {
   #configPatchTail: Promise<unknown> = Promise.resolve();
   #stopResult?: Promise<void>;
   readonly #controller: RootController<RuntimeGenerationState>;
+  readonly #disabledPluginInstanceKeys: readonly string[];
 
   constructor(options: RootRuntimeOptions) {
     this.#projectRoot = resolve(options.projectRoot);
@@ -150,6 +152,7 @@ export class RootRuntime {
     else this.#configDocument = structuredClone(options.config ?? {});
     this.#installResources = options.installResources;
     this.#isolation = options.isolation;
+    this.#disabledPluginInstanceKeys = Object.freeze([...(options.disabledPluginInstanceKeys ?? [])]);
     this.#controller = new RootController(
       emptyState(),
       options.onControlError,
@@ -336,7 +339,9 @@ export class RootRuntime {
 
   async #inspectProject(): Promise<InspectedProject> {
     const resolver = await NodePackageResolver.create(this.#projectRoot);
-    const graph = await new ProjectGraphService(resolver).inspect(this.#projectRoot);
+    const graph = await new ProjectGraphService(resolver, {
+      disabledPluginInstanceKeys: this.#disabledPluginInstanceKeys,
+    }).inspect(this.#projectRoot);
     await this.#refreshConfigDocument();
     if (this.#configResolver) {
       return {
@@ -345,7 +350,8 @@ export class RootRuntime {
         primaryConfigDocument: Object.freeze({}),
       };
     }
-    const composed = await new ConfigComposer().compose(graph, this.#configDocument);
+    const composed = await new ConfigComposer(this.#disabledPluginInstanceKeys)
+      .compose(graph, this.#configDocument);
     return {
       graph,
       configResolver: this.#configViewResolver(composed.views),
@@ -394,8 +400,12 @@ export class RootRuntime {
       let prepared: PreparedRuntimeGeneration;
       signal.throwIfAborted();
       const resolver = await NodePackageResolver.create(this.#projectRoot);
-      const graph = await new ProjectGraphService(resolver).inspect(this.#projectRoot);
-      const planned = await new ConfigPatchPlanner().plan(graph, currentDocument, patches);
+      const graph = await new ProjectGraphService(resolver, {
+        disabledPluginInstanceKeys: this.#disabledPluginInstanceKeys,
+      }).inspect(this.#projectRoot);
+      const planned = await new ConfigPatchPlanner(
+        new ConfigComposer(this.#disabledPluginInstanceKeys),
+      ).plan(graph, currentDocument, patches);
       plan = planned;
       if (!planned.documentChanged) return undefined;
       try {

@@ -24,6 +24,7 @@ import {
   readProjectFile,
   saveProjectFile,
   createConsoleEventHub,
+  consoleEventHubToken,
   registerConsoleRestPages,
   type ConsoleAgentRuntime,
   type ConsoleScheduleEngine,
@@ -38,6 +39,13 @@ import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';
 import type { LoginAssist } from '@zhin.js/core';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { bindLoginAssistStdin } from './login-assist-stdin.js';
+import {
+  readDeclaredPlugins,
+  readPluginLifecycleState,
+  resolvePluginLifecycleFile,
+  createPluginLifecycleStore,
+  type PluginLifecycleStore,
+} from './plugin-lifecycle-store.js';
 import {
   INBOX_TABLE_MESSAGE,
   runtimeEventPublisherToken,
@@ -573,8 +581,12 @@ export function installConsoleApi(options: {
   readonly snapshots?: SnapshotReader;
   /** ScheduleHost — wires `schedule:list`/`cron:list` extended RPC. */
   readonly scheduleHost?: unknown;
-  /** Full-scope `system:restart` — typically `process.exit(51)` for CLI daemon. */
+  /** Full-scope `system:restart` — uses the native-TS supervisor restart exit code. */
   readonly onRestart?: () => void;
+  /** Durable child Plugin enable/disable state. */
+  readonly pluginLifecycleFile?: string;
+  /** Process-composition-owned writer that serializes lifecycle state updates. */
+  readonly pluginLifecycleStore: PluginLifecycleStore;
   /** Shared console event hub (`hmr:reload` 等由 RootHost 层 publish）。 */
   readonly eventHub?: ConsoleEventHub;
 }): RootResourceInstaller {
@@ -585,6 +597,7 @@ export function installConsoleApi(options: {
     // Console SSE hub 同时作为 Root 级事件发布口（插件经 runtimeEventPublisherToken
     // publish endpoint:request/endpoint:notice 等收件箱事件）。
     resources.provide(runtimeEventPublisherToken, hub);
+    resources.provide(consoleEventHubToken, hub);
 
     const loginAssist = options.im?.loginAssist;
     if (loginAssist) {
@@ -604,6 +617,8 @@ export function installConsoleApi(options: {
       hub,
       config.document,
       options.snapshots,
+      options.pluginLifecycleFile ?? resolvePluginLifecycleFile(options.projectRoot),
+      options.pluginLifecycleStore,
     );
   };
 }
@@ -621,6 +636,8 @@ export function registerConsoleApiRoutes(
   eventHub?: ConsoleEventHub,
   primaryConfigDocument?: RuntimeConfigDocument,
   snapshots?: SnapshotReader,
+  pluginLifecycleFile = resolvePluginLifecycleFile(projectRoot),
+  pluginLifecycleStore = createPluginLifecycleStore(),
 ): void {
   const base = normalizeBase(apiBase);
   const hub = eventHub ?? createConsoleEventHub();
@@ -714,9 +731,12 @@ export function registerConsoleApiRoutes(
   http.route('GET', `${base}/plugins`, async (_request, response) => {
     try {
       const snap = readSnapshot(snapshot);
-      const endpointRows = im?.listEndpoints() ?? [];
-      const plugins = listSnapshotPlugins(snap)
-        .map((node) => buildPluginListItem(node, snap, endpointRows));
+      const plugins = await buildManagedPluginList(
+        projectRoot,
+        pluginLifecycleFile,
+        snap,
+        im?.listEndpoints() ?? [],
+      );
       writeJson(response, 200, { success: true, data: plugins, total: plugins.length });
     } catch (error) {
       writeJson(response, 500, {
@@ -795,6 +815,12 @@ export function registerConsoleApiRoutes(
         ),
         writeConfigYaml: (yaml) => writeProjectConfigYaml(projectRoot, yaml),
         setConfigKey: (pluginName, data) => setProjectConfigKey(projectRoot, pluginName, data),
+        setPluginEnabled: async (instanceKey, enabled) => pluginLifecycleStore.setPluginEnabled(
+          pluginLifecycleFile,
+          instanceKey,
+          enabled,
+          await readDeclaredPlugins(projectRoot),
+        ),
         readWorkroomCatalog: async () => {
           const catalog = agentLease?.value?.workroomCatalog;
           if (!catalog) throw new Error('Workroom Catalog Runtime 未就绪');
@@ -1770,6 +1796,7 @@ export type ConsolePluginListItem = {
   readonly features: readonly ConsolePluginFeature[];
   readonly packageName: string;
   readonly instanceKey: string;
+  readonly manageable: boolean;
 };
 
 export function buildPluginListItem(
@@ -1785,7 +1812,42 @@ export function buildPluginListItem(
     features: buildPluginFeatures(node, snapshot, endpoints),
     packageName: node.packageName,
     instanceKey: node.instanceKey,
+    manageable: false,
   };
+}
+
+/** Loaded snapshot plus declared-but-disabled root children for product management UI. */
+export async function buildManagedPluginList(
+  projectRoot: string,
+  lifecycleFile: string,
+  snapshot?: RuntimeSnapshot,
+  endpoints: readonly ConsoleEndpointHint[] = [],
+): Promise<readonly ConsolePluginListItem[]> {
+  const loaded = listSnapshotPlugins(snapshot)
+    .map((node) => buildPluginListItem(node, snapshot, endpoints));
+  const loadedByKey = new Map(loaded.map((item) => [item.instanceKey, item]));
+  const declared = await readDeclaredPlugins(projectRoot);
+  const lifecycle = await readPluginLifecycleState(lifecycleFile);
+  const disabled = new Set(lifecycle.disabled);
+  const managed = declared.map((reference): ConsolePluginListItem => {
+    const active = loadedByKey.get(reference.instanceKey);
+    if (active) {
+      loadedByKey.delete(reference.instanceKey);
+      return Object.freeze({...active, manageable: true});
+    }
+    return Object.freeze({
+      name: reference.instanceKey,
+      status: 'inactive',
+      description: disabled.has(reference.instanceKey)
+        ? `${reference.packageName} · 已停用`
+        : `${reference.packageName} · 等待 Host 加载`,
+      features: Object.freeze([]),
+      packageName: reference.packageName,
+      instanceKey: reference.instanceKey,
+      manageable: true,
+    });
+  });
+  return Object.freeze([...managed, ...loadedByKey.values()]);
 }
 
 /**
