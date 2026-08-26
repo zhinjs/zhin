@@ -77,8 +77,12 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           pnpm build --concurrency=1
-          if ($LASTEXITCODE -eq -1073741502 -or $LASTEXITCODE -eq 3221225794) {
-            Write-Warning 'Windows child process initialization failed; retrying incremental build once.'
+          # pnpm normalizes Turbo/child-process native exits to code 1, so the
+          # original STATUS_DLL_INIT_FAILED value is not observable here. A
+          # second incremental pass reuses every completed Turbo task; a real
+          # compiler error remains red on the second pass.
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning 'Windows build exited before the Turbo summary; retrying incremental build once.'
             pnpm build --concurrency=1
           }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
