@@ -1,5 +1,11 @@
 # @zhin.js/runtime
 
+## 1.0.17
+
+### Patch Changes
+
+- 882a08a: Complete first-run Workroom disclosure setup with explicit model-processor contracts, a self-hosted Root-private AES/HMAC authority, Catalog-bound P12 publication, Console diagnostics, and fail-closed regression coverage.
+
 ## 1.0.16
 
 ### Patch Changes

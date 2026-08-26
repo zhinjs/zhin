@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 1.1.20
+
+### Patch Changes
+
+- 882a08a: Complete first-run Workroom disclosure setup with explicit model-processor contracts, a self-hosted Root-private AES/HMAC authority, Catalog-bound P12 publication, Console diagnostics, and fail-closed regression coverage.
+- Updated dependencies [882a08a]
+  - @zhin.js/ai@1.5.9
+  - @zhin.js/core@1.5.15
+
 ## 1.1.19
 
 ### Patch Changes

@@ -1,5 +1,40 @@
 # test-bot
 
+## 0.1.149
+
+### Patch Changes
+
+- Updated dependencies [882a08a]
+  - @zhin.js/agent@1.1.20
+  - @zhin.js/cli@3.0.21
+  - @zhin.js/client@2.1.14
+  - zhin.js@6.0.15
+  - @zhin.js/adapter-dingtalk@7.0.5
+  - @zhin.js/adapter-discord@8.0.5
+  - @zhin.js/adapter-github@6.0.5
+  - @zhin.js/adapter-icqq@9.0.6
+  - @zhin.js/adapter-kook@8.0.5
+  - @zhin.js/adapter-lark@7.0.5
+  - @zhin.js/adapter-line@5.0.5
+  - @zhin.js/adapter-milky@7.0.5
+  - @zhin.js/adapter-napcat@7.0.5
+  - @zhin.js/adapter-onebot11@7.0.5
+  - @zhin.js/adapter-qq@8.0.5
+  - @zhin.js/adapter-slack@7.0.5
+  - @zhin.js/adapter-telegram@8.0.5
+  - @zhin.js/adapter-wecom@5.0.5
+  - @zhin.js/service-activity-feedback@3.0.21
+  - @zhin.js/plugin-60s@4.0.20
+  - @zhin.js/plugin-code-runner@4.0.20
+  - @zhin.js/plugin-group-suite@4.0.20
+  - @zhin.js/plugin-lottery@2.0.20
+  - @zhin.js/plugin-qrcode@4.0.20
+  - @zhin.js/plugin-rss@4.0.20
+  - @zhin.js/plugin-short-url@4.0.20
+  - @zhin.js/contract@1.0.19
+  - @zhin.js/adapter-sandbox@8.0.4
+  - @zhin.js/plugin-music@8.0.6
+
 ## 0.1.148
 
 ### Patch Changes
