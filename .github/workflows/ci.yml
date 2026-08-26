@@ -76,13 +76,21 @@ jobs:
       - name: build packages (Windows)
         if: runner.os == 'Windows'
         run: |
+          # GitHub's pwsh wrapper treats native non-zero exits as terminating
+          # errors. Disable that behavior so this step can inspect pnpm's
+          # normalized exit and run the intended incremental retry.
+          $ErrorActionPreference = 'Continue'
+          if (Test-Path variable:PSNativeCommandUseErrorActionPreference) {
+            $PSNativeCommandUseErrorActionPreference = $false
+          }
           pnpm build --concurrency=1
+          $firstBuildExit = $LASTEXITCODE
           # pnpm normalizes Turbo/child-process native exits to code 1, so the
           # original STATUS_DLL_INIT_FAILED value is not observable here. A
           # second incremental pass reuses every completed Turbo task; a real
           # compiler error remains red on the second pass.
-          if ($LASTEXITCODE -ne 0) {
-            Write-Warning 'Windows build exited before the Turbo summary; retrying incremental build once.'
+          if ($firstBuildExit -ne 0) {
+            Write-Warning "Windows build exited with $firstBuildExit; retrying incremental build once."
             pnpm build --concurrency=1
           }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
