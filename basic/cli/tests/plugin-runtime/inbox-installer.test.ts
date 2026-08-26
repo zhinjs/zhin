@@ -171,6 +171,16 @@ describe('buildInboxMessageRow', () => {
     expect(row.platform_message_id).toBe('local:1700000000000');
   });
 
+  it('stores the routable adapter slot for an expanded slot~endpoint capability', () => {
+    const row = buildInboxMessageRow(inboundEvent({
+      conversation: {
+        endpoint: {id: 'root\0zhin.adapter\0sandbox~local-console', adapter: 'root'},
+        kind: 'private', id: 'local-user',
+      },
+    }), () => 'local-console');
+    expect(row).toMatchObject({adapter: 'sandbox', endpoint_id: 'local-console'});
+  });
+
   it('maps group-parented private conversations to private channel with group parent', () => {
     const row = buildInboxMessageRow(
       inboundEvent({

@@ -13,7 +13,7 @@ import {
   DatabaseConversationEventStore,
   type ConversationDbModel,
 } from '@zhin.js/im-contract';
-import { createConsoleEventHub, createHttpHost } from '@zhin.js/host-http';
+import { createConsoleEventHub, createHttpHostGroup } from '@zhin.js/host-http';
 import { defineInboxTables } from '@zhin.js/plugin-runtime';
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
 import {
@@ -39,6 +39,10 @@ import { installScheduleHost, createScheduleHost } from './schedule-host-install
 import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './speech-host-installer.js';
 import { installProtocolHosts } from './protocol-host-installer.js';
 import { RootHost } from './root-host.js';
+import {
+  readPluginLifecycleState,
+  resolvePluginLifecycleFile,
+} from './plugin-lifecycle-store.js';
 import {
   installProcessLifecycle,
   nodeProcessLifecycleAdapter,
@@ -103,10 +107,13 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   ensureTypeScriptSpecifierRemap();
   const environmentVariables = await loadRuntimeEnvironmentLayers(options.root, parsed.environment);
   const { config, file: configFile } = await loadProjectConfig(options.root);
+  const pluginLifecycleFile = resolvePluginLifecycleFile(options.root);
+  const pluginLifecycle = await readPluginLifecycleState(pluginLifecycleFile);
   await applyRuntimeLogLevel(config);
   const envOverlay = environmentVariables.environments?.[parsed.environment];
-  const httpConfig = await resolveHttpConfig(config, envOverlay);
-  const httpHost = createHttpHost(httpConfig);
+  const httpConfig = await resolveHttpConfig(config, envOverlay, options.root);
+  const {listeners: additionalHttpListeners = [], ...primaryHttpListener} = httpConfig;
+  const httpHost = createHttpHostGroup([primaryHttpListener, ...additionalHttpListeners]);
   const databaseConfig = await resolveDatabaseConfig(options.root, config);
   // Agent is an optional install tier. Do not resolve its module from the
   // IM-only startup graph unless the project actually configures Agent state.
@@ -148,6 +155,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
       platform: 'node',
     },
     environmentVariables,
+    disabledPluginInstanceKeys: pluginLifecycle.disabled,
     installResources: async (context) => {
       await options.installTrustedResources?.(context);
       im.install(context.resources);
@@ -214,11 +222,13 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
         databaseHost,
         scheduleHost,
         eventHub: consoleEventHub,
+        pluginLifecycleFile,
         snapshot: () => host.runtime.snapshot,
         snapshots: host.runtime.snapshots,
         onRestart: () => {
-          // Exit 51: CLI daemon (`zhin runtime start`) auto-restarts the process.
-          process.exit(51);
+          // The native TypeScript supervisor treats this code as an intentional
+          // process-generation restart in both foreground Desktop and daemon mode.
+          process.exit(processRestartExitCode);
         },
       })(context);
     },
@@ -289,7 +299,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     const endpoints = im.listEndpoints();
     const online = endpoints.filter((ep) => ep.status === 'online').map((ep) => ep.name);
     const offline = endpoints.filter((ep) => ep.status !== 'online').map((ep) => ep.name);
-    const httpAddress = `${httpConfig.host ?? '127.0.0.1'}:${httpConfig.port ?? 8086}`;
+    const httpAddress = `${primaryHttpListener.host ?? '127.0.0.1'}:${primaryHttpListener.port ?? 8086}`;
     const startup = getLogger('setup');
     startup.success('zhin runtime started');
     startup.info(formatCompact({

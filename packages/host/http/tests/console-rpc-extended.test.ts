@@ -612,6 +612,52 @@ describe('dispatchExtendedConsoleRpc', () => {
       expect(parentData.messages.map((m) => m.id)).toEqual([6]);
       expect(parentData.messages[0]?.parent).toEqual({ type: 'guild', id: 'g-1' });
     });
+
+    it('inbox.recent returns routable cross-endpoint rows for Mobile Console', async () => {
+      const messageRows = [
+        {
+          id: 7, adapter: 'telegram', endpoint_id: 'bot-a', platform_message_id: 'm7',
+          channel_id: 'chat-a', channel_type: 'private', channel_name: 'Alice',
+          channel_parent_type: null, channel_parent_id: null,
+          sender_id: 'alice', sender_name: 'Alice', content: 'hello', raw: null, created_at: 7000,
+        },
+        {
+          id: 8, adapter: 'discord', endpoint_id: 'bot-b', platform_message_id: 'm8',
+          channel_id: 'channel-b', channel_type: 'channel', channel_name: 'general',
+          channel_parent_type: 'guild', channel_parent_id: 'guild-b',
+          sender_id: 'bob', sender_name: 'Bob', content: 'world', raw: null, created_at: 8000,
+        },
+      ];
+      const requestRows = [{
+        id: 9, adapter: 'icqq', endpoint_id: 'bot-c', platform_request_id: 'flag-9',
+        type: 'friend', scene_type: 'private', scene_id: '10009', actor_id: '10009',
+        actor_name: 'Carol', comment: '请求添加好友', created_at: 9000, resolved: 0,
+      }, {
+        id: 10, adapter: 'icqq', endpoint_id: 'bot-c', platform_request_id: 'flag-10',
+        type: 'friend', scene_type: 'private', scene_id: '10010', actor_id: '10010',
+        actor_name: 'Resolved', comment: null, created_at: 10000, resolved: 1,
+      }];
+      const result = await dispatchExtendedConsoleRpc(
+        'inbox.recent', {limit: 10},
+        makeCtx({databaseHost: makeInboxDb({
+          unified_inbox_message: messageRows, unified_inbox_request: requestRows,
+        })}),
+      );
+      expect(result).toEqual({data: {inboxEnabled: true, requests: [expect.objectContaining({
+        id: 9, adapter: 'icqq', endpoint_id: 'bot-c', platform_request_id: 'flag-9',
+        actor: {id: '10009', name: 'Carol'}, comment: '请求添加好友',
+      })], messages: [
+        expect.objectContaining({
+          id: 8, adapter: 'discord', endpoint_id: 'bot-b',
+          channel: expect.objectContaining({type: 'channel', id: 'channel-b', name: 'general'}),
+          parent: {type: 'guild', id: 'guild-b'},
+        }),
+        expect.objectContaining({
+          id: 7, adapter: 'telegram', endpoint_id: 'bot-a',
+          channel: {type: 'private', id: 'chat-a', name: 'Alice'},
+        }),
+      ]}});
+    });
   });
 
   describe('endpoint request actions', () => {
@@ -680,7 +726,12 @@ describe('dispatchExtendedConsoleRpc', () => {
     it('approve/reject call endpoint methods when present', async () => {
       const approveRequest = vi.fn().mockResolvedValue(undefined);
       const rejectRequest = vi.fn().mockResolvedValue(undefined);
+      const requestRows = [
+        {adapter: 'icqq', endpoint_id: '1234', platform_request_id: 'req-1', resolved: 0, resolved_at: null},
+        {adapter: 'icqq', endpoint_id: '1234', platform_request_id: 'req-2', resolved: 0, resolved_at: null},
+      ];
       const ctx = makeCtx({
+        databaseHost: makeInboxDb({unified_inbox_request: requestRows}),
         withEndpointManagement: async (_adapter, _endpointKey, run) => run({ approveRequest, rejectRequest }),
       });
       await expect(
@@ -691,6 +742,7 @@ describe('dispatchExtendedConsoleRpc', () => {
         ),
       ).resolves.toEqual({ data: { success: true } });
       expect(approveRequest).toHaveBeenCalledWith('req-1', '欢迎');
+      expect(requestRows[0]).toMatchObject({resolved: 1, resolved_at: expect.any(Number)});
 
       await expect(
         dispatchExtendedConsoleRpc(
@@ -700,6 +752,7 @@ describe('dispatchExtendedConsoleRpc', () => {
         ),
       ).resolves.toEqual({ data: { success: true } });
       expect(rejectRequest).toHaveBeenCalledWith('req-2', 'spam');
+      expect(requestRows[1]).toMatchObject({resolved: 1, resolved_at: expect.any(Number)});
     });
 
     it('approve reports 未接线 when the endpoint lacks approval methods', async () => {

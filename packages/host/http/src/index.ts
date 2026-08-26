@@ -7,22 +7,30 @@ export {
   type ProcessHttpHost,
   type HttpHostAddress,
   type HttpHostOptions,
+  type HttpHostTlsOptions,
   type HttpRouteRegistration,
   type WsConnection,
   type WsHandle,
+  type WsRouteOptions,
 } from './http-host.js';
+export {
+  createHttpHostGroup,
+  listHttpHostAddresses,
+} from './listener-group.js';
 export {
   TokenRegistry,
   extractBearerToken,
   isDemoWebSocketPath,
   type AuthenticatedTokenPrincipal,
   type AuthScope,
+  type DynamicTokenConfig,
   type ScopedTokenConfig,
   type TokenRegistryConfig,
 } from './token-registry.js';
 export { timingSafeEqualString } from './timing-safe-equal.js';
 export {
   createConsoleEventHub,
+  consoleEventHubToken,
   type ConsoleEventHub,
 } from './console-events.js';
 export {

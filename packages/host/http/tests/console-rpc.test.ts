@@ -493,4 +493,27 @@ describe('runtime console RPC', () => {
     await new Promise((resolve) => setTimeout(resolve, 600));
     expect(restarted).toBe(true);
   });
+
+  it('persists a Plugin lifecycle change, publishes it and schedules restart', async () => {
+    const published: Array<{type: string; data: unknown}> = [];
+    let restarted = false;
+    const result = await dispatchRuntimeConsoleRpc(
+      {type: 'plugin:set-enabled', requestId: 90, instanceKey: 'sandbox', enabled: false},
+      {
+        authScope: 'full',
+        listPages: async () => [],
+        setPluginEnabled: async () => ({disabled: ['sandbox']}),
+        requestRestart: () => { restarted = true; },
+        publishEvent: (type, data) => { published.push({type, data}); },
+      },
+    );
+    expect(pickRpcReply({type: 'plugin:set-enabled', requestId: 90}, result)).toMatchObject({
+      data: {instanceKey: 'sandbox', enabled: false, restartRequired: true},
+    });
+    expect(published).toEqual([{
+      type: 'plugin:lifecycle-updated', data: {instanceKey: 'sandbox', enabled: false},
+    }]);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(restarted).toBe(true);
+  });
 });

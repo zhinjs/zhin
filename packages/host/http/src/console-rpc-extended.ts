@@ -208,6 +208,8 @@ export async function dispatchExtendedConsoleRpc(
       return listInbox(d, ctx, TABLE_NOTICE, 'notices', mapNoticeRow);
     case 'inbox.messages':
       return listInboxMessages(d, ctx);
+    case 'inbox.recent':
+      return listRecentInboxMessages(d, ctx);
 
     case 'request.approve':
     case 'request.reject':
@@ -673,6 +675,51 @@ async function listInboxMessages(
   return { data: { messages, inboxEnabled: enabled } };
 }
 
+/**
+ * Cross-endpoint recent inbox used by paired Mobile Console clients.
+ * Unlike endpoint-detail `inbox.messages`, every row carries its complete
+ * routable address so selecting a conversation can safely call
+ * `endpoint.send_message` through the Device Protocol write allowlist.
+ */
+async function listRecentInboxMessages(
+  d: Record<string, unknown>,
+  ctx: ConsoleRpcExtendedCtx,
+): Promise<ExtendedRpcResult> {
+  const limit = boundedIntegerField(d, 50, 1, 100, '$limit', 'limit');
+  const [messagePage, requestPage] = await Promise.all([
+    readInboxRows(ctx, TABLE_MESSAGE, {}, {
+      orderBy: {field: 'created_at', direction: 'DESC'}, limit,
+    }),
+    readInboxRows(ctx, TABLE_REQUEST, {resolved: 0}, {
+      orderBy: {field: 'created_at', direction: 'DESC'}, limit,
+    }),
+  ]);
+  const messages = messagePage.rows
+    .slice()
+    .sort((left, right) => Number(right.created_at ?? 0) - Number(left.created_at ?? 0))
+    .slice(0, limit)
+    .map(row => ({
+      id: row.id,
+      adapter: row.adapter,
+      endpoint_id: row.endpoint_id,
+      platform_message_id: row.platform_message_id,
+      sender_id: row.sender_id,
+      sender_name: row.sender_name,
+      content: row.content,
+      raw: row.raw,
+      created_at: row.created_at,
+      channel: channelFromStoredRow(row),
+      parent: parentFromStoredRow(row),
+    }));
+  const requests = requestPage.rows
+    .filter(row => Number(row.resolved ?? 0) === 0)
+    .slice()
+    .sort((left, right) => Number(right.created_at ?? 0) - Number(left.created_at ?? 0))
+    .slice(0, limit)
+    .map(row => ({...mapRequestRow(row), adapter: row.adapter, endpoint_id: row.endpoint_id}));
+  return {data: {messages, requests, inboxEnabled: messagePage.enabled || requestPage.enabled}};
+}
+
 function mapRequestRow(row: Record<string, unknown>): Record<string, unknown> {
   const actorId = row.actor_id;
   const actorName = row.actor_name ?? undefined;
@@ -790,6 +837,12 @@ async function actOnRequest(
       ? strField(d, '$remark', 'remark')
       : strField(d, '$reason', 'reason');
     await method.call(management, requestId, extra || undefined);
+    const model = getInboxModel(ctx, TABLE_REQUEST);
+    if (model && typeof model.update === 'function') {
+      await model.update({resolved: 1, resolved_at: Date.now()}).where({
+        adapter, endpoint_id: endpointKey, platform_request_id: requestId,
+      });
+    }
     return { data: { success: true } };
   });
 }
