@@ -413,6 +413,66 @@ export function resolveWorkroomTrustedPackPublishers(ai: AIConfig | undefined): 
   return Object.freeze(normalized);
 }
 
+type WorkroomModelProcessingContract = NonNullable<
+  NonNullable<NonNullable<AIConfig['workroom']>['disclosure']>['modelProviders']
+>[string];
+
+export interface WorkroomDisclosureBootstrapResolution {
+  readonly modelProviderAlias?: string;
+  readonly contract?: WorkroomModelProcessingContract;
+}
+
+export function resolveWorkroomDisclosureBootstrap(
+  definition: WorkroomDefinition | undefined,
+  providerAliasForAgent: (agentId: string) => string | undefined,
+  ai: AIConfig,
+): WorkroomDisclosureBootstrapResolution {
+  const orchestratorAgent = definition?.conversation?.agent;
+  const modelProviderAlias = orchestratorAgent
+    ? providerAliasForAgent(orchestratorAgent)
+    : undefined;
+  const contract = modelProviderAlias
+    ? ai.workroom?.disclosure?.modelProviders?.[modelProviderAlias]
+    : undefined;
+  return Object.freeze({
+    ...(modelProviderAlias ? { modelProviderAlias } : {}),
+    ...(contract ? { contract } : {}),
+  });
+}
+
+export function assessWorkroomDisclosureSetup(input: Readonly<{
+  resolution: WorkroomDisclosureBootstrapResolution;
+  authorityPublished: boolean;
+  localIssuerAvailable: boolean;
+}>): Readonly<{
+  disclosureReady: boolean;
+  disclosureConfigReady: boolean;
+  diagnostics: readonly string[];
+}> {
+  const { modelProviderAlias, contract } = input.resolution;
+  const diagnostics: string[] = [];
+  const disclosureConfigReady = contract !== undefined
+    && contract.maxConfidentiality !== 'public'
+    && (!contract.external || contract.noTraining);
+  if (!modelProviderAlias) diagnostics.push('orchestrator 尚未绑定模型 Provider');
+  else if (!contract) {
+    diagnostics.push(`尚未配置 ai.workroom.disclosure.modelProviders.${modelProviderAlias}`);
+  } else if (contract.external && !contract.noTraining) {
+    diagnostics.push(`外部模型 Provider ${modelProviderAlias} 必须显式禁止训练`);
+  } else if (contract.maxConfidentiality === 'public') {
+    diagnostics.push(`模型 Provider ${modelProviderAlias} 至少需要 project_internal 披露等级`);
+  }
+  if (!input.authorityPublished) diagnostics.push('尚未发布 Project Data Governance 披露 authority');
+  if (!input.localIssuerAvailable && !input.authorityPublished) {
+    diagnostics.push('Root-private Data Governance 签发能力不可用');
+  }
+  return Object.freeze({
+    disclosureReady: input.authorityPublished,
+    disclosureConfigReady,
+    diagnostics: Object.freeze(diagnostics),
+  });
+}
+
 export function resolveWorkroomStorageMode(ai: AIConfig | undefined): WorkroomStorageMode {
   return ai?.sessions?.useDatabase === false ? 'file' : 'database';
 }
@@ -1494,17 +1554,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       resources.provide(workroomAcceptanceProjectionSourceAuthorityToken, acceptanceProfileSource);
     }
     const trustedPackPublishers = new Set(options.workroomTrustedPackPublishers ?? []);
-    const resolveDisclosureBootstrap = (definition: WorkroomDefinition | undefined) => {
-      const orchestratorAgent = definition?.conversation?.agent;
-      const binding = orchestratorAgent
-        ? service.getBindingRegistry().getBinding(orchestratorAgent)
-        : undefined;
-      const modelProviderAlias = binding?.providerAlias;
-      const contract = modelProviderAlias
-        ? aiConfig.workroom?.disclosure?.modelProviders?.[modelProviderAlias]
-        : undefined;
-      return Object.freeze({ modelProviderAlias, contract });
-    };
+    const resolveDisclosureBootstrap = (definition: WorkroomDefinition | undefined) =>
+      resolveWorkroomDisclosureBootstrap(
+        definition,
+        agentId => service.getBindingRegistry().getBinding(agentId)?.providerAlias,
+        aiConfig,
+      );
     const ensureDisclosureAuthority = async (input: Readonly<{
       projectId: string;
       catalogRevision: string;
@@ -1659,22 +1714,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         }
         const { modelProviderAlias, contract } = resolveDisclosureBootstrap(definition);
         const disclosureAuthority = await dataGovernanceRuntime.options.repository.readProject(projectId);
-        const disclosureReady = disclosureAuthority !== undefined;
-        const disclosureConfigReady = contract !== undefined
-          && contract.maxConfidentiality !== 'public'
-          && (!contract.external || contract.noTraining);
-        if (!modelProviderAlias) diagnostics.push('orchestrator 尚未绑定模型 Provider');
-        else if (!contract) {
-          diagnostics.push(`尚未配置 ai.workroom.disclosure.modelProviders.${modelProviderAlias}`);
-        } else if (contract.external && !contract.noTraining) {
-          diagnostics.push(`外部模型 Provider ${modelProviderAlias} 必须显式禁止训练`);
-        } else if (contract.maxConfidentiality === 'public') {
-          diagnostics.push(`模型 Provider ${modelProviderAlias} 至少需要 project_internal 披露等级`);
-        }
-        if (!disclosureReady) diagnostics.push('尚未发布 Project Data Governance 披露 authority');
-        if (!localDataGovernance && !disclosureReady) {
-          diagnostics.push('Root-private Data Governance 签发能力不可用');
-        }
+        const disclosure = assessWorkroomDisclosureSetup({
+          resolution: { modelProviderAlias, contract },
+          authorityPublished: disclosureAuthority !== undefined,
+          localIssuerAvailable: localDataGovernance !== undefined,
+        });
+        diagnostics.push(...disclosure.diagnostics);
+        const { disclosureReady, disclosureConfigReady } = disclosure;
         const ready = catalogReady && activeRevision !== undefined && planningPolicyReady
           && disclosureReady;
         return Object.freeze({

@@ -34,6 +34,8 @@ import {
   workroomOrchestratorSessionKey,
   createWorkroomPlanningBootstrapArtifacts,
   resolveWorkroomTrustedPackPublishers,
+  resolveWorkroomDisclosureBootstrap,
+  assessWorkroomDisclosureSetup,
 } from '../../src/plugin-runtime/agent-host-installer.js';
 import {
   createEndpointRoleResolver,
@@ -266,6 +268,74 @@ describe('Workroom Planning Console bootstrap', () => {
     expect(() => resolveWorkroomTrustedPackPublishers({
       workroom: { trustedPackPublishers: ['workroom-admin', 'workroom-admin'] },
     })).toThrow('contains duplicates');
+  });
+
+  it('resolves the orchestrator model disclosure contract without inferring privacy', () => {
+    const contract = {
+      endpoint: 'https://models.example/v1', processingRegions: ['global'],
+      maxConfidentiality: 'project_internal' as const, external: true, noTraining: true,
+      loggingMode: 'metadata_only' as const, maximumRetentionSeconds: 60,
+      allowsRedisclosure: false, supportsDeletion: true,
+    };
+    const resolution = resolveWorkroomDisclosureBootstrap({
+      name: 'Zhin', members: [{ agent: 'planner', role: 'orchestrator' }],
+      conversation: {
+        adapter: 'sandbox', endpoint: 'main', kind: 'channel', id: 'zhin', agent: 'planner',
+      },
+    }, agentId => agentId === 'planner' ? 'openrouter' : undefined, {
+      workroom: { disclosure: { modelProviders: { openrouter: contract } } },
+    });
+    expect(resolution).toEqual({ modelProviderAlias: 'openrouter', contract });
+    expect(resolveWorkroomDisclosureBootstrap(undefined, () => 'openrouter', {})).toEqual({});
+  });
+
+  it('reports each fail-closed disclosure setup prerequisite', () => {
+    expect(assessWorkroomDisclosureSetup({
+      resolution: {}, authorityPublished: false, localIssuerAvailable: false,
+    })).toMatchObject({
+      disclosureReady: false,
+      disclosureConfigReady: false,
+      diagnostics: [
+        'orchestrator 尚未绑定模型 Provider',
+        '尚未发布 Project Data Governance 披露 authority',
+        'Root-private Data Governance 签发能力不可用',
+      ],
+    });
+    expect(assessWorkroomDisclosureSetup({
+      resolution: { modelProviderAlias: 'openrouter' },
+      authorityPublished: false,
+      localIssuerAvailable: true,
+    }).diagnostics).toContain('尚未配置 ai.workroom.disclosure.modelProviders.openrouter');
+    expect(assessWorkroomDisclosureSetup({
+      resolution: {
+        modelProviderAlias: 'external',
+        contract: {
+          endpoint: 'https://models.example/v1', processingRegions: ['global'],
+          maxConfidentiality: 'project_internal', external: true, noTraining: false,
+          loggingMode: 'full', maximumRetentionSeconds: 60,
+          allowsRedisclosure: false, supportsDeletion: false,
+        },
+      },
+      authorityPublished: true,
+      localIssuerAvailable: false,
+    })).toMatchObject({
+      disclosureReady: true,
+      disclosureConfigReady: false,
+      diagnostics: ['外部模型 Provider external 必须显式禁止训练'],
+    });
+    expect(assessWorkroomDisclosureSetup({
+      resolution: {
+        modelProviderAlias: 'public-only',
+        contract: {
+          endpoint: 'https://models.example/v1', processingRegions: ['local'],
+          maxConfidentiality: 'public', external: false, noTraining: true,
+          loggingMode: 'disabled', maximumRetentionSeconds: 1,
+          allowsRedisclosure: false, supportsDeletion: true,
+        },
+      },
+      authorityPublished: false,
+      localIssuerAvailable: true,
+    }).diagnostics).toContain('模型 Provider public-only 至少需要 project_internal 披露等级');
   });
 });
 
