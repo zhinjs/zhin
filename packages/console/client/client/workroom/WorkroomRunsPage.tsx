@@ -11,6 +11,9 @@ type PlanningSetupStatus = {
   registryRevision: number;
   activeProfile?: { revisionId: string; digest: string };
   planningPolicyReady: boolean;
+  disclosureReady: boolean;
+  disclosureConfigReady: boolean;
+  modelProviderAlias?: string;
   availableAgents: string[];
   availableTools: string[];
   availableSkills: string[];
@@ -210,8 +213,8 @@ export default function WorkroomRunsPage() {
       <section className="rounded-xl border p-4 space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold">规划能力配置</h2>
-            <p className="mt-1 text-xs text-muted-foreground">诊断 Catalog、Sponsor、Profile 与 Planning Policy，并以当前 generation 的真实能力生成首个受治理 Profile。</p>
+            <h2 className="text-sm font-semibold">规划与披露配置</h2>
+            <p className="mt-1 text-xs text-muted-foreground">诊断 Catalog、Sponsor、Profile、Planning Policy 与 P12 模型披露 authority，并以当前 generation 的真实能力完成初始化。</p>
           </div>
           <button type="button" className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted" disabled={planningBusy || !projectId.trim()} onClick={() => void loadPlanning()}>
             {planningBusy ? '检查中…' : '检查规划能力'}
@@ -220,8 +223,8 @@ export default function WorkroomRunsPage() {
         {planning ? (
           <div className="space-y-3 text-sm">
             <div className={`rounded-lg border p-3 ${planning.ready ? 'border-green-500/40 bg-green-500/5' : 'border-amber-500/40 bg-amber-500/5'}`}>
-              <p className="font-medium">{planning.ready ? '规划能力已就绪，可以提交 /work' : '规划能力尚未就绪'}</p>
-              <p className="mt-1 text-xs text-muted-foreground">principal: {planning.principalId ?? '未绑定'} · Profile: {planning.activeProfile?.revisionId ?? '未激活'} · Policy: {planning.planningPolicyReady ? '已发布' : '未发布'}</p>
+              <p className="font-medium">{planning.ready ? 'Workroom 编排已就绪，可以提交 /work' : 'Workroom 编排尚未就绪'}</p>
+              <p className="mt-1 text-xs text-muted-foreground">principal: {planning.principalId ?? '未绑定'} · Profile: {planning.activeProfile?.revisionId ?? '未激活'} · Policy: {planning.planningPolicyReady ? '已发布' : '未发布'} · Disclosure: {planning.disclosureReady ? '已发布' : '未发布'}</p>
             </div>
             {planning.diagnostics.length > 0 ? <ul className="list-disc space-y-1 pl-5 text-xs text-amber-700 dark:text-amber-300">{planning.diagnostics.map(item => <li key={item}>{item}</li>)}</ul> : null}
             {!planning.principalId || !planning.trustedPackPublisher ? (
@@ -231,13 +234,23 @@ export default function WorkroomRunsPage() {
                 <p className="border-t px-3 py-2 text-xs text-muted-foreground">重启后用 WORKROOM_SPONSOR_TOKEN 登录 Console，并在 Project sponsors 中加入 workroom-admin。</p>
               </details>
             ) : null}
+            {!planning.disclosureReady && planning.modelProviderAlias && !planning.disclosureConfigReady ? (
+              <details className="rounded-lg border bg-muted/20" open>
+                <summary className="cursor-pointer px-3 py-2 text-xs font-medium">模型处理方披露契约（保存后重启）</summary>
+                <p className="border-t px-3 py-2 text-xs text-muted-foreground">下面的占位符不能原样保存；必须按模型提供商合同与账号级设置填写。外部 Provider 只有在已禁止训练时才能初始化。</p>
+                <pre className="overflow-auto border-t p-3 text-xs">{`ai:\n  workroom:\n    disclosure:\n      modelProviders:\n        ${planning.modelProviderAlias}:\n          endpoint: REPLACE_WITH_CONTRACTED_ENDPOINT\n          processingRegions: [REPLACE_WITH_CONTRACTED_REGION]\n          maxConfidentiality: project_internal\n          external: true\n          noTraining: REPLACE_WITH_PROVIDER_GUARANTEE\n          loggingMode: REPLACE_WITH_LOGGING_MODE\n          maximumRetentionSeconds: REPLACE_WITH_MAX_RETENTION_SECONDS\n          allowsRedisclosure: REPLACE_WITH_PROVIDER_GUARANTEE\n          supportsDeletion: REPLACE_WITH_PROVIDER_GUARANTEE`}</pre>
+                <p className="border-t px-3 py-2 text-xs text-muted-foreground">OpenRouter 还需在其 Privacy/Guardrail 中启用 ZDR，并禁止 data collection；YAML 声明不会替你修改第三方账号策略。</p>
+              </details>
+            ) : null}
             {!planning.ready && planning.catalogReady && planning.trustedPackPublisher && planning.projectSponsor ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
                 <p className="text-xs text-muted-foreground">{planning.activeProfile
-                  ? '为当前 active Profile 发布默认 Planning Policy。'
-                  : `将当前 ${planning.availableAgents.length} 个 Agent、${planning.availableTools.length} 个 Tool、${planning.availableSkills.length} 个 Skill 固定进首个 Profile，并发布默认 Planning Policy。`}</p>
+                  ? planning.planningPolicyReady
+                    ? '为当前 Project 发布加密的 P12 模型披露 authority。'
+                    : '为当前 active Profile 发布默认 Planning Policy 与 P12 模型披露 authority。'
+                  : `将当前 ${planning.availableAgents.length} 个 Agent、${planning.availableTools.length} 个 Tool、${planning.availableSkills.length} 个 Skill 固定进首个 Profile，并发布 Planning Policy 与 P12 披露 authority。`}</p>
                 <button type="button" className="rounded-md border bg-primary px-3 py-1.5 text-sm text-primary-foreground" disabled={planningBusy} onClick={() => void bootstrapPlanning()}>
-                  {planning.activeProfile ? '补齐 Planning Policy' : '初始化规划能力'}
+                  {planning.planningPolicyReady ? '初始化披露能力' : planning.activeProfile ? '补齐编排能力' : '初始化编排能力'}
                 </button>
               </div>
             ) : null}

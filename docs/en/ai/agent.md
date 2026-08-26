@@ -127,7 +127,7 @@ Persistent Workroom Catalog entries may list `sponsors[]` as authenticated princ
 
 `/work` never falls back to a fixed single Task. The production ingress creates a Run only when the composition root installs a governed `HumanIngressPlanningPort`; otherwise it persists the request and returns a `planning_unavailable` clarification. `DynamicWorkflowPlanningPort` treats model/Strategy structured DAG output as untrusted: trusted ports inject the exact Project/Catalog, Profile, Orchestrator, planning policy, budget, and Sponsor Gate authority. `WorkflowPlanBuilder` then revalidates the Profile capability ceiling, required/optional Tasks, dependencies/cycles, Task/attempt budgets, and approval gates. Only `WorkroomKernel.admitWorkflowPlan()` may atomically write the resulting Plan and Task facts. A Plan Gate first materializes as an `approval` Blocker, and generic Orchestrator `resolve_blocker` cannot clear it. With a `WorkroomPlanGateAuthorityPort` installed, a human Sponsor can submit an exact replay-safe decision with `/control plan-gate <approve|reject|request-changes|cancel> <runId> <taskKey> <gateId> [reason]`.
 
-For first-time planning setup, enter the `projectId` under **Workrooms → Planning setup** in Console and run diagnostics. Mutations require a full token bound to a `principalId`; the same principal must be both a Project `sponsor` and a process-owned trusted shared-Pack publisher:
+For first-time planning setup, enter the `projectId` under **Workrooms → Planning & disclosure setup** in Console and run diagnostics. Mutations require a full token bound to a `principalId`; the same principal must be both a Project `sponsor` and a process-owned trusted shared-Pack publisher:
 
 ```yaml
 http:
@@ -139,9 +139,21 @@ ai:
   workroom:
     trustedPackPublishers:
       - workroom-admin
+    disclosure:
+      modelProviders:
+        PROVIDER_ALIAS:
+          endpoint: REPLACE_WITH_CONTRACTED_ENDPOINT
+          processingRegions: [REPLACE_WITH_CONTRACTED_REGION]
+          maxConfidentiality: project_internal
+          external: true
+          noTraining: REPLACE_WITH_PROVIDER_GUARANTEE
+          loggingMode: REPLACE_WITH_LOGGING_MODE
+          maximumRetentionSeconds: REPLACE_WITH_MAX_RETENTION_SECONDS
+          allowsRedisclosure: REPLACE_WITH_PROVIDER_GUARANTEE
+          supportsDeletion: REPLACE_WITH_PROVIDER_GUARANTEE
 ```
 
-Restart the Host after saving, sign in with that token, and add `workroom-admin` to the Catalog Project's `sponsors`. Every Workroom role must reference a distinct `ai.agents` binding. Once diagnostics pass, **Initialize planning** publishes a Capability Pack from exact current-generation Agent/Tool/Skill digests, activates the first Project Profile, and publishes the default Planning Policy. Console then explicitly reports that `/work` is ready; no hidden RPC calls are required.
+The `REPLACE_WITH_*` values above are intentionally invalid placeholders and cannot be saved unchanged. After entering the real contract, restart the Host, sign in with that token, and add `workroom-admin` to the Catalog Project's `sponsors`. A `modelProviders` key must match the `ai.providers` alias used by the Orchestrator binding. Region, training, logging, retention, and deletion values are governance attestations and must match the provider's real policy plus account-level enforcement. For OpenRouter, also enforce [Privacy / ZDR](https://openrouter.ai/docs/guides/features/zdr) and deny data collection. Every Workroom role must reference a distinct `ai.agents` binding. Once diagnostics pass, **Initialize orchestration** publishes a Capability Pack from exact current-generation Agent/Tool/Skill digests, activates the first Project Profile, publishes the default Planning Policy, and lets the authenticated Sponsor sign a Project Data Governance authority. On first publication, a self-hosted Host creates `.zhin/workroom-data-governance-root-key.json` with mode `0600`; it wraps local DEKs and signs authorities, must be included in encrypted backups, and cannot be recovered if lost. Console reports `/work` ready only when both Planning and Disclosure are ready.
 
 The Workroom Journal backend is fixed when the process starts: `ai.sessions.useDatabase !== false` selects `workroom_events`, and an unready Database Root Host rejects the candidate generation; explicitly setting it to `false` selects the atomic file event stream at `.zhin/workroom-journal`. Hot reload cannot switch this backend. Changing the selection requires a process restart so retired-generation leases and the new generation cannot write to unrelated authorities without shared CAS. Console Run list/detail endpoints remain Project-scoped read-only projections (for example, `GET /api/agent/workroom/runs?projectId=...`) and cannot mutate a Task or Assignment. An authenticated Console has separate typed control surfaces: Profile and Project Knowledge publication/rollback use `workroom.profile.*` / `workroom.knowledge.*` RPCs, Portfolio Sponsors submit exact commands to `POST /api/agent/workroom/portfolio/commands`, and Effect Sponsors use `POST /api/agent/workroom/effects/sponsor-decisions` only for authorization bound to an exact Intent; the command accepts a closed `reasonCode` rather than persistable free-form explanation text. Data Steward, Privacy, and Compliance operators use `/api/agent/workroom/data-lifecycle`, `/overdue`, and `/commands` for content-free lifecycle projections plus Hold, subject erasure/export, retention purge, and reconciliation; these routes are published only when Root-private role authority, the current Catalog Project, and the P12 Console recipient all match. Each surface rederives the principal from the authenticated token and revalidates the current Catalog/Profile/governance revision; identity, approval, or discussion fields supplied in a request body grant no state-writing authority. The optional Remote A2A Executor uses the same Assignment lease/fence/event contract. A new claim is allowed only when persistent Profile, Authority Grant, Workspace, Disclosure, and endpoint Card/auth/transport snapshots match exactly; missing authority remains durably blocked. The old `ai.remoteAgents` poller is not retained.
 

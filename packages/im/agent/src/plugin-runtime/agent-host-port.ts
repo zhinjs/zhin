@@ -150,6 +150,9 @@ export interface WorkroomPlanningSetupStatus {
   readonly registryRevision: number;
   readonly activeProfile?: Readonly<{ revisionId: string; digest: string }>;
   readonly planningPolicyReady: boolean;
+  readonly disclosureReady: boolean;
+  readonly disclosureConfigReady: boolean;
+  readonly modelProviderAlias?: string;
   readonly availableAgents: readonly string[];
   readonly availableTools: readonly string[];
   readonly availableSkills: readonly string[];

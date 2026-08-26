@@ -23,6 +23,36 @@
               "uniqueItems": true,
               "description": "Authenticated Console principal ids allowed to publish shared Capability Packs.",
               "x-descriptionZh": "允许发布共享 Capability Pack 的 Console 认证 principalId。"
+            },
+            "disclosure": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Explicit P12 model processor contracts for Workroom disclosure bootstrap.",
+              "x-descriptionZh": "Workroom 披露初始化使用的显式 P12 模型处理方契约。",
+              "properties": {
+                "tenantId": { "type": "string", "minLength": 1 },
+                "modelProviders": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["endpoint", "processingRegions", "maxConfidentiality", "external", "noTraining", "loggingMode", "maximumRetentionSeconds", "allowsRedisclosure", "supportsDeletion"],
+                    "properties": {
+                      "endpoint": { "type": "string", "minLength": 1 },
+                      "owner": { "type": "string", "minLength": 1 },
+                      "trustDomain": { "type": "string", "minLength": 1 },
+                      "processingRegions": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+                      "maxConfidentiality": { "type": "string", "enum": ["public", "project_internal", "confidential", "restricted"] },
+                      "external": { "type": "boolean" },
+                      "noTraining": { "type": "boolean" },
+                      "loggingMode": { "type": "string", "enum": ["disabled", "metadata_only", "full"] },
+                      "maximumRetentionSeconds": { "type": "integer", "minimum": 1 },
+                      "allowsRedisclosure": { "type": "boolean" },
+                      "supportsDeletion": { "type": "boolean" }
+                    }
+                  }
+                }
+              }
             }
           }
         },

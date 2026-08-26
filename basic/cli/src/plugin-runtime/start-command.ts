@@ -39,6 +39,7 @@ import { installScheduleHost, createScheduleHost } from './schedule-host-install
 import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './speech-host-installer.js';
 import { installProtocolHosts } from './protocol-host-installer.js';
 import { RootHost } from './root-host.js';
+import { createLocalWorkroomDataGovernanceAuthority } from './local-workroom-data-governance.js';
 import {
   installProcessLifecycle,
   nodeProcessLifecycleAdapter,
@@ -359,6 +360,9 @@ async function loadConfiguredAgentHost(
   const workroomStorageMode = module.resolveWorkroomStorageMode(initialAi);
   const runtime = new module.AgentRuntime({ coordinator: new module.AgentTurnCoordinator() });
   let snapshotReader: import('@zhin.js/plugin-runtime').SnapshotReader | undefined;
+  let localWorkroomDataGovernance: ReturnType<
+    typeof createLocalWorkroomDataGovernanceAuthority
+  > | undefined;
   const configured: ConfiguredAgentHost = {
     attach: (snapshots) => {
       snapshotReader = snapshots;
@@ -366,12 +370,16 @@ async function loadConfiguredAgentHost(
     },
     install: (options) => {
       if (!snapshotReader) throw new Error('Agent Host Snapshot reader is not attached');
+      localWorkroomDataGovernance ??= createLocalWorkroomDataGovernanceAuthority({
+        stateRoot: join(options.projectRoot, '.zhin'),
+      });
       return module.installAgentHost({
         ...options,
         runtime,
         snapshots: snapshotReader,
         workroomStorageMode,
         workroomTrustedPackPublishers: module.resolveWorkroomTrustedPackPublishers(initialAi),
+        workroomLocalDataGovernance: localWorkroomDataGovernance,
         extraTools: options.extraTools as Parameters<typeof module.installAgentHost>[0]['extraTools'],
       });
     },

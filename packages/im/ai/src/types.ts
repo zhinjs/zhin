@@ -327,6 +327,13 @@ export interface AIConfig {
   workroom?: {
     /** Authenticated Console principal ids allowed to publish shared Capability Packs. */
     trustedPackPublishers?: string[];
+    /** Explicit P12 processor contracts used by authenticated disclosure bootstrap. */
+    disclosure?: {
+      /** Stable tenant boundary for Project data; defaults to `workroom:<projectId>`. */
+      tenantId?: string;
+      /** Contracts keyed by `ai.providers` alias. No privacy property is inferred. */
+      modelProviders?: Record<string, WorkroomModelProcessingConfig>;
+    };
   };
   /** 命名 provider 实例 */
   providers?: Record<string, ProviderInstanceConfig>;
@@ -497,4 +504,20 @@ export interface AIConfig {
     /** 错误提示模板（默认 '❌ AI 处理失败: {error}'） */
     errorTemplate?: string;
   };
+}
+
+export interface WorkroomModelProcessingConfig {
+  /** Exact processor endpoint covered by this contract. */
+  endpoint: string;
+  owner?: string;
+  trustDomain?: string;
+  processingRegions: string[];
+  maxConfidentiality: 'public' | 'project_internal' | 'confidential' | 'restricted';
+  external: boolean;
+  /** Must be true for external Workroom planning. Configure provider-side enforcement separately. */
+  noTraining: boolean;
+  loggingMode: 'disabled' | 'metadata_only' | 'full';
+  maximumRetentionSeconds: number;
+  allowsRedisclosure: boolean;
+  supportsDeletion: boolean;
 }

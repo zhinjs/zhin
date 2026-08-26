@@ -220,6 +220,9 @@ import {
   createAgentCoreWorkroomLocalTurnPort,
   bindWorkroomCapabilityRealization,
   installWorkroomDataGovernanceResources,
+  createWorkroomDataGovernanceBootstrapCandidate,
+  WorkroomDataGovernanceAuthorityWriter,
+  digestWorkroomCatalogProjectBinding,
   resolveWorkroomDataGovernanceRootAuthorities,
   createGenerationOwnedWorkroomDataGovernanceStorage,
   createFileWorkroomDataLifecycleRuntime,
@@ -308,6 +311,7 @@ import {
   type WorkroomDataLifecycleConsoleControlPort,
   type PortfolioSponsorProjection,
 } from '@zhin.js/agent/runtime';
+import type { LocalWorkroomDataGovernanceAuthority } from './local-workroom-data-governance.js';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 
@@ -724,6 +728,8 @@ export interface InstallAgentHostOptions {
   readonly workroomPlanGateAuthority?: WorkroomPlanGateAuthorityPort;
   /** Process-owned shared Pack publisher membership; never accepted from HTTP request bodies. */
   readonly workroomTrustedPackPublishers?: readonly string[];
+  /** Self-hosted Root-private KMS and signed governance decision issuer. */
+  readonly workroomLocalDataGovernance?: LocalWorkroomDataGovernanceAuthority;
   /**
    * Trusted Root-only wrap/unwrap capability. It is never published through a
    * Feature, Resource snapshot or Console API and never exposes KEK bytes.
@@ -1245,8 +1251,17 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       requester: rootPluginId(),
       signal,
     });
+    const localDataGovernance = rootDataGovernance
+      || options.workroomPayloadVaultCryptography
+      || options.workroomDataGovernanceVerification
+      ? undefined
+      : options.workroomLocalDataGovernance;
     const dataGovernanceCryptography = rootDataGovernance?.cryptography
-      ?? options.workroomPayloadVaultCryptography;
+      ?? options.workroomPayloadVaultCryptography
+      ?? localDataGovernance?.cryptography;
+    const dataGovernanceVerification = rootDataGovernance?.governance
+      ?? options.workroomDataGovernanceVerification
+      ?? localDataGovernance?.verification;
     if (dataGovernanceCryptography) {
       dataGovernanceStorage = createGenerationOwnedWorkroomDataGovernanceStorage({
         stateRoot: workroomStateRoot,
@@ -1296,12 +1311,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       generation,
       signal,
       resources,
-      ...(rootDataGovernance?.cryptography ?? options.workroomPayloadVaultCryptography
-        ? { cryptography: rootDataGovernance?.cryptography ?? options.workroomPayloadVaultCryptography }
-        : {}),
-      ...(rootDataGovernance?.governance ?? options.workroomDataGovernanceVerification
-        ? { governance: rootDataGovernance?.governance ?? options.workroomDataGovernanceVerification }
-        : {}),
+      ...(dataGovernanceCryptography ? { cryptography: dataGovernanceCryptography } : {}),
+      ...(dataGovernanceVerification ? { governance: dataGovernanceVerification } : {}),
       ...(dataGovernanceStorage ? { vault: dataGovernanceStorage.vault } : {}),
       ...(dataLifecycle && lifecycleAuthorities
         ? {
@@ -1483,6 +1494,78 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       resources.provide(workroomAcceptanceProjectionSourceAuthorityToken, acceptanceProfileSource);
     }
     const trustedPackPublishers = new Set(options.workroomTrustedPackPublishers ?? []);
+    const resolveDisclosureBootstrap = (definition: WorkroomDefinition | undefined) => {
+      const orchestratorAgent = definition?.conversation?.agent;
+      const binding = orchestratorAgent
+        ? service.getBindingRegistry().getBinding(orchestratorAgent)
+        : undefined;
+      const modelProviderAlias = binding?.providerAlias;
+      const contract = modelProviderAlias
+        ? aiConfig.workroom?.disclosure?.modelProviders?.[modelProviderAlias]
+        : undefined;
+      return Object.freeze({ modelProviderAlias, contract });
+    };
+    const ensureDisclosureAuthority = async (input: Readonly<{
+      projectId: string;
+      catalogRevision: string;
+      definition: WorkroomDefinition;
+      principalId: string;
+    }>): Promise<void> => {
+      const repository = dataGovernanceRuntime.options.repository;
+      if (await repository.readProject(input.projectId)) return;
+      if (!localDataGovernance) {
+        throw new Error('Workroom 披露初始化缺少 Root-private Data Governance 签发能力');
+      }
+      const { modelProviderAlias, contract } = resolveDisclosureBootstrap(input.definition);
+      if (!modelProviderAlias) {
+        throw new Error('Workroom orchestrator 没有可用的 ai.agents model binding');
+      }
+      if (!contract) {
+        throw new Error(`请先配置 ai.workroom.disclosure.modelProviders.${modelProviderAlias}`);
+      }
+      const candidate = createWorkroomDataGovernanceBootstrapCandidate({
+        projectId: input.projectId,
+        tenantId: aiConfig.workroom?.disclosure?.tenantId ?? `workroom:${input.projectId}`,
+        definition: input.definition,
+        revision: 1,
+        model: {
+          providerId: modelProviderAlias,
+          endpoint: contract.endpoint,
+          ...(contract.owner ? { owner: contract.owner } : {}),
+          ...(contract.trustDomain ? { trustDomain: contract.trustDomain } : {}),
+          processingRegions: contract.processingRegions,
+          maxConfidentiality: contract.maxConfidentiality,
+          external: contract.external,
+          noTraining: contract.noTraining,
+          loggingMode: contract.loggingMode,
+          maximumRetentionSeconds: contract.maximumRetentionSeconds,
+          allowsRedisclosure: contract.allowsRedisclosure,
+          supportsDeletion: contract.supportsDeletion,
+        },
+      });
+      const writer = new WorkroomDataGovernanceAuthorityWriter({
+        catalog: workroomCatalog,
+        repository,
+        decisions: Object.freeze({
+          authorize: async (
+            decisionInput: Parameters<ConstructorParameters<
+              typeof WorkroomDataGovernanceAuthorityWriter
+            >[0]['decisions']['authorize']>[0],
+            operationSignal: AbortSignal,
+          ) =>
+            await localDataGovernance.issuePublicationDecision({
+              ...decisionInput,
+              principalId: input.principalId,
+              authorizedBy: 'sponsor',
+            }, operationSignal),
+        }),
+      });
+      await writer.publish({
+        catalogRevision: input.catalogRevision,
+        catalogBindingDigest: digestWorkroomCatalogProjectBinding(input.definition),
+        candidate,
+      }, signal);
+    };
     const readPlanningSetupStatus = async (
       projectId: string,
       authenticatedPrincipal?: Readonly<{ principalId: string }>,
@@ -1574,7 +1657,26 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           planningPolicyReady = authority !== undefined;
           if (!planningPolicyReady) diagnostics.push('active Profile 尚未绑定 Planning Policy');
         }
-        const ready = catalogReady && activeRevision !== undefined && planningPolicyReady;
+        const { modelProviderAlias, contract } = resolveDisclosureBootstrap(definition);
+        const disclosureAuthority = await dataGovernanceRuntime.options.repository.readProject(projectId);
+        const disclosureReady = disclosureAuthority !== undefined;
+        const disclosureConfigReady = contract !== undefined
+          && contract.maxConfidentiality !== 'public'
+          && (!contract.external || contract.noTraining);
+        if (!modelProviderAlias) diagnostics.push('orchestrator 尚未绑定模型 Provider');
+        else if (!contract) {
+          diagnostics.push(`尚未配置 ai.workroom.disclosure.modelProviders.${modelProviderAlias}`);
+        } else if (contract.external && !contract.noTraining) {
+          diagnostics.push(`外部模型 Provider ${modelProviderAlias} 必须显式禁止训练`);
+        } else if (contract.maxConfidentiality === 'public') {
+          diagnostics.push(`模型 Provider ${modelProviderAlias} 至少需要 project_internal 披露等级`);
+        }
+        if (!disclosureReady) diagnostics.push('尚未发布 Project Data Governance 披露 authority');
+        if (!localDataGovernance && !disclosureReady) {
+          diagnostics.push('Root-private Data Governance 签发能力不可用');
+        }
+        const ready = catalogReady && activeRevision !== undefined && planningPolicyReady
+          && disclosureReady;
         return Object.freeze({
           projectId,
           ready,
@@ -1588,6 +1690,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
             digest: active.compiledDigest,
           }) } : {}),
           planningPolicyReady,
+          disclosureReady,
+          disclosureConfigReady,
+          ...(modelProviderAlias ? { modelProviderAlias } : {}),
           availableAgents: Object.freeze(availableAgents),
           availableTools: Object.freeze(availableTools),
           availableSkills: Object.freeze(availableSkills),
@@ -1619,6 +1724,15 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         projectProfiles.read(command.projectId),
       ]);
       const definition = catalog.definitions[command.projectId]!;
+      if (before.planningPolicyReady) {
+        await ensureDisclosureAuthority({
+          projectId: command.projectId,
+          catalogRevision: catalog.revision,
+          definition,
+          principalId: authenticatedPrincipal.principalId,
+        });
+        return await readPlanningSetupStatus(command.projectId, authenticatedPrincipal);
+      }
       const lease = options.snapshots!.acquire();
       try {
         if (lease.value.generation !== generation) {
@@ -1651,6 +1765,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
             revision: 1,
             policy: artifacts.policy,
           }, signal);
+          await ensureDisclosureAuthority({
+            projectId: command.projectId,
+            catalogRevision: catalog.revision,
+            definition,
+            principalId: authenticatedPrincipal.principalId,
+          });
           return await readPlanningSetupStatus(command.projectId, authenticatedPrincipal);
         }
         const publication = await profileComposition.control.publishPack({
@@ -1696,6 +1816,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           revision: 1,
           policy: artifacts.policy,
         }, signal);
+        await ensureDisclosureAuthority({
+          projectId: command.projectId,
+          catalogRevision: catalog.revision,
+          definition,
+          principalId: authenticatedPrincipal.principalId,
+        });
       } finally {
         lease.release();
       }

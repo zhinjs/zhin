@@ -21,6 +21,20 @@ outline: [2, 3]
 | `ai` | object | 否 | — | Provider、Agent、会话、记忆、工具与执行安全策略。 |
 | `ai.workroom` | object | 否 | — | 进程持有的 Workroom 控制面策略；Project 仍由持久化 Catalog 管理。 |
 | `ai.workroom.trustedPackPublishers` | array&lt;string&gt; | 否 | — | 允许发布共享 Capability Pack 的 Console 认证 principalId。 |
+| `ai.workroom.disclosure` | object | 否 | — | Workroom 披露初始化使用的显式 P12 模型处理方契约。 |
+| `ai.workroom.disclosure.tenantId` | string | 否 | — | — |
+| `ai.workroom.disclosure.modelProviders` | object | 否 | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.endpoint` | string | 是 | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.owner` | string | 否 | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.trustDomain` | string | 否 | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.processingRegions` | array&lt;string&gt; | 是 | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.maxConfidentiality` | string: `"public"`, `"project_internal"`, `"confidential"`, `"restricted"` | 是 | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.external` | boolean | 是 | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.noTraining` | boolean | 是 | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.loggingMode` | string: `"disabled"`, `"metadata_only"`, `"full"` | 是 | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.maximumRetentionSeconds` | integer | 是 | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.allowsRedisclosure` | boolean | 是 | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.supportsDeletion` | boolean | 是 | — | — |
 | `ai.agent` | object | 否 | — | Agent 执行、排队、工具与模型策略。 |
 | `ai.agent.inboundQueue` | object | 否 | — | 入站回合排队策略。 |
 | `ai.agent.inboundQueue.groupMode` | string: `"supersede"`, `"fifo"` | 否 | — | 覆盖较早的群聊排队回合，或按到达顺序处理全部回合。 |

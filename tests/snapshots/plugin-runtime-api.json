@@ -47,6 +47,7 @@
     "export * from './workroom-assignment-authority-provider.js';",
     "export * from './workroom-assignment-knowledge-composition.js';",
     "export * from './workroom-data-governance-authority-writer.js';",
+    "export * from './workroom-data-governance-bootstrap.js';",
     "export * from './workroom-data-governance-composition.js';",
     "export * from './workroom-data-governance-root-provider.js';",
     "export * from './workroom-data-governance-runtime.js';",

@@ -21,6 +21,20 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai` | object | no | — | Providers, Agents, sessions, memory, tools, and execution security. |
 | `ai.workroom` | object | no | — | Process-owned Workroom control-plane policy; Projects remain in the persistent Catalog. |
 | `ai.workroom.trustedPackPublishers` | array&lt;string&gt; | no | — | Authenticated Console principal ids allowed to publish shared Capability Packs. |
+| `ai.workroom.disclosure` | object | no | — | Explicit P12 model processor contracts for Workroom disclosure bootstrap. |
+| `ai.workroom.disclosure.tenantId` | string | no | — | — |
+| `ai.workroom.disclosure.modelProviders` | object | no | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.endpoint` | string | yes | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.owner` | string | no | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.trustDomain` | string | no | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.processingRegions` | array&lt;string&gt; | yes | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.maxConfidentiality` | string: `"public"`, `"project_internal"`, `"confidential"`, `"restricted"` | yes | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.external` | boolean | yes | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.noTraining` | boolean | yes | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.loggingMode` | string: `"disabled"`, `"metadata_only"`, `"full"` | yes | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.maximumRetentionSeconds` | integer | yes | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.allowsRedisclosure` | boolean | yes | — | — |
+| `ai.workroom.disclosure.modelProviders.<key>.supportsDeletion` | boolean | yes | — | — |
 | `ai.agent` | object | no | — | Agent execution, queueing, tool, and model policies. |
 | `ai.agent.inboundQueue` | object | no | — | Inbound turn queue policy. |
 | `ai.agent.inboundQueue.groupMode` | string: `"supersede"`, `"fifo"` | no | — | Replace an older queued group turn, or process all turns in arrival order. |

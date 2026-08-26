@@ -61,6 +61,7 @@ export * from './workroom-local-agent-core-adapter.js';
 export * from './workroom-data-governance-runtime.js';
 export * from './workroom-data-governance-composition.js';
 export * from './workroom-data-governance-authority-writer.js';
+export * from './workroom-data-governance-bootstrap.js';
 export * from './workroom-journal-payload-composition.js';
 export * from './workroom-data-governance-root-provider.js';
 export * from './workroom-data-governance-storage.js';
