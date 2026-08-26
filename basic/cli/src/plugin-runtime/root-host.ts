@@ -19,6 +19,7 @@ export interface RootHostOptions {
   readonly environmentVariables?: EnvironmentLayers;
   readonly modules?: ModuleRuntime;
   readonly installResources?: RootResourceInstaller;
+  readonly disabledPluginInstanceKeys?: readonly string[];
   readonly watch?: boolean;
   onRestartRequired?(plan: ProcessInvalidationPlan): void | Promise<void>;
   onError?(error: unknown): void | Promise<void>;
@@ -76,6 +77,7 @@ export class RootHost {
         mode: 'development',
         platform: 'node',
       },
+      disabledPluginInstanceKeys: options.disabledPluginInstanceKeys,
       onControlError: (error) => {
         void Promise.resolve(this.#onError(error)).catch(() => undefined);
       },

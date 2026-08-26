@@ -1,9 +1,14 @@
 import {
-  createServer,
+  createServer as createHttpServer,
   type IncomingMessage,
-  type Server,
+  type Server as HttpServer,
   type ServerResponse,
 } from 'node:http';
+import {
+  createServer as createHttpsServer,
+  type Server as HttpsServer,
+  type ServerOptions as HttpsServerOptions,
+} from 'node:https';
 import type { Socket } from 'node:net';
 import { WebSocket, WebSocketServer } from 'ws';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -46,9 +51,29 @@ export interface WsHandle {
   close(): void;
 }
 
+export interface WsRouteOptions {
+  /**
+   * `host` applies the Host Bearer-token registry before upgrade. `protocol`
+   * leaves upgrade authentication to the registered application protocol.
+   */
+  readonly auth?: 'host' | 'protocol';
+}
+
 export interface HttpHostAddress {
   readonly host: string;
   readonly port: number;
+  readonly protocol: 'http' | 'https';
+  readonly secure: boolean;
+  readonly origin: string;
+}
+
+export interface HttpHostTlsOptions {
+  readonly key: NonNullable<HttpsServerOptions['key']>;
+  readonly cert: NonNullable<HttpsServerOptions['cert']>;
+  readonly ca?: HttpsServerOptions['ca'];
+  readonly passphrase?: string;
+  readonly minVersion?: HttpsServerOptions['minVersion'];
+  readonly ciphers?: string;
 }
 
 export interface HttpHostOptions {
@@ -67,6 +92,8 @@ export interface HttpHostOptions {
   readonly apiBase?: string;
   /** Extra HTTP path prefixes that skip auth even under `apiBase`. */
   readonly authExemptPaths?: readonly string[];
+  /** Enables HTTPS and WSS on this listener. Certificate lifecycle belongs to the process composition root. */
+  readonly tls?: HttpHostTlsOptions;
 }
 
 export type HttpHandler = (
@@ -83,7 +110,7 @@ export interface HttpRouteRegistration {
 
 /** @public Stable HTTP and WebSocket Host contract resolved through `httpHostToken`. */
 export interface HttpHost {
-  ws(path: string): WsHandle;
+  ws(path: string, options?: WsRouteOptions): WsHandle;
   route(
     method: string,
     path: string,
@@ -117,6 +144,7 @@ interface AdmissionBoundHttpHost extends HttpHost, GenerationAdmissionBindable<H
 interface WsRoute {
   readonly listener: (connection: WsConnection) => void;
   readonly admission?: GenerationAdmissionGate;
+  readonly options: WsRouteOptions;
 }
 
 /** @public Stable Plugin Runtime HTTP Host token. */
@@ -143,9 +171,13 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
   let closed = false;
   let closeResult: Promise<void> | undefined;
 
-  const server: Server = createServer((request, response) => {
+  const secure = options.tls !== undefined;
+  const handleRequest = (request: IncomingMessage, response: ServerResponse): void => {
     void dispatchHttp(request, response);
-  });
+  };
+  const server: HttpServer | HttpsServer = secure
+    ? createHttpsServer(options.tls, handleRequest)
+    : createHttpServer(handleRequest);
 
   // Track live TCP sockets so close() can destroy long-lived connections
   // (SSE /api/events, keep-alive) that would otherwise block server.close().
@@ -184,7 +216,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
     meta: Object.freeze({ summary: 'OpenAPI 3.1 document', tags: ['pub'] }),
     handler: (request: IncomingMessage, response: ServerResponse) => {
       const hostHeader = headerValue(request.headers.host) ?? 'localhost';
-      const proto = headerValue(request.headers['x-forwarded-proto']) ?? 'http';
+      const proto = headerValue(request.headers['x-forwarded-proto']) ?? (secure ? 'https' : 'http');
       writeJson(response, 200, buildOpenApiDocument(listListedRoutes(), {
         apiBase,
         serverUrl: `${proto}://${hostHeader}`,
@@ -210,7 +242,10 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
       socket.destroy();
       return;
     }
-    const auth = authenticateUpgrade(request, pathname);
+    const protocolAuthenticated = admitted.every(({ entry }) => entry.options.auth === 'protocol');
+    const auth = protocolAuthenticated
+      ? { ok: true as const, scope: 'full' as const }
+      : authenticateUpgrade(request, pathname);
     if (!auth.ok) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
@@ -406,6 +441,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
   function registerWs(
     pathname: string,
     admission?: GenerationAdmissionGate,
+    options: WsRouteOptions = {},
   ): WsHandle {
     const normalized = normalizePath(pathname);
     let listeners = wsRoutes.get(normalized);
@@ -416,7 +452,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
     const owned = new Set<WsRoute>();
     return {
       onConnection(listener) {
-        const entry = Object.freeze({ listener, admission });
+        const entry = Object.freeze({ listener, admission, options: Object.freeze({ ...options }) });
         listeners!.add(entry);
         owned.add(entry);
         return () => {
@@ -463,7 +499,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
   ): AdmissionBoundHttpHost {
     const bound: AdmissionBoundHttpHost = {
       [generationAdmissionBinder]: (next) => createBoundHost(next),
-      ws: (path) => registerWs(path, admission),
+      ws: (path, options) => registerWs(path, admission, options),
       route: (method, path, handler, meta) => registerRoute(
         method,
         path,
@@ -481,7 +517,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
   const runtime: ProcessHttpHost = {
     [generationAdmissionBinder]: (admission) => createBoundHost(admission),
 
-    ws: (pathname) => registerWs(pathname),
+    ws: (pathname, options) => registerWs(pathname, undefined, options),
 
     route: (method, path, handler, meta) => registerRoute(method, path, handler, meta),
 
@@ -506,9 +542,14 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
           const bound = server.address();
           const listenPort = typeof bound === 'object' && bound ? bound.port : port;
           const publicHost = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
-          address = Object.freeze({ host: publicHost, port: listenPort });
+          const protocol = secure ? 'https' : 'http';
+          const originHost = publicHost.includes(':') ? `[${publicHost}]` : publicHost;
+          address = Object.freeze({
+            host: publicHost, port: listenPort, protocol, secure,
+            origin: `${protocol}://${originHost}:${listenPort}`,
+          });
           logger.info(
-            `listening http://${publicHost}:${listenPort}`
+            `listening ${address.origin}`
             + ` | routes: ${httpRoutes.length}`
             + ` | token: ${tokenRegistry.hasAnyToken()
               ? `${tokenRegistry.primaryTokenPrefixForLog()}…`

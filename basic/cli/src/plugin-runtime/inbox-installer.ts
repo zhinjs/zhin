@@ -45,10 +45,11 @@ export function buildInboxMessageRow(
 ): Record<string, unknown> {
   const capabilityId = String(event.conversation.endpoint.id);
   const localName = capabilityId.split('\0').pop() ?? capabilityId;
+  const [adapterName] = localName.split('~');
   const endpointId = resolveEndpoint(capabilityId) || localName;
   const channel = conversationToInboxChannel(event.conversation);
   return {
-    adapter: localName,
+    adapter: adapterName || localName,
     endpoint_id: endpointId,
     platform_message_id: event.messageId != null && event.messageId !== ''
       ? String(event.messageId)

@@ -45,6 +45,7 @@ export interface ProjectGraph {
 
 export interface ProjectGraphServiceOptions {
   readonly engineVersion?: string;
+  readonly disabledPluginInstanceKeys?: readonly string[];
 }
 
 export class ProjectGraphError extends Error {
@@ -57,6 +58,7 @@ export class ProjectGraphError extends Error {
 export class ProjectGraphService {
   readonly #resolver: PackageResolver;
   readonly #engineVersion: string;
+  readonly #disabledPluginInstanceKeys: ReadonlySet<string>;
 
   constructor(
     resolver: PackageResolver,
@@ -66,6 +68,11 @@ export class ProjectGraphService {
     this.#engineVersion = typeof engineVersionOrOptions === 'string'
       ? engineVersionOrOptions
       : (engineVersionOrOptions.engineVersion ?? runtimeEngineVersion);
+    this.#disabledPluginInstanceKeys = new Set(
+      typeof engineVersionOrOptions === 'string'
+        ? []
+        : (engineVersionOrOptions.disabledPluginInstanceKeys ?? []),
+    );
   }
 
   async inspect(projectRoot: string): Promise<ProjectGraph> {
@@ -127,6 +134,11 @@ export class ProjectGraphService {
         const inheritedPlugins = facadeManifest.type === 'plugin' ? facadeManifest.plugins : [];
         pluginRefs = mergeChildPluginReferences(manifest.plugins, inheritedPlugins);
       }
+    }
+    if (isRoot && this.#disabledPluginInstanceKeys.size > 0) {
+      pluginRefs = pluginRefs.filter(
+        (reference) => !this.#disabledPluginInstanceKeys.has(reference.instanceKey),
+      );
     }
 
     const featurePackages = new Set<string>();

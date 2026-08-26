@@ -1,4 +1,6 @@
 import { describe, expect, it, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { request as httpsRequest } from 'node:https';
 import WebSocket from 'ws';
 import {
   SnapshotStore,
@@ -19,6 +21,28 @@ afterEach(async () => {
 });
 
 describe('HttpHost', () => {
+  it('serves authenticated HTTPS health and WSS routes with explicit secure address metadata', async () => {
+    const key = readFileSync(new URL('./fixtures/localhost-key.pem', import.meta.url));
+    const cert = readFileSync(new URL('./fixtures/localhost-cert.pem', import.meta.url));
+    const host = createHttpHost({ host: '127.0.0.1', port: 0, tls: {key, cert} });
+    hosts.push(host);
+    host.ws('/secure').onConnection(({socket}) => socket.send('secure'));
+    const address = await host.listen();
+
+    expect(address).toEqual({
+      host: '127.0.0.1', port: expect.any(Number), protocol: 'https', secure: true,
+      origin: `https://127.0.0.1:${address.port}`,
+    });
+    await expect(httpsText(address.port, '/pub/health', cert)).resolves.toContain('"status":"ok"');
+    await expect(new Promise<string>((resolve, reject) => {
+      const socket = new WebSocket(`wss://127.0.0.1:${address.port}/secure`, {
+        ca: cert, servername: 'localhost',
+      });
+      socket.once('message', value => { resolve(value.toString()); socket.close(); });
+      socket.once('error', reject);
+    })).resolves.toBe('secure');
+  });
+
   it('keeps candidate HTTP and WS routes invisible until atomic generation admission', async () => {
     const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(host);
@@ -297,6 +321,24 @@ describe('HttpHost', () => {
     })).resolves.toBeUndefined();
   });
 
+  it('allows a protocol-authenticated WS route to perform its own handshake', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0, token: 'host-token' });
+    hosts.push(host);
+    let connected = false;
+    host.ws('/device/v1', { auth: 'protocol' }).onConnection(({ socket }) => {
+      connected = true;
+      socket.close(1000, 'protocol handshake test');
+    });
+    const { port } = await host.listen();
+
+    await new Promise<void>((resolve, reject) => {
+      const client = new WebSocket(`ws://127.0.0.1:${port}/device/v1`);
+      client.once('close', () => resolve());
+      client.once('error', reject);
+    });
+    expect(connected).toBe(true);
+  });
+
   it('close() resolves within 1s even with long-lived SSE and WS connections', async () => {
     const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     // Not tracked in `hosts`: this test closes the host itself.
@@ -471,6 +513,22 @@ describe('HttpHost', () => {
     });
   });
 });
+
+function httpsText(port: number, path: string, ca: Buffer): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const request = httpsRequest({
+      host: '127.0.0.1', port, path, ca, servername: 'localhost', method: 'GET',
+    }, (response) => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { body += chunk; });
+      response.on('end', () => response.statusCode === 200
+        ? resolve(body) : reject(new Error(`HTTPS ${response.statusCode}: ${body}`)));
+    });
+    request.once('error', reject);
+    request.end();
+  });
+}
 
 function admissionState(gate: GenerationAdmissionGate): SnapshotState {
   return {
