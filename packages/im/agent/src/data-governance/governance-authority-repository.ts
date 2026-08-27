@@ -252,6 +252,11 @@ export function createDataGovernanceBlocker(input: DataGovernanceBlockerInput): 
 
 export interface DataGovernanceAuthorityRepository {
   readProject(projectId: string): Promise<ProjectDataGovernanceAuthority | undefined>;
+  /** Resolves an immutable historical authority pinned by an older payload. */
+  readProjectRevision?(
+    projectId: string,
+    revision: number,
+  ): Promise<ProjectDataGovernanceAuthority | undefined>;
   appendProject(
     authority: ProjectDataGovernanceAuthority,
     expectedDigest: string | undefined,
@@ -303,6 +308,18 @@ export class FileDataGovernanceAuthorityRepository implements DataGovernanceAuth
   }
 
   async readProject(projectId: string): Promise<ProjectDataGovernanceAuthority | undefined> {
+    return (await this.#readProjects(projectId)).at(-1);
+  }
+
+  async readProjectRevision(
+    projectId: string,
+    revision: number,
+  ): Promise<ProjectDataGovernanceAuthority | undefined> {
+    positive(revision, 'Project authority revision');
+    return (await this.#readProjects(projectId)).find(authority => authority.revision === revision);
+  }
+
+  async #readProjects(projectId: string): Promise<readonly ProjectDataGovernanceAuthority[]> {
     requireText(projectId, 'projectId');
     await this.#ensureReady();
     await this.#projects.syncLeaf();
@@ -310,6 +327,7 @@ export class FileDataGovernanceAuthorityRepository implements DataGovernanceAuth
     const names = (await readdir(this.#projects.directory))
       .filter(name => name.startsWith(prefix) && name.endsWith('.json'))
       .sort();
+    const history: ProjectDataGovernanceAuthority[] = [];
     let latest: ProjectDataGovernanceAuthority | undefined;
     for (const [index, name] of names.entries()) {
       const match = /^[a-f\d]{64}\.(\d{12})\.json$/u.exec(name);
@@ -323,8 +341,9 @@ export class FileDataGovernanceAuthorityRepository implements DataGovernanceAuth
         throw new DataGovernanceAuthorityConflictError(projectId, latest?.digest, current.previousDigest);
       }
       latest = current;
+      history.push(current);
     }
-    return latest;
+    return history;
   }
 
   async appendProject(authority: ProjectDataGovernanceAuthority, expectedDigest: string | undefined) {

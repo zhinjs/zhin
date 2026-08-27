@@ -16,6 +16,8 @@ describe('Workroom local Agent loop adapter', () => {
       run: vi.fn(async input => {
         operations.push(`turn:${input.turnId}:${input.principalId}`);
         expect(input.capabilityPlan).toBe(capabilityPlan);
+        expect(input.prompt).toContain('only permitted top-level keys');
+        expect(input.prompt).toContain('Never add task_id');
         return {
           output: JSON.stringify({
             claims: [{

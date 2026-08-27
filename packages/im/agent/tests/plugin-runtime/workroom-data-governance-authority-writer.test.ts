@@ -13,7 +13,7 @@ import {
   WorkroomDataGovernanceAuthorityWriter,
   type ProjectDataGovernanceAuthorityCandidate,
 } from '../../src/plugin-runtime/workroom-data-governance-authority-writer.js';
-import { digestWorkroomCatalogProjectBinding } from '../../src/plugin-runtime/workroom-assignment-authority-provider.js';
+import { digestWorkroomCatalogProjectBinding } from '../../src/workroom/catalog-definition.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
 
 describe('trusted Project Data Governance authority writer', () => {
@@ -122,6 +122,15 @@ describe('trusted Project Data Governance authority writer', () => {
     await expect(writer.publish({
       catalogRevision: 'catalog:1',
       catalogBindingDigest: digestWorkroomCatalogProjectBinding(definition),
+      candidate: {
+        ...candidate,
+        derivedPayloads: { ...candidate.derivedPayloads, acceptanceProjection: undefined },
+      },
+    }, new AbortController().signal)).rejects.toThrow('Acceptance Projection derived/sink');
+
+    await expect(writer.publish({
+      catalogRevision: 'catalog:1',
+      catalogBindingDigest: digestWorkroomCatalogProjectBinding(definition),
       candidate,
     }, new AbortController().signal)).rejects.toThrow('decision');
   });
@@ -163,6 +172,10 @@ function projectionCandidate(): ProjectDataGovernanceAuthorityCandidate {
       },
       {
         principalId: 'service:workroom-kernel:project-1', tenantId: 'tenant-1', projectId: 'project-1',
+        clearance: 'confidential',
+      },
+      {
+        principalId: 'service:workroom-acceptance-policy:project-1', tenantId: 'tenant-1', projectId: 'project-1',
         clearance: 'confidential',
       },
       {
@@ -259,10 +272,23 @@ function projectionCandidate(): ProjectDataGovernanceAuthorityCandidate {
         },
         requestedMode: 'full',
       },
+      'acceptance-projection:acceptance-policy': {
+        destinationId: destination.id, channel: 'context_view', purpose: 'acceptance_review',
+        fixedPrincipalId: 'service:workroom-acceptance-policy:project-1', recipients,
+        principal: {
+          role: 'reviewer', clearance: 'confidential', allowedPurposes: ['acceptance_review'],
+        },
+        requestedMode: 'full',
+      },
     },
     derivedPayloads: {
       projection: derivedRule,
       journal: { ...derivedRule, allowedPurposes: ['orchestration'] },
+      acceptanceProjection: {
+        ...derivedRule,
+        allowedPurposes: ['acceptance_review'],
+        retentionClass: 'project_record',
+      },
     },
     approvals: [],
   };

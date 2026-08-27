@@ -57,8 +57,11 @@ implements PortfolioKernelCommandAuthorityPort {
     const state = replayWorkroom(events);
     if (state.sequence !== input.kernelSequence || digest(state) !== input.kernelFactDigest
       || Object.hasOwn(state.assignments, input.assignmentRef)) return undefined;
-    if (failureReason(state.status, state.tasks[decision.taskKey]?.status,
-      state.tasks[decision.taskKey]?.revision, decision.taskRevision) !== input.failureReason) return undefined;
+    if (failureReason(
+      state.status,
+      state.tasks[decision.taskKey],
+      decision.taskRevision,
+    ) !== input.failureReason) return undefined;
     const claims = {
       portfolioId: input.portfolioId,
       action: 'assignment_failed' as const,
@@ -84,16 +87,20 @@ implements PortfolioKernelCommandAuthorityPort {
 
 function failureReason(
   runStatus: string,
-  taskStatus: string | undefined,
-  taskRevision: number | undefined,
+  task: ReturnType<typeof replayWorkroom>['tasks'][string] | undefined,
   decisionTaskRevision: number,
 ) {
   if (runStatus === 'completed' || runStatus === 'cancelled') return 'run_terminal' as const;
-  if (taskStatus === 'accepted' || taskStatus === 'failed' || taskStatus === 'cancelled') {
+  if (task?.status === 'accepted' || task?.status === 'failed' || task?.status === 'cancelled') {
     return 'task_terminal' as const;
   }
-  if (taskRevision !== undefined && taskRevision !== decisionTaskRevision) return 'task_stale' as const;
-  if (taskStatus === 'executing' || taskStatus === 'awaiting_acceptance' || taskStatus === 'cancelling') {
+  if (task?.revision !== undefined && task.revision !== decisionTaskRevision) return 'task_stale' as const;
+  // Pre-contract Grants created by an older runtime cannot be issued safely.
+  // The issuer and this exact Kernel proof authority must agree so the durable
+  // consumed Grant can be compensated instead of retrying forever.
+  if (task && !task.acceptanceContract) return 'task_stale' as const;
+  if (task?.status === 'executing' || task?.status === 'awaiting_acceptance'
+    || task?.status === 'cancelling') {
     return 'task_stale' as const;
   }
   return undefined;

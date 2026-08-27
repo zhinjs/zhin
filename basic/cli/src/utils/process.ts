@@ -4,8 +4,12 @@ import path from 'path';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from './logger.js';
 import os from 'os';
+import { DEFAULT_SHUTDOWN_BUDGET_MS } from '../plugin-runtime/process-lifecycle.js';
 
 const PID_FILE = '.zhin.pid';
+const PROCESS_EXIT_POLL_MS = 100;
+/** The supervisor must outlive the Runtime child's complete graceful-stop budget. */
+export const PROCESS_STOP_GRACE_MS = DEFAULT_SHUTDOWN_BUDGET_MS + 2_000;
 
 /**
  * 检查进程是否存在的跨平台实现
@@ -120,30 +124,30 @@ export async function stopProcess(cwd: string): Promise<void> {
     }
     
     // 等待进程结束
-    let attempts = 0;
-    while (attempts < 30) {
+    let waitedMs = 0;
+    while (waitedMs < PROCESS_STOP_GRACE_MS) {
       const stillRunning = await isProcessRunning(pid);
       if (!stillRunning) {
         break;
       }
-      await new Promise(resolve => setTimeout(resolve, 100));
-      attempts++;
+      await new Promise(resolve => setTimeout(resolve, PROCESS_EXIT_POLL_MS));
+      waitedMs += PROCESS_EXIT_POLL_MS;
     }
 
     // 如果进程仍然存在，强制结束
-    if (attempts >= 30) {
+    if (waitedMs >= PROCESS_STOP_GRACE_MS) {
       logger.warn(formatCompact( { op: 'kill', signal: 'SIGKILL' }));
       await killProcess(pid, 'SIGKILL');
       
       // 再次等待
-      attempts = 0;
-      while (attempts < 10) {
+      waitedMs = 0;
+      while (waitedMs < 1_000) {
         const stillRunning = await isProcessRunning(pid);
         if (!stillRunning) {
           break;
         }
-        await new Promise(resolve => setTimeout(resolve, 100));
-        attempts++;
+        await new Promise(resolve => setTimeout(resolve, PROCESS_EXIT_POLL_MS));
+        waitedMs += PROCESS_EXIT_POLL_MS;
       }
     }
 
@@ -337,11 +341,11 @@ async function getRelatedProcessesInternal(processName: string): Promise<Array<{
 /**
  * 获取所有相关进程列表
  */
-export async function getRelatedProcesses(processName: string): Promise<Array<{ 
-  pid: number; 
-  name: string; 
-  memory?: string; 
-  cpu?: string 
+export async function getRelatedProcesses(processName: string): Promise<Array<{
+  pid: number;
+  name: string;
+  memory?: string;
+  cpu?: string
 }>> {
   return await getRelatedProcessesInternal(processName);
-} 
+}

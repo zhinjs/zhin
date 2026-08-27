@@ -259,10 +259,21 @@ export class DurableReportLocalModelExecutionPort implements LocalModelExecution
     return [
       `Execute Workroom Task ${request.envelope.taskKey}@${request.envelope.taskRevision}.`,
       `Workspace mount: ${request.envelope.workspace.mountRef}.`,
-      'Return only JSON with claims[] and evidence[]. Each claim uses a human-readable label; the Host assigns its canonical claimId. Verified claims must reference evidenceIds.',
+      ...structuredTaskReportPrompt(),
       'Do not use chat Subagent lifecycle or emit Task status commands.',
     ].join('\n');
   }
+}
+
+export function structuredTaskReportPrompt(): readonly string[] {
+  return Object.freeze([
+    'Return exactly one JSON object, with no Markdown fence or prose before or after it.',
+    'The only permitted top-level keys are "claims" and "evidence". Never add task_id, taskId, taskKey, status, summary, or other metadata.',
+    'Each claims[] item must use exactly: label, key, value, status, evidenceIds, artifactRefs; optional keys are validUntil and supersedesFactIds. Use [] for empty evidenceIds and artifactRefs.',
+    'Each evidence[] item must use exactly: id, mediaType, content, source. Each source must use exactly: kind and locator; kind is command, file, url, tool, or human.',
+    'The Host owns Task/Assignment identity and canonical claimId. Do not repeat those fields. A verified claim must reference verified evidenceIds; otherwise use status "assumed".',
+    'Required shape: {"claims":[{"label":"result","key":"task.result","value":"...","status":"assumed","evidenceIds":[],"artifactRefs":[]}],"evidence":[]}',
+  ]);
 }
 
 function parseReportOutput(serialized: string): LocalTaskReportOutput {

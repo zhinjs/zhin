@@ -64,6 +64,7 @@ export * from './workroom-data-governance-authority-writer.js';
 export * from './workroom-data-governance-bootstrap.js';
 export * from './workroom-journal-payload-composition.js';
 export * from './workroom-data-governance-root-provider.js';
+export { digestCanonicalWorkroomValue } from '../workroom/canonical-value.js';
 export * from './workroom-data-governance-storage.js';
 export * from './workroom-governed-dispatch-composition.js';
 export * from './workroom-governed-dispatch-reasons.js';

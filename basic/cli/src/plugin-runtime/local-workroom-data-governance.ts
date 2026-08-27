@@ -8,8 +8,10 @@ import {
 } from 'node:crypto';
 import { open, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import type {
-  WorkroomDataGovernancePublicationDecision,
+import {
+  digestCanonicalWorkroomValue,
+  type WorkroomDataGovernancePublicationDecision,
+  type WorkroomDataGovernanceRootProviderResolution,
   installWorkroomDataGovernanceResources,
 } from '@zhin.js/agent/runtime';
 
@@ -20,6 +22,13 @@ type VerificationPort = NonNullable<
 Parameters<typeof installWorkroomDataGovernanceResources>[0]['governance']
 >;
 type GovernanceDecision = Parameters<VerificationPort['verify']>[0];
+type LifecycleAuthorities = NonNullable<WorkroomDataGovernanceRootProviderResolution['lifecycle']>;
+type LifecycleAuthorizationRequest = Parameters<LifecycleAuthorities['authority']['authorize']>[0];
+type LifecycleAuthorizationDecision = Parameters<LifecycleAuthorities['authority']['verify']>[1];
+type LifecycleDeletionDispatch = Parameters<LifecycleAuthorities['deletion']['purge']>[0];
+type LifecyclePurgeReceipt = Parameters<LifecycleAuthorities['receipts']['verify']>[0];
+type LifecycleOrphanPurgeRequest = Parameters<LifecycleAuthorities['orphanPurge']['purge']>[0];
+type LifecycleOrphanPurgeReceipt = Parameters<LifecycleAuthorities['orphanPurge']['reconcile']>[1];
 
 interface LocalRootKeyDocument {
   readonly version: 1;
@@ -30,6 +39,7 @@ interface LocalRootKeyDocument {
 export interface LocalWorkroomDataGovernanceAuthority {
   readonly cryptography: CryptographyPort;
   readonly verification: VerificationPort;
+  readonly lifecycle: LifecycleAuthorities;
   issuePublicationDecision(input: Readonly<{
     projectId: string;
     catalogRevision: string;
@@ -110,9 +120,117 @@ export function createLocalWorkroomDataGovernanceAuthority(options: Readonly<{
     },
   });
 
+  const lifecyclePrincipalId = 'local-workroom-data-steward';
+  const lifecycleAuthority: LifecycleAuthorities['authority'] = Object.freeze({
+    async authorize(request: LifecycleAuthorizationRequest) {
+      if (request.authenticatedPrincipalId !== lifecyclePrincipalId) {
+        return Object.freeze({
+          approved: false as const,
+          requestDigest: request.digest,
+          reason: 'local_root_principal_required',
+        });
+      }
+      const rootKey = await key();
+      const decidedAt = request.clock.now;
+      const proof = lifecycleDecisionProof(request, decidedAt);
+      const decisionId = signDecision(rootKey.key, proof);
+      return Object.freeze({
+        approved: true as const,
+        requestDigest: request.digest,
+        decisionId,
+        principalId: request.authenticatedPrincipalId,
+        role: request.requiredRole,
+        authorityDigest: digestCanonicalWorkroomValue({
+          kind: 'local-workroom-lifecycle-authority',
+          requestDigest: request.digest,
+          decisionId,
+        }),
+        decidedAt,
+      });
+    },
+    async verify(request: LifecycleAuthorizationRequest, decision: LifecycleAuthorizationDecision) {
+      if (decision.requestDigest !== request.digest
+        || decision.principalId !== request.authenticatedPrincipalId
+        || decision.role !== request.requiredRole
+        || decision.decidedAt !== request.clock.now) return false;
+      const rootKey = await key();
+      const expectedDecisionId = signDecision(
+        rootKey.key,
+        lifecycleDecisionProof(request, decision.decidedAt),
+      );
+      return decision.decisionId === expectedDecisionId
+        && decision.authorityDigest === digestCanonicalWorkroomValue({
+          kind: 'local-workroom-lifecycle-authority',
+          requestDigest: request.digest,
+          decisionId: decision.decisionId,
+        });
+    },
+  });
+  const lifecycle: LifecycleAuthorities = Object.freeze({
+    registrationPrincipalId: lifecyclePrincipalId,
+    clock: Object.freeze({
+      async read() {
+        const body = Object.freeze({ version: 1 as const, now: now(), revision: 1 });
+        return Object.freeze({ ...body, digest: digestCanonicalWorkroomValue(body) });
+      },
+    }),
+    authority: lifecycleAuthority,
+    subjects: Object.freeze({ resolve: async () => undefined }),
+    deletion: Object.freeze({
+      async purge(dispatch: LifecycleDeletionDispatch) {
+        const body = Object.freeze({
+          version: 1 as const,
+          purgeId: dispatch.id,
+          projectId: dispatch.governance.request.projectId,
+          objectId: dispatch.governance.request.objectId,
+          locationId: dispatch.location.id,
+          locationAuthorityDigest: dispatch.location.authorityDigest,
+          locationManifestDigest: dispatch.locationManifestDigest,
+          attempt: dispatch.attempt,
+          fence: dispatch.fence,
+          requestDigest: dispatch.requestDigest,
+          status: 'failed' as const,
+          reasonCode: 'unsupported' as const,
+          authenticatedBy: lifecyclePrincipalId,
+          observedAt: Math.max(now(), dispatch.requestedAt),
+          authorityDigest: digestCanonicalWorkroomValue({
+            kind: 'local-workroom-lifecycle-deletion',
+            purgeDigest: dispatch.digest,
+          }),
+        });
+        return Object.freeze({ ...body, digest: digestCanonicalWorkroomValue(body) });
+      },
+    }),
+    receipts: Object.freeze({
+      async verify(receipt: LifecyclePurgeReceipt, dispatch: LifecycleDeletionDispatch) {
+        const { digest, ...body } = receipt;
+        return receipt.requestDigest === dispatch.requestDigest
+          && receipt.locationId === dispatch.location.id
+          && receipt.authorityDigest === digestCanonicalWorkroomValue({
+            kind: 'local-workroom-lifecycle-deletion',
+            purgeDigest: dispatch.digest,
+          })
+          && digest === digestCanonicalWorkroomValue(body);
+      },
+    }),
+    orphanPurge: Object.freeze({
+      async purge(request: LifecycleOrphanPurgeRequest) {
+        return createLocalOrphanPurgeReceipt(request.digest, now());
+      },
+      async reconcile(
+        request: LifecycleOrphanPurgeRequest,
+        previous: LifecycleOrphanPurgeReceipt,
+      ) {
+        if (previous?.requestDigest === request.digest) return previous;
+        return createLocalOrphanPurgeReceipt(request.digest, now());
+      },
+    }),
+  });
+
   return Object.freeze({
     cryptography,
     verification,
+    lifecycle,
     async issuePublicationDecision(
       input: Parameters<LocalWorkroomDataGovernanceAuthority['issuePublicationDecision']>[0],
       signal: Parameters<LocalWorkroomDataGovernanceAuthority['issuePublicationDecision']>[1],
@@ -204,7 +322,28 @@ function decisionBody(decision: GovernanceDecision) {
   });
 }
 
-function signDecision(key: Buffer, body: ReturnType<typeof decisionBody>): string {
+function lifecycleDecisionProof(request: LifecycleAuthorizationRequest, decidedAt: number) {
+  return Object.freeze({
+    kind: 'local-workroom-lifecycle-decision',
+    requestDigest: request.digest,
+    principalId: request.authenticatedPrincipalId,
+    role: request.requiredRole,
+    decidedAt,
+  });
+}
+
+function createLocalOrphanPurgeReceipt(requestDigest: string, observedAt: number) {
+  const body = Object.freeze({
+    version: 1 as const,
+    requestDigest,
+    providerId: 'local-workroom-orphan-purge',
+    status: 'outcome_unknown' as const,
+    observedAt,
+  });
+  return Object.freeze({ ...body, digest: digestCanonicalWorkroomValue(body) });
+}
+
+function signDecision(key: Buffer, body: object): string {
   const digest = createHmac('sha256', key)
     .update(JSON.stringify(body))
     .digest('hex');

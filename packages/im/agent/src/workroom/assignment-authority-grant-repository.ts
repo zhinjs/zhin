@@ -37,7 +37,8 @@ export interface AssignmentAuthorityGrantRecordInput {
   readonly fence: number;
   readonly operationId: string;
   readonly agentDefinitionId: string;
-  readonly endpointId: string;
+  /** Absent for a local-only Assignment grant. */
+  readonly endpointId?: string;
   readonly profileRevisionId: string;
   readonly profileDigest: string;
   readonly factAnchor: AssignmentExecutionFactAnchor;
@@ -382,8 +383,9 @@ function validateRecordInput(input: AssignmentAuthorityGrantRecordInput): void {
   if (unexpected) throw new Error(`Assignment Authority Grant record has unexpected ${unexpected}`);
   for (const field of [
     'assignmentKey', 'projectId', 'runId', 'taskKey', 'assignmentId', 'operationId',
-    'agentDefinitionId', 'endpointId', 'profileRevisionId', 'profileDigest',
+    'agentDefinitionId', 'profileRevisionId', 'profileDigest',
   ] as const) requiredText(input[field], field);
+  if (input.endpointId !== undefined) requiredText(input.endpointId, 'endpointId');
   for (const field of [
     'revision', 'generation', 'taskRevision', 'assignmentRevision', 'attempt', 'fence',
   ] as const) positive(input[field], field);

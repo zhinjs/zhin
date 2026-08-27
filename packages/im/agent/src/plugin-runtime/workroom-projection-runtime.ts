@@ -45,6 +45,12 @@ export interface WorkroomProjectionRuntimeOptions {
   readonly maxRunsPerTick: number;
   readonly maxDeliveriesPerTick: number;
   readonly governance?: WorkroomProjectionGovernancePort;
+  /** Renews one Workroom view from the exact current Catalog + Endpoint generation. */
+  readonly renewWorkroomBinding?: (
+    projectId: string,
+    catalog: WorkroomCatalogSnapshot,
+    signal: AbortSignal,
+  ) => Promise<void>;
   /** Resolves a persistent Sponsor Room definition to the exact current Endpoint capability. */
   readonly resolveSponsorConversation?: (
     projectId: string,
@@ -91,6 +97,15 @@ export class WorkroomProjectionRuntime {
   async runOnce(signal: AbortSignal): Promise<WorkroomProjectionTickResult> {
     signal.throwIfAborted();
     const catalog = await this.options.catalog.read();
+    if (this.options.renewWorkroomBinding) {
+      for (const projectId of Object.keys(catalog.definitions).sort()) {
+        signal.throwIfAborted();
+        const definition = catalog.definitions[projectId];
+        if (!definition || definition.enabled === false || !definition.conversation
+          || definition.conversation.kind === 'repository') continue;
+        await this.options.renewWorkroomBinding(projectId, catalog, signal);
+      }
+    }
     if (this.options.lifecycleOverdue || this.options.portfolioSponsor) {
       await this.#ensureSponsorRoomBindings(catalog, signal);
     }

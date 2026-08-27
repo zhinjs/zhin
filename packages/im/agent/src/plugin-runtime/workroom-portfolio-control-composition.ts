@@ -57,6 +57,7 @@ export function installWorkroomPortfolioControlWorker(
     route: options.route,
     delivery: control,
     acknowledgements: control,
+    ...(options.onError ? { onDeliveryError: options.onError } : {}),
   });
   const worker = new GenerationOwnedPortfolioControlWorker({
     runtime,

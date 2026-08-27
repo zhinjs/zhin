@@ -161,6 +161,7 @@ describe('WorkroomSchedulerRuntime', () => {
     const blocked: string[] = [];
     const recovered: string[] = [];
     const delivered: string[] = [];
+    const operations: string[] = [];
     const runtime = new WorkroomSchedulerRuntime({
       journal: { listRunIds: async () => ['run-1'], read: async () => events },
       commands: { commit: async candidate => ({
@@ -168,11 +169,17 @@ describe('WorkroomSchedulerRuntime', () => {
       }) },
       resolveSupply: () => ({
         probe: async () => ready,
-        deliver: async candidate => { delivered.push(candidate.decisionId); },
+        deliver: async candidate => {
+          operations.push('deliver');
+          delivered.push(candidate.decisionId);
+        },
       }),
       unavailableControl: {
         block: async candidate => { blocked.push(candidate.decisionId); },
-        recover: async candidate => { recovered.push(candidate.decisionId); },
+        recover: async candidate => {
+          operations.push('recover');
+          recovered.push(candidate.decisionId);
+        },
       },
     });
 
@@ -186,9 +193,10 @@ describe('WorkroomSchedulerRuntime', () => {
     expect(blocked).toEqual([decision.decisionId]);
     expect(recovered).toEqual([decision.decisionId]);
     expect(delivered).toEqual([decision.decisionId]);
+    expect(operations).toEqual(['recover', 'deliver']);
   });
 
-  it('does not recover a blocker when readiness probed true but delivery still fails closed', async () => {
+  it('reblocks after recovering the exact blocker when delivery still fails closed', async () => {
     const base = readyJournal();
     const decision = (await import('../../src/workroom/workroom-scheduler.js'))
       .decideWorkroomSchedule(base)!;
@@ -214,7 +222,7 @@ describe('WorkroomSchedulerRuntime', () => {
 
     await expect(runtime.drain()).resolves.toEqual({ scheduled: 0, delivered: 0 });
     expect(blocked).toEqual([decision.decisionId]);
-    expect(recovered).toEqual([]);
+    expect(recovered).toEqual([decision.decisionId]);
   });
 });
 

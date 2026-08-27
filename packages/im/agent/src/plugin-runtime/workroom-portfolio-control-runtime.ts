@@ -56,6 +56,7 @@ export interface WorkroomPortfolioControlRuntimeOptions {
   readonly route: PortfolioWorkroomRouteAuthorityPort;
   readonly delivery: PortfolioWorkroomControlDeliveryPort;
   readonly acknowledgements: PortfolioWorkroomAckAuthorityPort;
+  readonly onDeliveryError?: (error: unknown, item: PortfolioControlOutboxItem) => void;
 }
 
 /** Durable source scanner + two-phase owning Workroom control worker. */
@@ -176,6 +177,7 @@ export class WorkroomPortfolioControlRuntime {
           ? await this.options.delivery.reconcile(item, signal)
           : await this.options.delivery.deliver(item, signal);
       } catch (error) {
+        this.options.onDeliveryError?.(error, item);
         if (error instanceof PortfolioGrantAssignmentCompensatedError) {
           await this.#append(portfolioId, {
             type: 'item.compensated', payload: {

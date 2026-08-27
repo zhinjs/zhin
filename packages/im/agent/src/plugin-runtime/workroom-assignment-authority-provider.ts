@@ -426,11 +426,11 @@ export function createWorkroomGenerationAuthoritySnapshotFromRuntime(
   const skillIndex = runtimeProjection(snapshot, skillFeatureId, SkillIndex);
   return createWorkroomGenerationAuthoritySnapshot({
     generation: snapshot.generation,
-    tools: (toolIndex?.list() ?? []).filter(tool => tool.hidden !== true).map(tool => ({
+    tools: (toolIndex?.visible(snapshot.root) ?? []).filter(tool => tool.hidden !== true).map(tool => ({
       name: tool.name,
       digest: digestGenerationDescriptor('tool', generationToolProjection(tool)),
     })),
-    skills: (skillIndex?.list() ?? []).map(skill => ({
+    skills: (skillIndex?.visible(snapshot.root) ?? []).map(skill => ({
       name: skill.name,
       digest: digestGenerationDescriptor('skill', generationSkillProjection(skill)),
     })),

@@ -1,5 +1,6 @@
 import { createToken } from '@zhin.js/plugin-runtime';
 import type { WorkroomCatalog } from '../workroom/catalog.js';
+import type { WorkroomRunState } from '../workroom/kernel-contracts.js';
 import { parsePortfolioCapacityRequest } from '../portfolio/portfolio-journal.js';
 import {
   parseWorkroomDispatchTaskDecision,
@@ -11,6 +12,7 @@ import type {
 } from './workroom-portfolio-capacity.js';
 import {
   WorkroomSchedulerAssignmentRouteUnavailableError,
+  WorkroomSchedulerDurablyBlockedError,
   type WorkroomSchedulerAssignmentRoute,
   type WorkroomSchedulerAssignmentRoutePort,
   type WorkroomSchedulerDispatchSupplyPort,
@@ -43,6 +45,10 @@ export interface PortfolioFirstWorkroomSchedulerDispatchSupplyOptions {
   readonly routes: WorkroomSchedulerAssignmentRoutePort;
   readonly requests: WorkroomSchedulerPortfolioRequestAuthorityPort;
   readonly capacity: WorkroomSchedulerCapacityRequestPort;
+  readonly runState: Readonly<{
+    read(projectId: string, runId: string): Promise<WorkroomRunState>;
+    pinTaskAcceptance(projectId: string, runId: string, taskKey: string): Promise<WorkroomRunState>;
+  }>;
 }
 
 export class WorkroomSchedulerPortfolioCapacityUnavailableError
@@ -78,6 +84,34 @@ implements WorkroomSchedulerDispatchSupplyPort {
   async deliver(decision: WorkroomDispatchTaskDecision): Promise<void> {
     const exactDecision = parseWorkroomDispatchTaskDecision(decision);
     const resolved = await this.#resolve(exactDecision);
+    let state = await this.options.runState.read(exactDecision.projectId, exactDecision.runId);
+    let task = state.tasks[exactDecision.taskKey];
+    if (!task || task.revision !== exactDecision.taskRevision || task.status !== 'ready') {
+      throw new WorkroomSchedulerPortfolioCapacityUnavailableError(exactDecision, {
+        cause: new Error('Portfolio Capacity Request targets a stale Task'),
+      });
+    }
+    if (!task.acceptanceContract) {
+      try {
+        state = await this.options.runState.pinTaskAcceptance(
+          exactDecision.projectId,
+          exactDecision.runId,
+          exactDecision.taskKey,
+        );
+        task = state.tasks[exactDecision.taskKey];
+      } catch {
+        throw new WorkroomSchedulerDurablyBlockedError(
+          exactDecision,
+          `acceptance-contract:${exactDecision.projectId}:${exactDecision.runId}:${exactDecision.taskKey}`,
+        );
+      }
+      if (!task?.acceptanceContract) {
+        throw new WorkroomSchedulerDurablyBlockedError(
+          exactDecision,
+          `acceptance-contract:${exactDecision.projectId}:${exactDecision.runId}:${exactDecision.taskKey}`,
+        );
+      }
+    }
     try {
       await this.options.capacity.request(resolved.request);
     } catch (error) {

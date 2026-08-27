@@ -46,6 +46,7 @@ import {
   resolvePluginLifecycleFile,
 } from './plugin-lifecycle-store.js';
 import {
+  DEFAULT_SHUTDOWN_BUDGET_MS,
   installProcessLifecycle,
   nodeProcessLifecycleAdapter,
 } from './process-lifecycle.js';
@@ -57,6 +58,8 @@ const REMOTE_CONSOLE_URL = 'https://console.zhin.dev';
 /** Storm guard parity with the `zhin start` daemon: 10 restarts/minute, 3s delay. */
 export const MAX_RESPAWNS_PER_MINUTE = 10;
 export const RESPAWN_DELAY_MS = 3_000;
+/** Gives the Runtime its complete shutdown budget before fencing leaked handles. */
+export const SUPERVISOR_CHILD_EXIT_GRACE_MS = DEFAULT_SHUTDOWN_BUDGET_MS + 1_000;
 const RESPAWN_WINDOW_MS = 60_000;
 
 export interface RespawnPlan {
@@ -334,9 +337,9 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
   };
   const orphanWatchdog = startOrphanWatchdog(() => {
-    void control.stop().catch((error) => {
-      process.exitCode = 1;
+    void control.stop().then(() => process.exit(0), (error) => {
       reportStopError(error);
+      process.exit(1);
     });
   });
   const disposeProcessLifecycle = installProcessLifecycle({
@@ -544,17 +547,24 @@ async function relaunchWithNativeTypeScript(parsed: StartOptions, root: string):
   let attempts: readonly number[] = [];
   let interrupted = false;
   let activeChild: ChildProcess | undefined;
-  const onSigint = (): void => {
-    interrupted = true;
-    activeChild?.kill('SIGINT');
-  };
+  let forceChildExitTimer: ReturnType<typeof setTimeout> | undefined;
   // Forward the other terminal signals too, and never leave the child behind:
   // a bot whose wrapper died keeps platform connections (and file watchers)
   // alive as a zombie.
   const forward = (signal: NodeJS.Signals) => (): void => {
     interrupted = true;
-    activeChild?.kill(signal);
+    const child = activeChild;
+    if (!child) return;
+    child.kill(signal);
+    if (!forceChildExitTimer) {
+      forceChildExitTimer = setTimeout(() => {
+        if (activeChild === child && child.exitCode === null && child.signalCode === null) {
+          child.kill('SIGKILL');
+        }
+      }, SUPERVISOR_CHILD_EXIT_GRACE_MS);
+    }
   };
+  const onSigint = forward('SIGINT');
   const onSigterm = forward('SIGTERM');
   const onSighup = forward('SIGHUP');
   const onExit = (): void => {
@@ -588,6 +598,8 @@ async function relaunchWithNativeTypeScript(parsed: StartOptions, root: string):
           child.once('exit', (code, signal) => resolve({ code, signal }));
         },
       );
+      if (forceChildExitTimer) clearTimeout(forceChildExitTimer);
+      forceChildExitTimer = undefined;
       activeChild = undefined;
       if (interrupted) {
         process.exitCode = result.code ?? 130;
@@ -619,6 +631,7 @@ async function relaunchWithNativeTypeScript(parsed: StartOptions, root: string):
       }
     }
   } finally {
+    if (forceChildExitTimer) clearTimeout(forceChildExitTimer);
     removePidFile();
     process.off('SIGINT', onSigint);
     process.off('SIGTERM', onSigterm);
