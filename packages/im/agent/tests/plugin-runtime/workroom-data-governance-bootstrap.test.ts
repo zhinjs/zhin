@@ -1,4 +1,11 @@
+import { mkdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import {
+  FileDataGovernanceAuthorityRepository,
+} from '../../src/data-governance/governance-authority-repository.js';
 import {
   createWorkroomDataGovernanceBootstrapCandidate,
 } from '../../src/plugin-runtime/workroom-data-governance-bootstrap.js';
@@ -82,6 +89,51 @@ describe('Workroom Data Governance bootstrap', () => {
     }, new AbortController().signal)).resolves.toMatchObject({
       projectId: 'project-1',
       planning: { destinationId: 'model-provider:openrouter' },
+    });
+  });
+
+  it('persists the bootstrapped authority through the canonical file repository', async () => {
+    const stateRoot = join(tmpdir(), `zhin-workroom-governance-bootstrap-${randomUUID()}`);
+    await mkdir(stateRoot);
+    const candidate = createWorkroomDataGovernanceBootstrapCandidate({
+      projectId: 'project-1',
+      tenantId: 'tenant:project-1',
+      definition,
+      revision: 1,
+      model,
+    });
+    const repository = new FileDataGovernanceAuthorityRepository(stateRoot, {
+      verify: async (decision, candidateDigest) => decision.candidateDigest === candidateDigest,
+    });
+    const writer = new WorkroomDataGovernanceAuthorityWriter({
+      catalog: {
+        read: async () => ({ revision: 'catalog:1', definitions: { 'project-1': definition } }),
+      },
+      repository,
+      decisions: {
+        authorize: async input => ({
+          decisionId: 'decision:file-repository',
+          projectId: input.projectId,
+          candidateDigest: input.candidateDigest,
+          principalId: 'principal:sponsor',
+          authorizedBy: 'sponsor',
+          decidedAt: 1,
+          catalogRevision: input.catalogRevision,
+          catalogBindingDigest: input.catalogBindingDigest,
+        }),
+      },
+    });
+
+    await expect(writer.publish({
+      catalogRevision: 'catalog:1',
+      catalogBindingDigest: digestWorkroomCatalogProjectBinding(definition),
+      candidate,
+    }, new AbortController().signal)).resolves.toMatchObject({
+      projectId: 'project-1',
+      governanceDecision: { candidateDigest: expect.stringMatching(/^sha256:/u) },
+    });
+    await expect(repository.readProject('project-1')).resolves.toMatchObject({
+      projectId: 'project-1',
     });
   });
 

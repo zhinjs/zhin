@@ -5,7 +5,10 @@ import {
   createDisclosureRecipientSetSnapshot,
   createProcessingDestinationContract,
 } from '../../src/data-governance/data-governance.js';
-import type { ProjectDataGovernanceAuthority } from '../../src/data-governance/governance-authority-repository.js';
+import {
+  canonicalizeProjectDataGovernanceAuthorityCandidate,
+  type ProjectDataGovernanceAuthority,
+} from '../../src/data-governance/governance-authority-repository.js';
 import {
   WorkroomDataGovernanceAuthorityWriter,
   type ProjectDataGovernanceAuthorityCandidate,
@@ -80,7 +83,8 @@ describe('trusted Project Data Governance authority writer', () => {
       recipients: { recipients: [{ principalId: 'principal:sponsor' }] },
     });
     expect(authorize).toHaveBeenCalledWith(expect.objectContaining({
-      candidateDigest: digest(candidate), catalogRevision: 'catalog:1',
+      candidateDigest: digest(canonicalizeProjectDataGovernanceAuthorityCandidate(candidate)),
+      catalogRevision: 'catalog:1',
     }), expect.any(AbortSignal));
   });
 
