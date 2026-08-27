@@ -247,7 +247,13 @@ export class KernelPortfolioGrantAssignmentIssuance implements PortfolioGrantAss
       if (recovered) return deepFreeze({ kind: 'claimed' as const, ...recovered });
       const state = await this.kernel.read(claim.request.projectId, claim.request.runId);
       const task = state.tasks[claim.request.taskKey];
-      const reason = deterministicFailureReason(state.status, task?.status, task?.revision, preview.taskRevision);
+      const reason = deterministicFailureReason(
+        state.status,
+        task?.status,
+        task?.revision,
+        preview.taskRevision,
+        task?.acceptanceContract !== undefined,
+      );
       if (!reason) throw error;
       const kernelFactDigest = digest(state);
       const proofBody = deepFreeze({
@@ -452,13 +458,16 @@ function deterministicFailureReason(
   taskStatus: string | undefined,
   taskRevision: number | undefined,
   previewTaskRevision: number,
+  acceptanceContractPinned: boolean,
 ): PortfolioGrantAssignmentFailureReason | undefined {
   if (runStatus === 'completed' || runStatus === 'cancelled') return 'run_terminal';
   if (taskStatus === 'accepted' || taskStatus === 'failed' || taskStatus === 'cancelled') {
     return 'task_terminal';
   }
   if (taskRevision !== undefined && taskRevision !== previewTaskRevision) return 'task_stale';
-  if (taskStatus === 'executing' || taskStatus === 'awaiting_acceptance' || taskStatus === 'cancelling') {
+  if (!acceptanceContractPinned) return 'task_stale';
+  if (taskStatus === 'blocked' || taskStatus === 'executing'
+    || taskStatus === 'awaiting_acceptance' || taskStatus === 'cancelling') {
     return 'task_stale';
   }
   return undefined;

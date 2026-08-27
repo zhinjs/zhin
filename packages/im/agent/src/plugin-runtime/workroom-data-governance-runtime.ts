@@ -383,6 +383,7 @@ export class WorkroomDataGovernanceRuntime {
       payload,
       source,
       signal: this.options.signal,
+      createdAt: input.occurredAt,
       publicationScope: input.runId,
     });
   }
@@ -392,7 +393,14 @@ export class WorkroomDataGovernanceRuntime {
   ): Promise<void> {
     if (!this.options.payloadWrites) return;
     for (const receipt of input.receipts) {
-      await this.options.payloadWrites.publish(journalIntentId(input.projectId, input.runId, receipt), input.publicationDigest);
+      const intentId = journalIntentId(input.projectId, input.runId, receipt);
+      const pending = await this.options.payloadWrites.read(intentId);
+      if (!pending) throw new Error('Governed Workroom Journal payload intent is unavailable');
+      if (pending.state === 'published') continue;
+      if (pending.state !== 'authority_indexed') {
+        throw new Error(`Governed Workroom Journal payload cannot be published from ${pending.state}`);
+      }
+      await this.options.payloadWrites.publish(intentId, input.publicationDigest);
     }
   }
 
@@ -400,12 +408,12 @@ export class WorkroomDataGovernanceRuntime {
     input: Parameters<NonNullable<WorkroomJournalPayloadPort['prepare']>>[0],
   ): Promise<void> {
     if (!this.options.payloadWrites) return;
-    const candidates = new Set(input.receipts.map(receipt =>
-      journalIntentId(input.projectId, input.runId, receipt)));
-    for (const pending of await this.options.payloadWrites.listUnpublished(input.projectId, input.runId)) {
-      if (!candidates.has(pending.intentId)) {
-        await this.options.payloadWrites.requirePurge(pending.intentId, 'restart_unpublished');
-        await this.#purgeIntent(pending.intentId);
+    for (const receipt of input.receipts) {
+      const pending = await this.options.payloadWrites.read(
+        journalIntentId(input.projectId, input.runId, receipt),
+      );
+      if (!pending || (pending.state !== 'authority_indexed' && pending.state !== 'published')) {
+        throw new Error('Governed Workroom Journal payload is not ready for header publication');
       }
     }
   }
@@ -415,11 +423,11 @@ export class WorkroomDataGovernanceRuntime {
   ): Promise<void> {
     if (!this.options.payloadWrites) return;
     for (const receipt of input.receipts) {
-      await this.options.payloadWrites.requirePurge(
-        journalIntentId(input.projectId, input.runId, receipt),
-        input.reason,
-      );
-      await this.#purgeIntent(journalIntentId(input.projectId, input.runId, receipt));
+      const intentId = journalIntentId(input.projectId, input.runId, receipt);
+      const pending = await this.options.payloadWrites.read(intentId);
+      if (!pending || pending.state === 'published' || pending.state === 'purge_required') continue;
+      await this.options.payloadWrites.requirePurge(intentId, input.reason);
+      await this.#purgeIntent(intentId);
     }
   }
 
@@ -427,15 +435,15 @@ export class WorkroomDataGovernanceRuntime {
     input: Parameters<NonNullable<WorkroomJournalPayloadPort['reconcile']>>[0],
   ): Promise<void> {
     if (!this.options.payloadWrites) return;
-    const published = new Set(input.receipts.map(receipt =>
-      journalIntentId(input.projectId, input.runId, receipt)));
-    for (const pending of await this.options.payloadWrites.listUnpublished(input.projectId, input.runId)) {
-      if (published.has(pending.intentId)) {
-        await this.options.payloadWrites.publish(pending.intentId, input.publicationDigest);
-      } else {
-        await this.options.payloadWrites.requirePurge(pending.intentId, 'restart_unpublished');
-        await this.#purgeIntent(pending.intentId);
+    for (const receipt of input.receipts) {
+      const intentId = journalIntentId(input.projectId, input.runId, receipt);
+      const pending = await this.options.payloadWrites.read(intentId);
+      if (!pending) throw new Error('Governed Workroom Journal payload intent is unavailable');
+      if (pending.state === 'published') continue;
+      if (pending.state !== 'authority_indexed') {
+        throw new Error(`Governed Workroom Journal committed payload is ${pending.state}`);
       }
+      await this.options.payloadWrites.publish(intentId, input.publicationDigest);
     }
   }
 
@@ -444,20 +452,48 @@ export class WorkroomDataGovernanceRuntime {
       operationId: `workroom-journal-read:${input.eventId}:${digest(input.fieldPath)}`,
       projectId: input.projectId,
     });
-    const authority = await this.options.repository.readProject(input.projectId);
+    const currentAuthority = await this.options.repository.readProject(input.projectId);
+    const source = await this.options.repository.readSource(
+      input.projectId,
+      input.receipt.descriptor.objectId,
+      input.receipt.descriptor.payloadHash,
+    );
+    const authority = source && currentAuthority
+      ? source.projectAuthorityDigest === currentAuthority.digest
+        ? currentAuthority
+        : await this.options.repository.readProjectRevision?.(
+          input.projectId,
+          source.projectAuthorityRevision,
+        )
+      : undefined;
     const sinkRuleId = 'workroom-journal:kernel-replay';
     const sink = authority?.sinks[sinkRuleId];
-    if (!authority || !sink?.fixedPrincipalId) {
+    const destination = sink && authority?.policy.destinations[sink.destinationId];
+    if (!source || !authority || source.projectAuthorityDigest !== authority.digest
+      || source.projectAuthorityRevision !== authority.revision || !sink?.fixedPrincipalId
+      || !destination) {
       throw new Error('Workroom Journal replay disclosure authority is unavailable');
     }
-    const manifest = await this.disclosureManifest.materialize({
+    const manifest = await this.#materialize({
       operationId: `workroom-journal-read:${input.eventId}:${digest(input.fieldPath)}`,
-      projectId: input.projectId,
-      sourceRef: input.receipt.descriptor.objectId,
-      sourceDigest: input.receipt.descriptor.payloadHash,
-      sinkRuleId,
-      principalId: sink.fixedPrincipalId,
-    }, this.options.signal);
+      authority,
+      source,
+      context: {
+        channel: sink.channel,
+        purpose: sink.purpose,
+        requestedMode: sink.requestedMode,
+        policyRevision: authority.policy.revision,
+        principal: {
+          principalId: sink.fixedPrincipalId,
+          tenantId: authority.tenantId,
+          projectId: authority.projectId,
+          ...sink.principal,
+        },
+        destination,
+        recipients: structuredClone(sink.recipients),
+      },
+      signal: this.options.signal,
+    });
     if (!manifest || manifest.output.mode !== 'full'
       || manifest.output.handle.vaultObjectId !== input.receipt.descriptor.vaultObjectId
       || manifest.output.handle.descriptorDigest !== input.receipt.descriptor.descriptorDigest
@@ -650,19 +686,52 @@ export class WorkroomDataGovernanceRuntime {
       if (!trusted || canonicalWorkroomJson(trusted) !== canonicalWorkroomJson(input.receipt.source)) {
         return undefined;
       }
-      const authority = await this.options.repository.readProject(input.projectId);
+      const sourceAuthority = await this.options.repository.readSource(
+        input.projectId,
+        input.receipt.objectId,
+        input.receipt.payloadHash,
+      );
+      if (!sourceAuthority
+        || sourceAuthority.sourceBindingDigest !== input.receipt.source.bindingDigest
+        || sourceAuthority.handle.vaultObjectId !== input.receipt.vaultObjectId
+        || sourceAuthority.handle.descriptorDigest !== input.receipt.descriptorDigest
+        || sourceAuthority.handle.locationManifestDigest !== input.receipt.locationManifestDigest) {
+        return undefined;
+      }
+      const currentAuthority = await this.options.repository.readProject(input.projectId);
+      const authority = currentAuthority?.revision === sourceAuthority.projectAuthorityRevision
+        && currentAuthority.digest === sourceAuthority.projectAuthorityDigest
+        ? currentAuthority
+        : await this.options.repository.readProjectRevision?.(
+          input.projectId,
+          sourceAuthority.projectAuthorityRevision,
+        );
       const sinkRuleId = 'acceptance-projection:acceptance-policy';
       const sink = authority?.sinks[sinkRuleId];
-      if (!authority || !sink?.fixedPrincipalId) return undefined;
-      const manifest = await this.disclosureManifest.materialize({
+      const destination = sink && authority?.policy.destinations[sink.destinationId];
+      if (!authority || authority.digest !== sourceAuthority.projectAuthorityDigest
+        || !sink?.fixedPrincipalId || !destination) return undefined;
+      const manifest = await this.#materialize({
         operationId: input.operationId,
-        projectId: input.projectId,
-        sourceRef: input.receipt.objectId,
-        sourceDigest: input.receipt.payloadHash,
-        sinkRuleId,
-        principalId: sink.fixedPrincipalId,
-      }, linked.signal);
-      if (!manifest || manifest.output.mode !== 'full'
+        authority,
+        source: sourceAuthority,
+        context: {
+          channel: sink.channel,
+          purpose: sink.purpose,
+          requestedMode: sink.requestedMode,
+          policyRevision: authority.policy.revision,
+          principal: {
+            principalId: sink.fixedPrincipalId,
+            tenantId: authority.tenantId,
+            projectId: authority.projectId,
+            ...sink.principal,
+          },
+          destination,
+          recipients: structuredClone(sink.recipients),
+        },
+        signal: linked.signal,
+      });
+      if (manifest.output.mode !== 'full'
         || manifest.output.handle.vaultObjectId !== input.receipt.vaultObjectId
         || manifest.output.handle.descriptorDigest !== input.receipt.descriptorDigest
         || manifest.output.handle.locationManifestDigest !== input.receipt.locationManifestDigest
@@ -708,6 +777,7 @@ export class WorkroomDataGovernanceRuntime {
     payload: Uint8Array;
     source: TSource;
     signal: AbortSignal;
+    createdAt?: number;
     consumer?: 'authority_source' | 'evidence_header' | 'task_report_header' | 'journal_header';
     publicationScope?: string;
     publication?: WorkroomGovernedPayloadPublicationPort;
@@ -726,10 +796,41 @@ export class WorkroomDataGovernanceRuntime {
       if (!authority) throw new Error('Data Governance Project authority is unavailable');
       const rule = authority.derivedPayloads[input.kind];
       if (!rule) throw new Error(`Governed ${input.kind} payload authority is unavailable`);
-      const createdAt = this.#now();
+      const payloadHash = hashBytes(input.payload);
+      const existingSource = await this.options.repository.readSource(
+        input.projectId,
+        input.objectId,
+        payloadHash,
+      );
+      if (existingSource && !input.publication
+        && existingSource.sourceBindingDigest === input.source.bindingDigest
+        && existingSource.projectAuthorityRevision === authority.revision
+        && existingSource.projectAuthorityDigest === authority.digest
+        && existingSource.descriptor.objectId === input.objectId
+        && existingSource.descriptor.payloadHash === payloadHash
+        && existingSource.handle.objectId === input.objectId
+        && existingSource.handle.payloadHash === payloadHash
+        && existingSource.handle.descriptorDigest === digest(existingSource.descriptor)) {
+        await infrastructure.payloadLifecycleIndex.register({
+          operationId: input.operationId,
+          handle: existingSource.handle,
+        }, linked.signal);
+        return deepFreeze({
+          descriptor: {
+            vaultObjectId: existingSource.handle.vaultObjectId,
+            objectId: existingSource.handle.objectId,
+            payloadHash: existingSource.handle.payloadHash,
+            descriptorDigest: existingSource.handle.descriptorDigest,
+            locationManifestDigest: existingSource.handle.locationManifestDigest,
+            bytes: input.payload.byteLength,
+          },
+          source: structuredClone(input.source),
+        });
+      }
+      const createdAt = input.createdAt ?? this.#now();
       const classified = classifyDataDescriptor({
         objectId: input.objectId,
-        payloadHash: hashBytes(input.payload),
+        payloadHash,
         tenantId: authority.tenantId,
         projectId: authority.projectId,
         kind: input.kind === 'evidence'
@@ -1029,6 +1130,7 @@ export class WorkroomDataGovernanceRuntime {
     sourceBindingDigest: string,
     signal: AbortSignal,
   ): Promise<GovernedSourceAuthority> {
+    const infrastructure = await this.#requirePayloadInfrastructure(signal);
     const existing = await this.options.repository.readSource(
       request.input.projectId,
       request.input.source.ref,
@@ -1040,9 +1142,12 @@ export class WorkroomDataGovernanceRuntime {
         || existing.projectAuthorityRevision !== authority.revision) {
         throw new Error('Governed source authority is stale for current policy');
       }
+      await infrastructure.payloadLifecycleIndex.register({
+        operationId: request.input.operationId,
+        handle: existing.handle,
+      }, signal);
       return existing;
     }
-    await this.#requirePayloadInfrastructure(signal);
     const payload = new TextEncoder().encode(request.input.source.text);
     const payloadHash = hashBytes(payload);
     const timestamp = nonNegative(request.input.source.event.timestamp, 'source timestamp');
@@ -1074,6 +1179,10 @@ export class WorkroomDataGovernanceRuntime {
       descriptorDigest: digest(descriptor),
       payload,
       sourceBindingDigest,
+    }, signal);
+    await infrastructure.payloadLifecycleIndex.register({
+      operationId: request.input.operationId,
+      handle,
     }, signal);
     return await this.options.repository.appendSource(createGovernedSourceAuthority({
       version: 1,
@@ -1171,6 +1280,10 @@ export class WorkroomDataGovernanceRuntime {
           undefined, authority.digest);
         return deepFreeze({ status: 'blocked', reason: 'source_authority_conflict' });
       }
+      const authorityEpoch = deepFreeze({
+        revision: authority.revision,
+        digest: authority.digest,
+      });
       const payload = new TextEncoder().encode(input.body);
       const payloadHash = hashBytes(payload);
       const source = deepFreeze<WorkroomGovernedPayloadReceipt['source']>({
@@ -1178,19 +1291,21 @@ export class WorkroomDataGovernanceRuntime {
         ref: `workroom-projection-events:${digest({
           projectId: input.projectId,
           sourceEventIds: input.sourceEventIds,
+          authorityEpoch,
         })}`,
-        digest: digest({ version: 1, sourceEventIds: input.sourceEventIds }),
+        digest: digest({ version: 1, sourceEventIds: input.sourceEventIds, authorityEpoch }),
         bindingDigest: digest({
           version: 1, projectId: input.projectId, sourceEventIds: input.sourceEventIds, payloadHash,
+          authorityEpoch,
         }),
         verification: 'verified',
       });
       const receipt = await this.#writeDerivedPayload({
-        operationId: input.operationId,
+        operationId: `${input.operationId}:authority:${authority.revision}:${authority.digest}`,
         projectId: input.projectId,
         kind: 'projection',
         objectId: `workroom-projection-payload:${digest({
-          projectId: input.projectId, sourceEventIds: input.sourceEventIds, payloadHash,
+          projectId: input.projectId, sourceEventIds: input.sourceEventIds, payloadHash, authorityEpoch,
         })}`,
         payload,
         source,

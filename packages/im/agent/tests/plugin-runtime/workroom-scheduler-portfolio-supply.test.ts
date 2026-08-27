@@ -28,6 +28,7 @@ describe('Portfolio-first Workroom Scheduler supply', () => {
       routes: { resolve: async () => route },
       requests: { resolve: async () => request },
       capacity,
+      runState: readyRunState(),
     });
 
     await expect(supply.deliver(selected)).resolves.toBeUndefined();
@@ -42,6 +43,7 @@ describe('Portfolio-first Workroom Scheduler supply', () => {
       routes: { resolve: async () => null },
       requests: { resolve: vi.fn() },
       capacity,
+      runState: readyRunState(),
     });
 
     await expect(supply.probe(decision())).resolves.toBe(false);
@@ -68,6 +70,7 @@ describe('Portfolio-first Workroom Scheduler supply', () => {
       routes: { resolve: async () => route },
       requests: { resolve: async () => forged },
       capacity,
+      runState: readyRunState(),
     });
 
     await expect(supply.deliver(selected)).rejects.toThrow('exact Scheduler decision/route');
@@ -112,6 +115,16 @@ function catalog() {
       'project-1': { enabled: true, members: [{ role: 'executor', agent: 'developer' }] },
     },
   } as never;
+}
+
+function readyRunState() {
+  const state = { tasks: { build: {
+    revision: 1, status: 'ready', acceptanceContract: { id: 'acceptance:build' },
+  } } } as never;
+  return {
+    read: async () => state,
+    pinTaskAcceptance: async () => state,
+  };
 }
 
 function decision() {

@@ -1,8 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { WorkroomCatalog } from '../workroom/catalog.js';
+import type { WorkroomCatalog, WorkroomCatalogSnapshot } from '../workroom/catalog.js';
 import type { WorkroomDefinition } from '../workroom/catalog-definition.js';
 import type { ProjectProfileRegistry, ProjectProfileRegistrySnapshot } from '../workroom/profile-registry.js';
+import type { WorkroomJournal } from '../workroom/journal.js';
+import {
+  assertWorkflowPlanProposal,
+  type WorkflowPlanProposal,
+} from '../workroom/workflow-plan-builder.js';
 import {
   createWorkroomProjectMemorySchemaSnapshot,
   type WorkroomProjectMemoryClaimRule,
@@ -131,6 +136,16 @@ export interface ProfileOwnedWorkroomAcceptanceProviderOptions {
   readonly profiles: Pick<ProjectProfileRegistry, 'read'>;
   readonly catalog: Pick<WorkroomCatalog, 'read'>;
   readonly projections: WorkroomGovernedAcceptanceProjectionPort;
+  /** Exact admitted Plan authority used to map dynamic Task keys to Profile templates. */
+  readonly journal?: Pick<WorkroomJournal, 'read'>;
+}
+
+interface ProfileOwnedWorkroomAcceptanceContext {
+  readonly profile: ProjectProfileRegistrySnapshot;
+  readonly catalog: WorkroomCatalogSnapshot;
+  readonly pin: ReturnType<typeof exactRunProfile>;
+  readonly definition: WorkroomDefinition;
+  readonly projection: WorkroomGovernedAcceptanceProjection;
 }
 
 /** Exact Run Profile projection shared by Acceptance contracts and Memory Schema authority. */
@@ -150,8 +165,7 @@ implements WorkroomAcceptancePolicyFactsPort {
     positive(input.taskRevision, 'Acceptance Task revision');
     const context = await this.#context(input.projectId, input.runId);
     const projection = context.projection;
-    const task = projection.tasks.find(candidate => candidate.taskKey === input.taskKey);
-    if (!task) throw new Error(`Pinned Profile has no Acceptance policy for Task ${input.taskKey}`);
+    const task = await this.#taskPolicy(context, input.runId, input.taskKey);
     assertPrincipals(
       task,
       context.definition,
@@ -205,8 +219,7 @@ implements WorkroomAcceptancePolicyFactsPort {
     acceptance: WorkroomAcceptanceRecord;
   }>): Promise<WorkroomProjectMemorySchemaSnapshot> {
     const context = await this.#context(input.projectId, input.runId);
-    const task = context.projection.tasks.find(candidate => candidate.taskKey === input.taskKey);
-    if (!task) throw new Error(`Pinned Profile has no Memory policy for Task ${input.taskKey}`);
+    await this.#taskPolicy(context, input.runId, input.taskKey);
     const expected = await this.resolve({
       projectId: input.projectId,
       runId: input.runId,
@@ -221,6 +234,48 @@ implements WorkroomAcceptancePolicyFactsPort {
       throw new Error('Project Memory Schema authority targets a stale Acceptance/Profile binding');
     }
     return createWorkroomProjectMemorySchemaSnapshot(context.projection.memorySchema);
+  }
+
+  async #taskPolicy(
+    context: ProfileOwnedWorkroomAcceptanceContext,
+    runId: string,
+    taskKey: string,
+  ): Promise<WorkroomGovernedAcceptanceTaskPolicy> {
+    const exact = context.projection.tasks.find(candidate => candidate.taskKey === taskKey);
+    if (exact) return exact;
+    if (!this.options.journal) {
+      throw new Error(`Pinned Profile has no Acceptance policy for Task ${taskKey}`);
+    }
+    const events = await this.options.journal.read(runId);
+    const admitted = events.filter(event => event.type === 'plan.admitted');
+    if (admitted.length !== 1) throw new Error('Acceptance requires exactly one admitted Workflow Plan');
+    const value = admitted[0]!.payload.plan;
+    if (!value || typeof value !== 'object') {
+      throw new Error('Acceptance admitted Workflow Plan is unavailable');
+    }
+    const plan = value as WorkflowPlanProposal;
+    assertWorkflowPlanProposal(plan);
+    if (plan.projectId !== context.pin.projectId
+      || plan.authority.profileRevisionId !== context.pin.profileRevisionId
+      || plan.authority.profileDigest !== context.pin.profileDigest
+      || plan.strategy.version !== context.pin.profileRevisionId) {
+      throw new Error('Acceptance Workflow Plan does not bind the exact Run Profile');
+    }
+    const plannedTask = plan.tasks.find(candidate => candidate.key === taskKey);
+    if (!plannedTask) throw new Error(`Admitted Workflow Plan has no Task ${taskKey}`);
+    const compiled = context.profile.revisions[context.pin.profileRevisionId]!.compiledProfile;
+    const workflows = compiled.workflows.filter(workflow =>
+      workflow.id === plan.strategy.id && workflow.digest === plan.strategy.digest);
+    if (workflows.length !== 1) throw new Error('Acceptance Workflow strategy is not uniquely pinned');
+    const templates = workflows[0]!.tasks.filter(candidate => candidate.role === plannedTask.role);
+    if (templates.length !== 1) {
+      throw new Error(`Acceptance Workflow role ${plannedTask.role} has no unique Task template`);
+    }
+    const template = context.projection.tasks.filter(candidate => candidate.taskKey === templates[0]!.key);
+    if (template.length !== 1) {
+      throw new Error(`Pinned Profile has no Acceptance policy for Workflow Task ${templates[0]!.key}`);
+    }
+    return deepFreeze({ ...template[0]!, taskKey });
   }
 
   async #context(projectId: string, runId: string) {

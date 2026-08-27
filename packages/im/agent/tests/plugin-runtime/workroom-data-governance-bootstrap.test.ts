@@ -12,7 +12,7 @@ import {
 import {
   WorkroomDataGovernanceAuthorityWriter,
 } from '../../src/plugin-runtime/workroom-data-governance-authority-writer.js';
-import { digestWorkroomCatalogProjectBinding } from '../../src/plugin-runtime/workroom-assignment-authority-provider.js';
+import { digestWorkroomCatalogProjectBinding } from '../../src/workroom/catalog-definition.js';
 import { createCatalogGovernedWorkroomProjectionAuthority } from '../../src/workroom/runtime.js';
 
 describe('Workroom Data Governance bootstrap', () => {

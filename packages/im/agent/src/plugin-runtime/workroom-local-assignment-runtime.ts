@@ -16,6 +16,7 @@ export interface WorkroomLocalAssignmentRuntimeOptions {
   readonly executor: AssignmentExecutorPort;
   readonly now?: () => number;
   readonly intervalMs?: number;
+  readonly heartbeatIntervalMs?: number;
   readonly maxCasRetries?: number;
   readonly onError?: (error: unknown) => void;
 }
@@ -38,6 +39,7 @@ export class WorkroomLocalAssignmentRuntime {
   readonly #ingress: AssignmentObservationIngress;
   readonly #now: () => number;
   readonly #intervalMs: number;
+  readonly #heartbeatIntervalMs: number;
   readonly #maxCasRetries: number;
   readonly #active = new Map<string, Readonly<{
     controller: AbortController;
@@ -51,6 +53,10 @@ export class WorkroomLocalAssignmentRuntime {
     this.#ingress = new AssignmentObservationIngress({ kernel: options.kernel });
     this.#now = options.now ?? Date.now;
     this.#intervalMs = positive(options.intervalMs ?? 1_000, 'intervalMs');
+    this.#heartbeatIntervalMs = positive(
+      options.heartbeatIntervalMs ?? 10_000,
+      'heartbeatIntervalMs',
+    );
     this.#maxCasRetries = positive(options.maxCasRetries ?? 4, 'maxCasRetries');
   }
 
@@ -79,7 +85,7 @@ export class WorkroomLocalAssignmentRuntime {
     const controller = new AbortController();
     const promise = (async () => {
       await this.#assertLeased(envelope);
-      await this.#execute(envelope, controller.signal);
+      await this.#execute(envelope, controller);
     })();
     this.#active.set(envelope.assignmentId, Object.freeze({ controller, promise }));
     try {
@@ -144,36 +150,79 @@ export class WorkroomLocalAssignmentRuntime {
     return Object.freeze({ started, recovered });
   }
 
-  async #execute(envelope: AssignmentExecutionEnvelope, signal: AbortSignal): Promise<void> {
+  async #execute(envelope: AssignmentExecutionEnvelope, controller: AbortController): Promise<void> {
+    const { signal } = controller;
     await this.options.kernel.execute(envelope.projectId, envelope.runId, {
       type: 'start_assignment',
       assignmentId: envelope.assignmentId,
     });
     const observations = this.#ingress.bind(envelope);
-    for await (const observation of executeAssignment(this.options.executor, envelope, signal)) {
-      signal.throwIfAborted();
-      let committed = false;
-      for (let attempt = 0; attempt < this.#maxCasRetries; attempt += 1) {
-        const state = await this.options.kernel.read(envelope.projectId, envelope.runId);
-        const assignment = state.assignments[envelope.assignmentId];
-        if (!assignment
-          || assignment.envelopeDigest !== envelope.digest
-          || assignment.fence !== envelope.fence
-          || assignment.taskRevision !== envelope.taskRevision) {
-          throw new Error('Local Assignment observation Envelope is stale or targets another authority scope');
-        }
-        try {
-          await observations.apply(observation, state.sequence);
-          committed = true;
-          break;
-        } catch (error) {
-          if (!(error instanceof WorkroomSequenceConflictError)) throw error;
-        }
+    let heartbeatSequence = 0;
+    let heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
+    let heartbeatRunning: Promise<void> | undefined;
+    let heartbeatsStopped = false;
+    const scheduleHeartbeat = (): void => {
+      if (heartbeatsStopped || signal.aborted) return;
+      heartbeatTimer = setTimeout(() => {
+        heartbeatTimer = undefined;
+        if (heartbeatsStopped || signal.aborted) return;
+        heartbeatSequence += 1;
+        heartbeatRunning = this.#applyObservation(envelope, observations, {
+          version: 1,
+          type: 'heartbeat',
+          observationId: `local-runtime-heartbeat:${heartbeatSequence}`,
+          envelopeDigest: envelope.digest,
+        }).catch(error => {
+          if (!controller.signal.aborted) controller.abort(error);
+          throw error;
+        }).finally(() => {
+          heartbeatRunning = undefined;
+          scheduleHeartbeat();
+        });
+        void heartbeatRunning.catch(() => undefined);
+      }, this.#heartbeatIntervalMs);
+      heartbeatTimer.unref?.();
+    };
+    const stopHeartbeats = async (): Promise<void> => {
+      heartbeatsStopped = true;
+      if (heartbeatTimer) clearTimeout(heartbeatTimer);
+      heartbeatTimer = undefined;
+      await heartbeatRunning?.catch(() => undefined);
+    };
+    scheduleHeartbeat();
+    try {
+      for await (const observation of executeAssignment(this.options.executor, envelope, signal)) {
+        signal.throwIfAborted();
+        if (observation.type === 'execution_completed') await stopHeartbeats();
+        await this.#applyObservation(envelope, observations, observation);
       }
-      if (!committed) {
-        throw new Error('Local Assignment observation exceeded Kernel CAS retry budget');
+    } finally {
+      await stopHeartbeats();
+    }
+  }
+
+  async #applyObservation(
+    envelope: AssignmentExecutionEnvelope,
+    observations: ReturnType<AssignmentObservationIngress['bind']>,
+    observation: Parameters<ReturnType<AssignmentObservationIngress['bind']>['apply']>[0],
+  ): Promise<void> {
+    for (let attempt = 0; attempt < this.#maxCasRetries; attempt += 1) {
+      const state = await this.options.kernel.read(envelope.projectId, envelope.runId);
+      const assignment = state.assignments[envelope.assignmentId];
+      if (!assignment
+        || assignment.envelopeDigest !== envelope.digest
+        || assignment.fence !== envelope.fence
+        || assignment.taskRevision !== envelope.taskRevision) {
+        throw new Error('Local Assignment observation Envelope is stale or targets another authority scope');
+      }
+      try {
+        await observations.apply(observation, state.sequence);
+        return;
+      } catch (error) {
+        if (!(error instanceof WorkroomSequenceConflictError)) throw error;
       }
     }
+    throw new Error('Local Assignment observation exceeded Kernel CAS retry budget');
   }
 
   async #assertLeased(envelope: AssignmentExecutionEnvelope): Promise<void> {

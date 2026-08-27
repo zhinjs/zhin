@@ -1,7 +1,9 @@
 import type { Scope } from '@zhin.js/plugin-runtime';
 import type { WorkroomCatalog } from '../workroom/catalog.js';
 import type { WorkroomJournal } from '../workroom/journal.js';
+import type { WorkroomRunState } from '../workroom/kernel-contracts.js';
 import type { ProjectProfileRegistry } from '../workroom/profile-registry.js';
+import type { PortfolioResourceBundle } from '../portfolio/portfolio-journal.js';
 import {
   portfolioAtomicBundleAuthorityToken,
   portfolioPolicyAuthorityToken,
@@ -35,6 +37,11 @@ export interface InstallWorkroomSchedulerPortfolioDispatchResourcesOptions {
   readonly catalog: Pick<WorkroomCatalog, 'read'>;
   readonly profiles: Pick<ProjectProfileRegistry, 'read'>;
   readonly journal?: Pick<WorkroomJournal, 'read'>;
+  readonly fallbackResourceRequirements?: PortfolioResourceBundle;
+  readonly runState: Readonly<{
+    read(projectId: string, runId: string): Promise<WorkroomRunState>;
+    pinTaskAcceptance(projectId: string, runId: string, taskKey: string): Promise<WorkroomRunState>;
+  }>;
 }
 
 export interface WorkroomSchedulerPortfolioDispatchResources {
@@ -89,6 +96,9 @@ export function installWorkroomSchedulerPortfolioDispatchResources(
               ? options.resources.use(portfolioAtomicBundleAuthorityToken).validate(input)
               : Promise.resolve(undefined),
         }),
+        ...(options.fallbackResourceRequirements
+          ? { fallbackResourceRequirements: options.fallbackResourceRequirements }
+          : {}),
       }),
     );
   }
@@ -119,6 +129,7 @@ export function installWorkroomSchedulerPortfolioDispatchResources(
           return options.resources.use(workroomSchedulerCapacityRequestToken).request(input);
         },
       }),
+      runState: options.runState,
     });
     options.resources.provide(workroomSchedulerDispatchSupplyToken, supply);
   }

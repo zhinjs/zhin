@@ -476,6 +476,10 @@ export interface PublishPlanningPolicyCommand {
 }
 
 export interface WorkroomProfileControlPort {
+  readPlanningPolicy(
+    projectId: string,
+    profileRevisionId: string,
+  ): Promise<WorkroomPlanningPolicyRevision | undefined>;
   publishPack(command: PublishCapabilityPackCommand, signal: AbortSignal): Promise<CapabilityPackPublication>;
   publishProfile(command: PublishProjectProfileCommand, signal: AbortSignal): Promise<ProjectProfileRegistrySnapshot>;
   publishRollback(
@@ -607,6 +611,8 @@ export class WorkroomProfileAuthorityRuntime {
 
   constructor(readonly options: WorkroomProfileAuthorityRuntimeOptions) {
     this.control = Object.freeze({
+      readPlanningPolicy: async (projectId: string, profileRevisionId: string) =>
+        await this.options.repository.readPlanningPolicy(projectId, profileRevisionId),
       publishPack: async (command: PublishCapabilityPackCommand, signal: AbortSignal) =>
         await this.#publishPack(command, signal),
       publishProfile: async (command: PublishProjectProfileCommand, signal: AbortSignal) =>

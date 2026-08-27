@@ -159,6 +159,15 @@ export interface WorkroomPlanAdmissionReceipt {
   readonly state: WorkroomRunState;
 }
 
+export interface WorkroomPlanAdmissionReplay {
+  readonly operationId: string;
+  readonly sourceEventRef: string;
+  readonly sourceEventDigest: string;
+  readonly orchestratorAgentDefinitionId: string;
+  readonly plan: WorkflowPlanProposal;
+  readonly receipt: WorkroomPlanAdmissionReceipt;
+}
+
 export interface WorkroomSchedulerCommitReceipt {
   readonly status: 'committed' | 'duplicate';
   readonly decisionId: string;
@@ -308,18 +317,63 @@ export class WorkroomKernel {
     }
     assertExactPlanAdmission(existing, normalized, admittedPayload);
     const state = replayWorkroom(existing);
-    const receiptRef = `workroom-run:${runId}:plan:${encodeURIComponent(normalized.plan.proposalId)}`;
-    return Object.freeze({
+    return planAdmissionReceipt(
       runId,
-      receiptRef,
-      receiptDigest: digestCanonicalWorkroomValue({
-        version: 1,
-        runId,
-        operationId: normalized.operationId,
-        planDigest: normalized.plan.digest,
-        sourceEventDigest: normalized.sourceEventDigest,
-      }),
+      normalized.operationId,
+      normalized.sourceEventDigest,
+      normalized.plan,
       state,
+    );
+  }
+
+  /** Exact persisted admission lookup used to finish a crash-interrupted application replay. */
+  async readWorkflowPlanAdmission(
+    operationId: string,
+  ): Promise<WorkroomPlanAdmissionReplay | undefined> {
+    requireCanonicalText(operationId, 'operationId');
+    const runId = planAdmissionRunId(operationId);
+    const events = await this.#journal.read(runId);
+    if (events.length === 0) return undefined;
+    const created = events[0];
+    const admitted = events[1];
+    if (created?.type !== 'run.created' || admitted?.type !== 'plan.admitted') {
+      throw new Error('Workflow Plan persisted admission header is invalid');
+    }
+    const projectId = created.payload.projectId;
+    const title = created.payload.title;
+    const sourceEventRef = admitted.payload.sourceEventRef;
+    const sourceEventDigest = admitted.payload.sourceEventDigest;
+    const orchestratorAgentDefinitionId = admitted.payload.orchestratorAgentDefinitionId;
+    const persistedOperationId = admitted.payload.operationId;
+    const plan = admitted.payload.plan;
+    requireCanonicalText(projectId, 'projectId');
+    requireCanonicalText(title, 'title');
+    requireCanonicalText(sourceEventRef, 'sourceEventRef');
+    requireDigest(sourceEventDigest, 'sourceEventDigest');
+    requireCanonicalText(orchestratorAgentDefinitionId, 'orchestratorAgentDefinitionId');
+    requireCanonicalText(persistedOperationId, 'persisted operationId');
+    assertWorkflowPlanProposal(plan as WorkflowPlanProposal);
+    if (persistedOperationId !== operationId) {
+      throw new Error('Workflow Plan persisted admission operation drift');
+    }
+    const admission = {
+      operationId,
+      projectId,
+      title,
+      sourceEventRef,
+      sourceEventDigest,
+      orchestratorAgentDefinitionId,
+      plan: plan as WorkflowPlanProposal,
+    };
+    assertExactPlanAdmission(events, admission, admitted.payload);
+    const state = replayWorkroom(events);
+    return Object.freeze({
+      operationId,
+      sourceEventRef,
+      sourceEventDigest,
+      orchestratorAgentDefinitionId,
+      plan: admission.plan,
+      receipt: planAdmissionReceipt(runId, operationId, sourceEventDigest, admission.plan, state),
     });
   }
 
@@ -833,8 +887,9 @@ export class WorkroomKernel {
         ?? workroomLocalAssignmentId(request.operationId),
       claimDigest: digestCanonicalWorkroomValue({ kind: 'local', request }),
       taskRevision: existing?.envelope.taskRevision ?? task.revision,
-      kernelSequence: state.sequence,
-      kernelStateDigest: digestCanonicalWorkroomValue(events),
+      kernelSequence: existing?.envelope.factAnchor.sequence ?? state.sequence,
+      kernelStateDigest: existing?.envelope.factAnchor.digest
+        ?? digestCanonicalWorkroomValue(events),
     });
   }
 
@@ -969,8 +1024,9 @@ export class WorkroomKernel {
         ?? workroomRemoteAssignmentId(request.operationId),
       claimDigest: digestCanonicalWorkroomValue({ kind: 'remote', request }),
       taskRevision: existing?.envelope.taskRevision ?? task.revision,
-      kernelSequence: state.sequence,
-      kernelStateDigest: digestCanonicalWorkroomValue(events),
+      kernelSequence: existing?.envelope.factAnchor.sequence ?? state.sequence,
+      kernelStateDigest: existing?.envelope.factAnchor.digest
+        ?? digestCanonicalWorkroomValue(events),
     });
   }
 
@@ -1692,6 +1748,27 @@ function planAdmissionRunId(operationId: string): string {
   return `run-${digestCanonicalWorkroomValue({ operationId }).slice('sha256:'.length, 38)}`;
 }
 
+function planAdmissionReceipt(
+  runId: string,
+  operationId: string,
+  sourceEventDigest: string,
+  plan: WorkflowPlanProposal,
+  state: WorkroomRunState,
+): WorkroomPlanAdmissionReceipt {
+  return Object.freeze({
+    runId,
+    receiptRef: `workroom-run:${runId}:plan:${encodeURIComponent(plan.proposalId)}`,
+    receiptDigest: digestCanonicalWorkroomValue({
+      version: 1,
+      runId,
+      operationId,
+      planDigest: plan.digest,
+      sourceEventDigest,
+    }),
+    state,
+  });
+}
+
 function assertExactPlanAdmission(
   events: readonly import('./kernel-contracts.js').WorkroomEvent[],
   input: WorkroomPlanAdmissionInput,
@@ -1705,8 +1782,9 @@ function assertExactPlanAdmission(
       ...(task.approvalGate ? ['task.blocked'] : []),
     ]),
   ];
-  if (events.length !== expectedTypes.length
-    || events.some((event, index) => event.type !== expectedTypes[index])) {
+  if (events.length < expectedTypes.length
+    || events.slice(0, expectedTypes.length)
+      .some((event, index) => event.type !== expectedTypes[index])) {
     throw new Error('Workflow Plan operation replay conflicts with persisted Run shape');
   }
   const created = events[0]!;

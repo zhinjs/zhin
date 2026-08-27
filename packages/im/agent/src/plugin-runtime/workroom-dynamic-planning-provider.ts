@@ -12,6 +12,7 @@ import {
   type TrustedDisclosureTransformPort,
 } from '../data-governance/disclosure-manifest.js';
 import type { WorkroomCatalog } from '../workroom/catalog.js';
+import { digestWorkroomCatalogProjectBinding } from '../workroom/catalog-definition.js';
 import {
   compareCanonicalWorkroomText,
   canonicalWorkroomJson,
@@ -384,7 +385,7 @@ async function resolvePlanningAuthority(
   const definition = catalog.definitions[input.projectId];
   if (!definition || definition.enabled === false || !definition.conversation
     || catalog.revision !== input.projectRevision
-    || digest(definition) !== input.projectDigest
+    || digestWorkroomCatalogProjectBinding(definition) !== input.projectDigest
     || definition.conversation.agent !== input.orchestratorAgentDefinitionId
     || !definition.members.some(member => member.agent === input.orchestratorAgentDefinitionId
       && member.role === 'orchestrator')) {

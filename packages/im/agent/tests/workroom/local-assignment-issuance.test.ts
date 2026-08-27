@@ -65,9 +65,7 @@ describe('Kernel-owned Local Assignment issuance', () => {
       },
     });
     await expect(restarted.issueLocalAssignment(request)).resolves.toEqual(issued);
-    expect(await restarted.previewLocalAssignment(request)).toMatchObject({
-      assignmentRef: issued.envelope.assignmentId, taskRevision: issued.envelope.taskRevision,
-    });
+    expect(await restarted.previewLocalAssignment(request)).toEqual(preview);
     expect(await restarted.findLocalAssignment(request)).toEqual(issued);
     expect(await restarted.listLocalAssignmentIssuances()).toEqual([issued]);
   });

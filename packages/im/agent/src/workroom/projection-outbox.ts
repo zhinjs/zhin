@@ -1672,7 +1672,9 @@ function requireAgentIdentity(
   assignment: AssignmentProjectionScope,
 ): WorkroomProjectionAgentIdentity {
   const matches = binding.agents.filter(identity =>
-    identity.principalId === assignment.owner && identity.role === assignment.role);
+    (identity.principalId === assignment.owner
+      || `agent:${identity.agentDefinitionId}` === assignment.owner)
+    && identity.role === assignment.role);
   if (matches.length !== 1) {
     throw new Error(`Workroom Projection requires one named Agent identity for ${assignment.assignmentId}`);
   }

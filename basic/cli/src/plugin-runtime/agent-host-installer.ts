@@ -17,6 +17,7 @@ import {
   type SendContent,
 } from '@zhin.js/core/runtime';
 import type { UserInteraction } from '@zhin.js/interaction';
+
 import {
   expandEnvironmentValue,
   type ConfigDocumentPort,
@@ -218,6 +219,7 @@ import {
   workroomTaskReportPayloadToken,
   type WorkroomEvidencePayloadWriteInput,
   createAgentCoreWorkroomLocalTurnPort,
+  structuredTaskReportPrompt,
   bindWorkroomCapabilityRealization,
   installWorkroomDataGovernanceResources,
   createWorkroomDataGovernanceBootstrapCandidate,
@@ -225,6 +227,7 @@ import {
   digestWorkroomCatalogProjectBinding,
   resolveWorkroomDataGovernanceRootAuthorities,
   createGenerationOwnedWorkroomDataGovernanceStorage,
+  assertAcceptanceProjectionDataGovernanceAuthority,
   createFileWorkroomDataLifecycleRuntime,
   createWorkroomDataLifecycleHumanIngressControlPort,
   createGenerationOwnedWorkroomJournalPayloadPort,
@@ -312,6 +315,11 @@ import {
   type PortfolioSponsorProjection,
 } from '@zhin.js/agent/runtime';
 import type { LocalWorkroomDataGovernanceAuthority } from './local-workroom-data-governance.js';
+import {
+  createLocalWorkroomAssignmentGrantProvider,
+  installLocalWorkroomPortfolioAuthorities,
+  LOCAL_WORKROOM_RESOURCE_REQUIREMENTS,
+} from './local-workroom-portfolio.js';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 
@@ -334,6 +342,7 @@ const WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT = `You produce one untrusted Workr
 Return exactly: {"version":1,"strategy":{"id":"...","version":"...","digest":"sha256:..."},"tasks":[...]}
 Each task must contain exactly: key, title, role, required, maxAttempts, localRank, dependsOn, requires, approval.
 requires must contain exactly tools, skills, integrations, authorities arrays. approval is "none" or "sponsor_required".
+Copy every requirement only from the matching supplied capability array: tools from tools, skills from skills, integrations from integrations, and authorities from authorities. Never classify a skill as a tool.
 Use only the supplied strategies, roles, capabilities and constraints. Include at least one required task.
 Do not output markdown, commentary, identity, authority, Project state, Sponsor lane, deadline, policy, assignment, or execution state.`;
 
@@ -486,6 +495,21 @@ export function resolveWorkroomDisclosureAuthorityPublication(
     revision: (current?.revision ?? 0) + 1,
     ...(current ? { previousDigest: current.digest } : {}),
   });
+}
+
+export function resolveWorkroomPlanningPolicyPublication(
+  current: Readonly<{ revision: number; digest: string }> | undefined,
+): Readonly<{ revision: number; expectedPreviousDigest?: string }> {
+  return Object.freeze({
+    revision: (current?.revision ?? 0) + 1,
+    ...(current ? { expectedPreviousDigest: current.digest } : {}),
+  });
+}
+
+export function isWorkroomPlanningPolicyReady(authority: Readonly<{
+  policy: Readonly<{ schedulerPolicy: Readonly<{ pinnedAtSequence: number }> }>;
+}> | undefined): boolean {
+  return authority?.policy.schedulerPolicy.pinnedAtSequence === 1;
 }
 
 export function resolveWorkroomStorageMode(ai: AIConfig | undefined): WorkroomStorageMode {
@@ -656,7 +680,25 @@ export function resolveCatalogSponsorProjectionConversation(
     id: string; name: string; adapter: string; owner: string;
   }>[],
 ): WorkroomProjectionBinding['conversation'] | undefined {
-  const configured = definition.sponsorConversation;
+  return resolveCatalogProjectionConversation(definition.sponsorConversation, endpoints);
+}
+
+/** Resolves a persisted Workroom conversation to one exact current Endpoint capability. */
+export function resolveCatalogWorkroomProjectionConversation(
+  definition: WorkroomDefinition,
+  endpoints: readonly Readonly<{
+    id: string; name: string; adapter: string; owner: string;
+  }>[],
+): WorkroomProjectionBinding['conversation'] | undefined {
+  return resolveCatalogProjectionConversation(definition.conversation, endpoints);
+}
+
+function resolveCatalogProjectionConversation(
+  configured: WorkroomDefinition['conversation'] | WorkroomDefinition['sponsorConversation'],
+  endpoints: readonly Readonly<{
+    id: string; name: string; adapter: string; owner: string;
+  }>[],
+): WorkroomProjectionBinding['conversation'] | undefined {
   if (!configured || configured.kind === 'repository') return undefined;
   const matches = endpoints.filter(endpoint =>
     endpoint.adapter === configured.adapter && endpoint.name === configured.endpoint);
@@ -1346,7 +1388,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       });
       if (!useDatabase) await dataGovernanceStorage.activateFile();
     }
-    const lifecycleAuthorities = rootDataGovernance?.lifecycle;
+    const lifecycleAuthorities = rootDataGovernance?.lifecycle
+      ?? localDataGovernance?.lifecycle;
     const dataLifecycle = dataGovernanceStorage && lifecycleAuthorities
       ? createFileWorkroomDataLifecycleRuntime({
           stateRoot: workroomStateRoot,
@@ -1418,9 +1461,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         ) {
           operationSignal.throwIfAborted();
           if (intent.consumer === 'journal_header') {
-            return workroomJournal.verifyGovernedPayloadPublication
+            const verification = workroomJournal.verifyGovernedPayloadPublication
               ? await workroomJournal.verifyGovernedPayloadPublication(intent)
               : Object.freeze({ status: 'unknown' as const });
+            return verification.status === 'missing'
+              ? Object.freeze({ status: 'unknown' as const })
+              : verification;
           }
           if (intent.consumer === 'evidence_header'
             || intent.consumer === 'task_report_header') {
@@ -1590,9 +1636,17 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         recipientPrincipalId: input.principalId,
         requestedMode: 'metadata_only',
       });
+      let acceptanceProjectionAuthorityCurrent = current !== undefined;
+      if (current) {
+        try {
+          assertAcceptanceProjectionDataGovernanceAuthority(current);
+        } catch {
+          acceptanceProjectionAuthorityCurrent = false;
+        }
+      }
       const publication = resolveWorkroomDisclosureAuthorityPublication(
         current,
-        currentAuthorization !== null,
+        currentAuthorization !== null && acceptanceProjectionAuthorityCurrent,
       );
       if (!publication) return;
       if (!localDataGovernance) {
@@ -1712,8 +1766,16 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         const activeRevision = active ? profiles.revisions[active.revisionId] : undefined;
         if (!active || !activeRevision) diagnostics.push('尚未发布并激活 Project Profile');
         let planningPolicyReady = false;
+        let acceptancePolicyReady = false;
         if (definition && active && activeRevision) {
           const profile = activeRevision.compiledProfile;
+          const acceptance = profile.acceptancePolicies ?? [];
+          acceptancePolicyReady = acceptance.length === 1
+            && profile.workflows.every(workflow => workflow.tasks.every(task =>
+              acceptance[0]!.tasks.some(policyTask => policyTask.taskKey === task.key)));
+          if (!acceptancePolicyReady) {
+            diagnostics.push('active Profile 尚未绑定覆盖 Workflow Task 的 Acceptance Policy');
+          }
           const authority = await profileComposition.planningPolicy.resolve({
             version: 1,
             generation: createWorkroomDynamicPlanningGenerationSnapshot(generation),
@@ -1737,8 +1799,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               },
             },
           });
-          planningPolicyReady = authority !== undefined;
-          if (!planningPolicyReady) diagnostics.push('active Profile 尚未绑定 Planning Policy');
+          planningPolicyReady = isWorkroomPlanningPolicyReady(authority);
+          if (!authority) diagnostics.push('active Profile 尚未绑定 Planning Policy');
+          else if (!planningPolicyReady) {
+            diagnostics.push('active Planning Policy 的 Scheduler 序列锚点已过期');
+          }
         }
         const { modelProviderAlias, contract } = resolveDisclosureBootstrap(definition);
         const disclosureAuthority = await dataGovernanceRuntime.options.repository.readProject(projectId);
@@ -1759,7 +1824,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         diagnostics.push(...disclosure.diagnostics);
         const { disclosureReady, disclosureConfigReady } = disclosure;
         const ready = catalogReady && activeRevision !== undefined && planningPolicyReady
-          && disclosureReady;
+          && acceptancePolicyReady && disclosureReady;
         return Object.freeze({
           projectId,
           ready,
@@ -1807,7 +1872,14 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         projectProfiles.read(command.projectId),
       ]);
       const definition = catalog.definitions[command.projectId]!;
-      if (before.planningPolicyReady) {
+      const activeRevision = before.activeProfile
+        ? profiles.revisions[before.activeProfile.revisionId]
+        : undefined;
+      const activeAcceptancePolicies = activeRevision?.compiledProfile.acceptancePolicies ?? [];
+      const activeAcceptanceReady = Boolean(activeRevision && activeAcceptancePolicies.length === 1
+        && activeRevision.compiledProfile.workflows.every(workflow => workflow.tasks.every(task =>
+          activeAcceptancePolicies[0]!.tasks.some(policyTask => policyTask.taskKey === task.key))));
+      if (before.planningPolicyReady && activeAcceptanceReady) {
         await ensureDisclosureAuthority({
           projectId: command.projectId,
           catalogRevision: catalog.revision,
@@ -1836,6 +1908,88 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         if (before.activeProfile) {
           const active = profiles.revisions[before.activeProfile.revisionId];
           if (!active) throw new Error('Active Project Profile revision is unavailable');
+          if (!activeAcceptanceReady) {
+            if ((active.compiledProfile.acceptancePolicies ?? []).length > 0) {
+              throw new Error('active Profile 的 Acceptance Policy 未完整覆盖 Workflow Task，请发布修订后的 Profile');
+            }
+            const acceptancePolicy = createBootstrapAcceptancePolicy({
+              projectId: command.projectId,
+              definition,
+              principalId: authenticatedPrincipal.principalId,
+              tasks: active.compiledProfile.workflows.flatMap(workflow => workflow.tasks),
+            });
+            const acceptancePack = createCapabilityPackManifest({
+              id: `workroom:${command.projectId}:acceptance-bootstrap`,
+              version: '1.0.0',
+              kind: 'policy',
+              acceptancePolicies: [acceptancePolicy],
+            });
+            const { digest: _acceptancePackDigest, ...acceptancePackInput } = acceptancePack;
+            const publication = await profileComposition.control.publishPack({
+              version: 1,
+              operationId: `${command.operationId}:acceptance-pack`,
+              authenticatedPrincipalId: authenticatedPrincipal.principalId,
+              pack: acceptancePackInput,
+            }, signal);
+            const upgradedOverlay = createWorkroomProfileOverlay({
+              version: 1,
+              projectId: command.projectId,
+              revisionId: `${active.revisionId}:acceptance:1`,
+              charterRevisionId: active.charterRevisionId,
+              parentRevisionId: active.revisionId,
+              packs: [...active.packRefs, publication.pack],
+              enabledTools: active.compiledProfile.tools.map(tool => tool.id),
+              enabledSkills: active.compiledProfile.skills.map(skill => skill.id),
+              enabledAgents: active.compiledProfile.agents.map(agent => agent.id),
+              enabledWorkflows: active.compiledProfile.workflows.map(workflow => workflow.id),
+              enabledMemories: active.compiledProfile.memories.map(memory => memory.id),
+              enabledGlossaries: active.compiledProfile.glossaries.map(glossary => glossary.id),
+              enabledAcceptancePolicies: [acceptancePolicy.id],
+            });
+            const upgraded = await profileComposition.control.publishProfile({
+              version: 1,
+              operationId: `${command.operationId}:acceptance-profile`,
+              authenticatedPrincipalId: authenticatedPrincipal.principalId,
+              projectId: command.projectId,
+              expectedRegistryRevision: profiles.registryRevision,
+              overlay: upgradedOverlay,
+              source: {
+                kind: 'sponsor_decision',
+                sourceId: `console-bootstrap:${command.operationId}:acceptance`,
+              },
+              activate: true,
+            }, signal);
+            const upgradedActive = upgraded.active!;
+            const currentPlanningPolicy = await profileComposition.control.readPlanningPolicy(
+              command.projectId,
+              upgradedActive.revisionId,
+            );
+            const planningPublication = resolveWorkroomPlanningPolicyPublication(currentPlanningPolicy);
+            await profileComposition.control.publishPlanningPolicy({
+              version: 1,
+              operationId: `${command.operationId}:policy`,
+              authenticatedPrincipalId: authenticatedPrincipal.principalId,
+              projectId: command.projectId,
+              catalogRevision: catalog.revision,
+              projectDigest: digestWorkroomProfileCatalogProject(definition),
+              profileRevisionId: upgradedActive.revisionId,
+              profileDigest: upgradedActive.compiledDigest,
+              ...planningPublication,
+              policy: artifacts.policy,
+            }, signal);
+            await ensureDisclosureAuthority({
+              projectId: command.projectId,
+              catalogRevision: catalog.revision,
+              definition,
+              principalId: authenticatedPrincipal.principalId,
+            });
+            return await readPlanningSetupStatus(command.projectId, authenticatedPrincipal);
+          }
+          const currentPlanningPolicy = await profileComposition.control.readPlanningPolicy(
+            command.projectId,
+            active.revisionId,
+          );
+          const planningPublication = resolveWorkroomPlanningPolicyPublication(currentPlanningPolicy);
           await profileComposition.control.publishPlanningPolicy({
             version: 1,
             operationId: `${command.operationId}:policy`,
@@ -1845,7 +1999,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
             projectDigest: digestWorkroomProfileCatalogProject(definition),
             profileRevisionId: active.revisionId,
             profileDigest: active.compiledDigest,
-            revision: 1,
+            ...planningPublication,
             policy: artifacts.policy,
           }, signal);
           await ensureDisclosureAuthority({
@@ -1872,6 +2026,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           enabledSkills: artifacts.overlay.enabledSkills,
           enabledAgents: artifacts.overlay.enabledAgents,
           enabledWorkflows: artifacts.overlay.enabledWorkflows,
+          enabledAcceptancePolicies: artifacts.overlay.enabledAcceptancePolicies,
         });
         const profile = await profileComposition.control.publishProfile({
           version: 1,
@@ -1887,6 +2042,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           activate: true,
         }, signal);
         const active = profile.active!;
+        const currentPlanningPolicy = await profileComposition.control.readPlanningPolicy(
+          command.projectId,
+          active.revisionId,
+        );
+        const planningPublication = resolveWorkroomPlanningPolicyPublication(currentPlanningPolicy);
         await profileComposition.control.publishPlanningPolicy({
           version: 1,
           operationId: `${command.operationId}:policy`,
@@ -1896,7 +2056,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           projectDigest: digestWorkroomProfileCatalogProject(definition),
           profileRevisionId: active.revisionId,
           profileDigest: active.compiledDigest,
-          revision: 1,
+          ...planningPublication,
           policy: artifacts.policy,
         }, signal);
         await ensureDisclosureAuthority({
@@ -2260,6 +2420,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       resources,
       profiles: projectProfiles,
       catalog: workroomCatalog,
+      journal: workroomJournal,
       reports: workroomReports,
       projections: acceptanceProjections,
       riskHeaders: artifactRiskHeaders,
@@ -2343,6 +2504,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     if (!resources.has(portfolioControlOutboxRepositoryToken)) {
       resources.provide(portfolioControlOutboxRepositoryToken, portfolioControlOutbox);
     }
+    installLocalWorkroomPortfolioAuthorities({
+      generation,
+      resources,
+      catalog: workroomCatalog,
+      profiles: projectProfiles,
+      portfolioJournal: resources.use(portfolioJournalRepositoryToken),
+    });
     if (!resources.has(portfolioSponsorCommandToken)) {
       const portfolioSponsor = new WorkroomPortfolioSponsorRuntime({
         generation,
@@ -2422,13 +2590,31 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       catalog: workroomCatalog,
       profiles: projectProfiles,
       journal: workroomJournal,
+      runState: Object.freeze({
+        read: (projectId: string, runId: string) => workroomKernel.read(projectId, runId),
+        pinTaskAcceptance: (projectId: string, runId: string, taskKey: string) =>
+          workroomKernel.pinTaskAcceptance(projectId, runId, taskKey),
+      }),
+      fallbackResourceRequirements: LOCAL_WORKROOM_RESOURCE_REQUIREMENTS,
     });
     resources.provide(workroomAssignmentAuthorityGrantRepositoryToken, assignmentAuthorityGrants);
+    const durableAssignmentGrants = createDurableWorkroomAssignmentAuthorityGrantProvider({
+      repository: assignmentAuthorityGrants,
+      generation,
+    });
     resources.provide(
       workroomAssignmentAuthorityGrantToken,
-      createDurableWorkroomAssignmentAuthorityGrantProvider({
-        repository: assignmentAuthorityGrants,
+      createLocalWorkroomAssignmentGrantProvider({
         generation,
+        projectRoot: options.projectRoot,
+        repository: assignmentAuthorityGrants,
+        durable: durableAssignmentGrants,
+        journal: workroomJournal,
+        catalog: workroomCatalog,
+        profiles: projectProfiles,
+        runState: Object.freeze({
+          read: (projectId: string, runId: string) => workroomKernel.read(projectId, runId),
+        }),
       }),
     );
     resources.provide(
@@ -2532,6 +2718,24 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       maxRunsPerTick: 64,
       maxDeliveriesPerTick: 32,
       governance: governedOutbound.projection,
+      renewWorkroomBinding: async (projectId, catalog, operationSignal) => {
+        operationSignal.throwIfAborted();
+        const definition = catalog.definitions[projectId];
+        if (!definition) return;
+        const conversation = resolveCatalogWorkroomProjectionConversation(
+          definition,
+          options.im.listEndpoints(),
+        );
+        if (!conversation) return;
+        await ensureCatalogWorkroomProjectionBinding({
+          repository: projectionRepository,
+          catalog,
+          projectId,
+          conversation,
+          interactionBindingRevision: 1,
+          endpoints: options.im.listEndpoints(),
+        });
+      },
       resolveSponsorConversation: (_projectId, definition) =>
         resolveCatalogSponsorProjectionConversation(definition, options.im.listEndpoints()),
       ...(dataLifecycle ? { lifecycleOverdue: dataLifecycle.overdue } : {}),
@@ -2589,7 +2793,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
             `Task identity: ${task.key}@${task.revision}`,
             `Workspace mount: ${request.envelope.workspace.mountRef}`,
             `Acceptance Contract: ${task.acceptanceContract?.id ?? 'missing'}`,
-            'Return only structured Task Report JSON with claims[] and evidence[].',
+            ...structuredTaskReportPrompt(),
+            'Do not use chat Subagent lifecycle or emit Task status commands.',
           ].join('\n');
         },
       });
@@ -2905,7 +3110,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         if (!definition.members.some(member => member.agent === agent && member.role === 'orchestrator')) {
           throw new Error(`Workroom Catalog ${projectId} has no valid Orchestrator binding`);
         }
-        const projectDigest = workroomProjectionCatalogBindingDigest(definition);
+        const projectDigest = digestWorkroomCatalogProjectBinding(definition);
         return Object.freeze({
           orchestratorAgentDefinitionId: agent,
           projectRevision: snapshot.revision,
@@ -2993,13 +3198,16 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     let humanIngressRetryTimer: ReturnType<typeof setTimeout> | undefined;
     let humanIngressRetryAt: number | undefined;
     const scheduleHumanIngressRetry = (retryAt: number) => {
+      if (signal.aborted) return;
       if (humanIngressRetryAt !== undefined && humanIngressRetryAt <= retryAt) return;
       if (humanIngressRetryTimer) clearTimeout(humanIngressRetryTimer);
       humanIngressRetryAt = retryAt;
       humanIngressRetryTimer = setTimeout(() => {
         humanIngressRetryTimer = undefined;
         humanIngressRetryAt = undefined;
+        if (signal.aborted) return;
         void recoverHumanIngress().catch(error => {
+          if (signal.aborted) return;
           logger.error(formatCompact({
             op: 'workroom_human_ingress_recovery',
             error: error instanceof Error ? error.message : String(error),
@@ -4730,8 +4938,15 @@ export function createWorkroomPlanningBootstrapArtifacts(input: Readonly<{
     key: `${role}-${index + 1}`,
     role,
     requires: {},
+    resourceRequirements: LOCAL_WORKROOM_RESOURCE_REQUIREMENTS,
   }));
   const workflowDigest = digestInstallerValue({ workflowId, workflowTasks });
+  const acceptancePolicy = createBootstrapAcceptancePolicy({
+    projectId: input.projectId,
+    definition: input.definition,
+    principalId: input.principalId,
+    tasks: workflowTasks,
+  });
   const pack = createCapabilityPackManifest({
     id: `workroom:${input.projectId}:bootstrap`,
     version: '1.0.0',
@@ -4754,6 +4969,7 @@ export function createWorkroomPlanningBootstrapArtifacts(input: Readonly<{
       requiredByProfile: true,
       tasks: workflowTasks,
     }],
+    acceptancePolicies: [acceptancePolicy],
   });
   const { digest: _packDigest, ...packInput } = pack;
   const revisionId = `profile:${input.projectId}:bootstrap:1`;
@@ -4767,6 +4983,7 @@ export function createWorkroomPlanningBootstrapArtifacts(input: Readonly<{
     enabledSkills: skillIds,
     enabledAgents: members.map(member => member.agent).sort(),
     enabledWorkflows: [workflowId],
+    enabledAcceptancePolicies: [acceptancePolicy.id],
   });
   const policy = createWorkroomDynamicPlanningPolicySnapshot({
     revisionId: `planning:${input.projectId}:1`,
@@ -4779,7 +4996,7 @@ export function createWorkroomPlanningBootstrapArtifacts(input: Readonly<{
     schedulerPolicy: createWorkroomSchedulerPolicySnapshot({
       policyRef: `scheduler:${input.projectId}:bootstrap`,
       revision: 1,
-      pinnedAtSequence: 0,
+      pinnedAtSequence: 1,
       capacity: Math.max(1, Math.min(4, taskRoles.length)),
       agingStepMs: 30_000,
       starvationBoundMs: {
@@ -4791,7 +5008,65 @@ export function createWorkroomPlanningBootstrapArtifacts(input: Readonly<{
     defaultTaskDeadlineMs: 60 * 60_000,
     defaultPreemptibility: 'atomic',
   });
-  return Object.freeze({ pack, packInput: Object.freeze(packInput), overlay, policy, revisionId, workflowId });
+  return Object.freeze({
+    pack,
+    packInput: Object.freeze(packInput),
+    overlay,
+    policy,
+    acceptancePolicy,
+    revisionId,
+    workflowId,
+  });
+}
+
+function createBootstrapAcceptancePolicy(input: Readonly<{
+  projectId: string;
+  definition: WorkroomDefinition;
+  principalId: string;
+  tasks: readonly Readonly<{ key: string; role: string }>[];
+}>) {
+  if (!input.definition.sponsors?.includes(input.principalId)) {
+    throw new Error(`principal ${input.principalId} 不在 Project sponsors`);
+  }
+  const reviewers = input.definition.members.filter(member => member.role === 'reviewer');
+  if (reviewers.length !== 1) {
+    throw new Error('Workroom Acceptance Policy 需要且只能配置一个 reviewer 成员');
+  }
+  const templates = new Map<string, Readonly<{ key: string; role: string }>>();
+  for (const task of input.tasks) {
+    const current = templates.get(task.key);
+    if (current && current.role !== task.role) {
+      throw new Error(`Workroom Task 模板 ${task.key} 的角色不唯一`);
+    }
+    templates.set(task.key, Object.freeze({ key: task.key, role: task.role }));
+  }
+  if (templates.size === 0) {
+    throw new Error('Workroom Acceptance Policy 缺少 Workflow Task 模板');
+  }
+  const id = `workroom:${input.projectId}:acceptance`;
+  const tasks = [...templates.values()]
+    .sort((left, right) => left.key.localeCompare(right.key))
+    .map(task => ({
+      taskKey: task.key,
+      kind: task.role === 'integration' ? 'integration_candidate' as const : 'task_result' as const,
+      criteria: [{
+        id: 'reviewer-verdict',
+        kind: 'judgment' as const,
+        description: 'Reviewer verifies the task report, evidence, and governed artifacts against the task objective.',
+      }],
+      requiredEvidence: [],
+      minimumRoute: 'reviewer_required' as const,
+      reviewerPrincipalId: reviewers[0]!.agent,
+      sponsorPrincipalId: input.principalId,
+      reviewerTimeoutMs: 15 * 60_000,
+      sponsorTimeoutMs: 15 * 60_000,
+    }));
+  const body = Object.freeze({
+    id,
+    tasks,
+    memorySchema: Object.freeze({ revision: 1 as const, claimRules: Object.freeze([]) }),
+  });
+  return Object.freeze({ ...body, digest: digestInstallerValue(body) });
 }
 
 function digestInstallerValue(value: unknown): string {

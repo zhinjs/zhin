@@ -121,6 +121,7 @@ describe('Kernel-owned Remote Assignment issuance', () => {
       taskKey: 'build',
       agentDefinitionId: 'developer', endpointId: 'endpoint-1',
     };
+    const preview = await first.previewRemoteAssignment(request);
     const original = await first.issueRemoteAssignment(request);
     const restarted = new WorkroomKernel({
       journal, now: () => 200,
@@ -128,6 +129,7 @@ describe('Kernel-owned Remote Assignment issuance', () => {
     });
 
     await expect(restarted.issueRemoteAssignment(request)).resolves.toEqual(original);
+    await expect(restarted.previewRemoteAssignment(request)).resolves.toEqual(preview);
     await expect(restarted.issueRemoteAssignment({ ...request, endpointId: 'endpoint-drift' }))
       .rejects.toThrow('operation payload conflict');
     expect(await journal.read('run-1')).toHaveLength(5);

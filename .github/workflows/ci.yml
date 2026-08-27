@@ -76,24 +76,18 @@ jobs:
       - name: build packages (Windows)
         if: runner.os == 'Windows'
         run: |
-          # GitHub's pwsh wrapper treats native non-zero exits as terminating
-          # errors. Disable that behavior so this step can inspect pnpm's
-          # normalized exit and run the intended incremental retry.
-          $ErrorActionPreference = 'Continue'
-          if (Test-Path variable:PSNativeCommandUseErrorActionPreference) {
-            $PSNativeCommandUseErrorActionPreference = $false
-          }
-          pnpm build --concurrency=1
-          $firstBuildExit = $LASTEXITCODE
-          # pnpm normalizes Turbo/child-process native exits to code 1, so the
-          # original STATUS_DLL_INIT_FAILED value is not observable here. A
-          # second incremental pass reuses every completed Turbo task; a real
-          # compiler error remains red on the second pass.
-          if ($firstBuildExit -ne 0) {
-            Write-Warning "Windows build exited with $firstBuildExit; retrying incremental build once."
-            pnpm build --concurrency=1
-          }
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Invoke pnpm through Start-Process so GitHub's pwsh wrapper cannot
+          # terminate the script on a native STATUS_DLL_INIT_FAILED exit before
+          # the incremental retry starts.
+          $pnpm = (Get-Command pnpm.cmd -ErrorAction Stop).Source
+          $firstBuild = Start-Process -FilePath $pnpm -ArgumentList @('build', '--concurrency=1') -NoNewWindow -Wait -PassThru
+          if ($firstBuild.ExitCode -eq 0) { exit 0 }
+
+          # The second pass reuses every completed Turbo task. Transient process
+          # initialization failures recover, while real compiler errors stay red.
+          Write-Warning "Windows build exited with $($firstBuild.ExitCode); retrying incremental build once."
+          $retryBuild = Start-Process -FilePath $pnpm -ArgumentList @('build', '--concurrency=1') -NoNewWindow -Wait -PassThru
+          exit $retryBuild.ExitCode
 
       - name: build packages
         if: runner.os != 'Windows'

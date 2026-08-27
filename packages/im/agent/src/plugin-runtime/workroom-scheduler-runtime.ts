@@ -228,9 +228,13 @@ export class WorkroomSchedulerRuntime {
               await this.options.unavailableControl?.block(decision);
               continue;
             }
+            // The exact Scheduler supply blocker changes the Task to blocked.
+            // Recover it before delivery so supplies that validate current Task
+            // readiness can consume the same durable dispatch fact.
+            await this.options.unavailableControl?.recover(decision);
           }
           await supply.deliver(decision);
-          await this.options.unavailableControl?.recover(decision);
+          if (!supply.probe) await this.options.unavailableControl?.recover(decision);
         } catch (error) {
           if (error instanceof WorkroomSchedulerDurablyBlockedError) continue;
           if (error instanceof WorkroomSchedulerAssignmentRouteUnavailableError

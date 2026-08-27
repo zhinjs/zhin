@@ -14,6 +14,7 @@ import {
   decideWorkroomSchedule,
 } from '../../src/workroom/workroom-scheduler.js';
 import type { WorkroomEvent } from '../../src/workroom/kernel-contracts.js';
+import { WorkflowPlanBuilder } from '../../src/workroom/workflow-plan-builder.js';
 
 describe('pinned Profile Workroom Scheduler Portfolio Request authority', () => {
   it('constructs one content-free request from exact Kernel, Profile, Portfolio, and Catalog facts', async () => {
@@ -162,7 +163,7 @@ function pinnedProfile(withResources = true) {
       revisionId: 'profile-1', projectId: 'project-1', compiledDigest: sha('a'),
       compiledProfile: {
         revisionId: 'profile-1', projectId: 'project-1', digest: sha('a'),
-        workflows: [{ id: 'build-workflow', tasks: [{
+        workflows: [{ id: 'build-workflow', digest: sha('9'), tasks: [{
           key: 'build', role: 'executor', requires: { tools: [], skills: [] },
           ...(withResources ? { resourceRequirements: { demands: [
               { poolId: 'model-main', capacityUnits: 1, rateUnits: 2, budgetUnits: 50 },
@@ -273,13 +274,49 @@ function readyJournal(): readonly WorkroomEvent[] {
   });
   return [
     event(0, 'run.created', { projectId: 'project-1', title: 'Private run title' }),
-    event(1, 'plan.admitted', { schedulerPolicy: policy }),
+    event(1, 'plan.admitted', { schedulerPolicy: policy, plan: admittedPlan(policy) }),
     event(2, 'task.planned', {
       taskKey: 'build', title: 'Build secret release', role: 'executor', required: true, maxAttempts: 1,
       sponsorLane: 'normal', localRank: 0, deadline: 1_000, enqueuedAt: 10,
       dependsOn: [], preemptibility: 'atomic',
     }),
   ];
+}
+
+function admittedPlan(policy: ReturnType<typeof createWorkroomSchedulerPolicySnapshot>) {
+  return WorkflowPlanBuilder.create({
+    proposalId: 'proposal-1',
+    projectId: 'project-1',
+    strategy: { id: 'build-workflow', version: 'profile-1', digest: sha('9') },
+    parameterDigest: sha('1'),
+    authority: {
+      projectRevision: sha('b'),
+      projectDigest: sha('2'),
+      profileRevisionId: 'profile-1',
+      profileDigest: sha('a'),
+      planningPolicyRevisionId: 'planning-policy-1',
+      planningPolicyDigest: sha('3'),
+      orchestratorAgentDefinitionId: 'orchestrator',
+      orchestratorAuthorityDigest: sha('4'),
+    },
+    budget: { maxTasks: 1, maxTotalAttempts: 1 },
+    schedulerPolicy: policy,
+  }).addTask({
+    key: 'build',
+    title: 'Build secret release',
+    role: 'executor',
+    required: true,
+    maxAttempts: 1,
+    dependsOn: [],
+    requires: {},
+    scheduler: {
+      sponsorLane: 'normal',
+      localRank: 0,
+      deadline: 1_000,
+      enqueuedAt: 10,
+      preemptibility: 'atomic',
+    },
+  }).build();
 }
 
 function withDispatch(decision: NonNullable<ReturnType<typeof decideWorkroomSchedule>>): readonly WorkroomEvent[] {

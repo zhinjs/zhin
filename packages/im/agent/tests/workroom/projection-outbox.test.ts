@@ -140,6 +140,32 @@ describe('Workroom Projection Outbox', () => {
     expect(JSON.stringify(captured)).not.toContain('完成 durable projection schema');
   });
 
+  it('resolves a namespaced Assignment principal through its exact Agent definition identity', async () => {
+    const repository = new MemoryWorkroomProjectionRepository();
+    const events: WorkroomEvent[] = [
+      workroomEvent(0, 'run.created', { projectId: 'project-1', title: 'Namespaced identity' }),
+      workroomEvent(1, 'task.planned', { taskKey: 'build' }),
+      workroomEvent(2, 'assignment.claimed', {
+        taskKey: 'build', assignmentId: 'assignment-1', owner: 'agent:software.developer',
+        role: 'executor', taskRevision: 1, assignmentRevision: 1,
+      }),
+    ];
+    const tracer = new WorkroomProjectionTracer({
+      repository,
+      governance,
+      journal: {
+        listRunIds: async () => ['run-1'],
+        read: async () => events,
+        append: async () => { throw new Error('read-only test Journal'); },
+      },
+    });
+
+    const state = await tracer.capture(binding(), 'run-1');
+
+    expect(Object.values(state.items).find(item => item.sourceSequence === 2)?.speaker)
+      .toMatchObject({ agentDefinitionId: 'software.developer', displayName: 'Developer' });
+  });
+
   it('recovers outbox items and cursors after restart and fences concurrent CAS writers', async () => {
     const fixture = await runningAssignment();
     const root = join(tmpdir(), `workroom-projection-${crypto.randomUUID()}`);

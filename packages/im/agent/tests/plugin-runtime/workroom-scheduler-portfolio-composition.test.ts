@@ -30,13 +30,13 @@ describe('standard Portfolio-first Workroom Scheduler composition', () => {
     const catalog = catalogSnapshot();
     const installed = installWorkroomSchedulerPortfolioDispatchResources({
       generation: 7, signal: controller.signal, resources,
-      catalog: { read: async () => catalog }, profiles: pinnedProfiles(),
+      catalog: { read: async () => catalog }, profiles: pinnedProfiles(), runState: readyRunState(),
     });
     expect(resources.use(workroomSchedulerAssignmentRouteRegistryToken)).toBe(installed.routes);
     expect(resources.use(workroomSchedulerDispatchSupplyToken)).toBe(installed.supply);
     expect(installWorkroomSchedulerPortfolioDispatchResources({
       generation: 7, signal: controller.signal, resources,
-      catalog: { read: async () => catalog }, profiles: pinnedProfiles(),
+      catalog: { read: async () => catalog }, profiles: pinnedProfiles(), runState: readyRunState(),
     })).toEqual(installed);
     installed.routes.register({
       providerId: 'local', generation: 7,
@@ -54,7 +54,7 @@ describe('standard Portfolio-first Workroom Scheduler composition', () => {
     const catalog = catalogSnapshot();
     const installed = installWorkroomSchedulerPortfolioDispatchResources({
       generation: 7, signal: new AbortController().signal, resources,
-      catalog: { read: async () => catalog }, profiles: pinnedProfiles(),
+      catalog: { read: async () => catalog }, profiles: pinnedProfiles(), runState: readyRunState(),
     });
     installed.routes.register({ providerId: 'local', generation: 7, resolve: async () => route });
     const request = {
@@ -90,6 +90,7 @@ describe('standard Portfolio-first Workroom Scheduler composition', () => {
       resources,
       catalog: { read: async () => catalogSnapshot() },
       profiles: pinnedProfiles(),
+      runState: readyRunState(),
       journal: { read: async () => [
         ...readyJournal(),
         event(3, 'scheduler.dispatch_requested', selected),
@@ -116,6 +117,16 @@ function catalogSnapshot() {
   return { revision: sha('d'), definitions: { 'project-1': {
     enabled: true, members: [{ role: 'executor', agent: 'developer' }],
   } } } as never;
+}
+
+function readyRunState() {
+  const state = { tasks: { build: {
+    revision: 1, status: 'ready', acceptanceContract: { id: 'acceptance:build' },
+  } } } as never;
+  return {
+    read: async () => state,
+    pinTaskAcceptance: async () => state,
+  };
 }
 
 function decision() { return decideWorkroomSchedule(readyJournal())!; }

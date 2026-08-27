@@ -21,6 +21,7 @@ import {
 import {
   FileGovernedPayloadWriteSagaRepository,
   GovernedPayloadWritePurgeConsumer,
+  createGovernedPayloadWriteIntentId,
 } from '../../src/data-governance/governed-payload-write-saga.js';
 import {
   WorkroomDataGovernanceRuntime,
@@ -39,6 +40,67 @@ import { FileWorkroomJournal } from '../../src/workroom/journal.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 
 describe('WorkroomDataGovernanceRuntime', () => {
+  it('does not purge another in-flight Journal append while preparing or reconciling exact receipts', async () => {
+    const root = join(tmpdir(), `zhin-governance-journal-concurrency-${randomUUID()}`);
+    await mkdir(root);
+    const repository = new FileDataGovernanceAuthorityRepository(
+      join(root, 'authority'), { verify: async () => true },
+    );
+    await repository.appendProject(projectAuthority('full'), undefined);
+    const payloadWrites = new FileGovernedPayloadWriteSagaRepository(join(root, 'sagas'));
+    const runtime = new WorkroomDataGovernanceRuntime({
+      generation: 5,
+      repository,
+      vault: new EncryptedFilePayloadVault({
+        directory: join(root, 'payloads'), generation: 5,
+        cryptography: testCryptography(new Uint8Array(32).fill(2), 'kms:key-journal-concurrency'),
+      }),
+      ...payloadInfrastructure(root, 5, payloadWrites),
+      signal: new AbortController().signal,
+      now: () => 100,
+    });
+    const write = async (eventId: string, value: string) => {
+      const source = {
+        ref: `workroom-journal-event:run-1:${eventId}:$.payload.title`,
+        digest: digestCanonicalWorkroomValue({ eventId, value }),
+        bindingDigest: digestCanonicalWorkroomValue({ eventId, value, binding: true }),
+      };
+      const receipt = await runtime.journalPayloads.write({
+        projectId: 'project-1', runId: 'run-1', eventId,
+        eventType: 'run.created', fieldPath: '$.payload.title', value,
+        contentHash: digestCanonicalWorkroomValue(value), source,
+      });
+      const intentId = createGovernedPayloadWriteIntentId({
+        operationId: `journal-publication:run-1`,
+        projectId: 'project-1',
+        objectId: receipt.descriptor.objectId,
+        payloadHash: receipt.descriptor.payloadHash,
+        descriptorDigest: receipt.descriptor.descriptorDigest,
+        sourceBindingDigest: receipt.source.bindingDigest,
+        consumer: 'journal_header',
+        publicationScope: 'run-1',
+      });
+      return { receipt, intentId };
+    };
+    const first = await write('event-1', 'first private payload');
+    const second = await write('event-2', 'second private payload');
+
+    await runtime.journalPayloads.prepare?.({
+      projectId: 'project-1', runId: 'run-1', receipts: [first.receipt],
+    });
+    await runtime.journalPayloads.reconcile?.({
+      projectId: 'project-1', runId: 'run-1', receipts: [first.receipt],
+      publicationDigest: digestCanonicalWorkroomValue({ header: 1 }),
+    });
+    await runtime.journalPayloads.abandon?.({
+      projectId: 'project-1', runId: 'run-1', receipts: [first.receipt], reason: 'cas_lost',
+    });
+
+    await expect(payloadWrites.read(first.intentId)).resolves.toMatchObject({ state: 'published' });
+    await expect(payloadWrites.read(second.intentId)).resolves.toMatchObject({ state: 'authority_indexed' });
+    await expect(payloadWrites.listPurgeRequired('project-1')).resolves.toEqual([]);
+  });
+
   it('settles an authority-indexed publication during generation handoff without a Vault rewrite', async () => {
     const root = join(tmpdir(), `zhin-governance-handoff-publication-${randomUUID()}`);
     await mkdir(root);

@@ -8,8 +8,10 @@ import {
   WORKROOM_CONTROL_PLANE_ROOT_PRINCIPAL,
   createCatalogWorkroomProfilePublisherAuthority,
   createSnapshotWorkroomProfileGenerationView,
+  digestWorkroomProfileCatalogProject,
   installWorkroomProfileAuthorityResources,
 } from '../../src/plugin-runtime/workroom-profile-authority-composition.js';
+import { digestWorkroomCatalogProjectBinding } from '../../src/workroom/catalog-definition.js';
 import { workroomProjectProfileRegistryToken } from '../../src/plugin-runtime/workroom-assignment-authority-provider.js';
 import { workroomDynamicPlanningPolicyToken } from '../../src/plugin-runtime/workroom-dynamic-planning-provider.js';
 import { createWorkroomProfileOverlay } from '../../src/plugin-runtime/workroom-profile-authority-runtime.js';
@@ -51,6 +53,16 @@ const pack = Object.freeze({
 });
 
 describe('Workroom Profile authority production composition', () => {
+  it('uses the canonical Catalog Project binding digest for planning authority', () => {
+    const definition = Object.freeze({
+      name: 'Alpha',
+      members: Object.freeze([]),
+      sponsors: Object.freeze(['human:alice']),
+    });
+    expect(digestWorkroomProfileCatalogProject(definition))
+      .toBe(digestWorkroomCatalogProjectBinding(definition));
+  });
+
   it('holds one current Snapshot lease for the complete operation and releases it on failure', async () => {
     const store = snapshots();
     const acquire = vi.spyOn(store, 'acquire');

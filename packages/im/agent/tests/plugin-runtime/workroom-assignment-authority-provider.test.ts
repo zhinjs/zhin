@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   createWorkroomAssignmentAuthorityGrant,
   createWorkroomGenerationAuthoritySnapshot,
+  createWorkroomGenerationAuthoritySnapshotFromRuntime,
   digestWorkroomCatalogProjectBinding,
   digestWorkroomRemoteEndpointAuthority,
   GenerationOwnedWorkroomAssignmentAuthorityProvider,
 } from '../../src/plugin-runtime/workroom-assignment-authority-provider.js';
+import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { SkillIndex, skillFeatureId } from '@zhin.js/skill';
+import { ToolIndex, toolFeatureId } from '@zhin.js/tool';
 import { MemoryProjectProfileJournal, ProjectProfileRegistry } from '../../src/workroom/profile-registry.js';
 import type { WorkroomCatalogSnapshot } from '../../src/workroom/catalog.js';
 import type { WorkroomRemoteAssignmentAuthorityInput } from '../../src/workroom/remote-assignment-issuance.js';
@@ -17,6 +21,31 @@ import { compileWorkroomProfile, type CapabilityPack } from '../../src/workroom/
 const SHA = (value: string): string => `sha256:${value.repeat(64)}`;
 
 describe('generation-owned Workroom Assignment authority provider', () => {
+  it('publishes only capabilities executable from the Root generation owner', () => {
+    const root = rootPluginId();
+    const toolIndex = Object.assign(Object.create(ToolIndex.prototype), {
+      list: () => [toolDescriptor('root_tool'), toolDescriptor('child_tool')],
+      visible: () => [toolDescriptor('root_tool')],
+    }) as ToolIndex;
+    const skillIndex = Object.assign(Object.create(SkillIndex.prototype), {
+      list: () => [skillDescriptor('root_skill'), skillDescriptor('child_skill')],
+      visible: () => [skillDescriptor('root_skill')],
+    }) as SkillIndex;
+    const snapshot = {
+      generation: 3,
+      root,
+      projections: new Map([
+        [toolFeatureId, toolIndex],
+        [skillFeatureId, skillIndex],
+      ]),
+    } as unknown as RuntimeSnapshot;
+
+    const authority = createWorkroomGenerationAuthoritySnapshotFromRuntime(snapshot, []);
+
+    expect(authority.tools.map(tool => tool.name)).toEqual(['root_tool']);
+    expect(authority.skills.map(skill => skill.name)).toEqual(['root_skill']);
+  });
+
   it('composes only the exact persisted Run Profile pin, generation supply, Project member, grant and endpoint', async () => {
     const fixture = await createFixture();
 
@@ -232,4 +261,12 @@ function ceiling(id: string, revision: number) {
     tools: [{ name: 'read_file', digest: SHA('1') }],
     skills: [{ name: 'typescript', digest: SHA('2'), requiredTools: ['read_file'] }],
   } as const;
+}
+
+function toolDescriptor(name: string) {
+  return { name, description: name, approval: 'never' as const, hidden: false };
+}
+
+function skillDescriptor(name: string) {
+  return { name, description: name, instructions: `Use ${name}` };
 }

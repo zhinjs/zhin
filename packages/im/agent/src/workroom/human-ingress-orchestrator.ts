@@ -190,6 +190,28 @@ implements HumanIngressOrchestratorProposalPort {
     }
     const title = source.text.replace(/^\/(?:work|task)(?:\s+|$)/iu, '').trim();
     if (!title) return clarification(request, 'missing_work_scope');
+    const replay = await this.options.kernel.readWorkflowPlanAdmission(request.operationId);
+    if (replay) {
+      const { plan, receipt } = replay;
+      if (replay.operationId !== request.operationId
+        || replay.sourceEventRef !== source.ref
+        || replay.sourceEventDigest !== source.digest
+        || replay.orchestratorAgentDefinitionId !== authority.orchestratorAgentDefinitionId
+        || plan.projectId !== request.identity.projectId
+        || plan.proposalId !== request.operationId
+        || plan.parameterDigest !== source.digest
+        || receipt.state.projectId !== request.identity.projectId
+        || receipt.state.title !== title) {
+        throw new Error('Human ingress persisted Plan admission is outside the exact operation/source scope');
+      }
+      await this.options.afterPlanAdmission?.({
+        operationId: request.operationId,
+        projectId: request.identity.projectId,
+        plan,
+        receipt,
+      });
+      return applied(request, 'plan_proposal_submitted', receipt);
+    }
     if (!this.options.planning) return clarification(request, 'planning_unavailable');
     let plan: WorkflowPlanProposal;
     try {
@@ -315,7 +337,13 @@ function applied(
   kind: Extract<HumanIngressApplicationDecision, { status: 'applied' }>['kind'],
   receipt: Readonly<{ receiptRef: string; receiptDigest: string }>,
 ): HumanIngressApplicationDecision {
-  return deepFreeze({ ...request.identity, status: 'applied', kind, ...receipt });
+  return deepFreeze({
+    ...request.identity,
+    status: 'applied',
+    kind,
+    receiptRef: receipt.receiptRef,
+    receiptDigest: receipt.receiptDigest,
+  });
 }
 
 function clarification(

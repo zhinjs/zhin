@@ -46,6 +46,7 @@ export interface WorkroomJournalPayloadWriteInput {
   readonly runId: string;
   readonly eventId: string;
   readonly eventType: WorkroomEvent['type'];
+  readonly occurredAt: number;
   readonly fieldPath: string;
   readonly value: unknown;
   readonly contentHash: string;
@@ -728,59 +729,70 @@ export class DatabaseWorkroomJournal implements WorkroomJournal {
       protectedEvents: readonly StoredWorkroomEvent[];
       current: readonly StoredWorkroomEvent[];
     }> | undefined;
+    let headerPublished = false;
     try {
-      const appended = await this.#database.transaction(async transaction => {
-        const allRows = await transaction.select('workroom_events').where({});
+      const allRows = await this.#eventModel.select().where({});
+      await assertActiveStoreHasNoLegacyEmbeddedPayload({
+        read: async () => legacyDatabaseJournalRecords(allRows),
+      });
+      const current = parseStoredRowGroups(allRows).get(runId) ?? Object.freeze([]);
+      if (current.length > 0) {
+        await reconcileJournalPayloads(runId, current, this.#requirePayloads());
+      }
+      const actualSequence = current.at(-1)?.sequence ?? -1;
+      if (actualSequence !== expectedSequence) {
+        throw new WorkroomSequenceConflictError(runId, expectedSequence, actualSequence);
+      }
+      if (drafts.length === 0) return [];
+      const appended = materializeEvents(runId, expectedSequence, drafts);
+      const projectId = projectIdForAppend(current, appended);
+      const protectedEvents = await protectEvents(appended, projectId, this.#requirePayloads());
+      publication = { projectId, protectedEvents, current };
+      await this.#requirePayloads().prepare?.({
+        projectId,
+        runId,
+        receipts: collectGovernedPayloadReceipts(protectedEvents),
+      });
+      await this.#database.transaction(async transaction => {
+        const transactionRows = await transaction.select('workroom_events').where({});
         await assertActiveStoreHasNoLegacyEmbeddedPayload({
-          read: async () => legacyDatabaseJournalRecords(allRows),
+          read: async () => legacyDatabaseJournalRecords(transactionRows),
         });
-        const current = parseStoredRowGroups(allRows).get(runId) ?? Object.freeze([]);
-        if (current.length > 0) await reconcileJournalPayloads(runId, current, this.#requirePayloads());
-        const actualSequence = current.at(-1)?.sequence ?? -1;
-        if (actualSequence !== expectedSequence) {
-          throw new WorkroomSequenceConflictError(runId, expectedSequence, actualSequence);
+        const transactionCurrent = parseStoredRowGroups(transactionRows).get(runId)
+          ?? Object.freeze([]);
+        const transactionSequence = transactionCurrent.at(-1)?.sequence ?? -1;
+        if (transactionSequence !== expectedSequence) {
+          throw new WorkroomSequenceConflictError(runId, expectedSequence, transactionSequence);
         }
-        if (drafts.length === 0) return [];
-        const appended = materializeEvents(runId, expectedSequence, drafts);
-        const projectId = projectIdForAppend(current, appended);
-        const protectedEvents = await protectEvents(appended, projectId, this.#requirePayloads());
-        await this.#requirePayloads().prepare?.({
-          projectId,
-          runId,
-          receipts: collectGovernedPayloadReceipts(protectedEvents),
-        });
         await transaction.insertMany('workroom_events', protectedEvents.map(toRow));
-        publication = { projectId, protectedEvents, current };
-        return appended;
       }, { isolationLevel: 'SERIALIZABLE' });
-      if (publication) {
-        await this.#requirePayloads().publish?.({
+      headerPublished = true;
+      await this.#requirePayloads().publish?.({
+        projectId: publication.projectId,
+        runId,
+        receipts: collectGovernedPayloadReceipts(publication.protectedEvents),
+        publicationDigest: journalPublicationDigest(
+          runId,
+          [...publication.current, ...publication.protectedEvents],
+        ),
+      });
+      return appended;
+    } catch (error) {
+      if (publication && !headerPublished) {
+        await this.#requirePayloads().abandon?.({
           projectId: publication.projectId,
           runId,
           receipts: collectGovernedPayloadReceipts(publication.protectedEvents),
-          publicationDigest: journalPublicationDigest(
-            runId,
-            [...publication.current, ...publication.protectedEvents],
-          ),
+          reason: error instanceof WorkroomSequenceConflictError ? 'cas_lost' : 'write_failed',
         });
       }
-      return appended;
-    } catch (error) {
-      if (error instanceof WorkroomSequenceConflictError) throw error;
+      if (error instanceof WorkroomSequenceConflictError || headerPublished) throw error;
       // A serializable/unique-key loser is dialect-specific. Re-read the
       // authoritative sequence and normalize only a proven concurrent winner;
       // unrelated database failures retain their original error.
       const actualSequence = (await this.read(runId)).at(-1)?.sequence ?? -1;
       if (actualSequence !== expectedSequence) {
         throw new WorkroomSequenceConflictError(runId, expectedSequence, actualSequence);
-      }
-      if (publication) {
-        await this.#requirePayloads().abandon?.({
-          projectId: publication.projectId,
-          runId,
-          receipts: collectGovernedPayloadReceipts(publication.protectedEvents),
-          reason: 'write_failed',
-        });
       }
       throw error;
     }
@@ -1371,6 +1383,7 @@ async function protectValue(
         runId: event.runId,
         eventId: event.eventId,
         eventType: event.type,
+        occurredAt: event.occurredAt,
         fieldPath: path,
         value: structuredClone(child),
         contentHash,
@@ -1383,6 +1396,7 @@ async function protectValue(
           runId: event.runId,
           eventId: event.eventId,
           eventType: event.type,
+          occurredAt: event.occurredAt,
           fieldPath: path,
           contentHash,
         }),
@@ -1522,6 +1536,7 @@ async function materializeValue(
         runId: event.runId,
         eventId: event.eventId,
         eventType: event.type,
+        occurredAt: event.occurredAt,
         fieldPath,
         contentHash: value.contentHash,
       }),
@@ -1637,6 +1652,7 @@ function assertStoredEventReceiptBindings(events: readonly StoredWorkroomEvent[]
           runId: event.runId,
           eventId: event.eventId,
           eventType: event.type,
+          occurredAt: event.occurredAt,
           fieldPath,
           contentHash: value.contentHash,
         }),
@@ -1663,14 +1679,17 @@ export function createWorkroomJournalPayloadObjectId(input: Readonly<{
   runId: string;
   eventId: string;
   eventType: WorkroomEvent['type'];
+  occurredAt: number;
   fieldPath: string;
   contentHash: string;
 }>): string {
   return `workroom-journal-payload:${digestCanonicalWorkroomValue({
+    version: 2,
     projectId: input.projectId,
     runId: input.runId,
     eventId: input.eventId,
     eventType: input.eventType,
+    occurredAt: input.occurredAt,
     fieldPath: input.fieldPath,
     contentHash: input.contentHash,
   })}`;

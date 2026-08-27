@@ -10,6 +10,7 @@ import {
   parsePortfolioCapacityRequest,
   parsePortfolioPolicySnapshot,
   parsePortfolioResourceBundle,
+  type PortfolioResourceBundle,
   type PortfolioPolicySnapshot,
 } from '../portfolio/portfolio-journal.js';
 import type { ValidatedAtomicResourceBundle } from '../portfolio/resource-bundle.js';
@@ -18,6 +19,7 @@ import {
   parseWorkroomDispatchTaskDecision,
   type WorkroomDispatchTaskDecision,
 } from '../workroom/workroom-scheduler.js';
+import { assertWorkflowPlanProposal, type WorkflowPlanProposal } from '../workroom/workflow-plan-builder.js';
 import type {
   PortfolioAtomicBundleAuthorityPort,
   PortfolioPolicyAuthorityPort,
@@ -79,6 +81,8 @@ export interface PinnedProfileWorkroomSchedulerPortfolioRequestAuthorityOptions 
   readonly scopes: WorkroomSchedulerPortfolioScopeAuthorityPort;
   readonly policies: PortfolioPolicyAuthorityPort;
   readonly bundles: PortfolioAtomicBundleAuthorityPort;
+  /** Explicit generation-owned fallback for legacy Profiles without a resource declaration. */
+  readonly fallbackResourceRequirements?: PortfolioResourceBundle;
 }
 
 /**
@@ -117,6 +121,16 @@ implements WorkroomSchedulerPortfolioRequestAuthorityPort {
     const task = getWorkroomScheduledTaskCapacitySnapshot(events, decision.taskKey);
     if (task.taskRevision !== decision.taskRevision || task.role !== decision.role) return undefined;
 
+    const admitted = events.filter(event => event.type === 'plan.admitted');
+    if (admitted.length !== 1) return undefined;
+    const plan = admitted[0]!.payload.plan;
+    if (!plan || typeof plan !== 'object') return undefined;
+    assertWorkflowPlanProposal(plan as WorkflowPlanProposal);
+    const admittedPlan = plan as WorkflowPlanProposal;
+    if (admittedPlan.projectId !== decision.projectId
+      || !admittedPlan.tasks.some(candidate => candidate.key === decision.taskKey
+        && candidate.role === decision.role)) return undefined;
+
     const registry = await this.options.profiles.read(decision.projectId);
     const pin = registry.runPins[decision.runId];
     const revision = pin && registry.revisions[pin.profileRevisionId];
@@ -127,12 +141,15 @@ implements WorkroomSchedulerPortfolioRequestAuthorityPort {
       || revision.compiledProfile.revisionId !== pin.profileRevisionId
       || revision.compiledProfile.projectId !== decision.projectId
       || revision.compiledProfile.digest !== pin.profileDigest) return undefined;
-    const requirements = revision.compiledProfile.workflows.flatMap(workflow => workflow.tasks)
-      .filter(candidate => candidate.key === decision.taskKey
-        && candidate.role === decision.role
-        && candidate.resourceRequirements !== undefined);
-    if (requirements.length !== 1) return undefined;
-    const resourceBundle = parsePortfolioResourceBundle(requirements[0]!.resourceRequirements);
+    const workflows = revision.compiledProfile.workflows.filter(workflow =>
+      workflow.id === admittedPlan.strategy.id && workflow.digest === admittedPlan.strategy.digest);
+    if (workflows.length !== 1 || admittedPlan.strategy.version !== pin.profileRevisionId) return undefined;
+    const templates = workflows[0]!.tasks.filter(candidate => candidate.role === decision.role);
+    if (templates.length !== 1) return undefined;
+    const requirements = templates[0]!.resourceRequirements
+      ?? this.options.fallbackResourceRequirements;
+    if (!requirements) return undefined;
+    const resourceBundle = parsePortfolioResourceBundle(requirements);
 
     const scopeInput = Object.freeze({
       generation: this.#generation,

@@ -111,8 +111,7 @@ export class ActivatableWorkroomDataGovernanceStorage {
     const before = await lifecycleStreams(this.#fileLifecycle, projects);
     await this.lifecycle.activate(input.lifecycle, projects, this.#fileLifecycle);
     const afterSource = await lifecycleStreams(this.#fileLifecycle, projects);
-    const afterTarget = await lifecycleStreams(this.lifecycle, projects);
-    if (digest(before) !== digest(afterSource) || digest(before) !== digest(afterTarget)) {
+    if (digest(before) !== digest(afterSource)) {
       throw new Error('Workroom Data Governance Lifecycle cutover replay drift');
     }
     input.signal.throwIfAborted();

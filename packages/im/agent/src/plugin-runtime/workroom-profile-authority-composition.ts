@@ -8,6 +8,10 @@ import {
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
 } from '../workroom/canonical-value.js';
+import {
+  digestWorkroomCatalogProjectBinding,
+  type WorkroomDefinition,
+} from '../workroom/catalog-definition.js';
 import { DurableFileStore } from '../workroom/durable-file-store.js';
 import { FileProjectProfileJournal } from '../workroom/file-profile-journal.js';
 import { workroomProjectProfileRegistryToken } from './workroom-assignment-authority-provider.js';
@@ -120,7 +124,7 @@ export function digestWorkroomProfileCatalogProject(definition: unknown): string
   if (!definition || typeof definition !== 'object' || Array.isArray(definition)) {
     throw new Error('Workroom Profile Catalog Project definition is invalid');
   }
-  return digest(structuredClone(definition));
+  return digestWorkroomCatalogProjectBinding(definition as WorkroomDefinition);
 }
 
 export function createSnapshotWorkroomProfileGenerationView(options: Readonly<{

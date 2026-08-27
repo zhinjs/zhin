@@ -15,6 +15,7 @@ import {
 } from '../workroom/effect-ledger.js';
 import type { ProjectProfileRegistry } from '../workroom/profile-registry.js';
 import type { WorkroomCatalog } from '../workroom/catalog.js';
+import type { WorkroomJournal } from '../workroom/journal.js';
 import type { WorkroomRunState } from '../workroom/kernel-contracts.js';
 import { workroomAcceptanceAuthorityToken } from './workroom-acceptance-authority.js';
 import { workroomAcceptancePolicyDecisionToken } from './workroom-acceptance-policy.js';
@@ -533,6 +534,7 @@ export interface InstallWorkroomAcceptanceResourcesOptions {
   readonly resources: Pick<Scope, 'has' | 'provide'>;
   readonly profiles: Pick<ProjectProfileRegistry, 'read'>;
   readonly catalog: Pick<WorkroomCatalog, 'read'>;
+  readonly journal?: Pick<WorkroomJournal, 'read'>;
   readonly projections?: WorkroomGovernedAcceptanceProjectionPort;
   readonly reports: WorkroomAcceptedReportReader;
   readonly riskHeaders?: WorkroomKernelRiskHeaderPort;
@@ -662,6 +664,7 @@ export function installWorkroomAcceptanceResources(
     profiles: options.profiles,
     catalog: options.catalog,
     projections,
+    ...(options.journal ? { journal: options.journal } : {}),
   });
   const principals = new CatalogWorkroomAcceptancePrincipalRegistry({
     profiles: options.profiles,

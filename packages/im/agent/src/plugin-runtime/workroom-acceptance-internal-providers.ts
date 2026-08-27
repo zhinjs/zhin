@@ -63,7 +63,8 @@ WorkroomAcceptanceProjectionSourceAuthorityPort {
       && candidate.profileDigest === active.compiledDigest
       && candidate.activationRegistryRevision === active.activatedAtRegistryRevision);
     if (!pin) return Object.freeze([]);
-    return Object.freeze([candidateForPin(profile, catalog, pin)]);
+    const candidate = candidateForPin(profile, catalog, pin);
+    return candidate ? Object.freeze([candidate]) : Object.freeze([]);
   }
 
   async authorize(candidate: WorkroomAcceptanceProjectionCandidate): Promise<boolean> {
@@ -104,6 +105,7 @@ WorkroomAcceptanceProjectionSourceAuthorityPort {
     const byRevision = new Map<string, WorkroomAcceptanceProjectionCandidate>();
     for (const pin of pins) {
       const candidate = candidateForPin(profile, catalog, pin);
+      if (!candidate) continue;
       const key = `${pin.profileRevisionId}:${pin.profileDigest}`;
       const current = byRevision.get(key);
       if (current && canonicalWorkroomJson(current) !== canonicalWorkroomJson(candidate)) {
@@ -487,7 +489,7 @@ function candidateForPin(
   profile: ProjectProfileRegistrySnapshot,
   catalog: WorkroomCatalogSnapshot,
   pin: WorkroomRunProfilePin,
-): WorkroomAcceptanceProjectionCandidate {
+): WorkroomAcceptanceProjectionCandidate | undefined {
   const revision = profile.revisions[pin.profileRevisionId];
   if (!revision || revision.projectId !== pin.projectId
     || revision.compiledDigest !== pin.profileDigest
@@ -500,7 +502,8 @@ function candidateForPin(
     throw new Error('Acceptance Profile source Project is unavailable in the persistent Catalog');
   }
   const policies = revision.compiledProfile.acceptancePolicies ?? [];
-  if (policies.length !== 1) {
+  if (policies.length === 0) return undefined;
+  if (policies.length > 1) {
     throw new Error('Acceptance Profile source requires exactly one compiled Acceptance Policy');
   }
   const policy = policies[0]!;

@@ -65,6 +65,7 @@ implements WorkroomDataGovernanceAuthorityControlPort {
     }
     assertProjectionAuthority(input.candidate, definition);
     assertWorkroomJournalDataGovernanceAuthority(input.candidate);
+    assertAcceptanceProjectionDataGovernanceAuthority(input.candidate);
     const candidate = canonicalizeProjectDataGovernanceAuthorityCandidate(input.candidate);
     const current = await this.options.repository.readProject(candidate.projectId);
     if ((!current && candidate.revision !== 1)
@@ -120,6 +121,32 @@ export function assertWorkroomJournalDataGovernanceAuthority(
     || !destination.noTraining
     || destination.loggingMode !== 'metadata_only') {
     throw new Error('Project Data Governance authority lacks exact Workroom Journal derived/sink policy');
+  }
+}
+
+/** Exact policy gate for materializing Acceptance Profile projections. */
+export function assertAcceptanceProjectionDataGovernanceAuthority(
+  candidate: ProjectDataGovernanceAuthorityCandidate,
+): void {
+  const rule = candidate.derivedPayloads.acceptanceProjection;
+  const sink = candidate.sinks['acceptance-projection:acceptance-policy'];
+  const servicePrincipal = `service:workroom-acceptance-policy:${candidate.projectId}`;
+  const destination = sink && candidate.policy.destinations[sink.destinationId];
+  if (!rule
+    || !rule.allowedPurposes.includes('acceptance_review')
+    || !sink
+    || sink.channel !== 'context_view'
+    || sink.purpose !== 'acceptance_review'
+    || sink.requestedMode !== 'full'
+    || sink.fixedPrincipalId !== servicePrincipal
+    || sink.principal.role !== 'reviewer'
+    || !sink.principal.allowedPurposes.includes('acceptance_review')
+    || !sink.recipients.recipients.some(recipient => recipient.principalId === servicePrincipal)
+    || !destination
+    || destination.external
+    || !destination.noTraining
+    || destination.loggingMode !== 'metadata_only') {
+    throw new Error('Project Data Governance authority lacks exact Acceptance Projection derived/sink policy');
   }
 }
 

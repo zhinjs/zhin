@@ -58,6 +58,7 @@ export function createWorkroomDataGovernanceBootstrapCandidate(input: Readonly<{
       `room:${input.projectId}`,
       `service:workroom-kernel:${input.projectId}`,
       `service:workroom-projection:${input.projectId}`,
+      `service:workroom-acceptance-policy:${input.projectId}`,
     ].map(principalId => ({
       principalId,
       tenantId: input.tenantId,
@@ -220,6 +221,11 @@ export function createWorkroomDataGovernanceBootstrapCandidate(input: Readonly<{
     ...operationalRule,
     allowedPurposes: ['workroom_awareness' as const, 'portfolio_oversight' as const],
   });
+  const acceptanceProjectionRule = Object.freeze({
+    ...operationalRule,
+    allowedPurposes: ['acceptance_review' as const],
+    retentionClass: 'project_record' as const,
+  });
   const candidate: ProjectDataGovernanceAuthorityCandidate = {
     version: 1,
     revision: input.revision,
@@ -309,10 +315,23 @@ export function createWorkroomDataGovernanceBootstrapCandidate(input: Readonly<{
         },
         requestedMode: 'full',
       },
+      'acceptance-projection:acceptance-policy': {
+        destinationId: workroomDestination.id,
+        channel: 'context_view',
+        purpose: 'acceptance_review',
+        fixedPrincipalId: `service:workroom-acceptance-policy:${input.projectId}`,
+        recipients: workroomRecipients,
+        principal: {
+          role: 'reviewer', clearance: 'project_internal',
+          allowedPurposes: ['acceptance_review'],
+        },
+        requestedMode: 'full',
+      },
     },
     derivedPayloads: {
       projection: projectionRule,
       journal: operationalRule,
+      acceptanceProjection: acceptanceProjectionRule,
     },
     approvals: [],
   };
