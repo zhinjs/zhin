@@ -100,7 +100,8 @@
     "export{FileJournalStore}from '../journal/file-journal-store.js';",
     "export{capabilityToTool,toolInvocationFromTurn,toolsFromCapabilities,type GenerationStampedTool,}from './capability-tools.js';",
     "export{createCatalogGovernedWorkroomProjectionAuthority,createCatalogGovernedConsoleDisclosureAuthority,createWorkroomRuntime,type WorkroomProjectionReadAuthorityPort,type WorkroomRunDetail,type WorkroomRunHeader,type WorkroomRuntimeHandle,}from '../workroom/runtime.js';",
-    "export{createSessionTreeRuntimeFromAgent,type SessionTreeRuntimeHandle,}from '../session-tree-runtime.js';"
+    "export{createSessionTreeRuntimeFromAgent,type SessionTreeRuntimeHandle,}from '../session-tree-runtime.js';",
+    "export{digestCanonicalWorkroomValue}from '../workroom/canonical-value.js';"
   ],
   "cli/runtime": [
     "export * from './migrate/index.js';",
