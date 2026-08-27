@@ -67,8 +67,6 @@ Doctor checks Node, pnpm, ports, `HTTP_TOKEN`, CORS, and the project manifest. W
 
 ## Install tiers
 
-```md
-<<< ../../snippets/install-tiers.md#tiers-table
-```
+<!--@include: ../../snippets/install-tiers.md#tiers-table-en-->
 
 Prefer an outcome over learning the package graph first: [Choose a solution](../solutions/).
