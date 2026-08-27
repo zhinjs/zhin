@@ -1,5 +1,13 @@
 # @zhin.js/adapter-process
 
+## 8.0.6
+
+### Patch Changes
+
+- Updated dependencies [a728a20]
+  - @zhin.js/host-http@1.0.17
+  - zhin.js@6.0.15
+
 ## 8.0.5
 
 ### Patch Changes
