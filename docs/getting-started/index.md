@@ -67,8 +67,6 @@ Doctor 会检查 Node、pnpm、端口、`HTTP_TOKEN`、CORS 和项目清单。�
 
 ## Install tiers
 
-```md
-<<< ../snippets/install-tiers.md#tiers-table
-```
+<!--@include: ../snippets/install-tiers.md#tiers-table-->
 
 继续学习时先选目标，不必先读完整包结构：[从问题选解决方案](../solutions/)。

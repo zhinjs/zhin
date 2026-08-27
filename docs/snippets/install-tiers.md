@@ -1,9 +1,9 @@
 # Install tiers（文档片段 SSOT）
 
-用户向 **Install tiers / 安装分层** 文案的唯一来源。VitePress 页面用区域引用，勿在正文手抄表格。
+用户向 **Install tiers / 安装分层** 文案的唯一来源。VitePress 页面用 Markdown include 区域引用，勿在正文手抄表格。
 
 ```md
-<<< ../snippets/install-tiers.md#tiers-table
+<!--@include: ../snippets/install-tiers.md#tiers-table-->
 ```
 
 维护：改表只改本文件，然后 `pnpm docs:build` 验证。仓库根英文 `README.md` 为入口；中文 `README.zh-CN.md` 保留简表并由 `pnpm check:install-tiers-ssot` 对齐。
@@ -18,6 +18,17 @@
 | **Rich media** | `+ @zhin.js/html-renderer` | +~数 MB | 出站 `html` / `markdown` 转 PNG（未装则降级 text） |
 | **Speech** | `+ @zhin.js/speech` | +~数 MB | 入站 STT、出站 TTS、`segment.tts`（未装则 warn 降级） |
 <!-- #endregion tiers-table -->
+
+<!-- #region tiers-table-en -->
+| Tier | Install | ~production size | Capabilities |
+|------|---------|------------------|--------------|
+| **IM** | `pnpm add zhin.js` + an adapter (for example, `@zhin.js/adapter-sandbox`); dev: `@zhin.js/cli` | **&lt;10MB** (library) | Plugin Runtime; command / component / adapter convention directories (Stable Features inherited via `@zhin.js/core` `zhin.features`; Host is an optional peer + `zhin.plugins`, see [Plugin model](/en/concepts/plugin-model)) |
+| **AI** | `+ @zhin.js/agent zod ai` | +~12–15MB | ZhinAgent, sessions, tools, compaction |
+| **Provider** | `+ @ai-sdk/openai` etc. | per vendor | LLM calls |
+| **MCP** | `+ @modelcontextprotocol/sdk` | + a few MB | MCP client |
+| **Rich media** | `+ @zhin.js/html-renderer` | + a few MB | outbound `html` / `markdown` to PNG (falls back to text if missing) |
+| **Speech** | `+ @zhin.js/speech` | + a few MB | inbound STT, outbound TTS, `segment.tts` (warns and degrades if missing) |
+<!-- #endregion tiers-table-en -->
 
 <!-- #region tiers-table-host -->
 | 档位 | 安装 | 能力 |
