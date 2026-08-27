@@ -114,6 +114,17 @@ export function createWorkroomDataGovernanceBootstrapCandidate(input: Readonly<{
         })),
       })
     : undefined;
+  const consoleRecipients = input.definition.sponsors?.length
+    ? createDisclosureRecipientSetSnapshot({
+        revision: input.revision,
+        recipients: input.definition.sponsors.map(principalId => ({
+          principalId,
+          tenantId: input.tenantId,
+          projectId: input.projectId,
+          clearance: 'project_internal' as const,
+        })),
+      })
+    : undefined;
   const sponsorDestination = input.definition.sponsorConversation && sponsorRecipients
     ? createProcessingDestinationContract({
         id: `workroom-sponsor-room:${input.projectId}`,
@@ -133,6 +144,27 @@ export function createWorkroomDataGovernanceBootstrapCandidate(input: Readonly<{
         supportsDeletion: true,
         recipientSnapshotRevision: sponsorRecipients.revision,
         recipientSnapshotDigest: sponsorRecipients.digest,
+      })
+    : undefined;
+  const consoleDestination = consoleRecipients
+    ? createProcessingDestinationContract({
+        id: `workroom-console:${input.projectId}`,
+        owner: `workroom:${input.projectId}`,
+        endpoint: `console://workroom/${encodeURIComponent(input.projectId)}`,
+        tenantId: input.tenantId,
+        projectId: input.projectId,
+        trustDomain: `workroom-console:${input.projectId}`,
+        processingRegions: ['local'],
+        maxConfidentiality: 'project_internal',
+        allowedCategories: [categoryId],
+        external: false,
+        noTraining: true,
+        loggingMode: 'metadata_only',
+        maximumRetentionSeconds: 86_400,
+        allowsRedisclosure: false,
+        supportsDeletion: true,
+        recipientSnapshotRevision: consoleRecipients.revision,
+        recipientSnapshotDigest: consoleRecipients.digest,
       })
     : undefined;
   const categoryRegistry = createDataCategoryRegistrySnapshot({
@@ -155,6 +187,7 @@ export function createWorkroomDataGovernanceBootstrapCandidate(input: Readonly<{
     [modelDestination.id]: modelDestination,
     [workroomDestination.id]: workroomDestination,
     ...(sponsorDestination ? { [sponsorDestination.id]: sponsorDestination } : {}),
+    ...(consoleDestination ? { [consoleDestination.id]: consoleDestination } : {}),
   };
   const policy = createDataGovernancePolicySnapshot({
     id: `workroom:${input.projectId}:policy`,
@@ -248,6 +281,20 @@ export function createWorkroomDataGovernanceBootstrapCandidate(input: Readonly<{
             allowedPurposes: ['portfolio_oversight' as const],
           },
           requestedMode: 'full' as const,
+        },
+      } : {}),
+      ...(consoleDestination && consoleRecipients ? {
+        'console:run-metadata': {
+          destinationId: consoleDestination.id,
+          channel: 'console' as const,
+          purpose: 'portfolio_oversight' as const,
+          recipients: consoleRecipients,
+          principal: {
+            role: 'sponsor' as const,
+            clearance: 'project_internal' as const,
+            allowedPurposes: ['portfolio_oversight' as const],
+          },
+          requestedMode: 'metadata_only' as const,
         },
       } : {}),
       'workroom-journal:kernel-replay': {

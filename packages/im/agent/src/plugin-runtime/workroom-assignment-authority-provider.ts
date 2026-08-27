@@ -4,7 +4,11 @@ import { SkillIndex, skillFeatureId, type SkillDescriptor } from '@zhin.js/skill
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { GovernedDisclosureManifestSnapshot } from '../data-governance/disclosure-manifest.js';
 import type { WorkroomCatalog, WorkroomCatalogSnapshot } from '../workroom/catalog.js';
-import type { WorkroomDefinition } from '../workroom/catalog-definition.js';
+import {
+  digestWorkroomCatalogProjectBinding,
+  type WorkroomDefinition,
+} from '../workroom/catalog-definition.js';
+export { digestWorkroomCatalogProjectBinding } from '../workroom/catalog-definition.js';
 import {
   compareCanonicalWorkroomText,
   canonicalWorkroomJson,
@@ -473,10 +477,6 @@ export function createWorkroomAssignmentAuthorityGrant(
   });
   validateGrantProjection(projection);
   return deepFreeze({ ...projection, digest: digest(projection) });
-}
-
-export function digestWorkroomCatalogProjectBinding(definition: WorkroomDefinition): string {
-  return digest({ version: 1, definition: structuredClone(definition) });
 }
 
 export function digestWorkroomRemoteEndpointAuthority(

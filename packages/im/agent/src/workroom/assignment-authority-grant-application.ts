@@ -1,10 +1,10 @@
 import type { MaterializedDisclosureManifest } from '../data-governance/disclosure-manifest.js';
 import {
   createWorkroomAssignmentAuthorityGrant,
-  digestWorkroomCatalogProjectBinding,
   type WorkroomAssignmentAuthorityGrant,
   type WorkroomCapabilityCeilingInput,
 } from '../plugin-runtime/workroom-assignment-authority-provider.js';
+import { digestWorkroomCatalogProjectBinding } from './catalog-definition.js';
 import type {
   AssignmentExecutionFactAnchor,
   AssignmentExecutionSnapshotReference,

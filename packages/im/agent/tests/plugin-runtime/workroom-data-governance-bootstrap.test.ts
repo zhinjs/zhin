@@ -13,6 +13,7 @@ import {
   WorkroomDataGovernanceAuthorityWriter,
 } from '../../src/plugin-runtime/workroom-data-governance-authority-writer.js';
 import { digestWorkroomCatalogProjectBinding } from '../../src/plugin-runtime/workroom-assignment-authority-provider.js';
+import { createCatalogGovernedWorkroomProjectionAuthority } from '../../src/workroom/runtime.js';
 
 describe('Workroom Data Governance bootstrap', () => {
   const definition = {
@@ -82,14 +83,31 @@ describe('Workroom Data Governance bootstrap', () => {
       },
     });
 
-    await expect(writer.publish({
+    const authority = await writer.publish({
       catalogRevision: 'catalog:1',
       catalogBindingDigest: digestWorkroomCatalogProjectBinding(definition),
       candidate,
-    }, new AbortController().signal)).resolves.toMatchObject({
+    }, new AbortController().signal);
+    expect(authority).toMatchObject({
       projectId: 'project-1',
       planning: { destinationId: 'model-provider:openrouter' },
     });
+    expect(authority.sinks['console:run-metadata']).toMatchObject({
+      channel: 'console',
+      purpose: 'portfolio_oversight',
+      requestedMode: 'metadata_only',
+      recipients: { recipients: [{ principalId: 'principal:sponsor' }] },
+    });
+    const consoleRead = createCatalogGovernedWorkroomProjectionAuthority({
+      catalog: { read: async () => ({ revision: 'catalog:1', definitions: { 'project-1': definition } }) },
+      governance: { readProject: async () => authority },
+    });
+    await expect(consoleRead.authorize({
+      destination: 'console',
+      projectId: 'project-1',
+      recipientPrincipalId: 'principal:sponsor',
+      requestedMode: 'metadata_only',
+    })).resolves.toMatchObject({ catalogRevision: 'catalog:1' });
   });
 
   it('persists the bootstrapped authority through the canonical file repository', async () => {
