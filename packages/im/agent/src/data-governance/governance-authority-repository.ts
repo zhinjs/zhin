@@ -108,11 +108,10 @@ export interface ProjectDataGovernanceAuthority extends ProjectDataGovernanceAut
   readonly digest: string;
 }
 
-export function createProjectDataGovernanceAuthority(
-  input: ProjectDataGovernanceAuthorityInput,
-): ProjectDataGovernanceAuthority {
-  assertProjectAuthorityInput(input);
-  const body = deepFreeze({
+export function canonicalizeProjectDataGovernanceAuthorityCandidate(
+  input: Omit<ProjectDataGovernanceAuthorityInput, 'governanceDecision'>,
+): Omit<ProjectDataGovernanceAuthorityInput, 'governanceDecision'> {
+  return deepFreeze({
     ...structuredClone(input),
     planning: {
       ...structuredClone(input.planning),
@@ -156,6 +155,21 @@ export function createProjectDataGovernanceAuthority(
     approvals: [...input.approvals]
       .sort((left, right) => compareCanonicalWorkroomText(left.id, right.id))
       .map(value => structuredClone(value)),
+  });
+}
+
+export function createProjectDataGovernanceAuthority(
+  input: ProjectDataGovernanceAuthorityInput,
+): ProjectDataGovernanceAuthority {
+  assertProjectAuthorityInput(input);
+  const { governanceDecision, ...candidateInput } = structuredClone(input);
+  const candidate = canonicalizeProjectDataGovernanceAuthorityCandidate(candidateInput);
+  if (governanceDecision.candidateDigest !== digest(candidate)) {
+    throw new Error('Data Governance decision does not bind the exact authority candidate');
+  }
+  const body = deepFreeze({
+    ...candidate,
+    governanceDecision: structuredClone(governanceDecision),
   });
   return deepFreeze({ ...body, digest: digest(body) });
 }
@@ -578,10 +592,6 @@ function assertProjectAuthorityInput(input: ProjectDataGovernanceAuthorityInput)
   if (decision.projectId !== input.projectId
     || decision.expectedPreviousDigest !== input.previousDigest) {
     throw new Error('Data Governance decision scope/chain binding mismatch');
-  }
-  const { governanceDecision: _governanceDecision, ...candidate } = structuredClone(input);
-  if (decision.candidateDigest !== digest(candidate)) {
-    throw new Error('Data Governance decision does not bind the exact authority candidate');
   }
 }
 

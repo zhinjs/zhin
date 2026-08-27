@@ -1,4 +1,5 @@
 import {
+  canonicalizeProjectDataGovernanceAuthorityCandidate,
   createProjectDataGovernanceAuthority,
   FileDataGovernanceAuthorityRepository,
   type DataGovernanceAuthorityDecision,
@@ -64,22 +65,23 @@ implements WorkroomDataGovernanceAuthorityControlPort {
     }
     assertProjectionAuthority(input.candidate, definition);
     assertWorkroomJournalDataGovernanceAuthority(input.candidate);
-    const current = await this.options.repository.readProject(input.candidate.projectId);
-    if ((!current && input.candidate.revision !== 1)
-      || (current && (input.candidate.revision !== current.revision + 1
-        || input.candidate.previousDigest !== current.digest))) {
+    const candidate = canonicalizeProjectDataGovernanceAuthorityCandidate(input.candidate);
+    const current = await this.options.repository.readProject(candidate.projectId);
+    if ((!current && candidate.revision !== 1)
+      || (current && (candidate.revision !== current.revision + 1
+        || candidate.previousDigest !== current.digest))) {
       throw new Error('Data Governance publication revision/CAS authority is stale');
     }
-    const candidateDigest = digest(input.candidate);
+    const candidateDigest = digest(candidate);
     const decision = await this.options.decisions.authorize({
-      projectId: input.candidate.projectId,
+      projectId: candidate.projectId,
       catalogRevision: input.catalogRevision,
       catalogBindingDigest: input.catalogBindingDigest,
       candidateDigest,
       ...(current ? { expectedPreviousDigest: current.digest } : {}),
     }, signal);
     if (!decision
-      || decision.projectId !== input.candidate.projectId
+      || decision.projectId !== candidate.projectId
       || decision.candidateDigest !== candidateDigest
       || decision.expectedPreviousDigest !== current?.digest
       || decision.catalogRevision !== input.catalogRevision
@@ -88,7 +90,7 @@ implements WorkroomDataGovernanceAuthorityControlPort {
       throw new Error('Data Governance publication decision is unavailable or forged');
     }
     const authority = createProjectDataGovernanceAuthority({
-      ...structuredClone(input.candidate),
+      ...candidate,
       governanceDecision: structuredClone(decision),
     });
     return (await this.options.repository.appendProject(authority, current?.digest)).authority;
