@@ -25,6 +25,8 @@ import {
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
 import type { WorkroomAcceptanceDecisionInput } from '../../src/workroom/acceptance-policy.js';
 import type { WorkroomCatalogSnapshot } from '../../src/workroom/catalog.js';
+import { createWorkroomSchedulerPolicySnapshot } from '../../src/workroom/workroom-scheduler.js';
+import { WorkflowPlanBuilder } from '../../src/workroom/workflow-plan-builder.js';
 
 const SHA = (value: string): string => `sha256:${value.repeat(64).slice(0, 64)}`;
 
@@ -68,6 +70,75 @@ describe('P7 governed Acceptance production providers', () => {
     await expect(staleProvider.resolve({
       projectId: 'project-1', runId: 'run-1', taskKey: 'build', taskRevision: 1,
     })).rejects.toThrow(/Profile.*digest|projection.*drift/iu);
+  });
+
+  it('maps a dynamic Task to its unique governed workflow role from the exact admitted Plan', async () => {
+    const fixture = await profileFixture();
+    const projection = acceptanceProjection(fixture.profileDigest);
+    const plan = dynamicPlan(fixture);
+    const provider = new ProfileOwnedWorkroomAcceptanceProvider({
+      profiles: fixture.profiles,
+      catalog: fixture.catalog,
+      projections: { resolve: async () => projection },
+      journal: {
+        read: async () => [{ type: 'plan.admitted', payload: { plan } }] as never,
+      },
+    });
+
+    const facts = await provider.resolve({
+      projectId: 'project-1', runId: 'run-1', taskKey: 'dynamic-build', taskRevision: 1,
+    });
+    expect(facts).toMatchObject({
+      kind: 'task_result',
+      reviewerOwner: 'reviewer-1',
+      sponsorOwner: 'human:sponsor-1',
+    });
+    await expect(provider.resolveMemorySchema({
+      projectId: 'project-1', runId: 'run-1', taskKey: 'dynamic-build',
+      acceptance: acceptanceRecord(facts.policy),
+    })).resolves.toMatchObject({ revision: 1 });
+
+    const missingJournal = new ProfileOwnedWorkroomAcceptanceProvider({
+      profiles: fixture.profiles,
+      catalog: fixture.catalog,
+      projections: { resolve: async () => projection },
+    });
+    await expect(missingJournal.resolve({
+      projectId: 'project-1', runId: 'run-1', taskKey: 'dynamic-build', taskRevision: 1,
+    })).rejects.toThrow('no Acceptance policy');
+
+    const dynamicProvider = (
+      events: readonly unknown[],
+      governedProjection = projection,
+    ) => new ProfileOwnedWorkroomAcceptanceProvider({
+      profiles: fixture.profiles,
+      catalog: fixture.catalog,
+      projections: { resolve: async () => governedProjection },
+      journal: { read: async () => events as never },
+    });
+    const resolveDynamic = (candidate: ProfileOwnedWorkroomAcceptanceProvider) => candidate.resolve({
+      projectId: 'project-1', runId: 'run-1', taskKey: 'dynamic-build', taskRevision: 1,
+    });
+    await expect(resolveDynamic(dynamicProvider([])))
+      .rejects.toThrow('exactly one admitted Workflow Plan');
+    await expect(resolveDynamic(dynamicProvider([
+      { type: 'plan.admitted', payload: { plan: null } },
+    ]))).rejects.toThrow('Plan is unavailable');
+    await expect(resolveDynamic(dynamicProvider([
+      { type: 'plan.admitted', payload: { plan: dynamicPlan(fixture, { profileDigest: SHA('0') }) } },
+    ]))).rejects.toThrow('does not bind the exact Run Profile');
+    await expect(resolveDynamic(dynamicProvider([
+      { type: 'plan.admitted', payload: { plan: dynamicPlan(fixture, { taskKey: 'other-task' }) } },
+    ]))).rejects.toThrow('has no Task dynamic-build');
+    await expect(resolveDynamic(dynamicProvider([
+      { type: 'plan.admitted', payload: { plan: dynamicPlan(fixture, { strategyDigest: SHA('0') }) } },
+    ]))).rejects.toThrow('strategy is not uniquely pinned');
+    await expect(resolveDynamic(dynamicProvider([
+      { type: 'plan.admitted', payload: { plan } },
+    ], createWorkroomGovernedAcceptanceProjection({
+      ...projection,
+      tasks: [{ ...projection.tasks[0]!, taskKey: 'other-template' }],
+    })))).rejects.toThrow('no Acceptance policy for Workflow Task build');
   });
 
   it('uses Kernel headers only, binds their hashes, and routes reviewer/sponsor without report risk metadata', async () => {
@@ -297,7 +368,11 @@ async function profileFixture() {
       { id: 'executor-1', digest: SHA('1'), role: 'executor', allowedTools: [], allowedSkills: [] },
       { id: 'reviewer-1', digest: SHA('2'), role: 'reviewer', allowedTools: [], allowedSkills: [] },
     ],
-    workflows: [], memories: [], glossaries: [], acceptancePolicies: [],
+    workflows: [{
+      id: 'strategy-1', digest: SHA('6'), requiredByProfile: true,
+      tasks: [{ key: 'build', role: 'executor', requires: { tools: [], skills: [] } }],
+    }],
+    memories: [], glossaries: [], acceptancePolicies: [],
   } as const;
   const profileDigest = digest(profileProjection);
   await profiles.registerRevision({
@@ -330,6 +405,48 @@ async function profileFixture() {
   });
   const catalog = { read: async () => catalogSnapshot };
   return { profiles, profileDigest, catalog, catalogSnapshot };
+}
+
+function dynamicPlan(
+  fixture: Awaited<ReturnType<typeof profileFixture>>,
+  options: Readonly<{
+    taskKey?: string;
+    profileDigest?: string;
+    strategyDigest?: string;
+  }> = {},
+) {
+  return WorkflowPlanBuilder.create({
+    proposalId: 'plan-dynamic-1',
+    projectId: 'project-1',
+    parameterDigest: SHA('7'),
+    strategy: {
+      id: 'strategy-1', version: 'profile-1', digest: options.strategyDigest ?? SHA('6'),
+    },
+    authority: {
+      projectRevision: fixture.catalogSnapshot.revision,
+      projectDigest: digest(fixture.catalogSnapshot.definitions['project-1']),
+      profileRevisionId: 'profile-1',
+      profileDigest: options.profileDigest ?? fixture.profileDigest,
+      planningPolicyRevisionId: 'planning-1',
+      planningPolicyDigest: SHA('8'),
+      orchestratorAgentDefinitionId: 'orchestrator-1',
+      orchestratorAuthorityDigest: SHA('9'),
+    },
+    budget: { maxTasks: 1, maxTotalAttempts: 1 },
+    schedulerPolicy: createWorkroomSchedulerPolicySnapshot({
+      policyRef: 'scheduler-1', revision: 1, pinnedAtSequence: 1, capacity: 1,
+      agingStepMs: 100,
+      starvationBoundMs: { urgent: 100, high: 200, normal: 300, low: 400 },
+      preemptionDeadlineMs: 50,
+    }),
+  }).addTask({
+    key: options.taskKey ?? 'dynamic-build', title: 'Dynamic build', role: 'executor',
+    required: true, maxAttempts: 1, dependsOn: [], requires: {},
+    scheduler: {
+      sponsorLane: 'normal', localRank: 0, enqueuedAt: 1,
+      deadline: 1_000, preemptibility: 'checkpointable',
+    },
+  }).build();
 }
 
 function acceptanceProjection(profileDigest: string, criterionKind: 'deterministic' | 'judgment' = 'deterministic') {

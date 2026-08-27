@@ -14,6 +14,7 @@ import {
 import {
   digestWorkroomCatalogProjectBinding,
   portfolioAtomicBundleAuthorityToken,
+  portfolioKernelCommandAuthorityToken,
   portfolioPolicyAuthorityToken,
   workroomSchedulerPortfolioScopeAuthorityToken,
 } from '@zhin.js/agent/runtime';
@@ -152,18 +153,41 @@ describe('CLI local Workroom Portfolio authorities', () => {
     });
     expect(binding?.portfolioId).toMatch(/^workroom-local:/u);
     await expect(scope.resolve({
+      generation,
+      projectId,
+      workroomCatalogRevision: catalog.revision,
+      profileRevisionId,
+      profileDigest,
+    })).resolves.toEqual(binding);
+    await expect(scope.resolve({
       generation: generation + 1,
       projectId,
       workroomCatalogRevision: catalog.revision,
       profileRevisionId,
       profileDigest,
     })).resolves.toBeUndefined();
+    await expect(scope.resolve({
+      generation,
+      projectId: 'missing-project',
+      workroomCatalogRevision: catalog.revision,
+      profileRevisionId,
+      profileDigest,
+    })).resolves.toBeUndefined();
+    await expect(scope.resolve({
+      generation,
+      projectId,
+      workroomCatalogRevision: catalog.revision,
+      profileRevisionId,
+      profileDigest: sha('stale-profile'),
+    })).resolves.toBeUndefined();
 
-    const policy = await resources.use(portfolioPolicyAuthorityToken).resolve(binding!.portfolioId);
+    const policyAuthority = resources.use(portfolioPolicyAuthorityToken);
+    const policy = await policyAuthority.resolve(binding!.portfolioId);
     expect(policy?.policy.projects[projectId]).toMatchObject({
       allowedPools: [LOCAL_WORKROOM_EXECUTOR_POOL_ID, LOCAL_WORKROOM_MODEL_POOL_ID],
       status: 'active',
     });
+    await expect(policyAuthority.resolve('workroom-local:missing')).resolves.toBeUndefined();
     const bundleAuthority = resources.use(portfolioAtomicBundleAuthorityToken);
     const capacityRequest = {
       requestId: 'request-1',
@@ -189,6 +213,34 @@ describe('CLI local Workroom Portfolio authorities', () => {
       model: { poolId: LOCAL_WORKROOM_MODEL_POOL_ID },
       executor: { poolId: LOCAL_WORKROOM_EXECUTOR_POOL_ID },
     });
+    await expect(bundleAuthority.validate({
+      generation: generation + 1,
+      portfolioId: binding!.portfolioId,
+      tenantId: binding!.tenantId,
+      catalogRevision: binding!.resourceCatalogRevision,
+      catalogDigest: binding!.resourceCatalogDigest,
+      capacityRequest,
+    })).resolves.toBeUndefined();
+    await expect(bundleAuthority.validate({
+      generation,
+      portfolioId: binding!.portfolioId,
+      tenantId: binding!.tenantId,
+      catalogRevision: binding!.resourceCatalogRevision,
+      catalogDigest: binding!.resourceCatalogDigest,
+      capacityRequest: {
+        ...capacityRequest,
+        workRef: { ...capacityRequest.workRef, profileDigest: sha('stale-profile') },
+      },
+    })).resolves.toBeUndefined();
+
+    const kernelAuthority = resources.use(portfolioKernelCommandAuthorityToken);
+    await expect(kernelAuthority.authorize({
+      generation: generation + 1,
+      portfolioId: binding!.portfolioId,
+      action: 'consume',
+      assignmentRef: 'assignment-1',
+      grant: {} as never,
+    })).resolves.toBeUndefined();
   });
 });
 

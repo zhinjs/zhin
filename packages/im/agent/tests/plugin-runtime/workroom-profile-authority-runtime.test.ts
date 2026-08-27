@@ -115,6 +115,12 @@ async function setup() {
 }
 
 describe('Workroom Profile authority production runtime', () => {
+  it('exposes an exact Planning Policy read through the narrow control port', async () => {
+    const fixture = await setup();
+    await expect(fixture.runtime.control.readPlanningPolicy('project:missing', 'profile:missing'))
+      .resolves.toBeUndefined();
+  });
+
   it('publishes one trusted content-addressed Pack revision and rejects same-version drift after restart', async () => {
     const fixture = await setup();
     const published = await fixture.runtime.control.publishPack({
