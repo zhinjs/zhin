@@ -1,5 +1,13 @@
 # multi-agent-room
 
+## 0.0.35
+
+### Patch Changes
+
+- Updated dependencies [337fd05]
+  - @zhin.js/agent@1.1.21
+  - zhin.js@6.0.15
+
 ## 0.0.34
 
 ### Patch Changes

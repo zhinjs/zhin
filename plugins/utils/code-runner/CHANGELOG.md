@@ -1,5 +1,13 @@
 # @zhin.js/plugin-code-runner
 
+## 4.0.21
+
+### Patch Changes
+
+- Updated dependencies [337fd05]
+  - @zhin.js/agent@1.1.21
+  - zhin.js@6.0.15
+
 ## 4.0.20
 
 ### Patch Changes
