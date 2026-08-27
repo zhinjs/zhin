@@ -1,3 +1,5 @@
+import { digestCanonicalWorkroomValue as digest } from './canonical-value.js';
+
 export type WorkroomMemberRole = 'orchestrator' | 'executor' | 'reviewer' | 'integration';
 
 /**
@@ -49,6 +51,11 @@ export interface WorkroomDefinition {
   conversation?: WorkroomConversationBindingDefinition;
   /** Optional distinct collaboration space for authenticated Sponsor controls and projections. */
   sponsorConversation?: WorkroomConversationBindingDefinition;
+}
+
+/** Canonical digest used by every authority that binds one Catalog Project definition. */
+export function digestWorkroomCatalogProjectBinding(definition: WorkroomDefinition): string {
+  return digest({ version: 1, definition: structuredClone(definition) });
 }
 
 /** @deprecated Use WorkroomAgentMemberDefinition. */

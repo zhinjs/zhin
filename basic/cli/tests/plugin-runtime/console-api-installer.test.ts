@@ -793,6 +793,50 @@ describe('console REST routes', () => {
     expect(publishKnowledge).toHaveBeenCalledTimes(1);
   });
 
+  it('exposes the authenticated principal through the Workroom Catalog read contract', async () => {
+    await import('@zhin.js/agent/runtime');
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const root = rootPluginId();
+    const readCatalog = vi.fn(async () => ({
+      revision: 'a'.repeat(64),
+      definitions: {},
+    }));
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+        console: {
+          sessionTree: {}, workroom: {}, assistant: null,
+          trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
+          workroomCatalog: { read: readCatalog },
+          listBindings: () => [],
+        },
+      }]])]]),
+    } as unknown as RuntimeSnapshot;
+    const snapshots = {
+      acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
+    } as unknown as SnapshotReader;
+    const { port } = await startHost({ projectRoot, withTokens: true, snapshots });
+
+    const sponsor = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'workrooms:get', requestId: 31 }),
+    });
+    await expect(sponsor.json()).resolves.toMatchObject({
+      success: true,
+      data: { principalId: 'human:alice', workrooms: {}, revision: 'a'.repeat(64) },
+    });
+
+    const unbound = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer full-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'workrooms:get', requestId: 32, principalId: 'human:mallory' }),
+    });
+    const unboundBody = await unbound.json() as { data?: { principalId?: string } };
+    expect(unboundBody.data?.principalId).toBeUndefined();
+    expect(readCatalog).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps Sponsor controls typed and injects the token principal without accepting forged identity', async () => {
     await import('@zhin.js/agent/runtime');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));

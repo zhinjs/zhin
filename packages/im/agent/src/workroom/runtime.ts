@@ -2,6 +2,7 @@ import type {
   DataGovernanceAuthorityRepository,
 } from '../data-governance/governance-authority-repository.js';
 import type { WorkroomCatalog } from './catalog.js';
+import { digestWorkroomCatalogProjectBinding } from './catalog-definition.js';
 import {
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
@@ -231,7 +232,7 @@ export function createCatalogGovernedConsoleDisclosureAuthority(options: Readonl
       const definition = catalog.definitions[input.projectId];
       if (!definition || definition.enabled === false
         || policy.requireSponsor && !definition.sponsors?.includes(input.recipientPrincipalId)) return null;
-      const projectDigest = digest(definition);
+      const projectDigest = digestWorkroomCatalogProjectBinding(definition);
       const governance = await options.governance.readProject(input.projectId);
       if (!governance
         || governance.governanceDecision.catalogRevision !== catalog.revision

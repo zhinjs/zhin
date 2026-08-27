@@ -5,6 +5,7 @@ import {
   createWorkroomRuntime,
 } from '../../src/workroom/runtime.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
+import { digestWorkroomCatalogProjectBinding } from '../../src/workroom/catalog-definition.js';
 import {
   MemoryWorkroomJournal,
   MemoryWorkroomJournalPayloadPort,
@@ -173,7 +174,7 @@ describe('Workroom Console runtime projection', () => {
       sponsors: ['human:alice'],
     };
     const catalogRevision = digest({ definitions: { support: project } });
-    const projectDigest = digest(project);
+    const projectDigest = digestWorkroomCatalogProjectBinding(project);
     const recipientDigest = digest({ recipient: 'human:alice', projectId: 'support' });
     const governanceDigest = digest({ governance: 'support-v1' });
     const authority = createCatalogGovernedWorkroomProjectionAuthority({

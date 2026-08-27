@@ -834,6 +834,9 @@ export function registerConsoleApiRoutes(
             })])),
             workrooms: snapshot.definitions,
             revision: snapshot.revision,
+            ...(authenticatedPrincipal
+              ? { principalId: authenticatedPrincipal.principalId }
+              : {}),
           });
         },
         setWorkroomCatalog: async (workrooms, expectedRevision) => {

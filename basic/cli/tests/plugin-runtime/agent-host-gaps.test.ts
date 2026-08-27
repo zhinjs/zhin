@@ -36,6 +36,7 @@ import {
   resolveWorkroomTrustedPackPublishers,
   resolveWorkroomDisclosureBootstrap,
   assessWorkroomDisclosureSetup,
+  resolveWorkroomDisclosureAuthorityPublication,
 } from '../../src/plugin-runtime/agent-host-installer.js';
 import {
   createEndpointRoleResolver,
@@ -291,7 +292,7 @@ describe('Workroom Planning Console bootstrap', () => {
 
   it('reports each fail-closed disclosure setup prerequisite', () => {
     expect(assessWorkroomDisclosureSetup({
-      resolution: {}, authorityPublished: false, localIssuerAvailable: false,
+      resolution: {}, authorityPublished: false, authorityCurrent: false, localIssuerAvailable: false,
     })).toMatchObject({
       disclosureReady: false,
       disclosureConfigReady: false,
@@ -304,6 +305,7 @@ describe('Workroom Planning Console bootstrap', () => {
     expect(assessWorkroomDisclosureSetup({
       resolution: { modelProviderAlias: 'openrouter' },
       authorityPublished: false,
+      authorityCurrent: false,
       localIssuerAvailable: true,
     }).diagnostics).toContain('尚未配置 ai.workroom.disclosure.modelProviders.openrouter');
     expect(assessWorkroomDisclosureSetup({
@@ -317,6 +319,7 @@ describe('Workroom Planning Console bootstrap', () => {
         },
       },
       authorityPublished: true,
+      authorityCurrent: true,
       localIssuerAvailable: false,
     })).toMatchObject({
       disclosureReady: true,
@@ -334,8 +337,33 @@ describe('Workroom Planning Console bootstrap', () => {
         },
       },
       authorityPublished: false,
+      authorityCurrent: false,
       localIssuerAvailable: true,
     }).diagnostics).toContain('模型 Provider public-only 至少需要 project_internal 披露等级');
+  });
+
+  it('treats a Catalog-stale disclosure authority as not ready and advances its CAS chain', () => {
+    expect(assessWorkroomDisclosureSetup({
+      resolution: {},
+      authorityPublished: true,
+      authorityCurrent: false,
+      localIssuerAvailable: true,
+    })).toMatchObject({
+      disclosureReady: false,
+      diagnostics: expect.arrayContaining(['Project Data Governance 披露 authority 未绑定当前 Catalog/Sponsor']),
+    });
+    expect(resolveWorkroomDisclosureAuthorityPublication(undefined, false)).toEqual({ revision: 1 });
+    expect(resolveWorkroomDisclosureAuthorityPublication({
+      revision: 3,
+      digest: `sha256:${'a'.repeat(64)}`,
+    }, false)).toEqual({
+      revision: 4,
+      previousDigest: `sha256:${'a'.repeat(64)}`,
+    });
+    expect(resolveWorkroomDisclosureAuthorityPublication({
+      revision: 3,
+      digest: `sha256:${'a'.repeat(64)}`,
+    }, true)).toBeUndefined();
   });
 });
 

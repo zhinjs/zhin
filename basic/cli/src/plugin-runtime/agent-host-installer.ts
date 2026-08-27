@@ -443,6 +443,7 @@ export function resolveWorkroomDisclosureBootstrap(
 export function assessWorkroomDisclosureSetup(input: Readonly<{
   resolution: WorkroomDisclosureBootstrapResolution;
   authorityPublished: boolean;
+  authorityCurrent: boolean;
   localIssuerAvailable: boolean;
 }>): Readonly<{
   disclosureReady: boolean;
@@ -463,13 +464,27 @@ export function assessWorkroomDisclosureSetup(input: Readonly<{
     diagnostics.push(`模型 Provider ${modelProviderAlias} 至少需要 project_internal 披露等级`);
   }
   if (!input.authorityPublished) diagnostics.push('尚未发布 Project Data Governance 披露 authority');
-  if (!input.localIssuerAvailable && !input.authorityPublished) {
+  else if (!input.authorityCurrent) {
+    diagnostics.push('Project Data Governance 披露 authority 未绑定当前 Catalog/Sponsor');
+  }
+  if (!input.localIssuerAvailable && !input.authorityCurrent) {
     diagnostics.push('Root-private Data Governance 签发能力不可用');
   }
   return Object.freeze({
-    disclosureReady: input.authorityPublished,
+    disclosureReady: input.authorityCurrent,
     disclosureConfigReady,
     diagnostics: Object.freeze(diagnostics),
+  });
+}
+
+export function resolveWorkroomDisclosureAuthorityPublication(
+  current: Readonly<{ revision: number; digest: string }> | undefined,
+  authorityCurrent: boolean,
+): Readonly<{ revision: number; previousDigest?: string }> | undefined {
+  if (authorityCurrent) return undefined;
+  return Object.freeze({
+    revision: (current?.revision ?? 0) + 1,
+    ...(current ? { previousDigest: current.digest } : {}),
   });
 }
 
@@ -929,6 +944,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       );
     };
     let workroomRuntime: WorkroomRuntimeHandle;
+    let consoleProjectionAuthority: ReturnType<typeof createCatalogGovernedWorkroomProjectionAuthority>;
     const dataGovernanceRuntimeRef: {
       current?: ReturnType<typeof installWorkroomDataGovernanceResources>;
     } = {};
@@ -950,7 +966,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 
       // Console reads the same replayed facts as tools; it never receives the
       // command authority or a mutable repository.
-      const consoleProjectionAuthority = createCatalogGovernedWorkroomProjectionAuthority({
+      consoleProjectionAuthority = createCatalogGovernedWorkroomProjectionAuthority({
         catalog: workroomCatalog,
         governance: Object.freeze({
           readProject: async (projectId: string) =>
@@ -1567,7 +1583,18 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       principalId: string;
     }>): Promise<void> => {
       const repository = dataGovernanceRuntime.options.repository;
-      if (await repository.readProject(input.projectId)) return;
+      const current = await repository.readProject(input.projectId);
+      const currentAuthorization = await consoleProjectionAuthority.authorize({
+        destination: 'console',
+        projectId: input.projectId,
+        recipientPrincipalId: input.principalId,
+        requestedMode: 'metadata_only',
+      });
+      const publication = resolveWorkroomDisclosureAuthorityPublication(
+        current,
+        currentAuthorization !== null,
+      );
+      if (!publication) return;
       if (!localDataGovernance) {
         throw new Error('Workroom 披露初始化缺少 Root-private Data Governance 签发能力');
       }
@@ -1582,7 +1609,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         projectId: input.projectId,
         tenantId: aiConfig.workroom?.disclosure?.tenantId ?? `workroom:${input.projectId}`,
         definition: input.definition,
-        revision: 1,
+        revision: publication.revision,
+        ...(publication.previousDigest ? { previousDigest: publication.previousDigest } : {}),
         model: {
           providerId: modelProviderAlias,
           endpoint: contract.endpoint,
@@ -1714,9 +1742,18 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         }
         const { modelProviderAlias, contract } = resolveDisclosureBootstrap(definition);
         const disclosureAuthority = await dataGovernanceRuntime.options.repository.readProject(projectId);
+        const disclosureAuthorization = principalId
+          ? await consoleProjectionAuthority.authorize({
+              destination: 'console',
+              projectId,
+              recipientPrincipalId: principalId,
+              requestedMode: 'metadata_only',
+            })
+          : null;
         const disclosure = assessWorkroomDisclosureSetup({
           resolution: { modelProviderAlias, contract },
           authorityPublished: disclosureAuthority !== undefined,
+          authorityCurrent: disclosureAuthorization !== null,
           localIssuerAvailable: localDataGovernance !== undefined,
         });
         diagnostics.push(...disclosure.diagnostics);

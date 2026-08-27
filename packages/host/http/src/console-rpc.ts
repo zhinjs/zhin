@@ -91,6 +91,8 @@ export type RuntimeConsoleRpcContext = {
     agents: Readonly<Record<string, unknown>>;
     workrooms: Readonly<Record<string, unknown>>;
     revision: string;
+    /** Principal bound to the authenticated Console token, never caller supplied. */
+    principalId?: string;
   }>>;
   setWorkroomCatalog?(
     workrooms: unknown,

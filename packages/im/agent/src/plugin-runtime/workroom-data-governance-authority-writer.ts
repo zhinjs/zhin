@@ -11,7 +11,7 @@ import {
 import { join } from 'node:path';
 import type { WorkroomCatalog } from '../workroom/catalog.js';
 import { digestCanonicalWorkroomValue as digest } from '../workroom/canonical-value.js';
-import { digestWorkroomCatalogProjectBinding } from './workroom-assignment-authority-provider.js';
+import { digestWorkroomCatalogProjectBinding } from '../workroom/catalog-definition.js';
 
 export type ProjectDataGovernanceAuthorityCandidate = Omit<
   ProjectDataGovernanceAuthorityInput,
