@@ -9,6 +9,7 @@ import {
   createWorkroomPlanningDisclosureSourceBinding,
   type WorkroomDynamicPlanningPolicyRequest,
 } from '../../src/plugin-runtime/workroom-dynamic-planning-provider.js';
+import { digestWorkroomCatalogProjectBinding } from '../../src/workroom/catalog-definition.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
 import type { HumanIngressPlanningInput } from '../../src/workroom/human-ingress-orchestrator.js';
 import { createWorkroomSchedulerPolicySnapshot } from '../../src/workroom/workroom-scheduler.js';
@@ -39,7 +40,7 @@ const input: HumanIngressPlanningInput = Object.freeze({
   operationId: 'human-ingress-application:p1',
   projectId: 'project-1',
   projectRevision: `sha256:${'2'.repeat(64)}`,
-  projectDigest: digest(definition),
+  projectDigest: digestWorkroomCatalogProjectBinding(definition),
   orchestratorAgentDefinitionId: 'lead',
   orchestratorAuthorityDigest: `sha256:${'3'.repeat(64)}`,
   principalId: 'human:owner',
