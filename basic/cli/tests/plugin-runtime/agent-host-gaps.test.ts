@@ -25,6 +25,7 @@ import {
   assertWorkroomCatalogMatchesGeneration,
   createCatalogWorkroomProjectionBinding,
   createCatalogSponsorRoomProjectionBinding,
+  resolveCatalogWorkroomProjectionConversation,
   resolveCatalogSponsorProjectionConversation,
   resolveWorkroomStorageMode,
   routeSpecialistAgent,
@@ -37,6 +38,8 @@ import {
   resolveWorkroomDisclosureBootstrap,
   assessWorkroomDisclosureSetup,
   resolveWorkroomDisclosureAuthorityPublication,
+  resolveWorkroomPlanningPolicyPublication,
+  isWorkroomPlanningPolicyReady,
 } from '../../src/plugin-runtime/agent-host-installer.js';
 import {
   createEndpointRoleResolver,
@@ -583,6 +586,41 @@ describe('process-fixed Workroom storage identity', () => {
       kind: 'channel', id: 'portfolio-sponsors',
     });
     expect(resolveCatalogSponsorProjectionConversation(definition, [])).toBeUndefined();
+  });
+
+  it('renews Workroom conversation and Planning Policy bindings from exact current authorities', () => {
+    const definition = {
+      name: 'Engineering', members: [{ agent: 'orchestrator', role: 'orchestrator' as const }],
+      conversation: {
+        adapter: 'slack', endpoint: 'main', kind: 'channel' as const,
+        id: 'engineering', agent: 'orchestrator',
+      },
+    };
+    const endpoint = {
+      id: 'root\0zhin.adapter\0slack~main', name: 'main', adapter: 'slack', owner: 'adapter-owner',
+    };
+    expect(resolveCatalogWorkroomProjectionConversation(definition, [endpoint])).toEqual({
+      endpoint: { id: endpoint.id, adapter: endpoint.owner },
+      kind: 'channel', id: 'engineering',
+    });
+    expect(resolveCatalogWorkroomProjectionConversation(definition, [endpoint, {
+      ...endpoint, id: 'duplicate', owner: 'duplicate-owner',
+    }])).toBeUndefined();
+    expect(resolveCatalogWorkroomProjectionConversation({
+      ...definition,
+      conversation: { kind: 'repository' as const, id: 'zhinjs/zhin', agent: 'orchestrator' },
+    }, [endpoint])).toBeUndefined();
+
+    expect(resolveWorkroomPlanningPolicyPublication(undefined)).toEqual({ revision: 1 });
+    expect(resolveWorkroomPlanningPolicyPublication({ revision: 3, digest: 'sha256:previous' }))
+      .toEqual({ revision: 4, expectedPreviousDigest: 'sha256:previous' });
+    expect(isWorkroomPlanningPolicyReady(undefined)).toBe(false);
+    expect(isWorkroomPlanningPolicyReady({
+      policy: { schedulerPolicy: { pinnedAtSequence: 0 } },
+    })).toBe(false);
+    expect(isWorkroomPlanningPolicyReady({
+      policy: { schedulerPolicy: { pinnedAtSequence: 1 } },
+    })).toBe(true);
   });
 
   it('derives one backend from the initial process configuration', () => {

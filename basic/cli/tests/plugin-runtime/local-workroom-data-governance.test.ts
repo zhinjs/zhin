@@ -155,4 +155,83 @@ describe('local Workroom Data Governance authority', () => {
     await expect(authority.issuePublicationDecision(decisionInput, controller.signal))
       .rejects.toThrow('cancelled');
   });
+
+  it('provides signed lifecycle authorization, deletion receipts, and conservative orphan reconciliation', async () => {
+    const root = join(tmpdir(), `zhin-local-workroom-governance-${randomUUID()}`);
+    await mkdir(root);
+    const authority = createLocalWorkroomDataGovernanceAuthority({ stateRoot: root, now: () => 73 });
+    const lifecycle = authority.lifecycle;
+    const clock = await lifecycle.clock.read();
+    expect(clock).toMatchObject({ version: 1, now: 73, revision: 1 });
+
+    const deniedRequest = {
+      authenticatedPrincipalId: 'principal:attacker',
+      requiredRole: 'data_steward',
+      clock,
+      digest: `sha256:${'1'.repeat(64)}`,
+    } as never;
+    await expect(lifecycle.authority.authorize(deniedRequest)).resolves.toEqual({
+      approved: false,
+      requestDigest: deniedRequest.digest,
+      reason: 'local_root_principal_required',
+    });
+
+    const request = {
+      ...deniedRequest,
+      authenticatedPrincipalId: lifecycle.registrationPrincipalId,
+      digest: `sha256:${'2'.repeat(64)}`,
+    } as never;
+    const decision = await lifecycle.authority.authorize(request);
+    if (!decision.approved) throw new Error('fixture lifecycle decision must be approved');
+    await expect(lifecycle.authority.verify(request, decision)).resolves.toBe(true);
+    await expect(lifecycle.authority.verify(request, {
+      ...decision,
+      role: 'privacy',
+    } as never)).resolves.toBe(false);
+    await expect(lifecycle.subjects.resolve()).resolves.toBeUndefined();
+
+    const dispatch = {
+      id: 'purge-1',
+      governance: { request: { projectId: 'project-1', objectId: 'object-1' } },
+      location: {
+        id: 'primary',
+        authorityDigest: `sha256:${'3'.repeat(64)}`,
+      },
+      locationManifestDigest: `sha256:${'4'.repeat(64)}`,
+      attempt: 1,
+      fence: 1,
+      requestDigest: `sha256:${'5'.repeat(64)}`,
+      requestedAt: 50,
+      digest: `sha256:${'6'.repeat(64)}`,
+    } as never;
+    const receipt = await lifecycle.deletion.purge(dispatch);
+    expect(receipt).toMatchObject({
+      purgeId: 'purge-1',
+      projectId: 'project-1',
+      objectId: 'object-1',
+      status: 'failed',
+      reasonCode: 'unsupported',
+      authenticatedBy: lifecycle.registrationPrincipalId,
+      observedAt: 73,
+    });
+    await expect(lifecycle.receipts.verify(receipt, dispatch)).resolves.toBe(true);
+    await expect(lifecycle.receipts.verify({
+      ...receipt,
+      requestDigest: `sha256:${'7'.repeat(64)}`,
+    }, dispatch)).resolves.toBe(false);
+
+    const orphanRequest = { digest: `sha256:${'8'.repeat(64)}` } as never;
+    const orphan = await lifecycle.orphanPurge.purge(orphanRequest);
+    expect(orphan).toMatchObject({
+      requestDigest: orphanRequest.digest,
+      providerId: 'local-workroom-orphan-purge',
+      status: 'outcome_unknown',
+      observedAt: 73,
+    });
+    await expect(lifecycle.orphanPurge.reconcile(orphanRequest, orphan)).resolves.toBe(orphan);
+    await expect(lifecycle.orphanPurge.reconcile(orphanRequest, {
+      ...orphan,
+      requestDigest: `sha256:${'9'.repeat(64)}`,
+    })).resolves.toEqual(orphan);
+  });
 });

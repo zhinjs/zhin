@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   PortfolioFirstWorkroomSchedulerDispatchSupply,
+  WorkroomSchedulerPortfolioCapacityUnavailableError,
 } from '../../src/plugin-runtime/workroom-scheduler-portfolio-supply.js';
 import {
   workroomSchedulerPortfolioOpaqueHeadId,
@@ -9,6 +10,7 @@ import {
 } from '../../src/plugin-runtime/workroom-scheduler-portfolio-contract.js';
 import {
   WorkroomSchedulerAssignmentRouteUnavailableError,
+  WorkroomSchedulerDurablyBlockedError,
 } from '../../src/plugin-runtime/workroom-scheduler-runtime.js';
 import { createWorkroomSchedulerPolicySnapshot, decideWorkroomSchedule } from '../../src/workroom/workroom-scheduler.js';
 import type { WorkroomEvent } from '../../src/workroom/kernel-contracts.js';
@@ -75,6 +77,73 @@ describe('Portfolio-first Workroom Scheduler supply', () => {
 
     await expect(supply.deliver(selected)).rejects.toThrow('exact Scheduler decision/route');
     expect(capacity.request).not.toHaveBeenCalled();
+  });
+
+  it('pins Acceptance before requesting capacity and rejects stale or durably unpinnable Tasks', async () => {
+    const selected = decision();
+    const route = {
+      kind: 'local' as const, agentDefinitionId: 'developer', authorityRef: 'local:7:developer',
+    };
+    const request = capacityRequest(selected, route);
+    const capacity = { request: vi.fn(async () => null) };
+    const unpinned = { tasks: { build: { revision: 1, status: 'ready' } } } as never;
+    const pinned = readyRunState();
+    const pinTaskAcceptance = vi.fn(pinned.pinTaskAcceptance);
+    const supply = new PortfolioFirstWorkroomSchedulerDispatchSupply({
+      generation: 7,
+      catalog: { read: async () => catalog() },
+      routes: { resolve: async () => route },
+      requests: { resolve: async () => request },
+      capacity,
+      runState: {
+        read: async () => unpinned,
+        pinTaskAcceptance,
+      },
+    });
+
+    await expect(supply.deliver(selected)).resolves.toBeUndefined();
+    expect(pinTaskAcceptance).toHaveBeenCalledWith('project-1', 'run-1', 'build');
+    expect(capacity.request).toHaveBeenCalledExactlyOnceWith(request);
+
+    const stale = new PortfolioFirstWorkroomSchedulerDispatchSupply({
+      generation: 7,
+      catalog: { read: async () => catalog() },
+      routes: { resolve: async () => route },
+      requests: { resolve: async () => request },
+      capacity,
+      runState: {
+        read: async () => ({ tasks: { build: { revision: 2, status: 'ready' } } } as never),
+        pinTaskAcceptance: vi.fn(),
+      },
+    });
+    await expect(stale.deliver(selected))
+      .rejects.toBeInstanceOf(WorkroomSchedulerPortfolioCapacityUnavailableError);
+
+    const rejected = new PortfolioFirstWorkroomSchedulerDispatchSupply({
+      generation: 7,
+      catalog: { read: async () => catalog() },
+      routes: { resolve: async () => route },
+      requests: { resolve: async () => request },
+      capacity,
+      runState: {
+        read: async () => unpinned,
+        pinTaskAcceptance: async () => { throw new Error('policy unavailable'); },
+      },
+    });
+    await expect(rejected.deliver(selected)).rejects.toBeInstanceOf(WorkroomSchedulerDurablyBlockedError);
+
+    const missing = new PortfolioFirstWorkroomSchedulerDispatchSupply({
+      generation: 7,
+      catalog: { read: async () => catalog() },
+      routes: { resolve: async () => route },
+      requests: { resolve: async () => request },
+      capacity,
+      runState: {
+        read: async () => unpinned,
+        pinTaskAcceptance: async () => unpinned,
+      },
+    });
+    await expect(missing.deliver(selected)).rejects.toBeInstanceOf(WorkroomSchedulerDurablyBlockedError);
   });
 });
 

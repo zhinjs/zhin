@@ -21,6 +21,39 @@ import type { PortfolioSponsorProjection } from '../../src/portfolio/sponsor-pro
 const governance = createTestProjectionGovernance();
 
 describe('production Workroom Projection runtime', () => {
+  it('renews each enabled IM Workroom binding before projecting durable facts', async () => {
+    const repository = new MemoryWorkroomProjectionRepository();
+    const renewWorkroomBinding = vi.fn(async () => undefined);
+    const currentCatalog = {
+      revision: 'a'.repeat(64),
+      definitions: {
+        'project-1': catalogDefinition(),
+        disabled: { ...catalogDefinition(), enabled: false },
+        repository: {
+          ...catalogDefinition(),
+          conversation: { kind: 'repository' as const, id: 'zhinjs/zhin', agent: 'software.orchestrator' },
+        },
+      },
+    };
+    const runtime = new WorkroomProjectionRuntime({
+      catalog: { read: async () => currentCatalog },
+      journal: new MemoryWorkroomJournal(),
+      repository,
+      outbound: { send: async () => ({ status: 'sent' }) },
+      workerId: 'projection-renewal', leaseMs: 30_000,
+      maxRunsPerTick: 4, maxDeliveriesPerTick: 4,
+      governance,
+      renewWorkroomBinding,
+    });
+
+    await expect(runtime.runOnce(new AbortController().signal)).resolves.toMatchObject({
+      scannedRuns: 0, capturedRuns: 0, deliveries: 0,
+    });
+    expect(renewWorkroomBinding).toHaveBeenCalledExactlyOnceWith(
+      'project-1', currentCatalog, expect.any(AbortSignal),
+    );
+  });
+
   it('recovers Catalog-bound Journal facts and drains them through the durable outbox', async () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
     const journal = new MemoryWorkroomJournal();
