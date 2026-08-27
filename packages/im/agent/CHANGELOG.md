@@ -1,5 +1,11 @@
 # @zhin.js/agent
 
+## 1.1.22
+
+### Patch Changes
+
+- a728a20: Expose the token-bound Console principal for safe Workroom sponsor initialization, generate the missing governed Console disclosure sink, use one canonical Catalog binding digest, and renew stale Project disclosure authorities after Catalog or Sponsor changes.
+
 ## 1.1.21
 
 ### Patch Changes
