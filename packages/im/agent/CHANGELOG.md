@@ -1,5 +1,11 @@
 # @zhin.js/agent
 
+## 1.1.21
+
+### Patch Changes
+
+- 337fd05: Normalize Project Data Governance authority candidates before requesting the exact publication decision, so Workroom disclosure bootstrap persists through the canonical repository without digest drift.
+
 ## 1.1.20
 
 ### Patch Changes

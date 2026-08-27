@@ -1,5 +1,12 @@
 # single-file-bot
 
+## 0.1.31
+
+### Patch Changes
+
+- zhin.js@6.0.15
+- @zhin.js/adapter-icqq@9.0.7
+
 ## 0.1.30
 
 ### Patch Changes

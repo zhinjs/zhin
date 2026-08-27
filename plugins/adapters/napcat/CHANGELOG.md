@@ -1,5 +1,13 @@
 # @zhin.js/adapter-napcat
 
+## 7.0.7
+
+### Patch Changes
+
+- Updated dependencies [337fd05]
+  - @zhin.js/agent@1.1.21
+  - zhin.js@6.0.15
+
 ## 7.0.6
 
 ### Patch Changes

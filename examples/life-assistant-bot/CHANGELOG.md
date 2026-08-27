@@ -1,5 +1,13 @@
 # life-assistant-bot
 
+## 0.1.38
+
+### Patch Changes
+
+- Updated dependencies [337fd05]
+  - @zhin.js/agent@1.1.21
+  - zhin.js@6.0.15
+
 ## 0.1.37
 
 ### Patch Changes
