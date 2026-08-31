@@ -37,10 +37,6 @@ export interface SeamProvider {
 
 export type SeamScope = string | symbol;
 
-function toKey(scope: SeamScope): string {
-  return typeof scope === 'symbol' ? scope.toString() : scope;
-}
-
 /**
  * 能力接缝提供者注册表
  *
@@ -48,28 +44,38 @@ function toKey(scope: SeamScope): string {
  * 'global' 作用域的提供者对所有查询可见。
  */
 export class SeamProviderRegistry<T extends SeamProvider> {
-  private readonly providers = new Map<string, T[]>();
+  private readonly providers = new Map<SeamScope | 'global', T[]>();
 
   /**
    * 在指定作用域下注册一个 Service Provider
    */
-  register(scope: SeamScope | 'global', provider: T): void {
-    const key = toKey(scope);
-    if (!this.providers.has(key)) {
-      this.providers.set(key, []);
+  register(scope: SeamScope | 'global', provider: T): () => void {
+    const key = scope;
+    const providers = this.providers.get(key) ?? [];
+    if (providers.some((candidate) => candidate.id === provider.id)) {
+      throw new Error(`Duplicate Seam provider "${provider.id}" in scope "${String(key)}"`);
     }
-    this.providers.get(key)!.push(provider);
+    providers.push(provider);
+    this.providers.set(key, providers);
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      this.remove(scope, provider.id);
+    };
   }
 
   /**
    * 获取指定作用域下的所有提供者（包含 global 中的提供者）
    */
   getFor(scope: SeamScope | 'global'): T[] {
-    const key = toKey(scope);
+    const key = scope;
     const scoped = this.providers.get(key) ?? [];
-    if (key === 'global') return scoped;
+    if (key === 'global') return [...scoped];
     const global = this.providers.get('global') ?? [];
-    return [...global, ...scoped];
+    const visible = new Map(global.map((provider) => [provider.id, provider]));
+    for (const provider of scoped) visible.set(provider.id, provider);
+    return [...visible.values()];
   }
 
   /**
@@ -91,12 +97,17 @@ export class SeamProviderRegistry<T extends SeamProvider> {
    * 移除已注册的提供者（返回是否实际移除）
    */
   remove(scope: SeamScope | 'global', id: string): boolean {
-    const key = toKey(scope);
+    const key = scope;
     const list = this.providers.get(key);
     if (!list) return false;
     const idx = list.findIndex((p) => p.id === id);
     if (idx === -1) return false;
     list.splice(idx, 1);
+    if (list.length === 0) this.providers.delete(key);
     return true;
+  }
+
+  dispose(): void {
+    this.providers.clear();
   }
 }

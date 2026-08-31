@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { SeamIntegration } from '../../src/seam/seam-integration.js';
 import type { ToolService } from '../../src/seam/tool-service.js';
 import type { SkillService, SkillMetadata } from '../../src/seam/skill-service.js';
+import type { ToolInvocationContext } from '@zhin.js/tool';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -31,7 +32,6 @@ function makeSkillService(id: string, skills: SkillMetadata[]): SkillService {
       if (!found) throw new Error(`Skill not found: ${skillId}`);
       return found.description;
     },
-    invoke: async (_scope, request) => ({ success: true, output: request.input }),
     isAvailable: (_scope, skillId) => skills.some((s) => s.name === skillId),
   };
 }
@@ -64,21 +64,19 @@ describe('SeamIntegration', () => {
       expect(schemas.map((s) => s.function.name)).toContain('scoped_tool');
     });
 
-    it('executes a tool through the correct service', async () => {
+    it('projects provider execution for the canonical turn runtime', async () => {
       const integration = new SeamIntegration();
       integration.registerToolService('global', makeToolService('svc', ['my_tool']));
 
-      const result = await integration.executeTool('global', 'my_tool', { x: 1 });
+      const [tool] = integration.projectTools('global');
+      const result = await tool!.execute({ x: 1 }, invocation());
       expect(result.success).toBe(true);
       expect((result.output as any).toolName).toBe('my_tool');
     });
 
-    it('returns error result when tool is not found', async () => {
+    it('does not expose an execute-by-name policy bypass', () => {
       const integration = new SeamIntegration();
-
-      const result = await integration.executeTool('global', 'nonexistent', {});
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Tool not found');
+      expect('executeTool' in integration).toBe(false);
     });
 
     it('returns empty schemas when no services are registered', () => {
@@ -111,23 +109,38 @@ describe('SeamIntegration', () => {
       );
     });
 
-    it('invokes a skill through the correct service', async () => {
+    it('projects skill instructions through the correct service', async () => {
       const integration = new SeamIntegration();
       integration.registerSkillService(
         'global',
         makeSkillService('svc', [{ name: 'my_skill', description: 'My skill' }]),
       );
 
-      const result = await integration.invokeSkill('global', 'my_skill', { data: 42 });
-      expect(result.success).toBe(true);
+      const [result] = await integration.projectSkills('global');
+      expect(result?.metadata.name).toBe('my_skill');
+      expect(result?.instructions).toBe('My skill');
     });
 
     it('returns error result when skill is not found', async () => {
       const integration = new SeamIntegration();
 
-      const result = await integration.invokeSkill('global', 'missing_skill', {});
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Skill not found');
+      expect(await integration.projectSkills('global')).toEqual([]);
     });
   });
 });
+
+function invocation(): ToolInvocationContext {
+  return {
+    signal: new AbortController().signal,
+    traceId: 'trace',
+    turnId: 'turn',
+    sessionKey: 'session',
+    origin: { kind: 'internal', source: 'test' },
+    principal: { subjectId: 'user', roles: ['user'] },
+    policy: {
+      permissions: ['user'],
+      unattended: false,
+      network: { enabled: false },
+    },
+  };
+}

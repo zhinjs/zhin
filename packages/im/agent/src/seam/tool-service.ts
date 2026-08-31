@@ -6,6 +6,7 @@
  */
 
 import type { SeamProvider, SeamScope } from './seam-provider.js';
+import type { ToolInvocationContext, ToolApproval, ToolScope } from '@zhin.js/tool';
 
 /**
  * Tool 的 OpenAI 格式 Schema
@@ -17,6 +18,13 @@ export interface ToolSchema {
     description: string;
     parameters: unknown; // JSONSchema
   };
+  /** Runtime policy metadata projected into the canonical Tool capability. */
+  approval?: ToolApproval;
+  platforms?: readonly string[];
+  scopes?: readonly ToolScope[];
+  permissions?: readonly string[];
+  hidden?: boolean;
+  source?: string;
 }
 
 /**
@@ -53,6 +61,7 @@ export interface ToolService extends SeamProvider {
     scope: SeamScope | 'global',
     toolName: string,
     args: unknown,
+    context: ToolInvocationContext,
   ): Promise<ToolExecutionResult>;
 
   /**
@@ -60,13 +69,12 @@ export interface ToolService extends SeamProvider {
    */
   isAvailable?(scope: SeamScope | 'global', toolName: string): boolean;
 
-  /**
-   * 可选：应用安全策略（文件/执行权限检查等）
-   */
+  /** Provider-local policy. Runtime generation, permission and approval policy always runs first. */
   applyPolicy?(
     scope: SeamScope | 'global',
     toolName: string,
     args: unknown,
+    context: ToolInvocationContext,
   ): Promise<void>;
 }
 

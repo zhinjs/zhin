@@ -1,106 +1,124 @@
-/**
- * 统一的能力接缝集成器
- *
- * 管理 Tool / Skill 两类能力的 Provider Registry，并提供便利方法。
- * 在 ZhinAgent 的作用域中提供，供 capability projector 与 PromptAssemblyRegistry 使用。
- */
+/** Generation-owned Tool / Skill provider integration. */
 
+import type { ToolInvocationContext } from '@zhin.js/tool';
 import { SeamProviderRegistry, type SeamScope } from './seam-provider.js';
 import type { ToolService, ToolSchema, ToolExecutionResult } from './tool-service.js';
-import type {
-  SkillService,
-  SkillMetadata,
-  SkillInvocationResult,
-} from './skill-service.js';
+import type { SkillService, SkillMetadata } from './skill-service.js';
 
+export interface ProjectedSeamTool {
+  readonly providerId: string;
+  readonly schema: ToolSchema;
+  execute(input: unknown, context: ToolInvocationContext): Promise<ToolExecutionResult>;
+}
+
+export interface ProjectedSeamSkill {
+  readonly providerId: string;
+  readonly metadata: SkillMetadata & { readonly name: string };
+  readonly instructions: string;
+}
+
+/**
+ * Collects service providers, while leaving execution authority to the
+ * canonical TurnToolRuntime. `projectTools()` returns bound definitions; it
+ * deliberately does not expose a second, policy-free execute-by-name path.
+ */
 export class SeamIntegration {
   readonly toolRegistry = new SeamProviderRegistry<ToolService>();
   readonly skillRegistry = new SeamProviderRegistry<SkillService>();
 
-  // ── Tool ────────────────────────────────────────────────────────────
-
-  /**
-   * 在指定作用域下注册一个 Tool Service
-   */
-  registerToolService(scope: SeamScope | 'global', service: ToolService): void {
-    this.toolRegistry.register(scope, service);
+  registerToolService(scope: SeamScope | 'global', service: ToolService): () => void {
+    return this.toolRegistry.register(scope, service);
   }
 
-  /**
-   * 获取指定作用域下的所有 Tool Schema
-   *
-   * 自动遍历所有注册的 Tool Services，收集 schemas。
-   */
   getToolSchemas(scope: SeamScope | 'global'): ToolSchema[] {
-    return this.toolRegistry
-      .getFor(scope)
-      .flatMap((service) => service.schema(scope));
+    return this.projectToolSchemas(scope).map(({ schema }) => schema);
   }
 
-  /**
-   * 执行一个工具
-   *
-   * 自动查找提供该工具的 Service，然后执行。
-   */
-  async executeTool(
-    scope: SeamScope | 'global',
-    toolName: string,
-    args: unknown,
-  ): Promise<ToolExecutionResult> {
-    const provider = this.toolRegistry.find(
-      scope,
-      (service) =>
-        service.isAvailable?.(scope, toolName) !== false &&
-        service.schema(scope).some((s) => s.function.name === toolName),
-    );
-
-    if (!provider) {
-      return { success: false, error: `Tool not found: ${toolName}` };
-    }
-
-    return provider.execute(scope, toolName, args);
+  projectTools(scope: SeamScope | 'global'): ProjectedSeamTool[] {
+    return this.projectToolSchemas(scope).map(({ service, schema }) => Object.freeze({
+      providerId: service.id,
+      schema,
+      execute: async (input: unknown, context: ToolInvocationContext) => {
+        if (service.isAvailable?.(scope, schema.function.name) === false) {
+          return { success: false, error: `Tool unavailable: ${schema.function.name}` };
+        }
+        try {
+          await service.applyPolicy?.(scope, schema.function.name, input, context);
+          return await service.execute(scope, schema.function.name, input, context);
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      },
+    }));
   }
 
-  // ── Skill ────────────────────────────────────────────────────────────
-
-  /**
-   * 在指定作用域下注册一个 Skill Service
-   */
-  registerSkillService(scope: SeamScope | 'global', service: SkillService): void {
-    this.skillRegistry.register(scope, service);
+  registerSkillService(scope: SeamScope | 'global', service: SkillService): () => void {
+    return this.skillRegistry.register(scope, service);
   }
 
-  /**
-   * 获取指定作用域下的所有 Skill 元数据
-   *
-   * 自动遍历所有注册的 Skill Services，收集 catalogs。
-   */
   async getSkillCatalog(scope: SeamScope | 'global'): Promise<SkillMetadata[]> {
-    const results = await Promise.all(
-      this.skillRegistry.getFor(scope).map((service) => service.catalog(scope)),
-    );
-    return results.flat();
+    return (await this.projectSkills(scope)).map(({ metadata }) => metadata);
   }
 
-  /**
-   * 调用一个 Skill
-   *
-   * 自动查找提供该 Skill 的 Service，然后调用。
-   */
-  async invokeSkill(
-    scope: SeamScope | 'global',
-    skillId: string,
-    input: unknown,
-  ): Promise<SkillInvocationResult> {
-    const provider = this.skillRegistry.find(
-      scope,
-      (service) => service.isAvailable?.(scope, skillId) !== false,
-    );
-
-    if (!provider) {
-      return { success: false, error: `Skill not found: ${skillId}` };
+  async projectSkills(scope: SeamScope | 'global'): Promise<ProjectedSeamSkill[]> {
+    const projected: ProjectedSeamSkill[] = [];
+    const names = new Set<string>();
+    for (const service of this.skillRegistry.getFor(scope)) {
+      for (const metadata of await service.catalog(scope)) {
+        const name = metadata.name?.trim();
+        if (!name || service.isAvailable?.(scope, name) === false) continue;
+        if (names.has(name)) throw new Error(`Duplicate Seam Skill capability: ${name}`);
+        names.add(name);
+        projected.push(Object.freeze({
+          providerId: service.id,
+          metadata: immutableSnapshot({ ...metadata, name }),
+          instructions: await service.describe(scope, name),
+        }));
+      }
     }
-
-    return provider.invoke(scope, { skillId, input });
+    return projected;
   }
+
+  dispose(): void {
+    this.toolRegistry.dispose();
+    this.skillRegistry.dispose();
+  }
+
+  private projectToolSchemas(
+    scope: SeamScope | 'global',
+  ): Array<{ service: ToolService; schema: ToolSchema }> {
+    const projected: Array<{ service: ToolService; schema: ToolSchema }> = [];
+    const names = new Set<string>();
+    for (const service of this.toolRegistry.getFor(scope)) {
+      for (const schema of service.schema(scope)) {
+        const name = schema.function.name.trim();
+        if (!name || service.isAvailable?.(scope, name) === false) continue;
+        if (names.has(name)) throw new Error(`Duplicate Seam Tool capability: ${name}`);
+        names.add(name);
+        projected.push({
+          service,
+          schema: immutableSnapshot({
+            ...schema,
+            function: { ...schema.function, name },
+          }),
+        });
+      }
+    }
+    return projected;
+  }
+}
+
+function immutableSnapshot<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return Object.freeze(value.map((entry) => immutableSnapshot(entry))) as T;
+  }
+  if (value && typeof value === 'object') {
+    return Object.freeze(Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, immutableSnapshot(entry)]),
+    )) as T;
+  }
+  return value;
 }

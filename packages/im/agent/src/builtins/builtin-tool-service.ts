@@ -10,6 +10,7 @@
 
 import type { SeamScope } from '../seam/seam-provider.js';
 import type { ToolService, ToolSchema, ToolExecutionResult } from '../seam/tool-service.js';
+import type { ToolInvocationContext } from '@zhin.js/tool';
 
 const ASK_USER_SCHEMA: ToolSchema = {
   type: 'function',
@@ -27,6 +28,8 @@ const ASK_USER_SCHEMA: ToolSchema = {
       required: ['question'],
     },
   },
+  approval: 'never',
+  source: 'builtin:interaction',
 };
 
 /**
@@ -49,9 +52,10 @@ export class BuiltinToolService implements ToolService {
     _scope: SeamScope | 'global',
     toolName: string,
     args: unknown,
+    context: ToolInvocationContext,
   ): Promise<ToolExecutionResult> {
     if (toolName === 'ask_user') {
-      return this.handleAskUser(args);
+      return this.handleAskUser(args, context);
     }
     return { success: false, error: `Unknown builtin tool: ${toolName}` };
   }
@@ -60,7 +64,10 @@ export class BuiltinToolService implements ToolService {
     return toolName === 'ask_user';
   }
 
-  private handleAskUser(args: unknown): ToolExecutionResult {
+  private async handleAskUser(
+    args: unknown,
+    context: ToolInvocationContext,
+  ): Promise<ToolExecutionResult> {
     if (
       typeof args !== 'object' ||
       args === null ||
@@ -68,10 +75,19 @@ export class BuiltinToolService implements ToolService {
     ) {
       return { success: false, error: 'ask_user requires a "question" string argument' };
     }
-    // 实际执行由上层（interactive session）处理；此处返回成功表示接受请求
+    if (!context.question) {
+      return { success: false, error: 'ask_user requires an interactive QuestionPort' };
+    }
+    const question = (args as Record<string, unknown>)['question'] as string;
+    const answer = await context.question.ask({
+      requestId: `${context.turnId}:ask_user`,
+      question,
+      type: 'text',
+      signal: context.signal,
+    });
     return {
       success: true,
-      output: { question: (args as Record<string, unknown>)['question'] },
+      output: answer,
     };
   }
 }

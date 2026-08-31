@@ -1,211 +1,160 @@
-# 能力接缝（Capability Seams）
+# 能力接缝（Capability Seam）
 
-## 什么是能力接缝？
+Capability Seam 是 Agent Runtime 的 **Advanced / experimental** Provider 扩展口。普通插件仍应优先使用
+`tools/*.ts`、`agent/skills/*.md` 或 `addTool` / `addSkill`；这些 Feature 能获得 manifest、
+owner 可见性、Generation HMR 和冲突校验。Seam 用于 Root Host 需要接入远程能力服务、已有能力注册表，
+或不适合落成普通 Feature slot 的 Provider。
 
-能力接缝是 Zhin.js 中统一的扩展点模型。所有能力（LLM / Tool / Skill）都遵循同一套三角架构：
+## 生产执行路径
 
-```
-┌─────────────────────────────────┐
-│ Service Definition (接口规范)    │
-│ 定义能力提供者必须实现的方法      │
-└────────────┬────────────────────┘
-             │
-┌────────────▼────────────────────┐
-│ Service Provider (实现)          │
-│ 具体的能力提供者（插件等）        │
-└────────────┬────────────────────┘
-             │
-┌────────────▼────────────────────┐
-│ Consumer (消费方)                │
-│ 使用能力的核心模块               │
-└─────────────────────────────────┘
-```
-
-## 三种能力
-
-### 1. LLM Service
-- **定义**：大语言模型适配（`AIProvider` in `@zhin.js/ai`）
-- **消费方**：Agent Definition / Assignment capability snapshot projector
-- **示例**：DeepSeek API、OpenAI API
-
-### 2. Tool Service（`ToolService`）
-- **定义**：原子操作（读文件、调 API 等）
-- **消费方**：Assignment capability snapshot projector（工具执行）、`PromptAssemblyRegistry`（schema 注入）
-- **示例**：内置工具（`BuiltinToolService`）、平台工具、插件工具
-
-### 3. Skill Service（`SkillService`）
-- **定义**：复合能力（通常由多个 Tool 组合而成）
-- **消费方**：Workroom Scheduler / Assignment projector
-- **示例**：GitHub Skill、数据分析 Skill
-
-## 核心组件
-
-### `SeamProvider`
-
-所有 Service Provider 的基接口：
-
-```typescript
-interface SeamProvider {
-  readonly id: string;         // 唯一标识符，格式建议：namespace:name
-  readonly description: string;
-  readonly tags?: string[];
-  readonly version?: string;
-}
+```text
+Tool / Skill Feature ─┐
+                      ├─ CapabilityIngress ─ immutable AgentCapabilities
+Root Capability Seam ─┘                         │
+                                                ▼
+                                          TurnIngress
+                                                │
+                                                ▼
+                                        TurnToolRuntime
+                         generation → permission → approval → journal
+                                                │
+                                                ▼
+                                           Provider
 ```
 
-### `SeamProviderRegistry<T>`
+`CapabilityIngress` 从固定的 Runtime snapshot 读取 Root 的 `seamIntegrationToken`，把服务投影为与
+Tool / Skill Feature 相同的 capability snapshot。Seam Tool 不存在独立的
+`executeTool(name, args)` 快捷通道；只有 `TurnToolRuntime` 可以执行投影后的 Tool。因此：
 
-类型安全的提供者注册表，支持作用域隔离：
+- 当前 generation 退役或 operation 结束后，Provider 不再可执行；
+- `platforms`、`scopes`、`permissions` 和 `hidden` 先经过统一可见性过滤；
+- `approval` 由 Turn 的 ApprovalPort 执行；无人值守且需要审批时 fail closed；
+- Tool call、denied、failed 和 result 进入同一 Turn Journal；
+- Feature 与 Seam 出现同名 Tool / Skill 时，候选能力快照直接拒绝，而不是静默覆盖。
 
-```typescript
-const registry = new SeamProviderRegistry<ToolService>();
-registry.register('global', myToolService);        // 全局可见
-registry.register('agent-1', scopedService);       // 仅 agent-1 可见
+## 服务契约
 
-registry.getFor('agent-1');  // 返回 global + agent-1 的所有提供者
-registry.getById('global', 'zhin:builtin-tools');
-```
+`ToolService` 提供 schema 和最终 Provider 调用。schema 上的策略字段会进入 canonical
+Tool capability；未声明 `approval` 时默认 `on-risk`。
 
-### `SeamIntegration`
+```ts
+import type {
+  ToolExecutionResult,
+  ToolSchema,
+  ToolService,
+} from '@zhin.js/agent'
 
-统一管理 Tool 和 Skill 两类能力注册表，并提供便利方法：
+export class SearchService implements ToolService {
+  readonly id = 'acme:search'
+  readonly description = 'Acme remote search'
 
-```typescript
-const seamIntegration = new SeamIntegration();
-
-// 注册服务
-seamIntegration.registerToolService('global', new BuiltinToolService());
-seamIntegration.registerSkillService('global', new SkillRegistryAsService(skillRegistry));
-
-// 收集所有 Tool Schema（用于 LLM 工具描述）
-const schemas = seamIntegration.getToolSchemas('global');
-
-// 执行工具
-const result = await seamIntegration.executeTool('global', 'ask_user', { question: 'Sure?' });
-
-// 收集 Skill 目录
-const catalog = await seamIntegration.getSkillCatalog('global');
-```
-
-## 实现一个 Tool Service
-
-```typescript
-// packages/my-plugin/src/tool-service.ts
-import type { ToolService, ToolSchema, ToolExecutionResult, SeamScope } from '@zhin.js/agent';
-
-export class MyToolService implements ToolService {
-  readonly id = 'my-plugin:tools';
-  readonly description = 'My custom tools';
-
-  schema(_scope: SeamScope | 'global'): ToolSchema[] {
+  schema(): ToolSchema[] {
     return [{
       type: 'function',
       function: {
-        name: 'greet',
-        description: 'Greet someone by name',
+        name: 'acme_search',
+        description: 'Search the Acme knowledge base',
         parameters: {
           type: 'object',
-          properties: {
-            name: { type: 'string', description: 'The name to greet' },
-          },
-          required: ['name'],
+          properties: { query: { type: 'string' } },
+          required: ['query'],
         },
       },
-    }];
+      approval: 'never',
+      permissions: ['authenticated'],
+      source: 'remote:acme',
+    }]
   }
 
-  async execute(
-    _scope: SeamScope | 'global',
-    toolName: string,
-    args: unknown,
-  ): Promise<ToolExecutionResult> {
-    if (toolName === 'greet' && typeof args === 'object' && args !== null) {
-      const { name } = args as { name: string };
-      return { success: true, output: `Hello, ${name}!` };
+  async execute(_scope, toolName, input, context): Promise<ToolExecutionResult> {
+    if (toolName !== 'acme_search') {
+      return { success: false, error: `Unknown tool: ${toolName}` }
     }
-    return { success: false, error: `Unknown tool: ${toolName}` };
+    context.signal.throwIfAborted()
+    return { success: true, output: await searchAcme(input, context.signal) }
   }
 }
 ```
 
-## 实现一个 Skill Service
+`SkillService` 是声明式目录，不是另一种可直接执行的函数。它通过 `catalog()` 暴露名称和摘要，
+通过 `describe()` 返回完整 instructions；Skill 使用哪些 Tool、何时加载和如何进入 prompt，仍由
+Agent 的 capability plan 和 prompt assembly 决定。
 
-```typescript
-// packages/my-plugin/src/skill-service.ts
-import type { SkillService, SkillMetadata, SkillInvocationRequest, SkillInvocationResult, SeamScope } from '@zhin.js/agent';
+```ts
+import type { SkillService } from '@zhin.js/agent'
 
-export class MySkillService implements SkillService {
-  readonly id = 'my-plugin:skills';
-  readonly description = 'My custom skills';
+export class ResearchSkills implements SkillService {
+  readonly id = 'acme:skills'
+  readonly description = 'Acme research workflows'
 
-  async catalog(_scope: SeamScope | 'global'): Promise<SkillMetadata[]> {
-    return [
-      { name: 'data-analysis', description: 'Analyze data files', keywords: ['data', 'csv', 'json'] },
-    ];
+  async catalog() {
+    return [{ name: 'acme_research', description: 'Research with Acme sources' }]
   }
 
-  async describe(_scope: SeamScope | 'global', skillId: string): Promise<string> {
-    if (skillId === 'data-analysis') return 'Reads and summarizes data files.';
-    throw new Error(`Skill not found: ${skillId}`);
-  }
-
-  async invoke(
-    _scope: SeamScope | 'global',
-    request: SkillInvocationRequest,
-  ): Promise<SkillInvocationResult> {
-    // 执行 skill 逻辑
-    return { success: true, output: `Invoked ${request.skillId}` };
-  }
-
-  isAvailable(_scope: SeamScope | 'global', skillId: string): boolean {
-    return skillId === 'data-analysis';
+  async describe(_scope, skillId: string) {
+    if (skillId !== 'acme_research') throw new Error('Skill not found')
+    return '# Acme research\nUse acme_search, cite source IDs, then summarize.'
   }
 }
 ```
 
-## 作用域隔离
+## Root 注册与生命周期
 
-每个能力都支持作用域隔离，避免不同 agent/session 间的冲突：
+Seam 是显式的 Root Resource。注册返回幂等 disposer；Root Scope 退役时还要释放整个
+`SeamIntegration`。这样 Provider 与候选 Generation 一起 prepare、发布、回滚和释放。
 
-```typescript
-const seamIntegration = new SeamIntegration();
+```ts
+import {
+  SeamIntegration,
+  seamIntegrationToken,
+} from '@zhin.js/agent'
+import { definePlugin } from 'zhin.js/plugin-runtime'
+import { ResearchSkills } from './research-skills.js'
+import { SearchService } from './search-service.js'
 
-// 在 agent-specific 作用域中注册
-seamIntegration.registerToolService(agentScope, toolService);
+export default definePlugin({
+  name: 'my-agent-root',
+  setup({ resources }) {
+    const seams = new SeamIntegration()
+    seams.registerToolService('global', new SearchService())
+    seams.registerSkillService('global', new ResearchSkills())
 
-// 查询时也需要指定作用域（自动包含 global 提供者）
-const schemas = seamIntegration.getToolSchemas(agentScope);
+    resources.provide(seamIntegrationToken, seams, () => seams.dispose())
+  },
+})
 ```
 
-## 内置实现
+不要在模块顶层保存 `SeamIntegration`，也不要在 candidate 发布后向旧 Generation 的实例追加
+Provider。动态变化应生成新的 Runtime Generation。
 
-| 类 | 路径 | 说明 |
-|---|---|---|
-| `BuiltinToolService` | `packages/im/agent/src/builtins/builtin-tool-service.ts` | 框架内置工具（ask_user 等）的接缝接入 |
-| `SkillRegistryAsService` | `packages/im/agent/src/skill/skill-registry-as-service.ts` | 将 `SkillRegistry` 适配为 `SkillService` |
+## 作用域和冲突
 
-## DI Token
+- `global` Provider 对 Root 下所有 Agent owner 可见；
+- 使用 owner 的字符串 ID 注册时，只对对应 owner 查询可见；
+- 同一 scope 中 Provider ID 重复会在注册时失败；
+- scoped Provider 可以用相同 ID 替代 global Provider；
+- 可见 Provider 中 Tool / Skill 名重复会在 capability projection 时失败；
+- 每次注册都应保存并调用返回的 disposer，或把整个 Integration 交给 Scope disposer。
 
-```typescript
-import { seamIntegrationToken, SeamIntegration } from '@zhin.js/agent';
+## 现有适配器
 
-// 在 context.resources 中提供
-context.resources.provide(seamIntegrationToken, seamIntegration);
+| 类 | 用途 |
+|---|---|
+| `BuiltinToolService` | 把 QuestionPort 的交互能力适配为 ToolService；仅用于自定义 Host 组合 |
+| `ToolRegistryAsService` | 显式桥接 generation-owned `ToolRegistry`；不会由 Agent Host 自动全局发布 |
+| `SkillRegistryAsService` | 显式桥接 generation-owned `SkillRegistry`，并读取 Skill 文档 |
 
-// 在消费方使用
-const seamIntegration = context.resources.use(seamIntegrationToken);
-```
+这些适配器不会自动注册。框架内置 Tool / Skill 仍走 Feature projection，避免形成第二套可见性和
+生命周期规则。
 
-## 最佳实践
+## 选择 Feature 还是 Seam
 
-1. **一个 Service = 一个单一职责** — 不要混合 Tool/Skill 能力
-2. **始终检查 `isAvailable?()`** — 在作用域中验证能力可用性
-3. **应用策略** — 通过 `applyPolicy()` 进行权限和安全检查
-4. **返回类型规范** — 始终返回标准的 `ToolExecutionResult` / `SkillInvocationResult` 对象
-5. **唯一 ID** — 使用 `namespace:name` 格式避免冲突，例如 `zhin:builtin-tools`
+| 场景 | 推荐入口 |
+|---|---|
+| npm 插件中的普通 Tool / Skill | Feature 约定目录或 `addTool` / `addSkill` |
+| 需要 manifest、owner 关系和文件级 HMR | Feature |
+| Root Host 接入远程 Provider 或已有 registry | Capability Seam |
+| 需要绕过审批或直接按名称执行 | 不支持；使用 Turn capability |
 
-## 相关文件
-
-- [架构概览](./architecture.md)
-- [插件模型](./plugin-model.md)
-- [消息发送链路](./message-flow.md)
+相关文档：[插件模型](./plugin-model.md) · [Generation 生命周期](./generation-lifecycle.md) ·
+[Agent Tool 创作](../authoring/agent-tools.md) · [架构概览](./architecture.md)

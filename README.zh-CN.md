@@ -91,6 +91,16 @@ pnpm dev
 - **多通道** — QQ / 微信 / Discord / Telegram / Slack / GitHub 等，见 [adapters](./plugins/adapters)
 - **文件化创作面** — `commands/`、`tools/`、`agent/skills`（见 [agent-authoring](./docs/authoring/agent-tools.md)）
 
+### 为长期运行而设计
+
+Zhin 把 Bot 当作长期运行的插件系统，而不是一组消息回调：
+
+- **发布插件有明确 Runtime 契约** — manifest 声明协议、engine 范围、Feature、子插件、隔离方式和实例；同一 npm 包可以多次挂载，并拥有独立作用域与配置（见[插件模型](./docs/concepts/plugin-model.md)）。
+- **热重载是 Generation 事务** — 新插件树先在旁路 prepare 和校验，再原子发布；候选代失败时，当前 Generation 继续服务（见 [Generation 生命周期](./docs/concepts/generation-lifecycle.md)）。
+- **配置是有所有权的数据** — Schema 沿插件树组合，每个插件只得到自己的 owner projection；带 revision 的更新可在激活失败时回滚（见[配置即数据](./docs/concepts/config-as-data.md)）。
+- **Agent 执行只有一条权威路径** — Tool / Skill / MCP 进入固定 snapshot，Generation 校验、权限、审批、取消和 Journal 都留在 Turn Runtime（见 [Agent Runtime](./packages/im/agent/README.md)）。
+- **外部 Agent Provider 也服从同一治理** — Advanced [Capability Seam](./docs/concepts/capability-seams.md) 现已通过 `CapabilityIngress` 投影 Root 服务，不提供绕过策略的按名称直接执行入口。
+
 <details>
 <summary><strong>Stable / Advanced 能力分档</strong></summary>
 

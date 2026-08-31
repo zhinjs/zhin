@@ -91,6 +91,16 @@ More: [Getting started](./docs/getting-started/index.md) · [Examples](./docs/ex
 - **Multi-channel** — QQ / WeChat / Discord / Telegram / Slack / GitHub, see [adapters](./plugins/adapters)
 - **File-based authoring** — `commands/`, `tools/`, `agent/skills` ([agent authoring](./docs/authoring/agent-tools.md))
 
+### Built to stay operable
+
+Zhin treats a bot as a long-running plugin system, rather than a collection of message callbacks:
+
+- **Published plugins have a runtime contract** — the manifest declares protocol, engine range, Features, child plugins, isolation and instances; one package can be mounted more than once with separate scope and config ([plugin model](./docs/concepts/plugin-model.md)).
+- **Hot reload is a Generation transaction** — the next plugin tree is prepared and validated off-path, then published atomically; a failed candidate leaves the active Generation serving traffic ([Generation lifecycle](./docs/concepts/generation-lifecycle.md)).
+- **Configuration is owned data** — schemas compose across the plugin tree, each plugin receives its owner projection, and revisioned updates can roll back when activation fails ([config as data](./docs/concepts/config-as-data.md)).
+- **Agent execution has one authority path** — Tool / Skill / MCP capabilities enter a fixed snapshot, while generation checks, permissions, approval, cancellation and journaling stay in the Turn runtime ([Agent runtime](./packages/im/agent/README.md)).
+- **External Agent providers use the same governance** — the Advanced [Capability Seam](./docs/concepts/capability-seams.md) now projects Root services through `CapabilityIngress`; it does not expose a policy-free execute-by-name path.
+
 <details>
 <summary><strong>Stable / Advanced capability tiers</strong></summary>
 

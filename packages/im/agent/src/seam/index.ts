@@ -12,11 +12,10 @@ export type {
   SkillService,
   SkillServiceProvider,
   SkillMetadata,
-  SkillInvocationRequest,
-  SkillInvocationResult,
 } from './skill-service.js';
 
 export { SeamIntegration } from './seam-integration.js';
+export type { ProjectedSeamTool, ProjectedSeamSkill } from './seam-integration.js';
 
 export { seamIntegrationToken } from './tokens.js';
 export type { SeamIntegrationToken } from './tokens.js';

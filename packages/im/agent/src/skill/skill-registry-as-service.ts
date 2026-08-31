@@ -9,10 +9,9 @@ import type { SeamScope } from '../seam/seam-provider.js';
 import type {
   SkillService,
   SkillMetadata,
-  SkillInvocationRequest,
-  SkillInvocationResult,
 } from '../seam/skill-service.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
+import { readFile } from 'node:fs/promises';
 
 /**
  * 将 SkillRegistry 适配为 SkillService
@@ -29,8 +28,11 @@ export class SkillRegistryAsService implements SkillService {
 
   constructor(private readonly registry: SkillRegistry) {}
 
-  async catalog(_scope: SeamScope | 'global'): Promise<SkillMetadata[]> {
-    return this.registry.getAll().map((skill) => ({
+  async catalog(scope: SeamScope | 'global'): Promise<SkillMetadata[]> {
+    const skills = scope === 'global'
+      ? this.registry.getAll()
+      : this.registry.getForAgent(String(scope));
+    return skills.map((skill) => ({
       name: skill.name,
       description: skill.description,
       keywords: skill.keywords,
@@ -38,28 +40,25 @@ export class SkillRegistryAsService implements SkillService {
     }));
   }
 
-  async describe(_scope: SeamScope | 'global', skillId: string): Promise<string> {
-    const skill = this.registry.getByName(skillId);
+  async describe(scope: SeamScope | 'global', skillId: string): Promise<string> {
+    const skill = this.findSkill(scope, skillId);
     if (!skill) throw new Error(`Skill not found: ${skillId}`);
-    return skill.description;
-  }
-
-  async invoke(
-    _scope: SeamScope | 'global',
-    request: SkillInvocationRequest,
-  ): Promise<SkillInvocationResult> {
+    if (!skill.filePath) return skill.description;
     try {
-      const skill = this.registry.getByName(request.skillId);
-      if (!skill) {
-        return { success: false, error: `Skill not found: ${request.skillId}` };
-      }
-      return { success: true, output: skill };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
+      return await readFile(skill.filePath, 'utf8');
+    } catch {
+      return skill.description;
     }
   }
 
-  isAvailable(_scope: SeamScope | 'global', skillId: string): boolean {
-    return this.registry.getByName(skillId) !== undefined;
+  isAvailable(scope: SeamScope | 'global', skillId: string): boolean {
+    return this.findSkill(scope, skillId) !== undefined;
+  }
+
+  private findSkill(scope: SeamScope | 'global', skillId: string) {
+    const skills = scope === 'global'
+      ? this.registry.getAll()
+      : this.registry.getForAgent(String(scope));
+    return skills.find((skill) => skill.name === skillId);
   }
 }

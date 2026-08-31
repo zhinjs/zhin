@@ -184,14 +184,15 @@ export type {
   ToolExecutionResult,
   SkillService,
   SkillServiceProvider,
-  SkillInvocationRequest,
-  SkillInvocationResult,
   SeamIntegrationToken,
+  ProjectedSeamTool,
+  ProjectedSeamSkill,
 } from './seam/index.js';
 export { SeamProviderRegistry, SeamIntegration } from './seam/index.js';
 export { seamIntegrationToken } from './seam/index.js';
 export { BuiltinToolService } from './builtins/builtin-tool-service.js';
 export { SkillRegistryAsService } from './skill/skill-registry-as-service.js';
+export { ToolRegistryAsService } from './tool/tool-registry-as-service.js';
 
 export { SubagentSystem } from './subagent/index.js';
 export { SubagentRuntime } from './subagent/subagent-runtime.js';

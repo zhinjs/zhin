@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { SeamProviderRegistry } from '../../src/seam/seam-provider.js';
-import type { SeamProvider } from '../../src/seam/seam-provider.js';
+import {
+  SeamProviderRegistry,
+  type SeamProvider,
+} from '../../src/seam/seam-provider.js';
 
 interface TestProvider extends SeamProvider {
   id: string;
@@ -93,6 +95,21 @@ describe('SeamProviderRegistry', () => {
   it('returns false when removing a non-existent provider', () => {
     const registry = new SeamProviderRegistry<TestProvider>();
     expect(registry.remove('global', 'nonexistent')).toBe(false);
+  });
+
+  it('rejects duplicate provider ids in one scope', () => {
+    const registry = new SeamProviderRegistry<TestProvider>();
+    registry.register('global', { id: 'duplicate', description: 'first' });
+    expect(() => registry.register('global', { id: 'duplicate', description: 'second' }))
+      .toThrow('Duplicate Seam provider');
+  });
+
+  it('returns an idempotent registration disposer', () => {
+    const registry = new SeamProviderRegistry<TestProvider>();
+    const dispose = registry.register('global', { id: 'owned', description: 'owned' });
+    dispose();
+    dispose();
+    expect(registry.getById('global', 'owned')).toBeNull();
   });
 
   it('supports symbol scopes', () => {

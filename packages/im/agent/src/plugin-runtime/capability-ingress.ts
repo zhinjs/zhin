@@ -29,6 +29,8 @@ import {
   type PromptSectionDescriptor,
   type PromptProfile,
 } from '@zhin.js/prompt-section';
+import { seamIntegrationToken } from '../seam/tokens.js';
+import type { SeamIntegration } from '../seam/seam-integration.js';
 
 export interface ToolCapability extends ToolDescriptor {
   execute<TInput = unknown, TResult = unknown>(
@@ -65,13 +67,20 @@ export class CapabilityIngress {
     const promptProjection = snapshot.projections.get(promptSectionFeatureId);
     const promptSections = isPromptSectionIndex(promptProjection) ? promptProjection : undefined;
     const promptProfile: PromptProfile = turn?.origin.kind === 'schedule' ? 'schedule' : 'interactive';
+    const featureTools = await bindTools(tools, owner, isActive, turn, resolvePermissionHost(snapshot));
+    const featureSkills = projection(snapshot, skillFeatureId, SkillIndex)?.visible(owner) ?? [];
+    const seam = resolveSeamIntegration(snapshot);
+    const seamTools = seam
+      ? await bindSeamTools(seam, owner, isActive, turn, resolvePermissionHost(snapshot))
+      : [];
+    const seamSkills = seam ? await bindSeamSkills(seam, owner) : [];
+    assertDistinctCapabilities('Tool', [...featureTools, ...seamTools]);
+    assertDistinctCapabilities('Skill', [...featureSkills, ...seamSkills]);
     return Object.freeze({
       generation: snapshot.generation,
       owner,
-      tools: await bindTools(tools, owner, isActive, turn, resolvePermissionHost(snapshot)),
-      skills: Object.freeze([
-        ...(projection(snapshot, skillFeatureId, SkillIndex)?.visible(owner) ?? []),
-      ]),
+      tools: Object.freeze([...featureTools, ...seamTools]),
+      skills: Object.freeze([...featureSkills, ...seamSkills]),
       agents: Object.freeze([
         ...(projection(snapshot, agentFeatureId, AgentIndex)?.visible(owner) ?? []),
       ]),
@@ -80,6 +89,77 @@ export class CapabilityIngress {
         .filter((section) => !section.platforms
           || (turn?.origin.kind === 'im' && section.platforms.includes(turn.origin.platform)))),
     });
+  }
+}
+
+function resolveSeamIntegration(snapshot: RuntimeSnapshot): SeamIntegration | undefined {
+  const value = snapshot.resources.get(snapshot.root)?.get(seamIntegrationToken.id);
+  return value
+    && typeof (value as SeamIntegration).projectTools === 'function'
+    && typeof (value as SeamIntegration).projectSkills === 'function'
+    ? value as SeamIntegration
+    : undefined;
+}
+
+async function bindSeamTools(
+  seam: SeamIntegration,
+  owner: PluginId,
+  isActive: () => boolean,
+  turn?: TurnAccessContext,
+  host?: PermissionHost,
+): Promise<readonly ToolCapability[]> {
+  const projected = seam.projectTools(String(owner)).map((entry) => Object.freeze({
+    owner,
+    name: entry.schema.function.name,
+    qualifiedName: entry.schema.function.name,
+    description: entry.schema.function.description,
+    inputSchema: entry.schema.function.parameters,
+    approval: entry.schema.approval ?? 'on-risk',
+    platforms: entry.schema.platforms,
+    scopes: entry.schema.scopes,
+    permissions: entry.schema.permissions,
+    hidden: entry.schema.hidden,
+    source: entry.schema.source ?? `seam:${entry.providerId}`,
+    execute: async <TInput = unknown, TResult = unknown>(
+      input: TInput,
+      invocation: ToolInvocationContext,
+    ): Promise<TResult> => {
+      assertActive(isActive);
+      const result = await entry.execute(input, invocation);
+      if (!result.success) throw new Error(result.error ?? `Seam Tool failed: ${entry.schema.function.name}`);
+      return result.output as TResult;
+    },
+  } satisfies ToolCapability));
+  const access = await Promise.all(projected.map(async (descriptor) => ({
+    descriptor,
+    allowed: !descriptor.hidden && await canAccessDescriptor(descriptor, turn, host),
+  })));
+  return Object.freeze(access.filter(({ allowed }) => allowed).map(({ descriptor }) => descriptor));
+}
+
+async function bindSeamSkills(
+  seam: SeamIntegration,
+  owner: PluginId,
+): Promise<readonly SkillDescriptor[]> {
+  return Object.freeze((await seam.projectSkills(String(owner))).map((entry) => Object.freeze({
+    $feature: 'zhin.skill/1' as const,
+    owner,
+    name: entry.metadata.name,
+    qualifiedName: entry.metadata.name,
+    description: entry.metadata.description,
+    instructions: entry.instructions,
+    source: `seam:${entry.providerId}`,
+  })));
+}
+
+function assertDistinctCapabilities(
+  kind: 'Tool' | 'Skill',
+  capabilities: readonly { name: string }[],
+): void {
+  const names = new Set<string>();
+  for (const capability of capabilities) {
+    if (names.has(capability.name)) throw new Error(`Duplicate Agent ${kind} capability: ${capability.name}`);
+    names.add(capability.name);
   }
 }
 

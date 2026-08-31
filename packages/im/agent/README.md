@@ -145,6 +145,13 @@ packages/im/agent/src/
 
 `AgentResourceHub` 是 4.x 的能力资源入口，替代已删除的 `AgentOrchestrator` / `ResourceHub` 兼容名称。它只注册 Tool、Skill、SubAgent、MCP 与 Hook，不拥有 Workroom Run/Task/Assignment 状态；持久编排只能通过 Workroom Kernel 与专用 typed ports。
 
+Root Host 若要接入远程 Tool / Skill Provider，可在 generation Scope 提供
+`seamIntegrationToken`。`CapabilityIngress` 会把 `SeamIntegration` 投影进同一份 immutable
+`AgentCapabilities`；Tool 仍只能由 `TurnToolRuntime` 执行，因此不会跳过 owner 可见性、
+permission、approval、generation lease 或 Journal。普通 npm 插件继续优先使用 Tool / Skill
+Feature；Capability Seam 属于 Advanced Root Host 扩展口，详见
+[能力接缝](../../docs/concepts/capability-seams.md)。
+
 升级前的 legacy Run export 可用 `zhin agent legacy-runs <input>` 离线审计，遗留内嵌 payload 可用 `zhin agent legacy-payloads <input> --kind <kind>` 离线扫描。两条命令都只读输入并 create-only 输出 audit/proposal，不会自动写入新 Journal、接受旧结果、删除正文或执行迁移。
 
 **Agent Core**：`AgentCore.runText()` / `runVision()` 为 `AsyncGenerator<TurnEvent>` SSOT；`runTextTurn` 为 collector。组合层经 `composeZhinAgentRuntime` 注入 8 模块 + `createAgentCoreDepsForCompose`。
