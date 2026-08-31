@@ -82,24 +82,51 @@ More: [Getting started](./docs/getting-started/index.md) · [Examples](./docs/ex
 
 **Requirements**: Node.js `^20.19.0` or `>=22.12.0` (Plugin Runtime examples: **≥22.6**), pnpm 9+
 
-## Features
+## From a message to durable work
 
-- **IM first** — commands, components, hot reload; `pnpm add zhin.js` **&lt;10MB**
-- **Plugins** — file conventions + declarative APIs (`definePlugin` / `defineCommand` / `defineAdapter`)
-- **Remote Console** — Host is API only; UI lives at [console.zhin.dev](https://console.zhin.dev)
-- **Optional AI** — `@zhin.js/agent`: chat, tools, MCP, security policies
-- **Multi-channel** — QQ / WeChat / Discord / Telegram / Slack / GitHub, see [adapters](./plugins/adapters)
-- **File-based authoring** — `commands/`, `tools/`, `agent/skills` ([agent authoring](./docs/authoring/agent-tools.md))
+Zhin starts with one normalized message stream. A message can match a command, pass through middleware, enter an Agent turn, call governed capabilities, start durable work, and return through the same send pipeline.
+
+Each layer is optional. The IM core stays small; AI, rich media, speech, Remote Console, and external protocols are installed only when the product needs them.
+
+```mermaid
+flowchart LR
+    A[Adapters & Endpoints] --> B[Message pipeline]
+    B --> C[Commands & Middleware]
+    B --> D[Agent turn]
+    D --> E[Tools · Skills · MCP]
+    E --> F[Sub-agents · Schedules · Workroom]
+    C --> G[Reply]
+    F --> G
+    H[Plugin Runtime · Config · Generations] -. governs .-> B
+    H -. governs .-> D
+    H -. governs .-> E
+    I[Journal · Console · Host APIs] -. observes .-> B
+    I -. observes .-> D
+    I -. observes .-> F
+```
+
+### Capability map
+
+| Surface | What it covers | Explore |
+|---------|----------------|---------|
+| **Connect** | 20+ adapters, multiple accounts and endpoints, normalized inbound/outbound messages, rich media, STT and TTS | [Adapters](./docs/adapters/index.md) · [Message flow](./docs/en/concepts/message-flow.md) · [Speech](./docs/en/ai/speech.md) |
+| **Interact** | Commands, middleware, components, replies, schedules, notifications, and AI trigger/access rules | [Commands](./docs/en/authoring/commands.md) · [Middleware & components](./docs/en/authoring/middleware-components.md) · [AI configuration](./docs/en/ai/index.md) |
+| **Extend** | Plugin manifests, convention directories, scoped instances, child plugins, Console pages, and reusable npm delivery | [Plugin model](./docs/en/concepts/plugin-model.md) · [Conventions](./docs/en/authoring/conventions.md) · [Plugin delivery](./docs/en/authoring/plugin-delivery.md) |
+| **Understand** | Model/provider routing, multimodal input, Prompt Sections, conversation history, memory, session trees, and compaction | [AI overview](./docs/en/ai/index.md) · [Agent authoring](./docs/en/authoring/agent-tools.md) · [Agent deep dive](./docs/en/ai/agent.md) |
+| **Act** | Built-in and plugin Tools, Skills, MCP, deferred discovery, permissions, approval, cancellation, and execution Journal | [Tools & Skills](./docs/en/authoring/agent-tools.md) · [Agent runtime](./packages/im/agent/README.md) · [Capability Seam](./docs/en/concepts/capability-seams.md) |
+| **Coordinate** | Sub-agents, scheduled turns, persistent Workroom runs/tasks, review, sponsor gates, recovery, and A2A hosts | [Agent orchestration](./docs/en/ai/agent.md) · [Governed Agent](./docs/en/solutions/governed-agent.md) · [`packages/host`](./packages/host) |
+| **Evolve safely** | Generation-based HMR, candidate validation, atomic publication, owner-scoped configuration, rollback, and endpoint lifecycle | [Generation lifecycle](./docs/en/concepts/generation-lifecycle.md) · [Config as data](./docs/en/concepts/config-as-data.md) · [Endpoint lifecycle](./docs/en/authoring/endpoint-lifecycle.md) |
+| **Operate & deliver** | Remote Console, logs and diagnostics, HTTP/MCP/A2A hosts, scaffolding, production templates, harnesses, and changesets | [Console](./docs/en/console/index.md) · [Production](./docs/en/operations/production.md) · [Contributing](./docs/contributing/development.md) |
 
 ### Built to stay operable
 
-Zhin treats a bot as a long-running plugin system, rather than a collection of message callbacks:
+These surfaces share one Plugin Runtime instead of forming separate execution islands:
 
-- **Published plugins have a runtime contract** — the manifest declares protocol, engine range, Features, child plugins, isolation and instances; one package can be mounted more than once with separate scope and config ([plugin model](./docs/concepts/plugin-model.md)).
-- **Hot reload is a Generation transaction** — the next plugin tree is prepared and validated off-path, then published atomically; a failed candidate leaves the active Generation serving traffic ([Generation lifecycle](./docs/concepts/generation-lifecycle.md)).
-- **Configuration is owned data** — schemas compose across the plugin tree, each plugin receives its owner projection, and revisioned updates can roll back when activation fails ([config as data](./docs/concepts/config-as-data.md)).
-- **Agent execution has one authority path** — Tool / Skill / MCP capabilities enter a fixed snapshot, while generation checks, permissions, approval, cancellation and journaling stay in the Turn runtime ([Agent runtime](./packages/im/agent/README.md)).
-- **External Agent providers use the same governance** — the Advanced [Capability Seam](./docs/en/concepts/capability-seams.md) now projects Root services through `CapabilityIngress`; it does not expose a policy-free execute-by-name path.
+- **Published plugins have a runtime contract** — the manifest declares protocol, engine range, Features, child plugins, isolation and instances; one package can be mounted more than once with separate scope and config ([plugin model](./docs/en/concepts/plugin-model.md)).
+- **Hot reload is a Generation transaction** — the next plugin tree is prepared and validated off-path, then published atomically; a failed candidate leaves the active Generation serving traffic ([Generation lifecycle](./docs/en/concepts/generation-lifecycle.md)).
+- **Configuration is owned data** — schemas compose across the plugin tree, each plugin receives its owner projection, and revisioned updates can roll back when activation fails ([config as data](./docs/en/concepts/config-as-data.md)).
+- **Agent execution has one authority path** — Prompt, Tool, Skill and MCP capabilities enter a fixed snapshot; generation checks, permissions, approval, cancellation and journaling stay in the Turn runtime ([Agent deep dive](./docs/en/ai/agent.md)).
+- **External providers use the same governance** — the Advanced [Capability Seam](./docs/en/concepts/capability-seams.md) projects Root services through `CapabilityIngress`; it does not expose a policy-free execute-by-name path.
 
 <details>
 <summary><strong>Stable / Advanced capability tiers</strong></summary>
@@ -156,7 +183,7 @@ ai:
     execApprovalMode: ask
 ```
 
-Deeper: [AI](./docs/ai/index.md) · [Agent security](./docs/ai/agent.md) · [Tools & skills](./docs/authoring/agent-tools.md)
+Deeper: [AI](./docs/en/ai/index.md) · [Agent runtime & security](./docs/en/ai/agent.md) · [Prompt Sections, tools & skills](./docs/en/authoring/agent-tools.md)
 
 ## Adapters
 
@@ -189,7 +216,7 @@ Layers and dependency direction: [architecture](./docs/concepts/architecture.md)
 |--|--|
 | **Start** | [Getting started](./docs/getting-started/index.md) · [Roadmap & boundaries](./docs/index.md) · [Stability](./docs/concepts/generation-lifecycle.md) · [Docker](./docs/contributing/development.md) · [Windows](./docs/getting-started/index.md) |
 | **Basics** | [Architecture](./docs/concepts/architecture.md) · [Config](./docs/configuration/index.md) · [Commands](./docs/authoring/commands.md) · [Plugins](./docs/concepts/plugin-model.md) |
-| **Advanced** | [AI](./docs/ai/index.md) · [Agent authoring](./docs/authoring/agent-tools.md) · [Message flow](./docs/concepts/message-flow.md) |
+| **Advanced** | [AI](./docs/en/ai/index.md) · [Prompt Sections, Tools & Skills](./docs/en/authoring/agent-tools.md) · [Agent runtime](./packages/im/agent/README.md) · [Message flow](./docs/en/concepts/message-flow.md) |
 | **Develop** | [Plugin authoring](./docs/authoring/define-plugin.md) · [Contributing](./docs/contributing/development.md) · [Architecture](./docs/concepts/architecture.md) |
 
 Site: [zhin.js.org](https://zhin.js.org) · Chinese docs: [zhin.js.org](https://zhin.js.org) (switch language in the docs nav)

@@ -82,24 +82,51 @@ pnpm dev
 
 **要求**：Node.js `^20.19.0` 或 `>=22.12.0`（跑 Plugin Runtime 示例推荐 **≥22.6**），pnpm 9+
 
-## Features
+## 从一条消息到长期任务
 
-- **IM 优先** — 命令、组件、热重载；`pnpm add zhin.js` **&lt;10MB**
-- **插件化** — 文件约定 + 声明式 API（`definePlugin` / `defineCommand` / `defineAdapter`）
-- **Remote Console** — Host 只提供 API；UI 在 [console.zhin.dev](https://console.zhin.dev)
-- **可选 AI** — `@zhin.js/agent`：对话、工具、MCP、安全策略
-- **多通道** — QQ / 微信 / Discord / Telegram / Slack / GitHub 等，见 [adapters](./plugins/adapters)
-- **文件化创作面** — `commands/`、`tools/`、`agent/skills`（见 [agent-authoring](./docs/authoring/agent-tools.md)）
+Zhin 从一条标准化消息流开始。一条消息可以命中命令、经过中间件、进入 Agent 回合、调用受治理的能力、启动长期任务，最后从同一条发送链路回到聊天平台。
+
+每一层都可按需安装。IM 核心保持轻量；AI、富媒体、语音、Remote Console 和外部协议只在产品需要时加入。
+
+```mermaid
+flowchart LR
+    A[Adapter 与 Endpoint] --> B[消息管线]
+    B --> C[命令与中间件]
+    B --> D[Agent 回合]
+    D --> E[Tool · Skill · MCP]
+    E --> F[子 Agent · 定时 · Workroom]
+    C --> G[回复]
+    F --> G
+    H[Plugin Runtime · 配置 · Generation] -. 治理 .-> B
+    H -. 治理 .-> D
+    H -. 治理 .-> E
+    I[Journal · Console · Host API] -. 观测 .-> B
+    I -. 观测 .-> D
+    I -. 观测 .-> F
+```
+
+### 完整能力地图
+
+| 能力面 | 覆盖内容 | 继续了解 |
+|--------|----------|----------|
+| **连接** | 20+ Adapter、多账号与多 Endpoint、统一收发消息、富媒体、STT 与 TTS | [Adapter](./docs/adapters/index.md) · [消息流](./docs/concepts/message-flow.md) · [语音](./docs/ai/speech.md) |
+| **交互** | 命令、中间件、组件、回复、定时、通知，以及 AI 触发与访问规则 | [命令](./docs/authoring/commands.md) · [中间件与组件](./docs/authoring/middleware-components.md) · [AI 配置](./docs/ai/index.md) |
+| **扩展** | Plugin manifest、约定目录、作用域实例、子插件、Console 页面与 npm 插件交付 | [插件模型](./docs/concepts/plugin-model.md) · [目录约定](./docs/authoring/conventions.md) · [插件交付](./docs/authoring/plugin-delivery.md) |
+| **理解** | 模型与 Provider 路由、多模态输入、Prompt Section、对话历史、记忆、会话树与 Compaction | [AI 总览](./docs/ai/index.md) · [Agent 创作面](./docs/authoring/agent-tools.md) · [Agent 深入](./docs/ai/agent.md) |
+| **行动** | 内置与插件 Tool、Skill、MCP、延迟发现、权限、审批、取消与执行 Journal | [Tool 与 Skill](./docs/authoring/agent-tools.md) · [Agent Runtime](./packages/im/agent/README.md) · [Capability Seam](./docs/concepts/capability-seams.md) |
+| **协作** | 子 Agent、定时回合、持久化 Workroom Run/Task、Review、Sponsor Gate、恢复与 A2A Host | [Agent 编排](./docs/ai/agent.md) · [受治理 Agent](./docs/solutions/governed-agent.md) · [`packages/host`](./packages/host) |
+| **安全演进** | Generation HMR、候选代校验、原子发布、配置所有权、失败回滚与 Endpoint 生命周期 | [Generation 生命周期](./docs/concepts/generation-lifecycle.md) · [配置即数据](./docs/concepts/config-as-data.md) · [Endpoint 生命周期](./docs/authoring/endpoint-lifecycle.md) |
+| **运维交付** | Remote Console、日志与诊断、HTTP/MCP/A2A Host、脚手架、生产模板、Harness 与 Changesets | [Console](./docs/console/index.md) · [生产运维](./docs/operations/production.md) · [贡献指南](./docs/contributing/development.md) |
 
 ### 为长期运行而设计
 
-Zhin 把 Bot 当作长期运行的插件系统，而不是一组消息回调：
+这些能力共享同一个 Plugin Runtime，不会形成彼此割裂的执行孤岛：
 
 - **发布插件有明确 Runtime 契约** — manifest 声明协议、engine 范围、Feature、子插件、隔离方式和实例；同一 npm 包可以多次挂载，并拥有独立作用域与配置（见[插件模型](./docs/concepts/plugin-model.md)）。
 - **热重载是 Generation 事务** — 新插件树先在旁路 prepare 和校验，再原子发布；候选代失败时，当前 Generation 继续服务（见 [Generation 生命周期](./docs/concepts/generation-lifecycle.md)）。
 - **配置是有所有权的数据** — Schema 沿插件树组合，每个插件只得到自己的 owner projection；带 revision 的更新可在激活失败时回滚（见[配置即数据](./docs/concepts/config-as-data.md)）。
-- **Agent 执行只有一条权威路径** — Tool / Skill / MCP 进入固定 snapshot，Generation 校验、权限、审批、取消和 Journal 都留在 Turn Runtime（见 [Agent Runtime](./packages/im/agent/README.md)）。
-- **外部 Agent Provider 也服从同一治理** — Advanced [Capability Seam](./docs/concepts/capability-seams.md) 现已通过 `CapabilityIngress` 投影 Root 服务，不提供绕过策略的按名称直接执行入口。
+- **Agent 执行只有一条权威路径** — Prompt、Tool、Skill 与 MCP 进入固定 snapshot；Generation 校验、权限、审批、取消和 Journal 都留在 Turn Runtime（见 [Agent 深入](./docs/ai/agent.md)）。
+- **外部 Provider 也服从同一治理** — Advanced [Capability Seam](./docs/concepts/capability-seams.md) 通过 `CapabilityIngress` 投影 Root 服务，不提供绕过策略的按名称直接执行入口。
 
 <details>
 <summary><strong>Stable / Advanced 能力分档</strong></summary>
@@ -189,7 +216,7 @@ ai:
 |--|--|
 | **入门** | [快速开始](./docs/getting-started/index.md) · [路线与边界](./docs/index.md) · [稳定性承诺](./docs/concepts/generation-lifecycle.md) · [Docker](./docs/contributing/development.md) · [Windows](./docs/getting-started/index.md) |
 | **基础** | [核心概念](./docs/concepts/architecture.md) · [配置](./docs/configuration/index.md) · [命令](./docs/authoring/commands.md) · [插件](./docs/concepts/plugin-model.md) |
-| **进阶** | [AI](./docs/ai/index.md) · [Agent 创作面](./docs/authoring/agent-tools.md) · [消息流](./docs/concepts/message-flow.md) |
+| **进阶** | [AI](./docs/ai/index.md) · [Prompt Section、工具与技能](./docs/authoring/agent-tools.md) · [Agent Runtime](./packages/im/agent/README.md) · [消息流](./docs/concepts/message-flow.md) |
 | **开发** | [插件开发](./docs/authoring/define-plugin.md) · [贡献](./docs/contributing/development.md) · [架构](./docs/concepts/architecture.md) |
 
 站点：[zhin.js.org](https://zhin.js.org)
