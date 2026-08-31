@@ -61,7 +61,7 @@ export interface ToolService extends SeamProvider {
     scope: SeamScope | 'global',
     toolName: string,
     args: unknown,
-    context: ToolInvocationContext,
+    context?: ToolInvocationContext,
   ): Promise<ToolExecutionResult>;
 
   /**
@@ -74,7 +74,7 @@ export interface ToolService extends SeamProvider {
     scope: SeamScope | 'global',
     toolName: string,
     args: unknown,
-    context: ToolInvocationContext,
+    context?: ToolInvocationContext,
   ): Promise<void>;
 }
 

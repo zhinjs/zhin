@@ -146,7 +146,7 @@ packages/im/agent/src/
 `AgentResourceHub` 是 4.x 的能力资源入口，替代已删除的 `AgentOrchestrator` / `ResourceHub` 兼容名称。它只注册 Tool、Skill、SubAgent、MCP 与 Hook，不拥有 Workroom Run/Task/Assignment 状态；持久编排只能通过 Workroom Kernel 与专用 typed ports。
 
 Root Host 若要接入远程 Tool / Skill Provider，可在 generation Scope 提供
-`seamIntegrationToken`。`CapabilityIngress` 会把 `SeamIntegration` 投影进同一份 immutable
+`capabilitySeamToken`。`CapabilityIngress` 会把 `SeamIntegration` 投影进同一份 immutable
 `AgentCapabilities`；Tool 仍只能由 `TurnToolRuntime` 执行，因此不会跳过 owner 可见性、
 permission、approval、generation lease 或 Journal。普通 npm 插件继续优先使用 Tool / Skill
 Feature；Capability Seam 属于 Advanced Root Host 扩展口，详见

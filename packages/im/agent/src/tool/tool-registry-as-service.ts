@@ -32,10 +32,13 @@ export class ToolRegistryAsService implements ToolService {
     scope: SeamScope | 'global',
     toolName: string,
     args: unknown,
-    context: ToolInvocationContext,
+    context?: ToolInvocationContext,
   ): Promise<ToolExecutionResult> {
     const tool = this.tools(scope).find((candidate) => candidate.name === toolName);
     if (!tool) return { success: false, error: `Tool not found: ${toolName}` };
+    if (!context) {
+      return { success: false, error: `Tool execution requires Turn context: ${toolName}` };
+    }
     const executionContext: AgentToolExecutionContext = {
       signal: context.signal,
       sessionId: context.sessionKey,

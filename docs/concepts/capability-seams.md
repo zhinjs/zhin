@@ -22,9 +22,10 @@ Root Capability Seam ─┘                         │
                                            Provider
 ```
 
-`CapabilityIngress` 从固定的 Runtime snapshot 读取 Root 的 `seamIntegrationToken`，把服务投影为与
+`CapabilityIngress` 从固定的 Runtime snapshot 读取 Root 的 `capabilitySeamToken`，把服务投影为与
 Tool / Skill Feature 相同的 capability snapshot。Seam Tool 不存在独立的
-`executeTool(name, args)` 快捷通道；只有 `TurnToolRuntime` 可以执行投影后的 Tool。因此：
+`executeTool(name, args)` 执行通道（遗留同名方法只返回 fail-closed 迁移错误）；只有
+`TurnToolRuntime` 可以执行投影后的 Tool。因此：
 
 - 当前 generation 退役或 operation 结束后，Provider 不再可执行；
 - `platforms`、`scopes`、`permissions` 和 `hidden` 先经过统一可见性过滤；
@@ -70,6 +71,7 @@ export class SearchService implements ToolService {
     if (toolName !== 'acme_search') {
       return { success: false, error: `Unknown tool: ${toolName}` }
     }
+    if (!context) return { success: false, error: 'Turn context required' }
     context.signal.throwIfAborted()
     return { success: true, output: await searchAcme(input, context.signal) }
   }
@@ -106,7 +108,7 @@ Seam 是显式的 Root Resource。注册返回幂等 disposer；Root Scope 退�
 ```ts
 import {
   SeamIntegration,
-  seamIntegrationToken,
+  capabilitySeamToken,
 } from '@zhin.js/agent'
 import { definePlugin } from 'zhin.js/plugin-runtime'
 import { ResearchSkills } from './research-skills.js'
@@ -119,13 +121,16 @@ export default definePlugin({
     seams.registerToolService('global', new SearchService())
     seams.registerSkillService('global', new ResearchSkills())
 
-    resources.provide(seamIntegrationToken, seams, () => seams.dispose())
+    resources.provide(capabilitySeamToken, seams, () => seams.dispose())
   },
 })
 ```
 
 不要在模块顶层保存 `SeamIntegration`，也不要在 candidate 发布后向旧 Generation 的实例追加
 Provider。动态变化应生成新的 Runtime Generation。
+
+旧 `seamIntegrationToken` Symbol 仅为源码兼容保留，Plugin Runtime Scope 不会消费它。迁移时改用
+`capabilitySeamToken`；旧 `executeTool()` / `invokeSkill()` 方法也只返回 fail-closed 错误。
 
 ## 作用域和冲突
 

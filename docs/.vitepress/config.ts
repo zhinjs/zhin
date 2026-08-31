@@ -176,6 +176,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     { text: 'Config as Data', link: '/en/concepts/config-as-data' },
     { text: 'Generation Lifecycle', link: '/en/concepts/generation-lifecycle' },
     { text: 'Message Flow', link: '/en/concepts/message-flow' },
+    { text: 'Capability Seam', link: '/en/concepts/capability-seams' },
   ]),
   sidebarGroup('Plugin Authoring', [
     { text: 'definePlugin Overview', link: '/en/authoring/define-plugin' },

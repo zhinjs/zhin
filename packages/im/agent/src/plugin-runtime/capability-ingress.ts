@@ -29,7 +29,7 @@ import {
   type PromptSectionDescriptor,
   type PromptProfile,
 } from '@zhin.js/prompt-section';
-import { seamIntegrationToken } from '../seam/tokens.js';
+import { capabilitySeamToken } from '../seam/tokens.js';
 import type { SeamIntegration } from '../seam/seam-integration.js';
 
 export interface ToolCapability extends ToolDescriptor {
@@ -93,7 +93,7 @@ export class CapabilityIngress {
 }
 
 function resolveSeamIntegration(snapshot: RuntimeSnapshot): SeamIntegration | undefined {
-  const value = snapshot.resources.get(snapshot.root)?.get(seamIntegrationToken.id);
+  const value = snapshot.resources.get(snapshot.root)?.get(capabilitySeamToken.id);
   return value
     && typeof (value as SeamIntegration).projectTools === 'function'
     && typeof (value as SeamIntegration).projectSkills === 'function'

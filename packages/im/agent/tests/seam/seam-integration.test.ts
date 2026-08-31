@@ -3,6 +3,10 @@ import { SeamIntegration } from '../../src/seam/seam-integration.js';
 import type { ToolService } from '../../src/seam/tool-service.js';
 import type { SkillService, SkillMetadata } from '../../src/seam/skill-service.js';
 import type { ToolInvocationContext } from '@zhin.js/tool';
+import {
+  capabilitySeamToken,
+  seamIntegrationToken,
+} from '../../src/seam/tokens.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -39,6 +43,11 @@ function makeSkillService(id: string, skills: SkillMetadata[]): SkillService {
 // ── Tests ─────────────────────────────────────────────────────────────────
 
 describe('SeamIntegration', () => {
+  it('keeps the legacy symbol while exposing a Runtime resource token', () => {
+    expect(typeof seamIntegrationToken).toBe('symbol');
+    expect(String(capabilitySeamToken.id)).toBe('zhin.agent.capability-seam');
+  });
+
   describe('Tool Service', () => {
     it('collects tool schemas from all registered services', () => {
       const integration = new SeamIntegration();
@@ -74,9 +83,13 @@ describe('SeamIntegration', () => {
       expect((result.output as any).toolName).toBe('my_tool');
     });
 
-    it('does not expose an execute-by-name policy bypass', () => {
+    it('keeps the legacy execute-by-name method fail-closed', async () => {
       const integration = new SeamIntegration();
-      expect('executeTool' in integration).toBe(false);
+      const result = await integration.executeTool('global', 'legacy_tool', {});
+      expect(result).toEqual({
+        success: false,
+        error: 'Direct Seam execution is disabled for Tool: legacy_tool',
+      });
     });
 
     it('returns empty schemas when no services are registered', () => {

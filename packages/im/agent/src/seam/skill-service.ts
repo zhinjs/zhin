@@ -10,6 +10,21 @@ import type { SkillMetadata } from '../resource-hub/types.js';
 
 export type { SkillMetadata };
 
+/** @deprecated Skills are declarative capability metadata; use catalog/describe. */
+export interface SkillInvocationRequest {
+  skillId: string;
+  input: unknown;
+  context?: Record<string, unknown>;
+}
+
+/** @deprecated Skills are not directly executable; use Tool capabilities. */
+export interface SkillInvocationResult {
+  success: boolean;
+  output?: unknown;
+  error?: string;
+  metadata?: Record<string, unknown>;
+}
+
 /**
  * Skill Service Definition
  */
@@ -23,6 +38,12 @@ export interface SkillService extends SeamProvider {
    * 获取指定 Skill 的完整文档
    */
   describe(scope: SeamScope | 'global', skillId: string): Promise<string>;
+
+  /** @deprecated Provider-specific compatibility only; CapabilityIngress never calls it. */
+  invoke?(
+    scope: SeamScope | 'global',
+    request: SkillInvocationRequest,
+  ): Promise<SkillInvocationResult>;
 
   /**
    * 可选：Skill 是否在该作用域可用

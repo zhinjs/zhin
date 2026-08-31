@@ -11,7 +11,7 @@ import {
 } from '@zhin.js/tool';
 import { CapabilityIngress } from '../../src/plugin-runtime/capability-ingress.js';
 import { SeamIntegration } from '../../src/seam/seam-integration.js';
-import { seamIntegrationToken } from '../../src/seam/tokens.js';
+import { capabilitySeamToken } from '../../src/seam/tokens.js';
 import type { ToolService } from '../../src/seam/tool-service.js';
 import type { SkillService } from '../../src/seam/skill-service.js';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
@@ -149,7 +149,7 @@ function snapshotWith(seam: SeamIntegration): RuntimeSnapshot {
       },
     ]]),
     config: new Map([[root, {}]]),
-    resources: new Map([[root, new Map([[seamIntegrationToken.id, seam]])]]),
+    resources: new Map([[root, new Map([[capabilitySeamToken.id, seam]])]]),
     capabilities: new Map(),
     projections: new Map(),
   };

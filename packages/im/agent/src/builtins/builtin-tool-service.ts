@@ -52,7 +52,7 @@ export class BuiltinToolService implements ToolService {
     _scope: SeamScope | 'global',
     toolName: string,
     args: unknown,
-    context: ToolInvocationContext,
+    context?: ToolInvocationContext,
   ): Promise<ToolExecutionResult> {
     if (toolName === 'ask_user') {
       return this.handleAskUser(args, context);
@@ -66,7 +66,7 @@ export class BuiltinToolService implements ToolService {
 
   private async handleAskUser(
     args: unknown,
-    context: ToolInvocationContext,
+    context?: ToolInvocationContext,
   ): Promise<ToolExecutionResult> {
     if (
       typeof args !== 'object' ||
@@ -75,7 +75,7 @@ export class BuiltinToolService implements ToolService {
     ) {
       return { success: false, error: 'ask_user requires a "question" string argument' };
     }
-    if (!context.question) {
+    if (!context?.question) {
       return { success: false, error: 'ask_user requires an interactive QuestionPort' };
     }
     const question = (args as Record<string, unknown>)['question'] as string;
