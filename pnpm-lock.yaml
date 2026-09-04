@@ -579,6 +579,9 @@ importers:
 
   examples/single-file-bot:
     dependencies:
+      '@zhin.js/adapter-icqq':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/icqq
       '@zhin.js/adapter-sandbox':
         specifier: workspace:*
         version: link:../../plugins/adapters/sandbox
@@ -628,6 +631,9 @@ importers:
       '@zhin.js/adapter-github':
         specifier: workspace:*
         version: link:../../plugins/adapters/github
+      '@zhin.js/adapter-icqq':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/icqq
       '@zhin.js/adapter-kook':
         specifier: workspace:*
         version: link:../../plugins/adapters/kook
@@ -3232,6 +3238,9 @@ importers:
 
   plugins/utils/music:
     dependencies:
+      '@zhin.js/adapter-icqq':
+        specifier: workspace:*
+        version: link:../../adapters/icqq
       '@zhin.js/command':
         specifier: workspace:*
         version: link:../../../packages/im/command
