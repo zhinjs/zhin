@@ -1,4 +1,3 @@
-import { h, type HtmlComponent } from '@zhin.js/satori';
 import type { CacheMode, Clip, ScreenshotOptions, CaptureStats } from '@shotkit/shotium';
 
 import { resolveHtmlRendererConfig } from './config.js';
@@ -6,14 +5,14 @@ import { createEngine } from './engine.js';
 import { buildFontFaces, isFullDocument, withDocumentFile, wrapDocument } from './html.js';
 import { readImageSize } from './image.js';
 import { serializeJsxToHtml } from './jsx.js';
-import { renderHtmlToSvg, svgToPng } from './legacy-svg.js';
 import type {
   FontConfig,
+  HtmlComponent,
   HtmlRendererConfig,
   HtmlRendererLogger,
   HtmlRendererService,
-  RenderOptions,
   RenderResult,
+  RenderOptions,
 } from './types.js';
 
 const MAX_CONCURRENT_RENDERS = 2;
@@ -91,44 +90,6 @@ export function createHtmlRenderer(
   const releaseRenderSlot = (): void => {
     activeRenders--;
     renderQueue.shift()?.();
-  };
-
-  const renderWithLegacy = async (
-    html: string,
-    options: RenderOptions = {},
-  ): Promise<RenderResult> => {
-    const width = options.width ?? mergedConfig.defaultWidth;
-    const height = options.height;
-    const backgroundColor = options.backgroundColor ?? mergedConfig.defaultBackgroundColor;
-    const { svg, width: actualWidth, height: actualHeight } = await renderHtmlToSvg({
-      html,
-      width,
-      height,
-      fonts: getFonts(options.fonts ?? []),
-      backgroundColor,
-      logger,
-      enableEmoji: options.enableEmoji,
-    });
-
-    if ((options.format ?? 'png') === 'svg') {
-      return {
-        data: svg,
-        format: 'svg',
-        width: actualWidth,
-        height: actualHeight,
-        mimeType: 'image/svg+xml',
-      };
-    }
-
-    const scale = options.scale ?? 1;
-    const png = svgToPng(svg, scale);
-    return {
-      data: png,
-      format: 'png',
-      width: Math.round(actualWidth * scale),
-      height: Math.round(actualHeight * scale),
-      mimeType: 'image/png',
-    };
   };
 
   const capture = async (
@@ -222,14 +183,9 @@ export function createHtmlRenderer(
       await acquireRenderSlot();
       try {
         if ((options.format ?? 'png') === 'svg') {
-          return await renderWithLegacy(html, { ...options, format: 'svg' });
+          warnOnce('svg', 'html-renderer: shotium does not support svg output; returning png instead');
         }
-        try {
-          return await renderWithShotium(html, options);
-        } catch (error) {
-          warnOnce('shotium-fallback', 'html-renderer: shotium failed, falling back to legacy renderer', error);
-          return await renderWithLegacy(html, { ...options, format: 'png' });
-        }
+        return await renderWithShotium(html, options);
       } finally {
         releaseRenderSlot();
         engine.release();
@@ -245,7 +201,7 @@ export function createHtmlRenderer(
       props: P,
       options: RenderOptions = {},
     ): Promise<RenderResult> {
-      return this.render(serializeJsxToHtml(h(component, props)), options);
+      return this.render(serializeJsxToHtml(component(props)), options);
     },
 
     registerFont(font: FontConfig): void {

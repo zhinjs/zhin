@@ -1,8 +1,7 @@
-import type { HtmlComponent } from '@zhin.js/satori';
-
 export type OutputFormat = 'svg' | 'png';
 export type RasterFormat = 'png' | 'jpeg' | 'webp';
 export type WaitUntil = 'load' | 'networkidle';
+export type HtmlComponent<P> = (props: P) => unknown;
 
 export interface FontConfig {
   name: string;

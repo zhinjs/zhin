@@ -1,9 +1,15 @@
-import { e } from '@zhin.js/satori';
-
 const SELF_CLOSING = new Set(['img', 'br', 'hr', 'input', 'meta', 'link']);
 
+function escape(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 export function serializeJsxToHtml(element: unknown): string {
-  if (typeof element === 'string') return e(element);
+  if (typeof element === 'string') return escape(element);
   if (typeof element === 'number') return String(element);
   if (element == null || typeof element === 'boolean') return '';
   if (Array.isArray(element)) return element.map(serializeJsxToHtml).join('');
@@ -25,10 +31,10 @@ export function serializeJsxToHtml(element: unknown): string {
 
     const attrs = Object.entries(rest)
       .filter(([key, value]) => key !== 'dangerouslySetInnerHTML' && value != null && value !== false)
-      .map(([key, value]) => `${key}="${e(String(value))}"`)
+      .map(([key, value]) => `${key}="${escape(String(value))}"`)
       .join(' ')
 
-    const styleAttr = styleText ? ` style="${e(styleText)}"` : '';
+    const styleAttr = styleText ? ` style="${escape(styleText)}"` : '';
     const attrText = attrs ? ` ${attrs}` : '';
 
     if (dangerouslySetInnerHTML?.__html) {
