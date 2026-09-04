@@ -119,7 +119,7 @@ Host token 是 Host 提供给插件的能力句柄，`setup` 里通过 `context.
 | `databaseHostToken` | `zhin.database.host` | 配置了 `database:` | `define(name, columns)` 注册插件私有逻辑表；Runtime 按 PluginId 映射物理表名，`models.get(name)` 只访问本插件表（`select` / `insert` / `update` / `delete` / `count`） |
 | `scheduleHostToken` | `zhin.schedule.host` | 始终可用 | `register(job)` 注册插件私有逻辑任务 ID 的 6 段 solar cron（`秒 分 时 日 月 周`），返回取消函数；`list()` 只列出本插件任务 |
 | `outboundHostToken` | `zhin.outbound.host` | 有可用 Adapter | `send(input)` 主动推送（返回平台消息 id 或 `null`）；可选 `addReaction` / `removeReaction` / `recall` |
-| `htmlRendererToken` | `zhin.html-renderer.host` | 安装了 `@zhin.js/html-renderer` | `render(html, { width, format, backgroundColor })` → PNG（Buffer）或 SVG（string）；未安装时必须降级为纯文本 |
+| `htmlRendererToken` | `zhin.html-renderer.host` | 安装了 `@zhin.js/html-renderer` | `render(html, { width, format, backgroundColor })` → PNG（Buffer）；传 `format: 'svg'` 也会降级为 PNG；未安装时必须降级为纯文本 |
 | `runtimeEventPublisherToken` | `zhin.runtime.event-publisher` | Root 级，CLI console 装配 | `publish(type, data)` 向 Console SSE hub 广播事件（适配器用来推 `endpoint:request` / `endpoint:notice` 等） |
 | `httpHostToken` | `zhin.host.http` | HTTP Host 启用 | `route(method, path, handler, meta?)` 注册 HTTP 路由；`ws(path).onConnection(cb)` 注册 WS 端点；`listen()` / `close()` 由 Host 管理 |
 

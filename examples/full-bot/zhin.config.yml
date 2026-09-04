@@ -53,6 +53,9 @@ ai:
 #     provider: edge
 # htmlRenderer:
 #   width: 540
+#   viewport:
+#     height: 600
+#   scale: 1
 
 # Root 与 child Plugin 配置严格按 manifest topology 分层。
 plugin: {}

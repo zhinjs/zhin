@@ -72,7 +72,7 @@ Dotenv loads `.env` then `.env.<environment>`. `--environment` selects the name 
 | `ai` | object | AI stack (requires `@zhin.js/agent` etc., see below) |
 | `mcp` | object | MCP Host (exposes bot tools as an MCP Server) |
 | `a2a` | object | A2A Host (Agent Card / remote Agent interop) |
-| `htmlRenderer` | object | HTML rendering (e.g., `width`) |
+| `htmlRenderer` | object | Shotium HTML rendering (e.g., `width` / `viewport` / `scale`) |
 | `plugin` | object | Root Plugin (the application itself) configuration |
 | `plugins` | object | Child plugin configuration, keyed by instanceKey |
 

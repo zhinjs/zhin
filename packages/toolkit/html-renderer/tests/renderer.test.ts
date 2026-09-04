@@ -103,6 +103,28 @@ describe('@zhin.js/html-renderer', () => {
       }),
     );
   });
+
+  it('preserves renderJsx support', async () => {
+    const renderer = createHtmlRenderer({ defaultWidth: 200 });
+    const result = await renderer.renderJsx({
+      type: 'div',
+      props: { children: 'hello jsx' },
+    });
+    expect(result.format).toBe('png');
+    expect(Buffer.isBuffer(result.data)).toBe(true);
+    expect(screenshotMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves renderComponent support', async () => {
+    const renderer = createHtmlRenderer({ defaultWidth: 200 });
+    const result = await renderer.renderComponent(
+      ({ name }: { name: string }) => ({ type: 'div', props: { children: `hello ${name}` } }),
+      { name: 'component' },
+    );
+    expect(result.format).toBe('png');
+    expect(Buffer.isBuffer(result.data)).toBe(true);
+    expect(screenshotMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('serializeJsxToHtml（renderJsx 注入防护）', () => {

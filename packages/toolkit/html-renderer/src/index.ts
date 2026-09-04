@@ -3,6 +3,7 @@ export { serializeJsxToHtml } from './jsx.js';
 export { registerAiTextAsImageOutput, extractPlainTextForImage } from './ai-text-as-image.js';
 export type {
   FontConfig,
+  HtmlComponent,
   HtmlRendererAiTextAsImageConfig,
   HtmlRendererConfig,
   HtmlRendererLogger,
