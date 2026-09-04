@@ -1,7 +1,7 @@
 {
   "name": "single-file-bot",
   "private": true,
-  "version": "0.1.32",
+  "version": "0.1.33",
   "description": "Zhin.js single-file bot: one bot.ts is the whole bot",
   "type": "module",
   "scripts": {

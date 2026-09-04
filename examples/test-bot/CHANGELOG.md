@@ -1,5 +1,59 @@
 # test-bot
 
+## 0.1.153
+
+### Patch Changes
+
+- Updated dependencies [12325e1]
+- Updated dependencies [d19e976]
+  - @zhin.js/agent@1.2.0
+  - @zhin.js/cli@4.0.0
+  - zhin.js@7.0.0
+  - @zhin.js/adapter-dingtalk@8.0.0
+  - @zhin.js/adapter-discord@9.0.0
+  - @zhin.js/adapter-github@7.0.0
+  - @zhin.js/adapter-icqq@10.0.0
+  - @zhin.js/adapter-kook@9.0.0
+  - @zhin.js/adapter-lark@8.0.0
+  - @zhin.js/adapter-line@6.0.0
+  - @zhin.js/adapter-milky@8.0.0
+  - @zhin.js/adapter-napcat@8.0.0
+  - @zhin.js/adapter-onebot11@8.0.0
+  - @zhin.js/adapter-qq@9.0.0
+  - @zhin.js/adapter-slack@8.0.0
+  - @zhin.js/adapter-telegram@9.0.0
+  - @zhin.js/adapter-wecom@6.0.0
+  - @zhin.js/service-activity-feedback@4.0.0
+  - @zhin.js/plugin-60s@5.0.0
+  - @zhin.js/plugin-code-runner@5.0.0
+  - @zhin.js/plugin-group-suite@5.0.0
+  - @zhin.js/plugin-lottery@3.0.0
+  - @zhin.js/plugin-qrcode@5.0.0
+  - @zhin.js/plugin-rss@5.0.0
+  - @zhin.js/plugin-short-url@5.0.0
+  - @zhin.js/mcp@7.0.0
+  - @zhin.js/adapter-email@7.0.0
+  - @zhin.js/adapter-onebot12@7.0.0
+  - @zhin.js/adapter-sandbox@9.0.0
+  - @zhin.js/adapter-satori@7.0.0
+  - @zhin.js/adapter-wechat-mp@7.0.0
+  - @zhin.js/adapter-weixin-ilink@7.0.0
+  - @zhin.js/process-monitor@4.0.0
+  - @zhin.js/plugin-blackjack@1.0.0
+  - @zhin.js/plugin-dice-duel@2.0.0
+  - @zhin.js/plugin-dungeon-expedition@2.0.0
+  - @zhin.js/plugin-guess-number@2.0.0
+  - @zhin.js/plugin-game-hub@2.0.0
+  - @zhin.js/plugin-idiom-chain@2.0.0
+  - @zhin.js/plugin-rps@2.0.0
+  - @zhin.js/plugin-text-adventure@2.0.0
+  - @zhin.js/plugin-tic-tac-toe@2.0.0
+  - @zhin.js/plugin-word-riddle@2.0.0
+  - @zhin.js/plugin-content-moderation@2.0.0
+  - @zhin.js/plugin-link-poster@4.0.0
+  - @zhin.js/plugin-music@9.0.0
+  - @zhin.js/plugin-repeater@4.0.0
+
 ## 0.1.152
 
 ### Patch Changes

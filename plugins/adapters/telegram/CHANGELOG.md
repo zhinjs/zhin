@@ -1,5 +1,14 @@
 # Changelog
 
+## 9.0.0
+
+### Patch Changes
+
+- Updated dependencies [12325e1]
+- Updated dependencies [d19e976]
+  - @zhin.js/agent@1.2.0
+  - zhin.js@7.0.0
+
 ## 8.0.8
 
 ### Patch Changes

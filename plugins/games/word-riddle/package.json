@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-word-riddle",
-  "version": "1.0.25",
+  "version": "2.0.0",
   "description": "Zhin.js 猜谜 — 字谜与猜成语 (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",
