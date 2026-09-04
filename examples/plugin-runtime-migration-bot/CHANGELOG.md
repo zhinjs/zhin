@@ -1,5 +1,11 @@
 # @zhin.js/example-plugin-runtime-migration-bot
 
+## 0.0.26
+
+### Patch Changes
+
+- zhin.js@7.0.0
+
 ## 0.0.25
 
 ### Patch Changes

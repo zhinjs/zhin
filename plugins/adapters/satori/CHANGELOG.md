@@ -1,5 +1,11 @@
 # @zhin.js/adapter-satori
 
+## 7.0.0
+
+### Patch Changes
+
+- zhin.js@7.0.0
+
 ## 6.0.5
 
 ### Patch Changes

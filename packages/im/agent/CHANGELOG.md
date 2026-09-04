@@ -1,5 +1,20 @@
 # @zhin.js/agent
 
+## 1.2.0
+
+### Minor Changes
+
+- 12325e1: Project Root Capability Seam Tool and Skill providers through the fixed-generation
+  `CapabilityIngress` through the new `capabilitySeamToken` and canonical
+  `TurnToolRuntime`, including permission,
+  approval, cancellation, journal, conflict, and lifecycle enforcement. Direct
+  Tool and Skill invocation helpers now fail closed; use projected Turn
+  capabilities for execution.
+
+### Patch Changes
+
+- d19e976: Repair Workroom bootstrap, planning, governed payload, Portfolio assignment, scheduling, projection, acceptance, and graceful shutdown flows so fresh self-hosted projects can execute `/work` end to end.
+
 ## 1.1.22
 
 ### Patch Changes

@@ -1,5 +1,23 @@
 # qq-games-bot
 
+## 0.1.36
+
+### Patch Changes
+
+- zhin.js@7.0.0
+- @zhin.js/adapter-qq@9.0.0
+- @zhin.js/plugin-group-suite@5.0.0
+- @zhin.js/plugin-blackjack@1.0.0
+- @zhin.js/plugin-dice-duel@2.0.0
+- @zhin.js/plugin-dungeon-expedition@2.0.0
+- @zhin.js/plugin-guess-number@2.0.0
+- @zhin.js/plugin-game-hub@2.0.0
+- @zhin.js/plugin-idiom-chain@2.0.0
+- @zhin.js/plugin-rps@2.0.0
+- @zhin.js/plugin-text-adventure@2.0.0
+- @zhin.js/plugin-tic-tac-toe@2.0.0
+- @zhin.js/plugin-word-riddle@2.0.0
+
 ## 0.1.35
 
 ### Patch Changes

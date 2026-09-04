@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-lottery",
-  "version": "2.0.22",
+  "version": "3.0.0",
   "description": "Multi-game lottery analysis for Zhin.js (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",

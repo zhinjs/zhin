@@ -1,5 +1,15 @@
 # @zhin.js/cli
 
+## 4.0.0
+
+### Patch Changes
+
+- d19e976: Repair Workroom bootstrap, planning, governed payload, Portfolio assignment, scheduling, projection, acceptance, and graceful shutdown flows so fresh self-hosted projects can execute `/work` end to end.
+- Updated dependencies [12325e1]
+- Updated dependencies [d19e976]
+  - @zhin.js/agent@1.2.0
+  - @zhin.js/a2a@4.0.0
+
 ## 3.0.23
 
 ### Patch Changes
