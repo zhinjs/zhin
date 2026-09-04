@@ -126,7 +126,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   const agentHost = await loadConfiguredAgentHost(config);
   const endpointRoles = await createEndpointRoleResolver(config);
   const speechHandle = await prepareSpeechHost(await resolveSpeechConfig(config));
-  const htmlRendererHost = await prepareHtmlRendererHost();
+  const htmlRendererHost = await prepareHtmlRendererHost(config);
   let complete!: () => void;
   const completed = new Promise<void>((resolve) => { complete = resolve; });
   const control: { stop(): Promise<void> } = {

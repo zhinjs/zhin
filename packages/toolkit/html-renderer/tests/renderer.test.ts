@@ -1,5 +1,34 @@
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getAllBuiltinFonts } from '@zhin.js/satori';
+
+const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5qkS0AAAAASUVORK5CYII=',
+  'base64',
+);
+
+const screenshotMock = vi.fn(async () => ({
+  image: ONE_PIXEL_PNG,
+  stats: {
+    timing: { total: 1 },
+    requests: 0,
+    fromCache: 0,
+    failed: 0,
+  },
+}));
+const startMock = vi.fn(() => ({ cacheActive: true, cacheDir: '/tmp/shotium-cache' }));
+const statusMock = vi.fn(() => ({ running: false }));
+const releaseMemoryMock = vi.fn();
+const daemonConnectMock = vi.fn();
+
+vi.mock('@shotkit/shotium', () => ({
+  screenshot: screenshotMock,
+  start: startMock,
+  status: statusMock,
+  releaseMemory: releaseMemoryMock,
+  stop: vi.fn(),
+  daemon: { connect: daemonConnectMock },
+}));
+
 import {
   createHtmlRenderer,
   serializeJsxToHtml,
@@ -12,21 +41,55 @@ const EMOJI_SVG_RESPONSE = {
 } as Response;
 
 function makeFont(name: string, style?: FontConfig['style']): FontConfig {
-  // 用真实字体数据：fontCache 是模块级共享的，假数据会污染后续渲染
   return { name, data: getAllBuiltinFonts()[0].data, weight: 400, style };
 }
 
 describe('@zhin.js/html-renderer', () => {
+  beforeEach(() => {
+    screenshotMock.mockClear();
+    startMock.mockClear();
+    statusMock.mockReset();
+    statusMock.mockReturnValue({ running: false });
+    releaseMemoryMock.mockClear();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('createHtmlRenderer renders simple html to png', async () => {
+  it('renders simple html to png with shotium backend', async () => {
     const renderer = createHtmlRenderer({ defaultWidth: 200 });
     const result = await renderer.render('<div>Hi</div>', { format: 'png' });
     expect(result.format).toBe('png');
     expect(Buffer.isBuffer(result.data)).toBe(true);
-    expect((result.data as Buffer).length).toBeGreaterThan(100);
+    expect(screenshotMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps svg output through legacy fallback path', async () => {
+    const renderer = createHtmlRenderer({ defaultWidth: 200 });
+    const result = await renderer.render('<div>Hi</div>', { format: 'svg' });
+    expect(result.format).toBe('svg');
+    expect(typeof result.data).toBe('string');
+    expect(String(result.data)).toContain('<svg');
+    expect(screenshotMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to legacy png rendering when shotium fails', async () => {
+    screenshotMock.mockRejectedValueOnce(new Error('boom'));
+    const renderer = createHtmlRenderer({ defaultWidth: 200 });
+    const result = await renderer.render('<div>Hi</div>', { format: 'png' });
+    expect(result.format).toBe('png');
+    expect(Buffer.isBuffer(result.data)).toBe(true);
+  });
+
+  it('accepts nested host-level htmlRenderer config', async () => {
+    const renderer = createHtmlRenderer({ htmlRenderer: { width: 321, viewport: { height: 654 } } });
+    await renderer.render('<div>Hi</div>');
+    expect(screenshotMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        viewport: expect.objectContaining({ width: 321, height: 654 }),
+      }),
+    );
   });
 });
 
@@ -83,11 +146,14 @@ describe('fontCache', () => {
     expect(renderer.getFonts().some((f) => f.name === 'CfgFont')).toBe(true);
     renderer.clearFonts();
     expect(renderer.getFonts().some((f) => f.name === 'CfgFont')).toBe(true);
-    renderer.clearFonts();
   });
 });
 
 describe('emoji 加载', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('同一 emoji 第二次渲染命中缓存，且请求带超时 signal', async () => {
     const fetchMock = vi.fn().mockResolvedValue(EMOJI_SVG_RESPONSE);
     vi.stubGlobal('fetch', fetchMock);
@@ -134,12 +200,9 @@ describe('emoji 加载', () => {
       renderer.render(`<div>${emoji}</div>`, { format: 'svg' }),
     );
 
-    // 等前两个渲染进入 emoji fetch
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    // 第三个仍在排队
     expect(pending.length).toBe(2);
 
-    // 放行全部，最终三个渲染都完成
     while (pending.length) pending.shift()!(EMOJI_SVG_RESPONSE);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     while (pending.length) pending.shift()!(EMOJI_SVG_RESPONSE);

@@ -1,6 +1,8 @@
 import type { HtmlComponent } from '@zhin.js/satori';
 
 export type OutputFormat = 'svg' | 'png';
+export type RasterFormat = 'png' | 'jpeg' | 'webp';
+export type WaitUntil = 'load' | 'networkidle';
 
 export interface FontConfig {
   name: string;
@@ -43,11 +45,35 @@ export interface HtmlRendererAiTextAsImageConfig {
   fileName?: string;
 }
 
+export interface HtmlRendererViewport {
+  width?: number;
+  height?: number;
+}
+
 export interface HtmlRendererConfig {
   defaultWidth?: number;
+  width?: number;
   defaultFonts?: FontConfig[];
   defaultBackgroundColor?: string;
+  backgroundColor?: string;
   aiTextAsImage?: boolean | HtmlRendererAiTextAsImageConfig;
+  viewport?: HtmlRendererViewport;
+  scale?: number;
+  type?: RasterFormat;
+  quality?: number;
+  timeout?: number;
+  waitUntil?: WaitUntil;
+  fontFamily?: string;
+  maxImageHeight?: number;
+  sliceCompression?: number;
+  allowFileAccess?: boolean;
+  takeOverHtmlSegments?: boolean;
+  cacheDir?: string;
+  cacheMaxBytes?: number;
+  userAgent?: string;
+  idleTimeoutMs?: number;
+  logStats?: boolean;
+  htmlRenderer?: HtmlRendererConfig | Record<string, unknown>;
 }
 
 export interface HtmlRendererService {

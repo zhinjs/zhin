@@ -2,7 +2,7 @@
 
 HTML → PNG/SVG，供 Zhin.js 出站富媒体段（`segment.html` / `segment.markdown`）与可选 `aiTextAsImage` 使用。
 
-基于 `@zhin.js/satori` + `@resvg/resvg-js`，**不**再作为插件加载。
+现在默认使用 **Shotium（裁剪版 Chromium）** 渲染 PNG，保留 **Satori + Resvg** 作为 SVG 与故障回退路径，因此原有 API 与 SVG 能力不丢失。
 
 ## 安装
 
@@ -16,30 +16,28 @@ pnpm add @zhin.js/html-renderer
 
 ```yaml
 htmlRenderer:
-  defaultWidth: 1080
-  defaultBackgroundColor: "#ffffff"
-  aiTextAsImage: false   # true 时纯文本出站转 PNG（before.sendMessage）
+  width: 1080
+  viewport:
+    height: 600
+  backgroundColor: "#ffffff"
+  scale: 1
+  aiTextAsImage: false
 ```
+
+兼容旧字段 `defaultWidth` / `defaultBackgroundColor` / `defaultFonts`；新后端还支持 `viewport`、`scale`、`timeout`、`waitUntil`、`fontFamily`、`allowFileAccess`、`cacheDir`、`cacheMaxBytes`、`userAgent`、`idleTimeoutMs`、`logStats`。
 
 ## API
 
 ```typescript
 import { createHtmlRenderer } from '@zhin.js/html-renderer';
 
-const renderer = createHtmlRenderer({ defaultWidth: 540 });
+const renderer = createHtmlRenderer({ width: 540 });
 const png = await renderer.render('<div>Hello</div>', { format: 'png' });
+const svg = await renderer.render('<div>Hello</div>', { format: 'svg' });
 ```
 
+- `format: 'png'`：优先走 Shotium。
+- `format: 'svg'`：保持原有 SVG 输出。
+- Shotium 失败时会自动回退到旧渲染链，避免功能丢失。
+
 Core 出站链通过动态 import 自动调用，业务代码通常只需 `segment.html({ html: '...' })`。
-
-## IM 组件与 Context（安装包后 zhin 启动自动注册）
-
-无需再写 plugins 列表，安装 `@zhin.js/html-renderer` 后启动时自动：
-
-| 能力 | 说明 |
-|------|------|
-| **`RenderImage` 组件** | 模板/命令中 `<RenderImage html="..." width="540"/>`，异步渲染为 `image` 段 |
-| **`html-renderer` Context** | `useContext('html-renderer', (r) => …)` 或 `inject('html-renderer')` |
-| **Agent 工具** | `html_render`、`html_card`（需已装 `@zhin.js/agent` 且 tool 服务可用） |
-
-自定义组件仍用 `defineComponent` + `addComponent`；需要转图时在组件内 `inject('html-renderer')` 或返回 `segment.html({ html })` 走出站 policy。
