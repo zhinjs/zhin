@@ -579,9 +579,6 @@ importers:
 
   examples/single-file-bot:
     dependencies:
-      '@zhin.js/adapter-icqq':
-        specifier: workspace:*
-        version: link:../../plugins/adapters/icqq
       '@zhin.js/adapter-sandbox':
         specifier: workspace:*
         version: link:../../plugins/adapters/sandbox
@@ -631,9 +628,6 @@ importers:
       '@zhin.js/adapter-github':
         specifier: workspace:*
         version: link:../../plugins/adapters/github
-      '@zhin.js/adapter-icqq':
-        specifier: workspace:*
-        version: link:../../plugins/adapters/icqq
       '@zhin.js/adapter-kook':
         specifier: workspace:*
         version: link:../../plugins/adapters/kook
@@ -1739,6 +1733,9 @@ importers:
       '@resvg/resvg-js':
         specifier: ^2.6.2
         version: 2.6.2
+      '@shotkit/shotium':
+        specifier: ^0.3.3
+        version: 0.3.4
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../satori
@@ -3241,9 +3238,6 @@ importers:
 
   plugins/utils/music:
     dependencies:
-      '@zhin.js/adapter-icqq':
-        specifier: workspace:*
-        version: link:../../adapters/icqq
       '@zhin.js/command':
         specifier: workspace:*
         version: link:../../../packages/im/command
@@ -5413,6 +5407,46 @@ packages:
 
   '@shikijs/vscode-textmate@10.0.2':
     resolution: {integrity: sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg==}
+
+  '@shotkit/shotium-darwin-arm64@0.3.4':
+    resolution: {integrity: sha512-rvXbHhkbQ1zkekyuo9d6V+vlDSQXH9YG2LzYQmxDyHmD4N5pAQARKEm6t1ehagFwEQFK7oRfEtUc+0k+ZByneg==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@shotkit/shotium-darwin-x64@0.3.4':
+    resolution: {integrity: sha512-NFC9RaAcJKm0eQTkkTAl933jaXQ0R8k7MDddE8qZvX4/SsOnXtyFEDrXsQGfbGWTfFXaYNBUq0CnizhnW5+Mnw==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@shotkit/shotium-linux-arm64@0.3.4':
+    resolution: {integrity: sha512-Ac3C0OOKHCeWfgwfOmeaal5FXRBbkNmn3RFYK8LGr5xdzEgFl6Fg9d54Q/lXSWQ4GumEGmlQd8CQxT1sz0E6Ew==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@shotkit/shotium-linux-x64@0.3.4':
+    resolution: {integrity: sha512-6N7gyTtG+djezKwkNYXSmePxaRq9oL27F0MQq441RmorYCQSTKPgNdeHEHKvGEYiYnpZZMgUkVWJR2+Caft9+Q==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [linux]
+
+  '@shotkit/shotium-win32-arm64@0.3.4':
+    resolution: {integrity: sha512-Wmp81QYct7iGx1gvnvNg5B27NK8n60oXHx1Fc9rZEBpMSe9IYtn66LcwDByfyDj73Sf0wKr0K9RnmeKAiAKJXA==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@shotkit/shotium-win32-x64@0.3.4':
+    resolution: {integrity: sha512-TO2UcnTIWUdXPFpR4YndHe57/AYjtjnaah0gadbJ4bTXu8wYb1LJHYjMUN7D7tLJiiFzQvRTaLOsD1x4LTYupw==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [win32]
+
+  '@shotkit/shotium@0.3.4':
+    resolution: {integrity: sha512-6hx/q6cuJDAJ7390kmc7AVGA+VojgqZWSwPoCd2axIEaKAbKPjI6qpmPOjdl0/opQR+f3itFxSB3elmBI8dPpA==}
+    engines: {node: '>=18'}
 
   '@shuding/opentype.js@1.4.0-beta.0':
     resolution: {integrity: sha512-3NgmNyH3l/Hv6EvsWJbsvpcpUba6R8IREQ83nH83cyakCw7uM1arZKNfHwv1Wz6jgqrF/j4x5ELvR6PnK9nTcA==}
@@ -10916,6 +10950,33 @@ snapshots:
       '@types/hast': 3.0.5
 
   '@shikijs/vscode-textmate@10.0.2': {}
+
+  '@shotkit/shotium-darwin-arm64@0.3.4':
+    optional: true
+
+  '@shotkit/shotium-darwin-x64@0.3.4':
+    optional: true
+
+  '@shotkit/shotium-linux-arm64@0.3.4':
+    optional: true
+
+  '@shotkit/shotium-linux-x64@0.3.4':
+    optional: true
+
+  '@shotkit/shotium-win32-arm64@0.3.4':
+    optional: true
+
+  '@shotkit/shotium-win32-x64@0.3.4':
+    optional: true
+
+  '@shotkit/shotium@0.3.4':
+    optionalDependencies:
+      '@shotkit/shotium-darwin-arm64': 0.3.4
+      '@shotkit/shotium-darwin-x64': 0.3.4
+      '@shotkit/shotium-linux-arm64': 0.3.4
+      '@shotkit/shotium-linux-x64': 0.3.4
+      '@shotkit/shotium-win32-arm64': 0.3.4
+      '@shotkit/shotium-win32-x64': 0.3.4
 
   '@shuding/opentype.js@1.4.0-beta.0':
     dependencies:

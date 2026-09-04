@@ -6,19 +6,27 @@ const ONE_PIXEL_PNG = Buffer.from(
   'base64',
 );
 
-const screenshotMock = vi.fn(async () => ({
-  image: ONE_PIXEL_PNG,
-  stats: {
-    timing: { total: 1 },
-    requests: 0,
-    fromCache: 0,
-    failed: 0,
-  },
+const {
+  screenshotMock,
+  startMock,
+  statusMock,
+  releaseMemoryMock,
+  daemonConnectMock,
+} = vi.hoisted(() => ({
+  screenshotMock: vi.fn(async () => ({
+    image: ONE_PIXEL_PNG,
+    stats: {
+      timing: { total: 1 },
+      requests: 0,
+      fromCache: 0,
+      failed: 0,
+    },
+  })),
+  startMock: vi.fn(() => ({ cacheActive: true, cacheDir: '/tmp/shotium-cache' })),
+  statusMock: vi.fn(() => ({ running: false })),
+  releaseMemoryMock: vi.fn(),
+  daemonConnectMock: vi.fn(),
 }));
-const startMock = vi.fn(() => ({ cacheActive: true, cacheDir: '/tmp/shotium-cache' }));
-const statusMock = vi.fn(() => ({ running: false }));
-const releaseMemoryMock = vi.fn();
-const daemonConnectMock = vi.fn();
 
 vi.mock('@shotkit/shotium', () => ({
   screenshot: screenshotMock,

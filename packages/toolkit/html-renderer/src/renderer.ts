@@ -28,6 +28,34 @@ function fontKey(font: FontConfig): string {
   return `${font.name}\0${font.weight ?? 400}\0${font.style ?? 'normal'}`;
 }
 
+interface ShotiumRenderOptions {
+  width?: number;
+  height?: number;
+  type?: 'png' | 'jpeg' | 'webp';
+  quality?: number;
+  backgroundColor?: string;
+  fonts?: readonly FontConfig[];
+  fontFamily?: string;
+  scale?: number;
+  selector?: string;
+  fullPage?: boolean;
+  omitBackground?: boolean;
+  clip?: Clip;
+  timeout?: number;
+  waitUntil?: 'load' | 'networkidle';
+  headers?: Record<string, string>;
+  cache?: CacheMode;
+  allowFileAccess?: boolean;
+}
+
+interface ShotiumResult {
+  data: Buffer;
+  width: number;
+  height: number;
+  mimeType: string;
+  stats: CaptureStats;
+}
+
 export function createHtmlRenderer(
   config: HtmlRendererConfig = {},
   logger?: HtmlRendererLogger,

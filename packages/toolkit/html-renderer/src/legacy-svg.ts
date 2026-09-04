@@ -139,7 +139,7 @@ export async function renderHtmlToSvg(params: {
       weight: font.weight,
       style: font.style,
     })),
-    loadAdditionalAsset: async (code, segment) => {
+    loadAdditionalAsset: async (code: string, segment: string) => {
       if (!enableEmoji || code !== 'emoji') return '';
       const cached = getCachedEmoji(segment);
       if (cached.hit) return cached.value ?? '';
