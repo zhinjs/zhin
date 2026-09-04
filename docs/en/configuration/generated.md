@@ -56,7 +56,31 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `mcp` | object | no | — | Expose Bot tools through an MCP Server. |
 | `a2a` | object | no | — | A2A Agent Card, remote execution, and Workroom callbacks. |
 | `speech` | object | no | — | Speech-to-text and text-to-speech Host. |
-| `htmlRenderer` | object | no | — | HTML and image rendering options. |
+| `htmlRenderer` | object | no | — | HTML and image rendering options backed by Shotium. |
+| `htmlRenderer.width` | number | no | `800` | Default layout width in CSS pixels. |
+| `htmlRenderer.defaultWidth` | number | no | `800` | Legacy alias of width. |
+| `htmlRenderer.viewport` | object | no | — | Default viewport for Shotium rendering. |
+| `htmlRenderer.viewport.width` | number | no | `800` | Viewport width in CSS pixels. |
+| `htmlRenderer.viewport.height` | number | no | `600` | Viewport height in CSS pixels. |
+| `htmlRenderer.backgroundColor` | string | no | `"#ffffff"` | Fragment background color. |
+| `htmlRenderer.defaultBackgroundColor` | string | no | `"#ffffff"` | Legacy alias of backgroundColor. |
+| `htmlRenderer.scale` | number | no | `1` | Device scale factor. |
+| `htmlRenderer.type` | string: `"png"`, `"jpeg"`, `"webp"` | no | `"png"` | Default raster output format. |
+| `htmlRenderer.quality` | number | no | `90` | Quality for jpeg/webp output. |
+| `htmlRenderer.timeout` | number | no | `30000` | Navigation timeout in milliseconds. |
+| `htmlRenderer.waitUntil` | string: `"load"`, `"networkidle"` | no | `"load"` | Navigation wait strategy. |
+| `htmlRenderer.fontFamily` | string | no | `"-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", sans-serif"` | Default font-family for fragments. |
+| `htmlRenderer.maxImageHeight` | number | no | `0` | Split overly tall PNGs above this height; 0 disables splitting. |
+| `htmlRenderer.sliceCompression` | number | no | `3` | Compression level used when splitting PNGs. |
+| `htmlRenderer.allowFileAccess` | boolean | no | `true` | Allow local file subresources. |
+| `htmlRenderer.takeOverHtmlSegments` | boolean | no | `true` | Take over html/markdown rich-segment image rendering. |
+| `htmlRenderer.cacheDir` | string | no | `""` | HTTP cache directory; use off to disable. |
+| `htmlRenderer.cacheMaxBytes` | number | no | `268435456` | Maximum HTTP cache size in bytes. |
+| `htmlRenderer.userAgent` | string | no | `""` | Custom user agent string. |
+| `htmlRenderer.idleTimeoutMs` | number | no | `300000` | Daemon idle-exit timeout in milliseconds. |
+| `htmlRenderer.logStats` | boolean | no | `false` | Log render timing statistics. |
+| `htmlRenderer.mode` | string: `"inprocess"`, `"daemon"` | no | `"inprocess"` | Whether Shotium runs in-process or as a daemon. |
+| `htmlRenderer.aiTextAsImage` | boolean \| object | no | — | Optional plain-text to image conversion before send. |
 | `assistant` | object | no | — | Scheduled jobs, event ingress, and failure notifications. |
 | `log_level` | string \| number | no | — | Runtime log level. |
 | `plugin` | object | no | — | Root Plugin configuration; replaced by its project schema during composition. |

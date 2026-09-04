@@ -56,7 +56,31 @@ outline: [2, 3]
 | `mcp` | object | 否 | — | 把 Bot 工具公开为 MCP Server。 |
 | `a2a` | object | 否 | — | A2A Agent Card、远程执行与 Workroom 回调。 |
 | `speech` | object | 否 | — | 语音识别与语音合成 Host。 |
-| `htmlRenderer` | object | 否 | — | HTML/图片渲染参数。 |
+| `htmlRenderer` | object | 否 | — | 基于 Shotium 的 HTML/图片渲染参数。 |
+| `htmlRenderer.width` | number | 否 | `800` | 默认排版宽度（CSS 像素）。 |
+| `htmlRenderer.defaultWidth` | number | 否 | `800` | width 的旧别名。 |
+| `htmlRenderer.viewport` | object | 否 | — | Shotium 渲染默认视窗。 |
+| `htmlRenderer.viewport.width` | number | 否 | `800` | 视窗宽度（CSS 像素）。 |
+| `htmlRenderer.viewport.height` | number | 否 | `600` | 视窗高度（CSS 像素）。 |
+| `htmlRenderer.backgroundColor` | string | 否 | `"#ffffff"` | HTML 片段背景色。 |
+| `htmlRenderer.defaultBackgroundColor` | string | 否 | `"#ffffff"` | backgroundColor 的旧别名。 |
+| `htmlRenderer.scale` | number | 否 | `1` | 设备像素比。 |
+| `htmlRenderer.type` | string: `"png"`, `"jpeg"`, `"webp"` | 否 | `"png"` | 默认位图输出格式。 |
+| `htmlRenderer.quality` | number | 否 | `90` | jpeg/webp 输出质量。 |
+| `htmlRenderer.timeout` | number | 否 | `30000` | 导航超时（毫秒）。 |
+| `htmlRenderer.waitUntil` | string: `"load"`, `"networkidle"` | 否 | `"load"` | 导航等待策略。 |
+| `htmlRenderer.fontFamily` | string | 否 | `"-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", sans-serif"` | HTML 片段默认字体栈。 |
+| `htmlRenderer.maxImageHeight` | number | 否 | `0` | 超过该高度时切分 PNG；0 表示不切分。 |
+| `htmlRenderer.sliceCompression` | number | 否 | `3` | PNG 切片时使用的压缩级别。 |
+| `htmlRenderer.allowFileAccess` | boolean | 否 | `true` | 允许访问本地文件子资源。 |
+| `htmlRenderer.takeOverHtmlSegments` | boolean | 否 | `true` | 接管 html/markdown 富媒体段转图。 |
+| `htmlRenderer.cacheDir` | string | 否 | `""` | HTTP 缓存目录；off 表示关闭。 |
+| `htmlRenderer.cacheMaxBytes` | number | 否 | `268435456` | HTTP 缓存最大字节数。 |
+| `htmlRenderer.userAgent` | string | 否 | `""` | 自定义 User-Agent。 |
+| `htmlRenderer.idleTimeoutMs` | number | 否 | `300000` | daemon 空闲退出超时（毫秒）。 |
+| `htmlRenderer.logStats` | boolean | 否 | `false` | 记录渲染耗时统计。 |
+| `htmlRenderer.mode` | string: `"inprocess"`, `"daemon"` | 否 | `"inprocess"` | Shotium 在进程内运行还是以 daemon 运行。 |
+| `htmlRenderer.aiTextAsImage` | boolean \| object | 否 | — | 发送前可选的纯文本转图片。 |
 | `assistant` | object | 否 | — | 调度任务、事件入口和失败通知。 |
 | `log_level` | string \| number | 否 | — | Runtime 日志级别。 |
 | `plugin` | object | 否 | — | Root Plugin 配置；组合时由项目 Schema 替换。 |

@@ -38,5 +38,6 @@ const stillPng = await renderer.render('<div>Hello</div>', { format: 'svg' });
 
 - `format: 'png'`：优先走 Shotium。
 - `format: 'svg'`：为兼容旧调用方，仍可传入，但会返回 `png` 并警告一次。
+- `renderJsx()` / `renderComponent()`：继续保留，可直接把 JSX/函数组件转成图片。
 
 Core 出站链通过动态 import 自动调用，业务代码通常只需 `segment.html({ html: '...' })`。

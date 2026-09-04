@@ -186,21 +186,6 @@
         "timeout": { "type": "number", "minimum": 1, "maximum": 600000, "default": 30000, "description": "Navigation timeout in milliseconds.", "x-descriptionZh": "导航超时（毫秒）。" },
         "waitUntil": { "type": "string", "enum": ["load", "networkidle"], "default": "load", "description": "Navigation wait strategy.", "x-descriptionZh": "导航等待策略。" },
         "fontFamily": { "type": "string", "default": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", sans-serif", "description": "Default font-family for fragments.", "x-descriptionZh": "HTML 片段默认字体栈。" },
-        "defaultFonts": {
-          "type": "array",
-          "description": "Extra fonts registered at startup.",
-          "x-descriptionZh": "启动时注册的额外字体。",
-          "items": {
-            "type": "object",
-            "additionalProperties": true,
-            "properties": {
-              "name": { "type": "string", "minLength": 1, "description": "Font family name.", "x-descriptionZh": "字体族名称。" },
-              "data": { "description": "Font binary data provided by code.", "x-descriptionZh": "由代码提供的字体二进制数据。" },
-              "weight": { "type": "number", "enum": [100, 200, 300, 400, 500, 600, 700, 800, 900], "description": "Font weight.", "x-descriptionZh": "字体字重。" },
-              "style": { "type": "string", "enum": ["normal", "italic"], "description": "Font style.", "x-descriptionZh": "字体样式。" }
-            }
-          }
-        },
         "maxImageHeight": { "type": "number", "minimum": 0, "maximum": 100000, "default": 0, "description": "Split overly tall PNGs above this height; 0 disables splitting.", "x-descriptionZh": "超过该高度时切分 PNG；0 表示不切分。" },
         "sliceCompression": { "type": "number", "minimum": 0, "maximum": 9, "default": 3, "description": "Compression level used when splitting PNGs.", "x-descriptionZh": "PNG 切片时使用的压缩级别。" },
         "allowFileAccess": { "type": "boolean", "default": true, "description": "Allow local file subresources.", "x-descriptionZh": "允许访问本地文件子资源。" },
