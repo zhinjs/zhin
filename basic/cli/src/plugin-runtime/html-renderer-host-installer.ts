@@ -26,13 +26,16 @@ interface HtmlRendererModule {
  * Optional HtmlRenderer Host：动态加载 `@zhin.js/html-renderer`，
  * 未安装时返回 undefined（core 出站规范化降级为纯文本，不报错）。
  */
-export async function prepareHtmlRendererHost(): Promise<HtmlRendererHost | undefined> {
+export async function prepareHtmlRendererHost(config?: unknown): Promise<HtmlRendererHost | undefined> {
   try {
     const mod = await importHtmlRendererModule();
-    const host = mod.createHtmlRenderer({}, {
+    const host = mod.createHtmlRenderer(
+      config && typeof config === 'object' ? config as Record<string, unknown> : {},
+      {
       debug: (...args) => logger.debug(args.map(String).join(' ')),
       warn: (...args) => logger.warn(args.map(String).join(' ')),
-    });
+      },
+    );
     logger.debug(formatCompact({ op: 'html_renderer_ready' }));
     return host;
   } catch (error) {

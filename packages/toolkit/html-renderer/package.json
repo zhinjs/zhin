@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/html-renderer",
   "version": "3.0.15",
-  "description": "HTML to PNG/SVG for Zhin.js (satori + resvg); optional peer of zhin.js",
+  "description": "HTML rendering for Zhin.js with Shotium; optional peer of zhin.js",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -27,7 +27,7 @@
     "zhin.js",
     "html",
     "image",
-    "satori",
+    "shotium",
     "png"
   ],
   "author": {
@@ -37,8 +37,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@zhin.js/satori": "workspace:*",
-    "@resvg/resvg-js": "^2.6.2"
+    "@shotkit/shotium": "^0.3.3"
   },
   "peerDependencies": {
     "@zhin.js/core": "workspace:*"

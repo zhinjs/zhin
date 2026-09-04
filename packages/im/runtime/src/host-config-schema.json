@@ -160,7 +160,72 @@
     "mcp": { "type": "object", "additionalProperties": true, "description": "Expose Bot tools through an MCP Server.", "x-descriptionZh": "把 Bot 工具公开为 MCP Server。" },
     "a2a": { "type": "object", "additionalProperties": true, "description": "A2A Agent Card, remote execution, and Workroom callbacks.", "x-descriptionZh": "A2A Agent Card、远程执行与 Workroom 回调。" },
     "speech": { "type": "object", "additionalProperties": true, "description": "Speech-to-text and text-to-speech Host.", "x-descriptionZh": "语音识别与语音合成 Host。" },
-    "htmlRenderer": { "type": "object", "additionalProperties": true, "description": "HTML and image rendering options.", "x-descriptionZh": "HTML/图片渲染参数。" },
+    "htmlRenderer": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "HTML and image rendering options backed by Shotium.",
+      "x-descriptionZh": "基于 Shotium 的 HTML/图片渲染参数。",
+      "properties": {
+        "width": { "type": "number", "minimum": 1, "maximum": 30000, "default": 800, "description": "Default layout width in CSS pixels.", "x-descriptionZh": "默认排版宽度（CSS 像素）。" },
+        "defaultWidth": { "type": "number", "minimum": 1, "maximum": 30000, "default": 800, "description": "Legacy alias of width.", "x-descriptionZh": "width 的旧别名。" },
+        "viewport": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Default viewport for Shotium rendering.",
+          "x-descriptionZh": "Shotium 渲染默认视窗。",
+          "properties": {
+            "width": { "type": "number", "minimum": 1, "maximum": 30000, "default": 800, "description": "Viewport width in CSS pixels.", "x-descriptionZh": "视窗宽度（CSS 像素）。" },
+            "height": { "type": "number", "minimum": 1, "maximum": 30000, "default": 600, "description": "Viewport height in CSS pixels.", "x-descriptionZh": "视窗高度（CSS 像素）。" }
+          }
+        },
+        "backgroundColor": { "type": "string", "default": "#ffffff", "description": "Fragment background color.", "x-descriptionZh": "HTML 片段背景色。" },
+        "defaultBackgroundColor": { "type": "string", "default": "#ffffff", "description": "Legacy alias of backgroundColor.", "x-descriptionZh": "backgroundColor 的旧别名。" },
+        "scale": { "type": "number", "minimum": 0.01, "maximum": 8, "default": 1, "description": "Device scale factor.", "x-descriptionZh": "设备像素比。" },
+        "type": { "type": "string", "enum": ["png", "jpeg", "webp"], "default": "png", "description": "Default raster output format.", "x-descriptionZh": "默认位图输出格式。" },
+        "quality": { "type": "number", "minimum": 1, "maximum": 100, "default": 90, "description": "Quality for jpeg/webp output.", "x-descriptionZh": "jpeg/webp 输出质量。" },
+        "timeout": { "type": "number", "minimum": 1, "maximum": 600000, "default": 30000, "description": "Navigation timeout in milliseconds.", "x-descriptionZh": "导航超时（毫秒）。" },
+        "waitUntil": { "type": "string", "enum": ["load", "networkidle"], "default": "load", "description": "Navigation wait strategy.", "x-descriptionZh": "导航等待策略。" },
+        "fontFamily": { "type": "string", "default": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", sans-serif", "description": "Default font-family for fragments.", "x-descriptionZh": "HTML 片段默认字体栈。" },
+        "maxImageHeight": { "type": "number", "minimum": 0, "maximum": 100000, "default": 0, "description": "Split overly tall PNGs above this height; 0 disables splitting.", "x-descriptionZh": "超过该高度时切分 PNG；0 表示不切分。" },
+        "sliceCompression": { "type": "number", "minimum": 0, "maximum": 9, "default": 3, "description": "Compression level used when splitting PNGs.", "x-descriptionZh": "PNG 切片时使用的压缩级别。" },
+        "allowFileAccess": { "type": "boolean", "default": true, "description": "Allow local file subresources.", "x-descriptionZh": "允许访问本地文件子资源。" },
+        "takeOverHtmlSegments": { "type": "boolean", "default": true, "description": "Take over html/markdown rich-segment image rendering.", "x-descriptionZh": "接管 html/markdown 富媒体段转图。" },
+        "cacheDir": { "type": "string", "default": "", "description": "HTTP cache directory; use off to disable.", "x-descriptionZh": "HTTP 缓存目录；off 表示关闭。" },
+        "cacheMaxBytes": { "type": "number", "minimum": 0, "default": 268435456, "description": "Maximum HTTP cache size in bytes.", "x-descriptionZh": "HTTP 缓存最大字节数。" },
+        "userAgent": { "type": "string", "default": "", "description": "Custom user agent string.", "x-descriptionZh": "自定义 User-Agent。" },
+        "idleTimeoutMs": { "type": "number", "minimum": 0, "maximum": 86400000, "default": 300000, "description": "Daemon idle-exit timeout in milliseconds.", "x-descriptionZh": "daemon 空闲退出超时（毫秒）。" },
+        "logStats": { "type": "boolean", "default": false, "description": "Log render timing statistics.", "x-descriptionZh": "记录渲染耗时统计。" },
+        "mode": { "type": "string", "enum": ["inprocess", "daemon"], "default": "inprocess", "description": "Whether Shotium runs in-process or as a daemon.", "x-descriptionZh": "Shotium 在进程内运行还是以 daemon 运行。" },
+        "aiTextAsImage": {
+          "anyOf": [
+            { "type": "boolean" },
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Convert plain text output to an image before send.",
+              "x-descriptionZh": "发送前将纯文本输出转成图片。",
+              "properties": {
+                "enabled": { "type": "boolean", "description": "Enable text-to-image conversion.", "x-descriptionZh": "启用文本转图片。" },
+                "onlyAdapters": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true, "description": "Only apply to these adapter names.", "x-descriptionZh": "仅对这些适配器名称生效。" },
+                "minLength": { "type": "number", "minimum": 1, "default": 1, "description": "Minimum plain-text length to trigger conversion.", "x-descriptionZh": "触发转换的最小纯文本长度。" },
+                "maxLength": { "type": "number", "minimum": 1, "default": 12000, "description": "Maximum plain-text length to convert.", "x-descriptionZh": "允许转换的最大纯文本长度。" },
+                "skipIfRich": { "type": "boolean", "default": true, "description": "Skip when content already contains rich segments.", "x-descriptionZh": "内容已包含富媒体段时跳过。" },
+                "width": { "type": "number", "minimum": 1, "maximum": 30000, "description": "Image width in CSS pixels.", "x-descriptionZh": "图片宽度（CSS 像素）。" },
+                "height": { "type": "number", "minimum": 1, "maximum": 30000, "description": "Image height in CSS pixels.", "x-descriptionZh": "图片高度（CSS 像素）。" },
+                "backgroundColor": { "type": "string", "description": "Image background color.", "x-descriptionZh": "图片背景色。" },
+                "fontSize": { "type": "number", "minimum": 1, "description": "Font size in CSS pixels.", "x-descriptionZh": "字体大小（CSS 像素）。" },
+                "color": { "type": "string", "description": "Text color.", "x-descriptionZh": "文字颜色。" },
+                "padding": { "type": "number", "minimum": 0, "description": "Image padding in CSS pixels.", "x-descriptionZh": "图片内边距（CSS 像素）。" },
+                "scale": { "type": "number", "minimum": 0.01, "maximum": 8, "description": "Device scale factor.", "x-descriptionZh": "设备像素比。" },
+                "fileName": { "type": "string", "minLength": 1, "description": "Image file name.", "x-descriptionZh": "图片文件名。" }
+              }
+            }
+          ],
+          "description": "Optional plain-text to image conversion before send.",
+          "x-descriptionZh": "发送前可选的纯文本转图片。"
+        }
+      }
+    },
     "assistant": { "type": "object", "additionalProperties": true, "description": "Scheduled jobs, event ingress, and failure notifications.", "x-descriptionZh": "调度任务、事件入口和失败通知。" },
     "log_level": { "type": ["string", "number"], "description": "Runtime log level.", "x-descriptionZh": "Runtime 日志级别。" },
     "plugin": { "type": "object", "description": "Root Plugin configuration; replaced by its project schema during composition.", "x-descriptionZh": "Root Plugin 配置；组合时由项目 Schema 替换。" }

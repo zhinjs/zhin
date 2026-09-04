@@ -117,7 +117,7 @@ Host tokens are capability handles provided by the Host to plugins, resolved in 
 | `databaseHostToken` | `zhin.database.host` | `database:` configured | `define(name, columns)` registers a plugin-private logical table; Runtime maps it to a physical name by PluginId, and `models.get(name)` can access only that plugin's tables (`select` / `insert` / `update` / `delete` / `count`) |
 | `scheduleHostToken` | `zhin.schedule.host` | Always available | `register(job)` registers a plugin-private logical job id with a 6-field solar cron (`second minute hour day month weekday`), returns a cancel function; `list()` returns only that plugin's jobs |
 | `outboundHostToken` | `zhin.outbound.host` | Has available Adapter | `send(input)` proactive push (returns platform message id or `null`); optional `addReaction` / `removeReaction` / `recall` |
-| `htmlRendererToken` | `zhin.html-renderer.host` | `@zhin.js/html-renderer` installed | `render(html, { width, format, backgroundColor })` -> PNG (Buffer) or SVG (string); must degrade to plain text when not installed |
+| `htmlRendererToken` | `zhin.html-renderer.host` | `@zhin.js/html-renderer` installed | `render(html, { width, format, backgroundColor })` -> PNG (Buffer); `format: 'svg'` is downgraded to PNG; must degrade to plain text when not installed |
 | `runtimeEventPublisherToken` | `zhin.runtime.event-publisher` | Root-level, CLI console assembly | `publish(type, data)` broadcasts events to the Console SSE hub (used by adapters to push `endpoint:request` / `endpoint:notice` etc.) |
 | `httpHostToken` | `zhin.host.http` | HTTP Host enabled | `route(method, path, handler, meta?)` registers an HTTP route; `ws(path).onConnection(cb)` registers a WS endpoint; `listen()` / `close()` managed by Host |
 

@@ -2,12 +2,13 @@ import { createToken } from './token.js';
 
 export interface HtmlRenderOptions {
   readonly width?: number;
+  /** 兼容旧调用方；当前实现传 `svg` 也会降级为 png。 */
   readonly format?: 'png' | 'svg';
   readonly backgroundColor?: string;
 }
 
 export interface HtmlRenderResult {
-  /** PNG 时为 Buffer/Uint8Array，SVG 时为 string。 */
+  /** 当前实现恒为 png：Buffer/Uint8Array。 */
   readonly data: unknown;
   readonly format: 'png' | 'svg';
   readonly width: number;

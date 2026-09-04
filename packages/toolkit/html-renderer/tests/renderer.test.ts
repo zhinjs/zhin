@@ -1,32 +1,129 @@
-import { describe, expect, it, vi, afterEach } from 'vitest';
-import { getAllBuiltinFonts } from '@zhin.js/satori';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5qkS0AAAAASUVORK5CYII=',
+  'base64',
+);
+
+const {
+  screenshotMock,
+  startMock,
+  statusMock,
+  releaseMemoryMock,
+  daemonConnectMock,
+} = vi.hoisted(() => ({
+  screenshotMock: vi.fn(async () => ({
+    image: ONE_PIXEL_PNG,
+    stats: {
+      timing: { total: 1 },
+      requests: 0,
+      fromCache: 0,
+      failed: 0,
+    },
+  })),
+  startMock: vi.fn(() => ({ cacheActive: true, cacheDir: '/tmp/shotium-cache' })),
+  statusMock: vi.fn(() => ({ running: false })),
+  releaseMemoryMock: vi.fn(),
+  daemonConnectMock: vi.fn(),
+}));
+
+vi.mock('@shotkit/shotium', () => ({
+  screenshot: screenshotMock,
+  start: startMock,
+  status: statusMock,
+  releaseMemory: releaseMemoryMock,
+  stop: vi.fn(),
+  daemon: { connect: daemonConnectMock },
+}));
+
 import {
   createHtmlRenderer,
   serializeJsxToHtml,
   type FontConfig,
 } from '../src/index.js';
 
-const EMOJI_SVG_RESPONSE = {
-  ok: true,
-  text: async () => '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"></svg>',
-} as Response;
-
 function makeFont(name: string, style?: FontConfig['style']): FontConfig {
-  // 用真实字体数据：fontCache 是模块级共享的，假数据会污染后续渲染
-  return { name, data: getAllBuiltinFonts()[0].data, weight: 400, style };
+  return { name, data: Buffer.from('font'), weight: 400, style };
 }
 
 describe('@zhin.js/html-renderer', () => {
+  beforeEach(() => {
+    screenshotMock.mockClear();
+    screenshotMock.mockResolvedValue({
+      image: ONE_PIXEL_PNG,
+      stats: {
+        timing: { total: 1 },
+        requests: 0,
+        fromCache: 0,
+        failed: 0,
+      },
+    });
+    startMock.mockClear();
+    statusMock.mockReset();
+    statusMock.mockReturnValue({ running: false });
+    releaseMemoryMock.mockClear();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('createHtmlRenderer renders simple html to png', async () => {
+  it('renders simple html to png with shotium backend', async () => {
     const renderer = createHtmlRenderer({ defaultWidth: 200 });
     const result = await renderer.render('<div>Hi</div>', { format: 'png' });
     expect(result.format).toBe('png');
     expect(Buffer.isBuffer(result.data)).toBe(true);
-    expect((result.data as Buffer).length).toBeGreaterThan(100);
+    expect(screenshotMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('downgrades svg requests to png with a warning', async () => {
+    const warn = vi.fn();
+    const renderer = createHtmlRenderer({ defaultWidth: 200 });
+    const result = await renderer.render('<div>Hi</div>', { format: 'svg' });
+    expect(result.format).toBe('png');
+    expect(Buffer.isBuffer(result.data)).toBe(true);
+    expect(screenshotMock).toHaveBeenCalledTimes(1);
+    const rendererWithLogger = createHtmlRenderer({ defaultWidth: 200 }, { warn });
+    await rendererWithLogger.render('<div>Hi</div>', { format: 'svg' });
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws when shotium rendering fails', async () => {
+    screenshotMock.mockRejectedValueOnce(new Error('boom'));
+    const renderer = createHtmlRenderer({ defaultWidth: 200 });
+    await expect(renderer.render('<div>Hi</div>', { format: 'png' })).rejects.toThrow('boom');
+  });
+
+  it('accepts nested host-level htmlRenderer config', async () => {
+    const renderer = createHtmlRenderer({ htmlRenderer: { width: 321, viewport: { height: 654 } } });
+    await renderer.render('<div>Hi</div>');
+    expect(screenshotMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        viewport: expect.objectContaining({ width: 321, height: 654 }),
+      }),
+    );
+  });
+
+  it('preserves renderJsx support', async () => {
+    const renderer = createHtmlRenderer({ defaultWidth: 200 });
+    const result = await renderer.renderJsx({
+      type: 'div',
+      props: { children: 'hello jsx' },
+    });
+    expect(result.format).toBe('png');
+    expect(Buffer.isBuffer(result.data)).toBe(true);
+    expect(screenshotMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves renderComponent support', async () => {
+    const renderer = createHtmlRenderer({ defaultWidth: 200 });
+    const result = await renderer.renderComponent(
+      ({ name }: { name: string }) => ({ type: 'div', props: { children: `hello ${name}` } }),
+      { name: 'component' },
+    );
+    expect(result.format).toBe('png');
+    expect(Buffer.isBuffer(result.data)).toBe(true);
+    expect(screenshotMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -83,66 +180,5 @@ describe('fontCache', () => {
     expect(renderer.getFonts().some((f) => f.name === 'CfgFont')).toBe(true);
     renderer.clearFonts();
     expect(renderer.getFonts().some((f) => f.name === 'CfgFont')).toBe(true);
-    renderer.clearFonts();
-  });
-});
-
-describe('emoji 加载', () => {
-  it('同一 emoji 第二次渲染命中缓存，且请求带超时 signal', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(EMOJI_SVG_RESPONSE);
-    vi.stubGlobal('fetch', fetchMock);
-
-    const renderer = createHtmlRenderer({ defaultWidth: 200 });
-    await renderer.render('<div>😀</div>', { format: 'svg' });
-    await renderer.render('<div>😀</div>', { format: 'svg' });
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(init.signal).toBeInstanceOf(AbortSignal);
-  });
-
-  it('加载失败短 TTL 负缓存：TTL 内不重试', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 } as Response);
-    vi.stubGlobal('fetch', fetchMock);
-
-    const renderer = createHtmlRenderer({ defaultWidth: 200 });
-    await renderer.render('<div>😂</div>', { format: 'svg' });
-    await renderer.render('<div>😂</div>', { format: 'svg' });
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('enableEmoji: false 时不请求 twemoji', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(EMOJI_SVG_RESPONSE);
-    vi.stubGlobal('fetch', fetchMock);
-
-    const renderer = createHtmlRenderer({ defaultWidth: 200 });
-    await renderer.render('<div>😎</div>', { format: 'svg', enableEmoji: false });
-
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('渲染并发闸：最多 2 个并发，其余排队', async () => {
-    const pending: Array<(r: Response) => void> = [];
-    const fetchMock = vi.fn().mockImplementation(
-      () => new Promise<Response>((resolve) => pending.push(resolve)),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
-    const renderer = createHtmlRenderer({ defaultWidth: 200 });
-    const renders = ['🚀', '💡', '🔥'].map((emoji) =>
-      renderer.render(`<div>${emoji}</div>`, { format: 'svg' }),
-    );
-
-    // 等前两个渲染进入 emoji fetch
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    // 第三个仍在排队
-    expect(pending.length).toBe(2);
-
-    // 放行全部，最终三个渲染都完成
-    while (pending.length) pending.shift()!(EMOJI_SVG_RESPONSE);
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-    while (pending.length) pending.shift()!(EMOJI_SVG_RESPONSE);
-    await Promise.all(renders);
   });
 });

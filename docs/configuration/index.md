@@ -72,7 +72,7 @@ dotenv 按 `.env` → `.env.<环境>` 加载。环境名由 `--environment` 指�
 | `ai` | object | AI 栈（需安装 `@zhin.js/agent` 等，见下文） |
 | `mcp` | object | MCP Host（把 bot 工具暴露为 MCP Server） |
 | `a2a` | object | A2A Host（Agent Card / 远程 Agent 互调） |
-| `htmlRenderer` | object | HTML 渲染（如 `width`） |
+| `htmlRenderer` | object | Shotium HTML 渲染（如 `width` / `viewport` / `scale`） |
 | `plugin` | object | Root Plugin（应用自身）的配置 |
 | `plugins` | object | 子插件配置，键为 instanceKey |
 

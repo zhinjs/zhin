@@ -1,7 +1,9 @@
-export { createHtmlRenderer, serializeJsxToHtml } from './renderer.js';
+export { createHtmlRenderer } from './renderer.js';
+export { serializeJsxToHtml } from './jsx.js';
 export { registerAiTextAsImageOutput, extractPlainTextForImage } from './ai-text-as-image.js';
 export type {
   FontConfig,
+  HtmlComponent,
   HtmlRendererAiTextAsImageConfig,
   HtmlRendererConfig,
   HtmlRendererLogger,
@@ -9,7 +11,8 @@ export type {
   OutputFormat,
   RenderOptions,
   RenderResult,
+  RasterFormat,
+  WaitUntil,
 } from './types.js';
 
-/** 动态 import 时使用的包名（与 package.json name 一致） */
 export const HTML_RENDERER_PACKAGE = '@zhin.js/html-renderer';
