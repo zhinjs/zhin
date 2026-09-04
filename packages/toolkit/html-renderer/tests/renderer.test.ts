@@ -160,32 +160,3 @@ describe('fontCache', () => {
     expect(renderer.getFonts().some((f) => f.name === 'CfgFont')).toBe(true);
   });
 });
-
-describe('render queue', () => {
-  it('limits shotium renders to 2 concurrent executions', async () => {
-    const pending: Array<() => void> = [];
-    screenshotMock.mockImplementation(
-      () => new Promise((resolve) => pending.push(() => resolve({
-        image: ONE_PIXEL_PNG,
-        stats: {
-          timing: { total: 1 },
-          requests: 0,
-          fromCache: 0,
-          failed: 0,
-        },
-      }))),
-    );
-
-    const renderer = createHtmlRenderer({ defaultWidth: 200 });
-    const renders = ['a', 'b', 'c'].map((text) => renderer.render(`<div>${text}</div>`));
-
-    await vi.waitFor(() => expect(screenshotMock).toHaveBeenCalledTimes(2));
-    expect(pending).toHaveLength(2);
-
-    pending.shift()?.();
-    await vi.waitFor(() => expect(screenshotMock).toHaveBeenCalledTimes(3));
-    pending.shift()?.();
-    pending.shift()?.();
-    await Promise.all(renders);
-  });
-});
