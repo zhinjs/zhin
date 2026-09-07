@@ -26,6 +26,7 @@ export interface WorkroomEffectIntentInput {
         parameters: { repositoryId: string; ref: string; headSha: string; changedPaths: readonly string[] };
       }>
     | Readonly<{ kind: 'git_open_pr'; parameters: { repositoryId: string; headRef: string; baseRef: string; headSha: string } }>
+    | Readonly<{ kind: 'git_merge_pr'; parameters: { repositoryId: string; pullNumber: number; headSha: string; baseRef: string; baseSha: string; protectionDigest: string; checksDigest: string } }>
     | Readonly<{ kind: 'git_cancel_remote'; parameters: { repositoryId: string; remoteOperationId: string } }>
     | Readonly<{ kind: 'delivery_release'; parameters: {
         repositoryId: string; headSha: string; artifactDigest: string; environment: string; pipelineRef: string;
@@ -420,6 +421,18 @@ function normalizeOperation(operation: WorkroomEffectIntentInput['operation']) {
       headSha: gitSha(operation.parameters.headSha, 'headSha'),
       }),
     });
+  }
+  if (operation.kind === 'git_merge_pr') {
+    assertParameterKeys(operation.parameters, ['repositoryId', 'pullNumber', 'headSha', 'baseRef', 'baseSha', 'protectionDigest', 'checksDigest']);
+    return deepFreeze({ kind: operation.kind, parameters: deepFreeze({
+      repositoryId: required(operation.parameters.repositoryId, 'repositoryId'),
+      pullNumber: positive(operation.parameters.pullNumber, 'pullNumber'),
+      headSha: gitSha(operation.parameters.headSha, 'headSha'),
+      baseRef: required(operation.parameters.baseRef, 'baseRef'),
+      baseSha: gitSha(operation.parameters.baseSha, 'baseSha'),
+      protectionDigest: requiredDigest(operation.parameters.protectionDigest, 'protectionDigest'),
+      checksDigest: requiredDigest(operation.parameters.checksDigest, 'checksDigest'),
+    }) });
   }
   if (operation.kind === 'git_cancel_remote') {
     assertParameterKeys(operation.parameters, ['repositoryId', 'remoteOperationId']);

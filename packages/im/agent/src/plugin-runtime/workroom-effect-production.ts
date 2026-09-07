@@ -265,6 +265,9 @@ export class ProductionGitWorkroomEffectGateway implements WorkroomEffectGateway
     capability: WorkroomGitHubCapabilityPort;
   }> {
     signal.throwIfAborted();
+    if (state.intent.operation.kind === 'git_merge_pr') {
+      throw new Error('Exact merge requires its separately registered typed capability');
+    }
     if (state.intent.operation.kind === 'delivery_release') {
       throw new Error('Delivery release requires its separately registered typed capability');
     }
@@ -340,6 +343,9 @@ function assertLeaseJoin(lease: GitWorkspaceLease, state: WorkroomEffectState): 
   const operation = state.intent.operation;
   if (operation.kind === 'compensation') {
     throw new Error('Compensation is not a Git Workspace publication operation');
+  }
+  if (operation.kind === 'git_merge_pr') {
+    throw new Error('Exact merge is not a Git Workspace publication operation');
   }
   if (operation.kind === 'delivery_release') {
     throw new Error('Delivery release is not a Git Workspace publication operation');

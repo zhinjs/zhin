@@ -12,10 +12,7 @@ on:
         default: false
 
 permissions:
-  contents: write
-  packages: write
-  pull-requests: write
-  id-token: write
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,10 +20,18 @@ concurrency:
 
 env:
   CI: true
-  NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
 
 jobs:
   publish:
+    if: github.repository == 'zhinjs/zhin' && github.ref == 'refs/heads/main'
+    environment: npm-production
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    env:
+      NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
     timeout-minutes: 25
     runs-on: ubuntu-latest
     steps:

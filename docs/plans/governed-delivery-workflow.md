@@ -47,3 +47,7 @@ sidebar: false
 - patch changeset 已记录 `@zhin.js/agent` 行为变化和自定义 GitHub capability binding 迁移要求。
 
 本地验收完成；未推送、合并或执行真实外部发布。
+
+## 后续生产化
+
+以 `zhinjs/zhin` 为真实项目的下一阶段见[GitHub 自闭环生产化计划](./zhin-github-self-delivery.md)。

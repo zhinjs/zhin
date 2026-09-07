@@ -313,6 +313,11 @@ import {
   type WorkroomPayloadLifecycleIndexPort,
   type WorkroomDataLifecycleConsoleControlPort,
   type PortfolioSponsorProjection,
+  createSelfDeliveryProjectForHost,
+  createSelfDeliveryAssignmentExecutor,
+  workroomDeliveryProviderToken,
+  selfDeliveryProjectToken,
+  type SelfDeliveryHostConfiguration,
 } from '@zhin.js/agent/runtime';
 import type { LocalWorkroomDataGovernanceAuthority } from './local-workroom-data-governance.js';
 import {
@@ -801,6 +806,8 @@ export async function resolveAssistantConfigDocument(
 }
 
 export interface InstallAgentHostOptions {
+  /** Root-private self-delivery authentication/integration configuration. Never accepts model-supplied policy. */
+  readonly selfDelivery?: SelfDeliveryHostConfiguration;
   /** Process-owned execution authority attached to exactly one Root. */
   readonly runtime: AgentRuntime;
   /** Process-owned Snapshot reader; local Assignment operations hold an exact generation lease. */
@@ -1608,6 +1615,21 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       profiles: projectProfiles,
       runPins: profileComposition.runPins,
     });
+    if (options.selfDelivery) {
+      if (options.selfDelivery.deliveryProvider) {
+        if (resources.has(workroomDeliveryProviderToken)) throw new Error('Self-delivery Delivery provider conflicts with existing Host provider');
+        resources.provide(workroomDeliveryProviderToken, options.selfDelivery.deliveryProvider);
+      }
+      resources.provide(selfDeliveryProjectToken, createSelfDeliveryProjectForHost({
+        directory: join(workroomStateRoot, 'self-delivery-issues'),
+        configuration: options.selfDelivery,
+        kernel: workroomKernel,
+        catalog: workroomCatalog,
+        profiles: projectProfiles,
+        pins: profileRunPinWriter,
+        signal,
+      }));
+    }
     const acceptanceProfileSource = new PinnedProfileWorkroomAcceptanceProjectionSource({
       profiles: projectProfiles,
       catalog: workroomCatalog,
@@ -2892,9 +2914,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           }
         },
       });
+      const standardLocalExecutor = new LocalAssignmentExecutor(localModel, capabilityProjection);
       const localAssignments = new WorkroomLocalAssignmentRuntime({
         kernel: workroomKernel,
-        executor: new LocalAssignmentExecutor(localModel, capabilityProjection),
+        executor: options.selfDelivery
+          ? createSelfDeliveryAssignmentExecutor(options.selfDelivery, standardLocalExecutor)
+          : standardLocalExecutor,
         intervalMs: 1_000,
         onError: error => logger.error(formatCompact({
           op: 'workroom_local_assignment',

@@ -23,10 +23,13 @@ concurrency:
 
 jobs:
   production-install:
+    permissions:
+      contents: read
+      packages: read
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+      NPM_TOKEN: ''
     steps:
       - name: setup pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v4
@@ -35,6 +38,8 @@ jobs:
 
       - name: checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: setup node.js
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
@@ -42,12 +47,15 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: configure github packages auth
-        if: env.NPM_TOKEN != ''
-        run: echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc
-
+      # GitHub Packages must grant this repository Actions read access to @icqqjs.
+      # No maintainer PAT fallback and no credential materialization in .npmrc.
       - name: install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+        env:
+          NPM_TOKEN: ${{ github.token }}
+
+      - name: run dependency lifecycle scripts without registry credentials
+        run: pnpm rebuild
 
       - name: enforce production install budget
         run: pnpm --filter @zhin.js/runtime check:size

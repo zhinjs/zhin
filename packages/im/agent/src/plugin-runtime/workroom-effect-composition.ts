@@ -1,3 +1,4 @@
+import { WorkroomExactMergeGateway, workroomExactMergeInspectorToken } from './github-exact-merge-gateway.js';
 import { join } from 'node:path';
 import { createToken, type Scope } from '@zhin.js/plugin-runtime';
 import {
@@ -98,12 +99,16 @@ export function installWorkroomEffectResources(
       : undefined,
   });
   const gateway = new WorkroomPayloadEffectGatewayRouter({
-    fallback: new WorkroomDeliveryGatewayRouter(new WorkroomDeliveryGateway({
+    fallback: new WorkroomExactMergeGateway({
+      resolveInspector: () => options.resources.has(workroomExactMergeInspectorToken)
+        ? options.resources.use(workroomExactMergeInspectorToken) : undefined,
+      fallback: new WorkroomDeliveryGatewayRouter(new WorkroomDeliveryGateway({
       resolveProvider: () => options.resources.has(workroomDeliveryProviderToken)
         ? options.resources.use(workroomDeliveryProviderToken)
         : undefined,
       ...(options.now ? { now: options.now } : {}),
     }), gitGateway),
+    }),
     resolveProcessor: () => options.resources.has(workroomPayloadProcessorRecallProviderToken)
       ? options.resources.use(workroomPayloadProcessorRecallProviderToken)
       : undefined,

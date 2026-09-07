@@ -17,8 +17,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -26,14 +24,19 @@ concurrency:
 
 jobs:
   build:
+    if: github.repository == 'zhinjs/zhin' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     env:
-      NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+      NPM_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
       
       - name: Setup pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v4
@@ -48,10 +51,6 @@ jobs:
       
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0              
-      - name: configure github packages auth
-        if: env.NPM_TOKEN != ''
-        run: echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc
-
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
         env:
@@ -85,6 +84,10 @@ jobs:
           path: docs/.vitepress/dist
 
   deploy:
+    if: github.repository == 'zhinjs/zhin' && github.ref == 'refs/heads/main'
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.url }}

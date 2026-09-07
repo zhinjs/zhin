@@ -20,6 +20,8 @@
     "export{default}from './provider.js';"
   ],
   "agent/runtime": [
+    "export * from '../workroom/coding-assignment-executor.js';",
+    "export * from '../workroom/coding-git-objects.js';",
     "export * from '../workroom/github-workspace-transport.js';",
     "export * from '../workroom/software-delivery-plan.js';",
     "export * from '../workroom/workroom-assignment-knowledge-context.js';",
@@ -30,6 +32,8 @@
     "export * from './database-overlay-pack-promotion-repository.js';",
     "export * from './deferred-capability-plan.js';",
     "export * from './full-agent-turn-engine.js';",
+    "export * from './github-actions-delivery-provider.js';",
+    "export * from './github-exact-merge-gateway.js';",
     "export * from './github-workroom-capability.js';",
     "export * from './host-mcp-projection.js';",
     "export * from './host-tool-projection.js';",
@@ -38,6 +42,8 @@
     "export * from './native-semantic-memory-tools.js';",
     "export * from './native-todo-tools.js';",
     "export * from './native-web-tools.js';",
+    "export * from './self-delivery-project-composition.js';",
+    "export * from './self-delivery-project.js';",
     "export * from './turn-intent-resolver.js';",
     "export * from './workroom-acceptance-authority.js';",
     "export * from './workroom-acceptance-fact-providers.js';",

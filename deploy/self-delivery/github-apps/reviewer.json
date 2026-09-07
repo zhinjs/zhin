@@ -1,0 +1,17 @@
+{
+  "name": "Zhin self-delivery reviewer",
+  "url": "https://github.com/zhinjs/zhin",
+  "description": "Single-repository reviewer identity for governed Zhin delivery",
+  "public": false,
+  "hook_attributes": {
+    "active": false
+  },
+  "default_permissions": {
+    "contents": "read",
+    "pull_requests": "read",
+    "checks": "read",
+    "actions": "read",
+    "statuses": "read"
+  },
+  "default_events": []
+}

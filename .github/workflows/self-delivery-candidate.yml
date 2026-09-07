@@ -1,0 +1,112 @@
+name: Self Delivery Candidate
+run-name: "self-delivery:${{ inputs.mode }}:${{ inputs.mode == 'build' && inputs.candidate_sha || format('{0}:{1}:{2}', inputs.operation_key, inputs.candidate_sha, inputs.artifact_digest) }}"
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [build, smoke]
+        required: true
+      candidate_sha:
+        type: string
+        required: true
+      operation_key:
+        type: string
+        default: ''
+      artifact_id:
+        type: string
+        default: ''
+      artifact_digest:
+        type: string
+        default: ''
+# This workflow is dispatched ONLY via a protected immutable tag, pinned in the Repo Profile.
+# No publish credentials, environment, write token, cache save or production deployments.
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build:
+    if: inputs.mode == 'build'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          path: trusted
+          persist-credentials: false
+      - name: Validate candidate identifier
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: '[[ "$CANDIDATE_SHA" =~ ^[a-f0-9]{40}$ ]]'
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          path: candidate
+          persist-credentials: false
+      - name: Prepare isolated toolchain
+        run: docker build --tag self-delivery-toolchain --file trusted/scripts/self-delivery-container.Dockerfile trusted/scripts
+      - name: Build and pack inside credential-free container
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/artifacts"
+          docker run --rm --init --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges --pids-limit 512 --cpus 4 --memory 6g \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/candidate,dst=/candidate" \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/trusted,dst=/trusted,readonly" \
+            --mount "type=bind,src=$RUNNER_TEMP/artifacts,dst=/artifacts" \
+            --workdir /candidate --env CANDIDATE_SHA --env BUILD_RUN_ID="$GITHUB_RUN_ID" --env BUILD_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
+            self-delivery-toolchain sh -ec 'mkdir -p /tmp/home; pnpm --filter zhin --filter "zhin.js..." --filter "@zhin.js/agent..." --filter "@zhin.js/runtime..." --filter "@zhin.js/satori..." install --frozen-lockfile; pnpm exec turbo run build --filter=zhin.js... --filter=@zhin.js/agent... --filter=@zhin.js/runtime... --filter=@zhin.js/satori...; node /trusted/scripts/self-delivery-artifacts.mjs pack /candidate /artifacts'
+      - name: Validate artifact filesystem before trusted uploader reads it
+        run: node trusted/scripts/self-delivery-artifacts.mjs validate "$RUNNER_TEMP/artifacts"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-${{ inputs.candidate_sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/artifacts/
+          if-no-files-found: error
+          retention-days: 14
+  smoke:
+    if: inputs.mode == 'smoke'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          path: trusted
+          persist-credentials: false
+      - name: Prepare isolated toolchain
+        run: docker build --tag self-delivery-toolchain --file trusted/scripts/self-delivery-container.Dockerfile trusted/scripts
+      - name: Download exact approved artifact archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
+          ARTIFACT_DIGEST: ${{ inputs.artifact_digest }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          OPERATION_KEY: ${{ inputs.operation_key }}
+        run: |
+          [[ "$ARTIFACT_ID" =~ ^[0-9]+$ && "$ARTIFACT_DIGEST" =~ ^sha256:[a-f0-9]{64}$ && "$CANDIDATE_SHA" =~ ^[a-f0-9]{40}$ && "$OPERATION_KEY" =~ ^[a-zA-Z0-9]+$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/candidate.zip"
+          printf '%s  %s\n' "${ARTIFACT_DIGEST#sha256:}" "$RUNNER_TEMP/candidate.zip" | sha256sum --check --strict
+          mkdir "$RUNNER_TEMP/artifacts"
+          python3 - "$RUNNER_TEMP/candidate.zip" "$RUNNER_TEMP/artifacts" <<'PY'
+          import sys, zipfile, re
+          with zipfile.ZipFile(sys.argv[1]) as archive:
+              names = archive.namelist()
+              if len(names) != len(set(names)) or any(not re.fullmatch(r'(manifest\.json|[\w.-]+\.tgz)', name) for name in names):
+                  raise RuntimeError('Invalid archive members')
+              if sum(item.file_size for item in archive.infolist()) > 512 * 1024 * 1024:
+                  raise RuntimeError('Expanded artifact exceeds budget')
+              archive.extractall(sys.argv[2])
+          PY
+      - name: Install and run exact candidate packages in clean minimal-bot
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          ARTIFACT_DIGEST: ${{ inputs.artifact_digest }}
+        run: |
+          docker run --rm --init --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges --pids-limit 256 --cpus 2 --memory 3g \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/trusted,dst=/trusted,readonly" \
+            --mount "type=bind,src=$RUNNER_TEMP/artifacts,dst=/artifacts,readonly" \
+            --env CANDIDATE_SHA --env ARTIFACT_DIGEST \
+            self-delivery-toolchain sh -ec 'mkdir -p /tmp/home; node /trusted/scripts/self-delivery-artifacts.mjs smoke /artifacts /tmp/fixture' 
+      - name: Clean candidate installation
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/fixture" "$RUNNER_TEMP/artifacts" "$RUNNER_TEMP/candidate.zip"
