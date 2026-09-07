@@ -80,7 +80,7 @@ pnpm dev
 
 更多：[安装与启动](./docs/getting-started/index.md) · [示例速览](./docs/examples/index.md) · `npx zhin setup` · `npx zhin doctor`
 
-**要求**：Node.js `^20.19.0` 或 `>=22.12.0`（跑 Plugin Runtime 示例推荐 **≥22.6**），pnpm 9+
+**要求**：脚手架生成的 TypeScript 项目需要 Node.js **≥22.12.0**、pnpm 9+。编译后的 IM 库支持 Node.js `^20.19.0` 或 `>=22.12.0`。
 
 ## 从一条消息到长期任务
 

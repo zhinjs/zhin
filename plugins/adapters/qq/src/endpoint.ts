@@ -1,8 +1,8 @@
-import { Endpoint } from 'zhin.js/adapter';
 /**
  * QQ endpoints — lifecycle, outbound, admit, agent tool surface.
  */
 import {
+  Endpoint, createEndpointLifecycle, type EndpointLifecycle,
   createRecallEndpointControl,
   type EndpointControl,
   type EndpointChannel,
@@ -59,13 +59,15 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
   readonly #createBot: CreateQqBot;
   #bot: QqBotTransport | null = null;
   #open = false;
-  #started = false;
+  readonly #lifecycle: EndpointLifecycle;
+  #cleanup?: () => Promise<void>;
   readonly management: EndpointManagement = createQqEndpointManagement(() => this.#requireBot());
   readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
 
   constructor(options: QqEndpointOptions) {
     super();
     this.#logger = getAdapterLogger('qq', options.config.id);
+    this.#lifecycle = createEndpointLifecycle({ name: options.config.id, reconnect: false });
     this.#options = options;
     this.#createBot = options.createBot ?? defaultCreateBot;
   }
@@ -80,24 +82,46 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
   }
 
   async start(): Promise<void> {
-    if (this.#started) return;
-    this.#started = true;
-    try {
-      this.#bot = this.#createBot(this.#options.config);
-      this.#bindBot(this.#bot);
-      await this.#bot.start();
-      this.#logger.info(
-        `connected (websocket) | appid: ${this.#options.config.appid}`,
-      );
-    } catch (error) {
-      await this.stop();
-      this.#logger.error('Failed to connect QQ websocket:', error);
-      const raw = error instanceof Error ? error.message : String(error);
-      throw new Error(
-        `QQ WebSocket 连接失败：请检查 appid/secret 是否配对、网关地址（gatewayUrl/accessTokenUrl）是否可达（原始错误：${raw}）`,
-        { cause: error },
-      );
-    }
+    await this.#lifecycle.start(async (handle) => {
+      const bot = this.#createBot(this.#options.config);
+      this.#bot = bot;
+      let cancelled = false;
+      let stopping: Promise<void> | undefined;
+      const stopBot = async () => {
+        try { bot.removeAllListeners(); } catch { /* continue SDK cleanup */ }
+        try { await bot.stop(); } catch { /* best-effort SDK cleanup */ }
+      };
+      const cleanup = () => {
+        cancelled = true;
+        if (this.#bot === bot) this.#bot = null;
+        return stopping ??= stopBot();
+      };
+      this.#cleanup = cleanup;
+      handle.onForceClose(() => { void cleanup(); });
+      try {
+        this.#bindBot(bot);
+        await bot.start();
+        if (cancelled) {
+          // SDK startup may create resources after stop; close this exact old client again.
+          await stopping;
+          await stopBot();
+          return;
+        }
+        this.#logger.info(`connected (websocket) | appid: ${this.#options.config.appid}`);
+      } catch (error) {
+        const wasCancelled = cancelled;
+        await cleanup();
+        if (wasCancelled) {
+          await stopBot();
+          return;
+        }
+        const raw = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `QQ WebSocket 连接失败：请检查 appid/secret 是否配对、网关地址（gatewayUrl/accessTokenUrl）是否可达（原始错误：${raw}）`,
+          { cause: error },
+        );
+      }
+    });
   }
 
   open(): void {
@@ -110,16 +134,10 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
 
   async stop(): Promise<void> {
     this.#open = false;
-    if (this.#bot) {
-      try {
-        this.#bot.removeAllListeners();
-        await this.#bot.stop();
-      } catch {
-        /* ignore */
-      }
-      this.#bot = null;
-    }
-    this.#started = false;
+    const cleanup = this.#cleanup;
+    this.#cleanup = undefined;
+    await this.#lifecycle.stop();
+    await cleanup?.();
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
@@ -217,11 +235,13 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
 
   #bindBot(bot: QqBotTransport): void {
     bindQqBotInboundEvents(bot, (raw) => {
+      if (this.#bot !== bot) return;
       this.#emitPlatformEvent('message', raw);
       const msg = normalizeQqMessage(raw);
       if (msg) this.admit(msg);
     });
     bindQqBotSideEvents(bot, (eventName, raw) => {
+      if (this.#bot !== bot) return;
       this.#emitPlatformEvent(eventName, raw);
       receiveQqSideEvent(
         (name, payload) => this.emit(name, payload),
@@ -264,15 +284,16 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
   readonly #options: QqHttpEndpointOptions;
   readonly #createBot: CreateQqHttpBot;
   #bot: QqHttpBotTransport | null = null;
-  #routeReleases: ReturnType<typeof registerQqWebhookRoutes> = [];
   #open = false;
-  #started = false;
+  readonly #lifecycle: EndpointLifecycle;
+  #cleanup?: () => Promise<void>;
   readonly management: EndpointManagement = createQqEndpointManagement(() => this.#requireBot());
   readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
 
   constructor(options: QqHttpEndpointOptions) {
     super();
     this.#logger = getAdapterLogger('qq', options.config.id);
+    this.#lifecycle = createEndpointLifecycle({ name: options.config.id, reconnect: false });
     this.#options = options;
     this.#createBot = options.createBot ?? defaultCreateHttpBot;
   }
@@ -287,21 +308,48 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
   }
 
   async start(): Promise<void> {
-    if (this.#started) return;
-    this.#started = true;
-    try {
-      this.#setupRoutes();
-      this.#bot = this.#createBot(this.#options.config);
-      this.#bindBot(this.#bot);
-      await this.#bot.start();
-      this.#logger.info(
-        `connected (${this.#options.config.mode}) | path: ${this.#options.config.webhookPath}`,
-      );
-    } catch (error) {
-      await this.stop();
-      this.#logger.error('Failed to connect QQ HTTP receiver:', error);
-      throw error;
-    }
+    await this.#lifecycle.start(async (handle) => {
+      const bot = this.#createBot(this.#options.config);
+      this.#bot = bot;
+      let cancelled = false;
+      let stopping: Promise<void> | undefined;
+      const routes: Array<() => void> = [];
+      const stopBot = async () => {
+        try { bot.removeAllListeners(); } catch { /* continue SDK cleanup */ }
+        try { await bot.stop(); } catch { /* best-effort SDK cleanup */ }
+      };
+      const cleanup = () => {
+        cancelled = true;
+        if (this.#bot === bot) this.#bot = null;
+        for (const release of routes.splice(0)) release();
+        return stopping ??= stopBot();
+      };
+      this.#cleanup = cleanup;
+      handle.onForceClose(() => { void cleanup(); });
+      try {
+        this.#bindBot(bot);
+        routes.push(...registerQqWebhookRoutes(this.#options.http, {
+          config: this.#options.config,
+          getBot: () => cancelled ? null : bot,
+        }));
+        await bot.start();
+        if (cancelled) {
+          // SDK startup may create resources after stop; close this exact old client again.
+          await stopping;
+          await stopBot();
+          return;
+        }
+        this.#logger.info(`connected (${this.#options.config.mode}) | path: ${this.#options.config.webhookPath}`);
+      } catch (error) {
+        const wasCancelled = cancelled;
+        await cleanup();
+        if (wasCancelled) {
+          await stopBot();
+          return;
+        }
+        throw error;
+      }
+    });
   }
 
   open(): void {
@@ -314,17 +362,10 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
 
   async stop(): Promise<void> {
     this.#open = false;
-    for (const release of this.#routeReleases.splice(0)) release();
-    if (this.#bot) {
-      try {
-        this.#bot.removeAllListeners();
-        await this.#bot.stop();
-      } catch {
-        /* ignore */
-      }
-      this.#bot = null;
-    }
-    this.#started = false;
+    const cleanup = this.#cleanup;
+    this.#cleanup = undefined;
+    await this.#lifecycle.stop();
+    await cleanup?.();
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
@@ -419,20 +460,15 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
     });
   }
 
-  #setupRoutes(): void {
-    this.#routeReleases.push(...registerQqWebhookRoutes(this.#options.http, {
-      config: this.#options.config,
-      getBot: () => this.#bot,
-    }));
-  }
-
   #bindBot(bot: QqBotTransport): void {
     bindQqBotInboundEvents(bot, (raw) => {
+      if (this.#bot !== bot) return;
       this.#emitPlatformEvent('message', raw);
       const msg = normalizeQqMessage(raw);
       if (msg) this.admit(msg);
     });
     bindQqBotSideEvents(bot, (eventName, raw) => {
+      if (this.#bot !== bot) return;
       this.#emitPlatformEvent(eventName, raw);
       receiveQqSideEvent(
         (name, payload) => this.emit(name, payload),

@@ -4,7 +4,7 @@
 
 ## 开始前
 
-- Node.js `^20.19.0` 或 `>=22.12.0`；直接运行 TypeScript 项目推荐 `>=22.18`。
+- 本页脚手架生成的 TypeScript 项目需要 Node.js `>=22.12.0`；推荐 `>=22.18`。编译后的 IM 库仍支持 `^20.19.0 || >=22.12.0`。
 - pnpm 9 或更高版本。
 - 能访问 [Remote Console](https://console.zhin.dev)。
 

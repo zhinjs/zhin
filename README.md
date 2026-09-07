@@ -80,7 +80,7 @@ Open [Remote Console](https://console.zhin.dev) → Host `http://127.0.0.1:8086`
 
 More: [Getting started](./docs/getting-started/index.md) · [Examples](./docs/examples/index.md) · `npx zhin setup` · `npx zhin doctor`
 
-**Requirements**: Node.js `^20.19.0` or `>=22.12.0` (Plugin Runtime examples: **≥22.6**), pnpm 9+
+**Requirements**: scaffolded TypeScript projects require Node.js **≥22.12.0**, pnpm 9+. The compiled IM library supports Node.js `^20.19.0` or `>=22.12.0`.
 
 ## From a message to durable work
 

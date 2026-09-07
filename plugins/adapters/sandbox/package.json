@@ -78,7 +78,6 @@
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:*",
-    "@zhin.js/client": "workspace:*",
     "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
@@ -88,9 +87,6 @@
   },
   "peerDependenciesMeta": {
     "react": {
-      "optional": true
-    },
-    "@zhin.js/client": {
       "optional": true
     }
   },

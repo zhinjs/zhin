@@ -39,7 +39,7 @@ import { installScheduleHost, createScheduleHost } from './schedule-host-install
 import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './speech-host-installer.js';
 import { installProtocolHosts } from './protocol-host-installer.js';
 import { RootHost } from './root-host.js';
-import { createLocalWorkroomDataGovernanceAuthority } from './local-workroom-data-governance.js';
+import { registerReadinessRoutes, type ReadinessSource } from './readiness.js';
 import {
   createPluginLifecycleStore,
   readPluginLifecycleState,
@@ -266,8 +266,13 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   im.attach(host.runtime.snapshots);
   agentHost?.attach(host.runtime.snapshots);
   consoleHost.console.attach(host.runtime.snapshots);
+  const disposeReadiness = registerReadinessRoutes(httpHost, {
+    snapshots: host.runtime.snapshots,
+    agentBindings: agentHost?.bindings,
+  }, httpConfig.apiBase);
   control.stop = async () => {
     try {
+      disposeReadiness();
       // Process ingress owns WebSocket operation leases. Close it before Root
       // drain so long-lived connections release those leases instead of
       // deadlocking SnapshotStore.close().
@@ -355,6 +360,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
 }
 
 interface ConfiguredAgentHost {
+  readonly bindings: NonNullable<ReadinessSource['agentBindings']>;
   attach(snapshots: import('@zhin.js/plugin-runtime').SnapshotReader): void;
   install(options: {
     readonly im: ImRuntime;
@@ -373,6 +379,8 @@ async function loadConfiguredAgentHost(
   const document = isConfigDocumentPort(config) ? (await config.read()).document : config;
   if (!hasAgentConfiguration(document)) return undefined;
   const module = await import('./agent-host-installer.js');
+  const { createLocalWorkroomDataGovernanceAuthority } = await import('./local-workroom-data-governance.js');
+  const { agentHostToken } = await import('@zhin.js/agent/runtime');
   const initialAi = await module.resolveAiConfig(document);
   const workroomStorageMode = module.resolveWorkroomStorageMode(initialAi);
   const runtime = new module.AgentRuntime({ coordinator: new module.AgentTurnCoordinator() });
@@ -381,6 +389,11 @@ async function loadConfiguredAgentHost(
     typeof createLocalWorkroomDataGovernanceAuthority
   > | undefined;
   const configured: ConfiguredAgentHost = {
+    bindings: (snapshot) => {
+      const port = snapshot.resources.get(snapshot.root)?.get(agentHostToken.id) as
+        import('@zhin.js/agent/runtime').AgentHostPort | undefined;
+      return port?.protocol.listBindings() ?? [];
+    },
     attach: (snapshots) => {
       snapshotReader = snapshots;
       runtime.attach(snapshots);

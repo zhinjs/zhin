@@ -185,6 +185,24 @@ describe('hierarchical Plugin config', () => {
     );
   });
 
+  it('validates readiness selectors and rejects misspelled or ambiguous policy fields', async () => {
+    const root = await configProject({ rootSchema: {}, childSchema: {} });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const composer = new ConfigComposer();
+    const valid = { endpoints: [{ owner: 'root/sandbox', name: 'sandbox~bot' }], agents: ['zhin'] };
+    const config = await composer.compose(graph, { http: { readiness: valid } });
+    expect(config.document.http).toEqual({ readiness: { ...valid, database: true } });
+    for (const readiness of [
+      { endpoint: [] }, { database: 'yes' }, { agents: ['zhin', 'zhin'] },
+      { endpoints: [{ owner: 'sandbox', name: 'bot' }] },
+      { endpoints: [{ owner: 'root/sandbox' }] },
+      { endpoints: [{ owner: 'root/sandbox', name: 'slot\0injection' }] },
+    ]) {
+      await expect(composer.compose(graph, { http: { readiness } })).rejects.toBeInstanceOf(ConfigValidationError);
+    }
+  });
+
   it('returns structured validation issues', async () => {
     const root = await configProject({
       rootSchema: {

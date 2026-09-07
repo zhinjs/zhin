@@ -36,9 +36,10 @@ export async function sendSlackContent(
 
   for (const pf of wire.files) {
     try {
-      await uploadFile(client, opts.channel, pf, opts.threadTs, logger);
+      await uploadFile(client, opts.channel, pf, opts.threadTs);
     } catch (e) {
       logger.error('Failed to upload file:', e);
+      throw e;
     }
   }
 
@@ -113,7 +114,7 @@ async function postSlackMessage(
       ...(threadTs ? { thread_ts: threadTs } : {}),
       ...(attachments.length > 0 ? { attachments } : {}),
     });
-    return { ts: result.ts ?? '' };
+    return { ts: requireMessageTimestamp(result) };
   }
 
   for (let offset = 0; offset < blocks.length; offset += SLACK_MAX_BLOCKS_PER_MESSAGE) {
@@ -125,7 +126,7 @@ async function postSlackMessage(
       ...(threadTs ? { thread_ts: threadTs } : {}),
       ...(offset === 0 && attachments.length > 0 ? { attachments } : {}),
     });
-    const ts = result.ts ?? '';
+    const ts = requireMessageTimestamp(result);
     if (!firstTs) firstTs = ts;
     if (!threadTs) threadTs = ts;
   }
@@ -133,35 +134,37 @@ async function postSlackMessage(
   return { ts: firstTs };
 }
 
+function requireMessageTimestamp(result: { ts?: string } | null | undefined): string {
+  if (typeof result?.ts !== 'string' || !result.ts.trim()) {
+    throw new Error('Slack chat.postMessage returned no valid ts; delivery is unconfirmed');
+  }
+  return result.ts;
+}
+
 async function uploadFile(
   client: SlackChatClient,
   channel: string,
   file: { buffer?: Buffer; url?: string; path?: string; name?: string },
   threadTs?: string,
-  logger?: Logger,
 ): Promise<void> {
-  if (!client.filesUploadV2) return;
-  try {
-    let buffer = file.buffer;
-    if (!buffer && file.path) {
-      const { readFile } = await import('node:fs/promises');
-      buffer = await readFile(file.path);
-    }
-    if (!buffer && file.url) {
-      const res = await fetch(file.url);
-      if (!res.ok) throw new Error(`fetch ${file.url}: ${res.status}`);
-      buffer = Buffer.from(await res.arrayBuffer());
-    }
-    if (!buffer) return;
-
-    await client.filesUploadV2(
-      threadTs
-        ? { channel_id: channel, file: buffer, filename: file.name ?? 'file', thread_ts: threadTs }
-        : { channel_id: channel, file: buffer, filename: file.name ?? 'file' },
-    );
-  } catch (e) {
-    logger?.error('File upload failed:', e);
+  if (!client.filesUploadV2) throw new Error('Slack client does not support file uploads');
+  let buffer = file.buffer;
+  if (!buffer && file.path) {
+    const { readFile } = await import('node:fs/promises');
+    buffer = await readFile(file.path);
   }
+  if (!buffer && file.url) {
+    const res = await fetch(file.url);
+    if (!res.ok) throw new Error(`fetch ${file.url}: ${res.status}`);
+    buffer = Buffer.from(await res.arrayBuffer());
+  }
+  if (!buffer) throw new Error('Slack file contains no uploadable content');
+
+  await client.filesUploadV2(
+    threadTs
+      ? { channel_id: channel, file: buffer, filename: file.name ?? 'file', thread_ts: threadTs }
+      : { channel_id: channel, file: buffer, filename: file.name ?? 'file' },
+  );
 }
 
 export { keyboardToBlockKitBlocks };

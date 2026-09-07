@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=4cc22093f9d2b71f -->
+<!-- sync-adapter-docs:sha256=a748d3c6ac405b79 -->
 
 # @zhin.js/adapter-slack
 
@@ -150,3 +150,9 @@ HTTP 模式下 Runtime Host（`http`）须已 listen；Slack App 的 Event Subsc
 ## 许可证
 
 MIT
+
+## 发送失败与回执
+
+成功发送返回平台 `ts` 组成的消息引用，不以本地时间替代缺失回执。
+文件上传失败会让本次发送失败；分段消息中某段缺少有效回执时，停止后续分段。
+前面已成功的文件或分段不会自动回滚；发送失败可能表示部分已送达，请先核对目标会话再重试。

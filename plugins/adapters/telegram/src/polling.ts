@@ -36,6 +36,8 @@ export async function runTelegramPollLoop(
       }, abortSignal);
       consecutiveFailures = 0;
       for (const update of updates) {
+        // A transport may resolve after cancellation; never admit that late batch.
+        if (abortSignal.aborted) return;
         host.setUpdateOffset(update.update_id + 1);
         host.handleUpdate(update);
       }
@@ -63,10 +65,12 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
       resolve();
       return;
     }
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener('abort', () => {
+    const finish = () => {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', finish);
       resolve();
-    }, { once: true });
+    };
+    const timer = setTimeout(finish, ms);
+    signal?.addEventListener('abort', finish, { once: true });
   });
 }

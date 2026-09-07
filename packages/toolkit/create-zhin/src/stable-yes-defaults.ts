@@ -21,7 +21,7 @@ export function applyStableYesDefaults(options: InitOptions): void {
       // 无前缀文本落入 unmatched（AI 对话）路径。
       config: {
         commandPrefix: '/',
-        endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }],
+        endpoints: [{ context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' }],
       },
     }],
     envVars: {},

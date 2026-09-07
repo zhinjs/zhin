@@ -2,7 +2,7 @@
  * 平台适配器档位 SSOT（单一来源）。
  * 由 sync-adapter-docs / check-platform-tiers-ssot / 文档生成共享。
  *
- * 升档至 Platform Stable 须满足 ADR 0015 D3，并加入 run-stable-smoke 的 platform 批。
+ * 升档证据见 docs/contributing/platform-acceptance.md；候选与 Platform Stable 自动进入 Stable smoke。
  * 当前诚实状态：仅 Sandbox 为 Stable；无 Platform Stable；其余 Advanced / Experimental。
  */
 
@@ -11,7 +11,7 @@
 /**
  * `management` is the published EndpointManagement promise used by generated
  * docs; runtime capabilities are still derived from live methods.
- * @type {Record<string, { tier: AdapterTier, label: string, packageName: string, management?: string[] }>}
+ * @type {Record<string, { tier: AdapterTier, label: string, packageName: string, stabilityCandidate?: boolean, management?: string[] }>}
  */
 export const ADAPTER_META = {
   sandbox: { tier: 'Stable', label: 'Sandbox', packageName: '@zhin.js/adapter-sandbox' },
@@ -28,6 +28,7 @@ export const ADAPTER_META = {
   },
   qq: {
     tier: 'Advanced',
+    stabilityCandidate: true,
     label: 'QQ 官方',
     packageName: '@zhin.js/adapter-qq',
     management: ['listChannels'],
@@ -38,7 +39,7 @@ export const ADAPTER_META = {
   milky: { tier: 'Experimental', label: 'Milky', packageName: '@zhin.js/adapter-milky' },
   kook: { tier: 'Advanced', label: 'KOOK', packageName: '@zhin.js/adapter-kook' },
   discord: { tier: 'Advanced', label: 'Discord', packageName: '@zhin.js/adapter-discord' },
-  telegram: { tier: 'Advanced', label: 'Telegram', packageName: '@zhin.js/adapter-telegram' },
+  telegram: { tier: 'Advanced', stabilityCandidate: true, label: 'Telegram', packageName: '@zhin.js/adapter-telegram' },
   slack: { tier: 'Advanced', label: 'Slack', packageName: '@zhin.js/adapter-slack' },
   dingtalk: { tier: 'Advanced', label: '钉钉', packageName: '@zhin.js/adapter-dingtalk' },
   lark: { tier: 'Advanced', label: '飞书', packageName: '@zhin.js/adapter-lark' },
@@ -65,12 +66,9 @@ export function tierDisplayName(tier) {
   return tier;
 }
 
-/** sync-adapter-docs frontmatter 仅三档 Stable|Advanced|Experimental。
- * 产品 SSOT 的 PlatformStable 在 ADAPTER_META；frontmatter 映射为 Advanced，避免误标为 Stable。
- */
+/** Keep a promoted platform's page tier consistent with its index and SSOT. */
 export function tierForFrontmatter(tier) {
-  if (tier === 'PlatformStable') return 'Advanced';
-  return tier;
+  return tierDisplayName(tier);
 }
 
 /**
@@ -82,4 +80,12 @@ export function slugsForTier(tier) {
     .filter(([, m]) => m.tier === tier)
     .sort((a, b) => a[1].label.localeCompare(b[1].label, 'zh'))
     .map(([slug]) => slug);
+}
+
+/** Candidates accumulate Stable CI history before their public tier is promoted. */
+export function platformSmokeSuites(meta = ADAPTER_META) {
+  return Object.entries(meta)
+    .filter(([, entry]) => entry.stabilityCandidate || entry.tier === 'PlatformStable')
+    .map(([slug]) => `plugins/adapters/${slug}/tests`)
+    .sort();
 }

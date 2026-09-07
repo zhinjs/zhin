@@ -111,6 +111,7 @@ npm create zhin-app my-bot --yes
 |------|------|--------|
 | `[project-name]` | 项目名称（可选，会提示输入） | `my-zhin-bot` |
 | `-y, --yes` | 跳过交互，使用默认配置 | `false` |
+| `--skip-install` | 仅生成文件，稍后自行运行 `pnpm install` | `false` |
 
 **默认配置（使用 `-y` 时，见 `src/stable-yes-defaults.ts`，由 `tests/stable-yes.test.ts` 断言）：**
 - 配置格式: YAML (`zhin.config.yml`)
@@ -369,7 +370,7 @@ pnpm stop
 
 3. **Node.js 版本问题**
    ```bash
-   # 检查 Node.js 版本（需要 ^20.19.0 或 >=22.12.0）
+   # 检查 Node.js 版本（生成的 TypeScript 项目需要 >=22.12.0）
    node --version
    
    # 升级 Node.js
@@ -378,7 +379,7 @@ pnpm stop
 
 ## 环境要求
 
-- **Node.js**: ^20.19.0 或 >=22.12.0
+- **Node.js**: >=22.12.0（创建目录前会检查）
 - **npm**: >= 8.0.0 (或对应版本的 yarn/pnpm)
 - **操作系统**: Windows 10+, macOS 10.15+, Linux (现代发行版)
 

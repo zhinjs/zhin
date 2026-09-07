@@ -65,7 +65,7 @@ spec:
                 - ALL
           readinessProbe:
             httpGet:
-              path: /pub/health
+              path: /pub/ready
               port: http
             initialDelaySeconds: 10
             periodSeconds: 10

@@ -20,9 +20,12 @@ import {
 import { createWorkspace } from './workspace.js';
 import { ensurePnpmInstalled, installDependencies, runPostInstallDoctor } from './install.js';
 import { applyStableYesDefaults } from './stable-yes-defaults.js';
+import { assertCreateNodeVersion } from './node-requirement.js';
 
 async function main() {
+  assertCreateNodeVersion();
   const args = process.argv.slice(2);
+  const skipInstall = args.includes('--skip-install');
   
   const options: InitOptions = {
     yes: args.includes('-y') || args.includes('--yes')
@@ -37,7 +40,7 @@ async function main() {
   }
   
   // 检测并安装 pnpm
-  await ensurePnpmInstalled();
+  if (!skipInstall) await ensurePnpmInstalled();
   
   try {
     let name = projectNameArg;
@@ -230,12 +233,14 @@ async function main() {
     console.log(chalk.green(`✓ 项目结构创建成功！`));
     console.log('');
     
-    console.log(chalk.blue('📦 正在安装依赖...'));
-    await installDependencies(projectPath);
-    
-    console.log('');
-    // 安装后自检：复用项目内 CLI 的 zhin doctor（Node/pnpm/端口/Console 条件），失败不阻断
-    await runPostInstallDoctor(projectPath);
+    if (!skipInstall) {
+      console.log(chalk.blue('📦 正在安装依赖...'));
+      await installDependencies(projectPath);
+      console.log('');
+      await runPostInstallDoctor(projectPath);
+    } else {
+      console.log('已跳过安装；进入项目后运行 pnpm install，再运行 pnpm dev。');
+    }
     
     console.log('');
     console.log(chalk.green('🎉 项目初始化完成！'));
@@ -404,4 +409,7 @@ async function main() {
   }
 }
 
-main();
+main().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+});

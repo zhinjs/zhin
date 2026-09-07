@@ -17,6 +17,12 @@ outline: [2, 3]
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `http` | object | 否 | — | HTTP、Console、REST/RPC/SSE 与 Webhook Host。 |
+| `http.readiness` | object | 否 | — | /pub/ready 要求就绪的运行时组件；不执行外部网络探测。 |
+| `http.readiness.database` | boolean | 否 | `true` | 要求 Database Host 已初始化（不执行实时数据库查询）。 |
+| `http.readiness.endpoints` | array&lt;object&gt; | 否 | — | 必须开放入站的 Endpoint，按插件 owner 与稳定槽名精确选择。 |
+| `http.readiness.endpoints[].owner` | string | 是 | — | — |
+| `http.readiness.endpoints[].name` | string | 是 | — | — |
+| `http.readiness.agents` | array&lt;string&gt; | 否 | — | 必须存在的 Agent binding；不验证模型凭据或 Provider 网络可用性。 |
 | `database` | object | 否 | — | Database Host 与方言连接参数。 |
 | `ai` | object | 否 | — | Provider、Agent、会话、记忆、工具与执行安全策略。 |
 | `ai.workroom` | object | 否 | — | 进程持有的 Workroom 控制面策略；Project 仍由持久化 Catalog 管理。 |

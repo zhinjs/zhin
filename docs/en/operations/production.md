@@ -8,7 +8,8 @@ Use this for a single Bot, a team Workroom, or Remote Console. The goal is expli
 
 ## 1. Release baseline
 
-- Use Node `^20.19.0 || >=22.12.0` and commit the lockfile.
+- Use Node `>=22.12.0` for scaffolded TypeScript projects and commit the lockfile.
+- The compiled IM library still supports `^20.19.0 || >=22.12.0`; its minimum version is not the minimum for a source TypeScript project.
 - Run `zhin doctor`, `pnpm build`, and project tests.
 - Run `zhin runtime start --once --mode test` to prove assembly without a long-lived supervisor.
 - Record the commit, lockfile hash, configuration version, and data restore point.
@@ -31,7 +32,33 @@ flowchart LR
 
 The proxy must preserve Authorization, raw Webhook bodies, SSE streaming, and WebSocket Upgrade. Never cache `/api/events` or rewrite a body that a platform signature covers.
 
-`GET /pub/health` is the public probe. It proves the HTTP process responds, not that every Endpoint, Database, or Agent provider is ready. Use Dashboard and Runtime Capabilities for full readiness.
+`GET /pub/health` reports process liveness. `GET /pub/ready` reports runtime readiness, returning 503 before the first committed generation and 200 when required components are ready. The public response contains only `ready`.
+
+By default a committed generation and initialized Database Host are required. Configure additional requirements explicitly:
+
+```yaml
+http:
+  readiness:
+    database: true
+    endpoints:
+      - owner: root/sandbox
+        name: sandbox~sandbox-bot
+    # Optional AI requirement; omit for IM-only projects:
+    # agents: [zhin]
+```
+
+`owner` is the exact plugin instance path. `name` is the stable last part of the capability ID: `adapter-slot~endpoints[].id` for expanded accounts, otherwise the adapter slot. Display names are not selectors. Unlisted endpoints are optional; missing or disabled required instances fail readiness.
+
+`GET /api/system/readiness` returns generation, check time, component reasons and remediation, protected by full-scope Host authentication. It respects custom `http.base`. The CLI consumes that same report:
+
+```bash
+# Inject the full-scope Host token through ZHIN_HTTP_TOKEN.
+zhin doctor --live http://127.0.0.1:8068 --json
+# For http.base=/control:
+zhin doctor --live http://127.0.0.1:8068/control --json
+```
+
+Exit status is 0 when ready and 1 for non-readiness, authentication or request failures. These checks make no external network calls: database `initialized` is not a live SQL test, endpoint `admission_open` is not transport connectivity, and agent `binding_configured` is not provider credential validation. Real platform delivery still requires separate acceptance evidence. Upgrade the CLI to a version exposing `/pub/ready` before using the updated Kubernetes readiness probe.
 
 Set a full token in production. Use a separate demo token for read-only observation. Platform Webhooks keep their own signing secrets; a Console token cannot replace them.
 

@@ -27,6 +27,7 @@ import { logger } from '../utils/logger.js';
 import { formatNodeRequirementMessage, isNodeVersionSupported } from '../utils/node-requirements.js';
 import { findConfigFile, readConfig } from '../utils/config-file.js';
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../utils/adapter-endpoints-check.js';
+import { fetchReadiness } from '../plugin-runtime/readiness-client.js';
 
 const execAsync = promisify(exec);
 const CONSOLE_URL = 'https://console.zhin.dev';
@@ -45,7 +46,30 @@ export const doctorCommand = new Command('doctor')
   .description('检查系统环境和项目配置')
   .option('--fix', '自动修复可修复的问题')
   .option('--upgrade-l4', '诊断 minimal→L4 升级路径（AI 栈 + optional peer）')
+  .option('--live <host-url>', '检查运行中的 Host；自定义 API base 可包含在 URL 路径中')
+  .option('--json', '以 JSON 输出 --live 就绪报告')
   .action(async (options) => {
+    if (options.live) {
+      try {
+        const report = await fetchReadiness(options.live);
+        if (options.json) console.log(JSON.stringify(report, null, 2));
+        else {
+          console.log(report.ready ? '✓ Runtime ready' : '✗ Runtime not ready');
+          for (const check of report.checks) {
+            console.log(`${check.ready ? '✓' : '✗'} ${check.component}: ${check.reason}`);
+            if (check.remediation) console.log(`  ${check.remediation}`);
+          }
+        }
+        process.exitCode = report.ready ? 0 : 1;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Readiness request failed';
+        if (options.json) console.log(JSON.stringify({ ready: false, error: message }));
+        else console.error(message);
+        process.exitCode = 1;
+      }
+      return;
+    }
+    if (options.json) throw new Error('--json requires --live <host-url>');
     console.log(chalk.blue('🏥 Zhin.js 健康检查'));
     console.log('');
 

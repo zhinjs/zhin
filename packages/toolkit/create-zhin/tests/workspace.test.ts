@@ -93,7 +93,7 @@ describe('createWorkspace', () => {
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-api')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-router')
     expect(pkg.devDependencies['@zhin.js/cli']).toBe('latest')
-    expect(pkg.engines.node).toBe('>=22.6.0')
+    expect(pkg.engines.node).toBe('>=22.12.0')
 
     // zhin 清单：Stable Features 随 zhin.js 默认挂载；Console Feature 显式声明
     expect(pkg.zhin.protocol).toBe(1)

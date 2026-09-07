@@ -99,6 +99,10 @@ jobs:
         env:
           ZHIN_CONSOLE_DIR: .tmp/console
 
+      - name: verify clean generated project against candidate packages
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
+        run: pnpm check:created-project
+
       # type-check / lint 在 check:all；unit tests 由下方 coverage 覆盖（HARNESS_SKIP_TEST 避免双跑）
       - name: harness checks (incl. type-check, lint)
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24

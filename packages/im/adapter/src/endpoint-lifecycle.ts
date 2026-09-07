@@ -99,7 +99,7 @@ export interface EndpointConnectHandle {
    * 初始连接失败由 start() 的拒绝路径复位，不武装重连。
    */
   notifyClosed(reason?: unknown): void;
-  /** 注册当前连接的强制关闭函数（心跳看门狗与 stop 使用）；每次 connect 覆盖。 */
+  /** 注册当前连接的强制关闭函数；同代已 stop 时立即关闭，旧代句柄忽略。 */
   onForceClose(close: () => void): void;
 }
 
@@ -197,16 +197,17 @@ class EndpointLifecycleImpl implements EndpointLifecycle {
     this.#connect = connect;
     this.#state = 'connecting';
     this.#attempt = 0;
+    const generation = this.#generation + 1;
     try {
       await this.#runConnect(connect);
     } catch (err) {
       // 注意：stop() 可能在 await 期间并发改写 #state，必须经 getter 读取避免 TS 窄化误判
-      if (this.#currentState() === 'stopped') return; // stop-during-connect 竞态：静默 settle
+      if (generation !== this.#generation || this.#currentState() === 'stopped') return;
       // start 失败复位：回 idle、不武装重连，允许调用方重试
       this.#state = 'idle';
       throw err;
     }
-    if (this.#currentState() === 'stopped') return; // stop 竞态先于 open
+    if (generation !== this.#generation || this.#currentState() === 'stopped') return;
     this.#state = 'open';
   }
 
@@ -310,7 +311,16 @@ class EndpointLifecycleImpl implements EndpointLifecycle {
         this.#scheduleReconnect();
       },
       onForceClose: (close) => {
-        if (generation === this.#generation) this.#forceClose = close;
+        if (generation !== this.#generation) return;
+        if (this.#state === 'stopped') {
+          try {
+            close();
+          } catch {
+            /* same best-effort cleanup as stop() */
+          }
+          return;
+        }
+        this.#forceClose = close;
       },
     };
   }
@@ -321,7 +331,10 @@ class EndpointLifecycleImpl implements EndpointLifecycle {
     this.#forceClose = undefined;
     const handle = this.#createHandle(generation);
     // Promise.resolve().then 兜底同步抛错；额外 catch 防止 stop 竞态后迟到拒绝变 unhandled
-    const connecting = Promise.resolve().then(() => connect(handle));
+    const connecting = Promise.resolve().then(() => {
+      if (generation !== this.#generation || this.#state === 'stopped') return;
+      return connect(handle);
+    });
     connecting.catch(() => { /* settled via race; late rejection ignored */ });
     let wake!: () => void;
     const stopped = new Promise<void>((resolve) => {
@@ -375,10 +388,11 @@ class EndpointLifecycleImpl implements EndpointLifecycle {
       }));
       const elapsed = await this.#sleep(delay);
       if (!elapsed || this.#currentState() !== 'reconnecting') return;
+      const generation = this.#generation + 1;
       try {
         await this.#runConnect(connect);
       } catch (err) {
-        if (this.#currentState() === 'stopped') return;
+        if (generation !== this.#generation || this.#currentState() === 'stopped') return;
         this.#attempt += 1;
         logger.debug(formatCompact({
           op: 'reconnect',
@@ -389,7 +403,7 @@ class EndpointLifecycleImpl implements EndpointLifecycle {
         }));
         continue;
       }
-      if (this.#currentState() === 'stopped') return;
+      if (generation !== this.#generation || this.#currentState() === 'stopped') return;
       this.#state = 'open';
       this.#attempt = 0;
       logger.info(formatCompact({ op: 'reconnect', endpoint: this.#name, ok: true }));

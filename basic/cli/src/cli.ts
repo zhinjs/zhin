@@ -18,7 +18,6 @@ import { migrateCommand } from './commands/migrate.js';
 import { sendCommand } from './commands/send.js';
 import { watchCommand } from './commands/watch.js';
 import { packagesCommand } from './commands/packages.js';
-import { agentCommand } from './commands/agent.js';
 import { runtimeCommand } from './commands/runtime.js';
 
 const program = new Command();
@@ -48,7 +47,12 @@ program.addCommand(migrateCommand);
 program.addCommand(sendCommand);
 program.addCommand(watchCommand);
 program.addCommand(packagesCommand);
-program.addCommand(agentCommand);
+// Agent command handlers use optional AI contracts; IM-only commands must not load them.
+const needsAgentCommand = process.argv[2] === 'agent'
+  || (process.argv[2] === 'help' && process.argv[3] === 'agent');
+program.addCommand(needsAgentCommand
+  ? (await import('./commands/agent.js')).agentCommand
+  : new Command('agent').description('Agent diagnostics and Workroom operations'));
 program.addCommand(runtimeCommand);
 
 program.parse();

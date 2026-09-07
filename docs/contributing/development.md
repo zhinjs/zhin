@@ -37,6 +37,15 @@ pnpm --filter @zhin.js/scaffold-wizard build   # 或 pnpm prepare:cli
 
 ## harness 门禁（pnpm check:all）
 
+发布候选还必须通过 `pnpm check:created-project`：脚本打包候选依赖，在临时空目录运行
+已打包的 `create-zhin-app -y --skip-install`，安装后通过真实 Sandbox WebSocket 验证
+`/hello`、命令热重载、生产重启和 `doctor --live`。CI 的 Linux/Node 24 作业及发布
+workflow 均执行此项；它需要 npm 网络与本机随机端口，不属于离线单测。
+失败时可设置 `ZHIN_KEEP_ACCEPTANCE_TEMP=1` 保留临时项目排查，成功时自动清理。
+
+`pnpm check:platform-candidates` 验证 QQ 官方与 Telegram 的离线契约，
+覆盖范围与实机缺口见[平台稳定认证](./platform-acceptance.md)。离线通过不会自动升档。
+
 提交前最值得跑一次的是 `pnpm check:all`：它运行 `scripts/check-all-harness.mjs` 中登记的全部检查（含 type-check、lint、单测），全部通过才算绿——CI 跑的就是同一套。CI 若另跑 coverage 作业，可设 `HARNESS_SKIP_TEST=1` 跳过其中的 `pnpm test`，避免双跑。
 
 下面按职责分组列出（括号内是单项命令，均可单独运行）。

@@ -523,6 +523,32 @@ describe('telegram plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
+  it.each([{}, { message_id: 0 }, { message_id: -1 }, { message_id: '77' }])(
+    'does not fabricate a receipt when Telegram returns %j', async (result) => {
+      const fetch = mockApiFetch({ sendMessage: result });
+      const endpoint = new TelegramEndpoint({
+        id: capabilityId(rootPluginId(), adapterFeature, 'telegram'), config: baseConfig, fetch,
+      });
+      await expect(endpoint.send({ conversation: testConversation('private', '1001'), payload: 'pong' }))
+        .rejects.toThrow('delivery is unconfirmed');
+      expect(fetch.calls).toHaveLength(1);
+    },
+  );
+
+  it.each([403, 429, 500])('propagates Bot API %i without automatically resending', async (status) => {
+    const fetch = vi.fn<TelegramFetch>(async () => ({
+      ok: false, status,
+      text: async () => JSON.stringify({ ok: false, error_code: status, description: 'send rejected' }),
+      json: async () => ({ ok: false }),
+    }));
+    const endpoint = new TelegramEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'telegram'), config: baseConfig, fetch,
+    });
+    await expect(endpoint.send({ conversation: testConversation('private', '1001'), payload: 'pong' }))
+      .rejects.toThrow(`failed (${status})`);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('uses the native chat id from the structured conversation', async () => {
     const fetch = mockApiFetch({ sendMessage: { message_id: 78 } });
     const endpoint = bindTestEndpoint(new TelegramEndpoint({
@@ -801,7 +827,224 @@ describe('telegram webhook auth', () => {
   });
 });
 
+describe('telegram permission lookup isolation', () => {
+  it.each(['close', 'reopen', 'restart'] as const)('drops a late lookup after %s without repopulating permissions', async (transition) => {
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
+    const fallback = mockApiFetch({ getChatMember: { status: 'member' } });
+    const oldResponse = mockApiFetch({ getChatMember: { status: 'administrator' } });
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => { finish = resolve; });
+    let oldSignal: AbortSignal | undefined;
+    let lookups = 0;
+    const fetch: TelegramFetch = async (url, init) => {
+      if (url.endsWith('/getChatMember') && ++lookups === 1) {
+        oldSignal = init?.signal;
+        await pending;
+        return oldResponse(url, init);
+      }
+      return fallback(url, init);
+    };
+    const endpoint = bindTestEndpoint(new TelegramEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'telegram'), config: baseConfig, fetch,
+    }), gateway, undefined);
+    const message = textMessage({ chat: { id: -1001, type: 'supergroup' } });
+    await endpoint.start();
+    endpoint.open();
+    endpoint.admit(message);
+    await vi.waitFor(() => expect(lookups).toBe(1));
+    if (transition === 'restart') {
+      await endpoint.stop();
+      await endpoint.start();
+    } else endpoint.close();
+    if (transition !== 'close') endpoint.open();
+    finish();
+    // Allow the old HTTP response, parser and permission continuation to settle.
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    try {
+      expect(oldSignal?.aborted).toBe(true);
+      expect(receive).not.toHaveBeenCalled();
+      endpoint.open();
+      endpoint.admit({ ...message, message_id: 43 });
+      await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
+      expect(lookups).toBe(2);
+      expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+        message: expect.objectContaining({ id: '43' }),
+        metadata: expect.objectContaining({ senderRole: 'member' }),
+      }));
+    } finally {
+      await endpoint.stop();
+    }
+  });
+
+  it('keeps group permissions separate for two accounts sharing chat and user IDs', async () => {
+    const endpoints: TelegramEndpoint[] = [];
+    try {
+      for (const [account, role] of [['admin-bot', 'administrator'], ['member-bot', 'member']]) {
+        const receive = vi.fn(async () => Object.freeze({ matched: false }));
+        const fetch = mockApiFetch({ getChatMember: { status: role } });
+        const endpoint = bindTestEndpoint(new TelegramEndpoint({
+          id: capabilityId(rootPluginId(), adapterFeature, account!),
+          config: { ...baseConfig, id: account!, token: `test-${account}` }, fetch,
+        }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+        endpoints.push(endpoint);
+        await endpoint.start();
+        endpoint.open();
+        const message = textMessage({ chat: { id: -1001, type: 'supergroup' } });
+        endpoint.admit(message);
+        await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
+        endpoint.admit({ ...message, message_id: 43 });
+        await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
+        expect(fetch.calls.filter((call) => call.method === 'getChatMember')).toHaveLength(1);
+        expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({
+          metadata: expect.objectContaining({ senderRole: role }),
+        }));
+      }
+    } finally {
+      await Promise.all(endpoints.map((endpoint) => endpoint.stop()));
+    }
+  });
+});
+
 describe('telegram polling backoff', () => {
+  it('releases a failed webhook registration and allows a clean retry', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const register = http.route.bind(http);
+    const released = vi.fn();
+    vi.spyOn(http, 'route').mockImplementation((...args) => {
+      const release = register(...args);
+      return () => { released(); release(); };
+    });
+    const fallback = mockApiFetch();
+    let fail = true;
+    const fetch: TelegramFetch = async (url, init) => {
+      if (url.endsWith('/setWebhook') && fail) {
+        fail = false;
+        throw new Error('registration failed');
+      }
+      return fallback(url, init);
+    };
+    const endpoint = new TelegramEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
+      config: webhookConfig, http, fetch,
+    });
+    try {
+      await expect(endpoint.start()).rejects.toThrow('registration failed');
+      expect(released).toHaveBeenCalledTimes(1);
+      await endpoint.start();
+      expect(released).toHaveBeenCalledTimes(1);
+      await endpoint.stop();
+      expect(released).toHaveBeenCalledTimes(2);
+      await endpoint.stop();
+      expect(released).toHaveBeenCalledTimes(2);
+    } finally {
+      await endpoint.stop();
+    }
+  });
+
+  it.each([
+    ['polling', 'getMe'], ['polling', 'deleteWebhook'],
+    ['webhook', 'getMe'], ['webhook', 'setWebhook'],
+  ] as const)('cancels %s startup during %s and ignores its late response', async (mode, method) => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const fallback = mockApiFetch();
+    let complete!: () => void;
+    const pending = new Promise<void>((resolve) => { complete = resolve; });
+    let entered!: () => void;
+    const requested = new Promise<void>((resolve) => { entered = resolve; });
+    let signal: AbortSignal | undefined;
+    const fetch: TelegramFetch = async (url, init) => {
+      if (url.endsWith(`/${method}`)) {
+        signal = init?.signal;
+        entered();
+        await pending; // Simulate a transport that ignores cancellation.
+      }
+      return fallback(url, init);
+    };
+    const endpoint = new TelegramEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
+      config: mode === 'webhook' ? webhookConfig : baseConfig, http, fetch,
+    });
+    const starting = endpoint.start();
+    await requested;
+    await endpoint.stop();
+    complete();
+    await starting;
+    try {
+      expect(signal?.aborted).toBe(true);
+      expect(fallback.calls.some((call) => call.method === 'getUpdates')).toBe(false);
+      if (method === 'getMe') {
+        expect(fallback.calls.map((call) => call.method)).toEqual(['getMe']);
+      }
+      // Reusing the same instance must not retain the cancelled request or route.
+      await endpoint.start();
+    } finally {
+      await endpoint.stop();
+    }
+  });
+
+  it('a cancelled startup rejecting late does not stop its replacement poll', async () => {
+    const fallback = mockApiFetch();
+    let reject!: (error: Error) => void;
+    const pending = new Promise<never>((_, fail) => { reject = fail; });
+    let entered!: () => void;
+    const requested = new Promise<void>((resolve) => { entered = resolve; });
+    let first = true;
+    let pollSignal: AbortSignal | undefined;
+    const fetch: TelegramFetch = async (url, init) => {
+      if (url.endsWith('/getMe') && first) {
+        first = false;
+        entered();
+        return pending;
+      }
+      if (url.endsWith('/getUpdates')) pollSignal = init?.signal;
+      return fallback(url, init);
+    };
+    const endpoint = new TelegramEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'telegram'), config: baseConfig, fetch,
+    });
+    const oldStart = endpoint.start();
+    // Attach rejection observation before injecting the late failure.
+    const settled = oldStart.catch(() => undefined);
+    await requested;
+    await endpoint.stop();
+    await endpoint.start();
+    reject(new Error('late authentication failure'));
+    await settled;
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+    try {
+      expect(pollSignal?.aborted).toBe(false);
+      expect(fallback.calls.filter((call) => call.method === 'getUpdates')).toHaveLength(1);
+    } finally {
+      await endpoint.stop();
+    }
+  });
+
+  it('aborts an in-flight poll on stop and does not create duplicate polls on repeated start', async () => {
+    let pollSignal: AbortSignal | undefined;
+    const fallback = mockApiFetch();
+    const fetch: TelegramFetch = (url, init) => {
+      if (url.endsWith('/getUpdates')) pollSignal = init?.signal;
+      return fallback(url, init);
+    };
+    const endpoint = new TelegramEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'telegram'), config: baseConfig, fetch,
+    });
+    try {
+      await endpoint.start();
+      await endpoint.start();
+      expect(pollSignal?.aborted).toBe(false);
+      expect(fallback.calls.filter((call) => call.method === 'getUpdates')).toHaveLength(1);
+      await endpoint.stop();
+      expect(pollSignal?.aborted).toBe(true);
+      expect(fallback.calls.filter((call) => call.method === 'getUpdates')).toHaveLength(1);
+    } finally {
+      await endpoint.stop();
+    }
+  });
+
   it('keeps BACKOFF delay after max consecutive failures (no reset to RETRY)', async () => {
     vi.useFakeTimers();
     try {

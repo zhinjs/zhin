@@ -17,6 +17,12 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `http` | object | no | — | HTTP, Console, REST/RPC/SSE, and Webhook Host. |
+| `http.readiness` | object | no | — | Required runtime components for /pub/ready; no external network probes. |
+| `http.readiness.database` | boolean | no | `true` | Require an initialized Database Host (not a live database query). |
+| `http.readiness.endpoints` | array&lt;object&gt; | no | — | Required Endpoint admission slots, selected by exact plugin owner and stable slot name. |
+| `http.readiness.endpoints[].owner` | string | yes | — | — |
+| `http.readiness.endpoints[].name` | string | yes | — | — |
+| `http.readiness.agents` | array&lt;string&gt; | no | — | Required configured Agent bindings; does not verify model credentials or provider reachability. |
 | `database` | object | no | — | Database Host and dialect connection options. |
 | `ai` | object | no | — | Providers, Agents, sessions, memory, tools, and execution security. |
 | `ai.workroom` | object | no | — | Process-owned Workroom control-plane policy; Projects remain in the persistent Catalog. |

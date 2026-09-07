@@ -17,6 +17,7 @@ until snapshot commit and retired routes stop matching immediately while their l
 - Path-scoped WebSocket upgrades (`ws(path)`)
 - HTTP `route(method, path, handler, meta?)` (exact + `/*` prefix)
 - Built-in `GET /pub/health` and `GET /pub/openapi.json`
+- CLI-composed runtimes additionally expose `GET /pub/ready` and full-scope `GET /api/system/readiness`; see [production probes](../../../docs/operations/production.md).
 - CORS allowlist (always includes `https://console.zhin.dev`)
 - Optional Bearer auth for `/api/*` when `http.token` / `http.tokens` are set (ADR 0016 scopes)
 - WebSocket upgrade auth (Authorization or `?token=`); demo scope limited to `/sandbox`

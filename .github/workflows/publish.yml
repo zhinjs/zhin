@@ -59,6 +59,9 @@ jobs:
       - name: build packages
         run: pnpm build
 
+      - name: verify clean generated project before publishing
+        run: pnpm check:created-project
+
       # type-check / lint / unit tests 已纳入 pnpm check:all
       - name: run harness checks (incl. type-check, lint, test)
         run: pnpm check:all

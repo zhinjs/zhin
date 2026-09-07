@@ -58,13 +58,10 @@ import {
 } from '@zhin.js/plugin-runtime';
 import { HOST_CONFIG_KEYS, type RootResourceInstaller, type RuntimeConfigDocument } from '@zhin.js/runtime';
 import { installInboxMessageRecorder } from './inbox-installer.js';
-import {
-  parseWorkroomRunControlCommand,
-  WorkroomRunControlUnauthorizedError,
-  validateWorkroomDefinitions,
-  type PortfolioSponsorProjection,
-  type WorkroomRunControlCommand,
-  type WorkroomDefinition,
+import type {
+  PortfolioSponsorProjection,
+  WorkroomRunControlCommand,
+  WorkroomDefinition,
 } from '@zhin.js/agent';
 import type {
   PortfolioSponsorCommand,
@@ -843,6 +840,7 @@ export function registerConsoleApiRoutes(
           const catalog = agentLease?.value?.workroomCatalog;
           if (!catalog) throw new Error('Workroom Catalog Runtime 未就绪');
           const agents = (agentLease?.value?.listBindings() ?? []).map(binding => binding.name);
+          const { validateWorkroomDefinitions } = await import('@zhin.js/agent');
           const errors = validateWorkroomDefinitions(
             workrooms,
             agents,
@@ -1251,9 +1249,14 @@ export function registerConsoleApiRoutes(
       writeJson(response, 400, { success: false, error: 'Workroom control 不能携带身份或权威字段' });
       return;
     }
+    const agent = await import('@zhin.js/agent').catch(() => undefined);
+    if (!agent) {
+      writeJson(response, 503, { success: false, error: 'Agent Runtime 尚未安装' });
+      return;
+    }
     let command: WorkroomRunControlCommand;
     try {
-      command = parseWorkroomRunControlCommand(body);
+      command = agent.parseWorkroomRunControlCommand(body);
     } catch (error) {
       writeJson(response, 400, {
         success: false, error: error instanceof Error ? error.message : String(error),
@@ -1290,7 +1293,7 @@ export function registerConsoleApiRoutes(
           },
         });
       } catch (error) {
-        if (error instanceof WorkroomRunControlUnauthorizedError) {
+        if (error instanceof agent.WorkroomRunControlUnauthorizedError) {
           writeJson(response, 403, { success: false, error: error.message });
           return;
         }

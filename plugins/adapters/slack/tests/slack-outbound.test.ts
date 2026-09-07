@@ -16,6 +16,32 @@ function mockLogger() {
 }
 
 describe('sendSlackContent', () => {
+  it.each([{}, null, { ts: '' }, { ts: ' ' }, { ts: 123 }])('rejects an unconfirmed receipt %j without retry', async (response) => {
+    const client = mockWebClient();
+    client.chat.postMessage.mockResolvedValue(response);
+    await expect(sendSlackContent(client, 'hello', { channel: 'C001' }, mockLogger()))
+      .rejects.toThrow('delivery is unconfirmed');
+    expect(client.chat.postMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not send remaining chunks after an unconfirmed chunk', async () => {
+    const client = mockWebClient();
+    client.chat.postMessage.mockResolvedValueOnce({ ts: '1700000000.000000' }).mockResolvedValueOnce({});
+    await expect(sendSlackContent(client, 'x'.repeat(350_000), { channel: 'C001' }, mockLogger()))
+      .rejects.toThrow('delivery is unconfirmed');
+    expect(client.chat.postMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['unsupported', 'rejected'])('does not report success after an %s file upload', async (failure) => {
+    const client = mockWebClient();
+    if (failure === 'unsupported') client.filesUploadV2 = undefined;
+    else client.filesUploadV2.mockRejectedValue(new Error('upload denied'));
+    await expect(sendSlackContent(client, [
+      { type: 'image', data: { media: { kind: 'base64', value: 'aGVsbG8=' } } },
+    ], { channel: 'C001' }, mockLogger())).rejects.toThrow();
+    expect(client.chat.postMessage).not.toHaveBeenCalled();
+  });
+
   it('should send plain text as mrkdwn block', async () => {
     const client = mockWebClient();
     const logger = mockLogger();

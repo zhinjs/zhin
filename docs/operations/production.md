@@ -8,7 +8,8 @@ title: 生产部署与运维
 
 ## 1. 发布前基线
 
-- Node 使用 `^20.19.0 || >=22.12.0`，依赖由 lockfile 固定。
+- 脚手架生成的 TypeScript 项目使用 Node `>=22.12.0`，依赖由 lockfile 固定。
+- 编译后的 IM 库支持范围仍为 `^20.19.0 || >=22.12.0`，不要将库的最低版本当作源码项目的运行要求。
 - 执行 `zhin doctor`、`pnpm build` 与项目测试。
 - 用 `zhin runtime start --once --mode test` 验证装配，不连接长期 supervisor。
 - 记录当前提交、lockfile hash、配置版本与数据备份点。
@@ -31,7 +32,33 @@ flowchart LR
 
 反向代理必须保留 Authorization、Webhook 原始请求体、SSE 流式响应与 WebSocket Upgrade。不要缓存 `/api/events`，也不要改写需要平台验签的 body。
 
-公开探针是 `GET /pub/health`。它证明 HTTP 进程可响应，不证明所有 Endpoint、Database 或 Agent provider 已就绪；完整判断仍看 Console Dashboard 与运行时能力。
+`GET /pub/health` 是存活探针，只证明 HTTP 进程可响应。`GET /pub/ready` 是运行时就绪探针：启动尚未提交 generation 时返回 503，就绪时返回 200；公开响应仅包含 `ready`，不暴露配置或账号信息。
+
+默认就绪条件是已提交 generation 且 Database Host 已初始化。可在项目配置中声明必需组件：
+
+```yaml
+http:
+  readiness:
+    database: true
+    endpoints:
+      - owner: root/sandbox
+        name: sandbox~sandbox-bot
+    # 启用 AI 后可要求指定 binding；IM-only 项目省略此项
+    # agents: [zhin]
+```
+
+`owner` 是插件实例路径；`name` 是 capability ID 最后一段的稳定槽名。多账号展开使用 `适配器槽名~endpoints[].id`，未展开时使用适配器槽名。不要填平台昵称。未列出的 Endpoint 不阻止就绪；必需插件被禁用或对应槽不存在时返回 503。
+
+详细报告通过受 full-scope 保护的 `GET /api/system/readiness` 获取（自定义 `http.base` 同样生效），包含 generation、检查时间、逐项原因和修复建议。CLI 使用同一报告：
+
+```bash
+# ZHIN_HTTP_TOKEN 由环境注入，值为 Host 的 full-scope token
+zhin doctor --live http://127.0.0.1:8068 --json
+# 自定义 http.base=/control
+zhin doctor --live http://127.0.0.1:8068/control --json
+```
+
+就绪时退出码为 0，未就绪、认证失败或请求失败时为 1。探针不执行外部网络请求：Database 的 `initialized` 不等于实时 SQL 查询成功，Endpoint 的 `admission_open` 不等于平台传输在线，Agent 的 `binding_configured` 不等于模型凭据有效。平台实机收发仍需单独验收，不能仅凭此探针宣称平台可用。
 
 生产环境设置 full token。演示与只读观察使用独立 demo token；平台 Webhook 继续使用各自的签名密钥，不能拿 Console token 代替。
 
@@ -83,7 +110,7 @@ kubectl rollout status deployment/zhin
 kubectl port-forward service/zhin 8068:8068
 ```
 
-镜像会保留项目自己的 `zhin.config.yml`，Secret 则从 `.env` 整体投影，因此 Provider 与 Adapter 密钥不会被模板吞掉；修改密钥后需要重建 Secret 并滚动重启。模板固定单副本与 `Recreate`，因为默认 SQLite、Workroom 文件状态和 `ReadWriteOnce` 卷不是多写者系统。需要水平扩容时，先迁移到共享数据库与具备单一写入权威的 Workroom 存储。`/pub/health` 只适合作为进程探针，业务就绪仍通过 Console 验收。
+镜像会保留项目自己的 `zhin.config.yml`，Secret 则从 `.env` 整体投影，因此 Provider 与 Adapter 密钥不会被模板吞掉；修改密钥后需要重建 Secret 并滚动重启。模板固定单副本与 `Recreate`，因为默认 SQLite、Workroom 文件状态和 `ReadWriteOnce` 卷不是多写者系统。需要水平扩容时，先迁移到共享数据库与具备单一写入权威的 Workroom 存储。Kubernetes 模板分别使用 `/pub/health` 判断存活、`/pub/ready` 判断运行时就绪；请先升级到提供就绪探针的 CLI 版本再应用模板。
 
 ## 4. 进程托管
 

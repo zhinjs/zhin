@@ -161,8 +161,8 @@ function buildIndexMarkdown() {
 | 档位 | 含义 |
 |------|------|
 | **Stable** | 与 \`pnpm check:stable\`、[minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) 一致 |
-| **Platform Stable** | 主流 IM；须满足 ADR 0015 D3 并进入 \`check:stable\` Platform 批（**当前无**） |
-| **Advanced** | [test-bot](https://github.com/zhinjs/zhin/tree/main/examples/test-bot) 维护者厨房水槽（非用户模板）常用；有 integration 测试但不在 Stable smoke |
+| **Platform Stable** | 通过[平台验收](/contributing/platform-acceptance)，并持续进入 \`check:stable\` Platform 批；已认证平台见下表 |
+| **Advanced** | [test-bot](https://github.com/zhinjs/zhin/tree/main/examples/test-bot) 维护者厨房水槽（非用户模板）常用；有 integration 测试；升档候选提前进入 Stable smoke |
 | **Experimental** | 可用性因部署差异大，需自行验证；**≠ 无测试**，= 无全量 CI/实机承诺 |
 
 ## Stable

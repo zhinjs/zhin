@@ -1,9 +1,12 @@
-import { Endpoint } from 'zhin.js/adapter';
+import {
+  Endpoint, createEndpointLifecycle,
+  type EndpointLifecycle, type EndpointContentPort, type EndpointContentResolveContext,
+  type EndpointControl, type EndpointSendRequest,
+} from 'zhin.js/adapter';
 /**
  * TelegramEndpoint — lifecycle, outbound, admit, Bot API helpers for agent tools.
  */
 import { readFile } from 'node:fs/promises';
-import type { EndpointContentPort, EndpointContentResolveContext, EndpointControl, EndpointSendRequest } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
   type ConversationRef,
@@ -158,9 +161,9 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
   readonly #fetch: TelegramFetch;
   #pollAbort?: AbortController;
   #pollPromise?: Promise<void>;
-  #routeReleases: HttpRouteRegistration[] = [];
+  readonly #lifecycle: EndpointLifecycle;
   #open = false;
-  #started = false;
+  #admission?: AbortController;
   #updateOffset = 0;
   #botUserId?: number;
   #botUsername?: string;
@@ -175,6 +178,7 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
   constructor(options: TelegramEndpointOptions) {
     super();
     this.#logger = getAdapterLogger('telegram', options.config.id);
+    this.#lifecycle = createEndpointLifecycle({ name: options.config.id, reconnect: false });
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
@@ -201,79 +205,98 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
   }
 
   async start(): Promise<void> {
-    if (this.#started) return;
-    this.#started = true;
-    try {
-      const me = await this.callApi<{ id?: number; username?: string; first_name?: string }>('getMe');
-      this.#botUserId = me.id;
-      this.#botUsername = me.username;
+    await this.#lifecycle.start(async (handle) => {
+      const abort = new AbortController();
+      const routes: HttpRouteRegistration[] = [];
+      this.#pollAbort = abort;
+      const cleanup = () => {
+        abort.abort();
+        for (const release of routes.splice(0)) release();
+        if (this.#pollAbort === abort) {
+          this.#botUserId = undefined;
+          this.#botUsername = undefined;
+        }
+      };
+      handle.onForceClose(cleanup);
+      try {
+        const me = await this.callApi<{ id?: number; username?: string; first_name?: string }>('getMe', {}, abort.signal);
+        if (abort.signal.aborted) return;
+        this.#botUserId = me.id;
+        this.#botUsername = me.username;
 
-      if (this.#options.config.mode === 'webhook') {
-        if (!this.#options.http) {
-          throw new TypeError('Telegram webhook mode requires httpHostToken');
-        }
-        this.#routeReleases.push(...registerTelegramWebhookRoutes(this.#options.http, this));
-        const webhook = this.#options.config.webhook!;
-        if (!webhook.secretToken) {
-          // 未配 secretToken 时 webhook 无鉴权：任何人知道 path 即可注入假 update。
-          this.#logger.warn(formatCompact({
-            op: 'webhook_no_secret',
+        if (this.#options.config.mode === 'webhook') {
+          if (!this.#options.http) {
+            throw new TypeError('Telegram webhook mode requires httpHostToken');
+          }
+          routes.push(...registerTelegramWebhookRoutes(this.#options.http, this));
+          const webhook = this.#options.config.webhook!;
+          if (!webhook.secretToken) {
+            // 未配 secretToken 时 webhook 无鉴权：任何人知道 path 即可注入假 update。
+            this.#logger.warn(formatCompact({
+              op: 'webhook_no_secret',
+              endpoint: this.#options.config.id,
+              path: webhook.path,
+              hint: 'set webhook.secretToken to authenticate Telegram callbacks',
+            }));
+          }
+          const url = buildWebhookUrl(webhook);
+          await this.callApi('setWebhook', {
+            url,
+            allowed_updates: this.#options.config.allowedUpdates,
+            ...(webhook.secretToken ? { secret_token: webhook.secretToken } : {}),
+          }, abort.signal);
+          if (abort.signal.aborted) return;
+          this.#logger.info(formatCompact({
+            op: 'connect',
             endpoint: this.#options.config.id,
+            mode: 'webhook',
             path: webhook.path,
-            hint: 'set webhook.secretToken to authenticate Telegram callbacks',
+            username: me.username,
           }));
+          return;
         }
-        const url = buildWebhookUrl(webhook);
-        await this.callApi('setWebhook', {
-          url,
-          allowed_updates: this.#options.config.allowedUpdates,
-          ...(webhook.secretToken ? { secret_token: webhook.secretToken } : {}),
-        });
+
+        await this.callApi('deleteWebhook', { drop_pending_updates: false }, abort.signal);
+        if (abort.signal.aborted) return;
+        this.#pollPromise = runTelegramPollLoop(this, abort.signal);
         this.#logger.info(formatCompact({
           op: 'connect',
           endpoint: this.#options.config.id,
-          mode: 'webhook',
-          path: webhook.path,
+          mode: 'polling',
           username: me.username,
         }));
-        return;
+      } catch (error) {
+        const cancelled = abort.signal.aborted;
+        cleanup();
+        if (cancelled) return;
+        this.#logger.error('Failed to connect Telegram bot:', error);
+        throw error;
       }
-
-      await this.callApi('deleteWebhook', { drop_pending_updates: false });
-      this.#pollAbort = new AbortController();
-      this.#pollPromise = runTelegramPollLoop(this, this.#pollAbort.signal);
-      this.#logger.info(formatCompact({
-        op: 'connect',
-        endpoint: this.#options.config.id,
-        mode: 'polling',
-        username: me.username,
-      }));
-    } catch (error) {
-      await this.stop();
-      this.#logger.error('Failed to connect Telegram bot:', error);
-      throw error;
-    }
+    });
   }
 
   open(): void {
+    if (this.#open) return;
+    this.#admission = new AbortController();
     this.#open = true;
   }
 
   close(): void {
     this.#open = false;
+    this.#admission?.abort();
+    this.#chatMemberCache.clear();
   }
 
   async stop(): Promise<void> {
-    this.#open = false;
-    this.#pollAbort?.abort();
+    this.close();
+    const polling = this.#pollPromise;
+    this.#pollPromise = undefined;
+    await this.#lifecycle.stop();
     try {
-      await this.#pollPromise;
+      await polling;
     } catch {
       /* poll loop exit */
     }
-    for (const release of this.#routeReleases.splice(0)) release();
-    this.#chatMemberCache.clear();
-    this.#started = false;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
@@ -285,9 +308,13 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
       const result = form
         ? await this.callApiForm<{ message_id?: number }>(action.method, form)
         : await this.callApi<{ message_id?: number }>(action.method, action.params);
-      if (result.message_id != null) lastId = String(result.message_id);
+      if (!result || !Number.isSafeInteger(result.message_id) || result.message_id! <= 0) {
+        throw new Error(`Telegram API ${action.method} returned no valid message_id; delivery is unconfirmed`);
+      }
+      lastId = String(result.message_id);
     }
-    return lastId || `telegram-${Date.now()}`;
+    if (!lastId) throw new Error('Telegram message contains no sendable actions');
+    return lastId;
   }
 
   async recallMessage(message: MessageRef): Promise<void> {
@@ -376,9 +403,9 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
 
   /** Test / internal: admit a message when open. */
   admit(msg: TelegramMessage): void {
-    if (!this.#open) return;
+    if (!this.#open || !this.#admission) return;
     const conversation = telegramInboundConversation(String(this.#options.id), msg.chat);
-    void this.#admitWithSenderRole(msg, conversation).catch((err) => {
+    void this.#admitWithSenderRole(msg, conversation, this.#admission.signal).catch((err) => {
       this.#logger.warn(formatCompact({
         op: 'telegram_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
@@ -387,8 +414,9 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
     });
   }
 
-  async #admitWithSenderRole(msg: TelegramMessage, conversation: ConversationRef): Promise<void> {
-    const permit = await this.#resolveGroupSenderPermit(msg);
+  async #admitWithSenderRole(msg: TelegramMessage, conversation: ConversationRef, signal: AbortSignal): Promise<void> {
+    const permit = await this.#resolveGroupSenderPermit(msg, signal);
+    if (signal.aborted) return;
     // 新 Runtime Message.content 为纯文本：@ 本机只能经 metadata 传递
     const mentioned = this.#isBotMentioned(msg);
     await this.emit('message.receive', {
@@ -430,7 +458,7 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
   }
 
   /** 群消息 sender role 解析：getChatMember + 60s 缓存（对齐旧 enrichGroupSender）。 */
-  async #resolveGroupSenderPermit(msg: TelegramMessage): Promise<ChatMemberPermit | undefined> {
+  async #resolveGroupSenderPermit(msg: TelegramMessage, signal: AbortSignal): Promise<ChatMemberPermit | undefined> {
     if (msg.chat.type === 'private' || !msg.from?.id) return undefined;
     const chatId = Number(msg.chat.id);
     const userId = msg.from.id;
@@ -443,7 +471,8 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
       const member = await this.callApi<TelegramChatMember>('getChatMember', {
         chat_id: chatId,
         user_id: userId,
-      });
+      }, signal);
+      if (signal.aborted) return undefined;
       const normalized = normalizeTelegramChatMember(member);
       const entry: ChatMemberPermit = { at: now, ...normalized };
       this.#chatMemberCache.set(key, entry);

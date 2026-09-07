@@ -3,7 +3,42 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "http": { "type": "object", "additionalProperties": true, "description": "HTTP, Console, REST/RPC/SSE, and Webhook Host.", "x-descriptionZh": "HTTP、Console、REST/RPC/SSE 与 Webhook Host。" },
+    "http": {
+      "type": "object", "additionalProperties": true,
+      "description": "HTTP, Console, REST/RPC/SSE, and Webhook Host.",
+      "x-descriptionZh": "HTTP、Console、REST/RPC/SSE 与 Webhook Host。",
+      "properties": {
+        "readiness": {
+          "type": "object", "additionalProperties": false,
+          "description": "Required runtime components for /pub/ready; no external network probes.",
+          "x-descriptionZh": "/pub/ready 要求就绪的运行时组件；不执行外部网络探测。",
+          "properties": {
+            "database": {
+              "type": "boolean", "default": true,
+              "description": "Require an initialized Database Host (not a live database query).",
+              "x-descriptionZh": "要求 Database Host 已初始化（不执行实时数据库查询）。"
+            },
+            "endpoints": {
+              "type": "array", "uniqueItems": true,
+              "description": "Required Endpoint admission slots, selected by exact plugin owner and stable slot name.",
+              "x-descriptionZh": "必须开放入站的 Endpoint，按插件 owner 与稳定槽名精确选择。",
+              "items": {
+                "type": "object", "additionalProperties": false, "required": ["owner", "name"],
+                "properties": {
+                  "owner": { "type": "string", "pattern": "^root(?:/[a-z0-9][a-z0-9-]*)*$" },
+                  "name": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000]+$" }
+                }
+              }
+            },
+            "agents": {
+              "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 },
+              "description": "Required configured Agent bindings; does not verify model credentials or provider reachability.",
+              "x-descriptionZh": "必须存在的 Agent binding；不验证模型凭据或 Provider 网络可用性。"
+            }
+          }
+        }
+      }
+    },
     "database": { "type": "object", "additionalProperties": true, "description": "Database Host and dialect connection options.", "x-descriptionZh": "Database Host 与方言连接参数。" },
     "ai": {
       "type": "object",

@@ -26,6 +26,78 @@ async function flush(times = 10): Promise<void> {
 }
 
 describe('createEndpointLifecycle', () => {
+  it('an obsolete reconnect cannot mark a replacement startup open', async () => {
+    const lifecycle = createEndpointLifecycle({
+      name: 'restart-during-reconnect', reconnect: { initialIntervalMs: 10, jitterMs: 0 },
+    });
+    const first = createVirtualConnect();
+    const replacement = createVirtualConnect();
+    const starting = lifecycle.start(first.connect);
+    await flush();
+    first.connections[0]!.resolve();
+    await starting;
+    first.connections[0]!.handle.notifyClosed();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(first.connections).toHaveLength(2);
+    const stopping = lifecycle.stop();
+    const restarting = lifecycle.start(replacement.connect);
+    await stopping;
+    await flush();
+    expect(lifecycle.state).toBe('connecting');
+    first.connections[1]!.resolve();
+    await flush();
+    expect(lifecycle.state).toBe('connecting');
+    replacement.connections[0]!.resolve();
+    await restarting;
+    expect(lifecycle.state).toBe('open');
+    await lifecycle.stop();
+  });
+
+  it('does not create a connection when stopped before its deferred connect runs', async () => {
+    const lifecycle = createEndpointLifecycle({ name: 'cancel-before-connect' });
+    const connect = vi.fn(async () => {});
+    const starting = lifecycle.start(connect);
+    await lifecycle.stop();
+    await starting;
+    expect(connect).not.toHaveBeenCalled();
+    expect(lifecycle.state).toBe('stopped');
+  });
+
+  it('an old start settling after stop cannot mark a new pending connection open', async () => {
+    const lifecycle = createEndpointLifecycle({ name: 'restart-during-connect' });
+    const first = createVirtualConnect();
+    const second = createVirtualConnect();
+    const oldStart = lifecycle.start(first.connect);
+    await flush();
+    const stopping = lifecycle.stop();
+    const newStart = lifecycle.start(second.connect);
+    await stopping;
+    await oldStart;
+    expect(lifecycle.state).toBe('connecting');
+    first.connections[0]!.resolve();
+    await flush();
+    expect(lifecycle.state).toBe('connecting');
+    second.connections[0]!.resolve();
+    await newStart;
+    expect(lifecycle.state).toBe('open');
+    await lifecycle.stop();
+  });
+
+  it('closes a resource registered after stop while connection setup was awaiting', async () => {
+    const lifecycle = createEndpointLifecycle({ name: 'late-cleanup' });
+    const { connect, connections } = createVirtualConnect();
+    const starting = lifecycle.start(connect);
+    await flush();
+    await lifecycle.stop();
+    await starting;
+    const close = vi.fn();
+    connections[0]!.handle.onForceClose(close);
+    expect(close).toHaveBeenCalledTimes(1);
+    connections[0]!.resolve();
+    await flush();
+    expect(lifecycle.state).toBe('stopped');
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
   });

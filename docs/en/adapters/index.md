@@ -32,8 +32,8 @@ Every `@zhin.js/adapter-*` package has its own page, synchronized with its packa
 | Tier | Meaning |
 |------|---------|
 | **Stable** | Consistent with `pnpm check:stable` and [minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) |
-| **Platform Stable** | Mainstream IM; must satisfy ADR 0015 D3 and enter the `check:stable` Platform batch (**currently none**) |
-| **Advanced** | Commonly used by the [test-bot](https://github.com/zhinjs/zhin/tree/main/examples/test-bot) maintainer kitchen sink (not a user template); has integration tests but not in the Stable smoke |
+| **Platform Stable** | Passes [platform acceptance](/contributing/platform-acceptance) and remains in the `check:stable` Platform batch; see certified platforms below |
+| **Advanced** | Commonly used by the [test-bot](https://github.com/zhinjs/zhin/tree/main/examples/test-bot) maintainer kitchen sink (not a user template); has integration tests; graduation candidates enter Stable smoke before promotion |
 | **Experimental** | Usability varies greatly by deployment; requires self-verification; **does not mean untested**, just no full CI / real-device guarantee |
 
 ## Stable

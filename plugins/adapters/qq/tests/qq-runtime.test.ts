@@ -92,6 +92,88 @@ function createMockBot(): QqBotTransport & {
 afterEach(() => {
 });
 
+describe.each(['websocket', 'middleware'] as const)('QQ %s startup isolation', (mode) => {
+  function fixture() {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    const oldBot = { ...createMockBot(), middleware: vi.fn(async () => undefined) };
+    const newBot = { ...createMockBot(), middleware: vi.fn(async () => undefined) };
+    const factory = vi.fn().mockReturnValueOnce(oldBot).mockReturnValue(newBot);
+    const id = capabilityId(rootPluginId(), adapterFeature, 'qq');
+    const endpoint = mode === 'websocket'
+      ? new QqWebsocketEndpoint({ id, config: baseConfig, createBot: factory })
+      : new QqHttpEndpoint({ id, http, createBot: factory, config: {
+        context: 'qq', mode: 'middleware', id: 'test-qq-bot', appid: 'app-1', secret: 'secret-1',
+        webhookPath: '/qq/webhook', sandbox: false,
+      } });
+    return { endpoint, oldBot, newBot, http };
+  }
+
+  it.each(['resolve', 'reject'] as const)('ignores late startup %s after stop and restart', async (result) => {
+    const { endpoint, oldBot, newBot, http } = fixture();
+    let finish!: () => void;
+    let fail!: (error: Error) => void;
+    oldBot.start = vi.fn(() => new Promise<void>((resolve, reject) => { finish = resolve; fail = reject; }));
+    const starting = endpoint.start();
+    const settled = starting.catch(() => undefined);
+    await vi.waitFor(() => expect(oldBot.start).toHaveBeenCalledTimes(1));
+    await endpoint.stop();
+    await endpoint.start();
+    if (result === 'resolve') finish();
+    else fail(new Error('old SDK failed late'));
+    await settled;
+    try {
+      await vi.waitFor(() => expect(oldBot.stop).toHaveBeenCalledTimes(2));
+      expect(endpoint.client).toBe(newBot);
+      expect(newBot.stop).not.toHaveBeenCalled();
+    } finally {
+      await endpoint.stop();
+      await http.close();
+    }
+  });
+
+  it('ignores callbacks already queued by a replaced SDK', async () => {
+    const { endpoint, oldBot, http } = fixture();
+    const callbacks: Array<(...args: unknown[]) => void> = [];
+    oldBot.on = (_event, listener) => { callbacks.push(listener); };
+    const emit = vi.spyOn(endpoint, 'emitPlatform').mockResolvedValue(undefined);
+    try {
+      await endpoint.start();
+      await endpoint.stop();
+      await endpoint.start();
+      endpoint.open();
+      for (const callback of callbacks) callback({});
+      expect(emit).not.toHaveBeenCalled();
+    } finally {
+      await endpoint.stop();
+      await http.close();
+    }
+  });
+
+  it('cleans failed startup resources before retrying', async () => {
+    const { endpoint, oldBot, newBot, http } = fixture();
+    const register = http.route.bind(http);
+    const released = vi.fn();
+    vi.spyOn(http, 'route').mockImplementation((...args) => {
+      const release = register(...args);
+      return () => { released(); release(); };
+    });
+    oldBot.start = vi.fn().mockRejectedValue(new Error('SDK authentication failed'));
+    try {
+      await expect(endpoint.start()).rejects.toThrow('SDK authentication failed');
+      expect(oldBot.stop).toHaveBeenCalledTimes(1);
+      expect(released).toHaveBeenCalledTimes(mode === 'middleware' ? 1 : 0);
+      await endpoint.start();
+      expect(endpoint.client).toBe(newBot);
+      await endpoint.stop();
+      expect(newBot.stop).toHaveBeenCalledTimes(1);
+      expect(released).toHaveBeenCalledTimes(mode === 'middleware' ? 2 : 0);
+    } finally {
+      await endpoint.stop();
+      await http.close();
+    }
+  });
+});
+
 describe('qq protocol helpers', () => {
   it('destroys SDK managers before stopping to suppress reconnect', async () => {
     const calls: string[] = [];
@@ -154,6 +236,39 @@ describe('qq protocol helpers', () => {
 });
 
 describe('qq plugin runtime adapter', () => {
+  it('isolates two accounts and drops late events from a stopped account', async () => {
+    const receives = [vi.fn(async () => ({ matched: false })), vi.fn(async () => ({ matched: false }))];
+    const bots = [createMockBot(), createMockBot()];
+    const endpoints = bots.map((bot, index) => {
+      const gateway = { receive: receives[index]!, send: vi.fn(async () => 'sent') };
+      return bindTestEndpoint(new QqWebsocketEndpoint({
+        id: capabilityId(rootPluginId(), adapterFeature, `qq-${index}`),
+        config: { ...baseConfig, id: `account-${index}`, appid: `app-${index}` },
+        createBot: () => bot,
+      }), gateway, undefined);
+    });
+    try {
+      await Promise.all(endpoints.map((endpoint) => endpoint.start()));
+      endpoints.forEach((endpoint) => endpoint.open());
+      endpoints[0]!.admit(textMessage({ id: 'first' }));
+      await vi.waitFor(() => expect(receives[0]).toHaveBeenCalledTimes(1));
+      expect(receives[1]).not.toHaveBeenCalled();
+      await endpoints[0]!.stop();
+      endpoints[0]!.admit(textMessage({ id: 'late' }));
+      endpoints[1]!.admit(textMessage({ id: 'second' }));
+      await vi.waitFor(() => expect(receives[1]).toHaveBeenCalledTimes(1));
+      expect(receives[0]).toHaveBeenCalledTimes(1);
+      expect(bots[1]!.stop).not.toHaveBeenCalled();
+      await endpoints[1]!.send({ conversation: {
+        endpoint: { id: 'second', adapter: 'qq' }, kind: 'group', id: 'group-1',
+      }, payload: 'reply from second' });
+      expect(bots[0]!.sent).toHaveLength(0);
+      expect(bots[1]!.sent).toHaveLength(1);
+    } finally {
+      await Promise.all(endpoints.map((endpoint) => endpoint.stop()));
+    }
+  });
+
   it('routes admitted messages through OutboundMessageService when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };

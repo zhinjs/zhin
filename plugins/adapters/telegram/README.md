@@ -9,7 +9,7 @@ Zhin.js Telegram Bot API 适配器（Plugin Runtime），默认通过 **长轮�
 - 支持私聊与群组
 - 出站 `send({ conversation, payload })` → Bot API（Markdown→安全 HTML / media / keyboard）
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
-- Webhook 模式延期（需 `httpHostToken`）；配置 `polling: false` 会明确报错
+- Webhook 模式通过 `httpHostToken` 注册回调路由，支持 secretToken 校验
 
 ## 安装
 
@@ -40,9 +40,9 @@ pnpm add @zhin.js/adapter-telegram
 | **Bot Token** | 通过 [@BotFather](https://t.me/botfather) 创建并获取 Token |
 | **Polling（默认）** | 本地/生产均可；主动拉取更新，无需公网 HTTPS |
 | **网络** | 出站可访问 `api.telegram.org` |
-| **host-http** | Polling **不需要**；Webhook 延期至下一棒 |
+| **host-http** | Polling **不需要**；Webhook **需要** CLI HTTP Host |
 
-必填字段（`endpoints[i]`）：`name`、`token`。
+必填字段（`endpoints[i]`）：`id`、`token`。
 
 ## 最小配置
 
@@ -52,7 +52,7 @@ plugins:
   telegram:
     # polling: true   # 默认
     endpoints:
-      - name: my-telegram-bot
+      - id: my-telegram-bot
         token: ${TELEGRAM_TOKEN}
 ```
 
@@ -65,13 +65,37 @@ plugins:
 | `TELEGRAM_TOKEN` / `TELEGRAM_BOT_TOKEN` | Bot Token |
 | `TELEGRAM_BOT_NAME` | 可选，默认 endpoint 名 |
 
-## Webhook（延期）
+## Webhook
 
-`polling: false` + `webhook` 目前会抛出明确错误：
+配置 `polling: false`，启用 CLI HTTP Host，并提供公网 HTTPS 回调地址。
+`webhook.path` 必须与反向代理转发路径一致，多账号使用不同路径。
 
-> Telegram webhook mode is deferred until httpHostToken wiring; use polling: true (default) for now
+```yaml
+http:
+  host: 127.0.0.1
+  port: 8086
+plugins:
+  telegram:
+    polling: false
+    endpoints:
+      - id: my-telegram-bot
+        token: ${TELEGRAM_TOKEN}
+    webhook:
+      domain: https://bot.example.com
+      path: /telegram/webhook
+      secretToken: ${TELEGRAM_WEBHOOK_SECRET}
+```
 
-下一棒将用 `httpHostToken` 注册 POST 路由，不再使用 Telegraf 自建监听或 legacy host-router。
+启动时注册 Host 路由并调用 `setWebhook`；停止时释放路由。
+配置 `secretToken` 后，回调须携带匹配的 `X-Telegram-Bot-Api-Secret-Token`，否则返回 403。
+
+## 稳定化范围
+
+当前为 **Advanced / 首批升档候选**，完整适配器测试已纳入 `pnpm check:stable`。
+长轮询停止会中止请求与退避；即使传输层在中止后返回更新，也不会派发或推进 offset。
+轮询 offset 仅保存在当前 Endpoint 内存中，不承诺跨重启去重或业务处理恰好一次。
+Webhook 接收确认不等于业务处理完成；需要幂等性的业务应自行持久化去重。
+详见[平台稳定验收](https://github.com/zhinjs/zhin/blob/main/docs/contributing/platform-acceptance.md)。
 
 ## 消息类型映射
 
@@ -100,7 +124,7 @@ plugins:
 |------|------|
 | 收不到消息 | Token 是否正确；进程已 `open()`；同一 Token 勿多进程同时 polling |
 | Polling 报错 | 检查能否访问 `api.telegram.org`；查看日志 `op: poll` |
-| Webhook 配置报错 | 当前仅支持 polling；去掉 `polling: false` |
+| Webhook 配置报错 | 检查 HTTP Host、公网 HTTPS、反向代理路径与 secretToken |
 | 发送失败 | Token 是否被撤销；查看 Bot API 错误描述 |
 
 ## Documentation

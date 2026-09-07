@@ -4,7 +4,7 @@ This page delivers one result: send `/hello` to a new Bot in the browser Sandbox
 
 ## Before you start
 
-- Node.js `^20.19.0` or `>=22.12.0`; `>=22.18` is recommended for direct TypeScript execution.
+- Scaffolded TypeScript projects on this page require Node.js `>=22.12.0`; `>=22.18` is recommended. The compiled IM library still supports `^20.19.0 || >=22.12.0`.
 - pnpm 9 or newer.
 - Access to [Remote Console](https://console.zhin.dev).
 

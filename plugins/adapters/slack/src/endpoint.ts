@@ -233,8 +233,8 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
       { channel, threadTs },
       this.#logger,
     );
-    if (result.ts) this.trackMessageChannel(result.ts, channel);
-    return formatSlackMessageRef(channel, result.ts || String(Date.now()));
+    this.trackMessageChannel(result.ts, channel);
+    return formatSlackMessageRef(channel, result.ts);
   }
 
   /** Test / internal: admit a message event when open. */

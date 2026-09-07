@@ -108,7 +108,7 @@ describe('copy-ready production deployment templates', () => {
       allowPrivilegeEscalation: false,
       readOnlyRootFilesystem: true,
     });
-    expect(container.readinessProbe.httpGet.path).toBe('/pub/health');
+    expect(container.readinessProbe.httpGet.path).toBe('/pub/ready');
     expect(container.livenessProbe.httpGet.path).toBe('/pub/health');
     expect(container.envFrom).toEqual([{ secretRef: { name: 'zhin-secrets' } }]);
     expect(container.volumeMounts).toEqual(expect.arrayContaining([

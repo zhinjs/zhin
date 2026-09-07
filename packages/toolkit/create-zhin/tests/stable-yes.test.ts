@@ -1,10 +1,13 @@
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createWorkspace } from '../src/workspace.js';
 import { applyStableYesDefaults } from '../src/stable-yes-defaults.js';
 import type { InitOptions } from '../src/types.js';
+import { parse } from 'yaml';
+import Ajv2020 from 'ajv/dist/2020.js';
 
 const tmpRoots: string[] = [];
 
@@ -25,6 +28,22 @@ afterEach(async () => {
 });
 
 describe('create-zhin -y Stable 默认值', () => {
+  it.each([true, false])('generates schema-valid Sandbox endpoints (explicit defaults: %s)', async (explicit) => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'create-zhin-schema-'));
+    tmpRoots.push(root);
+    const options = stableYesOptions();
+    if (!explicit) options.adapters = undefined;
+    await createWorkspace(root, 'schema-bot', options);
+    const doc = parse(await fs.readFile(path.join(root, 'zhin.config.yml'), 'utf8'));
+    const schema = await fs.readJson(fileURLToPath(new URL('../../../../plugins/adapters/sandbox/schema.json', import.meta.url)));
+    const validate = new Ajv2020({ strict: false }).compile(schema);
+    expect(validate(doc.plugins.sandbox), JSON.stringify(validate.errors)).toBe(true);
+    expect(doc.plugins.sandbox.endpoints[0]).toMatchObject({ id: 'sandbox-bot' });
+    const manifest = await fs.readJson(path.join(root, 'package.json'));
+    expect(manifest.packageManager).toBe('pnpm@9.0.2');
+    expect(manifest.engines.node).toBe('>=22.12.0');
+  });
+
   it('Sandbox 实例 + IM-only、无 database', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'create-zhin-stable-'));
     tmpRoots.push(root);

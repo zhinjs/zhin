@@ -17,6 +17,7 @@ import {
   type InitOptions,
 } from '@zhin.js/scaffold-wizard';
 import { createConfigFile, generateDatabaseEnvVars } from './config.js';
+import { CREATE_NODE_REQUIREMENT } from './node-requirement.js';
 import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE, AGENTS_MD_TEMPLATE, ASSISTANT_PROFILE_YML_EXAMPLE } from './templates/bootstrap.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -58,7 +59,7 @@ function resolveAdapterResult(options: InitOptions): AdapterSetupResult {
       // 对齐 examples/minimal-bot 的 Stable 黄金路径：命令保留 / 前缀（/hello）
       config: {
         commandPrefix: '/',
-        endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }],
+        endpoints: [{ context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' }],
       },
     }],
     envVars: {},
@@ -121,6 +122,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     name: projectName,
     private: true,
     version: '0.1.0',
+    packageManager: 'pnpm@9.0.2',
     type: 'module',
     description: `${projectName} - Zhin.js Bot`,
     scripts: {
@@ -150,7 +152,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     },
     pnpm: getCreateBotPnpmConfig(aiEnabled),
     engines: {
-      node: '>=22.6.0'
+      node: CREATE_NODE_REQUIREMENT
     },
     zhin: {
       protocol: 1,
@@ -170,7 +172,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   }, { spaces: 2 });
 
   // Plugin Runtime 项目骨架（对齐 examples/minimal-bot）
-  await createRuntimeProjectFiles(projectPath, projectName, options);
+  await createRuntimeProjectFiles(projectPath, projectName, { ...options, adapters });
 
   // AI 引导文件（人格 / 工具约定 / 记忆），仅启用 AI 时生成
   if (aiEnabled) {
