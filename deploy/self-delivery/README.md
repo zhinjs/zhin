@@ -26,7 +26,7 @@
 - `github-pages` 环境：required reviewer `lc-cn`，禁止管理员 bypass，保留已有自定义 branch policy。
 - 两个环境允许发起者本人执行人工部署批准，因为目前登记的人工发布负责人只有 `lc-cn`；这不豁免 main PR 独立 Review，也不授权 agent 代按批准。
 
-本分支将 publish job 绑定 `npm-production`，npm 与 Pages 均仅允许本仓库 main。**npm 的 workflow Gate 要在该 YAML 经审阅合入 main 后才生效**；仅创建环境不会拦住尚未引用它的旧 job。既有 Pages deploy 已引用环境，因此远端 reviewer 规则已对后续部署生效。Pages 的写权限只授予 deploy job。候选 CI 和 Pages 构建改用 job 临时只读 `GITHUB_TOKEN`，不复用正式 `PERSONAL_TOKEN`。若跨仓库 GitHub Packages 未向本仓库授予读取权，安装将失败，需在包设置中授权；不能回退到正式发布密钥。正式 publish 仍保留现有发布凭据，但仅在人工 Gate 后获得。
+本分支将 publish job 绑定 `npm-production`，npm 与 Pages 均仅允许本仓库 main。**npm 的 workflow Gate 要在该 YAML 经审阅合入 main 后才生效**；仅创建环境不会拦住尚未引用它的旧 job。既有 Pages deploy 已引用环境，因此远端 reviewer 规则已对后续部署生效。Pages 的写权限只授予 deploy job。候选 CI 和 Pages 的依赖安装使用独立 `secrets.NPM_TOKEN`，只在禁用 scripts / pnpm hooks 的安装步骤注入，后续 lifecycle / build / test 不携带此 token。这个 Secret 必须存放可读取 `@icqqjs/icqq` 和 `@icqqjs/qqsign` 的 GitHub Token（`read:packages` 且所属账号有包访问权），其命名不代表 npmjs 凭据。不复用正式 `PERSONAL_TOKEN`，没有自动回退。正式 publish 仍保留现有发布凭据，但仅在人工 Gate 后获得。
 
 候选 workflow 不使用这两个正式环境。受信 workflow 必须先经人工审核纳入 main，创建受保护且固定 SHA 的 tag，再把实际 workflow ID / tag / SHA / actor IDs 登记到 provider；当前分支本身不是获批控制面版本。
 
@@ -35,4 +35,4 @@
 
 PR #657（`aec523c47`）的首次 Actions 验证在依赖安装被阻塞：`@icqqjs/icqq@1.12.3` 返回 `ERR_PNPM_FETCH_403`。GitHub API确认 `@icqqjs/icqq` 和 `@icqqjs/qqsign` 均为私有包。包的 Manage Actions access 中搜索 `zhinjs/zhin` / `zhin` 无可添加结果，当前临时 job-token 无法读取这两个跨组织依赖。未改变私有包可见性或访问者，也未回退正式 PAT。
 
-这是待解决的外部身份/包分发阻塞，不能把本地缓存安装成功视为CI可用。下一步需维护者提供独立包读取方案或批准包分发调整；不能为了绿色状态跳过 ICQQ 包或删除现有全仓质量检查。相关运行：[CI](https://github.com/zhinjs/zhin/actions/runs/34104413211)、[安装预算](https://github.com/zhinjs/zhin/actions/runs/34104413241)。
+这是待解决的外部身份/包分发阻塞，不能把本地缓存安装成功视为CI可用。维护者随后选择配置独立 `NPM_TOKEN`，workflow已接入上述安装边界；Secret配置完成后重跑验证。不能为了绿色状态跳过 ICQQ 包或删除现有全仓质量检查。相关运行：[CI](https://github.com/zhinjs/zhin/actions/runs/34104413211)、[安装预算](https://github.com/zhinjs/zhin/actions/runs/34104413241)。

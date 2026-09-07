@@ -47,12 +47,12 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # GitHub Packages must grant this repository Actions read access to @icqqjs.
-      # No maintainer PAT fallback and no credential materialization in .npmrc.
+      # Dedicated read-only NPM_TOKEN reads the cross-organization @icqqjs packages.
+      # No PERSONAL_TOKEN fallback and no credential materialization in .npmrc.
       - name: install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
         env:
-          NPM_TOKEN: ${{ github.token }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: run dependency lifecycle scripts without registry credentials
         run: pnpm rebuild

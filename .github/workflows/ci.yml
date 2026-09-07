@@ -64,12 +64,12 @@ jobs:
         if: github.event_name == 'pull_request'
         run: git fetch origin main:main
 
-      # The @icqqjs package owner must grant this repository Actions read access.
-      # A missing grant fails installation; never fall back to a maintainer PAT.
+      # Dedicated read-only package credential for cross-organization @icqqjs dependencies.
+      # Only this script-free install receives it; never fall back to PERSONAL_TOKEN.
       - name: install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
         env:
-          NPM_TOKEN: ${{ github.token }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: run dependency lifecycle scripts without registry credentials
         run: pnpm rebuild

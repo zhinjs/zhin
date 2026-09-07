@@ -23,5 +23,9 @@ describe('formal release isolation from self delivery', () => {
       expect(job.if).toBe("github.repository == 'zhinjs/zhin' && github.ref == 'refs/heads/main'");
     }
     expect(config.jobs.deploy.permissions).toEqual({ pages: 'write', 'id-token': 'write' });
+    expect(config.jobs.build.env.NPM_TOKEN).toBe('');
+    const install = config.jobs.build.steps.find((step: { name: string }) => step.name === 'Install Dependencies');
+    expect(install.env).toEqual({ NPM_TOKEN: '${{ secrets.NPM_TOKEN }}' });
+    expect(install.run).toBe('pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile');
   });
 });

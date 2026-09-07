@@ -7,16 +7,17 @@ const read = (name: string) => {
 };
 
 describe('untrusted candidate CI credential isolation', () => {
-  it.each([['ci', 'test'], ['plugin-runtime-size', 'production-install']])('%s uses only an ephemeral read-only package credential during script-free install', (file, jobName) => {
+  it.each([['ci', 'test'], ['plugin-runtime-size', 'production-install']])('%s exposes the dedicated package secret only during script-free install', (file, jobName) => {
     const { config, source } = read(file);
     const job = config.jobs[jobName];
     expect(config.permissions).toEqual({ contents: 'read' });
     expect(job.permissions).toEqual({ contents: 'read', packages: 'read' });
-    expect(source).not.toMatch(/secrets\.|PERSONAL_TOKEN|CODECOV_TOKEN/);
+    expect(source).not.toMatch(/secrets\.(?!NPM_TOKEN\b)|secrets\[['"]|CODECOV_TOKEN/);
+    expect(source.match(/secrets\.NPM_TOKEN/g)).toHaveLength(1);
     expect(config.env?.NPM_TOKEN ?? job.env?.NPM_TOKEN).toBe('');
     const install = job.steps.find((step: { name: string }) => step.name === 'install dependencies');
     expect(install.run).toBe('pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile');
-    expect(install.env).toEqual({ NPM_TOKEN: '${{ github.token }}' });
+    expect(install.env).toEqual({ NPM_TOKEN: '${{ secrets.NPM_TOKEN }}' });
     const installIndex = job.steps.indexOf(install);
     expect(job.steps[installIndex + 1].run).toBe('pnpm rebuild');
     for (const step of job.steps) {
