@@ -80,6 +80,31 @@ describe('Workroom Effect Ledger', () => {
       operationId: 'start-1', workerId: 'worker-1', fence: 7, startedAt: 20,
     })).rejects.toThrow('authorization binding');
   });
+
+  it('rejects reuse of an idempotency key for a different candidate or recreated intent', async () => {
+    const ledger = new WorkroomEffectLedger(new MemoryWorkroomEffectJournal());
+    await ledger.recordIntent('project-1', createWorkroomEffectIntent(intentInput()));
+    await expect(ledger.recordIntent('project-1', createWorkroomEffectIntent({
+      ...intentInput(), candidateHash: sha('f'), createdAt: 11,
+    }))).rejects.toThrow('idempotency key');
+  });
+
+
+  it('requires an exact artifact and Git object identity for delivery release intents', () => {
+    const input = { ...intentInput(), operation: {
+      kind: 'delivery_release' as const,
+      parameters: { repositoryId: 'github:owner/repo', headSha: 'a'.repeat(40),
+        artifactDigest: sha('1'), environment: 'staging', pipelineRef: 'deploy:staging' },
+    } };
+    expect(createWorkroomEffectIntent(input).operation).toEqual(input.operation);
+    expect(() => createWorkroomEffectIntent({ ...input, operation: { ...input.operation,
+      parameters: { ...input.operation.parameters, headSha: 'a'.repeat(41) },
+    } })).toThrow('headSha');
+    expect(() => createWorkroomEffectIntent({ ...input, operation: { ...input.operation,
+      parameters: { ...input.operation.parameters, artifactDigest: 'latest' },
+    } })).toThrow('artifactDigest');
+  });
+
 });
 
 function intentInput() {

@@ -536,7 +536,6 @@ export class WorkroomKernel {
       || currentTask.sponsorLane !== proposal.currentLane) {
       throw new Error('Workroom priority proposal targets a stale Task revision or lane');
     }
-    if (proposal.deadline < state.now) throw new Error('Workroom priority proposal is expired');
     const authority = this.#priorityAuthority;
     if (!authority) throw new Error('Workroom priority authority is not installed');
     const planAuthority = currentWorkflowPlan(events).plan.authority;
@@ -561,10 +560,12 @@ export class WorkroomKernel {
     if (proposal.requestedLane !== proposal.currentLane && authorization.authority !== 'sponsor') {
       throw new Error('Only an exact Sponsor authority may move a Task across lanes');
     }
-    const appended = await this.#journal.append(proposal.runId, proposal.expectedSequence, [this.#event(
-      'scheduler.priority_changed',
-      { ...proposal, authorizedBy: authorization.authorizationRef },
-    )]);
+    const controlState = this.#acceptanceControlState(state);
+    if (proposal.deadline <= controlState.now) throw new Error('Workroom priority proposal is expired');
+    const appended = await this.#journal.append(proposal.runId, proposal.expectedSequence, [Object.freeze({
+      ...this.#event('scheduler.priority_changed', { ...proposal, authorizedBy: authorization.authorizationRef }),
+      occurredAt: controlState.now,
+    })]);
     return Object.freeze({
       status: 'committed', proposalId: proposal.proposalId, sequence: appended[0]!.sequence,
     });
@@ -630,7 +631,13 @@ export class WorkroomKernel {
       || !authorization.authorizationRef.trim()) {
       throw new Error('Plan Sponsor Gate authority returned a stale principal proof');
     }
-    const audit = this.#event('plan_gate.decided', {
+    const controlState = this.#acceptanceControlState(state);
+    if (!Number.isFinite(gate.deadline) || gate.deadline <= controlState.now) {
+      throw new Error('Plan Sponsor Gate deadline has expired');
+    }
+    const event = (type: WorkroomEventType, payload: Record<string, unknown>): WorkroomEventDraft =>
+      Object.freeze({ ...this.#event(type, payload), occurredAt: controlState.now });
+    const audit = event('plan_gate.decided', {
       operationId: normalized.operationId,
       requestDigest,
       taskKey: normalized.taskKey,
@@ -645,17 +652,17 @@ export class WorkroomKernel {
       reasonDigest: digestCanonicalWorkroomValue({ reason: normalized.reason }),
     });
     const action = normalized.decision === 'approve'
-      ? [this.#event('task.blocker_resolved', {
+      ? [event('task.blocker_resolved', {
           taskKey: normalized.taskKey,
           blockerId: normalized.gateId,
         })]
       : normalized.decision === 'cancel'
-        ? decideWorkroom(state, {
+        ? decideWorkroom(controlState, {
             type: 'cancel_run',
             reason: `Plan Sponsor Gate ${normalized.gateId} cancelled`,
-            controlDeadline: state.now,
-          }, (type, payload) => this.#event(type, payload))
-        : [this.#event('task.failed', {
+            controlDeadline: controlState.now,
+          }, (type, payload) => event(type, payload))
+        : [event('task.failed', {
             taskKey: normalized.taskKey,
             reason: `Plan Sponsor Gate ${normalized.gateId} ${normalized.decision}`,
           })];
@@ -1325,10 +1332,11 @@ export class WorkroomKernel {
       taskKey: assignment.taskKey,
       targetId: assignment.id,
     });
+    const controlState = this.#acceptanceControlState(state);
     const drafts = decideReviewerClaim(
-      state,
+      controlState,
       { assignmentId, principalId, authorization },
-      (type, payload) => this.#event(type, payload),
+      (type, payload) => Object.freeze({ ...this.#event(type, payload), occurredAt: controlState.now }),
     );
     await this.#journal.append(runId, state.sequence, drafts);
     return this.read(scopedProjectId, runId);
@@ -1351,10 +1359,11 @@ export class WorkroomKernel {
       taskKey: assignment.taskKey,
       targetId: assignment.id,
     });
+    const controlState = this.#acceptanceControlState(state);
     const drafts = decideReviewerVerdict(
-      state,
+      controlState,
       { assignmentId, principalId, authorization, verdict },
-      (type, payload) => this.#event(type, payload),
+      (type, payload) => Object.freeze({ ...this.#event(type, payload), occurredAt: controlState.now }),
     );
     await this.#journal.append(runId, state.sequence, drafts);
     return this.read(scopedProjectId, runId);
@@ -1381,10 +1390,11 @@ export class WorkroomKernel {
       taskKey: gate.taskKey,
       targetId: gate.id,
     });
+    const controlState = this.#acceptanceControlState(state);
     const drafts = decideSponsorGate(
-      state,
+      controlState,
       { gateId, principalId, authorization, ...input },
-      (type, payload) => this.#event(type, payload),
+      (type, payload) => Object.freeze({ ...this.#event(type, payload), occurredAt: controlState.now }),
     );
     await this.#journal.append(runId, state.sequence, drafts);
     return this.read(scopedProjectId, runId);
@@ -1502,6 +1512,12 @@ export class WorkroomKernel {
       reason: `Workflow Plan Sponsor Gate ${gate.id}`,
       deadline: gate.deadline,
     });
+  }
+
+  #acceptanceControlState(state: WorkroomRunState): WorkroomRunState {
+    const now = this.#now();
+    if (!Number.isFinite(now)) throw new Error('Acceptance control clock must be finite');
+    return Object.freeze({ ...state, now: Math.max(state.now, now) });
   }
 
   #event(type: WorkroomEventType, payload: Record<string, unknown>): WorkroomEventDraft {

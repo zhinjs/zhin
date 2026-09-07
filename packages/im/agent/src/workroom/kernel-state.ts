@@ -12,6 +12,7 @@ import type {
 import { assertAcceptanceContract, assertPinnedAcceptanceContract } from './acceptance-policy.js';
 import {
   assertReviewerVerdictBindings,
+  assertWaitBinding,
   reviewerVerdictRequiresRework,
   type ReviewerVerdict,
 } from './acceptance-control.js';
@@ -185,13 +186,31 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
     case 'run.created': break;
     case 'plan.admitted': break;
     case 'plan.revision_applied': replanRequested = false; break;
-    case 'plan_gate.decided': break;
+    case 'plan_gate.decided': {
+      const task = requireTask(state, String(payload.taskKey));
+      const gate = task.blockers.find(blocker => blocker.id === payload.gateId && blocker.kind === 'approval');
+      if (task.revision !== payload.taskRevision || !gate) {
+        throw new Error('Plan Sponsor Gate decision targets an absent or stale gate');
+      }
+      const now = Math.max(state.now, event.occurredAt);
+      if (!Number.isFinite(now) || !Number.isFinite(gate.deadline) || gate.deadline <= now) {
+        throw new Error('Plan Sponsor Gate deadline has expired');
+      }
+      break;
+    }
     case 'run.control_decided': break;
     case 'run.replan_requested': replanRequested = true; status = 'needs_replan'; break;
     case 'local_execution.requested': break;
     case 'remote_dispatch.requested': break;
     case 'scheduler.dispatch_requested': break;
-    case 'scheduler.priority_changed': break;
+    case 'scheduler.priority_changed': {
+      const now = Math.max(state.now, event.occurredAt);
+      if (!Number.isFinite(now) || typeof payload.deadline !== 'number'
+        || !Number.isFinite(payload.deadline) || payload.deadline <= now) {
+        throw new Error('Workroom priority proposal is expired');
+      }
+      break;
+    }
     case 'scheduler.preemption_requested': break;
     case 'scheduler.preemption_checkpoint_acknowledged': break;
     case 'scheduler.preemption_timed_out': break;
@@ -361,6 +380,10 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
     case 'reviewer.claimed': {
       const assignment = requireReviewerAssignment(state, String(payload.assignmentId), ['open']);
       if (payload.taskKey !== assignment.taskKey) throw new Error('Reviewer claim targets another Task');
+      assertWaitBinding({ ...state, now: Math.max(state.now, event.occurredAt) }, assignment);
+      if (state.tasks[assignment.taskKey]?.currentReviewerAssignmentId !== assignment.id) {
+        throw new Error('Reviewer control is not the current Task target');
+      }
       assertPersistedAcceptanceAuthorization(state, payload, {
         action: 'claim_review', role: 'reviewer', principalKey: 'reviewerPrincipalId', targetId: assignment.id,
       });
@@ -381,6 +404,10 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
     case 'reviewer.verdict_recorded': {
       const assignment = requireReviewerAssignment(state, String(payload.assignmentId), ['claimed']);
       if (payload.taskKey !== assignment.taskKey) throw new Error('Reviewer verdict targets another Task');
+      assertWaitBinding({ ...state, now: Math.max(state.now, event.occurredAt) }, assignment);
+      if (state.tasks[assignment.taskKey]?.currentReviewerAssignmentId !== assignment.id) {
+        throw new Error('Reviewer control is not the current Task target');
+      }
       assertPersistedAcceptanceAuthorization(state, payload, {
         action: 'submit_review', role: 'reviewer', principalKey: 'reviewerPrincipalId', targetId: assignment.id,
       });
@@ -432,6 +459,10 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
     case 'sponsor_gate.decided': {
       const gate = requireSponsorGate(state, String(payload.gateId), ['open']);
       if (payload.taskKey !== gate.taskKey) throw new Error('Sponsor decision targets another Task');
+      assertWaitBinding({ ...state, now: Math.max(state.now, event.occurredAt) }, gate);
+      if (state.tasks[gate.taskKey]?.currentSponsorGateId !== gate.id) {
+        throw new Error('Sponsor control is not the current Task target');
+      }
       assertPersistedAcceptanceAuthorization(state, payload, {
         action: 'decide_sponsor', role: 'sponsor', principalKey: 'sponsorPrincipalId', targetId: gate.id,
       });
@@ -439,6 +470,7 @@ export function evolveWorkroom(state: WorkroomRunState, event: WorkroomEvent): W
         throw new Error('Sponsor decision is stale for the current Candidate hash');
       }
       const decision = payload.decision as 'approve' | 'reject' | 'request_changes' | 'cancel';
+      if (!gate.allowedActions.includes(decision)) throw new Error(`Sponsor Gate does not allow ${decision}`);
       sponsorGates = {
         ...sponsorGates,
         [gate.id]: {

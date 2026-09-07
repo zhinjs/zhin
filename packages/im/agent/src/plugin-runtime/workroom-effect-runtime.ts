@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   WorkroomEffectLedger,
   WorkroomEffectSequenceConflictError,
@@ -86,19 +87,28 @@ export class WorkroomEffectRuntime {
   #timer?: ReturnType<typeof setTimeout>;
   #running?: Promise<readonly WorkroomEffectState[]>;
   #stopped = false;
+  readonly #abort = new AbortController();
+  readonly #active = new Set<Promise<readonly WorkroomEffectState[]>>();
 
   constructor(readonly options: WorkroomEffectRuntimeOptions) {
     if (!options.workerId.trim()) throw new Error('Effect Runtime workerId is required');
     if (!Number.isSafeInteger(options.fence) || options.fence < 1) {
       throw new Error('Effect Runtime fence is invalid');
     }
-    this.#ledger = new WorkroomEffectLedger(options.journal, options.authorization);
+    this.#ledger = new WorkroomEffectLedger(options.journal, {
+      authorize: input => interruptible(options.authorization.authorize(input), this.#abort.signal),
+    });
     this.#now = options.now ?? Date.now;
     this.#intervalMs = positive(options.intervalMs ?? 1_000, 'intervalMs');
     if (Boolean(options.blockers) !== Boolean(options.blockerPolicy)) {
       throw new Error('Effect Runtime durable blocker control requires trusted blocker policy');
     }
-    options.signal?.addEventListener('abort', () => { void this.dispose(); }, { once: true });
+    if (options.signal?.aborted) {
+      this.#stopped = true;
+      this.#abort.abort(options.signal.reason);
+    } else {
+      options.signal?.addEventListener('abort', () => { void this.dispose(); }, { once: true });
+    }
   }
 
   start(): void {
@@ -111,7 +121,8 @@ export class WorkroomEffectRuntime {
     if (this.#stopped) throw new Error('Effect Runtime is stopped');
     if (!this.options.projects) throw new Error('Effect Runtime Project source is unavailable');
     if (this.#running) return await this.#running;
-    const running = this.#drain(signal);
+    const combined = AbortSignal.any([signal, this.#abort.signal]);
+    const running = interruptible(this.#drain(combined), combined);
     this.#running = running;
     try {
       return await running;
@@ -122,12 +133,22 @@ export class WorkroomEffectRuntime {
 
   async dispose(): Promise<void> {
     this.#stopped = true;
+    this.#abort.abort(new Error('Effect Runtime is stopped'));
     if (this.#timer) clearTimeout(this.#timer);
     this.#timer = undefined;
-    await this.#running;
+    await Promise.allSettled([...this.#active, ...(this.#running ? [this.#running] : [])]);
   }
 
   async runOnce(projectId: string, signal: AbortSignal): Promise<readonly WorkroomEffectState[]> {
+    if (this.#stopped) throw new Error('Effect Runtime is stopped');
+    const combined = AbortSignal.any([signal, this.#abort.signal, ...(this.options.signal ? [this.options.signal] : [])]);
+    combined.throwIfAborted();
+    const running = interruptible(this.#runOnce(projectId, combined), combined);
+    this.#active.add(running);
+    try { return await running; } finally { this.#active.delete(running); }
+  }
+
+  async #runOnce(projectId: string, signal: AbortSignal): Promise<readonly WorkroomEffectState[]> {
     signal.throwIfAborted();
     const initial = replayWorkroomEffectLedger(projectId, await this.options.journal.read(projectId));
     const results: WorkroomEffectState[] = [];
@@ -135,30 +156,40 @@ export class WorkroomEffectRuntime {
       signal.throwIfAborted();
       const state = await this.#ledger.read(projectId, effectId);
       if (state.status === 'pending_authorization') {
+        let dispatchState = state;
         try {
-          await this.options.gateway.prepare?.(state, signal);
+          if (this.options.gateway.prepare) {
+            await interruptible(this.options.gateway.prepare(state, signal), signal);
+          }
+          signal.throwIfAborted();
           const startedAt = this.options.clock
-            ? await this.options.clock.read(state)
+            ? await interruptible(this.options.clock.read(state), signal)
             : this.#now();
           const started = await this.#ledger.startAuthorizedAttempt(projectId, effectId, {
-            operationId: `effect-operation:${effectId}:${this.options.fence}`,
+            operationId: `effect-operation:${effectId}:${this.options.fence}:${randomUUID()}`,
             workerId: this.options.workerId,
             fence: this.options.fence,
             startedAt,
           });
+          dispatchState = started;
+          signal.throwIfAborted();
           const settled = await this.#dispatch(started, signal);
-          await this.options.blockers?.recover(projectId, effectId);
+          await this.#settleBlocker(settled);
           results.push(settled);
         } catch (error) {
+          signal.throwIfAborted();
           if (error instanceof WorkroomEffectSequenceConflictError) continue;
-          await this.#block(state, 'prepare_or_authorize', error);
+          if (!dispatchState.attempt
+            && (await this.#ledger.read(projectId, effectId)).status !== 'pending_authorization') continue;
+          await this.#block(dispatchState, dispatchState.attempt ? 'reconcile' : 'prepare_or_authorize', error);
         }
       } else if (state.status === 'executing' || state.status === 'outcome_unknown') {
         try {
           const settled = await this.#reconcile(state, signal);
-          await this.options.blockers?.recover(projectId, effectId);
+          await this.#settleBlocker(settled);
           results.push(settled);
         } catch (error) {
+          signal.throwIfAborted();
           if (error instanceof WorkroomEffectSequenceConflictError) continue;
           await this.#block(state, 'reconcile', error);
         }
@@ -172,7 +203,7 @@ export class WorkroomEffectRuntime {
       return await this.#ledger.recordReceipt(
         state.projectId,
         state.intent.id,
-        await this.options.gateway.execute(state, signal),
+        await interruptible(this.options.gateway.execute(state, signal), signal),
       );
     } catch (error) {
       if (!(error instanceof WorkroomEffectOutcomeUnknownError)) throw error;
@@ -185,13 +216,20 @@ export class WorkroomEffectRuntime {
       return await this.#ledger.recordReceipt(
         state.projectId,
         state.intent.id,
-        await this.options.gateway.reconcile(state, signal),
+        await interruptible(this.options.gateway.reconcile(state, signal), signal),
       );
     } catch (error) {
       if (!(error instanceof WorkroomEffectOutcomeUnknownError)) throw error;
-      if (state.status === 'outcome_unknown'
-        && state.receipt?.receiptId === error.receipt.receiptId) return state;
       return await this.#ledger.recordReceipt(state.projectId, state.intent.id, error.receipt);
+    }
+  }
+
+  async #settleBlocker(state: WorkroomEffectState): Promise<void> {
+    if (!this.options.blockers) return;
+    if (state.status === 'outcome_unknown') {
+      await this.#block(state, 'reconcile', new Error('Workroom Effect outcome is unknown and requires reconciliation'));
+    } else {
+      await this.options.blockers.recover(state.projectId, state.intent.id);
     }
   }
 
@@ -218,7 +256,11 @@ export class WorkroomEffectRuntime {
       policy: policy.policy,
       reason,
       deadline: policy.deadline,
-      allowedSuccessors: policy.allowedSuccessors,
+      // An existing durable attempt may already have changed the provider.
+      // Neither redispatch nor cancel-as-unexecuted is a safe successor.
+      allowedSuccessors: phase === 'reconcile'
+        ? Object.freeze(['reconcile'] as const)
+        : policy.allowedSuccessors,
     }));
   }
 
@@ -237,4 +279,14 @@ export class WorkroomEffectRuntime {
 function positive(value: unknown, label: string): number {
   if (!Number.isSafeInteger(value) || Number(value) < 1) throw new Error(`${label} is invalid`);
   return Number(value);
+}
+
+/** Stop waiting on uncooperative transports; the durable attempt must be reconciled. */
+function interruptible<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    if (signal.aborted) abort();
+    else signal.addEventListener('abort', abort, { once: true });
+    pending.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+  });
 }

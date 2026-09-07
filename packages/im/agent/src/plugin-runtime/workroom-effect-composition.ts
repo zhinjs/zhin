@@ -24,6 +24,11 @@ import {
   type WorkroomEffectClockPort,
 } from './workroom-effect-runtime.js';
 import {
+  WorkroomDeliveryGateway,
+  WorkroomDeliveryGatewayRouter,
+  workroomDeliveryProviderToken,
+} from './workroom-delivery-gateway.js';
+import {
   WorkroomPayloadEffectGatewayRouter,
   workroomPayloadProcessorRecallProviderToken,
 } from './workroom-payload-processor-recall.js';
@@ -93,7 +98,12 @@ export function installWorkroomEffectResources(
       : undefined,
   });
   const gateway = new WorkroomPayloadEffectGatewayRouter({
-    fallback: gitGateway,
+    fallback: new WorkroomDeliveryGatewayRouter(new WorkroomDeliveryGateway({
+      resolveProvider: () => options.resources.has(workroomDeliveryProviderToken)
+        ? options.resources.use(workroomDeliveryProviderToken)
+        : undefined,
+      ...(options.now ? { now: options.now } : {}),
+    }), gitGateway),
     resolveProcessor: () => options.resources.has(workroomPayloadProcessorRecallProviderToken)
       ? options.resources.use(workroomPayloadProcessorRecallProviderToken)
       : undefined,

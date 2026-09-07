@@ -295,7 +295,7 @@ function requireAuthorized(
   });
 }
 
-function assertWaitBinding(
+export function assertWaitBinding(
   state: WorkroomRunState,
   wait: WorkroomReviewerAssignmentState | WorkroomSponsorGateState,
 ): void {
@@ -309,9 +309,19 @@ function assertWaitBinding(
     || !samePolicy(wait.policy, evaluation.contract.policy)) {
     throw new Error('Acceptance control target does not match its Candidate, Contract or Policy');
   }
+  const producer = task.currentAssignmentId ? state.assignments[task.currentAssignmentId] : undefined;
+  if (!producer || producer.status !== 'execution_completed'
+    || evaluation.candidate.producerAssignmentId !== producer.id
+    || evaluation.candidate.producerPrincipalId !== producer.owner
+    || evaluation.candidate.id !== producer.candidateRef
+    || evaluation.candidate.hash !== producer.candidateHash
+    || evaluation.candidate.reportRef !== producer.reportRef
+    || evaluation.candidate.reportRef !== task.reportRef) {
+    throw new Error('Acceptance control target is stale for the completed Assignment Candidate');
+  }
   if (!task.acceptanceContract) throw new Error('Acceptance control Task has no pinned Contract');
   assertPinnedAcceptanceContract(evaluation.contract, task.acceptanceContract);
-  if (!Number.isFinite(wait.deadline) || wait.deadline <= state.now) {
+  if (!Number.isFinite(state.now) || !Number.isFinite(wait.deadline) || wait.deadline <= state.now) {
     throw new Error('Acceptance control deadline has expired');
   }
 }

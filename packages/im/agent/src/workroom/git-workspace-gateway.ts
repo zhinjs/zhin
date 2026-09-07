@@ -45,16 +45,20 @@ export interface GitWorkspaceCredentialPort {
   }>, signal: AbortSignal): Promise<GitWorkspaceCredential>;
 }
 
-interface GitPushTransportInput {
+export interface GitPushTransportInput {
   readonly operationId: string;
   readonly repositoryId: string;
   readonly ref: string;
   readonly headSha: string;
   readonly force: false;
+  readonly baseSha: string;
+  readonly pathScopes: readonly string[];
   readonly idempotencyKey: string;
 }
 
-interface GitPullRequestTransportInput {
+export interface GitPullRequestTransportInput {
+  readonly baseSha: string;
+  readonly pathScopes: readonly string[];
   readonly operationId: string;
   readonly repositoryId: string;
   readonly headRef: string;
@@ -116,6 +120,9 @@ export function createGitWorkspaceLease(input: GitWorkspaceLeaseInput): GitWorks
   const expectedBranch = `refs/heads/zhin/${required(input.runId, 'runId')}/${required(input.assignmentId, 'assignmentId')}/attempt-${positive(input.attempt, 'attempt')}`;
   const repositoryId = required(input.repository?.id, 'repository id');
   if (!/^github:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repositoryId)) {
+    throw new Error('Git Workspace canonical repository ID is invalid');
+  }
+  if (repositoryId.slice('github:'.length).split('/').some(part => part === '.' || part === '..')) {
     throw new Error('Git Workspace canonical repository ID is invalid');
   }
   if (repositoryId !== repositoryId.toLowerCase()) {
@@ -201,6 +208,8 @@ export class GitWorkspaceGateway {
       ref: lease.attemptBranch,
       headSha,
       force: false as const,
+      baseSha: lease.baseSha,
+      pathScopes: lease.pathScopes,
       idempotencyKey: `git-push:${lease.digest}:${input.operationId}`,
     });
     const receipt = await this.options.transport.push(request, credential, signal);
@@ -231,6 +240,8 @@ export class GitWorkspaceGateway {
       repositoryId: lease.repository.id,
       headRef: lease.attemptBranch,
       baseRef: lease.targetRef,
+      baseSha: lease.baseSha,
+      pathScopes: lease.pathScopes,
       headSha,
       idempotencyKey: `git-pr:${lease.digest}:${input.operationId}`,
     });
@@ -293,6 +304,8 @@ export class GitWorkspaceGateway {
     required(credential?.secret, 'credential secret');
     positive(credential?.expiresAt, 'credential expiresAt');
     if (credential.expiresAt <= this.#now()) throw new Error('Git Workspace credential is expired');
+    signal.throwIfAborted();
+    this.#assertActive(lease);
     return credential;
   }
 
@@ -373,7 +386,7 @@ function branchRef(value: unknown, label: string): string {
 }
 
 function gitSha(value: unknown, label: string): string {
-  if (typeof value !== 'string' || !/^[a-f0-9]{40,64}$/u.test(value)) throw new Error(`${label} is invalid`);
+  if (typeof value !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(value)) throw new Error(`${label} is invalid`);
   return value;
 }
 

@@ -27,6 +27,9 @@ export interface WorkroomEffectIntentInput {
       }>
     | Readonly<{ kind: 'git_open_pr'; parameters: { repositoryId: string; headRef: string; baseRef: string; headSha: string } }>
     | Readonly<{ kind: 'git_cancel_remote'; parameters: { repositoryId: string; remoteOperationId: string } }>
+    | Readonly<{ kind: 'delivery_release'; parameters: {
+        repositoryId: string; headSha: string; artifactDigest: string; environment: string; pipelineRef: string;
+      } }>
     | Readonly<{ kind: 'processor_recall'; parameters: {
         purgeId: string;
         objectId: string;
@@ -167,7 +170,9 @@ export class MemoryWorkroomEffectJournal implements WorkroomEffectJournal {
     expectedSequence: number,
     drafts: readonly WorkroomEffectEventDraft[],
   ): Promise<readonly WorkroomEffectEvent[]> {
-    const current = await this.read(projectId);
+    // Keep compare-and-append synchronous: yielding after the read lets two
+    // writers both claim the same sequence and dispatch the same side effect.
+    const current = this.#projects.get(required(projectId, 'projectId')) ?? Object.freeze([]);
     const actual = current.length - 1;
     if (actual !== expectedSequence) throw new WorkroomEffectSequenceConflictError(expectedSequence, actual);
     const appended = drafts.map((draft, index) => createWorkroomEffectEvent(
@@ -304,11 +309,17 @@ export function replayWorkroomEffectLedger(
   events: readonly WorkroomEffectEvent[],
 ): Readonly<Record<string, WorkroomEffectState>> {
   const states: Record<string, WorkroomEffectState> = {};
+  const idempotencyKeys = new Set<string>();
   events.forEach((event, sequence) => {
     assertWorkroomEffectEvent(event, projectId, sequence);
     if (event.type === 'effect.intent_recorded') {
       const intent = assertIntent(event.payload.intent as WorkroomEffectIntent);
+      if (intent.projectId !== projectId) throw new Error('Workroom Effect Project binding drift');
       if (states[intent.id]) throw new Error(`Duplicate Workroom Effect Intent ${intent.id}`);
+      if (idempotencyKeys.has(intent.idempotencyKey)) {
+        throw new Error('Workroom Effect idempotency key is already bound to an Intent');
+      }
+      idempotencyKeys.add(intent.idempotencyKey);
       states[intent.id] = deepFreeze({
         projectId, sequence, status: 'pending_authorization', intent,
       });
@@ -420,6 +431,19 @@ function normalizeOperation(operation: WorkroomEffectIntentInput['operation']) {
       }),
     });
   }
+  if (operation.kind === 'delivery_release') {
+    assertParameterKeys(operation.parameters, ['repositoryId', 'headSha', 'artifactDigest', 'environment', 'pipelineRef']);
+    return deepFreeze({
+      kind: operation.kind,
+      parameters: deepFreeze({
+        repositoryId: required(operation.parameters.repositoryId, 'repositoryId'),
+        headSha: gitSha(operation.parameters.headSha, 'headSha'),
+        artifactDigest: requiredDigest(operation.parameters.artifactDigest, 'artifactDigest'),
+        environment: required(operation.parameters.environment, 'environment'),
+        pipelineRef: required(operation.parameters.pipelineRef, 'pipelineRef'),
+      }),
+    });
+  }
   if (operation.kind === 'processor_recall') {
     assertParameterKeys(operation.parameters, [
       'purgeId', 'objectId', 'locationId', 'locationAuthorityDigest',
@@ -526,6 +550,11 @@ function assertAttempt(attempt: WorkroomEffectAttempt, state: WorkroomEffectStat
     || attempt.idempotencyKey !== state.intent.idempotencyKey) {
     throw new Error('Workroom Effect attempt binding drift');
   }
+  required(attempt.operationId, 'attempt operationId');
+  required(attempt.workerId, 'attempt workerId');
+  if (attempt.id !== `effect-attempt:${attempt.operationId}`) {
+    throw new Error('Workroom Effect attempt identity drift');
+  }
   positive(attempt.fence, 'attempt fence');
   nonNegative(attempt.startedAt, 'attempt startedAt');
 }
@@ -626,7 +655,7 @@ function requiredDigest(value: unknown, label: string): string {
 }
 
 function gitSha(value: unknown, label: string): string {
-  if (typeof value !== 'string' || !/^[a-f0-9]{40,64}$/u.test(value)) throw new Error(`${label} is invalid`);
+  if (typeof value !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(value)) throw new Error(`${label} is invalid`);
   return value;
 }
 

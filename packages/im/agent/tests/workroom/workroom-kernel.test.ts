@@ -259,11 +259,13 @@ describe('WorkroomKernel', () => {
   });
 
   it('accepts a medium-risk Task only after an independently authorized Reviewer verdict', async () => {
+    let now = 100;
+    let expireDuringAuthorization = false;
     const journal = new MemoryWorkroomJournal();
     let lastAuthorityDecision: Record<string, unknown> | undefined;
     const kernel = new WorkroomKernel({
       journal,
-      now: () => 100,
+      now: () => now,
       createId: (() => { let id = 0; return () => `review-id-${++id}`; })(),
       acceptancePolicy: {
         ...pinnedAcceptancePolicy(),
@@ -282,7 +284,10 @@ describe('WorkroomKernel', () => {
           };
         },
       },
-      acceptanceAuthority: allowingAcceptanceAuthority((decision) => { lastAuthorityDecision = decision; }),
+      acceptanceAuthority: allowingAcceptanceAuthority((decision) => {
+        lastAuthorityDecision = decision;
+        if (expireDuringAuthorization) now = 120;
+      }),
     });
     await kernel.createRun({ runId: 'run-1', projectId: 'project-1', title: 'Reviewed result' });
     await kernel.execute('project-1', 'run-1', {
@@ -303,6 +308,13 @@ describe('WorkroomKernel', () => {
     await expect(kernel.claimReviewerAssignment(
       'project-1', 'run-1', reviewId, 'builder',
     )).rejects.toThrow('Producer cannot review its own Candidate');
+    const beforeExpiredClaim = await journal.read('run-1');
+    expireDuringAuthorization = true;
+    await expect(kernel.claimReviewerAssignment('project-1', 'run-1', reviewId, 'reviewer-bob'))
+      .rejects.toThrow('deadline has expired');
+    expect(await journal.read('run-1')).toEqual(beforeExpiredClaim);
+    expireDuringAuthorization = false;
+    now = 100;
     await kernel.claimReviewerAssignment('project-1', 'run-1', reviewId, 'reviewer-bob');
     await expect(kernel.evaluateTaskAcceptance('project-1', 'run-1', 'build'))
       .rejects.toThrow('already has an open Acceptance wait');
@@ -310,6 +322,15 @@ describe('WorkroomKernel', () => {
     await expect(kernel.read('project-1', 'run-1')).resolves.toMatchObject({
       reviewerAssignments: { [reviewId]: { status: 'claimed' } },
     });
+    const beforeExpiredVerdict = await journal.read('run-1');
+    now = 120;
+    await expect(kernel.submitReviewerVerdict('project-1', 'run-1', reviewId, 'reviewer-bob', {
+      candidateHash: TEST_CANDIDATE_HASH,
+      criteria: [{ criterionId: 'criterion-build', status: 'passed', evidenceRefs: ['review://1'] }],
+      acceptedClaimIds: ['claim-1'], rejectedClaimIds: [], evidenceRefs: ['review://1'],
+    })).rejects.toThrow('deadline has expired');
+    expect(await journal.read('run-1')).toEqual(beforeExpiredVerdict);
+    now = 101;
     const accepted = await kernel.submitReviewerVerdict(
       'project-1', 'run-1', reviewId, 'reviewer-bob', {
         candidateHash: TEST_CANDIDATE_HASH,
@@ -330,6 +351,12 @@ describe('WorkroomKernel', () => {
       acceptedClaimIds: ['claim-1'], rejectedClaimIds: [],
     });
     const events = await journal.read('run-1');
+    expect(events.find(entry => entry.type === 'reviewer.verdict_recorded')?.occurredAt).toBe(101);
+    for (const type of ['reviewer.claimed', 'reviewer.verdict_recorded']) {
+      expect(() => replayWorkroom(events.map(entry => entry.type === type
+        ? { ...entry, occurredAt: 120 } : entry))).toThrow('deadline has expired');
+    }
+
     const forgedVerdict = events.map((entry) => entry.type === 'reviewer.verdict_recorded'
       ? {
           ...entry,
@@ -402,11 +429,12 @@ describe('WorkroomKernel', () => {
   });
 
   it('requires Reviewer then Sponsor for high-risk judgment and preserves claim disposition', async () => {
+    let now = 100;
     const journal = new MemoryWorkroomJournal();
     const basePolicy = pinnedAcceptancePolicy();
     const kernel = new WorkroomKernel({
       journal,
-      now: () => 100,
+      now: () => now,
       createId: (() => { let id = 0; return () => `gated-id-${++id}`; })(),
       acceptanceAuthority: allowingAcceptanceAuthority(),
       acceptancePolicy: {
@@ -474,6 +502,16 @@ describe('WorkroomKernel', () => {
     await expect(kernel.decideSponsorGate('project-1', 'run-1', gateId, 'sponsor-alice', {
       candidateHash: 'sha256:wrong', decision: 'approve', reason: 'wrong target',
     })).rejects.toThrow('stale for the current Candidate hash');
+    const beforeRejectedDecisions = await journal.read('run-1');
+    await expect(kernel.decideSponsorGate('project-1', 'run-1', gateId, 'intruder', {
+      candidateHash: TEST_CANDIDATE_HASH, decision: 'approve', reason: 'unauthorized',
+    })).rejects.toThrow('Acceptance authority denied');
+    now = 140;
+    await expect(kernel.decideSponsorGate('project-1', 'run-1', gateId, 'sponsor-alice', {
+      candidateHash: TEST_CANDIDATE_HASH, decision: 'approve', reason: 'late approval',
+    })).rejects.toThrow('deadline has expired');
+    expect(await journal.read('run-1')).toEqual(beforeRejectedDecisions);
+    now = 101;
     const accepted = await kernel.decideSponsorGate('project-1', 'run-1', gateId, 'sponsor-alice', {
       candidateHash: TEST_CANDIDATE_HASH, decision: 'approve', reason: 'approved exact candidate',
     });
@@ -487,6 +525,17 @@ describe('WorkroomKernel', () => {
       acceptedClaimIds: ['claim-1'],
       rejectedClaimIds: ['claim-2'],
     });
+    const acceptedEvents = await journal.read('run-1');
+    expect(() => replayWorkroom(acceptedEvents.map(entry => entry.type === 'assignment.execution_completed'
+      ? { ...entry, payload: { ...entry.payload, candidateHash: `sha256:${'e'.repeat(64)}` } }
+      : entry))).toThrow('stale for the completed Assignment Candidate');
+
+    await expect(kernel.decideSponsorGate('project-1', 'run-1', gateId, 'sponsor-alice', {
+      candidateHash: TEST_CANDIDATE_HASH, decision: 'approve', reason: 'duplicate approval',
+    })).rejects.toThrow('Open Sponsor Gate');
+    expect(await journal.read('run-1')).toEqual(acceptedEvents);
+    expect(() => replayWorkroom(acceptedEvents.map(entry => entry.type === 'sponsor_gate.decided'
+      ? { ...entry, occurredAt: 140 } : entry))).toThrow('deadline has expired');
     const forgedSponsorHash = (await journal.read('run-1')).map((entry) => entry.type === 'sponsor_gate.decided'
       ? { ...entry, payload: { ...entry.payload, candidateHash: 'sha256:forged' } }
       : entry);

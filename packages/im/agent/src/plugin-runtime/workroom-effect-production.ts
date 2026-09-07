@@ -147,6 +147,8 @@ export interface WorkroomGitHubReconciliationObservation {
 }
 
 export interface WorkroomGitHubCapabilityPort {
+  /** Logical capability identity authorized in the Effect Intent; required at execution/recovery. */
+  readonly binding?: Readonly<{ ref: string; digest: string }>;
   readonly provider: Readonly<{ id: string; digest: string }>;
   readonly credentials: GitWorkspaceCredentialPort;
   readonly transport: GitWorkspaceTransportPort;
@@ -192,6 +194,9 @@ export class ProductionGitWorkroomEffectGateway implements WorkroomEffectGateway
       signal,
       state.intent.operation.kind !== 'git_cancel_remote',
     );
+    if (state.authorization.expiresAt <= this.#now()) {
+      throw new Error('GitHub Effect authorization is expired before execution');
+    }
     const gateway = new GitWorkspaceGateway({
       generation: this.options.generation,
       credentials: capability.credentials,
@@ -260,6 +265,9 @@ export class ProductionGitWorkroomEffectGateway implements WorkroomEffectGateway
     capability: WorkroomGitHubCapabilityPort;
   }> {
     signal.throwIfAborted();
+    if (state.intent.operation.kind === 'delivery_release') {
+      throw new Error('Delivery release requires its separately registered typed capability');
+    }
     if (state.intent.operation.kind === 'processor_recall') {
       throw new Error('Processor recall requires its separately registered typed capability');
     }
@@ -279,6 +287,9 @@ export class ProductionGitWorkroomEffectGateway implements WorkroomEffectGateway
     const capability = this.options.resolveCapability();
     if (!capability) throw new Error('Generation-owned GitHub capability is unavailable');
     requireProvider(capability.provider);
+    if (!capability.binding || canonicalWorkroomJson(capability.binding) !== canonicalWorkroomJson(state.intent.capability)) {
+      throw new Error('GitHub capability binding is missing or does not match the authorized Effect Intent');
+    }
     if (requireProtection) {
       const protection = this.options.resolveProtection();
       if (!protection) throw new Error('Git branch-protection authority is unavailable');
@@ -329,6 +340,9 @@ function assertLeaseJoin(lease: GitWorkspaceLease, state: WorkroomEffectState): 
   const operation = state.intent.operation;
   if (operation.kind === 'compensation') {
     throw new Error('Compensation is not a Git Workspace publication operation');
+  }
+  if (operation.kind === 'delivery_release') {
+    throw new Error('Delivery release is not a Git Workspace publication operation');
   }
   if (operation.kind === 'processor_recall') {
     throw new Error('Processor recall is not a Git Workspace publication operation');
@@ -391,9 +405,8 @@ function effectReceipt(
 ): WorkroomEffectGatewayReceipt {
   if (!state.authorization || !state.attempt) throw new Error('Effect receipt requires authorized attempt');
   requireProvider(provider);
-  return deepFreeze({
-    version: 1,
-    receiptId: `effect-receipt:${state.attempt.id}:${remoteDigest}`,
+  const body = deepFreeze({
+    version: 1 as const,
     intentId: state.intent.id,
     intentDigest: state.intent.digest,
     authorizationDigest: state.authorization.authorizationDigest,
@@ -406,6 +419,7 @@ function effectReceipt(
     observedAt: positive(observedAt, 'observedAt'),
     authenticatedBy: required(authenticatedBy, 'authenticatedBy'),
   });
+  return deepFreeze({ ...body, receiptId: `effect-receipt:${digest(body)}` });
 }
 
 function requireProvider(value: Readonly<{ id: string; digest: string }>): void {
