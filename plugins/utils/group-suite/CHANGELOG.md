@@ -1,5 +1,13 @@
 # @zhin.js/plugin-group-suite
 
+## 5.0.1
+
+### Patch Changes
+
+- @zhin.js/core@1.5.16
+- zhin.js@7.0.1
+- @zhin.js/agent@1.2.1
+
 ## 5.0.0
 
 ### Patch Changes

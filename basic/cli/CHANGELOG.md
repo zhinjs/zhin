@@ -1,5 +1,21 @@
 # @zhin.js/cli
 
+## 4.0.1
+
+### Patch Changes
+
+- f7ee28d: Add snapshot-scoped readiness probes and `zhin doctor --live` for required database, endpoint slots and Agent bindings. Load optional Agent and Workroom dependencies on demand so IM-only projects can start without the AI stack, while preserving Agent command help.
+- Updated dependencies [f7ee28d]
+- Updated dependencies [f7ee28d]
+  - @zhin.js/adapter@1.2.2
+  - @zhin.js/runtime@1.0.19
+  - @zhin.js/core@1.5.16
+  - @zhin.js/pagemanager@2.0.23
+  - @zhin.js/config-yaml@1.0.19
+  - @zhin.js/a2a@4.0.1
+  - @zhin.js/agent@1.2.1
+  - @zhin.js/speech@3.0.16
+
 ## 4.0.0
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.0.65
+
+### Patch Changes
+
+- f7ee28d: Fix generated Sandbox endpoint IDs and fallback configuration. Pin generated projects to pnpm 9, validate the Node 22.12+ runtime requirement before creating files, and support `--skip-install`. Validate packed candidate packages through clean installation, Sandbox messages, command hot reload and production restart.
+
 ## 1.0.64
 
 ### Patch Changes
