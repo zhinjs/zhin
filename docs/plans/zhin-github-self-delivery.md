@@ -218,4 +218,4 @@ GitHub 评论、Issue 正文和 Agent 输出是非权威输入。聊天里的“
 - P5：维护者确认现有Hugging Face Space为 `zhinjs/demo`；只读核验RUNNING/cpu-basic/无挂载卷。新增[独立Canary bundle准备工具](../../deploy/huggingface-canary/README.md)，校验同批tgz/manifest、要求冻结lockfile与Node镜像，提供持续Terminal探测；未覆盖或部署现有demo。控制面必须使用独立持久存储。
 - P6：真实平台闭环、故障演练、72小时观察、备份恢复和正式准入尚未完成。上述基础模块的单测/本地启动不替代这些证据。
 
-实现已提交为[草稿 PR #657](https://github.com/zhinjs/zhin/pull/657)。本地全仓门禁和交付专项已执行；真实首轮 CI 的六个必需 job 均因临时 GITHUB_TOKEN 无权读取跨组织私有 @icqqjs 包而下载403失败；按维护者选择，已改为仅安装步骤注入独立 secrets.NPM_TOKEN，待配置后重新验证。核心候选路径通过真实 Docker 裁剪锁文件、构建、28个tarball、干净安装与minimal-bot消息往返；这不替代全仓CI或长期Canary准入。最终证据以PR当前说明和对应SHA运行记录为准。
+实现已提交为[草稿 PR #657](https://github.com/zhinjs/zhin/pull/657)。本地全仓门禁和交付专项已执行；真实首轮 CI 的六个必需 job 均因临时 GITHUB_TOKEN 无权读取跨组织私有 @icqqjs 包而下载403失败；经维护者确认，恢复 NPM_TOKEN 对既有 secrets.PERSONAL_TOKEN 的引用，并仅在安装步骤注入，继续远端复验。核心候选路径通过真实 Docker 裁剪锁文件、构建、28个tarball、干净安装与minimal-bot消息往返；这不替代全仓CI或长期Canary准入。最终证据以PR当前说明和对应SHA运行记录为准。

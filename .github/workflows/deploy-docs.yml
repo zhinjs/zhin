@@ -54,7 +54,7 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
 
       - name: Run dependency lifecycle scripts without registry credentials
         run: pnpm rebuild

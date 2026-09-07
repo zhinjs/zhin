@@ -12,12 +12,12 @@ describe('untrusted candidate CI credential isolation', () => {
     const job = config.jobs[jobName];
     expect(config.permissions).toEqual({ contents: 'read' });
     expect(job.permissions).toEqual({ contents: 'read', packages: 'read' });
-    expect(source).not.toMatch(/secrets\.(?!NPM_TOKEN\b)|secrets\[['"]|CODECOV_TOKEN/);
-    expect(source.match(/secrets\.NPM_TOKEN/g)).toHaveLength(1);
+    expect(source).not.toMatch(/secrets\.(?!PERSONAL_TOKEN\b)|secrets\[['"]|CODECOV_TOKEN/);
+    expect(source.match(/secrets\.PERSONAL_TOKEN/g)).toHaveLength(1);
     expect(config.env?.NPM_TOKEN ?? job.env?.NPM_TOKEN).toBe('');
     const install = job.steps.find((step: { name: string }) => step.name === 'install dependencies');
     expect(install.run).toBe('pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile');
-    expect(install.env).toEqual({ NPM_TOKEN: '${{ secrets.NPM_TOKEN }}' });
+    expect(install.env).toEqual({ NPM_TOKEN: '${{ secrets.PERSONAL_TOKEN }}' });
     const installIndex = job.steps.indexOf(install);
     expect(job.steps[installIndex + 1].run).toBe('pnpm rebuild');
     for (const step of job.steps) {

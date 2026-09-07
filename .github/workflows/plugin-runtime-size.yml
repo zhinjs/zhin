@@ -47,12 +47,12 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # Dedicated read-only NPM_TOKEN reads the cross-organization @icqqjs packages.
-      # No PERSONAL_TOKEN fallback and no credential materialization in .npmrc.
+      # Preserve the existing package credential mapping for cross-organization @icqqjs access.
+      # Do not materialize credentials in .npmrc or expose them to lifecycle scripts.
       - name: install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
 
       - name: run dependency lifecycle scripts without registry credentials
         run: pnpm rebuild
