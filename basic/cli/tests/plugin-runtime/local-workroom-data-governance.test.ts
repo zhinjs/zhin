@@ -1,10 +1,17 @@
-import { chmod, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, open, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import {
   createLocalWorkroomDataGovernanceAuthority,
 } from '../../src/plugin-runtime/local-workroom-data-governance.js';
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, open: vi.fn(actual.open) };
+});
+
+afterEach(() => { vi.restoreAllMocks(); });
 
 describe('local Workroom Data Governance authority', () => {
   const context = {
@@ -115,6 +122,86 @@ describe('local Workroom Data Governance authority', () => {
       .resolves.toEqual(request.dataKey);
     await expect(second.cryptography.unwrap({ ...context, ...firstWrapped! }, signal))
       .resolves.toEqual(request.dataKey);
+  });
+
+  it('keeps the final key absent while one creator is paused before writing, then adopts the complete winner', async () => {
+    const root = join(tmpdir(), `zhin-local-workroom-governance-${randomUUID()}`);
+    await mkdir(root);
+    const keyPath = join(root, 'workroom-data-governance-root-key.json');
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    let releaseWrite!: () => void;
+    let enteredWrite!: () => void;
+    const paused = new Promise<void>(resolve => { enteredWrite = resolve; });
+    const resume = new Promise<void>(resolve => { releaseWrite = resolve; });
+    vi.mocked(open).mockImplementationOnce(async (...args) => {
+      const handle = await actual.open(...args);
+      const write = handle.writeFile.bind(handle);
+      vi.spyOn(handle, 'writeFile').mockImplementationOnce(async (...writeArgs) => {
+        enteredWrite();
+        await resume;
+        return write(...writeArgs);
+      });
+      return handle;
+    });
+    const first = createLocalWorkroomDataGovernanceAuthority({ stateRoot: root });
+    const second = createLocalWorkroomDataGovernanceAuthority({ stateRoot: root });
+    const signal = new AbortController().signal;
+    const request = { ...context, dataKey: new Uint8Array(32).fill(5) };
+    const pending = first.cryptography.wrap(request, signal);
+    try {
+      await paused;
+      await expect(readFile(keyPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+      const secondWrapped = await second.cryptography.wrap(request, signal);
+      const winnerBytes = await readFile(keyPath, 'utf8');
+      releaseWrite();
+      const firstWrapped = await pending;
+      expect(firstWrapped?.keyId).toBe(secondWrapped?.keyId);
+      await expect(first.cryptography.unwrap({ ...context, ...secondWrapped! }, signal)).resolves.toEqual(request.dataKey);
+      expect(await readFile(keyPath, 'utf8')).toBe(winnerBytes);
+      expect(await readdir(root)).toEqual(['workroom-data-governance-root-key.json']);
+      if (process.platform !== 'win32') expect((await stat(keyPath)).mode & 0o777).toBe(0o600);
+    } finally {
+      releaseWrite();
+      await pending.catch(() => undefined);
+      vi.mocked(open).mockImplementation(actual.open);
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each(['writeFile', 'sync'] as const)('cleans unpublished key material when %s fails', async (operation) => {
+    const root = join(tmpdir(), `zhin-local-workroom-governance-${randomUUID()}`);
+    await mkdir(root);
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    vi.mocked(open).mockImplementationOnce(async (...args) => {
+      const handle = await actual.open(...args);
+      vi.spyOn(handle, operation).mockRejectedValueOnce(new Error('injected key persistence failure'));
+      return handle;
+    });
+    try {
+      const authority = createLocalWorkroomDataGovernanceAuthority({ stateRoot: root });
+      await expect(authority.issuePublicationDecision(decisionInput, new AbortController().signal))
+        .rejects.toThrow('injected key persistence failure');
+      expect(await readdir(root)).toEqual([]);
+      const retry = createLocalWorkroomDataGovernanceAuthority({ stateRoot: root });
+      await retry.issuePublicationDecision(decisionInput, new AbortController().signal);
+      expect(await readdir(root)).toEqual(['workroom-data-governance-root-key.json']);
+    } finally {
+      vi.mocked(open).mockImplementation(actual.open);
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not replace a pre-existing incomplete key document', async () => {
+    const root = join(tmpdir(), `zhin-local-workroom-governance-${randomUUID()}`);
+    await mkdir(root);
+    const keyPath = join(root, 'workroom-data-governance-root-key.json');
+    await writeFile(keyPath, '', { mode: 0o600 });
+    try {
+      const authority = createLocalWorkroomDataGovernanceAuthority({ stateRoot: root });
+      await expect(authority.issuePublicationDecision(decisionInput, new AbortController().signal)).rejects.toThrow();
+      expect(await readFile(keyPath, 'utf8')).toBe('');
+      expect(await readdir(root)).toEqual(['workroom-data-governance-root-key.json']);
+    } finally { await rm(root, { recursive: true, force: true }); }
   });
 
   it('rejects invalid key documents and insecure POSIX permissions', async () => {

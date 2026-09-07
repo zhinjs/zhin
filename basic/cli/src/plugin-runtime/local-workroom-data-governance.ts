@@ -4,10 +4,11 @@ import {
   createHash,
   createHmac,
   randomBytes,
+  randomUUID,
   timingSafeEqual,
 } from 'node:crypto';
-import { open, readFile, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { link, open, readFile, stat, unlink } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import {
   digestCanonicalWorkroomValue,
   type WorkroomDataGovernancePublicationDecision,
@@ -271,18 +272,36 @@ async function readOrCreateRootKey(
       keyId: `local-file:sha256:${createHash('sha256').update(key).digest('hex')}`,
       key: key.toString('base64'),
     });
+    // Publish only complete, synced bytes. Opening the final path with wx would
+    // expose an empty document to another first-use authority before writeFile.
+    const temporary = `${path}.${randomUUID()}.tmp`;
+    let temporaryCreated = false;
     try {
-      const handle = await open(path, 'wx', 0o600);
+      const handle = await open(temporary, 'wx', 0o600);
+      temporaryCreated = true;
       try {
         await handle.writeFile(`${JSON.stringify(document)}\n`, 'utf8');
         await handle.sync();
       } finally {
         await handle.close();
       }
-    } catch (createError) {
-      if (!hasCode(createError, 'EEXIST')) throw createError;
-      document = parseRootKey(JSON.parse(await readFile(path, 'utf8')));
+      try {
+        await link(temporary, path);
+      } catch (createError) {
+        if (!hasCode(createError, 'EEXIST')) throw createError;
+        // Another atomic publisher won. Never replace or rotate its key.
+        document = parseRootKey(JSON.parse(await readFile(path, 'utf8')));
+      }
+    } finally {
+      if (temporaryCreated) await unlink(temporary);
     }
+  }
+  // POSIX requires directory fsync for crash durability of the published name.
+  // Windows does not support opening/flushing directories through this Node API;
+  // it still receives complete-file atomic publication and a flushed key file.
+  if (process.platform !== 'win32') {
+    const directory = await open(dirname(path), 'r');
+    try { await directory.sync(); } finally { await directory.close(); }
   }
   if (process.platform !== 'win32' && ((await stat(path)).mode & 0o077) !== 0) {
     throw new Error(`Workroom Data Governance Root key permissions must be 0600: ${path}`);
