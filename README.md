@@ -144,6 +144,8 @@ These surfaces share one Plugin Runtime instead of forming separate execution is
 
 ### Install tiers (zhin.js 1.1.x)
 
+> Official packages use the owner-governed 1.1.x stable line. Routine releases are patch-only.
+
 > **SSOT** (Chinese table): [`docs/snippets/install-tiers.md`](./docs/snippets/install-tiers.md) · site: [Install tiers](https://zhin.js.org/getting-started/#install-tiers) · Chinese README: [`README.zh-CN.md`](./README.zh-CN.md)
 
 | Tier | Install | ~production size | Capabilities |

@@ -3,11 +3,11 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
-      "changeset": "reset-zhin-stable-line.md",
-      "package": "zhin.js",
+      "changeset": "reset-official-stable-line.md",
+      "packages": "*",
       "type": "minor",
       "approvedBy": "lc-cn",
-      "reason": "Reset the stable public line to 1.1.0"
+      "reason": "Reset the complete official npm ecosystem to the 1.1.x stable line"
     }
   ]
 }

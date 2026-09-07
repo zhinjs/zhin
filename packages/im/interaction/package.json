@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/interaction",
-  "version": "1.0.1",
+  "version": "1.0.99",
   "description": "Transport-neutral user interaction contracts for Zhin.js",
   "type": "module",
   "main": "./lib/index.js",

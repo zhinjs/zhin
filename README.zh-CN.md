@@ -144,6 +144,8 @@ flowchart LR
 
 ### Install tiers（zhin.js 1.1.x）
 
+> 官方包统一使用 owner 管理的 1.1.x 稳定线；常规发布只增加 patch。
+
 > **SSOT**：[`docs/snippets/install-tiers.md`](./docs/snippets/install-tiers.md) · 在线：[Install tiers](https://zhin.js.org/getting-started/#install-tiers) · English: [`README.md`](./README.md)
 
 | 档位 | 安装 | 约 production 体积 | 能力 |

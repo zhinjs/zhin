@@ -139,7 +139,7 @@ During daily development you only need `pnpm release` to commit the changeset fi
 The default release policy permits patch releases only. `pnpm check:release-plan` inspects the
 complete Changesets plan and fails on any unapproved minor or major, including bumps inferred
 through dependency propagation. A non-patch release requires the version owner to record the
-changeset filename, package, release type, approver, and reason in
+changeset filename, package scope, release type, approver, and reason in
 `.changeset/version-policy.json`. `.github/CODEOWNERS` assigns owner review for that policy file.
 
 Internal peer dependencies use `workspace:^` so compatible internal releases publish as caret
@@ -147,9 +147,12 @@ ranges instead of exact versions. Private examples do not participate in Changes
 
 ### 1.1 stable line
 
-After 1.0.93, internal peer dependency propagation inflated `zhin.js` through versions 2.x–7.x.
-Those versions remain on npm to preserve existing lockfiles and are marked as superseded by 1.1.0.
-Both `latest` and `stable` point to 1.1.0 after publication; routine releases then increment patch only.
+The official npm ecosystem uses the 1.1.x stable line. Eighty-one packages whose 1.1.0 version
+was still available start at 1.1.0. Seven packages that had already published 1.1.0 use their next
+available 1.1.x patch because npm does not permit version reuse. Historical higher versions remain
+available to preserve existing lockfiles and are marked as superseded by the corresponding 1.1.x
+stable release. Each official package points both `latest` and `stable` to that release; routine
+releases then increment patch only.
 
 ## Publishing (GitHub CI)
 

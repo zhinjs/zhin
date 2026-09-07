@@ -49,13 +49,19 @@ const malformedApprovals = approvals.filter(
     approval.approvedBy !== versionPolicy.owner ||
     typeof approval.reason !== 'string' ||
     approval.reason.trim() === '' ||
+    !(
+      approval.packages === '*' ||
+      (Array.isArray(approval.packages) &&
+        approval.packages.length > 0 &&
+        approval.packages.every((name) => typeof name === 'string'))
+    ) ||
     (approval.type !== 'minor' && approval.type !== 'major'),
 );
 
 if (malformedApprovals.length > 0) {
   console.error('Version policy contains malformed non-patch approvals:');
   for (const approval of malformedApprovals) {
-    console.error(`- ${approval.changeset}: ${approval.package} (${approval.type})`);
+    console.error(`- ${approval.changeset}: ${JSON.stringify(approval.packages)} (${approval.type})`);
   }
   process.exit(1);
 }
@@ -64,8 +70,8 @@ const activeApprovals = approvals.filter((approval) =>
   declarations.some(
     (declaration) =>
       declaration.changeset === approval.changeset &&
-      declaration.package === approval.package &&
-      declaration.type === approval.type,
+      declaration.type === approval.type &&
+      (approval.packages === '*' || approval.packages.includes(declaration.package)),
   ),
 );
 
@@ -92,7 +98,8 @@ try {
       (release) =>
         !activeApprovals.some(
           (approval) =>
-            approval.package === release.name && approval.type === release.type,
+            approval.type === release.type &&
+            (approval.packages === '*' || approval.packages.includes(release.name)),
         ),
     )
     .map((release) => `${release.name} (${release.oldVersion} -> ${release.newVersion})`);
