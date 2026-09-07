@@ -30,3 +30,8 @@ Host 私有 composition 捕获已有 Kernel、Catalog、Profile registry 和 Run
 默认 CLI 项目可启动终端 doctor，但没有安装外部服务身份和私有 Host integration，故 readiness 为 false。不能仅添加 YAML 布尔字段绕过。实际自行托管者必须在可信 composition root 提供上述端口、Project/Profile、执行器和 Provider；缺任一连接不得标为可交付。
 
 首版只支持经认证命令明确选入；没有自动消费 Issue/评论/webhook，未实现的 webhook 不能作为授权入口。现有 Kernel/Effect 事实保存 candidate/PR/CI/deployment 关联；本项目的快照仅保存 Issue → operation 的不可变入场信息，不复制运行状态。真实 GitHub 写入、人工合并、长期 canary 和生产准入仍按仓库计划逐项验收。
+
+
+持久 Coding 外部执行事实可使用 `FileCodingExecutionStore`（同样要求支持 fsync / hardlink 的持久文件系统）。将 `claimExecution: (envelope, signal) => store.claimExecution(envelope, signal)` 委托给它，并把 store 作为 `CodingReportPort` 传入执行器。该 store 只记录派发与不可变产物，不授予执行权限；`resolve` / `assertCurrent` / `release` 仍必须接当前 Assignment 的 lease、attempt、fence 和取消事实。已有 claim 而没有 report 时保留人工对账状态，不自动再次执行。
+
+恢复边界：Issue 快照落盘后，首次 admission 若因 Catalog/Profile 更新而被拒绝，重试会继续保持旧快照并阻塞；尚未提供自动迁移入口。不要直接删除快照来绕过权威检查，应先核对 Kernel admission / Run Profile pin 与快照，再由维护者安排显式迁移。

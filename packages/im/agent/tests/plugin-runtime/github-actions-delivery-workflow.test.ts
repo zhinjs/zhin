@@ -59,3 +59,19 @@ it('isolates build lifecycle hooks and protects the host uploader from symlinks'
   const container = fs.readFileSync(path.join(root, 'scripts/self-delivery-container.Dockerfile'), 'utf8');
   expect(container).toMatch(/FROM node:24-bookworm-slim@sha256:[a-f0-9]{64}/);
 });
+
+it('prunes the shared pnpm lockfile before frozen install rather than relying on filters', () => {
+  const build = workflow.jobs.build.steps.find((step: any) => step.name?.startsWith('Build and pack'));
+  expect(build.run).toContain('turbo --skip-infer prune zhin.js @zhin.js/agent @zhin.js/runtime @zhin.js/satori');
+  expect(build.run.indexOf('turbo --skip-infer prune')).toBeLessThan(build.run.indexOf('pnpm install --frozen-lockfile'));
+  expect(build.run).toContain('pack /tmp/pruned /artifacts');
+  expect(build.run).toContain('dst=/candidate,readonly');
+  expect(build.run).not.toContain('pnpm --filter');
+  expect(fs.readFileSync(path.join(root, 'scripts/self-delivery-container.Dockerfile'), 'utf8')).toContain('turbo@2.10.7');
+});
+it('transforms the trusted minimal-bot parameter properties and validates a fresh completion receipt', () => {
+  const script = fs.readFileSync(path.join(root, 'scripts/self-delivery-artifacts.mjs'), 'utf8');
+  expect(script).toContain("['--experimental-transform-types', 'smoke.mjs']");
+  expect(script).toContain('fs.rmSync(receiptPath, { force: true })');
+  expect(script).toContain('verifyInstalledSmokeReceipt(receiptPath, process.env.CANDIDATE_SHA, process.env.ARTIFACT_DIGEST)');
+});

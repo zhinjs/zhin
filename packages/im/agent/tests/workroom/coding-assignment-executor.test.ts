@@ -10,7 +10,7 @@ import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canon
 
 const sha = 'a'.repeat(40);
 function snapshot(): CodingAssignmentSnapshot {
-  return { envelopeDigest: `sha256:${'1'.repeat(64)}`, baseCommit: sha, baseTree: sha, files: [{ path: 'src/a.ts', content: 'before', mode: '100755' }], writablePaths: ['src/'], instruction: 'fix', image: `example/coding@sha256:${'a'.repeat(64)}`, command: ['/usr/bin/coding'], timeoutMs: 1000, maxBytes: 4096, memoryMiB: 128, workspaceMiB: 64, cpus: 1 };
+  return { envelopeDigest: `sha256:${'1'.repeat(64)}`, baseCommit: sha, baseTree: sha, files: [{ path: 'src/a.ts', content: 'before', mode: '100755' }], writablePaths: ['src/'], instruction: 'fix', image: `example/coding@sha256:${'a'.repeat(64)}`, command: ['/usr/bin/coding'], timeoutMs: 10_000, maxBytes: 4096, memoryMiB: 128, workspaceMiB: 64, cpus: 1 };
 }
 const paths: string[] = [];
 afterEach(async () => { await Promise.all(paths.splice(0).map(path => rm(path, { recursive: true, force: true }))); });

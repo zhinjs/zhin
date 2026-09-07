@@ -205,15 +205,17 @@ GitHub 评论、Issue 正文和 Agent 输出是非权威输入。聊天里的“
 - [ ] P5 Canary、运维、备份和恢复。
 - [ ] P6 故障演练、持续观察及准入报告。
 
-下一步：完成本分支本地与容器验收，提交可审阅 PR。服务 App、真实模型 runner、持久 Assignment claim/report、受信 workflow 版本和控制面宿主尚未配置；这些缺失必须保持 doctor blocked。现有开放 Issue 查询为空，第一条真实任务需单独选定并记录验收条件。
+下一步：完成本分支本地与容器验收，提交可审阅 PR。服务 App、真实模型 runner、持久 Assignment authority接线、受信 workflow 版本和控制面宿主尚未配置；这些缺失必须保持 doctor blocked。现有开放 Issue 查询为空，第一条真实任务需单独选定并记录验收条件。
 
 
 ### 2026-09-07 多 Agent 实施记录
 
 - P0：`npm-production` / `github-pages` 已登记人工 reviewer `lc-cn`，关闭 admin bypass并独立回读；现有Pages分支策略保留。npm工作流绑定新环境的代码需审阅合入后生效。详见[部署与身份配置](../../deploy/self-delivery/README.md)。
 - P1：新增[自闭环项目](../../examples/self-delivery-bot/README.md)，真实 Issue reader、认证选入、持久不可变快照、Kernel admission 和 Profile pin；标准 Host 接入 Coding Executor/Delivery provider，默认未配置时可启动 doctor 并明确阻塞。
-- P2：固定镜像的 Docker Executor、精确 Git base读取和受控 objects上传、原子claim/持久report端口、恢复复用与遗留容器清理。已验证本机Docker daemon可达，但没有真实Coding模型runner镜像，持久端口仍需服务实现。
+- P2：固定镜像的 Docker Executor、精确 Git base读取和受控 objects上传、原子claim/持久report端口、恢复复用与遗留容器清理。已验证本机Docker daemon可达，但没有真实Coding模型runner镜像，已提供 FileCodingExecutionStore 的持久claim/report，Assignment scope/fence端口仍需连接服务权威。
 - P3：GitHub Actions provider核验workflow/run/attempt/job集合和archive摘要，持久dispatch claim防重复；候选容器与受信控制脚本隔离。临时smoke覆盖minimal-bot Terminal往返、Agent入口加载和stop；不把它说成Sandbox或真实LLM验收。
 - P4：新增 `git_merge_pr` typed Effect 和只读前置检查。GitHub REST merge只支持head条件，不提供expected base SHA原子条件，因此此adapter始终明确阻塞精确合并，不降级为不安全的先读后写。首版main合并保留维护者受保护操作。
 - P5：维护者确认现有Hugging Face Space为 `zhinjs/demo`；只读核验RUNNING/cpu-basic/无挂载卷。新增[独立Canary bundle准备工具](../../deploy/huggingface-canary/README.md)，校验同批tgz/manifest、要求冻结lockfile与Node镜像，提供持续Terminal探测；未覆盖或部署现有demo。控制面必须使用独立持久存储。
 - P6：真实平台闭环、故障演练、72小时观察、备份恢复和正式准入尚未完成。上述基础模块的单测/本地启动不替代这些证据。
+
+实现已提交为[草稿 PR #657](https://github.com/zhinjs/zhin/pull/657)。本地全仓门禁和交付专项已执行；真实首轮 CI 的六个必需 job 均因跨组织私有 @icqqjs 包下载403失败。核心候选路径通过真实 Docker 裁剪锁文件、构建、28个tarball、干净安装与minimal-bot消息往返；这不替代全仓CI或长期Canary准入。最终证据以PR当前说明和对应SHA运行记录为准。

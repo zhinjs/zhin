@@ -51,11 +51,11 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/artifacts"
           docker run --rm --init --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges --pids-limit 512 --cpus 4 --memory 6g \
-            --mount "type=bind,src=$GITHUB_WORKSPACE/candidate,dst=/candidate" \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/candidate,dst=/candidate,readonly" \
             --mount "type=bind,src=$GITHUB_WORKSPACE/trusted,dst=/trusted,readonly" \
             --mount "type=bind,src=$RUNNER_TEMP/artifacts,dst=/artifacts" \
             --workdir /candidate --env CANDIDATE_SHA --env BUILD_RUN_ID="$GITHUB_RUN_ID" --env BUILD_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
-            self-delivery-toolchain sh -ec 'mkdir -p /tmp/home; pnpm --filter zhin --filter "zhin.js..." --filter "@zhin.js/agent..." --filter "@zhin.js/runtime..." --filter "@zhin.js/satori..." install --frozen-lockfile; pnpm exec turbo run build --filter=zhin.js... --filter=@zhin.js/agent... --filter=@zhin.js/runtime... --filter=@zhin.js/satori...; node /trusted/scripts/self-delivery-artifacts.mjs pack /candidate /artifacts'
+            self-delivery-toolchain sh -ec 'mkdir -p /tmp/home; turbo --skip-infer prune zhin.js @zhin.js/agent @zhin.js/runtime @zhin.js/satori --out-dir /tmp/pruned; cp /candidate/tsconfig.base.json /tmp/pruned/; cd /tmp/pruned; pnpm install --frozen-lockfile; pnpm exec turbo run build --filter=zhin.js... --filter=@zhin.js/agent... --filter=@zhin.js/runtime... --filter=@zhin.js/satori...; node /trusted/scripts/self-delivery-artifacts.mjs pack /tmp/pruned /artifacts'
       - name: Validate artifact filesystem before trusted uploader reads it
         run: node trusted/scripts/self-delivery-artifacts.mjs validate "$RUNNER_TEMP/artifacts"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

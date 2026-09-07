@@ -109,3 +109,4 @@ export * from './github-actions-delivery-provider.js';
 export * from './github-exact-merge-gateway.js';
 export * from '../workroom/coding-assignment-executor.js';
 export * from '../workroom/coding-git-objects.js';
+export * from '../workroom/file-coding-execution-store.js';

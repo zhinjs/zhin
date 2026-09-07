@@ -22,6 +22,7 @@
   "agent/runtime": [
     "export * from '../workroom/coding-assignment-executor.js';",
     "export * from '../workroom/coding-git-objects.js';",
+    "export * from '../workroom/file-coding-execution-store.js';",
     "export * from '../workroom/github-workspace-transport.js';",
     "export * from '../workroom/software-delivery-plan.js';",
     "export * from '../workroom/workroom-assignment-knowledge-context.js';",

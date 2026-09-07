@@ -12,7 +12,18 @@
 node deploy/huggingface-canary/build-bundle.mjs /absolute/path/canary-config.json
 ```
 
-锁文件必须针对生成项目的 `file:artifacts/<file>.tgz` 依赖与全部 pnpm overrides 生成并经受信 smoke 校验；当前 P3 smoke 使用绝对临时目录，不能原样复用其锁文件。准备 bundle 后在无凭据隔离环境运行 `pnpm install --lockfile-only --ignore-scripts`，审查及固定依赖锁，再以最终锁文件重新生成 bundle。Docker 内强制 `--frozen-lockfile`，无匹配锁文件会失败。生成/验证锁文件和真实镜像构建尚未在本轮完成。
+P3 smoke 的绝对临时路径锁文件不能直接复用。首次没有匹配锁时，配置省略 `lockfilePath`，使用明确的两步流程：
+
+```sh
+# 只校验并准备同一 bundle；不访问网络，不要求种子锁。
+node deploy/huggingface-canary/build-bundle.mjs prepare-lock /absolute/path/canary-config.json
+# 操作者明确执行：必须已提供 pnpm 9.0.2，此步允许访问 registry。
+node /absolute/path/output-bundle/prepare-lock.mjs /absolute/path/pnpm
+```
+
+第二步在已经生成的同一 `package.json` 中运行 `pnpm install --prod --lockfile-only --ignore-scripts --no-frozen-lockfile`，全部本地包始终使用 `file:artifacts/<file>.tgz`。运行前后共用 manifest/tarball 校验，并固定 package.json digest；成功后将锁文件摘要写入 canary.json。helper 不安装或替换 pnpm，不继承用户 HOME/registry 凭据，不在构建失败后自动联网回退，已有锁时拒绝覆盖。
+
+审查生成锁后，对同一目录执行隔离 Docker 构建；Docker 内强制 `--frozen-lockfile`。也可将此锁作为普通 `build-bundle.mjs` 配置的 `lockfilePath` 重建相同路径布局。没有实际候选 artifact 的本轮只完成 helper 的真实子进程协议测试，没有访问 registry 生成生产锁或构建真实镜像。
 
 所有候选包来自同一 manifest 的 tgz；验证名称、版本、文件名、唯一性、文件类型和逐包 SHA-256，拒绝可变 Node tag。外部依赖按批准的锁文件安装，禁用 lifecycle scripts。Node / pnpm 工具链准备仍需要构建时网络。
 

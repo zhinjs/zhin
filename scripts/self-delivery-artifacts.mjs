@@ -59,7 +59,8 @@ if (mode === 'validate') {
   fs.copyFileSync(path.join(trustedRoot, 'scripts/self-delivery-installed-smoke.mjs'), path.join(output, 'smoke.mjs'));
   const receiptPath = path.join(output, 'smoke-result.json');
   fs.rmSync(receiptPath, { force: true });
-  execFileSync(process.execPath, ['--experimental-strip-types', 'smoke.mjs'], { cwd: output, stdio: 'inherit', timeout: 120_000 });
+  execFileSync(process.execPath, ['--experimental-transform-types', 'smoke.mjs'], { cwd: output, stdio: 'inherit', timeout: 120_000 });
   // Exit 0 alone is not evidence: a package may terminate during module initialization.
-  verifyInstalledSmokeReceipt(receiptPath, process.env.CANDIDATE_SHA, process.env.ARTIFACT_DIGEST);
+  const receipt = verifyInstalledSmokeReceipt(receiptPath, process.env.CANDIDATE_SHA, process.env.ARTIFACT_DIGEST);
+  console.log(JSON.stringify({ type: 'self-delivery-smoke-receipt', ...receipt }));
 } else throw new Error('Expected pack or smoke');
