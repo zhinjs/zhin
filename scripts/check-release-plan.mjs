@@ -75,6 +75,60 @@ const activeApprovals = approvals.filter((approval) =>
   ),
 );
 
+const isChangesetsVersionPr =
+  process.env.GITHUB_HEAD_REF === 'changeset-release/main' &&
+  process.env.GITHUB_BASE_REF === 'main';
+
+if (declarations.length === 0 && isChangesetsVersionPr) {
+  if (approvals.length > 0) {
+    console.error('Changesets version PR must clear consumed non-patch approvals.');
+    process.exit(1);
+  }
+
+  const diff = spawnSync(
+    'git',
+    ['diff', '--name-only', 'origin/main...HEAD'],
+    { cwd: root, encoding: 'utf8' },
+  );
+  if (diff.status !== 0) {
+    process.stderr.write(diff.stderr);
+    process.exit(diff.status ?? 1);
+  }
+
+  const changedManifests = diff.stdout
+    .trim()
+    .split('\n')
+    .filter((file) =>
+      /^(basic|packages|plugins)\/.+\/package\.json$/.test(file),
+    );
+  const failures = [];
+
+  for (const manifestFile of changedManifests) {
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, manifestFile), 'utf8'));
+    if (manifest.private) continue;
+    const changelogFile = path.join(path.dirname(manifestFile), 'CHANGELOG.md');
+    const changelogPath = path.join(root, changelogFile);
+    if (
+      typeof manifest.version !== 'string' ||
+      !fs.existsSync(changelogPath) ||
+      !fs.readFileSync(changelogPath, 'utf8').includes(`## ${manifest.version}`)
+    ) {
+      failures.push(`${manifest.name}: missing CHANGELOG entry for ${manifest.version}`);
+    }
+  }
+
+  if (changedManifests.length === 0 || failures.length > 0) {
+    console.error('Changesets version PR output is incomplete:');
+    for (const failure of failures) console.error(`- ${failure}`);
+    process.exit(1);
+  }
+
+  console.log(
+    `Release plan check passed (${changedManifests.length} versioned package manifests with changelogs).`,
+  );
+  process.exit(0);
+}
+
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-release-plan-'));
 const outputPath = path.join(tempDir, 'release-plan.json');
 

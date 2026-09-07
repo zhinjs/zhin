@@ -172,6 +172,16 @@ pnpm pub       # = pnpm changeset publish，发布到 npm
 由对应包的 1.1.x 稳定版本取代。发布后每个官方包的 `latest` 与 `stable` 均指向其
 1.1.x 稳定版本，后续常规发布只增加 patch。
 
+| 1.1.0 已占用的包 | 稳定版本 |
+| --- | --- |
+| `@zhin.js/adapter` | `1.1.12` |
+| `@zhin.js/agent` | `1.1.23` |
+| `@zhin.js/ai` | `1.1.33` |
+| `@zhin.js/client` | `1.1.5` |
+| `@zhin.js/console-protocol` | `1.1.5` |
+| `@zhin.js/core` | `1.1.35` |
+| `@zhin.js/plugin-runtime` | `1.1.9` |
+
 ## 发版（GitHub CI）
 
 发版由 `.github/workflows/publish.yml` 驱动：`push` 到 `main` 或在 Actions 里 **workflow_dispatch 手动运行**。

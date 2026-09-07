@@ -1,13 +1,5 @@
 {
   "defaultReleaseType": "patch",
   "owner": "lc-cn",
-  "approvedNonPatchReleases": [
-    {
-      "changeset": "reset-official-stable-line.md",
-      "packages": "*",
-      "type": "minor",
-      "approvedBy": "lc-cn",
-      "reason": "Reset the complete official npm ecosystem to the 1.1.x stable line"
-    }
-  ]
+  "approvedNonPatchReleases": []
 }

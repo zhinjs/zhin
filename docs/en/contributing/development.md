@@ -154,6 +154,16 @@ available to preserve existing lockfiles and are marked as superseded by the cor
 stable release. Each official package points both `latest` and `stable` to that release; routine
 releases then increment patch only.
 
+| Package whose 1.1.0 is reserved | Stable version |
+| --- | --- |
+| `@zhin.js/adapter` | `1.1.12` |
+| `@zhin.js/agent` | `1.1.23` |
+| `@zhin.js/ai` | `1.1.33` |
+| `@zhin.js/client` | `1.1.5` |
+| `@zhin.js/console-protocol` | `1.1.5` |
+| `@zhin.js/core` | `1.1.35` |
+| `@zhin.js/plugin-runtime` | `1.1.9` |
+
 ## Publishing (GitHub CI)
 
 Publishing is driven by `.github/workflows/publish.yml`: on **push to `main`** or via **Actions → workflow_dispatch**.
