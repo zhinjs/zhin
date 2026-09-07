@@ -6,7 +6,7 @@
 
 **Zhin.js** 是 TypeScript 多通道 IM Bot 框架（私聊、群聊、记忆、定时、通知），定位是生活/工作助手 Bot——**不是** Cursor / Claude Code 类 coding agent。核心特性：插件热重载、Sandbox、Remote Console、可选 AI Agent 栈。
 
-- 版本：4.x。默认安装仅 IM 核心（production `node_modules` <10MB），AI 按需加装 `@zhin.js/agent` + `zod` + `ai` + 所选 `@ai-sdk/*`（ADR 0019 安装分层）。
+- 版本：1.1.x 稳定线。默认安装仅 IM 核心（production `node_modules` <10MB），AI 按需加装 `@zhin.js/agent` + `zod` + `ai` + 所选 `@ai-sdk/*`（ADR 0019 安装分层）。
 - 这是 pnpm workspace monorepo（pnpm 9，`pnpm-workspace.yaml` 为准），构建编排用 turbo。
 - Node 版本要求：`^20.19.0` 或 `>=22.12.0`。
 - 发布流：changesets（`pnpm release` 记 changeset，`pnpm bump` 升版本，`pnpm pub` 发布）。
@@ -61,11 +61,11 @@ basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp
 - [examples/test-bot](examples/test-bot/)：维护者厨房水槽（多 Endpoint / Advanced 能力），**非默认模板**；根目录用 `pnpm dev:test` 进入。
 - 进阶路径：**单文件（single-file-bot）→ Stable（minimal-bot）→ L4（full-bot）→ 厨房水槽（test-bot）**。
 
-### zhin.js 4.x 安装分档
+### zhin.js 1.1.x 安装分档
 
 - 默认安装仅 IM（<10MB）；AI 另装 `@zhin.js/agent` + `zod` + `ai` + 所选 `@ai-sdk/*`。
 - 用户向分档表 SSOT：[`docs/snippets/install-tiers.md`](docs/snippets/install-tiers.md)（中文 [`README.zh-CN.md`](README.zh-CN.md) 的 Install tiers 表必须与之一致，`pnpm check:install-tiers-ssot` 门禁；根 [`README.md`](README.md) 为英文入口）。
-- 安装分档（IM 核心 <10MB）见 [docs/snippets/install-tiers.md](docs/snippets/install-tiers.md)。Breaking（4.x）：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。
+- 安装分档（IM 核心 <10MB）见 [docs/snippets/install-tiers.md](docs/snippets/install-tiers.md)。1.1 稳定线中 `import from 'zhin.js'` 不含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。
 - `pnpm check:install-size`：IM 核心 production `node_modules` ≤10MB。
 
 ### 项目脚手架

@@ -6,7 +6,7 @@ AI / Agent 能力在 **`@zhin.js/agent`**（及 `@zhin.js/ai`），须显式安�
 
 ## Install tiers
 
-> **SSOT**：[`docs/snippets/install-tiers.md`](../../../docs/snippets/install-tiers.md)（含 Host 行扩展表）。站点：[快速开始](https://zhin.js.org/getting-started/#install-tierszhinjs-4x)。
+> **SSOT**：[`docs/snippets/install-tiers.md`](../../../docs/snippets/install-tiers.md)（含 Host 行扩展表）。站点：[快速开始](https://zhin.js.org/getting-started/#install-tiers)。
 
 | 档位 | 安装 | 能力 |
 |------|------|------|

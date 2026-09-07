@@ -21,6 +21,7 @@ import { formatOutbound, type QqOutboundMessage } from '../src/outbound.js';
 import { qqClient } from '../src/client.js';
 import { createQqRuntimeState, qqRuntimeStateToken } from '../src/qq-runtime-state.js';
 import { stopQqOfficialBot } from '../src/ws.js';
+import type { Bot } from 'qq-official-bot';
 
 const adapterFeature = featureId('zhin.adapter');
 
@@ -51,6 +52,7 @@ function createMockBot(): QqBotTransport & {
   const sent: Array<{ kind: string; id: string; message: QqOutboundMessage }> = [];
 
   return {
+    api: {} as Bot,
     sent,
     start: vi.fn(async () => undefined),
     stop: vi.fn(async () => undefined),
@@ -206,6 +208,7 @@ describe('qq protocol helpers', () => {
     if (resolved.mode === 'websocket') {
       expect(resolved.intents).toEqual([
         'GROUP_AND_C2C_EVENT',
+        'GROUP_MEMBER',
         'GUILDS',
         'GUILD_MEMBERS',
         'DIRECT_MESSAGE',

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=b48faae4dcb883ff -->
+<!-- sync-adapter-docs:sha256=3237b6c6b32cee78 -->
 
 # @zhin.js/adapter-qq
 
@@ -22,6 +22,8 @@ Zhin.js QQ 官方机器人适配器（Plugin Runtime），默认通过 **WebSock
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - Webhook / middleware 模式已实现（经 `httpHostToken` 注册 POST 路由）
 - AI `@` 触发标注：群消息（GROUP_AT_MESSAGE_CREATE 仅 @ 时下发）与频道 `mentions[].bot` 会在入站 metadata 标 `mentioned: true`（新 Plugin Runtime 纯文本 content 经 metadata 传递 @）
+- 群事件：机器人进群/退群、群成员加入/退出、入群申请（支持 `$approve()` / `$reject()`）
+- 完整 SDK 业务 API：通过 `qqClient.get(context, endpoint).api` 使用群管理、禁言、自动审批策略、自定义菜单、指令面板等 `qq-official-bot` 能力
 
 ## 安装
 
@@ -67,11 +69,11 @@ plugins:
 ### botKind 与 intents
 
 WebSocket Identify 的 `intents` **必须与开放平台已开通的权限一致**，否则会断连。
-群聊无公/私域之分，两类都订阅 `GROUP_AND_C2C_EVENT`；差异只在频道消息 intent：
+群聊无公/私域之分，两类都订阅 `GROUP_AND_C2C_EVENT` 和 `GROUP_MEMBER`；差异只在频道消息 intent：
 
 | `botKind` | 频道消息 intent | 共用 intents |
 |-----------|-----------------|--------------|
-| `public`（默认，公域） | `PUBLIC_GUILD_MESSAGES`（仅 @） | `GROUP_AND_C2C_EVENT`, `GUILDS`, `GUILD_MEMBERS`, `DIRECT_MESSAGE` |
+| `public`（默认，公域） | `PUBLIC_GUILD_MESSAGES`（仅 @） | `GROUP_AND_C2C_EVENT`, `GROUP_MEMBER`, `GUILDS`, `GUILD_MEMBERS`, `DIRECT_MESSAGE` |
 | `private`（私域） | `GUILD_MESSAGES`（频道全量） | 同上 |
 
 公域机器人订阅 `GUILD_MESSAGES` 会 Identify 失败断连。显式配置 `intents` 时优先于 `botKind`。
@@ -90,6 +92,7 @@ plugins:
         botKind: public
         intents:
           - GROUP_AND_C2C_EVENT
+          - GROUP_MEMBER
           - GUILDS
           - GUILD_MEMBERS
           - DIRECT_MESSAGE
@@ -100,6 +103,7 @@ plugins:
         botKind: private
         intents:
           - GROUP_AND_C2C_EVENT
+          - GROUP_MEMBER
           - GUILDS
           - GUILD_MEMBERS
           - DIRECT_MESSAGE
@@ -142,6 +146,29 @@ master 可执行；未配置则放行（首个扫码绑定者会写入该 endpoi
 | Permit 词汇 | `agent/PERMITS.md` |
 | 平台工具 | `agent/tools/`（频道、角色等） |
 | 技能说明 | `agent/skills/qq.md` |
+
+## 平台 Client 与 QQ API
+
+`qqClient` 返回当前 endpoint 的传输 client。常用发送、撤回、频道查询仍有顶层快捷方法；
+`client.api` 暴露完整的 `qq-official-bot` 1.3 业务 Service 与实体入口；连接启停仍由 Endpoint 生命周期统一管理：
+
+```ts
+import { qqClient } from '@zhin.js/adapter-qq';
+
+const client = qqClient.get(context, 'my-qq-bot');
+
+const group = await client.api.groupService.getInfo(groupOpenid);
+const requests = await client.api.groupService.getJoinRequests(groupOpenid);
+await client.api.groupService.setMemberMute(groupOpenid, [
+  { op: 'add', member_openid: memberOpenid, mute_expire_at: expiresAt },
+]);
+
+const menu = await client.api.menuPanelService.getCustomMenu();
+const panels = await client.api.menuPanelService.getCommandPanels({ scope: 'group' });
+```
+
+群管理接口中有部分是白名单能力，入群审批和禁言还要求机器人具备群管理员权限；
+具体可用范围以 QQ 开放平台为准。
 
 ## 平台权限（platform permit）
 

@@ -47,6 +47,44 @@ if (typeof scripts.bump === 'string' && scripts.bump.includes('sync:scaffold-dep
   failures.push('package.json bump still runs sync:scaffold-deps');
 }
 
+const changesetConfig = JSON.parse(
+  fs.readFileSync(path.join(root, '.changeset/config.json'), 'utf8'),
+);
+if (changesetConfig.privatePackages?.version !== false) {
+  failures.push('.changeset/config.json must keep privatePackages.version=false');
+}
+if (
+  changesetConfig.___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH
+    ?.onlyUpdatePeerDependentsWhenOutOfRange !== true
+) {
+  failures.push(
+    '.changeset/config.json must keep onlyUpdatePeerDependentsWhenOutOfRange=true',
+  );
+}
+
+for (const workspaceRoot of ['basic', 'packages', 'plugins', 'examples']) {
+  for (const file of walk(path.join(root, workspaceRoot)).filter((entry) =>
+    entry.endsWith('package.json'),
+  )) {
+    const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+    for (const [name, range] of Object.entries(manifest.peerDependencies ?? {})) {
+      if (range === 'workspace:*') {
+        failures.push(
+          `${path.relative(root, file)} peer dependency ${name} uses workspace:*; use workspace:^`,
+        );
+      }
+      if (
+        (name === 'zhin.js' || name.startsWith('@zhin.js/')) &&
+        range !== 'workspace:^'
+      ) {
+        failures.push(
+          `${path.relative(root, file)} internal peer dependency ${name} must use workspace:^`,
+        );
+      }
+    }
+  }
+}
+
 const policyFiles = [
   'packages/toolkit/scaffold-wizard/src/project-deps.ts',
   'packages/toolkit/scaffold-wizard/src/zhin-stack-deps.ts',

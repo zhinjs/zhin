@@ -50,11 +50,11 @@
     "discord.js": "^14.27.0"
   },
   "peerDependencies": {
-    "@zhin.js/adapter": "workspace:*",
-    "@zhin.js/agent": "workspace:*",
-    "@zhin.js/command": "workspace:*",
-    "@zhin.js/core": "workspace:*",
-    "zhin.js": "workspace:*",
+    "@zhin.js/adapter": "workspace:^",
+    "@zhin.js/agent": "workspace:^",
+    "@zhin.js/command": "workspace:^",
+    "@zhin.js/core": "workspace:^",
+    "zhin.js": "workspace:^",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {

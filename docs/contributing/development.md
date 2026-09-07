@@ -64,7 +64,8 @@ workflow 均执行此项；它需要 npm 网络与本机随机端口，不属于
 | 检查 | 说明 |
 | --- | --- |
 | Architecture Layers（`pnpm check:architecture`） | 分层依赖方向（basic → kernel → ai → core → agent → zhin） |
-| Dependency Policy（`pnpm check:dependency-policy`） | 用户项目脚手架依赖默认写 `latest` |
+| Dependency Policy（`pnpm check:dependency-policy`） | 脚手架依赖策略、Changesets 配置与内部 peer 范围 |
+| Release Plan（`pnpm check:release-plan`） | 默认只允许 patch；minor/major 必须有 owner 授权记录 |
 | No Koa Import（`pnpm check:no-koa`） | 插件不得直接 import koa |
 | Install Size（`pnpm check:install-size`） | zhin.js IM 核心 production `node_modules` ≤ 10MB |
 
@@ -143,6 +144,31 @@ pnpm pub       # = pnpm changeset publish，发布到 npm
 ```
 
 日常开发只需 `pnpm release` 提交 changeset 文件；`bump` 和 `pub` 由 CI 执行。
+
+版本策略默认只允许 `patch`。`pnpm check:release-plan` 会读取 Changesets 的完整发布计划，
+只要出现未授权的 `minor` 或 `major`（包括依赖传播推导出的升级）就会让 CI 失败。
+确需非 patch 发版时，由版本 owner 在 `.changeset/version-policy.json` 的
+`approvedNonPatchReleases` 中记录 changeset 文件名、包名、级别、`approvedBy` 和原因；
+该策略文件由 `.github/CODEOWNERS` 指定 owner 审核。示例：
+
+```json
+{
+  "changeset": "intentional-breaking-change.md",
+  "package": "zhin.js",
+  "type": "major",
+  "approvedBy": "lc-cn",
+  "reason": "Remove the deprecated compatibility API"
+}
+```
+
+内部 `peerDependencies` 使用 `workspace:^`，避免兼容的内部 minor 升级被发布成精确版本，
+进而把无关的上游包推成 major。私有示例包不参与 Changesets version/tag。
+
+### 1.1 稳定线
+
+`zhin.js` 在 1.0.93 之后曾因内部 peer 依赖传播产生 2.x–7.x 的版本膨胀。
+这些版本保留在 npm 以免破坏已有 lockfile，并标记为由 1.1.0 取代；1.1.0 是当前稳定线。
+发布后 `latest` 与 `stable` 均指向 1.1.0，后续常规发布只增加 patch。
 
 ## 发版（GitHub CI）
 

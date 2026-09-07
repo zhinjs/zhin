@@ -1,34 +1,32 @@
 import { receiveOneBotLikeSideEvent, type OneBotLikeRawEvent } from '@zhin.js/core';
 import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
+import type { ApproveJoinRequestOptions } from 'qq-official-bot';
 
 export interface QqSideEventCaller {
   approveGroupJoinRequest?(
     groupId: string,
     userId: string,
-    options: { op: 'approve' | 'reject'; join_request_id: string; reason?: string },
+    options: ApproveJoinRequestOptions,
   ): Promise<unknown>;
 }
-
-const QQ_SIDE_EVENT_NAMES = [
-  'notice.group.join_request',
-  'notice.group.member',
-  'notice.group.member.increase',
-  'notice.group.member.decrease',
-  'notice.group.increase',
-  'notice.group.decrease',
-  'notice.guild.member',
-  'notice.guild.member.increase',
-  'notice.guild.member.decrease',
-] as const;
 
 export function bindQqBotSideEvents(
   bot: { on(event: string, listener: (...args: unknown[]) => void): void },
   dispatch: (eventName: string, raw: unknown) => void,
 ): void {
-  for (const name of QQ_SIDE_EVENT_NAMES) {
-    bot.on(name, (raw) => dispatch(name, raw));
-  }
+  // qq-official-bot emits every dotted prefix. Listening at `notice` once avoids
+  // dispatching e.g. notice.group.member.increase three times.
+  bot.on('notice', (raw) => dispatch(resolveQqSideEventName(raw), raw));
+}
+
+function resolveQqSideEventName(raw: unknown): string {
+  if (!raw || typeof raw !== 'object') return 'notice';
+  const record = raw as Record<string, unknown>;
+  return ['notice', record.notice_type, record.sub_type]
+    .filter((part) => part != null && String(part) !== '')
+    .map(String)
+    .join('.');
 }
 
 function toOneBotLikeRaw(eventName: string, raw: unknown): OneBotLikeRawEvent | null {
@@ -40,7 +38,9 @@ function toOneBotLikeRaw(eventName: string, raw: unknown): OneBotLikeRawEvent | 
   };
   const asTime = (value: unknown): number => {
     const n = typeof value === 'number' ? value : Number(value);
-    return Number.isFinite(n) && n > 0 ? n : Date.now();
+    if (Number.isFinite(n) && n > 0) return n;
+    const date = typeof value === 'string' ? Date.parse(value) : Number.NaN;
+    return Number.isFinite(date) ? date : Date.now();
   };
   if (eventName === 'notice.group.join_request') {
     return {
@@ -50,19 +50,40 @@ function toOneBotLikeRaw(eventName: string, raw: unknown): OneBotLikeRawEvent | 
       flag: record.join_request_id != null ? String(record.join_request_id) : undefined,
       user_id: asId(record.user_id),
       group_id: asId(record.group_id),
-      comment: record.verify_info != null ? String(record.verify_info) : undefined,
-      time: asTime(record.timestamp),
+      comment: formatJoinRequestComment(record.verify_info),
+      time: asTime(record.time ?? record.timestamp ?? record.apply_at),
     };
   }
   if (eventName.startsWith('notice.')) {
+    const memberChange = eventName.match(/^notice\.group(?:\.member)?\.(increase|decrease)$/);
+    const memberUserId = asId(record.user_id)
+      ?? asId((record.bot as { self_id?: unknown } | undefined)?.self_id);
     return {
       ...record,
-      post_type: eventName,
-      notice_type: eventName.replace(/^notice\./, ''),
-      time: asTime(record.timestamp),
+      post_type: 'notice',
+      notice_type: memberChange ? `group_${memberChange[1]}` : eventName.replace(/^notice\./, ''),
+      ...(memberChange && memberUserId != null ? { user_id: memberUserId } : {}),
+      time: asTime(record.time ?? record.timestamp),
     };
   }
   return null;
+}
+
+function formatJoinRequestComment(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (!value || typeof value !== 'object') return undefined;
+  const verify = value as {
+    verify_message?: unknown;
+    review_qa_list?: Array<{ question?: unknown; answer?: unknown }>;
+  };
+  if (typeof verify.verify_message === 'string') return verify.verify_message;
+  if (!Array.isArray(verify.review_qa_list)) return undefined;
+  const lines = verify.review_qa_list.flatMap((item) => {
+    const question = typeof item?.question === 'string' ? item.question : '';
+    const answer = typeof item?.answer === 'string' ? item.answer : '';
+    return question || answer ? [`${question}${question && answer ? ': ' : ''}${answer}`] : [];
+  });
+  return lines.length > 0 ? lines.join('\n') : undefined;
 }
 
 export function receiveQqSideEvent(
@@ -93,7 +114,6 @@ export function receiveQqSideEvent(
           {
             op: 'approve',
             join_request_id: String(joinRaw.join_request_id ?? flag),
-            ...(remark ? { reason: remark } : {}),
           },
         );
       },
@@ -102,9 +122,9 @@ export function receiveQqSideEvent(
           String(joinRaw.group_id ?? ''),
           String(joinRaw.user_id ?? ''),
           {
-            op: 'reject',
+            op: 'decline',
             join_request_id: String(joinRaw.join_request_id ?? flag),
-            ...(reason ? { reason } : {}),
+            ...(reason ? { reject_reason: reason } : {}),
           },
         );
       },

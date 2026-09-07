@@ -61,6 +61,12 @@ function parseMajor(versionSpec: string | undefined): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
+function parseMajorMinor(versionSpec: string | undefined): [number, number] | undefined {
+  if (!versionSpec?.trim()) return undefined;
+  const match = versionSpec.trim().replace(/^[\^~>=<]+/, '').match(/^(\d+)\.(\d+)/);
+  return match ? [Number(match[1]), Number(match[2])] : undefined;
+}
+
 function getDeclaredPackageVersion(pkg: PackageJsonLike, name: string): string | undefined {
   return pkg.dependencies?.[name] ?? pkg.devDependencies?.[name];
 }
@@ -77,8 +83,27 @@ function readInstalledMajor(cwd: string, packageName: string): number | undefine
   }
 }
 
+function readInstalledVersion(cwd: string, packageName: string): string | undefined {
+  const pkgJson = path.join(cwd, 'package.json');
+  if (!fs.existsSync(pkgJson)) return undefined;
+  try {
+    const req = createRequire(pkgJson);
+    const installed = req(`${packageName}/package.json`) as { version?: string };
+    return installed.version;
+  } catch {
+    return undefined;
+  }
+}
+
 function resolvePackageMajor(cwd: string, pkg: PackageJsonLike, packageName: string): number | undefined {
   return readInstalledMajor(cwd, packageName) ?? parseMajor(getDeclaredPackageVersion(pkg, packageName));
+}
+
+function supportsSplitAiInstallation(versionSpec: string | undefined): boolean | undefined {
+  const version = parseMajorMinor(versionSpec);
+  if (!version) return undefined;
+  const [major, minor] = version;
+  return major >= 4 || (major === 1 && minor >= 1);
 }
 
 function resolveStackVersion(packageName: string): string {
@@ -173,14 +198,14 @@ export function findInstalledZhinStackIncompatibilities(
   config: Record<string, unknown>,
 ): ZhinStackIncompatibility[] {
   const issues: ZhinStackIncompatibility[] = [];
-  const zhinMajor = resolvePackageMajor(cwd, pkg, 'zhin.js');
+  const zhinVersion = readInstalledVersion(cwd, 'zhin.js') ?? getDeclaredPackageVersion(pkg, 'zhin.js');
   const agentDeclared = getDeclaredPackageVersion(pkg, '@zhin.js/agent');
   const aiEnabled = isAiEnabledInConfig(config);
 
-  if (zhinMajor != null && zhinMajor < 4 && (aiEnabled || agentDeclared)) {
+  if (supportsSplitAiInstallation(zhinVersion) === false && (aiEnabled || agentDeclared)) {
     issues.push({
       package: 'zhin.js',
-      reason: 'zhin.js 4.x 才支持 @zhin.js/agent 与 AI 安装分层（ADR 0019），请升级 zhin.js',
+      reason: 'zhin.js 1.1.x 稳定线才支持当前 @zhin.js/agent 与 AI 安装分层，请升级 zhin.js',
     });
   }
 
@@ -192,7 +217,7 @@ export function findInstalledZhinStackIncompatibilities(
   if (agentMajor != null && agentMajor < 1 && aiEnabled) {
     issues.push({
       package: '@zhin.js/agent',
-      reason: '@zhin.js/agent 1.x 与 zhin.js 4.x / AI SDK 7 配套，请升级 @zhin.js/agent',
+      reason: '@zhin.js/agent 1.x 与 zhin.js 1.1.x 稳定线 / AI SDK 7 配套，请升级 @zhin.js/agent',
     });
   }
 

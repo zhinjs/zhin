@@ -36,6 +36,7 @@ export {
   type CreateQqBot,
   type CreateQqHttpBot,
   type QqBotTransport,
+  type QqOfficialApi,
   type QqEndpointOptions,
   type QqHttpBotTransport,
   type QqHttpEndpointOptions,

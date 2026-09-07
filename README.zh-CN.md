@@ -142,9 +142,9 @@ flowchart LR
 
 </details>
 
-### Install tiers（zhin.js 4.x）
+### Install tiers（zhin.js 1.1.x）
 
-> **SSOT**：[`docs/snippets/install-tiers.md`](./docs/snippets/install-tiers.md) · 在线：[Install tiers](https://zhin.js.org/getting-started/#install-tierszhinjs-4x) · English: [`README.md`](./README.md)
+> **SSOT**：[`docs/snippets/install-tiers.md`](./docs/snippets/install-tiers.md) · 在线：[Install tiers](https://zhin.js.org/getting-started/#install-tiers) · English: [`README.md`](./README.md)
 
 | 档位 | 安装 | 约 production 体积 | 能力 |
 |------|------|-------------------|------|
@@ -155,7 +155,7 @@ flowchart LR
 | **Rich media** | `+ @zhin.js/html-renderer` | +~数 MB | 出站 `html` / `markdown` 转 PNG（未装则降级 text） |
 | **Speech** | `+ @zhin.js/speech` | +~数 MB | 入站 STT、出站 TTS、`segment.tts`（未装则 warn 降级） |
 
-Breaking（4.x）：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [ADR 0019](./docs/snippets/install-tiers.md)。
+1.1 稳定线兼容说明：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [ADR 0019](./docs/snippets/install-tiers.md)。
 
 > **Windows**：见 [Windows 初始化指南](./docs/getting-started/index.md)。
 
@@ -202,7 +202,7 @@ ai:
 
 | 包 | 角色 |
 |----|------|
-| [`zhin.js`](./packages/im/zhin) | IM 入口（4.x） |
+| [`zhin.js`](./packages/im/zhin) | IM 入口（1.1.x 稳定线） |
 | [`@zhin.js/core`](./packages/im/core) | Plugin / Adapter / Dispatcher |
 | [`@zhin.js/ai`](./packages/im/ai) | 无 IM 的 AI 引擎 |
 | [`@zhin.js/agent`](./packages/im/agent) | Agent 编排与安全 |

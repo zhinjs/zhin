@@ -91,6 +91,7 @@ export function defaultCreateHttpBot(config: ResolvedQqHttpConfig): QqHttpBotTra
   } as never) as Bot<ReceiverMode.MIDDLEWARE, 'koa'> & QqBotTransport;
 
   return {
+    api: bot,
     start: () => bot.start().then(() => undefined),
     stop: () => bot.stop().then(() => undefined),
     on: (event, listener) => {

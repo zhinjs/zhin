@@ -142,9 +142,9 @@ These surfaces share one Plugin Runtime instead of forming separate execution is
 
 </details>
 
-### Install tiers (zhin.js 4.x)
+### Install tiers (zhin.js 1.1.x)
 
-> **SSOT** (Chinese table): [`docs/snippets/install-tiers.md`](./docs/snippets/install-tiers.md) · site: [Install tiers](https://zhin.js.org/getting-started/#install-tierszhinjs-4x) · Chinese README: [`README.zh-CN.md`](./README.zh-CN.md)
+> **SSOT** (Chinese table): [`docs/snippets/install-tiers.md`](./docs/snippets/install-tiers.md) · site: [Install tiers](https://zhin.js.org/getting-started/#install-tiers) · Chinese README: [`README.zh-CN.md`](./README.zh-CN.md)
 
 | Tier | Install | ~production size | Capabilities |
 |------|---------|------------------|--------------|
@@ -155,7 +155,7 @@ These surfaces share one Plugin Runtime instead of forming separate execution is
 | **Rich media** | `+ @zhin.js/html-renderer` | + a few MB | outbound `html` / `markdown` → PNG (falls back to text if missing) |
 | **Speech** | `+ @zhin.js/speech` | + a few MB | inbound STT, outbound TTS, `segment.tts` (warn + degrade if missing) |
 
-Breaking (4.x): `import from 'zhin.js'` no longer includes `ZhinAgent` / `AIService`. Use `zhin.js/agent` or `zhin.js/ai`. See [ADR 0019](https://zhin.js.org/adr/0019-install-size-layering).
+Compatibility note for the 1.1 stable line: `import from 'zhin.js'` no longer includes `ZhinAgent` / `AIService`. Use `zhin.js/agent` or `zhin.js/ai`. See [ADR 0019](https://zhin.js.org/adr/0019-install-size-layering).
 
 > **Windows**: [Getting started](./docs/getting-started/index.md).
 
@@ -202,7 +202,7 @@ Full list: [adapter docs](./docs/adapters/index.md) · [`plugins/adapters`](./pl
 
 | Package | Role |
 |---------|------|
-| [`zhin.js`](./packages/im/zhin) | IM entry (4.x) |
+| [`zhin.js`](./packages/im/zhin) | IM entry (1.1.x stable line) |
 | [`@zhin.js/core`](./packages/im/core) | Plugin / Adapter / Dispatcher |
 | [`@zhin.js/ai`](./packages/im/ai) | AI engine (no IM) |
 | [`@zhin.js/agent`](./packages/im/agent) | Agent orchestration & security |

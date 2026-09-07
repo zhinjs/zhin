@@ -371,7 +371,7 @@ export async function configureQQBot(ctx: EndpointConfigureContext): Promise<Rec
     {
       type: 'select',
       name: 'botKind',
-      message: '  公域 / 私域（决定频道消息 intents；群聊两边都有）:',
+      message: '  公域 / 私域（决定频道消息 intents；群聊与群成员事件两边都有）:',
       choices: [
         {
           name: 'public — 公域（频道仅 @；+ 群聊/私聊）',
@@ -388,6 +388,7 @@ export async function configureQQBot(ctx: EndpointConfigureContext): Promise<Rec
 
   const sharedIntents = [
     'GROUP_AND_C2C_EVENT',
+    'GROUP_MEMBER',
     'GUILDS',
     'GUILD_MEMBERS',
     'DIRECT_MESSAGE',

@@ -82,9 +82,9 @@
     }
   },
   "peerDependencies": {
-    "@zhin.js/a2a": "^4.0.1",
-    "@zhin.js/agent": "^1.2.1",
-    "@zhin.js/speech": "^3.0.16",
+    "@zhin.js/a2a": "workspace:^",
+    "@zhin.js/agent": "workspace:^",
+    "@zhin.js/speech": "workspace:^",
     "typescript": ">=5.8.0 <7.0.0"
   },
   "repository": {

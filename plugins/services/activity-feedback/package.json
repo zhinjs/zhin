@@ -54,8 +54,8 @@
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "@zhin.js/agent": "workspace:*",
-    "zhin.js": "workspace:*"
+    "@zhin.js/agent": "workspace:^",
+    "zhin.js": "workspace:^"
   },
   "peerDependenciesMeta": {
     "zhin.js": {

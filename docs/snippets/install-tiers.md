@@ -42,11 +42,11 @@
 <!-- #endregion tiers-table-host -->
 
 <!-- #region breaking -->
-Breaking（4.x）：`import from 'zhin.js'` **不再**含 `ZhinAgent` / `AIService` / `ModelRegistry`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [分层架构](/concepts/architecture)。
+1.1 稳定线兼容说明：`import from 'zhin.js'` **不含** `ZhinAgent` / `AIService` / `ModelRegistry`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [分层架构](/concepts/architecture)。
 <!-- #endregion breaking -->
 
 <!-- #region breaking-short -->
-Breaking（4.x）：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [分层架构](/concepts/architecture)。
+1.1 稳定线兼容说明：`import from 'zhin.js'` 不含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [分层架构](/concepts/architecture)。
 <!-- #endregion breaking-short -->
 
 <!-- #region imports -->
@@ -77,5 +77,5 @@ pnpm add @ai-sdk/openai   # 示例：按 provider 替换
 <!-- #endregion scaffold-note -->
 
 <!-- #region callout-one-liner -->
-**zhin.js 4.x 安装分层**：库包 `pnpm add zhin.js`（IM 核心 &lt;10MB）；Plugin Runtime 项目再加适配器与 `@zhin.js/cli`；AI 另装 `@zhin.js/agent zod ai` 与所选 `@ai-sdk/*`。见 [分层架构](/concepts/architecture)、[插件模型](/concepts/plugin-model) 与 [快速开始 — Install tiers](/getting-started/#install-tierszhinjs-4x)。
+**zhin.js 1.1.x 安装分层**：库包 `pnpm add zhin.js`（IM 核心 &lt;10MB）；Plugin Runtime 项目再加适配器与 `@zhin.js/cli`；AI 另装 `@zhin.js/agent zod ai` 与所选 `@ai-sdk/*`。见 [分层架构](/concepts/architecture)、[插件模型](/concepts/plugin-model) 与 [快速开始 — Install tiers](/getting-started/#install-tiers)。
 <!-- #endregion callout-one-liner -->

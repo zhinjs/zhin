@@ -65,8 +65,8 @@
     "plugins": []
   },
   "peerDependencies": {
-    "@zhin.js/command": "workspace:*",
-    "zhin.js": "workspace:*"
+    "@zhin.js/command": "workspace:^",
+    "zhin.js": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@zhin.js/command": {

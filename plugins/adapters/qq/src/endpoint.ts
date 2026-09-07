@@ -43,7 +43,7 @@ import {
   type QqSideEventCaller,
 } from './side-event-dispatch.js';
 
-export type { CreateQqBot, QqBotTransport } from './ws.js';
+export type { CreateQqBot, QqBotTransport, QqOfficialApi } from './ws.js';
 export type { CreateQqHttpBot, QqHttpBotTransport } from './webhook.js';
 
 export interface QqEndpointOptions {

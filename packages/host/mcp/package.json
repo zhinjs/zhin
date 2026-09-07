@@ -56,7 +56,7 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

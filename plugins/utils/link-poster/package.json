@@ -83,8 +83,8 @@
     "plugins": []
   },
   "peerDependencies": {
-    "@zhin.js/middleware": "workspace:*",
-    "zhin.js": "workspace:*"
+    "@zhin.js/middleware": "workspace:^",
+    "zhin.js": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@zhin.js/middleware": {

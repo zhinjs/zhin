@@ -1,0 +1,13 @@
+{
+  "defaultReleaseType": "patch",
+  "owner": "lc-cn",
+  "approvedNonPatchReleases": [
+    {
+      "changeset": "reset-zhin-stable-line.md",
+      "package": "zhin.js",
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Reset the stable public line to 1.1.0"
+    }
+  ]
+}

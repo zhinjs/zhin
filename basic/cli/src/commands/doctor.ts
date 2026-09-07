@@ -394,7 +394,7 @@ export const doctorCommand = new Command('doctor')
       }
     }
 
-    // 6. 检查 AI 依赖（zhin.js 4.x：配置启用 AI 时需单独安装 agent 栈）
+    // 6. 检查 AI 依赖（zhin.js 1.1.x：配置启用 AI 时需单独安装 agent 栈）
     if (existingConfig && !configParseFailed) {
       try {
         const config = loadedConfig ?? await readConfig(path.join(cwd, existingConfig));

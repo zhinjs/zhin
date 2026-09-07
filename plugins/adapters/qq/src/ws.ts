@@ -2,13 +2,42 @@
  * QQ WebSocket transport: bot factory and inbound message normalization.
  */
 import path from 'node:path';
-import { Bot, ReceiverMode, type Sendable } from 'qq-official-bot';
+import {
+  Bot,
+  ReceiverMode,
+  type ApproveJoinRequestOptions,
+  type Sendable,
+} from 'qq-official-bot';
 import type { MediaRef, Segment } from '@zhin.js/core';
 import type { QqOutboundMessage } from './outbound.js';
 import type { QqChannelKind, QqInboundMessage, ResolvedQqWebsocketConfig } from './protocol.js';
 
+/** SDK business surface exposed to plugins without bypassing Endpoint lifecycle ownership. */
+export type QqOfficialApi = Pick<Bot,
+  | 'messageService'
+  | 'fileProcessor'
+  | 'guildService'
+  | 'channelService'
+  | 'memberService'
+  | 'permissionService'
+  | 'reactionService'
+  | 'scheduleService'
+  | 'threadService'
+  | 'audioService'
+  | 'botService'
+  | 'groupService'
+  | 'menuPanelService'
+  | 'group'
+  | 'user'
+  | 'channel'
+  | 'direct'
+  | 'guild'
+>;
+
 /** Minimal bot surface used by the endpoint (real qq-official-bot or test mock). */
 export interface QqBotTransport {
+  /** Full qq-official-bot business API; lifecycle remains owned by the Endpoint. */
+  readonly api: QqOfficialApi;
   start(): Promise<void>;
   stop(): Promise<void>;
   on(event: string, listener: (...args: unknown[]) => void): void;
@@ -42,7 +71,7 @@ export interface QqBotTransport {
   approveGroupJoinRequest?(
     groupId: string,
     userId: string,
-    options: { op: 'approve' | 'reject'; join_request_id: string; reason?: string },
+    options: ApproveJoinRequestOptions,
   ): Promise<unknown>;
 }
 
@@ -58,10 +87,10 @@ interface QqOfficialBotLifecycle {
 }
 
 /**
- * qq-official-bot 1.2.x keeps a second `userClose` flag in Connection.
- * Session.stop() does not update it, so a normal shutdown is treated as an
- * unexpected disconnect and starts a reconnect loop. Destroy both managers at
- * the SDK boundary until upstream exposes a complete public shutdown method.
+ * qq-official-bot 1.2 used a separate connection manager; 1.3 moved WebSocket
+ * ownership into the receiver, but Session.stop() still leaves the auth refresh
+ * manager alive. Mark the session closed, clean up legacy connections when
+ * present, stop the receiver, then destroy auth refresh at the SDK boundary.
  */
 export async function stopQqOfficialBot(bot: QqOfficialBotLifecycle): Promise<void> {
   const session = bot.sessionManager;
@@ -262,6 +291,7 @@ export function defaultCreateBot(config: ResolvedQqWebsocketConfig): QqBotTransp
   });
 
   return {
+    api: bot,
     start: () => bot.start().then(() => undefined),
     stop: () => stopQqOfficialBot(bot as unknown as QqOfficialBotLifecycle),
     on: (event, listener) => {

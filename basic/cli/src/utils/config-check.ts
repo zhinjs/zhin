@@ -325,7 +325,7 @@ function checkAi(
         severity: 'error',
         code: 'ai.agent_missing',
         path: 'ai',
-        message: '配置已启用 AI，但未安装 @zhin.js/agent（zhin.js 4.x 需单独安装 AI 栈）',
+        message: '配置已启用 AI，但未安装 @zhin.js/agent（zhin.js 1.1.x 需单独安装 AI 栈）',
         fixHint: 'zhin setup --ai 或 pnpm add @zhin.js/agent@latest zod@latest ai@latest',
       });
     } else {

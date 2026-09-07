@@ -1,6 +1,6 @@
 # Legacy Concept Migration Guide
 
-After zhin.js 4.x completed the Plugin Runtime consolidation, the following legacy concepts are no longer used in public-facing documentation. This page explains each old concept -- "what it was then and where it went" -- for reference when maintaining old plugins, reading legacy code, or consulting old docs. For the API-level deprecation list, see [Public API Surface](./public-api-surface.md).
+After the Plugin Runtime consolidation, the following legacy concepts are no longer used in public-facing documentation. This page explains each old concept -- "what it was then and where it went" -- for reference when maintaining old plugins, reading legacy code, or consulting old docs. For the API-level deprecation list, see [Public API Surface](./public-api-surface.md).
 
 ## `usePlugin()` Plugin System -> Convention-based plugin.ts + definePlugin
 

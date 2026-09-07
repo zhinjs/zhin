@@ -40,7 +40,7 @@
     "@shotkit/shotium": "^0.3.3"
   },
   "peerDependencies": {
-    "@zhin.js/core": "workspace:*"
+    "@zhin.js/core": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@zhin.js/core": {

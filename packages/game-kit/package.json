@@ -16,8 +16,8 @@
     "build": "tsc"
   },
   "peerDependencies": {
-    "zhin.js": "^7.0.1",
-    "@zhin.js/html-renderer": "workspace:*"
+    "zhin.js": "workspace:^",
+    "@zhin.js/html-renderer": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@zhin.js/html-renderer": {

@@ -33,7 +33,7 @@ const snippetRows = dataRows(extractRegion(fs.readFileSync(snippetPath, 'utf8'),
 
 const readme = fs.readFileSync(readmePath, 'utf8');
 const section = readme.match(
-  /### Install tiers（zhin\.js 4\.x）\s*\n+([\s\S]*?)(?=\n### |\n## |$)/,
+  /### Install tiers（zhin\.js 1\.1\.x）\s*\n+([\s\S]*?)(?=\n### |\n## |$)/,
 );
 if (!section) {
   console.error('check-install-tiers-ssot: README Install tiers section not found');

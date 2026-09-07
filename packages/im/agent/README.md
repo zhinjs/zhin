@@ -109,7 +109,7 @@ turn 会跨代执行。
 ## 依赖关系
 
 - 依赖 **@zhin.js/core**（IM 类型与消息链）与 **@zhin.js/ai**（`agentLoop`、Provider 抽象）
-- **zhin.js 4.x** 主包为 optional peer；运行时通过 `zhin.js/agent` 子路径或本包 import
+- **zhin.js 1.1.x 稳定线**主包为 optional peer；运行时通过 `zhin.js/agent` 子路径或本包 import
 
 ## PromptAssemblyRegistry
 

@@ -30,7 +30,7 @@ describe('zhin-stack-deps', () => {
     expect(required['@zhin.js/database']).toBe('latest');
   });
 
-  it('diagnoses zhin.js below workspace major when AI enabled', () => {
+  it('diagnoses zhin.js versions before the 1.1 stable line when AI is enabled', () => {
     const config = {
       ai: { enabled: true, agents: { zhin: { provider: 'openai' } }, providers: { openai: { sdk: 'openai' } } },
       plugins: ['@zhin.js/adapter-sandbox', '@zhin.js/mcp'],
@@ -46,5 +46,15 @@ describe('zhin-stack-deps', () => {
     expect(diagnosis.outdatedInPackageJson).not.toContain('zhin.js');
     expect(diagnosis.incompatibleInstalled.some((i) => i.package === 'zhin.js')).toBe(true);
     expect(packagesNeedingZhinStackFix(diagnosis)).toContain('zhin.js');
+  });
+
+  it('accepts the reset 1.1 stable line when AI is enabled', () => {
+    const diagnosis = diagnoseZhinStackDependencies(
+      '/tmp',
+      { ai: { enabled: true } },
+      { dependencies: { 'zhin.js': '^1.1.0', '@zhin.js/agent': '^1.2.1' } },
+    );
+
+    expect(diagnosis.incompatibleInstalled).toEqual([]);
   });
 });

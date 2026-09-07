@@ -49,15 +49,15 @@
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/permission": "workspace:*",
-    "qq-official-bot": "^1.2.3"
+    "qq-official-bot": "^1.3.0"
   },
   "peerDependencies": {
-    "@zhin.js/adapter": "workspace:*",
-    "@zhin.js/agent": "workspace:*",
-    "@zhin.js/command": "workspace:*",
-    "@zhin.js/core": "workspace:*",
-    "@zhin.js/middleware": "workspace:*",
-    "zhin.js": "workspace:*",
+    "@zhin.js/adapter": "workspace:^",
+    "@zhin.js/agent": "workspace:^",
+    "@zhin.js/command": "workspace:^",
+    "@zhin.js/core": "workspace:^",
+    "@zhin.js/middleware": "workspace:^",
+    "zhin.js": "workspace:^",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {

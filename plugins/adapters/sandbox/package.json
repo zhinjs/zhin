@@ -77,13 +77,13 @@
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "@zhin.js/adapter": "workspace:*",
-    "@zhin.js/console-contract": "workspace:*",
-    "@zhin.js/core": "workspace:*",
-    "@zhin.js/host-http": "workspace:*",
-    "@zhin.js/page": "workspace:*",
+    "@zhin.js/adapter": "workspace:^",
+    "@zhin.js/console-contract": "workspace:^",
+    "@zhin.js/core": "workspace:^",
+    "@zhin.js/host-http": "workspace:^",
+    "@zhin.js/page": "workspace:^",
     "react": "^19.0.0",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:^"
   },
   "peerDependenciesMeta": {
     "react": {

@@ -55,7 +55,8 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 | Check | Description |
 | --- | --- |
 | Architecture Layers (`pnpm check:architecture`) | Layer dependency direction (basic -> kernel -> ai -> core -> agent -> zhin) |
-| Dependency Policy (`pnpm check:dependency-policy`) | User project scaffold dependencies default to `latest` |
+| Dependency Policy (`pnpm check:dependency-policy`) | Scaffold dependency policy, Changesets config, and internal peer ranges |
+| Release Plan (`pnpm check:release-plan`) | Patch-only by default; minor/major require an owner approval record |
 | No Koa Import (`pnpm check:no-koa`) | Plugins must not directly import koa |
 | Install Size (`pnpm check:install-size`) | zhin.js IM core production `node_modules` <= 10MB |
 
@@ -134,6 +135,21 @@ pnpm pub       # = pnpm changeset publish; publishes to npm
 ```
 
 During daily development you only need `pnpm release` to commit the changeset file; `bump` and `pub` are executed by CI.
+
+The default release policy permits patch releases only. `pnpm check:release-plan` inspects the
+complete Changesets plan and fails on any unapproved minor or major, including bumps inferred
+through dependency propagation. A non-patch release requires the version owner to record the
+changeset filename, package, release type, approver, and reason in
+`.changeset/version-policy.json`. `.github/CODEOWNERS` assigns owner review for that policy file.
+
+Internal peer dependencies use `workspace:^` so compatible internal releases publish as caret
+ranges instead of exact versions. Private examples do not participate in Changesets versioning or tags.
+
+### 1.1 stable line
+
+After 1.0.93, internal peer dependency propagation inflated `zhin.js` through versions 2.x–7.x.
+Those versions remain on npm to preserve existing lockfiles and are marked as superseded by 1.1.0.
+Both `latest` and `stable` point to 1.1.0 after publication; routine releases then increment patch only.
 
 ## Publishing (GitHub CI)
 

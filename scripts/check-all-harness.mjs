@@ -178,7 +178,12 @@ const checks = [
   {
     name: 'Dependency Policy',
     command: 'pnpm check:dependency-policy',
-    description: '用户项目脚手架依赖默认写 latest',
+    description: '校验脚手架依赖策略、Changesets 配置与内部 peer 版本范围',
+  },
+  {
+    name: 'Release Plan',
+    command: 'pnpm check:release-plan',
+    description: '默认只允许 patch；minor/major 必须有 owner 授权记录',
   },
   {
     name: 'API Surface',

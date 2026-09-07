@@ -1,6 +1,6 @@
 # Legacy 概念迁移指南
 
-zhin.js 4.x 完成 Plugin Runtime 收口后，以下 legacy 概念不再出现在对外叙事中。本页集中解释每个旧概念「当时是什么、现在去哪了」，供维护老插件、读旧代码或旧文档时对照。API 级别的废弃清单另见 [Public API Surface](./public-api-surface.md)。
+Plugin Runtime 完成收口后，以下 legacy 概念不再出现在对外叙事中。本页集中解释每个旧概念「当时是什么、现在去哪了」，供维护老插件、读旧代码或旧文档时对照。API 级别的废弃清单另见 [Public API Surface](./public-api-surface.md)。
 
 ## `usePlugin()` 类插件体系 → 约定式 plugin.ts + definePlugin
 

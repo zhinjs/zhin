@@ -304,10 +304,10 @@ importers:
         version: 11.16.1
       vitepress:
         specifier: ^1.6.4
-        version: 1.6.4(@algolia/client-search@5.56.0)(@types/node@26.1.2)(@types/react@19.2.18)(axios@1.19.0)(postcss@8.5.25)(qrcode@1.5.4)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(search-insights@2.17.3)(tsx@4.23.1)(typescript@6.0.3)(yaml@2.9.0)
+        version: 1.6.4(@algolia/client-search@5.56.0)(@types/node@26.1.2)(@types/react@19.2.18)(axios@1.20.0)(postcss@8.5.25)(qrcode@1.5.4)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(search-insights@2.17.3)(tsx@4.23.1)(typescript@6.0.3)(yaml@2.9.0)
       vitepress-plugin-mermaid:
         specifier: ^2.0.17
-        version: 2.0.17(mermaid@11.16.1)(vitepress@1.6.4(@algolia/client-search@5.56.0)(@types/node@26.1.2)(@types/react@19.2.18)(axios@1.19.0)(postcss@8.5.25)(qrcode@1.5.4)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(search-insights@2.17.3)(tsx@4.23.1)(typescript@6.0.3)(yaml@2.9.0))
+        version: 2.0.17(mermaid@11.16.1)(vitepress@1.6.4(@algolia/client-search@5.56.0)(@types/node@26.1.2)(@types/react@19.2.18)(axios@1.20.0)(postcss@8.5.25)(qrcode@1.5.4)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(search-insights@2.17.3)(tsx@4.23.1)(typescript@6.0.3)(yaml@2.9.0))
       vue:
         specifier: ^3.5.40
         version: 3.5.40(typescript@6.0.3)
@@ -1001,7 +1001,7 @@ importers:
         specifier: workspace:*
         version: link:../im/core
       '@zhin.js/html-renderer':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../toolkit/html-renderer
       '@zhin.js/middleware':
         specifier: workspace:*
@@ -1821,7 +1821,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -1839,7 +1839,7 @@ importers:
         specifier: workspace:*
         version: link:../../../basic/logger
       '@zhin.js/permission':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/permission
     devDependencies:
       '@types/node':
@@ -1867,7 +1867,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -1965,7 +1965,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2011,7 +2011,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2063,7 +2063,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2112,7 +2112,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2130,7 +2130,7 @@ importers:
         specifier: workspace:*
         version: link:../../../basic/logger
       '@zhin.js/permission':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/permission
     devDependencies:
       '@types/node':
@@ -2158,7 +2158,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2204,7 +2204,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2256,7 +2256,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2311,7 +2311,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2369,7 +2369,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2415,7 +2415,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2433,14 +2433,14 @@ importers:
         specifier: workspace:*
         version: link:../../../basic/logger
       '@zhin.js/middleware':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/middleware
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
       qq-official-bot:
-        specifier: ^1.2.3
-        version: 1.2.3
+        specifier: ^1.3.0
+        version: 1.3.0
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2531,7 +2531,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2583,7 +2583,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2601,7 +2601,7 @@ importers:
         specifier: workspace:*
         version: link:../../../basic/logger
       '@zhin.js/permission':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/permission
     devDependencies:
       '@types/node':
@@ -2629,7 +2629,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2647,7 +2647,7 @@ importers:
         specifier: workspace:*
         version: link:../../../basic/logger
       '@zhin.js/permission':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/permission
     devDependencies:
       '@types/node':
@@ -2675,7 +2675,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2721,7 +2721,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2739,7 +2739,7 @@ importers:
         specifier: workspace:*
         version: link:../../../basic/logger
       '@zhin.js/permission':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/permission
     devDependencies:
       '@types/node':
@@ -2767,7 +2767,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/adapter
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2798,7 +2798,7 @@ importers:
   plugins/features/process-monitor:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/tool':
         specifier: workspace:*
@@ -2820,7 +2820,7 @@ importers:
   plugins/games/blackjack:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2829,7 +2829,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/game-kit
       '@zhin.js/middleware':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/middleware
     devDependencies:
       typescript:
@@ -2845,7 +2845,7 @@ importers:
   plugins/games/dice-duel:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2854,7 +2854,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/game-kit
       '@zhin.js/middleware':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/middleware
     devDependencies:
       typescript:
@@ -2870,7 +2870,7 @@ importers:
   plugins/games/dungeon-expedition:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2879,7 +2879,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/game-kit
       '@zhin.js/middleware':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/middleware
     devDependencies:
       typescript:
@@ -2895,7 +2895,7 @@ importers:
   plugins/games/guess-number:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2904,7 +2904,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/game-kit
       '@zhin.js/middleware':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/middleware
     devDependencies:
       typescript:
@@ -2920,7 +2920,7 @@ importers:
   plugins/games/hub:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/game-kit':
         specifier: workspace:*
@@ -2939,7 +2939,7 @@ importers:
   plugins/games/idiom-chain:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2948,7 +2948,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/game-kit
       '@zhin.js/middleware':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/middleware
       chinese-idiom-chengyu:
         specifier: ^1.1.0
@@ -2967,7 +2967,7 @@ importers:
   plugins/games/rps:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -2976,7 +2976,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/game-kit
       '@zhin.js/middleware':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/middleware
     devDependencies:
       typescript:
@@ -2992,7 +2992,7 @@ importers:
   plugins/games/text-adventure:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -3001,7 +3001,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/game-kit
       '@zhin.js/middleware':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/middleware
     devDependencies:
       typescript:
@@ -3017,7 +3017,7 @@ importers:
   plugins/games/tic-tac-toe:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -3026,7 +3026,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/game-kit
       '@zhin.js/middleware':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/middleware
     devDependencies:
       typescript:
@@ -3042,7 +3042,7 @@ importers:
   plugins/games/word-riddle:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -3051,7 +3051,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/game-kit
       '@zhin.js/middleware':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/middleware
       chinese-idiom-chengyu:
         specifier: ^1.1.0
@@ -3092,7 +3092,7 @@ importers:
   plugins/utils/60s:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/tool':
         specifier: workspace:*
@@ -3117,7 +3117,7 @@ importers:
   plugins/utils/code-runner:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
     devDependencies:
       '@zhin.js/agent':
@@ -3145,7 +3145,7 @@ importers:
         specifier: workspace:*
         version: link:../../../basic/logger
       '@zhin.js/middleware':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/middleware
     devDependencies:
       typescript:
@@ -3161,13 +3161,13 @@ importers:
   plugins/utils/group-suite:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
       '@zhin.js/middleware':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/middleware
       '@zhin.js/satori':
         specifier: workspace:*
@@ -3198,7 +3198,7 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/toolkit/html-renderer
       '@zhin.js/middleware':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/middleware
     devDependencies:
       typescript:
@@ -3214,7 +3214,7 @@ importers:
   plugins/utils/lottery:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/tool':
         specifier: workspace:*
@@ -3239,19 +3239,19 @@ importers:
   plugins/utils/music:
     dependencies:
       '@zhin.js/adapter-icqq':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../adapters/icqq
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/component':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/component
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
       '@zhin.js/middleware':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/middleware
       '@zhin.js/tool':
         specifier: workspace:*
@@ -3270,7 +3270,7 @@ importers:
   plugins/utils/qrcode:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
@@ -3295,13 +3295,13 @@ importers:
   plugins/utils/repeater:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
       '@zhin.js/middleware':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/middleware
     devDependencies:
       typescript:
@@ -3317,7 +3317,7 @@ importers:
   plugins/utils/rss:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
       rss-parser:
         specifier: ^3.13.0
@@ -3342,7 +3342,7 @@ importers:
   plugins/utils/short-url:
     dependencies:
       '@zhin.js/command':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../../packages/im/command
     devDependencies:
       '@zhin.js/agent':
@@ -6017,6 +6017,9 @@ packages:
   axios@1.19.0:
     resolution: {integrity: sha512-ht/iuYZXEjFxLH/Hkezgd7m6JKlHHXEUSneaDz8uZe1Gj5QZtCnpyDsckvAiEnT89OEbCLmnte4R4sn7P0EKFw==}
 
+  axios@1.20.0:
+    resolution: {integrity: sha512-r8aOh8j9cGKpgQAqpzrUHnSIc6a59Y3Xf/cv8sy1DrHCkZHzQGEuoq1tARk6qSyDdtQGSDgpb9kFlruzPvrgwg==}
+
   balanced-match@4.0.4:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
     engines: {node: 18 || 20 || >=22}
@@ -7936,8 +7939,8 @@ packages:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
 
-  qq-official-bot@1.2.3:
-    resolution: {integrity: sha512-YP2rMgm3/6JxW7tkwIyZgb1Na/s0mj7YoFG6v5vBXK89EUHnP7wei2xlKRQmHC6fdeo+DiRB5XauWE0izRevbA==}
+  qq-official-bot@1.3.0:
+    resolution: {integrity: sha512-Nc2SIQ8/fc5A9RNN5jfc83QKnA2+QH1XskyOvqTGzdQv9z+KqAXPXRvkvOEXixPC8LdLZYq2ZMj24R0DsJMe+A==}
     engines: {node: '>=20.12'}
 
   qrcode@1.5.4:
@@ -8758,6 +8761,18 @@ packages:
 
   ws@8.21.1:
     resolution: {integrity: sha512-+0NTnW77fFN/DjQi6k/Sq/Yvk4Sgajw7urW8V+asjXnRgDs9gyGkdb7EzgfhA4goXsRIZKE28fzIXBHEzhuiWw==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
+  ws@8.21.3:
+    resolution: {integrity: sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -11496,13 +11511,13 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@vueuse/integrations@12.8.2(axios@1.19.0)(focus-trap@7.8.0)(qrcode@1.5.4)(typescript@6.0.3)':
+  '@vueuse/integrations@12.8.2(axios@1.20.0)(focus-trap@7.8.0)(qrcode@1.5.4)(typescript@6.0.3)':
     dependencies:
       '@vueuse/core': 12.8.2(typescript@6.0.3)
       '@vueuse/shared': 12.8.2(typescript@6.0.3)
       vue: 3.5.40(typescript@6.0.3)
     optionalDependencies:
-      axios: 1.19.0
+      axios: 1.20.0
       focus-trap: 7.8.0
       qrcode: 1.5.4
     transitivePeerDependencies:
@@ -11641,6 +11656,16 @@ snapshots:
   aws-ssl-profiles@1.1.2: {}
 
   axios@1.19.0:
+    dependencies:
+      follow-redirects: 1.16.0
+      form-data: 4.0.6
+      https-proxy-agent: 5.0.1
+      proxy-from-env: 2.1.0
+    transitivePeerDependencies:
+      - debug
+      - supports-color
+
+  axios@1.20.0:
     dependencies:
       follow-redirects: 1.16.0
       form-data: 4.0.6
@@ -13601,13 +13626,13 @@ snapshots:
 
   punycode@2.3.1: {}
 
-  qq-official-bot@1.2.3:
+  qq-official-bot@1.3.0:
     dependencies:
       '@noble/curves': 1.9.7
-      axios: 1.19.0
+      axios: 1.20.0
       formdata-node: 6.0.3
       log4js: 6.9.1
-      ws: 8.21.1
+      ws: 8.21.3
     transitivePeerDependencies:
       - bufferutil
       - debug
@@ -14407,14 +14432,14 @@ snapshots:
       tsx: 4.23.1
       yaml: 2.9.0
 
-  vitepress-plugin-mermaid@2.0.17(mermaid@11.16.1)(vitepress@1.6.4(@algolia/client-search@5.56.0)(@types/node@26.1.2)(@types/react@19.2.18)(axios@1.19.0)(postcss@8.5.25)(qrcode@1.5.4)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(search-insights@2.17.3)(tsx@4.23.1)(typescript@6.0.3)(yaml@2.9.0)):
+  vitepress-plugin-mermaid@2.0.17(mermaid@11.16.1)(vitepress@1.6.4(@algolia/client-search@5.56.0)(@types/node@26.1.2)(@types/react@19.2.18)(axios@1.20.0)(postcss@8.5.25)(qrcode@1.5.4)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(search-insights@2.17.3)(tsx@4.23.1)(typescript@6.0.3)(yaml@2.9.0)):
     dependencies:
       mermaid: 11.16.1
-      vitepress: 1.6.4(@algolia/client-search@5.56.0)(@types/node@26.1.2)(@types/react@19.2.18)(axios@1.19.0)(postcss@8.5.25)(qrcode@1.5.4)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(search-insights@2.17.3)(tsx@4.23.1)(typescript@6.0.3)(yaml@2.9.0)
+      vitepress: 1.6.4(@algolia/client-search@5.56.0)(@types/node@26.1.2)(@types/react@19.2.18)(axios@1.20.0)(postcss@8.5.25)(qrcode@1.5.4)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(search-insights@2.17.3)(tsx@4.23.1)(typescript@6.0.3)(yaml@2.9.0)
     optionalDependencies:
       '@mermaid-js/mermaid-mindmap': 9.3.0
 
-  vitepress@1.6.4(@algolia/client-search@5.56.0)(@types/node@26.1.2)(@types/react@19.2.18)(axios@1.19.0)(postcss@8.5.25)(qrcode@1.5.4)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(search-insights@2.17.3)(tsx@4.23.1)(typescript@6.0.3)(yaml@2.9.0):
+  vitepress@1.6.4(@algolia/client-search@5.56.0)(@types/node@26.1.2)(@types/react@19.2.18)(axios@1.20.0)(postcss@8.5.25)(qrcode@1.5.4)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(search-insights@2.17.3)(tsx@4.23.1)(typescript@6.0.3)(yaml@2.9.0):
     dependencies:
       '@docsearch/css': 3.8.2
       '@docsearch/js': 3.8.2(@algolia/client-search@5.56.0)(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(search-insights@2.17.3)
@@ -14427,7 +14452,7 @@ snapshots:
       '@vue/devtools-api': 7.7.10
       '@vue/shared': 3.5.40
       '@vueuse/core': 12.8.2(typescript@6.0.3)
-      '@vueuse/integrations': 12.8.2(axios@1.19.0)(focus-trap@7.8.0)(qrcode@1.5.4)(typescript@6.0.3)
+      '@vueuse/integrations': 12.8.2(axios@1.20.0)(focus-trap@7.8.0)(qrcode@1.5.4)(typescript@6.0.3)
       focus-trap: 7.8.0
       mark.js: 8.11.1
       minisearch: 7.2.0
@@ -14541,6 +14566,8 @@ snapshots:
   wrappy@1.0.2: {}
 
   ws@8.21.1: {}
+
+  ws@8.21.3: {}
 
   wsl-utils@0.3.1:
     dependencies:

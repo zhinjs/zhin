@@ -39,7 +39,7 @@
   },
   "license": "MIT",
   "peerDependencies": {
-    "@zhin.js/core": "workspace:*"
+    "@zhin.js/core": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@zhin.js/core": {
