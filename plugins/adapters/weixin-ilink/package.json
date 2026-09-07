@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-weixin-ilink",
-  "version": "1.0.99",
+  "version": "1.1.0",
   "type": "module",
   "description": "Zhin.js Weixin iLink (ClawBot) adapter for Plugin Runtime (long-poll)",
   "main": "./lib/index.js",

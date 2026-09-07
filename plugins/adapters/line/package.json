@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-line",
-  "version": "1.0.99",
+  "version": "1.1.0",
   "description": "Zhin.js LINE Messaging API adapter for Plugin Runtime (HTTP webhook)",
   "type": "module",
   "main": "./lib/index.js",

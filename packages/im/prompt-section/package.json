@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/prompt-section",
-  "version": "1.0.99",
+  "version": "1.1.0",
   "description": "Generation-owned Agent Prompt Section Feature for Zhin Plugin Runtime",
   "type": "module",
   "main": "./lib/index.js",

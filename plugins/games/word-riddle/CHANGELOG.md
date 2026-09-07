@@ -1,5 +1,19 @@
 # @zhin.js/plugin-word-riddle
 
+## 1.1.0
+
+### Minor Changes
+
+- 1fc6270: Reset all 88 published official packages onto the owner-governed 1.1.x stable line. Packages whose historical 1.1.0 version is still available publish as 1.1.0; packages where npm permanently reserves that version use the next available 1.1.x patch. Historical higher version lines remain installable but are superseded, and routine releases after this reset are patch-only.
+
+### Patch Changes
+
+- a34bf91: Publish internal peer dependencies as compatible caret ranges instead of exact versions, preventing compatible internal minor releases from forcing unrelated major bumps.
+- Updated dependencies [1fc6270]
+- Updated dependencies [a34bf91]
+  - @zhin.js/core@1.1.35
+  - @zhin.js/game-kit@1.1.0
+
 ## 2.0.1
 
 ### Patch Changes

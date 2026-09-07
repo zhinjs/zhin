@@ -1,5 +1,15 @@
 # @zhin.js/scaffold-wizard
 
+## 1.1.0
+
+### Minor Changes
+
+- 1fc6270: Reset all 88 published official packages onto the owner-governed 1.1.x stable line. Packages whose historical 1.1.0 version is still available publish as 1.1.0; packages where npm permanently reserves that version use the next available 1.1.x patch. Historical higher version lines remain installable but are superseded, and routine releases after this reset are patch-only.
+
+### Patch Changes
+
+- a34bf91: Upgrade qq-official-bot to 1.3, expose its complete API client, and deliver QQ group lifecycle, member change, and join-request events through the canonical side-event path.
+
 ## 0.2.6
 
 ### Patch Changes

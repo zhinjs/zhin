@@ -1,5 +1,18 @@
 # @zhin.js/kernel
 
+## 1.1.0
+
+### Minor Changes
+
+- 1fc6270: Reset all 88 published official packages onto the owner-governed 1.1.x stable line. Packages whose historical 1.1.0 version is still available publish as 1.1.0; packages where npm permanently reserves that version use the next available 1.1.x patch. Historical higher version lines remain installable but are superseded, and routine releases after this reset are patch-only.
+
+### Patch Changes
+
+- Updated dependencies [1fc6270]
+  - @zhin.js/logger@1.1.0
+  - @zhin.js/schedule@1.1.0
+  - @zhin.js/schema@1.1.0
+
 ## 1.0.8
 
 ### Patch Changes

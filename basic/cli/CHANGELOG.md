@@ -1,5 +1,35 @@
 # @zhin.js/cli
 
+## 1.1.0
+
+### Minor Changes
+
+- 1fc6270: Reset all 88 published official packages onto the owner-governed 1.1.x stable line. Packages whose historical 1.1.0 version is still available publish as 1.1.0; packages where npm permanently reserves that version use the next available 1.1.x patch. Historical higher version lines remain installable but are superseded, and routine releases after this reset are patch-only.
+
+### Patch Changes
+
+- a34bf91: Publish internal peer dependencies as compatible caret ranges instead of exact versions, preventing compatible internal minor releases from forcing unrelated major bumps.
+- Updated dependencies [a34bf91]
+- Updated dependencies [1fc6270]
+  - @zhin.js/scaffold-wizard@1.1.0
+  - @zhin.js/adapter@1.1.12
+  - @zhin.js/ai@1.1.33
+  - @zhin.js/command@1.1.0
+  - @zhin.js/component@1.1.0
+  - @zhin.js/config-yaml@1.1.0
+  - @zhin.js/core@1.1.35
+  - @zhin.js/database@1.1.0
+  - @zhin.js/host-http@1.1.0
+  - @zhin.js/im-contract@1.1.0
+  - @zhin.js/interaction@1.1.0
+  - @zhin.js/logger@1.1.0
+  - @zhin.js/middleware@1.1.0
+  - @zhin.js/pagemanager@1.1.0
+  - @zhin.js/plugin-runtime@1.1.9
+  - @zhin.js/prompt-section@1.1.0
+  - @zhin.js/runtime@1.1.0
+  - @zhin.js/schedule@1.1.0
+
 ## 4.0.1
 
 ### Patch Changes

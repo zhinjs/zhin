@@ -1,5 +1,25 @@
 # @zhin.js/core
 
+## 1.1.35
+
+### Patch Changes
+
+- 1fc6270: Reset all 88 published official packages onto the owner-governed 1.1.x stable line. Packages whose historical 1.1.0 version is still available publish as 1.1.0; packages where npm permanently reserves that version use the next available 1.1.x patch. Historical higher version lines remain installable but are superseded, and routine releases after this reset are patch-only.
+- Updated dependencies [1fc6270]
+  - @zhin.js/adapter@1.1.12
+  - @zhin.js/command@1.1.0
+  - @zhin.js/component@1.1.0
+  - @zhin.js/database@1.1.0
+  - @zhin.js/handler@1.1.0
+  - @zhin.js/im-contract@1.1.0
+  - @zhin.js/interaction@1.1.0
+  - @zhin.js/kernel@1.1.0
+  - @zhin.js/logger@1.1.0
+  - @zhin.js/middleware@1.1.0
+  - @zhin.js/permission@1.1.0
+  - @zhin.js/plugin-runtime@1.1.9
+  - @zhin.js/schema@1.1.0
+
 ## 1.5.16
 
 ### Patch Changes

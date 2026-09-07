@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/scaffold-wizard",
-  "version": "1.0.99",
+  "version": "1.1.0",
   "description": "Shared interactive scaffold wizard for create-zhin-app and @zhin.js/cli",
   "type": "module",
   "main": "./lib/index.js",
