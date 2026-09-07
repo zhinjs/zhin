@@ -1,5 +1,16 @@
 # Changelog
 
+## 9.0.1
+
+### Patch Changes
+
+- f7ee28d: Reject sends without a valid platform message ID. Use the shared Endpoint lifecycle to cancel setup requests and polling, isolate late results from replacement connections, and release Webhook routes on failed startup. Release retry listeners and cancel permission lookups when admission closes, preventing stale messages and permissions from entering reopened endpoints. Correct endpoint ID and Webhook setup documentation.
+- Updated dependencies [f7ee28d]
+  - @zhin.js/adapter@1.2.2
+  - @zhin.js/core@1.5.16
+  - zhin.js@7.0.1
+  - @zhin.js/agent@1.2.1
+
 ## 9.0.0
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @zhin.js/plugin-guess-number
 
+## 2.0.1
+
+### Patch Changes
+
+- @zhin.js/core@1.5.16
+- zhin.js@7.0.1
+- @zhin.js/game-kit@4.0.1
+
 ## 2.0.0
 
 ### Patch Changes

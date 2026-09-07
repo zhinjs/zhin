@@ -1,5 +1,16 @@
 # Changelog
 
+## 8.0.1
+
+### Patch Changes
+
+- f7ee28d: Require a platform message timestamp for each Slack message chunk instead of fabricating a successful receipt. Stop subsequent chunks when delivery cannot be confirmed, and propagate file upload failures instead of silently reporting partial delivery as success.
+- Updated dependencies [f7ee28d]
+  - @zhin.js/adapter@1.2.2
+  - @zhin.js/core@1.5.16
+  - zhin.js@7.0.1
+  - @zhin.js/agent@1.2.1
+
 ## 8.0.0
 
 ### Patch Changes

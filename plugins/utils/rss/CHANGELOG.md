@@ -1,5 +1,12 @@
 # @zhin.js/plugin-rss
 
+## 5.0.1
+
+### Patch Changes
+
+- zhin.js@7.0.1
+- @zhin.js/agent@1.2.1
+
 ## 5.0.0
 
 ### Patch Changes

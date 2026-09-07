@@ -1,5 +1,16 @@
 # @zhin.js/adapter-qq
 
+## 9.0.1
+
+### Patch Changes
+
+- f7ee28d: Use the shared Endpoint lifecycle for QQ WebSocket and HTTP receivers. Isolate each SDK instance and its Webhook routes, close resources created by late startup completion after cancellation, and ignore callbacks queued by replaced SDK instances. Failed startup releases resources before retrying.
+- Updated dependencies [f7ee28d]
+  - @zhin.js/adapter@1.2.2
+  - @zhin.js/core@1.5.16
+  - zhin.js@7.0.1
+  - @zhin.js/agent@1.2.1
+
 ## 9.0.0
 
 ### Patch Changes

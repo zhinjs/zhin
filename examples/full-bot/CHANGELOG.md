@@ -1,5 +1,18 @@
 # full-bot
 
+## 0.0.45
+
+### Patch Changes
+
+- Updated dependencies [f7ee28d]
+  - @zhin.js/adapter-sandbox@9.0.1
+  - @zhin.js/adapter-kook@9.0.1
+  - @zhin.js/adapter-napcat@8.0.1
+  - zhin.js@7.0.1
+  - @zhin.js/a2a@4.0.1
+  - @zhin.js/mcp@7.0.1
+  - @zhin.js/agent@1.2.1
+
 ## 0.0.44
 
 ### Patch Changes

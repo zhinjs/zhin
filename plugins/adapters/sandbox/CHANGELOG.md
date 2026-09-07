@@ -1,5 +1,15 @@
 # @zhin.js/adapter-process
 
+## 9.0.1
+
+### Patch Changes
+
+- f7ee28d: Keep the Console SDK as a required dependency instead of also declaring it as an optional peer, which could remove it from a clean pnpm installation and prevent page compilation.
+- Updated dependencies [f7ee28d]
+  - @zhin.js/adapter@1.2.2
+  - @zhin.js/core@1.5.16
+  - zhin.js@7.0.1
+
 ## 9.0.0
 
 ### Patch Changes

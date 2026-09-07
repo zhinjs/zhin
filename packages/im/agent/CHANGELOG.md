@@ -1,5 +1,11 @@
 # @zhin.js/agent
 
+## 1.2.1
+
+### Patch Changes
+
+- @zhin.js/core@1.5.16
+
 ## 1.2.0
 
 ### Minor Changes
