@@ -1,4 +1,6 @@
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdtemp, mkdir, rm, readFile, readdir, writeFile } from 'node:fs/promises';
+import { DurableFileStore, nodeDurableFileSystem } from '../../src/workroom/durable-file-store.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -16,6 +18,44 @@ afterEach(async () => {
 });
 
 describe('File Project Memory application repository', () => {
+  it('reads committed facts while a real durable publication is paused before linking', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'zhin-journal-publication-'));
+    try {
+      const journal = new FileProjectMemoryApplicationRepository(directory);
+      await journal.append('project-1', 0, acceptedProjection('acceptance-1', 'run-1', 3, 0, '22'));
+      const [name] = await readdir(directory);
+      const target = join(directory, name!);
+      let entered!: () => void;
+      let resume!: () => void;
+      const paused = new Promise<void>(resolve => { entered = resolve; });
+      const released = new Promise<void>(resolve => { resume = resolve; });
+      const publisher = new DurableFileStore(directory, { ...nodeDurableFileSystem, link: async (from, to) => {
+        entered(); await released; await nodeDurableFileSystem.link(from, to);
+      } });
+      const pending = publisher.publishCreateOnly({ target, content: await readFile(target, 'utf8'), createdValue: null, onConflict: async () => null });
+      await paused;
+      try { expect(await journal.read('project-1')).toHaveLength(1); }
+      finally { resume(); await pending; }
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it('ignores only canonical orphan temporary files and still rejects corrupt segments', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'zhin-journal-orphan-'));
+    try {
+      const journal = new FileProjectMemoryApplicationRepository(directory);
+      await journal.append('project-1', 0, acceptedProjection('acceptance-1', 'run-1', 3, 0, '22'));
+      const [name] = await readdir(directory);
+      await writeFile(join(directory, `${name}.${randomUUID()}.tmp`), '{');
+      expect(await new FileProjectMemoryApplicationRepository(directory).read('project-1')).toHaveLength(1);
+      const unexpected = join(directory, `${name}.unexpected.tmp`);
+      await writeFile(unexpected, '{');
+      await expect(journal.read('project-1')).rejects.toThrow('segment name');
+      await rm(unexpected);
+      await writeFile(join(directory, name!), '{');
+      await expect(journal.read('project-1')).rejects.toThrow();
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
   it('replays a committed projection after restart and confirms an exact lost-response retry', async () => {
     const parent = await mkdtemp(join(tmpdir(), 'zhin-project-memory-'));
     temporaryDirectories.push(parent);
