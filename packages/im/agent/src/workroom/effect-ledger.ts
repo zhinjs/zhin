@@ -226,6 +226,7 @@ export class WorkroomEffectLedger {
     projectId: string,
     effectId: string,
     input: Readonly<{ operationId: string; workerId: string; fence: number; startedAt: number }>,
+    signal?: AbortSignal,
   ): Promise<WorkroomEffectState> {
     const events = await this.journal.read(projectId);
     const state = requireState(replayWorkroomEffectLedger(projectId, events), effectId);
@@ -237,12 +238,14 @@ export class WorkroomEffectLedger {
       throw new Error(`Workroom Effect cannot start from ${state.status}`);
     }
     if (!this.authorization) throw new Error('Trusted Workroom Effect Authorization Port is unavailable');
+    signal?.throwIfAborted();
     const authorization = await this.authorization.authorize({
       projectId,
       expectedSequence: events.length - 1,
       now: input.startedAt,
       intent: state.intent,
     });
+    signal?.throwIfAborted();
     assertAuthorization(authorization, state.intent, input.startedAt);
     const attempt = createAttempt(input, state.intent, authorization);
     // Authorization and the externally-visible attempt are one durable fact. A

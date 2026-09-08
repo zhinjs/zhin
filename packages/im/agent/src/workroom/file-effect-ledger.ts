@@ -15,7 +15,7 @@ import {
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
 } from './canonical-value.js';
-import { DurableFileStore } from './durable-file-store.js';
+import { DurableFileStore, isDurableFileStagingName } from './durable-file-store.js';
 
 interface EffectSegment {
   readonly version: 1;
@@ -43,13 +43,11 @@ export class FileWorkroomEffectJournal implements WorkroomEffectJournal {
       if (hasCode(error, 'ENOENT')) return Object.freeze([]);
       throw error;
     }
-    // DurableFileStore writes <segment>.json.<UUIDv4>.tmp before its atomic
-    // hard-link publication. Concurrent readers and restart replay must ignore
-    // only that private staging format; other malformed names remain errors.
-    const stagingName = /^[0-9]{16}\.json\.[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\.tmp$/u;
+    const pattern = segmentPattern(prefix);
+    // Ignore only unpublished staging files; malformed segment names remain errors.
     const candidates = names.filter(name => name.startsWith(prefix)
-      && !stagingName.test(name.slice(prefix.length))).sort();
-    if (candidates.some(name => !segmentPattern(prefix).test(name))) {
+      && !isDurableFileStagingName(name, pattern)).sort();
+    if (candidates.some(name => !pattern.test(name))) {
       throw new Error('Invalid Workroom Effect Journal segment name');
     }
     const events = await Promise.all(candidates.map(async (name, index) =>

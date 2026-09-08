@@ -7,7 +7,7 @@ it('rejects exit zero before a package produced its required smoke receipt', () 
   const directory = mkdtempSync(join(tmpdir(), 'smoke-early-exit-'));
   try {
     execFileSync(process.execPath, ['-e', 'process.exit(0)'], { cwd: directory });
-    expect(() => verifyInstalledSmokeReceipt(join(directory, 'smoke-result.json'), 'head', 'digest')).toThrow();
+    expect(() => verifyInstalledSmokeReceipt(join(directory, 'smoke-result.json'), 'head', 'digest')).toThrow('Installed smoke receipt missing or invalid');
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 it('requires the exact candidate identity and every successful runtime probe', () => {
@@ -20,7 +20,16 @@ it('requires the exact candidate identity and every successful runtime probe', (
     expect(() => verifyInstalledSmokeReceipt(path, 'new-head', 'digest')).toThrow();
     for (const field of Object.keys(receipt)) {
       writeFileSync(path, JSON.stringify({ ...receipt, [field]: null }));
-      expect(() => verifyInstalledSmokeReceipt(path, 'head', 'digest')).toThrow();
+      expect(() => verifyInstalledSmokeReceipt(path, 'head', 'digest')).toThrow('Installed smoke receipt missing or invalid');
     }
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+it.each(['{', 'null'])('reports malformed receipt %s with the domain error', content => {
+  const directory = mkdtempSync(join(tmpdir(), 'smoke-invalid-'));
+  try {
+    const path = join(directory, 'smoke-result.json');
+    writeFileSync(path, content);
+    expect(() => verifyInstalledSmokeReceipt(path, 'head', 'digest')).toThrow('Installed smoke receipt missing or invalid');
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });

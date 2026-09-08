@@ -53,6 +53,12 @@ export function createSelfDeliveryProjectForHost(input: {
         const { catalog, profiles, definition } = await authority();
         const pin = admission.plan.authority;
         const existing = await input.kernel.readWorkflowPlanAdmission(admission.operationId);
+        if (!existing) {
+          const blockers = [...await config.readiness()];
+          if (!config.codingExecutor) blockers.push('Coding Executor is not installed');
+          if (!config.deliveryProvider) blockers.push('Delivery provider is not installed');
+          if (blockers.length) throw new Error(`Self-delivery blocked: ${blockers.join('; ')}`);
+        }
         if (!existing && (pin.projectRevision !== catalog.revision
           || pin.projectDigest !== digestWorkroomCatalogProjectBinding(definition)
           || pin.profileRevisionId !== profiles.active!.revisionId

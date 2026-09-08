@@ -166,6 +166,9 @@ function validateSnapshot(snapshot: CodingAssignmentSnapshot, envelope: Assignme
   if (!/^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$/u.test(snapshot.image)) throw new Error('Coding image requires immutable digest');
   if (!snapshot.command.length || snapshot.command.some(arg => !arg || arg.includes('\0'))) throw new Error('Coding command is invalid');
   for (const n of [snapshot.timeoutMs, snapshot.maxBytes, snapshot.memoryMiB, snapshot.workspaceMiB]) if (!Number.isSafeInteger(n) || n <= 0) throw new Error('Coding budget must be positive');
+  // Node timers above signed 32-bit delay overflow to 1ms, even where the
+  // AbortSignal API accepts an unsigned 32-bit value. Reject before dispatch.
+  if (snapshot.timeoutMs > 2_147_483_647) throw new Error('Coding timeout exceeds platform timer upper bound');
   if (!Number.isFinite(snapshot.cpus) || snapshot.cpus <= 0) throw new Error('Coding CPU budget must be positive');
   for (const path of snapshot.writablePaths) assertPath(path.endsWith('/') ? path.slice(0, -1) : path);
   const seen = new Set<string>();
@@ -180,8 +183,9 @@ function assertPath(path: string): void {
   if (!path || path.startsWith('/') || path.includes('\\') || path.includes(':') || Array.from(path).some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) || path.split('/').some(part => !part || part === '.' || part === '..' || part.toLowerCase() === '.git') || (path.toLowerCase() === '.github' || path.toLowerCase().startsWith('.github/'))) throw new Error(`Unsafe coding path: ${path}`);
 }
 
-/** No shell; bounded stdout/stderr; cancellation kills the attached process and waits for exit. */
-export async function runCodingProcess(binary: string, args: readonly string[], input: string, signal: AbortSignal, maxBytes: number, cwd?: string): Promise<string> {
+/** No shell; bounded stdout/stderr; cancellation kills the attached process and waits for exit.
+ * Strict UTF-8 mode validates raw stdout bytes before any lossy decoding. */
+export async function runCodingProcess(binary: string, args: readonly string[], input: string, signal: AbortSignal, maxBytes: number, cwd?: string, strictUtf8 = false): Promise<string> {
   signal.throwIfAborted();
   return new Promise((resolve, reject) => {
     const child = spawn(binary, [...args], { cwd, env: { PATH: process.env.PATH, HOME: '/nonexistent', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0' }, stdio: 'pipe' });
@@ -194,23 +198,37 @@ export async function runCodingProcess(binary: string, args: readonly string[], 
     signal.addEventListener('abort', stop, { once: true });
     if (signal.aborted) stop();
     child.once('error', error => { signal.removeEventListener('abort', stop); reject(error); });
-    child.once('close', code => { signal.removeEventListener('abort', stop); if (failure) reject(failure); else if (code !== 0) reject(new Error(`Coding process exited ${code}: ${Buffer.concat(errors).toString('utf8').slice(0, 1024)}`)); else resolve(Buffer.concat(output).toString('utf8')); });
+    child.once('close', code => {
+      signal.removeEventListener('abort', stop);
+      if (failure) { reject(failure); return; }
+      if (code !== 0) {
+        reject(new Error(`Coding process exited ${code}: ${Buffer.concat(errors).toString('utf8').slice(0, 1024)}`));
+        return;
+      }
+      try {
+        const bytes = Buffer.concat(output);
+        resolve(strictUtf8 ? new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) : bytes.toString('utf8'));
+      } catch { reject(new Error('Coding process output requires valid UTF-8')); }
+    });
     child.stdin.end(input);
   });
 }
 
 /** Read-only infrastructure check; image availability does not prove a model/backend integration. */
 export async function inspectCodingDockerReadiness(image: string, signal: AbortSignal, dockerBinary = 'docker'): Promise<{ ready: boolean; blockers: string[] }> {
+  signal.throwIfAborted();
   if (!/^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$/u.test(image)) return { ready: false, blockers: ['coding_image_digest_required'] };
   try {
     await runCodingProcess(dockerBinary, ['info', '--format', '{{.ServerVersion}}'], '', signal, 16_384);
-  } catch { return { ready: false, blockers: ['docker_daemon_unavailable'] }; }
+    signal.throwIfAborted();
+  } catch { signal.throwIfAborted(); return { ready: false, blockers: ['docker_daemon_unavailable'] }; }
   try {
     const output = await runCodingProcess(dockerBinary, ['image', 'inspect', '--format', '{{json .RepoDigests}}', image], '', signal, 16_384);
+    signal.throwIfAborted();
     const digests: unknown = JSON.parse(output);
     if (!Array.isArray(digests) || !digests.includes(image)) return { ready: false, blockers: ['coding_image_digest_mismatch'] };
     return { ready: true, blockers: [] };
-  } catch { return { ready: false, blockers: ['coding_image_not_provisioned'] }; }
+  } catch { signal.throwIfAborted(); return { ready: false, blockers: ['coding_image_not_provisioned'] }; }
 }
 
 /** Reconcile daemon leftovers using current assignment authority, without redispatching work. */

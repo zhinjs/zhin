@@ -22,7 +22,22 @@ export function readCandidateArtifacts(options) {
   return { bytes, manifest, files, overrides };
 }
 export function readRegular(file) {
-  const stat = fs.lstatSync(file);
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 512 * 1024 * 1024) throw new Error('Canary requires bounded regular files');
-  return fs.readFileSync(file);
+  const expected = fs.lstatSync(file);
+  if (!expected.isFile() || expected.isSymbolicLink() || expected.size > 512 * 1024 * 1024) throw new Error('Canary requires bounded regular files');
+  // Bind validation and reads to one descriptor. NOFOLLOW prevents last-component
+  // symlink races; inode/device checks also cover platforms without that flag.
+  const fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0));
+  try {
+    const opened = fs.fstatSync(fd);
+    if (!opened.isFile() || opened.dev !== expected.dev || opened.ino !== expected.ino || opened.size !== expected.size) throw new Error('Canary artifact changed during open');
+    const bytes = Buffer.alloc(opened.size);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const count = fs.readSync(fd, bytes, offset, bytes.length - offset, offset);
+      if (!count) throw new Error('Canary artifact truncated during read');
+      offset += count;
+    }
+    if (fs.readSync(fd, Buffer.alloc(1), 0, 1, offset)) throw new Error('Canary artifact grew during read');
+    return bytes;
+  } finally { fs.closeSync(fd); }
 }

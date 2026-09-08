@@ -361,6 +361,14 @@ function deliveryInput(): SoftwareDeliveryPlanInput {
 }
 
 describe('software delivery plan scope', () => {
+  it('bounds the Sponsor gate by its decision timeout and the task deadline', () => {
+    const input = deliveryInput();
+    const plan = createSoftwareDeliveryPlan(input);
+    expect(plan.tasks.find(task => task.key === 'release')?.approvalGate?.deadline).toBe(1100);
+    const tighter = createSoftwareDeliveryPlan({ ...input, scheduler: { ...input.scheduler, deadline: 500 } });
+    expect(tighter.tasks.find(task => task.key === 'release')?.approvalGate?.deadline).toBe(500);
+  });
+
   it('binds immutable request, acceptance criteria, repository and target environment', () => {
     const input = deliveryInput();
     const baseline = createSoftwareDeliveryPlan(input);

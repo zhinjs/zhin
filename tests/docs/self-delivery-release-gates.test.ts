@@ -16,7 +16,7 @@ describe('formal release isolation from self delivery', () => {
   it('limits Pages deployment rights to the separately gated main deployment job', () => {
     const config = workflow('deploy-docs');
     expect(config.permissions).toEqual({ contents: 'read' });
-    expect(config.jobs.build.permissions ?? config.permissions).not.toHaveProperty('pages');
+    expect(config.jobs.build.permissions).toEqual({ contents: 'read', packages: 'read', pages: 'read' });
     expect(config.jobs.deploy.environment.name).toBe('github-pages');
     expect(config.jobs.deploy.needs).toBe('build');
     for (const job of [config.jobs.build, config.jobs.deploy]) {

@@ -170,7 +170,7 @@ export class WorkroomEffectRuntime {
             workerId: this.options.workerId,
             fence: this.options.fence,
             startedAt,
-          });
+          }, signal);
           dispatchState = started;
           signal.throwIfAborted();
           const settled = await this.#dispatch(started, signal);

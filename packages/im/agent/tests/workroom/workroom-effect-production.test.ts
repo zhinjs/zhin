@@ -98,8 +98,13 @@ describe('production Workroom Effect authorities', () => {
       const gateway = new ProductionGitWorkroomEffectGateway({
         generation: 3, now: () => 100, resolveLease: () => ({ resolve: async () => lease }),
         resolveProtection: () => ({ attest: async () => protection(lease) }),
-        resolveCapability: () => ({ binding, provider: provider(), credentials: { resolve },
-          transport: { push, openPullRequest: vi.fn(), cancel: vi.fn() }, reconcile }),
+        resolveCapability: () => {
+          const capability = { binding: intent.capability, provider: provider(), credentials: { resolve },
+            transport: { push, openPullRequest: vi.fn(), cancel: vi.fn() }, reconcile };
+          // Malformed runtime plugin input must fail closed despite the required TypeScript field.
+          Object.defineProperty(capability, 'binding', { value: binding });
+          return capability;
+        },
       });
       await expect(gateway.prepare(state, signal())).rejects.toThrow('capability binding');
       await expect(gateway.execute(state, signal())).rejects.toThrow('capability binding');
@@ -130,6 +135,34 @@ describe('production Workroom Effect authorities', () => {
     });
     await expect(gateway.execute(state, signal())).rejects.toThrow('authorization is expired');
     expect(resolve).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('refuses writes when authorization expires while credentials resolve', async () => {
+    const intent = createWorkroomEffectIntent(intentInput());
+    const lease = createGitWorkspaceLease(leaseInput());
+    const ledger = new WorkroomEffectLedger(new MemoryWorkroomEffectJournal(),
+      new GenerationOwnedP7EffectAuthorization(() => ({ resolve: async () => authorizationFacts(intent) })));
+    await ledger.recordIntent('project-1', intent);
+    const state = await ledger.startAuthorizedAttempt('project-1', intent.id, {
+      operationId: 'publish-1', workerId: 'worker-1', fence: 7, startedAt: 100,
+    });
+    let now = 100;
+    const resolve = vi.fn(async () => {
+      await Promise.resolve();
+      now = 1_000;
+      return { credentialId: 'github-app:1', secret: 'hidden', expiresAt: 2_000 };
+    });
+    const push = vi.fn();
+    const gateway = new ProductionGitWorkroomEffectGateway({
+      generation: 3, now: () => now,
+      resolveLease: () => ({ resolve: async () => lease }),
+      resolveProtection: () => ({ attest: async () => protection(lease) }),
+      resolveCapability: () => ({ binding: intent.capability, provider: provider(), credentials: { resolve },
+        transport: { push, openPullRequest: vi.fn(), cancel: vi.fn() }, reconcile: vi.fn() }),
+    });
+    await expect(gateway.execute(state, signal())).rejects.toThrow('authorization is expired');
+    expect(resolve).toHaveBeenCalledTimes(1);
     expect(push).not.toHaveBeenCalled();
   });
 

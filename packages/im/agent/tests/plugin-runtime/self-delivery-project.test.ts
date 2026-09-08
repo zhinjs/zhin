@@ -102,6 +102,36 @@ describe('self-delivery Issue admission', () => {
       await expect(service.select({ identity: 'trusted-session', issueNumber: 7, acceptanceCriteria: ['test'] })).rejects.toThrow('authenticated');
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
+  it('rechecks readiness for an unadmitted snapshot but preserves an admitted replay', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'self-delivery-'));
+    try {
+      const host = ports();
+      const admit = vi.spyOn(host.kernel, 'admitWorkflowPlan').mockRejectedValueOnce(new Error('admission interrupted'));
+      const readiness = vi.fn(async (): Promise<readonly string[]> => []);
+      const service = new SelfDeliveryProject(join(directory, 'issues'), { ...host, readiness });
+      const input = { identity: 'trusted-session', issueNumber: 7, acceptanceCriteria: ['test'] };
+      await expect(service.select(input)).rejects.toThrow('admission interrupted');
+      readiness.mockResolvedValue(['Executor unavailable']);
+      await expect(service.select(input)).rejects.toThrow('Executor unavailable');
+      expect(admit).toHaveBeenCalledTimes(1);
+      readiness.mockResolvedValue([]);
+      const admitted = await service.select(input);
+      readiness.mockResolvedValue(['Executor unavailable']);
+      expect(await service.select(input)).toEqual(admitted);
+      expect(host.readIssue).toHaveBeenCalledTimes(1);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+  it('does not let a different current Sponsor adopt a persisted selection', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'self-delivery-'));
+    try {
+      const host = ports();
+      const profile = { ...host.profile, sponsorPrincipalIds: ['alice', 'bob'] };
+      const authenticate = async (identity: unknown) => ({ principalId: String(identity) });
+      const service = new SelfDeliveryProject(join(directory, 'issues'), { ...host, profile, authenticate });
+      await service.select({ identity: 'alice', issueNumber: 7, acceptanceCriteria: ['test'] });
+      await expect(service.select({ identity: 'bob', issueNumber: 7, acceptanceCriteria: ['test'] })).rejects.toThrow('different Sponsor');
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
   it('uses GitHub REST repository identity and rejects PR-shaped input without forwarding redirects', async () => {
     const transport = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({ id: 123 })))
       .mockResolvedValueOnce(new Response(JSON.stringify({ pull_request: {}, number: 7 })));

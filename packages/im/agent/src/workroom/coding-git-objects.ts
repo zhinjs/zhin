@@ -3,8 +3,9 @@ import { runCodingProcess, type CodingFile, type CodingObjectsPort } from './cod
 /** Reads committed regular UTF-8 files without checking out or running repository code. */
 export async function readCodingGitSnapshot(repository: string, commit: string, paths: readonly string[], signal: AbortSignal, maxBytes = 4 * 1024 * 1024): Promise<{ baseCommit: string; baseTree: string; files: CodingFile[] }> {
   if (!/^[a-f0-9]{40}$/u.test(commit)) throw new Error('Coding base requires exact SHA-1');
-  if (!paths.length || paths.some(path => !path || path.startsWith('-') || path.includes('\0'))) throw new Error('Coding context paths required');
-  const git = (args: string[]) => runCodingProcess('git', ['--no-replace-objects', '-c', 'core.fsmonitor=false', ...args], '', signal, maxBytes, repository);
+  if (!paths.length) throw new Error('Coding context paths required');
+  for (const path of paths) assertContextPath(path);
+  const git = (args: string[]) => runCodingProcess('git', ['--literal-pathspecs', '--no-replace-objects', '-c', 'core.fsmonitor=false', ...args], '', signal, maxBytes, repository, true);
   const baseCommit = (await git(['rev-parse', '--verify', `${commit}^{commit}`])).trim();
   if (baseCommit !== commit) throw new Error('Coding base commit mismatch');
   const baseTree = (await git(['rev-parse', `${commit}^{tree}`])).trim();
@@ -16,7 +17,7 @@ export async function readCodingGitSnapshot(repository: string, commit: string, 
     if (!match) throw new Error('Coding context forbids symlinks and submodules');
     const content = await git(['cat-file', 'blob', match[2]!]);
     // Binary files need a separate, explicit artifact channel.
-    if (content.includes('\0') || content.includes('\ufffd')) throw new Error('Coding context requires UTF-8 text');
+    if (content.includes('\0')) throw new Error('Coding context requires UTF-8 text');
     total += Buffer.byteLength(content);
     if (total > maxBytes) throw new Error('Coding context exceeds byte budget');
     files.push({ path: match[3]!, content, mode: match[1] as CodingFile['mode'] });
@@ -54,4 +55,11 @@ export function createCodingGitHubObjectsPort(options: CodingGitHubObjectsOption
     createTree: (baseTree, tree, signal) => request('trees', { base_tree: baseTree, tree }, signal),
     createCommit: (tree, parent, message, signal) => request('commits', { tree, parents: [parent], message }, signal),
   };
+}
+
+function assertContextPath(path: string): void {
+  if (typeof path !== 'string' || !path || path.startsWith('/') || path.startsWith('-') || path.includes(':') || path.includes('\\')
+    || Array.from(path).some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) throw new Error('Coding context requires canonical relative paths');
+  const canonical = path.endsWith('/') ? path.slice(0, -1) : path;
+  if (canonical.split('/').some(part => !part || part === '.' || part === '..' || part.toLowerCase() === '.git')) throw new Error('Coding context requires canonical relative paths');
 }

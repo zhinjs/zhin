@@ -162,6 +162,7 @@ export class GitHubActionsDeliveryProvider implements WorkroomDeliveryProviderPo
       const directory = await open(this.#options.claimDirectory, 'r');
       try { await directory.sync(); } finally { await directory.close(); }
     }
+    return true;
   }
   async dispatch(request: WorkroomDeliveryDispatch & { evidenceRef: string; evidenceDigest: string }, signal: AbortSignal): Promise<WorkroomDeliveryObservation> {
     this.#target(request);

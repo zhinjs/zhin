@@ -30,9 +30,19 @@
 
 候选 workflow 不使用这两个正式环境。受信 workflow 必须先经人工审核纳入 main，创建受保护且固定 SHA 的 tag，再把实际 workflow ID / tag / SHA / actor IDs 登记到 provider；当前分支本身不是获批控制面版本。
 
+仓库 Actions Variables 还必须登记 `SELF_DELIVERY_WORKFLOW_REF`（完整 `refs/tags/...`）与 `SELF_DELIVERY_WORKFLOW_SHA`（该 tag 对应的完整 commit SHA），与 Repo Profile / provider 的 `workflowRef`、`workflowSha` 完全一致。build 和 smoke 两个 job 均核对本仓库身份、tag ref 和 SHA；缺少变量、分支手动触发或身份不匹配时均跳过，不产生交付证据。本次只增加代码约束，未创建远端变量或 tag。
+
+保留 `workflow_dispatch` 是为了让 provider 精确选择冻结的 workflow tag；`repository_dispatch` 使用默认分支，不能直接替代此协议。这些 job 条件不是对拥有 workflow 修改权限者的沙箱：分支中的 YAML 仍可能被其改写。provider 必须继续独立核验 workflow SHA、actor、run/attempt、required jobs 和制品来源，拒绝接纳分支运行及跳过任务为成功证据。
+
 
 ## 真实 CI 首轮结果
 
 PR #657（`aec523c47`）的首次 Actions 验证在依赖安装被阻塞：`@icqqjs/icqq@1.12.3` 返回 `ERR_PNPM_FETCH_403`。GitHub API确认 `@icqqjs/icqq` 和 `@icqqjs/qqsign` 均为私有包。包的 Manage Actions access 中搜索 `zhinjs/zhin` / `zhin` 无可添加结果，当前临时 job-token 无法读取这两个跨组织依赖。该首轮未改变私有包可见性或访问者，也未使用既有 PAT。
 
 该首轮验证证明临时 job-token 不足以读取这些依赖，不能把本地缓存安装成功视为CI可用。维护者确认原有 `NPM_TOKEN` 环境变量来自 `secrets.PERSONAL_TOKEN`；已恢复该映射，同时保留仅安装步骤注入的限制，继续真实 CI 复验。不能为了绿色状态跳过 ICQQ 包或删除现有全仓质量检查。相关运行：[CI](https://github.com/zhinjs/zhin/actions/runs/34104413211)、[安装预算](https://github.com/zhinjs/zhin/actions/runs/34104413241)。
+
+### Root key 临时文件的维护窗口
+
+进程被强杀可能留下 `workroom-data-governance-root-key.json.<UUIDv4>.tmp`，权限仍为 `0600`。临时文件不代表已发布的 Root key；启动时不得按文件年龄或正式 key 是否存在直接删除，因为另一个实例可能仍在创建它。
+
+清理须先停止所有共享该 `stateRoot` 的进程及自动重启，确认没有进行中的创建操作，并确认正式 Root key 完整有效。维护者只删除当前属主、准确匹配上述名称的普通临时文件，不跟随符号链接、不输出密钥内容、不改动正式 key；POSIX 下同步目录。正式 key 缺失或损坏时保留现场供恢复调查，不自动提升临时文件或生成替代密钥。自动清理需要所有创建者与清理者共同参与可靠的跨进程锁，当前实现不宣称提供此能力。

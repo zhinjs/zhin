@@ -46,21 +46,46 @@ describe('Workroom Effect Runtime', () => {
 
   it.each(['memory', 'file'] as const)('allows only one dispatcher when workers race (%s journal)', async kind => {
     const directory = await mkdtemp(join(tmpdir(), 'zhin-effect-race-'));
-    const journal = kind === 'file' ? new FileWorkroomEffectJournal(directory) : new MemoryWorkroomEffectJournal();
+    try {
+      const journal = kind === 'file' ? new FileWorkroomEffectJournal(directory) : new MemoryWorkroomEffectJournal();
+      const intent = createWorkroomEffectIntent(intentInput());
+      await new WorkroomEffectLedger(journal).recordIntent('project-1', intent);
+      const execute = vi.fn(async (state: WorkroomEffectState) => receipt(state, 'committed', 'receipt:commit'));
+      const options = {
+        journal, authorization: { authorize: async () => auth(intent) },
+        gateway: { execute, reconcile: vi.fn() }, workerId: 'worker', fence: 1, now: () => 100,
+      };
+      await Promise.all([
+        new WorkroomEffectRuntime(options).runOnce('project-1', signal()),
+        new WorkroomEffectRuntime(options).runOnce('project-1', signal()),
+      ]);
+      expect(execute).toHaveBeenCalledTimes(1);
+      expect((await journal.read('project-1')).filter(event => event.type === 'effect.attempt_started')).toHaveLength(1);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it('does not persist an attempt after cancellation while authorization is pending', async () => {
+    const journal = new MemoryWorkroomEffectJournal();
     const intent = createWorkroomEffectIntent(intentInput());
     await new WorkroomEffectLedger(journal).recordIntent('project-1', intent);
-    const execute = vi.fn(async (state: WorkroomEffectState) => receipt(state, 'committed', 'receipt:commit'));
-    const options = {
-      journal, authorization: { authorize: async () => auth(intent) },
+    let release!: () => void;
+    let entered!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    const ready = new Promise<void>(resolve => { entered = resolve; });
+    const execute = vi.fn();
+    const controller = new AbortController();
+    const runtime = new WorkroomEffectRuntime({
+      journal, authorization: { authorize: async () => { entered(); await pending; return auth(intent); } },
       gateway: { execute, reconcile: vi.fn() }, workerId: 'worker', fence: 1, now: () => 100,
-    };
-    await Promise.all([
-      new WorkroomEffectRuntime(options).runOnce('project-1', signal()),
-      new WorkroomEffectRuntime(options).runOnce('project-1', signal()),
-    ]);
-    expect(execute).toHaveBeenCalledTimes(1);
-    expect((await journal.read('project-1')).filter(event => event.type === 'effect.attempt_started')).toHaveLength(1);
-    await rm(directory, { recursive: true, force: true });
+    });
+    const running = runtime.runOnce('project-1', controller.signal);
+    const rejected = expect(running).rejects.toThrow('cancelled during authorization');
+    await ready;
+    controller.abort(new Error('cancelled during authorization'));
+    release();
+    await rejected;
+    expect(execute).not.toHaveBeenCalled();
+    expect((await journal.read('project-1')).map(event => event.type)).toEqual(['effect.intent_recorded']);
   });
 
   it('blocks transport timeouts and unknown observations until reconciliation proves the outcome', async () => {

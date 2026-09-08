@@ -36,7 +36,7 @@ async function fixture() {
     target: input.target, candidateHash: input.candidateHash, targetDigest: input.targetDigest,
     evidenceRef: 'ci:run:42', evidenceDigest: sha('e'),
     checks: [{ id: 'test', status: 'passed' as const }, { id: 'review', status: 'passed' as const }],
-    observedAt: 90, expiresAt: 200,
+    observedAt: 90, expiresAt: 1000,
   });
   const observation = (input: WorkroomDeliveryRequest, health: WorkroomDeliveryObservation['health'] = 'passed'): WorkroomDeliveryObservation => ({
     effectId: input.effectId, intentDigest: input.intentDigest, idempotencyKey: input.idempotencyKey,
@@ -146,7 +146,7 @@ describe('governed delivery gateway', () => {
         operationId: 'attempt', workerId: 'worker', fence: 1, startedAt: 100,
       });
       const expired = new WorkroomDeliveryGateway({ resolveProvider: () => f.provider, now: () => 201 });
-      await expect(expired.execute(state, new AbortController().signal)).rejects.toThrow();
+      await expect(expired.execute(state, new AbortController().signal)).rejects.toThrow('Delivery authorization expired');
       const other = new WorkroomDeliveryGateway({ resolveProvider: () => ({
         ...f.provider, provider: { id: 'ci:other', digest: sha('b') },
       }), now: () => 100 });

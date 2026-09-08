@@ -181,13 +181,18 @@ export class GitHubWorkspaceTransport implements GitWorkspaceTransportPort {
         }, ...(body ? { body: JSON.stringify(body) } : {}),
       });
     } catch {
+      signal.throwIfAborted();
       // Do not leak fetch error bodies, URLs or credential-bearing host diagnostics.
       throw new Error('GitHub Workspace request interrupted; reconcile before retrying a write');
     }
     signal.throwIfAborted();
     if (allowMissing && response.status === 404) return undefined;
     if (!response.ok) throw new GitHubWorkspaceHttpError(response.status);
-    try { return await response.json(); } catch { throw new Error('GitHub Workspace response is invalid JSON; reconcile before retrying a write'); }
+    try {
+      const value: unknown = await response.json();
+      signal.throwIfAborted();
+      return value;
+    } catch { signal.throwIfAborted(); throw new Error('GitHub Workspace response is invalid JSON; reconcile before retrying a write'); }
   }
 }
 

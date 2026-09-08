@@ -9,13 +9,13 @@ const required = ['zhin.js', '@zhin.js/agent', '@zhin.js/runtime', '@zhin.js/sat
 /** Pure local preparation. No registry, Docker, HF, git or service credential access. */
 export function buildCanaryBundle(options, mode = 'frozen') {
   if (!['frozen', 'prepare-lock'].includes(mode)) throw new Error('Unknown canary preparation mode');
-  const { artifactsDirectory, outputDirectory, candidateSha, manifestDigest, runId, runAttempt, nodeImage, lockfilePath } = options;
+  const { outputDirectory, candidateSha, manifestDigest, runId, runAttempt, nodeImage, lockfilePath } = options;
   if (!/^[a-f0-9]{40}$/.test(candidateSha) || !/^sha256:[a-f0-9]{64}$/.test(manifestDigest) || !/^[1-9][0-9]*$/.test(runId) || !/^[1-9][0-9]*$/.test(runAttempt)) throw new Error('Canary requires exact candidate and build identity');
-  if (!/^node:24[\w.-]*@sha256:[a-f0-9]{64}$/.test(nodeImage)) throw new Error('Canary requires pinned Node 24 image digest');
+  if (!/^node:24(?:[.-][\w.-]+)?@sha256:[a-f0-9]{64}$/.test(nodeImage)) throw new Error('Canary requires pinned Node 24 image digest');
   if (fs.existsSync(outputDirectory)) throw new Error('Canary output must be a new directory');
   const { bytes, manifest, files, overrides } = readCandidateArtifacts(options);
   // Must be produced/verified by trusted candidate smoke; frozen installation fails on mismatch.
-  if (mode !== 'prepare-lock' && typeof lockfilePath !== 'string') throw new Error('Canary requires dependency lockfile path');
+  if (mode !== 'prepare-lock' && (typeof lockfilePath !== 'string' || !lockfilePath.trim())) throw new Error('Canary requires dependency lockfile path');
   const lockfile = mode === 'prepare-lock' ? undefined : readRegular(lockfilePath);
   if (lockfile && !lockfile.length) throw new Error('Canary requires dependency lockfile');
   fs.mkdirSync(outputDirectory, { recursive: true });

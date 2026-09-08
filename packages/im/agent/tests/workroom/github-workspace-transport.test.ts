@@ -33,6 +33,20 @@ function http(...responses: (Response | Error | unknown)[]) {
 }
 
 describe('GitHub Workspace REST transport', () => {
+  it('preserves the exact abort reason when fetch is cancelled', async () => {
+    const controller = new AbortController(); const reason = new Error('caller cancelled request');
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => { controller.abort(reason); throw new DOMException('aborted', 'AbortError'); });
+    const transport = new GitHubWorkspaceTransport({ fetch });
+    await expect(transport.queryPush(push, credential, controller.signal)).rejects.toBe(reason);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+  it('preserves cancellation while reading the response body', async () => {
+    const controller = new AbortController(); const reason = new Error('caller cancelled body');
+    const response = Response.json(ref());
+    vi.spyOn(response, 'json').mockImplementationOnce(async () => { controller.abort(reason); throw new DOMException('aborted', 'AbortError'); });
+    const { transport } = http(response);
+    await expect(transport.queryPush(push, credential, controller.signal)).rejects.toBe(reason);
+  });
   it('publishes only an existing commit after authenticating its actual diff and creates a non-force ref', async () => {
     const { fetch, transport } = http(comparison(), new Response('', { status: 404 }), ref());
     const receipt = await transport.push(push, credential, signal());

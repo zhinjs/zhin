@@ -11,6 +11,5 @@ export default defineCommand({
       identity: context.input, issueNumber,
       acceptanceCriteria: [context.args.join(' ')],
     }));
-    }));
   },
 });

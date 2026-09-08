@@ -46,12 +46,18 @@ async function fixture() {
   const request: WorkroomDeliveryDispatch = { projectId: 'project', effectId: 'effect', intentDigest: 'intent', candidateHash: 'candidate', target: { repositoryId: '42', headSha: head, artifactDigest, environment: 'github-actions-smoke', pipelineRef: `.github/workflows/self-delivery-candidate.yml@${sha}` }, targetRef: 'target', targetDigest: 'target-digest', idempotencyKey: 'operation-1', attemptId: 'attempt-1', fence: 1, authorizationDigest: 'authorization', authorizationExpiresAt: 2000 };
   return { provider, options, request, state, transport, signal: new AbortController().signal };
 }
-it('verifies archive bytes and exact workflow/attempt/job provenance then executes smoke', async () => {
+it.each(['native', 'win32'] as const)('verifies provenance and dispatches a fresh durable claim on %s', async platform => {
   const f = await fixture();
   const evidence = await f.provider.inspect(f.request, f.signal);
   expect(evidence.checks).toEqual([{ id: '10:1:build', status: 'passed' }]);
-  const result = await f.provider.dispatch({ ...f.request, ...evidence }, f.signal);
-  expect(result.status).toBe('succeeded'); expect(result.health).toBe('passed'); expect(f.state.posts).toBe(1);
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')!;
+  try {
+    if (platform === 'win32') Object.defineProperty(process, 'platform', { ...descriptor, value: 'win32' });
+    const result = await f.provider.dispatch({ ...f.request, ...evidence }, f.signal);
+    expect(result.status).toBe('succeeded'); expect(result.health).toBe('passed'); expect(f.state.posts).toBe(1);
+    await f.provider.dispatch({ ...f.request, ...evidence }, f.signal);
+    expect(f.state.posts).toBe(1);
+  } finally { Object.defineProperty(process, 'platform', descriptor); }
 });
 it('persists claim across restart and only queries after a lost dispatch response', async () => {
   const f = await fixture(); const evidence = await f.provider.inspect(f.request, f.signal); f.state.loseResponse = true;

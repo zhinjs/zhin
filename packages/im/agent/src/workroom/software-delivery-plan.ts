@@ -60,7 +60,8 @@ export function createSoftwareDeliveryPlan(input: SoftwareDeliveryPlanInput): Wo
       scheduler: { ...input.scheduler, localRank: index, preemptibility: 'atomic' },
       ...(stage === 'release' ? { approvalGate: {
         id: 'approval:release', kind: 'sponsor' as const, owner: input.sponsor.principalId,
-        decisionTimeoutMs: input.sponsor.decisionTimeoutMs, deadline: input.scheduler.deadline,
+        decisionTimeoutMs: input.sponsor.decisionTimeoutMs,
+        deadline: Math.min(input.scheduler.deadline, input.scheduler.enqueuedAt + input.sponsor.decisionTimeoutMs),
         policyRevisionId: input.metadata.authority.planningPolicyRevisionId,
         policyDigest: input.metadata.authority.planningPolicyDigest,
       } } : {}),

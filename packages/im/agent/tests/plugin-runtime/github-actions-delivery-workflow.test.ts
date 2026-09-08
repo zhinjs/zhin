@@ -1,9 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
-const root = process.cwd();
+const root = fileURLToPath(new URL('../../../../../', import.meta.url));
 const text = fs.readFileSync(path.join(root, '.github/workflows/self-delivery-candidate.yml'), 'utf8');
 const workflow = parse(text);
+it('requires the configured immutable workflow identity for both manual dispatch modes', () => {
+  for (const mode of ['build', 'smoke']) {
+    expect(workflow.jobs[mode].if).toBe(`inputs.mode == '${mode}' && github.repository == 'zhinjs/zhin' && startsWith(vars.SELF_DELIVERY_WORKFLOW_REF, 'refs/tags/') && github.ref == vars.SELF_DELIVERY_WORKFLOW_REF && github.sha == vars.SELF_DELIVERY_WORKFLOW_SHA`);
+  }
+});
 it('isolates candidate builds from smoke and gives neither production privileges', () => {
   expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch']);
   expect(workflow.permissions).toEqual({ contents: 'read', actions: 'read' });

@@ -148,7 +148,7 @@ export interface WorkroomGitHubReconciliationObservation {
 
 export interface WorkroomGitHubCapabilityPort {
   /** Logical capability identity authorized in the Effect Intent; required at execution/recovery. */
-  readonly binding?: Readonly<{ ref: string; digest: string }>;
+  readonly binding: Readonly<{ ref: string; digest: string }>;
   readonly provider: Readonly<{ id: string; digest: string }>;
   readonly credentials: GitWorkspaceCredentialPort;
   readonly transport: GitWorkspaceTransportPort;
@@ -199,7 +199,14 @@ export class ProductionGitWorkroomEffectGateway implements WorkroomEffectGateway
     }
     const gateway = new GitWorkspaceGateway({
       generation: this.options.generation,
-      credentials: capability.credentials,
+      credentials: { resolve: async (request, credentialSignal) => {
+        const credential = await capability.credentials.resolve(request, credentialSignal);
+        credentialSignal.throwIfAborted();
+        if (state.authorization!.expiresAt <= this.#now()) {
+          throw new Error('GitHub Effect authorization is expired before execution');
+        }
+        return credential;
+      } },
       transport: capability.transport,
       now: this.#now,
     });
@@ -343,12 +350,6 @@ function assertLeaseJoin(lease: GitWorkspaceLease, state: WorkroomEffectState): 
   const operation = state.intent.operation;
   if (operation.kind === 'compensation') {
     throw new Error('Compensation is not a Git Workspace publication operation');
-  }
-  if (operation.kind === 'git_merge_pr') {
-    throw new Error('Exact merge is not a Git Workspace publication operation');
-  }
-  if (operation.kind === 'delivery_release') {
-    throw new Error('Delivery release is not a Git Workspace publication operation');
   }
   if (operation.kind === 'processor_recall') {
     throw new Error('Processor recall is not a Git Workspace publication operation');

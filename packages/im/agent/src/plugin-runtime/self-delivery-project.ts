@@ -98,10 +98,15 @@ export class SelfDeliveryProject {
       })).value;
     }
     if (selection.profileDigest !== digest(ports.profile)) throw new Error('Persisted Issue profile changed; explicit migration is required');
+    if (selection.principalId !== identity.principalId) throw new Error('Issue selection belongs to a different Sponsor');
     if (digest(selection.acceptanceCriteria) !== digest(criteria)) throw new Error('Issue already selected with different criteria; use governed plan revision');
     const plan = planFor(selection);
     const requestDigest = digest(selection.issue);
     const sourceEventRef = `github:zhinjs/zhin/issues/${selection.issue.number}@${requestDigest}`;
+    if (!await ports.kernel.readWorkflowPlanAdmission(operationId)) {
+      const readiness = await this.doctor();
+      if (!readiness.ready) throw new Error(`Self-delivery blocked: ${readiness.blockers.join('; ')}`);
+    }
     // Exact Kernel admission is idempotent even after a crash between Journal and response.
     const currentIdentity = await ports.authenticate(input.identity);
     if (!currentIdentity || currentIdentity.principalId !== identity.principalId

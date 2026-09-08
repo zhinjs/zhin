@@ -26,7 +26,7 @@ permissions:
   actions: read
 jobs:
   build:
-    if: inputs.mode == 'build'
+    if: inputs.mode == 'build' && github.repository == 'zhinjs/zhin' && startsWith(vars.SELF_DELIVERY_WORKFLOW_REF, 'refs/tags/') && github.ref == vars.SELF_DELIVERY_WORKFLOW_REF && github.sha == vars.SELF_DELIVERY_WORKFLOW_SHA
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -65,7 +65,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   smoke:
-    if: inputs.mode == 'smoke'
+    if: inputs.mode == 'smoke' && github.repository == 'zhinjs/zhin' && startsWith(vars.SELF_DELIVERY_WORKFLOW_REF, 'refs/tags/') && github.ref == vars.SELF_DELIVERY_WORKFLOW_REF && github.sha == vars.SELF_DELIVERY_WORKFLOW_SHA
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

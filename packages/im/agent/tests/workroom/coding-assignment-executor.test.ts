@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile, mkdir, chmod, readFile } from 'node:fs/promises
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DockerCodingAssignmentExecutor, reconcileCodingContainers, codingDockerArgs, runCodingProcess, uploadCodingObjects, validateCodingEdits, type CodingAssignmentSnapshot, type CodingObjectsPort } from '../../src/workroom/coding-assignment-executor.js';
+import { DockerCodingAssignmentExecutor, inspectCodingDockerReadiness, reconcileCodingContainers, codingDockerArgs, runCodingProcess, uploadCodingObjects, validateCodingEdits, type CodingAssignmentSnapshot, type CodingObjectsPort } from '../../src/workroom/coding-assignment-executor.js';
 import { createCodingGitHubObjectsPort, readCodingGitSnapshot } from '../../src/workroom/coding-git-objects.js';
 
 import { createAssignmentExecutionEnvelope } from '../../src/workroom/assignment-executor.js';
@@ -62,6 +62,38 @@ describe('isolated coding boundary', () => {
     expect(read.baseCommit).toBe(commit);
     await expect(readCodingGitSnapshot(dir, 'HEAD', ['src/'], signal)).rejects.toThrow('exact');
   });
+  it.each([':(glob)**', ':!src/', '../secrets', './src', '/src', 'src/../secrets', 'src//file', 'src\\file', 'src/.git/config'])('rejects non-canonical Git scope %s before invoking Git', async scope => {
+    await expect(readCodingGitSnapshot('/does/not/exist', sha, [scope], new AbortController().signal)).rejects.toThrow('canonical');
+  });
+  it('uses literal Git pathspecs and distinguishes valid replacement characters from malformed UTF-8 bytes', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'zhin-coding-bytes-')); paths.push(dir);
+    const signal = new AbortController().signal;
+    const git = (args: string[]) => runCodingProcess('git', args, '', signal, 4096, dir);
+    await git(['init']); await mkdir(join(dir, 'src'));
+    await writeFile(join(dir, 'src/a.ts'), 'outside-literal-path');
+    await writeFile(join(dir, 'src/[a].ts'), 'literal-star-file');
+    await writeFile(join(dir, 'src/replacement.txt'), '\ufeffvalid \ufffd text');
+    await writeFile(join(dir, 'src/invalid.txt'), Buffer.from([0x61, 0x80, 0x62]));
+    await git(['add', 'src/']);
+    await git(['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'UTF-8 fixture']);
+    const commit = (await git(['rev-parse', 'HEAD'])).trim();
+    expect((await readCodingGitSnapshot(dir, commit, ['src/[a].ts'], signal)).files).toEqual([{ path: 'src/[a].ts', content: 'literal-star-file', mode: '100644' }]);
+    expect((await readCodingGitSnapshot(dir, commit, ['src/replacement.txt'], signal)).files[0]!.content).toBe('\ufeffvalid \ufffd text');
+    await expect(readCodingGitSnapshot(dir, commit, ['src/invalid.txt'], signal)).rejects.toThrow('valid UTF-8');
+  });
+  it.each(['info', 'image'])('preserves cancellation during Docker %s readiness probe', async phase => {
+    const dir = await mkdtemp(join(tmpdir(), 'zhin-readiness-abort-')); paths.push(dir);
+    const binary = join(dir, 'docker'); const marker = join(dir, 'entered');
+    await writeFile(binary, `#!${process.execPath}\nif(process.argv[2]===${JSON.stringify(phase)}){require('node:fs').writeFileSync(${JSON.stringify(marker)},'entered');setInterval(()=>{},1000);}else{process.stdout.write('29.4.0');}`);
+    await chmod(binary, 0o700);
+    const controller = new AbortController(); const reason = new Error('operator stopped readiness');
+    const pending = inspectCodingDockerReadiness(snapshot().image, controller.signal, binary);
+    // Attach rejection expectation before aborting to avoid an unhandled-rejection race.
+    const rejected = expect(pending).rejects.toBe(reason);
+    await vi.waitFor(async () => { expect(await readFile(marker, 'utf8')).toBe('entered'); }, { timeout: 10_000 });
+    controller.abort(reason);
+    await rejected;
+  });
   it('uses credential only in trusted object API, blocks redirects and redacts errors', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ sha }), { status: 201 }));
     const port = createCodingGitHubObjectsPort({ owner: 'zhinjs', repository: 'zhin', token: async () => 'private-service-token', fetch: fetcher });
@@ -87,6 +119,12 @@ describe('coding executor fenced lifecycle', () => {
     const reports = { find: vi.fn(async (_digest: string, _signal: AbortSignal): Promise<{ ref: string; digest: string; report: Readonly<Record<string, unknown>> } | undefined> => undefined), save: vi.fn(async (report: Readonly<Record<string, unknown>>) => ({ ref: 'report', digest: digest(report) })) };
     return { binary, dir, snapshots, objects, reports, executor: new DockerCodingAssignmentExecutor(snapshots, objects, reports, binary) };
   }
+  it.each([2_147_483_648, 4_294_967_296, Number.MAX_SAFE_INTEGER])('rejects timer-overflow budget %s before any dispatch claim', async timeoutMs => {
+    const f = await fixture();
+    f.snapshots.resolve.mockResolvedValueOnce({ ...snapshot(), envelopeDigest: envelope.digest, timeoutMs });
+    await expect((async () => { for await (const _event of f.executor.execute(envelope, new AbortController().signal)) { /* drain */ } })()).rejects.toThrow('platform timer upper bound');
+    expect(f.snapshots.claimExecution).not.toHaveBeenCalled();
+  });
   it('emits exact candidate and releases operation snapshot', async () => {
     const f = await fixture(); const events = [];
     for await (const event of f.executor.execute(envelope, new AbortController().signal)) events.push(event);

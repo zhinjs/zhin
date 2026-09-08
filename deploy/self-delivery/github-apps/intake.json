@@ -7,7 +7,6 @@
     "active": false
   },
   "default_permissions": {
-    "contents": "read",
     "issues": "read"
   },
   "default_events": []

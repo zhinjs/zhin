@@ -40,7 +40,7 @@ sidebar: false
 
 最终验收（2026-09-07）：
 
-- `pnpm check:delivery`：8 个文件、92 个测试全部通过。
+- `pnpm check:delivery`：运行交付专项测试集合；随实现扩展的文件及用例数量以当前脚本和 PR 对应提交的验收记录为准。
 - `pnpm check:all`：48 项全部通过，包含全量 Vitest、Lint、TypeScript、Workroom/架构/API 门禁、文档、发布计划、IM 安装体积、Runtime migration、Stable smoke 和 L4-CI。
 - `git diff --check`：通过。
 - 首轮受限环境的 HTTP `listen EPERM` 和依赖下载失败，在允许本地监听和联网的环境中复验通过；新增 API 快照和文档导航已对齐。
