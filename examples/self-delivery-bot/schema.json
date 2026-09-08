@@ -9,6 +9,8 @@
     },
     "terminal": {
       "type": "object",
+      "default": {},
+      "properties": {
       "properties": {
         "interactive": {
           "type": "boolean",
