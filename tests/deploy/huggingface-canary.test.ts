@@ -47,6 +47,10 @@ describe('HF canary local bundle', () => {
     expect(result.lockfileDigest).toBe(digest(readFileSync(join(options.outputDirectory, 'pnpm-lock.yaml'))));
     expect(() => prepareCanaryLock(options.outputDirectory, binary)).toThrow('already exists');
   });
+  it('requires an explicit lockfile path outside prepare-lock mode', () => {
+    const { options } = fixture();
+    expect(() => buildCanaryBundle({ ...options, lockfilePath: undefined })).toThrow('lockfile path');
+  });
   it('reuses provenance validation and rejects tampering before invoking lock preparation', () => {
     const { options } = fixture();
     buildCanaryBundle({ ...options, lockfilePath: undefined }, 'prepare-lock');

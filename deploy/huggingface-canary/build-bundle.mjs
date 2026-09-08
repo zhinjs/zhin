@@ -15,6 +15,7 @@ export function buildCanaryBundle(options, mode = 'frozen') {
   if (fs.existsSync(outputDirectory)) throw new Error('Canary output must be a new directory');
   const { bytes, manifest, files, overrides } = readCandidateArtifacts(options);
   // Must be produced/verified by trusted candidate smoke; frozen installation fails on mismatch.
+  if (mode !== 'prepare-lock' && typeof lockfilePath !== 'string') throw new Error('Canary requires dependency lockfile path');
   const lockfile = mode === 'prepare-lock' ? undefined : readRegular(lockfilePath);
   if (lockfile && !lockfile.length) throw new Error('Canary requires dependency lockfile');
   fs.mkdirSync(outputDirectory, { recursive: true });
