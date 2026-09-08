@@ -638,6 +638,9 @@ function projectScheduler(events: readonly WorkroomEvent[]): SchedulerProjection
         break;
       }
       case 'scheduler.priority_changed': {
+        if (finiteTime(event.payload.deadline, 'Persisted priority deadline') <= now) {
+          throw new Error('Workroom priority proposal is expired');
+        }
         const task = requireTask(tasks, event.payload.taskKey);
         if (Number(event.payload.taskRevision) !== task.revision) {
           throw new Error('Persisted Workroom priority change targets another Task revision');

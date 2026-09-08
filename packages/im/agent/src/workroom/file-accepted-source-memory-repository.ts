@@ -16,7 +16,7 @@ import {
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
 } from './canonical-value.js';
-import { DurableFileStore } from './durable-file-store.js';
+import { DurableFileStore, isDurableFileStagingName } from './durable-file-store.js';
 
 interface ProjectMemorySegmentPayload {
   readonly version: 1;
@@ -51,8 +51,11 @@ export class FileProjectMemoryApplicationRepository implements ProjectMemoryAppl
       if (hasCode(error, 'ENOENT')) return Object.freeze([]);
       throw error;
     }
-    const candidates = names.filter(name => name.startsWith(prefix));
-    if (candidates.some(name => !segmentPattern(prefix).test(name))) {
+    const pattern = segmentPattern(prefix);
+    // Ignore only unpublished staging files; malformed segment names remain errors.
+    const candidates = names.filter(name => name.startsWith(prefix)
+      && !isDurableFileStagingName(name, pattern));
+    if (candidates.some(name => !pattern.test(name))) {
       throw new Error('Invalid Project Memory Journal segment name');
     }
     const events = await Promise.all(candidates.sort().map(async name =>

@@ -1,0 +1,15 @@
+{
+  "name": "Zhin self-delivery workspace",
+  "url": "https://github.com/zhinjs/zhin",
+  "description": "Single-repository workspace identity for governed Zhin delivery",
+  "public": false,
+  "hook_attributes": {
+    "active": false
+  },
+  "default_permissions": {
+    "contents": "write",
+    "pull_requests": "write",
+    "administration": "read"
+  },
+  "default_events": []
+}

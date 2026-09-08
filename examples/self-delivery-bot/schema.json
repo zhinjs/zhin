@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "stateDirectory": {
+      "type": "string",
+      "default": "./.zhin/self-delivery-issues",
+      "minLength": 1
+    },
+    "terminal": {
+      "type": "object",
+      "default": {},
+      "properties": {
+        "interactive": {
+          "type": "boolean",
+          "default": true
+        },
+        "prompt": {
+          "type": "string",
+          "default": "delivery> "
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

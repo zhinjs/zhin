@@ -99,3 +99,14 @@ export {
   toolsFromCapabilities,
   type GenerationStampedTool,
 } from './capability-tools.js';
+export * from './workroom-delivery-gateway.js';
+export * from './github-workroom-capability.js';
+export * from '../workroom/github-workspace-transport.js';
+export * from '../workroom/software-delivery-plan.js';
+export * from './self-delivery-project.js';
+export * from './self-delivery-project-composition.js';
+export * from './github-actions-delivery-provider.js';
+export * from './github-exact-merge-gateway.js';
+export * from '../workroom/coding-assignment-executor.js';
+export * from '../workroom/coding-git-objects.js';
+export * from '../workroom/file-coding-execution-store.js';

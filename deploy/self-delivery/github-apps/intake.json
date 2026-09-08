@@ -1,0 +1,13 @@
+{
+  "name": "Zhin self-delivery intake",
+  "url": "https://github.com/zhinjs/zhin",
+  "description": "Single-repository intake identity for governed Zhin delivery",
+  "public": false,
+  "hook_attributes": {
+    "active": false
+  },
+  "default_permissions": {
+    "issues": "read"
+  },
+  "default_events": []
+}

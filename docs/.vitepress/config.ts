@@ -46,6 +46,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     { text: '多 Endpoint 运营', link: '/solutions/multi-endpoint-operations' },
     { text: '受治理的业务 Agent', link: '/solutions/governed-agent' },
     { text: 'GitHub 仓库 Workroom', link: '/solutions/github-workroom' },
+    { text: '受治理的研发交付', link: '/solutions/governed-software-delivery' },
   ], false),
   sidebarGroup('核心概念', [
     { text: '分层架构', link: '/concepts/architecture' },

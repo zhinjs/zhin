@@ -8,8 +8,10 @@ import type { WorkroomPriorityAuthorityPort } from '../../src/workroom/scheduler
 import {
   createWorkroomSchedulerPolicySnapshot,
   proposeWorkroomPriorityChange,
+  getWorkroomScheduledTaskSnapshot,
 } from '../../src/workroom/workroom-scheduler.js';
 import { WorkflowPlanBuilder, type WorkflowPlanProposal } from '../../src/workroom/workflow-plan-builder.js';
+import { replayWorkroom } from '../../src/workroom/kernel-state.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 
 const DIGEST = `sha256:${'a'.repeat(64)}`;
@@ -146,7 +148,38 @@ describe('Workroom Plan Revision Kernel admission', () => {
     expect((await journal.read(runId)).at(-1)).toMatchObject({
       type: 'scheduler.priority_changed', payload: { requestedLane: 'urgent', authorizedBy: 'sponsor-authority://decision/1' },
     });
+    const late = (await journal.read(runId)).map(event => event.type === 'scheduler.priority_changed'
+      ? { ...event, occurredAt: 1_000 } : event);
+    expect(() => replayWorkroom(late)).toThrow('Workroom priority proposal is expired');
+    expect(() => getWorkroomScheduledTaskSnapshot(late, 'build')).toThrow('Workroom priority proposal is expired');
+
   });
+
+  it.each(['wall-clock', 'authorization-delay', 'persisted-clock'] as const)(
+    'does not write priority after %s reaches its deadline', async mode => {
+      let now = 100;
+      const { journal, kernel, runId } = await fixture({
+        authorize(input) {
+          if (mode === 'authorization-delay') now = 1_000;
+          return {
+            authorized: true, authority: 'sponsor', principalId: 'sponsor-1',
+            authorizationRef: 'sponsor-authority://decision/1', proposalDigest: input.proposal.digest,
+          };
+        },
+      }, () => now);
+      if (mode !== 'authorization-delay') now = 1_000;
+      if (mode === 'persisted-clock') await kernel.execute('project-1', runId, { type: 'advance_clock', now });
+      const before = await journal.read(runId);
+      const proposal = proposeWorkroomPriorityChange({
+        projectId: 'project-1', runId, taskKey: 'build', taskRevision: 1,
+        expectedSequence: before.length - 1, currentLane: 'normal', requestedLane: 'urgent', localRank: 99,
+        principalId: 'sponsor-1', authority: 'sponsor',
+        authorityRef: 'sponsor-authority://decision/1', deadline: 1_000,
+      });
+      await expect(kernel.commitPriorityChange(proposal)).rejects.toThrow('Workroom priority proposal is expired');
+      expect(await journal.read(runId)).toEqual(before);
+    },
+  );
 
   it('does not write priority when the trusted authority proof is not an exact echo', async () => {
     const priorityAuthority: WorkroomPriorityAuthorityPort = {
@@ -169,9 +202,9 @@ describe('Workroom Plan Revision Kernel admission', () => {
   });
 });
 
-async function fixture(priorityAuthority?: WorkroomPriorityAuthorityPort) {
+async function fixture(priorityAuthority?: WorkroomPriorityAuthorityPort, now: () => number = () => 100) {
   const journal = new MemoryWorkroomJournal();
-  const kernel = new WorkroomKernel({ journal, now: () => 100, priorityAuthority });
+  const kernel = new WorkroomKernel({ journal, now, priorityAuthority });
   const plan = initialPlan();
   const admitted = await kernel.admitWorkflowPlan({
     operationId: 'operation-1', projectId: 'project-1', title: 'Run',

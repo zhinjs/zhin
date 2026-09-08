@@ -42,3 +42,7 @@ Zhin Task 是 Workroom Kernel 的事实；GitHub Project Item 只是外部投影
 - Project Item 同步失败不改变 Kernel 中已提交的任务事实。
 
 完整字段见 [Agent 深入：Workroom Kernel](/ai/agent#workroom-kernel)。
+
+## 研发交付
+
+从需求、独立 Review 到 CI/CD 和健康检查的计划模板、可信连接与验收命令，见[受治理的研发交付](./governed-software-delivery.md)。

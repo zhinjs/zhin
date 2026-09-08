@@ -26,7 +26,11 @@ export interface WorkroomEffectIntentInput {
         parameters: { repositoryId: string; ref: string; headSha: string; changedPaths: readonly string[] };
       }>
     | Readonly<{ kind: 'git_open_pr'; parameters: { repositoryId: string; headRef: string; baseRef: string; headSha: string } }>
+    | Readonly<{ kind: 'git_merge_pr'; parameters: { repositoryId: string; pullNumber: number; headSha: string; baseRef: string; baseSha: string; protectionDigest: string; checksDigest: string } }>
     | Readonly<{ kind: 'git_cancel_remote'; parameters: { repositoryId: string; remoteOperationId: string } }>
+    | Readonly<{ kind: 'delivery_release'; parameters: {
+        repositoryId: string; headSha: string; artifactDigest: string; environment: string; pipelineRef: string;
+      } }>
     | Readonly<{ kind: 'processor_recall'; parameters: {
         purgeId: string;
         objectId: string;
@@ -167,7 +171,9 @@ export class MemoryWorkroomEffectJournal implements WorkroomEffectJournal {
     expectedSequence: number,
     drafts: readonly WorkroomEffectEventDraft[],
   ): Promise<readonly WorkroomEffectEvent[]> {
-    const current = await this.read(projectId);
+    // Keep compare-and-append synchronous: yielding after the read lets two
+    // writers both claim the same sequence and dispatch the same side effect.
+    const current = this.#projects.get(required(projectId, 'projectId')) ?? Object.freeze([]);
     const actual = current.length - 1;
     if (actual !== expectedSequence) throw new WorkroomEffectSequenceConflictError(expectedSequence, actual);
     const appended = drafts.map((draft, index) => createWorkroomEffectEvent(
@@ -220,6 +226,7 @@ export class WorkroomEffectLedger {
     projectId: string,
     effectId: string,
     input: Readonly<{ operationId: string; workerId: string; fence: number; startedAt: number }>,
+    signal?: AbortSignal,
   ): Promise<WorkroomEffectState> {
     const events = await this.journal.read(projectId);
     const state = requireState(replayWorkroomEffectLedger(projectId, events), effectId);
@@ -231,12 +238,14 @@ export class WorkroomEffectLedger {
       throw new Error(`Workroom Effect cannot start from ${state.status}`);
     }
     if (!this.authorization) throw new Error('Trusted Workroom Effect Authorization Port is unavailable');
+    signal?.throwIfAborted();
     const authorization = await this.authorization.authorize({
       projectId,
       expectedSequence: events.length - 1,
       now: input.startedAt,
       intent: state.intent,
     });
+    signal?.throwIfAborted();
     assertAuthorization(authorization, state.intent, input.startedAt);
     const attempt = createAttempt(input, state.intent, authorization);
     // Authorization and the externally-visible attempt are one durable fact. A
@@ -304,11 +313,17 @@ export function replayWorkroomEffectLedger(
   events: readonly WorkroomEffectEvent[],
 ): Readonly<Record<string, WorkroomEffectState>> {
   const states: Record<string, WorkroomEffectState> = {};
+  const idempotencyKeys = new Set<string>();
   events.forEach((event, sequence) => {
     assertWorkroomEffectEvent(event, projectId, sequence);
     if (event.type === 'effect.intent_recorded') {
       const intent = assertIntent(event.payload.intent as WorkroomEffectIntent);
+      if (intent.projectId !== projectId) throw new Error('Workroom Effect Project binding drift');
       if (states[intent.id]) throw new Error(`Duplicate Workroom Effect Intent ${intent.id}`);
+      if (idempotencyKeys.has(intent.idempotencyKey)) {
+        throw new Error('Workroom Effect idempotency key is already bound to an Intent');
+      }
+      idempotencyKeys.add(intent.idempotencyKey);
       states[intent.id] = deepFreeze({
         projectId, sequence, status: 'pending_authorization', intent,
       });
@@ -410,6 +425,18 @@ function normalizeOperation(operation: WorkroomEffectIntentInput['operation']) {
       }),
     });
   }
+  if (operation.kind === 'git_merge_pr') {
+    assertParameterKeys(operation.parameters, ['repositoryId', 'pullNumber', 'headSha', 'baseRef', 'baseSha', 'protectionDigest', 'checksDigest']);
+    return deepFreeze({ kind: operation.kind, parameters: deepFreeze({
+      repositoryId: required(operation.parameters.repositoryId, 'repositoryId'),
+      pullNumber: positive(operation.parameters.pullNumber, 'pullNumber'),
+      headSha: gitSha(operation.parameters.headSha, 'headSha'),
+      baseRef: required(operation.parameters.baseRef, 'baseRef'),
+      baseSha: gitSha(operation.parameters.baseSha, 'baseSha'),
+      protectionDigest: requiredDigest(operation.parameters.protectionDigest, 'protectionDigest'),
+      checksDigest: requiredDigest(operation.parameters.checksDigest, 'checksDigest'),
+    }) });
+  }
   if (operation.kind === 'git_cancel_remote') {
     assertParameterKeys(operation.parameters, ['repositoryId', 'remoteOperationId']);
     return deepFreeze({
@@ -417,6 +444,19 @@ function normalizeOperation(operation: WorkroomEffectIntentInput['operation']) {
       parameters: deepFreeze({
       repositoryId: required(operation.parameters.repositoryId, 'repositoryId'),
       remoteOperationId: required(operation.parameters.remoteOperationId, 'remoteOperationId'),
+      }),
+    });
+  }
+  if (operation.kind === 'delivery_release') {
+    assertParameterKeys(operation.parameters, ['repositoryId', 'headSha', 'artifactDigest', 'environment', 'pipelineRef']);
+    return deepFreeze({
+      kind: operation.kind,
+      parameters: deepFreeze({
+        repositoryId: required(operation.parameters.repositoryId, 'repositoryId'),
+        headSha: gitSha(operation.parameters.headSha, 'headSha'),
+        artifactDigest: requiredDigest(operation.parameters.artifactDigest, 'artifactDigest'),
+        environment: required(operation.parameters.environment, 'environment'),
+        pipelineRef: required(operation.parameters.pipelineRef, 'pipelineRef'),
       }),
     });
   }
@@ -526,6 +566,11 @@ function assertAttempt(attempt: WorkroomEffectAttempt, state: WorkroomEffectStat
     || attempt.idempotencyKey !== state.intent.idempotencyKey) {
     throw new Error('Workroom Effect attempt binding drift');
   }
+  required(attempt.operationId, 'attempt operationId');
+  required(attempt.workerId, 'attempt workerId');
+  if (attempt.id !== `effect-attempt:${attempt.operationId}`) {
+    throw new Error('Workroom Effect attempt identity drift');
+  }
   positive(attempt.fence, 'attempt fence');
   nonNegative(attempt.startedAt, 'attempt startedAt');
 }
@@ -626,7 +671,7 @@ function requiredDigest(value: unknown, label: string): string {
 }
 
 function gitSha(value: unknown, label: string): string {
-  if (typeof value !== 'string' || !/^[a-f0-9]{40,64}$/u.test(value)) throw new Error(`${label} is invalid`);
+  if (typeof value !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(value)) throw new Error(`${label} is invalid`);
   return value;
 }
 

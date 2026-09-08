@@ -17,10 +17,14 @@ concurrency:
 
 env:
   CI: true
-  NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+  # Resolve repository .npmrc placeholders without exposing credentials to build/test code.
+  NPM_TOKEN: ''
 
 jobs:
   test:
+    permissions:
+      contents: read
+      packages: read
     timeout-minutes: 25
     runs-on: ${{ matrix.os }}
     strategy:
@@ -38,6 +42,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: checkout official Console contract consumer
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
@@ -45,6 +50,7 @@ jobs:
         with:
           repository: zhinjs/console
           path: .tmp/console
+          persist-credentials: false
 
       - name: setup node.js
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
@@ -58,10 +64,15 @@ jobs:
         if: github.event_name == 'pull_request'
         run: git fetch origin main:main
 
+      # Existing package credential for cross-organization @icqqjs dependencies.
+      # Only this script-free install receives the existing PERSONAL_TOKEN credential.
       - name: install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+
+      - name: run dependency lifecycle scripts without registry credentials
+        run: pnpm rebuild
 
       - name: audit dependencies
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
@@ -122,13 +133,15 @@ jobs:
         if: ${{ runner.os != 'Windows' && !(matrix.os == 'ubuntu-latest' && matrix.node-version == 24) }}
         run: pnpm vitest run
 
+      # Public tokenless uploads require Codecov tokenless access to be enabled.
+      # Reporting must not reintroduce long-lived secrets into candidate jobs.
       - name: Upload coverage reports to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
       - name: Upload test results to Codecov
         if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' && matrix.node-version == 24 }}
         uses: codecov/test-results-action@0fa95f0e1eeaafde2c782583b36b28ad0d8c77d3 # v1.2.1
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
