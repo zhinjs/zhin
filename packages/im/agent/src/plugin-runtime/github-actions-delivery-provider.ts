@@ -158,9 +158,10 @@ export class GitHubActionsDeliveryProvider implements WorkroomDeliveryProviderPo
       return false;
     }
     try { await handle.writeFile(this.#claimValue(request)); await handle.sync(); } finally { await handle.close(); }
-    const directory = await open(this.#options.claimDirectory, 'r');
-    try { await directory.sync(); } finally { await directory.close(); }
-    return true;
+    if (process.platform !== 'win32') {
+      const directory = await open(this.#options.claimDirectory, 'r');
+      try { await directory.sync(); } finally { await directory.close(); }
+    }
   }
   async dispatch(request: WorkroomDeliveryDispatch & { evidenceRef: string; evidenceDigest: string }, signal: AbortSignal): Promise<WorkroomDeliveryObservation> {
     this.#target(request);
