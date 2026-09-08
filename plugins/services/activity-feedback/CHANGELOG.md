@@ -1,5 +1,13 @@
 # @zhin.js/service-activity-feedback
 
+## 1.1.1
+
+### Patch Changes
+
+- Updated dependencies [28b7375]
+- Updated dependencies [aec523c]
+  - @zhin.js/agent@1.1.24
+
 ## 1.1.0
 
 ### Minor Changes

@@ -1,5 +1,15 @@
 # @zhin.js/agent
 
+## 1.1.24
+
+### Patch Changes
+
+- 28b7375: Add a governed software-delivery plan, GitHub workspace REST transport and exact-artifact CI/CD provider integration. Enforce candidate-bound, current-clock review and Sponsor decisions; prevent duplicate Effect dispatch and recover uncertain external operations through query-only reconciliation and health evidence.
+
+  Custom GitHub capabilities must provide an explicit binding matching the Effect capability reference and digest; missing or mismatched bindings now fail closed. Ref and PR recovery validate the actual immutable diff against the workspace path scope before settling success.
+
+- aec523c: Add authenticated GitHub Issue admission through the standard Workroom Host, isolated coding execution and Git object upload, and a digest-bound GitHub Actions candidate provider. Keep missing service identities and deployment prerequisites blocked, with durable recovery and cancellation checks.
+
 ## 1.1.23
 
 ### Patch Changes
