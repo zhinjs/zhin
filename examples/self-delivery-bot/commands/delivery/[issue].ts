@@ -5,10 +5,12 @@ export default defineCommand({
   description: 'Select a GitHub Issue with explicit acceptance criteria',
   params: { issue: { type: 'number' } },
   async execute(context) {
-    if (typeof context.params.issue !== 'number') throw new Error('Issue number is required');
+    const issueNumber = Number(context.params.issue);
+    if (!Number.isSafeInteger(issueNumber) || issueNumber <= 0) throw new Error('Issue number is required');
     return JSON.stringify(await context.use(selfDeliveryProjectToken).select({
-      identity: context.input, issueNumber: context.params.issue,
+      identity: context.input, issueNumber,
       acceptanceCriteria: [context.args.join(' ')],
+    }));
     }));
   },
 });
