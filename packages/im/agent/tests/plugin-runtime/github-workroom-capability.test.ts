@@ -45,7 +45,7 @@ describe('GitHub Workroom production capability recovery', () => {
     await expect(ledger.recordReceipt('project', intent.id, receipt)).resolves.toMatchObject({ status: 'committed' });
     expect(resolve).toHaveBeenCalledWith(expect.objectContaining({ generation: 2, leaseDigest: lease.digest }), expect.any(AbortSignal));
     expect(fetch).toHaveBeenCalledTimes(2);
-    expect(fetch.mock.calls[0][1]?.method).toBe('GET');
+    expect(fetch.mock.calls.every(([, init]) => init?.method === 'GET')).toBe(true);
     expect(JSON.stringify(receipt)).not.toContain('never-persist');
   });
 
