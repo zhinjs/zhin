@@ -1,5 +1,11 @@
 # @zhin.js/cli
 
+## 1.1.1
+
+### Patch Changes
+
+- aec523c: Add authenticated GitHub Issue admission through the standard Workroom Host, isolated coding execution and Git object upload, and a digest-bound GitHub Actions candidate provider. Keep missing service identities and deployment prerequisites blocked, with durable recovery and cancellation checks.
+
 ## 1.1.0
 
 ### Minor Changes
