@@ -61,5 +61,6 @@ function assertContextPath(path: string): void {
   if (typeof path !== 'string' || !path || path.startsWith('/') || path.startsWith('-') || path.includes(':') || path.includes('\\')
     || Array.from(path).some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) throw new Error('Coding context requires canonical relative paths');
   const canonical = path.endsWith('/') ? path.slice(0, -1) : path;
-  if (canonical.split('/').some(part => !part || part === '.' || part === '..' || part.toLowerCase() === '.git')) throw new Error('Coding context requires canonical relative paths');
+  if (canonical.split('/').some(part => !part || part === '.' || part === '..' || part.toLowerCase() === '.git')
+    || canonical.split('/')[0]!.toLowerCase() === '.github') throw new Error('Coding context requires canonical relative paths outside protected .github');
 }

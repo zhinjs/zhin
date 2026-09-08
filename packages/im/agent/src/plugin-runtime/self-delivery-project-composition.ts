@@ -24,6 +24,12 @@ export function createSelfDeliveryProjectForHost(input: {
   signal: AbortSignal;
 }): SelfDeliveryProject {
   const config = input.configuration;
+  const installedBlockers = async () => {
+    const blockers = [...await config.readiness()];
+    if (!config.codingExecutor) blockers.push('Coding Executor is not installed');
+    if (!config.deliveryProvider) blockers.push('Delivery provider is not installed');
+    return blockers;
+  };
   const authority = async () => {
     input.signal.throwIfAborted();
     const [catalog, profiles] = await Promise.all([input.catalog.read(), input.profiles.read(config.profile.projectId)]);
@@ -42,10 +48,7 @@ export function createSelfDeliveryProjectForHost(input: {
     },
     async readiness() {
       try { await authority(); } catch { return ['Catalog repository binding or active Profile is unavailable']; }
-      const blockers = [...await config.readiness()];
-      if (!config.codingExecutor) blockers.push('Coding Executor is not installed');
-      if (!config.deliveryProvider) blockers.push('Delivery provider is not installed');
-      return blockers;
+      return installedBlockers();
     },
     kernel: {
       readWorkflowPlanAdmission: operationId => input.kernel.readWorkflowPlanAdmission(operationId),
@@ -54,9 +57,7 @@ export function createSelfDeliveryProjectForHost(input: {
         const pin = admission.plan.authority;
         const existing = await input.kernel.readWorkflowPlanAdmission(admission.operationId);
         if (!existing) {
-          const blockers = [...await config.readiness()];
-          if (!config.codingExecutor) blockers.push('Coding Executor is not installed');
-          if (!config.deliveryProvider) blockers.push('Delivery provider is not installed');
+          const blockers = await installedBlockers();
           if (blockers.length) throw new Error(`Self-delivery blocked: ${blockers.join('; ')}`);
         }
         if (!existing && (pin.projectRevision !== catalog.revision

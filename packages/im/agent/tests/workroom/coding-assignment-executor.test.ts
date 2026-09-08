@@ -62,8 +62,21 @@ describe('isolated coding boundary', () => {
     expect(read.baseCommit).toBe(commit);
     await expect(readCodingGitSnapshot(dir, 'HEAD', ['src/'], signal)).rejects.toThrow('exact');
   });
-  it.each([':(glob)**', ':!src/', '../secrets', './src', '/src', 'src/../secrets', 'src//file', 'src\\file', 'src/.git/config'])('rejects non-canonical Git scope %s before invoking Git', async scope => {
+  it.each(['.github', '.github/', '.github/workflows/ci.yml', '.GitHub/', ':(glob)**', ':!src/', '../secrets', './src', '/src', 'src/../secrets', 'src//file', 'src\\file', 'src/.git/config'])('rejects non-canonical Git scope %s before invoking Git', async scope => {
     await expect(readCodingGitSnapshot('/does/not/exist', sha, [scope], new AbortController().signal)).rejects.toThrow('canonical');
+  });
+  it.each(['file', 'directory'])('excludes top-level .github %s from coding context', async kind => {
+    const dir = await mkdtemp(join(tmpdir(), 'zhin-coding-protected-')); paths.push(dir);
+    const signal = new AbortController().signal;
+    const git = (args: string[]) => runCodingProcess('git', args, '', signal, 4096, dir);
+    await git(['init']);
+    if (kind === 'directory') { await mkdir(join(dir, '.github')); await writeFile(join(dir, '.github/ci.yml'), 'protected'); }
+    else await writeFile(join(dir, '.github'), 'protected');
+    await git(['add', '.github']);
+    await git(['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'protected context fixture']);
+    const commit = (await git(['rev-parse', 'HEAD'])).trim();
+    await expect(readCodingGitSnapshot(dir, commit, ['.github'], signal)).rejects.toThrow('protected .github');
+    if (kind === 'directory') await expect(readCodingGitSnapshot(dir, commit, ['.github/'], signal)).rejects.toThrow('protected .github');
   });
   it('uses literal Git pathspecs and distinguishes valid replacement characters from malformed UTF-8 bytes', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'zhin-coding-bytes-')); paths.push(dir);
