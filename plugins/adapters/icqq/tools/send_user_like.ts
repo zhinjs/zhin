@@ -11,8 +11,8 @@ export default defineAgentTool<{ user_id: number }>({
     const successArray: number[] = [];
     await Promise.all([20, 20, 10].map(async (times) => {
       try {
-        await context.$client.sendLike(user_id, times);
-        successArray.push(times);
+        const isSuccess= await context.$client.sendLike(user_id, times);
+        if (isSuccess) successArray.push(times);
       } catch { /* ignore */ }
     }));
     const successTimes = successArray.reduce((a, b) => a + b, 0);
