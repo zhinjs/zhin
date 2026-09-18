@@ -69,8 +69,11 @@ and default must live in `defineCommand({ params })`, not in the file name.
   child values are under `plugins.<instanceKey>` recursively.
 - Capability callbacks use owner-scoped `context.config` and `context.use(token)`.
 - Shared database, router, credentials and connections are Plugin Resources, never module globals.
-- Register setup cleanup with `context.lifecycle`. Endpoint admission uses
-  `start -> open -> close -> stop`; all operations must be idempotent.
+- Register setup cleanup with `context.lifecycle`. Adapter authors should return the compact
+  `{ client, connect, activate?, send }` implementation described in
+  `docs/authoring/adapters.md`; the
+  framework owns Endpoint identity and `start -> open -> close -> stop`. Extend `Endpoint` only
+  when a protocol needs custom multi-stage lifecycle behavior.
 - Do not mutate RuntimeSnapshot projections or maintain a second registry.
 
 ## AI capabilities

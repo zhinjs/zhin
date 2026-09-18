@@ -1,7 +1,6 @@
-import { Endpoint, defineAdapter } from 'zhin.js/adapter';
+import { defineAdapter, type EndpointImplementation } from 'zhin.js/adapter';
 import { createInterface, type Interface as ReadlineInterface } from 'node:readline';
 import type { Readable, Writable } from 'node:stream';
-import type { CapabilityId } from 'zhin.js';
 
 interface TerminalConfig {
   readonly terminal?: {
@@ -10,8 +9,7 @@ interface TerminalConfig {
   };
 }
 
-export interface TerminalEndpointOptions {
-  readonly id: CapabilityId;
+interface TerminalOptions {
   readonly input: Readable;
   readonly output: Writable;
   readonly error: Writable;
@@ -19,15 +17,12 @@ export interface TerminalEndpointOptions {
   readonly prompt: string;
 }
 
-export class TerminalClient {
-  readonly input: Readable;
+class TerminalClient {
   readonly output: Writable;
-  readonly error: Writable;
   private readonly resolveReadline: () => ReadlineInterface | undefined;
-  constructor(input: Readable, output: Writable, error: Writable, resolveReadline: () => ReadlineInterface | undefined) {
-    this.input = input;
+
+  constructor(output: Writable, resolveReadline: () => ReadlineInterface | undefined) {
     this.output = output;
-    this.error = error;
     this.resolveReadline = resolveReadline;
   }
 
@@ -40,119 +35,71 @@ export class TerminalClient {
   }
 }
 
-export class TerminalEndpoint extends Endpoint<TerminalClient> {
-  readonly client: TerminalClient;
-  readonly #options: TerminalEndpointOptions;
-  #messageSequence = 0;
-  #readline?: ReadlineInterface;
-  #promptTimer?: ReturnType<typeof setTimeout>;
-  #open = false;
-  #stopped = false;
-
-  constructor(options: TerminalEndpointOptions) {
-    super();
-    this.#options = options;
-    this.client = new TerminalClient(
-      options.input,
-      options.output,
-      options.error,
-      () => this.#readline,
-    );
-  }
-
-  start(): void {
-    if (!this.#options.interactive || this.#readline || this.#stopped) return;
-    const readline = createInterface({
-      input: this.#options.input,
-      output: this.#options.output,
-      crlfDelay: Infinity,
-      terminal: isTerminal(this.#options.input) && isTerminal(this.#options.output),
-    });
-    readline.setPrompt(this.#options.prompt);
-    readline.on('line', (line) => {
-      void this.emitPlatform('line', line).catch((error) => {
-        this.#options.error.write(`${formatError(error)}\n`);
-      });
-      const content = line.trim();
-      if (!this.#open) return;
-      if (!content) {
-        this.#schedulePrompt();
-        return;
-      }
-      const endpointKey = String(this.#options.id);
-      void this.emit('message.receive', {
-        conversation: {
-          endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
-          kind: 'private',
-          id: 'terminal',
-        },
-        content,
-        sender: { id: 'local-user' },
-      }).catch((error: unknown) => {
-        this.#options.error.write(`${formatError(error)}\n`);
-      }).finally(() => {
-        this.#schedulePrompt();
-      });
-    });
-    this.#readline = readline;
-  }
-
-  open(): void {
-    if (this.#stopped) throw new Error('Terminal Endpoint cannot reopen after stop');
-    // Candidate rollback stops only this candidate; the committed Endpoint is untouched.
-    this.start();
-    this.#open = true;
-    this.#schedulePrompt();
-  }
-
-  close(): void {
-    this.#open = false;
-    this.#clearPrompt();
-    // readline.close() pauses its input. Release it before the next generation starts so the
-    // old projection's deferred stop cannot pause a stream already owned by the new Endpoint.
-    this.#releaseReadline();
-  }
-
-  stop(): void {
-    this.#open = false;
-    this.#stopped = true;
-    this.#clearPrompt();
-    this.#releaseReadline();
-  }
-
-  #releaseReadline(): void {
-    this.#readline?.close();
-    this.#readline = undefined;
-  }
-
-  send({ payload }: { readonly payload: unknown }): string {
-    this.client.write(payload);
-    this.#messageSequence += 1;
-    return `terminal-${this.#messageSequence}`;
-  }
-
-  #schedulePrompt(): void {
-    this.#clearPrompt();
-    // Root activation finishes before the CLI prints its startup summary. A timer keeps the
-    // interactive prompt as the final line without coupling the Adapter to the CLI.
-    this.#promptTimer = setTimeout(() => {
-      this.#promptTimer = undefined;
-      if (this.#open) this.#readline?.prompt();
+function createTerminalEndpoint(options: TerminalOptions): EndpointImplementation<TerminalClient> {
+  let readline: ReadlineInterface | undefined;
+  let promptTimer: ReturnType<typeof setTimeout> | undefined;
+  let messageSequence = 0;
+  const client = new TerminalClient(options.output, () => readline);
+  const clearPrompt = () => {
+    if (!promptTimer) return;
+    clearTimeout(promptTimer);
+    promptTimer = undefined;
+  };
+  const schedulePrompt = () => {
+    clearPrompt();
+    promptTimer = setTimeout(() => {
+      promptTimer = undefined;
+      readline?.prompt();
     }, 0);
-  }
+  };
 
-  #clearPrompt(): void {
-    if (!this.#promptTimer) return;
-    clearTimeout(this.#promptTimer);
-    this.#promptTimer = undefined;
-  }
+  return {
+    client,
+    activate({ events }) {
+      if (!options.interactive) return;
+      readline = createInterface({
+        input: options.input,
+        output: options.output,
+        crlfDelay: Infinity,
+        terminal: isTerminal(options.input) && isTerminal(options.output),
+      });
+      readline.setPrompt(options.prompt);
+      readline.on('line', (line) => {
+        void events.platform('line', line).catch((error) => {
+          options.error.write(`${formatError(error)}\n`);
+        });
+        const content = line.trim();
+        if (!content) {
+          schedulePrompt();
+          return;
+        }
+        void events.message({
+          conversation: { kind: 'private', id: 'terminal' },
+          content,
+          sender: { id: 'local-user' },
+        }).catch((error: unknown) => {
+          options.error.write(`${formatError(error)}\n`);
+        }).finally(schedulePrompt);
+      });
+      schedulePrompt();
+      return () => {
+        clearPrompt();
+        readline?.close();
+        readline = undefined;
+      };
+    },
+    send({ payload }) {
+      client.write(payload);
+      messageSequence += 1;
+      return `terminal-${messageSequence}`;
+    },
+  };
 }
 
-export default defineAdapter<TerminalConfig>({
+export default defineAdapter<TerminalConfig, TerminalClient>({
   capabilities: ['inbound', 'outbound'],
   create(context) {
-    return new TerminalEndpoint({
-      id: context.id,
+    return createTerminalEndpoint({
       input: process.stdin,
       output: process.stdout,
       error: process.stderr,

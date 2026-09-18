@@ -19,7 +19,7 @@ import {
   type AdapterSegmentPolicy,
   type EndpointSendRequest,
 } from './definition.js';
-import { bindEndpoint, isEndpoint, type Endpoint } from './endpoint.js';
+import { bindEndpoint, materializeEndpoint, type Endpoint } from './endpoint.js';
 import {
   listEndpointManagementCapabilities,
   type EndpointManagementCapability,
@@ -396,12 +396,6 @@ function endpointPhase(record: AdapterRecord): AdapterEndpointPhase {
   return 'pending';
 }
 
-function assertEndpoint(value: unknown, id: CapabilityId): asserts value is Endpoint {
-  if (!isEndpoint(value)) {
-    throw new TypeError(`Adapter ${id} create() must return an Endpoint subclass`);
-  }
-}
-
 /** 单个实例配置展开的 endpoint 描述（多账号适配器经 `endpoints` 数组声明）。 */
 interface EndpointExpansion {
   readonly id: CapabilityId;
@@ -469,17 +463,21 @@ async function createEndpoint(
     ...createCapabilityContext(snapshot, slot.owner, admission, signal),
     ...(expansion?.config ? { config: expansion.config } : {}),
     id: expansion?.id ?? slot.id,
+    endpointId: expansion?.endpointId ?? slot.localName,
     name: slot.localName,
   });
   const operations = resolveAdapterOperations(slot.definition, context);
-  const endpoint = await slot.definition.create(context);
-  assertEndpoint(endpoint, expansion?.id ?? slot.id);
-  bindEndpoint(endpoint, context, admission);
-  if (slot.definition.capabilities.includes('outbound') && typeof endpoint.send !== 'function') {
+  const implementation = await slot.definition.create(context);
+  const endpoint = materializeEndpoint(implementation, context);
+  if (
+    slot.definition.capabilities.includes('outbound')
+    && typeof implementation.send !== 'function'
+  ) {
     throw new TypeError(
       `Adapter Endpoint ${String(expansion?.id ?? slot.id)} declares outbound but send() is missing`,
     );
   }
+  bindEndpoint(endpoint, context, admission);
   assertDeclaredEndpointOperations(
     endpoint,
     operations,

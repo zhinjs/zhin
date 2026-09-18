@@ -32,6 +32,7 @@ import adapterFeature, {
   type AdapterSegmentPolicy,
   type AdapterContext,
   type AdapterDefinition,
+  type EndpointCleanup,
   type EndpointEvent,
 } from '../src/index.js';
 
@@ -52,19 +53,6 @@ class TestEndpoint extends Endpoint<object> {
   open(): void {}
   close(): void {}
   stop(): void {}
-}
-
-class EmittingEndpoint extends Endpoint<object> {
-  readonly client = Object.freeze({ api: 'native' });
-
-  start(): void {}
-  open(): void {}
-  close(): void {}
-  stop(): void {}
-
-  publish(name: string, payload: unknown): Promise<unknown> {
-    return this.emit(name, payload);
-  }
 }
 
 function defineAdapter<TConfig = unknown>(
@@ -364,6 +352,23 @@ describe('Adapter Feature', () => {
       .rejects.toThrow('declares outbound but send() is missing');
   });
 
+  it('reports an invalid create result before checking outbound send', async () => {
+    const root = rootPluginId();
+    const invalid = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'invalid-result',
+      source: '/adapters/invalid-result.ts',
+      definition: defineAdapterContract({
+        capabilities: ['outbound'],
+        create: () => null as never,
+      }),
+    });
+
+    await expect(createAdapterIndex([invalid], snapshot([invalid])))
+      .rejects.toThrow('must return an Endpoint or an object with a client');
+  });
+
   it('brands definitions and discovers nested TypeScript modules', async () => {
     const definition = defineAdapter({
       capabilities: ['inbound', 'outbound'],
@@ -394,15 +399,20 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'memory',
       source: '/adapters/memory.ts',
-      definition: defineAdapter({
+      definition: defineAdapterContract({
         capabilities: ['outbound'],
         create(context) {
           events.push(`create:${context.name}:${context.id}`);
           return {
-            start() { events.push('start'); },
-            open() { events.push('open'); },
-            close() { events.push('close'); },
-            stop() { events.push('stop'); },
+            client: Object.freeze({ kind: 'memory' }),
+            connect() {
+              events.push('connect');
+              return () => { events.push('disconnect'); };
+            },
+            activate() {
+              events.push('activate');
+              return () => { events.push('deactivate'); };
+            },
             send({ target, payload }) {
               events.push(`send:${target}:${String(payload)}`);
               return 'sent';
@@ -426,14 +436,104 @@ describe('Adapter Feature', () => {
 
     expect(events).toEqual([
       `create:memory:${slot.id}`,
-      'start',
-      'open',
+      'connect',
+      'activate',
       'send:room:hello',
-      'close',
-      'open',
-      'close',
-      'stop',
+      'deactivate',
+      'activate',
+      'deactivate',
+      'disconnect',
     ]);
+  });
+
+  it('rolls back registered connection resources when connect returns an invalid cleanup', async () => {
+    const cleanup = vi.fn();
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'invalid-connect',
+      source: '/adapters/invalid-connect.ts',
+      definition: defineAdapterContract({
+        capabilities: ['inbound'],
+        create: () => ({
+          client: Object.freeze({ kind: 'invalid-connect' }),
+          connect({ onCleanup }) {
+            onCleanup(cleanup);
+            return 'invalid' as unknown as EndpointCleanup;
+          },
+        }),
+      }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+
+    await expect(index.start()).rejects.toThrow('connect() must return a cleanup function');
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+
+  it('runs connection cleanup even when activation cleanup fails', async () => {
+    const events: string[] = [];
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'cleanup-failure',
+      source: '/adapters/cleanup-failure.ts',
+      definition: defineAdapterContract({
+        capabilities: ['inbound'],
+        create: () => ({
+          client: Object.freeze({ kind: 'cleanup-failure' }),
+          connect: () => () => { events.push('connect cleanup'); },
+          activate: () => () => {
+            events.push('activation cleanup');
+            throw new Error('activation cleanup failed');
+          },
+        }),
+      }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    await index.start();
+    index.open();
+
+    await expect(index.stop()).rejects.toBeInstanceOf(AggregateError);
+    expect(events).toEqual(['activation cleanup', 'connect cleanup']);
+  });
+
+  it('cleans up a connect result that settles after generation abort', async () => {
+    const events: string[] = [];
+    const controller = new AbortController();
+    let finishConnect!: () => void;
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'slow-connect',
+      source: '/adapters/slow-connect.ts',
+      definition: defineAdapterContract({
+        capabilities: ['inbound'],
+        create: () => ({
+          client: Object.freeze({ kind: 'slow-connect' }),
+          connect({ onCleanup }) {
+            onCleanup(() => { events.push('registered cleanup'); });
+            return new Promise<EndpointCleanup>((resolve) => {
+              finishConnect = () => resolve(() => { events.push('returned cleanup'); });
+            });
+          },
+        }),
+      }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    const starting = index.start(controller.signal);
+    await vi.waitFor(() => expect(finishConnect).toBeTypeOf('function'));
+
+    controller.abort(new Error('generation aborted'));
+    await expect(starting).rejects.toThrow('generation aborted');
+    finishConnect();
+
+    await vi.waitFor(() => expect(events).toEqual([
+      'returned cleanup',
+      'registered cleanup',
+    ]));
   });
 
   it('fails Endpoint creation closed and disposes already-created candidates', async () => {
@@ -760,15 +860,25 @@ describe('Adapter Feature', () => {
         });
       },
     };
-    let endpoint!: EmittingEndpoint;
+    const client = Object.freeze({ api: 'native' });
+    let publish!: () => Promise<unknown>;
     const slot = createCapabilitySlot({
       owner: root,
       feature: adapterFeatureId,
       localName: 'native',
       source: '/adapters/native.ts',
-      definition: defineAdapter({
+      definition: defineAdapterContract({
         capabilities: ['inbound'],
-        create: () => (endpoint = new EmittingEndpoint()),
+        create: () => ({
+          client,
+          connect({ events }) {
+            publish = () => events.message({
+              conversation: { kind: 'private', id: 'room-1' },
+              content: 'hello',
+              sender: { id: 'user-1' },
+            });
+          },
+        }),
       }),
     });
     const candidate = snapshot([slot], undefined, new Map([
@@ -777,7 +887,7 @@ describe('Adapter Feature', () => {
     const index = await createAdapterIndex([slot], candidate);
     await index.start();
 
-    await endpoint.publish('platform.receive', { name: 'ready', event: { online: true } });
+    await publish();
     expect(received).toEqual([]);
 
     const store = new SnapshotStore({
@@ -786,9 +896,17 @@ describe('Adapter Feature', () => {
     });
     await vi.waitFor(() => expect(received).toHaveLength(1));
     expect(received[0]).toMatchObject({
-      name: 'platform.receive',
-      client: endpoint.client,
-      payload: { name: 'ready', event: { online: true } },
+      name: 'message.receive',
+      client,
+      payload: {
+        conversation: {
+          kind: 'private',
+          id: 'room-1',
+          endpoint: { id: slot.id, adapter: 'native' },
+        },
+        endpointId: 'native',
+        content: 'hello',
+      },
     });
     await store.close();
   });

@@ -9,12 +9,19 @@ import type {
   EndpointCapabilities,
   EndpointOperation,
 } from '@zhin.js/im-contract';
-import type { Endpoint } from './endpoint.js';
+import type { Endpoint, EndpointImplementation } from './endpoint.js';
 
 export { Endpoint } from './endpoint.js';
 export type {
+  EndpointActivationContext,
+  EndpointCleanup,
+  EndpointConnectionContext,
+  EndpointConversation,
   EndpointEvent,
+  EndpointEventSink,
   EndpointIdentity,
+  EndpointImplementation,
+  EndpointIncomingMessage,
   PlatformEvent,
 } from './endpoint.js';
 export { defineEndpointClient } from './endpoint-client.js';
@@ -54,6 +61,9 @@ export interface EndpointSendRequest {
  */
 export interface AdapterContext<TConfig = unknown> extends CapabilityContext<TConfig> {
   readonly id: CapabilityId;
+  /** Human-facing Endpoint id from `endpoints[].id`, or the Adapter local name. */
+  readonly endpointId: string;
+  /** Adapter module local name, stable across expanded Endpoint entries. */
   readonly name: string;
 }
 
@@ -112,7 +122,8 @@ export interface AdapterDefinition<TConfig = unknown, TClient = unknown> {
   readonly segments?: AdapterSegmentPolicy;
   create(
     context: AdapterContext<TConfig>,
-  ): Endpoint<TClient> | Promise<Endpoint<TClient>>;
+  ): Endpoint<TClient> | EndpointImplementation<TClient>
+    | Promise<Endpoint<TClient> | EndpointImplementation<TClient>>;
 }
 
 declare module '@zhin.js/plugin-runtime' {
@@ -137,13 +148,17 @@ declare module '@zhin.js/plugin-runtime' {
  *
  * export default defineAdapter({
  *   capabilities: ['inbound', 'outbound'],
- *   create: () => new MyPlatformEndpoint(),
+ *   create: () => ({
+ *     client: myPlatformClient,
+ *     connect: ({ events }) => myPlatformClient.onMessage((message) => events.message(message)),
+ *     send: ({ conversation, payload }) => myPlatformClient.send(conversation.id, payload),
+ *   }),
  * });
  * ```
  */
-export function defineAdapter<TConfig = unknown>(
-  definition: Omit<AdapterDefinition<TConfig>, '$feature'>,
-): Readonly<AdapterDefinition<TConfig>> {
+export function defineAdapter<TConfig = unknown, TClient = unknown>(
+  definition: Omit<AdapterDefinition<TConfig, TClient>, '$feature'>,
+): Readonly<AdapterDefinition<TConfig, TClient>> {
   if (typeof definition.create !== 'function') {
     throw new TypeError('Adapter create must be a function');
   }

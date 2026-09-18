@@ -1,8 +1,10 @@
 import {
   createToken,
+  DisposeStack,
   type CapabilityId,
   type GenerationAdmissionGate,
 } from '@zhin.js/plugin-runtime';
+import type { ConversationRef, MessageRef } from '@zhin.js/im-contract';
 import type { AdapterContext, EndpointSendRequest } from './definition.js';
 import type { EndpointManagement } from './endpoint-management.js';
 import type { EndpointControl } from './endpoint-control.js';
@@ -51,6 +53,75 @@ export interface PlatformEvent<
   readonly name: TName;
   /** Native SDK/protocol payload without canonicalization. */
   readonly event: TEvent;
+}
+
+/** A conversation address supplied by an Adapter without framework Endpoint identity. */
+export type EndpointConversation = Omit<ConversationRef, 'endpoint'>;
+
+/**
+ * Compact inbound message shape for object-style Endpoint implementations.
+ * Framework-owned Endpoint identity is attached by {@link EndpointEventSink.message}.
+ */
+export interface EndpointIncomingMessage<TSegment = unknown> {
+  readonly conversation: EndpointConversation;
+  readonly message?: MessageRef;
+  readonly content: string;
+  readonly segments?: readonly TSegment[];
+  readonly sender?: Readonly<{
+    id: string;
+    name?: string;
+    roles?: readonly string[];
+  }>;
+  readonly endpointId?: string;
+  readonly mentioned?: boolean;
+  readonly replyTo?: { readonly id: string };
+  readonly metadata?: Readonly<Record<string, unknown>>;
+}
+
+/** Inbound event methods available while an object-style Endpoint is connected. */
+export interface EndpointEventSink {
+  /** Emit a canonical or Adapter-specific event. */
+  emit<TPayload, TName extends string>(name: TName, payload: TPayload): Promise<unknown>;
+  /** Preserve a native platform event before optional canonical projection. */
+  platform<TEvent, TName extends string>(name: TName, event: TEvent): Promise<unknown>;
+  /** Emit a canonical message and attach this Endpoint's identity automatically. */
+  message<TSegment = unknown>(input: EndpointIncomingMessage<TSegment>): Promise<unknown>;
+}
+
+export type EndpointCleanup = () => void | Promise<void>;
+
+/** Event and identity context for an object-style Endpoint lifecycle hook. */
+export interface EndpointActivationContext {
+  readonly signal: AbortSignal;
+  readonly identity: EndpointIdentity;
+  readonly events: EndpointEventSink;
+}
+
+/** Context passed once to an object-style Endpoint's `connect` hook. */
+export interface EndpointConnectionContext extends EndpointActivationContext {
+  /** Register cleanup immediately after acquiring a resource so failed setup can roll it back. */
+  onCleanup(cleanup: EndpointCleanup): void;
+}
+
+/**
+ * Small authoring interface for most Adapters.
+ *
+ * Return this object from `defineAdapter().create()` when a custom Endpoint
+ * subclass is unnecessary. Runtime owns generation admission and the complete
+ * start/open/close/stop lifecycle. `connect` waits for readiness and may return
+ * cleanup through `onCleanup` or return one cleanup function. Registered
+ * resources unwind in reverse order during setup rollback or stop.
+ */
+export interface EndpointImplementation<TClient = unknown> {
+  readonly client: TClient;
+  readonly name?: string;
+  readonly management?: EndpointManagement;
+  readonly control?: EndpointControl;
+  readonly content?: EndpointContentPort;
+  connect?(context: EndpointConnectionContext): void | EndpointCleanup | Promise<void | EndpointCleanup>;
+  /** Acquire listeners that must belong only to the active generation. */
+  activate?(context: EndpointActivationContext): void | EndpointCleanup;
+  send?(request: EndpointSendRequest): string | Promise<string>;
 }
 
 const endpointBrand = Symbol.for('zhin.adapter.endpoint/1');
@@ -153,6 +224,196 @@ export abstract class Endpoint<TClient = unknown> {
   abstract close(): void | Promise<void>;
   abstract stop(): void | Promise<void>;
   send?(_request: EndpointSendRequest): string | Promise<string>;
+}
+
+class ObjectEndpoint<TClient> extends Endpoint<TClient> {
+  readonly client: TClient;
+  readonly management?: EndpointManagement;
+  readonly control?: EndpointControl;
+  readonly content?: EndpointContentPort;
+
+  readonly #implementation: EndpointImplementation<TClient>;
+  readonly #endpointId: string;
+  #activationContext?: EndpointActivationContext;
+  #connectCleanup?: EndpointCleanup;
+  #activationCleanup?: EndpointCleanup;
+  #started = false;
+  #open = false;
+  #everOpened = false;
+  #stopped = false;
+
+  constructor(implementation: EndpointImplementation<TClient>, context: AdapterContext) {
+    super();
+    this.#implementation = implementation;
+    this.#endpointId = context.endpointId;
+    this.client = implementation.client;
+    this.management = implementation.management;
+    this.control = implementation.control;
+    this.content = implementation.content;
+  }
+
+  get name(): string {
+    return this.#implementation.name ?? this.#endpointId;
+  }
+
+  async start(signal: AbortSignal): Promise<void> {
+    if (this.#started) return;
+    if (this.#stopped) throw new Error(`Endpoint ${this.#endpointId} cannot restart after stop`);
+    signal.throwIfAborted();
+    const events: EndpointEventSink = Object.freeze({
+      emit: <TPayload, TName extends string>(name: TName, payload: TPayload) =>
+        this.#publish(name, payload),
+      platform: <TEvent, TName extends string>(name: TName, event: TEvent) =>
+        this.#publishPlatform(name, event),
+      message: <TSegment>(input: EndpointIncomingMessage<TSegment>) =>
+        this.#publishMessage(input),
+    });
+    const activationContext: EndpointActivationContext = Object.freeze({
+      signal,
+      identity: this.identity,
+      events,
+    });
+    const stack = new DisposeStack();
+    const connection: EndpointConnectionContext = Object.freeze({
+      ...activationContext,
+      onCleanup: (cleanup: EndpointCleanup) => { stack.add(cleanup); },
+    });
+    try {
+      const cleanup = await this.#implementation.connect?.(connection);
+      if (cleanup !== undefined && typeof cleanup !== 'function') {
+        throw new TypeError(`Endpoint ${this.#endpointId} connect() must return a cleanup function`);
+      }
+      if (cleanup) stack.add(cleanup);
+      stack.seal();
+      if (signal.aborted || this.#stopped) {
+        const stoppedError = signal.aborted
+          ? signal.reason ?? new Error(`Endpoint ${this.#endpointId} connect aborted`)
+          : new Error(`Endpoint ${this.#endpointId} stopped during connect`);
+        await disposeAfterError(
+          stack,
+          stoppedError,
+          `Endpoint ${this.#endpointId} late connect cleanup failed`,
+        );
+      }
+    } catch (error) {
+      await disposeAfterError(stack, error, `Endpoint ${this.#endpointId} connect rollback failed`);
+    }
+    this.#activationContext = activationContext;
+    this.#connectCleanup = () => stack.dispose();
+    this.#started = true;
+  }
+
+  open(): void {
+    const activationContext = this.#activationContext;
+    if (!this.#started || this.#stopped || !activationContext) {
+      throw new Error(`Endpoint ${this.#endpointId} must connect before open`);
+    }
+    this.#open = true;
+    try {
+      const cleanup = this.#implementation.activate?.(activationContext);
+      if (cleanup !== undefined && typeof cleanup !== 'function') {
+        throw new TypeError(`Endpoint ${this.#endpointId} activate() must return a cleanup function`);
+      }
+      this.#activationCleanup = cleanup || undefined;
+      this.#everOpened = true;
+    } catch (error) {
+      this.#open = false;
+      throw error;
+    }
+  }
+
+  async close(): Promise<void> {
+    this.#open = false;
+    const cleanup = this.#activationCleanup;
+    this.#activationCleanup = undefined;
+    await cleanup?.();
+  }
+
+  async stop(): Promise<void> {
+    if (this.#stopped) return;
+    this.#stopped = true;
+    const cleanup = this.#connectCleanup;
+    this.#connectCleanup = undefined;
+    const errors: unknown[] = [];
+    try {
+      await this.close();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      await cleanup?.();
+    } catch (error) {
+      errors.push(error);
+    }
+    if (errors.length > 0) {
+      throw new AggregateError(errors, `Endpoint ${this.#endpointId} cleanup failed`);
+    }
+  }
+
+  send(request: EndpointSendRequest): string | Promise<string> {
+    if (!this.#implementation.send) {
+      throw new Error(`Endpoint ${this.#endpointId} does not support outbound messages`);
+    }
+    return this.#implementation.send(request);
+  }
+
+  #canPublish(): boolean {
+    if (this.#stopped) return false;
+    // Candidate readiness happens before open; Endpoint's generation gate owns
+    // these early events. Once close has run, new transport events are ignored.
+    return this.#open || !this.#everOpened;
+  }
+
+  #publish<TPayload, TName extends string>(name: TName, payload: TPayload): Promise<unknown> {
+    if (!this.#canPublish()) return Promise.resolve(undefined);
+    return this.emit(name, payload);
+  }
+
+  #publishPlatform<TEvent, TName extends string>(name: TName, event: TEvent): Promise<unknown> {
+    if (!this.#canPublish()) return Promise.resolve(undefined);
+    return this.emitPlatform(name, event);
+  }
+
+  #publishMessage<TSegment>(input: EndpointIncomingMessage<TSegment>): Promise<unknown> {
+    return this.#publish('message.receive', Object.freeze({
+      ...input,
+      conversation: Object.freeze({
+        ...input.conversation,
+        endpoint: this.identity,
+      }),
+      endpointId: input.endpointId ?? this.name,
+    }));
+  }
+}
+
+async function disposeAfterError(
+  stack: DisposeStack,
+  error: unknown,
+  message: string,
+): Promise<never> {
+  try {
+    await stack.dispose();
+  } catch (cleanupError) {
+    throw new AggregateError([error, cleanupError], message, { cause: cleanupError });
+  }
+  throw error;
+}
+
+/** @internal Convert the compact authoring form into the Runtime Endpoint contract. */
+export function materializeEndpoint<TClient>(
+  value: Endpoint<TClient> | EndpointImplementation<TClient>,
+  context: AdapterContext,
+): Endpoint<TClient> {
+  if (isEndpoint(value)) return value as Endpoint<TClient>;
+  if (!value || typeof value !== 'object' || !('client' in value)) {
+    throw new TypeError(
+      `Adapter ${context.id} create() must return an Endpoint or an object with a client`,
+    );
+  }
+  if (value.client === value) {
+    throw new TypeError(`Adapter Endpoint ${context.id} must expose a distinct platform client`);
+  }
+  return new ObjectEndpoint(value as EndpointImplementation<TClient>, context);
 }
 
 /** @internal AdapterIndex binding hook; deliberately not exported by name. */
