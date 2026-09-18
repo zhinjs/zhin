@@ -145,6 +145,17 @@ describe('onebot11 protocol helpers', () => {
     expect(formatInboundContent(ev)).toBe('hello');
   });
 
+  it('strips complete CQ codes without dropping malformed text', () => {
+    expect(formatInboundContent({
+      post_type: 'message',
+      raw_message: 'hello[CQ:image,file=test.jpg]world[CQ:at,qq=1]',
+    })).toBe('helloworld');
+    expect(formatInboundContent({
+      post_type: 'message',
+      raw_message: 'hello[CQ:image,file=test.jpg',
+    })).toBe('hello[CQ:image,file=test.jpg');
+  });
+
   it('builds send_*_msg actions from conversation', () => {
     expect(buildSendAction(
       { endpoint: endpointRef, kind: 'private', id: '1' },

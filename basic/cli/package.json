@@ -41,7 +41,6 @@
     "@zhin.js/runtime": "workspace:*",
     "@zhin.js/scaffold-wizard": "workspace:*",
     "@zhin.js/schedule": "workspace:*",
-    "adm-zip": "^0.6.0",
     "chalk": "^5.6.2",
     "commander": "^15.0.0",
     "cross-spawn": "^7.0.6",

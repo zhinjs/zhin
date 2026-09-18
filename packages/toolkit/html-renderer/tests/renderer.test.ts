@@ -41,6 +41,7 @@ import {
   serializeJsxToHtml,
   type FontConfig,
 } from '../src/index.js';
+import { isFullDocument, wrapDocument } from '../src/html.js';
 
 function makeFont(name: string, style?: FontConfig['style']): FontConfig {
   return { name, data: Buffer.from('font'), weight: 400, style };
@@ -124,6 +125,31 @@ describe('@zhin.js/html-renderer', () => {
     expect(result.format).toBe('png');
     expect(Buffer.isBuffer(result.data)).toBe(true);
     expect(screenshotMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('HTML document wrapping', () => {
+  const options = {
+    width: 800,
+    backgroundColor: '#fff',
+    fontFamily: 'sans-serif',
+    fontFaces: '@font-face{font-family:test}',
+  };
+
+  it('recognizes full documents and injects fonts into head or body', () => {
+    expect(isFullDocument('<!DOCTYPE html><html><head></head><body>x</body></html>')).toBe(true);
+    expect(isFullDocument('<html-data>fragment</html-data>')).toBe(false);
+    expect(wrapDocument('<HTML><HEAD></HEAD><BODY>x</BODY></HTML>', options)).toContain(
+      '<style>@font-face{font-family:test}</style></HEAD>',
+    );
+    expect(wrapDocument('<html><body class="page">x</body></html>', options)).toContain(
+      '<body class="page"><style>@font-face{font-family:test}</style>x',
+    );
+  });
+
+  it('handles long attributes without regex backtracking', () => {
+    const html = `<html><body data-value="${'x'.repeat(100_000)}">x</body></html>`;
+    expect(wrapDocument(html, options)).toContain('<style>@font-face{font-family:test}</style>x');
   });
 });
 

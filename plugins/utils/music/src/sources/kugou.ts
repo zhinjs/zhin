@@ -9,6 +9,20 @@ interface KugouSearchItem {
   album_id?: string;
 }
 
+function stripHtmlTags(input: string): string {
+  let result = '';
+  let cursor = 0;
+  while (cursor < input.length) {
+    const start = input.indexOf('<', cursor);
+    if (start < 0) return result + input.slice(cursor);
+    result += input.slice(cursor, start);
+    const end = input.indexOf('>', start + 1);
+    if (end < 0) return result + input.slice(start);
+    cursor = end + 1;
+  }
+  return result;
+}
+
 export class KugouMusicService implements MusicSearchService {
   async search(keyword: string, limit = 10): Promise<MusicInfo[]> {
     try {
@@ -28,7 +42,7 @@ export class KugouMusicService implements MusicSearchService {
       return items.slice(0, limit).map((item) => ({
         id: item.hash,
         source: 'kugou' as const,
-        title: item.songname?.replace(/<[^>]+>/g, '') ?? '',
+        title: stripHtmlTags(item.songname ?? ''),
         artist: item.singername,
         album: item.album_name,
         duration: item.duration,

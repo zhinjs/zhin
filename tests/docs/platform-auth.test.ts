@@ -15,17 +15,25 @@ function runPreflight(fail: boolean, malformed = false, telegram = false) {
       ? `secret: [${secret}\n`
       : 'plugins:\n  qq:\n    endpoints:\n      - appid: ${PREFLIGHT_TEST_ID}\n        secret: ${PREFLIGHT_TEST_SECRET}\n');
     const stub = path.join(project, 'fetch.mjs');
-    writeFileSync(stub, `globalThis.fetch = async (url, options) => {
-      if (!['https://bots.qq.com/app/getAppAccessToken', 'https://api.sgroup.qq.com/gateway/bot', 'https://api.telegram.org/bot${secret}/getMe'].includes(url)) throw new Error('Unexpected URL');
+    writeFileSync(stub, `const secret = process.env.PREFLIGHT_STUB_SECRET;
+    const fail = process.env.PREFLIGHT_STUB_FAIL === 'true';
+    globalThis.fetch = async (url, options) => {
+      if (!['https://bots.qq.com/app/getAppAccessToken', 'https://api.sgroup.qq.com/gateway/bot', \`https://api.telegram.org/bot\${secret}/getMe\`].includes(url)) throw new Error('Unexpected URL');
       if (options.redirect !== 'error' || !options.signal) throw new Error('Missing request safeguards');
-      return { status: ${fail ? 403 : 200}, json: async () => url.endsWith('/getMe') ? { ok: true, result: { is_bot: true } } : (${JSON.stringify(fail
-        ? { error: secret, access_token: secret }
-        : { access_token: secret, url: 'wss://gateway.example.test' })}) };
+      return { status: fail ? 403 : 200, json: async () => url.endsWith('/getMe')
+        ? { ok: true, result: { is_bot: true } }
+        : fail
+          ? { error: secret, access_token: secret }
+          : { access_token: secret, url: 'wss://gateway.example.test' } };
     };`);
     const report = path.join(project, 'report.json');
     const result = spawnSync(process.execPath, ['--import', stub,
       path.join(root, 'scripts/check-platform-auth.mjs'), '--project', project, '--report', report],
-    { cwd: root, encoding: 'utf8' });
+    { cwd: root, encoding: 'utf8', env: {
+      ...process.env,
+      PREFLIGHT_STUB_SECRET: secret,
+      PREFLIGHT_STUB_FAIL: String(fail),
+    } });
     return { status: result.status, output: result.stdout + result.stderr,
       report: malformed ? undefined : JSON.parse(readFileSync(report, 'utf8')) };
   } finally {

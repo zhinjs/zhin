@@ -234,8 +234,27 @@ export function formatInboundContent(ev: OneBot12Event): string {
       .join('');
   }
   return typeof ev.alt_message === 'string'
-    ? ev.alt_message.replace(/\[[^\]]*(?:image|audio|video|file)[^\]]*\]/gi, '').trim()
+    ? stripMediaPlaceholders(ev.alt_message).trim()
     : '';
+}
+
+function stripMediaPlaceholders(input: string): string {
+  const mediaNames = ['image', 'audio', 'video', 'file'];
+  let result = '';
+  let cursor = 0;
+  while (cursor < input.length) {
+    const start = input.indexOf('[', cursor);
+    if (start < 0) return result + input.slice(cursor);
+    const end = input.indexOf(']', start + 1);
+    if (end < 0) return result + input.slice(cursor);
+    result += input.slice(cursor, start);
+    const placeholder = input.slice(start + 1, end).toLowerCase();
+    if (!mediaNames.some((name) => placeholder.includes(name))) {
+      result += input.slice(start, end + 1);
+    }
+    cursor = end + 1;
+  }
+  return result;
 }
 
 /**

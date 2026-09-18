@@ -3,6 +3,7 @@
  * https://github.com/claude-code-best/claude-code/blob/main/packages/builtin-tools/src/tools/WebSearchTool/adapters/bingAdapter.ts
  */
 import he from 'he';
+import { htmlToPlainText } from '@zhin.js/core';
 import { acceptLanguageForMarket, DEFAULT_WEB_SEARCH_MARKET } from './web-search-locale.js';
 
 export interface BingSearchResultRow {
@@ -14,12 +15,7 @@ export interface BingSearchResultRow {
 export const decodeHtmlEntities = (s: string): string => he.decode(s);
 
 export function htmlToPlainSearchText(html: string): string {
-  return he.decode(html
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' '))
-    .replace(/\s+/g, ' ')
-    .trim();
+  return he.decode(htmlToPlainText(html));
 }
 
 /**

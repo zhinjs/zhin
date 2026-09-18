@@ -1,7 +1,7 @@
 /**
  * Email SMTP/IMAP transport factories (nodemailer + imap).
  */
-import nodemailer from 'nodemailer';
+import nodemailer, { type SendMailOptions } from 'nodemailer';
 import Imap from 'imap';
 import type { ResolvedEmailConfig } from './protocol.js';
 
@@ -49,7 +49,7 @@ export function defaultCreateSmtp(config: ResolvedEmailConfig['smtp']): EmailSmt
   });
   return {
     verify: () => transporter.verify().then(() => undefined),
-    sendMail: (options) => transporter.sendMail(options as nodemailer.SendMailOptions),
+    sendMail: (options) => transporter.sendMail(options as SendMailOptions),
     close: () => transporter.close(),
   };
 }
