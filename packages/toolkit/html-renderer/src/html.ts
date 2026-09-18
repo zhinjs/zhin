@@ -34,8 +34,30 @@ function toBuffer(data: ArrayBuffer | Buffer): Buffer {
   return Buffer.isBuffer(data) ? data : Buffer.from(new Uint8Array(data));
 }
 
+function isHtmlBoundary(char: string | undefined): boolean {
+  return char === undefined || char === '>' || /\s/.test(char);
+}
+
+function findOpeningTagEnd(html: string, tag: string): number {
+  const lower = html.toLowerCase();
+  const prefix = `<${tag}`;
+  let start = lower.indexOf(prefix);
+  while (start >= 0) {
+    if (isHtmlBoundary(lower[start + prefix.length])) return html.indexOf('>', start + prefix.length);
+    start = lower.indexOf(prefix, start + prefix.length);
+  }
+  return -1;
+}
+
 export function isFullDocument(html: string): boolean {
-  return /<!doctype\s+html|<html[\s>]/i.test(html);
+  const lower = html.toLowerCase();
+  const doctype = lower.indexOf('<!doctype');
+  if (doctype >= 0) {
+    let cursor = doctype + '<!doctype'.length;
+    while (/\s/.test(lower[cursor] ?? '')) cursor += 1;
+    if (lower.startsWith('html', cursor) && isHtmlBoundary(lower[cursor + 4])) return true;
+  }
+  return findOpeningTagEnd(html, 'html') >= 0;
 }
 
 export function wrapDocument(html: string, options: WrapOptions): string {
@@ -44,10 +66,11 @@ export function wrapDocument(html: string, options: WrapOptions): string {
   if (isFullDocument(html)) {
     if (!fontFaces) return html;
     const style = `<style>${fontFaces}</style>`;
-    if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, `${style}</head>`);
-    if (/<body[^>]*>/i.test(html)) {
-      return html.replace(/<body[^>]*>/i, (match) => `${match}${style}`);
-    }
+    const lower = html.toLowerCase();
+    const headEnd = lower.indexOf('</head>');
+    if (headEnd >= 0) return `${html.slice(0, headEnd)}${style}${html.slice(headEnd)}`;
+    const bodyTagEnd = findOpeningTagEnd(html, 'body');
+    if (bodyTagEnd >= 0) return `${html.slice(0, bodyTagEnd + 1)}${style}${html.slice(bodyTagEnd + 1)}`;
     return `${style}${html}`;
   }
 

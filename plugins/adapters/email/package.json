@@ -21,7 +21,7 @@
     "@zhin.js/logger": "workspace:*",
     "imap": "^0.8.19",
     "mailparser": "^3.9.14",
-    "nodemailer": "^9.0.3"
+    "nodemailer": "^10.0.10"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",
@@ -37,7 +37,7 @@
     "@types/imap": "^0.8.43",
     "@types/mailparser": "^3.4.6",
     "@types/node": "^26.1.2",
-    "@types/nodemailer": "^8.0.1",
+    "@types/nodemailer": "^8.0.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "zhin.js": "workspace:*"

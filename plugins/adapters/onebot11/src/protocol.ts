@@ -205,8 +205,22 @@ export function formatInboundContent(ev: OneBot11Event): string {
       .join('');
   }
   return typeof ev.raw_message === 'string'
-    ? ev.raw_message.replace(/\[CQ:[^\]]+\]/g, '').trim()
+    ? stripCqCodes(ev.raw_message).trim()
     : '';
+}
+
+function stripCqCodes(input: string): string {
+  let result = '';
+  let cursor = 0;
+  while (cursor < input.length) {
+    const start = input.indexOf('[CQ:', cursor);
+    if (start < 0) return result + input.slice(cursor);
+    result += input.slice(cursor, start);
+    const end = input.indexOf(']', start + 4);
+    if (end < 0) return result + input.slice(start);
+    cursor = end + 1;
+  }
+  return result;
 }
 
 export function senderDisplayName(ev: OneBot11Event): string {

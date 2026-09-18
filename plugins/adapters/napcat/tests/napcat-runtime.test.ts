@@ -141,6 +141,17 @@ describe('napcat protocol helpers', () => {
     expect(formatInboundContent(ev)).toBe('hello');
   });
 
+  it('strips complete CQ codes from string messages without dropping malformed text', () => {
+    expect(formatInboundContent({
+      post_type: 'message',
+      message: 'hello[CQ:image,file=test.jpg]world[CQ:at,qq=1]',
+    })).toBe('helloworld');
+    expect(formatInboundContent({
+      post_type: 'message',
+      raw_message: 'hello[CQ:image,file=test.jpg',
+    })).toBe('hello[CQ:image,file=test.jpg');
+  });
+
   it('maps private temp sessions to a private conversation with group parent', () => {
     const ev: NapCatEvent = {
       post_type: 'message',

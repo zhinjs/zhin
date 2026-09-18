@@ -129,6 +129,23 @@ describe('onebot12 protocol helpers', () => {
     expect(formatInboundContent(ev)).toBe('hello');
   });
 
+  it('strips media placeholders while preserving other bracketed text', () => {
+    const event = {
+      id: 'e-media',
+      time: 1,
+      type: 'message' as const,
+      detail_type: 'private',
+      sub_type: '',
+      self: { platform: 'qq', user_id: 'bot' },
+      alt_message: 'hello[image]world[mention:user][FILE:test.zip]',
+    };
+    expect(formatInboundContent(event)).toBe('helloworld[mention:user]');
+    expect(formatInboundContent({
+      ...event,
+      alt_message: 'hello[image',
+    })).toBe('hello[image');
+  });
+
   it('maps channel guild and private temp session into conversation parent', () => {
     const channelEv: OneBot12Event = {
       id: 'e2',

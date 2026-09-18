@@ -83,6 +83,29 @@ describe('@zhin.js/plugin-music', () => {
     }
   });
 
+  it('removes complete HTML tags from Kugou search titles', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      json: async () => ({
+        data: {
+          info: [{
+            hash: 'hash-1',
+            songname: '<em>海阔</em>天空',
+            singername: '信乐团',
+            duration: 277,
+          }],
+        },
+      }),
+    })));
+    try {
+      const service = new KugouMusicService();
+      await expect(service.search('海阔天空')).resolves.toMatchObject([
+        { id: 'hash-1', title: '海阔天空', artist: '信乐团' },
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   describe('source aliases', () => {
     it('resolves common aliases', () => {
       expect(resolveSourceAlias('qq')).toBe('qq');

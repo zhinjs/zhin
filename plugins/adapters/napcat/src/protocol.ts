@@ -249,10 +249,24 @@ export function formatInboundContent(ev: NapCatEvent): string {
       .map((seg) => (seg.type === 'text' ? String(seg.data?.text ?? '') : ''))
       .join('');
   }
-  if (typeof ev.message === 'string') return ev.message.replace(/\[CQ:[^\]]+\]/g, '').trim();
+  if (typeof ev.message === 'string') return stripCqCodes(ev.message).trim();
   return typeof ev.raw_message === 'string'
-    ? ev.raw_message.replace(/\[CQ:[^\]]+\]/g, '').trim()
+    ? stripCqCodes(ev.raw_message).trim()
     : '';
+}
+
+function stripCqCodes(input: string): string {
+  let result = '';
+  let cursor = 0;
+  while (cursor < input.length) {
+    const start = input.indexOf('[CQ:', cursor);
+    if (start < 0) return result + input.slice(cursor);
+    result += input.slice(cursor, start);
+    const end = input.indexOf(']', start + 4);
+    if (end < 0) return result + input.slice(start);
+    cursor = end + 1;
+  }
+  return result;
 }
 
 /**

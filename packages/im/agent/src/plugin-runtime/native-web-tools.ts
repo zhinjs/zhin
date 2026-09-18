@@ -4,6 +4,7 @@ import {
   type AgentToolDefinition,
   type ToolExecutionContext,
 } from '@zhin.js/tool';
+import { htmlToPlainText } from '@zhin.js/core';
 import {
   bingSearchFetchHeaders,
   buildBingSearchUrl,
@@ -119,21 +120,6 @@ function filterDomains<T extends { readonly url: string }>(
     if (allowed.length > 0 && !allowed.some((domain) => hostnameMatchesList(hostname, domain))) return false;
     return !blocked.some((domain) => hostnameMatchesList(hostname, domain));
   });
-}
-
-function htmlToPlainText(html: string): string {
-  return html
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 function feature(
