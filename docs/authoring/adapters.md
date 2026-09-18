@@ -17,8 +17,9 @@ export default defineAdapter({
     return {
       client,
 
-      async connect({ events, signal }) {
+      async connect({ events, signal, onCleanup }) {
         await client.login({ signal });
+        onCleanup(() => client.logout());
         const unsubscribe = client.onMessage((message) => {
           void events.message({
             conversation: {
@@ -29,11 +30,7 @@ export default defineAdapter({
             sender: { id: message.userId, name: message.nickname },
           });
         });
-
-        return async () => {
-          unsubscribe();
-          await client.logout();
-        };
+        onCleanup(unsubscribe);
       },
 
       send({ conversation, payload }) {
@@ -44,7 +41,7 @@ export default defineAdapter({
 });
 ```
 
-`client` 是平台 SDK 实例，也是在命令和 Handler 中通过 `$client` 暴露的对象。`connect()` 等到平台可用后返回；它可以返回一个清理函数。`events.message()` 会自动补上当前 Endpoint 身份，因此适配器作者不需要解析 capability id。`send()` 返回平台消息 id。
+`client` 是平台 SDK 实例，也是在命令和 Handler 中通过 `$client` 暴露的对象。`connect()` 等到平台可用后返回。每获得一个资源就立即用 `onCleanup()` 登记；如果后续初始化失败，框架会逆序回滚。只有一个清理动作时，也可以直接把它作为 `connect()` 返回值。`events.message()` 会自动补上当前 Endpoint 身份，因此适配器作者不需要解析 capability id。`send()` 返回平台消息 id。
 
 如果某个 listener 或输入流只能由当前激活代持有，可以实现同步的 `activate({ events })`，并返回释放函数。框架在切代和回滚时调用它。普通 SDK listener 直接放在 `connect()` 即可。
 

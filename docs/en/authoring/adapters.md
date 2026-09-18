@@ -17,8 +17,9 @@ export default defineAdapter({
     return {
       client,
 
-      async connect({ events, signal }) {
+      async connect({ events, signal, onCleanup }) {
         await client.login({ signal });
+        onCleanup(() => client.logout());
         const unsubscribe = client.onMessage((message) => {
           void events.message({
             conversation: {
@@ -29,11 +30,7 @@ export default defineAdapter({
             sender: { id: message.userId, name: message.nickname },
           });
         });
-
-        return async () => {
-          unsubscribe();
-          await client.logout();
-        };
+        onCleanup(unsubscribe);
       },
 
       send({ conversation, payload }) {
@@ -44,7 +41,7 @@ export default defineAdapter({
 });
 ```
 
-`client` is the platform SDK object exposed as `$client` in commands and handlers. `connect()` resolves when the platform is ready and may return one cleanup function. `events.message()` attaches the current Endpoint identity automatically. `send()` returns the platform message id.
+`client` is the platform SDK object exposed as `$client` in commands and handlers. `connect()` resolves when the platform is ready. Register each acquired resource with `onCleanup()` immediately; the framework unwinds them in reverse order if later setup fails. For one cleanup action, returning it from `connect()` remains a shorthand. `events.message()` attaches the current Endpoint identity automatically. `send()` returns the platform message id.
 
 Implement synchronous `activate({ events })` when a listener or input stream must belong only to the active generation; return its release function. Ordinary SDK listeners belong in `connect()`.
 

@@ -36,6 +36,7 @@ const expectedSurface = new Map([
   ]],
   ['zhin.js/adapter', [
     'AdapterContext', 'AdapterDefinition', 'AdapterSegmentPolicy', 'Endpoint',
+    'EndpointActivationContext',
     'EndpointCleanup', 'EndpointClientContext', 'EndpointClientToken', 'EndpointConnectionContext',
     'EndpointConversation', 'EndpointEvent', 'EndpointEventSink', 'EndpointIdentity',
     'EndpointImplementation', 'EndpointIncomingMessage', 'EndpointSendRequest',

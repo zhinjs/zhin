@@ -32,6 +32,7 @@ import adapterFeature, {
   type AdapterSegmentPolicy,
   type AdapterContext,
   type AdapterDefinition,
+  type EndpointCleanup,
   type EndpointEvent,
 } from '../src/index.js';
 
@@ -426,6 +427,59 @@ describe('Adapter Feature', () => {
       'deactivate',
       'disconnect',
     ]);
+  });
+
+  it('rolls back registered connection resources when connect returns an invalid cleanup', async () => {
+    const cleanup = vi.fn();
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'invalid-connect',
+      source: '/adapters/invalid-connect.ts',
+      definition: defineAdapterContract({
+        capabilities: ['inbound'],
+        create: () => ({
+          client: Object.freeze({ kind: 'invalid-connect' }),
+          connect({ onCleanup }) {
+            onCleanup(cleanup);
+            return 'invalid' as unknown as EndpointCleanup;
+          },
+        }),
+      }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+
+    await expect(index.start()).rejects.toThrow('connect() must return a cleanup function');
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+
+  it('runs connection cleanup even when activation cleanup fails', async () => {
+    const events: string[] = [];
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'cleanup-failure',
+      source: '/adapters/cleanup-failure.ts',
+      definition: defineAdapterContract({
+        capabilities: ['inbound'],
+        create: () => ({
+          client: Object.freeze({ kind: 'cleanup-failure' }),
+          connect: () => () => { events.push('connect cleanup'); },
+          activate: () => () => {
+            events.push('activation cleanup');
+            throw new Error('activation cleanup failed');
+          },
+        }),
+      }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    await index.start();
+    index.open();
+
+    await expect(index.stop()).rejects.toBeInstanceOf(AggregateError);
+    expect(events).toEqual(['activation cleanup', 'connect cleanup']);
   });
 
   it('fails Endpoint creation closed and disposes already-created candidates', async () => {

@@ -13,6 +13,7 @@ import type { Endpoint, EndpointImplementation } from './endpoint.js';
 
 export { Endpoint } from './endpoint.js';
 export type {
+  EndpointActivationContext,
   EndpointCleanup,
   EndpointConnectionContext,
   EndpointConversation,
