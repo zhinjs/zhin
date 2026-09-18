@@ -22,7 +22,7 @@
 |-----|--------|-------------|--------|--------|
 | `definePlugin` | `stable` | `zhin.js` | `@zhin.js/plugin-runtime` | 约定式插件入口，`plugin.ts` 默认导出 |
 | `defineCommand` | `stable` | `zhin.js/command` | `@zhin.js/command` | 命令模块（`commands/` 下默认导出） |
-| `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | 适配器模块（`adapters/` 下默认导出），`create(context)` 返回 Endpoint |
+| `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | 适配器模块（`adapters/` 下默认导出），`create(context)` 默认返回 `{ client, connect, send }`，复杂协议可返回 Endpoint 子类 |
 | `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR 组件（`components/` 下默认导出） |
 | `defineMiddleware` | `stable` | `zhin.js/middleware` | `@zhin.js/middleware` | 中间件模块（`middlewares/` 下默认导出） |
 | `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle 事件处理器（`handlers/` 下默认导出；`/` → `.` 推断事件名） |

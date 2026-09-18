@@ -8,7 +8,9 @@ import {
   adapterFeatureId,
   bindEndpoint,
   isAdapterIndex,
+  materializeEndpoint,
   type AdapterContext,
+  type Endpoint,
   type EndpointEventGateway,
 } from 'zhin.js/adapter';
 import { ImRuntime } from 'zhin.js/core/runtime';
@@ -20,7 +22,11 @@ import {
 } from '@zhin.js/runtime';
 import { MigrationReadiness, runStartCommand } from '@zhin.js/cli';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { TerminalEndpoint } from '../adapters/terminal.js';
+import {
+  createTerminalEndpoint,
+  type TerminalClient,
+  type TerminalEndpointOptions,
+} from '../adapters/terminal.js';
 
 const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(
@@ -47,20 +53,20 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     ], { cwd: botRoot, env: { ...process.env, NODE_OPTIONS: '' }, stdio: 'pipe' })).not.toThrow();
   });
 
-  it('forwards terminal Ctrl+C to process shutdown and restores cooked input', () => {
+  it('forwards terminal Ctrl+C to process shutdown and restores cooked input', async () => {
     const input = Object.assign(new PassThrough(), { isTTY: true, setRawMode: vi.fn() });
     const output = Object.assign(new PassThrough(), { isTTY: true });
     const emit = vi.spyOn(process, 'emit').mockReturnValue(true);
-    const endpoint = new TerminalEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeatureId, 'terminal'),
+    const endpoint = createBoundTerminalEndpoint({
       input, output, error: output, interactive: true, prompt: 'zhin> ',
     });
     try {
-      endpoint.start();
+      await endpoint.start(new AbortController().signal);
+      endpoint.open();
       input.write('\x03');
       expect(emit).toHaveBeenCalledWith('SIGINT');
     } finally {
-      endpoint.stop();
+      await endpoint.stop();
     }
     expect(input.setRawMode).toHaveBeenLastCalledWith(false);
     expect(input.isPaused()).toBe(true);
@@ -150,16 +156,15 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     const writes: string[] = [];
     output.on('data', (chunk: Buffer) => writes.push(chunk.toString()));
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
-    const endpoint = bindTerminalEndpoint(new TerminalEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeatureId, 'terminal'),
+    const endpoint = createBoundTerminalEndpoint({
       input,
       output,
       error: output,
       interactive: true,
       prompt: 'zhin> ',
-    }), receive);
+    }, receive);
 
-    endpoint.start();
+    await endpoint.start(new AbortController().signal);
     endpoint.open();
     await vi.waitFor(() => expect(writes.join('')).toContain('zhin> '));
     input.write('/hello\n');
@@ -173,7 +178,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     await vi.waitFor(() => {
       expect(writes.join('').match(/zhin> /gu)).toHaveLength(2);
     });
-    endpoint.stop();
+    await endpoint.stop();
   });
 
   it('hands the current process stream to the next Adapter generation', async () => {
@@ -183,30 +188,29 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     Object.defineProperty(output, 'isTTY', { value: true });
     const previousReceive = vi.fn(async () => Object.freeze({ matched: true }));
     const nextReceive = vi.fn(async () => Object.freeze({ matched: true }));
-    const createEndpoint = (receive: EndpointEventGateway['receive']) => bindTerminalEndpoint(new TerminalEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeatureId, 'terminal'),
+    const createEndpoint = (receive: EndpointEventGateway['receive']) => createBoundTerminalEndpoint({
       input,
       output,
       error: output,
       interactive: true,
       prompt: 'zhin> ',
-    }), receive);
+    }, receive);
     const previous = createEndpoint(previousReceive);
     const next = createEndpoint(nextReceive);
 
-    previous.start();
+    await previous.start(new AbortController().signal);
     previous.open();
     previous.close();
-    next.start();
+    await next.start(new AbortController().signal);
     next.open();
-    previous.stop();
+    await previous.stop();
     input.write('/hello\n');
 
     await vi.waitFor(() => expect(nextReceive.mock.calls.filter(
       ([event]) => event.name === 'message.receive',
     )).toHaveLength(1));
     expect(previousReceive).not.toHaveBeenCalled();
-    next.stop();
+    await next.stop();
   });
 
   it('reopens the previous terminal Endpoint when a generation rolls back', async () => {
@@ -215,16 +219,15 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     Object.defineProperty(input, 'isTTY', { value: true });
     Object.defineProperty(output, 'isTTY', { value: true });
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
-    const previous = bindTerminalEndpoint(new TerminalEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeatureId, 'terminal'),
+    const previous = createBoundTerminalEndpoint({
       input,
       output,
       error: output,
       interactive: true,
       prompt: 'zhin> ',
-    }), receive);
+    }, receive);
 
-    previous.start();
+    await previous.start(new AbortController().signal);
     previous.open();
     previous.close();
     previous.open();
@@ -233,7 +236,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     await vi.waitFor(() => expect(receive.mock.calls.filter(
       ([event]) => event.name === 'message.receive',
     )).toHaveLength(1));
-    previous.stop();
+    await previous.stop();
   });
 
   it.skipIf(!supportsNativeTypeScript())(
@@ -261,14 +264,17 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
   });
 });
 
-function bindTerminalEndpoint(
-  endpoint: TerminalEndpoint,
-  receive: EndpointEventGateway['receive'],
-): TerminalEndpoint {
-  bindEndpoint(endpoint, {
+function createBoundTerminalEndpoint(
+  options: TerminalEndpointOptions,
+  receive: EndpointEventGateway['receive'] = async () => undefined,
+): Endpoint<TerminalClient> {
+  const context = {
     id: capabilityId(rootPluginId(), adapterFeatureId, 'terminal'),
+    endpointId: 'terminal',
     name: 'terminal',
     use: () => Object.freeze({ receive }),
-  } as unknown as AdapterContext);
+  } as unknown as AdapterContext;
+  const endpoint = materializeEndpoint(createTerminalEndpoint(options), context);
+  bindEndpoint(endpoint, context);
   return endpoint;
 }

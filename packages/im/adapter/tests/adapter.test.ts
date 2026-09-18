@@ -54,19 +54,6 @@ class TestEndpoint extends Endpoint<object> {
   stop(): void {}
 }
 
-class EmittingEndpoint extends Endpoint<object> {
-  readonly client = Object.freeze({ api: 'native' });
-
-  start(): void {}
-  open(): void {}
-  close(): void {}
-  stop(): void {}
-
-  publish(name: string, payload: unknown): Promise<unknown> {
-    return this.emit(name, payload);
-  }
-}
-
 function defineAdapter<TConfig = unknown>(
   definition: TestAdapterDefinition<TConfig>,
 ): Readonly<AdapterDefinition<TConfig>> {
@@ -394,15 +381,20 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'memory',
       source: '/adapters/memory.ts',
-      definition: defineAdapter({
+      definition: defineAdapterContract({
         capabilities: ['outbound'],
         create(context) {
           events.push(`create:${context.name}:${context.id}`);
           return {
-            start() { events.push('start'); },
-            open() { events.push('open'); },
-            close() { events.push('close'); },
-            stop() { events.push('stop'); },
+            client: Object.freeze({ kind: 'memory' }),
+            connect() {
+              events.push('connect');
+              return () => { events.push('disconnect'); };
+            },
+            activate() {
+              events.push('activate');
+              return () => { events.push('deactivate'); };
+            },
             send({ target, payload }) {
               events.push(`send:${target}:${String(payload)}`);
               return 'sent';
@@ -426,13 +418,13 @@ describe('Adapter Feature', () => {
 
     expect(events).toEqual([
       `create:memory:${slot.id}`,
-      'start',
-      'open',
+      'connect',
+      'activate',
       'send:room:hello',
-      'close',
-      'open',
-      'close',
-      'stop',
+      'deactivate',
+      'activate',
+      'deactivate',
+      'disconnect',
     ]);
   });
 
@@ -760,15 +752,25 @@ describe('Adapter Feature', () => {
         });
       },
     };
-    let endpoint!: EmittingEndpoint;
+    const client = Object.freeze({ api: 'native' });
+    let publish!: () => Promise<unknown>;
     const slot = createCapabilitySlot({
       owner: root,
       feature: adapterFeatureId,
       localName: 'native',
       source: '/adapters/native.ts',
-      definition: defineAdapter({
+      definition: defineAdapterContract({
         capabilities: ['inbound'],
-        create: () => (endpoint = new EmittingEndpoint()),
+        create: () => ({
+          client,
+          connect({ events }) {
+            publish = () => events.message({
+              conversation: { kind: 'private', id: 'room-1' },
+              content: 'hello',
+              sender: { id: 'user-1' },
+            });
+          },
+        }),
       }),
     });
     const candidate = snapshot([slot], undefined, new Map([
@@ -777,7 +779,7 @@ describe('Adapter Feature', () => {
     const index = await createAdapterIndex([slot], candidate);
     await index.start();
 
-    await endpoint.publish('platform.receive', { name: 'ready', event: { online: true } });
+    await publish();
     expect(received).toEqual([]);
 
     const store = new SnapshotStore({
@@ -786,9 +788,17 @@ describe('Adapter Feature', () => {
     });
     await vi.waitFor(() => expect(received).toHaveLength(1));
     expect(received[0]).toMatchObject({
-      name: 'platform.receive',
-      client: endpoint.client,
-      payload: { name: 'ready', event: { online: true } },
+      name: 'message.receive',
+      client,
+      payload: {
+        conversation: {
+          kind: 'private',
+          id: 'room-1',
+          endpoint: { id: slot.id, adapter: 'native' },
+        },
+        endpointId: 'native',
+        content: 'hello',
+      },
     });
     await store.close();
   });

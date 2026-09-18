@@ -1,20 +1,37 @@
 # @zhin.js/adapter
 
-Zhin Plugin Runtime 的 Adapter Feature。它从插件或项目的 `adapters/**/*.ts` 发现
-`defineAdapter()` 定义，按 Plugin owner 投影 Endpoint，并把 start/open/close/stop 纳入同一
-generation lifecycle。候选 Endpoint 可完成连接 readiness，但入站由 `SnapshotStore`
-切换的 generation admission gate 阻断到 commit；旧 Endpoint 不会在 commit 前被关闭。
-已声明的 Endpoint 默认都是 required：`create()`、`start()` 或 `open()` 任一步失败都会
-销毁整组候选 Endpoint 并拒绝本次 generation，不存在 inert stub 或后台 late-open。
+Zhin Plugin Runtime 的平台接入创作面。项目只需在 `adapters/**/*.ts` 默认导出一个
+`defineAdapter()`；框架负责发现、多账号展开、热重载切代、事件准入和资源清理。
 
 ```ts
 import { defineAdapter } from 'zhin.js/adapter';
 
 export default defineAdapter({
-  capabilities: ['inbound'],
-  create: (context) => ({ name: context.name }),
+  capabilities: ['inbound', 'outbound'],
+  create: () => {
+    const client = createPlatformClient();
+    return {
+      client,
+      connect({ events }) {
+        const unsubscribe = client.onMessage((message) => void events.message({
+          conversation: { kind: 'private', id: message.userId },
+          content: message.text,
+          sender: { id: message.userId },
+        }));
+        return unsubscribe;
+      },
+      send: ({ conversation, payload }) => client.send(conversation.id, payload),
+    };
+  },
 });
 ```
+
+普通适配器只实现 `client`、`connect` 和 `send`。`connect` 返回一个清理函数即可；
+`Endpoint` 身份、`start/open/close/stop`、切代期间的事件缓冲均由框架处理。需要精细控制
+连接状态的复杂协议仍可返回 `Endpoint` 子类，现有适配器无需迁移。
+
+完整入门见 [适配器开发](../../../docs/authoring/adapters.md)，重连与心跳见
+[端点生命周期](../../../docs/authoring/endpoint-lifecycle.md)。
 
 本包只依赖 Kernel 与 Feature Kit，不包含具体平台 SDK。生产 manifest 指向
 `lib/provider.js`；开发时可通过 conditional export 读取源码。
@@ -28,13 +45,15 @@ AdapterIndex 和 generation lifecycle 管理。
 
 | Module | 负责 | 禁止承担 |
 | --- | --- | --- |
-| Adapter definition | 声明平台能力与段策略；解析单个 endpoint 配置；注入依赖；选择并构造一种 Endpoint implementation | 建连、收发消息、持有 socket/timer/listener、维护在线状态、保存 live Endpoint Map |
-| Endpoint instance | 代表一个具体账号/连接；拥有 transport、协议编解码、send/control/content/management、start/open/close/stop 与资源清理 | 展开多账号配置、查找兄弟 Endpoint、发布 generation、维护全局 registry、执行 endpoint add/edit/remove 配置命令 |
+| Adapter definition | 声明平台能力与段策略；解析单个 endpoint 配置；注入依赖；返回紧凑实现对象或高级 Endpoint 子类 | 保存 live Endpoint Map、展开多账号配置 |
+| Endpoint implementation | 代表一个具体账号/连接；拥有平台 client、协议编解码、connect/send/control/content/management | 理解 generation、手写准入门、注册全局 Endpoint |
+| Framework Endpoint | 为紧凑实现补齐身份、start/open/close/stop、切代准入与清理；高级适配器可直接继承 | 理解平台协议、鉴权或媒体上传 |
 | AdapterIndex | 展开 1:N 配置；作为当前 generation 的 Endpoint directory；校验能力；编排 admission 与生命周期；提供 Runtime 查询 | 理解平台协议、鉴权、媒体上传或 SDK 类型 |
 | Plugin composition | 提供 schema、Resource、命令、HTTP Host 和平台专属 Agent tools | 绕过 AdapterIndex 保存另一份 live Endpoint 权威状态 |
 
 `defineAdapter().create()` 是 Adapter 与 Endpoint 的唯一 Seam：调用前属于配置、能力和
-依赖装配，返回后属于具体 Endpoint 的运行期。Adapter definition 应保持无连接状态；
+依赖装配，返回后属于具体 Endpoint 的运行期。默认返回紧凑实现对象；只有协议确实需要
+自定义生命周期时才继承 `Endpoint`。Adapter definition 应保持无连接状态；
 Endpoint 不得把自己注册进模块级 Map。需要从命令、Agent tool 或 Host 查找当前 Endpoint
 时，应解析当前 generation 的 AdapterIndex/Resource View，不能建立 second source of truth。
 
