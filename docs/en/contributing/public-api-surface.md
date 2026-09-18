@@ -22,7 +22,7 @@ Three tiers:
 |-----|-----------|---------------|----------------|-----------|
 | `definePlugin` | `stable` | `zhin.js` | `@zhin.js/plugin-runtime` | Convention-based plugin entry, default export from `plugin.ts` |
 | `defineCommand` | `stable` | `zhin.js/command` | `@zhin.js/command` | Command module (default export in `commands/`) |
-| `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | Adapter module (default export in `adapters/`); `create(context)` normally returns `{ client, connect, send }`, while complex protocols may return an Endpoint subclass |
+| `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | Adapter module (default export in `adapters/`); `create(context)` normally returns `{ client, connect, activate?, send }`, while complex protocols may return an Endpoint subclass |
 | `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR component (default export in `components/`) |
 | `defineMiddleware` | `stable` | `zhin.js/middleware` | `@zhin.js/middleware` | Middleware module (default export in `middlewares/`) |
 | `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle event handler (default export in `handlers/`; `/` → `.` event inference) |

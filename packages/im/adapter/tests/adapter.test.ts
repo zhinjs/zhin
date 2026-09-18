@@ -352,6 +352,23 @@ describe('Adapter Feature', () => {
       .rejects.toThrow('declares outbound but send() is missing');
   });
 
+  it('reports an invalid create result before checking outbound send', async () => {
+    const root = rootPluginId();
+    const invalid = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'invalid-result',
+      source: '/adapters/invalid-result.ts',
+      definition: defineAdapterContract({
+        capabilities: ['outbound'],
+        create: () => null as never,
+      }),
+    });
+
+    await expect(createAdapterIndex([invalid], snapshot([invalid])))
+      .rejects.toThrow('must return an Endpoint or an object with a client');
+  });
+
   it('brands definitions and discovers nested TypeScript modules', async () => {
     const definition = defineAdapter({
       capabilities: ['inbound', 'outbound'],
@@ -480,6 +497,43 @@ describe('Adapter Feature', () => {
 
     await expect(index.stop()).rejects.toBeInstanceOf(AggregateError);
     expect(events).toEqual(['activation cleanup', 'connect cleanup']);
+  });
+
+  it('cleans up a connect result that settles after generation abort', async () => {
+    const events: string[] = [];
+    const controller = new AbortController();
+    let finishConnect!: () => void;
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'slow-connect',
+      source: '/adapters/slow-connect.ts',
+      definition: defineAdapterContract({
+        capabilities: ['inbound'],
+        create: () => ({
+          client: Object.freeze({ kind: 'slow-connect' }),
+          connect({ onCleanup }) {
+            onCleanup(() => { events.push('registered cleanup'); });
+            return new Promise<EndpointCleanup>((resolve) => {
+              finishConnect = () => resolve(() => { events.push('returned cleanup'); });
+            });
+          },
+        }),
+      }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    const starting = index.start(controller.signal);
+    await vi.waitFor(() => expect(finishConnect).toBeTypeOf('function'));
+
+    controller.abort(new Error('generation aborted'));
+    await expect(starting).rejects.toThrow('generation aborted');
+    finishConnect();
+
+    await vi.waitFor(() => expect(events).toEqual([
+      'returned cleanup',
+      'registered cleanup',
+    ]));
   });
 
   it('fails Endpoint creation closed and disposes already-created candidates', async () => {

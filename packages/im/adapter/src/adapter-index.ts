@@ -468,6 +468,7 @@ async function createEndpoint(
   });
   const operations = resolveAdapterOperations(slot.definition, context);
   const implementation = await slot.definition.create(context);
+  const endpoint = materializeEndpoint(implementation, context);
   if (
     slot.definition.capabilities.includes('outbound')
     && typeof implementation.send !== 'function'
@@ -476,7 +477,6 @@ async function createEndpoint(
       `Adapter Endpoint ${String(expansion?.id ?? slot.id)} declares outbound but send() is missing`,
     );
   }
-  const endpoint = materializeEndpoint(implementation, context);
   bindEndpoint(endpoint, context, admission);
   assertDeclaredEndpointOperations(
     endpoint,

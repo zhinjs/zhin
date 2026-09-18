@@ -285,6 +285,16 @@ class ObjectEndpoint<TClient> extends Endpoint<TClient> {
       }
       if (cleanup) stack.add(cleanup);
       stack.seal();
+      if (signal.aborted || this.#stopped) {
+        const stoppedError = signal.aborted
+          ? signal.reason ?? new Error(`Endpoint ${this.#endpointId} connect aborted`)
+          : new Error(`Endpoint ${this.#endpointId} stopped during connect`);
+        await disposeAfterError(
+          stack,
+          stoppedError,
+          `Endpoint ${this.#endpointId} late connect cleanup failed`,
+        );
+      }
     } catch (error) {
       await disposeAfterError(stack, error, `Endpoint ${this.#endpointId} connect rollback failed`);
     }
@@ -384,7 +394,7 @@ async function disposeAfterError(
   try {
     await stack.dispose();
   } catch (cleanupError) {
-    throw new AggregateError([error, cleanupError], message, { cause: error });
+    throw new AggregateError([error, cleanupError], message, { cause: cleanupError });
   }
   throw error;
 }

@@ -8,7 +8,7 @@ Create a TypeScript file under the plugin or project's `adapters/` directory and
 import { defineAdapter } from 'zhin.js/adapter';
 import { ExampleClient } from 'example-sdk';
 
-export default defineAdapter({
+export default defineAdapter<{ readonly token: string }>({
   capabilities: ['inbound', 'outbound'],
 
   create(context) {
@@ -41,7 +41,7 @@ export default defineAdapter({
 });
 ```
 
-`client` is the platform SDK object exposed as `$client` in commands and handlers. `connect()` resolves when the platform is ready. Register each acquired resource with `onCleanup()` immediately; the framework unwinds them in reverse order if later setup fails. For one cleanup action, returning it from `connect()` remains a shorthand. `events.message()` attaches the current Endpoint identity automatically. `send()` returns the platform message id.
+`client` is the platform SDK object exposed as `context.$client` in commands and as `event.client` in handler event parameters. `connect()` resolves when the platform is ready. Register each acquired resource with `onCleanup()` immediately; the framework unwinds them in reverse order if later setup fails. For one cleanup action, returning it from `connect()` remains a shorthand. `events.message()` attaches the current Endpoint identity automatically. `send()` returns the platform message id.
 
 Implement synchronous `activate({ events })` when a listener or input stream must belong only to the active generation; return its release function. Ordinary SDK listeners belong in `connect()`.
 
