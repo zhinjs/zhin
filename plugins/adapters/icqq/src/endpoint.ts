@@ -5,16 +5,17 @@ import {
   type FileElem,
   type PttElem,
   type Sendable,
+  type ShareElem,
   type VideoElem,
 } from '@icqqjs/icqq';
 import { inspect } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { Endpoint } from 'zhin.js/adapter';
-import type {
-  EndpointControl,
-  EndpointManagement,
-  EndpointPendingRequest,
-  EndpointSendRequest,
+import {
+  Endpoint,
+  type EndpointControl,
+  type EndpointManagement,
+  type EndpointPendingRequest,
+  type EndpointSendRequest,
 } from 'zhin.js/adapter';
 import type { EndpointContentPort, EndpointContentResolveContext } from '@zhin.js/adapter';
 import { receiveOneBotLikeSideEvent, SystemEvent, toCanonicalSegments, type LoginAssist } from '@zhin.js/core';
@@ -436,6 +437,27 @@ export class IcqqEndpoint extends Endpoint<Client> {
     target: ReturnType<typeof icqqOutboundTarget>,
     message: Sendable,
   ): Promise<{ message_id?: unknown }> {
+    if (isIcqqShareElement(message)) {
+      switch (target.kind) {
+        case 'private':
+          await this.client.pickFriend(target.userId).share(message);
+          return {};
+        case 'group':
+          await this.client.pickGroup(target.groupId).share(message);
+          return {};
+        case 'temp':
+          await this.client.pickMember(target.groupId, target.userId).share(message);
+          return {};
+        case 'channel': {
+          const channel = this.client.pickGuild(target.guildId).channels.get(target.channelId);
+          if (!channel) {
+            throw new TypeError(`ICQQ guild channel is unavailable: ${target.guildId}/${target.channelId}`);
+          }
+          await channel.share(message);
+          return {};
+        }
+      }
+    }
     if (isIcqqFileElement(message)) {
       switch (target.kind) {
         case 'private': {
@@ -1012,6 +1034,13 @@ export class IcqqEndpoint extends Endpoint<Client> {
       await this.client.setGroupAddRequest(target.flag, false, reason);
     }
   }
+}
+
+function isIcqqShareElement(message: Sendable): message is ShareElem {
+  return !Array.isArray(message)
+    && typeof message === 'object'
+    && message !== null
+    && message.type === 'share';
 }
 
 function formatIcqqSendablePreview(message: Sendable): string {

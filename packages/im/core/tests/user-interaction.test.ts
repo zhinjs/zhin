@@ -73,14 +73,20 @@ describe('UserInteraction module', () => {
       .toMatchObject({ ok: false });
   });
 
-  it('rejects ambiguous or impossible definitions before waiting for input', () => {
-    expect(() => assertUserInteractionRequest({ type: 'select', title: '环境', options: [] }))
-      .toThrow('options must not be empty');
-    expect(() => assertUserInteractionRequest({
-      type: 'select',
+  it('allows duplicate labels because options remain addressable by index', () => {
+    const request = {
+      type: 'select' as const,
       title: '环境',
       options: [{ label: '生产', value: 1 }, { label: '生产', value: 2 }],
-    })).toThrow('Duplicate');
+    };
+    expect(() => assertUserInteractionRequest(request)).not.toThrow();
+    expect(parseUserInteractionAnswer(request, '1')).toEqual({ ok: true, value: 1 });
+    expect(parseUserInteractionAnswer(request, '2')).toEqual({ ok: true, value: 2 });
+  });
+
+  it('rejects impossible definitions before waiting for input', () => {
+    expect(() => assertUserInteractionRequest({ type: 'select', title: '环境', options: [] }))
+      .toThrow('options must not be empty');
     expect(() => assertUserInteractionRequest({ type: 'number', title: '数量', min: 10, max: 1 }))
       .toThrow('range is invalid');
   });

@@ -1,5 +1,5 @@
 import { pickCredential } from 'zhin.js/adapter';
-import type { MessageElem, Sendable } from '@icqqjs/icqq';
+import type { MessageElem, Sendable, ShareElem } from '@icqqjs/icqq';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import type { MessageSegment } from "zhin.js";
 import { resolveIcqqMediaFile } from "./cq-message.js";
@@ -411,6 +411,7 @@ const ICQQ_STANDALONE_ELEMENTS = new Set([
   'video',
   'file',
   'json',
+  'share',
   'long_msg',
 ] as const);
 
@@ -497,7 +498,7 @@ export function formatOutboundBody(payload: unknown): Sendable {
         return { type: 'long_msg', resid };
       }
       case 'share':
-        return formatMusicShareJson(item.data);
+        return formatShare(item.data);
       default: {
         const text = item.data?.text;
         if (typeof text === 'string' && text) return text;
@@ -528,48 +529,45 @@ function isWireSegment(value: unknown): value is IcqqWireSegment {
     && typeof (value as { type?: unknown }).type === 'string';
 }
 
-function formatMusicShareJson(data: Record<string, unknown> | undefined): MessageElem {
+function formatShare(data: Record<string, unknown> | undefined): ShareElem {
   if (!data) throw new TypeError('ICQQ share segment requires data');
   const config = data.config as {
     appid?: number;
     package?: string;
-    icon?: string;
     sign?: string;
   } | undefined;
-  const title = String(data.title ?? '');
-  const desc = String(data.artist ?? '');
-  const jumpUrl = String(data.url ?? '');
-  const musicUrl = String(data.audio ?? '');
-  const preview = String(data.image ?? '');
-  const tag = config?.appid === 100497308 ? 'QQ音乐'
-    : config?.appid === 100495085 ? '网易云音乐'
-    : config?.appid === 100243533 ? '酷我音乐'
-    : config?.appid === 205141 ? '酷狗音乐'
-    : '音乐';
-  const json = {
-    app: 'com.tencent.structmsg',
-    view: 'music',
-    ver: '0.0.0.1',
-    desc: 'music',
-    prompt: `[分享]${title}`,
-    meta: {
-      music: {
-        action: '',
-        android_pkg_name: config?.package ?? '',
-        app_type: 1,
-        appid: config?.appid ?? 0,
-        ctime: 0,
-        desc,
-        jumpUrl,
-        musicUrl,
-        preview,
-        sourceMsgId: '0',
-        source_icon: config?.icon ?? '',
-        source_url: '',
-        tag,
-        title,
-      },
-    },
+  const title = String(data.title ?? '').trim();
+  const url = String(data.url ?? '').trim();
+  if (!title) throw new TypeError('ICQQ share segment requires title');
+  if (!url) throw new TypeError('ICQQ share segment requires url');
+
+  const optionalString = (value: unknown): string | undefined => {
+    const text = String(value ?? '').trim();
+    return text || undefined;
   };
-  return { type: 'json', data: json };
+  const appid = Number(config?.appid);
+  const appname = optionalString(config?.package);
+  const appsign = optionalString(config?.sign);
+  const shareConfig = Number.isSafeInteger(appid) && appid > 0
+    ? {
+        appid,
+        ...(appname ? { appname } : {}),
+        ...(appsign ? { appsign } : {}),
+      }
+    : undefined;
+  const summary = optionalString(data.artist);
+  const content = optionalString(data.content);
+  const image = optionalString(data.image);
+  const audio = optionalString(data.audio);
+
+  return {
+    type: 'share',
+    title,
+    url,
+    ...(summary ? { summary } : {}),
+    ...(content ? { content } : {}),
+    ...(image ? { image } : {}),
+    ...(audio ? { audio } : {}),
+    ...(shareConfig ? { config: shareConfig } : {}),
+  };
 }

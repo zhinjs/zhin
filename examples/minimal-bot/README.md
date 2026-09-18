@@ -19,6 +19,18 @@ Wait for the `zhin> ` prompt, then type `/hello` or `/card` in the same terminal
 closes the terminal Endpoint. Editing a file under `adapters/`, `commands/` or `components/`
 triggers a generation transaction without rerunning Plugin setup.
 
+On Windows, `pnpm`/`.cmd` wrappers may additionally ask `Terminate batch job (Y/N)?`
+(`终止批处理操作吗(Y/N)?`). Enter `Y` and press Enter to finish the wrapper. To run
+without that batch wrapper, open a shell in `examples/minimal-bot` and run:
+
+```bash
+node ../../basic/cli/bin/zhin.js runtime start
+```
+
+Server capabilities are loaded by Node's native TypeScript loader. Keep them erasable:
+use explicit class fields and constructor assignments instead of parameter properties.
+The example's TypeScript check enforces this with `erasableSyntaxOnly`.
+
 ## Project layout
 
 ```text
