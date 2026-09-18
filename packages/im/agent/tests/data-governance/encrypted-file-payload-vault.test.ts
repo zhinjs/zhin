@@ -108,7 +108,8 @@ describe('EncryptedFilePayloadVault', () => {
 
     const objectFile = join(directory, 'objects', `${handle.vaultObjectId.slice('vault-object:'.length)}.json`);
     const envelope = JSON.parse(await readFile(objectFile, 'utf8')) as { ciphertext: string };
-    envelope.ciphertext = `${envelope.ciphertext.slice(0, -2)}AA`;
+    const firstCiphertextCharacter = envelope.ciphertext[0];
+    envelope.ciphertext = `${firstCiphertextCharacter === 'A' ? 'B' : 'A'}${envelope.ciphertext.slice(1)}`;
     await writeFile(objectFile, JSON.stringify(envelope), 'utf8');
 
     await expect(vault.readExact({
