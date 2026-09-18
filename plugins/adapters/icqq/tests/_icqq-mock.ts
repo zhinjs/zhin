@@ -118,6 +118,8 @@ export class Client {
   sendTempMsg = vi.fn(async () => ({ message_id: 'sent-1' }));
   sendGuildMsg = vi.fn(async () => ({ message_id: 'sent-1' }));
 
+  share = vi.fn(async () => undefined);
+
   deleteMsg = vi.fn(async () => true);
   getSystemMsg = vi.fn(async (): Promise<unknown[]> => []);
   setFriendAddRequest = vi.fn(async () => true);
@@ -147,6 +149,12 @@ export class Client {
   pickGroup = vi.fn((_gid?: number) => ({
     setReaction: this.setReaction,
     delReaction: this.delReaction,
+    share: this.share,
+  }));
+  pickFriend = vi.fn((_uin?: number) => ({ share: this.share }));
+  pickMember = vi.fn((_gid?: number, _uin?: number) => ({ share: this.share }));
+  pickGuild = vi.fn((_guildId?: string) => ({
+    channels: new Map([['c1', { share: this.share }]]),
   }));
 }
 

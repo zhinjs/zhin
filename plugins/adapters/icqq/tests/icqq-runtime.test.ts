@@ -713,6 +713,50 @@ describe('icqq plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
+  it('sends music shares through the native ICQQ share protocol', async () => {
+    const endpoint = createEndpoint();
+    await endpoint.start(new AbortController().signal);
+    endpoint.open();
+    const id = await endpoint.send({
+      conversation: {
+        endpoint: { id: 'test-endpoint', adapter: 'test' },
+        kind: 'group',
+        id: '100',
+      },
+      payload: {
+        type: 'share',
+        data: {
+          title: '海阔天空',
+          url: 'https://music.163.com/#/song?id=387717',
+          image: 'http://p1.music.126.net/cover.jpg',
+          audio: 'http://iot201.music.126.net/song.mp3',
+          content: '小B崽子，你的歌道了',
+          artist: '信乐团',
+          config: {
+            appid: 100495085,
+          },
+        },
+      },
+    });
+
+    expect(id).toMatch(/^sent_/);
+    expect(endpoint.client.pickGroup).toHaveBeenCalledWith(100);
+    expect(endpoint.client.share).toHaveBeenCalledWith({
+      type: 'share',
+      title: '海阔天空',
+      url: 'https://music.163.com/#/song?id=387717',
+      image: 'http://p1.music.126.net/cover.jpg',
+      audio: 'http://iot201.music.126.net/song.mp3',
+      content: '小B崽子，你的歌道了',
+      summary: '信乐团',
+      config: {
+        appid: 100495085,
+      },
+    });
+    expect(endpoint.client.sendGroupMsg).not.toHaveBeenCalled();
+    await endpoint.stop();
+  });
+
   it('send posts temp message (群容器内的 private 会话)', async () => {
     const endpoint = createEndpoint();
     await endpoint.start(new AbortController().signal);
