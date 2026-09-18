@@ -1,8 +1,28 @@
 {
-  "name": "self-delivery-bot", "version": "0.0.0", "private": true, "type": "module",
+  "name": "self-delivery-bot",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
   "description": "Governed Zhin GitHub delivery reference project",
-  "scripts": { "dev": "zhin runtime start", "start": "zhin runtime start --mode production --no-watch" },
-  "dependencies": { "zhin.js": "workspace:*", "@zhin.js/agent": "workspace:*" },
-  "devDependencies": { "@zhin.js/cli": "workspace:*", "@zhin.js/runtime": "workspace:*" },
-  "zhin": { "protocol": 1, "type": "plugin", "entry": "./plugin.ts", "engine": "^1.0.0", "runtime": "trusted", "features": [], "plugins": [] }
+  "scripts": {
+    "dev": "zhin runtime start",
+    "start": "zhin runtime start --mode production --no-watch"
+  },
+  "dependencies": {
+    "zhin.js": "workspace:*",
+    "@zhin.js/agent": "workspace:*"
+  },
+  "devDependencies": {
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/runtime": "workspace:*"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [],
+    "plugins": []
+  }
 }
