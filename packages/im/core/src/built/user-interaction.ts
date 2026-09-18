@@ -39,12 +39,9 @@ export function assertUserInteractionRequest(request: UserInteractionRequest): v
   }
   if (request.type === 'select' || request.type === 'multiselect') {
     if (request.options.length === 0) throw new TypeError('User interaction options must not be empty');
-    const labels = new Set<string>();
     for (const option of request.options) {
       const label = option.label.trim().toLocaleLowerCase();
       if (!label) throw new TypeError('User interaction option label must not be empty');
-      if (labels.has(label)) throw new TypeError(`Duplicate user interaction option label: ${option.label}`);
-      labels.add(label);
     }
   }
   if (request.type === 'multiselect') {

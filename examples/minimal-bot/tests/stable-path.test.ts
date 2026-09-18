@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
@@ -39,6 +40,32 @@ afterEach(() => {
 });
 
 describe('minimal-bot Stable Plugin Runtime contract', () => {
+  it('loads the terminal source using native Node without the Vitest transformer', () => {
+    expect(() => execFileSync(process.execPath, [
+      '--experimental-strip-types', '--input-type=module', '-e',
+      "await import('./adapters/terminal.ts?zhin-generation=0')",
+    ], { cwd: botRoot, env: { ...process.env, NODE_OPTIONS: '' }, stdio: 'pipe' })).not.toThrow();
+  });
+
+  it('forwards terminal Ctrl+C to process shutdown and restores cooked input', () => {
+    const input = Object.assign(new PassThrough(), { isTTY: true, setRawMode: vi.fn() });
+    const output = Object.assign(new PassThrough(), { isTTY: true });
+    const emit = vi.spyOn(process, 'emit').mockReturnValue(true);
+    const endpoint = new TerminalEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeatureId, 'terminal'),
+      input, output, error: output, interactive: true, prompt: 'zhin> ',
+    });
+    try {
+      endpoint.start();
+      input.write('\x03');
+      expect(emit).toHaveBeenCalledWith('SIGINT');
+    } finally {
+      endpoint.stop();
+    }
+    expect(input.setRawMode).toHaveBeenLastCalledWith(false);
+    expect(input.isPaused()).toBe(true);
+  });
+
   it('uses a static manifest and convention directories without legacy registration', () => {
     expect(packageJson.zhin.entry).toBe('./plugin.ts');
     // Stable Features are shipped with zhin.js and mounted by RootRuntime by default.

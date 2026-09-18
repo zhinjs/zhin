@@ -20,12 +20,22 @@ export interface TerminalEndpointOptions {
 }
 
 export class TerminalClient {
+  readonly input: Readable;
+  readonly output: Writable;
+  readonly error: Writable;
+  private readonly resolveReadline: () => ReadlineInterface | undefined;
+
   constructor(
-    readonly input: Readable,
-    readonly output: Writable,
-    readonly error: Writable,
-    private readonly resolveReadline: () => ReadlineInterface | undefined,
-  ) {}
+    input: Readable,
+    output: Writable,
+    error: Writable,
+    resolveReadline: () => ReadlineInterface | undefined,
+  ) {
+    this.input = input;
+    this.output = output;
+    this.error = error;
+    this.resolveReadline = resolveReadline;
+  }
 
   get readline(): ReadlineInterface | undefined {
     return this.resolveReadline();
@@ -65,6 +75,9 @@ export class TerminalEndpoint extends Endpoint<TerminalClient> {
       terminal: isTerminal(this.#options.input) && isTerminal(this.#options.output),
     });
     readline.setPrompt(this.#options.prompt);
+    // In raw TTY mode Ctrl+C is a readline event, not an OS process signal.
+    // Keep shutdown owned by the CLI so it can drain all Runtime resources.
+    readline.on('SIGINT', () => process.emit('SIGINT'));
     readline.on('line', (line) => {
       void this.emitPlatform('line', line).catch((error) => {
         this.#options.error.write(`${formatError(error)}\n`);
