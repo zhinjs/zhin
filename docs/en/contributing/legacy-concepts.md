@@ -4,7 +4,7 @@ After the Plugin Runtime consolidation, the following legacy concepts are no lon
 
 ## `usePlugin()` Plugin System -> Convention-based plugin.ts + definePlugin
 
-- **Old approach**: `usePlugin()` from `@zhin.js/core` -- a React Hooks-like design that uses AsyncLocalStorage to locate the calling file and automatically build the plugin tree. The constraint is that it must be called at module top level (gate: `pnpm check:use-plugin-top-level`). This function still exists in `packages/im/core/src/plugin.ts` for backward compatibility with the legacy app layer (`packages/im/zhin`).
+- **Old approach**: `usePlugin()` from `@zhin.js/core` -- a React Hooks-like design that used AsyncLocalStorage to locate the calling file and automatically build the plugin tree. The exported signature now always throws and exists only for compile-time migration diagnostics.
 - **New approach**: A convention-based `plugin.ts` at the plugin package root that default-exports `definePlugin(...)` (`zhin.js`). Commands, middleware, adapters, etc. go in convention directories (`commands/`, `middlewares/`, `adapters/`...) for auto-discovery. See [definePlugin](../authoring/define-plugin.md) and [Convention Directories](../authoring/conventions.md).
 
 ```ts

@@ -33,20 +33,28 @@ title: 仓库结构
 
 ## 分层与依赖方向
 
-核心包之间的依赖方向是单向的，由 `pnpm check:architecture`（`scripts/check-architecture-layers.mjs`）强制检查：
+核心包之间的依赖方向是单向的，由 `pnpm check:architecture`（`scripts/check-architecture-layers.mjs`）强制检查。完整关系以[架构概览](../concepts/architecture.md)为 SSOT，常用主干如下：
 
 ```mermaid
-flowchart LR
-  basic["basic/*<br/>logger · database · schema · cli"] --> kernel["@zhin.js/kernel<br/>插件系统 · 定时 · 错误体系"]
-  kernel --> ai["@zhin.js/ai<br/>Provider · agentLoop · 会话 · 记忆"]
-  ai --> core["@zhin.js/core<br/>Plugin · Adapter · Endpoint · 命令 · 中间件"]
-  core --> agent["@zhin.js/agent<br/>ZhinAgent · 编排 · 安全沙箱 · MCP client"]
-  agent --> zhin["zhin.js<br/>启动入口 · 配置解析 · 插件加载"]
-  zhin --> hostHttp["@zhin.js/host-http"]
-  hostHttp --> hostMcp["@zhin.js/mcp / @zhin.js/a2a"]
+flowchart BT
+  contract["plugin-runtime · im-contract · interaction"] --> featureKit["feature-kit"]
+  featureKit --> features["adapter · command · component · middleware · handler"]
+  features --> core["core"]
+  basic["logger · schema · schedule · database"] --> kernel["kernel"]
+  kernel --> core
+  basic --> ai["ai"]
+  ai --> agent["agent"]
+  core --> agent
+  core --> zhin["zhin.js"]
+  contract --> runtime["runtime"]
+  featureKit --> runtime
+  runtime --> cli["cli composition root"]
+  agent --> cli
 ```
 
-记住三件事：`kernel` 与 `ai` 不含任何 IM 概念，可以独立拿出来用；低层不得反向依赖高层，也不得让低层代码引入 IM 概念；唯一例外是 `basic/cli`——它是 Plugin Runtime 的 composition root（`zhin runtime start` 在这里装配 IM / Agent / Console Host），允许导入 `packages/im` 各层。
+`plugin-runtime`、`im-contract` 与 `interaction` 是底层契约；Feature 包在其上描述单一能力，
+`core` 负责组装 IM 链路。`kernel` 与 `ai` 不含 IM 概念。唯一跨层装配点是
+`basic/cli`，`zhin runtime start` 在这里组合 IM、Agent 与 Console Host。
 
 ## AGENTS.md 导读
 

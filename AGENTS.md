@@ -39,20 +39,30 @@
 
 ### 分层架构（依赖方向单向，由 harness 强制）
 
+架构 SSOT 是 [docs/concepts/architecture.md](docs/concepts/architecture.md)，实际依赖以各包
+`package.json` 为准。阅读代码时使用下面的最小依赖图：
+
 ```
-basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp）
+plugin-runtime → feature-kit → adapter / command / component / middleware / handler
+im-contract ───────────────────────────────→ adapter / core / agent
+logger / schema / schedule → kernel ──────→ core / agent
+logger ─────────────────────→ ai ─────────→ agent
+feature packages + kernel ────────────────→ core → zhin
+plugin-runtime + feature-kit ─────────────→ runtime → cli
 ```
 
 | 层 | 包 | 一句话 |
 |----|-----|--------|
-| 基础层 | `basic/*`（`@zhin.js/logger` `database` `schema` `cli`） | 日志、数据库、配置校验、命令行 |
-| 内核 | `@zhin.js/kernel` | 插件系统、定时任务、错误体系（无 IM 概念） |
-| AI 引擎 | `@zhin.js/ai` | Provider、agentLoop、会话、记忆（无 IM 概念） |
-| IM 层 | `@zhin.js/core` | Plugin、Adapter、Endpoint、命令、中间件 |
+| 基础契约 | `@zhin.js/plugin-runtime` `im-contract` `interaction` | generation、身份、消息与交互语义；零/近零依赖 |
+| Feature 机制 | `@zhin.js/feature-kit` 与各 Feature 包 | 能力声明、发现和运行时投影 |
+| 基础服务 | `basic/logger` `schema` `schedule` `database`、`@zhin.js/kernel` | 日志、校验、存储、调度与通用机制 |
+| AI 引擎 | `@zhin.js/ai` | Provider、agentLoop、会话、记忆；无 IM 概念 |
+| IM 组装 | `@zhin.js/core` | 组合 Adapter、Command、Component、Middleware 与消息链路 |
 | Agent | `@zhin.js/agent` | ZhinAgent、多模型编排、安全沙箱、MCP |
-| 应用 | `zhin.js` | 启动入口、配置解析、插件加载 |
+| 门面与运行时 | `zhin.js`、`@zhin.js/runtime`、`@zhin.js/cli` | 公共入口、generation 编排和进程装配 |
 
-依赖方向由 `pnpm check:architecture` 强制检查，不要逆向依赖、不要让低层依赖 IM 概念。例外：`basic/cli` 是 Plugin Runtime composition root（`zhin runtime start` 装配 IM/Agent/Console Host），允许导入 packages/im 各层，仅限 basic/cli。
+`pnpm check:architecture` 强制依赖方向。`basic/cli` 是唯一 composition root，可装配 IM、
+Agent 与 Console Host；其他低层包不跨层取用上层实现。
 
 ### 示例分层（跑哪个 example 取决于任务层级）
 
@@ -101,7 +111,7 @@ basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp
 - **Legacy API 已移除**：勿调用 `usePlugin()` / `getPlugin()`，也勿导入已不存在的 `zhin.js/node`；门禁 `pnpm check:use-plugin-top-level` / `pnpm check:get-plugin-runtime` 防止仓库内残留引用。
 - 发送消息不能绕过统一链路：`Message.$reply` 或 `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → 平台 Endpoint（`pnpm check:harness-paths` 门禁）。
 - Endpoint 可按 `capabilities`（`inbound` / `outbound`）拆分 IO；跨平台出站用 `inject(adapter).sendMessage`，见 [docs/concepts/message-flow.md](docs/concepts/message-flow.md)。
-- 保持依赖方向单向：basic → kernel → ai → core → agent → zhin；不要让低层依赖 IM 概念。例外仅限 `basic/cli`（见上）。
+- 保持 [架构 SSOT](docs/concepts/architecture.md) 中的依赖方向；契约与运行时底座不依赖 Core/Agent。例外仅限 composition root `basic/cli`（见上）。
 - 代级运行时状态必须通过 snapshot Resource / 当前 operation 的 Generation View 解析；禁止新增裸模块级单例、latest-value stack 或 `createGenerationStore`（现存调用是待删除技术债）。WS 类端点的 start/stop/重连/心跳统一走 `createEndpointLifecycle`（`zhin.js/adapter`），不要手写状态机。
 - Node 侧源码放 `src/`，产物放 `lib/`；浏览器侧源码放 `client/`，产物放 `dist/`。
 - 新增 workspace 包必须落在 `pnpm-workspace.yaml` 覆盖的目录里，并带独立 `package.json`。

@@ -4,8 +4,7 @@
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { isMediaRef, type MediaRef } from '@zhin.js/core';
-import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
+import { isMediaRef, type MediaRef, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { mrkdwnToMarkdown } from './mrkdwn-to-markdown.js';
 

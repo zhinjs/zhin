@@ -54,6 +54,22 @@ const receipt: DeliveryReceipt = { status: 'sent' };
 - `DeliveryReceipt` contains serializable data only, so it can cross Console,
   HTTP, MCP, A2A, and activity-feedback boundaries.
 
+## Source map
+
+The package keeps a shallow layout and a one-way dependency direction:
+
+| File | Responsibility |
+| --- | --- |
+| `identity.ts` | Endpoint, conversation, actor, and message identities |
+| `segment.ts` | Canonical segment/media contracts and zero-dependency guards |
+| `conversation.ts` | Conversation messages, references, and event facts |
+| `conversation-store.ts` | In-memory/database event-store implementations |
+| `endpoint.ts` | Endpoint capabilities and delivery receipts |
+| `index.ts` | Stable package facade; contains no implementation |
+
+Higher layers should import transport-neutral values from this package instead
+of reaching through `@zhin.js/core`.
+
 ## Development
 
 ```bash

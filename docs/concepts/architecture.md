@@ -14,6 +14,7 @@ flowchart BT
     end
     subgraph runtime["运行时底座"]
         interaction["@zhin.js/interaction<br/>用户交互契约"]
+        imc["@zhin.js/im-contract<br/>IM 传输契约"]
         pr["@zhin.js/plugin-runtime<br/>generation / snapshot / handoff"]
         fk["@zhin.js/feature-kit<br/>Feature 发现与投影"]
         rt["@zhin.js/runtime<br/>RootRuntime / ProjectGraph / HMR"]
@@ -38,6 +39,7 @@ flowchart BT
     cli["@zhin.js/cli（composition root）"]
 
     pr --> fk --> ad & cmd & comp & mw & tool
+    imc --> ad & core & agent
     interaction --> cmd & core
     logger & schema & schedule --> k
     logger --> database
@@ -53,7 +55,7 @@ flowchart BT
 
 依赖关系的权威来源是各包的 `package.json`。读它之前，先记住几个关键事实。
 
-底座是运行时底座包（`packages/im/plugin-runtime`）：它不依赖任何 workspace 包，generation、snapshot、dispose、token 都从这里长出来。`@zhin.js/interaction` 同样是零依赖契约包，只描述用户交互的语义与返回类型，不知道 IM、Markdown 或平台 SDK。往上一层，`@zhin.js/feature-kit` 只依赖运行时底座，提供 Feature provider 的注册、发现与投影机制。Feature 层各包（adapter / command / component / middleware / handler / tool / skill / …）只依赖这些底层契约，彼此不互相依赖。
+底座是三个彼此独立的零依赖契约：`@zhin.js/plugin-runtime` 提供 generation、snapshot、dispose 与 token；`@zhin.js/im-contract` 提供传输中立的身份、消息段、会话事件与投递语义；`@zhin.js/interaction` 描述用户交互的请求与结论。往上一层，`@zhin.js/feature-kit` 只依赖运行时底座，提供 Feature provider 的注册、发现与投影机制。Feature 层各包（adapter / command / component / middleware / handler / tool / skill / …）只依赖这些底层契约，彼此不互相依赖。
 
 再往上，`@zhin.js/core` 把 adapter / command / component / middleware 四个 Feature 和 kernel 组装成 IM 层（Plugin、Adapter、Endpoint、消息收发）。门面包 `zhin.js` 把核心包重新导出为统一入口——插件作者只需 `import { ... } from 'zhin.js'`。`@zhin.js/agent`、`@zhin.js/ai` 等是可选 peer 依赖，默认安装只含 IM 核心，AI 按需加装。
 
@@ -63,6 +65,7 @@ flowchart BT
 |----|----|------|
 | 基础层 | `basic/logger` `schema` `schedule` `database` | 日志、配置校验、定时、数据库，零/近零依赖 |
 | 运行时底座 | `packages/im/plugin-runtime`（用户从 `zhin.js` 导入） | generation 事务、快照租约、handoff、dispose（见 [generation 与生命周期](./generation-lifecycle.md)） |
+| IM 契约 | `@zhin.js/im-contract` | Endpoint、会话、消息段与投递结果；零 Core、零平台 SDK 依赖 |
 | 交互契约 | `@zhin.js/interaction` | `ask` / `sequence` 的结构化请求与类型化结论；零传输、零渲染依赖 |
 | Feature 机制 | `@zhin.js/feature-kit` | 声明 Feature provider、按约定发现能力、投影成运行时索引 |
 | 内核 | `@zhin.js/kernel` | 插件系统与错误体系，无 IM 概念 |

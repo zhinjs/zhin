@@ -44,6 +44,9 @@ export {
 /**
  * Endpoint 接口：全双工平台机器人（入站 + 出站）。
  * 纯入站 / 纯出站请实现 InboundEndpoint / OutboundEndpoint。
+ *
+ * @deprecated 经典运行时兼容类型。Plugin Runtime Endpoint 从
+ * `zhin.js/adapter` 导入。
  */
 export type Endpoint<Config extends object = object, Event extends object = object> = FullEndpoint<
   Config,

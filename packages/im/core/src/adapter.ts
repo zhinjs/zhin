@@ -43,6 +43,9 @@ import type { Schema } from '@zhin.js/schema';
  * 负责根据配置启动/关闭各平台机器人，统一异常处理。
  * 
  * 适配器可以提供 AI 工具，供 AI 服务调用。
+ *
+ * @deprecated 经典运行时兼容类。新适配器从 `zhin.js/adapter` 导入
+ * `defineAdapter`，默认返回紧凑实现，复杂协议继承该子路径的 `Endpoint`。
  */
 export abstract class Adapter<
   R extends Endpoint = Endpoint,

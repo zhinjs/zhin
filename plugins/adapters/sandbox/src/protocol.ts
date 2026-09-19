@@ -1,8 +1,7 @@
 /** Sandbox WebSocket wire protocol helpers (no legacy Adapter/Endpoint). */
 
 import { readFileSync } from 'node:fs';
-import { isMediaRef } from '@zhin.js/core';
-import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
+import { isMediaRef, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   normalizeSandboxAgentRunConfig,

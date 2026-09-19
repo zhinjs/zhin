@@ -4,9 +4,8 @@
  * Spec: https://milky.ntqqrev.org/
  */
 
-import { isMediaRef } from '@zhin.js/core';
+import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import type { Segment } from '@zhin.js/core/runtime';
-import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('milky');

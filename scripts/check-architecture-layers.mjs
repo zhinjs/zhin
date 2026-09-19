@@ -2,19 +2,9 @@
 /**
  * Harness: 检查架构层级依赖是否正确
  *
- * 依赖层级（从低到高）：
- * 1. basic/ (logger, schema, database, cli)
- * 2. packages/im/kernel (无 IM 概念)
- * 3. packages/im/ai (providers, agents, memory)
- * 4. packages/im/core (Plugin, Adapter, Endpoint, Command)
- * 5. packages/im/agent (ZhinAgent, security policies)
- * 6. packages/im/zhin (主入口)
- *
- * 禁止的导入：
- * - kernel 不能导入 core/agent/zhin
- * - ai 不能导入 core/agent/zhin
- * - core 不能导入 agent/zhin
- * - agent 不能导入 zhin
+ * 依赖层级的 SSOT：docs/concepts/architecture.md。
+ * 本门禁把零依赖契约、Feature 机制、IM/AI 组装与 composition root
+ * 映射为实际可检查的包依赖。
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -36,7 +26,13 @@ const repoRoot = path.resolve(__dirname, '..');
 // → runtime（RootHost 装配）→ isolate / config-yaml（依赖 runtime，仅契约）。
 // packages/host/http-contract 是协议 Host 的最小端口（路由 + body），零业务依赖。
 // packages/host/http 是具体 HTTP / WebSocket Host，仅依赖 basic + plugin-runtime。
-const providerLayerAllowed = ['basic', 'packages/im/interaction', 'packages/im/plugin-runtime', 'packages/im/feature-kit'];
+const providerLayerAllowed = [
+  'basic',
+  'packages/im/im-contract',
+  'packages/im/interaction',
+  'packages/im/plugin-runtime',
+  'packages/im/feature-kit',
+];
 const layers = {
   // Console wire SSOT must remain zero-dependency so browsers, both Hosts and
   // external Console builds can share it without pulling runtime packages.
@@ -44,6 +40,7 @@ const layers = {
   'packages/host/http-contract': { level: 0, allowedImports: [] },
   'basic/cli': { level: 0, allowedImports: ['basic', 'packages/im', 'packages/host', 'packages/console'] },
   'basic': { level: 0, allowedImports: ['basic'] },
+  'packages/im/im-contract': { level: 0, allowedImports: [] },
   'packages/im/interaction': { level: 0, allowedImports: [] },
   'packages/im/plugin-runtime': { level: 1, allowedImports: ['basic'] },
   'packages/im/feature-kit': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime'] },
@@ -63,8 +60,8 @@ const layers = {
   'packages/host/http': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/console/protocol', 'packages/host/http-contract'] },
   'packages/im/kernel': { level: 1, allowedImports: ['basic'] },
   'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel'] },
-  'packages/im/core': { level: 3, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler'] },
-  'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/skill', 'packages/im/tool'] },
+  'packages/im/core': { level: 3, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler'] },
+  'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/skill', 'packages/im/tool'] },
   // define-plugin.ts 是 @zhin.js/plugin-runtime 的门面 re-export（zhin.js/plugin-runtime 子路径），允许。
   'packages/im/zhin': { level: 5, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime'] },
   // Protocol Hosts consume only the narrow HTTP route contract; they must not
@@ -110,6 +107,7 @@ const packageNameToPath = {
   '@zhin.js/isolate': 'packages/im/isolate',
   '@zhin.js/config-yaml': 'packages/im/config-yaml',
   '@zhin.js/interaction': 'packages/im/interaction',
+  '@zhin.js/im-contract': 'packages/im/im-contract',
   '@zhin.js/console-protocol': 'packages/console/protocol',
   '@zhin.js/contract': 'packages/console/contract',
   '@zhin.js/pagemanager': 'packages/console/pagemanager',

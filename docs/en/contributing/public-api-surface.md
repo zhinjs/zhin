@@ -65,7 +65,7 @@ Three tiers:
 
 | API | Stability | Source Package | One-liner |
 |-----|-----------|----------------|-----------|
-| `usePlugin()` and associated hooks (`provide` / `addCommand` / `useContext`, etc.) | `deprecated` (see table below) | `zhin.js` (`@zhin.js/core`) | Legacy plugin system entry, still compatible; new code uses convention-based approach |
+| `usePlugin()` and associated hooks (`provide` / `addCommand` / `useContext`, etc.) | `removed` (see table below) | `zhin.js` (`@zhin.js/core`) | Throwing compatibility signature; the only entry is `definePlugin` + `zhin runtime start` |
 | `MessageCommand` / `CommandFeature` | `deprecated` | `zhin.js` (`@zhin.js/core`) | Classic commands; new code uses `defineCommand` + `commands/` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | none (subpath deleted) | The only startup entry is `zhin runtime start` |
 
@@ -114,8 +114,9 @@ Three tiers:
 
 | Item | Stability | Status | One-liner |
 |------|-----------|--------|-----------|
-| Legacy `usePlugin()` plugin system | `deprecated` | Kept for compatibility, runtime still supports it | New code uses convention-based approach (`plugin.ts` + convention directories); deletion countdown begins after dual-track migration is complete |
+| Legacy `usePlugin()` / `getPlugin()` plugin system | `removed` | Calls throw; only compile-time transition signatures remain | The only entry is `definePlugin` + `zhin runtime start` |
 | `MessageCommand` / classic `CommandFeature` | `deprecated` | Still used by Agent init / game-kit hub | Will be removed after migration to `defineCommand` + Runtime `CommandIndex` |
+| `Adapter` class / Core `Endpoint` type | `deprecated` | Exported from the root facade only for classic-runtime compatibility | New adapters import `defineAdapter` and the Plugin Runtime `Endpoint` from `zhin.js/adapter` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | No longer exported | Use `zhin runtime start` |
 | `AgentOrchestrator` / `ResourceHub` | `removed` | Compatibility names are no longer exported | Use `AgentResourceHub` for capability registration; Workroom orchestration uses the Kernel and dedicated typed ports |
 | "Host plugin" narrative | `deprecated` | Documentation has been consolidated | Host capabilities are now token-based (see Host Token table above), no longer a plugin concept |

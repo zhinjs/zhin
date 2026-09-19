@@ -208,4 +208,3 @@ export function materializeEndpoint<TClient>(
   }
   return new ManagedEndpoint(value as EndpointImplementation<TClient>, context);
 }
-

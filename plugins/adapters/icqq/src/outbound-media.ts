@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
-import { isMediaRef } from "@zhin.js/core";
+import { isMediaRef } from '@zhin.js/im-contract';
 import type { MessageSegment, SendContent } from "zhin.js";
 import type { IcqqEndpointConfig } from "./types.js";
 

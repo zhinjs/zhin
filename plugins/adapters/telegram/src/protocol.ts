@@ -4,9 +4,8 @@
  */
 
 import type { IncomingMessage } from 'node:http';
-import { isMediaRef } from '@zhin.js/core';
+import { isMediaRef, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
 import type { Segment } from '@zhin.js/core/runtime';
-import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { escapeTelegramHtml, markdownToTelegramHtml } from './markdown-to-html.js';
 

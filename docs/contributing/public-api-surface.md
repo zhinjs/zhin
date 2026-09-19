@@ -116,6 +116,7 @@
 |----|--------|------|--------|
 | legacy `usePlugin()` / `getPlugin()` 插件体系 | `removed` | 调用 throw（throwing stub） | 唯一入口：`definePlugin` + `zhin runtime start` |
 | `MessageCommand` / classic `CommandFeature` | `deprecated` | Agent init / game-kit hub 仍用 | 迁到 `defineCommand` + Runtime `CommandIndex` 后删除 |
+| `Adapter` 类 / Core `Endpoint` 类型 | `deprecated` | Root facade 仅为经典运行时兼容而导出 | 新适配器从 `zhin.js/adapter` 导入 `defineAdapter` 与 Plugin Runtime `Endpoint` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | 不再导出 | 唯一启动入口：`zhin runtime start` |
 | `AgentOrchestrator` / `ResourceHub` | `removed` | 兼容名称不再导出 | 能力注册改用 `AgentResourceHub`；Workroom 编排改走 Kernel 与专用 typed ports |
 | 「`host` 插件」叙事 | `deprecated` | 文档已收口 | Host 能力改为 token 化（见上表 Host Token），不再是插件概念 |

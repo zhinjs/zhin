@@ -3,8 +3,7 @@
  * Canonicalization is owned by gateway/core before endpoint.send.
  * Spec: https://github.com/botuniverse/onebot-11
  */
-import { isMediaRef, type MediaRef } from '@zhin.js/core';
-import type { ConversationRef } from '@zhin.js/im-contract';
+import { isMediaRef, type MediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('onebot11');

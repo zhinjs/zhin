@@ -6,7 +6,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import { isMediaRef, type MediaRef } from '@zhin.js/core';
+import { isMediaRef, type MediaRef } from '@zhin.js/im-contract';
 
 export interface MediaBinary {
   readonly data: Buffer;

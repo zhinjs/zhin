@@ -33,20 +33,26 @@ Every workspace package has its own `package.json`. Internal directory conventio
 
 ## Layering and Dependency Direction
 
-Dependencies between core packages are strictly unidirectional, enforced by `pnpm check:architecture` (`scripts/check-architecture-layers.mjs`):
+Dependencies between core packages are strictly unidirectional, enforced by `pnpm check:architecture` (`scripts/check-architecture-layers.mjs`). [Architecture](../concepts/architecture.md) is the SSOT; the common paths are:
 
 ```mermaid
-flowchart LR
-  basic["basic/*<br/>logger · database · schema · cli"] --> kernel["@zhin.js/kernel<br/>Plugin system · Cron · Error hierarchy"]
-  kernel --> ai["@zhin.js/ai<br/>Provider · agentLoop · Session · Memory"]
-  ai --> core["@zhin.js/core<br/>Plugin · Adapter · Endpoint · Command · Middleware"]
-  core --> agent["@zhin.js/agent<br/>ZhinAgent · Orchestration · Security sandbox · MCP client"]
-  agent --> zhin["zhin.js<br/>Entry point · Config parsing · Plugin loading"]
-  zhin --> hostHttp["@zhin.js/host-http"]
-  hostHttp --> hostMcp["@zhin.js/mcp / @zhin.js/a2a"]
+flowchart BT
+  contract["plugin-runtime · im-contract · interaction"] --> featureKit["feature-kit"]
+  featureKit --> features["adapter · command · component · middleware · handler"]
+  features --> core["core"]
+  basic["logger · schema · schedule · database"] --> kernel["kernel"]
+  kernel --> core
+  basic --> ai["ai"]
+  ai --> agent["agent"]
+  core --> agent
+  core --> zhin["zhin.js"]
+  contract --> runtime["runtime"]
+  featureKit --> runtime
+  runtime --> cli["cli composition root"]
+  agent --> cli
 ```
 
-Three things to remember: `kernel` and `ai` contain no IM concepts and can be used independently; lower layers must never depend on higher layers, nor should lower-layer code introduce IM concepts; the only exception is `basic/cli` -- it is the Plugin Runtime's composition root (`zhin runtime start` assembles IM / Agent / Console Host here), so it is allowed to import from `packages/im` layers.
+`plugin-runtime`, `im-contract`, and `interaction` are the foundation contracts. Feature packages describe one capability above them, while `core` assembles the IM path. `kernel` and `ai` contain no IM concepts. The only cross-layer assembly point is `basic/cli`, where `zhin runtime start` composes IM, Agent, and Console Host.
 
 ## AGENTS.md Overview
 

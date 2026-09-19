@@ -4,8 +4,7 @@
  */
 
 import { pickCredential } from 'zhin.js/adapter';
-import { isMediaRef } from '@zhin.js/core';
-import type { ConversationRef, Segment } from '@zhin.js/im-contract';
+import { isMediaRef, type ConversationRef, type Segment } from '@zhin.js/im-contract';
 import { bodyFromItemList } from './weixin-inbound.js';
 import { DEFAULT_API_BASE_URL, DEFAULT_CDN_BASE_URL } from './ilink-meta.js';
 import type { WeixinMessage } from './ilink-types.js';

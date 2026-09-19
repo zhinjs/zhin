@@ -3,7 +3,8 @@
  */
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { Tool, Message, MediaRef, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { MediaRef } from '@zhin.js/im-contract';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { normalizeMediaRefsToPayloads } from '../media/media-normalize.js';

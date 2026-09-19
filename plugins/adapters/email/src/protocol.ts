@@ -4,9 +4,9 @@
  */
 
 import type { Attachment } from 'mailparser';
-import { htmlToPlainTextWithBlockBreaks, isMediaRef, type MediaRef } from '@zhin.js/core';
+import { htmlToPlainTextWithBlockBreaks } from '@zhin.js/core';
+import { isMediaRef, type MediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import type { Segment } from '@zhin.js/core/runtime';
-import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('email');
