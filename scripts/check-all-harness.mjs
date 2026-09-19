@@ -211,14 +211,9 @@ const checks = [
     description: '配置文档与 DEFAULT_CONFIG 关键字段对齐',
   },
   {
-    name: 'usePlugin Top-Level',
-    command: 'pnpm check:use-plugin-top-level',
-    description: '插件 usePlugin() 须在模块顶层',
-  },
-  {
-    name: 'getPlugin Runtime',
-    command: 'pnpm check:get-plugin-runtime',
-    description: '插件目录禁止在 middleware/action 等运行时回调内 getPlugin()',
+    name: 'Removed Plugin API',
+    command: 'pnpm check:no-removed-plugin-api',
+    description: '生产源码不得调用已删除的 Plugin lookup API',
   },
   {
     name: 'Plugin Runtime Migration Readiness',

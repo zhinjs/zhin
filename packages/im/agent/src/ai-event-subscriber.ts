@@ -164,7 +164,7 @@ export function subscribeAIEvents(
   const disposers = AI_EVENT_NAMES.map((eventName) => {
     const listener = (payload: AIEventPayload) => {
       if (!matchesFilter(payload, filter)) return;
-      // broadcast 不经过 usePlugin 加载栈；在订阅方入口恢复 ALS，避免监听里 getPlugin() 失效
+      // Classic subscribers still require their owning Plugin execution context.
       void storage.run(plugin, async () => {
         await invokeHandlers(eventName, payload, handlers);
       });

@@ -37,8 +37,7 @@ Custom lint checks:
 - `pnpm check:no-koa` — 检测插件是否直接 import koa（应使用 RouterContext）
 - `pnpm check:prod` — 检查生产环境配置（无 console.log/debugger/TODO/FIXME）
 - `pnpm check:plugin` — 检查插件是否符合标准规范（入口文件、测试、README）
-- `pnpm check:use-plugin-top-level` — 检测是否仍调用已移除的 `usePlugin()`（现为 throwing stub）
-- `pnpm check:get-plugin-runtime` — 检测是否在运行时回调内调用已移除的 `getPlugin()`（现为 throwing stub）
+- `pnpm check:no-removed-plugin-api` — 检测是否重新调用已从 public surface 删除的 Plugin lookup API
 - `pnpm check:plugin-agent-publish` — 带 agent/ 的插件发布清单（files、prepublishOnly）
 - `pnpm check:all` — 运行所有 harness 检查（含 type-check / lint / test）
 
@@ -227,7 +226,7 @@ These rules are non-negotiable — violating them will break the project:
 1. **Never bypass the send chain** — All outbound messages must flow through `Message.$reply` or `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → platform Endpoint.
 2. **Respect the dependency direction** — `basic → kernel → ai → core → agent → zhin`. Lower layers must never import from higher layers. Exception: `basic/cli` is the Plugin Runtime composition root (`zhin runtime start` assembles IM/Agent/Console hosts) and may import `packages/im` layers; this exception is scoped to `basic/cli` only.
 3. **`plugin.ts` must default-export `definePlugin()`** — The Plugin Runtime loader requires it; capabilities belong in convention directories (`commands/`, `middlewares/`, `tools/`, …), not in imperative top-level registration.
-4. **Legacy startup is removed** — `zhin.js/node` / `bootstrapNode` no longer exist; use `definePlugin()` + `zhin runtime start` only. Harness checks (`check:use-plugin-top-level` / `check:get-plugin-runtime`) guard against lingering classic Plugin call sites.
+4. **Legacy startup is removed** — `zhin.js/node` / `bootstrapNode` and Plugin lookup APIs no longer exist; use `definePlugin()` + `zhin runtime start` only. `check:no-removed-plugin-api` prevents their reintroduction.
 5. **Use `.js` extensions in imports** — TypeScript local imports require `.js` suffix (`import { x } from './y.js'`).
 6. **Build order matters** — When building incrementally, follow: logger/schema/database → kernel → ai → core → agent → zhin.
 7. **No git submodules** — This is a pnpm workspace monorepo; all packages live under `basic/`, `packages/`, `plugins/`, or `examples/`.

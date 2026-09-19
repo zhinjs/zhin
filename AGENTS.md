@@ -108,7 +108,7 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 
 - TypeScript 本地导入通常必须使用 `.js` 扩展名。
 - **唯一入口：Plugin Runtime**：`plugin.ts` default-export `definePlugin()`，用 `zhin runtime start` 启动；能力用约定目录（`defineCommand` / `defineMiddleware` / `defineHandler` / `defineAgentTool` 等）。`zhin.js/node` 与 `bootstrapNode` **已删除且不再导出**。
-- **Legacy API 已移除**：勿调用 `usePlugin()` / `getPlugin()`，也勿导入已不存在的 `zhin.js/node`；门禁 `pnpm check:use-plugin-top-level` / `pnpm check:get-plugin-runtime` 防止仓库内残留引用。
+- **Legacy API 已移除**：`usePlugin()` / `getPlugin()` 已不再导出，也勿导入已不存在的 `zhin.js/node`；门禁 `pnpm check:no-removed-plugin-api` 防止仓库内重新引入这些调用。
 - 发送消息不能绕过统一链路：`Message.$reply` 或 `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → 平台 Endpoint（`pnpm check:harness-paths` 门禁）。
 - Endpoint 可按 `capabilities`（`inbound` / `outbound`）拆分 IO；跨平台出站用 `inject(adapter).sendMessage`，见 [docs/concepts/message-flow.md](docs/concepts/message-flow.md)。
 - 保持 [架构 SSOT](docs/concepts/architecture.md) 中的依赖方向；契约与运行时底座不依赖 Core/Agent。例外仅限 composition root `basic/cli`（见上）。

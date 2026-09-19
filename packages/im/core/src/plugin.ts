@@ -25,9 +25,7 @@ import { Feature, PluginBase, BaseContext, PluginBaseLifecycle, resolvePluginRes
 
 import { storage } from "./plugin-context.js";
 
-export { getPlugin, markPluginRuntimeActive, isPluginRuntimeActive, resetPluginRuntimeFlag } from "./plugin-context.js";
-export { storage, getCurrentFile } from "./plugin-context.js";
-export { setHostRootPlugin, getHostRootPlugin } from "./host-plugin-registry.js";
+export { storage } from "./plugin-context.js";
 
 const contextsKey = Symbol("contexts");
 
@@ -47,17 +45,6 @@ export type SideEffect<A extends (keyof Plugin.Contexts)[]> = {
 export type DisposeFn<A> = (context: ArrayItem<A>) => MaybePromise<void>
 export type ContextList<CS extends (keyof Plugin.Contexts)[]> = CS extends [infer L, ...infer R] ? R extends (keyof Plugin.Contexts)[] ? [ContextItem<L>, ...ContextList<R>] : never[] : never[]
 type ContextItem<L> = L extends keyof Plugin.Contexts ? Plugin.Contexts[L] : never
-
-/**
- * @deprecated **已删除**。请使用 `definePlugin` + 约定目录（`zhin runtime start`）。
- * @throws 总是抛出——仅保留签名供编译期过渡。
- */
-export function usePlugin(): Plugin {
-  throw new Error(
-    'usePlugin() has been removed. Use `definePlugin` + convention directories instead. '
-    + 'See docs/contributing/public-api-surface.md',
-  );
-}
 
 // ============================================================================
 // Plugin 类

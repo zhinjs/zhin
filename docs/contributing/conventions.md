@@ -40,7 +40,7 @@ import { DisposeStack } from './dispose';           // ❌
 
 ## Removed：`usePlugin()` / `getPlugin()` / `bootstrapNode`
 
-`zhin.js/node` 与 `bootstrapNode` **已删除且不再导出**。唯一入口是 `definePlugin()` + `zhin runtime start`。仓库内 legacy Plugin 引用由门禁 `pnpm check:use-plugin-top-level` / `pnpm check:get-plugin-runtime` 拦截。迁移：`.github/skills/migrate-zhin-plugin-runtime`。
+`zhin.js/node`、`bootstrapNode`、`usePlugin()` 与 `getPlugin()` **已删除且不再导出**。唯一入口是 `definePlugin()` + `zhin runtime start`。门禁 `pnpm check:no-removed-plugin-api` 阻止重新引入这些调用。迁移：`.github/skills/migrate-zhin-plugin-runtime`。
 ## 代级状态：Snapshot Resource
 
 共享连接、数据库和其他有状态对象必须在 setup 中通过 `context.resources.provide`

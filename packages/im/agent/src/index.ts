@@ -525,16 +525,6 @@ export type {
   MemoryWriteDecision,
 } from './memory-layers.js';
 
-export {
-  registerAIHook, unregisterAIHook, triggerAIHook,
-  createAIHookEvent as createLegacyAIHookEvent, clearAIHooks, getRegisteredAIHookKeys,
-} from './hooks.js';
-export type {
-  AIHookEvent as LegacyAIHookEvent, AIHookEventType as LegacyAIHookEventType, AIHookHandler as LegacyAIHookHandler,
-  MessageReceivedEvent, MessageSentEvent, SessionCompactEvent,
-  SessionNewEvent, AgentBootstrapEvent, ToolCallEvent,
-} from './hooks.js';
-
 export { aiHookRuntimeBus, AIHookRuntimeBus } from './ai-hook-runtime-bus.js';
 
 export {

@@ -874,7 +874,7 @@ export interface InstallAgentHostOptions {
  * - CapabilityIngress tools + `ai.mcpServers` + SOUL/AGENTS/TOOLS bootstrap
  * - SubagentSystem + `spawn_task` (parallel sub-agents) + deferred meta tools
  * - Optional inbound STT / `@agent` specialist prompt injection
- * - `registerAIHook` / `aiHookRuntimeBus`, ScheduleJobEngine + `schedule_*`
+ * - generation-owned Hook resources / `aiHookRuntimeBus`, ScheduleJobEngine + `schedule_*`
  * - Assistant profile sync + Event Ingress registry (HTTP via Console API)
  * - Subagent/main-turn `bash` (sandbox + safety) + Owner `/approve` 命令面
  */

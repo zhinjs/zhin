@@ -49,7 +49,7 @@
 - [ ] **getPlugin() 防护**
   - 只能在插件初始化/装配阶段调用（register/init、注册 handler 之前）
   - 中间件、命令 action、工具 execute、Cron、事件回调内必须使用注册时捕获的 plugin/root 闭包
-  - CI：`pnpm check:get-plugin-runtime`（插件目录）
+  - CI：`pnpm check:no-removed-plugin-api`（生产源码）
   - 验证：上下文缺失时抛出明确错误（不是 undefined）
 
 ## 3. Plugin 生命周期 [中]

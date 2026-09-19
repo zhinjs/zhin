@@ -65,7 +65,7 @@ Three tiers:
 
 | API | Stability | Source Package | One-liner |
 |-----|-----------|----------------|-----------|
-| `usePlugin()` and associated hooks (`provide` / `addCommand` / `useContext`, etc.) | `removed` (see table below) | `zhin.js` (`@zhin.js/core`) | Throwing compatibility signature; the only entry is `definePlugin` + `zhin runtime start` |
+| `usePlugin()` / `getPlugin()` | `removed` | none (no longer exported) | The only entry is `definePlugin` + `zhin runtime start` |
 | `MessageCommand` / `CommandFeature` | `deprecated` | `zhin.js` (`@zhin.js/core`) | Classic commands; new code uses `defineCommand` + `commands/` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | none (subpath deleted) | The only startup entry is `zhin runtime start` |
 
@@ -114,7 +114,7 @@ Three tiers:
 
 | Item | Stability | Status | One-liner |
 |------|-----------|--------|-----------|
-| Legacy `usePlugin()` / `getPlugin()` plugin system | `removed` | Calls throw; only compile-time transition signatures remain | The only entry is `definePlugin` + `zhin runtime start` |
+| Legacy `usePlugin()` / `getPlugin()` plugin system | `removed` | Deleted from source and the public surface | The only entry is `definePlugin` + `zhin runtime start` |
 | `MessageCommand` / classic `CommandFeature` | `deprecated` | Still used by Agent init / game-kit hub | Will be removed after migration to `defineCommand` + Runtime `CommandIndex` |
 | `Adapter` class / Core `Endpoint` type | `deprecated` | Exported from the root facade only for classic-runtime compatibility | New adapters import `defineAdapter` and the Plugin Runtime `Endpoint` from `zhin.js/adapter` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | No longer exported | Use `zhin runtime start` |

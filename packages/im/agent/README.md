@@ -104,7 +104,7 @@ turn 会跨代执行。
 - 🔧 **内置工具**：bash、read_file、write_file、ask_user、web_search、`inspect_conversation_reference` 等
 - 📐 **Compaction（ADR 0010）**：生产 `agentLoop` 接线 L1 micro + L2 LLM；IM `/compact`；yaml `ai.agent.compaction`
 - 🌳 **会话树**：`parent_id` + `active_leaf`；IM `/tree`、`/reset`；branch summarization；Console `GET/POST /api/agent/sessions/...`
-- 🪝 **Hook 系统**：`registerAIHook`、`triggerAIHook` 等
+- 🪝 **Hook 系统**：generation-owned `AgentResourceHub.hooks` 与 canonical stream events
 
 ## 依赖关系
 
@@ -186,7 +186,6 @@ pnpm add @ai-sdk/openai   # 示例：按厂商安装 provider SDK
 import {
   ZhinAgent,
   AIService,
-  registerAIHook,
 } from 'zhin.js/agent'
 
 // 使用 ctx.ai (AIService)
@@ -227,7 +226,7 @@ useContext('ai', async (ai) => {
 | 上下文与记忆 | `ContextRepository`, `AgentSessionStore`（`@zhin.js/ai`）；`ConversationEventStore`（`@zhin.js/im-contract`） |
 | 跟进与定时 | `FollowUpManager`, `PersistentCronEngine`, `createCronTools`, `setCronManager`, `getCronManager` |
 | 压缩与 Bootstrap | `compactSession`, `estimateTokens`, `loadBootstrapFiles`, `loadSoulPersona`, `loadToolsGuide`, `loadAgentsMemory` |
-| Hook | `registerAIHook`, `unregisterAIHook`, `triggerAIHook`, `createAIHookEvent` |
+| Hook | `AgentResourceHub`、`HookRegistry`、`aiHookRuntimeBus` |
 | IM 内置工具工厂 | `createBuiltinTools`、`BuiltinBaseTool`；具体工具见 `src/builtin/*` |
 | 输出与检测 | `parseOutput`, `renderToPlainText`, `renderToSatori`, `detectTone` |
 | 子代理 | `SubagentSystem` |

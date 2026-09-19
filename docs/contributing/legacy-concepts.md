@@ -4,7 +4,7 @@ Plugin Runtime 完成收口后，以下 legacy 概念不再出现在对外叙事
 
 ## `usePlugin()` 类插件体系 → 约定式 plugin.ts + definePlugin
 
-- **旧写法**：`@zhin.js/core` 的 `usePlugin()`——类 React Hooks 设计，靠 AsyncLocalStorage 定位调用方文件自动创建插件树，约束是必须模块顶层调用（门禁 `pnpm check:use-plugin-top-level`）。该函数至今仍存在于 `packages/im/core/src/plugin.ts`，供 legacy app 层（`packages/im/zhin`）兼容使用。
+- **旧写法**：`@zhin.js/core` 的 `usePlugin()`——类 React Hooks 设计，靠 AsyncLocalStorage 定位调用方文件自动创建插件树。该 API 已从源码与 public surface 删除；`pnpm check:no-removed-plugin-api` 阻止生产代码重新调用。
 - **新写法**：插件包根目录的约定式 `plugin.ts` 默认导出 `definePlugin(...)`（`zhin.js`），命令、中间件、适配器等放进约定目录（`commands/`、`middlewares/`、`adapters/`…）自动发现，见 [definePlugin](../authoring/define-plugin.md) 与 [约定目录](../authoring/conventions.md)。
 
 ```ts
