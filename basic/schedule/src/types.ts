@@ -1,4 +1,5 @@
 import type { JobStore } from './store/types.js';
+import type { HolidayCalendar } from './holiday-calendar.js';
 
 export type ScheduleKind = 'solar' | 'lunar' | 'holiday' | 'freeDay' | 'workday' | 'scatter';
 
@@ -80,6 +81,8 @@ export interface SchedulerOptions {
    * 与 payload 一并调用，不依赖 HandlerRegistry。
    */
   onJob?: (ctx: JobContext, payload: unknown) => void | Promise<void>;
+  /** Mutable statutory-holiday data owned by this scheduler. */
+  holidays?: HolidayCalendar;
 }
 
 /** 可选任务元数据（第 4 参数） */

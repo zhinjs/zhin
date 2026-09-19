@@ -1,5 +1,6 @@
 export { buildJobContext } from './context.js';
 export { CalendarScheduler } from './scheduler.js';
+export { HolidayCalendar } from './holiday-calendar.js';
 export {
   resolveSolarJob,
   resolveLunarJob,
@@ -32,15 +33,10 @@ export { simulateNextRuns } from './planning/simulate-runs.js';
 export type { SimulateNextRunsOptions } from './planning/simulate-runs.js';
 export { formatSolarText, formatLunarText } from './utils/calendar-text.js';
 export {
-  updateData,
-  loadHolidayOverrides,
-  getMinHolidayYear,
-  getMaxHolidayYear,
-  onHolidayDataUpdate,
   fetchHolidayYearData,
   convertHolidayCnToYearData,
   HOLIDAY_CN_RAW_BASE,
-} from './update-data.js';
+} from './data/holiday-fetcher.js';
 export { createLocalJsonStore, LocalJsonJobStore } from './store/local-json-store.js';
 export { createSqliteStore, SqliteJobStore } from './store/sqlite-store.js';
 export { createRedisStore, RedisJobStore } from './store/redis-store.js';
@@ -78,5 +74,11 @@ export type {
 export type { StoredJob, JobStore, LocalJsonStoreOptions } from './store/types.js';
 export type { SqliteStoreOptions } from './store/sqlite-store.js';
 export type { RedisStoreOptions } from './store/redis-store.js';
-export type { HolidayRange, HolidayYearData, UpdateDataOptions, HolidayCnDay, HolidayCnYear } from './update-data.js';
+export type {
+  HolidayRange,
+  HolidayRangeInfo,
+  HolidayYearData,
+  UpdateHolidayDataOptions,
+} from './holiday-calendar.js';
+export type { HolidayCnDay, HolidayCnYear } from './data/holiday-fetcher.js';
 export type { RegisteredHandler } from './store/handler-registry.js';

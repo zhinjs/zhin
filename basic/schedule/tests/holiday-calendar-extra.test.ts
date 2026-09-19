@@ -1,22 +1,16 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { expandRange } from '../src/data/holiday-registry.js';
-import {
-  getMaxHolidayYear,
-  loadHolidayOverrides,
-  onHolidayDataUpdate,
-  resetHolidayRegistryForTests,
-  updateData,
-} from '../src/update-data.js';
+import { expandHolidayRange, HolidayCalendar } from '../src/holiday-calendar.js';
 
 const TEST_TMP_ROOT = join(process.cwd(), 'tests', '.tmp');
 
 describe('holiday registry extras', () => {
   let tempDir: string;
+  let holidays: HolidayCalendar;
 
   beforeEach(() => {
-    resetHolidayRegistryForTests();
+    holidays = new HolidayCalendar();
   });
 
   afterEach(async () => {
@@ -26,8 +20,8 @@ describe('holiday registry extras', () => {
     }
   });
 
-  it('batch updateData merges multiple years', async () => {
-    await updateData({
+  it('merges multiple years in one update', async () => {
+    await holidays.update({
       2030: {
         holidayRanges: [{ start: '2030-01-01', end: '2030-01-01', festival: '元旦' }],
         workdays: [],
@@ -38,15 +32,15 @@ describe('holiday registry extras', () => {
       },
     });
 
-    expect(getMaxHolidayYear()).toBe(2031);
+    expect(holidays.maxYear).toBe(2031);
   });
 
-  it('batch updateData with persist writes override file', async () => {
+  it('persists a batch update', async () => {
     tempDir = join(TEST_TMP_ROOT, `batch-persist-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
     const path = join(tempDir, 'batch-overrides.json');
 
-    await updateData(
+    await holidays.update(
       {
         2037: {
           holidayRanges: [{ start: '2037-01-01', end: '2037-01-01', festival: '元旦' }],
@@ -60,13 +54,12 @@ describe('holiday registry extras', () => {
     expect(raw).toContain('"2037"');
   });
 
-  it('getHolidaySet returns null for unknown year', async () => {
-    const { getHolidaySet, getWorkdaySet } = await import('../src/data/holiday-registry.js');
-    expect(getHolidaySet(1800)).toBeNull();
-    expect(getWorkdaySet(1800)).toBeNull();
+  it('falls back to weekdays for an unknown year', () => {
+    expect(holidays.isWorkday(new Date('1800-01-06T09:00:00+08:00'))).toBe(true);
+    expect(holidays.isWorkday(new Date('1800-01-05T09:00:00+08:00'))).toBe(false);
   });
 
-  it('loadHolidayOverrides reads persisted file', async () => {
+  it('loads a persisted override file', async () => {
     tempDir = join(TEST_TMP_ROOT, `load-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
     const path = join(tempDir, 'overrides.json');
@@ -80,35 +73,35 @@ describe('holiday registry extras', () => {
       }),
     );
 
-    await loadHolidayOverrides(path);
-    expect(getMaxHolidayYear()).toBeGreaterThanOrEqual(2032);
+    await holidays.loadOverrides(path);
+    expect(holidays.maxYear).toBeGreaterThanOrEqual(2032);
   });
 
-  it('loadHolidayOverrides ignores missing file', async () => {
+  it('ignores a missing override file', async () => {
     await expect(
-      loadHolidayOverrides(join(TEST_TMP_ROOT, 'missing-overrides.json')),
+      holidays.loadOverrides(join(TEST_TMP_ROOT, 'missing-overrides.json')),
     ).resolves.toBeUndefined();
   });
 
-  it('loadHolidayOverrides throws on invalid json file', async () => {
+  it('rejects an invalid JSON override file', async () => {
     tempDir = join(TEST_TMP_ROOT, `bad-json-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
     const path = join(tempDir, 'bad.json');
     await writeFile(path, 'not-json');
 
-    await expect(loadHolidayOverrides(path)).rejects.toThrow();
+    await expect(holidays.loadOverrides(path)).rejects.toThrow();
   });
 
-  it('updateData throws when year given without data or force', async () => {
-    await expect(updateData(2099, { persist: true } as never)).rejects.toThrow(/force: true/);
+  it('rejects a year without data or force', async () => {
+    await expect(holidays.update(2099, { persist: true } as never)).rejects.toThrow(/force: true/);
   });
 
-  it('updateData with persist true writes default-style override file', async () => {
+  it('writes an explicit override path', async () => {
     tempDir = join(TEST_TMP_ROOT, `persist-default-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
     const path = join(tempDir, 'holiday-overrides.json');
 
-    await updateData(
+    await holidays.update(
       2033,
       { holidayRanges: [{ start: '2033-01-01', end: '2033-01-01', festival: '元旦' }], workdays: [] },
       { persist: path },
@@ -118,10 +111,10 @@ describe('holiday registry extras', () => {
     expect(raw).toContain('"2033"');
   });
 
-  it('onHolidayDataUpdate notifies listeners', async () => {
+  it('notifies owner-local listeners', async () => {
     const listener = vi.fn();
-    const off = onHolidayDataUpdate(listener);
-    await updateData(2034, {
+    const off = holidays.onUpdate(listener);
+    await holidays.update(2034, {
       holidayRanges: [{ start: '2034-01-01', end: '2034-01-01', festival: '元旦' }],
       workdays: [],
     });
@@ -129,8 +122,8 @@ describe('holiday registry extras', () => {
     off();
   });
 
-  it('expandRange includes start and end dates', () => {
-    expect(expandRange('2025-01-01', '2025-01-03')).toEqual([
+  it('expands a range including both endpoints', () => {
+    expect(expandHolidayRange('2025-01-01', '2025-01-03')).toEqual([
       '2025-01-01',
       '2025-01-02',
       '2025-01-03',

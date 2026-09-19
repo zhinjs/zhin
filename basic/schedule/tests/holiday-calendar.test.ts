@@ -2,12 +2,7 @@ import { mkdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getNextRun } from '../src/dispatch.js';
-import {
-  getMaxHolidayYear,
-  getMinHolidayYear,
-  resetHolidayRegistryForTests,
-  updateData,
-} from '../src/update-data.js';
+import { HolidayCalendar } from '../src/holiday-calendar.js';
 import { getFestivalForDate, isWorkday } from '../src/resolvers/holiday.js';
 import { resolveHolidayJob } from '../src/resolve-job.js';
 
@@ -19,11 +14,12 @@ function at(iso: string): Date {
   return new Date(iso);
 }
 
-describe('holiday registry / updateData', () => {
+describe('HolidayCalendar', () => {
   let tempDir: string;
+  let holidays: HolidayCalendar;
 
   beforeEach(() => {
-    resetHolidayRegistryForTests();
+    holidays = new HolidayCalendar();
   });
 
   afterEach(async () => {
@@ -34,29 +30,45 @@ describe('holiday registry / updateData', () => {
     }
   });
 
-  it('extends year range after updateData', async () => {
-    await updateData(2027, {
+  it('extends its year range after update', async () => {
+    await holidays.update(2027, {
       holidayRanges: [{ start: '2027-10-01', end: '2027-10-07', festival: '国庆节' }],
       workdays: [],
     });
 
-    expect(getMinHolidayYear()).toBe(2019);
-    expect(getMaxHolidayYear()).toBe(2027);
+    expect(holidays.minYear).toBe(2019);
+    expect(holidays.maxYear).toBe(2027);
 
     const job = resolveHolidayJob({ cron: '0 0 9 * * *', festivals: ['国庆节'] }, TZ);
-    const next = getNextRun(job, at('2027-09-30T10:00:00+08:00'));
+    const next = getNextRun(job, at('2027-09-30T10:00:00+08:00'), { holidays });
     expect(next?.toISOString()).toBe(at('2027-10-01T09:00:00+08:00').toISOString());
   });
 
-  it('refreshes cache after updateData', async () => {
-    await updateData(2027, {
+  it('refreshes derived caches after update', async () => {
+    await holidays.update(2027, {
       holidayRanges: [{ start: '2027-01-01', end: '2027-01-01', festival: '元旦' }],
       workdays: ['2027-01-04'],
     });
 
-    expect(isWorkday(at('2027-01-01T09:00:00+08:00'), TZ)).toBe(false);
-    expect(isWorkday(at('2027-01-04T09:00:00+08:00'), TZ)).toBe(true);
-    expect(getFestivalForDate(at('2027-01-01T09:00:00+08:00'), TZ)).toBe('元旦');
+    expect(isWorkday(at('2027-01-01T09:00:00+08:00'), TZ, holidays)).toBe(false);
+    expect(isWorkday(at('2027-01-04T09:00:00+08:00'), TZ, holidays)).toBe(true);
+    expect(getFestivalForDate(at('2027-01-01T09:00:00+08:00'), TZ, holidays)).toBe('元旦');
+  });
+
+  it('isolates mutable data between calendar owners', async () => {
+    const other = new HolidayCalendar();
+    const data = {
+      holidayRanges: [{ start: '2035-01-01', end: '2035-01-01', festival: '元旦' }],
+      workdays: [],
+    };
+
+    await holidays.update(2035, data);
+    data.holidayRanges.length = 0;
+
+    expect(holidays.maxYear).toBe(2035);
+    expect(holidays.festivalForDate(at('2035-01-01T09:00:00+08:00'), TZ)).toBe('元旦');
+    expect(other.maxYear).toBe(2026);
+    expect(other.festivalForDate(at('2035-01-01T09:00:00+08:00'), TZ)).toBeUndefined();
   });
 
   it('persists overrides when persist option is set', async () => {
@@ -64,7 +76,7 @@ describe('holiday registry / updateData', () => {
     await mkdir(tempDir, { recursive: true });
     const path = join(tempDir, 'holiday-overrides.json');
 
-    await updateData(
+    await holidays.update(
       2028,
       {
         holidayRanges: [{ start: '2028-05-01', end: '2028-05-01', festival: '劳动节' }],
@@ -97,12 +109,12 @@ describe('holiday registry / updateData', () => {
       })),
     );
 
-    const data = await updateData(2029, { force: true, persist: path });
+    const data = await holidays.update(2029, { force: true, persist: path });
     expect(data.holidayRanges).toEqual([
       { start: '2029-01-01', end: '2029-01-01', festival: '元旦' },
     ]);
     expect(data.workdays).toEqual(['2029-01-02']);
-    expect(getMaxHolidayYear()).toBe(2029);
+    expect(holidays.maxYear).toBe(2029);
 
     const raw = await readFile(path, 'utf8');
     expect(raw).toContain('"2029"');

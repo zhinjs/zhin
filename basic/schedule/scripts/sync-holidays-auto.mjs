@@ -36,7 +36,7 @@ async function writeGithubOutput(changed, changedYears) {
 
 function runGenerateRegistry() {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['scripts/generate-holiday-registry.mjs'], {
+    const child = spawn(process.execPath, ['scripts/generate-holiday-calendar.mjs'], {
       cwd: root,
       stdio: 'inherit',
     });

@@ -1,6 +1,6 @@
 import type { FestivalName } from '../types.js';
 import { isFestivalName } from '../utils/festival-map.js';
-import type { HolidayRange, HolidayYearData } from './holiday-registry.js';
+import type { HolidayRange, HolidayYearData } from '../holiday-calendar.js';
 
 /** 国务院节假日公示数据（holiday-cn，溯源 gov.cn 通知） */
 export const HOLIDAY_CN_RAW_BASE =

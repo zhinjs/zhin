@@ -528,6 +528,15 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove unused composed side-event compatibility aliases and inert Agent defaults under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "own-holiday-calendars.md",
+      "packages": [
+        "@zhin.js/schedule"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace process-global holiday data, caches, listeners, and reset hooks with scheduler-owned HolidayCalendar instances under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

@@ -1,8 +1,8 @@
 import { mkdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { updateData, resetHolidayRegistryForTests } from '../src/update-data.js';
 import { CalendarScheduler } from '../src/scheduler.js';
+import { HolidayCalendar } from '../src/holiday-calendar.js';
 import { createLocalJsonStore } from '../src/store/local-json-store.js';
 
 const TEST_TMP_ROOT = join(process.cwd(), 'tests', '.tmp');
@@ -12,7 +12,6 @@ describe('CalendarScheduler edge cases', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    resetHolidayRegistryForTests();
   });
 
   afterEach(async () => {
@@ -136,7 +135,7 @@ describe('CalendarScheduler edge cases', () => {
     const scheduler = new CalendarScheduler({ timezone: 'Asia/Shanghai' });
     scheduler.holiday({ cron: '0 0 9 * * *', festivals: ['国庆节'] }, handler);
 
-    await updateData(2027, {
+    await scheduler.holidays.update(2027, {
       holidayRanges: [{ start: '2027-10-01', end: '2027-10-07', festival: '国庆节' }],
       workdays: [],
     });
@@ -200,13 +199,13 @@ describe('CalendarScheduler edge cases', () => {
     const handler = vi.fn();
     const scheduler = new CalendarScheduler({ timezone: 'Asia/Shanghai' });
 
-    await updateData(2036, {
+    await scheduler.holidays.update(2036, {
       holidayRanges: [{ start: '2036-01-01', end: '2036-01-01', festival: '元旦' }],
       workdays: [],
     });
 
     scheduler.holiday({ cron: '0 0 9 * * *', festivals: ['元旦'] }, handler);
-    await updateData(2036, { holidayRanges: [], workdays: [] });
+    await scheduler.holidays.update(2036, { holidayRanges: [], workdays: [] });
     await Promise.resolve();
     await Promise.resolve();
 
@@ -223,7 +222,8 @@ describe('CalendarScheduler edge cases', () => {
     await mkdir(tempDir, { recursive: true });
     const jobsPath = join(tempDir, 'jobs.json');
 
-    await updateData(2036, {
+    const holidays = new HolidayCalendar();
+    await holidays.update(2036, {
       holidayRanges: [{ start: '2036-01-01', end: '2036-01-01', festival: '元旦' }],
       workdays: [],
     });
@@ -232,6 +232,7 @@ describe('CalendarScheduler edge cases', () => {
     const scheduler = new CalendarScheduler({
       timezone: 'Asia/Shanghai',
       store: createLocalJsonStore({ path: jobsPath }),
+      holidays,
     });
     await scheduler.ready;
 
@@ -240,7 +241,7 @@ describe('CalendarScheduler edge cases', () => {
       expect(await readFile(jobsPath, 'utf8')).toContain('vanish-job');
     });
 
-    await updateData(2036, { holidayRanges: [], workdays: [] });
+    await holidays.update(2036, { holidayRanges: [], workdays: [] });
     await Promise.resolve();
     await Promise.resolve();
 

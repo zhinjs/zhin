@@ -1,4 +1,5 @@
 import type { ResolvedJob, ScatterRunState } from '../types.js';
+import type { HolidayCalendar } from '../holiday-calendar.js';
 import { getNextRun } from '../dispatch.js';
 import { advanceScatterState, EMPTY_SCATTER_STATE } from '../utils/scatter-state.js';
 
@@ -6,6 +7,7 @@ export interface SimulateNextRunsOptions {
   jobId?: string;
   scatterState?: ScatterRunState;
   from?: Date;
+  holidays?: HolidayCalendar;
 }
 
 export function simulateNextRuns(
@@ -21,6 +23,7 @@ export function simulateNextRuns(
     const next = getNextRun(job, from, {
       jobId: options.jobId,
       scatterState: job.kind === 'scatter' ? scatterState : undefined,
+      holidays: options.holidays,
     });
     if (next == null) {
       break;
