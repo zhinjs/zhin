@@ -11,7 +11,7 @@ import {
   resolveCurrentAgentConsole,
   resolveCurrentAgentIntrospection,
 } from './agent-console.js';
-import { displayConsolePath } from './projection.js';
+import { displayConsolePath } from './display-path.js';
 
 function createAgentRuntimeResolver(
   projectRoot: string,

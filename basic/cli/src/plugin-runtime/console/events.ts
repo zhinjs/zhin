@@ -2,7 +2,7 @@ import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';
 import type { ConsoleEventHub, HttpHost } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { writeJson, writeSse } from './http-response.js';
-import { listPages } from './projection.js';
+import { listPages } from './entry-projection.js';
 
 const messageBridgeInstallations = new WeakSet<ImRuntime>();
 

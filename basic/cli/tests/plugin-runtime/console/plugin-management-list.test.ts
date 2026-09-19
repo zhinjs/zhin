@@ -1,7 +1,7 @@
 import {mkdtemp, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {buildManagedPluginList} from '../../../src/plugin-runtime/console/projection.js';
+import {buildManagedPluginList} from '../../../src/plugin-runtime/console/plugin-projection.js';
 import {createPluginLifecycleStore} from '../../../src/plugin-runtime/plugin-lifecycle-store.js';
 
 describe('Console managed plugin list', () => {

@@ -7,8 +7,8 @@ import {
   buildPluginDetail,
   listSnapshotPlugins,
   readPackageVersion,
-  readSnapshot,
-} from './projection.js';
+} from './plugin-projection.js';
+import { readRuntimeSnapshot } from './runtime-snapshot.js';
 
 export interface RegisterConsolePluginRoutesOptions {
   readonly http: HttpHost;
@@ -23,7 +23,7 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
   const { http, base, projectRoot, pluginLifecycleFile, im, snapshot } = options;
   http.route('GET', `${base}/plugins`, async (_request, response) => {
     try {
-      const snap = readSnapshot(snapshot);
+      const snap = readRuntimeSnapshot(snapshot);
       const plugins = await buildManagedPluginList(
         projectRoot,
         pluginLifecycleFile,
@@ -57,7 +57,7 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
       return;
     }
     try {
-      const snap = readSnapshot(snapshot);
+      const snap = readRuntimeSnapshot(snapshot);
       const node = listSnapshotPlugins(snap)
         .find(item => item.instanceKey === name || item.packageName === name);
       if (!node) {

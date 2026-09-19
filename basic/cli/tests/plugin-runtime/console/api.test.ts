@@ -31,14 +31,18 @@ import {
 } from '../../../src/plugin-runtime/console/agent-console.js';
 import {
   buildConsoleEntriesBody,
-  buildConsoleStats,
+} from '../../../src/plugin-runtime/console/entry-projection.js';
+import { displayConsolePath } from '../../../src/plugin-runtime/console/display-path.js';
+import {
   buildPluginDetail,
   buildPluginFeatures,
   buildPluginListItem,
-  displayConsolePath,
-  getSystemStatusData,
   listSnapshotPlugins,
-} from '../../../src/plugin-runtime/console/projection.js';
+} from '../../../src/plugin-runtime/console/plugin-projection.js';
+import {
+  buildConsoleStats,
+  getSystemStatusData,
+} from '../../../src/plugin-runtime/console/system-projection.js';
 
 const hosts: HttpHost[] = [];
 const tempRoots: string[] = [];
@@ -241,7 +245,7 @@ describe('console entries builder', () => {
 });
 
 describe('system status / stats builders', () => {
-  it('reports the legacy status fields with real process data', () => {
+  it('reports status fields with real process data', () => {
     const status = getSystemStatusData();
     expect(status.runtime).toBe('node');
     expect(status.platform).toBe(process.platform);
@@ -338,9 +342,12 @@ describe('plugin list helpers', () => {
     const projectRoot = tempRoots[tempRoots.length - 1];
     const node = listSnapshotPlugins(stubSnapshot(packageRoot)())[0]!;
     const detail = buildPluginDetail(node, '1.0.0', undefined, undefined, projectRoot);
-    expect(detail.filePath).toBe('./node_modules/fake');
-    expect(detail.filename).toBe('./node_modules/fake');
+    expect(detail.packageRoot).toBe('./node_modules/fake');
     expect(detail.version).toBe('1.0.0');
+    expect(detail).not.toHaveProperty('filename');
+    expect(detail).not.toHaveProperty('filePath');
+    expect(detail).not.toHaveProperty('contexts');
+    expect(detail).not.toHaveProperty('contextCount');
   });
 });
 
@@ -1131,8 +1138,7 @@ describe('console REST routes', () => {
       status: 'active',
       version: '1.2.3',
       // 绝对 packageRoot 按 workspace 规则缩短为 ./…
-      filePath: './node_modules/fake',
-      filename: './node_modules/fake',
+      packageRoot: './node_modules/fake',
     });
     const detailFeatures = detailBody.data.features as Array<Record<string, unknown>>;
     expect(detailFeatures.some((f) => f.name === 'command')).toBe(true);

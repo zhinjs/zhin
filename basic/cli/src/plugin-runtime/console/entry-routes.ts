@@ -1,7 +1,7 @@
 import type { HttpHost } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { writeJson } from './http-response.js';
-import { buildConsoleEntriesBody, listPages } from './projection.js';
+import { buildConsoleEntriesBody, listPages } from './entry-projection.js';
 
 export interface RegisterConsoleEntryRoutesOptions {
   readonly http: HttpHost;

@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const pluginRuntimeRoot = fileURLToPath(new URL('../../../src/plugin-runtime/', import.meta.url));
+const consoleRoot = new URL('../../../src/plugin-runtime/console/', import.meta.url);
 
 describe('Console Host module boundary', () => {
   it('keeps Console Host implementation behind the module entry point', async () => {
@@ -25,6 +26,8 @@ describe('Console Host module boundary', () => {
       'log-transport.ts',
       'login-assist-stdin.ts',
     ].includes(name))).toEqual([]);
+    const consoleSources = await readdir(consoleRoot, { withFileTypes: true });
+    expect(consoleSources.some(entry => entry.name === 'projection.ts')).toBe(false);
   });
 
   it('keeps supporting modules independent from the HTTP API orchestrator', async () => {
@@ -37,7 +40,9 @@ describe('Console Host module boundary', () => {
       'configuration-document.ts',
       'conversation-session.ts',
       'data-lifecycle-routes.ts',
+      'display-path.ts',
       'effect-sponsor-routes.ts',
+      'entry-projection.ts',
       'entry-routes.ts',
       'environment-files.ts',
       'events.ts',
@@ -48,9 +53,11 @@ describe('Console Host module boundary', () => {
       'portfolio-sponsor-routes.ts',
       'plugin-routes.ts',
       'plugin-schema.ts',
-      'projection.ts',
+      'plugin-projection.ts',
       'rpc-route.ts',
+      'runtime-snapshot.ts',
       'system-log.ts',
+      'system-projection.ts',
       'system-routes.ts',
       'workroom-routes.ts',
       'workroom-run-routes.ts',

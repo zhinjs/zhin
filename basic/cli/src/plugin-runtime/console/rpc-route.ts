@@ -18,7 +18,7 @@ import type { WorkroomDefinition } from '@zhin.js/agent';
 import { acquireGenerationAgentConsole } from './agent-console.js';
 import { ConsoleConfigurationStore } from './configuration.js';
 import { writeJson } from './http-response.js';
-import { listPages } from './projection.js';
+import { listPages } from './entry-projection.js';
 import { readDeclaredPlugins, type PluginLifecycleStore } from '../plugin-lifecycle-store.js';
 
 export interface RegisterConsoleRpcRouteOptions {

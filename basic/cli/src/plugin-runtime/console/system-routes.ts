@@ -5,11 +5,10 @@ import type { HttpHost } from '@zhin.js/host-http';
 import type { RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { writeJson } from './http-response.js';
 import {
-  buildConsoleStats,
-  getSystemStatusData,
   listSnapshotPlugins,
-  readSnapshot,
-} from './projection.js';
+} from './plugin-projection.js';
+import { readRuntimeSnapshot } from './runtime-snapshot.js';
+import { buildConsoleStats, getSystemStatusData } from './system-projection.js';
 
 export interface RegisterConsoleSystemRoutesOptions {
   readonly http: HttpHost;
@@ -30,7 +29,7 @@ export function registerConsoleSystemRoutes(options: RegisterConsoleSystemRoutes
   http.route('GET', `${base}/stats`, async (_request, response) => {
     try {
       const endpoints = im ? im.listEndpoints() : [];
-      const snap = readSnapshot(snapshot);
+      const snap = readRuntimeSnapshot(snapshot);
       const commandIndex = snap?.projections.get(commandFeatureId);
       const commandCount = isCommandIndex(commandIndex) ? commandIndex.list().length : 0;
       const componentIndex = snap?.projections.get(componentFeatureId);
