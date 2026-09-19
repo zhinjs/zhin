@@ -18,12 +18,7 @@ import {
 } from '@zhin.js/core/runtime';
 import type { UserInteraction } from '@zhin.js/interaction';
 
-import {
-  expandEnvironmentValue,
-  type ConfigDocumentPort,
-  type RootResourceInstaller,
-  type RuntimeConfigDocument,
-} from '@zhin.js/runtime';
+import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { databaseRootHostToken, rootPluginId, type DisposeStack, type PluginId, type RuntimeSnapshot, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import {
   AIService,
@@ -352,6 +347,18 @@ import {
   withTriggerTimeout,
   workroomOrchestratorSessionKey,
 } from './agent-turn-trigger.js';
+import {
+  assertFixedWorkroomStorageMode,
+  assessWorkroomDisclosureSetup,
+  isWorkroomPlanningPolicyReady,
+  resolveAssistantConfigDocument,
+  resolveWorkroomDisclosureAuthorityPublication,
+  resolveWorkroomDisclosureBootstrap,
+  resolveWorkroomPlanningPolicyPublication,
+  resolveWorkroomStorageMode,
+  type AgentHostAIConfig as AIConfig,
+  type WorkroomStorageMode,
+} from './agent-host-config.js';
 
 const WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT = `You produce one untrusted Workroom DAG candidate as strict JSON.
 Return exactly: {"version":1,"strategy":{"id":"...","version":"...","digest":"sha256:..."},"tasks":[...]}
@@ -372,8 +379,6 @@ type OutputElementLike = {
   readonly fallbackText?: string;
 };
 
-type AIConfig = NonNullable<ConstructorParameters<typeof AIService>[0]>;
-export type WorkroomStorageMode = 'database' | 'file';
 type McpServerConfig = NonNullable<AIConfig['mcpServers']>[number];
 
 interface AgentToolLike {
@@ -406,138 +411,6 @@ interface McpServerEntry {
 const logger = getLogger('agent');
 const BOOTSTRAP_FILES = ['SOUL.md', 'AGENTS.md', 'TOOLS.md'] as const;
 const MAX_BOOTSTRAP_CHARS = 12_000;
-
-export async function resolveAiConfig(
-  config: RuntimeConfigDocument | ConfigDocumentPort,
-): Promise<AIConfig | undefined> {
-  const document = await readConfigDocument(config);
-  if (!document || typeof document !== 'object') return undefined;
-  const ai = (document as Record<string, unknown>).ai;
-  if (!ai || typeof ai !== 'object') return undefined;
-  // Top-level `ai` bypasses Plugin ConfigView, so expand environment values
-  // here. Validation remains fail-closed; missing secrets are errors.
-  const expanded = expandEnvironmentValue(ai, (key) => process.env[key]) as AIConfig;
-  resolveWorkroomTrustedPackPublishers(expanded);
-  return expanded;
-}
-
-export function resolveWorkroomTrustedPackPublishers(ai: AIConfig | undefined): readonly string[] {
-  const value = ai?.workroom?.trustedPackPublishers;
-  if (value === undefined) return Object.freeze([]);
-  if (!Array.isArray(value)) throw new Error('ai.workroom.trustedPackPublishers must be an array');
-  const normalized = value.map((principalId, index) => {
-    if (typeof principalId !== 'string' || !principalId.trim() || principalId !== principalId.trim()) {
-      throw new Error(`ai.workroom.trustedPackPublishers.${index} is invalid`);
-    }
-    return principalId;
-  });
-  if (new Set(normalized).size !== normalized.length) {
-    throw new Error('ai.workroom.trustedPackPublishers contains duplicates');
-  }
-  return Object.freeze(normalized);
-}
-
-type WorkroomModelProcessingContract = NonNullable<
-  NonNullable<NonNullable<AIConfig['workroom']>['disclosure']>['modelProviders']
->[string];
-
-export interface WorkroomDisclosureBootstrapResolution {
-  readonly modelProviderAlias?: string;
-  readonly contract?: WorkroomModelProcessingContract;
-}
-
-export function resolveWorkroomDisclosureBootstrap(
-  definition: WorkroomDefinition | undefined,
-  providerAliasForAgent: (agentId: string) => string | undefined,
-  ai: AIConfig,
-): WorkroomDisclosureBootstrapResolution {
-  const orchestratorAgent = definition?.conversation?.agent;
-  const modelProviderAlias = orchestratorAgent
-    ? providerAliasForAgent(orchestratorAgent)
-    : undefined;
-  const contract = modelProviderAlias
-    ? ai.workroom?.disclosure?.modelProviders?.[modelProviderAlias]
-    : undefined;
-  return Object.freeze({
-    ...(modelProviderAlias ? { modelProviderAlias } : {}),
-    ...(contract ? { contract } : {}),
-  });
-}
-
-export function assessWorkroomDisclosureSetup(input: Readonly<{
-  resolution: WorkroomDisclosureBootstrapResolution;
-  authorityPublished: boolean;
-  authorityCurrent: boolean;
-  localIssuerAvailable: boolean;
-}>): Readonly<{
-  disclosureReady: boolean;
-  disclosureConfigReady: boolean;
-  diagnostics: readonly string[];
-}> {
-  const { modelProviderAlias, contract } = input.resolution;
-  const diagnostics: string[] = [];
-  const disclosureConfigReady = contract !== undefined
-    && contract.maxConfidentiality !== 'public'
-    && (!contract.external || contract.noTraining);
-  if (!modelProviderAlias) diagnostics.push('orchestrator 尚未绑定模型 Provider');
-  else if (!contract) {
-    diagnostics.push(`尚未配置 ai.workroom.disclosure.modelProviders.${modelProviderAlias}`);
-  } else if (contract.external && !contract.noTraining) {
-    diagnostics.push(`外部模型 Provider ${modelProviderAlias} 必须显式禁止训练`);
-  } else if (contract.maxConfidentiality === 'public') {
-    diagnostics.push(`模型 Provider ${modelProviderAlias} 至少需要 project_internal 披露等级`);
-  }
-  if (!input.authorityPublished) diagnostics.push('尚未发布 Project Data Governance 披露 authority');
-  else if (!input.authorityCurrent) {
-    diagnostics.push('Project Data Governance 披露 authority 未绑定当前 Catalog/Sponsor');
-  }
-  if (!input.localIssuerAvailable && !input.authorityCurrent) {
-    diagnostics.push('Root-private Data Governance 签发能力不可用');
-  }
-  return Object.freeze({
-    disclosureReady: input.authorityCurrent,
-    disclosureConfigReady,
-    diagnostics: Object.freeze(diagnostics),
-  });
-}
-
-export function resolveWorkroomDisclosureAuthorityPublication(
-  current: Readonly<{ revision: number; digest: string }> | undefined,
-  authorityCurrent: boolean,
-): Readonly<{ revision: number; previousDigest?: string }> | undefined {
-  if (authorityCurrent) return undefined;
-  return Object.freeze({
-    revision: (current?.revision ?? 0) + 1,
-    ...(current ? { previousDigest: current.digest } : {}),
-  });
-}
-
-export function resolveWorkroomPlanningPolicyPublication(
-  current: Readonly<{ revision: number; digest: string }> | undefined,
-): Readonly<{ revision: number; expectedPreviousDigest?: string }> {
-  return Object.freeze({
-    revision: (current?.revision ?? 0) + 1,
-    ...(current ? { expectedPreviousDigest: current.digest } : {}),
-  });
-}
-
-export function isWorkroomPlanningPolicyReady(authority: Readonly<{
-  policy: Readonly<{ schedulerPolicy: Readonly<{ pinnedAtSequence: number }> }>;
-}> | undefined): boolean {
-  return authority?.policy.schedulerPolicy.pinnedAtSequence === 1;
-}
-
-export function resolveWorkroomStorageMode(ai: AIConfig | undefined): WorkroomStorageMode {
-  return ai?.sessions?.useDatabase === false ? 'file' : 'database';
-}
-
-export function assertFixedWorkroomStorageMode(
-  fixed: WorkroomStorageMode,
-  requested: WorkroomStorageMode,
-): void {
-  if (requested === fixed) return;
-  throw new Error(`Workroom storage mode changed from ${fixed} to ${requested}; process restart required`);
-}
 
 export function classifyWorkroomIngressSource(
   definition: WorkroomDefinition,
@@ -803,16 +676,6 @@ function createCatalogProjectionBinding(
       .filter(member => member !== orchestratorMember)
       .map(identity)) as WorkroomProjectionBinding['agents'],
   });
-}
-
-export async function resolveAssistantConfigDocument(
-  config: RuntimeConfigDocument | ConfigDocumentPort,
-): Promise<AssistantConfig | undefined> {
-  const document = await readConfigDocument(config);
-  if (!document || typeof document !== 'object') return undefined;
-  const assistant = (document as Record<string, unknown>).assistant;
-  if (!assistant || typeof assistant !== 'object') return undefined;
-  return expandEnvironmentValue(assistant, (key) => process.env[key]) as AssistantConfig;
 }
 
 export interface InstallAgentHostOptions {
@@ -5200,17 +5063,4 @@ function flattenOutputElements(elements: readonly OutputElementLike[]): string {
 function truncate(value: string, max: number): string {
   if (value.length <= max) return value;
   return `${value.slice(0, Math.max(0, max - 1))}…`;
-}
-
-async function readConfigDocument(
-  config: RuntimeConfigDocument | ConfigDocumentPort,
-): Promise<unknown> {
-  if (!isConfigDocumentPort(config)) return config;
-  return (await config.read()).document;
-}
-
-function isConfigDocumentPort(value: unknown): value is ConfigDocumentPort {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<ConfigDocumentPort>;
-  return typeof candidate.read === 'function';
 }

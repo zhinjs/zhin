@@ -378,11 +378,14 @@ async function loadConfiguredAgentHost(
 ): Promise<ConfiguredAgentHost | undefined> {
   const document = isConfigDocumentPort(config) ? (await config.read()).document : config;
   if (!hasAgentConfiguration(document)) return undefined;
-  const module = await import('./agent-host-installer.js');
+  const [module, configModule] = await Promise.all([
+    import('./agent-host-installer.js'),
+    import('./agent-host-config.js'),
+  ]);
   const { createLocalWorkroomDataGovernanceAuthority } = await import('./local-workroom-data-governance.js');
   const { agentHostToken } = await import('@zhin.js/agent/runtime');
-  const initialAi = await module.resolveAiConfig(document);
-  const workroomStorageMode = module.resolveWorkroomStorageMode(initialAi);
+  const initialAi = await configModule.resolveAiConfig(document);
+  const workroomStorageMode = configModule.resolveWorkroomStorageMode(initialAi);
   const runtime = new module.AgentRuntime({ coordinator: new module.AgentTurnCoordinator() });
   let snapshotReader: import('@zhin.js/plugin-runtime').SnapshotReader | undefined;
   let localWorkroomDataGovernance: ReturnType<
@@ -408,7 +411,7 @@ async function loadConfiguredAgentHost(
         runtime,
         snapshots: snapshotReader,
         workroomStorageMode,
-        workroomTrustedPackPublishers: module.resolveWorkroomTrustedPackPublishers(initialAi),
+        workroomTrustedPackPublishers: configModule.resolveWorkroomTrustedPackPublishers(initialAi),
         workroomLocalDataGovernance: localWorkroomDataGovernance,
         extraTools: options.extraTools as Parameters<typeof module.installAgentHost>[0]['extraTools'],
       });
