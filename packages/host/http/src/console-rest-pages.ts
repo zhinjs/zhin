@@ -1,11 +1,7 @@
 /**
  * Console REST pages — logs / marketplace / introspection / agent sessions。
  *
- * 响应形状对齐 legacy `packages/host/api/src/rest/`：
- * - logs-rest-api.ts（SystemLog 模型）
- * - marketplace-rest-api.ts（plugins.json + npmmirror）
- * - introspection-rest-api.ts（分页内省列表）
- * - agent-sessions-rest-api.ts（ADR 0010 D3 session tree）
+ * 统一提供日志、市场、Runtime snapshot 内省和 Agent session tree 页面。
  *
  * 数据源不可用时降级：读操作返回空数组 + `note` 说明，session tree 返回 503；
  * 写操作要求 `ctx.fullScope && authScope === 'full'`，否则 403。
@@ -48,7 +44,7 @@ export interface ConsoleRestCtx {
   ) => boolean | undefined | Promise<boolean | undefined>;
 }
 
-/** 内省数据门面 — 由 basic/cli 用 agent 包 collectIntrospection* 装配。 */
+/** 内省数据门面 — 由 composition root 从当前 Runtime snapshot 装配。 */
 export interface ConsoleAgentIntrospection {
   commands?(): readonly unknown[];
   middlewares?(): readonly unknown[];
@@ -562,7 +558,7 @@ async function listInstalledPluginPackages(
 }
 
 // ---------------------------------------------------------------------------
-// introspection（legacy introspection-rest-api.ts；分页形状对齐 IntrospectionJsonResponse）
+// Runtime snapshot introspection
 // ---------------------------------------------------------------------------
 
 function registerIntrospectionRoutes(
@@ -1030,7 +1026,7 @@ function parseSessionAction(
 }
 
 // ---------------------------------------------------------------------------
-// 内部分页 / 过滤（语义对齐 agent 包 introspection-pagination.ts）
+// 内部分页 / 过滤
 // ---------------------------------------------------------------------------
 
 function paginateItems<T>(

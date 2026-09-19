@@ -185,6 +185,15 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove inert Plugin Runtime tokens that falsely exposed classic Feature registries under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-classic-agent-introspection.md",
+      "packages": [
+        "@zhin.js/agent"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove the unused classic Plugin-based Agent introspection facade after Console introspection moved to current Runtime snapshot projections."
     }
   ]
 }

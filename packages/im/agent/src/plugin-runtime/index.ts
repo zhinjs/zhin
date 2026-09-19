@@ -11,21 +11,6 @@ export { activateAiDatabaseStorage } from '../init/activate-ai-database-storage.
 export { defineAiDatabaseModels } from '../init/define-ai-database-models.js';
 export type { AiDatabaseModelDefiner } from '../init/define-ai-database-models.js';
 export {
-  introspectionRestBindings,
-  introspectionRestEndpoints,
-  introspectionRestCommands,
-  introspectionRestMcp,
-  introspectionRestTools,
-} from '../init/introspection-rest.js';
-export type { IntrospectionJsonResponse } from '../init/introspection-rest.js';
-export {
-  collectIntrospectionBindings,
-  collectIntrospectionAgentTools,
-  collectIntrospectionSkills,
-  collectIntrospectionMcpLabels,
-  collectIntrospectionMcpWithConfigFallback,
-} from '../init/introspection-collectors.js';
-export {
   ensureMcpConnections,
   ensureMcpConnectionsForBinding,
   getMcpToolsForBinding,
