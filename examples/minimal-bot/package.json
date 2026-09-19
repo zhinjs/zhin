@@ -13,14 +13,14 @@
   },
   "dependencies": {
     "@zhin.js/satori": "workspace:*",
-    "zhin.js": "workspace:*"
+    "@zhin.js/tool": "workspace:*",
+    "zhin.js": "workspace:*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
-    "@zhin.js/tool": "workspace:*",
-    "typescript": "^6.0.3",
-    "zod": "^4.4.3"
+    "typescript": "^6.0.3"
   },
   "engines": {
     "node": ">=22.6.0"
@@ -31,7 +31,12 @@
     "entry": "./plugin.ts",
     "engine": "^1.0.0",
     "runtime": "trusted",
-    "features": [],
+    "features": [
+      {
+        "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      }
+    ],
     "plugins": []
   }
 }

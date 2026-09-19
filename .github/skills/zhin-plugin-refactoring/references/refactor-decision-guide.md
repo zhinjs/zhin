@@ -40,7 +40,7 @@
 - 周期任务放 `crons/`
 - 数据访问和外部 SDK 放 `services/`
 - 模型定义放 `models/`
-- AI 工具放 `tools/`
+- AI 工具放 `agent/tools/`
 - 控制台页面放 `client/`
 
 ## 一条实用规则

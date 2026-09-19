@@ -1,15 +1,15 @@
 ---
 title: Agent 工具与技能
-description: tools/$*.ts 约定与 setup addTool、统一 ToolIndex 准入、deferred catalog 与 load_tool、skills 与 $*.agent.md
+description: agent/tools/$*.ts 约定与 setup addTool、统一 ToolIndex 准入、deferred catalog 与 load_tool、skills 与 $*.agent.md
 ---
 
 # Agent 工具与技能
 
-想让模型替用户搜一首歌、查一次乐透推荐？把这段逻辑写成一个文件丢进 `tools/`，下一个 Agent turn 模型就能按名调用它。创作有两种形式：**`tools/$*.ts` 文件约定**，以及按配置在 **`setup()` 中调用 `context.addTool()`**。两者都写入候选 generation 的同一份 capability table，commit 后由唯一 `ToolIndex` 发布；不存在第二个动态注册表。
+想让模型替用户搜一首歌、查一次乐透推荐？把这段逻辑写成一个文件放进 `agent/tools/`，下一个 Agent turn 模型就能按名调用它。创作有两种形式：**`agent/tools/$*.ts` 文件约定**，以及按配置在 **`setup()` 中调用 `context.addTool()`**。两者都写入候选 generation 的同一份 capability table，commit 后由唯一 `ToolIndex` 发布；不存在第二个动态注册表。
 
 ```mermaid
 flowchart LR
-    A["tools/$*.ts<br/>defineAgentTool"] --> C[候选 capability table]
+    A["agent/tools/$*.ts<br/>defineAgentTool"] --> C[候选 capability table]
     B["setup() → context.addTool()"] --> C
     C --> D["commit → ToolIndex 投影"]
     D --> E[CapabilityIngress]
@@ -19,12 +19,12 @@ flowchart LR
     H --> I[模型可调用的工具集]
 ```
 
-## 路径一：`tools/$*.ts` 约定
+## 路径一：`agent/tools/$*.ts` 约定
 
-挂载 `@zhin.js/tool` Feature 后，插件包根目录的 `tools/`（不递归）下只有 `$*.ts` 文件会被发现，并默认导出 `defineAgentTool(...)`。`helper.ts` 等未加 `$` 的文件是普通依赖模块：
+挂载 `@zhin.js/tool` Feature 后，插件包的 `agent/tools/`（不递归）下只有 `$*.ts` 文件会被发现，并默认导出 `defineAgentTool(...)`。`helper.ts` 等未加 `$` 的文件是普通依赖模块：
 
 ```ts
-// tools/$echo.ts（examples/minimal-bot）
+// agent/tools/$echo.ts
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -144,33 +144,35 @@ You are **planner** (协调者): break down user goals, define acceptance
 criteria, and coordinate specialist roles.
 ```
 
-### 插件 `agent/` 目录（另一种组织方式）
+## 插件 `agent/` 目录
 
-装了 `@zhin.js/agent` 的插件还可以用 `agent/` 目录集中声明 AI 面（`packages/im/agent/src/discovery/agent-surface.ts` 扫描）：
+插件的 AI 创作面统一放在 `agent/` 下。Tool 由 `@zhin.js/tool` Feature 发现，其他声明由各自 Feature 或 Agent 作者面负责；不存在另一套 Tool 定义或扫描器。
 
 ```text
 my-plugin/
 ├── agent/
-│   ├── agent.ts           # defineAgent：描述、关键词、toolNames、systemPrompt
-│   ├── instructions.md    # 系统提示正文
-│   ├── tools/$*.ts         # defineAgentTool（来自 '@zhin.js/agent/tools'）
-│   ├── skills/*.{md,ts}   # .md 可带 frontmatter（description / tools / always）
-│   └── subagents/<name>/  # 递归同构的子 Agent
+│   ├── agent.ts            # defineAgent：描述、关键词、toolNames、systemPrompt
+│   ├── instructions.md     # 系统提示正文
+│   ├── tools/
+│   │   ├── $short_url.ts   # defineAgentTool（来自 '@zhin.js/tool'）
+│   │   └── client.ts       # 普通依赖模块，不会注册为 Tool
+│   ├── skills/*.{md,ts}
+│   └── subagents/<name>/
 ```
 
-与 `@zhin.js/tool` 的 `defineAgentTool` 区别：`@zhin.js/agent/tools` 版本的 `execute(input, ctx)` 第二参是 `{ pluginName, runtimeName, filePath }` 上下文，`approval` 支持 `'always' | 'once' | 'never'` 或自定义谓词，且可配 `toModelOutput` 塑形回传模型的文本。真实示例：`plugins/utils/short-url/agent/tools/$short_url.ts`。
+`agent/tools/$*.ts` 与 `setup()` 中的 `addTool()` 使用同一个 `AgentToolDefinition`、`ToolExecutionContext` 和 `ToolIndex`。执行上下文提供固定 generation 的 `config`、`use(token)`、`origin`、`principal`、`policy`、`question` 与按 adapter 推断的 `$client`。插件不应从全局状态恢复当前 Message 或 Runtime。
 
 ```ts
-// agent/tools/$short_url.ts（plugins/utils/short-url，节选）
-import { defineAgentTool } from '@zhin.js/agent/tools';
+// agent/tools/$short_url.ts
+import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
 export default defineAgentTool<{ url: string }>({
   description: '缩短一个 URL，返回短链接',
   inputSchema: z.object({ url: z.string().min(1) }),
   keywords: ['短链', '缩短', 'shorten'],
-  async execute({ url }) {
-    // …
+  async execute({ url }, context) {
+    return context.use(shortUrlClientToken).shorten(url);
   },
 });
 ```

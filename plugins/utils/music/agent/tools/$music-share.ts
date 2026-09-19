@@ -1,7 +1,7 @@
 import { defineAgentTool } from '@zhin.js/tool';
-import { shareMusicDetail } from '../src/music-lib.js';
-import type { MusicSource } from '../src/types.js';
-import { musicRuntimeToken } from '../src/runtime.js';
+import { shareMusicDetail } from '../../src/music-lib.js';
+import type { MusicSource } from '../../src/types.js';
+import { musicRuntimeToken } from '../../src/runtime.js';
 
 export default defineAgentTool<{
   id: string;

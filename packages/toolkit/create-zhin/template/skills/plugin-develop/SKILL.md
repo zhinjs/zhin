@@ -36,7 +36,7 @@ tags:
 | 能力 | 做法 | 目录 / 位置 |
 |------|------|-------------|
 | 聊天命令 | `defineCommand()` default export | `commands/**/$*.ts`（`$` 入口路径即路由） |
-| AI 工具 | `defineAgentTool()` | `tools/$*.ts` 或 `agent/tools/$*.ts` |
+| AI 工具 | `defineAgentTool()` | `agent/tools/$*.ts` |
 | 中间件 | `defineMiddleware()` | `middlewares/$*.ts` |
 | 组件 | `defineComponent()` | `components/$*.tsx` |
 | 定时任务 | `scheduleHostToken.register(...)` + `lifecycle` | `plugin.ts` setup |

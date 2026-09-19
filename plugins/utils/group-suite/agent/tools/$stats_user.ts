@@ -1,8 +1,8 @@
 import { defineAgentTool } from '@zhin.js/tool';
-import { getStatsModel } from '../src/db-store.js';
-import { groupSuiteRuntimeToken } from '../src/runtime-state.js';
-import { todayStr } from '../src/shared-runtime.js';
-import { flushStatsBuffer, weekStartStr } from '../src/stats-lib.js';
+import { getStatsModel } from '../../src/db-store.js';
+import { groupSuiteRuntimeToken } from '../../src/runtime-state.js';
+import { todayStr } from '../../src/shared-runtime.js';
+import { flushStatsBuffer, weekStartStr } from '../../src/stats-lib.js';
 
 export default defineAgentTool<{ user_id: string; group_id?: string }>({
   description: '查询指定用户在当前群或指定群的消息统计',

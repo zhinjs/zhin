@@ -50,6 +50,7 @@
     "check:console-client-boundaries": "node scripts/check-console-client-boundaries.mjs",
     "check:console-protocol-boundaries": "node scripts/check-console-protocol-boundaries.mjs",
     "check:sixty-s-runtime-boundaries": "node scripts/check-sixty-s-runtime-boundaries.mjs",
+    "check:agent-tool-authoring-boundaries": "node scripts/check-agent-tool-authoring-boundaries.mjs",
     "check:adapter-endpoint-boundaries": "node scripts/check-adapter-endpoint-boundaries.mjs",
     "check:im-session-ssot": "node scripts/check-im-session-ssot.mjs",
     "check:llm-runtime-boundaries": "node scripts/check-llm-runtime-boundaries.mjs",

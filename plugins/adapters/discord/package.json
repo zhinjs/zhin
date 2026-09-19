@@ -47,20 +47,17 @@
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/permission": "workspace:*",
+    "@zhin.js/tool": "workspace:*",
     "discord.js": "^14.27.0"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",
-    "@zhin.js/agent": "workspace:^",
     "@zhin.js/command": "workspace:^",
     "@zhin.js/core": "workspace:^",
     "zhin.js": "workspace:^",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/agent": {
-      "optional": true
-    },
     "@zhin.js/command": {
       "optional": true
     },
@@ -73,7 +70,6 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
-    "@zhin.js/agent": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
@@ -111,6 +107,10 @@
       },
       {
         "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/tool",
         "api": "^1.0.0"
       }
     ],

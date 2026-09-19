@@ -1,4 +1,4 @@
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
 export default defineAgentTool<{ chat_id: string; sticker: string }>({

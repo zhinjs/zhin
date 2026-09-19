@@ -1,15 +1,15 @@
 ---
 title: Agent Tools and Skills
-description: tools/$*.ts convention and setup addTool — one ToolIndex, deferred catalog and load_tool, skills and $*.agent.md
+description: agent/tools/$*.ts convention and setup addTool — one ToolIndex, deferred catalog and load_tool, skills and $*.agent.md
 ---
 
 # Agent Tools and Skills
 
-Want the model to search a song or check a lottery recommendation for the user? Put the logic in `tools/`, or conditionally call `context.addTool()` from `setup()`. Both forms write the same candidate-generation capability table and become visible through the sole `ToolIndex` only after commit. There is no second dynamic registry.
+Want the model to search a song or check a lottery recommendation for the user? Put the logic in `agent/tools/`, or conditionally call `context.addTool()` from `setup()`. Both forms write the same candidate-generation capability table and become visible through the sole `ToolIndex` only after commit. There is no second dynamic registry.
 
 ```mermaid
 flowchart LR
-    A["tools/$*.ts<br/>defineAgentTool"] --> C[Candidate capability table]
+    A["agent/tools/$*.ts<br/>defineAgentTool"] --> C[Candidate capability table]
     B["setup() → context.addTool()"] --> C
     C --> D["commit → ToolIndex projection"]
     D --> E[CapabilityIngress]
@@ -19,12 +19,12 @@ flowchart LR
     H --> I[Tool set callable by the model]
 ```
 
-## Path One: `tools/$*.ts` Convention
+## Path One: `agent/tools/$*.ts` Convention
 
-After mounting the `@zhin.js/tool` Feature, only `$*.ts` files directly under the plugin package root's `tools/` directory are discovered, and each default-exports `defineAgentTool(...)`. Unprefixed files such as `helper.ts` remain ordinary importable modules:
+After mounting the `@zhin.js/tool` Feature, only `$*.ts` files directly under the plugin package's `agent/tools/` directory are discovered, and each default-exports `defineAgentTool(...)`. Unprefixed files such as `helper.ts` remain ordinary importable modules:
 
 ```ts
-// tools/$echo.ts (examples/minimal-bot)
+// agent/tools/$echo.ts
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -139,33 +139,35 @@ You are **planner** (coordinator): break down user goals, define acceptance
 criteria, and coordinate specialist roles.
 ```
 
-### Plugin `agent/` Directory (An Alternative Organization)
+## Plugin `agent/` Directory
 
-Plugins with `@zhin.js/agent` installed can also use an `agent/` directory to centrally declare the AI surface (`packages/im/agent/src/discovery/agent-surface.ts` scans it):
+A plugin's AI authoring surface lives under `agent/`. The `@zhin.js/tool` Feature discovers Tools; the corresponding Features or Agent authoring surfaces own the other declarations. There is no second Tool definition or scanner.
 
 ```text
 my-plugin/
 ├── agent/
-│   ├── agent.ts           # defineAgent: description, keywords, toolNames, systemPrompt
-│   ├── instructions.md    # System prompt body
-│   ├── tools/$*.ts         # defineAgentTool (from '@zhin.js/agent/tools')
-│   ├── skills/*.{md,ts}   # .md can have frontmatter (description / tools / always)
-│   └── subagents/<name>/  # Recursively isomorphic sub-Agents
+│   ├── agent.ts            # defineAgent: description, keywords, toolNames, systemPrompt
+│   ├── instructions.md     # system instructions
+│   ├── tools/
+│   │   ├── $short_url.ts   # defineAgentTool from '@zhin.js/tool'
+│   │   └── client.ts       # ordinary dependency, not a Tool entry
+│   ├── skills/*.{md,ts}
+│   └── subagents/<name>/
 ```
 
-The difference from `@zhin.js/tool`'s `defineAgentTool`: the `@zhin.js/agent/tools` version's `execute(input, ctx)` receives `{ pluginName, runtimeName, filePath }` context as the second argument, `approval` supports `'always' | 'once' | 'never'` or a custom predicate, and it can configure `toModelOutput` to shape the text returned to the model. Real-world example: `plugins/utils/short-url/agent/tools/$short_url.ts`.
+`agent/tools/$*.ts` and `addTool()` in `setup()` use the same `AgentToolDefinition`, `ToolExecutionContext`, and `ToolIndex`. The execution context provides fixed-generation `config`, `use(token)`, `origin`, `principal`, `policy`, `question`, and an adapter-inferred `$client`. Plugins must not recover the current Message or Runtime from global state.
 
 ```ts
-// agent/tools/$short_url.ts (plugins/utils/short-url, excerpt)
-import { defineAgentTool } from '@zhin.js/agent/tools';
+// agent/tools/$short_url.ts
+import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
 export default defineAgentTool<{ url: string }>({
-  description: 'Shorten a URL and return the short link',
+  description: 'Shorten a URL',
   inputSchema: z.object({ url: z.string().min(1) }),
-  keywords: ['短链', '缩短', 'shorten'],
-  async execute({ url }) {
-    // ...
+  keywords: ['short url', 'shorten'],
+  async execute({ url }, context) {
+    return context.use(shortUrlClientToken).shorten(url);
   },
 });
 ```

@@ -19,7 +19,6 @@
     "commands",
     "middlewares",
     "components",
-    "tools",
     "src",
     "lib",
     "agent",

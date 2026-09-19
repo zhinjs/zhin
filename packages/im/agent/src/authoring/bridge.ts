@@ -1,13 +1,9 @@
-import type { Message } from '@zhin.js/core';
 import { parseToolInputSchema, toolInputSchemaToParameters } from '@zhin.js/core/tool-zod';
-import { readOperationClient } from '@zhin.js/tool';
 import type { Skill, Tool, McpServerEntry } from '../resource-hub/types.js';
 import {
   type AuthoringSkillDefinition,
   type AuthoringConnectionDefinition,
   type AuthoringHookDefinition,
-  type BridgedToolFromAuthoring,
-  type DiscoveredAuthoringTool,
   AUTHORING_KIND,
 } from './types.js';
 
@@ -25,64 +21,6 @@ export function slotNameFromFile(filePath: string): string {
 
 export function slotNameFromDir(dirPath: string): string {
   return dirPath.split(/[/\\]/).filter(Boolean).pop() ?? dirPath;
-}
-
-export function bridgeAuthoringTool(
-  discovered: DiscoveredAuthoringTool,
-): BridgedToolFromAuthoring {
-  const { definition, runtimeName, pluginName, filePath } = discovered;
-  const parameters = toolInputSchemaToParameters(definition.inputSchema);
-  const execute = async (args: Record<string, unknown>, message?: Message) => {
-    const parsed = parseToolInputSchema<Record<string, unknown>>(definition.inputSchema, args);
-    if (!parsed.ok) return `Error: ${parsed.error}`;
-    const context = {
-      pluginName,
-      runtimeName,
-      filePath,
-      ...(message ? { message } : {}),
-    } as Record<string, unknown>;
-    Object.defineProperty(context, '$client', {
-      configurable: false,
-      enumerable: true,
-      get: () => readOperationClient(message, definition.adapter),
-    });
-    return definition.execute(parsed.data, context as never);
-  };
-
-  return {
-    name: runtimeName,
-    description: definition.description,
-    parameters,
-    execute,
-    platforms: definition.adapter ? [definition.adapter] : definition.platforms,
-    scopes: definition.scopes,
-    permissions: definition.permissions,
-    tags: definition.tags,
-    keywords: definition.keywords,
-    hidden: definition.hidden,
-    source: pluginName,
-    filePath,
-    approval: definition.approval,
-    toModelOutput: definition.toModelOutput,
-  };
-}
-
-export function bridgeAuthoringToolToOrchestratorTool(bridged: BridgedToolFromAuthoring): Tool {
-  return {
-    name: bridged.name,
-    description: bridged.description,
-    parameters: bridged.parameters,
-    execute: bridged.execute,
-    platforms: bridged.platforms,
-    scopes: bridged.scopes,
-    permissions: bridged.permissions,
-    tags: bridged.tags,
-    keywords: bridged.keywords,
-    hidden: bridged.hidden,
-    source: bridged.source,
-    approval: bridged.approval,
-    toModelOutput: bridged.toModelOutput,
-  };
 }
 
 export function bridgeAuthoringSkill(

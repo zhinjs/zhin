@@ -1,4 +1,4 @@
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { isValidUrl, shortenUrl } from '../../src/short-url-lib.js';
 

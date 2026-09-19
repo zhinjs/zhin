@@ -5,13 +5,13 @@ import { createInMemoryLotteryDb } from '../src/memory-db.js';
 import { upsertDraws } from '../src/db.js';
 import { lotteryRuntimeToken, type LotteryRuntime } from '../src/runtime-state.js';
 import { resolveLotteryConfig } from '../src/config.js';
-import computeRecommend from '../tools/$compute-recommend.js';
-import getModelState from '../tools/$get-model-state.js';
-import history from '../tools/$history.js';
-import listPending from '../tools/$list-pending.js';
-import savePrediction from '../tools/$save-prediction.js';
-import statsSnapshot from '../tools/$stats-snapshot.js';
-import sync from '../tools/$sync.js';
+import computeRecommend from '../agent/tools/$compute-recommend.js';
+import getModelState from '../agent/tools/$get-model-state.js';
+import history from '../agent/tools/$history.js';
+import listPending from '../agent/tools/$list-pending.js';
+import savePrediction from '../agent/tools/$save-prediction.js';
+import statsSnapshot from '../agent/tools/$stats-snapshot.js';
+import sync from '../agent/tools/$sync.js';
 
 const TOOLS = [
   computeRecommend,
@@ -50,14 +50,14 @@ describe('lottery ToolFeature definitions', () => {
       peerDependencies?: Record<string, string>;
       zhin?: { features?: Array<{ package: string }> };
     };
-    expect(manifest.files).toContain('tools');
+    expect(manifest.files).toContain('agent');
     expect(manifest.scripts?.build).toContain('pnpm run clean');
     expect(manifest.dependencies?.zod).toBeDefined();
     expect(manifest.peerDependencies?.zod).toBeUndefined();
     expect(manifest.zhin?.features?.map((feature) => feature.package)).toContain('@zhin.js/tool');
   });
 
-  it('uses only validated tools/*.ts convention definitions', () => {
+  it('uses only validated agent/tools/*.ts convention definitions', () => {
     expect(TOOLS.map(parseAgentToolDefinition)).toEqual([...TOOLS]);
   });
 

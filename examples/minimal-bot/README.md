@@ -43,7 +43,7 @@ minimal-bot/
 ├── commands/$card.ts          # /card -> component("status-card")
 ├── components/$status-card.ts # defineComponent(), compiler-free Satori h()
 ├── agents/$hello.agent.md    # optional Agent capability authoring example
-└── tools/$echo.ts             # optional defineAgentTool() example
+└── agent/tools/$echo.ts             # optional defineAgentTool() example
 ```
 
 `package.json#zhin` is the topology SSOT. It mounts `@zhin.js/adapter`, `@zhin.js/command` and

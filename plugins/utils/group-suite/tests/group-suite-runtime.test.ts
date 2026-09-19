@@ -16,11 +16,11 @@ import teachMiddleware from '../middlewares/$teach-reply.ts';
 import statsCommand from '../commands/$stats.ts';
 import mystatsCommand from '../commands/$mystats.ts';
 import statsMiddleware from '../middlewares/$stats-count.ts';
-import checkinQueryTool from '../tools/$checkin_query.ts';
-import checkinRankTool from '../tools/$checkin_rank.ts';
-import statsQueryTool from '../tools/$stats_query.ts';
-import statsUserTool from '../tools/$stats_user.ts';
-import groupAnnounceTool from '../tools/$group_announce.ts';
+import checkinQueryTool from '../agent/tools/$checkin_query.ts';
+import checkinRankTool from '../agent/tools/$checkin_rank.ts';
+import statsQueryTool from '../agent/tools/$stats_query.ts';
+import statsUserTool from '../agent/tools/$stats_user.ts';
+import groupAnnounceTool from '../agent/tools/$group_announce.ts';
 import {
   addKeyword,
   listKeywords,

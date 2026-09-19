@@ -3,16 +3,11 @@
  * Identity comes from the path; definitions do not carry name/id fields.
  */
 
-import type { ToolParametersSchema } from '../resource-hub/types.js';
-import type { Message } from '@zhin.js/core';
-import type { AdapterClient } from '@zhin.js/tool';
-import type { ToolApprovalPolicy, ToolToModelOutputFn } from '@zhin.js/ai/tool-policy';
 
 export const AUTHORING_KIND = Symbol.for('zhin.authoring.kind');
 
 export type AuthoringKind =
   | 'agent'
-  | 'tool'
   | 'skill'
   | 'schedule'
   | 'connection'
@@ -21,16 +16,6 @@ export type AuthoringKind =
 
 export interface AuthoringMarker {
   [AUTHORING_KIND]: AuthoringKind;
-}
-
-export interface AuthoringToolContext<TAdapter extends string | undefined = undefined> {
-  pluginName: string;
-  runtimeName: string;
-  filePath: string;
-  /** Current IM operation, when the tool was invoked from an IM turn. */
-  message?: Message;
-  /** Lazily resolved native Client. Without `adapter`, its static type is `unknown`. */
-  readonly $client: AdapterClient<TAdapter>;
 }
 
 export interface AuthoringAgentDefinition extends AuthoringMarker {
@@ -45,28 +30,6 @@ export interface AuthoringAgentDefinition extends AuthoringMarker {
   /** Tool names or {@link disableTool} sentinels to exclude from this agent. */
   disallowedTools?: (string | import('./disable-tool.js').DisabledToolRef)[];
   systemPrompt?: string;
-}
-
-export interface AuthoringToolDefinition<
-  TInput = Record<string, unknown>,
-  TAdapter extends string | undefined = string | undefined,
-> extends AuthoringMarker {
-  [AUTHORING_KIND]: 'tool';
-  description: string;
-  inputSchema: unknown;
-  execute: (input: TInput, ctx: AuthoringToolContext<TAdapter>) => unknown | Promise<unknown>;
-  /** Restrict this tool to one adapter and infer `context.$client`. */
-  adapter?: TAdapter;
-  platforms?: string[];
-  scopes?: ('private' | 'group' | 'channel')[];
-  permissions?: string[];
-  tags?: string[];
-  keywords?: string[];
-  hidden?: boolean;
-  /** `always` | `once` | `never` or custom predicate — stacks with ExecPolicy (ADR 0039 P1). */
-  approval?: ToolApprovalPolicy;
-  /** Shapes string sent to the model after execute (ADR 0039 P1). */
-  toModelOutput?: ToolToModelOutputFn<TInput>;
 }
 
 export interface AuthoringSkillDefinition extends AuthoringMarker {
@@ -126,14 +89,6 @@ export interface AuthoringEvalDefinition extends AuthoringMarker {
   test: (t: AuthoringEvalContext) => void | Promise<void>;
 }
 
-export interface DiscoveredAuthoringTool {
-  runtimeName: string;
-  slotName: string;
-  pluginName: string;
-  filePath: string;
-  definition: AuthoringToolDefinition;
-}
-
 export interface DiscoveredAuthoringSkill {
   runtimeName: string;
   slotName: string;
@@ -180,7 +135,6 @@ export interface DiscoveredPluginAgentSurface {
   agentDefinition?: AuthoringAgentDefinition;
   instructionsPath?: string;
   instructionsBody?: string;
-  tools: DiscoveredAuthoringTool[];
   skills: DiscoveredAuthoringSkill[];
   schedules: DiscoveredAuthoringSchedule[];
   connections: DiscoveredAuthoringConnection[];
@@ -192,23 +146,4 @@ export interface DiscoveredPluginAgentSurface {
 export function isAuthoringDefinition(value: unknown, kind: AuthoringKind): boolean {
   return typeof value === 'object' && value !== null
     && (value as AuthoringMarker)[AUTHORING_KIND] === kind;
-}
-
-export type BridgedToolExecute = (args: Record<string, unknown>, message?: Message) => unknown | Promise<unknown>;
-
-export interface BridgedToolFromAuthoring {
-  name: string;
-  description: string;
-  parameters: ToolParametersSchema;
-  execute: BridgedToolExecute;
-  platforms?: string[];
-  scopes?: ('private' | 'group' | 'channel')[];
-  permissions?: string[];
-  tags?: string[];
-  keywords?: string[];
-  hidden?: boolean;
-  source: string;
-  filePath: string;
-  approval?: ToolApprovalPolicy;
-  toModelOutput?: ToolToModelOutputFn;
 }

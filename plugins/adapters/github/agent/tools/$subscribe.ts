@@ -1,4 +1,4 @@
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { executeGithubSubscribe } from '../../src/github-tool-handlers.js';
 
@@ -11,6 +11,6 @@ export default defineAgentTool<{ repo: string; events?: string }>({
   adapter: 'github',
   tags: ['github'],
   async execute(input, context) {
-    return executeGithubSubscribe(input, context.$client, context.message);
+    return executeGithubSubscribe(input, context.$client);
   },
 });

@@ -142,7 +142,7 @@ IM turn 的场景，才使用 `icqqClient.get(context, endpointId)` 显式选择
 - `src/icqq-inbound.ts`：把 ICQQ 原生消息归一为 Zhin 入站消息
 - `src/protocol.ts`：配置解析、会话映射与出站目标转换
 - `src/client.ts`：向插件作者暴露 ICQQ `Client` / `EventMap` 类型注册
-- Agent 工具：`tools/$*.ts`；权限说明见 `agent/PERMITS.md`
+- Agent 工具：`agent/tools/$*.ts`；权限说明见 `agent/PERMITS.md`
 
 阅读适配器实现时从 `endpoint.ts` 看能力装配，再进入对应能力文件。包外代码只从
 `@zhin.js/adapter-icqq` 与 `zhin.js/adapter` 的公开入口导入，不依赖上述源码路径。

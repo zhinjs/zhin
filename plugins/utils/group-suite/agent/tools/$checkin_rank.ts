@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
-import { getCheckinModel } from '../src/db-store.js';
-import { groupSuiteRuntimeToken } from '../src/runtime-state.js';
+import { getCheckinModel } from '../../src/db-store.js';
+import { groupSuiteRuntimeToken } from '../../src/runtime-state.js';
 
 export default defineAgentTool<{ limit?: number; group_id?: string }>({
   description: '查询当前群或指定群的签到积分排行榜',

@@ -39,7 +39,7 @@ ai:
 
 ## 3. 声明一个 Tool
 
-创建 `tools/$weather.ts`：
+创建 `agent/tools/$weather.ts`：
 
 ```ts
 import { defineAgentTool } from '@zhin.js/tool';

@@ -27,7 +27,7 @@ flowchart LR
 | `handlers/` | `$*.ts` | 是（`/` 分段；省略 `event` 时映为 `.` 事件名） | server | `@zhin.js/handler` | `zhin.handler` | `defineHandler(...)` |
 | `components/` | `$*.ts` / `$*.tsx` | 是 | server | `@zhin.js/component` | `zhin.component` | `defineComponent(...)` |
 | `adapters/` | `$*.ts` | 是 | server | `@zhin.js/adapter` | `zhin.adapter` | `defineAdapter(...)` |
-| `tools/` | `$*.ts` | 否 | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
+| `agent/tools/` | `$*.ts` | 否 | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
 | `agent/prompt-sections/` | `$*.ts` | 是 | server | `@zhin.js/prompt-section` | `zhin.agent-prompt-section` | `defineAgentPromptSection(...)` |
 | `skills/` | 子目录 + `SKILL.md` | 一层 | server | `@zhin.js/skill` | `zhin.skill` | Markdown 文本 |
 | `agents/` | `$*.agent.md` | 否 | server | `@zhin.js/agent-feature` | `zhin.agent` | Markdown 文本 |
@@ -38,7 +38,7 @@ flowchart LR
 
 `$` 只标记入口，不属于 `localName`。没有 `$` 的文件不会被发现，也不会被校验为 capability。入口去掉 `$` 和扩展名后，默认须匹配 `^[a-z0-9][a-z0-9-]*$`（小写字母/数字开头、可含连字符）；目录段沿用同一规则。
 
-**例外：`commands/`** 静态段还允许 Unicode 名（如 `$赞我.ts`），规则与 `isCapabilityLocalSegment`（`zhin.js`）一致——ASCII kebab，或含非 ASCII 字母且无 ASCII 大写的 Unicode 标识；动态参数文件（`$[name].ts` 等）仍限 ASCII。`tools/` 额外允许 ASCII snake（如 `$send_user_like.ts`）。其它约定目录（middlewares / adapters / …）不放宽。
+**例外：`commands/`** 静态段还允许 Unicode 名（如 `$赞我.ts`），规则与 `isCapabilityLocalSegment`（`zhin.js`）一致——ASCII kebab，或含非 ASCII 字母且无 ASCII 大写的 Unicode 标识；动态参数文件（`$[name].ts` 等）仍限 ASCII。`agent/tools/` 额外允许 ASCII snake（如 `$send_user_like.ts`）。其它约定目录（middlewares / adapters / …）不放宽。
 
 各目录的补充规则：
 
@@ -49,7 +49,7 @@ flowchart LR
 | `handlers/` | 相对路径去扩展名，`/` 拼接为 capability localName；省略 `event` 时把 `/` 映成 `.` 作为 Lifecycle 事件名 | `handlers/message/$receive.ts` → localName `message/receive` → event `message.receive` |
 | `components/` | 相对路径去扩展名，`/` 拼接 | `components/$share-music.ts` → `share-music` |
 | `adapters/` | 同上 | `adapters/$napcat.ts` → `napcat` |
-| `tools/` | 文件名去扩展名（不递归子目录）；ASCII kebab 或 snake | `tools/$music-search.ts` → `music-search`；`tools/$send_user_like.ts` → `send_user_like` |
+| `agent/tools/` | 文件名去扩展名（不递归子目录）；ASCII kebab 或 snake | `agent/tools/$music-search.ts` → `music-search`；`agent/tools/$send_user_like.ts` → `send_user_like` |
 | `agent/prompt-sections/` | 相对路径去扩展名，`/` 拼接 | `agent/prompt-sections/project/$rules.ts` → `project/rules` |
 | `skills/` | 子目录名即 localName，目录内必须含 `SKILL.md` | `skills/memory-consolidate/SKILL.md` → `memory-consolidate` |
 | `agents/` | 文件名去掉 `$` 前缀与 `.agent.md` 后缀 | `agents/$planner.agent.md` → `planner` |
@@ -170,10 +170,10 @@ export default defineAdapter<NapCatAdapterConfig>({
 
 `capabilities` 至少含 `inbound` / `outbound` 之一；`create` 返回的 Endpoint 生命周期见 [WS/SSE 端点生命周期](./endpoint-lifecycle.md)。
 
-### tools/ — `defineAgentTool`
+### agent/tools/ — `defineAgentTool`
 
 ```ts
-// plugins/utils/music/tools/$music-search.ts（节选）
+// plugins/utils/music/agent/tools/$music-search.ts（节选）
 import { defineAgentTool } from '@zhin.js/tool';
 
 export default defineAgentTool<{ keyword: string; source?: MusicSource; limit?: number }>({
@@ -210,4 +210,4 @@ tools:
 
 ## 仓库实例
 
-想找生产级参照时，直接翻这些目录：`commands` 看 `plugins/utils/lottery/commands/`（含动态参数 `lottery/$[[game]].ts`）；`middlewares` 看 `plugins/utils/group-suite/middlewares/` 和 `plugins/games/*/middlewares/`；`handlers` 用 `handlers/message/$receive.ts` + `defineHandler`（见上文最小形态；仓库内示例可按需自加）；`components` 看 `plugins/utils/music/components/$share-music.ts`；`adapters` 看 `plugins/adapters/napcat/adapters/$napcat.ts`；`tools` 看 `plugins/utils/music/tools/` 与 `plugins/utils/group-suite/tools/`；`skills` 看 `examples/full-bot/skills/memory-consolidate/`；`agents` 看 `examples/multi-agent-room/agents/`；`pages` 看 `examples/full-bot/pages/$workroom.tsx`。
+想找生产级参照时，直接翻这些目录：`commands` 看 `plugins/utils/lottery/commands/`（含动态参数 `lottery/$[[game]].ts`）；`middlewares` 看 `plugins/utils/group-suite/middlewares/` 和 `plugins/games/*/middlewares/`；`handlers` 用 `handlers/message/$receive.ts` + `defineHandler`（见上文最小形态；仓库内示例可按需自加）；`components` 看 `plugins/utils/music/components/$share-music.ts`；`adapters` 看 `plugins/adapters/napcat/adapters/$napcat.ts`；`agent/tools` 看 `plugins/utils/music/agent/tools/` 与 `plugins/utils/group-suite/agent/tools/`；`skills` 看 `examples/full-bot/skills/memory-consolidate/`；`agents` 看 `examples/multi-agent-room/agents/`；`pages` 看 `examples/full-bot/pages/$workroom.tsx`。

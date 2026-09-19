@@ -48,8 +48,8 @@ describe('NativeDevelopmentModuleRuntime', () => {
 
     expect(runtime.requiresProcessRestart(join(root, 'commands/gh/$status.ts'))).toBe(false);
     expect(runtime.requiresProcessRestart(join(root, 'components/$card.ts'))).toBe(false);
-    expect(runtime.requiresProcessRestart(join(root, 'tools/$weather.ts'))).toBe(false);
-    expect(runtime.requiresProcessRestart(join(root, 'tools/shared/client.ts'))).toBe(true);
+    expect(runtime.requiresProcessRestart(join(root, 'agent/tools/$weather.ts'))).toBe(false);
+    expect(runtime.requiresProcessRestart(join(root, 'agent/tools/shared/client.ts'))).toBe(true);
     expect(runtime.requiresProcessRestart(join(root, 'src/helper.ts'))).toBe(true);
     expect(runtime.requiresProcessRestart(join(root, 'schema.json'))).toBe(false);
     await runtime.close();

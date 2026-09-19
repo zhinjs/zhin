@@ -1,4 +1,4 @@
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { executeGithubCreatePr } from '../../src/github-bot-handlers.js';
 
@@ -15,6 +15,6 @@ export default defineAgentTool<{ repo?: string; title: string; body?: string; he
   tags: ['github'],
   approval: 'always',
   async execute(input, context) {
-    return executeGithubCreatePr(input, context.$client, context.message);
+    return executeGithubCreatePr(input, context.$client);
   },
 });

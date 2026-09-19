@@ -21,7 +21,7 @@ const watchedExtensions = new Set([
   '.cjs', '.js', '.json', '.md', '.mjs', '.ts', '.tsx', '.yaml', '.yml',
 ]);
 const capabilityRoots = new Set([
-  'adapters', 'agent', 'agents', 'commands', 'components', 'handlers', 'mcp', 'middlewares', 'pages', 'skills', 'tools',
+  'adapters', 'agent', 'agents', 'commands', 'components', 'handlers', 'mcp', 'middlewares', 'pages', 'skills',
 ]);
 
 /**
@@ -74,9 +74,10 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     if (root === 'skills' || root === 'agents') return extname(normalized) !== '.md';
     if (root === 'agent') {
       const local = parts.slice(capability + 1);
+      if (local[0] === 'tools') return !isFlatCapabilityEntry(local.slice(1));
       return local[0] !== 'prompt-sections' || !isCapabilityEntry(local.slice(1));
     }
-    if (root === 'tools' || root === 'mcp') {
+    if (root === 'mcp') {
       return !isFlatCapabilityEntry(parts.slice(capability + 1));
     }
     if (isCapabilityEntry(parts.slice(capability + 1))) return false;

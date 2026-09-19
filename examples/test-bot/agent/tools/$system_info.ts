@@ -1,7 +1,7 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import * as os from 'node:os';
-import { formatBytes } from '../lib/bytes.js';
+import { formatBytes } from '../../lib/bytes.js';
 
 const schema = z.object({
   section: z.enum(['time', 'memory', 'system', 'all']).default('all'),

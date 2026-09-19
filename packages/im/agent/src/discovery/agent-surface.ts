@@ -14,13 +14,11 @@ import {
   type AuthoringHookDefinition,
   type AuthoringScheduleDefinition,
   type AuthoringSkillDefinition,
-  type AuthoringToolDefinition,
   type DiscoveredAuthoringConnection,
   type DiscoveredAuthoringEval,
   type DiscoveredAuthoringHook,
   type DiscoveredAuthoringSchedule,
   type DiscoveredAuthoringSkill,
-  type DiscoveredAuthoringTool,
   type DiscoveredPluginAgentSurface,
 } from '../authoring/types.js';
 import {
@@ -108,27 +106,6 @@ function listSubagentDirs(dir: string): string[] {
   } catch {
     return [];
   }
-}
-
-async function loadToolFile(
-  filePath: string,
-  pluginName: string,
-  bareNames: boolean,
-  packageRoot?: string,
-): Promise<DiscoveredAuthoringTool | null> {
-  const slotName = slotNameFromFile(filePath);
-  const exported = await importAuthoringModule(filePath, packageRoot);
-  if (!isAuthoringDefinition(exported, 'tool')) {
-    logger.debug(`Skip non-tool authoring file: ${filePath}`);
-    return null;
-  }
-  return {
-    runtimeName: namespaceAuthoringName(pluginName, slotName, bareNames),
-    slotName,
-    pluginName,
-    filePath,
-    definition: exported as AuthoringToolDefinition,
-  };
 }
 
 async function loadSkillFile(
@@ -259,7 +236,6 @@ async function scanAgentDir(
   bareNames: boolean,
   packageRoot?: string,
 ): Promise<Omit<DiscoveredPluginAgentSurface, 'pluginName' | 'agentDir' | 'evals'>> {
-  const tools: DiscoveredAuthoringTool[] = [];
   const skills: DiscoveredAuthoringSkill[] = [];
   const schedules: DiscoveredAuthoringSchedule[] = [];
   const connections: DiscoveredAuthoringConnection[] = [];
@@ -281,10 +257,6 @@ async function scanAgentDir(
     .find((p) => fs.existsSync(p));
   const instructionsBody = instructionsPath ? await readTextIfExists(instructionsPath) : undefined;
 
-  for (const file of listTsFiles(path.join(agentDir, 'tools'))) {
-    const item = await loadToolFile(file, pluginName, bareNames, packageRoot);
-    if (item) tools.push(item);
-  }
   for (const file of listSkillFiles(path.join(agentDir, 'skills'))) {
     const item = await loadSkillFile(file, pluginName, bareNames, packageRoot);
     if (item) skills.push(item);
@@ -325,7 +297,6 @@ async function scanAgentDir(
     agentDefinition,
     instructionsPath,
     instructionsBody: instructionsBody?.trim() || undefined,
-    tools,
     skills,
     schedules,
     connections,
@@ -342,7 +313,6 @@ export async function discoverPluginAgentSurface(
     const scanned = fs.existsSync(roots.agentDir)
       ? await scanAgentDir(roots.agentDir, roots.pluginName, false, roots.packageRoot)
       : {
-          tools: [],
           skills: [],
           schedules: [],
           connections: [],

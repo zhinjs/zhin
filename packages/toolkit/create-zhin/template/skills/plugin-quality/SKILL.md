@@ -74,7 +74,7 @@ export default definePlugin({ name: 'my-plugin', setup() {} })
 ## 审查流程
 
 1. 读 `package.json#zhin` + `plugin.ts`
-2. 扫 `commands/` / `tools/` / `middlewares/` 是否 default export 正确 API
+2. 扫 `commands/` / `agent/tools/` / `middlewares/` 是否 default export 正确 API
 3. ripgrep：`usePlugin|MessageCommand|getPlugin|bootstrapNode`
 4. 跑 `pnpm --filter <pkg> test`（及需要的 harness）
 5. 输出问题清单（严重度 + 建议修复）

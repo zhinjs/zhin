@@ -1,7 +1,7 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { handleStatsSnapshot } from '../src/lottery-tool-handlers.js';
-import { lotteryRuntimeToken } from '../src/runtime-state.js';
+import { handleStatsSnapshot } from '../../src/lottery-tool-handlers.js';
+import { lotteryRuntimeToken } from '../../src/runtime-state.js';
 
 export default defineAgentTool<{ game: string }>({
   description: 'Get stats snapshot for a lottery game',

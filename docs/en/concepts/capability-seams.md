@@ -1,7 +1,7 @@
 # Capability Seam
 
 Capability Seam is an **Advanced / experimental** provider extension for the Agent Runtime. Regular
-plugins should continue to use `tools/$*.ts`, `agent/skills/$*.md`, `addTool`, or `addSkill`.
+plugins should continue to use `agent/tools/$*.ts`, `agent/skills/$*.md`, `addTool`, or `addSkill`.
 Those Feature paths provide manifest ownership, owner visibility, Generation HMR, and conflict
 validation. Seam is intended for a Root Host that must connect a remote capability service or an
 existing generation-owned registry.

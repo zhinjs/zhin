@@ -1,4 +1,4 @@
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { executeGithubPrepareWorkspace } from '../../src/github-bot-handlers.js';
 
@@ -10,6 +10,6 @@ export default defineAgentTool<{ repo?: string }>({
   }),
   tags: ['github'],
   async execute(input, context) {
-    return executeGithubPrepareWorkspace(input, context.$client, context.message);
+    return executeGithubPrepareWorkspace(input, context.$client);
   },
 });

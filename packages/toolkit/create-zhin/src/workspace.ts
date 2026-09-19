@@ -760,10 +760,10 @@ export default defineComponent<StatusCardProps>({
 });
 `);
 
-  // tools/$echo.ts（AI 启用时生成，defineAgentTool 约定目录）
+  // agent/tools/$echo.ts（AI 启用时生成，defineAgentTool 约定目录）
   if (aiEnabled) {
-    await fs.ensureDir(path.join(projectPath, 'tools'));
-    await fs.writeFile(path.join(projectPath, 'tools', '$echo.ts'),
+    await fs.ensureDir(path.join(projectPath, 'agent', 'tools'));
+    await fs.writeFile(path.join(projectPath, 'agent', 'tools', '$echo.ts'),
 `import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -834,8 +834,8 @@ export default defineCommand({
 `);
 
     if (aiEnabled) {
-      await fs.ensureDir(path.join(projectPath, 'tools'));
-      await fs.writeFile(path.join(projectPath, 'tools', '$get_current_time.ts'),
+      await fs.ensureDir(path.join(projectPath, 'agent', 'tools'));
+      await fs.writeFile(path.join(projectPath, 'agent', 'tools', '$get_current_time.ts'),
 `import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 

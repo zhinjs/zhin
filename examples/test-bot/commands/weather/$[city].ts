@@ -1,7 +1,7 @@
 import { defineCommand } from 'zhin.js/command';
 import { fetchWttrWeather } from '../../lib/wttr.js';
 
-/** Live weather (wttr.in); same source as tools/$weather.ts. */
+/** Live weather (wttr.in); same source as agent/tools/$weather.ts. */
 export default defineCommand({
   description: '查询城市实时天气（wttr.in）',
   params: { city: { type: 'string' } },

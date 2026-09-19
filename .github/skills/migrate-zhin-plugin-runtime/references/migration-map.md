@@ -9,7 +9,7 @@
 | `plugin.on('message.*.receive')` / `plugin.on('message.receive')` | 有序链：`middlewares/$*.ts` + `target: 'inbound'`；fire-and-forget：`handlers/message/$receive.ts` + `defineHandler()`（localName 用 `/`，省略 `event` 时映为 `message.receive`） |
 | `plugin.on('before.sendMessage')` | `middlewares/$*.ts` + `target: 'outbound'` |
 | `addComponent(fn)` | `components/$*.ts(x)` + `defineComponent()` |
-| `addTool()` / Tool registry | `tools/$*.ts` + `defineAgentTool()` |
+| `addTool()` / Tool registry | `agent/tools/$*.ts` + `defineAgentTool()` |
 | `addCron(new Cron(...))` | `plugin.ts` setup + `scheduleHostToken.register()`，或 `agent/schedules/*.ts` + `defineSchedule()` |
 | Skill registry | `agent/skills/<name>.md`（插件包**禁止**顶层 `skills/`，见 `check:no-package-skills`） |
 | Agent registry | `agents/$<name>.agent.md` |

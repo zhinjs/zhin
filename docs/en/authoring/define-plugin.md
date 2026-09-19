@@ -137,7 +137,7 @@ if (config.heartbeatCron && context.resources.has(scheduleHostToken)) {
   }));
 }
 
-// Agent tool: shares the same candidate capability table as tools/$*.ts
+// Agent tool: shares the same candidate capability table as agent/tools/$*.ts
 context.addTool('showcase_greet', defineAgentTool<{ name?: string }>({
     description: 'Return the configured greeting for a name',
     approval: 'never',

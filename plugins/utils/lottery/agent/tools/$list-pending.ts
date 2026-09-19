@@ -1,7 +1,7 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { handleListPending } from '../src/lottery-tool-handlers.js';
-import { lotteryRuntimeToken } from '../src/runtime-state.js';
+import { handleListPending } from '../../src/lottery-tool-handlers.js';
+import { lotteryRuntimeToken } from '../../src/runtime-state.js';
 
 export default defineAgentTool<{ game?: string }>({
   description: 'List pending lottery predictions awaiting review',

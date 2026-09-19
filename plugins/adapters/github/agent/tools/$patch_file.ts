@@ -1,4 +1,4 @@
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { executeGithubPatchFile } from '../../src/github-bot-handlers.js';
 
@@ -14,6 +14,6 @@ export default defineAgentTool<{ repo?: string; path: string; content: string; m
   }),
   tags: ['github'],
   async execute(input, context) {
-    return executeGithubPatchFile(input, context.$client, context.message);
+    return executeGithubPatchFile(input, context.$client);
   },
 });

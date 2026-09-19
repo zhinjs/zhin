@@ -1,7 +1,7 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { handleGetModelState } from '../src/lottery-tool-handlers.js';
-import { lotteryRuntimeToken } from '../src/runtime-state.js';
+import { handleGetModelState } from '../../src/lottery-tool-handlers.js';
+import { lotteryRuntimeToken } from '../../src/runtime-state.js';
 
 export default defineAgentTool<{ game?: string }>({
   description: 'Query model weights and historical hit rate per game',

@@ -651,7 +651,6 @@ export type { FiveAgentRole } from './builtin/five-agent/index.js';
 
 export {
   defineAgent,
-  defineAgentTool,
   defineSkill,
   defineSchedule,
   defineConnection,
@@ -665,16 +664,13 @@ export {
 } from './authoring/index.js';
 export type {
   AuthoringAgentDefinition,
-  AuthoringToolDefinition,
   AuthoringSkillDefinition,
   AuthoringScheduleDefinition,
   AuthoringConnectionDefinition,
   AuthoringHookDefinition,
   AuthoringEvalDefinition,
-  AuthoringToolContext,
   AuthoringEvalContext,
   DiscoveredPluginAgentSurface,
-  DefineAgentToolInput,
 } from './authoring/index.js';
 export {
   discoverPluginAgentSurface,

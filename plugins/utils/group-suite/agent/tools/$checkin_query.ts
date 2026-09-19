@@ -1,7 +1,7 @@
 import { defineAgentTool } from '@zhin.js/tool';
-import { getCheckinModel } from '../src/db-store.js';
-import { groupSuiteRuntimeToken } from '../src/runtime-state.js';
-import { todayStr } from '../src/shared-runtime.js';
+import { getCheckinModel } from '../../src/db-store.js';
+import { groupSuiteRuntimeToken } from '../../src/runtime-state.js';
+import { todayStr } from '../../src/shared-runtime.js';
 
 export default defineAgentTool<{ user_id?: string; group_id?: string }>({
   description: '查询用户的签到积分，或汇总当前范围的签到数据',

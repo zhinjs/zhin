@@ -1,14 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   defineAgent,
-  defineAgentTool,
   namespaceAuthoringName,
   slotNameFromFile,
   isAuthoringDefinition,
   AUTHORING_KIND,
 } from '../src/authoring/index.js';
 import { z } from 'zod';
-import { bridgeAuthoringConnection, bridgeAuthoringTool } from '../src/authoring/bridge.js';
+import { bridgeAuthoringConnection } from '../src/authoring/bridge.js';
 import { defineConnection } from '../src/authoring/define-connection.js';
 import {
   discoverPluginAgentSurface,
@@ -18,15 +17,6 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 
-declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly authoring_test: {
-      readonly client: { readonly account: string };
-      readonly events: Record<string, unknown>;
-    };
-  }
-}
-
 describe('authoring define* helpers', () => {
   it('defineAgent marks authoring kind', () => {
     const def = defineAgent({ description: 'test agent' });
@@ -34,45 +24,6 @@ describe('authoring define* helpers', () => {
     expect(def[AUTHORING_KIND]).toBe('agent');
   });
 
-  it('defineAgentTool wraps zod schema', () => {
-    const def = defineAgentTool({
-      description: 'echo',
-      inputSchema: z.object({ x: z.string() }),
-      async execute({ x }) { return x; },
-    });
-    expect(isAuthoringDefinition(def, 'tool')).toBe(true);
-  });
-
-  it('resolves an adapter Client lazily for file-based tools', async () => {
-    let reads = 0;
-    const definition = defineAgentTool({
-      description: 'read account',
-      adapter: 'authoring_test',
-      inputSchema: z.object({}),
-      execute(_input, context) {
-        return context.$client.account;
-      },
-    });
-    const bridged = bridgeAuthoringTool({
-      runtimeName: 'fixture_read_account',
-      slotName: 'read_account',
-      pluginName: 'fixture',
-      filePath: '/fixture/agent/tools/$read_account.ts',
-      definition,
-    });
-    const message = {
-      clientAdapter: 'authoring_test',
-      get $client() {
-        reads += 1;
-        return { account: 'bot-1' };
-      },
-    };
-
-    expect(reads).toBe(0);
-    await expect(bridged.execute({}, message as never)).resolves.toBe('bot-1');
-    expect(reads).toBe(1);
-    expect(bridged.platforms).toEqual(['authoring_test']);
-  });
 });
 
 describe('namespaceAuthoringName', () => {
@@ -92,15 +43,14 @@ describe('slotNameFromFile', () => {
 });
 
 describe('agent authoring entry discovery', () => {
-  it('loads only $-marked files and leaves adjacent helpers importable', async () => {
+  it('leaves Agent Tool discovery to the Tool Feature', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-agent-surface-'));
     const tools = path.join(root, 'agent', 'tools');
     fs.mkdirSync(tools, { recursive: true });
     fs.writeFileSync(path.join(tools, 'helper.js'), 'export const value = 1;\n');
     fs.writeFileSync(path.join(tools, '$lookup.js'), [
       "import { value } from './helper.js';",
-      "const KIND = Symbol.for('zhin.authoring.kind');",
-      "export default { [KIND]: 'tool', description: 'lookup', execute: () => value };",
+      "export default { description: 'lookup', execute: () => value };",
       '',
     ].join('\n'));
     try {
@@ -110,7 +60,7 @@ describe('agent authoring entry discovery', () => {
         agentDir: path.join(root, 'agent'),
         evalsDir: path.join(root, 'evals'),
       });
-      expect(surface?.tools.map((tool) => tool.slotName)).toEqual(['lookup']);
+      expect(surface).not.toHaveProperty('tools');
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

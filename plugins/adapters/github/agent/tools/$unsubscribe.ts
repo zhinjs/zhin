@@ -1,4 +1,4 @@
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { executeGithubUnsubscribe } from '../../src/github-tool-handlers.js';
 
@@ -10,6 +10,6 @@ export default defineAgentTool<{ repo: string }>({
   adapter: 'github',
   tags: ['github'],
   async execute(input, context) {
-    return executeGithubUnsubscribe(input, context.$client, context.message);
+    return executeGithubUnsubscribe(input, context.$client);
   },
 });

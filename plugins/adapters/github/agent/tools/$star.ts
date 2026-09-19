@@ -1,4 +1,4 @@
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { executeGithubStar } from '../../src/github-tool-handlers.js';
 
@@ -11,6 +11,6 @@ export default defineAgentTool<{ action: 'star' | 'unstar' | 'check'; repo: stri
   }),
   tags: ['github'],
   async execute(input, context) {
-    return executeGithubStar(input, context.$client, context.message);
+    return executeGithubStar(input, context.$client);
   },
 });

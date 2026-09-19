@@ -27,7 +27,7 @@ A few key points. The full capability id takes the form `owner\0feature\0localNa
 | `handlers/` | `$*.ts` | Yes (`/` segments; omit `event` → map to `.` event name) | server | `@zhin.js/handler` | `zhin.handler` | `defineHandler(...)` |
 | `components/` | `$*.ts` / `$*.tsx` | Yes | server | `@zhin.js/component` | `zhin.component` | `defineComponent(...)` |
 | `adapters/` | `$*.ts` | Yes | server | `@zhin.js/adapter` | `zhin.adapter` | `defineAdapter(...)` |
-| `tools/` | `$*.ts` | No | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
+| `agent/tools/` | `$*.ts` | No | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
 | `agent/prompt-sections/` | `$*.ts` | Yes | server | `@zhin.js/prompt-section` | `zhin.agent-prompt-section` | `defineAgentPromptSection(...)` |
 | `skills/` | Subdirectory + `SKILL.md` | One level | server | `@zhin.js/skill` | `zhin.skill` | Markdown text |
 | `agents/` | `$*.agent.md` | No | server | `@zhin.js/agent-feature` | `zhin.agent` | Markdown text |
@@ -38,7 +38,7 @@ A few key points. The full capability id takes the form `owner\0feature\0localNa
 
 The `$` marker selects an entry and is removed from its `localName`. Files without `$` are neither discovered nor validated as capabilities. After removing the marker and extension, entry names and directory segments must match `^[a-z0-9][a-z0-9-]*$` (lowercase letter/digit start, hyphens allowed). Non-matching files are skipped.
 
-**Exception: `commands/`** static segments also allow Unicode names (e.g. `$赞我.ts`), matching `isCapabilityLocalSegment` (`zhin.js`) — ASCII kebab, or a Unicode identifier with at least one non-ASCII character and no ASCII uppercase. Dynamic parameter files (`$[name].ts`, etc.) remain ASCII-only. `tools/` also allows ASCII snake (e.g. `$send_user_like.ts`). Other convention directories (middlewares / adapters / …) are not relaxed.
+**Exception: `commands/`** static segments also allow Unicode names (e.g. `$赞我.ts`), matching `isCapabilityLocalSegment` (`zhin.js`) — ASCII kebab, or a Unicode identifier with at least one non-ASCII character and no ASCII uppercase. Dynamic parameter files (`$[name].ts`, etc.) remain ASCII-only. `agent/tools/` also allows ASCII snake (e.g. `$send_user_like.ts`). Other convention directories (middlewares / adapters / …) are not relaxed.
 
 Supplementary rules per directory:
 
@@ -49,7 +49,7 @@ Supplementary rules per directory:
 | `handlers/` | Relative path without extension, `/`-joined capability localName; when `event` is omitted, `/` maps to `.` for the Lifecycle event name | `handlers/message/$receive.ts` → localName `message/receive` → event `message.receive` |
 | `components/` | Relative path without extension, joined with `/` | `components/$share-music.ts` -> `share-music` |
 | `adapters/` | Same as above | `adapters/$napcat.ts` -> `napcat` |
-| `tools/` | File name without extension (no subdirectory recursion); ASCII kebab or snake | `tools/$music-search.ts` -> `music-search`; `tools/$send_user_like.ts` -> `send_user_like` |
+| `agent/tools/` | File name without extension (no subdirectory recursion); ASCII kebab or snake | `agent/tools/$music-search.ts` -> `music-search`; `agent/tools/$send_user_like.ts` -> `send_user_like` |
 | `agent/prompt-sections/` | Relative path without extension, joined with `/` | `agent/prompt-sections/project/$rules.ts` -> `project/rules` |
 | `skills/` | Subdirectory name is the localName, directory must contain `SKILL.md` | `skills/memory-consolidate/SKILL.md` -> `memory-consolidate` |
 | `agents/` | File name with `$` prefix and `.agent.md` suffix removed | `agents/$planner.agent.md` -> `planner` |
@@ -156,10 +156,10 @@ export default defineAdapter<NapCatAdapterConfig>({
 
 `capabilities` must contain at least one of `inbound` / `outbound`; the lifecycle of the Endpoint returned by `create` is described in [WS/SSE Endpoint Lifecycle](./endpoint-lifecycle.md).
 
-### tools/ -- `defineAgentTool`
+### agent/tools/ -- `defineAgentTool`
 
 ```ts
-// plugins/utils/music/tools/$music-search.ts (excerpt)
+// plugins/utils/music/agent/tools/$music-search.ts (excerpt)
 import { defineAgentTool } from '@zhin.js/tool';
 
 export default defineAgentTool<{ keyword: string; source?: MusicSource; limit?: number }>({
@@ -196,4 +196,4 @@ tools:
 
 ## Repository Examples
 
-When looking for production-grade references, browse these directories directly: `commands` -- see `plugins/utils/lottery/commands/` (including dynamic parameter `lottery/$[[game]].ts`); `middlewares` -- see `plugins/utils/group-suite/middlewares/` and `plugins/games/*/middlewares/`; `handlers` -- use `handlers/message/$receive.ts` + `defineHandler` (see the minimal form above; add in-repo examples as needed); `components` -- see `plugins/utils/music/components/$share-music.ts`; `adapters` -- see `plugins/adapters/napcat/adapters/$napcat.ts`; `tools` -- see `plugins/utils/music/tools/` and `plugins/utils/group-suite/tools/`; `skills` -- see `examples/full-bot/skills/memory-consolidate/`; `agents` -- see `examples/multi-agent-room/agents/`; `pages` -- see `examples/full-bot/pages/$workroom.tsx`.
+When looking for production-grade references, browse these directories directly: `commands` -- see `plugins/utils/lottery/commands/` (including dynamic parameter `lottery/$[[game]].ts`); `middlewares` -- see `plugins/utils/group-suite/middlewares/` and `plugins/games/*/middlewares/`; `handlers` -- use `handlers/message/$receive.ts` + `defineHandler` (see the minimal form above; add in-repo examples as needed); `components` -- see `plugins/utils/music/components/$share-music.ts`; `adapters` -- see `plugins/adapters/napcat/adapters/$napcat.ts`; `agent/tools` -- see `plugins/utils/music/agent/tools/` and `plugins/utils/group-suite/agent/tools/`; `skills` -- see `examples/full-bot/skills/memory-consolidate/`; `agents` -- see `examples/multi-agent-room/agents/`; `pages` -- see `examples/full-bot/pages/$workroom.tsx`.

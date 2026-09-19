@@ -20,19 +20,18 @@ describe('@zhin.js/adapter-icqq package', () => {
     expect(pkg.dependencies['@zhin.js/tool']).toBe('workspace:*');
     expect(pkg.dependencies['@zhin.js/host-http']).toBeUndefined();
     expect(pkg.zhin.features.map((f: { package: string }) => f.package)).toContain('@zhin.js/tool');
-    expect(pkg.files).toContain('tools');
+    expect(pkg.files).toContain('agent');
   });
 
-  it('plugin tools live under tools/ and use @zhin.js/tool', () => {
-    const like = path.resolve(__dirname, '../tools/$send_user_like.ts');
+  it('plugin tools live under agent/tools/ and use @zhin.js/tool', () => {
+    const like = path.resolve(__dirname, '../agent/tools/$send_user_like.ts');
     expect(fs.existsSync(like)).toBe(true);
     const src = fs.readFileSync(like, 'utf8');
     expect(src).toContain("from '@zhin.js/tool'");
-    expect(src).not.toContain("from '@zhin.js/agent/tools'");
   });
 
   it('send_user_like default-exports a branded @zhin.js/tool definition', async () => {
-    const like = path.resolve(__dirname, '../tools/$send_user_like.ts');
+    const like = path.resolve(__dirname, '../agent/tools/$send_user_like.ts');
     const mod = await import(pathToFileURL(like).href) as {
       default: { $feature: string; description: string; platforms?: readonly string[] };
     };
@@ -44,7 +43,7 @@ describe('@zhin.js/adapter-icqq package', () => {
 
   it('tool permissions use valid permit DSL (not platform(icqq) without a perm)', async () => {
     const { isBuiltinPermit, isPlatformPermit } = await import('@zhin.js/permission');
-    const dir = path.resolve(__dirname, '../tools');
+    const dir = path.resolve(__dirname, '../agent/tools');
     const files = fs.readdirSync(dir).filter((name) => name.endsWith('.ts'));
     expect(files.length).toBeGreaterThan(10);
     for (const file of files) {

@@ -74,8 +74,10 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
 
   it('uses a static manifest and convention directories without legacy registration', () => {
     expect(packageJson.zhin.entry).toBe('./plugin.ts');
-    // Stable Features are shipped with zhin.js and mounted by RootRuntime by default.
-    expect(packageJson.zhin.features).toEqual([]);
+    // AI remains opt-in; the example mounts Tool explicitly for agent/tools/$echo.ts.
+    expect(packageJson.zhin.features).toEqual([
+      { package: '@zhin.js/tool', api: '^1.0.0' },
+    ]);
     expect(packageJson.zhin.plugins).toEqual([]);
     expect(packageJson.dependencies).toHaveProperty('zhin.js');
     expect(packageJson.dependencies).not.toHaveProperty('@zhin.js/command');
@@ -95,7 +97,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       .toContain('defineComponent');
     expect(fs.readFileSync(path.join(botRoot, 'adapters/$terminal.ts'), 'utf8'))
       .toContain('defineAdapter');
-    expect(fs.readFileSync(path.join(botRoot, 'tools/$echo.ts'), 'utf8'))
+    expect(fs.readFileSync(path.join(botRoot, 'agent/tools/$echo.ts'), 'utf8'))
       .toContain('defineAgentTool');
   });
 
@@ -256,9 +258,9 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       started: true,
       generation: 1,
       plugins: 1,
-      capabilities: 4,
-      // adapter + command + component + middleware + handler（platformFeatures 继承）
-      projections: 5,
+      capabilities: 5,
+      // adapter + command + component + middleware + handler + tool（platformFeatures 继承）
+      projections: 6,
     });
     expect((await new MigrationReadiness().inspect(botRoot)).state).toBe('ready');
   });

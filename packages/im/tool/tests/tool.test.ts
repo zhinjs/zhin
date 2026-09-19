@@ -33,7 +33,7 @@ declare module '@zhin.js/feature-kit' {
 }
 
 describe('Tool Feature', () => {
-  it('brands definitions and discovers flat tools/$*.ts', async () => {
+  it('brands definitions and discovers flat agent/tools/$*.ts', async () => {
     const definition = defineAgentTool({
       description: 'Get weather',
       execute: (input: { city: string }) => input.city,
@@ -41,11 +41,11 @@ describe('Tool Feature', () => {
     expect(definition.approval).toBe('on-risk');
     expect(parseAgentToolDefinition(definition)).toBe(definition);
     const host = new MemoryHost({
-      '/project/tools': [
+      '/project/agent/tools': [
         { name: '$weather.ts', kind: 'file' },
         { name: 'nested', kind: 'directory' },
       ],
-    }, new Map([['/project/tools/$weather.ts', { default: definition }]]));
+    }, new Map([['/project/agent/tools/$weather.ts', { default: definition }]]));
     const slots = await new FeatureDiscovery(host).discover(toolFeature, [{
       owner: rootPluginId(), packageRoot: '/project',
     }]);
@@ -53,7 +53,7 @@ describe('Tool Feature', () => {
     expect(slots.map((slot) => slot.localName)).toEqual(['weather']);
   });
 
-  it('discovers snake_case tool files such as send_user_like.ts', async () => {
+  it('ignores removed package-root tools directories', async () => {
     const definition = defineAgentTool({
       description: '给用户点赞',
       execute: () => 'ok',
@@ -67,7 +67,7 @@ describe('Tool Feature', () => {
       owner: rootPluginId(), packageRoot: '/project',
     }]);
 
-    expect(slots.map((slot) => slot.localName)).toEqual(['send_user_like']);
+    expect(slots).toEqual([]);
   });
 
   it('discovers plugin AI tools from agent/tools with the same owner context', async () => {

@@ -81,7 +81,7 @@ plugins/{name}/
 | `commands/**/$*.ts` | `defineCommand()`；未加 `$` 的文件是普通依赖模块 |
 | `middlewares/$*.ts` | `defineMiddleware()` |
 | `components/$*.tsx` | `defineComponent()` |
-| `tools/$*.ts` | `defineAgentTool()` |
+| `agent/tools/$*.ts` | `defineAgentTool()` |
 | `pages/$*.tsx` | `definePage()` |
 | `skills/<name>/SKILL.md` | Markdown Skill |
 | `agents/$<name>.agent.md` | Markdown Agent |

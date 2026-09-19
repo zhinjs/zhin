@@ -1,8 +1,8 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { parseGameId } from '../src/games/registry.js';
-import { lotteryRuntimeToken } from '../src/runtime-state.js';
-import { runDataSync } from '../src/sync/run-sync.js';
+import { parseGameId } from '../../src/games/registry.js';
+import { lotteryRuntimeToken } from '../../src/runtime-state.js';
+import { runDataSync } from '../../src/sync/run-sync.js';
 
 export default defineAgentTool<{ game?: string }>({
   description: 'Sync official lottery draws into DB',

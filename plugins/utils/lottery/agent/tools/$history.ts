@@ -1,8 +1,8 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { parseGameId } from '../src/games/registry.js';
-import { loadDraws } from '../src/db.js';
-import { lotteryRuntimeToken } from '../src/runtime-state.js';
+import { parseGameId } from '../../src/games/registry.js';
+import { loadDraws } from '../../src/db.js';
+import { lotteryRuntimeToken } from '../../src/runtime-state.js';
 
 export default defineAgentTool<{ game: string; count?: number }>({
   description: 'Query historical lottery draws',

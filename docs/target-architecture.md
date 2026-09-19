@@ -62,7 +62,7 @@ plugin-package/
   components/**/$*.ts(x)
   middlewares/**/$*.ts
   handlers/**/$*.ts
-  tools/$*.ts
+  agent/tools/$*.ts
   skills/<name>/SKILL.md
   agents/$<name>.agent.md
   pages/$*.ts(x)
@@ -122,7 +122,7 @@ disposal. Standard providers use the following conventions:
 | Middleware | `middlewares/**/$*.ts` / `defineMiddleware()` | Inbound/outbound pipeline |
 | Handler | `handlers/**/$*.ts` / `defineHandler()` (`.`-joined localName) | HandlerIndex (`message.receive` wired in ImRuntime) |
 | Adapter | `adapters/**/$*.ts` / `defineAdapter()` | AdapterIndex |
-| Tool | `tools/$*.ts` / `defineAgentTool()` | Agent capability catalog |
+| Tool | `agent/tools/$*.ts` / `defineAgentTool()` | Agent capability catalog |
 | Skill | `skills/<name>/SKILL.md` | Agent capability catalog |
 | Agent | `agents/$<name>.agent.md` | Agent capability catalog |
 | Prompt Section | `agent/prompt-sections/**/$*.ts` / `defineAgentPromptSection()` | Fixed-generation Agent prompt assembly |

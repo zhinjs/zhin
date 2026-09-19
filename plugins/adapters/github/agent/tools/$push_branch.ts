@@ -1,4 +1,4 @@
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { executeGithubPushBranch } from '../../src/github-bot-handlers.js';
 
@@ -13,6 +13,6 @@ export default defineAgentTool<{ repo?: string; branch?: string; message: string
   tags: ['github'],
   approval: 'always',
   async execute(input, context) {
-    return executeGithubPushBranch(input, context.$client, context.message);
+    return executeGithubPushBranch(input, context.$client);
   },
 });

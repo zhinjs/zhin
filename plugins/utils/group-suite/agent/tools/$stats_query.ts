@@ -1,7 +1,7 @@
 import { defineAgentTool } from '@zhin.js/tool';
-import { groupSuiteRuntimeToken } from '../src/runtime-state.js';
-import { flushStatsBuffer, monthStartStr, queryStats, weekStartStr } from '../src/stats-lib.js';
-import { todayStr } from '../src/shared-runtime.js';
+import { groupSuiteRuntimeToken } from '../../src/runtime-state.js';
+import { flushStatsBuffer, monthStartStr, queryStats, weekStartStr } from '../../src/stats-lib.js';
+import { todayStr } from '../../src/shared-runtime.js';
 
 type Period = 'today' | 'week' | 'month';
 

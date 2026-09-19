@@ -1,4 +1,4 @@
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { executeGithubBind } from '../../src/github-tool-handlers.js';
 
@@ -8,6 +8,6 @@ export default defineAgentTool<{}>({
   inputSchema: z.object({}),
   tags: ['github'],
   async execute(input, context) {
-    return executeGithubBind({}, context.$client, context.message);
+    return executeGithubBind({}, context.$client);
   },
 });

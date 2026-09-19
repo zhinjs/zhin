@@ -71,11 +71,6 @@
       "development": "./src/turn/index.ts",
       "import": "./lib/turn/index.js"
     },
-    "./tools": {
-      "types": "./lib/authoring/entries/tools.d.ts",
-      "development": "./src/authoring/entries/tools.ts",
-      "import": "./lib/authoring/entries/tools.js"
-    },
     "./skills": {
       "types": "./lib/authoring/entries/skills.d.ts",
       "development": "./src/authoring/entries/skills.ts",

@@ -126,6 +126,11 @@ const checks = [
     description: '60s API transport 必须归属当前 Plugin owner，不使用进程级注册栈',
   },
   {
+    name: 'Agent Tool Authoring Boundaries',
+    command: 'pnpm check:agent-tool-authoring-boundaries',
+    description: 'Agent Tool 只使用 @zhin.js/tool 与 agent/tools/$*.ts，并显式挂载 Feature',
+  },
+  {
     name: 'IM Session SSOT',
     command: 'pnpm check:im-session-ssot',
     description: '检查 IM 场景/session 身份解析是否使用 core SSOT',

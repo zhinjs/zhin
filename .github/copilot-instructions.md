@@ -56,7 +56,7 @@ export default defineCommand({
 | `commands/**/$*.ts` | `defineCommand()` |
 | `middlewares/$*.ts` | `defineMiddleware()` |
 | `components/$*.tsx` | `defineComponent()` |
-| `tools/$*.ts` | `defineAgentTool()` |
+| `agent/tools/$*.ts` | `defineAgentTool()` |
 | `pages/$*.tsx` | `definePage()` |
 | `skills/<name>/SKILL.md` | Skill |
 | `agents/$<name>.agent.md` | Agent |

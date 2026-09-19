@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Harness: agent/tools/*.ts inputSchema keys must appear in defineAgentTool<> (or legacy defineTool<>) and execute param types.
- * Monorepo files under plugins/ and examples/ must use defineAgentTool (defineTool is soft-deprecated alias).
+ * Harness: agent/tools/*.ts inputSchema keys must appear in defineAgentTool<> and execute param types.
+ * Monorepo files under plugins/ and examples/ must use the canonical defineAgentTool API.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -43,13 +43,12 @@ for (const root of scanRoots) {
       violations.push(`${relFile}: uses bare input.* (destructure from execute args)`);
     }
 
-    if (!/\bdefineAgentTool\b/.test(src) && !/\bdefineTool\b/.test(src)) {
-      violations.push(`${relFile}: missing defineAgentTool (or legacy defineTool) export`);
-      return;
+    if (/\bdefineTool\b/.test(src)) {
+      violations.push(`${relFile}: removed defineTool alias; use defineAgentTool`);
     }
-
-    if (/\bdefineTool\b/.test(src) && !/\bdefineAgentTool\b/.test(src)) {
-      violations.push(`${relFile}: use defineAgentTool (defineTool is deprecated alias)`);
+    if (!/\bdefineAgentTool\b/.test(src)) {
+      violations.push(`${relFile}: missing defineAgentTool export`);
+      return;
     }
 
     const schemaMatch = src.match(/inputSchema:\s*z\.object\(\{([\s\S]*?)\}\)/);

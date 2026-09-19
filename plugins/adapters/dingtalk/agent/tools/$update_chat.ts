@@ -1,4 +1,4 @@
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ chat_id: string; name?: string; owner?: string; add_members?: string; remove_members?: string }>({
   description: '更新钉钉群聊设置（改名、换群主、增减成员）',

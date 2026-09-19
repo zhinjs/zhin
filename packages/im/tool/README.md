@@ -1,23 +1,23 @@
 # @zhin.js/tool
 
-下一代 Agent Tool Feature。它从 Plugin 或项目根的 `tools/$<name>.ts`，以及插件 AI 创作面的 `agent/tools/$<name>.ts` 发现 `defineAgentTool()` definition，并投影为 owner-aware `ToolIndex`。未加 `$` 的文件可作为同目录依赖模块。
+Agent Tool Feature。它从 Plugin 的 `agent/tools/$<name>.ts` 发现 `defineAgentTool()` definition，并投影为 owner-aware `ToolIndex`。未加 `$` 的文件可作为同目录依赖模块。
 
 ## 目录与身份
 
 ```text
-tools/
+agent/tools/
 ├── $get-weather.ts
 ├── $search.ts
 └── weather-client.ts  # 普通依赖模块
 ```
 
-两个 Tool 目录都只允许一级 `.ts` 文件，并使用同一个 definition 和运行时投影。文件 basename 是 owner 内部使用的 local name；Agent turn 对模型发布 owner-qualified name。Root 的 `get-weather` 仍是 `get-weather`，child `root/maps` 的同名 Tool 是 `maps__get-weather`。嵌套目录和 TSX 不属于接口。
+Tool 目录只发现一级 `$*.ts` 文件。文件 basename 是 owner 内部使用的 local name；Agent turn 对模型发布 owner-qualified name。Root 的 `get-weather` 仍是 `get-weather`，child `root/maps` 的同名 Tool 是 `maps__get-weather`。嵌套目录和 TSX 不属于接口。
 
 ## 定义 Tool
 
 ```ts
 import { defineAgentTool } from '@zhin.js/tool';
-import { weatherClientToken } from '../plugin.js';
+import { weatherClientToken } from '../../plugin.js';
 
 export default defineAgentTool<{ city: string }>({
   description: 'Query current weather',
@@ -38,7 +38,7 @@ export default defineAgentTool<{ city: string }>({
 `inputSchema` 保持 provider-neutral，可以是 JSON Schema 或模型 adapter 能理解的其它只读描述。本包不引入 Zod，也不在 ToolIndex 重复实现 schema validator。
 
 单文件插件可用 `setup({ addTool })` 注册 `defineAgentTool(...)`。Tool Feature 必须已在
-插件 manifest 中挂载；注册结果与两个约定目录进入同一 ToolIndex。
+插件 manifest 中挂载；注册结果与约定目录进入同一 ToolIndex。
 
 ## Owner 解析
 

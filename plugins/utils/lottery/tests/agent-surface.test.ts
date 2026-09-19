@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { buildDailyPipelinePrompt } from '../src/agent/prompts.js';
 
