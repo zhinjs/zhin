@@ -508,6 +508,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove the unused IM-specific session store and process-global epoch counters so AgentSessionRepository becomes the sole origin-neutral session lifecycle contract under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "require-current-agent-database-schema.md",
+      "packages": [
+        "@zhin.js/agent",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove online compatibility migration for historical Agent SQLite schemas and require the current registered model set under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

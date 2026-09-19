@@ -87,6 +87,9 @@ describe('Database Workroom Journal row integrity', () => {
     const catalog = new ActivatableWorkroomCatalog();
     const db = {
       models: new Map<string, unknown>([
+        ['agent_sessions', {}],
+        ['agent_messages', {}],
+        ['agent_summaries', {}],
         ['workroom_events', fixture.model],
         ['workroom_catalog', { select: () => ({ where: async () => [] }) }],
       ]),

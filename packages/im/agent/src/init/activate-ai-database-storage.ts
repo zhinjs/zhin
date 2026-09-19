@@ -11,10 +11,6 @@ import {
 } from '../workroom/journal.js';
 import { ActivatableWorkroomCatalog, DatabaseWorkroomCatalog } from '../workroom/catalog.js';
 import type { AIServiceRefs } from '../internal/ai-service-refs.js';
-import {
-  upgradeAgentSessionTreeData,
-  type AgentDbQueryable,
-} from './upgrade-agent-db-schema.js';
 
 export async function activateAiDatabaseStorage(
   db: any,
@@ -28,27 +24,58 @@ export async function activateAiDatabaseStorage(
   if (!refs.zhinAgent) throw new Error('Agent database activation requires a ZhinAgent instance');
   if (config.sessions?.useDatabase === false) return;
 
-  await upgradeAgentSessionTreeData(db as AgentDbQueryable);
-
-  const agentSessionModel = db.models?.get('agent_sessions');
-  const agentMessageModel = db.models?.get('agent_messages');
-  const agentSummaryModel = db.models?.get('agent_summaries');
-
-  let agentSessionStore: AgentSessionStore | undefined;
-  if (agentSessionModel) {
-    agentSessionStore = new AgentSessionStore(agentSessionModel, {
-      sessionIdleArchiveMs: config.sessions?.sessionIdleArchiveMs,
-    });
+  const agentSessionModel = requireDatabaseModel<ConstructorParameters<typeof AgentSessionStore>[0]>(
+    db,
+    'agent_sessions',
+  );
+  const agentMessageModel = requireDatabaseModel<ConstructorParameters<typeof DatabaseContextRepository>[0]>(
+    db,
+    'agent_messages',
+  );
+  const agentSummaryModel = requireDatabaseModel<ConstructorParameters<typeof DatabaseContextRepository>[1]>(
+    db,
+    'agent_summaries',
+  );
+  const workroomEventModel = requireDatabaseModel<ConstructorParameters<typeof DatabaseWorkroomJournal>[1]>(
+    db,
+    'workroom_events',
+  );
+  const workroomCatalogModel = requireDatabaseModel<ConstructorParameters<typeof DatabaseWorkroomCatalog>[1]>(
+    db,
+    'workroom_catalog',
+  );
+  const semanticEnabled = config.memory?.semantic?.enabled === true;
+  if (semanticEnabled && !semanticMemory) {
+    throw new Error('Semantic memory runtime was not prepared');
   }
-
-  const contextRepository = (agentMessageModel && agentSummaryModel && agentSessionStore)
-    ? new DatabaseContextRepository(
-        agentMessageModel,
-        agentSummaryModel,
-        agentSessionStore,
-        { tailMessageLimit: config.sessions?.coldStartMaxMessages ?? DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT },
-      )
+  const semanticActivation = semanticEnabled && semanticMemory
+    ? {
+        runtime: semanticMemory,
+        repository: new DatabaseMemoryEntryRepository(
+          requireDatabaseModel<ConstructorParameters<typeof DatabaseMemoryEntryRepository>[0]>(
+            db,
+            'memory_entries',
+          ),
+        ),
+      }
     : undefined;
+
+  const agentSessionStore = new AgentSessionStore(agentSessionModel, {
+    sessionIdleArchiveMs: config.sessions?.sessionIdleArchiveMs,
+  });
+  const contextRepository = new DatabaseContextRepository(
+    agentMessageModel,
+    agentSummaryModel,
+    agentSessionStore,
+    { tailMessageLimit: config.sessions?.coldStartMaxMessages ?? DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT },
+  );
+  const databaseWorkroomJournal = new DatabaseWorkroomJournal(
+    db,
+    workroomEventModel,
+    workroomJournalPayloads,
+  );
+  // Validate persisted authority before mutating any candidate runtime port.
+  await databaseWorkroomJournal.scanStoredHeaders();
 
   refs.zhinAgent.configure({
     agentSessionStore,
@@ -60,28 +87,17 @@ export async function activateAiDatabaseStorage(
     refs.zhinAgent.upgradeProfilesToDatabase(profileModel);
   }
 
-  const semanticEnabled = config.memory?.semantic?.enabled === true;
-  if (semanticEnabled) {
-    if (!semanticMemory) throw new Error('Semantic memory runtime was not prepared');
-    const memoryModel = db.models?.get('memory_entries');
-    if (!memoryModel) throw new Error('Semantic memory requires the memory_entries database model');
-    semanticMemory.activate(new DatabaseMemoryEntryRepository(
-      memoryModel as ConstructorParameters<typeof DatabaseMemoryEntryRepository>[0],
-    ));
-  }
+  semanticActivation?.runtime.activate(semanticActivation.repository);
 
-  const workroomEventModel = db.models?.get('workroom_events');
-  if (!workroomEventModel) throw new Error('Workroom requires the workroom_events database model');
-  const databaseWorkroomJournal = new DatabaseWorkroomJournal(
-    db,
-    workroomEventModel,
-    workroomJournalPayloads,
-  );
-  // Validate every persisted row before publishing the production writer latch.
-  // Old unsigned v2 rows remain offline migration candidates and never become active state.
-  await databaseWorkroomJournal.scanStoredHeaders();
   workroomJournal.activate(databaseWorkroomJournal);
-  const workroomCatalogModel = db.models?.get('workroom_catalog');
-  if (!workroomCatalogModel) throw new Error('Workroom requires the workroom_catalog database model');
   workroomCatalog.activate(new DatabaseWorkroomCatalog(db, workroomCatalogModel));
+}
+
+function requireDatabaseModel<T>(
+  db: { models?: { get(name: string): unknown } },
+  name: string,
+): T {
+  const model = db.models?.get(name) as T | undefined;
+  if (!model) throw new Error(`Agent database activation requires the ${name} model`);
+  return model;
 }
