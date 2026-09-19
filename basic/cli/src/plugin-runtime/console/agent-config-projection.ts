@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
+import { ROOT_CONFIG_FILE_NAMES, selectRootConfigFile } from '@zhin.js/plugin-runtime';
 
 type AgentConfiguration = {
   readonly agents?: Record<string, {
@@ -57,12 +58,7 @@ export class AgentConfigProjection {
 }
 
 function findConfigFileSync(projectRoot: string): string | undefined {
-  for (const candidate of [
-    'config.yml', 'config.yaml', 'config.json',
-    'zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json',
-  ]) {
-    const file = join(projectRoot, candidate);
-    if (existsSync(file)) return file;
-  }
-  return undefined;
+  return selectRootConfigFile(ROOT_CONFIG_FILE_NAMES
+    .map((candidate) => join(projectRoot, candidate))
+    .filter((file) => existsSync(file)));
 }

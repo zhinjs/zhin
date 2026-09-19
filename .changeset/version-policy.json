@@ -3,6 +3,18 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "unify-root-config-file-contract.md",
+      "packages": [
+        "@zhin.js/plugin-runtime",
+        "@zhin.js/scaffold-wizard",
+        "create-zhin-app",
+        "@zhin.js/cli"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Establish one executable Root configuration contract and remove TOML and TypeScript configuration surfaces that the Runtime cannot load under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "remove-classic-agent-tool-rails.md",
       "packages": [
         "@zhin.js/agent",

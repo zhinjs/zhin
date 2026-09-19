@@ -27,7 +27,6 @@
     "fs-extra": "^11.4.0",
     "inquirer": "^14.0.2",
     "qrcode": "^1.5.4",
-    "smol-toml": "^1.7.1",
     "yaml": "^2.9.0"
   },
   "devDependencies": {

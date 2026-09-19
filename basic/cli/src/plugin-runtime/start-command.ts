@@ -12,7 +12,13 @@ import {
   type ConversationDbModel,
 } from '@zhin.js/im-contract';
 import { createConsoleEventHub, createHttpHostGroup } from '@zhin.js/host-http';
-import { defineInboxTables, readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
+import {
+  defineInboxTables,
+  readPluginConfigurationMap,
+  ROOT_CONFIG_FILE_NAMES,
+  rootConfigFormat,
+  selectRootConfigFile,
+} from '@zhin.js/plugin-runtime';
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
 import {
   ConfigValidationError,
@@ -634,22 +640,15 @@ async function readConfigDocumentValue(
 async function loadProjectConfig(
   root: string,
 ): Promise<{ config: RuntimeConfigDocument | ConfigDocumentPort; file: string | undefined }> {
-  const candidates = [
-    'config.yml', 'config.yaml', 'config.json',
-    'zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json',
-  ];
   const existing: string[] = [];
-  for (const candidate of candidates) {
+  for (const candidate of ROOT_CONFIG_FILE_NAMES) {
     const file = join(root, candidate);
     try { await access(file); existing.push(file); }
     catch { /* Missing candidates are expected. */ }
   }
-  if (existing.length > 1) {
-    throw new Error(`Multiple Root config files found: ${existing.join(', ')}`);
-  }
-  const file = existing[0];
+  const file = selectRootConfigFile(existing);
   if (!file) return { config: Object.freeze({}), file: undefined };
-  if (file.endsWith('.yml') || file.endsWith('.yaml')) {
+  if (rootConfigFormat(file) === 'yaml') {
     return { config: new YamlConfigDocument(file), file };
   }
   const value = JSON.parse(await readFile(file, 'utf8')) as unknown;

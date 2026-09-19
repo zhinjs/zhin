@@ -365,7 +365,7 @@ export function previewEnablePlugin(cwd: string, pluginName: string): EnablePlug
     return {
       status: 'missing-config',
       pluginName,
-      message: `未找到 zhin.config.yml/json/toml；将提示手动添加 ${pluginName}`,
+      message: `未找到 Root YAML/JSON 配置文件；将提示手动添加 ${pluginName}`,
     };
   }
   if (loaded.status !== 'loaded') {

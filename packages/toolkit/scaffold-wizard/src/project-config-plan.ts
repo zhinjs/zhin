@@ -1,18 +1,16 @@
 import fs from 'fs-extra';
 import path from 'node:path';
 import yaml from 'yaml';
-import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
-import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
+import {
+  readPluginConfigurationMap,
+  ROOT_CONFIG_FILE_NAMES,
+  rootConfigFormat,
+  selectRootConfigFile,
+  type RootConfigFormat,
+} from '@zhin.js/plugin-runtime';
 import { providerSdkFor } from './ai.js';
 
 const CONSOLE_URL = 'https://console.zhin.dev';
-const CONFIG_CANDIDATES = [
-  'zhin.config.yml',
-  'zhin.config.yaml',
-  'zhin.config.json',
-  'zhin.config.toml',
-  'zhin.config.ts',
-] as const;
 const SANDBOX_PLUGIN = '@zhin.js/adapter-sandbox';
 const LEGACY_AI_PROVIDER_FIELDS = ['driver', 'api', 'preset', 'spec'] as const;
 
@@ -24,7 +22,7 @@ export function packageToInstanceKey(packageName: string): string {
   return name.replace(/^(adapter|plugin|service)-/, '');
 }
 
-export type ProjectConfigFormat = 'yaml' | 'json' | 'toml' | 'ts';
+export type ProjectConfigFormat = RootConfigFormat;
 
 export interface LoadedProjectConfig {
   status: 'loaded' | 'missing' | 'unsupported';
@@ -71,12 +69,7 @@ export interface ConsoleConfigDiagnosis {
 }
 
 function configFormatFromPath(filePath: string): ProjectConfigFormat | null {
-  const ext = path.extname(filePath).toLowerCase();
-  if (ext === '.yml' || ext === '.yaml') return 'yaml';
-  if (ext === '.json') return 'json';
-  if (ext === '.toml') return 'toml';
-  if (ext === '.ts') return 'ts';
-  return null;
+  return rootConfigFormat(filePath) ?? null;
 }
 
 function cloneConfig(config: Record<string, unknown>): Record<string, unknown> {
@@ -84,39 +77,28 @@ function cloneConfig(config: Record<string, unknown>): Record<string, unknown> {
 }
 
 function parseConfig(content: string, format: ProjectConfigFormat): Record<string, unknown> {
-  if (format === 'yaml') {
-    const parsed = yaml.parse(content) as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : {};
-  }
   if (format === 'json') {
     const parsed = JSON.parse(content) as unknown;
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? parsed as Record<string, unknown>
       : {};
   }
-  if (format === 'toml') {
-    const parsed = parseToml(content) as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : {};
-  }
-  return {};
+  const parsed = yaml.parse(content) as unknown;
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    ? parsed as Record<string, unknown>
+    : {};
 }
 
 function serializeConfig(config: Record<string, unknown>, format: ProjectConfigFormat): string {
   if (format === 'json') return `${JSON.stringify(config, null, 2)}\n`;
-  if (format === 'toml') return stringifyToml(config as Record<string, unknown>);
   return yaml.stringify(config);
 }
 
 function findProjectConfigPath(cwd: string): string | null {
-  for (const candidate of CONFIG_CANDIDATES) {
-    const configPath = path.join(cwd, candidate);
-    if (fs.existsSync(configPath)) return configPath;
-  }
-  return null;
+  const existing = ROOT_CONFIG_FILE_NAMES
+    .map((candidate) => path.join(cwd, candidate))
+    .filter((configPath) => fs.existsSync(configPath));
+  return selectRootConfigFile(existing) ?? null;
 }
 
 export function loadProjectConfig(cwd = process.cwd(), configPath?: string): LoadedProjectConfig {
@@ -127,7 +109,7 @@ export function loadProjectConfig(cwd = process.cwd(), configPath?: string): Loa
       cwd,
       config: {},
       writable: false,
-      message: '未找到 zhin.config.yml/json/toml',
+      message: '未找到 Root YAML/JSON 配置文件',
     };
   }
 
@@ -142,19 +124,6 @@ export function loadProjectConfig(cwd = process.cwd(), configPath?: string): Loa
       config: {},
       writable: false,
       message: `${path.basename(resolvedPath)} 暂不支持自动写入`,
-    };
-  }
-
-  if (format === 'ts') {
-    return {
-      status: 'unsupported',
-      cwd,
-      configPath: resolvedPath,
-      relativePath,
-      format,
-      config: {},
-      writable: false,
-      message: 'zhin.config.ts 只读；请迁移为 zhin.config.yml/json/toml 后自动修复',
     };
   }
 
@@ -319,6 +288,8 @@ function applyAiLegacyMigration(config: Record<string, unknown>, mutations: stri
 
 export function createProjectConfigPlan(options: ProjectConfigPlanOptions): ProjectConfigPlan {
   const cwd = options.cwd ?? options.loaded?.cwd ?? process.cwd();
+  const configuredFormat = options.format
+    ?? (options.configPath ? configFormatFromPath(options.configPath) ?? undefined : undefined);
   const loaded = options.loaded ?? (
     options.config
       ? {
@@ -326,9 +297,9 @@ export function createProjectConfigPlan(options: ProjectConfigPlanOptions): Proj
         cwd,
         configPath: options.configPath,
         relativePath: options.configPath ? path.relative(cwd, options.configPath) : undefined,
-        format: options.format ?? (options.configPath ? configFormatFromPath(options.configPath) ?? undefined : undefined),
+        format: configuredFormat,
         config: options.config,
-        writable: Boolean(options.configPath && (options.format ?? configFormatFromPath(options.configPath)) !== 'ts'),
+        writable: Boolean(options.configPath && configuredFormat),
       }
       : loadProjectConfig(cwd, options.configPath)
   );
@@ -371,7 +342,7 @@ export function createProjectConfigPlan(options: ProjectConfigPlanOptions): Proj
 
 export function renderProjectConfigPatch(plan: ProjectConfigPlan): string {
   if (!plan.changed) return '配置无需改动。';
-  const format = plan.format && plan.format !== 'ts' ? plan.format : 'yaml';
+  const format = plan.format ?? 'yaml';
   const name = plan.relativePath ?? 'zhin.config.yml';
   return [
     `# ${name}`,
@@ -382,7 +353,7 @@ export function renderProjectConfigPatch(plan: ProjectConfigPlan): string {
 
 export async function applyProjectConfigPlan(plan: ProjectConfigPlan): Promise<boolean> {
   if (!plan.changed) return false;
-  if (!plan.writable || !plan.configPath || !plan.format || plan.format === 'ts') return false;
+  if (!plan.writable || !plan.configPath || !plan.format) return false;
   await fs.writeFile(plan.configPath, serializeConfig(plan.after, plan.format));
   return true;
 }

@@ -114,4 +114,27 @@ describe('config document flatten / write namespace', () => {
     };
     expect(after.plugins.d).toEqual({ ok: true });
   });
+
+  it('preserves JSON syntax when replacing config through the YAML editor contract', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-json-'));
+    tempRoots.push(root);
+    await writeFile(join(root, 'zhin.config.json'), '{"http":{"port":1000}}\n');
+
+    const configuration = new ConsoleConfigurationStore(root);
+    await configuration.writeYaml('http:\n  port: 2000\n');
+
+    expect(JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8'))).toEqual({
+      http: { port: 2000 },
+    });
+  });
+
+  it('rejects multiple Root configuration files instead of selecting one implicitly', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-multiple-'));
+    tempRoots.push(root);
+    await writeFile(join(root, 'config.json'), '{}\n');
+    await writeFile(join(root, 'zhin.config.yml'), '{}\n');
+
+    const configuration = new ConsoleConfigurationStore(root);
+    await expect(configuration.readDocument()).rejects.toThrow(/Multiple Root config files found/);
+  });
 });

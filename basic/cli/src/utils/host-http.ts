@@ -4,11 +4,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import yaml from 'yaml';
-
-const CONFIG_CANDIDATES = [
-  'config.yml', 'config.yaml', 'config.json',
-  'zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json',
-];
+import { ROOT_CONFIG_FILE_NAMES, selectRootConfigFile } from '@zhin.js/plugin-runtime';
 
 export interface HostHttpConfig {
   baseUrl: string;
@@ -28,7 +24,9 @@ function parseEnv(content: string): Record<string, string> {
 }
 
 function findConfigFile(dir: string): string | null {
-  return CONFIG_CANDIDATES.find((f) => fs.existsSync(path.join(dir, f))) ?? null;
+  const existing = ROOT_CONFIG_FILE_NAMES
+    .filter((file) => fs.existsSync(path.join(dir, file)));
+  return selectRootConfigFile(existing) ?? null;
 }
 
 async function readConfig(filePath: string): Promise<Record<string, unknown>> {

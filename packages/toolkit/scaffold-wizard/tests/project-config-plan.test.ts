@@ -83,34 +83,23 @@ describe('ProjectConfigPlan', () => {
     expect(content).toContain('telegram:');
   });
 
-  it('rejects legacy list-form TOML configs without rewriting them', async () => {
+  it('loads the canonical config.yml Root filename', async () => {
     const root = await makeProject();
-    await fs.writeFile(path.join(root, 'zhin.config.toml'), 'plugins = ["example"]\n');
+    await fs.writeFile(path.join(root, 'config.yml'), 'plugins:\n  example: {}\n');
 
     const loaded = loadProjectConfig(root);
     const plan = createProjectConfigPlan({ loaded, enablePlugins: ['@scope/plugin'] });
-    expect(loaded.status).toBe('unsupported');
-    expect(plan.changed).toBe(false);
-    await expect(applyProjectConfigPlan(plan)).resolves.toBe(false);
-    const content = await fs.readFile(path.join(root, 'zhin.config.toml'), 'utf8');
-    expect(content).toBe('plugins = ["example"]\n');
+    expect(loaded.status).toBe('loaded');
+    expect(plan.changed).toBe(true);
+    await expect(applyProjectConfigPlan(plan)).resolves.toBe(true);
+    expect(await fs.readFile(path.join(root, 'config.yml'), 'utf8')).toContain('plugin:');
   });
 
-  it('returns a copyable patch for readonly TypeScript configs', async () => {
+  it('rejects projects with multiple Root configuration files', async () => {
     const root = await makeProject();
-    await fs.writeFile(path.join(root, 'zhin.config.ts'), 'export default {}\n');
-
-    const loaded = loadProjectConfig(root);
-    const plan = createProjectConfigPlan({
-      loaded,
-      config: { plugins: { example: {} } },
-      enablePlugins: ['@scope/plugin'],
-    });
-
-    expect(loaded.status).toBe('unsupported');
-    expect(plan.writable).toBe(false);
-    expect(renderProjectConfigPatch(plan)).toContain('plugin:');
-    await expect(applyProjectConfigPlan(plan)).resolves.toBe(false);
+    await fs.writeFile(path.join(root, 'config.json'), '{}\n');
+    await fs.writeFile(path.join(root, 'zhin.config.yml'), '{}\n');
+    expect(() => loadProjectConfig(root)).toThrow(/Multiple Root config files found/);
   });
 
   it('migrates legacy AI provider fields to sdk and agents.zhin.provider', () => {

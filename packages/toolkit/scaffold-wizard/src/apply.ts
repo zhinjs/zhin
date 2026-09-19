@@ -1,7 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
 import yaml from 'yaml';
-import { stringify as stringifyToml } from 'smol-toml';
 import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
 import type { AdapterSetupResult, AISetupConfig, DatabaseConfig, InitOptions } from './types.js';
 import {
@@ -316,12 +315,11 @@ export function buildRuntimeConfigDocument(options: InitOptions): Record<string,
   return doc;
 }
 
-/** 序列化配置文档为 zhin.config.yml / json / toml 文本 */
+/** Serialize a Root Runtime YAML or JSON configuration document. */
 export function serializeRuntimeConfig(
   doc: Record<string, unknown>,
-  format: 'yaml' | 'json' | 'toml',
+  format: 'yaml' | 'json',
 ): string {
   if (format === 'json') return `${JSON.stringify(doc, null, 2)}\n`;
-  if (format === 'toml') return stringifyToml(doc);
   return yaml.stringify(doc);
 }

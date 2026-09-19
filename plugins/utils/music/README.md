@@ -17,21 +17,23 @@
 ## 📦 安装
 
 ```bash
-pnpm add @zhin.js/plugin-music
+zhin install @zhin.js/plugin-music
 ```
 
 ## 🚀 使用
 
-### 配置
+### 挂载插件
 
-在 `zhin.config.ts` 中添加插件：
+`zhin install` 会安装依赖，并把插件实例写入 `package.json#zhin.plugins`。手工挂载时使用同一份拓扑契约：
 
-```typescript
-export default defineConfig({
-  plugins: [
-    'music'  // 添加音乐插件
-  ]
-})
+```json
+{
+  "zhin": {
+    "plugins": [
+      { "package": "@zhin.js/plugin-music", "instanceKey": "music" }
+    ]
+  }
+}
 ```
 
 ### 命令列表

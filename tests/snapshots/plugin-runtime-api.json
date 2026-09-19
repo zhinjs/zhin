@@ -281,6 +281,7 @@
     "export * from './outbound-sender.js';",
     "export * from './plugin-configuration.js';",
     "export * from './plugin.js';",
+    "export * from './root-config-file.js';",
     "export * from './root-controller.js';",
     "export * from './schedule-host.js';",
     "export * from './shared-lifetime.js';",

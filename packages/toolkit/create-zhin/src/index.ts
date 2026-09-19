@@ -113,8 +113,7 @@ async function main() {
           message: '选择配置文件格式:',
           choices: [
             { name: 'YAML (推荐)', value: 'yaml' },
-            { name: 'JSON', value: 'json' },
-            { name: 'TOML', value: 'toml' }
+            { name: 'JSON', value: 'json' }
           ],
           default: 'yaml'
         }

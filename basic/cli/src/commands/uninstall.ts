@@ -6,15 +6,16 @@ import path from 'path';
 import yaml from 'yaml';
 import { execSync } from 'child_process';
 import { formatCompact } from '@zhin.js/logger';
-import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
+import {
+  readPluginConfigurationMap,
+  ROOT_CONFIG_FILE_NAMES,
+  selectRootConfigFile,
+} from '@zhin.js/plugin-runtime';
 import { logger } from '../utils/logger.js';
 
 async function findConfigFile(cwd: string): Promise<string | null> {
-  const candidates = [
-    'config.yml', 'config.yaml', 'config.json',
-    'zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json',
-  ];
-  return candidates.find(f => fs.existsSync(path.join(cwd, f))) || null;
+  const existing = ROOT_CONFIG_FILE_NAMES.filter(file => fs.existsSync(path.join(cwd, file)));
+  return selectRootConfigFile(existing) ?? null;
 }
 
 async function readConfig(filePath: string): Promise<any> {

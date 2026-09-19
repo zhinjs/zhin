@@ -186,8 +186,8 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
    - 审查插件代码，特别是涉及文件系统和网络访问的部分
 
 3. **配置文件**
-   - TypeScript 配置文件（`zhin.config.ts`）在运行时执行
-   - 不要从不可信来源加载配置文件
+   - Root Runtime 只读取 YAML/JSON 数据文件，不执行配置代码
+   - 密钥使用 `${ENV_VAR}` 引用并存放在环境变量中，不要写入配置文件
 
 4. **热重载功能**
    - 开发环境功能，不建议在生产环境中启用
@@ -402,8 +402,8 @@ We currently do not have a formal bug bounty program, but we will:
    - Review plugin code, especially filesystem and network access
 
 3. **Configuration Files**
-   - TypeScript config files (`zhin.config.ts`) execute at runtime
-   - Don't load config files from untrusted sources
+   - Root Runtime reads YAML/JSON data files only and does not execute configuration code
+   - Keep secrets in environment variables and reference them as `${ENV_VAR}`
 
 4. **Hot Reload Feature**
    - Development environment feature, not recommended for production

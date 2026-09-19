@@ -66,17 +66,6 @@ describe('install command plugin enable helpers', () => {
     expect(config.plugins).toEqual({ example: {}, plugin: {} });
   });
 
-  it('writes plugin into TOML config', async () => {
-    const root = await makeTempProject();
-    await fs.writeFile(path.join(root, 'zhin.config.toml'), '[plugins.example]\n');
-
-    const result = await enablePluginInProjectConfig(root, '@scope/plugin');
-    const content = await fs.readFile(path.join(root, 'zhin.config.toml'), 'utf8');
-
-    expect(result.status).toBe('enabled');
-    expect(content).toContain('[plugins.plugin]');
-  });
-
   it('refuses to enable plugins in a legacy list-form config', async () => {
     const root = await makeTempProject();
     await fs.writeFile(path.join(root, 'zhin.config.yml'), 'plugins:\n  - "example"\n');

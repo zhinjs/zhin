@@ -1,7 +1,7 @@
 /**
  * CLI 写侧 legacy 残留修复回归测试：
- * - config-file utils：toml 读写、不支持格式直接报错
- * - config 命令：toml 配置 set 真正落盘
+ * - config-file utils：Root YAML/JSON 读写与唯一文件约束
+ * - config 命令：JSON 配置 set 真正落盘
  * - doctor createDefaultConfig：新 Plugin Runtime map 形态
  * - migrate：engines.node、中文模板多命中判定、覆盖前 .bak 备份
  * - schedule add：--prompt option + --at/--every 可用、非法输入统一报错
@@ -38,37 +38,33 @@ afterEach(() => {
 });
 
 describe('utils/config-file', () => {
-  it('toml 配置可读写往返', async () => {
-    const file = path.join(tmp, 'zhin.config.toml');
+  it('JSON 配置可读写往返', async () => {
+    const file = path.join(tmp, 'config.json');
     await saveConfig(file, { log_level: 'info', ai: { enabled: false } });
     const config = await readConfig(file);
     expect(config).toEqual({ log_level: 'info', ai: { enabled: false } });
   });
 
-  it('findConfigFile 能发现 toml 配置', () => {
-    fs.writeFileSync(path.join(tmp, 'zhin.config.toml'), 'log_level = "info"\n');
-    expect(findConfigFile(tmp)).toBe('zhin.config.toml');
+  it('findConfigFile 能发现六种契约内的 Root 配置名', () => {
+    fs.writeFileSync(path.join(tmp, 'config.yaml'), 'log_level: info\n');
+    expect(findConfigFile(tmp)).toBe('config.yaml');
   });
 
-  it('readConfig 对 .ts 配置直接报错而非静默返回 {}', async () => {
-    const file = path.join(tmp, 'zhin.config.ts');
-    fs.writeFileSync(file, 'export default {};\n');
-    await expect(readConfig(file)).rejects.toThrow(/zhin.config.ts/);
-  });
-
-  it('saveConfig 对 .ts 配置直接报错', async () => {
-    await expect(saveConfig(path.join(tmp, 'zhin.config.ts'), {})).rejects.toThrow();
+  it('rejects multiple Root configuration authorities', () => {
+    fs.writeFileSync(path.join(tmp, 'config.json'), '{}\n');
+    fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), '{}\n');
+    expect(() => findConfigFile(tmp)).toThrow(/Multiple Root config files found/);
   });
 });
 
-describe('config 命令（toml 落盘）', () => {
-  it('config set 真正写入 zhin.config.toml', async () => {
+describe('config 命令（JSON 落盘）', () => {
+  it('config set 真正写入 config.json', async () => {
     fs.writeFileSync(
-      path.join(tmp, 'zhin.config.toml'),
-      'log_level = "info"\n\n[ai]\nenabled = false\n',
+      path.join(tmp, 'config.json'),
+      JSON.stringify({ log_level: 'info', ai: { enabled: false } }),
     );
     await configCommand.parseAsync(['node', 'zhin', 'set', 'ai.enabled', 'true']);
-    const config = await readConfig(path.join(tmp, 'zhin.config.toml'));
+    const config = await readConfig(path.join(tmp, 'config.json'));
     expect((config.ai as Record<string, unknown>).enabled).toBe(true);
     expect(config.log_level).toBe('info');
   });

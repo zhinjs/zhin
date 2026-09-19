@@ -39,8 +39,6 @@ function getConfigFilename(format: InitOptions['config']): string {
   switch (format) {
     case 'json':
       return 'zhin.config.json';
-    case 'toml':
-      return 'zhin.config.toml';
     case 'yaml':
     default:
       return 'zhin.config.yml';

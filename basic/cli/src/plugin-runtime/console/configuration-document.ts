@@ -2,7 +2,12 @@ import { access, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { getLogger } from '@zhin.js/logger';
-import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
+import {
+  readPluginConfigurationMap,
+  ROOT_CONFIG_FILE_NAMES,
+  rootConfigFormat,
+  selectRootConfigFile,
+} from '@zhin.js/plugin-runtime';
 import { HOST_CONFIG_KEYS, type RuntimeConfigDocument } from '@zhin.js/runtime';
 import { readPluginPackageMap } from './plugin-package-map.js';
 
@@ -16,7 +21,7 @@ export async function readProjectConfigDocument(projectRoot: string): Promise<Re
   const file = await findConfigFile(projectRoot);
   if (!file) return {};
   const text = await readFile(file, 'utf8');
-  if (file.endsWith('.json')) {
+  if (rootConfigFormat(file) === 'json') {
     const value = JSON.parse(text) as unknown;
     return value && typeof value === 'object' && !Array.isArray(value)
       ? value as Record<string, unknown>
@@ -106,18 +111,17 @@ export async function listConsoleConfigKeys(
 }
 
 async function findConfigFile(projectRoot: string): Promise<string | undefined> {
-  for (const candidate of [
-    'config.yml', 'config.yaml', 'config.json', 'zhin.config.yml', 'zhin.config.yaml',
-  ]) {
+  const existing: string[] = [];
+  for (const candidate of ROOT_CONFIG_FILE_NAMES) {
     const file = join(projectRoot, candidate);
     try {
       await access(file);
-      return file;
+      existing.push(file);
     } catch {
       /* try next */
     }
   }
-  return undefined;
+  return selectRootConfigFile(existing);
 }
 
 async function ensureConfigFile(projectRoot: string): Promise<string> {
@@ -129,8 +133,13 @@ async function ensureConfigFile(projectRoot: string): Promise<string> {
 export async function writeProjectConfigYaml(projectRoot: string, yaml: string): Promise<void> {
   // 写入前试解析：损坏的 YAML 一旦落盘，下次启动 runtime 将无法加载配置。
   // 解析失败抛错，RPC 层（/console/request）映射为 HTTP 400。
+  let parsed: Record<string, unknown>;
   try {
-    parseYaml(yaml);
+    const value = parseYaml(yaml) as unknown;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('Root configuration must be an object');
+    }
+    parsed = value as Record<string, unknown>;
   } catch (error) {
     throw new Error(
       `Invalid YAML: ${error instanceof Error ? error.message : String(error)}`,
@@ -138,6 +147,10 @@ export async function writeProjectConfigYaml(projectRoot: string, yaml: string):
     );
   }
   const file = await ensureConfigFile(projectRoot);
+  if (rootConfigFormat(file) === 'json') {
+    await writeFile(file, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
+    return;
+  }
   await writeFile(file, yaml, 'utf8');
 }
 
@@ -149,7 +162,7 @@ export async function writeProjectConfigKey(
   const file = await ensureConfigFile(projectRoot);
   const document = await readProjectConfigDocument(projectRoot);
   writeConfigKey(document, pluginName, data);
-  if (file.endsWith('.json')) {
+  if (rootConfigFormat(file) === 'json') {
     await writeFile(file, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
   } else {
     await writeFile(file, stringifyYaml(document), 'utf8');

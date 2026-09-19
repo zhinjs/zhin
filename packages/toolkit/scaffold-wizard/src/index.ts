@@ -27,7 +27,6 @@ export {
   generateAIEnvVars,
   generateAIConfigYaml,
   generateAIConfigJSON,
-  generateAIConfigToml,
   RECOMMENDED_AI_DEFAULTS,
 } from './ai.js';
 

@@ -167,11 +167,10 @@ describe('buildRuntimeConfigDocument', () => {
     expect(doc).not.toHaveProperty('inbox');
   });
 
-  it('serializes to yaml/json/toml', () => {
+  it('serializes to the Runtime-supported YAML and JSON formats', () => {
     const doc = buildRuntimeConfigDocument(options);
     expect(serializeRuntimeConfig(doc, 'yaml')).toContain('plugins:');
     expect(JSON.parse(serializeRuntimeConfig(doc, 'json')).plugins.sandbox).toBeDefined();
-    expect(serializeRuntimeConfig(doc, 'toml')).toContain('[[plugins.sandbox.endpoints]]');
   });
 
   it('writes ai section only when enabled', () => {

@@ -20,6 +20,7 @@ export * from './handoff.js';
 export * from './plugin.js';
 /** @public Root configuration contract shared by Runtime and composition tooling. */
 export * from './plugin-configuration.js';
+export * from './root-config-file.js';
 /** @internal Runtime 内部：RootRuntime / RootController。 */
 export * from './root-controller.js';
 export * from './shared-lifetime.js';

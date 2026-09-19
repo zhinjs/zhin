@@ -12,7 +12,7 @@ import {
   packagesNeedingZhinStackFix,
   migrateAiLegacyConfig,
 } from '@zhin.js/scaffold-wizard';
-import { findConfigFile, hasLegacyTsConfig, readConfig, saveConfig } from './config-file.js';
+import { findConfigFile, readConfig, saveConfig } from './config-file.js';
 import { loadAiConfigUtils, type AiConfigUtils } from './ai-config-loader.js';
 
 export type ConfigIssueSeverity = 'error' | 'warn' | 'info';
@@ -370,20 +370,10 @@ export async function runConfigCheck(
     pushIssue(issues, {
       severity: 'error',
       code: 'config.missing',
-      message: '未找到 zhin.config.{yml,yaml,json,toml}',
+      message: '未找到 Root 配置文件（config/zhin.config 的 YAML 或 JSON）',
       fixHint: 'zhin setup',
     });
     return { configFile: null, config: {}, issues, fixesApplied };
-  }
-
-  if (configFile.endsWith('.ts') || hasLegacyTsConfig(cwd)) {
-    pushIssue(issues, {
-      severity: 'error',
-      code: 'config.legacy_ts',
-      message: 'zhin.config.ts 已不再被运行时加载，请迁移为 zhin.config.yml',
-      fixHint: '参考文档 configuration.md，或运行 zhin setup 重新生成',
-    });
-    return { configFile, config: {}, issues, fixesApplied };
   }
 
   let config: Record<string, unknown>;
