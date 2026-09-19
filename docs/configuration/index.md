@@ -291,8 +291,7 @@ plugin:
 plugins:
   sandbox:
     endpoints:
-      - context: sandbox
-        name: sandbox-bot
+      - id: sandbox-bot
         owner: sandbox-user
 ```
 

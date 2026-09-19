@@ -42,33 +42,17 @@ export type ResolvedSandboxBot = {
   readonly randomNamePerConnection: boolean;
 };
 
-export interface SandboxAdapterConfig {
-  /** Runtime expands `endpoints[i]` onto the top level — prefer these. */
-  readonly context?: string;
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface SandboxEndpointConfig {
   readonly id?: string;
   readonly owner?: string;
-  /** Legacy shape: endpoint entries nested under `endpoints[]`. */
-  readonly endpoints?: ReadonlyArray<{
-    readonly context?: string;
-    readonly id?: string;
-    readonly owner?: string;
-  }>;
 }
 
 export function resolveSandboxEndpoint(
-  appConfig: SandboxAdapterConfig,
+  config: SandboxEndpointConfig,
 ): ResolvedSandboxBot {
-  const entry = appConfig.endpoints?.find((item) => item.context === 'sandbox');
-  const fixedName = typeof appConfig.id === 'string' && appConfig.id
-    ? appConfig.id
-    : typeof entry?.id === 'string' && entry.id
-      ? entry.id
-      : undefined;
-  const id = fixedName || process.env.SANDBOX_BOT_NAME || 'sandbox-bot';
-  const owner = (typeof appConfig.owner === 'string' && appConfig.owner)
-    || (typeof entry?.owner === 'string' && entry.owner)
-    || process.env.SANDBOX_BOT_OWNER
-    || 'sandbox-user';
+  const id = optionalEndpointField(config.id) ?? 'sandbox-bot';
+  const owner = optionalEndpointField(config.owner) ?? 'sandbox-user';
   return {
     context: 'sandbox',
     id,
@@ -78,6 +62,10 @@ export function resolveSandboxEndpoint(
     // session resumes the same Agent context.
     randomNamePerConnection: false,
   };
+}
+
+function optionalEndpointField(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 export function bindSandboxWsSocket(

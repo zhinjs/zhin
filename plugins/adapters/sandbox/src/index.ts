@@ -9,7 +9,7 @@ export {
   type MessageElement,
   type MessageType,
   type ResolvedSandboxBot,
-  type SandboxAdapterConfig,
+  type SandboxEndpointConfig,
   type SandboxWsSocket,
 } from './protocol.js';
 

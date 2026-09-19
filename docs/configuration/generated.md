@@ -464,8 +464,8 @@ outline: [2, 3]
 | `plugins.sandbox.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `plugins.sandbox.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（sandbox client id (distinct from endpoints[].owner)）；覆盖顶层 master |
 | `plugins.sandbox.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.sandbox.endpoints[].context` | string | 否 | — | Sandbox context identifier |
 | `plugins.sandbox.endpoints[].owner` | string | 否 | — | Sandbox owner user ID |
+| `plugins.sandbox.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.sandbox.endpoints[].id` | string | 是 | — | Sandbox bot name |
 | `plugins.sandbox.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

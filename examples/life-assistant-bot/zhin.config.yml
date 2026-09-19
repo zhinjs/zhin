@@ -8,8 +8,7 @@ plugin: {}
 plugins:
   sandbox:
     endpoints:
-      - context: sandbox
-        id: assistant
+      - id: assistant
         owner: assistant-user
 
 # --- HTTP 服务 ---

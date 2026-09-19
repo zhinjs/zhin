@@ -55,7 +55,8 @@ describe('create-zhin -y Stable 默认值', () => {
     // 新 runtime 格式：plugins.<instanceKey> 映射，sandbox 带默认 Endpoint
     expect(config).toContain('plugins:');
     expect(config).toContain('sandbox:');
-    expect(config).toContain('context: sandbox');
+    expect(config).toContain('id: sandbox-bot');
+    expect(config).not.toContain('context: sandbox');
     expect(config).not.toMatch(/^endpoints:/m);
     expect(config).not.toContain('toolSearch:');
     expect(config).not.toContain('ai:');

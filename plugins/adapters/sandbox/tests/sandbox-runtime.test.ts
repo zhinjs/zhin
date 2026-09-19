@@ -111,9 +111,7 @@ describe('sandbox plugin runtime adapter', () => {
       return Object.freeze({ matched: true, value: 'pong' });
     });
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
-    const defaults = resolveSandboxEndpoint({
-      endpoints: [{ context: 'sandbox', id: 'demo-bot', owner: 'sandbox-user' }],
-    });
+    const defaults = resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' });
     const endpoint = bindTestEndpoint(new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
       gateway,
@@ -172,9 +170,7 @@ describe('sandbox plugin runtime adapter', () => {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     };
-    const defaults = resolveSandboxEndpoint({
-      endpoints: [{ context: 'sandbox', id: 'demo-bot', owner: 'sandbox-user' }],
-    });
+    const defaults = resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' });
     const endpoint = bindTestEndpoint(new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
       gateway,
@@ -241,12 +237,10 @@ describe('sandbox plugin runtime adapter', () => {
       .not.toHaveProperty('agentRun');
   });
 
-  it('prefers top-level id/owner over legacy endpoints[] entries', () => {
-    // Runtime expands endpoints[i] onto the top level ({ ...base, ...entry, id }).
+  it('resolves the expanded endpoint identity and owner', () => {
     const resolved = resolveSandboxEndpoint({
       id: 'expanded-bot',
       owner: 'expanded-user',
-      endpoints: [{ context: 'sandbox', id: 'legacy-bot', owner: 'legacy-user' }],
     });
     expect(resolved.id).toBe('expanded-bot');
     expect(resolved.owner).toBe('expanded-user');
@@ -505,9 +499,7 @@ describe('sandbox plugin runtime adapter', () => {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     };
-    const defaults = resolveSandboxEndpoint({
-      endpoints: [{ context: 'sandbox', id: 'demo-bot', owner: 'sandbox-user' }],
-    });
+    const defaults = resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' });
     const endpoint = bindTestEndpoint(new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
       gateway,
@@ -558,9 +550,7 @@ describe('sandbox plugin runtime adapter', () => {
       return Object.freeze({ matched: true, value: 'pong' });
     });
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
-    const defaults = resolveSandboxEndpoint({
-      endpoints: [{ context: 'sandbox', id: 'demo-bot', owner: 'sandbox-user' }],
-    });
+    const defaults = resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' });
     const endpoint = bindTestEndpoint(new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
       gateway,

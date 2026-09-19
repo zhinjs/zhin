@@ -27,7 +27,7 @@ async function makeProject(options: Partial<InitOptions> = {}) {
       instances: [{
         package: '@zhin.js/adapter-sandbox',
         instanceKey: 'sandbox',
-        config: { endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }] },
+        config: { endpoints: [{ id: 'sandbox-bot', owner: 'sandbox-user' }] },
       }],
       envVars: {},
     },

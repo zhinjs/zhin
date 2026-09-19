@@ -40,8 +40,7 @@ zhin 的契合点：**IM 框架和 AI 是可拆开的**——这个案例里 AI 
 plugins:
   sandbox:
     endpoints:
-      - context: sandbox
-        name: assistant
+      - id: assistant
         owner: assistant-user
 
 ai:

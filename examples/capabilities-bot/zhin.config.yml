@@ -18,6 +18,5 @@ plugin:
 plugins:
   sandbox:
     endpoints:
-      - context: sandbox
-        id: sandbox-bot
+      - id: sandbox-bot
         owner: sandbox-user

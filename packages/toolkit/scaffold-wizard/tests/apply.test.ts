@@ -146,7 +146,7 @@ describe('buildRuntimeConfigDocument', () => {
       instances: [{
         package: '@zhin.js/adapter-sandbox',
         instanceKey: 'sandbox',
-        config: { endpoints: [{ context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' }] },
+        config: { endpoints: [{ id: 'sandbox-bot', owner: 'sandbox-user' }] },
       }],
       envVars: {},
     },
@@ -160,7 +160,7 @@ describe('buildRuntimeConfigDocument', () => {
     expect((doc.http as { corsOrigins: string[] }).corsOrigins).toContain('https://console.zhin.dev');
     expect(doc.database).toEqual({ dialect: 'sqlite', filename: './data/bot.db', mode: 'wal' });
     expect(doc.plugins).toEqual({
-      sandbox: { endpoints: [{ context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' }] },
+      sandbox: { endpoints: [{ id: 'sandbox-bot', owner: 'sandbox-user' }] },
     });
     // runtime config-composer 不接受的顶层键不得出现
     expect(doc).not.toHaveProperty('endpoints');
@@ -205,22 +205,22 @@ describe('applyAdaptersToConfig', () => {
           sandbox: {
             commandPrefix: '/',
             endpoints: [
-              { context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' },
-              { context: 'sandbox', id: 'manual-bot', owner: 'someone-else' },
+              { id: 'sandbox-bot', owner: 'sandbox-user' },
+              { id: 'manual-bot', owner: 'someone-else' },
             ],
           },
         },
       };
 
       applyAdaptersToConfig(config, sandboxResult([
-        { context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' },
+        { id: 'sandbox-bot', owner: 'sandbox-user' },
       ]));
 
       const plugins = config.plugins as Record<string, Record<string, unknown>>;
       expect(plugins.sandbox.commandPrefix).toBe('/');
       expect(plugins.sandbox.endpoints).toEqual([
-        { context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' },
-        { context: 'sandbox', id: 'manual-bot', owner: 'someone-else' },
+        { id: 'sandbox-bot', owner: 'sandbox-user' },
+        { id: 'manual-bot', owner: 'someone-else' },
       ]);
     } finally {
       warn.mockRestore();
@@ -233,18 +233,18 @@ describe('applyAdaptersToConfig', () => {
       const config: Record<string, unknown> = {
         plugins: {
           sandbox: {
-            endpoints: [{ context: 'sandbox', id: 'sandbox-bot', owner: 'stale-owner' }],
+            endpoints: [{ id: 'sandbox-bot', owner: 'stale-owner' }],
           },
         },
       };
 
       applyAdaptersToConfig(config, sandboxResult([
-        { context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' },
+        { id: 'sandbox-bot', owner: 'sandbox-user' },
       ]));
 
       const plugins = config.plugins as Record<string, Record<string, unknown>>;
       expect(plugins.sandbox.endpoints).toEqual([
-        { context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' },
+        { id: 'sandbox-bot', owner: 'sandbox-user' },
       ]);
       expect(warn).toHaveBeenCalledOnce();
       expect(String(warn.mock.calls[0]?.[0])).toContain('sandbox-bot');
@@ -258,11 +258,11 @@ describe('applyAdaptersToConfig', () => {
       plugins: { telegram: { polling: true } },
     };
 
-    applyAdaptersToConfig(config, sandboxResult([{ context: 'sandbox', id: 'sandbox-bot' }]));
+    applyAdaptersToConfig(config, sandboxResult([{ id: 'sandbox-bot' }]));
 
     const plugins = config.plugins as Record<string, unknown>;
     expect(plugins.telegram).toEqual({ polling: true });
-    expect(plugins.sandbox).toEqual({ endpoints: [{ context: 'sandbox', id: 'sandbox-bot' }] });
+    expect(plugins.sandbox).toEqual({ endpoints: [{ id: 'sandbox-bot' }] });
   });
 });
 

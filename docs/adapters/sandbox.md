@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=816cca5a1edb6729 -->
+<!-- sync-adapter-docs:sha256=e36d92f066cdd8cc -->
 
 # @zhin.js/adapter-sandbox
 
@@ -58,7 +58,7 @@ Root 在 `zhin runtime start` 时装载 `@zhin.js/host-http`、`ConsoleRuntime` 
 
 ## 配置
 
-**推荐（与 [minimal-bot](/getting-started/) 一致）**：`plugins.sandbox.endpoints: []`，在 Remote Console 打开「沙盒」页时经 `/sandbox` WebSocket **自动创建** bot（如 `sandbox-xxxx`），无需在 yaml 里写 `context: sandbox`。
+**推荐（与 [minimal-bot](/getting-started/) 一致）**：`plugins.sandbox.endpoints: []`，运行时提供默认 `sandbox-bot` endpoint，无需额外账号配置。
 
 ```yaml
 # zhin.config.yml（Plugin Runtime）
@@ -73,8 +73,7 @@ plugins:
 plugins:
   sandbox:
     endpoints:
-      - name: sandbox-bot
-        context: sandbox
+      - id: sandbox-bot
         owner: sandbox-user
 ```
 
@@ -84,7 +83,7 @@ plugins:
 2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 与 Host 地址一致，Token 与 `http.token` / `HTTP_TOKEN` 一致
 3. 在 Console **沙盒** 页连接后发送消息进行测试
 
-每个浏览器客户端连接后创建 Sandbox Bot（无 yaml 固定名时为 `sandbox-xxxx`）。
+浏览器客户端连接到默认 `sandbox-bot`，也可以通过多个显式 endpoint 使用不同 WebSocket 路径。
 
 通过 `Router.ws("/sandbox")`（插件 `useContext("router")` 自动挂载）建立连接。
 

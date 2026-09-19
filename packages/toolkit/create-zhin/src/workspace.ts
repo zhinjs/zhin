@@ -59,7 +59,7 @@ function resolveAdapterResult(options: InitOptions): AdapterSetupResult {
       // 对齐 examples/minimal-bot 的 Stable 黄金路径：命令保留 / 前缀（/hello）
       config: {
         commandPrefix: '/',
-        endpoints: [{ context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' }],
+        endpoints: [{ id: 'sandbox-bot', owner: 'sandbox-user' }],
       },
     }],
     envVars: {},

@@ -55,7 +55,7 @@ The outbound wire only does JSON wrapping; the old `segment-mapper` (canonical s
 
 ## Configuration
 
-**Recommended (consistent with [minimal-bot](/getting-started/))**: `plugins.sandbox.endpoints: []` — when the "Sandbox" page is opened in the Remote Console, a bot (e.g., `sandbox-xxxx`) is **auto-created** via the `/sandbox` WebSocket. No need to write `context: sandbox` in the YAML.
+**Recommended (consistent with [minimal-bot](/getting-started/))**: `plugins.sandbox.endpoints: []` creates the stable default endpoint `sandbox-bot` when the plugin starts.
 
 ```yaml
 # zhin.config.yml (Plugin Runtime)
@@ -70,8 +70,7 @@ Optional: if you want a **fixed-name** offline placeholder bot to appear in the 
 plugins:
   sandbox:
     endpoints:
-      - name: sandbox-bot
-        context: sandbox
+      - id: sandbox-bot
         owner: sandbox-user
 ```
 
@@ -81,7 +80,7 @@ plugins:
 2. Open the **[Remote Console](https://console.zhin.dev)**, set the API Base to match the Host address, and set the Token to match `http.token` / `HTTP_TOKEN`
 3. Send messages for testing on the Console **Sandbox** page after connecting
 
-Each browser client creates a Sandbox Bot upon connection (named `sandbox-xxxx` when no fixed name is configured in YAML).
+The Sandbox plugin creates one endpoint from each configured entry. With an empty endpoint list, it creates the stable `sandbox-bot` default.
 
 The connection is established via `Router.ws("/sandbox")` (auto-mounted by the plugin's `useContext("router")`).
 

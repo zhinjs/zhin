@@ -464,8 +464,8 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | `plugins.sandbox.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `plugins.sandbox.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（sandbox client id (distinct from endpoints[].owner)）；覆盖顶层 master |
 | `plugins.sandbox.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.sandbox.endpoints[].context` | string | no | — | Sandbox context identifier |
 | `plugins.sandbox.endpoints[].owner` | string | no | — | Sandbox owner user ID |
+| `plugins.sandbox.endpoints[].commandPrefix` | string | no | — | — |
 | `plugins.sandbox.endpoints[].id` | string | yes | — | Sandbox bot name |
 | `plugins.sandbox.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

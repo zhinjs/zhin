@@ -17,7 +17,8 @@ describe('life-assistant-bot 配置契约', () => {
 
   it('uses hierarchical Sandbox child config', () => {
     expect(configText).toMatch(/plugins:\s*\n\s+sandbox:/)
-    expect(configText).toMatch(/context:\s*sandbox/)
+    expect(configText).toMatch(/id:\s*assistant/)
+    expect(configText).not.toMatch(/context:\s*sandbox/)
   })
 
   it('uses the Plugin Runtime manifest and conventional capabilities', () => {

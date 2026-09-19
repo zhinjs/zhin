@@ -6,8 +6,7 @@ plugin: {}
 plugins:
   sandbox:
     endpoints:
-      - context: sandbox
-        id: assistant-bot
+      - id: assistant-bot
         owner: planner-user
 
 http:

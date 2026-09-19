@@ -26,7 +26,7 @@ describe('diagnoseOptionalPeers', () => {
 
   it('does not require html-renderer for plugins map without html-image adapters', () => {
     const result = diagnoseOptionalPeers('/tmp', {
-      plugins: { sandbox: { endpoints: [{ name: 'sandbox-bot' }] } },
+      plugins: { sandbox: { endpoints: [{ id: 'sandbox-bot' }] } },
     }, { dependencies: {} });
     expect(result.htmlRenderer).toBeUndefined();
   });
