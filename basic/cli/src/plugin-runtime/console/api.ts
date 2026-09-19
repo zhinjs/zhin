@@ -1,5 +1,3 @@
-import { commandFeatureId, isCommandIndex } from '@zhin.js/command';
-import { componentFeatureId, isComponentIndex } from '@zhin.js/component';
 import {
   httpHostToken,
   createConsoleEventHub,
@@ -28,21 +26,13 @@ import type { RootResourceInstaller, RuntimeConfigDocument } from '@zhin.js/runt
 import { ConsoleConfigurationStore } from './configuration.js';
 import { installInboxMessageRecorder } from './inbox.js';
 import { registerAgentConsoleRoutes } from './agent-routes.js';
+import { registerConsoleEntryRoutes } from './entry-routes.js';
 import { installMessageEventBridge, registerConsoleEventRoutes } from './events.js';
-import { normalizeBase, writeJson } from './http-response.js';
+import { normalizeBase } from './http-response.js';
 import { createAgentRuntimeLeaseResolver } from './agent-console.js';
-import {
-  buildConsoleEntriesBody,
-  buildConsoleStats,
-  buildManagedPluginList,
-  buildPluginDetail,
-  getSystemStatusData,
-  listPages,
-  listSnapshotPlugins,
-  readPackageVersion,
-  readSnapshot,
-} from './projection.js';
+import { registerConsolePluginRoutes } from './plugin-routes.js';
 import { registerConsoleRpcRoute } from './rpc-route.js';
+import { registerConsoleSystemRoutes } from './system-routes.js';
 
 interface LoginAssistBinding {
   readonly hub: ConsoleEventHub;
@@ -220,121 +210,15 @@ export function registerConsoleApiRoutes(
       : undefined,
   }, { apiBase: base });
 
-  // Remote Console shell plugin discovery (legacy host-api `GET /entries` parity).
-  // Public path (outside apiBase) — the loader still sends Bearer when present.
-  http.route('GET', '/entries', async (_request, response) => {
-    try {
-      const pages = await listPages(consoleRuntime);
-      writeJson(response, 200, buildConsoleEntriesBody(pages));
-    } catch (error) {
-      writeJson(response, 503, {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }, {
-    summary: 'Console entries (plugin discovery)',
-    tags: ['console'],
-  });
-
-  http.route('GET', `${base}/system/status`, (_request, response) => {
-    writeJson(response, 200, { success: true, data: getSystemStatusData() });
-  }, {
-    summary: 'System status snapshot',
-    tags: ['system'],
-  });
-
-  http.route('GET', `${base}/stats`, async (_request, response) => {
-    try {
-      const endpoints = im ? im.listEndpoints() : [];
-      const snap = readSnapshot(snapshot);
-      // dashboard 命令/组件卡片：CommandIndex / ComponentIndex 投影计数
-      const commandIndex = snap?.projections.get(commandFeatureId);
-      const commandCount = isCommandIndex(commandIndex) ? commandIndex.list().length : 0;
-      const componentIndex = snap?.projections.get(componentFeatureId);
-      const componentCount = isComponentIndex(componentIndex) ? componentIndex.list().length : 0;
-      writeJson(response, 200, {
-        success: true,
-        data: {
-          ...buildConsoleStats(listSnapshotPlugins(snap).length, endpoints),
-          commands: commandCount,
-          components: componentCount,
-        },
-      });
-    } catch (error) {
-      writeJson(response, 500, {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }, {
-    summary: 'Dashboard statistics',
-    tags: ['system'],
-  });
-
-  http.route('GET', `${base}/plugins`, async (_request, response) => {
-    try {
-      const snap = readSnapshot(snapshot);
-      const plugins = await buildManagedPluginList(
-        projectRoot,
-        pluginLifecycleFile,
-        snap,
-        im?.listEndpoints() ?? [],
-      );
-      writeJson(response, 200, { success: true, data: plugins, total: plugins.length });
-    } catch (error) {
-      writeJson(response, 500, {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }, {
-    summary: 'List loaded plugins',
-    tags: ['plugins'],
-  });
-
-  http.route('GET', `${base}/plugins/*`, async (_request, response, url) => {
-    const prefix = `${base}/plugins/`;
-    const raw = url.pathname.startsWith(prefix) ? url.pathname.slice(prefix.length) : '';
-    // 未解码段内不允许嵌套路径；scoped 包名（%40scope%2Fname）解码后含 '/' 属正常。
-    if (!raw || raw.includes('/')) {
-      writeJson(response, 404, { success: false, error: '插件不存在' });
-      return;
-    }
-    let name = '';
-    try {
-      name = decodeURIComponent(raw);
-    } catch {
-      writeJson(response, 400, { success: false, error: 'Invalid plugin name' });
-      return;
-    }
-    try {
-      const snap = readSnapshot(snapshot);
-      const node = listSnapshotPlugins(snap)
-        .find((item) => item.instanceKey === name || item.packageName === name);
-      if (!node) {
-        writeJson(response, 404, { success: false, error: '插件不存在' });
-        return;
-      }
-      writeJson(response, 200, {
-        success: true,
-        data: buildPluginDetail(
-          node,
-          await readPackageVersion(node.packageRoot),
-          snap,
-          im?.listEndpoints(),
-          projectRoot,
-        ),
-      });
-    } catch (error) {
-      writeJson(response, 500, {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }, {
-    summary: 'Plugin detail',
-    tags: ['plugins'],
+  registerConsoleEntryRoutes({ http, consoleRuntime });
+  registerConsoleSystemRoutes({ http, base, im, snapshot });
+  registerConsolePluginRoutes({
+    http,
+    base,
+    projectRoot,
+    pluginLifecycleFile,
+    im,
+    snapshot,
   });
 
   registerConsoleRpcRoute({
