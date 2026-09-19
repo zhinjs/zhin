@@ -39,14 +39,14 @@ HMR 粒度缩小到单个命令文件。
 
 ## 文件路由
 
-命令名 = 插件树路径段（instanceKey，去掉 root，`.` 连接）+ `.` + 文件相对路径段（空格连接）。Root 插件（应用自身）没有前缀。
+命令名只由 `commands/` 下的相对路径决定，目录段以空格连接。插件 owner 只参与 Capability 身份和配置隔离，不会隐式进入用户输入；需要产品命名空间时，把它明确写成目录。
 
 | 文件 | 所属插件 | 命令名 |
 | --- | --- | --- |
 | `commands/$hello.ts` | root | `hello` |
-| `commands/endpoint/$list.ts` | `qq` | `qq.endpoint list` |
-| `commands/endpoint/add/$[[name]].ts` | `qq` | `qq.endpoint add [name]` |
-| `commands/$foo.ts` | `b` 下的 `a`（`root/b/a`） | `b.a.foo` |
+| `commands/qq/endpoint/$list.ts` | `qq` | `qq endpoint list` |
+| `commands/qq/endpoint/add/$[[name]].ts` | `qq` | `qq endpoint add [name]` |
+| `commands/$foo.ts` | `b` 下的 `a`（`root/b/a`） | `foo` |
 
 先看嵌套：`commands/` 递归扫描，嵌套目录直接映射为子命令段。静态段文件名 / 目录名须通过 `isCapabilityLocalSegment`（`zhin.js`）：
 
@@ -67,7 +67,7 @@ HMR 粒度缩小到单个命令文件。
 
 一致性在启动期校验：有 `default` 时文件名必须用双方括号（`$[[name]]`），文件名声明了参数形态但 `params` 里缺对应声明，都会抛 `CommandPathSyntaxError`。
 
-动态参数可以直接作为首段。子插件的 `$[note].ts` 会挂在插件命名空间后，形成 `remind <note>`；放在静态目录 `commands/add/$[note].ts` 时则形成 `remind.add <note>`。Root 的 `$[note].ts` 可匹配顶层单段输入。每条命令仍只允许一个动态段，并且必须位于路径末尾。
+动态参数可以直接作为顶层首段。无论 Root 还是子插件，`commands/$[note].ts` 都匹配顶层单段输入；放在静态目录 `commands/remind/$[note].ts` 时形成 `remind <note>`。每条命令仍只允许一个动态段，并且必须位于路径末尾。不同 owner 发布相同用户路由时，generation 构建会直接报告冲突。
 
 捕获所有的数组元素粒度由 `params.<name>.type` 决定：`text` 逐消息段收集（纯文本输入整体为一个元素）；`word` / `string` 按空白逐词切分；`number` / `integer` / `float` / `boolean` 逐词切分后逐个转换，任一词转换失败即视为命令不匹配；`mention` / `image` 等结构化类型逐消息段收集。
 
@@ -83,10 +83,10 @@ HMR 粒度缩小到单个命令文件。
 
 路由冲突有两条规则：**静态优先**——`$list.ts` 永远赢过 `$[name].ts`，动态路由之间静态段多者（更具体）优先；**同形拒绝**——同一路由形状重复注册会在启动时报错（`Duplicate runtime Command`）。
 
-真实示例（`plugins/adapters/qq/commands/endpoint/remove/$[name].ts`，命令定义由[endpoint 管理命令套件](#适配器-endpoint-管理命令套件)生成）：
+真实示例（`plugins/adapters/qq/commands/qq/endpoint/remove/$[name].ts`，命令定义由[endpoint 管理命令套件](#适配器-endpoint-管理命令套件)生成）：
 
 ```ts
-import { qqEndpointCommands } from '../../../src/qq-endpoint-commands.js';
+import { qqEndpointCommands } from '../../../../src/qq-endpoint-commands.js';
 
 export default qqEndpointCommands.remove;
 ```
@@ -143,7 +143,7 @@ flowchart LR
 
 派发时按确定性优先级尝试已编译的命令模式：静态命令先于动态命令，动态命令中更具体的
 路径优先。命中后，剩余文本按空白切分进入 `args`，完整富消息尾部保留在 `segments`。
-因此 `qq.endpoint remove mybot` 会命中 `qq.endpoint remove <name>`，`args` 为空、
+因此 `qq endpoint remove mybot` 会命中 `qq endpoint remove <name>`，`args` 为空、
 `params.name === 'mybot'`。
 
 结构化参数示例：
@@ -193,16 +193,16 @@ export default defineCommand({
   description: 'ICQQ 点赞',
   alias: ['zan'],                    // 可多词，如 'gh issue'
   permit: ['adapter(icqq)'],         // 数组 AND；单项内逗号 OR
-  // shortcut: { '赞满': { count: 10 } }, // 全局整句精确匹配，可打破 owner 前缀
+  // shortcut: { '赞满': { count: 10 } }, // 全局整句精确匹配
   execute: async (ctx) => { /* ... */ },
 });
 ```
 
 | 字段 | 行为 |
 |---|---|
-| `alias` | 替换**全部本地静态段**后仍挂 owner 前缀（子插件如 `qq.ep`，裸 `ep` 不命中）；动态 `$param` 接在后面 |
+| `alias` | 替换**全部本地静态段**；动态 `$param` 接在后面，owner 不参与路由 |
 | `permit` | 仅内置 DSL：`adapter\|group\|private\|channel\|user\|role(...)`；未过则**静默未命中**（`matched: false`）；`CommandIndex.execute` 无 session 时跳过 |
-| `shortcut` | `Record`：触发串 → 预填 `params`；trim 后全文相等才命中；**可全局**（不强制命名空间） |
+| `shortcut` | `Record`：触发串 → 预填 `params`；trim 后全文相等才命中 |
 
 冲突键按**完整词序列**（`b` 与 `b list` 可共存）。正式路由、alias、shortcut 键互斥。
 
@@ -225,10 +225,10 @@ export function isEndpointOperator(config: unknown, input: unknown): boolean {
 
 `@zhin.js/adapter` 的 `createEndpointCommands(spec, defineCommand)` 为适配器生成 `<adapter> endpoint` 的 **list / add / remove** 三个命令。除 email（smtp/imap 为嵌套对象，kv 无法表达）与 sandbox（内置调试适配器，无凭据）外，全部平台适配器均已接入：qq、icqq、napcat、onebot11、onebot12、milky、satori、slack、telegram、discord、kook、lark、dingtalk、line、wecom、wechat-mp、weixin-ilink、github。
 
-- `<adapter>.endpoint list`：运行中的 endpoints（adapter `create()` 注册的 runtime state）+ `zhin.config.yml` 里 `plugins.<adapterKey>.endpoints` 的配置清单。
-- `<adapter>.endpoint add <name> <key=value...>`：手动录入字段。`env: true` 的凭据字段值写入 `.env`（键名派生为 `<ADAPTER>_<NAME>_<FIELD>` 大写，如 `TELEGRAM_BOT1_TOKEN`、`SLACK_BOT1_SIGNING_SECRET`），yaml 中保存 `${REF}` 引用；其余字段内联写入。yaml 用 Document 节点级操作，保留既有注释；重名拒绝；`add`/`remove` 都走上面的 master 门禁。
-- `<adapter>.endpoint remove <name>`：从配置移除（重启生效，`.env` 键保留待手动清理）。
-- 特殊 add 流程（如 QQ 扫码绑定）经 `spec.bindFlow` 钩子接管 add 命令；QQ 因此多出第四个命令 `qq.endpoint cancel`。
+- `<adapter> endpoint list`：运行中的 endpoints（adapter `create()` 注册的 runtime state）+ `zhin.config.yml` 里 `plugins.<adapterKey>.endpoints` 的配置清单。
+- `<adapter> endpoint add <name> <key=value...>`：手动录入字段。`env: true` 的凭据字段值写入 `.env`（键名派生为 `<ADAPTER>_<NAME>_<FIELD>` 大写，如 `TELEGRAM_BOT1_TOKEN`、`SLACK_BOT1_SIGNING_SECRET`），yaml 中保存 `${REF}` 引用；其余字段内联写入。yaml 用 Document 节点级操作，保留既有注释；重名拒绝；`add`/`remove` 都走上面的 master 门禁。
+- `<adapter> endpoint remove <name>`：从配置移除（重启生效，`.env` 键保留待手动清理）。
+- 特殊 add 流程（如 QQ 扫码绑定）经 `spec.bindFlow` 钩子接管 add 命令；QQ 因此多出第四个命令 `qq endpoint cancel`。
 
 接入一个适配器只需四步（以 telegram 为例）：
 
@@ -250,7 +250,7 @@ export const telegramEndpointCommands = createEndpointCommands({
   describeEntry: (entry) => `token: ${String(entry.token)}`,
 }, defineCommand);
 
-// 4. commands/endpoint/$list.ts、add/$[[name]].ts、remove/$[name].ts
+// 4. commands/telegram/endpoint/$list.ts、add/$[[name]].ts、remove/$[name].ts
 export default telegramEndpointCommands.list; // / .add / .remove
 ```
 
@@ -263,7 +263,7 @@ export default telegramEndpointCommands.list; // / .add / .remove
 ```yaml
 plugins:
   qq:
-    commandPrefix: '/'     # 仅 "/qq.endpoint list" 触发
+    commandPrefix: '/'     # 仅 "/qq endpoint list" 触发
     endpoints:
       - name: main
         commandPrefix: ''  # endpoints[i] 可逐项覆盖顶层
@@ -273,4 +273,4 @@ plugins:
 
 ## 排错提示
 
-`description` 会出现在命令清单里，建议都写。命令名冲突（同名静态命令或同形动态路由）在启动期抛错，改配置时启动一次就能尽早发现。返回 `Promise` 的命令可以做多轮交互——先 resolve 首条回复，后续用 `input.$reply` 追加，参考 `qq.endpoint add` 的扫码绑定流程。
+`description` 会出现在命令清单里，建议都写。命令名冲突（同名静态命令或同形动态路由）在启动期抛错，改配置时启动一次就能尽早发现。返回 `Promise` 的命令可以做多轮交互——先 resolve 首条回复，后续用 `input.$reply` 追加，参考 `qq endpoint add` 的扫码绑定流程。

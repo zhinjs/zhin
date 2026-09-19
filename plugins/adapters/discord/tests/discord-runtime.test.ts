@@ -702,7 +702,7 @@ describe('discord plugin runtime adapter', () => {
 });
 
 
-describe('discord.endpoint management', () => {
+describe('discord endpoint management', () => {
   const GUILD_ID = '1234567890123456789';
 
   function managementMock() {

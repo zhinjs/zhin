@@ -40,7 +40,7 @@ export default defineAdapter<NapCatAdapterConfig>({
   },
   create(context) {
     const config = resolveNapCatConfig(context.config);
-    // 注册到插件运行时状态（napcat.endpoint list 的"运行中"数据源）
+    // 注册到插件运行时状态（napcat endpoint list 的"运行中"数据源）
     context.use(napcatRuntimeStateToken).endpoints.set(config.id, {
       id: config.id,
       mode: config.connection,

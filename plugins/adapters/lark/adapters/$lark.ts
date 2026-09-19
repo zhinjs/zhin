@@ -27,7 +27,7 @@ export default defineAdapter<LarkAdapterConfig>({
   },
   create(context) {
     const config = resolveLarkConfig(context.config);
-    // 注册到插件运行时状态（lark.endpoint list 的"运行中"数据源）
+    // 注册到插件运行时状态（lark endpoint list 的"运行中"数据源）
     context.use(larkRuntimeStateToken).endpoints.set(config.id, {
       id: config.id,
       mode: 'webhook',

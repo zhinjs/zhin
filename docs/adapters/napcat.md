@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/napcat/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/napcat/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=fa16cb60263c9e39 -->
+<!-- sync-adapter-docs:sha256=0a6c18c7ff2f0fc9 -->
 
 # @zhin.js/adapter-napcat
 

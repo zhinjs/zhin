@@ -712,7 +712,7 @@ describe('IM Runtime', () => {
         kind: 'private',
         id: 'room',
       },
-      '/child.status',
+      '/status',
       1,
       async (_content, owner) => { requester = owner; return { status: 'sent' }; },
     );

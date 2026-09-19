@@ -33,8 +33,8 @@ export default defineMiddleware<CommandMessage>({
     }
 
     const raw = String(context.input.content ?? '').trim();
-    // 让 qq.endpoint cancel 等命令继续走命令链
-    if (raw.toLowerCase().startsWith('qq.endpoint')) {
+    // 让 qq endpoint cancel 等命令继续走命令链
+    if (raw.toLowerCase().startsWith('qq endpoint')) {
       await next();
       return;
     }

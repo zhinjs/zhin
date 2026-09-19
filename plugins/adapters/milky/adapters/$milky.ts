@@ -41,7 +41,7 @@ export default defineAdapter<MilkyAdapterConfig>({
   },
   create(context) {
     const config = resolveMilkyConfig(context.config);
-    // 注册到插件运行时状态（milky.endpoint list 的"运行中"数据源）
+    // 注册到插件运行时状态（milky endpoint list 的"运行中"数据源）
     context.use(milkyRuntimeStateToken).endpoints.set(config.id, {
       id: config.id,
       mode: config.connection,

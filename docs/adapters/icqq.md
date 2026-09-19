@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=245948a038c59636 -->
+<!-- sync-adapter-docs:sha256=464adff641ed7ad1 -->
 
 # @zhin.js/adapter-icqq
 

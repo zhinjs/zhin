@@ -321,7 +321,7 @@ describe('removeEndpointById', () => {
   it('空 id 提示用法；不存在提示未找到；存在则移除并提示重启', () => {
     writeConfig('plugins:\n  demo:\n    endpoints:\n      - { id: a, token: "1" }\n');
 
-    expect(removeEndpointById(demoSpec, '  ', root)).toContain('用法：demo.endpoint remove <id>');
+    expect(removeEndpointById(demoSpec, '  ', root)).toContain('用法：demo endpoint remove <id>');
     expect(removeEndpointById(demoSpec, 'ghost', root)).toContain('不存在');
     expect(removeEndpointById(demoSpec, 'a', root)).toContain('重启');
     expect(listConfiguredEndpoints('demo', root)).toEqual([]);
@@ -404,7 +404,7 @@ describe('createEndpointCommands', () => {
 
   it('add 无 id 时返回用法', () => {
     const commands = createEndpointCommands(demoSpec, defineCommand);
-    expect(commands.add.execute(fakeContext())).toContain('用法：demo.endpoint add <id>');
+    expect(commands.add.execute(fakeContext())).toContain('用法：demo endpoint add <id>');
   });
 
   it('bindFlow 钩子接管 add（忽略 kv）', async () => {

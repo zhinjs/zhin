@@ -4,9 +4,9 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
-import listCommand from '../commands/endpoint/$list.js';
-import addCommand from '../commands/endpoint/add/$[[id]].js';
-import removeCommand from '../commands/endpoint/remove/$[id].js';
+import listCommand from '../commands/icqq/endpoint/$list.js';
+import addCommand from '../commands/icqq/endpoint/add/$[[id]].js';
+import removeCommand from '../commands/icqq/endpoint/remove/$[id].js';
 import { icqqRuntimeStateToken } from '../src/icqq-runtime-state.js';
 
 /**
@@ -43,7 +43,7 @@ function fakeContext(overrides: Record<string, unknown> = {}) {
   } as never;
 }
 
-describe('icqq.endpoint command definitions', () => {
+describe('icqq endpoint command definitions', () => {
   it('三个命令模块均为合法 defineCommand', () => {
     for (const definition of [listCommand, addCommand, removeCommand]) {
       expect(() => parseCommandDefinition(definition)).not.toThrow();
@@ -52,7 +52,7 @@ describe('icqq.endpoint command definitions', () => {
 
   it('add 无 id 时回复用法', () => {
     const text = addCommand.execute(fakeContext()) as string;
-    expect(text).toContain('用法：icqq.endpoint add <uin>');
+    expect(text).toContain('用法：icqq endpoint add <uin>');
   });
 
   it('add 非数字 id 拒绝', () => {

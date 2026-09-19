@@ -1,9 +1,9 @@
 /**
- * `qq.endpoint` 命令的业务逻辑（与命令定义文件分离，便于测试）。
+ * `qq endpoint` 命令的业务逻辑（与命令定义文件分离，便于测试）。
  * 通用部分（权限 / list / remove / 配置写回 / .env 持久化）已迁移到
  * @zhin.js/adapter 的 createEndpointCommands 套件；本文件保留 QQ 特化的
  * 扫码绑定 add 流程（经套件 bindFlow 钩子接入）与 cancel，并导出
- * qqEndpointCommands 供 commands/endpoint/ 下的命令文件默认导出。
+ * qqEndpointCommands 供 commands/qq/endpoint/ 下的命令文件默认导出。
  */
 import {
   createEndpointCommands,
@@ -48,14 +48,14 @@ export function extractQqCommandReply(input: unknown): QqCommandReply {
 }
 
 function busyFooter(state: QqRuntimeState): string | undefined {
-  if (state.bindFlow) return '⚠️ 有进行中的扫码绑定，可用 qq.endpoint cancel 取消';
+  if (state.bindFlow) return '⚠️ 有进行中的扫码绑定，可用 qq endpoint cancel 取消';
   if (state.pendingBotKind) {
-    return `⚠️ endpoint「${state.pendingBotKind.endpointId}」等待公域/私域选择，回复 public/private 或 qq.endpoint cancel`;
+    return `⚠️ endpoint「${state.pendingBotKind.endpointId}」等待公域/私域选择，回复 public/private 或 qq endpoint cancel`;
   }
   return undefined;
 }
 
-/** `qq.endpoint list`：运行中的 endpoints（本 generation adapter create 注册）+ 配置里的 endpoints */
+/** `qq endpoint list`：运行中的 endpoints（本 generation adapter create 注册）+ 配置里的 endpoints */
 export function runQqEndpointList(state: QqRuntimeState, projectRoot?: string): string {
   return formatEndpointList(qqEndpointListSpec, {
     running: state.endpoints.values(),
@@ -112,7 +112,7 @@ export function completeQqPendingBotKind(
 }
 
 /**
- * `qq.endpoint add [id]`：启动扫码绑定流程。
+ * `qq endpoint add [id]`：启动扫码绑定流程。
  * 返回的 Promise 在二维码链接就绪（或前置失败）时 resolve 为首条回复；
  * 后续状态（已扫码 / 成功 / 失败 / 过期刷新）通过 reply 推回当前会话。
  * 扫码成功后凭据暂存内存并询问公域/私域；确认后一次性写 .env + yaml。
@@ -126,7 +126,7 @@ export function runQqEndpointAdd(
 ): Promise<string> {
   if (state.bindFlow || state.pendingBotKind) {
     return Promise.resolve(
-      '已有进行中的 QQ 机器人绑定或待确认的公域/私域选择，请先发送 qq.endpoint cancel 取消后再试',
+      '已有进行中的 QQ 机器人绑定或待确认的公域/私域选择，请先发送 qq endpoint cancel 取消后再试',
     );
   }
   const endpointId = id?.trim() || undefined;
@@ -208,7 +208,7 @@ export function runQqEndpointAdd(
   });
 }
 
-/** `qq.endpoint cancel`：中止进行中的绑定或待选 botKind */
+/** `qq endpoint cancel`：中止进行中的绑定或待选 botKind */
 export function runQqEndpointCancel(state: QqRuntimeState): string {
   if (state.bindFlow) {
     state.bindFlow.stop();
@@ -223,7 +223,7 @@ export function runQqEndpointCancel(state: QqRuntimeState): string {
   return '当前没有进行中的 QQ 绑定流程';
 }
 
-/** `qq.endpoint remove <id>`：从 zhin.config.yml 移除对应 endpoints 项 */
+/** `qq endpoint remove <id>`：从 zhin.config.yml 移除对应 endpoints 项 */
 export function runQqEndpointRemove(
   _state: QqRuntimeState,
   id: string,
@@ -234,7 +234,7 @@ export function runQqEndpointRemove(
 
 /**
  * 通用套件生成的 QQ endpoint 命令（add 经 bindFlow 钩子走扫码绑定）。
- * commands/endpoint/ 下的 list / add / remove 直接默认导出这三项；cancel 为 QQ 特化，单独定义。
+ * commands/qq/endpoint/ 下的 list / add / remove 直接默认导出这三项；cancel 为 QQ 特化，单独定义。
  */
 export const qqEndpointCommands = createEndpointCommands({
   ...qqEndpointListSpec,

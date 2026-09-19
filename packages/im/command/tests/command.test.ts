@@ -436,7 +436,7 @@ describe('Command Feature', () => {
     )).toThrow(/Duplicate Command route/);
   });
 
-  it('replaces all local static segments via alias and keeps owner namespace', async () => {
+  it('replaces all local static segments via a global alias', async () => {
     const root = rootPluginId();
     const qq = childPluginId(root, 'qq');
     const slot = createCapabilitySlot({
@@ -452,19 +452,19 @@ describe('Command Feature', () => {
     const index = new CommandIndex([slot], snapshotWithOwners([qq], [slot]));
 
     expect(index.list()[0]).toMatchObject({
-      name: 'qq.endpoint list',
+      name: 'endpoint list',
       alias: ['ep', 'e l'],
     });
-    await expect(index.dispatch('qq.ep')).resolves.toMatchObject({
+    await expect(index.dispatch('ep')).resolves.toMatchObject({
       matched: true,
-      command: 'qq.endpoint list',
+      command: 'endpoint list',
       value: 'list:',
     });
-    await expect(index.dispatch('qq.e l open')).resolves.toMatchObject({
+    await expect(index.dispatch('e l open')).resolves.toMatchObject({
       matched: true,
       value: 'list:open',
     });
-    await expect(index.dispatch('ep')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('qq.ep')).resolves.toEqual({ matched: false });
   });
 
   it('matches multi-word alias with trailing dynamic params', async () => {
@@ -554,7 +554,7 @@ describe('Command Feature', () => {
     await expect(index.dispatch('叮')).resolves.toMatchObject({
       matched: true,
       value: 'pong',
-      command: 'remind.ping',
+      command: 'ping',
     });
   });
 
@@ -808,7 +808,7 @@ describe('Command Feature', () => {
     });
   });
 
-  it('isolates owner dot-prefix namespace from root directory namespace', async () => {
+  it('keeps owner identity separate from the user route', async () => {
     const root = rootPluginId();
     const child = childPluginId(root, 'child');
     const rootSlot = createCapabilitySlot({
@@ -827,18 +827,30 @@ describe('Command Feature', () => {
     });
     const snapshot = snapshotWithOwners([child], [rootSlot, childSlot]);
 
-    // 点号前缀下二者不再冲突：root 目录段 `child status` vs owner 前缀 `child.status`
     const index = new CommandIndex([rootSlot, childSlot], snapshot);
     await expect(index.dispatch('child status')).resolves.toMatchObject({
       matched: true,
       owner: root,
       value: 'root',
     });
-    await expect(index.dispatch('child.status')).resolves.toMatchObject({
+    await expect(index.dispatch('status')).resolves.toMatchObject({
       matched: true,
       owner: child,
       value: 'child',
     });
+    await expect(index.dispatch('child.status')).resolves.toEqual({ matched: false });
+  });
+
+  it('rejects the same user route published by different owners', () => {
+    const root = rootPluginId();
+    const child = childPluginId(root, 'child');
+    const rootSlot = slotFor(root, 'status');
+    const childSlot = slotFor(child, 'status');
+
+    expect(() => new CommandIndex(
+      [rootSlot, childSlot],
+      snapshotWithOwners([child], [rootSlot, childSlot]),
+    )).toThrow(/Duplicate Command route "status"/);
   });
 
   it('dispatches Unicode command names (e.g. Chinese 赞我)', async () => {
@@ -1195,33 +1207,33 @@ describe('Command Feature', () => {
   });
 });
 
-describe('命令名点号前缀（插件树路径段 + 命令段）', () => {
+describe('命令用户路由与 owner 身份分离', () => {
   const root = rootPluginId();
   const qq = childPluginId(root, 'qq');
   const nested = childPluginId(childPluginId(root, 'b'), 'a');
 
-  it('单级挂载：root/qq + endpoint/list → qq.endpoint list', async () => {
+  it('单级挂载不把 owner 拼进用户路由', async () => {
     const slot = slotFor(qq, 'endpoint/list', 'listed');
     const index = new CommandIndex([slot], snapshotWithOwners([qq], [slot]));
 
-    expect(index.list()[0]!.name).toBe('qq.endpoint list');
-    await expect(index.dispatch('qq.endpoint list')).resolves.toMatchObject({
+    expect(index.list()[0]!.name).toBe('endpoint list');
+    await expect(index.dispatch('endpoint list')).resolves.toMatchObject({
       matched: true,
-      command: 'qq.endpoint list',
+      command: 'endpoint list',
       owner: qq,
       value: 'listed',
     });
-    // 旧空格风格不再命中（breaking）
-    await expect(index.dispatch('qq endpoint list')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('qq.endpoint list')).resolves.toEqual({ matched: false });
   });
 
-  it('多级挂载：root/b/a + foo → b.a.foo', async () => {
+  it('多级 owner 仍只发布本地能力路径', async () => {
     const slot = slotFor(nested, 'foo', 'nested-ok');
     const index = new CommandIndex([slot], snapshotWithOwners([nested], [slot]));
 
-    expect(index.list()[0]!.name).toBe('b.a.foo');
-    await expect(index.execute('b.a.foo')).resolves.toBe('nested-ok');
-    await expect(index.dispatch('b.a.foo')).resolves.toMatchObject({ matched: true });
+    expect(index.list()[0]!.name).toBe('foo');
+    await expect(index.execute('foo')).resolves.toBe('nested-ok');
+    await expect(index.dispatch('foo')).resolves.toMatchObject({ matched: true });
+    await expect(index.dispatch('b.a.foo')).resolves.toEqual({ matched: false });
     await expect(index.dispatch('b a foo')).resolves.toEqual({ matched: false });
   });
 
@@ -1233,19 +1245,20 @@ describe('命令名点号前缀（插件树路径段 + 命令段）', () => {
     await expect(index.dispatch('foo')).resolves.toMatchObject({ matched: true });
   });
 
-  it('点号前缀边界：b.foobar 不误命中 b.foo', async () => {
+  it('owner 点号路径不再形成隐式命令', async () => {
     const b = childPluginId(root, 'b');
     const slot = slotFor(b, 'foo');
     const index = new CommandIndex([slot], snapshotWithOwners([b], [slot]));
 
     await expect(index.dispatch('b.foobar')).resolves.toEqual({ matched: false });
-    await expect(index.dispatch('b.foo extra args')).resolves.toMatchObject({
+    await expect(index.dispatch('foo extra args')).resolves.toMatchObject({
       matched: true,
-      command: 'b.foo',
+      command: 'foo',
     });
+    await expect(index.dispatch('b.foo')).resolves.toEqual({ matched: false });
   });
 
-  it('子插件动态首段挂在插件命名空间后，无需额外静态命令段', async () => {
+  it('子插件可发布顶层动态首段', async () => {
     const remind = childPluginId(root, 'remind');
     const slot = createCapabilitySlot({
       owner: remind,
@@ -1259,8 +1272,8 @@ describe('命令名点号前缀（插件树路径段 + 命令段）', () => {
     });
     const index = new CommandIndex([slot], snapshotWithOwners([remind], [slot]));
 
-    expect(index.list()[0]?.name).toBe('remind <note>');
-    await expect(index.execute('remind hello')).resolves.toBe('x');
+    expect(index.list()[0]?.name).toBe('<note>');
+    await expect(index.execute('hello')).resolves.toBe('x');
   });
 });
 
@@ -1378,7 +1391,7 @@ describe('内置菜单命令', () => {
     const result = await index.dispatch('菜单 qq');
     expect(result.matched).toBe(true);
     const text = result.value as string;
-    expect(text).toContain('qq.status');
+    expect(text).toContain('status');
     expect(text).toContain('QQ 状态');
     expect(text).toContain('qq.group');
     expect(text).toContain('提示');

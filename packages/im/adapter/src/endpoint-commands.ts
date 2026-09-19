@@ -1,14 +1,14 @@
 /**
  * createEndpointCommands — 适配器 endpoint 管理命令套件（list / add / remove）。
  *
- * 把 QQ 适配器独有的 `qq.endpoint` 命令族泛化为任意适配器可复用的套件：
+ * 把 QQ 适配器独有的 `qq endpoint` 命令族泛化为任意适配器可复用的套件：
  *
- * - `<adapter>.endpoint list`：运行中的 endpoints（adapter create 注册的 runtime state）
+ * - `<adapter> endpoint list`：运行中的 endpoints（adapter create 注册的 runtime state）
  *   + zhin.config.yml 配置里的 `plugins.<adapterKey>.endpoints`。
- * - `<adapter>.endpoint add <name> <key=value...>`：手动录入字段，
+ * - `<adapter> endpoint add <name> <key=value...>`：手动录入字段，
  *   凭据类字段（env: true）值写入 .env（`<ADAPTER>_<NAME>_<FIELD>` 大写键），
  *   yaml 中保存 `${REF}` 引用；其余字段内联写入。yaml 用 Document 节点级操作保留注释。
- * - `<adapter>.endpoint remove <name>`：从 `plugins.<adapterKey>.endpoints` 移除（重启生效）。
+ * - `<adapter> endpoint remove <name>`：从 `plugins.<adapterKey>.endpoints` 移除（重启生效）。
  * - 权限：实例 config 声明了 master（顶层或 endpoints[i]）时仅 master 可用 add/remove，
  *   未配置放行（isEndpointOperator）。
  * - 特殊 add 流程（如 QQ 扫码绑定）经 spec.bindFlow 钩子接管 add 命令。
@@ -20,7 +20,7 @@
  * 3. src 下 `export const telegramEndpointCommands = createEndpointCommands({ adapterKey: 'telegram', ... }, defineCommand)`
  *    （defineCommand 由调用方从 @zhin.js/command 传入——provider 包之间禁止互相 import，
  *    见 scripts/check-architecture-layers.mjs，故 defineCommand 走依赖注入）。
- * 4. commands/endpoint/{list.ts, add/[name].ts, remove/[name].ts} 分别
+ * 4. commands/<adapter>/endpoint/{$list.ts, add/$[name].ts, remove/$[name].ts} 分别
  *    `export default telegramEndpointCommands.list|add|remove`。
  *
  * 注意：adapterKey 即实例 key（zhin.config.yml 的 plugins.<key>）；多实例自定义 key 时
@@ -350,7 +350,7 @@ export function addEndpointToConfig(
   const document = readConfigDocument(adapterKey, projectRoot);
   const seq = ensureEndpointsSeq(document.doc, adapterKey);
   if (seq.items.some((item) => entryId(item) === entry.id)) {
-    throw new Error(`配置中已存在 ${adapterKey} endpoint「${entry.id}」，可先 ${adapterKey}.endpoint remove ${entry.id} 再重新添加`);
+    throw new Error(`配置中已存在 ${adapterKey} endpoint「${entry.id}」，可先 ${adapterKey} endpoint remove ${entry.id} 再重新添加`);
   }
   seq.items.push(document.doc.createNode(entry));
   writeConfigDocument(document);
@@ -527,7 +527,7 @@ function addUsage(spec: EndpointCommandsSpec): string {
       ].filter(Boolean).join('，');
       return marks ? `${field.key}（${marks}）` : field.key;
     }).join('、')}`;
-  return `用法：${spec.adapterKey}.endpoint add <id> <key=value...>${fieldText}`;
+  return `用法：${spec.adapterKey} endpoint add <id> <key=value...>${fieldText}`;
 }
 
 /** add（kv 模式）的完整业务逻辑：解析 kv → 凭据写 .env → 追加 yaml；返回回复文本。 */
@@ -589,7 +589,7 @@ export function removeEndpointById(
   projectRoot?: string,
 ): string {
   const trimmed = id.trim();
-  if (!trimmed) return `用法：${spec.adapterKey}.endpoint remove <id>`;
+  if (!trimmed) return `用法：${spec.adapterKey} endpoint remove <id>`;
   try {
     const { removed, filePath } = removeEndpointFromConfig(spec.adapterKey, trimmed, projectRoot);
     if (!removed) {

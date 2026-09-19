@@ -119,7 +119,7 @@ export class CommandIndex {
     };
 
     for (const slot of slots) {
-      const primarySegments = runtimeSegments(slot.owner, slot.localName);
+      const primarySegments = runtimeSegments(slot.localName);
       const parameter = slot.definition.$parameter;
       assertParameterSegment(primarySegments, parameter, slot.source);
       const name = displayName(primarySegments, parameter);
@@ -158,7 +158,7 @@ export class CommandIndex {
 
       if (alias) {
         for (const entry of alias) {
-          const aliasSegments = aliasRuntimeSegments(slot.owner, entry, primarySegments);
+          const aliasSegments = aliasRuntimeSegments(entry, primarySegments);
           assertParameterSegment(aliasSegments, parameter, `${slot.source} alias ${JSON.stringify(entry)}`);
           claim(occupancyKey(aliasSegments, parameter), `${slot.source} alias ${JSON.stringify(entry)}`);
           routes.push({
@@ -456,32 +456,24 @@ export function isCommandIndex(value: unknown): value is CommandIndex {
 }
 
 /**
- * 命令运行时名 = 插件树路径段（instanceKey，去掉 root）以 `.` 连接后，再与命令
- * 文件路径首段以 `.` 连接；命令内部嵌套段仍为空格分隔。Root 插件无前缀。
- * 例：`root/qq` + `endpoint/list` → `qq.endpoint list`；
- * `root/b/a` + `foo` → `b.a.foo`；root + `foo` → `foo`。
+ * 用户路由只来自命令的本地能力路径。owner 已经属于 CapabilityId，不能再次
+ * 泄漏进用户输入；需要产品命名空间时，作者应把它写进 commands/ 下的目录。
+ * 例：任意 owner + `foo` → `foo`；`qq/endpoint/list` → `qq endpoint list`。
  */
-function runtimeSegments(owner: string, localName: string): string[] {
-  const localSegments = localName.split('/');
-  if (owner === 'root') return localSegments;
-  const prefix = owner.slice('root/'.length).split('/').join('.');
-  if (localSegments[0]?.startsWith('$')) return [prefix, ...localSegments];
-  return [`${prefix}.${localSegments[0]}`, ...localSegments.slice(1)];
+function runtimeSegments(localName: string): string[] {
+  return localName.split('/');
 }
 
 /**
- * 用 alias 词序列替换全部本地静态段，再按 owner 规则重挂前缀；动态段保留。
+ * 用 alias 词序列替换全部本地静态段；动态段保留。
  */
 function aliasRuntimeSegments(
-  owner: string,
   alias: string,
   primarySegments: readonly string[],
 ): string[] {
   const aliasTokens = alias.trim().split(/\s+/u).filter(Boolean);
   const dynamicTail = primarySegments.filter((segment) => segment.startsWith('$'));
-  if (owner === 'root') return [...aliasTokens, ...dynamicTail];
-  const prefix = owner.slice('root/'.length).split('/').join('.');
-  return [`${prefix}.${aliasTokens[0]}`, ...aliasTokens.slice(1), ...dynamicTail];
+  return [...aliasTokens, ...dynamicTail];
 }
 
 function occupancyKey(

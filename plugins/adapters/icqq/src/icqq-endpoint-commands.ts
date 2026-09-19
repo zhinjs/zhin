@@ -10,7 +10,7 @@ export const icqqEndpointCommands = createEndpointCommands({
   addDescription: '登记 ICQQ endpoint（重启 zhin 生效）',
   bindFlow: ({ id }) => {
     if (!id) {
-      return '用法：icqq.endpoint add <uin>（uin 为纯数字 QQ 号）';
+      return '用法：icqq endpoint add <uin>（uin 为纯数字 QQ 号）';
     }
     if (!/^\d+$/.test(id)) {
       return 'icqq endpoint 名必须是纯数字 QQ 号（uin）';

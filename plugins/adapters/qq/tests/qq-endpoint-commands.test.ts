@@ -317,13 +317,13 @@ describe('runQqEndpointList', () => {
     expect(text).toContain('（无）');
   });
 
-  it('有进行中绑定时 footer 提示 qq.endpoint cancel', () => {
+  it('有进行中绑定时 footer 提示 qq endpoint cancel', () => {
     const state = createQqRuntimeState();
     state.bindFlow = { id: 'a', stop: vi.fn() };
 
     const text = runQqEndpointList(state, root);
 
-    expect(text).toContain('qq.endpoint cancel');
+    expect(text).toContain('qq endpoint cancel');
   });
 
   it('待选 botKind 时 footer 提示', () => {

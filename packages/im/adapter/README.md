@@ -160,7 +160,7 @@ stop 主动断开不重连、心跳 PONG 看门狗、定时器集中清理、陈
 
 - `plugins.<adapter>` 配置该 adapter 所有 endpoint 的**通用配置**（如凭据共享字段、
   `master`、`intents`）。
-- `plugins.<adapter>.endpoints[index]` 配置单个 endpoint 的**特殊配置**，逐项覆盖通用
+- `plugins.<adapter> endpoints[index]` 配置单个 endpoint 的**特殊配置**，逐项覆盖通用
   配置，`name` 必填。
 - 不写 `endpoints` 时退化为单 endpoint（历史行为），实例 config 原样传给 `create()`。
 

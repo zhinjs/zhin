@@ -68,7 +68,7 @@ plugins:
 | 类别 | 路径 |
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
-| 平台工具 | `agent/tools/*.ts` |
+| 平台工具 | `agent/tools/$*.ts` |
 | 技能说明 | `agent/skills/$napcat.md` |
 
 ## 迁移说明（Plugin Runtime）

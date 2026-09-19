@@ -214,6 +214,35 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove the unused classic Component Feature registry after component authority moved to generation-owned projections."
+    },
+    {
+      "changeset": "decouple-command-routes-from-owners.md",
+      "packages": [
+        "@zhin.js/command",
+        "@zhin.js/adapter",
+        "@zhin.js/adapter-dingtalk",
+        "@zhin.js/adapter-discord",
+        "@zhin.js/adapter-github",
+        "@zhin.js/adapter-icqq",
+        "@zhin.js/adapter-kook",
+        "@zhin.js/adapter-lark",
+        "@zhin.js/adapter-line",
+        "@zhin.js/adapter-milky",
+        "@zhin.js/adapter-napcat",
+        "@zhin.js/adapter-onebot11",
+        "@zhin.js/adapter-onebot12",
+        "@zhin.js/adapter-qq",
+        "@zhin.js/adapter-satori",
+        "@zhin.js/adapter-slack",
+        "@zhin.js/adapter-telegram",
+        "@zhin.js/adapter-wechat-mp",
+        "@zhin.js/adapter-wecom",
+        "@zhin.js/adapter-weixin-ilink",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Separate owner-scoped Command identity from global user routing and remove implicit dot-prefixed compatibility routes under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

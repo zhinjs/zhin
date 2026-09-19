@@ -24,7 +24,7 @@ function config() {
   });
 }
 
-describe('wechat-mp.endpoint management', () => {
+describe('wechat-mp endpoint management', () => {
   it('只暴露 listFriends（公众号无群/频道概念）', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     const endpoint = bindTestEndpoint(new WeChatMpEndpoint({

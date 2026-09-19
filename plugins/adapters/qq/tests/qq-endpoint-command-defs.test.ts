@@ -3,10 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
-import listCommand from '../commands/endpoint/$list.js';
-import addCommand from '../commands/endpoint/add/$[[id]].js';
-import cancelCommand from '../commands/endpoint/$cancel.js';
-import removeCommand from '../commands/endpoint/remove/$[id].js';
+import listCommand from '../commands/qq/endpoint/$list.js';
+import addCommand from '../commands/qq/endpoint/add/$[[id]].js';
+import cancelCommand from '../commands/qq/endpoint/$cancel.js';
+import removeCommand from '../commands/qq/endpoint/remove/$[id].js';
 import { createQqRuntimeState, qqRuntimeStateToken } from '../src/qq-runtime-state.js';
 
 /**
@@ -39,7 +39,7 @@ function fakeContext(state = createQqRuntimeState()) {
   } as never;
 }
 
-describe('qq.endpoint command definitions', () => {
+describe('qq endpoint command definitions', () => {
   it('四个命令模块均为合法 defineCommand', () => {
     for (const definition of [listCommand, addCommand, cancelCommand, removeCommand]) {
       expect(() => parseCommandDefinition(definition)).not.toThrow();
@@ -55,13 +55,13 @@ describe('qq.endpoint command definitions', () => {
     expect(text).toContain('bot-1');
   });
 
-  it('list execute 在有进行中绑定时提示 qq.endpoint cancel', () => {
+  it('list execute 在有进行中绑定时提示 qq endpoint cancel', () => {
     const state = createQqRuntimeState();
     state.bindFlow = { id: 'a', stop: vi.fn() };
 
     const text = listCommand.execute(fakeContext(state)) as string;
 
-    expect(text).toContain('qq.endpoint cancel');
+    expect(text).toContain('qq endpoint cancel');
   });
 
   it('cancel execute 在无流程时提示', () => {

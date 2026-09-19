@@ -36,7 +36,7 @@ export default defineAdapter<KookAdapterConfig>({
   },
   create(context) {
     const config = resolveKookConfig(context.config);
-    // 注册到插件运行时状态（kook.endpoint list 的"运行中"数据源）
+    // 注册到插件运行时状态（kook endpoint list 的"运行中"数据源）
     context.use(kookRuntimeStateToken).endpoints.set(config.id, {
       id: config.id,
       mode: config.connection,

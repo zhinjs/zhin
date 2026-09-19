@@ -28,7 +28,7 @@ export default defineAdapter<IcqqAdapterConfig>({
   },
   create(context) {
     const config = resolveIcqqConfig(context.config);
-    // 注册到插件运行时状态（icqq.endpoint list 的"运行中"数据源）
+    // 注册到插件运行时状态（icqq endpoint list 的"运行中"数据源）
     context.use(icqqRuntimeStateToken).endpoints.set(config.id, {
       id: config.id,
       mode: 'direct',

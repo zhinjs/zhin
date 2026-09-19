@@ -4,9 +4,9 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
-import listCommand from '../commands/endpoint/$list.js';
-import addCommand from '../commands/endpoint/add/$[id].js';
-import removeCommand from '../commands/endpoint/remove/$[id].js';
+import listCommand from '../commands/telegram/endpoint/$list.js';
+import addCommand from '../commands/telegram/endpoint/add/$[id].js';
+import removeCommand from '../commands/telegram/endpoint/remove/$[id].js';
 import { telegramRuntimeStateToken } from '../src/telegram-runtime-state.js';
 
 /**
@@ -44,7 +44,7 @@ function fakeContext(overrides: Record<string, unknown> = {}) {
   } as never;
 }
 
-describe('telegram.endpoint command definitions', () => {
+describe('telegram endpoint command definitions', () => {
   it('三个命令模块均为合法 defineCommand', () => {
     for (const definition of [listCommand, addCommand, removeCommand]) {
       expect(() => parseCommandDefinition(definition)).not.toThrow();
