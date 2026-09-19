@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { MessageCommand } from '../src/command'
 import { Message } from '../src/message'
-import { createPermissionHost, type PermissionHost } from '@zhin.js/permission'
+import { PermissionHost } from '@zhin.js/permission'
 
-const host: PermissionHost = createPermissionHost();
+const host: PermissionHost = new PermissionHost();
 
 describe('Command系统测试', () => {
   describe('MessageCommand基础功能测试', () => {

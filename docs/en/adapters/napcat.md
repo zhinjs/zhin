@@ -87,7 +87,7 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 
 - **Notice / request / meta side events** enter the unified `Endpoint.emit(...)` ingress and dispatch to handlers. Requests expose `$approve` / `$reject`; messages continue through `outboundMessageToken`.
 - **Group management tools have not been migrated yet**: the old Adapter registered a full set of agent tools (kick/mute/group card, etc.) via `createSceneManagementTools`; after migration, `agent/tools/` only covers NapCat extension APIs. Other group management capabilities can be invoked via `callApi` (e.g., `set_group_kick`, `set_group_ban`) as an escape hatch.
-- **Platform permission access control**: `plugin.ts` setup has registered `registerDefaultScenePlatformPermitChecker('napcat')`. `scene_admin` / `scene_owner` are determined based on the sender's `role` (owner / admin) in the inbound metadata.
+- **Platform permission access control**: `plugin.ts` setup registers `createSceneRolePlatformChecker()` through the generation-owned `permissionHostToken`. `scene_admin` / `scene_owner` are determined based on the sender's `role` (owner / admin) in the inbound metadata.
 
 ## Documentation Links
 

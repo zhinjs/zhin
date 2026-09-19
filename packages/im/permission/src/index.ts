@@ -1,8 +1,7 @@
 export {
-  type PermissionHost,
+  PermissionHost,
   type PermissionChecker,
   type PlatformPermitChecker,
-  createPermissionHost,
 } from './host.js';
 
 export { permissionHostToken } from './token.js';

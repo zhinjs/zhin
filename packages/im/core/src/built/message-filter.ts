@@ -2,7 +2,7 @@
  * MessageFilterFeature — 消息过滤引擎
  *
  * 设计理念：
- *   将过滤规则视为 Feature Item，与命令 (CommandFeature)、权限 (PermissionFeature) 同构，
+ *   将过滤规则视为 Feature Item，与命令和组件 Feature 同构，
  *   遵循框架的 add/remove/extensions/toJSON 范式，支持插件级 CRUD 和生命周期自动回收。
  *
  * 核心特性：

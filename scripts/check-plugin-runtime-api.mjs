@@ -9,6 +9,7 @@ const migratedRoots = [
   ['plugin-runtime', 'packages/im/plugin-runtime/src'],
   ['game-kit', 'packages/game-kit/src'],
   ['feature-kit', 'packages/im/feature-kit/src'],
+  ['permission', 'packages/im/permission/src'],
   ['adapter', 'packages/im/adapter/src'],
   ['command', 'packages/im/command/src'],
   ['component', 'packages/im/component/src'],

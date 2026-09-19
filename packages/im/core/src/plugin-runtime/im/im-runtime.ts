@@ -12,7 +12,7 @@ import {
   type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
+import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { MessageBus, messageBusToken } from './message-bus.js';
 import {
   AdapterIndex,
@@ -304,7 +304,7 @@ export class ImRuntime implements OutboundMessageService {
     this.#snapshots = snapshots;
   }
 
-  readonly permissionHost = createPermissionHost();
+  readonly permissionHost = new PermissionHost();
   readonly messageBus = new MessageBus();
   readonly loginAssist = new LoginAssist();
 

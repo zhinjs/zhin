@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ToolFeature, SkillFeature, type Message } from '@zhin.js/core';
-import { createPermissionHost, type PermissionHost } from '@zhin.js/permission';
+import { PermissionHost } from '@zhin.js/permission';
 import { AgentResourceHub } from '../../src/resource-hub/index.js';
 import { FeatureCapabilityIngress } from '../../src/ingress/capability-ingress.js';
 import { AgentFeature } from '../../src/features/agent-feature.js';
@@ -149,7 +149,7 @@ describe('FeatureCapabilityIngress', () => {
       permissions: ['role(master)'],
     }), 'a');
 
-    const host = createPermissionHost();
+    const host = new PermissionHost();
     const userMsg = makeMessage({});
     const denied = await ingress.ensureForTurn(
       resourceHub,

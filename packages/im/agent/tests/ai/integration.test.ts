@@ -7,7 +7,7 @@
  * 3. AI 触发中间件
  * 4. 内置工具
  */
-import { createPermissionHost } from '@zhin.js/permission';
+import { PermissionHost } from '@zhin.js/permission';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock Logger first
@@ -383,7 +383,7 @@ describe('Tool Service 集成测试', () => {
         $channel: { type: 'private', id: 'admin1' },
       } as import('@zhin.js/core').Message<any>;
       
-      const host = createPermissionHost();
+      const host = new PermissionHost();
       const userFiltered = await service.filterByContext(allTools, userContext, host);
       expect(userFiltered.some(t => t.name === 'admin_tool')).toBe(false);
       

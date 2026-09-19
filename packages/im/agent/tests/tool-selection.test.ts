@@ -20,7 +20,7 @@ import {
   normalizeTool,
 } from '../src/resource-hub/tool-selection.js';
 import { planToolRun } from '../src/tool/runtime.js';
-import { createPermissionHost, createSceneRolePlatformChecker } from '@zhin.js/permission';
+import { PermissionHost, createSceneRolePlatformChecker } from '@zhin.js/permission';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
 import type { Tool } from '../src/resource-hub/types.js';
 import type { ZhinAgentConfig } from '../src/config/index.js';
@@ -73,10 +73,10 @@ function makeTool(overrides: Partial<Tool> = {}): Tool {
 }
 
 describe('tool-selection permissions', () => {
-  let host: ReturnType<typeof createPermissionHost>;
+  let host: PermissionHost;
 
   beforeEach(() => {
-    host = createPermissionHost();
+    host = new PermissionHost();
     host.registerPlatform('qq', createSceneRolePlatformChecker());
   });
 

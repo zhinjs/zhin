@@ -34,7 +34,7 @@ import {
   defineAgentPromptSection,
   promptSectionFeatureId,
 } from '@zhin.js/prompt-section';
-import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
+import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { compactAgentMessages, getLlmTransportModel } from '@zhin.js/ai';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 import {
@@ -846,7 +846,7 @@ function baseState(slots: readonly CapabilitySlot[], journal = memoryJournalStor
     ]),
     config: new Map([[root, {}], [child, {}]]),
     resources: new Map([[root, new Map([
-      [permissionHostToken.id, createPermissionHost()],
+      [permissionHostToken.id, new PermissionHost()],
       [turnJournalStoreToken.id, journal],
     ])], [child, new Map()]]),
     capabilities: new Map(slots.map((slot) => [slot.id, slot])),

@@ -12,13 +12,14 @@
 
 ```ts
 import {
-  createPermissionHost,
+  PermissionHost,
   permissionHostToken,
   toPermissionSubject,
   assertPermitSyntax,
-  type PermissionHost,
   type PermissionSubject,
 } from '@zhin.js/permission';
+
+const host = new PermissionHost();
 ```
 
 ### 命令 permit 校验

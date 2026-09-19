@@ -1,6 +1,6 @@
 /**
  * 常见 IM 平台场景身份：sender.role 为 owner / admin。
- * 从旧 platform-permit 迁移到 PermissionHost 体系的等价 helper。
+ * 常见场景角色的 PermissionHost checker。
  */
 
 import type { PermissionSubject } from './subject.js';

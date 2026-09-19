@@ -14,7 +14,6 @@
  */
 
 import type { Tool, ToolScope } from '../types.js';
-import { registerDefaultScenePlatformPermitChecker } from './platform-permit.js';
 
 // ============================================================================
 // Adapter 场景治理方法规范
@@ -187,8 +186,6 @@ export function defaultScenePermitResolver(adapterPrefix: string): (logicalPerm:
 export interface CreateSceneManagementToolsOptions {
   /** 将 SCENE_MANAGEMENT_METHOD_SPECS 逻辑 perm（scene_admin/scene_owner）映射为 platform(...) 字符串 */
   permitResolver?: (logicalPerm: string) => string | undefined;
-  /** 是否注册默认 QQ 系 scene checker（默认 true） */
-  registerChecker?: boolean;
 }
 
 function resolveSpecPermit(
@@ -207,9 +204,6 @@ export function createSceneManagementTools(
   options: CreateSceneManagementToolsOptions = {},
 ): Tool[] {
   const permitResolver = options.permitResolver ?? defaultScenePermitResolver(prefix);
-  if (options.registerChecker !== false) {
-    registerDefaultScenePlatformPermitChecker(prefix);
-  }
   return createSceneManagementToolsRaw<Tool>(adapter, prefix, (spec, prefix, execute) => {
     const specPermissions = resolveSpecPermit(spec.permit, prefix, permitResolver);
     return {

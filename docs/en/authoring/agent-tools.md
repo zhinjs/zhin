@@ -105,7 +105,7 @@ Four-tuple semantics:
 | `permissions` | Permit list, checked item by item (AND); commas inside parentheses mean OR |
 | `hidden` | Not included in the tool list given to the model, but still executable by name |
 
-Permit syntax (`packages/im/core/src/built/permit-parse.ts`) has three categories: built-in `adapter(name)`, `group(id,...)`, `private(id,...)`, `channel(id,...)`, `user(id,...)`, `role(master|trusted|user)`; platform identity `platform(adapter,perm)` (e.g., group owner/admin, determined by adapter checker); unrecognized permits are always rejected.
+Permit syntax is defined by `@zhin.js/permission` (`packages/im/permission/src/builtin.ts`): built-in `adapter(name)`, `group(id,...)`, `private(id,...)`, `channel(id,...)`, `user(id,...)`, `role(master|trusted|user)`; platform identity `platform(adapter,perm)` (e.g., group owner/admin, determined by adapter checker); unrecognized permits are always rejected.
 
 ## Deferred Catalog and load_tool
 

@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Plugin, CommandFeature } from '../src/index.js';
-import { PermissionFeature } from '../src/built/permission.js';
 import { MANAGEMENT_OPERATOR_PERMIT } from '../src/built/management-command-guard.js';
 import { registerEndpointManagementCommands } from '../src/built/endpoint-commands.js';
 import * as lifecycleModule from '../src/built/endpoint-lifecycle-service.js';
-import { createPermissionHost, type PermissionHost } from '@zhin.js/permission';
+import { PermissionHost } from '@zhin.js/permission';
 
 function trustedMsg(text: string) {
   return {
@@ -33,7 +32,6 @@ describe('registerEndpointManagementCommands', () => {
 
   beforeEach(() => {
     root = new Plugin('/test/root.ts');
-    root.provide(new PermissionFeature());
     plugin = new Plugin('/packages/im/core/index.ts', root);
     commandService = new CommandFeature();
     vi.spyOn(lifecycleModule, 'createEndpointLifecycleService').mockReturnValue({
@@ -69,14 +67,14 @@ describe('registerEndpointManagementCommands', () => {
 
   it('/endpoint add without adapter lists provisionable adapters', async () => {
     registerEndpointManagementCommands(plugin, commandService);
-    const host = createPermissionHost();
+    const host = new PermissionHost();
     const result = await commandService.handle(trustedMsg('/endpoint add'), host);
     expect(String(result)).toMatch(/qq/);
   });
 
   it('denies when sender lacks trusted role', async () => {
     registerEndpointManagementCommands(plugin, commandService);
-    const host = createPermissionHost();
+    const host = new PermissionHost();
     const result = await commandService.handle(untrustedMsg('/endpoint help'), host);
     expect(result).toBeFalsy();
   });

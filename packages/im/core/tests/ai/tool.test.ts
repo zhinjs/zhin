@@ -9,13 +9,13 @@
  * 5. 命令模式生成
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ZhinTool, defineTool, isZhinTool, extractParamInfo, canAccessTool, roleSatisfies, checkBuiltinPermitList, type Tool } from '@zhin.js/core';
-import { createPermissionHost, createSceneRolePlatformChecker, type PermissionHost } from '@zhin.js/permission';
+import { ZhinTool, defineTool, isZhinTool, extractParamInfo, canAccessTool, roleSatisfies, type Tool } from '@zhin.js/core';
+import { PermissionHost, createSceneRolePlatformChecker } from '@zhin.js/permission';
 
 let host: PermissionHost;
 
 beforeEach(() => {
-  host = createPermissionHost();
+  host = new PermissionHost();
   host.registerPlatform('qq', createSceneRolePlatformChecker());
 });
 
@@ -311,15 +311,6 @@ describe('canAccessTool 函数', () => {
     expect(await canAccessTool(tool, { ...okMsg, $adapter: 'qq', $channel: { type: 'private', id: 'u1' } }, host)).toBe(false);
 
     expect(await canAccessTool(tool, mockCommMessage({ adapter: 'qq', scope: 'group' }), host)).toBe(false);
-  });
-
-  it('checkBuiltinPermitList 支持 AND 链', () => {
-    const msg = mockMessage('scene_admin');
-    expect(checkBuiltinPermitList(
-      ['adapter(qq)', 'group(*)'],
-      msg,
-      ['user'],
-    )).toBe(true);
   });
 
   it('空平台数组应该允许所有平台', async () => {
@@ -629,4 +620,3 @@ describe('defineTool 高级用法', () => {
     expect(tool.source).toBe('plugin:my-plugin');
   });
 });
-

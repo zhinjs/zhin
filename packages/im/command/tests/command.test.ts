@@ -15,7 +15,7 @@ import {
   parseCommandDefinition,
   type CommandParameterDefinition,
 } from '../src/index.js';
-import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
+import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import {
   FeatureDiscovery,
   type DirectoryEntry,
@@ -675,7 +675,7 @@ describe('Command Feature', () => {
       }),
     });
     const snapshot = snapshotFor(owner, [slot]);
-    snapshot.resources.get(owner)!.set(permissionHostToken.id, createPermissionHost());
+    snapshot.resources.get(owner)!.set(permissionHostToken.id, new PermissionHost());
     const index = new CommandIndex([slot], snapshot);
 
     await expect(index.dispatch('secret', {

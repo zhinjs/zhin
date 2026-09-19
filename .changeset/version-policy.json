@@ -110,6 +110,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace the public process-global game registry with an owner-directed generation Feature projection under the zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "own-permission-hosts.md",
+      "packages": [
+        "@zhin.js/permission",
+        "@zhin.js/core"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove duplicate Core permission implementations and process-global platform permit state under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }
