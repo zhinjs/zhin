@@ -9,7 +9,7 @@
  * 技能:      load_skill, install_skill（builtin/load-skill-tool, install-skill-tool）
  * 交互工具由 Plugin Runtime 以 turn-scoped ToolFeature 发布。
  *
- * 发现逻辑已拆分到 discovery/skills.ts、agents.ts、tools.ts
+ * 工作区 Agent 发现保留在 discovery/agents.ts；Skill 与 Tool 由 Plugin Runtime 投影。
  */
 
 import type { Tool } from '@zhin.js/core';

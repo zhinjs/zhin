@@ -1,5 +1,5 @@
 /**
- * 60s API 共享模块 — 供 *.tool.md handler 使用
+ * 60s API 共享模块 — 供 command 与 Agent Tool handler 使用
  */
 
 import { resolveApiBase } from './runtime-deps.js';

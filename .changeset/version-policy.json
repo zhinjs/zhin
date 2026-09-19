@@ -447,6 +447,17 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove the duplicate classic interactive registry and process-global keyboard fallback store so each ImRuntime exclusively owns generation-scoped interaction state under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-classic-agent-file-discovery.md",
+      "packages": [
+        "@zhin.js/agent",
+        "@zhin.js/plugin-group-suite",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove dead classic Agent file discovery and Group Suite module-global fallbacks so Plugin Runtime features and owner-scoped resources are the only tool, skill, database, and transient-state authorities under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

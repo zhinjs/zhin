@@ -9,7 +9,7 @@ export default defineCommand<GroupSuiteConfig>({
   execute({ params, owner, use }) {
     const keyword = String(params.keyword ?? '');
     if (!keyword) return '请提供要删除的关键词';
-    if (!removeKeyword(keyword, resolveGroupSuiteRuntime({ owner, use })?.keywords)) return `关键词「${keyword}」不存在`;
+    if (!removeKeyword(keyword, resolveGroupSuiteRuntime({ owner, use }).keywords)) return `关键词「${keyword}」不存在`;
     return `已删除关键词「${keyword}」`;
   },
 });

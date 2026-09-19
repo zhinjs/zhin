@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { parseMiddlewareDefinition } from 'zhin.js/middleware';
+import { parseAgentToolDefinition } from '@zhin.js/tool';
 import plugin from '../plugin.ts';
 import checkinCommand from '../commands/$checkin.ts';
 import mypointsCommand from '../commands/$mypoints.ts';
@@ -15,16 +16,16 @@ import teachMiddleware from '../middlewares/$teach-reply.ts';
 import statsCommand from '../commands/$stats.ts';
 import mystatsCommand from '../commands/$mystats.ts';
 import statsMiddleware from '../middlewares/$stats-count.ts';
+import checkinQueryTool from '../tools/$checkin_query.ts';
+import checkinRankTool from '../tools/$checkin_rank.ts';
+import statsQueryTool from '../tools/$stats_query.ts';
+import statsUserTool from '../tools/$stats_user.ts';
+import groupAnnounceTool from '../tools/$group_announce.ts';
 import {
   addKeyword,
   listKeywords,
   matchKeyword,
-  resetKeywords,
   resolveGroupSuiteConfig,
-  ensureGroupSuiteMemoryDb,
-  resetGroupSuiteDb,
-  resetTeachCooldown,
-  resetStatsBuffer,
   recordMessage,
   tryTeachReply,
   doCheckin,
@@ -35,14 +36,15 @@ import {
   queryStats,
   type GroupSuiteRuntime,
 } from '../src/index.js';
+import { createInMemoryGroupSuiteDb } from '../src/memory-store.js';
+
+let runtime: GroupSuiteRuntime;
 
 const emptyCtx = {
   owner: {} as never,
   generation: 0,
   config: {},
-  use: () => {
-    throw new Error('unused');
-  },
+  use: () => runtime as never,
   args: [] as string[],
   params: {} as Record<string, string | number | boolean>,
   input: undefined as never,
@@ -57,11 +59,7 @@ const groupInput = {
 
 describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
   beforeEach(() => {
-    resetKeywords();
-    resetGroupSuiteDb();
-    ensureGroupSuiteMemoryDb();
-    resetTeachCooldown();
-    resetStatsBuffer();
+    runtime = createGroupSuiteRuntime(createInMemoryGroupSuiteDb());
   });
 
   it('defines a valid Plugin Runtime entry', () => {
@@ -77,6 +75,15 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
     expect(parseMiddlewareDefinition(keywordMiddleware)).toBe(keywordMiddleware);
     expect(parseMiddlewareDefinition(teachMiddleware)).toBe(teachMiddleware);
     expect(parseMiddlewareDefinition(statsMiddleware)).toBe(statsMiddleware);
+    for (const tool of [
+      checkinQueryTool,
+      checkinRankTool,
+      statsQueryTool,
+      statsUserTool,
+      groupAnnounceTool,
+    ]) {
+      expect(parseAgentToolDefinition(tool)).toBe(tool);
+    }
   });
 
   it('resolves default config', () => {
@@ -84,9 +91,9 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
   });
 
   it('manages keyword store', () => {
-    addKeyword('你好', '你好呀');
-    expect(matchKeyword('说你好')).toBe('你好呀');
-    expect(listKeywords()).toHaveLength(1);
+    addKeyword('你好', '你好呀', runtime.keywords);
+    expect(matchKeyword('说你好', runtime.keywords)).toBe('你好呀');
+    expect(listKeywords(runtime.keywords)).toHaveLength(1);
   });
 
   it('checkin / mypoints work against in-memory store', async () => {
@@ -97,29 +104,38 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
     expect(String(result)).toContain('签到成功');
     expect(String(result)).not.toContain('尚未就绪');
 
-    const again = await doCheckin(groupInput, resolveGroupSuiteConfig({}));
+    const again = await doCheckin(groupInput, resolveGroupSuiteConfig({}), runtime);
     expect(again).toContain('已经签到');
 
-    const points = await myPoints(groupInput);
+    const points = await myPoints(groupInput, runtime);
     expect(points).toContain('积分');
     expect(points).toContain('今日已签到');
+
+    const summary = await checkinQueryTool.execute(
+      { user_id: 'u1' },
+      {
+        use: () => runtime,
+        origin: { kind: 'im', platform: 'test', endpoint: 'memory', scope: 'group', sceneId: 'g1' },
+      } as never,
+    );
+    expect(String(summary)).toContain('Alice');
   });
 
   it('并发双签只成功一次（per-user 串行化）', async () => {
     const cfg = resolveGroupSuiteConfig({});
     const results = await Promise.all([
-      doCheckin(groupInput, cfg),
-      doCheckin(groupInput, cfg),
+      doCheckin(groupInput, cfg, runtime),
+      doCheckin(groupInput, cfg, runtime),
     ]);
     expect(results.filter((r) => r.includes('签到成功'))).toHaveLength(1);
     expect(results.filter((r) => r.includes('已经签到'))).toHaveLength(1);
 
-    const points = await myPoints(groupInput);
+    const points = await myPoints(groupInput, runtime);
     expect(points).toContain('累计签到: 1 天');
   });
 
   it('mypoints / rank commands brand and run', async () => {
-    await doCheckin(groupInput, resolveGroupSuiteConfig({}));
+    await doCheckin(groupInput, resolveGroupSuiteConfig({}), runtime);
     const points = await mypointsCommand.execute({
       ...emptyCtx,
       input: groupInput as never,
@@ -151,6 +167,7 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
     const reply = await tryTeachReply(
       { ...groupInput, content: '你好' },
       resolveGroupSuiteConfig({}),
+      runtime,
     );
     expect(reply).toContain('你好呀');
 
@@ -163,8 +180,8 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
   });
 
   it('stats count + mystats work in memory', async () => {
-    recordMessage(groupInput);
-    recordMessage(groupInput);
+    recordMessage(groupInput, runtime);
+    recordMessage(groupInput, runtime);
     const stats = await statsCommand.execute({
       ...emptyCtx,
       input: groupInput as never,
@@ -187,11 +204,11 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
       args: ['hello', 'there'],
     });
     expect(String(result)).toContain('已添加');
-    expect(matchKeyword('say hi')).toBe('hello there');
+    expect(matchKeyword('say hi', runtime.keywords)).toBe('hello there');
   });
 
   it('flushStatsBuffer 只移除写成功的 key，失败行留缓冲不丢计数', async () => {
-    const db = ensureGroupSuiteMemoryDb();
+    const db = createInMemoryGroupSuiteDb();
     const stats = getStatsModel(db)!;
     const runtime = createGroupSuiteRuntime(db);
     const bobInput = { ...groupInput, sender: { id: 'u2', name: 'Bob' }, metadata: { type: 'group', senderName: 'Bob' } };

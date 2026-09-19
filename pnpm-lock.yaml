@@ -3173,6 +3173,9 @@ importers:
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../../../packages/toolkit/satori
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
     devDependencies:
       '@zhin.js/agent':
         specifier: workspace:*

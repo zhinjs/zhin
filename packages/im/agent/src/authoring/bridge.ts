@@ -1,4 +1,5 @@
 import type { Message } from '@zhin.js/core';
+import { parseToolInputSchema, toolInputSchemaToParameters } from '@zhin.js/core/tool-zod';
 import { readOperationClient } from '@zhin.js/tool';
 import type { Skill, Tool, McpServerEntry } from '../resource-hub/types.js';
 import {
@@ -9,7 +10,6 @@ import {
   type DiscoveredAuthoringTool,
   AUTHORING_KIND,
 } from './types.js';
-import { parseConfigWithZodSchema, parseWithZodSchema, zodObjectToParameters } from './zod-schema.js';
 
 export function namespaceAuthoringName(pluginName: string, slotName: string, bare = false): string {
   if (bare) return slotName;
@@ -31,9 +31,9 @@ export function bridgeAuthoringTool(
   discovered: DiscoveredAuthoringTool,
 ): BridgedToolFromAuthoring {
   const { definition, runtimeName, pluginName, filePath } = discovered;
-  const parameters = zodObjectToParameters(definition.inputSchema);
+  const parameters = toolInputSchemaToParameters(definition.inputSchema);
   const execute = async (args: Record<string, unknown>, message?: Message) => {
-    const parsed = parseWithZodSchema<Record<string, unknown>>(definition.inputSchema, args);
+    const parsed = parseToolInputSchema<Record<string, unknown>>(definition.inputSchema, args);
     if (!parsed.ok) return `Error: ${parsed.error}`;
     const context = {
       pluginName,
@@ -115,7 +115,10 @@ export function bridgeAuthoringConnection(
   },
   configValue: unknown,
 ): { ok: true; entry: McpServerEntry } | { ok: false; error: string } {
-  const parsed = parseConfigWithZodSchema(discovered.definition.configSchema, configValue);
+  const parsed = parseToolInputSchema<Record<string, unknown>>(
+    discovered.definition.configSchema,
+    configValue ?? {},
+  );
   if (!parsed.ok) {
     return { ok: false, error: `Connection "${discovered.slotName}": ${parsed.error}` };
   }

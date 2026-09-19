@@ -1,7 +1,7 @@
 /**
  * 发现模块共用的工具函数
  *
- * 被 builtin-tools 与 discovery/tools、skills、agents 共同依赖，
+ * 被 builtin tools、Agent surface、Skill loader 与安全策略共同依赖，
  * 独立出来以避免循环导入。
  */
 
@@ -67,38 +67,6 @@ export function buildStandardSkillDirs(): string[] {
     ...collectAgentsSkillsDirs(workspaceRoot()),
   ];
   return [...new Set(list)];
-}
-
-/**
- * 技能发现与 activate_skill 查找共用：标准目录 + 已加载插件包 skills/
- */
-/** zhin-package 安装目录下的 skills 路径 */
-export function collectZhinPackageSkillRoots(): string[] {
-  const roots: string[] = [];
-  const bases = [
-    path.join(os.homedir(), '.zhin', 'packages'),
-    path.join(workspaceRoot(), '.zhin', 'packages'),
-  ];
-  for (const base of bases) {
-    if (!fs.existsSync(base)) continue;
-    for (const entry of fs.readdirSync(base, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const dir = path.join(base, entry.name);
-      const skills = path.join(dir, 'skills');
-      const repoSkills = path.join(dir, 'repo', 'skills');
-      if (fs.existsSync(skills)) roots.push(skills);
-      if (fs.existsSync(repoSkills)) roots.push(repoSkills);
-    }
-  }
-  return roots;
-}
-
-export function getSkillSearchDirectories(): string[] {
-  const list = [...buildStandardSkillDirs()];
-  for (const d of collectZhinPackageSkillRoots()) {
-    if (!list.includes(d)) list.push(d);
-  }
-  return list;
 }
 
 export function mergeSkillDirsWithResolver(resolver?: () => string[]): string[] {

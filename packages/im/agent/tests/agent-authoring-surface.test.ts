@@ -8,7 +8,6 @@ import {
   AUTHORING_KIND,
 } from '../src/authoring/index.js';
 import { z } from 'zod';
-import { parseConfigWithZodSchema } from '../src/authoring/zod-schema.js';
 import { bridgeAuthoringConnection, bridgeAuthoringTool } from '../src/authoring/bridge.js';
 import { defineConnection } from '../src/authoring/define-connection.js';
 import {
@@ -138,8 +137,17 @@ describe('connection schema bridge', () => {
   });
 
   it('rejects invalid config', () => {
-    const parsed = parseConfigWithZodSchema(z.object({ token: z.string().min(1) }), {});
-    expect(parsed.ok).toBe(false);
+    const definition = defineConnection({
+      description: 'GitHub MCP',
+      transport: 'streamable-http',
+      configSchema: z.object({ token: z.string().min(1) }),
+      buildEntry: () => ({ url: 'https://example.com/mcp' }),
+    });
+    const bridged = bridgeAuthoringConnection(
+      { runtimeName: 'lottery_github', slotName: 'github', pluginName: 'lottery', definition },
+      {},
+    );
+    expect(bridged.ok).toBe(false);
   });
 });
 

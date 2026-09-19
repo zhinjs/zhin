@@ -9,17 +9,11 @@ export {
   listKeywords,
   matchKeyword,
   removeKeyword,
-  resetKeywords,
 } from './keyword-store.js';
 export {
-  ensureGroupSuiteMemoryDb,
   getCheckinModel,
-  getGroupSuiteDb,
   getStatsModel,
   getTeachModel,
-  resetGroupSuiteDb,
-  registerGroupSuiteDb,
-  setGroupSuiteDb,
 } from './db-store.js';
 export {
   createGroupSuiteRuntime,
@@ -29,7 +23,6 @@ export {
 export type { GroupSuiteRuntime, PendingStatsIncrement } from './runtime-state.js';
 export {
   parseTeachPair,
-  resetTeachCooldown,
   teachAdd,
   teachForget,
   teachList,
@@ -41,7 +34,6 @@ export {
   myStatsText,
   queryStats,
   recordMessage,
-  resetStatsBuffer,
   statsRankText,
   weekStartStr,
 } from './stats-lib.js';

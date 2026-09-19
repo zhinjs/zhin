@@ -10,7 +10,7 @@ export default defineCommand<GroupSuiteConfig>({
     const keyword = String(params.keyword ?? '');
     const reply = args.join(' ').trim();
     if (!keyword || !reply) return '请提供关键词和回复内容';
-    addKeyword(keyword, reply, resolveGroupSuiteRuntime({ owner, use })?.keywords);
+    addKeyword(keyword, reply, resolveGroupSuiteRuntime({ owner, use }).keywords);
     return `已添加关键词「${keyword}」→「${reply}」`;
   },
 });

@@ -27,7 +27,7 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
       await next();
       return;
     }
-    const reply = matchKeyword(text, resolveGroupSuiteRuntime(context)?.keywords);
+    const reply = matchKeyword(text, resolveGroupSuiteRuntime(context).keywords);
     if (reply) {
       await context.input.$reply(reply);
       return;

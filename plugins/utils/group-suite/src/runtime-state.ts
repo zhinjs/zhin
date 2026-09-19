@@ -15,6 +15,7 @@ export interface GroupSuiteRuntime {
   readonly keywords: Map<string, string>;
   readonly teachCooldowns: Map<string, number>;
   readonly statsBuffer: Map<string, PendingStatsIncrement>;
+  readonly checkinChains: Map<string, Promise<unknown>>;
 }
 
 export const groupSuiteRuntimeToken = createToken<GroupSuiteRuntime>(
@@ -28,17 +29,13 @@ export function createGroupSuiteRuntime(db: GroupSuiteMemoryDb): GroupSuiteRunti
     keywords: new Map(),
     teachCooldowns: new Map(),
     statsBuffer: new Map(),
+    checkinChains: new Map(),
   };
 }
 
 export function resolveGroupSuiteRuntime(context: {
-  owner?: { id?: unknown };
+  readonly owner?: unknown;
   use<T>(token: Token<T>): T;
-}): GroupSuiteRuntime | undefined {
-  try {
-    return context.use(groupSuiteRuntimeToken);
-  } catch (error) {
-    if (context.owner?.id) throw error;
-    return undefined;
-  }
+}): GroupSuiteRuntime {
+  return context.use(groupSuiteRuntimeToken);
 }

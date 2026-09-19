@@ -4,7 +4,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { checkSkillDeps, extractSkillInstructions } from '../discovery/skills.js';
+import { checkSkillDependencies, extractSkillInstructions } from '../skill/skill-instructions.js';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -29,7 +29,7 @@ export async function readSkillInstructions(
   const registeredPath = opts.skillFileLookup?.(name);
   if (registeredPath && fs.existsSync(registeredPath)) {
     const fullContent = await fs.promises.readFile(registeredPath, 'utf-8');
-    const depWarning = await checkSkillDeps(fullContent);
+    const depWarning = await checkSkillDependencies(fullContent);
     const instructions = extractSkillInstructions(name, fullContent, opts.skillMaxChars);
     return depWarning ? `${depWarning}\n\n${instructions}` : instructions;
   }
@@ -37,7 +37,7 @@ export async function readSkillInstructions(
     const skillPath = path.join(dir, name, 'SKILL.md');
     if (fs.existsSync(skillPath)) {
       const fullContent = await fs.promises.readFile(skillPath, 'utf-8');
-      const depWarning = await checkSkillDeps(fullContent);
+      const depWarning = await checkSkillDependencies(fullContent);
       const instructions = extractSkillInstructions(name, fullContent, opts.skillMaxChars);
       return depWarning ? `${depWarning}\n\n${instructions}` : instructions;
     }
