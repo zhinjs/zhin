@@ -9,14 +9,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const completeSimpleMock = vi.hoisted(() => vi.fn());
-
-vi.mock('../../src/llm/index.js', async (importOriginal) => {
-  const original = (await importOriginal()) as Record<string, unknown>;
-  return {
-    ...original,
-    completeSimple: completeSimpleMock,
-  };
-});
+const transport = {
+  complete: vi.fn(),
+  completeSimple: completeSimpleMock,
+};
 
 import {
   autoCompactAgentMessagesIfNeeded,
@@ -53,6 +49,7 @@ describe('agent-message-compaction 失败语义', () => {
     const messages = makeMessages();
 
     const result = await autoCompactAgentMessagesIfNeeded({
+      transport,
       model,
       messages,
       state,
@@ -74,6 +71,7 @@ describe('agent-message-compaction 失败语义', () => {
     const messages = makeMessages();
 
     const result = await autoCompactAgentMessagesIfNeeded({
+      transport,
       model,
       messages,
       state,
@@ -92,6 +90,7 @@ describe('agent-message-compaction 失败语义', () => {
 
     for (let i = 0; i < MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES; i++) {
       await autoCompactAgentMessagesIfNeeded({
+        transport,
         model,
         messages: makeMessages(),
         state,
@@ -107,6 +106,7 @@ describe('agent-message-compaction 失败语义', () => {
     completeSimpleMock.mockRejectedValue(new Error('boom'));
     await expect(
       compactAgentMessages({
+        transport,
         model,
         messages: makeMessages(),
         keepRecentTokens: 5,
@@ -121,6 +121,7 @@ describe('agent-message-compaction 失败语义', () => {
     state.consecutiveFailures = 2;
 
     const result = await autoCompactAgentMessagesIfNeeded({
+      transport,
       model,
       messages: makeMessages(),
       state,
@@ -153,6 +154,7 @@ describe('agent-message-compaction 失败语义', () => {
     ];
 
     await compactAgentMessages({
+      transport,
       model,
       messages,
       keepRecentTokens: 2,

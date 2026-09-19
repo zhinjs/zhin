@@ -2,7 +2,7 @@
  * ZhinAgent 运行时 host 契约 — 供 ideal 模块引用，避免依赖 zhin-agent 门面实现。
  * 成员按域拆为窄接口，ZhinAgentPrivate 组合之；消费方优先用窄接口形参。
  */
-import type { AIProvider, Usage, OutputElement, AgentSessionRepository, ContextRepository, RateLimiter, ModelRegistry } from '@zhin.js/ai';
+import type { AIProvider, Usage, OutputElement, AgentSessionRepository, ContextRepository, RateLimiter, ModelRegistry, LlmApiRuntime } from '@zhin.js/ai';
 import type { Tool, Message } from '../resource-hub/types.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { SkillSystem } from '../skill/skill-system.js';
@@ -89,6 +89,7 @@ export interface ZhinAgentPrivate
   extends AgentSessionHost, AgentContextHost, AgentTurnLifecycleHost, AgentEmitterHost {
   config: RequiredHostConfig;
   activeBinding: ResolvedAgentBinding | null;
+  llmRuntime: LlmApiRuntime;
   getTurnProvider(): AIProvider;
   skillRegistry: SkillRegistry | null;
   skillSystem: SkillSystem | null;

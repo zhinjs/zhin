@@ -2,7 +2,7 @@
  * full-bot L4：Provider 网关文档与配置风格契约
  * CI：pnpm check:l4
  *
- * 运行时 normalize / getLlmTransportModel 见 packages/im/ai/tests/llm/provider-gateway-presets.test.ts
+ * 运行时 normalize / LlmApiRuntime.model 见 packages/im/ai/tests/llm/provider-gateway-presets.test.ts
  */
 import fs from 'node:fs';
 import path from 'node:path';

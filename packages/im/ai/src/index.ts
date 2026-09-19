@@ -9,15 +9,8 @@
 
 // ── LLM engine core (ADR 0009) ──
 export {
-  registerApiProvider,
-  registerProviderInstance,
-  getApiProvider,
-  getProviderConfig,
-  getLlmTransportModel,
-  stream,
-  complete,
-  streamSimple,
-  completeSimple,
+  LlmApiRuntime,
+  createLlmTransportModel,
   createAssistantMessageEventStream,
   createContext,
   createUserMessage,
@@ -34,9 +27,7 @@ export {
   agentLoop,
   agentContextFrom,
   assistantText,
-  registerLlmApiFromProviders,
-  resetLlmApiRegistryForTests,
-  setLiveModelsResolver,
+  createLlmApiRuntime,
   isSdkId,
   SDK_IDS,
   createSdkProviderAdapter,
@@ -104,6 +95,7 @@ export type {
   ToolExecutionCause,
   TokenUsage,
   SdkId,
+  LlmCompletionPort,
 } from './llm/index.js';
 export { renderContextMessage } from './llm/index.js';
 

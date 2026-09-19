@@ -99,9 +99,9 @@ export interface TextCompleteOptions {
 /**
  * Provider 接口。
  *
- * 传输面只有两类：结构化 agent 会话走 `registerLlmApiFromProviders` /
- * `getLlmTransportModel` 的 ai-sdk 传输；轻量"system+user→文本"补全走
- * `completeText`。不再有 OpenAI wire 形态的 chat/chatStream 双轨。
+ * 传输面只有两类：结构化 agent 会话走 owner-scoped `LlmApiRuntime`；
+ * 轻量"system+user→文本"补全走 `completeText`。不再有 OpenAI wire
+ * 形态的 chat/chatStream 双轨。
  */
 export interface AIProvider {
   name: string;

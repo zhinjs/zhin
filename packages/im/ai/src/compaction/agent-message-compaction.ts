@@ -11,7 +11,8 @@ import {
 } from '../llm/types/agent-message.js';
 
 import type { Model } from '../llm/types/model.js';
-import { completeSimple, createContext } from '../llm/index.js';
+import { createContext } from '../llm/index.js';
+import type { LlmCompletionPort } from '../llm/llm-api-runtime.js';
 import {
   AUTOCOMPACT_BUFFER_TOKENS,
   DEFAULT_CONTEXT_TOKENS,
@@ -103,6 +104,7 @@ function agentMessageToTranscriptLine(message: AgentMessage): string {
 }
 
 async function summarizeAgentMessages(
+  transport: LlmCompletionPort,
   model: Model,
   messages: AgentMessage[],
   previousSummary?: string,
@@ -125,7 +127,7 @@ async function summarizeAgentMessages(
   userContent += `New conversation:\n${conversation}\n\nGenerate the updated full summary.`;
 
   try {
-    const assistant = await completeSimple(
+    const assistant = await transport.completeSimple(
       model,
       createContext(systemPrompt, [createUserMessage(userContent)]),
     );
@@ -165,6 +167,7 @@ export function shouldAutoCompactAgentMessages(
 }
 
 export async function compactAgentMessages(params: {
+  transport: LlmCompletionPort;
   model: Model;
   messages: AgentMessage[];
   contextWindow?: number;
@@ -192,6 +195,7 @@ export async function compactAgentMessages(params: {
   const beforeTokens = estimateAgentMessagesTokens(toCompact);
 
   const summary = await summarizeAgentMessages(
+    params.transport,
     params.model,
     toCompact,
     undefined,
@@ -208,6 +212,7 @@ export async function compactAgentMessages(params: {
 }
 
 export async function autoCompactAgentMessagesIfNeeded(params: {
+  transport: LlmCompletionPort;
   model: Model;
   messages: AgentMessage[];
   config?: AgentCompactionConfig;
@@ -253,6 +258,7 @@ export async function autoCompactAgentMessagesIfNeeded(params: {
 
   try {
     const result = await compactAgentMessages({
+      transport: params.transport,
       model: params.model,
       messages,
       contextWindow,

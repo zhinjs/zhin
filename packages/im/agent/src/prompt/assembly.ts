@@ -9,7 +9,7 @@ import {
 import { resolveWorkspacePrompt } from './workspace-prompt.js';
 import { getGitStatusLine } from './git-context.js';
 import type { AgentContextHost, ZhinAgentPrivate } from '../internal/agent-host.js';
-import { getLlmTransportModel, type AgentMessage } from '@zhin.js/ai';
+import { type AgentMessage } from '@zhin.js/ai';
 import { assembleSchedulePrompt } from '../schedule-domain/prompt-assembler.js';
 import type { AgentPromptProfile } from './turn-prompt-profile.js';
 import type { TurnContextView } from '../context/turn-envelope.js';
@@ -126,7 +126,7 @@ export async function buildAgentPathSystemPrompt(
     ?? agent.activeBinding?.providerAlias
     ?? agent.getTurnProvider().name;
   const llmModel = bindingModel
-    ? getLlmTransportModel(providerAlias, bindingModel)
+    ? agent.llmRuntime.model(providerAlias, bindingModel)
     : undefined;
 
   const promptCtx = {

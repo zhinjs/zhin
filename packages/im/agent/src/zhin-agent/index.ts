@@ -17,6 +17,7 @@ import {
   type ContextRepository,
   createMemoryContextRepository,
   RateLimiter,
+  type LlmApiRuntime,
 } from '@zhin.js/ai';
 import type { Tool, Message } from '../resource-hub/types.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
@@ -152,6 +153,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   alwaysSkillsBaseline: string = '';
   skillsSummaryXML: string = '';
   modelRegistry: ModelRegistry | null = null;
+  llmRuntime: LlmApiRuntime;
   readonly emitter: ZhinAgentEventEmitter;
   readonly deferred = new DeferredTurnState();
   readonly compactionRuntime = new AgentCompactionRuntime();
@@ -209,7 +211,12 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return { promptTraceEnabled: isPromptTraceEnabled(this.config), promptTraceVerbose: isPromptTraceVerbose(this.config) };
   }
 
-  constructor(provider: AIProvider, config?: ZhinAgentConfig, events = new AgentEventBus()) {
+  constructor(
+    provider: AIProvider,
+    config?: ZhinAgentConfig,
+    events = new AgentEventBus(),
+    llmRuntime?: LlmApiRuntime,
+  ) {
     this.provider = provider;
     this.emitter = new ZhinAgentEventEmitter(events);
     const merged = { ...DEFAULT_CONFIG, ...config } as Required<ZhinAgentConfig>;
@@ -228,10 +235,11 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     });
     this.agentSessionStore = memoryStack.sessionStore;
     this.contextRepository = memoryStack.repository;
+    this.llmRuntime = llmRuntime
+      ?? wireZhinAgentLlmApiLayer(this.provider, this.providerResolver);
     this.turnContextState.alwaysSkillsBaseline = this.alwaysSkillsBaseline;
     this.runtimeModules = createZhinAgentRuntimeModules(asPrivate(this));
     bindModuleProperties(this, this.runtimeModules);
-    this.wireLlmApiLayer();
   }
 
   configure(deps: Partial<ZhinAgentDependencies>): void {
@@ -252,10 +260,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   buildDisciplinedPrompt(basePrompt: string): string {
     return assembleDisciplinedPrompt(asPrivate(this), basePrompt);
-  }
-
-  wireLlmApiLayer(): void {
-    wireZhinAgentLlmApiLayer(this.provider, this.providerResolver);
   }
 
   getActiveBinding(): ResolvedAgentBinding | null {
@@ -299,6 +303,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   initSubagentSystem(createTools: () => AgentTool[]): void {
     this.subagentSystem = createSubagentSystem({
       provider: this.provider,
+      llmRuntime: this.llmRuntime,
       config: this.config,
       modelRegistry: this.modelRegistry,
       emitter: this.emitter,

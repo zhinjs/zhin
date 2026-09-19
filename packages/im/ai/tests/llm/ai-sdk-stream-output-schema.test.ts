@@ -11,8 +11,7 @@ vi.mock('ai', async (importOriginal) => {
 });
 
 import { createAiSdkStreamFn } from '../../src/llm/bridge/ai-sdk-stream.js';
-import { registerLanguageModel, clearLanguageModelStoreForTests } from '../../src/llm/language-model-store.js';
-import { createContext, createUserMessage } from '../../src/llm/index.js';
+import { createContext, createUserMessage, LlmApiRuntime } from '../../src/llm/index.js';
 import type { Model } from '../../src/llm/types/model.js';
 import type { AssistantMessage } from '../../src/llm/types/agent-message.js';
 
@@ -26,6 +25,7 @@ const model: Model = {
   contextWindow: 8192,
   maxTokens: 1024,
 } as Model;
+let runtime: LlmApiRuntime;
 
 function makeStreamResult(final: Record<string, unknown>) {
   return {
@@ -48,7 +48,7 @@ function makeFinal(overrides: Record<string, unknown> = {}) {
 }
 
 async function runStream(options?: Record<string, unknown>): Promise<AssistantMessage> {
-  const fn = createAiSdkStreamFn();
+  const fn = createAiSdkStreamFn(runtime);
   const eventStream = fn(model, createContext('sys', [createUserMessage('hi')]), options);
   let message: AssistantMessage | undefined;
   for await (const event of eventStream) {
@@ -61,8 +61,8 @@ async function runStream(options?: Record<string, unknown>): Promise<AssistantMe
 describe('createAiSdkStreamFn outputSchema', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    clearLanguageModelStoreForTests();
-    registerLanguageModel('test', 'm1', {} as LanguageModel);
+    runtime = new LlmApiRuntime();
+    runtime.registerLanguageModel('test', 'm1', {} as LanguageModel);
   });
 
   it('passes Output.object to streamText and serializes structured output as assistant text', async () => {

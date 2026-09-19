@@ -6,9 +6,7 @@
  */
 import {
   createAssistantMessageEventStream,
-  registerApiProvider,
-  registerProviderInstance,
-  setLiveModelsResolver,
+  LlmApiRuntime,
   EMPTY_TOKEN_USAGE,
   SdkProviderAdapter,
   type AssistantMessage,
@@ -26,6 +24,7 @@ export type MockLlmResponder = (context: Context) => AssistantMessage | Promise<
 export interface MockLlmApi {
   readonly provider: SdkProviderAdapter;
   readonly calls: MockLlmCall[];
+  readonly runtime: LlmApiRuntime;
   respondWith(next: MockLlmResponder): void;
   respondText(text: string): void;
   /** 永不返回（模拟挂起的长任务）。 */
@@ -73,8 +72,8 @@ export function wireMockLlmApi(options: {
   const name = options.name ?? 'mock';
   const models = [...(options.models ?? ['mock-model'])];
   const provider = new SdkProviderAdapter(name, 'openai', { sdk: 'openai', apiKey: 'test-key' }, models);
-  registerProviderInstance(name, { sdk: 'openai', apiKey: 'test-key' }, models);
-  setLiveModelsResolver((alias) => (alias === name ? [...models] : []));
+  const runtime = new LlmApiRuntime((alias) => (alias === name ? [...models] : []));
+  runtime.registerProvider(name, { sdk: 'openai', apiKey: 'test-key' }, models);
 
   const calls: MockLlmCall[] = [];
   let responder: MockLlmResponder = options.responder ?? (() => assistantTextReply('ok'));
@@ -89,10 +88,11 @@ export function wireMockLlmApi(options: {
       if (text) push({ type: 'text_delta', text });
       return message;
     });
-  registerApiProvider({ api: 'ai-sdk', stream: streamFn, streamSimple: streamFn });
+  runtime.registerApiProvider({ api: 'ai-sdk', stream: streamFn, streamSimple: streamFn });
 
   return {
     provider,
+    runtime,
     calls,
     respondWith(next) { responder = next; },
     respondText(text) { responder = () => assistantTextReply(text); },

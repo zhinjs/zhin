@@ -537,6 +537,17 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace process-global holiday data, caches, listeners, and reset hooks with scheduler-owned HolidayCalendar instances under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "own-llm-api-runtime.md",
+      "packages": [
+        "@zhin.js/ai",
+        "@zhin.js/agent",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace process-global LLM provider, transport, resolver, and model-cache state with owner-scoped runtimes and remove the old global APIs under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

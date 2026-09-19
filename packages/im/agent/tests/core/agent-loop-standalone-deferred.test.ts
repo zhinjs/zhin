@@ -61,6 +61,7 @@ describe('standalone loop 延迟加载', () => {
 
     const result = await runWithDeferredTurnController(controller, () => runAgentLoopStandaloneTurn({
       provider,
+      llmRuntime: llm.runtime,
       model: 'mock',
       systemPrompt: '',
       tools: [],
@@ -86,6 +87,7 @@ describe('standalone loop 延迟加载', () => {
     const controller = new AbortController();
     const pending = runAgentLoopStandaloneTurn({
       provider,
+      llmRuntime: llm.runtime,
       model: 'mock',
       systemPrompt: '',
       tools: [],

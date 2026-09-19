@@ -56,7 +56,7 @@ export function createRuntimeZhinAgent(
   const agent = new ZhinAgent(provider, {
     ...(service.getAgentConfig() ?? {}),
     chatModel: binding.model,
-  }, events);
+  }, events, service.getLlmRuntime());
   const composed = composeZhinAgentRuntime(agent, provider, createRuntimeProactiveOutbound(im));
   composed.host.approvalPort = approvalPort;
   const resourceHub = new AgentResourceHub();
@@ -69,6 +69,7 @@ export function createRuntimeZhinAgent(
     eventSystem: composed.eventSystem,
     resourceHub,
     providerResolver: (alias) => service.getProvider(alias),
+    llmRuntime: service.getLlmRuntime(),
     activeBinding: binding,
     deferredResultSender: composed.deliverOutbound,
     subagentSender: composed.deliverOutbound,

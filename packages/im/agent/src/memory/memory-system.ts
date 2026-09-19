@@ -1,4 +1,4 @@
-import { getLlmTransportModel, type ContextRepository } from '@zhin.js/ai';
+import { type ContextRepository } from '@zhin.js/ai';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { beginTurnSession, type SessionIODeps } from '../session/session-io.js';
 import type { MemoryStore, MemorySystemConfig } from './contracts.js';
@@ -53,11 +53,12 @@ export class MemorySystem {
     const { sessionId } = await beginTurnSession(deps, sessionKey);
     const provider = host.getTurnProvider();
     const modelId = host.config.chatModel || provider.models[0] || '';
-    const llmModel = getLlmTransportModel(provider.name, modelId);
+    const llmModel = host.llmRuntime.model(provider.name, modelId);
     const contextWindow = llmModel.contextWindow ?? host.config.contextTokens;
     return host.compactionRuntime.compactSession(host.contextRepository, {
       host,
       sessionId,
+      transport: host.llmRuntime,
       model: llmModel,
       compactionConfig: host.config.compaction,
       contextWindow,
@@ -69,10 +70,10 @@ export class MemorySystem {
 export function createMemorySystemForHost(host: ZhinAgentPrivate): MemorySystem {
   const provider = host.getTurnProvider();
   const modelId = host.config.chatModel || provider.models[0] || '';
-  const llmModel = getLlmTransportModel(provider.name, modelId);
+  const llmModel = host.llmRuntime.model(provider.name, modelId);
   const contextWindow = llmModel.contextWindow ?? host.config.contextTokens;
   const system = new MemorySystem({
-    compactionStrategy: new AiCompactionStrategy(llmModel, host.config.compaction),
+    compactionStrategy: new AiCompactionStrategy(host.llmRuntime, llmModel, host.config.compaction),
   });
   system.registerContextRepository('default', host.contextRepository, contextWindow);
   return system;

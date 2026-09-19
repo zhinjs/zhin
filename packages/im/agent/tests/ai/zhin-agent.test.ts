@@ -6,7 +6,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AgentEventBus, SkillRegistry, ZhinAgent } from '@zhin.js/agent';
 import { type AIProvider, type AgentTool, type Tool } from '@zhin.js/core';
-import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
 import { wireMockLlmApi, assistantTextReply, type MockLlmApi } from '../helpers/mock-llm-api.js';
 
 
@@ -94,12 +93,11 @@ describe('ZhinAgent', () => {
   let llm: MockLlmApi;
 
   beforeEach(() => {
-    resetLlmApiRegistryForTests();
     ({ provider, llm } = createMockProvider());
     agent = new ZhinAgent(provider, {
       persona: '测试助手',
       maxIterations: 3,
-    });
+    }, undefined, llm.runtime);
   });
 
   afterEach(() => {
@@ -116,6 +114,16 @@ describe('ZhinAgent', () => {
     it('configure({ skillRegistry }) 应正常工作', () => {
       const registry = new SkillRegistry();
       expect(() => agent.configure({ skillRegistry: registry })).not.toThrow();
+    });
+
+    it('providerResolver 必须与同一 owner 的 llmRuntime 一起注入', () => {
+      expect(() => agent.configure({ providerResolver: () => provider })).toThrow(
+        /providerResolver requires an owner-scoped llmRuntime/,
+      );
+      expect(() => agent.configure({
+        providerResolver: () => provider,
+        llmRuntime: llm.runtime,
+      })).not.toThrow();
     });
 
     it('registerTool 应添加和移除工具', () => {
@@ -164,7 +172,7 @@ describe('ZhinAgent', () => {
       // 创建一个严格限制的 agent
       const strictAgent = new ZhinAgent(provider, {
         rateLimit: { maxRequestsPerMinute: 1, cooldownSeconds: 5 },
-      });
+      }, undefined, llm.runtime);
 
       const commMessage = makeCommMessage();
 
@@ -186,7 +194,7 @@ describe('ZhinAgent', () => {
       const phaseAgent = new ZhinAgent(provider, {
         phaseTrace: true,
         onPhaseTrace: ({ phase }) => phases.push(phase),
-      });
+      }, undefined, llm.runtime);
       const commMessage = makeCommMessage();
       try {
         await phaseAgent.process('phase trace', commMessage, []);
@@ -206,7 +214,7 @@ describe('ZhinAgent', () => {
       const busAgent = new ZhinAgent(provider, {
         persona: '测试助手',
         maxIterations: 3,
-      }, events);
+      }, events, llm.runtime);
       const received: string[] = [];
 
       const record = (event: string) => () => {
@@ -239,7 +247,7 @@ describe('ZhinAgent', () => {
       const sessionAgent = new ZhinAgent(provider, {
         persona: '测试助手',
         maxIterations: 3,
-      }, events);
+      }, events, llm.runtime);
       const payloads: any[] = [];
       events.on('ai.session.new', payload => payloads.push(payload));
       try {

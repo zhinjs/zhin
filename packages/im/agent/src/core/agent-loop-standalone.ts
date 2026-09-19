@@ -2,7 +2,7 @@
  * Standalone agentLoop runner (subagent / deferred worker) — isolated memory context.
  */
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { type AgentTool, type AIProvider, type Usage, type MediaContentBlock, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, getLlmTransportModel, agentToolsToLlmTools, registerLlmApiFromProviders, sdkEntryFromProvider, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
+import { type AgentTool, type AIProvider, type Usage, type MediaContentBlock, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, agentToolsToLlmTools, createLlmApiRuntime, sdkEntryFromProvider, type LlmApiRuntime, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
 import { runWithCommMessage, runWithDirectAgentExecution } from '../security/comm-message-context.js';
 import type { Message } from '../resource-hub/types.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from '../core/text-sanitize.js';
@@ -57,8 +57,11 @@ function buildUserMessages(input: AgentRunInput): AgentMessage[] {
   return [createUserMessage(texts.join(' ') || '[多模态消息]', media.length > 0 ? media : undefined)];
 }
 
-function ensureLlmApi(provider: AIProvider, resolveProvider?: (alias: string) => AIProvider | undefined): void {
-  registerLlmApiFromProviders(
+function createStandaloneLlmRuntime(
+  provider: AIProvider,
+  resolveProvider?: (alias: string) => AIProvider | undefined,
+): LlmApiRuntime {
+  return createLlmApiRuntime(
     [sdkEntryFromProvider(provider)],
     (alias) => {
       const p = alias === provider.name ? provider : resolveProvider?.(alias);
@@ -75,6 +78,7 @@ export interface AgentLoopStandaloneCallbacks {
 export interface AgentLoopStandaloneInput {
   provider: AIProvider;
   resolveProvider?: (alias: string) => AIProvider | undefined;
+  llmRuntime?: LlmApiRuntime;
   model: string;
   systemPrompt: string;
   tools: AgentTool[];
@@ -121,9 +125,9 @@ export async function runAgentLoopStandaloneTurn(
   } = input;
   signal?.throwIfAborted();
 
-  ensureLlmApi(provider, input.resolveProvider);
-
-  const llmModel = getLlmTransportModel(provider.name, model);
+  const llmRuntime = input.llmRuntime
+    ?? createStandaloneLlmRuntime(provider, input.resolveProvider);
+  const llmModel = llmRuntime.model(provider.name, model);
   const { repository } = createMemoryContextRepository();
   const sessionId = `standalone:${Date.now()}`;
   const loaded = await repository.loadContext(sessionId);
@@ -209,6 +213,7 @@ export async function runAgentLoopStandaloneTurn(
 
   const loopConfig = {
     model: llmModel,
+    transport: llmRuntime,
     maxIterations,
     streamOptions: {
       promptCache: input.promptCache !== false,

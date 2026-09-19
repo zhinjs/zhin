@@ -35,7 +35,7 @@ import {
   promptSectionFeatureId,
 } from '@zhin.js/prompt-section';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
-import { compactAgentMessages, getLlmTransportModel } from '@zhin.js/ai';
+import { compactAgentMessages } from '@zhin.js/ai';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 import {
   AgentRuntime,
@@ -362,7 +362,7 @@ describe('Agent CapabilityIngress', () => {
       maxIterations: 5,
       toolExecution: 'sequential',
       deferredTools: { maxLoadedPerSession: 8, alwaysLoadedTools: ['child__lookup'] },
-    });
+    }, undefined, llm.runtime);
     agent.activeBinding = {
       name: 'zhin', providerAlias: 'shared-session', model: 'model', mcpServers: [],
     };
@@ -455,7 +455,8 @@ describe('Agent CapabilityIngress', () => {
     ]));
     llm.respondText('Alice 要求先不要改数据库；Bob 补充不能使用 Kubernetes。');
     const compacted = await compactAgentMessages({
-      model: getLlmTransportModel('shared-session', 'model'),
+      transport: llm.runtime,
+      model: llm.runtime.model('shared-session', 'model'),
       messages: restored.messages,
       keepRecentTokens: 1,
       minKeepCount: 1,

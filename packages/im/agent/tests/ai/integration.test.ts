@@ -41,6 +41,7 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
 
 // Import after mocking — AIService + builtin tools from agent; Tool/trigger from core
 import { AIService } from '@zhin.js/agent';
+import { createSdkProviderAdapter } from '@zhin.js/ai';
 import { shouldTriggerAI, resolveSenderRoles, type AgentTool } from '@zhin.js/core';
 
 // ============================================================================
@@ -106,6 +107,24 @@ describe('AI Service 集成测试', () => {
       expect(providers).toHaveLength(6);
 
       fullService.dispose();
+    });
+
+    it('动态 Provider 加入既有 service-owned runtime', () => {
+      const runtime = aiService.getLlmRuntime();
+      const provider = createSdkProviderAdapter('secondary', {
+        sdk: 'openai',
+        apiKey: 'sk-secondary',
+        models: ['gpt-secondary'],
+      });
+      expect(provider).not.toBeNull();
+
+      aiService.registerProvider(provider!);
+
+      expect(aiService.getLlmRuntime()).toBe(runtime);
+      expect(runtime.model('secondary', 'gpt-secondary')).toMatchObject({
+        provider: 'secondary',
+        id: 'gpt-secondary',
+      });
     });
 
     it('应该只初始化有 apiKey 的 Provider', () => {

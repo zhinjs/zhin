@@ -85,7 +85,7 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 
 | Check | Description |
 | --- | --- |
-| getModel Import Disambiguation (`pnpm check:get-model-imports`) | Runtime code uses getLlmTransportModel, not the ambiguous getModel |
+| LLM Runtime Boundaries (`pnpm check:llm-runtime-boundaries`) | Runtime code resolves models through an owner-scoped `LlmApiRuntime` and does not import ambiguous `getModel` |
 | Legacy AI Exports (`pnpm check:legacy-ai-exports`) | `@zhin.js/ai` no longer exports SessionManager and similar symbols |
 | Provider Gateway (`pnpm check:provider-gateway`) | LLM gateway sdk/contextWindow preset contract |
 | A2A Mesh (`pnpm check:a2a-mesh`) | No residual MCP Agent Mesh v1 symbols |

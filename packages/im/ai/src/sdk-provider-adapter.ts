@@ -14,14 +14,13 @@ import {
   SDK_SUPPORTS_OPENAI_MODEL_DISCOVERY,
 } from './llm/sdk-default-models.js';
 
-import { registerLanguageModel } from './llm/language-model-store.js';
 import { generateTextViaAiSdk } from './llm/bridge/ai-sdk-stream.js';
 import { generateImageViaAiSdk } from './llm/bridge/ai-sdk-image.js';
 import { createContext } from './llm/types/context.js';
 import { createUserMessage } from './llm/types/agent-message.js';
 import { assistantText } from './llm/convert/openai-bridge.js';
 import type { ImageGenerateRequest, ImageGenerateResult } from './image-generation.js';
-import { getLlmTransportModel } from './llm/api-registry.js';
+import { createLlmTransportModel } from './llm/llm-api-runtime.js';
 import { resolveProxyFetch } from './llm/proxy-fetch.js';
 
 function stripTrailingSlashes(s: string): string {
@@ -132,11 +131,6 @@ export class SdkProviderAdapter implements AIProvider {
     this.imageGenerationDefaults = config.imageGeneration;
   }
 
-  private ensureLanguageModel(modelId: string): void {
-    const lm = createLanguageModel(this.sdk, this.config, modelId);
-    registerLanguageModel(this.name, modelId, lm);
-  }
-
   /**
    * 纯文本补全（compaction / 话题判定 / 上下文摘要等轻量场景）：
    * system + user → assistant 文本，走 ai-sdk 传输。
@@ -147,8 +141,7 @@ export class SdkProviderAdapter implements AIProvider {
     opts: TextCompleteOptions = {},
   ): Promise<string> {
     const modelId = opts.model ?? this.models[0];
-    this.ensureLanguageModel(modelId);
-    const model = getLlmTransportModel(this.name, modelId);
+    const model = createLlmTransportModel(this.name, this.config, modelId);
     const ctx = createContext(system, [createUserMessage(user)]);
     const assistant = await generateTextViaAiSdk(
       createLanguageModel(this.sdk, this.config, modelId),
@@ -210,7 +203,7 @@ export function createSdkProviderAdapter(
   return new SdkProviderAdapter(alias, config.sdk, config, models);
 }
 
-export function sdkEntryFromProvider(provider: AIProvider): import('./llm/register-api-layer.js').SdkProviderEntry {
+export function sdkEntryFromProvider(provider: AIProvider): import('./llm/llm-runtime-factory.js').SdkProviderEntry {
   if (provider instanceof SdkProviderAdapter) {
     return {
       alias: provider.name,

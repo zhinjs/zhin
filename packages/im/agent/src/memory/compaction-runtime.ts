@@ -1,4 +1,4 @@
-import { autoCompactAgentMessagesIfNeeded, createAgentCompactionState, estimateAgentMessagesTokens, type AgentCompactionConfig, type AgentCompactionState, type ContextRepository, type Model, type AgentMessage } from '@zhin.js/ai';
+import { autoCompactAgentMessagesIfNeeded, createAgentCompactionState, estimateAgentMessagesTokens, type AgentCompactionConfig, type AgentCompactionState, type ContextRepository, type Model, type AgentMessage, type LlmCompletionPort } from '@zhin.js/ai';
 import type { CompactionConfig } from '../config/zhin-agent-config.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import { resolveWorkspacePrompt } from '../prompt/workspace-prompt.js';
@@ -11,6 +11,7 @@ export interface CompactionRuntimeOptions {
   host: CompactionContextHost;
   sessionId: string;
   model: Model;
+  transport: LlmCompletionPort;
   compactionConfig?: CompactionConfig;
   contextWindow: number;
   mode?: 'text' | 'multimodal';
@@ -89,6 +90,7 @@ export class AgentCompactionRuntime {
     ].filter(Boolean).join('\n\n') || undefined;
 
     const result = await autoCompactAgentMessagesIfNeeded({
+      transport: options.transport,
       model: options.model,
       messages,
       config: cfg,

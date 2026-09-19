@@ -3,6 +3,8 @@ import type { Model, ModelApi, ProviderInstanceConfig } from './types/model.js';
 import type { ThinkingLevel } from './types/agent-event.js';
 import type { AssistantMessage } from './types/agent-message.js';
 import { inferModelReasoning, resolveTransportContextWindow } from './provider-gateway-presets.js';
+import type { LanguageModel } from 'ai';
+import { createLanguageModel } from './sdk-registry.js';
 
 export interface StreamOptions {
   signal?: AbortSignal;
@@ -57,53 +59,15 @@ export interface RegisteredProvider {
   models: string[];
 }
 
-const apiProviders = new Map<ModelApi, ApiProviderRegistration>();
-const providerConfigs = new Map<string, RegisteredProvider>();
-
-let liveModelsResolver: ((alias: string) => string[]) | undefined;
-
-/** @internal wired by register-api-layer */
-export function setLiveModelsResolver(
-  resolver: ((alias: string) => string[]) | undefined,
-): void {
-  liveModelsResolver = resolver;
+function languageModelKey(alias: string, modelId: string): string {
+  return `${alias}::${modelId}`;
 }
 
-export function getLiveModelsResolver(): typeof liveModelsResolver {
-  return liveModelsResolver;
-}
-
-export function registerApiProvider(registration: ApiProviderRegistration): void {
-  apiProviders.set(registration.api, registration);
-}
-
-export function registerProviderInstance(
-  alias: string,
+export function createLlmTransportModel(
+  providerAlias: string,
   config: ProviderInstanceConfig,
-  models: string[] = [],
-): void {
-  providerConfigs.set(alias, { config, models });
-}
-
-export function getApiProvider(api: ModelApi): ApiProviderRegistration | undefined {
-  return apiProviders.get(api);
-}
-
-export function getProviderConfig(alias: string): RegisteredProvider | undefined {
-  return providerConfigs.get(alias);
-}
-
-export function getLlmTransportModel(providerAlias: string, modelId: string): Model {
-  const entry = providerConfigs.get(providerAlias);
-  if (!entry) {
-    throw new Error(`Unknown provider alias: ${providerAlias}`);
-  }
-  const { config, models: registered } = entry;
-  const live = liveModelsResolver?.(providerAlias) ?? [];
-  const allowlist = registered.length > 0 ? registered : live;
-  if (allowlist.length > 0 && !allowlist.includes(modelId)) {
-    throw new Error(`Model ${modelId} not registered for provider ${providerAlias}`);
-  }
+  modelId: string,
+): Model {
   return {
     id: modelId,
     provider: providerAlias,
@@ -118,77 +82,97 @@ export function getLlmTransportModel(providerAlias: string, modelId: string): Mo
   };
 }
 
-export function clearApiRegistryForTests(): void {
-  apiProviders.clear();
-  providerConfigs.clear();
-  liveModelsResolver = undefined;
+export interface LlmCompletionPort {
+  complete(model: Model, context: Context, options?: StreamOptions): Promise<AssistantMessage>;
+  completeSimple(model: Model, context: Context, options?: StreamOptions): Promise<AssistantMessage>;
 }
 
-export async function complete(
-  model: Model,
-  context: Context,
-  options?: StreamOptions,
-): Promise<AssistantMessage> {
-  const eventStream = stream(model, context, options);
-  let lastMessage: AssistantMessage | undefined;
-  for await (const event of eventStream) {
-    if (event.type === 'done' && event.message) {
-      lastMessage = event.message;
-    }
-    if (event.type === 'error') {
-      throw event.error ?? new Error('Stream failed');
-    }
-  }
-  if (!lastMessage) {
-    throw new Error('Stream ended without assistant message');
-  }
-  return lastMessage;
-}
+/** Owns one independent provider directory, model cache, and transport set. */
+export class LlmApiRuntime implements LlmCompletionPort {
+  readonly #apiProviders = new Map<ModelApi, ApiProviderRegistration>();
+  readonly #providers = new Map<string, RegisteredProvider>();
+  readonly #languageModels = new Map<string, LanguageModel>();
 
-export function stream(
-  model: Model,
-  context: Context,
-  options?: StreamOptions,
-): AssistantMessageEventStream {
-  const registration = apiProviders.get(model.api);
-  if (!registration) {
-    throw new Error(`No ApiProvider registered for api: ${model.api}`);
-  }
-  return registration.stream(model, context, options);
-}
+  constructor(private readonly resolveLiveModels?: (alias: string) => string[]) {}
 
-export function streamSimple(
-  model: Model,
-  context: Context,
-  options?: StreamOptions,
-): AssistantMessageEventStream {
-  const registration = apiProviders.get(model.api);
-  if (!registration) {
-    throw new Error(`No ApiProvider registered for api: ${model.api}`);
+  registerApiProvider(registration: ApiProviderRegistration): this {
+    this.#apiProviders.set(registration.api, registration);
+    return this;
   }
-  const fn = registration.streamSimple ?? registration.stream;
-  return fn(model, context, options);
-}
 
-export async function completeSimple(
-  model: Model,
-  context: Context,
-  options?: StreamOptions,
-): Promise<AssistantMessage> {
-  const eventStream = streamSimple(model, context, options);
-  let lastMessage: AssistantMessage | undefined;
-  for await (const event of eventStream) {
-    if (event.type === 'done' && event.message) {
-      lastMessage = event.message;
-    }
-    if (event.type === 'error') {
-      throw event.error ?? new Error('Stream failed');
-    }
+  registerProvider(
+    alias: string,
+    config: ProviderInstanceConfig,
+    models: string[] = [],
+  ): this {
+    this.#providers.set(alias, { config, models: [...models] });
+    return this;
   }
-  if (!lastMessage) {
-    throw new Error('Stream ended without assistant message');
+
+  model(providerAlias: string, modelId: string): Model {
+    const entry = this.#providers.get(providerAlias);
+    if (!entry) throw new Error(`Unknown provider alias: ${providerAlias}`);
+    const live = this.resolveLiveModels?.(providerAlias) ?? [];
+    const allowlist = entry.models.length > 0 ? entry.models : live;
+    if (allowlist.length > 0 && !allowlist.includes(modelId)) {
+      throw new Error(`Model ${modelId} not registered for provider ${providerAlias}`);
+    }
+    return createLlmTransportModel(providerAlias, entry.config, modelId);
   }
-  return lastMessage;
+
+  registerLanguageModel(alias: string, modelId: string, model: LanguageModel): this {
+    this.#languageModels.set(languageModelKey(alias, modelId), model);
+    return this;
+  }
+
+  resolveLanguageModel(alias: string, modelId: string): LanguageModel | undefined {
+    const key = languageModelKey(alias, modelId);
+    const existing = this.#languageModels.get(key);
+    if (existing) return existing;
+    const entry = this.#providers.get(alias);
+    if (!entry) return undefined;
+    const model = createLanguageModel(entry.config.sdk, entry.config, modelId);
+    this.#languageModels.set(key, model);
+    return model;
+  }
+
+  stream(model: Model, context: Context, options?: StreamOptions): AssistantMessageEventStream {
+    const registration = this.#apiProviders.get(model.api);
+    if (!registration) throw new Error(`No ApiProvider registered for api: ${model.api}`);
+    return registration.stream(model, context, options);
+  }
+
+  streamSimple(model: Model, context: Context, options?: StreamOptions): AssistantMessageEventStream {
+    const registration = this.#apiProviders.get(model.api);
+    if (!registration) throw new Error(`No ApiProvider registered for api: ${model.api}`);
+    return (registration.streamSimple ?? registration.stream)(model, context, options);
+  }
+
+  async complete(
+    model: Model,
+    context: Context,
+    options?: StreamOptions,
+  ): Promise<AssistantMessage> {
+    return this.consume(this.stream(model, context, options));
+  }
+
+  async completeSimple(
+    model: Model,
+    context: Context,
+    options?: StreamOptions,
+  ): Promise<AssistantMessage> {
+    return this.consume(this.streamSimple(model, context, options));
+  }
+
+  private async consume(eventStream: AssistantMessageEventStream): Promise<AssistantMessage> {
+    let lastMessage: AssistantMessage | undefined;
+    for await (const event of eventStream) {
+      if (event.type === 'done' && event.message) lastMessage = event.message;
+      if (event.type === 'error') throw event.error ?? new Error('Stream failed');
+    }
+    if (!lastMessage) throw new Error('Stream ended without assistant message');
+    return lastMessage;
+  }
 }
 
 /** Build a push-based event stream from an async producer. */

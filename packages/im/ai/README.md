@@ -48,7 +48,7 @@ if (hasGenerateImage(zhipu)) {
 
 ### agentLoop（推荐 — LLM 统一入口）
 
-IM 栈与 `@zhin.js/agent` 的生产路径均经 **`agentLoop`**（ADR 0009）。Provider 须配置 **`sdk`**（见 [ADR 0018](../../../docs/adr/0018-ai-sdk-transport-layer.md)），由 `registerLlmApiFromProviders` 注册 AI SDK transport 到 ApiRegistry（`api: 'ai-sdk'`）。
+IM 栈与 `@zhin.js/agent` 的生产路径均经 **`agentLoop`**（ADR 0009）。Provider 须配置 **`sdk`**（见 [ADR 0018](../../../docs/adr/0018-ai-sdk-transport-layer.md)）。每个宿主创建并持有独立的 `LlmApiRuntime`，其中封装 AI SDK transport、Provider 目录、模型白名单和模型缓存。
 
 ```typescript
 import {
@@ -56,17 +56,16 @@ import {
   agentContextFrom,
   createUserMessage,
   agentToolsToLlmTools,
-  getLlmTransportModel,
-  registerLlmApiFromProviders,
+  createLlmApiRuntime,
   sdkEntryFromProvider,
 } from '@zhin.js/ai'
 
-registerLlmApiFromProviders(
+const runtime = createLlmApiRuntime(
   [sdkEntryFromProvider(provider)],
   (alias) => provider.models,
 )
 
-const model = getLlmTransportModel(provider.name, 'gpt-4o')
+const model = runtime.model(provider.name, 'gpt-4o')
 const context = agentContextFrom({
   systemPrompt: '你是一个助手',
   messages: [],
@@ -76,7 +75,7 @@ const context = agentContextFrom({
 for await (const event of agentLoop(
   [createUserMessage('今天北京天气怎么样？')],
   context,
-  { model, maxIterations: 5, executeTool: async (tc) => { /* ... */ } },
+  { model, transport: runtime, maxIterations: 5, executeTool: async (tc) => { /* ... */ } },
 )) {
   if (event.type === 'agent_end') console.log(event.messages)
 }
@@ -90,14 +89,14 @@ for await (const event of agentLoop(
 `createAgent` / `Agent` 类已从 `@zhin.js/ai` 中删除。如需直接调用 LLM，请使用 **`agentLoop`** 或 **`@zhin.js/agent`** 的封装。参见上方的 **`agentLoop`（推荐）** 章节。
 :::
 
-### ModelRegistry 与 ApiRegistry（模型发现 + agentLoop 白名单）
+### ModelRegistry 与 LlmApiRuntime（模型发现 + agentLoop 白名单）
 
 **两层协作**（IM 主路径由 `@zhin.js/agent` 的 `AIService` / `createZhinAgent` 接线）：
 
 | 层 | 职责 |
 |----|------|
 | **ModelRegistry** | 启动时 `discover()` → `provider.listModels()`；缓存到 `data/model-registry-cache.json`；Tier 评分与 `selectModel` |
-| **ApiRegistry**（`getLlmTransportModel`） | `agentLoop` 校验模型是否可用；**未配置 yaml `models` 时**白名单来自发现后的 `provider.models`，而非 Provider 类内硬编码默认列表 |
+| **LlmApiRuntime**（`runtime.model`） | 在单一宿主边界内校验模型是否可用并执行补全；**未配置 yaml `models` 时**白名单来自发现后的 `provider.models`，而非 Provider 类内硬编码默认列表 |
 
 ```typescript
 import { ModelRegistry } from '@zhin.js/ai'
@@ -118,7 +117,7 @@ const candidates = registry.selectModels(provider.name, 'chat', 5)
 - **OpenAI 兼容**（含中转/聚合）：`GET {baseUrl}/models`；名称启发式推断能力
 - **显式 yaml `models`**：跳过自动发现，直接作为 ApiRegistry 白名单（如 Cloudflare Workers AI）
 
-冷启动：发现完成前若注册表白名单为空，`getLlmTransportModel` 不拦截；发现完成后按 `provider.models` 校验。
+冷启动：发现完成前若 runtime 白名单为空，`runtime.model` 不拦截；发现完成后按 `provider.models` 校验。
 
 ### 持久化与上下文（ADR 0009）
 
@@ -280,9 +279,9 @@ const tools = cache.filter('天气查询', allTools, { maxTools: 10 })
 
 | 导出 | 说明 |
 |------|------|
-| `agentLoop` / `agentContextFrom` / `getLlmTransportModel` | LLM 统一回合引擎（推荐） |
+| `agentLoop` / `agentContextFrom` / `LlmApiRuntime` | LLM 统一回合引擎与 owner-scoped transport（推荐） |
 | `agentToolsToLlmTools` | Plugin/AgentTool → LlmTool 桥接（agentLoop transport） |
-| `registerLlmApiFromProviders` / `ModelRegistry` | ApiRegistry 注册 + `/v1/models` 发现与白名单 |
+| `createLlmApiRuntime` / `ModelRegistry` | 独立 transport runtime + `/v1/models` 发现与白名单 |
 | `ContextRepository` / `AgentSessionStore` | Agent 会话持久化原语 |
 | `createSdkProviderAdapter` / `AIProvider` | LLM 提供者（AI SDK 传输，ADR 0018） |
 | `ContextManager` | 场景摘要实验（辅助，不接入 ZhinAgent 生产回合） |

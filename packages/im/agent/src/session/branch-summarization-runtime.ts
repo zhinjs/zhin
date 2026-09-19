@@ -7,7 +7,6 @@ import {
   collectAbandonedPathRows,
   compactAgentMessages,
   estimateAgentMessagesTokens,
-  getLlmTransportModel,
   parseAgentMessageRow,
 } from '@zhin.js/ai';
 import type { CompactionConfig } from '../config/index.js';
@@ -41,12 +40,13 @@ export async function summarizeAbandonedBranchIfNeeded(
 
   const provider = host.getTurnProvider();
   const modelId = host.config.chatModel || provider.models[0] || '';
-  const llmModel = getLlmTransportModel(provider.name, modelId);
+  const llmModel = host.llmRuntime.model(provider.name, modelId);
   const contextWindow = options.contextWindow ?? llmModel.contextWindow ?? host.config.contextTokens;
 
   let result: Awaited<ReturnType<typeof compactAgentMessages>>;
   try {
     result = await compactAgentMessages({
+      transport: host.llmRuntime,
       model: llmModel,
       messages,
       contextWindow,

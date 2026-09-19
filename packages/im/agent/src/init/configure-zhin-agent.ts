@@ -1,5 +1,5 @@
 import { getLogger } from '@zhin.js/logger';
-import { registerLlmApiFromProviders, sdkEntryFromProvider, AIProvider, ModelRegistry } from '@zhin.js/ai';
+import { createLlmApiRuntime, sdkEntryFromProvider, AIProvider, ModelRegistry, type LlmApiRuntime } from '@zhin.js/ai';
 import { createSkillSystem, SkillSystem } from '../skill/skill-system.js';
 import type { AgentCore } from '../core/agent-core.js';
 import type { ToolSystem } from '../tool/tool-system.js';
@@ -21,6 +21,7 @@ export type ConfigureZhinAgentTarget = Pick<
   | 'contextSystem' | 'sessionSystem'
   | 'agentSessionStore' | 'contextRepository'
   | 'modelRegistry' | 'subagentSystem' | 'activeBinding'
+  | 'llmRuntime'
   | 'bootstrapContext' | 'globalContext' | 'skillsSummaryXML' | 'deferred'
 > & {
   /** 接口外的运行时模块（declare 在类上，不经 ZhinAgentPrivate 暴露） */
@@ -29,13 +30,15 @@ export type ConfigureZhinAgentTarget = Pick<
   providerResolver: ((alias: string) => AIProvider) | null;
   alwaysSkillsBaseline: string;
   turnContextState: TurnContextBridgeState;
-  wireLlmApiLayer(): void;
 };
 
 export function applyZhinAgentConfigure(
   target: ConfigureZhinAgentTarget,
   deps: Partial<ZhinAgentDependencies>,
 ): void {
+  if (deps.providerResolver !== undefined && deps.llmRuntime === undefined) {
+    throw new Error('providerResolver requires an owner-scoped llmRuntime');
+  }
   if (deps.skillRegistry !== undefined) {
     target.skillRegistry = deps.skillRegistry;
     target.skillSystem = deps.skillRegistry ? createSkillSystem(deps.skillRegistry) : null;
@@ -59,8 +62,8 @@ export function applyZhinAgentConfigure(
   }
   if (deps.providerResolver !== undefined) {
     target.providerResolver = deps.providerResolver;
-    target.wireLlmApiLayer();
   }
+  if (deps.llmRuntime !== undefined) target.llmRuntime = deps.llmRuntime;
   if (deps.activeBinding !== undefined) {
     target.activeBinding = deps.activeBinding;
     if (deps.activeBinding) {
@@ -90,8 +93,8 @@ export function applyZhinAgentConfigure(
 export function wireZhinAgentLlmApiLayer(
   provider: AIProvider,
   providerResolver: ((alias: string) => AIProvider) | null,
-): void {
-  registerLlmApiFromProviders(
+): LlmApiRuntime {
+  return createLlmApiRuntime(
     [sdkEntryFromProvider(provider)],
     (alias) => {
       const p = alias === provider.name ? provider : providerResolver?.(alias);

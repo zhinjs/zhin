@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import * as ai from '@zhin.js/ai';
 import { AiCompactionStrategy } from '../../src/memory/ai-compaction-strategy.js';
 import { createMemorySystemForHost, defaultMemorySystem } from '../../src/memory/memory-system.js';
 import { AgentCompactionRuntime } from '../../src/memory/compaction-runtime.js';
 
 describe('MemorySystem', () => {
+  const transport = { complete: vi.fn(), completeSimple: vi.fn() };
   it('compaction runtimes own isolated state', async () => {
     const first = new AgentCompactionRuntime();
     const second = new AgentCompactionRuntime();
@@ -17,6 +17,7 @@ describe('MemorySystem', () => {
     const options = {
       host,
       sessionId: 'shared-session',
+      transport,
       model: { id: 'm1' } as any,
       contextWindow: 128_000,
     };
@@ -41,6 +42,7 @@ describe('MemorySystem', () => {
       await runtime.transformContext([], undefined, {
         host,
         sessionId: `session-${index}`,
+        transport,
         model: { id: 'm1' } as any,
         contextWindow: 128_000,
       });
@@ -56,10 +58,6 @@ describe('MemorySystem', () => {
   });
 
   it('createMemorySystemForHost uses AiCompactionStrategy', () => {
-    vi.spyOn(ai, 'getLlmTransportModel').mockReturnValue({
-      id: 'm1',
-      contextWindow: 128_000,
-    } as any);
     const host = {
       getTurnProvider: () => ({ name: 'mock', models: ['m1'] }),
       config: {
@@ -68,6 +66,10 @@ describe('MemorySystem', () => {
         compaction: { enabled: true, auto: true, keepRecentTokens: 20_000, minKeepCount: 2 },
       },
       contextRepository: {} as any,
+      llmRuntime: {
+        ...transport,
+        model: () => ({ id: 'm1', contextWindow: 128_000 }),
+      },
     } as any;
     const system = createMemorySystemForHost(host);
     const strategy = (system as any)._config.compactionStrategy;

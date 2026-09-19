@@ -3,6 +3,7 @@ import type {
   AgentSessionRepository,
   ContextRepository,
   ModelRegistry,
+  LlmApiRuntime,
 } from '@zhin.js/ai';
 import type { AgentCore } from '../core/agent-core.js';
 import type { ToolSystem } from '../tool/tool-system.js';
@@ -28,6 +29,7 @@ export interface ZhinAgentDependencies {
   agentSessionStore: AgentSessionRepository;
   contextRepository: ContextRepository;
   modelRegistry: ModelRegistry;
+  llmRuntime: LlmApiRuntime;
   providerResolver: (alias: string) => AIProvider;
   activeBinding: ResolvedAgentBinding;
   subagentSender: SubagentResultSender;

@@ -4,7 +4,7 @@
  */
 
 import { type AITriggerConfig, type AIAccessConfig, type Tool } from '@zhin.js/core';
-import { type AIProvider, type AIConfig, type AgentTool, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, registerLlmApiFromProviders } from '@zhin.js/ai';
+import { type AIProvider, type AIConfig, type AgentTool, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, createLlmApiRuntime, sdkEntryFromProvider, type LlmApiRuntime, type SdkProviderAdapter } from '@zhin.js/ai';
 import type { AgentRunInput } from './media/media-types.js';
 import { DEFAULT_CONFIG } from './config/index.js';
 import { normalizeTool } from './resource-hub/tool-selection.js';
@@ -65,6 +65,7 @@ export class AIService {
   private imageGenerationGlobal?: ImageGenerationDefaults;
   private customTools: Map<string, AgentTool> = new Map();
   private _modelRegistry: ModelRegistry | null = null;
+  private llmRuntime!: LlmApiRuntime;
   readonly loopHooks = new PluginAILoopHookRegistry();
 
   constructor(config: AIConfig = {}) {
@@ -75,7 +76,7 @@ export class AIService {
     }
 
     this.providers = registerProviderInstances(this.routing.providers);
-    this.refreshLlmApiRegistry();
+    this.refreshLlmApiRuntime();
     const zhinProvider = this.routing.agents[DEFAULT_ZHIN_AGENT_NAME]?.provider;
     this.defaultProvider =
       zhinProvider
@@ -110,6 +111,7 @@ export class AIService {
 
   setModelRegistry(registry: ModelRegistry): void { this._modelRegistry = registry; }
   getModelRegistry(): ModelRegistry | null { return this._modelRegistry; }
+  getLlmRuntime(): LlmApiRuntime { return this.llmRuntime; }
   registerTool(tool: AgentTool): () => void { this.customTools.set(tool.name, tool); return () => { this.customTools.delete(tool.name); }; }
 
   /** ADR 0010 — bridge plugin beforeToolCall hooks to agentLoop. */
@@ -155,7 +157,11 @@ export class AIService {
     return { ...this.imageGenerationGlobal, ...inst };
   }
 
-  registerProvider(provider: AIProvider): void { this.providers.set(provider.name, provider); }
+  registerProvider(provider: SdkProviderAdapter): void {
+    this.providers.set(provider.name, provider);
+    const entry = sdkEntryFromProvider(provider);
+    this.llmRuntime.registerProvider(entry.alias, entry.config, entry.models);
+  }
   getProvider(name?: string): AIProvider {
     const providerName = name || this.defaultProvider;
     const provider = this.providers.get(providerName);
@@ -174,14 +180,16 @@ export class AIService {
     return Array.isArray(models) && models.length > 0;
   }
 
-  /** 同步 api-registry 白名单：显式 models 用配置，否则留空并由 /v1/models 发现填充 provider.models */
-  refreshLlmApiRegistry(): void {
-    registerLlmApiFromProviders(
-      [...this.providers.entries()].map(([alias, provider]) => ({
-        alias,
-        config: this.routing.providers[alias]!,
-        models: this.hasExplicitModelList(alias) ? (provider.models ?? []) : [],
-      })),
+  /** Build the service-owned transport runtime and its configured model allowlists. */
+  private refreshLlmApiRuntime(): void {
+    this.llmRuntime = createLlmApiRuntime(
+      [...this.providers.entries()].map(([alias, provider]) => {
+        const entry = sdkEntryFromProvider(provider);
+        return {
+          ...entry,
+          models: this.hasExplicitModelList(alias) ? entry.models : [],
+        };
+      }),
       (alias: string) => this.providers.get(alias)?.models ?? [],
     );
   }
@@ -227,6 +235,7 @@ export class AIService {
       run: (userInput) => runAgentLoopStandaloneTurn({
         provider,
         resolveProvider: (alias) => this.providers.get(alias),
+        llmRuntime: this.llmRuntime,
         model,
         systemPrompt,
         tools,

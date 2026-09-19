@@ -116,9 +116,9 @@ const checks = [
     description: '检查 IM 场景/session 身份解析是否使用 core SSOT',
   },
   {
-    name: 'getModel Import Disambiguation',
-    command: 'pnpm check:get-model-imports',
-    description: 'agent/zhin 运行时代码须使用 getLlmTransportModel 而非歧义 getModel',
+    name: 'LLM Runtime Boundaries',
+    command: 'pnpm check:llm-runtime-boundaries',
+    description: 'agent/zhin 运行时代码须经 owner-scoped LlmApiRuntime 解析模型',
   },
   {
     name: 'Legacy AI Exports',

@@ -13,7 +13,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import * as path from 'node:path';
 import type { Message } from '@zhin.js/core';
 import { getLogger, formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
-import { type AIProvider, type AgentTool, type Usage, type ModelRegistry } from '@zhin.js/ai';
+import { type AIProvider, type AgentTool, type Usage, type ModelRegistry, type LlmApiRuntime } from '@zhin.js/ai';
 import type { AgentRunInput, AgentRunInputPart } from '../media/media-types.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import {
@@ -145,6 +145,7 @@ export type SubagentResultSender = (
 
 export interface SubagentRuntimeOptions {
   provider: AIProvider;
+  llmRuntime: LlmApiRuntime;
   getProvider?: (alias: string) => AIProvider;
   resolveBinding?: (agentName: string) => ResolvedAgentBinding | null;
   getMcpRegistry?: () => McpRegistry | null;
@@ -179,6 +180,7 @@ export interface SubagentRuntimeOptions {
 
 export class SubagentRuntime {
   private provider: AIProvider;
+  private readonly llmRuntime: LlmApiRuntime;
   private getProviderFn: ((alias: string) => AIProvider) | null;
   private resolveBindingFn: ((agentName: string) => ResolvedAgentBinding | null) | null;
   private getMcpRegistryFn: (() => McpRegistry | null) | null;
@@ -207,6 +209,7 @@ export class SubagentRuntime {
 
   constructor(options: SubagentRuntimeOptions) {
     this.provider = options.provider;
+    this.llmRuntime = options.llmRuntime;
     this.getProviderFn = options.getProvider ?? null;
     this.resolveBindingFn = options.resolveBinding ?? null;
     this.getMcpRegistryFn = options.getMcpRegistry ?? null;
@@ -595,6 +598,7 @@ export class SubagentRuntime {
         : undefined;
       const result = await runAgentLoopStandaloneTurn({
         provider,
+        llmRuntime: this.llmRuntime,
         resolveProvider: this.getProviderFn ?? undefined,
         model,
         systemPrompt,

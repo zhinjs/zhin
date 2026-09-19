@@ -4,7 +4,7 @@
 
 import { aiOutboundJsonSchema, buildAiOutboundPromptHint } from '@zhin.js/core';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, getLlmTransportModel, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause } from '@zhin.js/ai';
+import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
@@ -198,7 +198,7 @@ async function* runAgentLoopVisionTurnOnceRun(
   const { host, sessionId, visionSystemPrompt, modelId, onChunk, promptHooks, signal } = input;
   const repo = host.contextRepository;
   const providerAlias = host.getTurnProvider().name;
-  const llmModel = getLlmTransportModel(providerAlias, modelId);
+  const llmModel = host.llmRuntime.model(providerAlias, modelId);
   const loaded = await repo.loadContext(sessionId);
   const promptMessages = input.userMessages;
 
@@ -216,6 +216,7 @@ async function* runAgentLoopVisionTurnOnceRun(
 
   const loopConfig = {
     model: llmModel,
+    transport: host.llmRuntime,
     maxIterations: 1,
     streamOptions: buildAgentPromptCacheStreamOptions(host.config, {
       modelSdk: llmModel.sdk,
@@ -367,7 +368,7 @@ export async function* runAgentLoopTextTurnRun(
   const repo = host.contextRepository;
 
   const providerAlias = host.getTurnProvider().name;
-  const llmModel = getLlmTransportModel(providerAlias, modelId);
+  const llmModel = host.llmRuntime.model(providerAlias, modelId);
   const persistentConversation = input.conversationPersistence !== 'none';
   const loaded = persistentConversation
     ? await repo.loadContext(sessionId)
@@ -525,6 +526,7 @@ export async function* runAgentLoopTextTurnRun(
 
   const loopConfig = {
     model: llmModel,
+    transport: host.llmRuntime,
     maxIterations,
     sessionId,
     streamOptions: {
@@ -541,6 +543,7 @@ export async function* runAgentLoopTextTurnRun(
       persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
         host,
         sessionId,
+        transport: host.llmRuntime,
         model: llmModel,
         compactionConfig: host.config.compaction,
         contextWindow,
@@ -551,6 +554,7 @@ export async function* runAgentLoopTextTurnRun(
       persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
         host,
         sessionId,
+        transport: host.llmRuntime,
         model: llmModel,
         compactionConfig: host.config.compaction,
         contextWindow,

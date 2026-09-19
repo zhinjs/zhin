@@ -4,7 +4,7 @@ import type { AgentEvent, ThinkingLevel, ToolExecutionMode } from './types/agent
 import type { Model } from './types/model.js';
 import type { LlmTool, ParsedToolCall } from './types/tool.js';
 import { isContextOverflowError } from '../compaction/agent-message-compaction.js';
-import { complete, type StreamOptions } from './api-registry.js';
+import type { LlmCompletionPort, StreamOptions } from './llm-api-runtime.js';
 import { createIncrementalRepair } from './repair-agent-messages.js';
 import { validateToolCall } from './validate-tool-call.js';
 import { isTieredParallelTool } from './tiered-tool-buckets.js';
@@ -32,6 +32,7 @@ export interface ToolExecutionCause {
 
 export interface AgentLoopConfig {
   model: Model;
+  transport: LlmCompletionPort;
   maxIterations?: number;
   reasoning?: ThinkingLevel;
   sessionId?: string;
@@ -258,7 +259,7 @@ export async function* agentLoop(
 
     let assistant: AssistantMessage;
     try {
-      assistant = await complete(config.model, await buildLlmContext(), {
+      assistant = await config.transport.complete(config.model, await buildLlmContext(), {
         ...config.streamOptions,
         signal,
         sessionId: config.sessionId,
@@ -272,7 +273,7 @@ export async function* agentLoop(
             repairer.reset();
             messages.splice(0, messages.length, ...compacted);
           }
-          assistant = await complete(config.model, await buildLlmContext(), {
+          assistant = await config.transport.complete(config.model, await buildLlmContext(), {
             ...config.streamOptions,
             signal,
             sessionId: config.sessionId,
@@ -342,7 +343,7 @@ export async function* agentLoop(
       tools = [...refreshed];
       recompleteCount += 1;
       try {
-        const followUp = await complete(config.model, await buildLlmContext(), {
+        const followUp = await config.transport.complete(config.model, await buildLlmContext(), {
           ...config.streamOptions,
           signal,
           sessionId: config.sessionId,

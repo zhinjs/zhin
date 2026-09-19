@@ -94,7 +94,7 @@ workflow 均执行此项；它需要 npm 网络与本机随机端口，不属于
 
 | 检查 | 说明 |
 | --- | --- |
-| getModel Import Disambiguation（`pnpm check:get-model-imports`） | 运行时代码用 getLlmTransportModel，不用歧义 getModel |
+| LLM Runtime Boundaries（`pnpm check:llm-runtime-boundaries`） | 运行时代码经 owner-scoped `LlmApiRuntime` 解析模型，不导入歧义 `getModel` |
 | Legacy AI Exports（`pnpm check:legacy-ai-exports`） | `@zhin.js/ai` 不再导出 SessionManager 等符号 |
 | Provider Gateway（`pnpm check:provider-gateway`） | LLM 网关 sdk/contextWindow 预设契约 |
 | A2A Mesh（`pnpm check:a2a-mesh`） | 禁止残留 MCP Agent Mesh v1 符号 |

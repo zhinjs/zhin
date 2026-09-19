@@ -49,7 +49,7 @@
     "check:architecture": "node scripts/check-architecture-layers.mjs",
     "check:adapter-endpoint-boundaries": "node scripts/check-adapter-endpoint-boundaries.mjs",
     "check:im-session-ssot": "node scripts/check-im-session-ssot.mjs",
-    "check:get-model-imports": "node scripts/check-get-model-imports.mjs",
+    "check:llm-runtime-boundaries": "node scripts/check-llm-runtime-boundaries.mjs",
     "check:legacy-ai-exports": "node scripts/check-legacy-ai-exports.mjs",
     "check:doc-links": "node scripts/check-doc-links.mjs",
     "check:install-tiers-ssot": "node scripts/check-install-tiers-ssot.mjs",
