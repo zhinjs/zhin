@@ -1,9 +1,6 @@
-import { spawn, type ChildProcess } from 'node:child_process';
-import { openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { access, mkdir, readFile } from 'node:fs/promises';
-import { dirname, join, relative } from 'node:path';
+import { access, readFile } from 'node:fs/promises';
+import { join, relative } from 'node:path';
 import chalk from 'chalk';
-import { parse as parseDotenv } from 'dotenv';
 import open from 'open';
 import { YamlConfigDocument } from '@zhin.js/config-yaml';
 import { endpointConfigurationStoreToken } from '@zhin.js/adapter';
@@ -19,11 +16,8 @@ import { defineInboxTables, readPluginConfigurationMap } from '@zhin.js/plugin-r
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
 import {
   ConfigValidationError,
-  supportsNativeTypeScript,
   type ConfigDocumentPort,
   type RuntimeConfigDocument,
-  type RuntimeMode,
-  type EnvironmentLayers,
   type RootResourceInstaller,
   ensureTypeScriptSpecifierRemap,
   expandEnvironmentValue,
@@ -47,52 +41,28 @@ import {
   readPluginLifecycleState,
   resolvePluginLifecycleFile,
 } from './plugin-lifecycle-store.js';
+import { installProcessLifecycle, nodeProcessLifecycleAdapter } from './process-lifecycle.js';
 import {
-  DEFAULT_SHUTDOWN_BUDGET_MS,
-  installProcessLifecycle,
-  nodeProcessLifecycleAdapter,
-} from './process-lifecycle.js';
-const DISABLE_EXPERIMENTAL_WARNING_FLAG = '--disable-warning=ExperimentalWarning';
+  NativeTypeScriptSupervisor,
+  loadRuntimeEnvironmentLayers,
+  parseStartOptions,
+  processRestartExitCode,
+  startSupervisorWatchdog,
+} from './start/module.js';
 
-export const processRestartExitCode = 75;
+export {
+  MAX_RESPAWNS_PER_MINUTE,
+  RESPAWN_DELAY_MS,
+  SUPERVISOR_CHILD_EXIT_GRACE_MS,
+  loadRuntimeEnvironmentLayers,
+  parseStartOptions,
+  planRespawn,
+  processRestartExitCode,
+  type RespawnPlan,
+  type StartOptions,
+} from './start/module.js';
+
 const REMOTE_CONSOLE_URL = 'https://console.zhin.dev';
-
-/** Storm guard parity with the `zhin start` daemon: 10 restarts/minute, 3s delay. */
-export const MAX_RESPAWNS_PER_MINUTE = 10;
-export const RESPAWN_DELAY_MS = 3_000;
-/** Gives the Runtime its complete shutdown budget before fencing leaked handles. */
-export const SUPERVISOR_CHILD_EXIT_GRACE_MS = DEFAULT_SHUTDOWN_BUDGET_MS + 1_000;
-const RESPAWN_WINDOW_MS = 60_000;
-
-export interface RespawnPlan {
-  readonly respawn: boolean;
-  readonly attempts: readonly number[];
-}
-
-/**
- * Pure backoff decision for native-TS child respawns.
- * `attempts` holds timestamps of respawns already scheduled; `once` mode never
- * respawns. Exit 75 (restartRequired) always respawns (subject to the storm
- * budget); in daemon mode any crash (non-zero exit / signal) also respawns.
- * Exceeding the per-minute budget stops respawning and the parent exits.
- */
-export function planRespawn(
-  exitCode: number | null,
-  once: boolean,
-  daemon: boolean,
-  attempts: readonly number[],
-  now = Date.now(),
-): RespawnPlan {
-  if (once) return Object.freeze({ respawn: false, attempts });
-  const shouldRespawn = exitCode === processRestartExitCode
-    || (daemon && exitCode !== 0);
-  if (!shouldRespawn) return Object.freeze({ respawn: false, attempts });
-  const recent = attempts.filter((timestamp) => now - timestamp < RESPAWN_WINDOW_MS);
-  if (recent.length >= MAX_RESPAWNS_PER_MINUTE) {
-    return Object.freeze({ respawn: false, attempts: recent });
-  }
-  return Object.freeze({ respawn: true, attempts: Object.freeze([...recent, now]) });
-}
 
 export interface StartCommandOptions {
   readonly root: string;
@@ -110,7 +80,7 @@ function readableCapabilityId(value: string): string {
 export async function runStartCommand(options: StartCommandOptions): Promise<void> {
   // Parse before any relaunch so invalid options fail fast instead of looping.
   const parsed = parseStartOptions(options.args);
-  if (await relaunchWithNativeTypeScript(parsed, options.root)) return;
+  if (await new NativeTypeScriptSupervisor(options.root, parsed).runIfRequired()) return;
   ensureTypeScriptSpecifierRemap();
   const environmentVariables = await loadRuntimeEnvironmentLayers(options.root, parsed.environment);
   const { config, file: configFile } = await loadProjectConfig(options.root);
@@ -349,7 +319,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   const reportStopError = (error: unknown): void => {
     options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
   };
-  const orphanWatchdog = startOrphanWatchdog(() => {
+  const orphanWatchdog = startSupervisorWatchdog(() => {
     void control.stop().then(() => process.exit(0), (error) => {
       reportStopError(error);
       process.exit(1);
@@ -468,252 +438,6 @@ function isConfigDocumentPort(value: unknown): value is ConfigDocumentPort {
     && typeof (value as Partial<ConfigDocumentPort>).read === 'function');
 }
 
-/** Poll parent liveness; when the supervisor (or any parent) is gone, shut down. */
-function startOrphanWatchdog(onOrphaned: () => void): NodeJS.Timeout {
-  const supervisorPid = Number(process.env.ZHIN_SUPERVISOR_PID ?? '');
-  const logger = getLogger('runtime');
-  return setInterval(() => {
-    if (Number.isInteger(supervisorPid) && supervisorPid > 0) {
-      try {
-        process.kill(supervisorPid, 0);
-        return;
-      } catch {
-        // ESRCH — supervisor is gone
-      }
-    } else if (process.ppid && process.ppid !== 1) {
-      return;
-    }
-    logger.error(formatCompact({
-      op: 'orphan_shutdown',
-      reason: Number.isInteger(supervisorPid) && supervisorPid > 0
-        ? `supervisor ${supervisorPid} exited`
-        : 'reparented to init (parent died)',
-    }));
-    onOrphaned();
-  }, 2_000).unref();
-}
-
-function processEnvSource(): Readonly<Record<string, string | undefined>> {
-  const result: Record<string, string | undefined> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(key)) continue;
-    result[key] = value;
-  }
-  return Object.freeze(result);
-}
-
-/**
- * Read project dotenv files into Runtime EnvironmentLayers without changing
- * the CLI process. `.env.<environment>` deliberately overrides `.env`; the
- * Runtime applies that overlay after inherited process variables.
- */
-export async function loadRuntimeEnvironmentLayers(
-  root: string,
-  environment: string,
-): Promise<Readonly<EnvironmentLayers>> {
-  const overlay: Record<string, string> = {};
-  for (const name of ['.env', `.env.${environment}`]) {
-    try {
-      Object.assign(overlay, parseDotenv(await readFile(join(root, name), 'utf8')));
-    } catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') continue;
-      throw error;
-    }
-  }
-  return Object.freeze({
-    base: processEnvSource(),
-    environments: Object.freeze({
-      [environment]: Object.freeze(overlay),
-    }),
-  });
-}
-
-async function relaunchWithNativeTypeScript(parsed: StartOptions, root: string): Promise<boolean> {
-  // The respawned child runs in-process (marker env), so this wrapper only
-  // runs once per supervisor.
-  if (process.env.ZHIN_RUNTIME_CHILD) return false;
-  if (supportsNativeTypeScript() && !parsed.daemon) return false;
-  const [major = 0, minor = 0] = process.versions.node.split('.').map(Number);
-  if (major < 22 || (major === 22 && minor < 6)) {
-    throw new Error(
-      `zhin runtime start requires Node >=22.6.0 for native TypeScript; found ${process.versions.node}`,
-    );
-  }
-  const entry = process.argv[1];
-  if (!entry) throw new Error('Cannot determine the zhin runtime executable path');
-
-  // Daemon supervision: same contract as the legacy `zhin start --daemon` —
-  // supervisor stays alive, writes .zhin.pid (so `zhin stop` works), logs to
-  // file, respawns the bot on crash / exit 75 with storm-guard backoff.
-  const daemon = parsed.daemon;
-  const pidFile = join(root, '.zhin.pid');
-  let stdio: 'inherit' | ['ignore', number, number] = 'inherit';
-  if (daemon) {
-    const logFile = parsed.logFile ?? join(root, '.zhin', 'runtime.log');
-    await mkdir(dirname(logFile), { recursive: true });
-    const fd = openSync(logFile, 'a');
-    stdio = ['ignore', fd, fd];
-    writeFileSync(pidFile, String(process.pid));
-    getLogger('runtime').info(formatCompact({
-      op: 'daemon_start', pid: process.pid, log: logFile,
-      hint: `stop: zhin stop 或 kill -TERM ${process.pid}`,
-    }));
-  }
-  const removePidFile = (): void => {
-    if (!daemon) return;
-    try {
-      if (readFileSync(pidFile, 'utf8').trim() === String(process.pid)) rmSync(pidFile, { force: true });
-    } catch { /* already gone */ }
-  };
-
-  // Exit 75 (restartRequired) has no supervisor here — consume it ourselves by
-  // respawning the child with storm-guard backoff until the budget runs out.
-  let attempts: readonly number[] = [];
-  let interrupted = false;
-  let activeChild: ChildProcess | undefined;
-  let forceChildExitTimer: ReturnType<typeof setTimeout> | undefined;
-  // Forward the other terminal signals too, and never leave the child behind:
-  // a bot whose wrapper died keeps platform connections (and file watchers)
-  // alive as a zombie.
-  const forward = (signal: NodeJS.Signals) => (): void => {
-    interrupted = true;
-    const child = activeChild;
-    if (!child) return;
-    child.kill(signal);
-    if (!forceChildExitTimer) {
-      forceChildExitTimer = setTimeout(() => {
-        if (activeChild === child && child.exitCode === null && child.signalCode === null) {
-          child.kill('SIGKILL');
-        }
-      }, SUPERVISOR_CHILD_EXIT_GRACE_MS);
-    }
-  };
-  const onSigint = forward('SIGINT');
-  const onSigterm = forward('SIGTERM');
-  const onSighup = forward('SIGHUP');
-  const onExit = (): void => {
-    try { activeChild?.kill('SIGTERM'); } catch { /* already gone */ }
-    removePidFile();
-  };
-  process.on('SIGINT', onSigint);
-  process.on('SIGTERM', onSigterm);
-  process.on('SIGHUP', onSighup);
-  process.on('exit', onExit);
-  try {
-    for (;;) {
-      const child = spawn(process.execPath, [
-        '--experimental-strip-types',
-        DISABLE_EXPERIMENTAL_WARNING_FLAG,
-        entry,
-        ...process.argv.slice(2),
-      ], {
-        stdio,
-        // Lets the child self-terminate if this wrapper dies without forwarding.
-        env: {
-          ...process.env,
-          ZHIN_SUPERVISOR_PID: String(process.pid),
-          ZHIN_RUNTIME_CHILD: '1',
-        },
-      });
-      activeChild = child;
-      const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
-        (resolve, reject) => {
-          child.once('error', reject);
-          child.once('exit', (code, signal) => resolve({ code, signal }));
-        },
-      );
-      if (forceChildExitTimer) clearTimeout(forceChildExitTimer);
-      forceChildExitTimer = undefined;
-      activeChild = undefined;
-      if (interrupted) {
-        process.exitCode = result.code ?? 130;
-        return true;
-      }
-      // Daemon treats any crash (signal or non-zero exit) as respawnable;
-      // foreground keeps the historical behavior (signal = fatal).
-      if (result.signal && !daemon) {
-        throw new Error(`Native TypeScript child exited from ${result.signal}`);
-      }
-      const plan = planRespawn(result.code ?? 1, parsed.once, daemon, attempts);
-      attempts = plan.attempts;
-      if (!plan.respawn) {
-        process.exitCode = result.code ?? 1;
-        return true;
-      }
-      if (daemon) {
-        getLogger('runtime').warn(formatCompact({
-          op: 'daemon_respawn',
-          code: result.code,
-          signal: result.signal,
-          attempts: attempts.length,
-        }));
-      }
-      await new Promise((resolve) => { setTimeout(resolve, RESPAWN_DELAY_MS); });
-      if (interrupted) {
-        process.exitCode = 130;
-        return true;
-      }
-    }
-  } finally {
-    if (forceChildExitTimer) clearTimeout(forceChildExitTimer);
-    removePidFile();
-    process.off('SIGINT', onSigint);
-    process.off('SIGTERM', onSigterm);
-    process.off('SIGHUP', onSighup);
-    process.off('exit', onExit);
-  }
-}
-
-interface StartOptions {
-  readonly once: boolean;
-  readonly noWatch: boolean;
-  readonly open: boolean;
-  readonly environment: string;
-  readonly mode: RuntimeMode;
-  readonly daemon: boolean;
-  readonly logFile?: string;
-}
-
-export function parseStartOptions(args: readonly string[]): StartOptions {
-  let once = false;
-  let noWatch = false;
-  let openConsole = false;
-  let environment = 'development';
-  let mode: RuntimeMode = 'development';
-  let daemon = false;
-  let logFile: string | undefined;
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    if (argument === '--') continue;
-    if (argument === '--once') once = true;
-    else if (argument === '--no-watch') noWatch = true;
-    else if (argument === '--open') openConsole = true;
-    else if (argument === '--daemon' || argument === '-d') daemon = true;
-    else if (argument === '--log-file') {
-      logFile = args[index + 1] ?? '';
-      index += 1;
-    } else if (argument?.startsWith('--log-file=')) {
-      logFile = argument.slice('--log-file='.length);
-    } else if (argument === '--environment') {
-      environment = args[index + 1] ?? '';
-      index += 1;
-    } else if (argument?.startsWith('--environment=')) {
-      environment = argument.slice('--environment='.length);
-    } else if (argument === '--mode') {
-      mode = parseMode(args[index + 1]);
-      index += 1;
-    } else if (argument?.startsWith('--mode=')) {
-      mode = parseMode(argument.slice('--mode='.length));
-    } else {
-      throw new Error(`Unknown start option: ${String(argument)}`);
-    }
-  }
-  if (!/^[a-z0-9][a-z0-9-]*$/u.test(environment)) {
-    throw new Error(`Invalid environment name: ${environment || '<empty>'}`);
-  }
-  return { once, noWatch, open: openConsole, environment, mode, daemon, logFile };
-}
-
 function printFirstRunGuidance(httpAddress: string, tokenConfigured: boolean): void {
   const startup = getLogger('setup');
   const consoleUrl = `${REMOTE_CONSOLE_URL}?host=${encodeURIComponent(`http://${httpAddress}`)}`;
@@ -731,11 +455,6 @@ function openBrowser(url: string): void {
       error: error instanceof Error ? error.message : String(error),
     }));
   });
-}
-
-function parseMode(value: string | undefined): RuntimeMode {
-  if (value === 'development' || value === 'test' || value === 'production') return value;
-  throw new Error(`Invalid Runtime mode: ${value || '<empty>'}`);
 }
 
 /**
