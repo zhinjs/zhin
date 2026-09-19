@@ -25,8 +25,8 @@ Root Capability Seam ─┘                         │
 
 `CapabilityIngress` reads `capabilitySeamToken` from the Root resources in one fixed Runtime
 snapshot. It projects the services into the same capability snapshot as Tool and Skill Features.
-Only `TurnToolRuntime` executes a projected Tool. The deprecated `executeTool(name, args)` method
-is retained for source compatibility, but always returns a fail-closed migration error.
+There is no independent `executeTool(name, args)` path for Seam Tools. Only `TurnToolRuntime`
+executes a projected Tool.
 
 This preserves the production invariants:
 
@@ -83,7 +83,7 @@ export class SearchService implements ToolService {
 
 A `SkillService` is a declarative catalog. `catalog()` returns names and summaries, while
 `describe()` returns complete instructions. Skill loading, prompt assembly, and Tool selection
-remain under the Agent capability plan. Direct Skill invocation is deprecated and fail-closed.
+remain under the Agent capability plan; direct Skill invocation is not part of the contract.
 
 ```ts
 import type { SkillService } from '@zhin.js/agent'
@@ -132,9 +132,9 @@ export default definePlugin({
 Do not store `SeamIntegration` in module-level state or mutate a retired Generation. Dynamic
 provider changes should produce a new Runtime Generation.
 
-The old `seamIntegrationToken` Symbol remains only for source compatibility and is not consumed
-by Plugin Runtime Scope. Migrate to `capabilitySeamToken`. The old `executeTool()` and
-`invokeSkill()` methods also return fail-closed errors.
+Capability Seam enters Plugin Runtime Scope only through `capabilitySeamToken`. `SeamIntegration`
+only registers providers and projects capabilities; it does not expose direct `executeTool()` or
+`invokeSkill()` methods.
 
 ## Scope and conflicts
 

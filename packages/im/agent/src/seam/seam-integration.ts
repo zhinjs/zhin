@@ -3,11 +3,7 @@
 import type { ToolInvocationContext } from '@zhin.js/tool';
 import { SeamProviderRegistry, type SeamScope } from './seam-provider.js';
 import type { ToolService, ToolSchema, ToolExecutionResult } from './tool-service.js';
-import type {
-  SkillService,
-  SkillMetadata,
-  SkillInvocationResult,
-} from './skill-service.js';
+import type { SkillService, SkillMetadata } from './skill-service.js';
 
 export interface ProjectedSeamTool {
   readonly providerId: string;
@@ -59,22 +55,6 @@ export class SeamIntegration {
     }));
   }
 
-  /**
-   * @deprecated Direct execution would bypass TurnToolRuntime. This
-   * compatibility method always rejects; project the provider through
-   * CapabilityIngress and execute the resulting Tool capability.
-   */
-  async executeTool(
-    _scope: SeamScope | 'global',
-    toolName: string,
-    _args: unknown,
-  ): Promise<ToolExecutionResult> {
-    return {
-      success: false,
-      error: `Direct Seam execution is disabled for Tool: ${toolName}`,
-    };
-  }
-
   registerSkillService(scope: SeamScope | 'global', service: SkillService): () => void {
     return this.skillRegistry.register(scope, service);
   }
@@ -100,18 +80,6 @@ export class SeamIntegration {
       }
     }
     return projected;
-  }
-
-  /** @deprecated Skills are declarative; load their instructions and execute Tools. */
-  async invokeSkill(
-    _scope: SeamScope | 'global',
-    skillId: string,
-    _input: unknown,
-  ): Promise<SkillInvocationResult> {
-    return {
-      success: false,
-      error: `Direct Skill invocation is disabled: ${skillId}`,
-    };
   }
 
   dispose(): void {

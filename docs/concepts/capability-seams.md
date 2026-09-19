@@ -24,7 +24,7 @@ Root Capability Seam ─┘                         │
 
 `CapabilityIngress` 从固定的 Runtime snapshot 读取 Root 的 `capabilitySeamToken`，把服务投影为与
 Tool / Skill Feature 相同的 capability snapshot。Seam Tool 不存在独立的
-`executeTool(name, args)` 执行通道（遗留同名方法只返回 fail-closed 迁移错误）；只有
+`executeTool(name, args)` 执行通道；只有
 `TurnToolRuntime` 可以执行投影后的 Tool。因此：
 
 - 当前 generation 退役或 operation 结束后，Provider 不再可执行；
@@ -129,8 +129,8 @@ export default definePlugin({
 不要在模块顶层保存 `SeamIntegration`，也不要在 candidate 发布后向旧 Generation 的实例追加
 Provider。动态变化应生成新的 Runtime Generation。
 
-旧 `seamIntegrationToken` Symbol 仅为源码兼容保留，Plugin Runtime Scope 不会消费它。迁移时改用
-`capabilitySeamToken`；旧 `executeTool()` / `invokeSkill()` 方法也只返回 fail-closed 错误。
+Capability Seam 只通过 `capabilitySeamToken` 进入 Plugin Runtime Scope。`SeamIntegration` 只负责
+Provider 注册和能力投影，不提供 `executeTool()` / `invokeSkill()` 直接执行方法。
 
 ## 作用域和冲突
 
