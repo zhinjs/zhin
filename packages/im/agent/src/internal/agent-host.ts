@@ -3,7 +3,6 @@
  * 成员按域拆为窄接口，ZhinAgentPrivate 组合之；消费方优先用窄接口形参。
  */
 import type { AIProvider, Usage, OutputElement, AgentSessionStore, ContextRepository, IMSessionStore, MemoryAgentSessionStore, MemoryIMSessionStore, RateLimiter, ModelRegistry } from '@zhin.js/ai';
-import type { Plugin } from '@zhin.js/core';
 import type { Tool, Message } from '../resource-hub/types.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { SkillSystem } from '../skill/skill-system.js';
@@ -103,4 +102,4 @@ export interface ZhinAgentPrivate
   readonly deferred: DeferredTurnState;
 }
 
-export type { OnChunkCallback, OutputElement, Tool, Message, Plugin };
+export type { OnChunkCallback, OutputElement, Tool, Message };

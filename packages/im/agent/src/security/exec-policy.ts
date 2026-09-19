@@ -432,7 +432,7 @@ function resolveRequesterRole(): ToolRequesterRole {
   if (!commMessage?.$adapter || !commMessage?.$endpoint || !commMessage?.$sender?.id) return 'unknown';
 
   try {
-    return resolveToolRequesterRole(null, commMessage);
+    return resolveToolRequesterRole(commMessage);
   } catch {
     // fail-closed: treat as unknown if plugin system unavailable
     return 'unknown';

@@ -1,6 +1,6 @@
 import type { AgentTool } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
-import type { Message, Plugin } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import type {
   AgentCoreToolExecutionOutcome,
   ToolExecutionAuthority,
@@ -9,30 +9,28 @@ import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { runWithCommMessage } from '../security/comm-message-context.js';
 import { isApprovalPortAvailable } from '../session/approval-port.js';
 import { runWithDeferredTurnController, type DeferredTurnController } from '../tool-catalog/deferred-turn-controller.js';
-import { registerBuiltinPolicyExtractors } from './builtin-policy-extractors.js';
+import { resolveBuiltinToolPolicyInput } from './builtin-policy-extractors.js';
 import { runToolApprovalGate } from './tool-approval-gate.js';
 import { createToolRuntime } from './tool-runtime.js';
 
-export interface ClassicToolExecutionAuthorityOptions {
+export interface ToolExecutionAuthorityOptions {
   readonly host: ZhinAgentPrivate;
   readonly sessionId: string;
   readonly message: Message;
   readonly signal: AbortSignal;
   readonly generation: number;
   readonly rejectApproval: boolean;
-  readonly plugin?: Plugin;
   readonly deferredController?: DeferredTurnController;
   readonly journal?: AgentRunJournal;
 }
 
 /**
- * Adapter for the remaining classic Tool definitions. AgentCore itself never
+ * Adapter for the Tool definitions. AgentCore itself never
  * reads Message, policy configuration, or approval transports through this seam.
  */
-export function createClassicToolExecutionAuthority(
-  options: ClassicToolExecutionAuthorityOptions,
+export function createToolExecutionAuthority(
+  options: ToolExecutionAuthorityOptions,
 ): ToolExecutionAuthority {
-  registerBuiltinPolicyExtractors();
   const runtime = createToolRuntime({
     generation: options.generation,
     signal: options.signal,
@@ -42,7 +40,7 @@ export function createClassicToolExecutionAuthority(
       ? { append: (event) => { options.journal!.append(event); } }
       : undefined,
     config: options.host.config,
-    hostPlugin: options.plugin,
+    policyInputResolver: resolveBuiltinToolPolicyInput,
   });
 
   return Object.freeze({
@@ -59,7 +57,6 @@ export function createClassicToolExecutionAuthority(
           sessionId: options.sessionId,
           commMessage: options.message,
           policy: tool.approval,
-          plugin: options.plugin,
           bus: options.host.resourceHub?.agentStreamBus,
           port: isApprovalPortAvailable(options.host.approvalPort)
             ? options.host.approvalPort

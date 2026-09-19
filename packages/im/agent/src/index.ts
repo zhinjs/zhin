@@ -291,15 +291,15 @@ export {
 export { createBuiltinTools, type BuiltinToolsOptions } from './builtin-tools.js';
 export {
   createToolRuntime,
-  registerPolicyExtractor,
   type ToolRuntime,
   type ToolRuntimeTurnContext,
   type ToolRuntimeJournalPort,
   type ToolCallContext,
   type ToolExecutionOutcome,
   type ToolPolicyInputExtractor,
+  type ToolPolicyInputResolver,
 } from './tool/tool-runtime.js';
-export { registerBuiltinPolicyExtractors } from './tool/builtin-policy-extractors.js';
+export { resolveBuiltinToolPolicyInput } from './tool/builtin-policy-extractors.js';
 export { stampToolGeneration } from './tool/tool-system.js';
 export { FileJournalStore } from './journal/index.js';
 export { PersistentTurnJournal } from './journal/index.js';
@@ -553,6 +553,7 @@ export type {
   AIEventPath,
   AIEventPayload,
 } from './ai-event-contract.js';
+export { AgentEventBus } from './event/ai-event-bus.js';
 
 export { registerEndpointKeyColumnMigrationHook } from './init/upgrade-endpoint-id-schema.js';
 
@@ -566,8 +567,6 @@ export {
   resolveActivityEventTargets,
   enableActivityFeedbackForBot,
   isGenericActivityFeedbackManager,
-  activityFeedbackAiBus,
-  ActivityFeedbackAIBus,
   resolveSubagentActivityTag,
   formatSubagentActivityPrefix,
   withSubagentActivityPrefix,

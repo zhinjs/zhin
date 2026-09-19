@@ -67,9 +67,8 @@ describe('BashBuiltinTool', () => {
   });
 
   it('execute 与 normalizeTool 绑定 context 时可调用', async () => {
-    const host = { root: { inject: () => undefined } } as import('@zhin.js/core').Plugin;
     const mockExec: BashExecAsync = async () => ({ stdout: 'via-tool\n', stderr: '' });
-    const tool = new BashBuiltinTool(mockExec, { useSandbox: false, plugin: host }).toTool();
+    const tool = new BashBuiltinTool(mockExec, { useSandbox: false }).toTool();
     const ctx = mockCommMessage({
       adapter: 'process',
       senderId: '1',

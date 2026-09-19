@@ -2,7 +2,7 @@
  * ZhinAgent host 契约类型 SSOT — ideal 模块与 internal/agent-host 共用，不依赖 zhin-agent 门面。
  */
 import type { Usage } from '@zhin.js/ai';
-import type { Message, Plugin } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
 import type { AIEventPayload } from '../ai-event-contract.js';
 
@@ -42,7 +42,6 @@ export interface HostTurnMetrics {
 }
 
 export interface HostEventEmitter {
-  on(eventType: string, handler: (event: unknown) => void | Promise<void>): () => void;
   dispatch(event: string, payload: AIEventPayload): Promise<void>;
   emit(event: string, payload: AIEventPayload): void;
   createPayload(
@@ -51,8 +50,6 @@ export interface HostEventEmitter {
     mode: AIEventPayload['mode'],
     extra?: Partial<AIEventPayload>,
   ): AIEventPayload;
-  setHostPlugin(plugin: Plugin): void;
-  getHostPlugin(): Plugin | null;
 }
 
 export interface HostPromptController {

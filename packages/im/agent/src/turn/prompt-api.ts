@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { resolveIMSessionIdFromMessage, type Plugin } from '@zhin.js/core';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { AgentMessage, MediaContentBlock, OutputElement, UserMessage } from '@zhin.js/ai';
 import type { Message } from '../resource-hub/types.js';
 import { PromptAccessDeniedError } from './prompt-access.js';
@@ -8,18 +8,12 @@ import { normalizePromptMessages } from './prompt-input.js';
 import { processTextTurn } from '../turn/turn-pipeline.js';
 import type { OnChunkCallback } from '../config/index.js';
 import type { PromptController } from '../turn/prompt-controller.js';
-import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 export function assertMasterForPromptControl(
-  emitter: ZhinAgentEventEmitter,
   commMessage: Message,
 ): void {
-  const plugin = emitter.getHostPlugin();
-  if (!plugin) {
-    throw new PromptAccessDeniedError('steer/followUp 需要有效的 master 上下文');
-  }
   try {
-    const role = resolveToolRequesterRole(plugin, commMessage);
+    const role = resolveToolRequesterRole(commMessage);
     if (role !== 'master') {
       throw new PromptAccessDeniedError('steer/followUp 仅 master 可用');
     }
@@ -56,22 +50,20 @@ export async function runPromptTurn(
 
 export function steerMessage(
   promptController: PromptController,
-  emitter: ZhinAgentEventEmitter,
   message: AgentMessage,
   commMessage: Message,
 ): void {
-  assertMasterForPromptControl(emitter, commMessage);
+  assertMasterForPromptControl(commMessage);
   const sessionKey = resolveIMSessionIdFromMessage(commMessage);
   promptController.steer(sessionKey, message);
 }
 
 export function followUpMessage(
   promptController: PromptController,
-  emitter: ZhinAgentEventEmitter,
   message: AgentMessage,
   commMessage: Message,
 ): void {
-  assertMasterForPromptControl(emitter, commMessage);
+  assertMasterForPromptControl(commMessage);
   const sessionKey = resolveIMSessionIdFromMessage(commMessage);
   promptController.followUp(sessionKey, message);
 }

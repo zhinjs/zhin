@@ -5,6 +5,7 @@ import {
   outboundHostToken,
   type GenerationAdmissionGate,
 } from 'zhin.js';
+import { agentEventBusToken } from '@zhin.js/agent/runtime';
 import { getLogger } from '@zhin.js/logger';
 import {
   loadActivityFeedbackServiceConfig,
@@ -26,7 +27,7 @@ const activityFeedbackAdmissionToken = createToken<GenerationAdmissionGate>(
 /**
  * Activity Feedback service — Plugin Runtime entry.
  *
- * Subscribes AI lifecycle events via `activityFeedbackAiBus`.
+ * Subscribes AI lifecycle events via the generation-owned Agent event bus.
  * When Root provides `outboundHostToken`, typing/status text uses
  * ImRuntime.sendEndpointMessage; otherwise phases no-op.
  */
@@ -50,6 +51,10 @@ export default definePlugin<ActivityFeedbackServiceConfig>({
       );
       return;
     }
+    if (!context.resources.has(agentEventBusToken)) {
+      logger.debug('[ActivityFeedback] disabled: generation Agent event bus is required');
+      return;
+    }
     const access = createOutboundEndpointAccess(outbound, logger);
 
     const orchestrator = createActivityFeedbackOrchestratorForRuntime(
@@ -60,6 +65,7 @@ export default definePlugin<ActivityFeedbackServiceConfig>({
     const admission = createGenerationAdmissionGate();
     context.resources.provide(activityFeedbackAdmissionToken, admission);
     const dispose = bindActivityFeedbackToAIEventBus(
+      context.resources.use(agentEventBusToken),
       orchestrator,
       admission,
       outbound.runWithView.bind(outbound),

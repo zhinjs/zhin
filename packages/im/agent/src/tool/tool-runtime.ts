@@ -11,7 +11,7 @@
  * ToolRuntime 按 turn 创建（createToolRuntime），绑定 turn 级上下文。
  */
 import type { AgentTool } from '@zhin.js/ai';
-import type { Message, Plugin } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../config/index.js';
 import {
   runToolPolicies,
@@ -35,7 +35,7 @@ export interface ToolRuntimeTurnContext {
   readonly commMessage?: Message;
   readonly journal?: ToolRuntimeJournalPort;
   readonly config?: Required<ZhinAgentConfig>;
-  readonly hostPlugin?: Plugin;
+  readonly policyInputResolver?: ToolPolicyInputResolver;
   readonly isGenerationValid?: (gen: number) => boolean;
 }
 
@@ -58,23 +58,11 @@ export type ToolPolicyInputExtractor = (
   toolName: string,
   args: Record<string, unknown>,
   commMessage?: Message,
-  hostPlugin?: Plugin,
 ) => ToolPolicyInput;
-
-// ── 默认策略提取器注册表 ─────────────────────────────────────────
-
-const extractorRegistry = new Map<string, ToolPolicyInputExtractor>();
-
-export function registerPolicyExtractor(toolName: string, extractor: ToolPolicyInputExtractor): void {
-  extractorRegistry.set(toolName, extractor);
-}
+export type ToolPolicyInputResolver = ToolPolicyInputExtractor;
 
 function defaultExtractor(toolName: string, _args: Record<string, unknown>, commMessage?: Message): ToolPolicyInput {
   return { toolName, commMessage };
-}
-
-function resolveExtractor(toolName: string): ToolPolicyInputExtractor {
-  return extractorRegistry.get(toolName) ?? defaultExtractor;
 }
 
 // ── ToolRuntime ─────────────────────────────────────────────────────
@@ -127,8 +115,8 @@ export function createToolRuntime(ctx: ToolRuntimeTurnContext): ToolRuntime {
       }
 
       // 3. 安全策略
-      const extractor = resolveExtractor(toolName);
-      const policyInput = extractor(toolName, args, ctx.commMessage, ctx.hostPlugin);
+      const extractor = ctx.policyInputResolver ?? defaultExtractor;
+      const policyInput = extractor(toolName, args, ctx.commMessage);
       if (ctx.config) policyInput.config = ctx.config;
       const policyResult = runToolPolicies(policyInput);
       const policyAudit = policyResult.decisions;

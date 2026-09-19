@@ -20,7 +20,7 @@
  * bash-tool 旧链不含 exec-policy，因此 bash 调用方不传 config，exec-policy 层不会激活。
  */
 
-import type { Message, Plugin } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../config/index.js';
 import { checkMemoryWritePath } from '../memory-layers.js';
 import {
@@ -76,8 +76,6 @@ export interface ToolPolicyInput {
   fileOperation?: FileOperation;
   /** bash 命令（exec-policy 与 bash 三层用） */
   command?: string;
-  /** bash-file-permission 层解析角色用的宿主插件（与 bash-tool 构造注入一致） */
-  hostPlugin?: Plugin;
   /**
    * 读类工具显式启用 blocked-device-path 层（仅 read_file；
    * analyze_media 不启用以保持旧行为；拒绝文案也用读类措辞）。
@@ -422,7 +420,7 @@ const TOOL_POLICIES: ToolPolicyLayer[] = sortByPriority([
       // 与 checkMemoryWritePath 对齐：会话记忆写对任意角色放行（避免矩阵/危险工具层先拒）
       if (isPermittedMemoryToolWrite(input)) {
         const role = input.commMessage
-          ? resolveToolRequesterRole(input.hostPlugin ?? null, input.commMessage)
+          ? resolveToolRequesterRole(input.commMessage)
           : 'unknown';
         return { allowed: true, role };
       }
@@ -445,7 +443,7 @@ const TOOL_POLICIES: ToolPolicyLayer[] = sortByPriority([
     check: (input) => {
       if (isPermittedMemoryToolWrite(input)) {
         const role = input.commMessage
-          ? resolveToolRequesterRole(input.hostPlugin ?? null, input.commMessage)
+          ? resolveToolRequesterRole(input.commMessage)
           : 'unknown';
         return { allowed: true, role };
       }
@@ -498,10 +496,9 @@ const TOOL_POLICIES: ToolPolicyLayer[] = sortByPriority([
     priority: 35,
     applies: (input) => input.toolName === 'bash' && Boolean(input.command),
     check: (input) => {
-      // 与 bash-tool 旧链一致：hostPlugin + commMessage 齐全才解析角色，否则 'unknown'
       const requesterRole: ToolRequesterRole =
-        input.commMessage && input.hostPlugin
-          ? resolveToolRequesterRole(input.hostPlugin, input.commMessage)
+        input.commMessage
+          ? resolveToolRequesterRole(input.commMessage)
           : 'unknown';
       const role = toolRequesterRoleToFileRole(requesterRole);
       const permResult = checkBashFilePermission(role, input.command!);

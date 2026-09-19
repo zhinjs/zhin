@@ -460,12 +460,11 @@ describe('policy-facade', () => {
     });
 
     it('普通用户删除命令在 bash-file-permission 拒绝（门面侧验证）', async () => {
-      const plugin = mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
       const cmd = `rm -rf ${path.join(tmpDir, 'x')}`;
 
       const facadeMsg = toolPolicyResultToMessage(
-        runToolPolicies({ toolName: 'bash', command: cmd, commMessage: ctx, hostPlugin: plugin }),
+        runToolPolicies({ toolName: 'bash', command: cmd, commMessage: ctx }),
         'bash',
       );
       expect(facadeMsg).toBe('Error: 当前角色为「普通用户」，仅允许读取文件；请求的操作「delete」被拒绝。');

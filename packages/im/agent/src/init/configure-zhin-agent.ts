@@ -20,7 +20,7 @@ export type ConfigureZhinAgentTarget = Pick<
   | 'config' | 'skillRegistry' | 'skillSystem' | 'resourceHub' | 'agentCore' | 'toolSystem'
   | 'contextSystem' | 'sessionSystem'
   | 'imSessionStore' | 'agentSessionStore' | 'contextRepository'
-  | 'modelRegistry' | 'subagentSystem' | 'emitter' | 'activeBinding'
+  | 'modelRegistry' | 'subagentSystem' | 'activeBinding'
   | 'bootstrapContext' | 'globalContext' | 'skillsSummaryXML' | 'deferred'
 > & {
   /** 接口外的运行时模块（declare 在类上，不经 ZhinAgentPrivate 暴露） */
@@ -58,7 +58,6 @@ export function applyZhinAgentConfigure(
     target.modelRegistry = deps.modelRegistry;
     target.subagentSystem?.setModelRegistry(deps.modelRegistry);
   }
-  if (deps.hostPlugin !== undefined) target.emitter.setHostPlugin(deps.hostPlugin);
   if (deps.providerResolver !== undefined) {
     target.providerResolver = deps.providerResolver;
     target.wireLlmApiLayer();

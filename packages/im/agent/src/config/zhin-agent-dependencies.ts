@@ -7,7 +7,6 @@ import type {
   MemoryIMSessionStore,
   ModelRegistry,
 } from '@zhin.js/ai';
-import type { Plugin } from '@zhin.js/core';
 import type { AgentCore } from '../core/agent-core.js';
 import type { ToolSystem } from '../tool/tool-system.js';
 import type { ContextSystem } from '../context/context-system.js';
@@ -33,7 +32,6 @@ export interface ZhinAgentDependencies {
   agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
   contextRepository: ContextRepository;
   modelRegistry: ModelRegistry;
-  hostPlugin: Plugin;
   providerResolver: (alias: string) => AIProvider;
   activeBinding: ResolvedAgentBinding;
   subagentSender: SubagentResultSender;

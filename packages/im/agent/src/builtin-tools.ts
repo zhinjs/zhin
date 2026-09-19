@@ -12,7 +12,7 @@
  * 发现逻辑已拆分到 discovery/skills.ts、agents.ts、tools.ts
  */
 
-import type { Plugin, ToolInput } from '@zhin.js/core';
+import type { ToolInput } from '@zhin.js/core';
 import { getDataDir } from './discovery/utils.js';
 import { createReadFileTool } from './builtin/read-file-tool.js';
 import { createWriteFileTool } from './builtin/write-file-tool.js';
@@ -30,8 +30,6 @@ import { createAnalyzeMediaTool } from './builtin/analyze-media-tool.js';
 import { createKnowledgeSearchTool } from './builtin/knowledge-search-tool.js';
 
 export interface BuiltinToolsOptions {
-  /** Classic Plugin authority still required by the legacy bash definition. */
-  plugin: Plugin;
   /** 知识库目录（注册 knowledge_search 工具） */
   knowledgeDir?: string;
 }
@@ -41,7 +39,6 @@ export interface BuiltinToolsOptions {
  */
 export function createBuiltinTools(options: BuiltinToolsOptions): ToolInput[] {
   const DATA_DIR = getDataDir();
-  const pluginRef = options?.plugin;
 
   const tools: ToolInput[] = [];
 
@@ -52,7 +49,7 @@ export function createBuiltinTools(options: BuiltinToolsOptions): ToolInput[] {
   tools.push(createListDirTool());
   tools.push(createGlobTool());
   tools.push(createGrepTool());
-  tools.push(createBashTool(pluginRef.root ?? pluginRef));
+  tools.push(createBashTool());
   tools.push(createWebSearchTool());
   tools.push(createWebFetchTool());
   tools.push(createTodoReadTool(DATA_DIR));

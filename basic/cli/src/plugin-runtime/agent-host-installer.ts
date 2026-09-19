@@ -28,6 +28,7 @@ import { databaseRootHostToken, rootPluginId, type DisposeStack, type PluginId, 
 import {
   AIService,
   ZhinAgent,
+  AgentEventBus,
   composeZhinAgentRuntime,
   AgentResourceHub,
   discoverWorkspaceAgents,
@@ -130,6 +131,7 @@ import {
 } from '@zhin.js/agent';
 import {
   agentHostToken,
+  agentEventBusToken,
   CapabilityIngress,
   projectHostTool,
   projectHostMcp,
@@ -1011,6 +1013,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       zhinAgent = created.agent;
       composedRuntime = created.runtime;
       lifecycle.add(() => created.agent.dispose());
+      lifecycle.add(() => created.events.clear());
+      resources.provide(agentEventBusToken, created.events);
       seedPresets = created.seedPresets;
 
       // Console reads the same replayed facts as tools; it never receives the
@@ -4061,15 +4065,17 @@ function createRuntimeZhinAgent(
   approvalPort?: ApprovalPort,
 ): {
   agent: ZhinAgent;
+  events: AgentEventBus;
   runtime: ReturnType<typeof composeZhinAgentRuntime>;
   seedPresets: () => Promise<number>;
 } {
   const binding = service.getBindingRegistry().requireZhinBinding();
   const provider = service.getProvider(binding.providerAlias);
+  const events = new AgentEventBus();
   const agent = new ZhinAgent(provider, {
     ...(service.getAgentConfig() ?? {}),
     chatModel: binding.model,
-  });
+  }, events);
   asPrivate(agent).approvalPort = approvalPort;
   const composed = composeZhinAgentRuntime(agent, provider, createRuntimeProactiveOutbound(im));
   const resourceHub = new AgentResourceHub();
@@ -4103,6 +4109,7 @@ function createRuntimeZhinAgent(
   // immediately when sessions.useDatabase === false / no DatabaseHost).
   return {
     agent,
+    events,
     runtime: composed,
     seedPresets: () => seedResourceHubAgentPresets(resourceHub, projectRoot),
   };

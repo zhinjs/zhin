@@ -1,5 +1,6 @@
 export * from './agent-runtime.js';
 export * from './agent-host-port.js';
+export * from './agent-event-bus.js';
 export * from './agent-trace-runtime.js';
 export type { AssistantRuntimeHandle } from '../assistant/runtime-contract.js';
 export type {

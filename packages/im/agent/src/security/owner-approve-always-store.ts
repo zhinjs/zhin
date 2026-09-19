@@ -9,7 +9,7 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { type Adapter, type Message, type Plugin, hasSenderRole, resolveSubjectRoles, senderRolesFromMessage } from '@zhin.js/core';
+import { type Adapter, type Message, type Plugin, hasSenderRole, senderRolesFromMessage } from '@zhin.js/core';
 import { getDataDir } from '../discovery/utils.js';
 export const OWNER_APPROVE_ALWAYS_TOOL = 'bash' as const;
 
@@ -171,27 +171,7 @@ export function getEndpointMaster(plugin: Plugin | null | undefined, commMessage
   }
 }
 
-function normalizeIdList(input: unknown): string[] {
-  if (Array.isArray(input)) return input.map((v) => String(v)).filter(Boolean);
-  if (typeof input === 'string') {
-    return input
-      .split(/[\s,]+/)
-      .map((v) => v.trim())
-      .filter(Boolean);
-  }
-  return [];
-}
-
-function getEndpointTrustedIds(plugin: Plugin, commMessage: Message): string[] {
-  const root = plugin.root ?? plugin;
-  const adapter = root.inject(commMessage.$adapter) as Adapter | undefined;
-  const endpoint = adapter?.endpoints?.get(commMessage.$endpoint);
-  const endpointConfig = (endpoint?.$config as Record<string, unknown> | undefined) ?? {};
-  return normalizeIdList(endpointConfig.trusted);
-}
-
 export function resolveToolRequesterRole(
-  plugin: Plugin | null | undefined,
   commMessage: Message,
 ): ToolRequesterRole {
   const roles = senderRolesFromMessage(commMessage);
@@ -200,24 +180,10 @@ export function resolveToolRequesterRole(
     if (hasSenderRole(roles, 'trusted')) return 'trusted';
     return 'other';
   }
-  if (plugin) {
-    try {
-      const resolved = resolveSubjectRoles(plugin.root ?? plugin, commMessage);
-      if (hasSenderRole(resolved.roles, 'master')) return 'master';
-      if (hasSenderRole(resolved.roles, 'trusted')) return 'trusted';
-      return 'other';
-    } catch {
-      /* fall through */
-    }
-  }
   if (!commMessage.$adapter || !commMessage.$endpoint || !commMessage.$sender?.id) return 'unknown';
   const senderId = String(commMessage.$sender.id);
-  const masterId = getEndpointMaster(plugin, commMessage);
+  const masterId = getEndpointMaster(null, commMessage);
   if (masterId && senderId === String(masterId)) return 'master';
-  if (plugin) {
-    const trusted = getEndpointTrustedIds(plugin, commMessage);
-    if (trusted.includes(senderId)) return 'trusted';
-  }
   return 'other';
 }
 

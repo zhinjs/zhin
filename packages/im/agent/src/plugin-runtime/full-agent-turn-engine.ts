@@ -1,7 +1,6 @@
 import { createUserMessage, renderContextMessage, type AgentMessage, type ContextMessage, type Usage } from '@zhin.js/ai';
 import type { AgentDescriptor } from '@zhin.js/agent-feature';
 import type { SkillDescriptor } from '@zhin.js/skill';
-import { activityFeedbackAiBus } from '../activity-feedback/ai-bus.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/inbound-media.js';
 import { isTurnTerminalEvent, type TurnEndEvent, type TurnEvent, type TurnTerminalEvent } from '../event/turn-event.js';
@@ -458,11 +457,7 @@ function emitActivityEvent(
   event: string,
   payload: AIEventPayload,
 ): void {
-  if (host.emitter) {
-    host.emitter.emit(event, payload);
-    return;
-  }
-  activityFeedbackAiBus.emit(event, payload);
+  host.emitter.emit(event, payload);
 }
 
 function emitActivityStop(

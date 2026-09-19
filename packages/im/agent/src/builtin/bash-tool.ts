@@ -3,7 +3,7 @@
  */
 import { exec, type ExecOptions } from 'node:child_process';
 import { promisify } from 'node:util';
-import { type Plugin, type Tool, type Message, type ToolParametersSchema, type ToolResult } from '@zhin.js/core';
+import { type Tool, type Message, type ToolParametersSchema, type ToolResult } from '@zhin.js/core';
 import {
   classifyBashCommand,
 } from '../security/file-policy.js';
@@ -39,17 +39,14 @@ export class BashBuiltinTool extends BuiltinBaseTool {
 
   /** 是否使用沙箱（默认 true，测试时可设为 false） */
   private useSandbox: boolean;
-  private readonly hostPlugin?: Plugin;
-
   constructor(
     private readonly execAsync: BashExecAsync = defaultExecAsync,
-    options?: { useSandbox?: boolean; plugin?: Plugin },
+    options?: { useSandbox?: boolean },
   ) {
     super();
     this.tags.push('shell', 'exec');
     this.keywords.push('执行', '运行', '命令', '终端', 'shell', 'bash');
     this.useSandbox = options?.useSandbox ?? true;
-    this.hostPlugin = options?.plugin?.root ?? options?.plugin;
   }
 
   async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
@@ -121,6 +118,6 @@ export class BashBuiltinTool extends BuiltinBaseTool {
   }
 }
 
-export function createBashTool(plugin?: Plugin): Tool {
-  return new BashBuiltinTool(undefined, { plugin }).toTool();
+export function createBashTool(): Tool {
+  return new BashBuiltinTool().toTool();
 }

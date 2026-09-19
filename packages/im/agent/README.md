@@ -147,7 +147,11 @@ packages/im/agent/src/
 
 Agent 生命周期事件由本包的 `AIEventPayload` / `AIEventName` 定义。Runtime 消费方通过
 `subscribeAIEventsOnTarget` 订阅显式 event target；事件契约不再挂在经典 `Plugin` namespace，
-也不再依赖 Plugin AsyncLocalStorage 恢复隐式上下文。
+也不再写入经典 `Plugin.dispatch()` 链或依赖 Plugin AsyncLocalStorage 恢复隐式上下文。
+组合根为每个 generation 创建 `AgentEventBus`，以 `agentEventBusToken` 发布给同代服务并在
+retire 时清理；旧代在途事件不会进入候选代。`ZhinAgent`、ToolRuntime 与事件系统都不持有
+经典 `Plugin` 对象。请求者角色来自 IM 入站阶段写入的消息身份，Skill 来自 generation
+capability projection 与标准工作区目录，不再遍历可变 Plugin 树。
 
 Root Host 若要接入远程 Tool / Skill Provider，可在 generation Scope 提供
 `capabilitySeamToken`。`CapabilityIngress` 会把 `SeamIntegration` 投影进同一份 immutable

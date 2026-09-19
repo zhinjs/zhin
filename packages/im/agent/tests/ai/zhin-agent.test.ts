@@ -4,8 +4,8 @@
  * 测试 collectTools 逻辑、handleMessage 端到端流程、会话管理等
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ZhinAgent } from '@zhin.js/agent';
-import { Plugin, SkillFeature, type AIProvider, type AgentTool, type Tool } from '@zhin.js/core';
+import { AgentEventBus, ZhinAgent } from '@zhin.js/agent';
+import { SkillFeature, type AIProvider, type AgentTool, type Tool } from '@zhin.js/core';
 import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
 import { wireMockLlmApi, assistantTextReply, type MockLlmApi } from '../helpers/mock-llm-api.js';
 
@@ -88,6 +88,7 @@ function createToolCallProvider(): AIProvider {
 }
 
 describe('ZhinAgent', () => {
+  const events = new AgentEventBus();
   let agent: ZhinAgent;
   let provider: AIProvider;
   let llm: MockLlmApi;
@@ -201,24 +202,21 @@ describe('ZhinAgent', () => {
       }
     });
 
-    it('应将 AI 生命周期桥接到 plugin 事件总线', async () => {
+    it('应将 AI 生命周期发布到 Runtime 事件总线', async () => {
       const busAgent = new ZhinAgent(provider, {
         persona: '测试助手',
         maxIterations: 3,
-      });
-      const hostPlugin = new Plugin('/virtual/host-plugin.ts');
+      }, events);
       const received: string[] = [];
 
       const record = (event: string) => () => {
         received.push(event);
       };
 
-      hostPlugin.on('ai.processing.start', record('ai.processing.start'));
-      hostPlugin.on('ai.agent.start', record('ai.agent.start'));
-      hostPlugin.on('ai.response', record('ai.response'));
-      hostPlugin.on('ai.processing.finish', record('ai.processing.finish'));
-
-      busAgent.configure({ hostPlugin });
+      events.on('ai.processing.start', record('ai.processing.start'));
+      events.on('ai.agent.start', record('ai.agent.start'));
+      events.on('ai.response', record('ai.response'));
+      events.on('ai.processing.finish', record('ai.processing.finish'));
 
       try {
         await busAgent.process(
@@ -228,6 +226,7 @@ describe('ZhinAgent', () => {
         );
       } finally {
         busAgent.dispose();
+        events.clear();
       }
 
       expect(received).toContain('ai.processing.start');
@@ -240,17 +239,15 @@ describe('ZhinAgent', () => {
       const sessionAgent = new ZhinAgent(provider, {
         persona: '测试助手',
         maxIterations: 3,
-      });
-      const hostPlugin = new Plugin('/virtual/host-plugin.ts');
+      }, events);
       const payloads: any[] = [];
-      hostPlugin.on('ai.session.new', payload => payloads.push(payload));
-      sessionAgent.configure({ hostPlugin });
-
+      events.on('ai.session.new', payload => payloads.push(payload));
       try {
         await sessionAgent.process('你好', makeCommMessage(), []);
         await sessionAgent.process('再来一次', makeCommMessage(), []);
       } finally {
         sessionAgent.dispose();
+        events.clear();
       }
 
       expect(payloads).toHaveLength(1);

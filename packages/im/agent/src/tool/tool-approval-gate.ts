@@ -1,7 +1,7 @@
 /**
  * Per-tool approval gate — stacks with ExecPolicy (ADR 0039 P1).
  */
-import type { Message, Plugin } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import { AgentRunJournal, AgentStreamEventType, type AgentRunEventInput } from '@zhin.js/ai/agent-stream';
 import type { ToolApprovalPolicy } from '@zhin.js/ai/tool-policy';
 import type { AgentStreamBus, AgentStreamPublishContext } from '../event/agent-stream-bus.js';
@@ -30,7 +30,6 @@ export interface ToolApprovalGateOptions {
   sessionId: string;
   commMessage: Message;
   policy?: ToolApprovalGatePolicy;
-  plugin?: Plugin;
   bus?: AgentStreamBus;
   port?: ApprovalPort;
   onceStore?: ToolApprovalOnceStore;

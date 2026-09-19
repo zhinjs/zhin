@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createToolRuntime,
-  registerPolicyExtractor,
   type ToolRuntimeTurnContext,
   type ToolRuntimeJournalPort,
 } from '../../src/tool/tool-runtime.js';
@@ -133,11 +132,13 @@ describe('ToolRuntime', () => {
   it('emits journal events even when policy denies', async () => {
     const events: (ToolCallEvent | ToolResultEvent)[] = [];
     const journal: ToolRuntimeJournalPort = { append: (evt) => { events.push(evt); } };
-    registerPolicyExtractor('deny_test_tool', (toolName) => ({
-      toolName,
-      command: 'rm -rf /',
+    const rt = createToolRuntime(makeCtx({
+      journal,
+      policyInputResolver: (toolName) => ({
+        toolName,
+        command: 'rm -rf /',
+      }),
     }));
-    const rt = createToolRuntime(makeCtx({ journal }));
     const tool = makeTool({ name: 'deny_test_tool' });
     const result = await rt.execute(tool, {}, { toolCallId: 'tc1' });
     expect(events.length).toBeGreaterThanOrEqual(0);

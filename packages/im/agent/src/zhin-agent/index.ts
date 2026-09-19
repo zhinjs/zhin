@@ -32,6 +32,7 @@ import type { ContextSystem } from '../context/context-system.js';
 import { type MemorySystem, createMemorySystemForHost } from '../memory/memory-system.js';
 import type { SessionSystem } from '../session/session-system.js';
 import type { EventSystem } from '../event/event-system.js';
+import { AgentEventBus } from '../event/ai-event-bus.js';
 import { type ZhinAgentTurnMetrics } from '../turn/turn-metrics.js';
 import { TurnTracker } from '../turn/turn-tracker.js';
 import { ZhinAgentEventEmitter } from '../event/event-emitter.js';
@@ -153,7 +154,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   alwaysSkillsBaseline: string = '';
   skillsSummaryXML: string = '';
   modelRegistry: ModelRegistry | null = null;
-  readonly emitter = new ZhinAgentEventEmitter();
+  readonly emitter: ZhinAgentEventEmitter;
   readonly deferred = new DeferredTurnState();
   readonly promptController: PromptController;
   /** 无交互审批面传输的 host 级回退。 */
@@ -208,8 +209,9 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return { promptTraceEnabled: isPromptTraceEnabled(this.config), promptTraceVerbose: isPromptTraceVerbose(this.config) };
   }
 
-  constructor(provider: AIProvider, config?: ZhinAgentConfig) {
+  constructor(provider: AIProvider, config?: ZhinAgentConfig, events = new AgentEventBus()) {
     this.provider = provider;
+    this.emitter = new ZhinAgentEventEmitter(events);
     const merged = { ...DEFAULT_CONFIG, ...config } as Required<ZhinAgentConfig>;
     this.config = merged;
     this.userProfiles = new UserProfileStore();
@@ -409,11 +411,11 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   }
 
   steer(message: AgentMessage, commMessage: Message): void {
-    steerMessage(this.promptController, this.emitter, message, commMessage);
+    steerMessage(this.promptController, message, commMessage);
   }
 
   followUp(message: AgentMessage, commMessage: Message): void {
-    followUpMessage(this.promptController, this.emitter, message, commMessage);
+    followUpMessage(this.promptController, message, commMessage);
   }
 
   async prompt(

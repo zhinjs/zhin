@@ -2,7 +2,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createSyntheticMessage, type Tool } from '@zhin.js/core';
 import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
 import { ZhinAgent } from '../src/zhin-agent/index.js';
-import { activityFeedbackAiBus } from '../src/activity-feedback/ai-bus.js';
+import { AgentEventBus } from '../src/event/ai-event-bus.js';
 import {
   wireMockLlmApi,
   assistantTextReply,
@@ -10,17 +10,18 @@ import {
 } from './helpers/mock-llm-api.js';
 
 describe('typing 反馈事件链探针', () => {
+  const events = new AgentEventBus();
   afterEach(() => {
-    activityFeedbackAiBus.clear();
+    events.clear();
   });
 
   it('processTurn(eligible) → ai.processing.start 携带 platform/endpointKey/eligible', async () => {
     resetLlmApiRegistryForTests();
     const llm = wireMockLlmApi({ responder: () => assistantTextReply('好的') });
-    const agent = new ZhinAgent(llm.provider as never, { maxIterations: 2 });
+    const agent = new ZhinAgent(llm.provider as never, { maxIterations: 2 }, events);
     const received: Array<Record<string, unknown>> = [];
     const listener = (p: unknown) => received.push(p as never);
-    activityFeedbackAiBus.on('ai.processing.start', listener);
+    events.on('ai.processing.start', listener);
 
     const commMessage = createSyntheticMessage({
       adapter: 'icqq',
@@ -41,18 +42,18 @@ describe('typing 反馈事件链探针', () => {
     expect(payload.endpointKey).toBe('8596238');
     expect((payload.hookContext as Record<string, unknown> | undefined)?.activityFeedbackEligible).toBe(true);
     agent.dispose();
-    activityFeedbackAiBus.off('ai.processing.start', listener);
+    events.off('ai.processing.start', listener);
   });
 
   it('processTurn failure emits an awaited terminal error and typing stop', async () => {
     resetLlmApiRegistryForTests();
     const llm = wireMockLlmApi();
-    const agent = new ZhinAgent(llm.provider as never, { maxIterations: 2 });
+    const agent = new ZhinAgent(llm.provider as never, { maxIterations: 2 }, events);
     const received: string[] = [];
     const onError = () => { received.push('error'); };
     const onStop = () => { received.push('stop'); };
-    activityFeedbackAiBus.on('ai.processing.error', onError);
-    activityFeedbackAiBus.on('ai.typing.stop', onStop);
+    events.on('ai.processing.error', onError);
+    events.on('ai.typing.stop', onStop);
     const commMessage = createSyntheticMessage({
       adapter: 'sandbox', endpoint: 'bot', id: 'm-error', sender: { id: 'u1' },
     });
@@ -75,11 +76,11 @@ describe('typing 反馈事件链探针', () => {
         ? assistantToolCallReply([{ id: 'call-1', name: 'status_probe', arguments: {} }])
         : assistantTextReply('done'),
     });
-    const agent = new ZhinAgent(llm.provider as never, { maxIterations: 3 });
+    const agent = new ZhinAgent(llm.provider as never, { maxIterations: 3 }, events);
     const received: string[] = [];
-    activityFeedbackAiBus.on('ai.tool.call', () => { received.push('tool.call'); });
-    activityFeedbackAiBus.on('ai.tool.result', () => { received.push('tool.result'); });
-    activityFeedbackAiBus.on('ai.processing.start', (payload) => {
+    events.on('ai.tool.call', () => { received.push('tool.call'); });
+    events.on('ai.tool.result', () => { received.push('tool.result'); });
+    events.on('ai.processing.start', (payload) => {
       if (payload.iterations === 2) received.push('iteration.2');
     });
     const tool: Tool = {

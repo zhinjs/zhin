@@ -31,7 +31,7 @@ import {
   turnMediaFromMessage,
   turnContextViewFromMessage,
 } from '../context/im-turn-context-adapter.js';
-import { createClassicToolExecutionAuthority } from '../tool/classic-tool-execution-authority.js';
+import { createToolExecutionAuthority } from '../tool/tool-execution-authority.js';
 import { createTurnActivityProjector } from '../activity-feedback/turn-event-projector.js';
 
 function requireSessionSystem(host: ZhinAgentPrivate): SessionSystem {
@@ -223,14 +223,13 @@ async function processTextTurnInner(
         onChunk,
         signal: extras?.signal,
         execute: (initialMessages, hooks, signal, _turnId) => {
-          const toolExecution = createClassicToolExecutionAuthority({
+          const toolExecution = createToolExecutionAuthority({
             host,
             sessionId,
             message: contextForTools,
             signal,
             generation: extras?.generation ?? 0,
             rejectApproval: toolsPrep.resolved.deferred === false,
-            plugin: host.emitter.getHostPlugin() ?? undefined,
             deferredController: toolsPrep.resolved.controller,
             journal: extras?.journal,
           });

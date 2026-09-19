@@ -27,6 +27,7 @@
     "export * from '../workroom/github-workspace-transport.js';",
     "export * from '../workroom/software-delivery-plan.js';",
     "export * from '../workroom/workroom-assignment-knowledge-context.js';",
+    "export * from './agent-event-bus.js';",
     "export * from './agent-host-port.js';",
     "export * from './agent-runtime.js';",
     "export * from './agent-trace-runtime.js';",
