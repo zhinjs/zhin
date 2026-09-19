@@ -591,6 +591,9 @@ outline: [2, 3]
 | `plugins.wecom.endpoints[].agentSecret` | string | 是 | — | WeCom agent secret |
 | `plugins.wecom.endpoints[].token` | string | 是 | — | WeCom callback token |
 | `plugins.wecom.endpoints[].encodingAESKey` | string | 是 | — | WeCom encoding AES key |
+| `plugins.wecom.endpoints[].webhookPath` | string | 否 | — | — |
+| `plugins.wecom.endpoints[].apiBaseUrl` | string | 否 | — | — |
+| `plugins.wecom.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.wecom.endpoints[].id` | string | 是 | — | WeCom bot name |
 | `plugins.wecom.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

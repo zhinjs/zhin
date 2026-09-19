@@ -591,6 +591,9 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | `plugins.wecom.endpoints[].agentSecret` | string | yes | — | WeCom agent secret |
 | `plugins.wecom.endpoints[].token` | string | yes | — | WeCom callback token |
 | `plugins.wecom.endpoints[].encodingAESKey` | string | yes | — | WeCom encoding AES key |
+| `plugins.wecom.endpoints[].webhookPath` | string | no | — | — |
+| `plugins.wecom.endpoints[].apiBaseUrl` | string | no | — | — |
+| `plugins.wecom.endpoints[].commandPrefix` | string | no | — | — |
 | `plugins.wecom.endpoints[].id` | string | yes | — | WeCom bot name |
 | `plugins.wecom.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

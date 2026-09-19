@@ -12,6 +12,7 @@ import {
   parseXmlMessage,
   resolveWecomConfig,
   verifySignature,
+  type WecomEndpointConfig,
   type WecomMessage,
 } from '../src/protocol.js';
 import { wecomClient } from '../src/client.js';
@@ -97,12 +98,14 @@ function mockFetchOk(messageId = 'sent-1'): ReturnType<typeof vi.fn> {
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(hosts.splice(0).map((host) => host.close()));
 });
 
 describe('wecom protocol helpers', () => {
   it('resolves plugin config with defaults', () => {
     const resolved = resolveWecomConfig({
+      id: 'wecom-bot',
       corpId: 'c',
       agentSecret: 's',
       token: 't',
@@ -111,6 +114,29 @@ describe('wecom protocol helpers', () => {
     expect(resolved.webhookPath).toBe('/wecom/callback');
     expect(resolved.apiBaseUrl).toBe('https://qyapi.weixin.qq.com');
     expect(resolved.id).toBe('wecom-bot');
+  });
+
+  it('requires one expanded endpoint config without environment or nested fallbacks', () => {
+    vi.stubEnv('WECOM_CORP_ID', 'legacy-corp');
+    vi.stubEnv('WECOM_AGENT_SECRET', 'legacy-secret');
+    vi.stubEnv('WECOM_TOKEN', 'legacy-token');
+    vi.stubEnv('WECOM_AES_KEY', ENCODING_AES_KEY);
+    expect(() => resolveWecomConfig({
+      id: 'wecom-bot',
+      corpId: '',
+      agentSecret: '',
+      token: '',
+      encodingAESKey: '',
+    })).toThrow(/non-empty corpId/);
+    expect(() => resolveWecomConfig({
+      endpoints: [{
+        id: 'nested-bot',
+        corpId: 'nested-corp',
+        agentSecret: 'nested-secret',
+        token: 'nested-token',
+        encodingAESKey: ENCODING_AES_KEY,
+      }],
+    } as unknown as WecomEndpointConfig)).toThrow(/non-empty id/);
   });
 
   it('verifies SHA1 msg_signature', () => {

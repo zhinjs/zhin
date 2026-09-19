@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/wecom/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wecom/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=812e207cbdf7f537 -->
+<!-- sync-adapter-docs:sha256=da9cacf5683e40d2 -->
 
 # @zhin.js/adapter-wecom
 
@@ -51,7 +51,9 @@ pnpm add @zhin.js/adapter-wecom
    - **Token** / **EncodingAESKey** 与配置一致
 4. Runtime Host（`http`）须已 listen，Webhook 才可达
 
-必填字段（`endpoints[i]`）：`name`、`corpId`、`agentSecret`、`token`、`encodingAESKey`。
+必填字段（`endpoints[i]`）：`id`、`corpId`、`agentSecret`、`token`、`encodingAESKey`。
+运行时由 AdapterIndex 把实例级默认值与每个 endpoint 合并；协议实现只接收一份展开后的
+endpoint 配置。
 
 ## 最小配置
 
@@ -62,7 +64,7 @@ plugins:
     webhookPath: /wecom/callback       # 可选，默认 /wecom/callback
     apiBaseUrl: https://qyapi.weixin.qq.com  # 可选
     endpoints:
-      - name: wecom-bot
+      - id: wecom-bot
         corpId: ${WECOM_CORP_ID}
         agentSecret: ${WECOM_AGENT_SECRET}
         token: ${WECOM_TOKEN}
@@ -72,6 +74,8 @@ plugins:
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-wecom`（`instanceKey: wecom`）。
 
 ## 环境变量
+
+环境变量通过 `zhin.config.yml` 的 `${...}` 引用解析；适配器协议层不会直接读取它们。
 
 | 变量 | 说明 |
 |------|------|

@@ -7,14 +7,14 @@ import { httpHostToken } from '@zhin.js/host-http';
 import { WecomEndpoint } from '../src/endpoint.js';
 import {
   resolveWecomConfig,
-  type WecomAdapterConfig,
+  type WecomEndpointConfig,
 } from '../src/protocol.js';
 import { wecomRuntimeStateToken } from '../src/wecom-runtime-state.js';
 
 export { WecomEndpoint } from '../src/endpoint.js';
 export type { WecomEndpointOptions, WecomFetch } from '../src/endpoint.js';
 
-export default defineAdapter<WecomAdapterConfig>({
+export default defineAdapter<WecomEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['recall'],
   // image 段全部经 /cgi-bin/media/upload 物化为 media_id（url 下载后上传、

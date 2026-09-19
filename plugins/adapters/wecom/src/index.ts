@@ -15,7 +15,7 @@ export {
   verifySignature,
   type AccessToken,
   type ResolvedWecomConfig,
-  type WecomAdapterConfig,
+  type WecomEndpointConfig,
   type WecomApiResponse,
   type WecomMessage,
   type WecomSendBody,

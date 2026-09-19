@@ -16,7 +16,6 @@ const directEnvironmentConsumers = new Set([
   'plugins/adapters/napcat/src/protocol.ts',
   'plugins/adapters/onebot11/src/protocol.ts',
   'plugins/adapters/onebot12/src/protocol.ts',
-  'plugins/adapters/wecom/src/protocol.ts',
   'plugins/adapters/weixin-ilink/src/credentials.ts',
   'plugins/adapters/weixin-ilink/src/login.ts',
   'plugins/adapters/weixin-ilink/src/protocol.ts',

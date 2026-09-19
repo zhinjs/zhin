@@ -3,6 +3,15 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "require-wecom-endpoint-config.md",
+      "packages": [
+        "@zhin.js/adapter-wecom"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove WeCom endpoint configuration compatibility and require the canonical AdapterIndex projection under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "require-wechat-mp-endpoint-config.md",
       "packages": [
         "@zhin.js/adapter-wechat-mp"

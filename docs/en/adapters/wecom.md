@@ -51,7 +51,9 @@ Inbound `metadata.mentioned`: **not wired**. The XML event in WeCom application 
    - **Token** / **EncodingAESKey** must match the configuration
 4. The Runtime Host (`http`) must already be listening for the Webhook to be reachable
 
-Required fields (`endpoints[i]`): `name`, `corpId`, `agentSecret`, `token`, `encodingAESKey`.
+Required fields (`endpoints[i]`): `id`, `corpId`, `agentSecret`, `token`, `encodingAESKey`.
+AdapterIndex merges instance defaults into every endpoint; the protocol receives only one expanded
+endpoint config.
 
 ## Minimal Configuration
 
@@ -62,7 +64,7 @@ plugins:
     webhookPath: /wecom/callback       # optional, default /wecom/callback
     apiBaseUrl: https://qyapi.weixin.qq.com  # optional
     endpoints:
-      - name: wecom-bot
+      - id: wecom-bot
         corpId: ${WECOM_CORP_ID}
         agentSecret: ${WECOM_AGENT_SECRET}
         token: ${WECOM_TOKEN}
@@ -72,6 +74,9 @@ plugins:
 The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-wecom` (`instanceKey: wecom`).
 
 ## Environment Variables
+
+Environment variables are resolved through `${...}` references in `zhin.config.yml`; the adapter
+protocol does not read them directly.
 
 | Variable | Description |
 |----------|-------------|
