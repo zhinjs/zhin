@@ -167,14 +167,6 @@ describe('Plugin Core Functionality', () => {
     })
   })
 
-  describe('Plugin Adapters', () => {
-    it('should initialize with empty adapters array', () => {
-      const plugin = new Plugin('/test/plugin.ts')
-      expect(plugin.adapters).toEqual([])
-      expect(Array.isArray(plugin.adapters)).toBe(true)
-    })
-  })
-
   describe('Plugin File Info', () => {
     it('should store file path', () => {
       const filePath = '/test/my-plugin.ts'

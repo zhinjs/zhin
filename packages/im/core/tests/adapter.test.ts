@@ -153,7 +153,7 @@ describe('Adapter Core Functionality', () => {
   describe('Adapter Start', () => {
     it('should start without config', async () => {
       await adapter.start()
-      expect(plugin.root.adapters).toContain('test')
+      expect(adapter.endpoints.size).toBe(0)
     })
 
     it('should create and connect endpoints from config', async () => {
@@ -168,11 +168,6 @@ describe('Adapter Core Functionality', () => {
       expect(adapter.endpoints.size).toBe(2)
       expect(adapter.endpoints.has('bot1')).toBe(true)
       expect(adapter.endpoints.has('bot2')).toBe(true)
-    })
-
-    it('should add adapter name to plugin adapters', async () => {
-      await adapter.start()
-      expect(plugin.root.adapters).toContain('test')
     })
 
     it('should handle empty config array', async () => {
@@ -192,14 +187,6 @@ describe('Adapter Core Functionality', () => {
       
       await adapter.stop()
       expect(adapter.endpoints.size).toBe(0)
-    })
-
-    it('should remove adapter from plugin adapters', async () => {
-      await adapter.start()
-      expect(plugin.root.adapters).toContain('test')
-      
-      await adapter.stop()
-      expect(plugin.root.adapters).not.toContain('test')
     })
 
     it('should remove all event listeners', async () => {

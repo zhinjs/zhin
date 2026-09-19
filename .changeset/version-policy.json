@@ -373,6 +373,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove the unused process-global classic Adapter factory registry so generation-owned AdapterIndex remains the sole adapter discovery and instance authority under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-classic-plugin-adapter-directory.md",
+      "packages": [
+        "@zhin.js/core",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove the duplicate classic Plugin Adapter directory and service-locator helper so generation-owned AdapterIndex is the sole live Endpoint directory under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

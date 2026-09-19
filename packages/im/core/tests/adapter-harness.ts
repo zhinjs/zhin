@@ -192,18 +192,9 @@ export function createAdapterTestSuite<
         expect(adapter.endpoints.has(endpointKey)).toBe(true);
       });
 
-      it('start() 应将适配器名注册到 plugin.root.adapters', () => {
-        expect(plugin.root.adapters).toContain(adapter.name);
-      });
-
       it('stop() 应断开所有 Endpoint', async () => {
         await adapter.stop();
         expect(adapter.endpoints.size).toBe(0);
-      });
-
-      it('stop() 应从 adapters 中移除', async () => {
-        await adapter.stop();
-        expect(plugin.root.adapters).not.toContain(adapter.name);
       });
 
       it('重复 start/stop 不应崩溃', async () => {

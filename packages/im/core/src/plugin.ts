@@ -19,7 +19,7 @@ import {
 } from "./built/interactive-segments/handlers.js";
 import type { InteractiveHandler } from "./built/interactive-segments/types.js";
 
-import { Adapter, Adapters } from "./adapter.js";
+import type { Adapters } from "./adapter.js";
 import { Feature, PluginBase, BaseContext, PluginBaseLifecycle, resolvePluginResolveDir as _resolvePluginResolveDir, pluginCreateRequire as _pluginCreateRequire, getFileHash, watchFile, registerExtension, unregisterExtensions, installExtensionProxy, type PluginLike } from '@zhin.js/kernel';
 
 
@@ -75,7 +75,6 @@ export class Plugin extends PluginBase implements PluginLike {
 
   #cachedName?: string;
   #manifest?: PluginManifest | null;
-  adapters: (keyof Plugin.Contexts)[] = [];
   declare started: boolean;
 
   // children/parent 继承 PluginBase 的类型（PluginBase[] / PluginBase | undefined），
@@ -248,10 +247,6 @@ export class Plugin extends PluginBase implements PluginLike {
     return context?.value;
   }
 
-  injectAdapter(name: string): Adapter | undefined {
-    const value = this.inject(name);
-    return value instanceof Adapter ? value : undefined;
-  }
   #contextsIsReady<CS extends (keyof Plugin.Contexts)[]>(contexts: CS) {
     if (!contexts.length) return true
     return contexts.every(name => this.contextIsReady(name))

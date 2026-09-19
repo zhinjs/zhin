@@ -130,6 +130,7 @@
 | Agent classic Plugin / Adapter runtime bridges | `removed` | 全局 Adapter registry 清理、未挂载 typing 示例与 `BotWithEditing` 已删除 | Agent 平台反馈依赖 `@zhin.js/adapter` 的 `EndpointControl` 端口；工具权限只读当前 turn 的显式消息上下文 |
 | Core `ProcessAdapter` / process runtime IO | `removed` | 未被生产装配的经典内置适配器与 stdin 辅助已删除 | 本地交互由 Sandbox Adapter 与 CLI Host 提供，不再占用经典 Adapter 注册表 |
 | `Adapter.Registry` / `Adapter.register` / `Adapter.Factory` | `removed` | 进程级工厂注册表及其唯一自证测试已删除 | Adapter 定义与实例只由 generation-owned `AdapterIndex` 发现和持有 |
+| `Plugin.adapters` / `Plugin.injectAdapter` | `removed` | 经典 Plugin 的重复 Adapter 目录与 service-locator helper 已删除 | 当前 Endpoint 目录只能从 generation-owned `AdapterIndex` 查询 |
 | `Adapter` 类 / Core `Endpoint` 类型 | `deprecated` | Root facade 仅为经典运行时兼容而导出 | 新适配器从 `zhin.js/adapter` 导入 `defineAdapter` 与 Plugin Runtime `Endpoint` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | 不再导出 | 唯一启动入口：`zhin runtime start` |
 | `AgentOrchestrator` / `ResourceHub` | `removed` | 兼容名称不再导出 | 能力注册改用 `AgentResourceHub`；Workroom 编排改走 Kernel 与专用 typed ports |
