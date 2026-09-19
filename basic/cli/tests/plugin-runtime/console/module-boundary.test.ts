@@ -30,7 +30,9 @@ describe('Console Host module boundary', () => {
   it('keeps supporting modules independent from the HTTP API orchestrator', async () => {
     const supportingModules = [
       'agent-console.ts',
+      'agent-routes.ts',
       'configuration.ts',
+      'http-response.ts',
       'inbox.ts',
       'projection.ts',
       'system-log.ts',
