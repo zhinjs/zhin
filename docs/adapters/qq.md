@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=eb17850dca6c7c03 -->
+<!-- sync-adapter-docs:sha256=120ce5873d86d6a7 -->
 
 # @zhin.js/adapter-qq
 
@@ -50,7 +50,7 @@ pnpm add @zhin.js/adapter-qq
 | **WebSocket（默认）** | `qq-official-bot` 正向连接；无需公网回调 |
 | **host-http** | WebSocket **不需要**；Webhook / middleware 模式需要（经 `httpHostToken`） |
 
-必填字段（`endpoints[i]`）：`name`、`appid`、`secret`。
+必填字段（`endpoints[i]`）：`id`、`appid`、`secret`。
 
 ## 最小配置
 
@@ -60,7 +60,7 @@ plugins:
   qq:
     # mode: websocket   # 默认
     endpoints:
-      - name: my-qq-bot
+      - id: my-qq-bot
         appid: ${QQ_APPID}
         secret: ${QQ_SECRET}
         # botKind / intents 可由向导写入；`qq endpoint add` 扫码后会追问公域/私域再写入
@@ -79,14 +79,14 @@ WebSocket Identify 的 `intents` **必须与开放平台已开通的权限一致
 公域机器人订阅 `GUILD_MESSAGES` 会 Identify 失败断连。显式配置 `intents` 时优先于 `botKind`。
 `create-zhin` / `zhin setup` 会询问公/私域并写入；`qq endpoint add` 扫码成功后在同一会话追问 `public`/`private`（或 `公域`/`私域`），确认后一次性写 `.env` 与 yaml。
 
-多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`name` 必填）：
+多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`id` 必填）：
 
 ```yaml
 plugins:
   qq:
     mode: websocket
     endpoints:
-      - name: main-bot
+      - id: main-bot
         appid: ${QQ_APPID}
         secret: ${QQ_SECRET}
         botKind: public
@@ -97,7 +97,7 @@ plugins:
           - GUILD_MEMBERS
           - DIRECT_MESSAGE
           - PUBLIC_GUILD_MESSAGES
-      - name: private-bot
+      - id: private-bot
         appid: ${QQ_APPID_2}
         secret: ${QQ_SECRET_2}
         botKind: private
@@ -131,9 +131,8 @@ master 可执行；未配置则放行（首个扫码绑定者会写入该 endpoi
 
 | 变量 | 说明 |
 |------|------|
-| `QQ_APPID` / `QQ_BOT_APPID` | 应用 AppID |
-| `QQ_SECRET` / `QQ_BOT_SECRET` | 应用 Secret |
-| `QQ_BOT_NAME` | 可选，默认 endpoint 名 |
+| `QQ_APPID` | YAML 示例中 `appid` 引用的应用 AppID |
+| `QQ_SECRET` | YAML 示例中 `secret` 引用的应用 Secret |
 
 ## Webhook / middleware
 

@@ -6,7 +6,7 @@ import { httpHostToken } from '@zhin.js/host-http';
 import { QqHttpEndpoint, QqWebsocketEndpoint } from '../src/endpoint.js';
 import {
   resolveQqConfig,
-  type QqAdapterConfig,
+  type QqEndpointConfig,
 } from '../src/protocol.js';
 import { qqRuntimeStateToken } from '../src/qq-runtime-state.js';
 
@@ -29,7 +29,7 @@ declare module '@zhin.js/core' {
   }
 }
 
-export default defineAdapter<QqAdapterConfig>({
+export default defineAdapter<QqEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['recall'],
   // 媒体 url 直发，base64/path 由 SDK formatMediaData 物化走 /files 上传；

@@ -7,6 +7,32 @@ const adaptersRoot = path.join(repoRoot, 'plugins/adapters');
 const adapterFeatureRoot = path.join(repoRoot, 'packages/im/adapter/src');
 const errors = [];
 const legacyAdapterConsumers = new Set();
+const directEnvironmentConsumers = new Set([
+  'plugins/adapters/dingtalk/src/protocol.ts',
+  'plugins/adapters/discord/src/protocol.ts',
+  'plugins/adapters/email/src/protocol.ts',
+  'plugins/adapters/github/src/gh-client.ts',
+  'plugins/adapters/github/src/protocol.ts',
+  'plugins/adapters/github/src/workspace-manager.ts',
+  'plugins/adapters/icqq/src/protocol.ts',
+  'plugins/adapters/kook/src/protocol.ts',
+  'plugins/adapters/lark/src/protocol.ts',
+  'plugins/adapters/line/src/protocol.ts',
+  'plugins/adapters/milky/src/protocol.ts',
+  'plugins/adapters/napcat/src/protocol.ts',
+  'plugins/adapters/onebot11/src/protocol.ts',
+  'plugins/adapters/onebot12/src/protocol.ts',
+  'plugins/adapters/sandbox/src/protocol.ts',
+  'plugins/adapters/satori/src/protocol.ts',
+  'plugins/adapters/slack/src/protocol.ts',
+  'plugins/adapters/telegram/src/protocol.ts',
+  'plugins/adapters/wechat-mp/src/protocol.ts',
+  'plugins/adapters/wecom/src/protocol.ts',
+  'plugins/adapters/weixin-ilink/src/credentials.ts',
+  'plugins/adapters/weixin-ilink/src/login.ts',
+  'plugins/adapters/weixin-ilink/src/protocol.ts',
+]);
+const observedDirectEnvironmentConsumers = new Set();
 
 for (const file of typescriptFiles(adapterFeatureRoot)) {
   const relative = path.relative(repoRoot, file).split(path.sep).join('/');
@@ -23,6 +49,16 @@ for (const file of typescriptFiles(adapterFeatureRoot)) {
 for (const file of typescriptFiles(adaptersRoot)) {
   const relative = path.relative(repoRoot, file).split(path.sep).join('/');
   const source = fs.readFileSync(file, 'utf8');
+
+  if (/\bprocess\.env\b/u.test(source)) {
+    if (directEnvironmentConsumers.has(relative)) {
+      observedDirectEnvironmentConsumers.add(relative);
+    } else {
+      errors.push(
+        `${relative}: Adapter code must receive resolved owner configuration instead of reading process.env`,
+      );
+    }
+  }
 
   if (/\bextends\s+Adapter\b/u.test(source)
     || importsLegacyAdapter(source)) {
@@ -73,6 +109,12 @@ for (const file of typescriptFiles(adaptersRoot)) {
   }
 }
 
+for (const relative of directEnvironmentConsumers) {
+  if (!observedDirectEnvironmentConsumers.has(relative)) {
+    errors.push(`${relative}: stale direct environment access allowlist entry`);
+  }
+}
+
 for (const entry of fs.readdirSync(adaptersRoot, { withFileTypes: true })) {
   if (!entry.isDirectory() || entry.name === 'test-utils') continue;
   const src = path.join(adaptersRoot, entry.name, 'src');
@@ -115,7 +157,8 @@ if (errors.length > 0) {
   console.log(
     `Adapter/Endpoint responsibility check passed `
     + `(distinct registered Clients, no Agent Endpoint registries; `
-    + `${legacyAdapterConsumers.size} legacy Adapter consumers remain ratcheted debt).`,
+    + `${legacyAdapterConsumers.size} legacy Adapter consumers and `
+    + `${directEnvironmentConsumers.size} direct environment consumers remain ratcheted debt).`,
   );
 }
 

@@ -58,23 +58,19 @@ describe('defaultQqEndpointIntentFields', () => {
 
 describe('resolveQqConfig intents', () => {
   it('websocket 无 intents 时按默认 public 生成', () => {
-    const resolved = resolveQqConfig({ appid: 'a', secret: 's' });
+    const resolved = resolveQqConfig({ id: 'bot', appid: 'a', secret: 's' });
     expect(resolved.mode).toBe('websocket');
     if (resolved.mode === 'websocket') {
       expect(resolved.intents).toEqual([...SHARED, 'PUBLIC_GUILD_MESSAGES']);
     }
   });
 
-  it('endpoint.botKind=private 时用 GUILD_MESSAGES', () => {
+  it('botKind=private 时用 GUILD_MESSAGES', () => {
     const resolved = resolveQqConfig({
-      endpoints: [
-        {
-          id: 'g',
-          appid: 'a',
-          secret: 's',
-          botKind: 'private',
-        },
-      ],
+      id: 'g',
+      appid: 'a',
+      secret: 's',
+      botKind: 'private',
     });
     if (resolved.mode === 'websocket') {
       expect(resolved.intents).toEqual([...SHARED, 'GUILD_MESSAGES']);

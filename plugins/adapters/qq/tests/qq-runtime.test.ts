@@ -202,7 +202,7 @@ describe('qq protocol helpers', () => {
   });
 
   it('resolves plugin config with websocket default', () => {
-    const resolved = resolveQqConfig({ appid: 'a', secret: 's' });
+    const resolved = resolveQqConfig({ id: 'qq-bot', appid: 'a', secret: 's' });
     expect(resolved.mode).toBe('websocket');
     expect(resolved.id).toBe('qq-bot');
     if (resolved.mode === 'websocket') {
@@ -218,8 +218,8 @@ describe('qq protocol helpers', () => {
   });
 
   it('selects deferred modes when configured', () => {
-    expect(resolveQqConfig({ appid: 'a', secret: 's', mode: 'webhook' }).mode).toBe('webhook');
-    expect(resolveQqConfig({ appid: 'a', secret: 's', mode: 'middleware' }).mode).toBe('middleware');
+    expect(resolveQqConfig({ id: 'bot', appid: 'a', secret: 's', mode: 'webhook' }).mode).toBe('webhook');
+    expect(resolveQqConfig({ id: 'bot', appid: 'a', secret: 's', mode: 'middleware' }).mode).toBe('middleware');
   });
 
   it('formats inbound content', () => {
@@ -618,7 +618,7 @@ describe('qq plugin runtime adapter', () => {
     const endpoint = defineQqAdapter.create({
       id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
       name: 'qq',
-      config: { appid: 'a', secret: 's', mode: 'middleware' },
+      config: { id: 'qq', appid: 'a', secret: 's', mode: 'middleware' },
       use: (token: unknown) => {
         if (token === httpHostToken) return http;
         if (token === outboundMessageToken) {

@@ -405,15 +405,19 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | `plugins.qq.accessTokenUrl` | string | no | — | — |
 | `plugins.qq.gatewayUrl` | string | no | — | — |
 | `plugins.qq.webhookPath` | string | no | `"/qq/webhook"` | POST path on httpHostToken for webhook/middleware modes. |
-| `plugins.qq.port` | number | no | — | Legacy standalone webhook port (unused with httpHostToken). |
-| `plugins.qq.path` | string | no | — | Legacy standalone webhook path (unused with httpHostToken). |
-| `plugins.qq.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `plugins.qq.endpoints` | array&lt;object&gt; | yes | — | 多账号：每项定义一个 endpoint，id/appid/secret 必填，其余字段覆盖实例默认值 |
 | `plugins.qq.endpoints[].appid` | string | yes | — | QQ official bot app ID |
 | `plugins.qq.endpoints[].secret` | string | yes | — | QQ official bot secret |
+| `plugins.qq.endpoints[].mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | no | — | — |
+| `plugins.qq.endpoints[].sandbox` | boolean | no | — | — |
 | `plugins.qq.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（openid）；覆盖顶层 master |
 | `plugins.qq.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
 | `plugins.qq.endpoints[].botKind` | string: `"public"`, `"private"` | no | — | 覆盖顶层 botKind（公域/私域），用于按 endpoint 生成 intents |
 | `plugins.qq.endpoints[].intents` | array&lt;string&gt; | no | — | 覆盖顶层 intents |
+| `plugins.qq.endpoints[].accessTokenUrl` | string | no | — | — |
+| `plugins.qq.endpoints[].gatewayUrl` | string | no | — | — |
+| `plugins.qq.endpoints[].webhookPath` | string | no | — | — |
+| `plugins.qq.endpoints[].commandPrefix` | string | no | — | — |
 | `plugins.qq.endpoints[].id` | string | yes | — | QQ bot name |
 | `plugins.qq.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
