@@ -121,6 +121,7 @@
 | `MessageCommand` / classic `CommandFeature` | `removed` | 源码与 public surface 均已删除 | 命令统一走 `defineCommand` + Runtime `CommandIndex` |
 | Core `ToolFeature` / `SkillFeature` | `removed` | 源码与 public surface 均已删除 | Tool / Skill 统一走 Feature provider、generation projection 与 Agent `CapabilityIngress` |
 | Agent `FeatureCapabilityIngress` | `removed` | 源码与 public surface 均已删除 | Agent 只保留读取 Runtime snapshot 的 `CapabilityIngress` |
+| Agent `AgentFeature` / `MCPFeature` | `removed` | 源码与 public surface 均已删除 | Agent / MCP 声明统一由各自 Feature provider 投影为 generation-owned `AgentIndex` / `McpIndex` |
 | `Adapter` 类 / Core `Endpoint` 类型 | `deprecated` | Root facade 仅为经典运行时兼容而导出 | 新适配器从 `zhin.js/adapter` 导入 `defineAdapter` 与 Plugin Runtime `Endpoint` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | 不再导出 | 唯一启动入口：`zhin runtime start` |
 | `AgentOrchestrator` / `ResourceHub` | `removed` | 兼容名称不再导出 | 能力注册改用 `AgentResourceHub`；Workroom 编排改走 Kernel 与专用 typed ports |

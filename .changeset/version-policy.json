@@ -285,6 +285,15 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove unmounted classic Tool and Skill registries plus their unused mutable Agent ingress after generation-owned Feature projections became the sole runtime authority."
+    },
+    {
+      "changeset": "remove-classic-agent-mcp-features.md",
+      "packages": [
+        "@zhin.js/agent"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove unused classic Agent and MCP registries after their dedicated generation-owned Feature projections became the sole runtime authorities."
     }
   ]
 }

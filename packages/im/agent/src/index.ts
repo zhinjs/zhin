@@ -698,8 +698,3 @@ export type {
   AgentSurfacePluginInfo,
   AgentSurfaceWorkspaceAgentInfo,
 } from './discovery/agent-surface-info.js';
-export {
-  AgentFeature,
-  MCPFeature,
-} from './features/index.js';
-export type { McpFeatureEntry } from './features/index.js';

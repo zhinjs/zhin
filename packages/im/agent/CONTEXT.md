@@ -64,12 +64,12 @@ _避免使用_：tool service 真相源、双注册、registry bag
 `@zhin.js/tool` / `@zhin.js/skill` 把插件 setup 与显式约定入口投影成 generation-owned `ToolIndex` / `SkillIndex`。
 _避免使用_：Orchestrator 直写、回合 SSOT
 
-**AgentFeature**:
-Agent Runtime 中的专长 / 子代理预设 Feature（对齐 `$*.agent.md`）；**不**替代配置里的主 Agent 选用。
+**Agent Feature projection**:
+`@zhin.js/agent-feature` 把插件 setup 与显式 `$*.agent.md` 入口投影成 generation-owned `AgentIndex`；**不**替代配置里的主 Agent 选用。
 _避免使用_：主绑定 SSOT
 
-**MCPFeature**:
-Agent Runtime 中的 MCP server **声明** Feature；不含已连接后的工具列表。
+**MCP Feature projection**:
+`@zhin.js/mcp-feature` 把插件 setup 与显式 `mcp/$*.ts` 入口投影成 generation-owned `McpIndex`，由该 Index 持有连接生命周期与工具调用权威。
 _避免使用_：已连接工具池、MCP host server
 
 **Capability Ingress**:
@@ -89,11 +89,11 @@ _避免使用_：role、ACL、rank、独立的 adapter/scene_type/sender_role �
 _避免使用_：plugin、prompt、recipe
 
 **Subagent**:
-用于更窄任务或角色的委派 Agent 预设（常来自 **AgentFeature**）。
+用于更窄任务或角色的委派 Agent 预设（来自 **Agent Feature projection**）。
 _避免使用_：worker、child bot、helper
 
 **Agent Binding**:
-配置 `agents[].match` 解析出的主路径选用结果；入站选用权威在配置，不在 AgentFeature。
+配置 `agents[].match` 解析出的主路径选用结果；入站选用权威在配置，不在 Agent Feature projection。
 _避免使用_：Feature match、preset 当主绑定
 
 **Context Budget**:
@@ -456,8 +456,8 @@ Session lifecycle 写权威只有 `ContextRepository`；archive 不得再代理�
 ## 关系
 
 - 插件与文件发现向 **Capability Feature** 写入；**Capability Ingress** 在 Boot（常驻核心）与入站（命中 **Agent Binding** 作用域）把能力装入 **Agent Resource Hub**；回合只读 Resource Hub。
-- **ZhinAgent** 通过 **Agent Resource Hub** 发现已装载的 **Tool**、**Skill**、**Subagent** 与 Hook；MCP **声明** 在 **MCPFeature**，generation 激活时连接，入站再按 **Agent Binding** 的 `mcpServers` 过滤；工具以 `${qualifiedServer}__${tool}` 的 owner-qualified 名称并入工具池。
-- 主路径 Agent 选用由配置 **Agent Binding**（`agents[].match`）决定；**AgentFeature** 仅提供专长 / **Subagent** 预设。
+- **ZhinAgent** 通过 **Agent Resource Hub** 发现已装载的 **Tool**、**Skill**、**Subagent** 与 Hook；MCP 声明由 generation-owned `McpIndex` 连接，入站再按 **Agent Binding** 的 `mcpServers` 过滤；工具以 `${qualifiedServer}__${tool}` 的 owner-qualified 名称并入工具池。
+- 主路径 Agent 选用由配置 **Agent Binding**（`agents[].match`）决定；generation-owned `AgentIndex` 仅提供专长 / **Subagent** 预设。
 - **Tool Selection** 在 **Permission Level** 检查后把 **Tool** 转换为 **AgentTool**；装载过滤与 Selection 共用 `platforms` / `scopes` / `permissions`。
 - **Tool Runtime** 基于 **Tool Selection** 的结果补充上下文工具，并决定 **Pre-executable Tool** 是走快速路径还是完整 Agent 路径。
 - **Skill** 可以在通用相关性过滤前贡献 Tool。
