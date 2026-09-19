@@ -1,12 +1,8 @@
-/**
- * KOOK protocol helpers — no legacy Adapter/Endpoint / segment-mapper.
- * Canonicalization is owned by gateway/core before endpoint.send.
- */
+/** KOOK protocol helpers. Canonicalization is owned by Core. */
 
 import { createDecipheriv, timingSafeEqual } from 'node:crypto';
 import { inflateSync } from 'node:zlib';
 import type { IncomingMessage } from 'node:http';
-import { pickCredential } from 'zhin.js/adapter';
 import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
@@ -29,10 +25,10 @@ export enum KookPermission {
   ChannelAdmin = 5,
 }
 
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface KookAdapterConfig {
-  readonly id?: string;
-  readonly token?: string;
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface KookEndpointConfig {
+  readonly id: string;
+  readonly token: string;
   /** Default `websocket`. `webhook` requires httpHostToken + verify_token. */
   readonly connection?: 'websocket' | 'webhook';
   readonly webhookPath?: string;
@@ -43,21 +39,6 @@ export interface KookAdapterConfig {
   readonly max_retry?: number;
   readonly ignore?: 'bot' | 'self';
   readonly logLevel?: LogLevel;
-  /** Transitional: legacy root `endpoints[]` with `context: kook`. */
-  readonly endpoints?: ReadonlyArray<{
-    readonly context?: string;
-    readonly id?: string;
-    readonly token?: string;
-    readonly connection?: 'websocket' | 'webhook';
-    readonly webhookPath?: string;
-    readonly verify_token?: string;
-    readonly encrypt_key?: string;
-    readonly data_dir?: string;
-    readonly timeout?: number;
-    readonly max_retry?: number;
-    readonly ignore?: 'bot' | 'self';
-    readonly logLevel?: LogLevel;
-  }>;
 }
 
 export interface ResolvedKookWebsocketConfig {
@@ -133,45 +114,26 @@ export interface KookWireSegment {
   readonly data?: Record<string, unknown>;
 }
 
-export function resolveKookConfig(config: KookAdapterConfig = {}): ResolvedKookConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'kook' || !item.context);
-  const token = pickCredential(config.token, entry?.token, process.env.KOOK_TOKEN, process.env.KOOK_BOT_TOKEN);
-  if (!token) {
-    throw new TypeError(
-      'KOOK adapter requires token (plugins.<key>.token or endpoints with context: kook)',
-    );
-  }
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.KOOK_BOT_NAME
-    || 'kook-bot';
-  const connection = config.connection
-    ?? entry?.connection
-    ?? 'websocket';
+export function resolveKookConfig(config: KookEndpointConfig): ResolvedKookConfig {
+  const id = requiredEndpointField(config.id, 'id');
+  const token = requiredEndpointField(config.token, 'token');
+  const connection = config.connection ?? 'websocket';
 
   if (connection === 'webhook') {
-    const verifyToken = (typeof config.verify_token === 'string' && config.verify_token)
-      || (typeof entry?.verify_token === 'string' && entry.verify_token)
-      || process.env.KOOK_VERIFY_TOKEN
-      || '';
-    if (!verifyToken) {
-      throw new TypeError(
-        'KOOK webhook mode requires verify_token (plugins.<key>.verify_token or KOOK_VERIFY_TOKEN)',
-      );
-    }
-    const encryptKey = config.encrypt_key ?? entry?.encrypt_key ?? process.env.KOOK_ENCRYPT_KEY;
+    const verifyToken = requiredEndpointField(config.verify_token, 'verify_token');
+    const encryptKey = config.encrypt_key;
     return {
       context: 'kook',
       connection: 'webhook',
       id,
       token,
       webhookPath: normalizeWebhookPath(
-        config.webhookPath ?? entry?.webhookPath ?? process.env.KOOK_WEBHOOK_PATH ?? '/kook/webhook',
+        config.webhookPath ?? '/kook/webhook',
       ),
       verifyToken,
       encryptKey: typeof encryptKey === 'string' && encryptKey ? encryptKey : undefined,
-      ignore: config.ignore ?? entry?.ignore ?? 'bot',
-      logLevel: config.logLevel ?? entry?.logLevel ?? 'info',
+      ignore: config.ignore ?? 'bot',
+      logLevel: config.logLevel ?? 'info',
     };
   }
 
@@ -180,12 +142,22 @@ export function resolveKookConfig(config: KookAdapterConfig = {}): ResolvedKookC
     connection: 'websocket',
     id,
     token,
-    data_dir: config.data_dir ?? entry?.data_dir,
-    timeout: config.timeout ?? entry?.timeout ?? 10_000,
-    max_retry: config.max_retry ?? entry?.max_retry ?? 3,
-    ignore: config.ignore ?? entry?.ignore ?? 'bot',
-    logLevel: config.logLevel ?? entry?.logLevel ?? 'info',
+    data_dir: config.data_dir,
+    timeout: config.timeout ?? 10_000,
+    max_retry: config.max_retry ?? 3,
+    ignore: config.ignore ?? 'bot',
+    logLevel: config.logLevel ?? 'info',
   };
+}
+
+function requiredEndpointField(
+  value: unknown,
+  field: 'id' | 'token' | 'verify_token',
+): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`KOOK endpoint requires a non-empty ${field}`);
+  }
+  return value.trim();
 }
 
 /**

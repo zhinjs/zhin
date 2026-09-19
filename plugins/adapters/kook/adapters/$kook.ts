@@ -10,7 +10,7 @@ import {
 } from '../src/endpoint.js';
 import {
   resolveKookConfig,
-  type KookAdapterConfig,
+  type KookEndpointConfig,
 } from '../src/protocol.js';
 import { kookRuntimeStateToken } from '../src/kook-runtime-state.js';
 
@@ -24,7 +24,7 @@ export type {
 } from '../src/endpoint.js';
 export type { CreateKookClient, KookClientTransport } from '../src/ws.js';
 
-export default defineAdapter<KookAdapterConfig>({
+export default defineAdapter<KookEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['recall'],
   // KOOK 图片消息消费远程 URL；KMarkdown 由 endpoint codec 原生消费；

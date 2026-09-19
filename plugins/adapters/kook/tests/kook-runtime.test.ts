@@ -140,13 +140,14 @@ function webhookMessageEvent(overrides: Partial<KookWebhookEventData> = {}): Koo
 
 describe('kook protocol helpers', () => {
   it('resolves plugin config with websocket default', () => {
-    const resolved = resolveKookConfig({ token: 'tok' });
+    const resolved = resolveKookConfig({ id: 'kook-bot', token: 'tok' });
     expect(resolved.connection).toBe('websocket');
     expect(resolved.id).toBe('kook-bot');
   });
 
   it('selects webhook mode when configured', () => {
     const resolved = resolveKookConfig({
+      id: 'kook-bot',
       token: 'tok',
       connection: 'webhook',
       verify_token: VERIFY_TOKEN,
@@ -376,6 +377,7 @@ describe('kook plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
       name: 'kook',
       config: {
+        id: 'kook',
         token: 'tok',
         connection: 'webhook',
         verify_token: VERIFY_TOKEN,

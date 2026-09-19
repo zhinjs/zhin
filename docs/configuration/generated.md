@@ -258,12 +258,20 @@ outline: [2, 3]
 | `plugins.kook.logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | 否 | `"info"` | — |
 | `plugins.kook.master` | string \| number | 否 | — | 框架 master（KOOK user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
 | `plugins.kook.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.kook.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `plugins.kook.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值 |
 | `plugins.kook.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（KOOK user id）；覆盖顶层 master |
 | `plugins.kook.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `plugins.kook.endpoints[].token` | string | 是 | — | KOOK bot token |
+| `plugins.kook.endpoints[].connection` | string: `"websocket"`, `"webhook"` | 否 | — | — |
+| `plugins.kook.endpoints[].webhookPath` | string | 否 | — | — |
 | `plugins.kook.endpoints[].verify_token` | string | 否 | — | KOOK developer console verify token (required for webhook mode). |
 | `plugins.kook.endpoints[].encrypt_key` | string | 否 | — | Optional Encrypt Key when message encryption is enabled in KOOK console. |
+| `plugins.kook.endpoints[].data_dir` | string | 否 | — | — |
+| `plugins.kook.endpoints[].timeout` | number | 否 | — | — |
+| `plugins.kook.endpoints[].max_retry` | number | 否 | — | — |
+| `plugins.kook.endpoints[].ignore` | string: `"bot"`, `"self"` | 否 | — | — |
+| `plugins.kook.endpoints[].logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | 否 | — | — |
+| `plugins.kook.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.kook.endpoints[].id` | string | 是 | — | KOOK bot name |
 | `plugins.kook.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

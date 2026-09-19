@@ -3,6 +3,15 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "require-kook-endpoint-config.md",
+      "packages": [
+        "@zhin.js/adapter-kook"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove KOOK endpoint configuration compatibility and require the canonical AdapterIndex projection under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "require-qq-endpoint-config.md",
       "packages": [
         "@zhin.js/adapter-qq"

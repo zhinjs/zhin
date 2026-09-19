@@ -4,7 +4,7 @@ export {
   resolveKookConfig,
   senderDisplayName,
   KookPermission,
-  type KookAdapterConfig,
+  type KookEndpointConfig,
   type KookInboundMessage,
   type KookWireSegment,
   type LogLevel,

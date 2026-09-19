@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/kook/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/kook/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=1defcabc735c7034 -->
+<!-- sync-adapter-docs:sha256=b00a2d1746d4fee1 -->
 
 # @zhin.js/adapter-kook
 
@@ -51,7 +51,7 @@ pnpm add @zhin.js/adapter-kook
 | **Webhook** | 需公网 HTTPS + Host `httpHostToken`；与 WebSocket 互斥 |
 | **host-http** | 仅 Webhook 模式需要 |
 
-必填字段（`endpoints[i]`）：`name`、`token`。
+必填字段（`endpoints[i]`）：`id`、`token`。
 
 ## 最小配置
 
@@ -61,7 +61,7 @@ plugins:
   kook:
     # connection: websocket   # 默认
     endpoints:
-      - name: my-kook-bot
+      - id: my-kook-bot
         token: ${KOOK_TOKEN}
 ```
 
@@ -71,11 +71,9 @@ plugins:
 
 | 变量 | 说明 |
 |------|------|
-| `KOOK_TOKEN` / `KOOK_BOT_TOKEN` | Bot Token |
-| `KOOK_BOT_NAME` | 可选，默认 endpoint 名 |
-| `KOOK_VERIFY_TOKEN` | Webhook 模式 verify token |
-| `KOOK_ENCRYPT_KEY` | 可选，Webhook 消息加密密钥 |
-| `KOOK_WEBHOOK_PATH` | 可选，默认 `/kook/webhook` |
+| `KOOK_TOKEN` | YAML 示例中 `token` 引用的 Bot Token |
+| `KOOK_VERIFY_TOKEN` | YAML 中 `verify_token` 引用的 Webhook 验证令牌 |
+| `KOOK_ENCRYPT_KEY` | YAML 中可选 `encrypt_key` 引用的消息加密密钥 |
 
 ## Webhook
 
@@ -87,7 +85,7 @@ plugins:
     connection: webhook
     webhookPath: /kook/webhook
     endpoints:
-      - name: my-kook-bot
+      - id: my-kook-bot
         token: ${KOOK_TOKEN}
         verify_token: ${KOOK_VERIFY_TOKEN}
         # encrypt_key: ${KOOK_ENCRYPT_KEY}   # 启用消息加密时必填
