@@ -176,6 +176,15 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove the legacy Capability Seam DI symbol and direct invocation contracts under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-inert-im-service-tokens.md",
+      "packages": [
+        "@zhin.js/core"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove inert Plugin Runtime tokens that falsely exposed classic Feature registries under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }
