@@ -588,6 +588,15 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace the process-wide Repeater singleton and reset helper with a generation-owned runtime resource under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "own-link-poster-renderer.md",
+      "packages": [
+        "@zhin.js/plugin-link-poster"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace the module-global renderer and reset API with a generation-owned Plugin Runtime resource under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

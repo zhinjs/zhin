@@ -2,7 +2,7 @@ import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 import { detectAndParse } from '../src/platforms.js';
 import { renderPoster } from '../src/render.js';
-import { getLinkPosterRenderer } from '../src/renderer-store.js';
+import { linkPosterRendererToken } from '../src/runtime.js';
 
 /**
  * Detect Bilibili / GitHub / Douyin / Xiaohongshu links and reply with a poster image.
@@ -24,7 +24,7 @@ export default defineMiddleware<Message>({
       const meta = await detectAndParse(text);
       if (meta) {
         const html = renderPoster(meta);
-        const result = await getLinkPosterRenderer().render(html, { width: 480 });
+        const result = await context.use(linkPosterRendererToken).render(html, { width: 480 });
         if (result.format === 'png' && typeof result.data === 'object') {
           const base64 = Buffer.from(result.data as Buffer).toString('base64');
           const dataUrl = `data:${result.mimeType};base64,${base64}`;
