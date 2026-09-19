@@ -1,6 +1,5 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createHash } from 'node:crypto';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   ingressRouteToken,
@@ -33,9 +32,6 @@ import {
   type AgentHostWorkroomKnowledgeControlPort,
   type AgentHostEffectSponsorControlPort,
   type AgentHostPortfolioSponsorControlPort,
-  installWorkroomEffectResources,
-  type WorkroomEffectClockPort,
-  type WorkroomEffectBlockerPolicyPort,
   type WorkroomDataLifecycleConsoleControlPort,
   createSelfDeliveryProjectForHost,
   workroomDeliveryProviderToken,
@@ -46,6 +42,7 @@ import type { LocalWorkroomDataGovernanceAuthority } from './local-workroom-data
 import { WorkroomExecutionCoordinator } from './workroom-execution-coordinator.js';
 import { WorkroomHumanIngressCoordinator } from './workroom-human-ingress-coordinator.js';
 import { WorkroomKnowledgeCoordinator } from './workroom-knowledge-coordinator.js';
+import { WorkroomEffectCoordinator } from './workroom-effect-coordinator.js';
 import { AgentTurnIngressRoute } from './agent-turn-ingress-route.js';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
@@ -317,73 +314,16 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 
     const binding = service.getBindingRegistry().requireZhinBinding();
     dataLifecycleConsoleControl.current = dataLifecycle?.console;
-    const emergencyEffectBlockerPolicyBody = Object.freeze({
-      kind: 'root_emergency_fallback' as const,
-      ref: 'root-emergency-effect-blocker-policy:1',
-      description: 'Conservative coordination blocker only; never authorizes an Effect',
-    });
-    const emergencyEffectBlockerPolicy = Object.freeze({
-      kind: emergencyEffectBlockerPolicyBody.kind,
-      ref: emergencyEffectBlockerPolicyBody.ref,
-      digest: `sha256:${createHash('sha256')
-        .update(JSON.stringify(emergencyEffectBlockerPolicyBody))
-        .digest('hex')}`,
-    });
-    const effectComposition = installWorkroomEffectResources({
+    const effectCoordinator = new WorkroomEffectCoordinator({
       projectRoot: options.projectRoot,
       generation,
       signal,
       resources,
-      projects: Object.freeze({
-        listProjectIds: async () => Object.freeze(Object.entries((await workroomCatalog.read()).definitions)
-          .filter(([, definition]) => definition.enabled !== false)
-          .map(([projectId]) => projectId)),
-      }),
-      clock: Object.freeze({
-        read: async (state: Parameters<WorkroomEffectClockPort['read']>[0]) => (await workroomKernel.read(
-          state.intent.projectId,
-          state.intent.runId,
-        )).now,
-      }),
-      blockerPolicy: Object.freeze({
-        resolve: async ({ state, phase }: Parameters<WorkroomEffectBlockerPolicyPort['resolve']>[0]) => {
-          const [catalog, run] = await Promise.all([
-            workroomCatalog.read(),
-            workroomKernel.read(state.intent.projectId, state.intent.runId),
-          ]);
-          const definition = catalog.definitions[state.intent.projectId];
-          if (!definition || definition.enabled === false) {
-            throw new Error('Effect blocker policy requires the current enabled Catalog Project');
-          }
-          const sponsors = [...new Set(definition.sponsors ?? [])];
-          const exactOwner = sponsors.length === 1
-            ? `sponsor:${sponsors[0]}@catalog:${catalog.revision}`
-            : sponsors.length > 1
-              ? `sponsor-set:${createHash('sha256').update(sponsors.sort().join('\0')).digest('hex')}@catalog:${catalog.revision}`
-              : `orchestrator:${definition.conversation?.agent ?? 'project-role'}@catalog:${catalog.revision}`;
-          return Object.freeze({
-            owner: exactOwner,
-            policy: emergencyEffectBlockerPolicy,
-            deadline: run.now + 60_000,
-            allowedSuccessors: Object.freeze(phase === 'reconcile'
-              ? ['reconcile', 'cancel'] as const
-              : ['retry', 'cancel'] as const),
-          });
-        },
-      }),
-      intervalMs: 1_000,
-      onError: error => logger.error(formatCompact({
-        op: 'workroom_effect_runtime',
-        error: error instanceof Error ? error.message : String(error),
-      })),
+      lifecycle,
+      handoff,
+      runtime: workroomFoundation,
     });
-    lifecycle.add(() => effectComposition.runtime.dispose());
-    handoff.add({
-      activateNext: operationSignal => {
-        operationSignal.throwIfAborted();
-        effectComposition.runtime.start();
-      },
-    });
+    const effectComposition = effectCoordinator.composition;
     const profileCoordinator = new WorkroomProfileCoordinator({
       projectRoot: options.projectRoot,
       stateRoot: workroomStateRoot,
