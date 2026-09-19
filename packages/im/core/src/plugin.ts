@@ -318,12 +318,10 @@ export class Plugin extends PluginBase implements PluginLike {
    * 从各个服务中获取数据
    */
   get features(): Plugin.Features {
-    const commandService = this.inject('command');
     const componentService = this.inject('component')
     const scheduleService = this.inject('schedule');
 
     return {
-      commands: commandService ? commandService.items.map(c => c.pattern) : [],
       components: componentService ? componentService.getAllNames() : [],
       schedules: scheduleService ? scheduleService.items.map(s => s.id) : [],
       middlewares: this.#middlewares.map((m, i) => m.name || `middleware_${i}`),
@@ -337,11 +335,10 @@ export class Plugin extends PluginBase implements PluginLike {
   getFeatures(): Array<{ name: string; count: number }> {
     const result: Array<{ name: string; count: number }> = [];
     const f = this.features;
-    if (f.commands.length > 0) result.push({ name: 'command', count: f.commands.length });
     if (f.components.length > 0) result.push({ name: 'component', count: f.components.length });
     if (f.schedules.length > 0) result.push({ name: 'schedule', count: f.schedules.length });
-    // #middlewares includes the default command middleware, only count user-added ones
-    const userMiddlewareCount = this.#middlewares.length - 1; // subtract default #messageMiddleware
+    // #middlewares includes the terminal pass-through middleware.
+    const userMiddlewareCount = this.#middlewares.length - 1;
     if (userMiddlewareCount > 0) result.push({ name: 'middleware', count: userMiddlewareCount });
     // Tool count is now tracked via ToolFeature, not Plugin#tools
     return result;
@@ -662,7 +659,6 @@ export namespace Plugin {
    * 插件提供的功能
    */
   export interface Features {
-    commands: string[];
     components: string[];
     schedules: string[];
     middlewares: string[];

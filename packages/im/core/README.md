@@ -9,8 +9,8 @@
 `@zhin.js/adapter`、`@zhin.js/command`、`@zhin.js/component` 与
 `@zhin.js/middleware` 提供纯 definition、约定发现 provider 和 generation projection；
 Core Runtime 只消费它们发布的 snapshot。
-旧根入口的 `addCommand`、`addComponent`、`addMiddleware` 暂时作为作者兼容接口保留，后续
-只向 RuntimeSnapshot 投影，不再维护第二套运行时权威。
+命令只通过 `@zhin.js/command` 的 definition、约定发现和 generation projection 进入运行时；
+classic `MessageCommand` / `CommandFeature` 已删除。
 
 Zhin.js **IM/多通道运行时**包：Plugin、Adapter、**Endpoint**、MessageDispatcher 与统一出站链。**AI 编排（ZhinAgent、工具安全、MCP）在 [`@zhin.js/agent`](../agent/README.md)**；本包仅 selective re-export `@zhin.js/ai` 的 Provider / Agent 原语供插件直接使用。
 
@@ -50,7 +50,7 @@ export default defineCommand({
 })
 ```
 
-> **已移除**：`usePlugin()` / `getPlugin()` / `bootstrapNode`（`zhin.js/node`）不再导出；唯一入口为 `definePlugin` + `zhin runtime start`。`MessageCommand` / `Plugin.addCommand` 仍 deprecated。见 [public-api-surface](../../docs/contributing/public-api-surface.md)。
+> **已移除**：`usePlugin()` / `getPlugin()` / `bootstrapNode`（`zhin.js/node`）以及 `MessageCommand` / `CommandFeature` 不再导出；唯一入口为 `definePlugin` + `zhin runtime start`。见 [public-api-surface](../../docs/contributing/public-api-surface.md)。
 
 本包仍提供 IM 运行时契约（Message / Adapter / Endpoint）；创作面在 Feature 包与 `@zhin.js/plugin-runtime`。
 
@@ -58,14 +58,7 @@ export default defineCommand({
 
 约定式 Feature（Command / Middleware / Component / Adapter…）由独立包提供 definition + 约定发现；Core Runtime 消费 snapshot。
 
-经典 `CommandFeature` / `addCommand` 等仍挂在 `Plugin.prototype`，**已 deprecated**，仅兼容 Agent init / game-kit：
-
-```
-Feature (抽象基类) — legacy 注册表仍在
-├── CommandFeature    — MessageCommand（→ defineCommand）
-├── ToolFeature       — AI 工具（→ defineAgentTool）
-├── …
-```
+classic Command 注册表已删除。命令能力由 `CommandIndex` 从当前 generation snapshot 投影。
 
 ```typescript
 const toolFeature = plugin.inject('tool')
@@ -166,14 +159,12 @@ class IcqqAdapter extends Adapter<IcqqEndpoint> {
 三阶段消息处理管线：
 
 ```
-消息到达 → Guardrail（守卫） → Route（路由） → Handle（处理）
-                │                    │                │
-           权限/频率检查         命令 or AI？      执行命令 / AI Agent
+消息到达 → Guardrail（守卫） → AI Trigger → AI Handler
 ```
 
 - **Guardrail** — 鉴权、速率限制、黑名单等前置检查
-- **Route** — 判断消息是命令还是 AI 对话
-- **Handle** — CommandFeature 处理命令；AI 对话由 `@zhin.js/agent` 的 ZhinAgent / AIService 处理（经 Dispatcher 注册）
+- **AI Trigger** — 判断 classic Adapter 入站是否交给 AI
+- **AI Handler** — 由 `@zhin.js/agent` 注册；Plugin Runtime 命令由 `MessageDispatcher` / `CommandIndex` 独立处理
 
 ### AI 与 @zhin.js/agent
 
@@ -200,13 +191,13 @@ export { Plugin } from './plugin.js'  // classic runtime；后续切片继续删
 
 // Feature 体系（Cron / Scheduler 来自 @zhin.js/kernel）
 export { Feature, Cron, Scheduler } from '@zhin.js/kernel'
-export { CommandFeature, ToolFeature, SkillFeature, ScheduleFeature, DatabaseFeature, ... } from './built/*.js'
+export { ToolFeature, SkillFeature, ScheduleFeature, DatabaseFeature, ... } from './built/*.js'
 
 // 消息路由
 export { createMessageDispatcher } from './built/dispatcher.js'
 
-// 适配器与消息（MessageCommand 已 deprecated）
-export { Adapter, Message, MessageCommand, Endpoint, segment, ... } from './'
+// 适配器与消息
+export { Adapter, Message, Endpoint, segment, ... } from './'
 
 // 富媒体出站段
 export {

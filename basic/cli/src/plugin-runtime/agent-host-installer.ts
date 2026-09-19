@@ -3021,7 +3021,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         return receipt;
       };
 
-      // 管理命令（原 MessageCommand /models /tree /reset…）— 在 AI trigger 前拦截
+      // Agent 管理命令（/models /tree /reset…）— 在 AI trigger 前拦截
       const managementReply = workroomAgentTurn
         ? null
         : await handleRuntimeManagementCommand({

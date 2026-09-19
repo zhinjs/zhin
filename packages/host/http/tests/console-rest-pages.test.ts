@@ -564,12 +564,12 @@ describe('console-rest-pages introspection', () => {
     expect(typeof (body.data as { note?: string }).note).toBe('string');
   });
 
-  it('collector 抛错时按 legacy err 路径返回 503', async () => {
+  it('collector 抛错时返回 503', async () => {
     const base = await startHost(baseCtx({
       acquireAgentRuntime: () => lease({
         introspection: {
           commands: () => {
-            throw new Error('CommandFeature 不可用');
+            throw new Error('CommandIndex 不可用');
           },
         },
       } satisfies ConsoleAgentRuntime),
@@ -578,7 +578,7 @@ describe('console-rest-pages introspection', () => {
     expect(response.status).toBe(503);
     expect(await json(response)).toMatchObject({
       success: false,
-      error: 'CommandFeature 不可用',
+      error: 'CommandIndex 不可用',
     });
   });
 

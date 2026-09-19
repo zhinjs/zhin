@@ -66,7 +66,7 @@
 | API | 稳定性 | 来源包 | 一句话 |
 |-----|--------|--------|--------|
 | `usePlugin()` / `getPlugin()` | `removed` | 无（不再导出） | 唯一入口为 `definePlugin` + `zhin runtime start` |
-| `MessageCommand` / `CommandFeature` | `deprecated` | `zhin.js`（`@zhin.js/core`） | 经典命令；新代码用 `defineCommand` + `commands/` |
+| `MessageCommand` / `CommandFeature` | `removed` | 无（不再导出） | 命令统一使用 `defineCommand` + Runtime `CommandIndex` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | 无（子路径已删除） | 唯一启动入口为 `zhin runtime start` |
 
 ### `zhin.config.yml` 顶层键
@@ -118,7 +118,7 @@
 | 项 | 稳定性 | 现状 | 一句话 |
 |----|--------|------|--------|
 | legacy `usePlugin()` / `getPlugin()` 插件体系 | `removed` | 源码与 public surface 均已删除 | 唯一入口：`definePlugin` + `zhin runtime start` |
-| `MessageCommand` / classic `CommandFeature` | `deprecated` | Agent init / game-kit hub 仍用 | 迁到 `defineCommand` + Runtime `CommandIndex` 后删除 |
+| `MessageCommand` / classic `CommandFeature` | `removed` | 源码与 public surface 均已删除 | 命令统一走 `defineCommand` + Runtime `CommandIndex` |
 | `Adapter` 类 / Core `Endpoint` 类型 | `deprecated` | Root facade 仅为经典运行时兼容而导出 | 新适配器从 `zhin.js/adapter` 导入 `defineAdapter` 与 Plugin Runtime `Endpoint` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | 不再导出 | 唯一启动入口：`zhin runtime start` |
 | `AgentOrchestrator` / `ResourceHub` | `removed` | 兼容名称不再导出 | 能力注册改用 `AgentResourceHub`；Workroom 编排改走 Kernel 与专用 typed ports |

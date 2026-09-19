@@ -505,9 +505,6 @@ importers:
 
   examples/plugin-runtime-migration-bot:
     dependencies:
-      '@zhin.js/core':
-        specifier: workspace:*
-        version: link:../../packages/im/core
       '@zhin.js/runtime':
         specifier: workspace:*
         version: link:../../packages/im/runtime

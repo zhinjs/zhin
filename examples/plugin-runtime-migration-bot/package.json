@@ -10,7 +10,6 @@
     "test": "vitest run --root ../.. examples/plugin-runtime-migration-bot/tests"
   },
   "dependencies": {
-    "@zhin.js/core": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
     "zhin.js": "workspace:*"
   },

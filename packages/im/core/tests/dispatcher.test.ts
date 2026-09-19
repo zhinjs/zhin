@@ -27,23 +27,6 @@ function makeMessage(text: string, overrides: Partial<Message<any>> = {}): Messa
   } as any;
 }
 
-function makeRootWithCommand(
-  handleImpl?: (msg: Message<any>, root: Plugin) => Promise<string | void>,
-) {
-  const handle = handleImpl ?? vi.fn(async () => 'cmd-ok');
-  const cmdService = {
-    items: [{ pattern: '/help ping' }],
-    handle,
-  };
-  const root = new EventEmitter() as unknown as Plugin;
-  (root as any).inject = (name: string) => {
-    if (name === 'command') return cmdService;
-    return undefined;
-  };
-  (root as any).root = root;
-  return root;
-}
-
 /** 模拟 $reply → adapter.sendMessage → renderSendMessage（before.sendMessage） */
 function wireMessageReplyThroughBeforeSend(msg: Message<any>, root: EventEmitter) {
   msg.$reply = vi.fn(async (content: any) => {
@@ -78,13 +61,11 @@ describe('createMessageDispatcher', () => {
     expect(context.value).toBeDefined();
     expect(typeof context.value.dispatch).toBe('function');
     expect(typeof context.value.addGuardrail).toBe('function');
-    expect(typeof context.value.setCommandMatcher).toBe('function');
     expect(typeof context.value.setAITriggerMatcher).toBe('function');
     expect(typeof context.value.setAIHandler).toBe('function');
     expect(typeof context.value.hasAIHandler).toBe('function');
     expect(typeof context.value.addOutboundPolish).toBe('function');
     expect(typeof context.value.replyWithPolish).toBe('function');
-    expect(typeof service.matchCommand).toBe('function');
     expect(typeof service.matchAI).toBe('function');
   });
 
@@ -167,84 +148,6 @@ describe('createMessageDispatcher', () => {
     });
   });
 
-  describe('Command Matcher (exclusive)', () => {
-    it('自定义命令匹配器应优先并阻断 AI（互斥模式）', async () => {
-      const exclusiveCtx = createMessageDispatcher({ dualRoute: { mode: 'exclusive' } });
-      const d = exclusiveCtx.value;
-      const aiHandler = vi.fn();
-      d.setAIHandler(aiHandler);
-      d.setAITriggerMatcher(() => ({ triggered: true, content: '' }));
-      d.setCommandMatcher((text) => text.startsWith('/'));
-
-      const msg = makeMessage('/help');
-      await d.dispatch(msg);
-
-      expect(aiHandler).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('双轨 dual 模式', () => {
-    it('同时命中指令与 AI 时应各执行一次（默认 command-first）', async () => {
-      const root = makeRootWithCommand();
-      const fakePlugin = { root } as Plugin;
-      context.mounted(fakePlugin);
-
-      const aiHandler = vi.fn();
-      service.setAIHandler(aiHandler);
-      service.setAITriggerMatcher(() => ({ triggered: true, content: 'hi' }));
-      service.setDualRouteConfig({ mode: 'dual', order: 'command-first', allowDualReply: true });
-
-      const msg = makeMessage('/help');
-      wireMessageReplyThroughBeforeSend(msg, root as unknown as EventEmitter);
-      await service.dispatch(msg);
-
-      const cmd = root.inject('command') as any;
-      expect(cmd.handle).toHaveBeenCalled();
-      expect(aiHandler).toHaveBeenCalledWith(msg, 'hi');
-      expect(msg.$reply).toHaveBeenCalledWith('cmd-ok');
-    });
-
-    it('ai-first 时应先 AI 后指令', async () => {
-      const order: string[] = [];
-      const root = makeRootWithCommand(async () => {
-        order.push('cmd');
-        return 'c';
-      });
-      const fakePlugin = { root } as Plugin;
-      context.mounted(fakePlugin);
-
-      service.setAIHandler(async () => {
-        order.push('ai');
-      });
-      service.setAITriggerMatcher(() => ({ triggered: true, content: 'x' }));
-      service.setDualRouteConfig({ mode: 'dual', order: 'ai-first', allowDualReply: true });
-
-      const msg = makeMessage('/help');
-      wireMessageReplyThroughBeforeSend(msg, root as unknown as EventEmitter);
-      await service.dispatch(msg);
-
-      expect(order).toEqual(['ai', 'cmd']);
-    });
-
-    it('allowDualReply false 且 command-first 时仅执行指令', async () => {
-      const root = makeRootWithCommand();
-      const fakePlugin = { root } as Plugin;
-      context.mounted(fakePlugin);
-
-      const aiHandler = vi.fn();
-      service.setAIHandler(aiHandler);
-      service.setAITriggerMatcher(() => ({ triggered: true, content: 'x' }));
-      service.setDualRouteConfig({ mode: 'dual', order: 'command-first', allowDualReply: false });
-
-      const msg = makeMessage('/help');
-      wireMessageReplyThroughBeforeSend(msg, root as unknown as EventEmitter);
-      await service.dispatch(msg);
-
-      expect(aiHandler).not.toHaveBeenCalled();
-      expect(msg.$reply).toHaveBeenCalled();
-    });
-  });
-
   describe('出站润色', () => {
     it('replyWithPolish 应经 before.sendMessage 链式润色再发出（$reply 入参仍为原文）', async () => {
       const root = new EventEmitter() as unknown as Plugin;
@@ -279,20 +182,6 @@ describe('createMessageDispatcher', () => {
       expect(msg.$reply).toHaveBeenCalledWith('hello', true);
     });
 
-    it('指令路径应经过润色', async () => {
-      const root = makeRootWithCommand(async () => 'out');
-      const fakePlugin = { root } as Plugin;
-      context.mounted(fakePlugin);
-
-      service.addOutboundPolish(async (ctx) => `<<${ctx.content}>>`);
-      service.setDualRouteConfig({ mode: 'exclusive' });
-
-      const msg = makeMessage('/help');
-      wireMessageReplyThroughBeforeSend(msg, root as unknown as EventEmitter);
-      await service.dispatch(msg);
-
-      expect(msg.$reply).toHaveBeenCalledWith('out');
-    });
   });
 
   describe('extensions', () => {

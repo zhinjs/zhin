@@ -2,7 +2,7 @@
   {
     "id": 1,
     "prompt": "帮我在 my-plugin 里加一个 greet 命令，用户发 greet 张三 就回复 Hello 张三",
-    "expected": "定位插件入口、用 MessageCommand 注册、提到 build/test 验证"
+    "expected": "定位 commands 约定目录、用 defineCommand 默认导出、提到 build/test 验证"
   },
   {
     "id": 2,

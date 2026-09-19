@@ -194,6 +194,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove the unused classic Plugin-based Agent introspection facade after Console introspection moved to current Runtime snapshot projections."
+    },
+    {
+      "changeset": "remove-classic-command-runtime.md",
+      "packages": [
+        "@zhin.js/core",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove the classic command registry and dispatcher branch after all production command authority moved to generation-owned CommandIndex projections."
     }
   ]
 }

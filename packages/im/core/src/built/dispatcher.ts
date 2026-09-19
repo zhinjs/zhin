@@ -1,7 +1,7 @@
 /**
  * MessageDispatcher — 消息调度器
  *
- * 取代原先的"大杂烩中间件链"，将消息处理分为三个清晰阶段：
+ * 经典 Plugin 入站的 AI 调度与出站润色上下文。
  *
  *   ┌────────────────────────────────────────┐
  *   │  Stage 1: Guardrail（护栏）             │
@@ -9,29 +9,15 @@
  *   │  始终执行，不可被 AI 跳过                │
  *   └──────────────┬─────────────────────────┘
  *                  ▼
- *   ┌────────────────────────────────────────┐
- *   │  Stage 2: Route（路径判定）             │
- *   │  exclusive：命令与 AI 互斥（旧行为）     │
- *   │  dual：命令与 AI 独立判定，可同时命中     │
- *   └──────────────┬─────────────────────────┘
- *                  ▼
- *   ┌────────────────────────────────────────┐
- *   │  Stage 3: Handle（处理）                │
- *   │  Command: commandService.handle()      │
- *   │  AI: aiHandler (由 AI 模块注册)         │
- *   │  出站：replyWithPolish → $reply → Adapter.sendMessage → before.sendMessage │
- *   └────────────────────────────────────────┘
+ *   AI trigger → aiHandler → replyWithPolish → Adapter.sendMessage
  *
  * 注意：Context key 为 'dispatcher'，避免与 HTTP 模块的 'router' 冲突。
- *
- * 默认路由为 exclusive（命令与 AI 互斥）；需双轨时请显式 dualRoute.mode: 'dual'。
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Message } from '../message.js';
 import { isActionMessage } from './interactive-segments/action.js';
 import { Plugin, type Context } from '../plugin.js';
-import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
 import type {
   MessageMiddleware,
   RegisteredAdapter,
@@ -56,47 +42,6 @@ export function getOutboundReplyStore(): OutboundReplyStore | undefined {
 // ============================================================================
 
 /**
- * 路由判定结果（互斥模式 legacy）
- */
-export type RouteResult =
-  | { type: 'command' }
-  | { type: 'ai'; content: string }
-  | { type: 'skip' };
-
-/**
- * 双轨分流配置
- */
-export interface DualRouteConfig {
-  /**
-   * exclusive：与旧版一致，命中命令则不再走 AI；
-   * dual：命令与 AI 独立判定，可同时执行（顺序由 order 决定）
-   */
-  mode?: 'exclusive' | 'dual';
-  /** 同时命中时的执行顺序，默认先指令后 AI */
-  order?: 'command-first' | 'ai-first';
-  /**
-   * 是否允许在双命中时各回复一次；为 false 时仅执行 order 中的第一个分支
-   */
-  allowDualReply?: boolean;
-}
-
-export type ResolvedDualRouteConfig = Required<DualRouteConfig>;
-
-const DUAL_ROUTE_DEFAULTS: ResolvedDualRouteConfig = {
-  mode: 'exclusive',
-  order: 'command-first',
-  allowDualReply: false,
-};
-
-function resolveDualRouteConfig(partial?: Partial<DualRouteConfig>): ResolvedDualRouteConfig {
-  return {
-    mode: partial?.mode ?? DUAL_ROUTE_DEFAULTS.mode,
-    order: partial?.order ?? DUAL_ROUTE_DEFAULTS.order,
-    allowDualReply: partial?.allowDualReply ?? DUAL_ROUTE_DEFAULTS.allowDualReply,
-  };
-}
-
-/**
  * AI 处理函数签名
  * 由 AI 模块通过 dispatcher.setAIHandler() 注册
  */
@@ -104,11 +49,6 @@ export type AIHandler = (
   message: Message<any>,
   content: string,
 ) => MaybePromise<void>;
-
-/**
- * 命令前缀判定函数
- */
-export type CommandMatcher = (text: string, message: Message<any>) => boolean;
 
 /**
  * AI 触发判定函数
@@ -122,18 +62,13 @@ export type GroupPassiveContextHandler = (message: Message<any>) => MaybePromise
 
 export type GuardrailMiddleware = MessageMiddleware<RegisteredAdapter>;
 
-/** Backward-compatible name for the command or AI outbound reply source. */
+/** Dispatcher outbound reply source. */
 export type ReplySource = OutboundReplySource;
 
 /** replyWithPolish 可选参数 */
 export interface ReplyWithPolishOptions {
   /** 引用入站消息（true 用 message.$id；string 为指定消息 id） */
   quote?: boolean | string;
-}
-
-export interface CreateMessageDispatcherOptions {
-  dualRoute?: Partial<DualRouteConfig>;
-  permissionHost?: PermissionHost | null;
 }
 
 // ============================================================================
@@ -145,8 +80,6 @@ export interface MessageDispatcherService {
 
   addGuardrail(guardrail: GuardrailMiddleware): () => void;
 
-  setCommandMatcher(matcher: CommandMatcher): void;
-
   setAITriggerMatcher(matcher: AITriggerMatcher): void;
 
   setAIHandler(handler: AIHandler): void;
@@ -155,11 +88,6 @@ export interface MessageDispatcherService {
   setGroupPassiveContextHandler(handler: GroupPassiveContextHandler | null): void;
 
   hasAIHandler(): boolean;
-
-  /** 合并更新双轨配置 */
-  setDualRouteConfig(config: Partial<DualRouteConfig>): void;
-
-  getDualRouteConfig(): Readonly<ResolvedDualRouteConfig>;
 
   /** 注册出站润色：挂到根插件 `before.sendMessage`；仅在 `replyWithPolish` 触发的发送中生效（见 getOutboundReplyStore） */
   addOutboundPolish(handler: OutboundPolishMiddleware): () => void;
@@ -179,11 +107,6 @@ export interface MessageDispatcherService {
     store: Pick<OutboundReplyStore, 'message' | 'trigger' | 'proactiveSource'> & { source?: OutboundReplySource },
     fn: () => Promise<T>,
   ): Promise<T>;
-
-  /**
-   * 是否匹配为指令路径（与 dispatch 内判定一致）
-   */
-  matchCommand(message: Message<any>): boolean;
 
   /**
    * AI 触发判定结果
@@ -213,9 +136,7 @@ declare module '../plugin.js' {
 // 实现
 // ============================================================================
 
-export function createMessageDispatcher(
-  options?: CreateMessageDispatcherOptions,
-): Context<'dispatcher', DispatcherContextExtensions> {
+export function createMessageDispatcher(): Context<'dispatcher', DispatcherContextExtensions> {
   const guardrails: GuardrailMiddleware[] = [];
   /** mounted 前注册的润色，在 mounted 时挂到 root.before.sendMessage */
   const pendingOutboundPolish: OutboundPolishMiddleware[] = [];
@@ -223,56 +144,7 @@ export function createMessageDispatcher(
   let aiHandler: AIHandler | null = null;
   let aiTriggerMatcher: AITriggerMatcher | null = null;
   let groupPassiveContextHandler: GroupPassiveContextHandler | null = null;
-  let commandMatcher: CommandMatcher | null = null;
   let rootPlugin: Plugin | null = null;
-  let dualRoute = resolveDualRouteConfig(options?.dualRoute);
-
-  let commandPrefixIndex: Map<string, boolean> | null = null;
-  let lastCommandSignature = '';
-
-  function commandIndexSignature(): string {
-    const commandService = rootPlugin?.inject('command');
-    if (!commandService?.items?.length) return '';
-    return commandService.items
-      .map((cmd) => cmd.pattern)
-      .sort()
-      .join('\0');
-  }
-
-  function rebuildCommandIndex(): Map<string, boolean> {
-    const index = new Map<string, boolean>();
-    if (rootPlugin) {
-      const commandService = rootPlugin.inject('command');
-      if (commandService?.items) {
-        for (const cmd of commandService.items) {
-          const prefix = cmd.pattern?.split(/\s/)[0];
-          if (prefix) index.set(prefix, true);
-        }
-      }
-    }
-    return index;
-  }
-
-  function getCommandIndex(): Map<string, boolean> {
-    const signature = commandIndexSignature();
-    if (!commandPrefixIndex || signature !== lastCommandSignature) {
-      commandPrefixIndex = rebuildCommandIndex();
-      lastCommandSignature = signature;
-    }
-    return commandPrefixIndex;
-  }
-
-  /** 命令前缀须为完整词（`teach` 不匹配 `teach-list`） */
-  function matchesCommandLeadingToken(text: string, prefix: string): boolean {
-    if (!text.startsWith(prefix)) return false;
-    if (text.length === prefix.length) return true;
-    const next = text.charAt(prefix.length);
-    return next === ' ' || next === '\t';
-  }
-
-  function getSortedCommandPrefixes(index: Map<string, boolean>): string[] {
-    return [...index.keys()].sort((a, b) => b.length - a.length);
-  }
 
   async function runGuardrails(message: Message<any>): Promise<boolean> {
     if (guardrails.length === 0) return true;
@@ -291,56 +163,9 @@ export function createMessageDispatcher(
     return true;
   }
 
-  function extractText(message: Message<any>): string {
-    if (!message.$content) return '';
-    return message.$content
-      .map((seg: any) => {
-        if (typeof seg === 'string') return seg;
-        if (seg.type === 'text') return seg.data?.text || '';
-        return '';
-      })
-      .join('')
-      .trim();
-  }
-
-  function matchCommandInternal(message: Message<any>): boolean {
-    const text = extractText(message);
-    if (commandMatcher && commandMatcher(text, message)) return true;
-    const index = getCommandIndex();
-    for (const prefix of getSortedCommandPrefixes(index)) {
-      if (matchesCommandLeadingToken(text, prefix)) return true;
-    }
-    return false;
-  }
-
   function matchAIInternal(message: Message<any>): { triggered: boolean; content: string } {
     if (!aiTriggerMatcher) return { triggered: false, content: '' };
     return aiTriggerMatcher(message);
-  }
-
-  /** 互斥路由（与旧版 route 一致） */
-  function routeExclusive(message: Message<any>): RouteResult {
-    const text = extractText(message);
-
-    if (commandMatcher && commandMatcher(text, message)) {
-      return { type: 'command' };
-    }
-
-    const index = getCommandIndex();
-    for (const prefix of getSortedCommandPrefixes(index)) {
-      if (matchesCommandLeadingToken(text, prefix)) {
-        return { type: 'command' };
-      }
-    }
-
-    if (aiTriggerMatcher) {
-      const { triggered, content } = aiTriggerMatcher(message);
-      if (triggered) {
-        return { type: 'ai', content };
-      }
-    }
-
-    return { type: 'skip' };
   }
 
   function wrapPolishAsBeforeSend(handler: OutboundPolishMiddleware): BeforeSendHandler {
@@ -415,68 +240,17 @@ export function createMessageDispatcher(
     }
   }
 
-  async function runCommandBranch(message: Message<any>): Promise<void> {
-    if (!rootPlugin) return;
-    const commandService = rootPlugin.inject('command');
-    if (!commandService) return;
-    const response = await commandService.handle(message, options?.permissionHost ?? null);
-    if (response !== undefined && response !== null) {
-      await replyWithPolishInternal(message, 'command', response);
-    }
-  }
-
   const service: MessageDispatcherService = {
     async dispatch(message: Message<any>) {
       const passed = await runGuardrails(message);
       if (!passed) return;
 
-      const cfg = dualRoute;
-
-      if (cfg.mode === 'exclusive') {
-        const result = routeExclusive(message);
-        switch (result.type) {
-          case 'command':
-            await runCommandBranch(message);
-            break;
-          case 'ai':
-            if (aiHandler) await aiHandler(message, result.content);
-            break;
-          default:
-            await maybeRecordGroupPassiveContext(message);
-            break;
-        }
-        return;
-      }
-
-      // dual 模式
-      let wantCmd = matchCommandInternal(message);
       const aiRes = matchAIInternal(message);
-      let wantAi = aiRes.triggered;
-
-      if (!wantCmd && !wantAi) {
+      if (!aiRes.triggered) {
         await maybeRecordGroupPassiveContext(message);
         return;
       }
-
-      if (!cfg.allowDualReply && wantCmd && wantAi) {
-        if (cfg.order === 'command-first') wantAi = false;
-        else wantCmd = false;
-      }
-
-      const runCmd = async () => {
-        if (wantCmd) await runCommandBranch(message);
-      };
-      const runAi = async () => {
-        if (wantAi && aiHandler) await aiHandler(message, aiRes.content);
-      };
-
-      if (cfg.order === 'ai-first') {
-        await runAi();
-        await runCmd();
-      } else {
-        await runCmd();
-        await runAi();
-      }
+      if (aiHandler) await aiHandler(message, aiRes.content);
     },
 
     addGuardrail(guardrail: GuardrailMiddleware) {
@@ -485,10 +259,6 @@ export function createMessageDispatcher(
         const index = guardrails.indexOf(guardrail);
         if (index !== -1) guardrails.splice(index, 1);
       };
-    },
-
-    setCommandMatcher(matcher: CommandMatcher) {
-      commandMatcher = matcher;
     },
 
     setAITriggerMatcher(matcher: AITriggerMatcher) {
@@ -505,14 +275,6 @@ export function createMessageDispatcher(
 
     hasAIHandler() {
       return aiHandler !== null;
-    },
-
-    setDualRouteConfig(config: Partial<DualRouteConfig>) {
-      dualRoute = resolveDualRouteConfig({ ...dualRoute, ...config });
-    },
-
-    getDualRouteConfig() {
-      return { ...dualRoute };
     },
 
     addOutboundPolish(handler: OutboundPolishMiddleware) {
@@ -541,10 +303,6 @@ export function createMessageDispatcher(
       return runWithOutboundPolish(store, fn);
     },
 
-    matchCommand(message) {
-      return matchCommandInternal(message);
-    },
-
     matchAI(message) {
       return matchAIInternal(message);
     },
@@ -552,7 +310,7 @@ export function createMessageDispatcher(
 
   return {
     name: 'dispatcher',
-    description: '消息调度器 — 统一消息路由分流 (Command / AI)',
+    description: '消息调度器 — AI 路由与出站润色',
     value: service,
     mounted(plugin: Plugin) {
       rootPlugin = plugin.root;

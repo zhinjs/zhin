@@ -7,7 +7,6 @@
 export * from './endpoint.js'
 export * from './endpoint-capabilities.js'
 export * from './plugin.js'
-export * from './command.js'
 export * from './component.js'
 export * from './adapter.js'
 export * from './message.js'
@@ -24,7 +23,6 @@ export * from './errors.js'
 
 // ── Built 模块 ──────────────────────────────────────────────────────
 export * from './built/config.js'
-export * from './built/command.js'
 export * from './built/schedule.js'
 export type { ScheduleDescriptor, ScheduleHandle, ScheduleContextExtensions } from './built/schedule.js'
 // Models
@@ -72,7 +70,6 @@ export * from './built/endpoint-manager.js'
 export type { EndpointConfigRecord, EndpointManager, ProvisionContext } from './built/endpoint-manager.js'
 export * from './built/endpoint-lifecycle-service.js'
 export * from './built/schema-endpoint-manager.js'
-export * from './built/endpoint-commands.js'
 export * from './built/introspection-format.js'
 export * from './built/management-command-guard.js'
 export * from './built/html-to-text.js'

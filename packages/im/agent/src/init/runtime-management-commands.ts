@@ -1,7 +1,6 @@
 /**
- * Plugin Runtime 管理命令面（替代 legacy MessageCommand 注册）。
+ * Plugin Runtime 管理命令面。
  *
- * 对齐 migrate-zhin-plugin-runtime：命令逻辑与 CommandFeature 解耦，
  * 由 Agent Host 在 unmatched route 前拦截，不进入普通 Agent turn。
  */
 import type { AIService } from '../service.js';
