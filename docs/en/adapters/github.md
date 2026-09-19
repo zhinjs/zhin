@@ -48,37 +48,34 @@ plugins:
       - zhinjs/zhin
     workspace_root: ./data/github-workspaces
     endpoints:
-      - name: my-github-bot
-        app_id: 123456
+      - id: my-github-bot
+        app_id: "${GITHUB_APP_ID}"
         private_key: ./data/github-app.pem
-        webhook_secret: your-secret
-```
-
-```env
-GITHUB_APP_ID=123456
-GITHUB_WEBHOOK_SECRET=your-secret
+        webhook_secret: "${GITHUB_WEBHOOK_SECRET}"
 ```
 
 `private_key` supports both file paths and PEM content. When `webhook_secret` is not configured, only API outbound / agent tools are available (no inbound).
 
-Multiple Apps: a single plugin instance can attach multiple endpoints (each item in the `endpoints` array overrides top-level fields; `name` is required):
+`AdapterIndex` merges instance defaults with each endpoint override before invoking the adapter. The protocol accepts only that expanded endpoint configuration; it does not read environment variables, inspect nested `endpoints`, or accept camelCase aliases. The composition root expands `${...}` references while loading configuration.
+
+Multiple Apps: a single plugin instance can attach multiple endpoints. Each endpoint requires `id`, `app_id`, and `private_key`:
 
 ```yaml
 plugins:
   github:
     endpoints:
-      - name: app-a
+      - id: app-a
         app_id: 123456
         private_key: ./data/app-a.pem
-      - name: app-b
+      - id: app-b
         app_id: 234567
         private_key: ./data/app-b.pem
 ```
 
-## Removed Configuration
+## Removed Capabilities
 
 - **`ai.githubMcp.enabled` / `ai.githubMcp.token`**: After Plugin Runtime migration, `register-github-mcp` (stdio `@modelcontextprotocol/server-github`, PAT personal identity) has been removed, and this configuration no longer takes effect. For MCP tools, follow the new runtime `mcp/<name>.ts` (`@zhin.js/mcp-feature`) convention to set up on your own.
-- **`poll_interval`**: Polling fallback has been deleted; only webhook inbound is supported. This field is currently parsed but does not take effect (deferred).
+- Polling fallback has been deleted; inbound events use Webhooks only. No inert polling configuration field remains.
 
 ## Channel ID
 

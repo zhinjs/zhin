@@ -201,8 +201,6 @@ outline: [2, 3]
 | --- | --- | --- | --- | --- |
 | `plugins.github.host` | string | 否 | — | GitHub Enterprise hostname (default github.com) |
 | `plugins.github.webhook_path` | string | 否 | `"/github/webhook"` | — |
-| `plugins.github.webhookPath` | string | 否 | `"/github/webhook"` | — |
-| `plugins.github.poll_interval` | number | 否 | `60` | Deferred: polling fallback was removed in the Plugin Runtime migration; currently parsed but unused |
 | `plugins.github.auto_reply_repos` | array&lt;string&gt; | 否 | — | Repos whose Issue/PR comments auto-trigger AI without @bot |
 | `plugins.github.bot_login` | string | 否 | — | Override App bot login (default {slug}[bot]) |
 | `plugins.github.workspace_root` | string | 否 | — | Managed git workspace root |
@@ -211,13 +209,16 @@ outline: [2, 3]
 | `plugins.github.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint |
 | `plugins.github.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（GitHub user login or id）；覆盖顶层 master |
 | `plugins.github.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.github.endpoints[].app_id` | string \| number | 否 | — | GitHub App ID |
-| `plugins.github.endpoints[].appId` | string \| number | 否 | — | GitHub App ID (camelCase alias) |
-| `plugins.github.endpoints[].private_key` | string | 否 | — | GitHub App private key (PEM content or file path) |
-| `plugins.github.endpoints[].privateKey` | string | 否 | — | GitHub App private key (camelCase alias) |
+| `plugins.github.endpoints[].app_id` | string \| number | 是 | — | GitHub App ID |
+| `plugins.github.endpoints[].private_key` | string | 是 | — | GitHub App private key (PEM content or file path) |
 | `plugins.github.endpoints[].webhook_secret` | string | 否 | — | Webhook HMAC secret; enables httpHostToken POST route |
-| `plugins.github.endpoints[].webhookSecret` | string | 否 | — | Webhook HMAC secret (camelCase alias) |
 | `plugins.github.endpoints[].id` | string | 是 | — | GitHub App bot name |
+| `plugins.github.endpoints[].host` | string | 否 | — | GitHub Enterprise hostname |
+| `plugins.github.endpoints[].webhook_path` | string | 否 | — | Webhook route path |
+| `plugins.github.endpoints[].auto_reply_repos` | array&lt;string&gt; | 否 | — | Repos whose comments auto-trigger AI |
+| `plugins.github.endpoints[].bot_login` | string | 否 | — | Override App bot login |
+| `plugins.github.endpoints[].workspace_root` | string | 否 | — | Managed git workspace root |
+| `plugins.github.endpoints[].commandPrefix` | string | 否 | — | 本 endpoint 的命令前缀 |
 | `plugins.github.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### icqq

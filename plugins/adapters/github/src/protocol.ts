@@ -5,7 +5,6 @@
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { pickCredential } from 'zhin.js/adapter';
 import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
@@ -22,7 +21,6 @@ export type {
   EventType,
   GenericWebhookPayload,
   GitHubComment,
-  GitHubEndpointConfig,
   GitHubIssue,
   GitHubOAuthUser,
   GitHubPR,
@@ -37,52 +35,30 @@ export type {
 
 export { buildChannelId, parseChannelId } from './types.js';
 
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface GithubAdapterConfig {
-  readonly id?: string;
+/** One expanded GitHub endpoint configuration produced by AdapterIndex. */
+export interface GithubEndpointConfig {
+  readonly id: string;
   readonly host?: string;
-  readonly app_id?: string | number;
-  readonly appId?: string | number;
-  readonly private_key?: string;
-  readonly privateKey?: string;
+  readonly app_id: string | number;
+  readonly private_key: string;
   readonly webhook_secret?: string;
-  readonly webhookSecret?: string;
   readonly webhook_path?: string;
-  readonly webhookPath?: string;
-  readonly poll_interval?: number;
-  readonly pollInterval?: number;
   readonly auto_reply_repos?: readonly string[];
-  readonly autoReplyRepos?: readonly string[];
   readonly bot_login?: string;
-  readonly botLogin?: string;
   readonly workspace_root?: string;
-  readonly workspaceRoot?: string;
-  /** Transitional: legacy root `endpoints[]` with `context: github`. */
-  readonly endpoints?: ReadonlyArray<Partial<ResolvedGithubConfig> & {
-    readonly context?: string;
-    readonly app_id?: string | number;
-    readonly private_key?: string;
-    readonly webhook_secret?: string;
-    readonly webhook_path?: string;
-    readonly poll_interval?: number;
-    readonly auto_reply_repos?: readonly string[];
-    readonly bot_login?: string;
-    readonly workspace_root?: string;
-  }>;
 }
 
 export interface ResolvedGithubConfig {
   readonly context: 'github';
   readonly id: string;
   readonly host?: string;
-  readonly appId?: string | number;
-  readonly privateKey?: string;
+  readonly appId: string | number;
+  readonly privateKey: string;
   readonly webhookSecret?: string;
   readonly webhookPath: string;
-  readonly pollInterval: number;
   readonly autoReplyRepos: readonly string[];
   readonly botLogin?: string;
-  readonly workspaceRoot?: string;
+  readonly workspaceRoot: string;
 }
 
 export interface GithubWireSegment {
@@ -117,63 +93,35 @@ export function githubInboundConversation(
   };
 }
 
-export function resolveGithubConfig(config: GithubAdapterConfig = {}): ResolvedGithubConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'github');
-  const appIdRaw = pickCredential(
-    config.appId != null ? String(config.appId) : undefined,
-    config.app_id != null ? String(config.app_id) : undefined,
-    entry?.appId != null ? String(entry.appId) : undefined,
-    entry?.app_id != null ? String(entry.app_id) : undefined,
-    process.env.GITHUB_APP_ID,
-  );
+export function resolveGithubConfig(config: GithubEndpointConfig): ResolvedGithubConfig {
+  const id = typeof config.id === 'string' ? config.id.trim() : '';
+  if (!id) throw new TypeError('GitHub endpoint requires a non-empty id');
+  const appIdRaw = config.app_id != null ? String(config.app_id).trim() : '';
   const appId = appIdRaw ? (Number(appIdRaw) || appIdRaw) : undefined;
-  const privateKey = pickCredential(
-    config.privateKey,
-    config.private_key,
-    entry?.privateKey,
-    entry?.private_key,
-  ) || undefined;
+  const privateKey = typeof config.private_key === 'string'
+    ? config.private_key.trim()
+    : '';
   if (!appId || !privateKey) {
-    throw new TypeError(
-      'GitHub adapter requires app_id + private_key (plugins.<key> or GITHUB_APP_ID)',
-    );
+    throw new TypeError('GitHub endpoint requires app_id and private_key');
   }
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.GITHUB_BOT_NAME
-    || 'github-bot';
-  const webhookSecret = config.webhookSecret ?? config.webhook_secret
-    ?? entry?.webhookSecret ?? entry?.webhook_secret
-    ?? process.env.GITHUB_WEBHOOK_SECRET
-    ?? undefined;
-  const host = config.host ?? entry?.host;
-  const webhookPath = normalizeWebhookPath(
-    config.webhookPath ?? config.webhook_path ?? entry?.webhookPath ?? entry?.webhook_path
-    ?? '/github/webhook',
-  );
-  const pollInterval = Number(
-    config.pollInterval ?? config.poll_interval ?? entry?.pollInterval ?? entry?.poll_interval ?? 60,
-  ) || 60;
-  const autoReplyRepos = [
-    ...(config.autoReplyRepos ?? config.auto_reply_repos
-      ?? entry?.autoReplyRepos ?? entry?.auto_reply_repos ?? []),
-  ];
-  const botLogin = config.botLogin ?? config.bot_login ?? entry?.botLogin ?? entry?.bot_login;
-  const workspaceRoot = config.workspaceRoot ?? config.workspace_root
-    ?? entry?.workspaceRoot ?? entry?.workspace_root;
+  const webhookSecret = config.webhook_secret;
+  const host = config.host;
+  const webhookPath = normalizeWebhookPath(config.webhook_path ?? '/github/webhook');
+  const autoReplyRepos = [...(config.auto_reply_repos ?? [])];
+  const botLogin = config.bot_login;
+  const workspaceRoot = config.workspace_root ?? 'data/github-workspaces';
 
   return {
     context: 'github',
     id,
     ...(host ? { host } : {}),
-    ...(appId != null ? { appId } : {}),
-    ...(privateKey ? { privateKey } : {}),
+    appId,
+    privateKey,
     ...(webhookSecret ? { webhookSecret } : {}),
     webhookPath,
-    pollInterval,
     autoReplyRepos,
     ...(botLogin ? { botLogin } : {}),
-    ...(workspaceRoot ? { workspaceRoot } : {}),
+    workspaceRoot,
   };
 }
 

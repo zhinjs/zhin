@@ -8,9 +8,6 @@ const adapterFeatureRoot = path.join(repoRoot, 'packages/im/adapter/src');
 const errors = [];
 const legacyAdapterConsumers = new Set();
 const directEnvironmentConsumers = new Set([
-  'plugins/adapters/github/src/gh-client.ts',
-  'plugins/adapters/github/src/protocol.ts',
-  'plugins/adapters/github/src/workspace-manager.ts',
   'plugins/adapters/weixin-ilink/src/credentials.ts',
   'plugins/adapters/weixin-ilink/src/login.ts',
   'plugins/adapters/weixin-ilink/src/protocol.ts',
@@ -33,7 +30,12 @@ for (const file of typescriptFiles(adaptersRoot)) {
   const relative = path.relative(repoRoot, file).split(path.sep).join('/');
   const source = fs.readFileSync(file, 'utf8');
 
-  if (/\bprocess\.env\b/u.test(source)) {
+  // Passing a copy to a child process preserves PATH/HOME and is not
+  // configuration discovery. Reading an individual key remains owner debt.
+  const directEnvironmentRead = /\bprocess\.env(?:\.[A-Za-z_$][\w$]*|\s*\[)/u.test(source);
+  const unsupportedEnvironmentAccess = /\bprocess\.env\b/u.test(source)
+    && !/\{\s*\.\.\.process\.env\s*,/u.test(source);
+  if (directEnvironmentRead || unsupportedEnvironmentAccess) {
     if (directEnvironmentConsumers.has(relative)) {
       observedDirectEnvironmentConsumers.add(relative);
     } else {

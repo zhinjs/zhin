@@ -36,37 +36,36 @@ plugins:
       - zhinjs/zhin
     workspace_root: ./data/github-workspaces
     endpoints:
-      - name: my-github-bot
-        app_id: 123456
+      - id: my-github-bot
+        app_id: "${GITHUB_APP_ID}"
         private_key: ./data/github-app.pem
-        webhook_secret: your-secret
-```
-
-```env
-GITHUB_APP_ID=123456
-GITHUB_WEBHOOK_SECRET=your-secret
+        webhook_secret: "${GITHUB_WEBHOOK_SECRET}"
 ```
 
 `private_key` 支持文件路径或 PEM 内容。未配置 `webhook_secret` 时仅 API 出站 / agent 工具可用（无入站）。
 
-多 App：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`name` 必填）：
+`AdapterIndex` 会先合并插件实例默认值与 endpoint 覆盖值，再把一份完整配置交给
+GitHub adapter。协议层只接受这份展开后的 endpoint 配置，不读取环境变量、不解析嵌套
+`endpoints`，也不接受 camelCase 配置别名。`${...}` 由 composition root 在加载配置时展开。
+
+多 App：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段；`id`、`app_id`、`private_key` 必填）：
 
 ```yaml
 plugins:
   github:
     endpoints:
-      - name: app-a
+      - id: app-a
         app_id: 123456
         private_key: ./data/app-a.pem
-      - name: app-b
+      - id: app-b
         app_id: 234567
         private_key: ./data/app-b.pem
 ```
 
-## 已移除的配置
+## 已移除的能力
 
 - **`ai.githubMcp.enabled` / `ai.githubMcp.token`**：Plugin Runtime 迁移后 `register-github-mcp`（stdio `@modelcontextprotocol/server-github`，PAT 人身份）已移除，该配置不再生效。如需 MCP 工具，请按新运行时 `mcp/<name>.ts`（`@zhin.js/mcp-feature`）约定自行装配。
-- **`poll_interval`**：轮询降级已删除，仅 webhook 入站；该字段目前解析但不生效（deferred）。
+- 轮询降级已删除，入站只通过 Webhook；没有保留无效的轮询配置字段。
 
 ## Channel ID
 

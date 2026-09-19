@@ -12,7 +12,7 @@ import { GithubEndpoint } from '../src/endpoint.js';
 import { githubRuntimeStateToken } from '../src/github-runtime-state.js';
 import {
   resolveGithubConfig,
-  type GithubAdapterConfig,
+  type GithubEndpointConfig,
 } from '../src/protocol.js';
 
 export { GithubEndpoint } from '../src/endpoint.js';
@@ -26,7 +26,7 @@ function optionalDatabase(context: AdapterContext): PluginDatabaseHost | undefin
   }
 }
 
-export default defineAdapter<GithubAdapterConfig>({
+export default defineAdapter<GithubEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   // Issue/PR 评论以 markdown 图片链接消费远程 URL；无交互面，交互段降级纯文本。
   segments: {

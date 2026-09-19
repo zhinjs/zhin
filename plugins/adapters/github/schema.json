@@ -11,15 +11,6 @@
       "type": "string",
       "default": "/github/webhook"
     },
-    "webhookPath": {
-      "type": "string",
-      "default": "/github/webhook"
-    },
-    "poll_interval": {
-      "type": "number",
-      "default": 60,
-      "description": "Deferred: polling fallback was removed in the Plugin Runtime migration; currently parsed but unused"
-    },
     "auto_reply_repos": {
       "type": "array",
       "items": {
@@ -55,10 +46,11 @@
     },
     "endpoints": {
       "type": "array",
+      "minItems": 1,
       "description": "多账号：一个插件实例挂多个 endpoint",
       "items": {
         "type": "object",
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "master": {
             "type": [
@@ -85,36 +77,51 @@
             ],
             "description": "GitHub App ID"
           },
-          "appId": {
-            "type": [
-              "string",
-              "number"
-            ],
-            "description": "GitHub App ID (camelCase alias)"
-          },
           "private_key": {
             "type": "string",
             "description": "GitHub App private key (PEM content or file path)"
-          },
-          "privateKey": {
-            "type": "string",
-            "description": "GitHub App private key (camelCase alias)"
           },
           "webhook_secret": {
             "type": "string",
             "description": "Webhook HMAC secret; enables httpHostToken POST route"
           },
-          "webhookSecret": {
-            "type": "string",
-            "description": "Webhook HMAC secret (camelCase alias)"
-          },
           "id": {
             "type": "string",
+            "minLength": 1,
             "description": "GitHub App bot name"
+          },
+          "host": {
+            "type": "string",
+            "description": "GitHub Enterprise hostname"
+          },
+          "webhook_path": {
+            "type": "string",
+            "description": "Webhook route path"
+          },
+          "auto_reply_repos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Repos whose comments auto-trigger AI"
+          },
+          "bot_login": {
+            "type": "string",
+            "description": "Override App bot login"
+          },
+          "workspace_root": {
+            "type": "string",
+            "description": "Managed git workspace root"
+          },
+          "commandPrefix": {
+            "type": "string",
+            "description": "本 endpoint 的命令前缀"
           }
         },
         "required": [
-          "id"
+          "id",
+          "app_id",
+          "private_key"
         ]
       }
     },

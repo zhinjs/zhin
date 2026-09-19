@@ -201,8 +201,6 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | --- | --- | --- | --- | --- |
 | `plugins.github.host` | string | no | — | GitHub Enterprise hostname (default github.com) |
 | `plugins.github.webhook_path` | string | no | `"/github/webhook"` | — |
-| `plugins.github.webhookPath` | string | no | `"/github/webhook"` | — |
-| `plugins.github.poll_interval` | number | no | `60` | Deferred: polling fallback was removed in the Plugin Runtime migration; currently parsed but unused |
 | `plugins.github.auto_reply_repos` | array&lt;string&gt; | no | — | Repos whose Issue/PR comments auto-trigger AI without @bot |
 | `plugins.github.bot_login` | string | no | — | Override App bot login (default {slug}[bot]) |
 | `plugins.github.workspace_root` | string | no | — | Managed git workspace root |
@@ -211,13 +209,16 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | `plugins.github.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint |
 | `plugins.github.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（GitHub user login or id）；覆盖顶层 master |
 | `plugins.github.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.github.endpoints[].app_id` | string \| number | no | — | GitHub App ID |
-| `plugins.github.endpoints[].appId` | string \| number | no | — | GitHub App ID (camelCase alias) |
-| `plugins.github.endpoints[].private_key` | string | no | — | GitHub App private key (PEM content or file path) |
-| `plugins.github.endpoints[].privateKey` | string | no | — | GitHub App private key (camelCase alias) |
+| `plugins.github.endpoints[].app_id` | string \| number | yes | — | GitHub App ID |
+| `plugins.github.endpoints[].private_key` | string | yes | — | GitHub App private key (PEM content or file path) |
 | `plugins.github.endpoints[].webhook_secret` | string | no | — | Webhook HMAC secret; enables httpHostToken POST route |
-| `plugins.github.endpoints[].webhookSecret` | string | no | — | Webhook HMAC secret (camelCase alias) |
 | `plugins.github.endpoints[].id` | string | yes | — | GitHub App bot name |
+| `plugins.github.endpoints[].host` | string | no | — | GitHub Enterprise hostname |
+| `plugins.github.endpoints[].webhook_path` | string | no | — | Webhook route path |
+| `plugins.github.endpoints[].auto_reply_repos` | array&lt;string&gt; | no | — | Repos whose comments auto-trigger AI |
+| `plugins.github.endpoints[].bot_login` | string | no | — | Override App bot login |
+| `plugins.github.endpoints[].workspace_root` | string | no | — | Managed git workspace root |
+| `plugins.github.endpoints[].commandPrefix` | string | no | — | 本 endpoint 的命令前缀 |
 | `plugins.github.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### icqq

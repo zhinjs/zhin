@@ -3,6 +3,15 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "require-github-endpoint-config.md",
+      "packages": [
+        "@zhin.js/adapter-github"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove GitHub endpoint configuration, environment, alias, and inert polling compatibility under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "require-icqq-endpoint-config.md",
       "packages": [
         "@zhin.js/adapter-icqq"

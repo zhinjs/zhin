@@ -19,5 +19,5 @@ export const githubEndpointCommands = createEndpointCommands({
     { key: 'webhook_secret', env: true, description: 'webhook 签名密钥（不配则 API-only）' },
   ],
   running: (use) => use(githubRuntimeStateToken).endpoints.values(),
-  describeEntry: (entry) => `app_id: ${String(entry.app_id ?? entry.appId)}`,
+  describeEntry: (entry) => `app_id: ${String(entry.app_id)}`,
 }, defineCommand);
